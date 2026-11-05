@@ -181,6 +181,24 @@ pub const SCENARIOS: &[Scenario] = &[
                 candidates: 1,
             }),
         ]),
+    // Its mana cost is {1}{W}: two Plains cast it. The oracles caught it costing {1}{W}{W}.
+    Scenario::new("Get Lost costs one and a white")
+        .battlefield(
+            P0,
+            &[Permanent::new(names::PLAINS), Permanent::new(names::PLAINS)],
+        )
+        .hand(P0, &[names::GET_LOST, names::ISLAND])
+        .battlefield(P1, &[Permanent::new(SPELLBINDER)])
+        .library(P1, &[names::ISLAND])
+        .actions(&[
+            Action::cast(P0, names::GET_LOST),
+            count(P1, Zone::Graveyard, SPELLBINDER, 1),
+            Action::assert(Assertion::Tapped {
+                player: P0,
+                card: names::PLAINS,
+                count: 2,
+            }),
+        ]),
     // The Island left in P0's hand keeps the game in P0's main phase once Get Lost has
     // resolved.
     Scenario::new("Get Lost on a planeswalker gives its controller two Maps")
