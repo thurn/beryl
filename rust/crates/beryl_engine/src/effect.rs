@@ -7,18 +7,19 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, CardDef, Delayed, Flow, ManaColor, ManaCost, Modification, Pause, Types,
+    Ability, CardDef, Delayed, FaceAbility, Flow, ManaColor, ManaCost, Modification, Pause, Types,
 };
 use crate::cast;
 use crate::decision::{Answers, Candidates, Choice, Decision, DecisionKind, Opt, StallReason};
 use crate::event::{self, Entry, Reason, Recipient, Sink, TokenEntry};
 use crate::fixed::{Fixed, Full};
+use crate::ids::{CardIx, Seat, Slot};
 use crate::mana;
 use crate::observation::Observation;
 use crate::profile::Payment;
 use crate::state::{
     CastPermission, Continuous, CounterKind, Duration, FloatingEffect, ObjectFlags, ObjectRef,
-    PendingTrigger, StackEntry, State, Target, TriggerInfo, Zone, opponent,
+    PendingTrigger, StackEntry, State, Target, TriggerInfo, Zone,
 };
 use crate::table::GameTable;
 use crate::zone::{self, Place};
@@ -45,7 +46,7 @@ pub struct EffectCtx<'a> {
     /// activator chose.
     pub(crate) mana: ManaColor,
     /// A card the body lets a player cast as it finishes resolving (CR 608.2g).
-    pub(crate) offer: Option<(ObjectRef, u8, bool)>,
+    pub(crate) offer: Option<(ObjectRef, Seat, bool)>,
     /// A fixed capacity ran out; the engine stalls once the body returns (§12.3).
     pub(crate) full: bool,
 }
@@ -65,7 +66,7 @@ impl<'a> EffectCtx<'a> {
             controller: trigger.controller,
             card: trigger.card,
             face: trigger.face,
-            ability: trigger.ability,
+            ability: Some(FaceAbility::Own(trigger.ability)),
             info: trigger.info,
             ..StackEntry::default()
         };
@@ -112,11 +113,15 @@ impl<'a> EffectCtx<'a> {
     }
 
     /// The spell's card or the ability's source.
+    ///
+    /// # Panics
+    ///
+    /// For an emblem's ability, which has no source.
     pub fn source(&self) -> ObjectRef {
-        self.entry.object
+        self.entry.object.expect("an ability with a source")
     }
 
-    pub fn controller(&self) -> u8 {
+    pub fn controller(&self) -> Seat {
         self.entry.controller
     }
 
@@ -161,7 +166,7 @@ impl<'a> EffectCtx<'a> {
     }
 
     /// The `i`th target as a player, if it is one and still legal.
-    pub fn target_player(&self, i: usize) -> Option<u8> {
+    pub fn target_player(&self, i: usize) -> Option<Seat> {
         self.target(i).and_then(Target::as_player)
     }
 
@@ -170,7 +175,7 @@ impl<'a> EffectCtx<'a> {
     /// # Panics
     ///
     /// If the table lacks it: a card's tokens must be listed in its `tokens`.
-    pub fn game_index(&self, def: &'static CardDef) -> u8 {
+    pub fn game_index(&self, def: &'static CardDef) -> CardIx {
         self.table
             .index_of(def)
             .expect("a token missing from its card's tokens")
@@ -199,15 +204,12 @@ impl<'a> EffectCtx<'a> {
     }
 
     /// The controller of a spell on the stack.
-    pub fn spell_controller(&self, spell: ObjectRef) -> Option<u8> {
+    pub fn spell_controller(&self, spell: ObjectRef) -> Option<Seat> {
         self.spell_entry(spell).map(|e| e.controller)
     }
 
     fn spell_entry(&self, spell: ObjectRef) -> Option<&StackEntry> {
-        self.state
-            .stack()
-            .iter()
-            .find(|e| e.is_spell() && e.object == spell)
+        self.state.stack().iter().find(|e| e.spell() == Some(spell))
     }
 
     /// The mana value of a spell on the stack, X included
@@ -257,7 +259,12 @@ impl<'a> EffectCtx<'a> {
         Err(Pause)
     }
 
-    fn ask_options(&mut self, player: u8, kind: DecisionKind, opts: &[Opt]) -> Result<Opt, Pause> {
+    fn ask_options(
+        &mut self,
+        player: Seat,
+        kind: DecisionKind,
+        opts: &[Opt],
+    ) -> Result<Opt, Pause> {
         let mut list = Fixed::new();
         for &o in opts {
             if list.push(o).is_err() {
@@ -275,7 +282,7 @@ impl<'a> EffectCtx<'a> {
     }
 
     /// Asks `player` yes or no.
-    pub fn choose_yes_no(&mut self, player: u8) -> Result<bool, Pause> {
+    pub fn choose_yes_no(&mut self, player: Seat) -> Result<bool, Pause> {
         Ok(self.ask_options(player, DecisionKind::YesNo, &[Opt::Yes, Opt::No])? == Opt::Yes)
     }
 
@@ -283,7 +290,7 @@ impl<'a> EffectCtx<'a> {
     /// more object or [`Opt::Done`]. Interchangeable candidates are one answer (§7.2).
     pub fn choose_up_to(
         &mut self,
-        player: u8,
+        player: Seat,
         candidates: Bitboard,
         n: u8,
     ) -> Result<Bitboard, Pause> {
@@ -299,7 +306,11 @@ impl<'a> EffectCtx<'a> {
 
     /// Asks `player` for one more of `candidates`, as an [`Opt::Object`], or [`Opt::Done`].
     /// Interchangeable candidates are one answer (§7.2).
-    fn choose_or_done(&mut self, player: u8, candidates: Bitboard) -> Result<Option<u8>, Pause> {
+    fn choose_or_done(
+        &mut self,
+        player: Seat,
+        candidates: Bitboard,
+    ) -> Result<Option<Slot>, Pause> {
         let mut opts: Fixed<Opt, 64> = Fixed::new();
         let left = crate::engine::collapse(self.state, candidates);
         for o in core::iter::once(Opt::Done).chain(left.iter().map(Opt::Object)) {
@@ -317,16 +328,16 @@ impl<'a> EffectCtx<'a> {
     }
 
     /// Asks `player` to choose one of `candidates`, which must not be empty.
-    pub fn choose_object(&mut self, player: u8, candidates: Bitboard) -> Result<u8, Pause> {
+    pub fn choose_object(&mut self, player: Seat, candidates: Bitboard) -> Result<Slot, Pause> {
         self.ask_object(player, DecisionKind::ChooseObject, candidates)
     }
 
     fn ask_object(
         &mut self,
-        player: u8,
+        player: Seat,
         kind: DecisionKind,
         candidates: Bitboard,
-    ) -> Result<u8, Pause> {
+    ) -> Result<Slot, Pause> {
         let d = Decision {
             player,
             kind,
@@ -340,7 +351,7 @@ impl<'a> EffectCtx<'a> {
     /// ([CR 701.9b](https://yawgatog.com/resources/magic-rules/#R7019b)): "By default, effects
     /// that cause a player to discard a card allow the affected player to choose which card
     /// to discard." Returns the card in the graveyard, or `None` from an empty hand.
-    pub fn discard_a_card(&mut self, player: u8) -> Result<Option<ObjectRef>, Pause> {
+    pub fn discard_a_card(&mut self, player: Seat) -> Result<Option<ObjectRef>, Pause> {
         let hand = self.state.zone(player, Zone::Hand);
         if hand.is_empty() {
             return Ok(None);
@@ -354,9 +365,9 @@ impl<'a> EffectCtx<'a> {
     /// no first, then the object. With no candidates there is nothing to ask.
     pub fn may_choose_object(
         &mut self,
-        player: u8,
+        player: Seat,
         candidates: Bitboard,
-    ) -> Result<Option<u8>, Pause> {
+    ) -> Result<Option<Slot>, Pause> {
         if candidates.is_empty() || !self.choose_yes_no(player)? {
             return Ok(None);
         }
@@ -372,7 +383,7 @@ impl<'a> EffectCtx<'a> {
     /// [CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g): "If an effect gives a
     /// player the option to pay mana, they may activate mana abilities before taking that
     /// action."
-    pub fn unless_pays(&mut self, player: u8, cost: ManaCost) -> Result<bool, Pause> {
+    pub fn unless_pays(&mut self, player: Seat, cost: ManaCost) -> Result<bool, Pause> {
         let r = mana::payable(self.state, self.table, player, cost, Bitboard::EMPTY);
         if !self.checked(r) {
             return Ok(false);
@@ -385,7 +396,7 @@ impl<'a> EffectCtx<'a> {
     }
 
     /// Pays a mana cost `player` can pay, under the profile's payment rules (§10).
-    fn pay(&mut self, player: u8, cost: ManaCost) -> Result<(), Pause> {
+    fn pay(&mut self, player: Seat, cost: ManaCost) -> Result<(), Pause> {
         if self.state.profile.payment == Payment::Manual {
             let mut remaining = cost;
             while !remaining.is_zero() {
@@ -444,7 +455,7 @@ impl<'a> EffectCtx<'a> {
     pub fn allow_cast(
         &mut self,
         object: ObjectRef,
-        player: u8,
+        player: Seat,
         extra: u8,
         this_turn: bool,
         exile: bool,
@@ -464,19 +475,19 @@ impl<'a> EffectCtx<'a> {
     /// resolving, which is when a spell cast during resolution would otherwise have
     /// mattered, since "no player receives priority after it's cast"
     /// ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)).
-    pub fn offer_cast(&mut self, object: ObjectRef, player: u8, free: bool) {
+    pub fn offer_cast(&mut self, object: ObjectRef, player: Seat, free: bool) {
         self.offer = Some((object, player, free));
     }
 
     /// "Until your next turn, you may cast sorcery spells as though they had flash."
-    pub fn allow_sorceries_as_flash(&mut self, player: u8) {
+    pub fn allow_sorceries_as_flash(&mut self, player: Seat) {
         self.state.player_mut(player).sorceries_as_flash = true;
     }
 
     /// Adds mana to a player's mana pool
     /// ([CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064)): "When an effect
     /// instructs a player to add mana, that mana goes into a player's mana pool."
-    pub fn add_mana(&mut self, player: u8, color: ManaColor, amount: u8) {
+    pub fn add_mana(&mut self, player: Seat, color: ManaColor, amount: u8) {
         let pool = &mut self.state.player_mut(player).mana[color as usize];
         *pool = pool.saturating_add(amount);
     }
@@ -487,7 +498,7 @@ impl<'a> EffectCtx<'a> {
             self.state,
             self.table,
             self.sink,
-            self.entry.object,
+            self.source(),
             to,
             amount,
             false,
@@ -495,17 +506,17 @@ impl<'a> EffectCtx<'a> {
         self.check(r);
     }
 
-    pub fn gain_life(&mut self, player: u8, amount: u8) {
+    pub fn gain_life(&mut self, player: Seat, amount: u8) {
         let r = event::gain_life(self.state, self.table, self.sink, player, amount);
         self.check(r);
     }
 
-    pub fn lose_life(&mut self, player: u8, amount: u8) {
+    pub fn lose_life(&mut self, player: Seat, amount: u8) {
         let r = event::lose_life(self.state, self.table, self.sink, player, amount);
         self.check(r);
     }
 
-    pub fn draw(&mut self, player: u8, cards: u8) {
+    pub fn draw(&mut self, player: Seat, cards: u8) {
         let r = event::draw(self.state, self.table, self.sink, player, cards);
         self.check(r);
     }
@@ -594,7 +605,7 @@ impl<'a> EffectCtx<'a> {
     /// ([CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a)): "To shuffle a
     /// library or a face-down pile of cards, randomize the cards within it so that no player
     /// knows their order."
-    pub fn shuffle(&mut self, player: u8) {
+    pub fn shuffle(&mut self, player: Seat) {
         zone::shuffle_library(self.state, player);
     }
 
@@ -602,7 +613,7 @@ impl<'a> EffectCtx<'a> {
     /// ([CR 701.20a](https://yawgatog.com/resources/magic-rules/#R70120a)): "To reveal a card,
     /// show that card to all players for a brief time." Each player knows it from then on,
     /// until it is shuffled or otherwise hidden anew.
-    pub fn reveal(&mut self, slot: u8) {
+    pub fn reveal(&mut self, slot: Slot) {
         for k in &mut self.state.knowledge {
             k.insert(slot);
         }
@@ -648,7 +659,7 @@ impl<'a> EffectCtx<'a> {
     }
 
     /// The top `n` cards of a player's library, or all of it if it has fewer.
-    pub fn top_of_library(&self, player: u8, n: u8) -> Bitboard {
+    pub fn top_of_library(&self, player: Seat, n: u8) -> Bitboard {
         let library = self.state.library(player);
         library[library.len().saturating_sub(usize::from(n))..]
             .iter()
@@ -660,8 +671,8 @@ impl<'a> EffectCtx<'a> {
     /// a library and a hand are hidden zones
     /// ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)), "zones in which not
     /// all players can be expected to see the cards' faces."
-    pub fn look_at(&mut self, player: u8, cards: Bitboard) {
-        self.state.knowledge[usize::from(player)] |= cards;
+    pub fn look_at(&mut self, player: Seat, cards: Bitboard) {
+        self.state.knowledge[player.index()] |= cards;
     }
 
     /// Discards a card from its owner's hand
@@ -690,8 +701,8 @@ impl<'a> EffectCtx<'a> {
         );
         self.check(r);
         // Rebound within each owner's library, among the slots that went there.
-        for owner in 0..2 {
-            let mut moved: Fixed<u8, 64> = Fixed::new();
+        for owner in Seat::BOTH {
+            let mut moved: Fixed<Slot, 64> = Fixed::new();
             for &slot in self.state.library(owner) {
                 if cards.contains(slot) && moved.push(slot).is_err() {
                     self.full = true;
@@ -722,7 +733,7 @@ impl<'a> EffectCtx<'a> {
     /// until the player is done; then those left are chosen one at a time from the top down.
     /// Every arrangement is one sequence of answers. [CR 701.22b](https://yawgatog.com/resources/magic-rules/#R70122b):
     /// "If a player is instructed to scry 0, no scry event occurs."
-    pub fn scry(&mut self, player: u8, n: u8) -> Flow {
+    pub fn scry(&mut self, player: Seat, n: u8) -> Flow {
         let mut left = self.top_of_library(player, n);
         self.look_at(player, left);
         while !left.is_empty() {
@@ -733,7 +744,7 @@ impl<'a> EffectCtx<'a> {
             self.check(r);
             left.remove(slot);
         }
-        let mut order: Fixed<u8, 60> = Fixed::new();
+        let mut order: Fixed<Slot, 60> = Fixed::new();
         while left.count() > 1 {
             let slot = self.choose_object(player, left)?;
             left.remove(slot);
@@ -755,7 +766,7 @@ impl<'a> EffectCtx<'a> {
     /// into their graveyard." [CR 701.17b](https://yawgatog.com/resources/magic-rules/#R70117b):
     /// "A player can't mill a number of cards greater than the number of cards in their
     /// library."
-    pub fn mill(&mut self, player: u8, n: u8) {
+    pub fn mill(&mut self, player: Seat, n: u8) {
         let top = self.top_of_library(player, n);
         self.move_all(top, Zone::Graveyard, Reason::Effect);
     }
@@ -824,14 +835,15 @@ impl<'a> EffectCtx<'a> {
     /// zones, and the specified event has already occurred before that one-shot effect would
     /// occur but after that ability triggered, the object doesn't move."
     pub fn exile_until_source_leaves(&mut self, object: ObjectRef) {
-        if !self.on_battlefield(self.entry.object) || !self.on_battlefield(object) {
+        let source = self.source();
+        if !self.on_battlefield(source) || !self.on_battlefield(object) {
             return;
         }
         self.move_to(object, Zone::Exile, Reason::Exile);
         if self.state.object(object.slot).zone == Zone::Exile {
             let o = self.state.object_mut(object.slot);
             o.flags.set(ObjectFlags::EXILED_UNTIL, true);
-            o.linked = self.entry.object.slot;
+            o.linked = Some(source.slot);
         }
     }
 
@@ -847,7 +859,7 @@ impl<'a> EffectCtx<'a> {
     /// creates a token is its owner."
     pub fn create_tokens_for(
         &mut self,
-        player: u8,
+        player: Seat,
         def: &'static CardDef,
         count: u8,
         how: TokenEntry,
@@ -858,11 +870,11 @@ impl<'a> EffectCtx<'a> {
 
     /// Creates `count` tokens that are copies of the card with this game index, such as the
     /// card a last-known-information record names (CR 707.2).
-    pub fn create_tokens_of(&mut self, card: u8, count: u8, how: TokenEntry) -> Bitboard {
+    pub fn create_tokens_of(&mut self, card: CardIx, count: u8, how: TokenEntry) -> Bitboard {
         self.tokens(self.entry.controller, card, count, how)
     }
 
-    fn tokens(&mut self, player: u8, card: u8, count: u8, how: TokenEntry) -> Bitboard {
+    fn tokens(&mut self, player: Seat, card: CardIx, count: u8, how: TokenEntry) -> Bitboard {
         let created =
             event::create_tokens(self.state, self.table, self.sink, player, card, count, how);
         created.unwrap_or_else(|Full| {
@@ -891,7 +903,7 @@ impl<'a> EffectCtx<'a> {
         let attacking =
             crate::combat::in_combat(self.state.turn.step) && self.state.turn.active == you;
         let walker = if attacking {
-            let opts = crate::combat::attack_targets(self.state, opponent(you));
+            let opts = crate::combat::attack_targets(self.state, you.opponent());
             match self.ask_options(you, DecisionKind::AttackTarget, opts.as_slice())? {
                 Opt::Defender(slot) => Some(slot),
                 _ => unreachable!("a defender"),
@@ -908,10 +920,10 @@ impl<'a> EffectCtx<'a> {
                 ..TokenEntry::default()
             },
         );
-        if let Some(walker) = walker.filter(|&w| w != crate::state::NONE) {
+        if let Some(walker) = walker.flatten() {
             for slot in tokens.iter() {
                 let o = self.state.object_mut(slot);
-                o.combat = walker;
+                o.combat = Some(walker);
                 o.flags.set(ObjectFlags::ATTACKS_PLANESWALKER, true);
             }
         }
@@ -925,11 +937,12 @@ impl<'a> EffectCtx<'a> {
         if !self.state.is_current(affected) {
             return;
         }
+        let source = self.source();
         let s = &mut *self.state;
         let timestamp = s.zones.next_timestamp;
         s.zones.next_timestamp = timestamp.wrapping_add(1);
         let pushed = s.effects.push(FloatingEffect {
-            source: self.entry.object,
+            source,
             timestamp,
             duration,
             affected,
@@ -971,7 +984,7 @@ impl<'a> EffectCtx<'a> {
     /// "[Player] gets an emblem with [ability]. This means that [player] puts an emblem with
     /// [ability] into the command zone. The emblem is both owned and controlled by that
     /// player."
-    pub fn create_emblem(&mut self, player: u8, def: &'static CardDef) {
+    pub fn create_emblem(&mut self, player: Seat, def: &'static CardDef) {
         let card = self.game_index(def);
         let r = self.state.player_mut(player).emblems.push(card);
         self.check(r);
@@ -1001,7 +1014,7 @@ impl<'a> EffectCtx<'a> {
     /// the coin calls 'heads' or 'tails.' If the call matches the result, the player wins the
     /// flip." A fair coin against any call is a fair win, so one draw from the game's
     /// randomness decides it (architecture §14).
-    pub fn flip_coin(&mut self, player: u8) -> bool {
+    pub fn flip_coin(&mut self, player: Seat) -> bool {
         let won = self.state.rng.other.below(2) == 0;
         let r = event::settle(
             self.state,
@@ -1085,7 +1098,10 @@ pub fn draw_a_card(ctx: &mut EffectCtx) -> Flow {
 /// and never changes while it stays; once it has left, the answer is what it was as the
 /// ability triggered, and it triggered only if the cost was paid.
 fn entered_with(s: &State, tr: &PendingTrigger, flag: u32) -> bool {
-    !s.is_current(tr.source) || s.object(tr.source.slot).flags.has(flag)
+    match tr.source {
+        Some(r) if s.is_current(r) => s.object(r.slot).flags.has(flag),
+        _ => true,
+    }
 }
 
 /// "If it was kicked" ([CR 702.33d](https://yawgatog.com/resources/magic-rules/#R70233d)):
@@ -1119,10 +1135,12 @@ pub fn offspring_copy(ctx: &mut EffectCtx) -> Flow {
 /// Impending's "if this permanent's impending cost was paid and it has a time counter on it"
 /// (CR 702.176a), on the permanent itself.
 pub fn impending_counting_down(s: &State, _: &GameTable, tr: &PendingTrigger) -> bool {
-    let o = s.object(tr.source.slot);
-    s.is_current(tr.source)
-        && o.flags.has(ObjectFlags::IMPENDING)
-        && o.counters.get(CounterKind::Time) > 0
+    tr.source.is_some_and(|r| {
+        let o = s.object(r.slot);
+        s.is_current(r)
+            && o.flags.has(ObjectFlags::IMPENDING)
+            && o.counters.get(CounterKind::Time) > 0
+    })
 }
 
 /// Impending's "remove a time counter from it" (CR 702.176a).

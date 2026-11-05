@@ -2,7 +2,8 @@
 //! `apply` on positions set up with the cards of [`super::cast`].
 
 use super::cast::{Game, cast, index_of};
-use crate::card::ManaColor;
+use crate::card::{AbilityIx, ManaColor};
+use crate::ids::Slot;
 use crate::state::{CounterKind, ObjectFlags, Pending, TurnStep, Zone};
 use crate::{Choice, DecisionKind, Opt, Profile};
 
@@ -46,7 +47,7 @@ fn a_creature_spell_goes_on_the_stack_then_resolves_onto_the_battlefield() {
     assert_eq!(g.s.turn().priority, g.me);
     g.pass_both();
     assert_eq!(g.s.object(bear).zone, Zone::Battlefield);
-    assert_eq!(g.s.object(bear).controller, g.me);
+    assert_eq!(g.s.controller(bear), g.me);
     assert!(g.s.stack().is_empty());
     // CR 117.3b: the active player receives priority after a resolution.
     assert_eq!(g.s.turn().priority, g.me);
@@ -290,11 +291,11 @@ fn loyalty_abilities_are_sorcery_speed_and_once_a_turn() {
     g.s.object_mut(raveler).counters.loyalty = 2;
     let plus = Opt::Activate {
         slot: raveler,
-        ability: 1,
+        ability: AbilityIx::Own(1),
     };
     let minus = Opt::Activate {
         slot: raveler,
-        ability: 2,
+        ability: AbilityIx::Own(2),
     };
     let d = g.current();
     assert!(index_of(&d, plus).is_some());
@@ -328,7 +329,7 @@ fn a_permission_lets_loyalty_abilities_be_activated_at_instant_speed_the_turn_it
     assert_eq!(g.s.object(emperor).counters.loyalty, 3, "CR 306.5b");
     let plus = Opt::Activate {
         slot: emperor,
-        ability: 1,
+        ability: AbilityIx::Own(1),
     };
     // The active player gets priority after the resolution and passes.
     g.choose(Choice(0));
@@ -372,7 +373,7 @@ fn sorceries_can_be_cast_as_though_they_had_flash_until_your_next_turn() {
     g.give(g.me, "Test Island", Zone::Battlefield);
     g.pick(Opt::Activate {
         slot: raveler,
-        ability: 1,
+        ability: AbilityIx::Own(1),
     });
     g.pass_both();
     g.at(g.them, TurnStep::End);
@@ -397,7 +398,7 @@ fn cycling_discards_from_hand_as_a_cost_and_draws_on_resolution() {
     g.at(g.me, TurnStep::Upkeep);
     g.pick(Opt::Activate {
         slot: hq,
-        ability: 1,
+        ability: AbilityIx::Own(1),
     });
     assert_eq!(g.s.object(hq).zone, Zone::Graveyard);
     assert_eq!(g.s.zone(g.me, Zone::Hand).count(), 0);
@@ -412,7 +413,7 @@ fn an_ability_whose_source_was_sacrificed_still_resolves() {
     let land = g.give(g.them, "Test Land", Zone::Battlefield);
     g.pick(Opt::Activate {
         slot: strip,
-        ability: 1,
+        ability: AbilityIx::Own(1),
     });
     let d = g.decide();
     assert_eq!(d.kind, DecisionKind::Target, "its own land is a target too");
@@ -538,7 +539,7 @@ fn a_triggered_ability_chooses_its_targets_as_it_goes_on_the_stack() {
         let mut g = Game::new(Profile::EXACT);
         let stinger = g.give(g.me, "Test Stinger", Zone::Hand);
         g.give(g.me, "Test Land", Zone::Battlefield);
-        let bears: Vec<u8> = (0..creatures)
+        let bears: Vec<Slot> = (0..creatures)
             .map(|_| g.give(g.them, "Test Bear", Zone::Battlefield))
             .collect();
         // Two bears with different tapped states are two targets.

@@ -3,8 +3,9 @@
 use super::{LANDS, MIXED, fingerprint, land_go, play, table};
 use crate::card::Types;
 use crate::filter::Filter;
+use crate::ids::Seat;
 use crate::profile::Limits;
-use crate::state::{Zone, opponent};
+use crate::state::Zone;
 use crate::{Choice, DecisionKind, Decklist, Opt, Outcome, Profile, StallReason, State};
 
 /// Plays a land-and-pass game, returning the outcome, the final state and the state hash at
@@ -28,7 +29,7 @@ fn land_and_pass_decks_the_player_on_the_draw_first() {
             // on their 34th turn: turn 68.
             assert_eq!(outcome, Outcome::Win(starting), "seed {seed}");
             assert_eq!(s.turn().number, 68);
-            assert!(s.player(opponent(starting)).drew_from_empty);
+            assert!(s.player(starting.opponent()).drew_from_empty);
             assert_eq!(s.library(starting).len(), 0);
             // One land a turn: the starting player played 34, the other 33.
             assert_eq!(s.battlefield().len(), 67);
@@ -68,7 +69,7 @@ fn choosing_to_draw_makes_the_other_player_start() {
         },
         |_, _| {},
     );
-    let starting = opponent(chooser.unwrap());
+    let starting = chooser.unwrap().opponent();
     assert_eq!(s.turn().starting_player, starting);
     assert_eq!(outcome, Outcome::Win(starting));
 }
@@ -113,7 +114,7 @@ fn cleanup_discards_down_to_seven() {
     let outcome = play(&t, &mut s, land_go, |s, d| {
         let active = s.turn().active;
         // The player who isn't active ended their own turn at seven cards or fewer.
-        assert!(s.zone(opponent(active), Zone::Hand).count() <= 7);
+        assert!(s.zone(active.opponent(), Zone::Hand).count() <= 7);
         if d.kind == DecisionKind::Discard {
             assert_eq!(d.player, active);
             assert!(s.zone(active, Zone::Hand).count() > 7);
@@ -122,7 +123,7 @@ fn cleanup_discards_down_to_seven() {
     });
     assert_eq!(outcome, Outcome::Win(s.turn().starting_player));
     assert!(discards > 5);
-    for p in 0..2 {
+    for p in Seat::BOTH {
         assert_eq!(
             s.graveyard(p).len() + s.zone(p, Zone::Hand).count() as usize,
             40

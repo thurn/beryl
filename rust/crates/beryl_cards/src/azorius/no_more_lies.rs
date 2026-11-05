@@ -6,7 +6,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
-use beryl_engine::{DecisionKind, Zone};
+use beryl_engine::{DecisionKind, Seat, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -55,7 +55,7 @@ const P0_LANDS: &[Permanent] = &[
 ];
 const P1_LANDS: &[Permanent] = &[Permanent::new(names::PLAINS), Permanent::new(names::ISLAND)];
 
-const fn count(player: u8, zone: Zone, card: &'static str, count: u8) -> Action {
+const fn count(player: Seat, zone: Zone, card: &'static str, count: u8) -> Action {
     Action::assert(Assertion::Count {
         player,
         zone,

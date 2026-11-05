@@ -18,6 +18,7 @@ mod engine;
 pub mod event;
 pub mod filter;
 pub mod fixed;
+pub mod ids;
 mod invariants;
 mod layers;
 mod mana;
@@ -39,8 +40,9 @@ pub use decision::{
     Answers, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, Replay, StallReason, Step,
 };
 pub use engine::{Counts, Scratch, apply, next, view};
-pub use invariants::Violation;
-pub use observation::{Observation, UNKNOWN};
+pub use ids::{CardIx, Seat, Slot};
+pub use invariants::{At, Violation};
+pub use observation::Observation;
 pub use profile::{Breakpoint, Payment, Profile, Stops};
 pub use state::{State, TurnStep, Zone};
 pub use table::{CardTable, Decklist, GameTable, TableError};

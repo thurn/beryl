@@ -3,10 +3,10 @@
 use std::fmt;
 
 use beryl_engine::card::Types;
-use beryl_engine::state::{CounterKind, NONE, ObjectFlags};
+use beryl_engine::state::{CounterKind, ObjectFlags};
 use beryl_engine::{
     Breakpoint, CardTable, Choice, Decision, DecisionKind, GameTable, Opt, Outcome, Profile,
-    Replay, Scratch, State, Step, Zone, apply, next,
+    Replay, Scratch, Seat, Slot, State, Step, Zone, apply, next,
 };
 
 use crate::{Action, Assertion, Ending, Pick, Scenario};
@@ -74,8 +74,7 @@ fn arrange(t: &GameTable, scenario: &Scenario) -> Result<State, String> {
     let setup = &scenario.setup;
     let mut s = State::new(t, setup.seed, Profile::EXACT);
     s.begin_at(setup.turn, setup.active, setup.step);
-    for (p, player) in setup.players.iter().enumerate() {
-        let p = p as u8;
+    for (p, player) in Seat::BOTH.into_iter().zip(&setup.players) {
         s.set_life(p, player.life);
         let full = |_| "a zone is full".to_string();
         for &name in player.hand {
@@ -89,7 +88,7 @@ fn arrange(t: &GameTable, scenario: &Scenario) -> Result<State, String> {
             s.set_face(slot, b.face);
             // CR 306.5b: a planeswalker "enters with a number of loyalty counters on it equal
             // to its printed loyalty number."
-            let printed = t.def(s.object(slot).card).faces[usize::from(b.face)].loyalty;
+            let printed = t.def(s.card(slot)).faces[usize::from(b.face)].loyalty;
             let counters = b
                 .counters
                 .map(|c| (c.kind, c.count))
@@ -124,7 +123,7 @@ fn arrange(t: &GameTable, scenario: &Scenario) -> Result<State, String> {
 
 /// A slot in `player`'s library holding the card `name`. The decks are built from the setup,
 /// so there is always one.
-fn library_slot(s: &State, t: &GameTable, player: u8, name: &str) -> u8 {
+fn library_slot(s: &State, t: &GameTable, player: Seat, name: &str) -> Slot {
     s.library(player)
         .iter()
         .copied()
@@ -134,9 +133,8 @@ fn library_slot(s: &State, t: &GameTable, player: u8, name: &str) -> u8 {
 
 /// The name of the object in `slot`: its face up's, which is the card's own name everywhere
 /// but on the stack and the battlefield (CR 712.8a, 712.8f).
-fn name_of(s: &State, t: &GameTable, slot: u8) -> &'static str {
-    let o = s.object(slot);
-    t.def(o.card).face_name(o.face)
+fn name_of(s: &State, t: &GameTable, slot: Slot) -> &'static str {
+    t.def(s.card(slot)).face_name(s.object(slot).face)
 }
 
 struct Runner<'a> {
@@ -240,7 +238,7 @@ impl Runner<'_> {
                 })
                 .ok_or_else(|| {
                     format!(
-                        "activating {card}'s ability {ability} is not offered: {}",
+                        "activating {card}'s ability {ability:?} is not offered: {}",
                         self.describe(&d)
                     )
                 })?;
@@ -304,7 +302,7 @@ impl Runner<'_> {
     }
 
     /// The open decision, which must be `player`'s and of `kind`.
-    fn expect(&mut self, i: usize, player: u8, kind: DecisionKind) -> Result<Decision, String> {
+    fn expect(&mut self, i: usize, player: Seat, kind: DecisionKind) -> Result<Decision, String> {
         let d = self.decision(i)?;
         if d.player == player && d.kind == kind {
             Ok(d)
@@ -316,12 +314,12 @@ impl Runner<'_> {
         }
     }
 
-    fn name(&self, slot: u8) -> &'static str {
+    fn name(&self, slot: Slot) -> &'static str {
         name_of(&self.s, self.t, slot)
     }
 
     /// The object an option names, if it names one.
-    fn named(&self, o: Opt) -> Option<u8> {
+    fn named(&self, o: Opt) -> Option<Slot> {
         match o {
             Opt::PlayLand(slot)
             | Opt::Attack(slot)
@@ -331,13 +329,13 @@ impl Runner<'_> {
             | Opt::Activate { slot, .. }
             | Opt::Mana { slot, .. }
             | Opt::Object(slot) => Some(slot),
-            Opt::Defender(slot) if slot != NONE => Some(slot),
+            Opt::Defender(slot) => slot,
             Opt::Trigger(i) => self
                 .s
                 .triggers()
                 .get(usize::from(i))
-                .map(|tr| tr.source.slot)
-                .filter(|&slot| slot != NONE),
+                .and_then(|tr| tr.source)
+                .map(|r| r.slot),
             _ => None,
         }
     }
@@ -359,14 +357,14 @@ impl Runner<'_> {
             Pick::No => Opt::No,
             Pick::Done => Opt::Done,
             Pick::Player { player } => Opt::Player(player),
-            Pick::DefendingPlayer => Opt::Defender(NONE),
+            Pick::DefendingPlayer => Opt::Defender(None),
             Pick::Plan { i } => Opt::Plan(i),
         };
         option_index(d, |o| o == wanted)
     }
 
     /// The permanents named `card` that `player` controls, in the order they entered.
-    fn permanents<'b>(&'b self, player: u8, card: &'b str) -> impl Iterator<Item = u8> + 'b {
+    fn permanents<'b>(&'b self, player: Seat, card: &'b str) -> impl Iterator<Item = Slot> + 'b {
         self.s
             .battlefield()
             .iter()
@@ -375,7 +373,7 @@ impl Runner<'_> {
     }
 
     /// The first permanent named `card` that `player` controls.
-    fn permanent(&self, player: u8, card: &str) -> Result<u8, String> {
+    fn permanent(&self, player: Seat, card: &str) -> Result<Slot, String> {
         self.permanents(player, card)
             .next()
             .ok_or_else(|| format!("player {player} controls no {card}"))
@@ -463,7 +461,7 @@ impl Runner<'_> {
                 creature,
             } => {
                 let d = s.derived(self.permanent(player, card)?);
-                let is = Types(d.types).contains(Types::CREATURE);
+                let is = d.types.contains(Types::CREATURE);
                 (is.to_string(), creature.to_string())
             }
             Assertion::Counters {

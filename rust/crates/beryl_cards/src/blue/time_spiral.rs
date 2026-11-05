@@ -2,6 +2,7 @@
 //! graveyard into their library, then draws seven cards. You untap up to six lands."
 
 use beryl_engine::DecisionKind;
+use beryl_engine::Seat;
 use beryl_engine::Zone;
 use beryl_engine::card::{Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, Types};
 use beryl_engine::effect::EffectCtx;
@@ -45,7 +46,7 @@ fn spiral(ctx: &mut EffectCtx) -> Flow {
     let lands = tapped.select(
         s,
         ctx.table(),
-        s.zone(0, Zone::Battlefield) | s.zone(1, Zone::Battlefield),
+        s.zone(Seat::P0, Zone::Battlefield) | s.zone(Seat::P1, Zone::Battlefield),
         ctx.controller(),
     );
     for slot in ctx.choose_up_to(ctx.controller(), lands, 6)?.iter() {
@@ -65,7 +66,7 @@ const SIX_LANDS: &[Permanent] = &[
     Permanent::new(names::PLAINS),
 ];
 
-const fn count(player: u8, zone: Zone, card: Option<&'static str>, count: u8) -> Action {
+const fn count(player: Seat, zone: Zone, card: Option<&'static str>, count: u8) -> Action {
     Action::assert(Assertion::Count {
         player,
         zone,
@@ -74,7 +75,7 @@ const fn count(player: u8, zone: Zone, card: Option<&'static str>, count: u8) ->
     })
 }
 
-const fn tapped(player: u8, card: &'static str, count: u8) -> Action {
+const fn tapped(player: Seat, card: &'static str, count: u8) -> Action {
     Action::assert(Assertion::Tapped {
         player,
         card,

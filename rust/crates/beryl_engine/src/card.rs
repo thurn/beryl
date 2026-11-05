@@ -6,6 +6,7 @@
 
 use crate::effect::EffectCtx;
 use crate::filter::{Filter, Whose};
+use crate::ids::Seat;
 use crate::state::{CounterKind, PendingTrigger, State, TurnStep};
 use crate::table::GameTable;
 
@@ -111,21 +112,32 @@ impl Face {
         grants: &[],
     };
 
-    /// The ability at `index`: one of this face's own, or, with the [`GRANTED`] bit, one it
-    /// grants.
-    pub fn ability(&'static self, index: u8) -> &'static Ability {
-        if index & GRANTED == 0 {
-            &self.abilities[usize::from(index)]
-        } else {
-            &self.grants[usize::from(index & !GRANTED)]
+    /// One of this face's own abilities or of those it grants.
+    pub fn ability(&'static self, ability: FaceAbility) -> &'static Ability {
+        match ability {
+            FaceAbility::Own(i) => &self.abilities[usize::from(i)],
+            FaceAbility::Grant(i) => &self.grants[usize::from(i)],
         }
     }
 }
 
-/// The bit of an ability index that names a granted ability: in a stack entry, an index into
-/// its card face's [`Face::grants`]; in [`crate::decision::Opt::Activate`], an index into the
-/// permanent's [`crate::state::Derived::granted`].
-pub const GRANTED: u8 = 0x80;
+/// An ability printed on a face, as a stack entry names it: one the face has itself, by its
+/// index in [`Face::abilities`], or one the face grants to another object, by its index in
+/// [`Face::grants`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum FaceAbility {
+    Own(u8),
+    Grant(u8),
+}
+
+/// An ability of a permanent, as [`crate::decision::Opt::Activate`] names it: one of its face
+/// up's own, by its index in [`Face::abilities`], or the `k`th ability other objects grant
+/// it, by its index in [`crate::state::Derived::granted`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum AbilityIx {
+    Own(u8),
+    Granted(u8),
+}
 
 /// A mana cost: generic mana plus colored and colorless symbols, and any {X}.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -272,6 +284,12 @@ macro_rules! bitset {
 
             pub fn intersects(self, other: $name) -> bool {
                 self.0 & other.0 != 0
+            }
+
+            /// The members of `self` not in `other`.
+            #[must_use]
+            pub const fn minus(self, other: $name) -> $name {
+                $name(self.0 & !other.0)
             }
         }
     };
@@ -934,7 +952,7 @@ pub enum StaticCondition {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Modification {
     /// Layer 2: "gain control of".
-    Control(u8),
+    Control(Seat),
     /// Layer 4: "becomes [types] in addition to its other types".
     AddTypes(Types),
     /// Layer 4: "isn't a [type]".

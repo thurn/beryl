@@ -7,7 +7,9 @@ use beryl_cards::CARDS;
 use beryl_cards::decks::{WU_CONTROL, fuzz_deck};
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::Pending;
-use beryl_engine::{Decision, GameTable, Observation, Replay, Scratch, State, Step, next};
+use beryl_engine::{
+    Decision, GameTable, Observation, Replay, Scratch, Seat, Slot, State, Step, next,
+};
 use beryl_session::protocol::{DecisionView, Moment, player_view};
 use beryl_session::{
     CandidateIndex, DecisionId, Game, PlayerView, ReplayFile, SessionError, SessionId, Sessions,
@@ -23,7 +25,7 @@ fn start(seed: u64, stops: StopsSetting) -> StartGame {
     StartGame {
         seed,
         decks: [owned(&fuzz_deck(seed)), owned(&fuzz_deck(seed ^ 1 << 40))],
-        human: 0,
+        human: Seat::P0,
         opponent: "random".to_owned(),
         stops,
     }
@@ -196,7 +198,7 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
             for o in &view.objects {
                 if o.name.is_some() {
                     assert!(
-                        seen.knows(0, o.slot),
+                        seen.knows(Seat::P0, Slot::new(o.slot)),
                         "seed {seed}: slot {} is named but unknown",
                         o.slot
                     );
@@ -214,11 +216,11 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
                 continue;
             }
             let d = open_decision(s, t);
-            let det = Observation::new(s, 0).determinize(t, &mut rng);
+            let det = Observation::new(s, Seat::P0).determinize(t, &mut rng);
             let mut x = Scratch::new();
             let theirs = player_view(
                 t,
-                Observation::new(beryl_engine::view(&det, t, &mut x), 0),
+                Observation::new(beryl_engine::view(&det, t, &mut x), Seat::P0),
                 Moment::Deciding(decision(&view).id, &d),
                 view.stops,
                 game.events(),
@@ -236,7 +238,7 @@ fn open_decision(s: &State, t: &GameTable) -> Decision {
     let mut s = *s;
     match next(&mut s, t, &mut Scratch::new(), &mut Replay) {
         Step::Decide(d) => {
-            assert_eq!(d.player, 0);
+            assert_eq!(d.player, Seat::P0);
             d
         }
         Step::Over(o) => panic!("the game is over: {o:?}"),

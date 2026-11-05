@@ -19,6 +19,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+pub use beryl_engine::Seat;
 pub use game::{Answer, Game, OpenDecision};
 pub use protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status, StopsSetting};
 pub use replay::ReplayFile;
@@ -32,7 +33,7 @@ pub struct StartGame {
     /// Each seat's decklist: (count, card name).
     pub decks: [Vec<(u8, String)>; 2],
     /// The human's seat.
-    pub human: u8,
+    pub human: Seat,
     /// The name of the agent in the other seat ([`beryl_search::AGENTS`]).
     pub opponent: String,
     pub stops: StopsSetting,

@@ -133,7 +133,7 @@ export type StackItem = { "kind": "spell", slot: number, targets: Array<TargetRe
 /**
  * The announced value of X.
  */
-x: number, } | { "kind": "ability", source: number, ability: number, name: string, controller: Side, targets: Array<TargetRef>, 
+x: number, } | { "kind": "ability", source: number | null, ability: number, granted: boolean, name: string, controller: Side, targets: Array<TargetRef>, 
 /**
  * The announced value of X.
  */
@@ -153,7 +153,7 @@ export type CandidateView = {
  */
 label: string, option: Candidate, };
 
-export type Candidate = { "kind": "object", slot: number, } | { "kind": "pass" } | { "kind": "playLand", slot: number, } | { "kind": "play" } | { "kind": "draw" } | { "kind": "keep" } | { "kind": "mulligan" } | { "kind": "trigger", index: number, source: number | null, } | { "kind": "yes" } | { "kind": "no" } | { "kind": "done" } | { "kind": "attack", slot: number, } | { "kind": "defender", planeswalker: number | null, } | { "kind": "block", slot: number, } | { "kind": "lethal", slot: number, } | { "kind": "cast", slot: number, face: number, costs: Array<number>, } | { "kind": "activate", slot: number, ability: number, } | { "kind": "mana", slot: number, color: Mana, } | { "kind": "pool", color: Mana, } | { "kind": "number", n: number, } | { "kind": "plan", index: number, } | { "kind": "player", player: Side, };
+export type Candidate = { "kind": "object", slot: number, } | { "kind": "pass" } | { "kind": "playLand", slot: number, } | { "kind": "play" } | { "kind": "draw" } | { "kind": "keep" } | { "kind": "mulligan" } | { "kind": "trigger", index: number, source: number | null, } | { "kind": "yes" } | { "kind": "no" } | { "kind": "done" } | { "kind": "attack", slot: number, } | { "kind": "defender", planeswalker: number | null, } | { "kind": "block", slot: number, } | { "kind": "lethal", slot: number, } | { "kind": "cast", slot: number, face: number, costs: Array<number>, } | { "kind": "activate", slot: number, ability: number, granted: boolean, } | { "kind": "mana", slot: number, color: Mana, } | { "kind": "pool", color: Mana, } | { "kind": "number", n: number, } | { "kind": "plan", index: number, } | { "kind": "player", player: Side, };
 
 export type OutcomeView = { "kind": "win", winner: Side, } | { "kind": "draw" } | { "kind": "stalled", reason: Stall, };
 

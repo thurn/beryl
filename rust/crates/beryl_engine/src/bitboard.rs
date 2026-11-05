@@ -2,7 +2,9 @@
 
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
-/// A set of object slots, `[u64; 4]` for the 256 slots. Zone membership, knowledge and
+use crate::ids::Slot;
+
+/// A set of object slots, `[u64; 4]` for the 255 slots. Zone membership, knowledge and
 /// filters are ANDs and ORs over these, in the style of chess bitboards.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Bitboard(pub [u64; 4]);
@@ -10,22 +12,22 @@ pub struct Bitboard(pub [u64; 4]);
 impl Bitboard {
     pub const EMPTY: Self = Self([0; 4]);
 
-    pub fn single(slot: u8) -> Self {
+    pub fn single(slot: Slot) -> Self {
         let mut b = Self::EMPTY;
         b.insert(slot);
         b
     }
 
-    pub fn contains(self, slot: u8) -> bool {
-        self.0[usize::from(slot >> 6)] & (1 << (slot & 63)) != 0
+    pub fn contains(self, slot: Slot) -> bool {
+        self.0[slot.index() >> 6] & (1 << (slot.get() & 63)) != 0
     }
 
-    pub fn insert(&mut self, slot: u8) {
-        self.0[usize::from(slot >> 6)] |= 1 << (slot & 63);
+    pub fn insert(&mut self, slot: Slot) {
+        self.0[slot.index() >> 6] |= 1 << (slot.get() & 63);
     }
 
-    pub fn remove(&mut self, slot: u8) {
-        self.0[usize::from(slot >> 6)] &= !(1 << (slot & 63));
+    pub fn remove(&mut self, slot: Slot) {
+        self.0[slot.index() >> 6] &= !(1 << (slot.get() & 63));
     }
 
     pub fn is_empty(self) -> bool {
@@ -37,12 +39,12 @@ impl Bitboard {
     }
 
     /// The lowest slot in the set.
-    pub fn first(self) -> Option<u8> {
+    pub fn first(self) -> Option<Slot> {
         self.iter().next()
     }
 
     /// The `n`th slot in ascending order, the meaning of a `Choice` over objects.
-    pub fn nth(self, n: usize) -> Option<u8> {
+    pub fn nth(self, n: usize) -> Option<Slot> {
         self.iter().nth(n)
     }
 
@@ -56,14 +58,14 @@ impl Bitboard {
 pub struct Slots(Bitboard);
 
 impl Iterator for Slots {
-    type Item = u8;
+    type Item = Slot;
 
-    fn next(&mut self) -> Option<u8> {
+    fn next(&mut self) -> Option<Slot> {
         for (i, word) in self.0.0.iter_mut().enumerate() {
             if *word != 0 {
                 let bit = word.trailing_zeros();
                 *word &= *word - 1;
-                return Some((i as u32 * 64 + bit) as u8);
+                return Some(Slot::new((i as u32 * 64 + bit) as u8));
             }
         }
         None
@@ -86,8 +88,11 @@ impl BitOr for Bitboard {
 
 impl Not for Bitboard {
     type Output = Self;
+    /// Every slot not in the set. Bit 255 is no slot, so it stays clear.
     fn not(self) -> Self {
-        Self(self.0.map(|w| !w))
+        let mut words = self.0.map(|w| !w);
+        words[3] &= !(1 << 63);
+        Self(words)
     }
 }
 
@@ -103,8 +108,8 @@ impl BitOrAssign for Bitboard {
     }
 }
 
-impl FromIterator<u8> for Bitboard {
-    fn from_iter<I: IntoIterator<Item = u8>>(iter: I) -> Self {
+impl FromIterator<Slot> for Bitboard {
+    fn from_iter<I: IntoIterator<Item = Slot>>(iter: I) -> Self {
         let mut b = Self::EMPTY;
         for slot in iter {
             b.insert(slot);
@@ -116,22 +121,31 @@ impl FromIterator<u8> for Bitboard {
 #[cfg(test)]
 mod tests {
     use super::Bitboard;
+    use crate::ids::Slot;
+
+    fn set(slots: &[u8]) -> Bitboard {
+        slots.iter().map(|&s| Slot::new(s)).collect()
+    }
+
+    fn slots(b: Bitboard) -> Vec<u8> {
+        b.iter().map(Slot::get).collect()
+    }
 
     #[test]
     fn slots_iterate_in_ascending_order_across_words() {
-        let b: Bitboard = [255, 3, 64, 0, 130].into_iter().collect();
-        assert_eq!(b.iter().collect::<Vec<_>>(), vec![0, 3, 64, 130, 255]);
+        let b = set(&[254, 3, 64, 0, 130]);
+        assert_eq!(slots(b), vec![0, 3, 64, 130, 254]);
         assert_eq!(b.count(), 5);
-        assert_eq!(b.nth(2), Some(64));
-        assert!(b.contains(130) && !b.contains(131));
+        assert_eq!(b.nth(2), Some(Slot::new(64)));
+        assert!(b.contains(Slot::new(130)) && !b.contains(Slot::new(131)));
     }
 
     #[test]
     fn set_operations() {
-        let a: Bitboard = [1, 2, 200].into_iter().collect();
-        let b: Bitboard = [2, 200, 201].into_iter().collect();
-        assert_eq!((a & b).iter().collect::<Vec<_>>(), vec![2, 200]);
+        let a = set(&[1, 2, 200]);
+        let b = set(&[2, 200, 201]);
+        assert_eq!(slots(a & b), vec![2, 200]);
         assert_eq!((a | b).count(), 4);
-        assert_eq!((a & !b).iter().collect::<Vec<_>>(), vec![1]);
+        assert_eq!(slots(a & !b), vec![1]);
     }
 }

@@ -1,12 +1,13 @@
 //! State-based actions (architecture §8.4).
 
 use crate::bitboard::Bitboard;
-use crate::card::{Subtype, Subtypes, Supertypes, Types};
+use crate::card::{Subtype, Supertypes, Types};
 use crate::decision::{Outcome, StallReason};
 use crate::event::{self, Entry, Event, Reason, Sink};
 use crate::fixed::Full;
+use crate::ids::{Seat, Slot};
 use crate::layers;
-use crate::state::{NONE, ObjectFlags, Pending, SLOTS, State, TOKEN_SLOTS, Zone};
+use crate::state::{ObjectFlags, Pending, State, Zone, token_slots};
 use crate::table::GameTable;
 use crate::turn::apnap;
 use crate::zone;
@@ -90,17 +91,16 @@ fn doomed(s: &State) -> (Bitboard, Bitboard) {
     for &slot in &s.battlefield {
         let d = s.derived(slot);
         let o = s.object(slot);
-        let types = Types(d.types);
+        let types = d.types;
         let dies = types.contains(Types::CREATURE)
             && (d.toughness <= 0
                 || (o.damage > 0 && i16::from(o.damage) >= i16::from(d.toughness)));
-        let unattached = o.attached_to == NONE && Subtypes(d.subtypes).contains(Subtype::Aura);
+        let unattached = o.attached_to.is_none() && d.subtypes.contains(Subtype::Aura);
         if dies || unattached || (types.contains(Types::PLANESWALKER) && o.counters.loyalty == 0) {
             graveyard.insert(slot);
         }
     }
-    let tokens = (usize::from(TOKEN_SLOTS)..SLOTS)
-        .map(|slot| slot as u8)
+    let tokens = token_slots()
         .filter(|&slot| {
             let o = s.object(slot);
             o.flags.has(ObjectFlags::TOKEN) && !matches!(o.zone, Zone::Battlefield | Zone::Nowhere)
@@ -125,11 +125,11 @@ fn check_losses(s: &mut State, sink: &mut Sink) -> bool {
     s.outcome = match lost {
         [false, false] => return false,
         [true, true] => Some(Outcome::Draw),
-        [true, false] => Some(Outcome::Win(1)),
-        [false, true] => Some(Outcome::Win(0)),
+        [true, false] => Some(Outcome::Win(Seat::P1)),
+        [false, true] => Some(Outcome::Win(Seat::P0)),
     };
-    for player in 0..2u8 {
-        sink.push(if lost[usize::from(player)] {
+    for player in Seat::BOTH {
+        sink.push(if lost[player.index()] {
             Event::Lose { player }
         } else {
             Event::Win { player }
@@ -138,18 +138,18 @@ fn check_losses(s: &mut State, sink: &mut Sink) -> bool {
     true
 }
 
-fn is_legendary(s: &State, slot: u8) -> bool {
-    Supertypes(s.derived(slot).supertypes).contains(Supertypes::LEGENDARY)
+fn is_legendary(s: &State, slot: Slot) -> bool {
+    s.derived(slot).supertypes.contains(Supertypes::LEGENDARY)
 }
 
 /// The name of the permanent in `slot`: its face up's (CR 712.8d, 712.8e).
-fn name(s: &State, t: &GameTable, slot: u8) -> &'static str {
+fn name(s: &State, t: &GameTable, slot: Slot) -> &'static str {
     let o = s.object(slot);
     t.def(o.card).face_name(o.face)
 }
 
 /// The legendary permanents with the same controller and name as the one in `slot`.
-fn legend_group(s: &State, t: &GameTable, slot: u8) -> Bitboard {
+fn legend_group(s: &State, t: &GameTable, slot: Slot) -> Bitboard {
     let name_of = name(s, t, slot);
     let controller = s.controller(slot);
     s.battlefield
@@ -174,7 +174,7 @@ pub(crate) fn unresolved_legends(
     s: &State,
     t: &GameTable,
     kept: Bitboard,
-) -> Option<(u8, Bitboard)> {
+) -> Option<(Seat, Bitboard)> {
     for player in apnap(s) {
         for &slot in &s.battlefield {
             if s.controller(slot) != player || !is_legendary(s, slot) {

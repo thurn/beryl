@@ -2,9 +2,8 @@
 //! §17.4). A violation is an engine bug, never a rules outcome.
 
 use crate::bitboard::Bitboard;
-use crate::state::{
-    DECK_SLOTS, NONE, Object, ObjectFlags, Pending, SLOTS, State, TOKEN_SLOTS, Zone,
-};
+use crate::ids::{Seat, Slot};
+use crate::state::{DECK_SLOTS, Object, ObjectFlags, Pending, State, TOKEN_SLOTS, Zone};
 use crate::table::GameTable;
 
 /// Which invariant failed, and the slot or player it failed for.
@@ -12,15 +11,22 @@ use crate::table::GameTable;
 pub struct Violation {
     pub what: &'static str,
     /// The slot or player concerned, if one is.
-    pub at: Option<u8>,
+    pub at: Option<At>,
 }
 
-fn fail(what: &'static str, at: Option<u8>) -> Result<(), Violation> {
-    Err(Violation { what, at })
+/// What a [`Violation`] concerns.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum At {
+    Slot(Slot),
+    Player(Seat),
 }
 
-fn check(ok: bool, what: &'static str, at: Option<u8>) -> Result<(), Violation> {
-    if ok { Ok(()) } else { fail(what, at) }
+fn check(ok: bool, what: &'static str, at: Option<At>) -> Result<(), Violation> {
+    if ok {
+        Ok(())
+    } else {
+        Err(Violation { what, at })
+    }
 }
 
 impl State {
@@ -41,56 +47,48 @@ impl State {
     }
 
     fn check_objects(&self, t: &GameTable) -> Result<(), Violation> {
-        for i in 0..SLOTS {
-            let slot = i as u8;
+        for slot in Slot::all() {
+            let i = slot.index();
+            let at = Some(At::Slot(slot));
             let o = self.object(slot);
-            let deck_owner = i / DECK_SLOTS;
-            let in_deck = deck_owner < 2 && i % DECK_SLOTS < t.deck(deck_owner as u8).len();
+            let deck_owner = Seat::try_new((i / DECK_SLOTS) as u8);
+            let in_deck = deck_owner.is_some_and(|p| i % DECK_SLOTS < t.deck(p).len());
             if o.zone == Zone::Nowhere {
-                check(!in_deck, "a deck card is nowhere", Some(slot))?;
+                check(!in_deck, "a deck card is nowhere", at)?;
                 continue;
             }
             let token = o.flags.has(ObjectFlags::TOKEN);
             if i >= usize::from(TOKEN_SLOTS) {
-                // The shared pool holds tokens; slot NONE is never used.
-                check(
-                    token && slot != NONE,
-                    "a non-token in the token pool",
-                    Some(slot),
-                )?;
-                check(o.owner < 2, "no such owner", Some(slot))?;
+                // The shared pool holds tokens.
+                check(token, "a non-token in the token pool", at)?;
             } else {
+                check(in_deck && !token, "an object outside the deck slots", at)?;
                 check(
-                    in_deck && !token,
-                    "an object outside the deck slots",
-                    Some(slot),
-                )?;
-                check(
-                    usize::from(o.owner) == deck_owner,
+                    Some(o.owner) == deck_owner,
                     "a deck card with another owner",
-                    Some(slot),
+                    at,
                 )?;
             }
-            check(o.controller < 2, "no such controller", Some(slot))?;
-            check(usize::from(o.card) < t.len(), "no such card", Some(slot))?;
+            check(o.card.index() < t.len(), "no such card", at)?;
             for link in [o.attached_to, o.linked, o.combat] {
                 check(
-                    link == NONE || self.object(link).zone != Zone::Nowhere,
+                    link.is_none_or(|l| self.object(l).zone != Zone::Nowhere),
                     "a link to an empty slot",
-                    Some(slot),
+                    at,
                 )?;
             }
-            let on_battlefield = |link: u8| self.object(link).zone == Zone::Battlefield;
+            let on_battlefield =
+                |link: Option<Slot>| link.is_some_and(|l| self.object(l).zone == Zone::Battlefield);
             check(
-                o.attached_to == NONE || on_battlefield(o.attached_to),
+                o.attached_to.is_none() || on_battlefield(o.attached_to),
                 "attached to an object off the battlefield",
-                Some(slot),
+                at,
             )?;
             // An object exiled "until" its exiler leaves returns as it leaves (CR 610.3).
             check(
                 !o.flags.has(ObjectFlags::EXILED_UNTIL) || on_battlefield(o.linked),
                 "exiled until a permanent that already left",
-                Some(slot),
+                at,
             )?;
             if !matches!(o.zone, Zone::Battlefield | Zone::Stack) {
                 // What may stay off the battlefield: being a token, and a link to the
@@ -103,40 +101,36 @@ impl State {
                         incarnation: o.incarnation,
                         zone: o.zone,
                         owner: o.owner,
-                        controller: o.owner,
+                        base_controller: o.owner,
                         timestamp: o.timestamp,
                         flags: ObjectFlags(o.flags.0 & kept),
-                        linked: if until { o.linked } else { NONE },
+                        linked: if until { o.linked } else { None },
                         ..Object::EMPTY
                     } && (!until || o.zone == Zone::Exile),
                     "permanent status off the battlefield",
-                    Some(slot),
+                    at,
                 )?;
             }
             // A blocker blocks an attacker, or nothing once that attacker left combat
             // (CR 506.4).
             check(
                 !o.flags.has(ObjectFlags::BLOCKING)
-                    || o.combat == NONE
-                    || self.object(o.combat).flags.has(ObjectFlags::ATTACKING),
+                    || o.combat
+                        .is_none_or(|a| self.object(a).flags.has(ObjectFlags::ATTACKING)),
                 "a blocker blocking a nonattacker",
-                Some(slot),
+                at,
             )?;
             // CR 400.2: public zones are seen by everyone; CR 402.3: a hand by its owner.
-            let known_by = |p: u8| self.knows(p, slot);
+            let known_by = |p: Seat| self.knows(p, slot);
             if o.zone.is_public() {
                 check(
-                    known_by(0) && known_by(1),
+                    known_by(Seat::P0) && known_by(Seat::P1),
                     "a public card unknown",
-                    Some(slot),
+                    at,
                 )?;
             }
             if o.zone == Zone::Hand {
-                check(
-                    known_by(o.owner),
-                    "a hand card its owner doesn't know",
-                    Some(slot),
-                )?;
+                check(known_by(o.owner), "a hand card its owner doesn't know", at)?;
             }
         }
         Ok(())
@@ -145,13 +139,12 @@ impl State {
     fn check_zones(&self) -> Result<(), Violation> {
         let mut members = [[Bitboard::EMPTY; Zone::OWNED]; 2];
         let mut stack = Bitboard::EMPTY;
-        for i in 0..SLOTS {
-            let slot = i as u8;
+        for slot in Slot::all() {
             let o = self.object(slot);
             match o.zone {
                 Zone::Stack => stack.insert(slot),
                 Zone::Nowhere => {}
-                zone => members[usize::from(o.owner)][zone as usize].insert(slot),
+                zone => members[o.owner.index()][zone as usize].insert(slot),
             }
         }
         check(
@@ -164,21 +157,21 @@ impl State {
             "the stack bitboard disagrees",
             None,
         )?;
-        for p in 0..2u8 {
-            let owned = |zone: Zone| members[usize::from(p)][zone as usize];
-            let listed = |list: &[u8]| -> Option<Bitboard> {
+        for p in Seat::BOTH {
+            let owned = |zone: Zone| members[p.index()][zone as usize];
+            let listed = |list: &[Slot]| -> Option<Bitboard> {
                 let set: Bitboard = list.iter().copied().collect();
                 (set.count() as usize == list.len()).then_some(set)
             };
             check(
                 listed(self.library(p)) == Some(owned(Zone::Library)),
                 "the library list disagrees",
-                Some(p),
+                Some(At::Player(p)),
             )?;
             check(
                 listed(self.graveyard(p)) == Some(owned(Zone::Graveyard)),
                 "the graveyard list disagrees",
-                Some(p),
+                Some(At::Player(p)),
             )?;
         }
         let battlefield =
@@ -190,11 +183,13 @@ impl State {
             None,
         )?;
         for e in &self.stack {
-            if e.ability == NONE {
+            if e.is_spell() {
                 check(
-                    self.is_current(e.object) && self.object(e.object.slot).zone == Zone::Stack,
+                    e.object.is_some_and(|r| {
+                        self.is_current(r) && self.object(r.slot).zone == Zone::Stack
+                    }),
                     "a spell on the stack names a stale object",
-                    Some(e.object.slot),
+                    e.object.map(|r| At::Slot(r.slot)),
                 )?;
             }
         }
@@ -207,7 +202,7 @@ impl State {
         // resolution paused for an answer is still resolving (§7.3).
         let resolving = matches!(self.pending, Pending::Resolving(_));
         check(
-            t.active < 2 && t.priority < 2 && (t.passes < 2 || (t.passes == 2 && resolving)),
+            t.passes < 2 || (t.passes == 2 && resolving),
             "a bad turn",
             None,
         )?;
@@ -218,12 +213,12 @@ impl State {
         // "If a player attempted to draw a card from a library with no cards in it since the
         // last time state-based actions were checked, that player loses the game."
         if self.outcome.is_none() && self.pending == Pending::None {
-            for p in 0..2u8 {
+            for p in Seat::BOTH {
                 let player = self.player(p);
                 check(
                     player.life > 0 && !player.drew_from_empty,
                     "a player who has lost has priority",
-                    Some(p),
+                    Some(At::Player(p)),
                 )?;
             }
         }

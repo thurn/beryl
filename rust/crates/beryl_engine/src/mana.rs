@@ -18,6 +18,7 @@ use crate::decision::Opt;
 use crate::effect::EffectCtx;
 use crate::event::{self, Sink};
 use crate::fixed::{Fixed, Full};
+use crate::ids::{Seat, Slot};
 use crate::state::{ObjectFlags, PendingTrigger, State, Zone};
 use crate::table::GameTable;
 
@@ -140,7 +141,7 @@ impl Sources {
     pub(crate) fn of(
         s: &State,
         t: &GameTable,
-        player: u8,
+        player: Seat,
         exclude: Bitboard,
     ) -> Result<Self, Full> {
         let mut classes: Fixed<Class, CLASSES> = Fixed::new();
@@ -155,7 +156,7 @@ impl Sources {
             let face = &t.def(o.card).faces[usize::from(o.face)];
             // CR 302.6: a creature's {T} abilities need it under its controller's control
             // since their most recent turn began.
-            if Types(s.derived(slot).types).intersects(Types::CREATURE)
+            if s.derived(slot).types.intersects(Types::CREATURE)
                 && o.flags.has(ObjectFlags::SUMMONING_SICK)
             {
                 continue;
@@ -222,7 +223,7 @@ impl Sources {
     }
 
     /// Whether the source in `slot` is tapped by a plan.
-    fn taps_slot(&self, tapped: &[u8; CLASSES], slot: u8) -> bool {
+    fn taps_slot(&self, tapped: &[u8; CLASSES], slot: Slot) -> bool {
         self.classes()
             .iter()
             .zip(tapped)
@@ -235,7 +236,7 @@ impl Sources {
 pub(crate) fn available(
     s: &State,
     t: &GameTable,
-    player: u8,
+    player: Seat,
     exclude: Bitboard,
 ) -> Result<Units, Full> {
     let sources = Sources::of(s, t, player, exclude)?;
@@ -246,7 +247,7 @@ pub(crate) fn available(
 pub(crate) fn sources(
     s: &State,
     t: &GameTable,
-    player: u8,
+    player: Seat,
     exclude: Bitboard,
 ) -> Result<Bitboard, Full> {
     let sources = Sources::of(s, t, player, exclude)?;
@@ -260,7 +261,7 @@ pub(crate) fn sources(
 pub(crate) fn payable(
     s: &State,
     t: &GameTable,
-    player: u8,
+    player: Seat,
     cost: ManaCost,
     exclude: Bitboard,
 ) -> Result<bool, Full> {
@@ -448,12 +449,12 @@ fn lowest_kind(kinds: u8) -> usize {
 struct Later {
     cost: ManaCost,
     /// The permanent whose {T} the cost includes, or none.
-    taps: Option<u8>,
+    taps: Option<Slot>,
 }
 
 /// The costs a payment should keep payable (§10): the mana costs of the player's cards in
 /// hand and the activation costs of their permanents' abilities, each once.
-fn later_costs(s: &State, t: &GameTable, player: u8) -> Fixed<Later, 32> {
+fn later_costs(s: &State, t: &GameTable, player: Seat) -> Fixed<Later, 32> {
     let mut later: Fixed<Later, 32> = Fixed::new();
     let mut add = |l: Later| {
         if !later.iter().any(|&x| x == l) {
@@ -527,7 +528,7 @@ fn still_payable(sources: &Sources, plan: &Plan, later: &[Later]) -> usize {
 pub(crate) fn plans(
     s: &State,
     t: &GameTable,
-    player: u8,
+    player: Seat,
     cost: ManaCost,
     exclude: Bitboard,
     greedy: bool,
@@ -584,7 +585,7 @@ pub(crate) fn pay(
     s: &mut State,
     t: &GameTable,
     sink: &mut Sink,
-    player: u8,
+    player: Seat,
     cost: ManaCost,
     exclude: Bitboard,
     plan: &Plan,
@@ -601,14 +602,14 @@ pub(crate) fn pay(
             .sum::<u32>();
     let spent = spent_by_class(&sources, plan, total - must);
     // The units spent: (kinds, source slot or none for floating mana, how many).
-    let mut units: Fixed<(u8, Option<u8>, u8), 64> = Fixed::new();
+    let mut units: Fixed<(u8, Option<Slot>, u8), 64> = Fixed::new();
     for (k, &n) in plan.spend.iter().enumerate() {
         for _ in 0..n {
             units.push((1 << k, None, 1))?;
         }
     }
     for (i, c) in sources.classes().iter().enumerate() {
-        let tapped: Fixed<u8, 64> = {
+        let tapped: Fixed<Slot, 64> = {
             let mut v = Fixed::new();
             for slot in c.members.iter().take(usize::from(plan.taps[i])) {
                 v.push(slot)?;
@@ -649,7 +650,7 @@ fn augment(
     sym: usize,
     symbols: &[usize],
     slots: &[usize],
-    units: &[(u8, Option<u8>, u8)],
+    units: &[(u8, Option<Slot>, u8)],
     owner: &mut [Option<usize>],
     seen: &mut [bool; 64],
 ) -> bool {
@@ -673,7 +674,7 @@ fn augment(
 /// Assigns the colored and colorless symbols of `cost` to units, each unit `(kinds, _, n)`
 /// paying `n` symbols of one kind: the kind each unit is spent as, or `None` where it pays
 /// only generic mana. Kuhn's augmenting paths over the few symbols a cost has.
-fn assign(cost: ManaCost, units: &[(u8, Option<u8>, u8)]) -> Fixed<Option<usize>, 64> {
+fn assign(cost: ManaCost, units: &[(u8, Option<Slot>, u8)]) -> Fixed<Option<usize>, 64> {
     let mut symbols: Fixed<usize, 64> = Fixed::new();
     for (k, &n) in cost.symbols.iter().enumerate() {
         for _ in 0..n {
@@ -724,7 +725,7 @@ pub(crate) fn activate(
     s: &mut State,
     t: &GameTable,
     sink: &mut Sink,
-    slot: u8,
+    slot: Slot,
     color: ManaColor,
 ) -> Result<(), Full> {
     let o = *s.object(slot);
@@ -738,7 +739,7 @@ pub(crate) fn activate(
     let source = s.object_ref(slot);
     event::set_tapped(s, t, sink, source, true)?;
     let activation = PendingTrigger {
-        source,
+        source: Some(source),
         controller: s.controller(slot),
         ability: index as u8,
         card: o.card,
@@ -773,7 +774,7 @@ fn helps(remaining: ManaCost, kind: usize) -> bool {
 pub(crate) fn manual_options(
     s: &State,
     t: &GameTable,
-    player: u8,
+    player: Seat,
     remaining: ManaCost,
     exclude: Bitboard,
 ) -> Result<Fixed<Opt, 64>, Full> {
@@ -820,7 +821,7 @@ pub(crate) fn manual_pay(
     s: &mut State,
     t: &GameTable,
     sink: &mut Sink,
-    player: u8,
+    player: Seat,
     mut remaining: ManaCost,
     option: Opt,
 ) -> Result<ManaCost, Full> {
@@ -844,7 +845,7 @@ pub(crate) fn manual_pay(
 pub(crate) fn standalone_options(
     s: &State,
     t: &GameTable,
-    player: u8,
+    player: Seat,
     out: &mut Fixed<Opt, 64>,
 ) -> Result<(), Full> {
     let sources = Sources::of(s, t, player, Bitboard::EMPTY)?;

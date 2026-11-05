@@ -12,7 +12,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::{Filter, Whose};
-use beryl_engine::{DecisionKind, TurnStep, Zone};
+use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -73,7 +73,7 @@ const THREE_ISLANDS: &[Permanent] = &[
     Permanent::new(names::ISLAND),
 ];
 
-const fn count(player: u8, zone: Zone, card: &'static str, count: u8) -> Action {
+const fn count(player: Seat, zone: Zone, card: &'static str, count: u8) -> Action {
     Action::assert(Assertion::Count {
         player,
         zone,

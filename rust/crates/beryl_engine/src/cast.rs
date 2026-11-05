@@ -12,24 +12,25 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, CastingOption, Face, GRANTED, Keywords, ManaCost, Rule, TargetKind,
-    TargetSpec, Timing, Types,
+    Ability, AbilityIx, AbilityKind, CastingOption, Face, FaceAbility, Keywords, ManaCost, Rule,
+    TargetKind, TargetSpec, Timing, Types,
 };
 use crate::decision::{Candidates, Decision, DecisionKind, Opt};
 use crate::engine::collapse;
 use crate::event::{self, Event, Reason, Sink};
 use crate::filter::{Filter, Whose};
 use crate::fixed::{Fixed, Full};
+use crate::ids::{CardIx, Seat, Slot};
 use crate::mana;
 use crate::profile::Payment;
 use crate::state::{
-    CastPermission, CastStep, Casting, CounterKind, NONE, ObjectFlags, ObjectRef, Pending,
-    StackEntry, State, Target, TurnStep, Zone, opponent,
+    CastPermission, CastStep, Casting, CounterKind, ObjectFlags, ObjectRef, Pending, StackEntry,
+    State, Target, TurnStep, Zone,
 };
 use crate::table::GameTable;
 
 /// The face of an object as it is now.
-fn face_of(s: &State, t: &GameTable, slot: u8) -> &'static Face {
+fn face_of(s: &State, t: &GameTable, slot: Slot) -> &'static Face {
     let o = s.object(slot);
     &t.def(o.card).faces[usize::from(o.face)]
 }
@@ -38,38 +39,39 @@ fn face_of(s: &State, t: &GameTable, slot: u8) -> &'static Face {
 /// ability. A permanent spell with no targets has none.
 pub(crate) fn entry_ability(t: &GameTable, entry: &StackEntry) -> Option<&'static Ability> {
     let face = &t.def(entry.card).faces[usize::from(entry.face)];
-    if entry.is_spell() {
-        face.spell_ability()
-    } else {
-        Some(face.ability(entry.ability))
+    match entry.ability {
+        None => face.spell_ability(),
+        Some(ability) => Some(face.ability(ability)),
     }
 }
 
 /// The ability of a stack entry that is an ability, by its card, face and index.
 fn entry_ability_of(t: &GameTable, entry: &StackEntry) -> &'static Ability {
-    t.def(entry.card).faces[usize::from(entry.face)].ability(entry.ability)
+    entry_ability(t, entry).expect("an ability's entry")
 }
 
-/// The card, face and ability index a stack entry records for activating ability `index` of
-/// the permanent in `slot`: its own, or, with the [`GRANTED`] bit, the `k`th ability granted
-/// to it, which is printed on the granting card (§9).
-fn activated(s: &State, slot: u8, index: u8) -> Option<(u8, u8, u8)> {
+/// The card, face and ability a stack entry records for activating ability `ability` of the
+/// permanent in `slot`: one of its own, or one granted to it, which is printed on the
+/// granting card's front face (§9).
+fn activated(s: &State, slot: Slot, ability: AbilityIx) -> Option<(CardIx, u8, FaceAbility)> {
     let o = s.object(slot);
-    if index & GRANTED == 0 {
-        return Some((o.card, o.face, index));
+    match ability {
+        AbilityIx::Own(i) => Some((o.card, o.face, FaceAbility::Own(i))),
+        AbilityIx::Granted(k) => {
+            if o.zone != Zone::Battlefield {
+                return None;
+            }
+            let grant = s.derived(slot).granted[usize::from(k)]?;
+            Some((grant.card, 0, FaceAbility::Grant(grant.grant)))
+        }
     }
-    if o.zone != Zone::Battlefield {
-        return None;
-    }
-    let granted = s.derived(slot).granted[usize::from(index & !GRANTED)];
-    (granted.card != NONE).then_some((granted.card, 0, GRANTED | granted.ability))
 }
 
 /// Whether `player` may cast a sorcery now
 /// ([CR 307.1](https://yawgatog.com/resources/magic-rules/#R3071)): "A player who has
 /// priority may cast a sorcery card from their hand during a main phase of their turn when the
 /// stack is empty."
-pub(crate) fn sorcery_timing(s: &State, player: u8) -> bool {
+pub(crate) fn sorcery_timing(s: &State, player: Seat) -> bool {
     player == s.turn.active
         && matches!(
             s.turn.step,
@@ -79,7 +81,7 @@ pub(crate) fn sorcery_timing(s: &State, player: u8) -> bool {
 }
 
 /// Whether a permanent on the battlefield has a static ability with this rule.
-fn has_rule(s: &State, t: &GameTable, slot: u8, rule: Rule) -> bool {
+fn has_rule(s: &State, t: &GameTable, slot: Slot, rule: Rule) -> bool {
     face_of(s, t, slot)
         .abilities
         .iter()
@@ -91,9 +93,9 @@ fn has_rule(s: &State, t: &GameTable, slot: u8, rule: Rule) -> bool {
 /// ([CR 101.2](https://yawgatog.com/resources/magic-rules/#R1012)): "When a rule or effect
 /// allows or directs something to happen, and another effect states that it can't happen,
 /// the "can't" effect takes precedence."
-fn limited_to_sorcery_speed(s: &State, t: &GameTable, player: u8) -> bool {
+fn limited_to_sorcery_speed(s: &State, t: &GameTable, player: Seat) -> bool {
     s.battlefield.iter().any(|&slot| {
-        s.controller(slot) == opponent(player)
+        s.controller(slot) == player.opponent()
             && has_rule(s, t, slot, Rule::OpponentsCastAsSorceries)
     })
 }
@@ -102,14 +104,14 @@ fn limited_to_sorcery_speed(s: &State, t: &GameTable, player: u8) -> bool {
 /// ([CR 117.1a](https://yawgatog.com/resources/magic-rules/#R1171a)), a face with flash
 /// ([CR 702.8a](https://yawgatog.com/resources/magic-rules/#R7028a)), or a sorcery while an
 /// effect lets them cast sorceries as though they had flash.
-fn instant_speed(s: &State, face: &Face, player: u8) -> bool {
+fn instant_speed(s: &State, face: &Face, player: Seat) -> bool {
     face.types.intersects(Types::INSTANT)
         || face.keywords.contains(Keywords::FLASH)
         || (face.types.intersects(Types::SORCERY) && s.player(player).sorceries_as_flash)
 }
 
 /// The permission that lets `player` cast the card in `slot`, if one does.
-fn permission(s: &State, player: u8, slot: u8) -> Option<CastPermission> {
+fn permission(s: &State, player: Seat, slot: Slot) -> Option<CastPermission> {
     s.permissions
         .iter()
         .copied()
@@ -202,11 +204,11 @@ pub(crate) enum TargetSet {
     Players(u8),
 }
 
-fn player_matches(filter: Filter, player: u8, you: u8) -> bool {
+fn player_matches(filter: Filter, player: Seat, you: Seat) -> bool {
     match filter {
         Filter::Any => true,
         Filter::Whose(Whose::You) => player == you,
-        Filter::Whose(Whose::Opponent) => player == opponent(you),
+        Filter::Whose(Whose::Opponent) => player == you.opponent(),
         _ => unreachable!("a player filter is Any or Whose"),
     }
 }
@@ -215,17 +217,17 @@ fn player_matches(filter: Filter, player: u8, you: u8) -> bool {
 fn spells(s: &State) -> Bitboard {
     s.stack
         .iter()
-        .filter(|e| e.is_spell())
-        .map(|e| e.object.slot)
+        .filter_map(StackEntry::spell)
+        .map(|r| r.slot)
         .collect()
 }
 
 fn in_zone(s: &State, zone: Zone) -> Bitboard {
-    s.zone(0, zone) | s.zone(1, zone)
+    s.zone(Seat::P0, zone) | s.zone(Seat::P1, zone)
 }
 
 /// The objects or players a target spec can choose now, for a spell or ability controlled by
-/// `you`. `itself` is the spell being cast, which is an illegal target for itself
+/// `you`. `itself` is the spell being cast, if one is, which is an illegal target for itself
 /// ([CR 115.5](https://yawgatog.com/resources/magic-rules/#R1155)): "A spell or ability on the
 /// stack is an illegal target for itself." Before it is cast it is not yet on the stack, but
 /// it will have left the zone it is in when its targets are chosen. `x` is the value of X of
@@ -235,16 +237,17 @@ fn candidates(
     s: &State,
     t: &GameTable,
     spec: &TargetSpec,
-    you: u8,
-    itself: u8,
+    you: Seat,
+    itself: Option<Slot>,
     x: u8,
-    source: u8,
+    source: Option<Slot>,
 ) -> TargetSet {
     let mut within = match spec.kind {
         TargetKind::Player => {
-            let players = (0..2u8)
+            let players = Seat::BOTH
+                .into_iter()
                 .filter(|&p| player_matches(spec.filter, p, you))
-                .fold(0, |m, p| m | (1 << p));
+                .fold(0, |m, p| m | (1 << p.get()));
             return TargetSet::Players(players);
         }
         TargetKind::Permanent => in_zone(s, Zone::Battlefield),
@@ -252,10 +255,10 @@ fn candidates(
         TargetKind::SpellOrPermanent => spells(s) | in_zone(s, Zone::Battlefield),
         TargetKind::GraveyardCard => in_zone(s, Zone::Graveyard),
     };
-    if itself != NONE {
+    if let Some(itself) = itself {
         within.remove(itself);
     }
-    if spec.other && source != NONE {
+    if let Some(source) = source.filter(|_| spec.other) {
         within.remove(source);
     }
     TargetSet::Objects(spec.filter.select_x(s, t, within, you, x))
@@ -277,10 +280,10 @@ fn targetable(
     s: &State,
     t: &GameTable,
     ability: Option<&Ability>,
-    you: u8,
-    itself: u8,
+    you: Seat,
+    itself: Option<Slot>,
     x: u8,
-    source: u8,
+    source: Option<Slot>,
 ) -> bool {
     ability.is_none_or(|a| {
         a.targets.iter().all(|spec| {
@@ -290,13 +293,9 @@ fn targetable(
     })
 }
 
-/// The slot of an entry's ability source, or [`NONE`] for a spell.
-fn source_of(entry: &StackEntry) -> u8 {
-    if entry.is_spell() {
-        NONE
-    } else {
-        entry.object.slot
-    }
+/// The slot of an entry's ability source; a spell has none.
+fn source_of(entry: &StackEntry) -> Option<Slot> {
+    entry.object.filter(|_| !entry.is_spell()).map(|r| r.slot)
 }
 
 /// Whether a chosen target is still legal as its spell or ability resolves
@@ -321,11 +320,7 @@ pub(crate) fn still_legal(
     if !s.is_current(r) {
         return false;
     }
-    let itself = if entry.is_spell() {
-        entry.object.slot
-    } else {
-        NONE
-    };
+    let itself = entry.spell().map(|r| r.slot);
     match candidates(s, t, spec, you, itself, entry.x, source_of(entry)) {
         TargetSet::Objects(b) => b.contains(r.slot),
         TargetSet::Players(_) => false,
@@ -340,8 +335,8 @@ pub(crate) fn still_legal(
 fn castable(
     s: &State,
     t: &GameTable,
-    player: u8,
-    slot: u8,
+    player: Seat,
+    slot: Slot,
     face_index: u8,
     costs: u8,
     from: From,
@@ -372,7 +367,7 @@ fn castable(
             (0, free)
         }
     };
-    if !targetable(s, t, face.spell_ability(), player, slot, 0, NONE) {
+    if !targetable(s, t, face.spell_ability(), player, Some(slot), 0, None) {
         return Ok(false);
     }
     let x = x_range_start(face, costs, free).unwrap_or(0);
@@ -386,7 +381,7 @@ fn castable(
 }
 
 /// The cards `player` can cast at priority: their hand and the cards a permission names.
-fn cast_sources(s: &State, player: u8) -> Bitboard {
+fn cast_sources(s: &State, player: Seat) -> Bitboard {
     let mut cards = s.zone(player, Zone::Hand);
     for p in &s.permissions {
         if p.player == player && s.is_current(p.object) {
@@ -400,7 +395,7 @@ fn cast_sources(s: &State, player: u8) -> Bitboard {
 fn cast_options(
     s: &State,
     t: &GameTable,
-    player: u8,
+    player: Seat,
     cards: Bitboard,
     from: From,
     out: &mut Fixed<Opt, 64>,
@@ -428,7 +423,7 @@ fn cast_options(
 
 /// The permanents that pay for an ability with themselves, and so cannot also tap for its
 /// mana.
-fn spent_by_cost(slot: u8, a: &Ability) -> Bitboard {
+fn spent_by_cost(slot: Slot, a: &Ability) -> Bitboard {
     let mut b = Bitboard::EMPTY;
     if a.cost.tap || a.cost.sacrifice_self {
         b.insert(slot);
@@ -439,39 +434,45 @@ fn spent_by_cost(slot: u8, a: &Ability) -> Bitboard {
 /// The other untapped creatures `player` controls, which may crew the Vehicle in `vehicle`
 /// (CR 702.122a). Summoning sickness doesn't stop them: tapping them is a cost of the
 /// Vehicle's ability, not an ability of theirs with {T} (CR 302.6).
-fn crew_candidates(s: &State, player: u8, vehicle: u8) -> Bitboard {
+fn crew_candidates(s: &State, player: Seat, vehicle: Slot) -> Bitboard {
     s.battlefield()
         .iter()
         .copied()
         .filter(|&slot| {
             slot != vehicle
                 && s.controller(slot) == player
-                && Types(s.derived(slot).types).contains(Types::CREATURE)
+                && s.derived(slot).types.contains(Types::CREATURE)
                 && !s.object(slot).flags.has(ObjectFlags::TAPPED)
         })
         .collect()
 }
 
 /// A creature's power counted toward a crew cost; less than 0 counts as 0.
-fn power_of(s: &State, slot: u8) -> u8 {
+fn power_of(s: &State, slot: Slot) -> u8 {
     u8::try_from(s.derived(slot).power.max(0)).unwrap_or(0)
 }
 
 /// The total power of the creatures that could crew the Vehicle in `vehicle`.
-fn crew_power(s: &State, player: u8, vehicle: u8) -> u32 {
+fn crew_power(s: &State, player: Seat, vehicle: Slot) -> u32 {
     crew_candidates(s, player, vehicle)
         .iter()
         .map(|slot| u32::from(power_of(s, slot)))
         .sum()
 }
 
-/// Whether `player` may activate ability `index` of the object in `slot` now.
+/// Whether `player` may activate ability `ability` of the object in `slot` now.
 ///
 /// [CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025): "A player can't begin to
 /// activate an ability that's prohibited from being activated."
-fn activatable(s: &State, t: &GameTable, player: u8, slot: u8, index: u8) -> Result<bool, Full> {
+fn activatable(
+    s: &State,
+    t: &GameTable,
+    player: Seat,
+    slot: Slot,
+    ability: AbilityIx,
+) -> Result<bool, Full> {
     let o = s.object(slot);
-    let Some((card, face, index)) = activated(s, slot, index) else {
+    let Some((card, face, index)) = activated(s, slot, ability) else {
         return Ok(false);
     };
     let a = t.def(card).faces[usize::from(face)].ability(index);
@@ -495,7 +496,7 @@ fn activatable(s: &State, t: &GameTable, player: u8, slot: u8, index: u8) -> Res
         // cost can't be activated unless the creature has been under its controller's control
         // since the start of their most recent turn."
         if o.flags.has(ObjectFlags::TAPPED)
-            || (Types(s.derived(slot).types).intersects(Types::CREATURE)
+            || (s.derived(slot).types.intersects(Types::CREATURE)
                 && o.flags.has(ObjectFlags::SUMMONING_SICK))
         {
             return Ok(false);
@@ -532,7 +533,7 @@ fn activatable(s: &State, t: &GameTable, player: u8, slot: u8, index: u8) -> Res
     if sorcery_speed && !sorcery_timing(s, player) {
         return Ok(false);
     }
-    if !targetable(s, t, Some(a), player, NONE, 0, slot) {
+    if !targetable(s, t, Some(a), player, None, 0, Some(slot)) {
         return Ok(false);
     }
     let cost = a.cost.mana.with_x(0);
@@ -550,7 +551,7 @@ fn activatable(s: &State, t: &GameTable, player: u8, slot: u8, index: u8) -> Res
 fn waterbend_payable(
     s: &State,
     t: &GameTable,
-    player: u8,
+    player: Seat,
     mut cost: ManaCost,
     bendable: u8,
     mut exclude: Bitboard,
@@ -566,13 +567,15 @@ fn waterbend_payable(
 /// The untapped artifacts and creatures `player` controls, which may each pay for one
 /// generic mana of a waterbend cost (CR 701.67a). Summoning sickness doesn't stop them:
 /// tapping them is a cost of the ability, not an ability of theirs with {T} (CR 302.6).
-fn benders(s: &State, player: u8) -> Bitboard {
+fn benders(s: &State, player: Seat) -> Bitboard {
     s.battlefield()
         .iter()
         .copied()
         .filter(|&slot| {
             s.controller(slot) == player
-                && Types(s.derived(slot).types).intersects(Types::ARTIFACT.union(Types::CREATURE))
+                && s.derived(slot)
+                    .types
+                    .intersects(Types::ARTIFACT.union(Types::CREATURE))
                 && !s.object(slot).flags.has(ObjectFlags::TAPPED)
         })
         .collect()
@@ -583,10 +586,10 @@ fn benders(s: &State, player: u8) -> Bitboard {
 fn activation_options(
     s: &State,
     t: &GameTable,
-    player: u8,
+    player: Seat,
     out: &mut Fixed<Opt, 64>,
 ) -> Result<(), Full> {
-    let mine = s.zone(0, Zone::Battlefield) | s.zone(1, Zone::Battlefield);
+    let mine = s.zone(Seat::P0, Zone::Battlefield) | s.zone(Seat::P1, Zone::Battlefield);
     let objects = mine.iter().filter(|&slot| s.controller(slot) == player);
     let objects: Bitboard = objects.collect::<Bitboard>() | s.zone(player, Zone::Hand);
     for slot in collapse(s, objects).iter() {
@@ -596,13 +599,12 @@ fn activation_options(
         } else {
             0
         };
-        let indices = (0..own).chain((0..granted).map(|k| GRANTED | k));
-        for index in indices {
-            if activatable(s, t, player, slot, index)? {
-                out.push(Opt::Activate {
-                    slot,
-                    ability: index,
-                })?;
+        let abilities = (0..own)
+            .map(AbilityIx::Own)
+            .chain((0..granted).map(AbilityIx::Granted));
+        for ability in abilities {
+            if activatable(s, t, player, slot, ability)? {
+                out.push(Opt::Activate { slot, ability })?;
             }
         }
     }
@@ -614,7 +616,7 @@ fn activation_options(
 pub(crate) fn priority_options(
     s: &State,
     t: &GameTable,
-    player: u8,
+    player: Seat,
     out: &mut Fixed<Opt, 64>,
 ) -> Result<(), Full> {
     cast_options(s, t, player, cast_sources(s, player), From::Priority, out)?;
@@ -638,7 +640,7 @@ pub(crate) fn begin_cast(
     s: &mut State,
     t: &GameTable,
     sink: &mut Sink,
-    player: u8,
+    player: Seat,
     option: Opt,
     resolving: Option<bool>,
 ) -> Result<(), Full> {
@@ -650,11 +652,11 @@ pub(crate) fn begin_cast(
     let card = s.object(slot).card;
     let o = s.object_mut(slot);
     o.face = face;
-    o.controller = player;
+    o.base_controller = player;
     s.stack.push(StackEntry {
-        object: s.object_ref(slot),
+        object: Some(s.object_ref(slot)),
         controller: player,
-        ability: NONE,
+        ability: None,
         card,
         face,
         costs,
@@ -691,11 +693,11 @@ pub(crate) fn begin_activate(
     s: &mut State,
     t: &GameTable,
     sink: &mut Sink,
-    player: u8,
-    slot: u8,
-    index: u8,
+    player: Seat,
+    slot: Slot,
+    ability: AbilityIx,
 ) -> Result<(), Full> {
-    let (card, face, index) = activated(s, slot, index).expect("an ability offered");
+    let (card, face, index) = activated(s, slot, ability).expect("an ability offered");
     let a = t.def(card).faces[usize::from(face)].ability(index);
     if a.is_loyalty() {
         s.object_mut(slot)
@@ -703,9 +705,9 @@ pub(crate) fn begin_activate(
             .set(ObjectFlags::LOYALTY_ACTIVATED, true);
     }
     s.stack.push(StackEntry {
-        object: s.object_ref(slot),
+        object: Some(s.object_ref(slot)),
         controller: player,
-        ability: index,
+        ability: Some(index),
         card,
         face,
         ..StackEntry::default()
@@ -749,9 +751,9 @@ pub(crate) fn target_trigger(s: &mut State, t: &GameTable, sink: &mut Sink) -> R
         t,
         Some(ability),
         entry.controller,
-        NONE,
+        None,
         entry.x,
-        entry.object.slot,
+        source_of(&entry),
     ) {
         s.stack.pop();
         return Ok(());
@@ -793,22 +795,23 @@ fn specs(t: &GameTable, entry: &StackEntry) -> &'static [TargetSpec] {
 /// The total mana cost of the spell or ability being cast, once X is announced.
 fn total_cost(t: &GameTable, entry: &StackEntry, c: &Casting) -> ManaCost {
     let face = &t.def(entry.card).faces[usize::from(entry.face)];
-    if entry.is_spell() {
-        spell_cost(face, entry.costs, entry.x, c.extra, c.free)
-    } else {
-        let mut cost = face.ability(entry.ability).cost.mana.with_x(entry.x);
-        cost.generic -= c.bent;
-        cost
+    match entry.ability {
+        None => spell_cost(face, entry.costs, entry.x, c.extra, c.free),
+        Some(ability) => {
+            let mut cost = face.ability(ability).cost.mana.with_x(entry.x);
+            cost.generic -= c.bent;
+            cost
+        }
     }
 }
 
 /// What may be spent paying for the entry being cast, before its other costs are paid: all
 /// but a source that pays with itself.
 fn spent_by_entry(t: &GameTable, entry: &StackEntry) -> Bitboard {
-    if entry.is_spell() {
-        return Bitboard::EMPTY;
+    match source_of(entry) {
+        Some(source) => spent_by_cost(source, entry_ability_of(t, entry)),
+        None => Bitboard::EMPTY,
     }
-    spent_by_cost(entry.object.slot, entry_ability_of(t, entry))
 }
 
 /// Moves the machine on to its next question, or finishes.
@@ -873,7 +876,7 @@ fn begin_payment(
     let entry = top(s);
     if !entry.is_spell() {
         let a = entry_ability_of(t, &entry);
-        let source = entry.object;
+        let source = entry.object.expect("an activated ability's source");
         if a.cost.tap {
             event::set_tapped(s, t, sink, source, true)?;
         }
@@ -987,13 +990,13 @@ fn finish(s: &mut State, t: &GameTable, sink: &mut Sink, c: Casting) -> Result<(
     s.turn.priority = if c.resolving { s.turn.active } else { c.player };
     s.turn.passes = 0;
     let entry = top(s);
-    if entry.is_spell() {
+    if let Some(spell) = entry.spell() {
         event::settle(
             s,
             t,
             sink,
             Event::Cast {
-                spell: entry.object,
+                spell,
                 controller: entry.controller,
             },
         )?;
@@ -1028,11 +1031,7 @@ fn x_options(s: &State, t: &GameTable, c: &Casting) -> Result<Fixed<Opt, 64>, Fu
 fn target_options(s: &State, t: &GameTable, c: &Casting) -> TargetSet {
     let entry = top(s);
     let spec = &specs(t, &entry)[usize::from(c.spec)];
-    let itself = if entry.is_spell() {
-        entry.object.slot
-    } else {
-        NONE
-    };
+    let itself = entry.spell().map(|r| r.slot);
     match candidates(s, t, spec, c.player, itself, entry.x, source_of(&entry)) {
         TargetSet::Objects(mut b) => {
             for target in entry.targets.iter().filter(|x| x.spec == c.spec) {
@@ -1045,7 +1044,7 @@ fn target_options(s: &State, t: &GameTable, c: &Casting) -> TargetSet {
         TargetSet::Players(mut p) => {
             for target in entry.targets.iter().filter(|x| x.spec == c.spec) {
                 if let Some(player) = target.as_player() {
-                    p &= !(1 << player);
+                    p &= !(1 << player.get());
                 }
             }
             TargetSet::Players(p)
@@ -1080,7 +1079,7 @@ pub(crate) fn decision(s: &State, t: &GameTable, c: &Casting) -> Result<Decision
             },
             TargetSet::Players(p) => {
                 let mut list = Fixed::new();
-                for player in (0..2u8).filter(|&q| p & (1 << q) != 0) {
+                for player in Seat::BOTH.into_iter().filter(|q| p & (1 << q.get()) != 0) {
                     list.push(Opt::Player(player))?;
                 }
                 options(DecisionKind::Target, list)
@@ -1107,7 +1106,7 @@ pub(crate) fn decision(s: &State, t: &GameTable, c: &Casting) -> Result<Decision
             kind: DecisionKind::Crew,
             candidates: Candidates::Objects(collapse(
                 s,
-                crew_candidates(s, c.player, top(s).object.slot),
+                crew_candidates(s, c.player, source_of(&top(s)).expect("a Vehicle to crew")),
             )),
         },
         CastStep::Manual => options(
@@ -1125,7 +1124,7 @@ pub(crate) fn perform(
     sink: &mut Sink,
     mut c: Casting,
     option: Option<Opt>,
-    object: Option<u8>,
+    object: Option<Slot>,
 ) -> Result<(), Full> {
     match c.step {
         CastStep::X => {
@@ -1212,7 +1211,7 @@ pub(crate) fn offer_options(
     s: &State,
     t: &GameTable,
     object: ObjectRef,
-    player: u8,
+    player: Seat,
     free: bool,
 ) -> Result<Fixed<Opt, 64>, Full> {
     let mut out = Fixed::new();
@@ -1244,10 +1243,7 @@ pub(crate) fn counter(
 /// Removes a spell's entry from the stack, if it is there, for an effect that moves the
 /// spell's card elsewhere.
 pub(crate) fn take_spell(s: &mut State, spell: ObjectRef) -> Option<StackEntry> {
-    let i = s
-        .stack
-        .iter()
-        .position(|e| e.is_spell() && e.object == spell)?;
+    let i = s.stack.iter().position(|e| e.spell() == Some(spell))?;
     Some(s.stack.remove(i))
 }
 
@@ -1266,7 +1262,8 @@ pub(crate) fn leave_stack(
     } else {
         Zone::Graveyard
     };
-    event::move_one(s, t, sink, entry.object.slot, to, reason)
+    let spell = entry.spell().expect("a spell leaving the stack");
+    event::move_one(s, t, sink, spell.slot, to, reason)
 }
 
 /// The objects a pending reference names: stack targets and cast permissions. They are never

@@ -6,7 +6,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
-use beryl_engine::{DecisionKind, TurnStep, Zone};
+use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
 use crate::names;
@@ -65,7 +65,7 @@ const fn library(top: &'static [&'static str]) -> Action {
     Action::assert(Assertion::Library { player: P1, top })
 }
 
-const fn life(player: u8, life: i16) -> Action {
+const fn life(player: Seat, life: i16) -> Action {
     Action::assert(Assertion::Life { player, life })
 }
 

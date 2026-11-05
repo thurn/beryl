@@ -13,8 +13,9 @@ use crate::card::{
 use crate::effect::EffectCtx;
 use crate::event::{self, Event, Reason, Recipient, TokenEntry};
 use crate::filter::{Filter, Whose};
+use crate::ids::{Seat, Slot};
 use crate::state::{
-    Continuous, CounterKind, Duration, NONE, ObjectFlags, PendingTrigger, TurnStep, Zone, opponent,
+    Continuous, CounterKind, Duration, ObjectFlags, PendingTrigger, TurnStep, Zone,
 };
 use crate::{
     CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Outcome, Profile, Replay,
@@ -151,7 +152,7 @@ static DRAIN_LAND: CardDef = CardDef {
 };
 
 fn opponent_loses_one(ctx: &mut EffectCtx) -> crate::card::Flow {
-    ctx.lose_life(opponent(ctx.controller()), 1);
+    ctx.lose_life(ctx.controller().opponent(), 1);
     Ok(())
 }
 
@@ -409,15 +410,13 @@ static RECONFIG: CardDef = CardDef {
 };
 
 fn exile_an_opposing_creature(ctx: &mut EffectCtx) -> crate::card::Flow {
-    let them = opponent(ctx.controller());
+    let them = ctx.controller().opponent();
     let s = ctx.state();
     let target = s
         .battlefield()
         .iter()
         .copied()
-        .find(|&slot| {
-            s.controller(slot) == them && Types(s.derived(slot).types).contains(Types::CREATURE)
-        })
+        .find(|&slot| s.controller(slot) == them && s.derived(slot).types.contains(Types::CREATURE))
         .map(|slot| s.object_ref(slot));
     if let Some(target) = target {
         ctx.exile_until_source_leaves(target);
@@ -487,17 +486,17 @@ const DECK: &Decklist = &[
 ];
 
 /// A game in the starting player's first main phase, with that player and the table.
-fn game() -> (GameTable, State, u8) {
+fn game() -> (GameTable, State, Seat) {
     game_with_seed(7)
 }
 
 /// Each player gets a basic land in hand, so every main phase of theirs is a decision
 /// (passing priority never plays it) and tests can stop there.
-fn game_with_seed(seed: u64) -> (GameTable, State, u8) {
+fn game_with_seed(seed: u64) -> (GameTable, State, Seat) {
     let t = GameTable::new(&CARDS, [DECK, DECK]).unwrap();
     let mut s = State::new(&t, seed, Profile::EXACT);
     begin(&t, &mut s);
-    for player in 0..2 {
+    for player in Seat::BOTH {
         let land = (s.zone(player, Zone::Library))
             .iter()
             .find(|&slot| t.def(s.object(slot).card).name == "Test Land")
@@ -509,7 +508,7 @@ fn game_with_seed(seed: u64) -> (GameTable, State, u8) {
 }
 
 /// A slot holding `name` in the player's library or hand.
-fn find(s: &State, t: &GameTable, player: u8, name: &str) -> u8 {
+fn find(s: &State, t: &GameTable, player: Seat, name: &str) -> Slot {
     (s.zone(player, Zone::Library) | s.zone(player, Zone::Hand))
         .iter()
         .find(|&slot| t.def(s.object(slot).card).name == name)
@@ -517,7 +516,7 @@ fn find(s: &State, t: &GameTable, player: u8, name: &str) -> u8 {
 }
 
 /// Puts a card onto the battlefield through the pipeline, under its owner's control.
-fn put(t: &GameTable, s: &mut State, x: &mut Scratch, player: u8, name: &str) -> u8 {
+fn put(t: &GameTable, s: &mut State, x: &mut Scratch, player: Seat, name: &str) -> Slot {
     let slot = find(s, t, player, name);
     event::move_one(s, t, &mut x.events, slot, Zone::Battlefield, Reason::Effect).unwrap();
     slot
@@ -528,11 +527,11 @@ fn with_ctx(
     t: &GameTable,
     s: &mut State,
     x: &mut Scratch,
-    slot: u8,
+    slot: Slot,
     body: impl FnOnce(&mut EffectCtx),
 ) {
     let trigger = PendingTrigger {
-        source: s.object_ref(slot),
+        source: Some(s.object_ref(slot)),
         card: s.object(slot).card,
         controller: s.controller(slot),
         ..PendingTrigger::default()
@@ -576,7 +575,7 @@ fn advance_to(
     t: &GameTable,
     s: &mut State,
     x: &mut Scratch,
-    active: u8,
+    active: Seat,
     step: TurnStep,
 ) -> Decision {
     loop {
@@ -592,8 +591,8 @@ fn advance_to(
     }
 }
 
-fn types(s: &State, slot: u8) -> Types {
-    Types(s.derived(slot).types)
+fn types(s: &State, slot: Slot) -> Types {
+    s.derived(slot).types
 }
 
 #[test]
@@ -741,7 +740,7 @@ fn combat_damage_to_a_player_triggers_and_noncombat_damage_does_not() {
     let mut x = Scratch::new();
     let raider = put(&t, &mut s, &mut x, p, "Test Raider");
     let source = s.object_ref(raider);
-    let q = opponent(p);
+    let q = p.opponent();
     event::deal_damage(
         &mut s,
         &t,
@@ -776,7 +775,7 @@ fn upkeep_triggers_are_ordered_apnap_and_flip_coins() {
     let mut flips = [0, 0];
     for seed in 0..16 {
         let (t, mut s, p) = game_with_seed(seed);
-        let q = opponent(p);
+        let q = p.opponent();
         let mut x = Scratch::recording();
         put(&t, &mut s, &mut x, q, "Test Crypt Land");
         put(&t, &mut s, &mut x, p, "Test Watcher");
@@ -819,13 +818,13 @@ fn upkeep_triggers_are_ordered_apnap_and_flip_coins() {
 
 /// The trigger-order decisions on the way from the starting player's first main phase to
 /// their next one, with two Crypt Lands of theirs and two Watchers of the opponent's.
-fn order_decisions(distinct: bool) -> (u8, Vec<(u8, usize)>) {
+fn order_decisions(distinct: bool) -> (Seat, Vec<(Seat, usize)>) {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
     let a = put(&t, &mut s, &mut x, p, "Test Crypt Land");
     put(&t, &mut s, &mut x, p, "Test Crypt Land");
-    put(&t, &mut s, &mut x, opponent(p), "Test Watcher");
-    put(&t, &mut s, &mut x, opponent(p), "Test Watcher");
+    put(&t, &mut s, &mut x, p.opponent(), "Test Watcher");
+    put(&t, &mut s, &mut x, p.opponent(), "Test Watcher");
     if distinct {
         let r = s.object_ref(a);
         with_ctx(&t, &mut s, &mut x, a, |ctx| {
@@ -866,9 +865,9 @@ fn an_end_step_trigger_fires_on_its_controllers_turn_only() {
     let (t, mut s, p) = game();
     let mut x = Scratch::recording();
     put(&t, &mut s, &mut x, p, "Test Ender");
-    advance_to(&t, &mut s, &mut x, opponent(p), TurnStep::PrecombatMain);
+    advance_to(&t, &mut s, &mut x, p.opponent(), TurnStep::PrecombatMain);
     advance_to(&t, &mut s, &mut x, p, TurnStep::PrecombatMain);
-    let draws: Vec<(u8, TurnStep)> = {
+    let draws: Vec<(Seat, TurnStep)> = {
         let mut step = TurnStep::Untap;
         x.events
             .drain()
@@ -887,7 +886,7 @@ fn an_end_step_trigger_fires_on_its_controllers_turn_only() {
         draws,
         [
             (p, TurnStep::End),
-            (opponent(p), TurnStep::Draw),
+            (p.opponent(), TurnStep::Draw),
             (p, TurnStep::Draw)
         ]
     );
@@ -930,12 +929,12 @@ fn an_emblem_triggers_from_the_command_zone() {
     .unwrap();
     let them = Event::Cast {
         spell,
-        controller: opponent(p),
+        controller: p.opponent(),
     };
     event::settle(&mut s, &t, &mut x.events, them).unwrap();
     assert_eq!(s.triggers().len(), 1, "only its owner's spells");
     resolve_all(&t, &mut s, &mut x);
-    assert_eq!(s.player(opponent(p)).life, 19);
+    assert_eq!(s.player(p.opponent()).life, 19);
 }
 
 #[test]
@@ -964,7 +963,7 @@ fn whenever_you_create_creature_tokens_triggers_once_per_event() {
 fn lands_enter_tapped_conditionally_or_unless_life_is_paid() {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
-    let tapped = |s: &State, slot: u8| s.object(slot).flags.has(ObjectFlags::TAPPED);
+    let tapped = |s: &State, slot: Slot| s.object(slot).flags.has(ObjectFlags::TAPPED);
     let tapland = put(&t, &mut s, &mut x, p, "Test Tapland");
     assert!(tapped(&s, tapland));
     // Seachrome Coast: untapped with two or fewer other lands, tapped with three.
@@ -1062,24 +1061,25 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     let mut x = Scratch::new();
     let bear = put(&t, &mut s, &mut x, p, "Test Bear");
     let aura = put(&t, &mut s, &mut x, p, "Test Reconfiguration");
-    s.object_mut(aura).attached_to = bear;
+    s.object_mut(aura).attached_to = Some(bear);
     s.flags.derived_dirty = true;
     crate::layers::refresh(&mut s, &t);
     let d = s.derived(bear);
-    assert_eq!(Types(d.types), Types::ARTIFACT);
-    assert!(crate::card::Subtypes(d.subtypes).contains(Subtype::Vehicle));
-    assert_eq!(d.granted[0].card, s.object(aura).card);
-    let granted = &t.def(d.granted[0].card).front().grants[usize::from(d.granted[0].ability)];
+    assert_eq!(d.types, Types::ARTIFACT);
+    assert!(d.subtypes.contains(Subtype::Vehicle));
+    let grant = d.granted[0].unwrap();
+    assert_eq!(grant.card, s.object(aura).card);
+    let granted = &t.def(grant.card).front().grants[usize::from(grant.grant)];
     assert_eq!(granted.kind, AbilityKind::Activated);
     // A land loses its land types with its land type (CR 205.1a), and keeps the Vehicle.
     let land = put(&t, &mut s, &mut x, p, "Test Land");
-    s.object_mut(aura).attached_to = land;
+    s.object_mut(aura).attached_to = Some(land);
     s.flags.derived_dirty = true;
     crate::layers::refresh(&mut s, &t);
-    let subtypes = crate::card::Subtypes(s.derived(land).subtypes);
+    let subtypes = s.derived(land).subtypes;
     assert_eq!(subtypes.iter().collect::<Vec<_>>(), vec![Subtype::Vehicle]);
     assert_eq!(types(&s, bear), Types::CREATURE, "no longer enchanted");
-    s.object_mut(aura).attached_to = bear;
+    s.object_mut(aura).attached_to = Some(bear);
     s.flags.derived_dirty = true;
     crate::layers::refresh(&mut s, &t);
     // Crewed: an artifact creature until end of turn, by a later timestamp.
@@ -1092,7 +1092,7 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
         );
     });
     assert_eq!(types(&s, bear), Types::ARTIFACT.union(Types::CREATURE));
-    advance_to(&t, &mut s, &mut x, opponent(p), TurnStep::PrecombatMain);
+    advance_to(&t, &mut s, &mut x, p.opponent(), TurnStep::PrecombatMain);
     assert_eq!(types(&s, bear), Types::ARTIFACT);
 }
 
@@ -1104,7 +1104,7 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
     let mut x = Scratch::new();
     let bear = put(&t, &mut s, &mut x, p, "Test Bear");
     let aura = put(&t, &mut s, &mut x, p, "Test Reconfiguration");
-    s.object_mut(aura).attached_to = bear;
+    s.object_mut(aura).attached_to = Some(bear);
     s.flags.derived_dirty = true;
     crate::layers::refresh(&mut s, &t);
     let r = s.object_ref(bear);
@@ -1113,7 +1113,7 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
         let r = ctx.state().object_ref(bear);
         ctx.put_onto_battlefield(r, 0, None);
     });
-    assert_eq!(s.object(aura).attached_to, crate::state::NONE);
+    assert_eq!(s.object(aura).attached_to, None);
     assert_eq!(types(&s, bear), Types::CREATURE);
     decide_with(&t, &mut s, &mut x);
     assert_eq!(s.object(aura).zone, Zone::Graveyard);
@@ -1127,7 +1127,7 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
         token = ctx.create_tokens(&MAP, 1, TokenEntry::default());
     });
     let token = token.first().unwrap();
-    s.object_mut(aura).attached_to = token;
+    s.object_mut(aura).attached_to = Some(token);
     s.flags.derived_dirty = true;
     crate::layers::refresh(&mut s, &t);
     let r = s.object_ref(token);
@@ -1143,7 +1143,7 @@ fn a_stolen_creatures_dies_trigger_belongs_to_its_last_controller() {
     // information of a permanent that left is how it last existed on the battlefield.
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
-    let q = opponent(p);
+    let q = p.opponent();
     let sphinx = put(&t, &mut s, &mut x, q, "Test Sphinx");
     let thief = put(&t, &mut s, &mut x, p, "Test Bear");
     let r = s.object_ref(sphinx);
@@ -1184,7 +1184,7 @@ fn removing_a_counter_kind_an_object_lacks_changes_nothing() {
 fn gaining_control_changes_the_controller_until_the_effect_ends() {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
-    let q = opponent(p);
+    let q = p.opponent();
     let theirs = put(&t, &mut s, &mut x, q, "Test Bear");
     let mine = put(&t, &mut s, &mut x, p, "Test Adeline");
     assert_eq!(s.derived(mine).power, 1);
@@ -1232,12 +1232,12 @@ fn granted_keywords_end_at_cleanup_and_until_your_next_turn_lasts_through_theirs
         ctx.add_counters(r, CounterKind::PlusOne, 1);
     });
     let d = s.derived(bear);
-    assert!(Keywords(d.keywords).contains(Keywords::FIRST_STRIKE));
+    assert!(d.keywords.contains(Keywords::FIRST_STRIKE));
     // Layer 7c: -2/-0 and a +1/+1 counter.
     assert_eq!((d.power, d.toughness), (1, 3));
-    advance_to(&t, &mut s, &mut x, opponent(p), TurnStep::PrecombatMain);
+    advance_to(&t, &mut s, &mut x, p.opponent(), TurnStep::PrecombatMain);
     let d = s.derived(bear);
-    assert!(!Keywords(d.keywords).contains(Keywords::FIRST_STRIKE));
+    assert!(!d.keywords.contains(Keywords::FIRST_STRIKE));
     assert_eq!((d.power, d.toughness), (1, 3), "until your next turn");
     advance_to(&t, &mut s, &mut x, p, TurnStep::PrecombatMain);
     assert_eq!((s.derived(bear).power, s.derived(bear).toughness), (3, 3));
@@ -1272,7 +1272,7 @@ fn a_one_one_token_copy_has_the_cards_abilities() {
 fn an_object_exiled_until_its_exiler_leaves_returns_under_its_owners_control() {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
-    let q = opponent(p);
+    let q = p.opponent();
     let bear = put(&t, &mut s, &mut x, q, "Test Bear");
     let iceberg = put(&t, &mut s, &mut x, p, "Test Iceberg");
     resolve_all(&t, &mut s, &mut x);
@@ -1286,7 +1286,7 @@ fn an_object_exiled_until_its_exiler_leaves_returns_under_its_owners_control() {
     // CR 610.3b: if the exiler leaves before its trigger resolves, nothing is exiled.
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
-    let q = opponent(p);
+    let q = p.opponent();
     let bear = put(&t, &mut s, &mut x, q, "Test Bear");
     let iceberg = put(&t, &mut s, &mut x, p, "Test Iceberg");
     let r = s.object_ref(iceberg);
@@ -1376,11 +1376,11 @@ fn a_token_created_attacking_may_attack_a_planeswalker() {
     )
     .unwrap();
     let mut s = State::new(&t, 1, Profile::EXACT);
-    s.begin_at(1, 0, TurnStep::PrecombatMain);
+    s.begin_at(1, Seat::P0, TurnStep::PrecombatMain);
     let mut x = Scratch::new();
-    let cathar = find(&s, &t, 0, "Test Cathar");
+    let cathar = find(&s, &t, Seat::P0, "Test Cathar");
     s.place(cathar, Zone::Battlefield).unwrap();
-    let walker = put(&t, &mut s, &mut x, 1, "Test Walker");
+    let walker = put(&t, &mut s, &mut x, Seat::P1, "Test Walker");
     let mut declared = false;
     let human = loop {
         let human = s
@@ -1406,8 +1406,8 @@ fn a_token_created_attacking_may_attack_a_planeswalker() {
             DecisionKind::Attacker => pick(Opt::Done),
             // The declared attacker attacks the player; the Human, as it is created, the
             // planeswalker.
-            DecisionKind::AttackTarget if s.stack().is_empty() => pick(Opt::Defender(NONE)),
-            DecisionKind::AttackTarget => pick(Opt::Defender(walker)),
+            DecisionKind::AttackTarget if s.stack().is_empty() => pick(Opt::Defender(None)),
+            DecisionKind::AttackTarget => pick(Opt::Defender(Some(walker))),
             _ => Choice(0),
         };
         apply(&mut s, &t, &mut x, &mut Replay, choice);
@@ -1415,8 +1415,8 @@ fn a_token_created_attacking_may_attack_a_planeswalker() {
     let o = s.object(human);
     assert!(o.flags.has(ObjectFlags::ATTACKING) && o.flags.has(ObjectFlags::TAPPED));
     assert!(o.flags.has(ObjectFlags::ATTACKS_PLANESWALKER));
-    assert_eq!(o.combat, walker);
-    assert_eq!(s.object(cathar).combat, NONE);
+    assert_eq!(o.combat, Some(walker));
+    assert_eq!(s.object(cathar).combat, None);
 }
 
 fn steal_target(ctx: &mut EffectCtx) -> crate::card::Flow {
@@ -1489,16 +1489,16 @@ fn an_enters_ability_targets_by_the_x_its_spell_was_cast_with() {
         )
         .unwrap();
         let mut s = State::new(&t, 1, Profile::EXACT);
-        s.begin_at(1, 0, TurnStep::PrecombatMain);
+        s.begin_at(1, Seat::P0, TurnStep::PrecombatMain);
         let mut scratch = Scratch::new();
-        let thief = find(&s, &t, 0, "Test Thief");
+        let thief = find(&s, &t, Seat::P0, "Test Thief");
         s.place(thief, Zone::Hand).unwrap();
         for _ in 0..4 {
-            let land = find(&s, &t, 0, "Test Land");
+            let land = find(&s, &t, Seat::P0, "Test Land");
             s.place(land, Zone::Battlefield).unwrap();
         }
         let rocks = ["Test Rock 1", "Test Rock 3"].map(|name| {
-            let rock = find(&s, &t, 1, name);
+            let rock = find(&s, &t, Seat::P1, name);
             s.place(rock, Zone::Battlefield).unwrap();
             rock
         });
@@ -1534,7 +1534,7 @@ fn an_enters_ability_targets_by_the_x_its_spell_was_cast_with() {
         }
         for rock in rocks {
             let name = t.def(s.object(rock).card).name;
-            let expected = u8::from(name != stolen);
+            let expected = if name == stolen { Seat::P0 } else { Seat::P1 };
             assert_eq!(s.controller(rock), expected, "{name}, kicked for {x}");
         }
     }
@@ -1577,10 +1577,10 @@ fn a_transformed_permanent_has_its_front_faces_mana_value() {
     )
     .unwrap();
     let mut s = State::new(&t, 1, Profile::EXACT);
-    s.begin_at(1, 0, TurnStep::PrecombatMain);
-    let prodigy = find(&s, &t, 0, "Test Prodigy");
+    s.begin_at(1, Seat::P0, TurnStep::PrecombatMain);
+    let prodigy = find(&s, &t, Seat::P0, "Test Prodigy");
     s.place(prodigy, Zone::Battlefield).unwrap();
     s.set_face(prodigy, 1);
-    assert!(!Filter::ManaValueAtMost(1).matches(&s, &t, prodigy, 0));
-    assert!(Filter::ManaValueAtMost(2).matches(&s, &t, prodigy, 0));
+    assert!(!Filter::ManaValueAtMost(1).matches(&s, &t, prodigy, Seat::P0));
+    assert!(Filter::ManaValueAtMost(2).matches(&s, &t, prodigy, Seat::P0));
 }

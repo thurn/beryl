@@ -2,7 +2,9 @@
 //! (§12.2).
 
 use crate::bitboard::Bitboard;
+use crate::card::AbilityIx;
 use crate::fixed::Fixed;
+use crate::ids::{Seat, Slot};
 use crate::observation::Observation;
 
 /// What `next` returns: a decision to make, or the end of the game. A decision is a flat
@@ -21,7 +23,7 @@ pub struct Choice(pub u8);
 /// One factored single pick for one player.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Decision {
-    pub player: u8,
+    pub player: Seat,
     pub kind: DecisionKind,
     pub candidates: Candidates,
 }
@@ -117,7 +119,7 @@ impl Candidates {
     }
 
     /// The object a choice names, for object candidates.
-    pub fn object(&self, c: Choice) -> Option<u8> {
+    pub fn object(&self, c: Choice) -> Option<Slot> {
         match self {
             Candidates::Objects(b) => b.nth(usize::from(c.0)),
             Candidates::Options(_) => None,
@@ -140,7 +142,7 @@ pub enum Opt {
     #[default]
     Pass,
     /// Play the land card in this slot.
-    PlayLand(u8),
+    PlayLand(Slot),
     /// Take the first turn.
     Play,
     /// Let the other player take the first turn.
@@ -154,29 +156,28 @@ pub enum Opt {
     /// Finish a declaration or a division.
     Done,
     /// Declare the creature in this slot as an attacker.
-    Attack(u8),
-    /// Attack the planeswalker in this slot, or, for [`crate::state::NONE`], the defending
-    /// player.
-    Defender(u8),
+    Attack(Slot),
+    /// Attack the planeswalker in this slot, or, for `None`, the defending player.
+    Defender(Option<Slot>),
     /// Declare the creature in this slot as a blocker.
-    Block(u8),
+    Block(Slot),
     /// Assign lethal damage to the blocker in this slot.
-    Lethal(u8),
+    Lethal(Slot),
     /// Cast the card in `slot` with face `face` up, paying the casting options in the bitmask
     /// `costs` over the face's [`crate::card::Face::casting`] list.
     Cast {
-        slot: u8,
+        slot: Slot,
         face: u8,
         costs: u8,
     },
-    /// Activate ability `ability` of the object in `slot`'s face up.
+    /// Activate an ability of the object in `slot`.
     Activate {
-        slot: u8,
-        ability: u8,
+        slot: Slot,
+        ability: AbilityIx,
     },
     /// Tap the mana source in `slot` for one mana of the [`crate::card::ManaColor`] `color`.
     Mana {
-        slot: u8,
+        slot: Slot,
         color: u8,
     },
     /// Spend floating mana of the [`crate::card::ManaColor`] index.
@@ -186,15 +187,17 @@ pub enum Opt {
     /// The `i`th payment plan.
     Plan(u8),
     /// A player, as a target.
-    Player(u8),
+    Player(Seat),
     /// The object in this slot, among options that also offer [`Opt::Done`].
-    Object(u8),
+    Object(Slot),
 }
+
+const _: () = assert!(size_of::<Opt>() == 4);
 
 /// How a game ended.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Outcome {
-    Win(u8),
+    Win(Seat),
     /// A rules draw ([CR 104.4a](https://yawgatog.com/resources/magic-rules/#R1044a)): "If all
     /// the players remaining in a game lose simultaneously, the game is a draw."
     Draw,

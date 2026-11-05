@@ -12,7 +12,7 @@ use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::TokenEntry;
 use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::state::CounterKind;
-use beryl_engine::{DecisionKind, TurnStep, Zone};
+use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -110,7 +110,7 @@ const THREE_PLAINS: &[Permanent] = &[
     Permanent::new(names::PLAINS),
 ];
 
-const fn count(player: u8, zone: Zone, card: &'static str, count: u8) -> Action {
+const fn count(player: Seat, zone: Zone, card: &'static str, count: u8) -> Action {
     Action::assert(Assertion::Count {
         player,
         zone,

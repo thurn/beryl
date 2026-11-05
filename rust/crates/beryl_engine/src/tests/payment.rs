@@ -5,12 +5,13 @@ use super::cast::{Game, cast};
 use crate::bitboard::Bitboard;
 use crate::card::{ManaColor, ManaCost};
 use crate::event::Sink;
+use crate::ids::Slot;
 use crate::mana::{self, Units};
 use crate::rng::SplitMix64;
 use crate::state::{ObjectFlags, Zone};
 use crate::{DecisionKind, Opt, Payment, Profile};
 
-fn tapped(g: &Game, slot: u8) -> bool {
+fn tapped(g: &Game, slot: Slot) -> bool {
     g.s.object(slot).flags.has(ObjectFlags::TAPPED)
 }
 

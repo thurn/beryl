@@ -6,7 +6,7 @@
 //! (It's not a creature unless it's crewed.)"
 
 use beryl_engine::card::{
-    Ability, AbilityKind, Affected, CardDef, Colors, Face, GRANTED, Keywords, LayerSpec, ManaCost,
+    Ability, AbilityKind, Affected, CardDef, Colors, Face, Keywords, LayerSpec, ManaCost,
     Modification, StaticCondition, Subtype, Subtypes, TargetKind, TargetSpec, Types,
 };
 use beryl_engine::filter::Filter;
@@ -137,7 +137,7 @@ pub const SCENARIOS: &[Scenario] = &[
                 creature: false,
             }),
             // Crew 5, granted by the Aura: the Overlord taps, the only creature that can.
-            Action::activate(P0, JACE, GRANTED),
+            Action::activate_granted(P0, JACE, 0),
             Action::assert(Assertion::Tapped {
                 player: P0,
                 card: OVERLORD,

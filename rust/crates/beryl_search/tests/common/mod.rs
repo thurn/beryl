@@ -45,7 +45,7 @@ pub fn play(
             Step::Over(outcome) => return outcome,
             Step::Decide(d) => {
                 watch(s, &d);
-                let c = agents[usize::from(d.player)].choose(Observation::new(s, d.player), &d);
+                let c = agents[d.player.index()].choose(Observation::new(s, d.player), &d);
                 apply(s, t, x, &mut Replay, c);
             }
         }

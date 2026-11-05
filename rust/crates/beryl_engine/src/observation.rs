@@ -3,14 +3,12 @@
 
 use crate::bitboard::Bitboard;
 use crate::fixed::Fixed;
+use crate::ids::{CardIx, Seat, Slot};
 use crate::rng::{Rng, SplitMix64};
 use crate::state::{
-    DECK_SLOTS, Derived, NONE, Object, PendingTrigger, Player, StackEntry, State, Turn, Zone,
+    DECK_SLOTS, Derived, Object, PendingTrigger, Player, StackEntry, State, Turn, Zone, deck_slot,
 };
 use crate::table::GameTable;
-
-/// What [`Observation::card`] reads for a slot whose identity the viewer does not know.
-pub const UNKNOWN: u8 = u8::MAX;
 
 /// The state as one player sees it. Slots are public handles; what is hidden is which card
 /// sits behind a slot the viewer has not seen. Agents, rollout policies and the UI read the
@@ -18,44 +16,47 @@ pub const UNKNOWN: u8 = u8::MAX;
 #[derive(Clone, Copy)]
 pub struct Observation<'a> {
     state: &'a State,
-    viewer: u8,
+    viewer: Seat,
 }
 
 impl<'a> Observation<'a> {
-    pub fn new(state: &'a State, viewer: u8) -> Self {
+    pub fn new(state: &'a State, viewer: Seat) -> Self {
         Self { state, viewer }
     }
 
-    pub fn viewer(&self) -> u8 {
+    pub fn viewer(&self) -> Seat {
         self.viewer
     }
 
-    pub fn knows(&self, slot: u8) -> bool {
+    pub fn knows(&self, slot: Slot) -> bool {
         self.state.knows(self.viewer, slot)
     }
 
-    /// The game index of the card in a slot, or [`UNKNOWN`].
-    pub fn card(&self, slot: u8) -> u8 {
-        if self.knows(slot) {
-            self.state.object(slot).card
-        } else {
-            UNKNOWN
-        }
+    /// The game index of the card in a slot, if the viewer knows it.
+    pub fn card(&self, slot: Slot) -> Option<CardIx> {
+        self.knows(slot).then(|| self.state.card(slot))
     }
 
-    /// The object in a slot, with every field that could betray an unknown identity masked.
-    pub fn object(&self, slot: u8) -> Object {
+    /// The object in a slot, with every field that could betray an unknown identity masked:
+    /// its card, which only [`Observation::card`] reads, its copy and the face up.
+    pub fn object(&self, slot: Slot) -> Object {
         let mut o = *self.state.object(slot);
         if !self.knows(slot) {
-            o.card = UNKNOWN;
-            o.copy_of = NONE;
+            o.card = CardIx::default();
+            o.copy_of = None;
             o.face = 0;
-            o.chosen = NONE;
         }
         o
     }
 
-    pub fn player(&self, player: u8) -> &'a Player {
+    /// Who controls an object: for a permanent the layer-2 result, otherwise its base
+    /// controller ([CR 109.4](https://yawgatog.com/resources/magic-rules/#R1094)). Public:
+    /// control is never hidden.
+    pub fn controller(&self, slot: Slot) -> Seat {
+        self.state.controller(slot)
+    }
+
+    pub fn player(&self, player: Seat) -> &'a Player {
         self.state.player(player)
     }
 
@@ -64,21 +65,21 @@ impl<'a> Observation<'a> {
     }
 
     /// The slots a player owns in a zone: public, though the identities may not be.
-    pub fn zone(&self, owner: u8, zone: Zone) -> Bitboard {
+    pub fn zone(&self, owner: Seat, zone: Zone) -> Bitboard {
         self.state.zone(owner, zone)
     }
 
     /// A player's library as slots, bottom first.
-    pub fn library(&self, player: u8) -> &'a [u8] {
+    pub fn library(&self, player: Seat) -> &'a [Slot] {
         self.state.library(player)
     }
 
     /// A player's graveyard as slots, bottom first.
-    pub fn graveyard(&self, player: u8) -> &'a [u8] {
+    pub fn graveyard(&self, player: Seat) -> &'a [Slot] {
         self.state.graveyard(player)
     }
 
-    pub fn battlefield(&self) -> &'a [u8] {
+    pub fn battlefield(&self) -> &'a [Slot] {
         self.state.battlefield()
     }
 
@@ -88,7 +89,7 @@ impl<'a> Observation<'a> {
     /// # Panics
     ///
     /// If `slot` is not on the battlefield.
-    pub fn derived(&self, slot: u8) -> &'a Derived {
+    pub fn derived(&self, slot: Slot) -> &'a Derived {
         self.state.derived(slot)
     }
 
@@ -112,16 +113,16 @@ impl<'a> Observation<'a> {
     /// kept; the game's random streams are reseeded from `rng`, so its seed does not leak.
     pub fn determinize(&self, t: &GameTable, rng: &mut SplitMix64) -> State {
         let mut s = *self.state;
-        for player in 0..2u8 {
+        for player in Seat::BOTH {
             let deck = t.deck(player);
-            let mut remainder: Fixed<u8, DECK_SLOTS> = Fixed::new();
+            let mut remainder: Fixed<CardIx, DECK_SLOTS> = Fixed::new();
             for &card in deck {
                 // A deck never holds more than DECK_SLOTS cards (GameTable::new).
                 let _ = remainder.push(card);
             }
-            let mut unknown: Fixed<u8, DECK_SLOTS> = Fixed::new();
+            let mut unknown: Fixed<Slot, DECK_SLOTS> = Fixed::new();
             for i in 0..deck.len() {
-                let slot = (usize::from(player) * DECK_SLOTS + i) as u8;
+                let slot = deck_slot(player, i);
                 if self.knows(slot) {
                     let card = s.object(slot).card;
                     let at = remainder

@@ -10,8 +10,8 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use beryl_cards::{CARDS, names};
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
-    Choice, Counts, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch,
-    StallReason, State, Step, Zone, apply, next,
+    CardIx, Choice, Counts, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch,
+    Seat, Slot, StallReason, State, Step, Zone, apply, next,
 };
 use beryl_search::{Agent, RandomAgent};
 use common::{agents, fingerprint, game, games, play};
@@ -30,7 +30,7 @@ fn random_games_keep_the_invariants() {
             &mut agents(seed),
             |s, d| {
                 decisions += 1;
-                assert!(!d.is_empty() && d.player < 2, "seed {seed}: {d:?}");
+                assert!(!d.is_empty(), "seed {seed}: {d:?}");
                 if let Err(v) = s.check_invariants(&t) {
                     panic!("seed {seed}, decision {decisions}: {v:?}");
                 }
@@ -61,7 +61,7 @@ fn record(seed: u64) -> (Vec<Choice>, Vec<u64>) {
             Step::Over(_) => return (choices, hashes),
             Step::Decide(d) => {
                 hashes.push(fingerprint(&s));
-                let c = agents[usize::from(d.player)].choose(Observation::new(&s, d.player), &d);
+                let c = agents[d.player.index()].choose(Observation::new(&s, d.player), &d);
                 choices.push(c);
                 apply(&mut s, &t, &mut x, &mut Replay, c);
             }
@@ -94,10 +94,10 @@ struct Observer;
 impl Agent for Observer {
     fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice {
         let mut h = DefaultHasher::new();
-        for slot in 0..=u8::MAX {
+        for slot in Slot::all() {
             (obs.knows(slot), obs.card(slot), obs.object(slot)).hash(&mut h);
         }
-        for p in 0..2 {
+        for p in Seat::BOTH {
             obs.player(p).hash(&mut h);
             obs.library(p).hash(&mut h);
             obs.graveyard(p).hash(&mut h);
@@ -131,7 +131,7 @@ fn agents_decide_the_same_on_a_redeterminized_state() {
                 let viewer = d.player;
                 let mut det = Observation::new(s, viewer).determinize(&t, &mut rng);
                 det.check_invariants(&t).unwrap();
-                for slot in 0..=u8::MAX {
+                for slot in Slot::all() {
                     if s.knows(viewer, slot) {
                         assert_eq!(det.object(slot), s.object(slot), "slot {slot}");
                     }
@@ -148,7 +148,7 @@ fn agents_decide_the_same_on_a_redeterminized_state() {
                     Step::Over(o) => panic!("seed {seed}: the determinized game ended: {o:?}"),
                 }
                 decisions += 1;
-                if (0..=u8::MAX).any(|slot| det.object(slot).card != s.object(slot).card) {
+                if Slot::all().any(|slot| det.card(slot) != s.card(slot)) {
                     redealt += 1;
                 }
             },
@@ -163,13 +163,13 @@ fn determinization_keeps_the_size_of_every_hidden_group() {
     let (t, mut s) = game(3);
     play(&t, &mut s, &mut Scratch::new(), &mut agents(3), |s, d| {
         let det = Observation::new(s, d.player).determinize(&t, &mut SplitMix64::new(1));
-        for p in 0..2 {
+        for p in Seat::BOTH {
             let cards = |s: &State| {
-                let mut v: Vec<u8> = (0..=u8::MAX)
+                let mut v: Vec<CardIx> = Slot::all()
                     .filter(|&slot| {
                         s.object(slot).owner == p && s.object(slot).zone != Zone::Nowhere
                     })
-                    .map(|slot| s.object(slot).card)
+                    .map(|slot| s.card(slot))
                     .collect();
                 v.sort_unstable();
                 v

@@ -4,8 +4,8 @@
 use beryl_engine::card::{Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, Types};
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
-use beryl_engine::state::opponent;
-use beryl_engine::{Bitboard, Zone};
+
+use beryl_engine::{Bitboard, Seat, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
 use crate::names;
@@ -44,7 +44,7 @@ fn twist(ctx: &mut EffectCtx) -> Flow {
 pub(crate) fn wheel(ctx: &mut EffectCtx) {
     let s = ctx.state();
     let active = s.turn().active;
-    let players = [active, opponent(active)];
+    let players = [active, active.opponent()];
     let cards = players.iter().fold(Bitboard::EMPTY, |b, &p| {
         b | s.zone(p, Zone::Hand) | s.zone(p, Zone::Graveyard)
     });
@@ -57,7 +57,7 @@ pub(crate) fn wheel(ctx: &mut EffectCtx) {
     }
 }
 
-const fn count(player: u8, zone: Zone, card: Option<&'static str>, count: u8) -> Action {
+const fn count(player: Seat, zone: Zone, card: Option<&'static str>, count: u8) -> Action {
     Action::assert(Assertion::Count {
         player,
         zone,

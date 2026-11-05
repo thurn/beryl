@@ -13,16 +13,17 @@ mod run;
 #[cfg(test)]
 mod tests;
 
+use beryl_engine::card::AbilityIx;
 use beryl_engine::card::ManaColor;
 use beryl_engine::state::CounterKind;
-use beryl_engine::{DecisionKind, TurnStep, Zone};
+use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
 use serde::{Serialize, Serializer};
 
 pub use run::{Failure, run};
 
 /// The players, in seat order.
-pub const P0: u8 = 0;
-pub const P1: u8 = 1;
+pub const P0: Seat = Seat::P0;
+pub const P1: Seat = Seat::P1;
 
 /// One scenario: a position, then what happens and what must be true.
 #[derive(Clone, Copy, Debug, Serialize)]
@@ -40,7 +41,8 @@ pub struct Setup {
     pub seed: u64,
     /// The turn number, from 1. The active player takes the odd turns.
     pub turn: u16,
-    pub active: u8,
+    #[serde(serialize_with = "seat")]
+    pub active: Seat,
     /// The step the game starts in, with the active player holding priority and the step's
     /// turn-based actions already done.
     #[serde(serialize_with = "variant")]
@@ -120,22 +122,29 @@ impl Permanent {
 #[serde(tag = "action")]
 pub enum Action {
     /// `player` plays the land card `card` from their hand, at a priority decision.
-    PlayLand { player: u8, card: &'static str },
+    PlayLand {
+        #[serde(serialize_with = "seat")]
+        player: Seat,
+        card: &'static str,
+    },
     /// `player` begins casting the card `card` at a priority decision, with face `face` up
     /// and the casting options in the bitmask `costs` (over the face's casting list) paid.
     /// The casting's own questions (X, targets, payment) follow as decisions.
     Cast {
-        player: u8,
+        #[serde(serialize_with = "seat")]
+        player: Seat,
         card: &'static str,
         face: u8,
         costs: u8,
     },
-    /// `player` begins activating ability `ability` (an index into its face's abilities) of
-    /// the permanent `card` at a priority decision.
+    /// `player` begins activating the ability `ability` of the permanent `card` at a priority
+    /// decision.
     Activate {
-        player: u8,
+        #[serde(serialize_with = "seat")]
+        player: Seat,
         card: &'static str,
-        ability: u8,
+        #[serde(serialize_with = "variant")]
+        ability: AbilityIx,
     },
     /// Players pass priority until the top of the stack resolves, or until the next decision
     /// is not a priority decision (a question its resolution asks). The game then stops at
@@ -143,7 +152,8 @@ pub enum Action {
     Resolve,
     /// `player` answers the open decision, which must be of this kind.
     Answer {
-        player: u8,
+        #[serde(serialize_with = "seat")]
+        player: Seat,
         #[serde(serialize_with = "variant")]
         kind: DecisionKind,
         pick: Pick,
@@ -163,17 +173,17 @@ pub enum Action {
 /// Shorthands for the common actions.
 impl Action {
     /// `player` answers a decision of `kind` with `pick`.
-    pub const fn answer(player: u8, kind: DecisionKind, pick: Pick) -> Action {
+    pub const fn answer(player: Seat, kind: DecisionKind, pick: Pick) -> Action {
         Action::Answer { player, kind, pick }
     }
 
     /// `player` passes priority.
-    pub const fn pass(player: u8) -> Action {
+    pub const fn pass(player: Seat) -> Action {
         Action::answer(player, DecisionKind::Priority, Pick::Pass)
     }
 
     /// `player` casts `card`'s front face at priority, with none of its casting options.
-    pub const fn cast(player: u8, card: &'static str) -> Action {
+    pub const fn cast(player: Seat, card: &'static str) -> Action {
         Action::Cast {
             player,
             card,
@@ -184,16 +194,25 @@ impl Action {
 
     /// `player` activates ability `ability` (an index into the face's abilities) of `card`
     /// at priority.
-    pub const fn activate(player: u8, card: &'static str, ability: u8) -> Action {
+    pub const fn activate(player: Seat, card: &'static str, ability: u8) -> Action {
         Action::Activate {
             player,
             card,
-            ability,
+            ability: AbilityIx::Own(ability),
+        }
+    }
+
+    /// `player` activates the `k`th ability other objects grant `card`, at priority.
+    pub const fn activate_granted(player: Seat, card: &'static str, k: u8) -> Action {
+        Action::Activate {
+            player,
+            card,
+            ability: AbilityIx::Granted(k),
         }
     }
 
     /// `player` chooses the card named `card` for a decision of `kind`.
-    pub const fn choose(player: u8, kind: DecisionKind, card: &'static str) -> Action {
+    pub const fn choose(player: Seat, kind: DecisionKind, card: &'static str) -> Action {
         Action::answer(player, kind, Pick::Card { card })
     }
 
@@ -224,7 +243,8 @@ pub enum Pick {
     Done,
     /// A player, as a target.
     Player {
-        player: u8,
+        #[serde(serialize_with = "seat")]
+        player: Seat,
     },
     /// The defending player, as what an attacker attacks.
     DefendingPlayer,
@@ -239,12 +259,14 @@ pub enum Pick {
 #[serde(tag = "assert")]
 pub enum Assertion {
     Life {
-        player: u8,
+        #[serde(serialize_with = "seat")]
+        player: Seat,
         life: i16,
     },
     /// How many cards `player` owns in `zone`: all of them, or those named `card`.
     Count {
-        player: u8,
+        #[serde(serialize_with = "seat")]
+        player: Seat,
         #[serde(serialize_with = "variant")]
         zone: Zone,
         card: Option<&'static str>,
@@ -252,37 +274,40 @@ pub enum Assertion {
     },
     /// How many of the permanents named `card` that `player` controls are tapped.
     Tapped {
-        player: u8,
+        #[serde(serialize_with = "seat")]
+        player: Seat,
         card: &'static str,
         count: u8,
     },
     /// The open decision: who decides, what, and among how many candidates.
     Decision {
-        player: u8,
+        #[serde(serialize_with = "seat")]
+        player: Seat,
         #[serde(serialize_with = "variant")]
         kind: DecisionKind,
         candidates: u8,
     },
     /// Whether and how the game has ended.
-    Outcome {
-        outcome: Ending,
-    },
+    Outcome { outcome: Ending },
     /// How many permanents named `card` `player` controls.
     Controls {
-        player: u8,
+        #[serde(serialize_with = "seat")]
+        player: Seat,
         card: &'static str,
         count: u8,
     },
     /// How many of the permanents named `card` that `player` controls are attacking.
     Attacking {
-        player: u8,
+        #[serde(serialize_with = "seat")]
+        player: Seat,
         card: &'static str,
         count: u8,
     },
     /// The power and toughness of the first permanent named `card` that `player` controls
     /// and that is a token, or a card.
     Pt {
-        player: u8,
+        #[serde(serialize_with = "seat")]
+        player: Seat,
         card: &'static str,
         token: bool,
         power: i8,
@@ -290,31 +315,33 @@ pub enum Assertion {
     },
     /// Whether the first permanent named `card` that `player` controls is a creature.
     Creature {
-        player: u8,
+        #[serde(serialize_with = "seat")]
+        player: Seat,
         card: &'static str,
         creature: bool,
     },
     /// How many counters of `kind` the first permanent named `card` that `player` controls
     /// has.
     Counters {
-        player: u8,
+        #[serde(serialize_with = "seat")]
+        player: Seat,
         card: &'static str,
         #[serde(serialize_with = "variant")]
         kind: CounterKind,
         count: u8,
     },
     /// How many spells and abilities are on the stack.
-    Stack {
-        count: u8,
-    },
+    Stack { count: u8 },
     /// The top cards of `player`'s library, top first.
     Library {
-        player: u8,
+        #[serde(serialize_with = "seat")]
+        player: Seat,
         top: &'static [&'static str],
     },
     /// How much unspent mana of `color` `player` has.
     Mana {
-        player: u8,
+        #[serde(serialize_with = "seat")]
+        player: Seat,
         #[serde(serialize_with = "variant")]
         color: ManaColor,
         amount: u8,
@@ -326,7 +353,10 @@ pub enum Assertion {
 #[serde(tag = "ending")]
 pub enum Ending {
     InProgress,
-    Win { player: u8 },
+    Win {
+        #[serde(serialize_with = "seat")]
+        player: Seat,
+    },
     Draw,
 }
 
@@ -334,6 +364,12 @@ pub enum Ending {
 /// without mirroring them.
 fn variant<T: std::fmt::Debug, S: Serializer>(value: &T, s: S) -> Result<S::Ok, S::Error> {
     s.collect_str(&format_args!("{value:?}"))
+}
+
+/// A player, as their seat number.
+#[allow(clippy::trivially_copy_pass_by_ref)] // the signature `serialize_with` calls
+fn seat<S: Serializer>(player: &Seat, s: S) -> Result<S::Ok, S::Error> {
+    s.serialize_u8(player.get())
 }
 
 const NEW_PLAYER: PlayerSetup = PlayerSetup {
@@ -370,7 +406,7 @@ impl Scenario {
 
     /// Starts at `step` of turn `turn`, with `active` the active player.
     #[must_use]
-    pub const fn at(mut self, turn: u16, active: u8, step: TurnStep) -> Scenario {
+    pub const fn at(mut self, turn: u16, active: Seat, step: TurnStep) -> Scenario {
         self.setup.turn = turn;
         self.setup.active = active;
         self.setup.step = step;
@@ -378,40 +414,40 @@ impl Scenario {
     }
 
     #[must_use]
-    pub const fn life(mut self, player: u8, life: i16) -> Scenario {
-        self.setup.players[player as usize].life = life;
+    pub const fn life(mut self, player: Seat, life: i16) -> Scenario {
+        self.setup.players[player.index()].life = life;
         self
     }
 
     #[must_use]
-    pub const fn hand(mut self, player: u8, cards: &'static [&'static str]) -> Scenario {
-        self.setup.players[player as usize].hand = cards;
+    pub const fn hand(mut self, player: Seat, cards: &'static [&'static str]) -> Scenario {
+        self.setup.players[player.index()].hand = cards;
         self
     }
 
     #[must_use]
-    pub const fn battlefield(mut self, player: u8, cards: &'static [Permanent]) -> Scenario {
-        self.setup.players[player as usize].battlefield = cards;
+    pub const fn battlefield(mut self, player: Seat, cards: &'static [Permanent]) -> Scenario {
+        self.setup.players[player.index()].battlefield = cards;
         self
     }
 
     /// The graveyard, top first.
     #[must_use]
-    pub const fn graveyard(mut self, player: u8, cards: &'static [&'static str]) -> Scenario {
-        self.setup.players[player as usize].graveyard = cards;
+    pub const fn graveyard(mut self, player: Seat, cards: &'static [&'static str]) -> Scenario {
+        self.setup.players[player.index()].graveyard = cards;
         self
     }
 
     #[must_use]
-    pub const fn exile(mut self, player: u8, cards: &'static [&'static str]) -> Scenario {
-        self.setup.players[player as usize].exile = cards;
+    pub const fn exile(mut self, player: Seat, cards: &'static [&'static str]) -> Scenario {
+        self.setup.players[player.index()].exile = cards;
         self
     }
 
     /// The whole library, top first.
     #[must_use]
-    pub const fn library(mut self, player: u8, cards: &'static [&'static str]) -> Scenario {
-        self.setup.players[player as usize].library = cards;
+    pub const fn library(mut self, player: Seat, cards: &'static [&'static str]) -> Scenario {
+        self.setup.players[player.index()].library = cards;
         self
     }
 

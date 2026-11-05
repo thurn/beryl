@@ -2,10 +2,10 @@
 
 use super::{MIXED, begin, table};
 use crate::state::{ObjectFlags, Zone};
-use crate::{Profile, State};
+use crate::{Profile, Seat, Slot, State};
 
 /// Breaks one invariant of a state, given the active player and a card in their hand.
-type Corruption = fn(&mut State, u8, u8);
+type Corruption = fn(&mut State, Seat, Slot);
 
 #[test]
 fn the_invariants_hold_in_play_and_fail_on_corruption() {
@@ -20,10 +20,10 @@ fn the_invariants_hold_in_play_and_fail_on_corruption() {
             s.object_mut(slot).zone = Zone::Library;
         }),
         ("the library list disagrees", |s, p, _| {
-            s.zones.library[usize::from(p)].pop();
+            s.zones.library[p.index()].pop();
         }),
         ("a hand card its owner doesn't know", |s, p, slot| {
-            s.knowledge[usize::from(p)].remove(slot);
+            s.knowledge[p.index()].remove(slot);
         }),
         ("permanent status off the battlefield", |s, _, slot| {
             s.object_mut(slot).flags.set(ObjectFlags::TAPPED, true);

@@ -7,8 +7,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use beryl_engine::event::Event;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
-    CardTable, Choice, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch, State,
-    Step, apply, next, view,
+    CardTable, Choice, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch, Seat,
+    State, Step, apply, next, view,
 };
 use beryl_search::Agent;
 
@@ -71,7 +71,7 @@ pub struct Game {
     table: GameTable,
     state: State,
     scratch: Scratch,
-    human: u8,
+    human: Seat,
     session: SessionId,
     agent: Box<dyn Agent + Send>,
     /// An agent answering the human's decisions in their place, if any.
@@ -97,7 +97,7 @@ impl Game {
         let replay = ReplayFile {
             seed: start.seed,
             decks: start.decks.clone(),
-            human: start.human,
+            human: start.human.get(),
             opponent: start.opponent.clone(),
             stops: start.stops,
             log: Vec::new(),
@@ -140,7 +140,7 @@ impl Game {
         file: &ReplayFile,
         session: SessionId,
     ) -> Result<(Game, PlayerView), SessionError> {
-        let mut game = Game::new(cards, &file.start(), session)?;
+        let mut game = Game::new(cards, &file.start()?, session)?;
         let bad = |what: &str| SessionError::BadReplay {
             reason: what.to_owned(),
         };

@@ -3,8 +3,9 @@
 use crate::decision::{Outcome, StallReason};
 use crate::event::{self, Event, Reason, Sink};
 use crate::fixed::Full;
+use crate::ids::{Seat, Slot};
 use crate::layers;
-use crate::state::{Duration, ObjectFlags, Pending, State, TurnStep, Zone, opponent};
+use crate::state::{Duration, ObjectFlags, Pending, State, TurnStep, Zone};
 use crate::table::GameTable;
 use crate::{combat, zone};
 
@@ -14,8 +15,8 @@ pub(crate) const MAX_HAND_SIZE: u32 = 7;
 
 /// The players in APNAP order ([CR 101.4](https://yawgatog.com/resources/magic-rules/#R1014)):
 /// "the active player ... makes any choices required, then the next player in turn order".
-pub(crate) fn apnap(s: &State) -> [u8; 2] {
-    [s.turn.active, opponent(s.turn.active)]
+pub(crate) fn apnap(s: &State) -> [Seat; 2] {
+    [s.turn.active, s.turn.active.opponent()]
 }
 
 /// Whether any creature is attacking.
@@ -36,7 +37,7 @@ pub(crate) fn begin_turn(s: &mut State, t: &GameTable, sink: &mut Sink) -> Resul
     s.turn.active = if s.turn.number == 0 {
         s.turn.starting_player
     } else {
-        opponent(s.turn.active)
+        s.turn.active.opponent()
     };
     s.turn.number += 1;
     s.budgets.decisions = 0;
@@ -198,7 +199,7 @@ pub(crate) fn cleanup_discard(
     s: &mut State,
     t: &GameTable,
     sink: &mut Sink,
-    slot: u8,
+    slot: Slot,
 ) -> Result<(), Full> {
     event::move_one(s, t, sink, slot, Zone::Graveyard, Reason::Discard)?;
     if zone::hand_size(s, s.turn.active) <= MAX_HAND_SIZE {
@@ -250,7 +251,7 @@ fn finish_cleanup(s: &mut State) {
 ///
 /// [CR 305.2](https://yawgatog.com/resources/magic-rules/#R3052): "A player can normally play
 /// one land during their turn".
-pub(crate) fn may_play_land(s: &State, player: u8) -> bool {
+pub(crate) fn may_play_land(s: &State, player: Seat) -> bool {
     player == s.turn.active
         && matches!(
             s.turn.step,
@@ -261,6 +262,6 @@ pub(crate) fn may_play_land(s: &State, player: u8) -> bool {
 }
 
 /// The cards in a player's hand.
-pub(crate) fn hand(s: &State, player: u8) -> crate::bitboard::Bitboard {
+pub(crate) fn hand(s: &State, player: Seat) -> crate::bitboard::Bitboard {
     s.zone(player, Zone::Hand)
 }

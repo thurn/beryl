@@ -8,8 +8,9 @@ use crate::decision::{
 };
 use crate::event::{self, Entry, Reason, Sink};
 use crate::fixed::{Fixed, Full};
+use crate::ids::{Seat, Slot};
 use crate::profile::Profile;
-use crate::state::{Pending, State, Zone, opponent};
+use crate::state::{Pending, State, Zone};
 use crate::table::GameTable;
 use crate::{cast, combat, layers, mana, resolve, sba, start, trigger, turn, zone};
 
@@ -187,7 +188,7 @@ pub(crate) fn decision(s: &State, t: &GameTable) -> Result<Decision, Full> {
         Pending::None => match trigger::next_to_stack(s) {
             Some((player, triggers)) => {
                 let mut list = Fixed::new();
-                for i in triggers.iter() {
+                for &i in &triggers {
                     list.push(Opt::Trigger(i))?;
                 }
                 Decision {
@@ -236,7 +237,7 @@ pub(crate) fn decision(s: &State, t: &GameTable) -> Result<Decision, Full> {
     })
 }
 
-fn objects(player: u8, kind: DecisionKind, candidates: Bitboard) -> Decision {
+fn objects(player: Seat, kind: DecisionKind, candidates: Bitboard) -> Decision {
     Decision {
         player,
         kind,
@@ -244,7 +245,7 @@ fn objects(player: u8, kind: DecisionKind, candidates: Bitboard) -> Decision {
     }
 }
 
-fn options(player: u8, kind: DecisionKind, opts: &[Opt]) -> Result<Decision, Full> {
+fn options(player: Seat, kind: DecisionKind, opts: &[Opt]) -> Result<Decision, Full> {
     let mut list = Fixed::new();
     for &o in opts {
         list.push(o)?;
@@ -285,7 +286,7 @@ fn priority_decision(s: &State, t: &GameTable) -> Result<Decision, Full> {
 /// ([CR 712.12](https://yawgatog.com/resources/magic-rules/#R71212)): "A player playing a
 /// modal double-faced card ... as a land chooses one of its faces that's a land before putting
 /// it onto the battlefield." The cube's modal double-faced cards have one land face at most.
-fn land_face(s: &State, t: &GameTable, slot: u8) -> Option<u8> {
+fn land_face(s: &State, t: &GameTable, slot: Slot) -> Option<u8> {
     t.def(s.object(slot).card)
         .faces
         .iter()
@@ -344,7 +345,7 @@ fn perform_priority(
     t: &GameTable,
     x: &mut Scratch,
     a: &mut dyn Answers,
-    player: u8,
+    player: Seat,
     option: Opt,
 ) -> Result<(), Full> {
     match option {
@@ -429,7 +430,7 @@ fn perform(
             let starting = if option() == Opt::Play {
                 d.player
             } else {
-                opponent(d.player)
+                d.player.opponent()
             };
             start::set_starting_player(s, t, sink, starting)
         }
@@ -469,7 +470,7 @@ fn perform(
 fn pass(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers) -> Result<(), Full> {
     s.turn.passes += 1;
     if s.turn.passes < 2 {
-        s.turn.priority = opponent(s.turn.priority);
+        s.turn.priority = s.turn.priority.opponent();
         return Ok(());
     }
     if s.stack.is_empty() {
@@ -499,8 +500,8 @@ fn play_land(
     s: &mut State,
     t: &GameTable,
     sink: &mut Sink,
-    player: u8,
-    slot: u8,
+    player: Seat,
+    slot: Slot,
 ) -> Result<(), Full> {
     s.player_mut(player).lands_played += 1;
     s.turn.priority = player;
@@ -519,7 +520,7 @@ fn enter_from_hand(
     s: &mut State,
     t: &GameTable,
     sink: &mut Sink,
-    slot: u8,
+    slot: Slot,
     pay_life: bool,
 ) -> Result<(), Full> {
     event::move_batch(
@@ -545,7 +546,7 @@ fn enter_from_hand(
 /// with another; nor is one that combat relates another object to, since its signature
 /// doesn't show what attacks or blocks it.
 pub(crate) fn collapse(s: &State, candidates: Bitboard) -> Bitboard {
-    let signature = |slot: u8| zone::signature(s, slot);
+    let signature = |slot: Slot| zone::signature(s, slot);
     let referenced = cast::referenced(s) | combat::related(s);
     let mut kept = Bitboard::EMPTY;
     for slot in candidates.iter() {

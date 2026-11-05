@@ -6,7 +6,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
-use beryl_engine::{DecisionKind, Zone};
+use beryl_engine::{DecisionKind, Seat, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -48,7 +48,7 @@ fn destroy_land(ctx: &mut EffectCtx) -> Flow {
     Ok(())
 }
 
-const fn count(player: u8, zone: Zone, card: Option<&'static str>, count: u8) -> Action {
+const fn count(player: Seat, zone: Zone, card: Option<&'static str>, count: u8) -> Action {
     Action::assert(Assertion::Count {
         player,
         zone,

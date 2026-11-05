@@ -1,8 +1,9 @@
 //! `Filter`: the predicates targets and affected sets are written in (architecture §6.2).
 
 use crate::bitboard::Bitboard;
-use crate::card::{Subtype, Subtypes, Supertypes, Types};
-use crate::state::{ObjectFlags, State, Zone, opponent};
+use crate::card::{Subtype, Supertypes, Types};
+use crate::ids::{Seat, Slot};
+use crate::state::{ObjectFlags, State, Zone};
 use crate::table::GameTable;
 
 /// Whose objects a filter accepts, relative to the player the filter is evaluated for.
@@ -40,13 +41,13 @@ pub enum Filter {
 
 impl Filter {
     /// Whether the object in `slot` passes, evaluated for player `you`, where X is 0.
-    pub fn matches(&self, s: &State, t: &GameTable, slot: u8, you: u8) -> bool {
+    pub fn matches(&self, s: &State, t: &GameTable, slot: Slot, you: Seat) -> bool {
         self.matches_x(s, t, slot, you, 0)
     }
 
     /// Whether the object in `slot` passes, evaluated for player `you` and the value `x` of
     /// X.
-    pub fn matches_x(&self, s: &State, t: &GameTable, slot: u8, you: u8, x: u8) -> bool {
+    pub fn matches_x(&self, s: &State, t: &GameTable, slot: Slot, you: Seat, x: u8) -> bool {
         let o = s.object(slot);
         let face = || &t.def(o.card).faces[usize::from(o.face)];
         let derived = || (o.zone == Zone::Battlefield).then(|| s.derived(slot));
@@ -66,13 +67,13 @@ impl Filter {
         match *self {
             Filter::Any => true,
             Filter::Types(types) => derived()
-                .map_or(face().types, |d| Types(d.types))
+                .map_or(face().types, |d| d.types)
                 .intersects(types),
             Filter::Supertypes(supertypes) => derived()
-                .map_or(face().supertypes, |d| Supertypes(d.supertypes))
+                .map_or(face().supertypes, |d| d.supertypes)
                 .intersects(supertypes),
             Filter::Subtype(subtype) => derived()
-                .map_or(face().subtypes, |d| Subtypes(d.subtypes))
+                .map_or(face().subtypes, |d| d.subtypes)
                 .contains(subtype),
             Filter::Whose(whose) => {
                 let player = if matches!(o.zone, Zone::Battlefield | Zone::Stack) {
@@ -83,7 +84,7 @@ impl Filter {
                 player
                     == match whose {
                         Whose::You => you,
-                        Whose::Opponent => opponent(you),
+                        Whose::Opponent => you.opponent(),
                     }
             }
             Filter::Tapped => o.flags.has(ObjectFlags::TAPPED),
@@ -96,12 +97,19 @@ impl Filter {
     }
 
     /// The members of `within` that pass, where X is 0.
-    pub fn select(&self, s: &State, t: &GameTable, within: Bitboard, you: u8) -> Bitboard {
+    pub fn select(&self, s: &State, t: &GameTable, within: Bitboard, you: Seat) -> Bitboard {
         self.select_x(s, t, within, you, 0)
     }
 
     /// The members of `within` that pass, for the value `x` of X.
-    pub fn select_x(&self, s: &State, t: &GameTable, within: Bitboard, you: u8, x: u8) -> Bitboard {
+    pub fn select_x(
+        &self,
+        s: &State,
+        t: &GameTable,
+        within: Bitboard,
+        you: Seat,
+        x: u8,
+    ) -> Bitboard {
         within
             .iter()
             .filter(|&slot| self.matches_x(s, t, slot, you, x))

@@ -4,8 +4,9 @@
 
 use crate::bitboard::Bitboard;
 use crate::fixed::{Fixed, Full};
+use crate::ids::{CardIx, Seat, Slot};
 use crate::rng::SplitMix64;
-use crate::state::{Counters, DECK_SLOTS, Derived, NONE, Object, ObjectFlags, State, Zone};
+use crate::state::{Counters, DECK_SLOTS, Derived, Object, ObjectFlags, State, Zone};
 
 /// Where in a library an object goes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,33 +29,32 @@ pub(crate) enum Place {
 /// [CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003): "If an object would go to
 /// any library, graveyard, or hand other than its owner's, it goes to its owner's
 /// corresponding zone." Zones are kept by owner, so that holds by construction.
-pub(crate) fn move_to(s: &mut State, slot: u8, to: Zone) -> Result<(), Full> {
+pub(crate) fn move_to(s: &mut State, slot: Slot, to: Zone) -> Result<(), Full> {
     move_to_place(s, slot, to, Place::Top)
 }
 
 /// Moves an object to the bottom of its owner's library.
-pub(crate) fn put_on_bottom(s: &mut State, slot: u8) -> Result<(), Full> {
+pub(crate) fn put_on_bottom(s: &mut State, slot: Slot) -> Result<(), Full> {
     move_to_place(s, slot, Zone::Library, Place::Bottom)
 }
 
-pub(crate) fn move_to_place(s: &mut State, slot: u8, to: Zone, place: Place) -> Result<(), Full> {
+pub(crate) fn move_to_place(s: &mut State, slot: Slot, to: Zone, place: Place) -> Result<(), Full> {
     leave(s, slot);
     let timestamp = s.zones.next_timestamp;
     let o = s.object_mut(slot);
     o.incarnation = o.incarnation.wrapping_add(1);
     o.zone = to;
-    o.controller = o.owner;
+    o.base_controller = o.owner;
     // A token stays a token wherever it goes, until it ceases to exist (CR 111.7).
     o.flags = ObjectFlags(o.flags.0 & (ObjectFlags::TOKEN | ObjectFlags::ONE_ONE));
     o.damage = 0;
     o.counters = Counters::default();
-    o.attached_to = NONE;
-    o.linked = NONE;
-    o.copy_of = NONE;
-    o.chosen = NONE;
+    o.attached_to = None;
+    o.linked = None;
+    o.copy_of = None;
     o.face = 0;
-    o.combat = NONE;
-    let owner = usize::from(o.owner);
+    o.combat = None;
+    let owner = o.owner.index();
     match to {
         Zone::Library => match place {
             Place::Top => s.zones.library[owner].push(slot)?,
@@ -96,9 +96,9 @@ pub(crate) fn move_to_place(s: &mut State, slot: u8, to: Zone, place: Place) -> 
     Ok(())
 }
 
-fn leave(s: &mut State, slot: u8) {
+fn leave(s: &mut State, slot: Slot) {
     let o = *s.object(slot);
-    let owner = usize::from(o.owner);
+    let owner = o.owner.index();
     match o.zone {
         Zone::Library => remove_slot(&mut s.zones.library[owner], slot),
         Zone::Graveyard => remove_slot(&mut s.zones.graveyard[owner], slot),
@@ -116,11 +116,11 @@ fn leave(s: &mut State, slot: u8) {
             // (CR 704.5m).
             for i in 0..s.battlefield.len() {
                 let other = s.object_mut(s.battlefield.as_slice()[i]);
-                if other.combat == slot {
-                    other.combat = NONE;
+                if other.combat == Some(slot) {
+                    other.combat = None;
                 }
-                if other.attached_to == slot {
-                    other.attached_to = NONE;
+                if other.attached_to == Some(slot) {
+                    other.attached_to = None;
                 }
             }
         }
@@ -132,7 +132,7 @@ fn leave(s: &mut State, slot: u8) {
     }
 }
 
-fn remove_slot<const N: usize>(list: &mut Fixed<u8, N>, slot: u8) {
+fn remove_slot<const N: usize>(list: &mut Fixed<Slot, N>, slot: Slot) {
     if let Some(i) = list.position(slot) {
         list.remove(i);
     }
@@ -146,8 +146,8 @@ fn remove_slot<const N: usize>(list: &mut Fixed<u8, N>, slot: u8) {
 /// [CR 121.4](https://yawgatog.com/resources/magic-rules/#R1214): "A player who attempts to
 /// draw a card from a library with no cards in it loses the game the next time a player would
 /// receive priority."
-pub(crate) fn draw(s: &mut State, player: u8) -> Result<(), Full> {
-    let Some(&slot) = s.zones.library[usize::from(player)].as_slice().last() else {
+pub(crate) fn draw(s: &mut State, player: Seat) -> Result<(), Full> {
+    let Some(&slot) = s.zones.library[player.index()].as_slice().last() else {
         s.player_mut(player).drew_from_empty = true;
         return Ok(());
     };
@@ -157,7 +157,7 @@ pub(crate) fn draw(s: &mut State, player: u8) -> Result<(), Full> {
 /// Draws `n` cards, one at a time ([CR 121.2](https://yawgatog.com/resources/magic-rules/#R1212)):
 /// "If a player is instructed to draw multiple cards, that player performs that many
 /// individual card draws."
-pub(crate) fn draw_n(s: &mut State, player: u8, n: u8) -> Result<(), Full> {
+pub(crate) fn draw_n(s: &mut State, player: Seat, n: u8) -> Result<(), Full> {
     for _ in 0..n {
         draw(s, player)?;
     }
@@ -167,8 +167,8 @@ pub(crate) fn draw_n(s: &mut State, player: u8, n: u8) -> Result<(), Full> {
 /// Moves a card within its owner's library to its top or bottom. Not a zone change, so the
 /// card stays the same object and whoever knew it still does: a player who scries or looks
 /// knows where they put each card.
-pub(crate) fn reorder_library(s: &mut State, slot: u8, place: Place) -> Result<(), Full> {
-    let library = &mut s.zones.library[usize::from(s.objects[usize::from(slot)].owner)];
+pub(crate) fn reorder_library(s: &mut State, slot: Slot, place: Place) -> Result<(), Full> {
+    let library = &mut s.zones.library[s.objects[slot.index()].owner.index()];
     let i = library
         .position(slot)
         .expect("a card in its owner's library");
@@ -192,8 +192,8 @@ pub(crate) fn reorder_library(s: &mut State, slot: u8, place: Place) -> Result<(
 /// reordered. [CR 701.20d](https://yawgatog.com/resources/magic-rules/#R70120d): "If cards in
 /// a player's library are shuffled or otherwise reordered, any revealed cards that are
 /// reordered stop being revealed and become new objects."
-pub(crate) fn shuffle_library(s: &mut State, player: u8) {
-    let p = usize::from(player);
+pub(crate) fn shuffle_library(s: &mut State, player: Seat) {
+    let p = player.index();
     let library = s.zones.library[p];
     let mut rng = s.rng.shuffle;
     rebind(s, library.as_slice(), &mut rng);
@@ -207,8 +207,8 @@ pub(crate) fn shuffle_library(s: &mut State, player: u8) {
 /// object ([CR 701.20d](https://yawgatog.com/resources/magic-rules/#R70120d)): "If cards in a
 /// player's library are shuffled or otherwise reordered, any revealed cards that are
 /// reordered stop being revealed and become new objects."
-pub(crate) fn rebind(s: &mut State, slots: &[u8], rng: &mut SplitMix64) {
-    let mut cards: Fixed<u8, DECK_SLOTS> = Fixed::new();
+pub(crate) fn rebind(s: &mut State, slots: &[Slot], rng: &mut SplitMix64) {
+    let mut cards: Fixed<CardIx, DECK_SLOTS> = Fixed::new();
     for &slot in slots {
         // A library never holds more than its owner's deck slots.
         let _ = cards.push(s.object(slot).card);
@@ -229,7 +229,7 @@ pub(crate) fn rebind(s: &mut State, slots: &[u8], rng: &mut SplitMix64) {
 /// shared pool ([CR 704.5d](https://yawgatog.com/resources/magic-rules/#R7045d)): "If a token
 /// is in a zone other than the battlefield, it ceases to exist." The incarnation is kept and
 /// bumped, so references to the token stay stale after the slot is reused.
-pub(crate) fn cease_to_exist(s: &mut State, slot: u8) {
+pub(crate) fn cease_to_exist(s: &mut State, slot: Slot) {
     leave(s, slot);
     let incarnation = s.object(slot).incarnation.wrapping_add(1);
     *s.object_mut(slot) = Object {
@@ -245,7 +245,7 @@ pub(crate) fn cease_to_exist(s: &mut State, slot: u8) {
 /// timestamp, and for a permanent its characteristics after continuous effects, so two
 /// untapped basic lands match but a stolen Mana Crypt does not match your own, nor a
 /// creature that got -2/-0 one that didn't.
-pub(crate) fn signature(s: &State, slot: u8) -> (Object, Option<Derived>) {
+pub(crate) fn signature(s: &State, slot: Slot) -> (Object, Option<Derived>) {
     let o = s.object(slot);
     let derived = (o.zone == Zone::Battlefield).then(|| *s.derived(slot));
     (
@@ -259,6 +259,6 @@ pub(crate) fn signature(s: &State, slot: u8) -> (Object, Option<Derived>) {
 }
 
 /// The number of cards in a player's hand.
-pub(crate) fn hand_size(s: &State, player: u8) -> u32 {
+pub(crate) fn hand_size(s: &State, player: Seat) -> u32 {
     s.zone(player, Zone::Hand).count()
 }

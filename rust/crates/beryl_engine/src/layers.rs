@@ -1,9 +1,10 @@
 //! Derived characteristics: continuous effects applied in layers, recomputed from base when
 //! dirty (architecture §9, decision D5, CR 613).
 
-use crate::card::{Affected, Modification, StaticCondition, Subtypes, Types};
+use crate::card::{Affected, Colors, Modification, StaticCondition, Subtypes, Types};
 use crate::fixed::Fixed;
-use crate::state::{AbilityRef, Continuous, CounterKind, Derived, NONE, ObjectFlags, State, Zone};
+use crate::ids::CardIx;
+use crate::state::{Continuous, CounterKind, Derived, GrantRef, ObjectFlags, State, Zone};
 use crate::table::GameTable;
 use crate::trigger::face;
 
@@ -18,7 +19,7 @@ struct Apply {
     /// The battlefield index of the permanent it affects.
     target: u8,
     /// The game index of the effect's source card, which a granted ability is printed on.
-    source: u8,
+    source: CardIx,
     modification: Option<Modification>,
 }
 
@@ -51,7 +52,7 @@ fn recompute(s: &mut State, t: &GameTable) {
     // Effects on an object that left its zone end: that object no longer exists (CR 400.7).
     let objects = &s.objects;
     s.effects
-        .retain(|e| objects[usize::from(e.affected.slot)].incarnation == e.affected.incarnation);
+        .retain(|e| objects[e.affected.slot.index()].incarnation == e.affected.incarnation);
 
     let mut list: Fixed<Apply, 192> = Fixed::new();
     for i in 0..s.battlefield.len() {
@@ -68,17 +69,14 @@ fn recompute(s: &mut State, t: &GameTable) {
         s.derived[i] = Derived {
             power,
             toughness,
-            types: f.types.0,
-            supertypes: f.supertypes.0,
-            colors: f.colors.0,
-            controller: o.controller,
-            protection: 0,
-            keywords: f.keywords.0,
-            subtypes: f.subtypes.0,
-            granted: [AbilityRef {
-                card: NONE,
-                ability: NONE,
-            }; 4],
+            types: f.types,
+            supertypes: f.supertypes,
+            colors: f.colors,
+            controller: o.base_controller,
+            protection: Colors::NONE,
+            keywords: f.keywords,
+            subtypes: f.subtypes,
+            granted: [None; 4],
         };
         for (n, ability) in f.abilities.iter().enumerate() {
             let Some(spec) = ability.layer else { continue };
@@ -91,7 +89,7 @@ fn recompute(s: &mut State, t: &GameTable) {
             };
             let target = match spec.affected {
                 Affected::Itself => Some(i),
-                Affected::Enchanted => s.battlefield.position(o.attached_to),
+                Affected::Enchanted => o.attached_to.and_then(|a| s.battlefield.position(a)),
             };
             if let (true, Some(target)) = (applies, target) {
                 // A list longer than its capacity would need more effects than the cards
@@ -148,41 +146,41 @@ fn recompute(s: &mut State, t: &GameTable) {
 }
 
 /// Applies one modification to the permanent at battlefield index `i`.
-fn apply(derived: &mut [Derived], i: usize, source: u8, m: Modification) {
+fn apply(derived: &mut [Derived], i: usize, source: CardIx, m: Modification) {
     match m {
         // CR 613.1b: "Layer 2: Control-changing effects are applied."
         Modification::Control(player) => derived[i].controller = player,
         // CR 613.1d: "Layer 4: Type-changing effects are applied. These include effects that
         // change an object's card type, subtype, and/or supertype."
-        Modification::AddTypes(types) => derived[i].types |= types.0,
-        Modification::RemoveTypes(types) => derived[i].types &= !types.0,
+        Modification::AddTypes(types) => derived[i].types = derived[i].types.union(types),
+        Modification::RemoveTypes(types) => derived[i].types = derived[i].types.minus(types),
         // CR 205.1a: "Some effects set an object's card type. In most such cases, the new
         // card type(s) replaces any existing card types. ... If an object's card type is
         // removed, the subtypes correlated with that card type will remain if they are also
         // the subtypes of a card type the object currently has; otherwise, they are also
         // removed".
         Modification::SetTypes(types) => {
-            derived[i].types = types.0;
+            derived[i].types = types;
             let mut kept = Subtypes::NONE;
-            for subtype in Subtypes(derived[i].subtypes).iter() {
+            for subtype in derived[i].subtypes.iter() {
                 if types.intersects(subtype.card_type()) {
                     kept = kept.with(subtype);
                 }
             }
-            derived[i].subtypes = kept.0;
+            derived[i].subtypes = kept;
         }
         Modification::AddSubtype(subtype) => {
-            derived[i].subtypes = Subtypes(derived[i].subtypes).with(subtype).0;
+            derived[i].subtypes = derived[i].subtypes.with(subtype);
         }
         // CR 613.1f: "Layer 6: Ability-adding effects, keyword counters, ability-removing
         // effects, and effects that say an object can't have an ability are applied."
-        Modification::AddKeywords(k) => derived[i].keywords |= k.0,
-        Modification::Grant(ability) => {
-            if let Some(free) = derived[i].granted.iter_mut().find(|g| g.card == NONE) {
-                *free = AbilityRef {
+        Modification::AddKeywords(k) => derived[i].keywords = derived[i].keywords.union(k),
+        Modification::Grant(grant) => {
+            if let Some(free) = derived[i].granted.iter_mut().find(|g| g.is_none()) {
+                *free = Some(GrantRef {
                     card: source,
-                    ability,
-                };
+                    grant,
+                });
             }
         }
         // CR 613.4a: "Layer 7a: Effects from characteristic-defining abilities that define
@@ -192,7 +190,7 @@ fn apply(derived: &mut [Derived], i: usize, source: u8, m: Modification) {
             let you = derived[i].controller;
             let creatures = derived
                 .iter()
-                .filter(|d| d.controller == you && Types(d.types).contains(Types::CREATURE))
+                .filter(|d| d.controller == you && d.types.contains(Types::CREATURE))
                 .count();
             derived[i].power = i8::try_from(creatures).unwrap_or(i8::MAX);
         }

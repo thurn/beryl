@@ -1,6 +1,7 @@
 //! Restriction profiles: which decisions are offered, and the budgets (architecture §12.3,
 //! §15).
 
+use crate::ids::Seat;
 use crate::state::{State, Turn, TurnStep};
 
 /// Where players get priority as a decision.
@@ -79,7 +80,7 @@ impl Profile {
     };
 
     /// Whether `player`'s priority now is a decision, given they have a legal action.
-    pub(crate) fn stops_for(self, s: &State, player: u8) -> bool {
+    pub(crate) fn stops_for(self, s: &State, player: Seat) -> bool {
         match self.stops {
             Stops::Exact => true,
             Stops::Smart => is_smart_stop(s, player),
@@ -99,7 +100,7 @@ impl Profile {
 
 /// The smart stops (§15): "their own main phases, after attackers and after blockers are
 /// declared, the opponent's end step, and whenever the stack is non-empty."
-fn is_smart_stop(s: &State, player: u8) -> bool {
+fn is_smart_stop(s: &State, player: Seat) -> bool {
     if !s.stack.is_empty() {
         return true;
     }

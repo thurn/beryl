@@ -12,6 +12,7 @@ use crate::card::{
 use crate::effect::EffectCtx;
 use crate::event::Reason;
 use crate::filter::{Filter, Whose};
+use crate::ids::{Seat, Slot};
 use crate::state::{Pending, TurnStep, Zone};
 use crate::{
     CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile, Replay, Scratch,
@@ -539,8 +540,8 @@ pub(crate) struct Game {
     pub s: State,
     pub x: Scratch,
     /// The starting player.
-    pub me: u8,
-    pub them: u8,
+    pub me: Seat,
+    pub them: Seat,
 }
 
 impl Game {
@@ -549,7 +550,7 @@ impl Game {
         let mut s = State::new(&t, 5, profile);
         begin(&t, &mut s);
         let me = s.turn().starting_player;
-        for p in 0..2 {
+        for p in Seat::BOTH {
             for slot in s.zone(p, Zone::Hand).iter() {
                 crate::zone::put_on_bottom(&mut s, slot).unwrap();
             }
@@ -559,14 +560,14 @@ impl Game {
             s,
             x: Scratch::new(),
             me,
-            them: 1 - me,
+            them: me.opponent(),
         };
         g.main(me);
         g
     }
 
     /// Puts a card of `player`'s from their library into a zone, returning its slot.
-    pub fn give(&mut self, player: u8, name: &str, zone: Zone) -> u8 {
+    pub fn give(&mut self, player: Seat, name: &str, zone: Zone) -> Slot {
         let slot = *self
             .s
             .library(player)
@@ -587,7 +588,7 @@ impl Game {
 
     /// Puts a card of `player`'s from deeper in their library on top of it, so it is the next
     /// card drawn.
-    pub fn on_top(&mut self, player: u8, name: &str) -> u8 {
+    pub fn on_top(&mut self, player: Seat, name: &str) -> Slot {
         let slot = *self
             .s
             .library(player)
@@ -599,12 +600,12 @@ impl Game {
     }
 
     /// Makes it `player`'s precombat main phase with an empty stack and priority.
-    pub fn main(&mut self, player: u8) {
+    pub fn main(&mut self, player: Seat) {
         self.at(player, TurnStep::PrecombatMain);
     }
 
     /// Makes it `active`'s turn, at `step`, with priority for the active player.
-    pub fn at(&mut self, active: u8, step: TurnStep) {
+    pub fn at(&mut self, active: Seat, step: TurnStep) {
         let turn = &mut self.s.turn;
         turn.active = active;
         turn.step = step;
@@ -640,7 +641,7 @@ impl Game {
     }
 
     /// The open decision, which must offer object `slot`, answered with it.
-    pub fn pick_object(&mut self, slot: u8) {
+    pub fn pick_object(&mut self, slot: Slot) {
         let d = self.decide();
         let c = object_index(&d, slot).unwrap_or_else(|| panic!("{slot} not offered in {d:?}"));
         self.choose(c);
@@ -662,7 +663,7 @@ impl Game {
     }
 
     /// Whether the open priority decision offers casting the card in `slot`.
-    pub fn offers_cast(&mut self, slot: u8) -> bool {
+    pub fn offers_cast(&mut self, slot: Slot) -> bool {
         let d = self.current();
         d.kind == DecisionKind::Priority
             && (0..d.len()).any(|i| {
@@ -681,14 +682,14 @@ pub(crate) fn index_of(d: &Decision, opt: Opt) -> Option<Choice> {
         .find(|&c| d.candidates.option(c) == Some(opt))
 }
 
-pub(crate) fn object_index(d: &Decision, slot: u8) -> Option<Choice> {
+pub(crate) fn object_index(d: &Decision, slot: Slot) -> Option<Choice> {
     (0..d.len())
         .map(|i| Choice(i as u8))
         .find(|&c| d.candidates.object(c) == Some(slot))
 }
 
 /// Casting `slot` with its front face and no casting options.
-pub(crate) fn cast(slot: u8) -> Opt {
+pub(crate) fn cast(slot: Slot) -> Opt {
     Opt::Cast {
         slot,
         face: 0,

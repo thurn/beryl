@@ -2,11 +2,14 @@
 //! evasion, damage and its division, first strike, planeswalkers and combat triggers.
 
 use super::begin;
-use crate::card::{Ability, CardDef, Face, Flow, Keywords, Subtype, Subtypes, Trigger, Types};
+use crate::card::{
+    Ability, AbilityIx, CardDef, Face, Flow, Keywords, Subtype, Subtypes, Trigger, Types,
+};
 use crate::effect::EffectCtx;
 use crate::event::{Event, TokenEntry};
+use crate::ids::{Seat, Slot};
 use crate::profile::Breakpoint;
-use crate::state::{NONE, ObjectFlags, Zone, opponent};
+use crate::state::{ObjectFlags, Zone};
 use crate::{
     Candidates, CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile,
     Replay, Scratch, State, Step, TurnStep, apply, next, zone,
@@ -154,7 +157,7 @@ struct Game {
     t: GameTable,
     s: State,
     x: Scratch,
-    attacker: u8,
+    attacker: Seat,
 }
 
 impl Game {
@@ -183,13 +186,13 @@ impl Game {
         }
     }
 
-    fn defender(&self) -> u8 {
-        opponent(self.attacker)
+    fn defender(&self) -> Seat {
+        self.attacker.opponent()
     }
 
     /// Puts a card of `player`'s from their library or hand onto the battlefield, as if it
     /// had been there since the turn began.
-    fn put(&mut self, player: u8, name: &str) -> u8 {
+    fn put(&mut self, player: Seat, name: &str) -> Slot {
         let slot = (self.s.zone(player, Zone::Library) | self.s.zone(player, Zone::Hand))
             .iter()
             .find(|&slot| self.t.def(self.s.object(slot).card).name == name)
@@ -227,7 +230,7 @@ impl Game {
     }
 
     /// Answers the next decision, of `kind`, with the object `slot`.
-    fn pick_object(&mut self, kind: DecisionKind, slot: u8) {
+    fn pick_object(&mut self, kind: DecisionKind, slot: Slot) {
         let d = self.expect(kind);
         let i = (0..d.len() as u8)
             .find(|&i| d.candidates.object(Choice(i)) == Some(slot))
@@ -270,17 +273,17 @@ impl Game {
             .collect()
     }
 
-    fn life(&self, player: u8) -> i16 {
+    fn life(&self, player: Seat) -> i16 {
         self.s.player(player).life
     }
 
-    fn on_battlefield(&self, slot: u8) -> bool {
+    fn on_battlefield(&self, slot: Slot) -> bool {
         self.s.object(slot).zone == Zone::Battlefield
     }
 }
 
 /// "Done", then attacking with each of these creatures, in slot order.
-fn attacks(slots: &[u8]) -> Vec<Opt> {
+fn attacks(slots: &[Slot]) -> Vec<Opt> {
     let mut sorted = slots.to_vec();
     sorted.sort_unstable();
     std::iter::once(Opt::Done)
@@ -378,11 +381,11 @@ fn an_attacked_planeswalker_loses_loyalty_and_dies_at_zero() {
     let target = g.expect(DecisionKind::AttackTarget);
     assert_eq!(
         options(&target),
-        vec![Opt::Defender(NONE), Opt::Defender(walker)]
+        vec![Opt::Defender(None), Opt::Defender(Some(walker))]
     );
     apply(&mut g.s, &g.t, &mut g.x, &mut Replay, Choice(1));
     g.pick(DecisionKind::Attacker, Opt::Attack(bear));
-    g.pick(DecisionKind::AttackTarget, Opt::Defender(NONE));
+    g.pick(DecisionKind::AttackTarget, Opt::Defender(None));
     g.finish_combat();
     // 3 damage removes all 3 loyalty counters (CR 120.3c); at 0 loyalty the planeswalker
     // goes to its owner's graveyard (CR 704.5i). The Bear hit the player.
@@ -398,7 +401,7 @@ fn a_planeswalker_survives_damage_short_of_its_loyalty() {
     let walker = g.put(d, "Walker");
     g.pass_to_combat();
     g.pick(DecisionKind::Attacker, Opt::Attack(bear));
-    g.pick(DecisionKind::AttackTarget, Opt::Defender(walker));
+    g.pick(DecisionKind::AttackTarget, Opt::Defender(Some(walker)));
     g.finish_combat();
     assert!(g.on_battlefield(walker));
     assert_eq!(g.s.object(walker).counters.loyalty, 1);
@@ -590,7 +593,7 @@ fn an_attacker_whose_planeswalker_left_deals_no_damage() {
     let walker = g.put(d, "Walker");
     g.pass_to_combat();
     g.pick(DecisionKind::Attacker, Opt::Attack(ogre));
-    g.pick(DecisionKind::AttackTarget, Opt::Defender(walker));
+    g.pick(DecisionKind::AttackTarget, Opt::Defender(Some(walker)));
     stop_at(&mut g, TurnStep::DeclareAttackers);
     zone::move_to(&mut g.s, walker, Zone::Graveyard).unwrap();
     g.finish_combat();
@@ -705,7 +708,7 @@ fn smart_stops_come_after_attackers_and_after_blockers_are_declared() {
     let smart = Profile::SMART;
     for step in [TurnStep::DeclareAttackers, TurnStep::DeclareBlockers] {
         g.s.turn.step = step;
-        for player in [a, opponent(a)] {
+        for player in [a, a.opponent()] {
             assert!(smart.stops_for(&g.s, player), "{step:?}");
         }
     }
@@ -713,8 +716,8 @@ fn smart_stops_come_after_attackers_and_after_blockers_are_declared() {
     assert!(!smart.stops_for(&g.s, a));
 }
 
-fn is_creature(g: &Game, slot: u8) -> bool {
-    Types(g.s.derived(slot).types).contains(Types::CREATURE)
+fn is_creature(g: &Game, slot: Slot) -> bool {
+    g.s.derived(slot).types.contains(Types::CREATURE)
 }
 
 #[test]
@@ -734,7 +737,7 @@ fn crew_taps_creatures_one_at_a_time_and_makes_an_artifact_creature_until_end_of
         DecisionKind::Priority,
         Opt::Activate {
             slot: wagon,
-            ability: 0,
+            ability: AbilityIx::Own(0),
         },
     );
     // The Wagon can't crew itself; both creatures are needed for power 3.
@@ -753,8 +756,8 @@ fn crew_taps_creatures_one_at_a_time_and_makes_an_artifact_creature_until_end_of
     g.expect(DecisionKind::Priority);
     assert!(g.s.stack().is_empty());
     assert!(is_creature(&g, wagon));
-    assert!(Types(g.s.derived(wagon).types).contains(Types::ARTIFACT));
-    assert!(Subtypes(g.s.derived(wagon).subtypes).contains(Subtype::Vehicle));
+    assert!(g.s.derived(wagon).types.contains(Types::ARTIFACT));
+    assert!(g.s.derived(wagon).subtypes.contains(Subtype::Vehicle));
     g.pass_to_combat();
     g.pick(DecisionKind::Attacker, Opt::Attack(wagon));
     g.finish_combat();
@@ -774,7 +777,7 @@ fn crew_is_offered_only_with_enough_power() {
     let priority = g.expect(DecisionKind::Priority);
     let crew = Opt::Activate {
         slot: wagon,
-        ability: 0,
+        ability: AbilityIx::Own(0),
     };
     assert!(!options(&priority).contains(&crew));
     g.s.object_mut(bear).flags.set(ObjectFlags::TAPPED, true);
@@ -808,7 +811,7 @@ fn random_combat_games_keep_the_invariants() {
     for seed in 0..12u64 {
         let mut g = Game::seeded(seed);
         g.s.set_profile(Profile::EXACT);
-        for player in [0, 1] {
+        for player in Seat::BOTH {
             for _ in 0..8 {
                 let slot = *g.s.library(player).last().unwrap();
                 let name = g.t.def(g.s.object(slot).card).name;

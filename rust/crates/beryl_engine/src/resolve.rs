@@ -11,13 +11,14 @@
 //! again from the start. An inline answer source runs every body once on the state itself.
 
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, AbilityKind, CastingOption};
+use crate::card::{Ability, AbilityKind, CastingOption, FaceAbility};
 use crate::cast::{self, entry_ability};
 use crate::decision::{Answers, Decision};
 use crate::effect::EffectCtx;
 use crate::engine::Scratch;
 use crate::event::{self, Entry, Reason, Sink};
 use crate::fixed::{Fixed, Full};
+use crate::ids::Seat;
 use crate::state::{
     CounterKind, ObjectFlags, Pending, PendingTrigger, Resolving, StackEntry, State, Zone,
 };
@@ -73,12 +74,12 @@ pub(crate) fn resolve(
 /// shuffle, a random order); then only a slot that is still the same object counts.
 fn keep_what_was_seen(s: &mut State, run: &State) {
     let random = run.rng != s.rng;
-    for p in 0..2 {
-        let gained = run.knowledge[p] & !s.knowledge[p];
+    for p in Seat::BOTH {
+        let gained = run.knowledge[p.index()] & !s.knowledge[p.index()];
         for slot in gained.iter() {
             let (now, then) = (s.object(slot), run.object(slot));
             if now.card == then.card && (!random || now.incarnation == then.incarnation) {
-                s.knowledge[p].insert(slot);
+                s.knowledge[p.index()].insert(slot);
             }
         }
     }
@@ -129,14 +130,15 @@ fn condition_fails(s: &State, t: &GameTable, entry: &StackEntry, ability: &Abili
     if ability.kind != AbilityKind::Triggered {
         return false;
     }
-    let Some(condition) = ability.condition else {
+    let (Some(condition), Some(FaceAbility::Own(index))) = (ability.condition, entry.ability)
+    else {
         return false;
     };
     let pending = PendingTrigger {
         source: entry.object,
         card: entry.card,
         face: entry.face,
-        ability: entry.ability,
+        ability: index,
         controller: entry.controller,
         info: entry.info,
     };
@@ -185,7 +187,7 @@ fn run(
         // is put into its owner's graveyard. As the final part of an ability's resolution, the
         // ability is removed from the stack and ceases to exist." Unless its own effect moved
         // it already, as Time Spiral exiles itself.
-        if entry.is_spell() && s.is_current(entry.object) {
+        if entry.is_spell() && entry.object.is_some_and(|r| s.is_current(r)) {
             cast::leave_stack(s, t, sink, &entry, false, Reason::Resolve)?;
         }
         if let Some((object, player, free)) = offer {
@@ -220,7 +222,7 @@ fn enter_battlefield(
     sink: &mut Sink,
     entry: &StackEntry,
 ) -> Result<(), Full> {
-    let slot = entry.object.slot;
+    let slot = entry.object.expect("a spell's card").slot;
     let face = &t.def(entry.card).faces[usize::from(entry.face)];
     let mut how = Entry {
         controller: Some(entry.controller),

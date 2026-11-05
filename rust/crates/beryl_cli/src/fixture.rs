@@ -8,7 +8,7 @@ use std::sync::mpsc::channel;
 use beryl_cards::decks::{WU_CONTROL, fuzz_deck};
 use beryl_session::ipc::{self, Fixture, FixtureMessage};
 use beryl_session::protocol::Kind;
-use beryl_session::{PlayerView, Sessions, StartGame, Status, StopsSetting, agents};
+use beryl_session::{PlayerView, Seat, Sessions, StartGame, Status, StopsSetting, agents};
 use serde::Deserialize;
 use serde_json::json;
 
@@ -35,7 +35,7 @@ struct Definition {
 /// Where a recording stops: the human's first decision of a kind, or the end of the game.
 #[derive(Debug, PartialEq)]
 enum Until {
-    First { kind: Kind, seat: u8 },
+    First { kind: Kind, seat: Seat },
     GameOver,
 }
 
@@ -52,7 +52,7 @@ impl Until {
                 seat: seat
                     .parse()
                     .ok()
-                    .filter(|&s| s < 2)
+                    .and_then(Seat::try_new)
                     .ok_or_else(|| format!("no seat {seat:?}"))?,
             }),
             _ => Err(format!(
@@ -61,10 +61,10 @@ impl Until {
         }
     }
 
-    fn seat(&self) -> u8 {
+    fn seat(&self) -> Seat {
         match self {
             Until::First { seat, .. } => *seat,
-            Until::GameOver => 0,
+            Until::GameOver => Seat::P0,
         }
     }
 
@@ -111,7 +111,7 @@ fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
         seed: def.seed,
         decks: [deck(&def.decks[0])?, deck(&def.decks[1])?],
         human,
-        opponent: def.agents[usize::from(1 - human)].clone(),
+        opponent: def.agents[human.opponent().index()].clone(),
         stops: def.stops.unwrap_or(StopsSetting::Smart),
     };
     let (sent, updates) = channel();
@@ -120,7 +120,7 @@ fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
         let _ = sent.send(update);
     });
     let session = sessions
-        .start_game(&start, Some(&def.agents[usize::from(human)]))
+        .start_game(&start, Some(&def.agents[human.index()]))
         .map_err(|e| e.to_string())?;
     let mut messages = vec![
         FixtureMessage::response(ipc::LIST_AGENTS, &agents()),
@@ -170,7 +170,7 @@ mod tests {
             Until::parse("first chooseUpTo decision for seat 1"),
             Ok(Until::First {
                 kind: Kind::ChooseUpTo,
-                seat: 1
+                seat: Seat::P1
             })
         );
         assert_eq!(Until::parse("game over"), Ok(Until::GameOver));

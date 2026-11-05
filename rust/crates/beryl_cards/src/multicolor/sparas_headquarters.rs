@@ -1,6 +1,7 @@
 //! Spara's Headquarters. Land — Forest Plains Island. "({T}: Add {G}, {W}, or {U}.) This land
 //! enters tapped. Cycling {3} ({3}, Discard this card: Draw a card.)"
 
+use beryl_engine::Seat;
 use beryl_engine::Zone;
 use beryl_engine::card::{
     Ability, CardDef, Face, ManaColor, ManaCost, ManaSet, Replacement, Subtype, Subtypes, Types,
@@ -31,7 +32,7 @@ pub static CARD: CardDef = CardDef {
     tokens: &[],
 };
 
-const fn count(player: u8, zone: Zone, card: &'static str, count: u8) -> Action {
+const fn count(player: Seat, zone: Zone, card: &'static str, count: u8) -> Action {
     Action::assert(Assertion::Count {
         player,
         zone,

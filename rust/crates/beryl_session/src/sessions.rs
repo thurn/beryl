@@ -15,7 +15,7 @@ use ts_rs::TS;
 use crate::game::Game;
 use crate::protocol::{CandidateIndex, DecisionId, SessionId, StopsSetting};
 use crate::session::GameSession;
-use crate::{GameUpdate, SessionError, StartGame};
+use crate::{GameUpdate, Seat, SessionError, StartGame};
 
 /// The UI's request for a game: the WU Control mirror against `agent`, the human in seat 0
 /// under the smart stops.
@@ -36,7 +36,7 @@ impl StartRequest {
         StartGame {
             seed: self.seed.map_or_else(clock_seed, u64::from),
             decks: [deck.clone(), deck],
-            human: 0,
+            human: Seat::P0,
             opponent: self.agent.clone(),
             stops: StopsSetting::Smart,
         }

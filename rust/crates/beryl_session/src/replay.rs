@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use beryl_engine::{CardTable, GameTable, State, TableError};
+use beryl_engine::{CardTable, GameTable, Seat, State, TableError};
 use serde::{Deserialize, Serialize};
 
 use crate::game::with_stops;
@@ -37,14 +37,17 @@ pub enum Entry {
 
 impl ReplayFile {
     /// How the recorded game was started.
-    pub fn start(&self) -> StartGame {
-        StartGame {
+    pub fn start(&self) -> Result<StartGame, SessionError> {
+        let human = Seat::try_new(self.human).ok_or_else(|| SessionError::BadReplay {
+            reason: format!("no seat {}", self.human),
+        })?;
+        Ok(StartGame {
             seed: self.seed,
             decks: self.decks.clone(),
-            human: self.human,
+            human,
             opponent: self.opponent.clone(),
             stops: self.stops,
-        }
+        })
     }
 
     /// The game's table and its state before the first decision.

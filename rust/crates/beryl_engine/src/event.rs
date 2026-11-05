@@ -10,9 +10,10 @@
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityKind, Replacement, Types};
 use crate::fixed::{Fixed, Full};
+use crate::ids::{CardIx, Seat, Slot};
 use crate::layers;
 use crate::state::{
-    Continuous, CounterKind, NONE, ObjectFlags, ObjectRef, State, TOKEN_SLOTS, TurnStep, Zone,
+    Continuous, CounterKind, ObjectFlags, ObjectRef, State, TurnStep, Zone, token_slots,
 };
 use crate::table::GameTable;
 use crate::trigger;
@@ -54,7 +55,7 @@ pub enum Reason {
 /// The player or permanent dealt damage.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Recipient {
-    Player(u8),
+    Player(Seat),
     Permanent(ObjectRef),
 }
 
@@ -78,15 +79,15 @@ pub enum Event {
         combat: bool,
     },
     Draw {
-        player: u8,
+        player: Seat,
         cards: u8,
     },
     LifeGain {
-        player: u8,
+        player: Seat,
         amount: u8,
     },
     LifeLoss {
-        player: u8,
+        player: Seat,
         amount: u8,
     },
     CountersAdded {
@@ -107,39 +108,39 @@ pub enum Event {
     },
     /// "Whenever you create one or more tokens" reads this once per event.
     TokensCreated {
-        controller: u8,
+        controller: Seat,
         tokens: Bitboard,
     },
     /// A spell was cast ([CR 601.2i](https://yawgatog.com/resources/magic-rules/#R6012i)).
     Cast {
         spell: ObjectRef,
-        controller: u8,
+        controller: Seat,
     },
     /// A player declared attackers ([CR 508.1](https://yawgatog.com/resources/magic-rules/#R5081)).
     Attack {
-        player: u8,
+        player: Seat,
         attackers: Bitboard,
     },
     /// A step or phase began ([CR 500.6](https://yawgatog.com/resources/magic-rules/#R5006)).
     StepBegins {
         step: TurnStep,
-        active: u8,
+        active: Seat,
     },
     GainControl {
         object: ObjectRef,
-        player: u8,
+        player: Seat,
     },
     /// A coin flip ([CR 705.2](https://yawgatog.com/resources/magic-rules/#R7052)): "If the
     /// call matches the result, the player wins the flip."
     CoinFlip {
-        player: u8,
+        player: Seat,
         won: bool,
     },
     Lose {
-        player: u8,
+        player: Seat,
     },
     Win {
-        player: u8,
+        player: Seat,
     },
 }
 
@@ -233,7 +234,7 @@ pub(crate) struct Entry {
     /// ([CR 508.4](https://yawgatog.com/resources/magic-rules/#R5084)).
     pub attacking: bool,
     /// Under this player's control rather than its owner's.
-    pub controller: Option<u8>,
+    pub controller: Option<Seat>,
     /// The face up.
     pub face: u8,
     /// Counters it enters with ("enters with N time counters").
@@ -246,7 +247,7 @@ pub(crate) struct Entry {
     pub flags: u32,
     pub x: u8,
     /// The object an Aura spell attaches to as it resolves (CR 608.3c).
-    pub attach: Option<u8>,
+    pub attach: Option<Slot>,
 }
 
 /// Executes the remaining steps of the pipeline for an event its primitive has executed:
@@ -264,7 +265,7 @@ pub(crate) fn move_one(
     s: &mut State,
     t: &GameTable,
     sink: &mut Sink,
-    slot: u8,
+    slot: Slot,
     to: Zone,
     reason: Reason,
 ) -> Result<(), Full> {
@@ -322,7 +323,7 @@ pub(crate) fn move_batch_to(
     entry: Entry,
 ) -> Result<(), Full> {
     layers::refresh(s, t);
-    let mut moves: Fixed<(u8, Zone, Zone, Entry), 128> = Fixed::new();
+    let mut moves: Fixed<(Slot, Zone, Zone, Entry), 128> = Fixed::new();
     let mut returning = Bitboard::EMPTY;
     for slot in objects.iter() {
         let o = *s.object(slot);
@@ -355,14 +356,14 @@ pub(crate) fn move_batch_to(
             o.flags.set(ObjectFlags::ATTACKING, entry.attacking);
             o.face = entry.face;
             if let Some(controller) = entry.controller {
-                o.controller = controller;
+                o.base_controller = controller;
             }
             if let Some((kind, n)) = entry.counters {
                 *o.counters.get_mut(kind) = n;
             }
             o.flags.0 |= entry.flags;
             if let Some(host) = entry.attach {
-                o.attached_to = host;
+                o.attached_to = Some(host);
             }
             if entry.x > 0 {
                 let r = s.object_ref(slot);
@@ -416,7 +417,7 @@ pub(crate) fn move_batch_to(
 /// create is "exile it instead" of a graveyard, and no two of them can apply to one event
 /// differently, so the ordering of [CR 616.1](https://yawgatog.com/resources/magic-rules/#R6161)
 /// never becomes a choice.
-fn destination(s: &State, slot: u8, to: Zone) -> Zone {
+fn destination(s: &State, slot: Slot, to: Zone) -> Zone {
     let r = s.object_ref(slot);
     let exiled = to == Zone::Graveyard
         && s.effects
@@ -426,12 +427,12 @@ fn destination(s: &State, slot: u8, to: Zone) -> Zone {
 }
 
 /// The objects exiled until the permanent in `slot` leaves the battlefield.
-fn exiled_until(s: &State, slot: u8) -> Bitboard {
-    (s.zone(0, Zone::Exile) | s.zone(1, Zone::Exile))
+fn exiled_until(s: &State, slot: Slot) -> Bitboard {
+    (s.zone(Seat::P0, Zone::Exile) | s.zone(Seat::P1, Zone::Exile))
         .iter()
         .filter(|&x| {
             let o = s.object(x);
-            o.flags.has(ObjectFlags::EXILED_UNTIL) && o.linked == slot
+            o.flags.has(ObjectFlags::EXILED_UNTIL) && o.linked == Some(slot)
         })
         .collect()
 }
@@ -443,7 +444,7 @@ fn exiled_until(s: &State, slot: u8) -> Bitboard {
 /// ([CR 306.5b](https://yawgatog.com/resources/magic-rules/#R3065b)): "A planeswalker has the
 /// intrinsic ability 'This permanent enters with a number of loyalty counters on it equal to
 /// its printed loyalty number.'"
-fn enter_replacements(s: &State, t: &GameTable, slot: u8, mut entry: Entry) -> Entry {
+fn enter_replacements(s: &State, t: &GameTable, slot: Slot, mut entry: Entry) -> Entry {
     let o = s.object(slot);
     let face = &t.def(o.card).faces[usize::from(entry.face)];
     let controller = entry.controller.unwrap_or(o.owner);
@@ -461,7 +462,7 @@ fn enter_replacements(s: &State, t: &GameTable, slot: u8, mut entry: Entry) -> E
                     .iter()
                     .filter(|&&p| {
                         let d = s.derived(p);
-                        d.controller == controller && Types(d.types).contains(Types::LAND)
+                        d.controller == controller && d.types.contains(Types::LAND)
                     })
                     .count();
                 if lands > usize::from(n) {
@@ -489,7 +490,7 @@ fn pay_life_to_enter(
     s: &mut State,
     t: &GameTable,
     sink: &mut Sink,
-    slot: u8,
+    slot: Slot,
     entry: Entry,
 ) -> Result<(), Full> {
     let o = s.object(slot);
@@ -504,7 +505,7 @@ fn pay_life_to_enter(
 }
 
 /// The life an entering replacement of the face asks for, if any.
-pub(crate) fn life_to_enter(t: &GameTable, card: u8, face: u8) -> Option<u8> {
+pub(crate) fn life_to_enter(t: &GameTable, card: CardIx, face: u8) -> Option<u8> {
     t.def(card).faces[usize::from(face)]
         .abilities
         .iter()
@@ -521,7 +522,7 @@ pub(crate) fn lose_life(
     s: &mut State,
     t: &GameTable,
     sink: &mut Sink,
-    player: u8,
+    player: Seat,
     amount: u8,
 ) -> Result<(), Full> {
     s.player_mut(player).life -= i16::from(amount);
@@ -533,7 +534,7 @@ pub(crate) fn gain_life(
     s: &mut State,
     t: &GameTable,
     sink: &mut Sink,
-    player: u8,
+    player: Seat,
     amount: u8,
 ) -> Result<(), Full> {
     s.player_mut(player).life += i16::from(amount);
@@ -547,7 +548,7 @@ pub(crate) fn draw(
     s: &mut State,
     t: &GameTable,
     sink: &mut Sink,
-    player: u8,
+    player: Seat,
     cards: u8,
 ) -> Result<(), Full> {
     zone::draw_n(s, player, cards)?;
@@ -583,7 +584,7 @@ pub(crate) fn deal_damage(
             if !s.is_current(r) || s.object(r.slot).zone != Zone::Battlefield {
                 return Ok(());
             }
-            let types = Types(s.derived(r.slot).types);
+            let types = s.derived(r.slot).types;
             let o = s.object_mut(r.slot);
             if types.contains(Types::PLANESWALKER) {
                 o.counters.loyalty = o.counters.loyalty.saturating_sub(amount);
@@ -719,14 +720,13 @@ pub(crate) fn create_tokens(
     s: &mut State,
     t: &GameTable,
     sink: &mut Sink,
-    controller: u8,
-    card: u8,
+    controller: Seat,
+    card: CardIx,
     count: u8,
     how: TokenEntry,
 ) -> Result<Bitboard, Full> {
     let mut tokens = Bitboard::EMPTY;
-    // Slot NONE is never used: it means "no object" in references.
-    let mut free = (TOKEN_SLOTS..NONE).filter(|&slot| s.object(slot).zone == Zone::Nowhere);
+    let mut free = token_slots().filter(|&slot| s.object(slot).zone == Zone::Nowhere);
     for _ in 0..count {
         let slot = free.next().ok_or(Full)?;
         tokens.insert(slot);
@@ -735,7 +735,7 @@ pub(crate) fn create_tokens(
         let o = s.object_mut(slot);
         o.card = card;
         o.owner = controller;
-        o.controller = controller;
+        o.base_controller = controller;
         o.flags = ObjectFlags(ObjectFlags::TOKEN);
         o.flags.set(ObjectFlags::ONE_ONE, how.one_one);
     }
@@ -755,9 +755,3 @@ pub(crate) fn create_tokens(
     settle(s, t, sink, Event::TokensCreated { controller, tokens })?;
     Ok(tokens)
 }
-
-/// The object in a slot, as a reference that names no object, for an emblem's triggers.
-pub(crate) const NO_OBJECT: ObjectRef = ObjectRef {
-    slot: NONE,
-    incarnation: 0,
-};

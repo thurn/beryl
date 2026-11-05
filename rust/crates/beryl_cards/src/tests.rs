@@ -7,7 +7,7 @@ use beryl_engine::card::{AbilityKind, ManaColor, Subtype, Supertypes, Types};
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
     Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome, Profile, Replay, Scratch,
-    State, Step, TurnStep, Zone, apply, next,
+    Seat, State, Step, TurnStep, Zone, apply, next,
 };
 
 use crate::{CARDS, SCENARIOS, decks, names};
@@ -260,15 +260,11 @@ fn a_question_after_a_look_keeps_the_look() {
     ];
     let t = GameTable::new(&CARDS, [p0, p1]).unwrap();
     let mut s = State::new(&t, 1, Profile::EXACT);
-    s.begin_at(1, 0, TurnStep::PrecombatMain);
-    for player in 0..2 {
+    s.begin_at(1, Seat::P0, TurnStep::PrecombatMain);
+    for player in Seat::BOTH {
         for slot in s.library(player).to_vec() {
-            let land = t
-                .def(s.object(slot).card)
-                .front()
-                .types
-                .contains(Types::LAND);
-            let zone = if player == 0 && land {
+            let land = t.def(s.card(slot)).front().types.contains(Types::LAND);
+            let zone = if player == Seat::P0 && land {
                 Zone::Battlefield
             } else {
                 Zone::Hand
@@ -289,9 +285,12 @@ fn a_question_after_a_look_keeps_the_look() {
             Step::Over(o) => panic!("the game ended: {o:?}"),
         }
     };
-    assert_eq!(question.player, 0);
-    for slot in s.zone(1, Zone::Hand).iter() {
-        assert!(s.knows(0, slot), "player 0 forgot the card in slot {slot}");
+    assert_eq!(question.player, Seat::P0);
+    for slot in s.zone(Seat::P1, Zone::Hand).iter() {
+        assert!(
+            s.knows(Seat::P0, slot),
+            "player 0 forgot the card in slot {slot}"
+        );
     }
     let choices = |s: &mut State| {
         let mut x = Scratch::new();
@@ -301,7 +300,7 @@ fn a_question_after_a_look_keeps_the_look() {
             Step::Over(o) => panic!("the game ended: {o:?}"),
         }
     };
-    let mut det = Observation::new(&s, 0).determinize(&t, &mut SplitMix64::new(9));
+    let mut det = Observation::new(&s, Seat::P0).determinize(&t, &mut SplitMix64::new(9));
     let real = choices(&mut s);
     assert_eq!(real.kind, DecisionKind::ChooseObject);
     assert_eq!(choices(&mut det), real);

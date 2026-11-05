@@ -1,26 +1,25 @@
 //! Triggered abilities: matching events, putting them on the stack in APNAP order, delayed
 //! triggers, and resolving them (architecture §8.3, CR 603).
 
-use crate::bitboard::Bitboard;
-use crate::card::{Ability, Delayed, Face, Trigger, Types};
-use crate::event::{Event, NO_OBJECT, Recipient, Sink, kind};
+use crate::card::{Ability, Delayed, Face, FaceAbility, Trigger, Types};
+use crate::event::{Event, Recipient, Sink, kind};
 use crate::filter::Whose;
-use crate::fixed::Full;
+use crate::fixed::{Fixed, Full};
+use crate::ids::{CardIx, Seat, Slot};
 use crate::state::{
-    Lki, NONE, ObjectFlags, ObjectRef, PendingTrigger, StackEntry, State, TriggerInfo, TurnStep,
-    Zone,
+    Lki, ObjectFlags, ObjectRef, PendingTrigger, StackEntry, State, TriggerInfo, TurnStep, Zone,
 };
 use crate::table::GameTable;
 use crate::turn::apnap;
 
 /// The printed face of a permanent, or of the card a token copies.
-pub(crate) fn face(s: &State, t: &GameTable, slot: u8) -> &'static Face {
+pub(crate) fn face(s: &State, t: &GameTable, slot: Slot) -> &'static Face {
     let o = s.object(slot);
     &t.def(o.card).faces[usize::from(o.face)]
 }
 
 /// The ability a pending trigger or stack entry names.
-pub(crate) fn ability(t: &GameTable, card: u8, face: u8, ability: u8) -> &'static Ability {
+pub(crate) fn ability(t: &GameTable, card: CardIx, face: u8, ability: u8) -> &'static Ability {
     &t.def(card).faces[usize::from(face)].abilities[usize::from(ability)]
 }
 
@@ -49,11 +48,11 @@ pub(crate) fn match_event(s: &mut State, t: &GameTable, e: &Event) -> Result<(),
             let face = s.object(slot).face;
             for (a, ability) in face_abilities(t, card, face) {
                 if let Some(info) = fires(s, ability.trigger, Some(slot), controller, e) {
-                    enqueue(s, t, source, card, face, a, controller, info)?;
+                    enqueue(s, t, Some(source), card, face, a, controller, info)?;
                 }
             }
         }
-        for player in 0..2u8 {
+        for player in Seat::BOTH {
             let emblems = s.player(player).emblems;
             for &card in &emblems {
                 if t.listens(card) & k == 0 {
@@ -61,7 +60,7 @@ pub(crate) fn match_event(s: &mut State, t: &GameTable, e: &Event) -> Result<(),
                 }
                 for (a, ability) in face_abilities(t, card, 0) {
                     if let Some(info) = fires(s, ability.trigger, None, player, e) {
-                        enqueue(s, t, NO_OBJECT, card, 0, a, player, info)?;
+                        enqueue(s, t, None, card, 0, a, player, info)?;
                     }
                 }
             }
@@ -75,7 +74,7 @@ pub(crate) fn match_event(s: &mut State, t: &GameTable, e: &Event) -> Result<(),
 
 fn face_abilities(
     t: &GameTable,
-    card: u8,
+    card: CardIx,
     face: u8,
 ) -> impl Iterator<Item = (u8, &'static Ability)> {
     t.def(card).faces[usize::from(face)]
@@ -86,9 +85,15 @@ fn face_abilities(
 }
 
 /// Whether a trigger of a source controlled by `you` fires on `e`, and with what.
-fn fires(s: &State, trigger: Trigger, this: Option<u8>, you: u8, e: &Event) -> Option<TriggerInfo> {
+fn fires(
+    s: &State,
+    trigger: Trigger,
+    this: Option<Slot>,
+    you: Seat,
+    e: &Event,
+) -> Option<TriggerInfo> {
     let is_this = |r: ObjectRef| this == Some(r.slot) && s.is_current(r);
-    let info = |object: ObjectRef, player: u8, amount: u8| TriggerInfo {
+    let info = |object: Option<ObjectRef>, player: Seat, amount: u8| TriggerInfo {
         object,
         player,
         amount,
@@ -101,15 +106,15 @@ fn fires(s: &State, trigger: Trigger, this: Option<u8>, you: u8, e: &Event) -> O
         // that object as it resolved had a value of X chosen for any of its costs, the value
         // of X for that ability is the same as the value of X for that spell".
         (Trigger::Enters, Event::ZoneChange { object, .. }) if is_this(object) => {
-            Some(info(object, you, s.x_of(object.slot)))
+            Some(info(Some(object), you, s.x_of(object.slot)))
         }
         (Trigger::Attacks, Event::Attack { attackers, .. })
             if this.is_some_and(|slot| attackers.contains(slot)) =>
         {
-            Some(info(s.object_ref(this?), you, 0))
+            Some(info(Some(s.object_ref(this?)), you, 0))
         }
         (Trigger::YouAttack, Event::Attack { player, attackers }) if player == you => {
-            Some(info(NO_OBJECT, you, attackers.count() as u8))
+            Some(info(None, you, attackers.count() as u8))
         }
         (
             Trigger::CombatDamageToPlayer,
@@ -119,11 +124,11 @@ fn fires(s: &State, trigger: Trigger, this: Option<u8>, you: u8, e: &Event) -> O
                 amount,
                 combat: true,
             },
-        ) if is_this(source) => Some(info(source, player, amount)),
+        ) if is_this(source) => Some(info(Some(source), player, amount)),
         (Trigger::Step(step, whose), Event::StepBegins { step: now, active })
             if step == now && whose_turn(whose, you, active) =>
         {
-            Some(info(NO_OBJECT, active, 0))
+            Some(info(None, active, 0))
         }
         (Trigger::YouCreateTokens(types), Event::TokensCreated { controller, tokens })
             if controller == you =>
@@ -132,19 +137,19 @@ fn fires(s: &State, trigger: Trigger, this: Option<u8>, you: u8, e: &Event) -> O
                 .iter()
                 .filter(|&slot| {
                     s.object(slot).zone == Zone::Battlefield
-                        && Types(s.derived(slot).types).intersects(types)
+                        && s.derived(slot).types.intersects(types)
                 })
                 .count();
-            (matching > 0).then(|| info(NO_OBJECT, you, matching as u8))
+            (matching > 0).then(|| info(None, you, matching as u8))
         }
         (Trigger::YouCast, Event::Cast { spell, controller }) if controller == you => {
-            Some(info(spell, you, 0))
+            Some(info(Some(spell), you, 0))
         }
         _ => None,
     }
 }
 
-fn whose_turn(whose: Whose, you: u8, active: u8) -> bool {
+fn whose_turn(whose: Whose, you: Seat, active: Seat) -> bool {
     match whose {
         Whose::You => active == you,
         Whose::Opponent => active != you,
@@ -158,7 +163,12 @@ fn whose_turn(whose: Whose, you: u8, active: u8) -> bool {
 ///
 /// [CR 700.4](https://yawgatog.com/resources/magic-rules/#R7004): "The term dies means 'is
 /// put into a graveyard from the battlefield.'"
-pub(crate) fn match_leaving(s: &mut State, t: &GameTable, slot: u8, to: Zone) -> Result<(), Full> {
+pub(crate) fn match_leaving(
+    s: &mut State,
+    t: &GameTable,
+    slot: Slot,
+    to: Zone,
+) -> Result<(), Full> {
     let card = s.object(slot).card;
     if t.listens(card) & kind::DIES == 0 || to != Zone::Graveyard {
         return Ok(());
@@ -172,26 +182,26 @@ pub(crate) fn match_leaving(s: &mut State, t: &GameTable, slot: u8, to: Zone) ->
     for (a, ability) in face_abilities(t, card, face) {
         if ability.trigger == Trigger::Dies {
             let info = TriggerInfo {
-                object: source,
+                object: Some(source),
                 player: lki.controller,
                 amount: 0,
                 lki,
             };
-            enqueue(s, t, source, card, face, a, lki.controller, info)?;
+            enqueue(s, t, Some(source), card, face, a, lki.controller, info)?;
         }
     }
     Ok(())
 }
 
 /// A permanent's last-known information, from its current characteristics.
-pub(crate) fn lki(s: &State, slot: u8) -> Lki {
+pub(crate) fn lki(s: &State, slot: Slot) -> Lki {
     let d = s.derived(slot);
     let o = s.object(slot);
     Lki {
         card: o.card,
         power: d.power,
         toughness: d.toughness,
-        types: Types(d.types),
+        types: d.types,
         controller: d.controller,
         token: o.flags.has(ObjectFlags::TOKEN),
     }
@@ -205,11 +215,11 @@ pub(crate) fn lki(s: &State, slot: u8) -> Lki {
 fn enqueue(
     s: &mut State,
     t: &GameTable,
-    source: ObjectRef,
-    card: u8,
+    source: Option<ObjectRef>,
+    card: CardIx,
     face: u8,
     ability: u8,
-    controller: u8,
+    controller: Seat,
     info: TriggerInfo,
 ) -> Result<(), Full> {
     let pending = PendingTrigger {
@@ -230,7 +240,7 @@ fn enqueue(
 
 /// Fires the delayed triggers waiting for this step, each once
 /// ([CR 603.7b](https://yawgatog.com/resources/magic-rules/#R6037b)).
-fn fire_delayed(s: &mut State, step: TurnStep, active: u8) -> Result<(), Full> {
+fn fire_delayed(s: &mut State, step: TurnStep, active: Seat) -> Result<(), Full> {
     let mut i = 0;
     while i < s.delayed.len() {
         let d = s.delayed.as_slice()[i];
@@ -256,19 +266,19 @@ fn fire_delayed(s: &mut State, step: TurnStep, active: u8) -> Result<(), Full> {
 /// [CR 603.3b](https://yawgatog.com/resources/magic-rules/#R6033b): "each player, in APNAP
 /// order, puts each triggered ability they control ... on the stack in any order they
 /// choose."
-pub(crate) fn next_to_stack(s: &State) -> Option<(u8, Bitboard)> {
+pub(crate) fn next_to_stack(s: &State) -> Option<(Seat, Fixed<u8, 64>)> {
     let player = apnap(s)
         .into_iter()
         .find(|&p| s.triggers.iter().any(|tr| tr.controller == p))?;
-    let mut kept = Bitboard::EMPTY;
-    let mut firsts: crate::fixed::Fixed<PendingTrigger, 64> = crate::fixed::Fixed::new();
+    let mut kept = Fixed::new();
+    let mut firsts: Fixed<PendingTrigger, 64> = Fixed::new();
     for (i, tr) in s.triggers.iter().enumerate() {
         if tr.controller != player || firsts.iter().any(|k| equivalent(s, k, tr)) {
             continue;
         }
-        // The waiting triggers never exceed the capacity of this list.
+        // The waiting triggers never exceed the capacity of these lists.
         let _ = firsts.push(*tr);
-        kept.insert(i as u8);
+        let _ = kept.push(i as u8);
     }
     Some((player, kept))
 }
@@ -276,11 +286,11 @@ pub(crate) fn next_to_stack(s: &State) -> Option<(u8, Bitboard)> {
 /// Triggers of the same ability from interchangeable sources, on the same event with
 /// interchangeable objects, lead to the same game whatever their order (§7.2).
 fn equivalent(s: &State, a: &PendingTrigger, b: &PendingTrigger) -> bool {
-    let interchangeable = |x: ObjectRef, y: ObjectRef| {
-        x == y
-            || (x.slot != NONE
-                && y.slot != NONE
-                && crate::zone::signature(s, x.slot) == crate::zone::signature(s, y.slot))
+    let interchangeable = |x: Option<ObjectRef>, y: Option<ObjectRef>| match (x, y) {
+        (Some(x), Some(y)) => {
+            x == y || crate::zone::signature(s, x.slot) == crate::zone::signature(s, y.slot)
+        }
+        _ => x == y,
     };
     interchangeable(a.source, b.source)
         && interchangeable(a.info.object, b.info.object)
@@ -304,7 +314,7 @@ pub(crate) fn put_on_stack(
     s.stack.push(StackEntry {
         object: tr.source,
         controller: tr.controller,
-        ability: tr.ability,
+        ability: Some(FaceAbility::Own(tr.ability)),
         card: tr.card,
         face: tr.face,
         info: tr.info,

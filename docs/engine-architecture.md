@@ -169,8 +169,8 @@ is an ordinary node with forty legal children.
 ```rust
 #[derive(Clone, Copy)]
 pub struct State {
-    objects: [Object; 256],        // base data, one per slot          ~6 KiB
-    battlefield: Fixed<u8, 128>,   // slots currently on the battlefield
+    objects: [Object; 255],        // base data, one per slot          ~6 KiB
+    battlefield: Fixed<Slot, 128>, // slots currently on the battlefield
     derived: [Derived; 128],       // layer results, by battlefield index ~5 KiB
     zones: Zones,                  // bitboards and the ordered zones    ~1 KiB
     players: [Player; 2],
@@ -207,21 +207,25 @@ const _: () = assert!(size_of::<State>() <= 20 * 1024);
 
 ### 4.2 Objects and slots
 
-Every card, token and spell copy occupies one of 256 slots, addressed by a `u8`.
-The object in a slot:
+Every card, token and spell copy occupies one of 255 slots, addressed by a
+`Slot`: a `u8` stored plus one, so `Option<Slot>` is one byte and "no object" is
+`None`, never a reserved slot. Players are a `Seat` and game-table indices a
+`CardIx` (stored plus one the same way), so one cannot pass for another. The
+object in a slot:
 
 | Field                         | Size | Notes                                                                                       |
 | ----------------------------- | ---- | ------------------------------------------------------------------------------------------- |
-| `card: u8`                    | 1    | Index into the game's table (§6.4). Tokens and copies point at their definition too         |
+| `card: CardIx`                | 1    | Index into the game's table (§6.4). Tokens and copies point at their definition too         |
 | `incarnation: u16`            | 2    | Bumped on every zone change (§5)                                                            |
-| `zone`, `owner`, `controller` | 2    | Small enums and player bits                                                                 |
+| `zone`, `owner`, `controller` | 3    | Small enums; `controller` is the base one, the layer-2 result is in `Derived`               |
 | `flags`                       | 4    | tapped, summoning sick, attacking, blocking, face down, transformed, phased out, token, ... |
 | `damage: u8`                  | 1    | Marked damage this turn                                                                     |
 | `counters`                    | 5    | +1/+1, -1/-1, loyalty, and one (kind, count) pair for the long tail                         |
-| `attached_to`, `linked`       | 2    | Equipment and auras; what exiled, imprinted or hid this card                                |
-| `copy_of: u8`                 | 1    | Layer 1 copiable values when this object is a copy, as a game-table index                   |
+| `attached_to`, `linked`       | 2    | `Option<Slot>`: equipment and auras; what exiled, imprinted or hid this card                |
+| `copy_of: Option<CardIx>`     | 1    | Layer 1 copiable values when this object is a copy, as a game-table index                   |
 | `timestamp: u16`              | 2    | Battlefield entry order, for layers                                                         |
-| `chosen`, `face`              | 2    | A chosen color or type; which face is up                                                    |
+| `face`                        | 1    | Which face is up; a chosen color or type joins it with the first card that names one        |
+| `combat: Option<Slot>`        | 1    | The planeswalker an attacker attacks, or the attacker a blocker blocks                      |
 
 About 22 bytes, so the table is under 6 KiB.
 
@@ -244,7 +248,7 @@ About 22 bytes, so the table is under 6 KiB.
   | Quantity                      | Capacity |
   | ----------------------------- | -------- |
   | Players                       | 2        |
-  | Object slots                  | 256      |
+  | Object slots                  | 255      |
   | Cards per deck                | 60       |
   | Permanents on the battlefield | 128      |
   | Stack entries                 | 64       |
@@ -432,7 +436,7 @@ Both decklists are public (§13), so the cards a game can contain are known when
 it starts: the two decks plus every token they can create. `GameTable` is built
 from them once per game:
 
-- **Dense game-local indices**, at most 256, which is what `State` stores. The
+- **Dense game-local indices**, at most 255, which is what `State` stores. The
   hot static data for those cards sits contiguously, a few KiB that stay in L1:
   types, costs, timing class, keywords, listener masks and mana production, with
   each mana source's flexibility rank (§10).
@@ -617,11 +621,12 @@ continuous effects lives in `derived`, indexed by battlefield position:
 ```rust
 pub struct Derived {
     pub power: i8, pub toughness: i8,
-    pub types: u8, pub supertypes: u8, pub colors: u8, pub controller: u8,
-    pub protection: u8,
-    pub keywords: u64,                   // flying, first strike, deathtouch, ...
-    pub subtypes: [u64; 2],              // the cube's creature, land, artifact and enchantment types
-    pub granted: [AbilityRef; 4],        // abilities granted by other objects
+    pub types: Types, pub supertypes: Supertypes, pub colors: Colors,
+    pub controller: Seat,                // the layer-2 controller, which State::controller reads
+    pub protection: Colors,
+    pub keywords: Keywords,              // flying, first strike, deathtouch, ...
+    pub subtypes: Subtypes,              // the cube's creature, land, artifact and enchantment types
+    pub granted: [Option<GrantRef>; 4],  // abilities granted by other objects
 }
 ```
 

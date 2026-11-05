@@ -1,9 +1,9 @@
 //! The runner on test cards: what it accepts, and what it refuses.
 
 use beryl_engine::card::{
-    Ability, CardDef, Face, ManaColor, ManaCost, ManaSet, Subtype, Subtypes, Types,
+    Ability, AbilityIx, CardDef, Face, ManaColor, ManaCost, ManaSet, Subtype, Subtypes, Types,
 };
-use beryl_engine::{CardTable, DecisionKind, TurnStep, Zone};
+use beryl_engine::{CardTable, DecisionKind, Seat, TurnStep, Zone};
 
 use crate::{Action, Assertion, Ending, P0, P1, Permanent, Pick, Scenario, run, to_json};
 
@@ -56,7 +56,7 @@ const L: &str = "Test Land";
 /// Nine cards: one too many to keep after playing a land, and two kinds to discard.
 const NINE: &[&str] = &[L, L, L, L, L, L, L, L, "Other Land"];
 
-const fn count(player: u8, zone: Zone, n: u8) -> Action {
+const fn count(player: Seat, zone: Zone, n: u8) -> Action {
     Action::Assert {
         assertion: Assertion::Count {
             player,
@@ -155,7 +155,7 @@ fn a_scenario_casts_resolves_activates_and_attacks() {
             Action::Activate {
                 player: P0,
                 card: "Test Cycler",
-                ability: 0,
+                ability: AbilityIx::Own(0),
             },
             Action::Resolve,
             count(P0, Zone::Hand, 1),
@@ -344,7 +344,7 @@ fn a_game_that_ends_first_fails_an_advance() {
         },
     }]);
     let e = error(&S);
-    assert!(e.contains("action 0: the game is over (Win(0))"), "{e}");
+    assert!(e.contains("action 0: the game is over (Win(P0))"), "{e}");
     run(&CARDS, &T).unwrap();
 }
 

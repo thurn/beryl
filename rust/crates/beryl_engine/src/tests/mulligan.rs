@@ -1,17 +1,16 @@
 //! The London mulligan, and what each player can see of the other's cards.
 
 use super::{LANDS, MIXED, decide, land_go, play, table};
-use crate::state::{Zone, opponent};
-use crate::{
-    Choice, Decision, DecisionKind, Observation, Profile, Replay, Scratch, State, UNKNOWN, apply,
-};
+use crate::ids::Seat;
+use crate::state::Zone;
+use crate::{Choice, Decision, DecisionKind, Observation, Profile, Replay, Scratch, State, apply};
 
 /// Answers mulligan decisions with `mulligan(player, mulligans so far)` and plays first.
 fn mulligans_until(
     t: &crate::GameTable,
     s: &mut State,
-    mulligan: impl Fn(u8, u8) -> bool,
-) -> (Decision, Vec<(DecisionKind, u8)>) {
+    mulligan: impl Fn(Seat, u8) -> bool,
+) -> (Decision, Vec<(DecisionKind, Seat)>) {
     let mut log = Vec::new();
     loop {
         let d = decide(t, s);
@@ -33,7 +32,7 @@ fn a_mulligan_puts_one_card_on_the_bottom_that_only_its_owner_knows() {
     let mut s = State::new(&t, 11, Profile::EXACT);
     let (first, log) = mulligans_until(&t, &mut s, |_, n| n == 0);
     let p = s.turn().starting_player;
-    let q = opponent(p);
+    let q = p.opponent();
     assert_eq!(first.kind, DecisionKind::Priority);
     // Both declare, both mulligan at once, both bottom a card, then both keep.
     let kinds: Vec<_> = log.iter().map(|&(k, player)| (k, player)).collect();
@@ -53,10 +52,10 @@ fn a_mulligan_puts_one_card_on_the_bottom_that_only_its_owner_knows() {
         assert_eq!(s.library(player).len(), 34);
         let bottom = s.library(player)[0];
         assert!(s.knows(player, bottom));
-        assert!(!s.knows(opponent(player), bottom));
+        assert!(!s.knows(player.opponent(), bottom));
         // Everything else in the library was shuffled away from both players.
         for &slot in &s.library(player)[1..] {
-            assert!(!s.knows(0, slot) && !s.knows(1, slot));
+            assert!(!s.knows(Seat::P0, slot) && !s.knows(Seat::P1, slot));
         }
     }
     // The starting player skipped their draw, so their hand is the kept six.
@@ -67,20 +66,20 @@ fn a_mulligan_puts_one_card_on_the_bottom_that_only_its_owner_knows() {
 fn a_player_can_mulligan_down_to_nothing() {
     let t = table([LANDS, LANDS]);
     let mut s = State::new(&t, 2, Profile::EXACT);
-    let (_, log) = mulligans_until(&t, &mut s, |player, _| player == 0);
-    assert_eq!(s.player(0).mulligans, 7);
-    assert_eq!(s.player(1).mulligans, 0);
+    let (_, log) = mulligans_until(&t, &mut s, |player, _| player == Seat::P0);
+    assert_eq!(s.player(Seat::P0).mulligans, 7);
+    assert_eq!(s.player(Seat::P1).mulligans, 0);
     // The eighth declaration is never asked: the hand would already be empty.
     let asked = log
         .iter()
-        .filter(|&&(k, player)| k == DecisionKind::KeepOrMulligan && player == 0)
+        .filter(|&&(k, player)| k == DecisionKind::KeepOrMulligan && player == Seat::P0)
         .count();
     assert_eq!(asked, 7);
     assert_eq!(
-        s.library(0).len() + s.zone(0, Zone::Hand).count() as usize,
+        s.library(Seat::P0).len() + s.zone(Seat::P0, Zone::Hand).count() as usize,
         40
     );
-    assert!(s.zone(0, Zone::Hand).count() <= 1);
+    assert!(s.zone(Seat::P0, Zone::Hand).count() <= 1);
 }
 
 #[test]
@@ -94,21 +93,20 @@ fn no_player_ever_sees_the_identity_of_a_card_in_the_other_players_hand_or_libra
         _ => land_go(obs, d),
     };
     play(&t, &mut s, agent, |s, _| {
-        for viewer in 0..2 {
+        for viewer in Seat::BOTH {
             let obs = Observation::new(s, viewer);
-            let other = opponent(viewer);
+            let other = viewer.opponent();
             for slot in obs.zone(other, Zone::Hand).iter() {
-                assert_eq!(obs.card(slot), UNKNOWN);
-                assert_eq!(obs.object(slot).card, UNKNOWN);
+                assert_eq!(obs.card(slot), None);
             }
             for &slot in obs.library(other) {
-                assert_eq!(obs.card(slot), UNKNOWN);
+                assert_eq!(obs.card(slot), None);
             }
             for slot in obs.zone(viewer, Zone::Hand).iter() {
-                assert_eq!(obs.card(slot), s.object(slot).card);
+                assert_eq!(obs.card(slot), Some(s.card(slot)));
             }
             for &slot in obs.battlefield() {
-                assert_eq!(obs.card(slot), s.object(slot).card);
+                assert_eq!(obs.card(slot), Some(s.card(slot)));
             }
             checked += 1;
         }

@@ -3,11 +3,12 @@
 use crate::bitboard::Bitboard;
 use crate::event::Sink;
 use crate::fixed::{Fixed, Full};
+use crate::ids::{CardIx, Seat, Slot};
 use crate::profile::Profile;
 use crate::rng::Rng;
 use crate::state::{
     BATTLEFIELD, Budgets, DECK_SLOTS, Derived, Flags, MulliganStatus, Object, Pending, Player,
-    SLOTS, State, Turn, TurnStep, Zone, Zones, opponent,
+    SLOTS, State, Turn, TurnStep, Zone, Zones, deck_slot,
 };
 use crate::table::GameTable;
 use crate::{turn, zone};
@@ -44,29 +45,29 @@ impl State {
     pub fn new(t: &GameTable, seed: u64, profile: Profile) -> State {
         let mut s = State::empty(profile);
         s.rng = Rng::new(seed);
-        for player in 0..2u8 {
-            let mut cards: Fixed<u8, DECK_SLOTS> = Fixed::new();
+        for player in Seat::BOTH {
+            let mut cards: Fixed<CardIx, DECK_SLOTS> = Fixed::new();
             for &card in t.deck(player) {
                 // GameTable::new refuses decks larger than DECK_SLOTS.
                 let _ = cards.push(card);
             }
             s.rng.shuffle.shuffle(cards.as_mut_slice());
             for (i, &card) in cards.iter().enumerate() {
-                let slot = (usize::from(player) * DECK_SLOTS + i) as u8;
+                let slot = deck_slot(player, i);
                 *s.object_mut(slot) = Object {
                     card,
                     zone: Zone::Library,
                     owner: player,
-                    controller: player,
+                    base_controller: player,
                     ..Object::EMPTY
                 };
-                let _ = s.zones.library[usize::from(player)].push(slot);
-                s.zones.members[usize::from(player)][Zone::Library as usize].insert(slot);
+                let _ = s.zones.library[player.index()].push(slot);
+                s.zones.members[player.index()][Zone::Library as usize].insert(slot);
             }
         }
         // CR 103.1: "the players determine which one of them will choose who takes the first
         // turn ... (flipping a coin, rolling dice, etc.)".
-        let chooser = s.rng.other.below(2) as u8;
+        let chooser = Seat::new(s.rng.other.below(2) as u8);
         s.pending = Pending::PlayOrDraw { chooser };
         s
     }
@@ -87,10 +88,10 @@ impl State {
             players: [new_player(); 2],
             turn: Turn {
                 number: 0,
-                active: 0,
-                starting_player: 0,
+                active: Seat::P0,
+                starting_player: Seat::P0,
                 step: TurnStep::Untap,
-                priority: 0,
+                priority: Seat::P0,
                 passes: 0,
                 cleanup_check: false,
                 attacked: false,
@@ -123,11 +124,11 @@ pub(crate) fn set_starting_player(
     s: &mut State,
     t: &GameTable,
     sink: &mut Sink,
-    starting: u8,
+    starting: Seat,
 ) -> Result<(), Full> {
     s.turn.starting_player = starting;
     s.turn.active = starting;
-    for player in [starting, opponent(starting)] {
+    for player in [starting, starting.opponent()] {
         zone::draw_n(s, player, STARTING_HAND)?;
     }
     s.pending = Pending::Mulligans;
@@ -135,8 +136,8 @@ pub(crate) fn set_starting_player(
 }
 
 /// The players in turn order from the starting player.
-pub(crate) fn turn_order(s: &State) -> [u8; 2] {
-    [s.turn.starting_player, opponent(s.turn.starting_player)]
+pub(crate) fn turn_order(s: &State) -> [Seat; 2] {
+    [s.turn.starting_player, s.turn.starting_player.opponent()]
 }
 
 /// Records a keep or mulligan declaration.
@@ -144,7 +145,7 @@ pub(crate) fn declare(
     s: &mut State,
     t: &GameTable,
     sink: &mut Sink,
-    player: u8,
+    player: Seat,
     mulligan: bool,
 ) -> Result<(), Full> {
     s.player_mut(player).mulligan = if mulligan {
@@ -160,8 +161,8 @@ pub(crate) fn put_on_bottom(
     s: &mut State,
     t: &GameTable,
     sink: &mut Sink,
-    player: u8,
-    slot: u8,
+    player: Seat,
+    slot: Slot,
 ) -> Result<(), Full> {
     zone::put_on_bottom(s, slot)?;
     s.player_mut(player).to_bottom -= 1;
@@ -224,7 +225,7 @@ fn advance_mulligans(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<()
 }
 
 /// Who answers the open mulligan question, and whether it is a bottom pick.
-pub(crate) fn mulligan_question(s: &State) -> (u8, bool) {
+pub(crate) fn mulligan_question(s: &State) -> (Seat, bool) {
     let order = turn_order(s);
     if let Some(&p) = order.iter().find(|&&p| s.player(p).to_bottom > 0) {
         return (p, true);

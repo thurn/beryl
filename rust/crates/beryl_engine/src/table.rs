@@ -3,6 +3,7 @@
 
 use crate::card::{CardDef, Trigger};
 use crate::event::kind;
+use crate::ids::{CardIx, Seat};
 use crate::state::DECK_SLOTS;
 
 /// Every card the program knows, built once and shared by every thread as a `&'static`.
@@ -34,19 +35,19 @@ pub enum TableError {
     /// A decklist names a card the [`CardTable`] does not have.
     UnknownCard(&'static str),
     /// A deck has more cards than the engine reserves slots for.
-    DeckTooLarge { player: u8, cards: usize },
-    /// The decks and their tokens need more game indices than a `u8` holds.
+    DeckTooLarge { player: Seat, cards: usize },
+    /// The decks and their tokens need more game indices than [`CardIx`] has.
     TooManyCards,
 }
 
-/// The cards one game can contain, under dense game-local indices: the `u8` that `State`
-/// stores for an object's card. Built once per game and shared, read-only, by every thread
+/// The cards one game can contain, under dense game-local indices: the [`CardIx`] that
+/// `State` stores for an object's card. Built once per game and shared, read-only, by every thread
 /// searching it.
 #[derive(Debug)]
 pub struct GameTable {
     cards: &'static CardTable,
     defs: Vec<&'static CardDef>,
-    decks: [Vec<u8>; 2],
+    decks: [Vec<CardIx>; 2],
     /// Per game index, the event kinds its triggered abilities listen to.
     listens: Vec<u16>,
     /// Every kind any card of the game listens to.
@@ -59,9 +60,9 @@ impl GameTable {
     /// the same table.
     pub fn new(cards: &'static CardTable, decks: [&Decklist; 2]) -> Result<Self, TableError> {
         let mut defs: Vec<&'static CardDef> = Vec::new();
-        let mut indices: [Vec<u8>; 2] = [Vec::new(), Vec::new()];
-        for (player, list) in decks.iter().enumerate() {
-            for &(count, name) in *list {
+        let mut indices: [Vec<CardIx>; 2] = [Vec::new(), Vec::new()];
+        for (player, list) in Seat::BOTH.into_iter().zip(decks) {
+            for &(count, name) in list {
                 let def = cards.get(name).ok_or(TableError::UnknownCard(name))?;
                 let index = if let Some(i) = defs.iter().position(|d| std::ptr::eq(*d, def)) {
                     i
@@ -69,14 +70,18 @@ impl GameTable {
                     defs.push(def);
                     defs.len() - 1
                 };
+                let index = u8::try_from(index)
+                    .ok()
+                    .and_then(CardIx::try_new)
+                    .ok_or(TableError::TooManyCards)?;
                 for _ in 0..count {
-                    indices[player].push(index as u8);
+                    indices[player.index()].push(index);
                 }
             }
-            if indices[player].len() > DECK_SLOTS {
+            if indices[player.index()].len() > DECK_SLOTS {
                 return Err(TableError::DeckTooLarge {
-                    player: player as u8,
-                    cards: indices[player].len(),
+                    player,
+                    cards: indices[player.index()].len(),
                 });
             }
         }
@@ -89,7 +94,7 @@ impl GameTable {
             }
             i += 1;
         }
-        if defs.len() > usize::from(u8::MAX) {
+        if defs.len() > CardIx::COUNT {
             return Err(TableError::TooManyCards);
         }
         let listens: Vec<u16> = defs.iter().map(|d| listens(d)).collect();
@@ -104,16 +109,16 @@ impl GameTable {
     }
 
     /// The game index of a card or token, if the game can contain it.
-    pub fn index_of(&self, def: &CardDef) -> Option<u8> {
+    pub fn index_of(&self, def: &CardDef) -> Option<CardIx> {
         self.defs
             .iter()
             .position(|d| std::ptr::eq(*d, def))
-            .map(|i| i as u8)
+            .map(|i| CardIx::new(i as u8))
     }
 
     /// The event kinds the triggered abilities of the card at `card` listen to.
-    pub(crate) fn listens(&self, card: u8) -> u16 {
-        self.listens[usize::from(card)]
+    pub(crate) fn listens(&self, card: CardIx) -> u16 {
+        self.listens[card.index()]
     }
 
     /// The event kinds any card of this game listens to.
@@ -126,8 +131,8 @@ impl GameTable {
     }
 
     /// The definition behind a game index.
-    pub fn def(&self, card: u8) -> &'static CardDef {
-        self.defs[usize::from(card)]
+    pub fn def(&self, card: CardIx) -> &'static CardDef {
+        self.defs[card.index()]
     }
 
     /// How many distinct cards the game has.
@@ -140,8 +145,8 @@ impl GameTable {
     }
 
     /// A player's deck as game indices, in decklist order.
-    pub fn deck(&self, player: u8) -> &[u8] {
-        &self.decks[usize::from(player)]
+    pub fn deck(&self, player: Seat) -> &[CardIx] {
+        &self.decks[player.index()]
     }
 }
 
