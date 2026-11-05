@@ -184,12 +184,13 @@ export function liveTransport(base: string): Transport & { log: LiveEntry[] } {
     },
     async listen<E extends keyof Events>(
       event: E,
-      handler: (payload: Events[E]) => void,
+      handler: (payload: Events[E], past: boolean) => void,
     ) {
+      // Live events are never past: each happens as the page sees it.
       const listener = (e: MessageEvent<string>) => {
         const payload = JSON.parse(e.data) as Events[E];
         log.push({ at: performance.now(), kind: "event", event, payload });
-        handler(payload);
+        handler(payload, false);
       };
       events.addEventListener(event, listener);
       return () => events.removeEventListener(event, listener);

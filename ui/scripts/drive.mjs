@@ -324,7 +324,9 @@ const probe = {
                     .find(
                         (m) =>
                             m.kind === "event" &&
-                            m.payload.view.status.kind !== "stopped",
+                            ["deciding", "over"].includes(
+                                m.payload.view.status.kind,
+                            ),
                     );
                 return next ? next.payload.view.status : false;
             },
@@ -388,7 +390,9 @@ const probe = {
                     .filter((m) => m.kind === "event")
                     .map((m) => ({
                         ms: Math.round(m.at - since),
-                        deciding: m.payload.view.status.kind !== "stopped",
+                        deciding: ["deciding", "over"].includes(
+                            m.payload.view.status.kind,
+                        ),
                     })),
             [since, from],
         );
