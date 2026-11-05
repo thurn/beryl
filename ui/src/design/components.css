@@ -38,8 +38,8 @@
   --rim: #cc2e14;
   --rim-hi: #f7743e;
   --rim-lo: #6d0806;
-  --bar: #efb79c;
-  --bar-hi: #fad7c4;
+  --bar: #e0b4a0;
+  --bar-hi: #f0d2c4;
   --box: #efcbb0;
 }
 .frame-g {
@@ -135,10 +135,10 @@
 .ability-badge {
   position: absolute;
   --ink: #2b2b30;
-  left: 0.37em;
+  left: 0.74em;
   bottom: 0.6em;
-  width: 2em;
-  height: 1.9em;
+  width: 2.2em;
+  height: 2.1em;
   border-radius: 0.38em;
   display: grid;
   place-items: center;
@@ -183,7 +183,7 @@
   transition: box-shadow 0.25s;
 }
 .card-field {
-  padding: 0.3em 0.56em var(--card-foot, 0.95em);
+  padding: 0.48em 0.56em var(--card-foot, 0.95em);
 }
 .card-rim {
   height: 100%;
@@ -255,8 +255,8 @@
 }
 .card-field .card-name-bar {
   height: 1em;
-  margin: 0 -0.3em;
-  padding: 0 0.26em;
+  margin: 0 -0.12em;
+  padding: 0 0.44em;
 }
 .card-name {
   overflow: hidden;
@@ -413,6 +413,13 @@
 }
 .card-pt span {
   font-size: 1.55em;
+}
+/* On the battlefield the plaque sits inset from the frame's edge, its numerals larger. */
+.card-field .card-pt {
+  right: 0.68em;
+}
+.card-field .card-pt span {
+  font-size: 1.7em;
 }
 .card-pt b {
   font-weight: inherit;
@@ -1237,10 +1244,16 @@
   height: 100%;
   overflow: visible;
 }
-/* Light blades catch the light along their edges. */
+/* The far orb's blades catch the light along their edges; the near orb's are outlined dark. */
 .life-orb-blade {
   stroke: #ece5d8;
   stroke-width: 1.2;
+}
+.life-orb-you .life-orb-blade {
+  stroke: #1a1410;
+}
+.life-orb-you .life-orb-blade-dark {
+  fill: #34302c;
 }
 /* Steel struts between the blades. */
 .life-orb-blade-dark {
@@ -1264,24 +1277,26 @@
 }
 .life-orb-ring-glow {
   stroke: #ff7a10;
-  stroke-width: 8;
+  stroke-width: 6;
+  opacity: 0.75;
 }
+/* A thick bevelled bezel, bright along its top. */
 .life-orb-core {
   fill: url(#orb-core);
   stroke: url(#orb-rim);
-  stroke-width: 3;
+  stroke-width: 4;
 }
 .life-orb-flare {
   fill: #ff6a00;
 }
 .life-orb-flare ellipse {
-  fill: #ff8f22;
-  opacity: 0.45;
+  fill: #ff7a14;
+  opacity: 0.75;
 }
 .life-orb-halo {
   fill: none;
-  stroke: #ff9a20;
-  stroke-width: 12;
+  stroke: #ff8a14;
+  stroke-width: 16;
 }
 .life-orb-bloom {
   fill: #ffc764;
@@ -1292,15 +1307,18 @@
   stroke-width: 4;
   stroke-linecap: round;
 }
+.life-orb-opponent .life-orb-core {
+  stroke-width: 5;
+}
 /* The far orb's ring is copper with a dim glow. */
 .life-orb-opponent .life-orb-ring {
   stroke: #e0974a;
   stroke-width: 3;
 }
 .life-orb-opponent .life-orb-ring-glow {
-  stroke: #b0581a;
-  stroke-width: 6;
-  opacity: 0.6;
+  stroke: #c86a20;
+  stroke-width: 7;
+  opacity: 0.85;
 }
 .life-orb-total {
   position: absolute;

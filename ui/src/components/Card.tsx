@@ -150,7 +150,12 @@ function useNameFit(text: string) {
     if (!name || !bar) return;
     const fit = () => {
       name.style.removeProperty("--fit");
-      const over = name.scrollWidth / name.clientWidth;
+      // Unrounded widths: scrollWidth and clientWidth round to whole pixels, so a name that
+      // overflows by less than one would keep its ellipsis.
+      const text = document.createRange();
+      text.selectNodeContents(name);
+      const over =
+        text.getBoundingClientRect().width / name.getBoundingClientRect().width;
       if (over > 1) name.style.setProperty("--fit", String(0.98 / over));
     };
     fit();

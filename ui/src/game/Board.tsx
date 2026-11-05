@@ -26,7 +26,6 @@ import {
   PriorityPill,
 } from "../components/Controls";
 import {
-  GRAVEYARD_DEPTH,
   GraveyardEdges,
   Library,
   LifeOrb,
@@ -65,6 +64,8 @@ import {
   layout,
   nextStop,
   phaseOf,
+  PILE_DEPTH,
+  PILE_SQUASH,
   PILE_WIDTH,
   PILES,
   STACK_Z,
@@ -297,11 +298,16 @@ export function Board({
           count > 1 && (
             <Lying
               key={side}
-              x={x + GRAVEYARD_DEPTH.x}
+              x={x + PILE_DEPTH.x}
               y={y}
               width={PILE_WIDTH}
+              squash={PILE_SQUASH}
             >
-              <GraveyardEdges count={count} width={PILE_WIDTH} />
+              <GraveyardEdges
+                count={count}
+                width={PILE_WIDTH}
+                depth={PILE_DEPTH}
+              />
             </Lying>
           )
         );

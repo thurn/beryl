@@ -54,23 +54,36 @@ export type Layout = Map<number, Placement>;
 /** The hand's full frames, and the width of everything drawn from a full frame. */
 export const FULL_WIDTH = HAND.width;
 const BACK_WIDTH = 105;
-export const PILE_WIDTH = 84;
+export const PILE_WIDTH = 91;
+/** Where a graveyard's bottom card lies under its top card on the table: straight below, so the
+ * pile shows only as thickness (battlefield.png). */
+export const PILE_DEPTH = { x: 0, y: 8 };
+/** How much a graveyard's cards are foreshortened, lying on the far table (battlefield.png). */
+export const PILE_SQUASH = 0.86;
 
-/** Each side's rows, in stage pixels (the mockup's divided by 1.045), and the gap between land
- * piles before depth scaling: battlefield.png spaces the far piles wider than the near ones. */
+/** Each side's rows, in stage pixels (the mockup's divided by 1.045): the land piles from
+ * (x, y), `size` times what depth alone makes them (battlefield.png paints the far lands larger),
+ * with `gap` between them before depth scaling; the other permanents' row at `y`, centered on
+ * `center`, `gap` card widths apart (the far row's closer). */
 const ROWS = {
-  opponent: { lands: { x: 159, y: 125, gap: 23 }, permanents: 221 },
-  you: { lands: { x: 105, y: 564, gap: 3 }, permanents: 418 },
+  opponent: {
+    lands: { x: 158, y: 127, gap: 12, size: 1.07 },
+    permanents: { y: 221, center: 802, gap: 0.044 },
+  },
+  you: {
+    lands: { x: 111, y: 564, gap: 3, size: 1 },
+    permanents: { y: 418, center: 801, gap: 0.08 },
+  },
 };
-/** Lands fill from the left up to here; other permanents center on the table between. */
+/** Lands fill from the left up to here; other permanents lie on the table between these. */
 const LANDS_END = 600;
-const PERMANENTS = { start: 580, end: 1250, center: 800 };
+const PERMANENTS = { start: 580, end: 1250 };
 
 /** Where each side's library and graveyard lie (Table.tsx draws the library piles). */
 export const PILES = {
   opponent: {
     library: { x: 1174, y: 13, width: 93 },
-    graveyard: { x: 1331, y: 40 },
+    graveyard: { x: 1327, y: 40 },
   },
   you: {
     library: { x: 168, y: 731, width: 104 },
@@ -280,7 +293,7 @@ function battlefieldPlacements(
   const out: Placement[] = [];
 
   const landPiles = piles(lands, (o) => o.name ?? `#${o.slot}`);
-  const landScale = depthScale(rows.lands.y);
+  const landScale = depthScale(rows.lands.y) * rows.lands.size;
   const pileWidth = (n: number) =>
     LAND_WIDTH * (1 + LAND_STEP.x * (n - 1)) * landScale;
   const landXs = row(
@@ -294,6 +307,7 @@ function battlefieldPlacements(
       const depth = pile.length - 1 - i;
       const x = landXs[p]! + i * LAND_WIDTH * LAND_STEP.x * landScale;
       const y = rows.lands.y + depth * LAND_WIDTH * LAND_STEP.y * landScale;
+      const placed = onTable(x, y, LAND_WIDTH);
       out.push({
         slot: o.slot,
         zone: o.zone,
@@ -301,7 +315,8 @@ function battlefieldPlacements(
         width: LAND_WIDTH,
         opacity: 1,
         z: 10 + p * 8 + i,
-        ...onTable(x, y, LAND_WIDTH),
+        ...placed,
+        scale: placed.scale * rows.lands.size,
       });
     });
   });
@@ -312,17 +327,17 @@ function battlefieldPlacements(
   const groups = piles(others, (o) =>
     plain(o) ? `${o.name}|${o.tapped}` : `#${o.slot}`,
   );
-  const scale = depthScale(rows.permanents);
+  const scale = depthScale(rows.permanents.y);
   const width = CREATURE_WIDTH * scale;
   const groupWidth = (n: number) => width * (1 + LAND_STEP.x * (n - 1));
   const widths = groups.map((g) => groupWidth(g.length));
-  const gap = 0.08 * CREATURE_WIDTH * scale;
+  const gap = rows.permanents.gap * CREATURE_WIDTH * scale;
   const xs = row(
     widths,
     gap,
     PERMANENTS.start,
     PERMANENTS.end,
-    PERMANENTS.center,
+    rows.permanents.center,
   );
   // Where each blocker wants to stand: its attacker's blockers side by side about its center.
   const attackers = new Map(across.map((p) => [p.slot, p]));
@@ -357,7 +372,7 @@ function battlefieldPlacements(
       const depth = group.length - 1 - i;
       const x = lefts[k]! + i * CREATURE_WIDTH * LAND_STEP.x * scale;
       const y =
-        rows.permanents +
+        rows.permanents.y +
         depth * CREATURE_WIDTH * LAND_STEP.y * scale +
         (o.combat?.kind === "attacking" ? forward : 0);
       out.push({

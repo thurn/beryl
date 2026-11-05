@@ -801,11 +801,18 @@
 .hand-card .card-art {
   flex-basis: 8.4em;
 }
-.hand-card .card-name-bar {
-  height: 1.3em;
+/* ...the more for a land, which has no rules text to make room for. */
+.hand-card .card:not(.card-land) .card-art {
+  flex-basis: 7.8em;
 }
+/* A wide black border, the name bar inset within the rim. */
 .hand-card .card {
   --name-size: 0.98em;
+  padding-inline: 0.62em;
+}
+.hand-card .card-name-bar {
+  height: 1.3em;
+  margin-inline: -0.1em;
 }
 /* A step announcement over the battlefield (combat.png's "Combat / Blockers declared"): a gold
    title between ornamented rules over an italic detail, on a smoky shade. Laid out from its

@@ -213,7 +213,7 @@ export interface TableBoard {
 export const CREATURE_WIDTH = 232;
 export const LAND_WIDTH = 190;
 /** Each copy beneath a land stack's top card, as a fraction of the card's width. */
-export const LAND_STEP = { x: 0.12, y: 0.022 };
+export const LAND_STEP = { x: 0.103, y: 0.022 };
 
 function Creature({ permanent }: { permanent: Permanent }) {
   const withArt = useSlotArt();
@@ -260,11 +260,11 @@ function Lands({ lands }: { lands: LandPile[] }) {
  * turns each a little more clockwise than the one on its left, as in the mockups. */
 export const HAND = {
   width: 182,
-  spacing: 180,
+  spacing: 176,
   top: 726.5,
   sag: 9,
-  turn: 6.3,
-  bias: 0.8,
+  turn: 5.9,
+  bias: 0.6,
 };
 
 /** The hand: a fan held at the near edge. A hovered card straightens and rises. */

@@ -5,6 +5,14 @@ bugs in future (e.g. via the type system). Each entry gives a short description
 of the bug, how a similar bug could be prevented, and the fixing commit when it
 was not found and fixed in the same session. Newest first.
 
+- **A long card name kept its ellipsis instead of shrinking.** `useNameFit`
+  compared `scrollWidth` with `clientWidth`, which WebKit rounds to whole
+  pixels, so "Swords to Plowshares" overflowing its name bar by under a pixel
+  measured as fitting and was cut to "Swords to Plowshar…". It now measures the
+  text's unrounded rect. Prevention: measure layout for decisions with
+  `getBoundingClientRect` (or a Range over the text), never the integer scroll
+  and client sizes.
+
 - **An oracle's question surface allowlisted as a rules divergence.** Three
   XMage scenarios (Mana Tithe and No More Lies against a controller who cannot
   pay) sat on `data/oracle-divergences.json` under CR 118.3, so XMage never

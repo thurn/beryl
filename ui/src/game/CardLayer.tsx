@@ -23,7 +23,7 @@ import { Card, CardBack, type Highlight } from "../components/Card";
 import type { ObjectView, Side } from "../generated/protocol";
 import { StageScale } from "../screens/Table";
 import { useFace } from "./faces";
-import type { Layout, Placement } from "./layout";
+import { PILE_SQUASH, type Layout, type Placement } from "./layout";
 
 /** Where on the stage a pointer is, in stage pixels. */
 export interface Point {
@@ -322,6 +322,10 @@ function Look({
     <div className="on-table">{card_}</div>
   ) : place.look === "hand" ? (
     <div className="hand-card">{card_}</div>
+  ) : place.look === "pile" ? (
+    <div style={{ scale: `1 ${PILE_SQUASH}`, transformOrigin: "top" }}>
+      {card_}
+    </div>
   ) : (
     card_
   );

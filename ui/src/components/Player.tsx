@@ -33,8 +33,8 @@ function blade(
 /** How a light blade is shaded, root to tip: the mockups paint the near orb's blades warm tan,
  * the far orb's upper blade grey silver and its lower one a pale wing, each coppery at its root. */
 const TONES = {
-  tan: ["#87643f", "#9a8064", "#b8ab9c"],
-  pale: ["#9c7c56", "#c2ae94", "#d2c6b6"],
+  tan: ["#8a7158", "#a89e92", "#cfc9c1"],
+  pale: ["#9c8466", "#c4bcae", "#dedad3"],
   silver: ["#8d5b3a", "#77706a", "#8a867e"],
   wing: ["#b0703e", "#c3a780", "#d8c8aa"],
 } as const;
@@ -66,13 +66,13 @@ const BLADES: Record<
     from: [1, 0],
     glints: [],
     arch: "M-98 70 Q-64 30 0 30 Q64 30 98 70",
-    ring: "M-42 23.4 A52 43 0 0 0 42 23.4",
+    ring: "M-44 16 A49 41 0 0 0 44 16",
   },
   opponent: {
     light: [
-      { d: blade([-46, 19], [-75, 9], [-101, -14], 11), tone: "wing" },
+      { d: blade([-46, 19], [-78, 10], [-103, -14], 12, 0.75), tone: "wing" },
       {
-        d: blade([-48, -8], [-71, -12], [-100, -39], 9.5, 0.4),
+        d: blade([-48, -8], [-74, -12], [-103, -37], 11, 0.3),
         tone: "silver",
       },
     ],
@@ -90,36 +90,44 @@ const BLADES: Record<
   },
 };
 
-/** The oval, a little larger on the near side of the table. */
+/** The core: a cushion, a rounded oval with flattened sides, `rx` by `ry` about (0, `cy`) to
+ * the middle of its rim; the total centers `total` below the orb's center. */
 const CORE = {
-  you: { rx: 50, ry: 41, cy: -2 },
-  opponent: { rx: 52, ry: 38, cy: 0 },
+  you: { rx: 49, ry: 37, cy: -3, total: -6 },
+  opponent: { rx: 48.5, ry: 36, cy: 0, total: 0 },
 };
+
+/** A superellipse (|x/rx|^n + |y/ry|^n = 1) about (0, cy), as a path. */
+function cushion({ rx, ry, cy }: { rx: number; ry: number; cy: number }) {
+  const n = 2.25;
+  const points = Array.from({ length: 72 }, (_, i) => {
+    const t = (i / 72) * 2 * Math.PI;
+    const [c, s] = [Math.cos(t), Math.sin(t)];
+    const x = rx * Math.sign(c) * Math.abs(c) ** (2 / n);
+    const y = cy + ry * Math.sign(s) * Math.abs(s) ** (2 / n);
+    return `${x.toFixed(1)} ${y.toFixed(1)}`;
+  });
+  return `M${points.join(" L")} Z`;
+}
 
 /** The active player's rays, by where each tip lies (the left half; mirrored on the right):
  * each widens from the rim of the oval to its tip. */
-const RAYS = (
-  [
-    [-47, -47],
-    [-82, -35],
-    [-105, -13],
-    [-62, -5],
-    [0, -58],
-  ] as const
-)
-  .flatMap(([x, y]) =>
-    x === 0
-      ? [[x, y]]
-      : [
-          [x, y],
-          [-x, y],
-        ],
-  )
+const RAYS = [
+  [-44, -50],
+  [-66, -44],
+  [-84, -32],
+  [-100, -16],
+  [-70, -6],
+]
+  .flatMap(([x, y]) => [
+    [x!, y!],
+    [-x!, y!],
+  ])
   .map(([x, y]) => {
     const a = Math.atan2(y!, x! / 1.2);
     const rim = (da: number) =>
       `${(Math.cos(a + da) * 36 * 1.2).toFixed(1)} ${(Math.sin(a + da) * 36).toFixed(1)}`;
-    return `M${rim(-0.09)} L${x} ${y} L${rim(0.09)} Z`;
+    return `M${rim(-0.06)} L${x} ${y} L${rim(0.06)} Z`;
   })
   .join(" ");
 
@@ -163,6 +171,7 @@ export function LifeOrb({
           className="life-orb-blade"
           d={d}
           fill={`url(#orb-blade-${seat}-${tone})`}
+          filter={seat === "you" ? "url(#orb-bevel)" : undefined}
         />
       ))}
     </>
@@ -188,8 +197,9 @@ export function LifeOrb({
             </linearGradient>
           ))}
           <linearGradient id="orb-rim" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#b9b4ae" />
-            <stop offset="0.5" stopColor="#77726c" />
+            <stop offset="0" stopColor="#dcd8d2" />
+            <stop offset="0.2" stopColor="#8e8984" />
+            <stop offset="0.6" stopColor="#4a4643" />
             <stop offset="1" stopColor="#3a3633" />
           </linearGradient>
           <radialGradient id="orb-core" cx="0.5" cy="0.32" r="0.7">
@@ -203,13 +213,35 @@ export function LifeOrb({
             r="120"
             gradientUnits="userSpaceOnUse"
           >
-            <stop offset="0.3" stopColor="#fffcea" />
-            <stop offset="0.45" stopColor="#ffd060" />
-            <stop offset="0.65" stopColor="#ff8410" />
-            <stop offset="1" stopColor="#f2560c" stopOpacity="0" />
+            <stop offset="0.3" stopColor="#fff3c0" />
+            <stop offset="0.42" stopColor="#ffb030" />
+            <stop offset="0.6" stopColor="#f05a10" />
+            <stop offset="1" stopColor="#c83008" stopOpacity="0" />
           </radialGradient>
           <filter id="orb-blur" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur stdDeviation="3" />
+          </filter>
+          {/* Metal catching the light along its upper edges. */}
+          <filter id="orb-bevel" x="-10%" y="-10%" width="120%" height="120%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="1.2" result="b" />
+            <feSpecularLighting
+              in="b"
+              surfaceScale="3"
+              specularConstant="0.9"
+              specularExponent="16"
+              lightingColor="#ffffff"
+              result="s"
+            >
+              <feDistantLight azimuth="270" elevation="40" />
+            </feSpecularLighting>
+            <feComposite in="s" in2="SourceAlpha" operator="in" result="lit" />
+            <feComposite
+              in="SourceGraphic"
+              in2="lit"
+              operator="arithmetic"
+              k2="1"
+              k3="0.9"
+            />
           </filter>
           <filter id="orb-shadow" x="-20%" y="-20%" width="140%" height="160%">
             <feDropShadow dx="0" dy="2" stdDeviation="1.5" floodOpacity="0.6" />
@@ -231,16 +263,13 @@ export function LifeOrb({
         {active && (
           <path
             className="life-orb-halo"
-            d="M-46 -12 A50 40 0 0 1 46 -12"
+            d="M-42 -17 A47 37 0 0 1 42 -17"
             filter="url(#orb-blur)"
           />
         )}
-        <ellipse
+        <path
           className="life-orb-core"
-          cx="0"
-          cy={core.cy}
-          rx={core.rx}
-          ry={core.ry}
+          d={cushion(core)}
           filter="url(#orb-shadow)"
         />
         <path
@@ -254,21 +283,21 @@ export function LifeOrb({
             className="life-orb-bloom"
             cx="0"
             cy={core.cy - core.ry}
-            rx="18"
-            ry="7"
+            rx="30"
+            ry="8"
             filter="url(#orb-blur)"
           />
         )}
         {active && (
           <path
             className="life-orb-crescent"
-            d="M-44 -19 A50 41 0 0 1 44 -19"
+            d="M-40 -24 A47 37 0 0 1 40 -24"
           />
         )}
       </svg>
       <span
         className="life-orb-total"
-        style={{ marginTop: `calc(${core.cy} * var(--orb))` }}
+        style={{ marginTop: `calc(${core.total} * var(--orb))` }}
       >
         {life}
       </span>
@@ -423,18 +452,20 @@ export function Graveyard({
 
 /** The edges beneath the top card of a graveyard of `count` cards, for a top card drawn by
  * someone else: the game screen draws every card itself, so it can move. The top card's place
- * is `-GRAVEYARD_DEPTH.x` pixels in from the left. */
+ * is `-depth.x` pixels in from the left. */
 export function GraveyardEdges({
   count,
   width,
+  depth = GRAVEYARD_DEPTH,
 }: {
   count: number;
   width: number;
+  depth?: PileDepth;
 }) {
   return (
     <Pile
       count={Math.max(0, count - 1) * 3}
-      depth={GRAVEYARD_DEPTH}
+      depth={depth}
       width={width}
       label={`Graveyard, ${count} cards`}
       className="graveyard"
