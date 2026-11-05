@@ -88,11 +88,15 @@ export function LifeOrb({
   life,
   active = false,
   seat = "you",
+  wings = 1,
 }: {
   life: number;
   active?: boolean;
   /** Which way the blades sweep: down toward you, up toward the opponent. */
   seat?: "you" | "opponent";
+  /** How far the blades reach, as a fraction of their full span: shorter where space is
+   * tight. */
+  wings?: number;
 }) {
   const blades = BLADES[seat];
   const core = CORE[seat];
@@ -164,7 +168,7 @@ export function LifeOrb({
           </g>
         )}
         {blades.arch && <path className="life-orb-arch" d={blades.arch} />}
-        <g filter="url(#orb-shadow)">
+        <g filter="url(#orb-shadow)" transform={`scale(${wings})`}>
           {side}
           <g transform="scale(-1 1)">{side}</g>
         </g>
@@ -321,10 +325,13 @@ export function Library({
 export function Graveyard({
   cards,
   width = 110,
+  height,
   depth = { x: -6, y: 8 },
 }: {
   cards: CardFace[];
   width?: number;
+  /** The top card's height, when not the full frame's usual aspect. */
+  height?: number;
   depth?: PileDepth;
 }) {
   const top = cards[cards.length - 1];
@@ -337,7 +344,7 @@ export function Graveyard({
       className="graveyard"
     >
       {top ? (
-        <Card card={top} width={width} />
+        <Card card={top} width={width} height={height} />
       ) : (
         <div className="pile-empty" style={{ width }} />
       )}
@@ -351,6 +358,7 @@ export function LandStack({
   card,
   count,
   width = 150,
+  height,
   tapped = 0,
   step = { x: 0.117, y: 0.034 },
   showCount = true,
@@ -358,6 +366,8 @@ export function LandStack({
   card: CardFace;
   count: number;
   width?: number;
+  /** The cards' height, when not the field frame's usual aspect. */
+  height?: number;
   tapped?: number;
   step?: { x: number; y: number };
   /** The ×N badge; on the table the edges of the copies beneath show the count instead. */
@@ -380,6 +390,7 @@ export function LandStack({
             card={card}
             variant="field"
             width={width}
+            height={height}
             tapped={i >= count - tapped}
             className={depth > 0 ? "card-under" : undefined}
             style={

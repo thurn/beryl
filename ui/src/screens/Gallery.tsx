@@ -130,40 +130,54 @@ function PlayerAndZones() {
   const a = useSlotArt();
   return (
     <Panel n="03" title="Player & zones">
-      <div className="player-row">
-        <figure>
-          <LifeOrb life={22} active />
-          <Caption>Active</Caption>
-        </figure>
-        <figure>
-          <LifeOrb life={17} seat="opponent" />
-          <Caption>Inactive</Caption>
-        </figure>
-        <div className="specimen-divider" />
+      <At x={0} y={50}>
+        <LifeOrb life={22} active wings={0.7} />
+      </At>
+      <At x={141} y={51}>
+        <LifeOrb life={17} seat="opponent" wings={0.7} />
+      </At>
+      <CaptionAt x={98} y={133}>
+        Active
+      </CaptionAt>
+      <CaptionAt x={238} y={133}>
+        Inactive
+      </CaptionAt>
+      <At x={306} y={60}>
+        <div className="specimen-divider" style={{ height: 92 }} />
+      </At>
+      <At x={324} y={70}>
         <PlayerBadge name="Opponent" />
-      </div>
+      </At>
       <div className="panel-rule" />
-      <div className="zone-row">
-        <figure>
-          <Library count={40} width={100} />
-          <Caption>Library</Caption>
-        </figure>
-        <figure>
-          <Graveyard
-            cards={[SAMPLE.counterspell, a(SAMPLE.doomBlade, "03-graveyard")]}
-            width={100}
-          />
-          <Caption>Graveyard</Caption>
-        </figure>
-        <figure>
-          <LandStack
-            card={a(SAMPLE.island, "03-island")}
-            count={3}
-            width={130}
-          />
-          <Caption>Lands (stacked)</Caption>
-        </figure>
-      </div>
+      <At x={22} y={186}>
+        <Library count={40} width={94} depth={{ x: -25, y: 18 }} />
+      </At>
+      <At x={180} y={197}>
+        <Graveyard
+          cards={[SAMPLE.counterspell, a(SAMPLE.doomBlade, "03-graveyard")]}
+          width={98}
+          height={123}
+          depth={{ x: -12, y: 15 }}
+        />
+      </At>
+      <At x={326} y={196}>
+        <LandStack
+          card={a(SAMPLE.island, "03-island")}
+          count={3}
+          width={110}
+          height={121}
+          step={{ x: 0.18, y: 0 }}
+        />
+      </At>
+      <CaptionAt x={92} y={343}>
+        Library
+      </CaptionAt>
+      <CaptionAt x={237} y={343}>
+        Graveyard
+      </CaptionAt>
+      <CaptionAt x={407} y={343}>
+        Lands (stacked)
+      </CaptionAt>
     </Panel>
   );
 }

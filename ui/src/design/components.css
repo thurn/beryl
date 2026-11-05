@@ -641,8 +641,8 @@
 }
 .land-count {
   position: absolute;
-  right: -0.4em;
-  bottom: -0.4em;
+  right: 0.4em;
+  bottom: -0.55em;
   padding: 0.05em 0.4em;
   border-radius: 0.3em;
   font-family: var(--font-serif);

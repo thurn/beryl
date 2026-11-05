@@ -470,24 +470,20 @@
   width: 405px;
 }
 
-/* 03 Player & zones. */
-.player-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.player-row .life-orb {
+/* 03 Player & zones: parts placed in the panel as on the mockup (At). */
+.panel-03 .life-orb {
   --orb: 0.74px;
 }
-.player-row .player-badge {
+.panel-03 .player-badge {
   font-size: 20.5px;
   padding-right: 0.8em;
 }
-.zone-row {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-around;
-  gap: 12px;
+.panel-03 .panel-rule {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 166px;
+  margin: 0;
 }
 
 /* 04 Cards & states and 05 Combat & stack: parts placed in the panel as on the mockup (At). */
