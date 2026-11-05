@@ -32,7 +32,7 @@ export function StackItem({
   return (
     <div
       id={id}
-      className={`stack-item frame-${frameKey(source)}`}
+      className={`stack-item frame-${frameKey(source)}${showArt ? "" : " stack-item-compact"}`}
       style={{ width, height, fontSize: unit ?? width / 12 }}
     >
       <div className="card-rim">

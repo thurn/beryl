@@ -51,11 +51,11 @@
   /* Source and target glows: a bright line hugging the card's edge, a tight halo and a wide
      falloff (ui_system.png section 04, trigger_on_stack_with_target.png). */
   --glow-gold:
-    0 0 0 2.5px #ffc65a, 0 0 6px 3px rgb(250 170 60 / 90%),
-    0 0 18px 8px rgb(245 130 30 / 55%), 0 0 34px 14px rgb(240 120 30 / 22%);
+    0 0 0 3px #ffc65a, 0 0 7px 4px rgb(250 170 60 / 95%),
+    0 0 20px 10px rgb(245 130 30 / 60%), 0 0 40px 16px rgb(240 120 30 / 25%);
   --glow-cyan:
-    0 0 0 2.5px #38dcff, 0 0 6px 3px rgb(56 220 255 / 90%),
-    0 0 18px 8px rgb(30 170 255 / 55%), 0 0 34px 14px rgb(30 150 255 / 22%);
+    0 0 0 3px #38dcff, 0 0 7px 4px rgb(56 220 255 / 95%),
+    0 0 20px 10px rgb(30 170 255 / 60%), 0 0 40px 16px rgb(30 150 255 / 25%);
 
   /* The matte tabletop: warm brown under a faint grain, lit evenly across the middle and
      falling off to dark edges and darker corners (battlefield.png: #837069 across the middle,

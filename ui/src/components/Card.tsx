@@ -320,7 +320,7 @@ function BlockArc({ id }: { id?: string }) {
 }
 
 /** The back of a card, for hidden cards and libraries: the Project Beryl back of scry.png, tooled
- * leather with corner studs around an oval panel bearing the crest, the wordmark and five dots. */
+ * leather with corner studs around an oval panel bearing the crest, the wordmark and four dots. */
 export function CardBack({
   width = 160,
   style,
@@ -346,7 +346,7 @@ export function CardBack({
           <Crest className="card-back-crest" />
           <span className="card-back-title">Project Beryl</span>
           <span className="card-back-dots">
-            {["w", "r", "g", "b", "u"].map((c) => (
+            {["w", "r", "g", "b"].map((c) => (
               <i key={c} className={`dot-${c}`} />
             ))}
           </span>

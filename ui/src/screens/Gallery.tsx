@@ -259,7 +259,7 @@ function CardsAndStates() {
         Target (cyan)
       </CaptionAt>
       <div className="mini-hand">
-        <At x={44} y={372}>
+        <At x={54} y={366}>
           <Card
             card={a(costless(SAMPLE.swords), "04-hand-swords")}
             width={128}
@@ -267,14 +267,14 @@ function CardsAndStates() {
             style={{ rotate: -7 }}
           />
         </At>
-        <At x={168} y={360}>
+        <At x={168} y={354}>
           <Card
             card={a(SAMPLE.mountain, "04-hand-mountain")}
             width={124}
             unit={13.5}
           />
         </At>
-        <At x={282} y={364}>
+        <At x={274} y={358}>
           <Card
             card={a(SAMPLE.plateau, "04-hand-plateau")}
             width={128}

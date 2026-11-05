@@ -332,7 +332,7 @@
     rgb(40 40 48 / 25%) 0.55em,
     transparent 0.7em 1em
   );
-  --rim-lo: #0f4e9c;
+  --rim-lo: #2a86dc;
 }
 .card-full.card-full-art .card-art {
   flex: 1 1 0;
@@ -369,8 +369,8 @@
   padding-bottom: 0.9em;
   text-align: center;
 }
-/* Power and toughness in a framed plaque, numerals in navy ink (blue on battlefield.png, near
-   black elsewhere). */
+/* Power and toughness in a framed plaque, numerals in a blue-black ink (blue on battlefield.png,
+   near black on the other mockups). */
 .card-pt {
   position: absolute;
   right: 0.37em;
@@ -403,7 +403,7 @@
 }
 .card-pt b {
   font-weight: inherit;
-  color: var(--pt-ink, #1d3463);
+  color: var(--pt-ink, #19213a);
 }
 .card-full .card-pt {
   font-size: 0.8em;
@@ -497,7 +497,7 @@
       rgb(255 220 170 / 12%),
       transparent 60%
     ),
-    linear-gradient(160deg, #8c5a2b, #7a4c23 55%, #66401d);
+    linear-gradient(160deg, #7e4d25, #704321 55%, #5f381c);
   box-shadow:
     inset 0 0 0 0.06em rgb(0 0 0 / 55%),
     inset 0 0 0 0.3em rgb(0 0 0 / 14%),
@@ -545,9 +545,9 @@
   border: 0.1em solid #2a5ec4;
   background: radial-gradient(
     ellipse 70% 60% at 50% 42%,
-    #7a4126,
-    #6c3922 55%,
-    #57301d
+    #7d4625,
+    #6f3d21 55%,
+    #5c321d
   );
   box-shadow:
     0 0 0 0.05em rgb(0 0 0 / 50%),
@@ -571,7 +571,7 @@
   width: 5em;
   text-shadow: 0 0.04em 0.05em rgb(0 0 0 / 45%);
 }
-/* The five dots sit in a diamond around a center dot. */
+/* Four dots sit in a diamond. */
 .card-back-dots {
   position: relative;
   width: 2.4em;
@@ -592,26 +592,19 @@
   top: 0;
 }
 .card-back-dots i:nth-child(2) {
-  left: 0.2em;
-  top: 0.75em;
+  left: 0.3em;
+  top: 0.7em;
 }
 .card-back-dots i:nth-child(3) {
-  right: 0.2em;
-  top: 0.75em;
+  right: 0.3em;
+  top: 0.7em;
 }
 .card-back-dots i:nth-child(4) {
   left: 0.99em;
-  bottom: 0;
-}
-.card-back-dots i:nth-child(5) {
-  left: 0.99em;
-  top: 0.75em;
+  bottom: 0.1em;
 }
 .dot-w {
   background: #e3a34a;
-}
-.dot-u {
-  background: #4f86d6;
 }
 .dot-b {
   background: #b96a86;
@@ -696,6 +689,16 @@
   font-weight: 600;
   font-size: 0.76em;
   line-height: 1.04;
+}
+/* Without art (ui_system.png section 05) the rim is thin and the rules text fills the shield. */
+.stack-item-compact .card-rim {
+  padding: 0.24em 0.2em 0.24em;
+}
+.stack-item-compact .card-name-bar {
+  margin: 0 -0.12em;
+}
+.stack-item-compact .card-rules {
+  font-size: 0.86em;
 }
 /* Arrows. */
 .arrows {
