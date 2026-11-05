@@ -2,8 +2,8 @@
 //! decisions D3 and D4).
 
 use crate::bitboard::Bitboard;
-use crate::card::{Delayed, Modification, Types};
-use crate::decision::Outcome;
+use crate::card::{Delayed, ManaCost, Modification, Types};
+use crate::decision::{Decision, Outcome};
 use crate::fixed::Fixed;
 use crate::profile::Profile;
 use crate::rng::Rng;
@@ -93,6 +93,17 @@ impl ObjectFlags {
         | Self::BLOCKED
         | Self::ATTACKS_PLANESWALKER
         | Self::STRUCK_FIRST;
+    /// Entered the battlefield this turn.
+    pub const ENTERED_THIS_TURN: u32 = 1 << 16;
+    /// A loyalty ability of this permanent was activated this turn
+    /// ([CR 606.3](https://yawgatog.com/resources/magic-rules/#R6063)).
+    pub const LOYALTY_ACTIVATED: u32 = 1 << 17;
+    /// Its spell was kicked ([CR 702.33d](https://yawgatog.com/resources/magic-rules/#R70233d)).
+    pub const KICKED: u32 = 1 << 18;
+    /// Its offspring cost was paid (CR 702.175a).
+    pub const OFFSPRING: u32 = 1 << 19;
+    /// Its impending cost was paid (CR 702.176a).
+    pub const IMPENDING: u32 = 1 << 20;
 
     pub fn has(self, flag: u32) -> bool {
         self.0 & flag != 0
@@ -297,6 +308,9 @@ pub struct Player {
     /// marker used to represent an object that has one or more abilities, but usually no
     /// other characteristics."
     pub emblems: Fixed<u8, 4>,
+    /// "Until your next turn, you may cast sorcery spells as though they had flash." (Teferi,
+    /// Time Raveler)
+    pub sorceries_as_flash: bool,
 }
 
 /// The steps of a turn ([CR 500.1](https://yawgatog.com/resources/magic-rules/#R5001)): "A
@@ -338,18 +352,83 @@ pub struct Turn {
     pub cleanup_check: bool,
 }
 
-/// An object on the stack. The casting work extends it with targets, modes, X and costs.
+/// Targets per stack entry (architecture §4.2).
+pub const TARGETS: usize = 8;
+
+/// One chosen target: an object or a player, and the instance of the word "target" it was
+/// chosen for (an index into the ability's target specs). Four bytes, as an [`ObjectRef`]
+/// with its padding used: a player is the slot [`NONE`] with the player in place of the
+/// incarnation.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Target {
+    pub spec: u8,
+    slot: u8,
+    incarnation: u16,
+}
+
+impl Target {
+    pub fn object(spec: u8, object: ObjectRef) -> Target {
+        Target {
+            spec,
+            slot: object.slot,
+            incarnation: object.incarnation,
+        }
+    }
+
+    pub fn player(spec: u8, player: u8) -> Target {
+        Target {
+            spec,
+            slot: NONE,
+            incarnation: u16::from(player),
+        }
+    }
+
+    /// The targeted object, if it is one.
+    pub fn as_object(self) -> Option<ObjectRef> {
+        (self.slot != NONE).then_some(ObjectRef {
+            slot: self.slot,
+            incarnation: self.incarnation,
+        })
+    }
+
+    /// The targeted player, if it is one.
+    pub fn as_player(self) -> Option<u8> {
+        (self.slot == NONE).then_some(self.incarnation as u8)
+    }
+}
+
+/// A spell or ability on the stack ([CR 405.1](https://yawgatog.com/resources/magic-rules/#R4051)):
+/// "When a spell is cast, the physical card is put on the stack (see rule 601.2a). When an
+/// ability is activated or triggers, it goes on top of the stack without any card associated
+/// with it".
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct StackEntry {
+    /// The spell's card, or the ability's source.
     pub object: ObjectRef,
     pub controller: u8,
     /// The ability, or [`NONE`] for a spell.
     pub ability: u8,
-    /// For an ability: the game index and face of the card that has it.
+    /// The game index and face of the spell's card, or of the card that has the ability,
+    /// which outlast the source ([CR 113.7a](https://yawgatog.com/resources/magic-rules/#R1137a)):
+    /// "Once activated or triggered, an ability exists on the stack independently of its
+    /// source."
     pub card: u8,
     pub face: u8,
     /// For a triggered ability: what it triggered on.
     pub info: TriggerInfo,
+    pub targets: Fixed<Target, TARGETS>,
+    /// The announced value of X ([CR 107.3a](https://yawgatog.com/resources/magic-rules/#R1073a)).
+    pub x: u8,
+    /// The face's casting options paid, a bit per [`crate::card::Face::casting`] entry.
+    pub costs: u8,
+    /// If the spell would be put into its owner's graveyard, it is exiled instead.
+    pub exile: bool,
+}
+
+impl StackEntry {
+    pub fn is_spell(&self) -> bool {
+        self.ability == NONE
+    }
 }
 
 /// Last-known information about a permanent that left the battlefield (architecture §5),
@@ -375,6 +454,24 @@ pub struct TriggerInfo {
     pub player: u8,
     pub amount: u8,
     pub lki: Lki,
+}
+
+/// A permission to cast a card from a zone other than a hand
+/// ([CR 601.3](https://yawgatog.com/resources/magic-rules/#R6013)): "A player can begin to
+/// cast a spell only if a rule or effect allows that player to cast it". It names one
+/// incarnation of the card, so it ends when the card leaves that zone.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct CastPermission {
+    pub object: ObjectRef,
+    pub player: u8,
+    /// Generic mana added to the cost, as in "A spell cast this way costs {2} more to cast."
+    /// (Elite Spellbinder)
+    pub extra: u8,
+    /// The permission lasts until end of turn rather than while the card stays in its zone.
+    pub this_turn: bool,
+    /// "If that spell would be put into your graveyard, exile it instead." (Jace, Telepath
+    /// Unbound)
+    pub exile: bool,
 }
 
 /// An ability that has triggered and waits to be put on the stack.
@@ -453,7 +550,58 @@ impl Default for FloatingEffect {
     }
 }
 
-/// The open question when it belongs to a machine step rather than to priority.
+/// The step a spell's casting or an ability's activation has reached (CR 601.2, 602.2). The
+/// spell or ability is already the top of the stack.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CastStep {
+    /// Announcing the value of X (CR 601.2b).
+    X,
+    /// Announcing how many targets to choose for the current spec (CR 601.2c).
+    TargetCount,
+    /// Choosing the targets of the current spec (CR 601.2c).
+    Target,
+    /// Choosing among payment plans that differ in their consequences (CR 601.2g, 601.2h).
+    Plan,
+    /// Paying mana one source at a time, under the `manual_mana` profile.
+    Manual,
+}
+
+/// A spell being cast or an ability being activated.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Casting {
+    pub player: u8,
+    pub step: CastStep,
+    /// The target spec being chosen.
+    pub spec: u8,
+    /// Targets still to choose for it.
+    pub left: u8,
+    /// Generic mana a permission adds to the cost.
+    pub extra: u8,
+    /// Cast without paying its mana cost
+    /// ([CR 118.9](https://yawgatog.com/resources/magic-rules/#R1189)).
+    pub free: bool,
+    /// Cast during the resolution of another spell or ability, so no player receives priority
+    /// after it is cast ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)).
+    pub resolving: bool,
+    /// What remains to pay under manual payment.
+    pub remaining: ManaCost,
+    /// A triggered ability being put on the stack: targets only, no costs and no change of
+    /// priority (CR 603.3d).
+    pub triggered: bool,
+}
+
+/// A paused resolution (architecture §7.3): the answers its body has been given so far, and
+/// the question it stopped at. The committed state is still the state before the resolution
+/// began.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Resolving {
+    pub record: Fixed<u8, 32>,
+    pub question: Decision,
+}
+
+/// The open question when it belongs to a machine step rather than to priority. Flat, like
+/// the rest of the state.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Pending {
     /// Priority, or nothing to ask.
@@ -480,6 +628,16 @@ pub enum Pending {
     /// The active player divides blocked attackers' combat damage (CR 510.1c): `done` holds
     /// the attackers divided so far, `lethal` the blockers chosen to be dealt lethal damage.
     CombatDamage { done: Bitboard, lethal: Bitboard },
+    /// A spell being cast or an ability being activated.
+    Casting(Casting),
+    /// A body paused for an answer.
+    Resolving(Resolving),
+    /// A resolving spell or ability lets `player` cast this card now (CR 608.2g).
+    CastOffer {
+        object: ObjectRef,
+        player: u8,
+        free: bool,
+    },
 }
 
 /// Counters toward the budgets of the profile (architecture §12.3).
@@ -513,6 +671,12 @@ pub struct State {
     pub(crate) triggers: Fixed<PendingTrigger, 64>,
     pub(crate) delayed: Fixed<DelayedTrigger, 32>,
     pub(crate) effects: Fixed<FloatingEffect, 64>,
+    pub(crate) permissions: Fixed<CastPermission, 8>,
+    /// The value of X the spells that became these permanents were cast with, for their
+    /// enters abilities ([CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)):
+    /// "the value of X for that ability is the same as the value of X for that spell". Only
+    /// a nonzero X is kept, and only while the permanent stays.
+    pub(crate) entered_x: Fixed<(ObjectRef, u8), 8>,
     pub(crate) pending: Pending,
     /// `knowledge[p]` holds the slots whose identity player `p` knows (architecture §13).
     pub(crate) knowledge: [Bitboard; 2],
@@ -587,6 +751,18 @@ impl State {
     /// Slots on the battlefield, in the order they entered.
     pub fn battlefield(&self) -> &[u8] {
         self.battlefield.as_slice()
+    }
+
+    pub fn pending(&self) -> &Pending {
+        &self.pending
+    }
+
+    /// The value of X the permanent in `slot` was cast with (CR 107.3m), 0 if none.
+    pub fn x_of(&self, slot: u8) -> u8 {
+        self.entered_x
+            .iter()
+            .find(|&&(r, _)| r.slot == slot && self.is_current(r))
+            .map_or(0, |&(_, x)| x)
     }
 
     /// Whether `player` knows the identity of the object in `slot`.

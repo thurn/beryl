@@ -38,6 +38,20 @@ pub struct Breakpoint {
     pub step: TurnStep,
 }
 
+/// How mana payments are chosen (architecture §10, decision D7).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Payment {
+    /// Among plans that differ only in which sources are tapped, the one that keeps the most
+    /// of the player's other costs payable; plans that differ in what they consume are a
+    /// decision. For tree nodes and the exact profile.
+    KeepMostPayable,
+    /// Tap the least flexible sources that pay, and offer nothing. For rollouts.
+    Greedy,
+    /// Every tap and every floating mana spent is a decision, and mana abilities may be
+    /// activated on their own: the `manual_mana` flag, for a human who wants it.
+    Manual,
+}
+
 /// A restriction of the decision surface plus budgets. Every profile is sound: any line it
 /// produces is a legal line of the real game.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -45,6 +59,7 @@ pub struct Profile {
     pub stops: Stops,
     pub limits: Limits,
     pub breakpoint: Option<Breakpoint>,
+    pub payment: Payment,
 }
 
 impl Profile {
@@ -53,12 +68,14 @@ impl Profile {
         stops: Stops::Exact,
         limits: Limits::DEFAULT,
         breakpoint: None,
+        payment: Payment::KeepMostPayable,
     };
     /// The smart stops, for search and, by default, for humans.
     pub const SMART: Profile = Profile {
         stops: Stops::Smart,
         limits: Limits::DEFAULT,
         breakpoint: None,
+        payment: Payment::KeepMostPayable,
     };
 
     /// Whether `player`'s priority now is a decision, given they have a legal action.

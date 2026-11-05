@@ -6,39 +6,50 @@
 //! ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
 
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, CardDef, Delayed, ManaColor};
+use crate::card::{Ability, CardDef, Delayed, Flow, ManaColor, ManaCost, Pause};
+use crate::cast;
+use crate::decision::{Answers, Candidates, Choice, Decision, DecisionKind, Opt, StallReason};
 use crate::event::{self, Entry, Reason, Recipient, Sink, TokenEntry};
-use crate::fixed::Full;
+use crate::fixed::{Fixed, Full};
+use crate::mana;
+use crate::observation::Observation;
+use crate::profile::Payment;
 use crate::state::{
-    Continuous, CounterKind, Duration, FloatingEffect, ObjectFlags, ObjectRef, PendingTrigger,
-    State, TriggerInfo, Zone,
+    CastPermission, Continuous, CounterKind, Duration, FloatingEffect, ObjectFlags, ObjectRef,
+    PendingTrigger, StackEntry, State, Target, TriggerInfo, Zone,
 };
 use crate::table::GameTable;
 use crate::{layers, trigger};
 
-/// What a body runs against: the working state and tables, the event sink, and the ability
-/// being resolved with what triggered it.
+/// What a body runs against: the working state and tables, the event sink, the stack entry
+/// resolving (its source, controller, targets, X and what triggered it), and where its
+/// questions are answered (§3, §7.3).
 pub struct EffectCtx<'a> {
     pub(crate) state: &'a mut State,
     pub(crate) table: &'a GameTable,
     pub(crate) sink: &'a mut Sink,
-    pub(crate) source: ObjectRef,
-    pub(crate) controller: u8,
+    pub(crate) entry: StackEntry,
     pub(crate) ability: &'static Ability,
-    /// The card and face the ability is printed on, as game indices.
-    pub(crate) card: u8,
-    pub(crate) face: u8,
-    /// For a triggered ability: what it triggered on.
-    pub(crate) info: TriggerInfo,
+    /// Where questions go: an inline source answers them, anything else pauses the body.
+    answers: Option<&'a mut dyn Answers>,
+    /// The answers given so far to this resolution's questions, and how many this run of
+    /// the body has used.
+    record: &'a [u8],
+    used: usize,
+    /// The question that paused this run.
+    pub(crate) question: Option<Decision>,
     /// For a mana ability that can produce more than one kind of mana, the kind its
     /// activator chose.
     pub(crate) mana: ManaColor,
+    /// A card the body lets a player cast as it finishes resolving (CR 608.2g).
+    pub(crate) offer: Option<(ObjectRef, u8, bool)>,
     /// A fixed capacity ran out; the engine stalls once the body returns (§12.3).
     pub(crate) full: bool,
 }
 
 impl<'a> EffectCtx<'a> {
-    /// The context for a triggered ability's body.
+    /// The context for a triggered ability's body, with no answer source: a question pauses
+    /// it.
     pub(crate) fn new(
         state: &'a mut State,
         table: &'a GameTable,
@@ -46,17 +57,41 @@ impl<'a> EffectCtx<'a> {
         trigger: &PendingTrigger,
         ability: &'static Ability,
     ) -> Self {
+        let entry = StackEntry {
+            object: trigger.source,
+            controller: trigger.controller,
+            card: trigger.card,
+            face: trigger.face,
+            ability: trigger.ability,
+            info: trigger.info,
+            ..StackEntry::default()
+        };
+        Self::resolving(state, table, sink, None, &[], entry, ability)
+    }
+
+    /// The context for the body of the spell or ability `entry`, answering from `record`
+    /// and then `answers`.
+    pub(crate) fn resolving(
+        state: &'a mut State,
+        table: &'a GameTable,
+        sink: &'a mut Sink,
+        answers: Option<&'a mut dyn Answers>,
+        record: &'a [u8],
+        entry: StackEntry,
+        ability: &'static Ability,
+    ) -> Self {
         Self {
             state,
             table,
             sink,
-            source: trigger.source,
-            controller: trigger.controller,
+            entry,
             ability,
-            card: trigger.card,
-            face: trigger.face,
-            info: trigger.info,
+            answers,
+            record,
+            used: 0,
+            question: None,
             mana: ManaColor::Colorless,
+            offer: None,
             full: false,
         }
     }
@@ -73,12 +108,13 @@ impl<'a> EffectCtx<'a> {
         }
     }
 
+    /// The spell's card or the ability's source.
     pub fn source(&self) -> ObjectRef {
-        self.source
+        self.entry.object
     }
 
     pub fn controller(&self) -> u8 {
-        self.controller
+        self.entry.controller
     }
 
     /// The state as it is now, to read.
@@ -93,7 +129,37 @@ impl<'a> EffectCtx<'a> {
     /// What a triggered ability triggered on, with last-known information for a look-back
     /// trigger.
     pub fn trigger(&self) -> TriggerInfo {
-        self.info
+        self.entry.info
+    }
+
+    /// The announced value of X.
+    pub fn x(&self) -> u8 {
+        self.entry.x
+    }
+
+    /// Whether the casting option at `index` in the face's list was paid.
+    pub fn paid(&self, index: u8) -> bool {
+        self.entry.costs & (1 << index) != 0
+    }
+
+    /// The `i`th chosen target if it is still legal, `None` if it was not chosen or is
+    /// illegal now ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "Illegal
+    /// targets, if any, won't be affected by parts of a resolving spell's effect for which
+    /// they're illegal."
+    pub fn target(&self, i: usize) -> Option<Target> {
+        let target = *self.entry.targets.as_slice().get(i)?;
+        cast::still_legal(self.state, self.table, &self.entry, self.ability, target)
+            .then_some(target)
+    }
+
+    /// The `i`th target as an object, if it is one and still legal.
+    pub fn target_object(&self, i: usize) -> Option<ObjectRef> {
+        self.target(i).and_then(Target::as_object)
+    }
+
+    /// The `i`th target as a player, if it is one and still legal.
+    pub fn target_player(&self, i: usize) -> Option<u8> {
+        self.target(i).and_then(Target::as_player)
     }
 
     /// The game index of a card or token the game's table holds.
@@ -105,6 +171,218 @@ impl<'a> EffectCtx<'a> {
         self.table
             .index_of(def)
             .expect("a token missing from its card's tokens")
+    }
+
+    /// Notes a capacity that ran out, so the engine stalls once the body returns (§12.3).
+    fn checked<T: Default>(&mut self, r: Result<T, Full>) -> T {
+        r.unwrap_or_else(|Full| {
+            self.full = true;
+            T::default()
+        })
+    }
+
+    fn stall(&mut self, reason: StallReason) {
+        self.state.outcome = Some(crate::decision::Outcome::Stalled(reason));
+    }
+
+    /// Counters a spell ([CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a)):
+    /// "To counter a spell or ability means to cancel it, removing it from the stack. It
+    /// doesn't resolve and none of its effects occur. A countered spell is put into its
+    /// owner's graveyard." With `exile`, it is exiled instead. Returns whether it was
+    /// countered.
+    pub fn counter(&mut self, spell: ObjectRef, exile: bool) -> bool {
+        let r = cast::counter(self.state, self.table, self.sink, spell, exile);
+        self.checked(r)
+    }
+
+    /// The controller of a spell on the stack.
+    pub fn spell_controller(&self, spell: ObjectRef) -> Option<u8> {
+        self.state
+            .stack()
+            .iter()
+            .find(|e| e.is_spell() && e.object == spell)
+            .map(|e| e.controller)
+    }
+
+    /// Asks a question (§7.3). A question with one answer is answered silently. Otherwise
+    /// the choice record answers it, or an inline source does, or the body pauses here.
+    fn ask(&mut self, d: &Decision) -> Result<Choice, Pause> {
+        debug_assert!(
+            self.ability.may_pause,
+            "a body asked a question without declaring may_pause"
+        );
+        debug_assert!(!d.is_empty(), "a question with no answer");
+        if d.len() == 1 {
+            return Ok(Choice(0));
+        }
+        if let Some(&c) = self.record.get(self.used) {
+            self.used += 1;
+            return Ok(Choice(c));
+        }
+        if let Some(answers) = self.answers.as_deref_mut()
+            && answers.inline()
+        {
+            // An inline answer is a decision like any other, so it counts toward the budget
+            // as a paused question would when `next` returns it.
+            if self.state.budgets.decisions >= self.state.profile.limits.decisions_per_turn {
+                self.stall(StallReason::DecisionsPerTurn);
+                return Err(Pause);
+            }
+            self.state.budgets.decisions += 1;
+            let answer = answers.answer(Observation::new(self.state, d.player), d);
+            debug_assert!(
+                answer.is_some(),
+                "an inline answer source declined to answer"
+            );
+            if let Some(c) = answer {
+                return Ok(c);
+            }
+        }
+        self.question = Some(*d);
+        Err(Pause)
+    }
+
+    fn ask_options(&mut self, player: u8, kind: DecisionKind, opts: &[Opt]) -> Result<Opt, Pause> {
+        let mut list = Fixed::new();
+        for &o in opts {
+            if list.push(o).is_err() {
+                self.full = true;
+                return Err(Pause);
+            }
+        }
+        let d = Decision {
+            player,
+            kind,
+            candidates: Candidates::Options(list),
+        };
+        let c = self.ask(&d)?;
+        Ok(d.candidates.option(c).expect("an answer among the options"))
+    }
+
+    /// Asks `player` yes or no.
+    pub fn choose_yes_no(&mut self, player: u8) -> Result<bool, Pause> {
+        Ok(self.ask_options(player, DecisionKind::YesNo, &[Opt::Yes, Opt::No])? == Opt::Yes)
+    }
+
+    /// Asks `player` to choose one of `candidates`, which must not be empty.
+    pub fn choose_object(&mut self, player: u8, candidates: Bitboard) -> Result<u8, Pause> {
+        let d = Decision {
+            player,
+            kind: DecisionKind::ChooseObject,
+            candidates: Candidates::Objects(crate::engine::collapse(self.state, candidates)),
+        };
+        let c = self.ask(&d)?;
+        Ok(d.candidates.object(c).expect("an answer among the objects"))
+    }
+
+    /// "[Effect] unless [player] pays [cost]"
+    /// ([CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a)): "This means the
+    /// same thing as '[A player may do something else]. If [that player doesn't], [do
+    /// something].'" Asks `player` whether to pay if they can, and pays if they do. Returns
+    /// whether they paid.
+    ///
+    /// [CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g): "If an effect gives a
+    /// player the option to pay mana, they may activate mana abilities before taking that
+    /// action."
+    pub fn unless_pays(&mut self, player: u8, cost: ManaCost) -> Result<bool, Pause> {
+        let r = mana::payable(self.state, self.table, player, cost, Bitboard::EMPTY);
+        if !self.checked(r) {
+            return Ok(false);
+        }
+        if !self.choose_yes_no(player)? {
+            return Ok(false);
+        }
+        self.pay(player, cost)?;
+        Ok(true)
+    }
+
+    /// Pays a mana cost `player` can pay, under the profile's payment rules (§10).
+    fn pay(&mut self, player: u8, cost: ManaCost) -> Result<(), Pause> {
+        if self.state.profile.payment == Payment::Manual {
+            let mut remaining = cost;
+            while !remaining.is_zero() {
+                let r = mana::manual_options(
+                    self.state,
+                    self.table,
+                    player,
+                    remaining,
+                    Bitboard::EMPTY,
+                );
+                let options = self.checked(r);
+                let option =
+                    self.ask_options(player, DecisionKind::ManaPayment, options.as_slice())?;
+                let r =
+                    mana::manual_pay(self.state, self.table, self.sink, player, remaining, option);
+                remaining = self.checked(r);
+            }
+            return Ok(());
+        }
+        let greedy = self.state.profile.payment == Payment::Greedy;
+        let r = mana::plans(
+            self.state,
+            self.table,
+            player,
+            cost,
+            Bitboard::EMPTY,
+            greedy,
+        );
+        let plans = self.checked(r);
+        let mut opts: Fixed<Opt, 64> = Fixed::new();
+        for i in 0..plans.len() {
+            let _ = opts.push(Opt::Plan(i as u8));
+        }
+        let Opt::Plan(i) = self.ask_options(player, DecisionKind::PaymentPlan, opts.as_slice())?
+        else {
+            unreachable!("a plan");
+        };
+        let plan = plans.as_slice()[usize::from(i)];
+        let r = mana::pay(
+            self.state,
+            self.table,
+            self.sink,
+            player,
+            cost,
+            Bitboard::EMPTY,
+            &plan,
+        );
+        self.checked(r);
+        Ok(())
+    }
+
+    /// Lets `player` cast the card in `object`'s slot from the zone it is in, for as long as
+    /// it stays there, or until end of turn with `this_turn`. A spell cast this way costs
+    /// `extra` generic mana more, and with `exile` it is exiled rather than put into its
+    /// owner's graveyard.
+    pub fn allow_cast(
+        &mut self,
+        object: ObjectRef,
+        player: u8,
+        extra: u8,
+        this_turn: bool,
+        exile: bool,
+    ) {
+        let r = self.state.permissions.push(CastPermission {
+            object,
+            player,
+            extra,
+            this_turn,
+            exile,
+        });
+        self.checked(r);
+    }
+
+    /// Lets `player` cast the card in `object`'s slot during this resolution, without paying
+    /// its mana cost when `free`. The body's last action: the card is offered as it finishes
+    /// resolving, which is when a spell cast during resolution would otherwise have
+    /// mattered, since "no player receives priority after it's cast"
+    /// ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)).
+    pub fn offer_cast(&mut self, object: ObjectRef, player: u8, free: bool) {
+        self.offer = Some((object, player, free));
+    }
+
+    /// "Until your next turn, you may cast sorcery spells as though they had flash."
+    pub fn allow_sorceries_as_flash(&mut self, player: u8) {
+        self.state.player_mut(player).sorceries_as_flash = true;
     }
 
     /// Adds mana to a player's mana pool
@@ -121,7 +399,7 @@ impl<'a> EffectCtx<'a> {
             self.state,
             self.table,
             self.sink,
-            self.source,
+            self.entry.object,
             to,
             amount,
             false,
@@ -205,14 +483,14 @@ impl<'a> EffectCtx<'a> {
     /// zones, and the specified event has already occurred before that one-shot effect would
     /// occur but after that ability triggered, the object doesn't move."
     pub fn exile_until_source_leaves(&mut self, object: ObjectRef) {
-        if !self.on_battlefield(self.source) || !self.on_battlefield(object) {
+        if !self.on_battlefield(self.entry.object) || !self.on_battlefield(object) {
             return;
         }
         self.move_to(object, Zone::Exile, Reason::Exile);
         if self.state.object(object.slot).zone == Zone::Exile {
             let o = self.state.object_mut(object.slot);
             o.flags.set(ObjectFlags::EXILED_UNTIL, true);
-            o.linked = self.source.slot;
+            o.linked = self.entry.object.slot;
         }
     }
 
@@ -230,7 +508,7 @@ impl<'a> EffectCtx<'a> {
             self.state,
             self.table,
             self.sink,
-            self.controller,
+            self.entry.controller,
             card,
             count,
             how,
@@ -252,7 +530,7 @@ impl<'a> EffectCtx<'a> {
         let timestamp = s.zones.next_timestamp;
         s.zones.next_timestamp = timestamp.wrapping_add(1);
         let pushed = s.effects.push(FloatingEffect {
-            source: self.source,
+            source: self.entry.object,
             timestamp,
             duration,
             affected,
@@ -271,7 +549,7 @@ impl<'a> EffectCtx<'a> {
         if !self.on_battlefield(object) {
             return;
         }
-        let player = self.controller;
+        let player = self.entry.controller;
         self.add_effect(
             object,
             Continuous::Layer(crate::card::Modification::Control(player)),
@@ -305,11 +583,11 @@ impl<'a> EffectCtx<'a> {
     /// ([CR 603.7](https://yawgatog.com/resources/magic-rules/#R6037)).
     pub fn delay(&mut self, ability: u8, at: Delayed, amount: u8) {
         let trigger = PendingTrigger {
-            source: self.source,
-            card: self.card,
-            face: self.face,
+            source: self.entry.object,
+            card: self.entry.card,
+            face: self.entry.face,
             ability,
-            controller: self.controller,
+            controller: self.entry.controller,
             info: TriggerInfo {
                 amount,
                 ..TriggerInfo::default()
@@ -356,7 +634,7 @@ impl<'a> EffectCtx<'a> {
             Zone::Battlefield,
             Reason::Effect,
             Entry {
-                controller: Some(self.controller),
+                controller: Some(self.entry.controller),
                 face,
                 counters,
                 ..Entry::default()
@@ -369,14 +647,20 @@ impl<'a> EffectCtx<'a> {
 /// The body of a mana ability: add what it produces, of the kind its activator chose
 /// ([CR 106.3](https://yawgatog.com/resources/magic-rules/#R1063)): "A spell or ability that
 /// produces mana instructs a player to add that mana."
-pub fn add_produced_mana(ctx: &mut EffectCtx) -> crate::card::Flow {
+pub fn add_produced_mana(ctx: &mut EffectCtx) -> Flow {
     let produces = ctx.ability.produces;
     debug_assert!(produces.includes(ctx.mana));
-    ctx.add_mana(ctx.controller, ctx.mana, produces.amount);
+    ctx.add_mana(ctx.controller(), ctx.mana, produces.amount);
     Ok(())
 }
 
 /// The body of an ability that does nothing when it resolves, such as a static ability.
-pub fn nothing(_: &mut EffectCtx) -> crate::card::Flow {
+pub fn nothing(_: &mut EffectCtx) -> Flow {
+    Ok(())
+}
+
+/// "Draw a card."
+pub fn draw_a_card(ctx: &mut EffectCtx) -> Flow {
+    ctx.draw(ctx.controller(), 1);
     Ok(())
 }

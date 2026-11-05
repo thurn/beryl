@@ -54,15 +54,20 @@ pub(crate) fn begin_turn(s: &mut State, t: &GameTable, sink: &mut Sink) -> Resul
     }
     layers::refresh(s, t);
     // CR 302.6: the active player's permanents have now been under their control since their
-    // most recent turn began.
+    // most recent turn began. Nothing has entered, and no loyalty ability has been
+    // activated (CR 606.3), this turn.
     for i in 0..s.battlefield.len() {
         let slot = s.battlefield.as_slice()[i];
-        if s.controller(slot) == active {
-            s.object_mut(slot)
-                .flags
-                .set(ObjectFlags::SUMMONING_SICK, false);
+        let controlled = s.controller(slot) == active;
+        let o = s.object_mut(slot);
+        if controlled {
+            o.flags.set(ObjectFlags::SUMMONING_SICK, false);
         }
+        o.flags.set(ObjectFlags::ENTERED_THIS_TURN, false);
+        o.flags.set(ObjectFlags::LOYALTY_ACTIVATED, false);
     }
+    // "Until your next turn" ends as that turn begins.
+    s.player_mut(active).sorceries_as_flash = false;
     begin_step(s, t, sink, TurnStep::Untap)
 }
 
@@ -221,6 +226,16 @@ fn finish_cleanup(s: &mut State) {
     s.effects.retain(|e| e.duration != Duration::EndOfTurn);
     if s.effects.len() != before {
         s.flags.derived_dirty = true;
+    }
+    // Permissions that last this turn end, and those whose card has left its zone are gone.
+    let mut i = 0;
+    while i < s.permissions.len() {
+        let p = s.permissions.as_slice()[i];
+        if p.this_turn || !s.is_current(p.object) {
+            s.permissions.remove(i);
+        } else {
+            i += 1;
+        }
     }
     s.turn.cleanup_check = true;
 }

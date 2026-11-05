@@ -42,6 +42,13 @@ pub enum Reason {
     Return,
     /// Any other effect that puts an object into a zone.
     Effect,
+    /// Put on the stack as it is cast (CR 601.2a).
+    Cast,
+    /// Countered ([CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a)).
+    Counter,
+    /// A spell resolving or failing to: a permanent spell entering the battlefield, an
+    /// instant or sorcery put into its owner's graveyard (CR 608.2n, 608.3).
+    Resolve,
 }
 
 /// The player or permanent dealt damage.
@@ -196,6 +203,20 @@ impl Sink {
         &self.events
     }
 
+    /// How many events it holds.
+    pub fn len(&self) -> usize {
+        self.events.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.events.is_empty()
+    }
+
+    /// Drops the events after the first `len`, those of a body run discarded (§7.3).
+    pub(crate) fn truncate(&mut self, len: usize) {
+        self.events.truncate(len);
+    }
+
     pub(crate) fn push(&mut self, e: Event) {
         if self.on {
             self.events.push(e);
@@ -219,6 +240,13 @@ pub(crate) struct Entry {
     pub counters: Option<(CounterKind, u8)>,
     /// Its controller chose to pay the life an "unless you pay N life" replacement asks.
     pub pay_life: bool,
+    /// What its spell was cast with that its abilities read: [`ObjectFlags`] such as
+    /// kicked, and the value of X
+    /// ([CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)).
+    pub flags: u32,
+    pub x: u8,
+    /// The object an Aura spell attaches to as it resolves (CR 608.3c).
+    pub attach: Option<u8>,
 }
 
 /// Executes the remaining steps of the pipeline for an event its primitive has executed:
@@ -316,6 +344,22 @@ pub(crate) fn move_batch(
             }
             if let Some((kind, n)) = entry.counters {
                 *o.counters.get_mut(kind) = n;
+            }
+            o.flags.0 |= entry.flags;
+            if let Some(host) = entry.attach {
+                o.attached_to = host;
+            }
+            if entry.x > 0 {
+                let r = s.object_ref(slot);
+                let mut i = 0;
+                while i < s.entered_x.len() {
+                    if s.is_current(s.entered_x.as_slice()[i].0) {
+                        i += 1;
+                    } else {
+                        s.entered_x.remove(i);
+                    }
+                }
+                s.entered_x.push((r, entry.x))?;
             }
         }
         sink.push(Event::ZoneChange {

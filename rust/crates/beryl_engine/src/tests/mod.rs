@@ -1,17 +1,21 @@
 //! Engine tests, driven through `next` and `apply` with test-only cards.
 
 mod banned;
+mod cast;
+mod casting;
 mod combat;
 mod events;
 mod game;
 mod invariants;
 mod mulligan;
+mod payment;
+mod replay;
 mod rules;
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use crate::card::{
-    Ability, CardDef, Face, ManaColor, ManaSet, Subtype, Subtypes, Supertypes, Types,
+    Ability, CardDef, Face, ManaColor, ManaCost, ManaSet, Subtype, Subtypes, Supertypes, Types,
 };
 use crate::{
     CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Observation, Opt, Outcome,
@@ -54,10 +58,14 @@ pub(crate) static LEGEND: CardDef = CardDef {
     tokens: &[],
 };
 
-/// Nonland cards nothing can cast yet: they only sit in hands and libraries.
+/// Black mana, which no test land makes.
+const UNPAYABLE: ManaCost = ManaCost::new(0, [0, 0, 1, 0, 0, 0]);
+
+/// Nonland cards no test land can pay for: they only sit in hands and libraries.
 pub(crate) static SPELL_A: CardDef = CardDef {
     name: "Test Spell A",
     faces: &[Face {
+        cost: UNPAYABLE,
         types: Types::SORCERY,
         ..Face::EMPTY
     }],
@@ -67,6 +75,7 @@ pub(crate) static SPELL_A: CardDef = CardDef {
 pub(crate) static SPELL_B: CardDef = CardDef {
     name: "Test Spell B",
     faces: &[Face {
+        cost: UNPAYABLE,
         types: Types::INSTANT,
         ..Face::EMPTY
     }],

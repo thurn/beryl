@@ -219,7 +219,7 @@ impl Runner<'_> {
             },
             Action::Assert { assertion } => {
                 let position = self.position(i)?;
-                self.check(position, assertion)?;
+                self.check(&position, assertion)?;
             }
         }
         Ok(())
@@ -266,7 +266,8 @@ impl Runner<'_> {
         )
     }
 
-    fn check(&self, position: Step, assertion: Assertion) -> Result<(), String> {
+    fn check(&self, position: &Step, assertion: Assertion) -> Result<(), String> {
+        let position = *position;
         let s = &self.s;
         let (actual, expected) = match assertion {
             Assertion::Life { player, life } => {

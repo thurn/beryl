@@ -2,24 +2,35 @@
 //! (architecture §3, §7).
 
 use crate::bitboard::Bitboard;
-use crate::card::Types;
+use crate::card::{ManaColor, Types};
 use crate::decision::{
     Answers, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, StallReason, Step,
 };
 use crate::event::{self, Entry, Reason, Sink};
-use crate::filter::Filter;
 use crate::fixed::{Fixed, Full};
+use crate::profile::Profile;
 use crate::state::{Pending, State, Zone, opponent};
 use crate::table::GameTable;
-use crate::{combat, layers, sba, start, trigger, turn, zone};
+use crate::{cast, combat, layers, mana, resolve, sba, start, trigger, turn, zone};
 
-/// Per-thread working memory, never copied with the state: the event sink. Candidate
-/// buffers, the mana solver's arrays and the spare state for transactional replay arrive
-/// with the work that needs them.
-#[derive(Debug, Default)]
+/// Per-thread working memory, never copied with the state: the event sink, the counts, and
+/// the spare state transactional replay runs bodies on (§7.3), allocated once so the hot
+/// path never allocates.
+#[derive(Debug)]
 pub struct Scratch {
     pub counts: Counts,
     pub events: Sink,
+    spare: Box<State>,
+}
+
+impl Default for Scratch {
+    fn default() -> Self {
+        Self {
+            counts: Counts::default(),
+            events: Sink::default(),
+            spare: Box::new(State::empty(Profile::EXACT)),
+        }
+    }
 }
 
 impl Scratch {
@@ -35,6 +46,23 @@ impl Scratch {
             ..Self::default()
         }
     }
+
+    /// The spare state, and the sink, for a run of a body on a copy.
+    pub(crate) fn spare_and_sink(&mut self) -> (&mut State, &mut Sink) {
+        (&mut self.spare, &mut self.events)
+    }
+}
+
+/// The position a player sees the open decision in. That is the state itself, except while
+/// a resolution is paused (§7.3): the committed state is then the one before the resolution
+/// began, so the paused body is replayed into scratch up to its question.
+pub fn view<'a>(s: &'a State, t: &GameTable, x: &'a mut Scratch) -> &'a State {
+    if matches!(s.pending, Pending::Resolving(_))
+        && let Ok(paused) = resolve::replay_to_question(s, t, x)
+    {
+        return paused;
+    }
+    s
 }
 
 /// Deterministic counts of the engine's logical operations, the stable performance signal CI
@@ -62,8 +90,7 @@ pub struct Counts {
 /// abilities that are waiting to be put on the stack are put on the stack, then the check is
 /// repeated." Waiting triggers come before priority as decisions of their own, one pick at a
 /// time ([`DecisionKind::TriggerOrder`]).
-pub fn next(s: &mut State, t: &GameTable, x: &mut Scratch, _a: &mut dyn Answers) -> Step {
-    let sink = &mut x.events;
+pub fn next(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers) -> Step {
     loop {
         if let Some(outcome) = s.outcome {
             return Step::Over(outcome);
@@ -76,7 +103,7 @@ pub fn next(s: &mut State, t: &GameTable, x: &mut Scratch, _a: &mut dyn Answers)
             // CR 117.5: "Each time a player would get priority, the game first performs all
             // applicable state-based actions as a single event".
             x.counts.state_based_checks += 1;
-            match sba::check(s, t, sink) {
+            match sba::check(s, t, &mut x.events) {
                 Ok(true) => {
                     s.turn.cleanup_check = false;
                     continue;
@@ -92,7 +119,7 @@ pub fn next(s: &mut State, t: &GameTable, x: &mut Scratch, _a: &mut dyn Answers)
                 // CR 514.3a: with no state-based actions and no waiting triggers, no player
                 // receives priority and the turn ends.
                 if s.triggers.is_empty() {
-                    if turn::begin_turn(s, t, sink).is_err() {
+                    if turn::begin_turn(s, t, &mut x.events).is_err() {
                         stall(s, StallReason::Capacity);
                     }
                     continue;
@@ -109,7 +136,7 @@ pub fn next(s: &mut State, t: &GameTable, x: &mut Scratch, _a: &mut dyn Answers)
             && !(priority && s.profile.breaks_at(s.turn));
         if silent {
             x.counts.silent += 1;
-            perform_or_stall(s, t, sink, &d, Choice(0));
+            perform_or_stall(s, t, x, a, &d, Choice(0));
             continue;
         }
         if s.budgets.decisions >= s.profile.limits.decisions_per_turn {
@@ -123,13 +150,13 @@ pub fn next(s: &mut State, t: &GameTable, x: &mut Scratch, _a: &mut dyn Answers)
 }
 
 /// Applies an answer to the decision `next` returned for this state.
-pub fn apply(s: &mut State, t: &GameTable, x: &mut Scratch, _a: &mut dyn Answers, c: Choice) {
+pub fn apply(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers, c: Choice) {
     debug_assert!(s.outcome.is_none(), "apply after the game ended");
     layers::refresh(s, t);
     match decision(s, t) {
         Ok(d) => {
             debug_assert!(usize::from(c.0) < d.len(), "choice out of range");
-            perform_or_stall(s, t, &mut x.events, &d, c);
+            perform_or_stall(s, t, x, a, &d, c);
         }
         Err(Full) => stall(s, StallReason::Capacity),
     }
@@ -140,15 +167,22 @@ fn stall(s: &mut State, reason: StallReason) {
     s.outcome = Some(Outcome::Stalled(reason));
 }
 
-fn perform_or_stall(s: &mut State, t: &GameTable, sink: &mut Sink, d: &Decision, c: Choice) {
-    if perform(s, t, sink, d, c).is_err() {
+fn perform_or_stall(
+    s: &mut State,
+    t: &GameTable,
+    x: &mut Scratch,
+    a: &mut dyn Answers,
+    d: &Decision,
+    c: Choice,
+) {
+    if perform(s, t, x, a, d, c).is_err() {
         stall(s, StallReason::Capacity);
     }
 }
 
 /// The open decision, a pure function of the state, so `apply` recomputes rather than
 /// remembers it.
-fn decision(s: &State, t: &GameTable) -> Result<Decision, Full> {
+pub(crate) fn decision(s: &State, t: &GameTable) -> Result<Decision, Full> {
     Ok(match s.pending {
         Pending::None => match trigger::next_to_stack(s) {
             Some((player, triggers)) => {
@@ -188,6 +222,17 @@ fn decision(s: &State, t: &GameTable) -> Result<Decision, Full> {
         Pending::DeclareAttackers { attacker } => combat::attack_decision(s, attacker)?,
         Pending::DeclareBlockers { blocker } => combat::block_decision(s, blocker)?,
         Pending::CombatDamage { done, lethal } => combat::division_decision(s, done, lethal)?,
+        Pending::Casting(c) => cast::decision(s, t, &c)?,
+        Pending::Resolving(r) => r.question,
+        Pending::CastOffer {
+            object,
+            player,
+            free,
+        } => Decision {
+            player,
+            kind: DecisionKind::CastOffer,
+            candidates: Candidates::Options(cast::offer_options(s, t, object, player, free)?),
+        },
     })
 }
 
@@ -220,11 +265,15 @@ fn priority_decision(s: &State, t: &GameTable) -> Result<Decision, Full> {
     let mut list = Fixed::new();
     list.push(Opt::Pass)?;
     if turn::may_play_land(s, player) {
-        let lands = Filter::Types(Types::LAND).select(s, t, turn::hand(s, player), player);
+        let lands: Bitboard = turn::hand(s, player)
+            .iter()
+            .filter(|&slot| land_face(s, t, slot).is_some())
+            .collect();
         for slot in collapse(s, lands).iter() {
             list.push(Opt::PlayLand(slot))?;
         }
     }
+    cast::priority_options(s, t, player, &mut list)?;
     Ok(Decision {
         player,
         kind: DecisionKind::Priority,
@@ -232,22 +281,112 @@ fn priority_decision(s: &State, t: &GameTable) -> Result<Decision, Full> {
     })
 }
 
+/// The first face of a card that is a land, which is the face it is played with
+/// ([CR 712.12](https://yawgatog.com/resources/magic-rules/#R71212)): "A player playing a
+/// modal double-faced card ... as a land chooses one of its faces that's a land before putting
+/// it onto the battlefield." The cube's modal double-faced cards have one land face at most.
+fn land_face(s: &State, t: &GameTable, slot: u8) -> Option<u8> {
+    t.def(s.object(slot).card)
+        .faces
+        .iter()
+        .position(|f| f.types.intersects(Types::LAND))
+        .map(|i| i as u8)
+}
+
+const COLORS: [ManaColor; 6] = [
+    ManaColor::White,
+    ManaColor::Blue,
+    ManaColor::Black,
+    ManaColor::Red,
+    ManaColor::Green,
+    ManaColor::Colorless,
+];
+
+/// Answers a question of the casting machine, a paused resolution or a resolution's offer
+/// to cast, if one is open.
+fn perform_machine(
+    s: &mut State,
+    t: &GameTable,
+    x: &mut Scratch,
+    a: &mut dyn Answers,
+    d: &Decision,
+    c: Choice,
+) -> Option<Result<(), Full>> {
+    Some(match s.pending {
+        Pending::Resolving(mut r) => r.record.push(c.0).and_then(|()| {
+            s.pending = Pending::Resolving(r);
+            resolve::resolve(s, t, x, a)
+        }),
+        Pending::Casting(casting) => cast::perform(
+            s,
+            t,
+            &mut x.events,
+            casting,
+            d.candidates.option(c),
+            d.candidates.object(c),
+        ),
+        Pending::CastOffer { player, free, .. } => {
+            s.pending = Pending::None;
+            match d.candidates.option(c).expect("an option choice") {
+                Opt::Pass => Ok(()),
+                cast_option => {
+                    cast::begin_cast(s, t, &mut x.events, player, cast_option, Some(free))
+                }
+            }
+        }
+        _ => return None,
+    })
+}
+
+/// Takes a priority action.
+fn perform_priority(
+    s: &mut State,
+    t: &GameTable,
+    x: &mut Scratch,
+    a: &mut dyn Answers,
+    player: u8,
+    option: Opt,
+) -> Result<(), Full> {
+    match option {
+        Opt::PlayLand(slot) => play_land(s, t, &mut x.events, player, slot),
+        cast_option @ Opt::Cast { .. } => {
+            cast::begin_cast(s, t, &mut x.events, player, cast_option, None)
+        }
+        Opt::Activate { slot, ability } => {
+            cast::begin_activate(s, t, &mut x.events, player, slot, ability)
+        }
+        Opt::Mana { slot, color } => {
+            mana::activate(s, t, &mut x.events, slot, COLORS[usize::from(color)])?;
+            // CR 117.3c: "If a player has priority when they ... activate an ability ...,
+            // that player receives priority afterward."
+            s.turn.passes = 0;
+            Ok(())
+        }
+        _ => pass(s, t, x, a),
+    }
+}
+
 fn perform(
     s: &mut State,
     t: &GameTable,
-    sink: &mut Sink,
+    x: &mut Scratch,
+    a: &mut dyn Answers,
     d: &Decision,
     c: Choice,
 ) -> Result<(), Full> {
     let object = || d.candidates.object(c).expect("an object choice");
     let option = || d.candidates.option(c).expect("an option choice");
+    if let Some(done) = perform_machine(s, t, x, a, d, c) {
+        return done;
+    }
+    if d.kind == DecisionKind::Priority {
+        return perform_priority(s, t, x, a, d.player, option());
+    }
+    let sink = &mut x.events;
     match d.kind {
-        DecisionKind::Priority => match option() {
-            Opt::PlayLand(slot) => play_land(s, t, sink, d.player, slot),
-            _ => pass(s, t, sink),
-        },
+        DecisionKind::Priority => unreachable!("handled above"),
         DecisionKind::TriggerOrder => match option() {
-            Opt::Trigger(i) => trigger::put_on_stack(s, i),
+            Opt::Trigger(i) => trigger::put_on_stack(s, t, sink, i),
             _ => unreachable!("a trigger-order decision offers only triggers"),
         },
         DecisionKind::PayLife => {
@@ -275,6 +414,14 @@ fn perform(
             };
             combat::divide(s, t, sink, done, lethal, option())
         }
+        DecisionKind::X
+        | DecisionKind::TargetCount
+        | DecisionKind::Target
+        | DecisionKind::PaymentPlan
+        | DecisionKind::ManaPayment
+        | DecisionKind::CastOffer
+        | DecisionKind::YesNo
+        | DecisionKind::ChooseObject => unreachable!("answered through the pending state"),
         DecisionKind::PlayOrDraw => {
             let starting = if option() == Opt::Play {
                 d.player
@@ -316,18 +463,17 @@ fn perform(
 ///
 /// [CR 117.3b](https://yawgatog.com/resources/magic-rules/#R1173b): "The active player
 /// receives priority after a spell or ability (other than a mana ability) resolves."
-fn pass(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<(), Full> {
+fn pass(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers) -> Result<(), Full> {
     s.turn.passes += 1;
     if s.turn.passes < 2 {
         s.turn.priority = opponent(s.turn.priority);
         return Ok(());
     }
-    let Some(top) = s.stack.pop() else {
-        return turn::end_step(s, t, sink);
-    };
-    s.turn.passes = 0;
-    s.turn.priority = s.turn.active;
-    trigger::resolve(s, t, sink, top)
+    if s.stack.is_empty() {
+        turn::end_step(s, t, &mut x.events)
+    } else {
+        resolve::resolve(s, t, x, a)
+    }
 }
 
 /// Plays a land: a special action that puts it onto the battlefield. A land that enters
@@ -353,8 +499,8 @@ fn play_land(
     s.player_mut(player).lands_played += 1;
     s.turn.priority = player;
     s.turn.passes = 0;
-    let o = s.object(slot);
-    match event::life_to_enter(t, o.card, o.face) {
+    let face = land_face(s, t, slot).expect("a land face");
+    match event::life_to_enter(t, s.object(slot).card, face) {
         Some(life) if s.player(player).life >= i16::from(life) => {
             s.pending = Pending::EnterPayingLife { slot, life };
             Ok(())
@@ -379,6 +525,7 @@ fn enter_from_hand(
         Reason::Play,
         Entry {
             pay_life,
+            face: land_face(s, t, slot).expect("a land face"),
             ..Entry::default()
         },
     )
@@ -387,13 +534,20 @@ fn enter_from_hand(
 /// Collapses interchangeable objects to one candidate each, the lowest slot (§7.2): objects
 /// that differ only in their incarnation and timestamp lead to the same game. Everything
 /// else counts: the face up, the owner (a stolen Mana Crypt goes to another graveyard than
-/// your own), copy, link and chosen value as much as card, counters and flags.
+/// your own), copy, link and chosen value as much as card, counters and flags. An object a
+/// pending reference names, a target on the stack or a cast permission, is never collapsed
+/// with another.
 pub(crate) fn collapse(s: &State, candidates: Bitboard) -> Bitboard {
     let signature = |slot: u8| zone::signature(s, slot);
+    let referenced = cast::referenced(s);
     let mut kept = Bitboard::EMPTY;
     for slot in candidates.iter() {
         let sig = signature(slot);
-        if !kept.iter().any(|k| signature(k) == sig) {
+        if referenced.contains(slot)
+            || !kept
+                .iter()
+                .any(|k| !referenced.contains(k) && signature(k) == sig)
+        {
             kept.insert(slot);
         }
     }

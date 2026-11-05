@@ -28,6 +28,7 @@ fn new_player() -> Player {
         mulligan: MulliganStatus::Undeclared,
         to_bottom: 0,
         emblems: Fixed::new(),
+        sorceries_as_flash: false,
     }
 }
 
@@ -41,39 +42,8 @@ impl State {
     /// [CR 103.3](https://yawgatog.com/resources/magic-rules/#R1033): "each player shuffles
     /// their deck so that the cards are in a random order."
     pub fn new(t: &GameTable, seed: u64, profile: Profile) -> State {
-        let mut s = State {
-            objects: [Object::EMPTY; SLOTS],
-            battlefield: Fixed::new(),
-            derived: [Derived::default(); BATTLEFIELD],
-            zones: Zones {
-                members: [[Bitboard::EMPTY; Zone::OWNED]; 2],
-                stack: Bitboard::EMPTY,
-                library: [Fixed::new(); 2],
-                graveyard: [Fixed::new(); 2],
-                next_timestamp: 0,
-            },
-            players: [new_player(); 2],
-            turn: Turn {
-                number: 0,
-                active: 0,
-                starting_player: 0,
-                step: TurnStep::Untap,
-                priority: 0,
-                passes: 0,
-                cleanup_check: false,
-            },
-            stack: Fixed::new(),
-            triggers: Fixed::new(),
-            delayed: Fixed::new(),
-            effects: Fixed::new(),
-            pending: Pending::None,
-            knowledge: [Bitboard::EMPTY; 2],
-            rng: Rng::new(seed),
-            profile,
-            budgets: Budgets::default(),
-            flags: Flags::default(),
-            outcome: None,
-        };
+        let mut s = State::empty(profile);
+        s.rng = Rng::new(seed);
         for player in 0..2u8 {
             let mut cards: Fixed<u8, DECK_SLOTS> = Fixed::new();
             for &card in t.deck(player) {
@@ -99,6 +69,45 @@ impl State {
         let chooser = s.rng.other.below(2) as u8;
         s.pending = Pending::PlayOrDraw { chooser };
         s
+    }
+
+    /// A state with no objects, before the game begins.
+    pub(crate) fn empty(profile: Profile) -> State {
+        State {
+            objects: [Object::EMPTY; SLOTS],
+            battlefield: Fixed::new(),
+            derived: [Derived::default(); BATTLEFIELD],
+            zones: Zones {
+                members: [[Bitboard::EMPTY; Zone::OWNED]; 2],
+                stack: Bitboard::EMPTY,
+                library: [Fixed::new(); 2],
+                graveyard: [Fixed::new(); 2],
+                next_timestamp: 0,
+            },
+            players: [new_player(); 2],
+            turn: Turn {
+                number: 0,
+                active: 0,
+                starting_player: 0,
+                step: TurnStep::Untap,
+                priority: 0,
+                passes: 0,
+                cleanup_check: false,
+            },
+            stack: Fixed::new(),
+            triggers: Fixed::new(),
+            delayed: Fixed::new(),
+            effects: Fixed::new(),
+            permissions: Fixed::new(),
+            entered_x: Fixed::new(),
+            pending: Pending::None,
+            knowledge: [Bitboard::EMPTY; 2],
+            rng: Rng::new(0),
+            profile,
+            budgets: Budgets::default(),
+            flags: Flags::default(),
+            outcome: None,
+        }
     }
 }
 

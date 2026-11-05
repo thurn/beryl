@@ -3,7 +3,6 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{Ability, Delayed, Face, Trigger, Types};
-use crate::effect::EffectCtx;
 use crate::event::{Event, NO_OBJECT, Recipient, Sink, kind};
 use crate::filter::Whose;
 use crate::fixed::Full;
@@ -287,7 +286,13 @@ fn equivalent(s: &State, a: &PendingTrigger, b: &PendingTrigger) -> bool {
 /// Puts the waiting trigger at `index` on the stack
 /// ([CR 603.3](https://yawgatog.com/resources/magic-rules/#R6033)): "The ability becomes the
 /// topmost object on the stack."
-pub(crate) fn put_on_stack(s: &mut State, index: u8) -> Result<(), Full> {
+/// Then its targets are chosen, through the casting machine (CR 603.3d).
+pub(crate) fn put_on_stack(
+    s: &mut State,
+    t: &GameTable,
+    sink: &mut Sink,
+    index: u8,
+) -> Result<(), Full> {
     let tr = s.triggers.remove(usize::from(index));
     s.stack.push(StackEntry {
         object: tr.source,
@@ -296,44 +301,12 @@ pub(crate) fn put_on_stack(s: &mut State, index: u8) -> Result<(), Full> {
         card: tr.card,
         face: tr.face,
         info: tr.info,
-    })
+        ..StackEntry::default()
+    })?;
+    crate::cast::target_trigger(s, t, sink)
 }
 
 /// Creates a delayed triggered ability ([CR 603.7](https://yawgatog.com/resources/magic-rules/#R6037)).
 pub(crate) fn delay(s: &mut State, trigger: PendingTrigger, at: Delayed) -> Result<(), Full> {
     s.delayed.push(crate::state::DelayedTrigger { trigger, at })
-}
-
-/// Resolves a triggered ability from the top of the stack: its intervening "if" is checked
-/// again, then its body runs
-/// ([CR 603.4](https://yawgatog.com/resources/magic-rules/#R6034)): "If the ability
-/// triggers, it checks the stated condition again as it resolves. If the condition isn't
-/// true at that time, the ability is removed from the stack and does nothing."
-///
-/// Spells resolve through the casting work.
-pub(crate) fn resolve(
-    s: &mut State,
-    t: &GameTable,
-    sink: &mut Sink,
-    entry: StackEntry,
-) -> Result<(), Full> {
-    debug_assert_ne!(entry.ability, NONE, "a spell resolving as an ability");
-    let ability = ability(t, entry.card, entry.face, entry.ability);
-    let pending = PendingTrigger {
-        source: entry.object,
-        card: entry.card,
-        face: entry.face,
-        ability: entry.ability,
-        controller: entry.controller,
-        info: entry.info,
-    };
-    if let Some(condition) = ability.condition
-        && !condition(s, t, &pending)
-    {
-        return Ok(());
-    }
-    let mut ctx = EffectCtx::new(s, t, sink, &pending, ability);
-    let flow = (ability.body)(&mut ctx);
-    debug_assert!(flow.is_ok(), "a triggered ability paused");
-    ctx.finish()
 }

@@ -64,6 +64,7 @@ pub(crate) fn move_to_place(s: &mut State, slot: u8, to: Zone, place: Place) -> 
             let o = s.object_mut(slot);
             o.timestamp = timestamp;
             o.flags.set(ObjectFlags::SUMMONING_SICK, true);
+            o.flags.set(ObjectFlags::ENTERED_THIS_TURN, true);
             s.zones.next_timestamp = timestamp.wrapping_add(1);
             s.flags.derived_dirty = true;
         }

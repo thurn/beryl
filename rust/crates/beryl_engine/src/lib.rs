@@ -10,6 +10,7 @@
 
 pub mod bitboard;
 pub mod card;
+mod cast;
 mod combat;
 pub mod decision;
 pub mod effect;
@@ -19,8 +20,10 @@ pub mod filter;
 pub mod fixed;
 mod invariants;
 mod layers;
+mod mana;
 pub mod observation;
 pub mod profile;
+mod resolve;
 pub mod rng;
 mod sba;
 mod setup;
@@ -35,10 +38,10 @@ pub use bitboard::Bitboard;
 pub use decision::{
     Answers, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, Replay, StallReason, Step,
 };
-pub use engine::{Counts, Scratch, apply, next};
+pub use engine::{Counts, Scratch, apply, next, view};
 pub use invariants::Violation;
 pub use observation::{Observation, UNKNOWN};
-pub use profile::{Breakpoint, Profile, Stops};
+pub use profile::{Breakpoint, Payment, Profile, Stops};
 pub use state::{State, TurnStep, Zone};
 pub use table::{CardTable, Decklist, GameTable, TableError};
 

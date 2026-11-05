@@ -5,7 +5,9 @@ use crate::bitboard::Bitboard;
 use crate::fixed::Fixed;
 use crate::observation::Observation;
 
-/// What `next` returns: a decision to make, or the end of the game.
+/// What `next` returns: a decision to make, or the end of the game. A decision is a flat
+/// value with its candidates inline, so it can live in the state and be copied with it.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Step {
     Decide(Decision),
@@ -17,7 +19,7 @@ pub enum Step {
 pub struct Choice(pub u8);
 
 /// One factored single pick for one player.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Decision {
     pub player: u8,
     pub kind: DecisionKind,
@@ -66,11 +68,28 @@ pub enum DecisionKind {
     /// division of a blocked attacker's damage, by which of its blockers it destroys
     /// (CR 510.1c).
     DamageDivision,
+    /// The value of X for a spell being cast or an ability being activated (CR 601.2b).
+    X,
+    /// How many targets to choose for a spec with a variable number (CR 601.2c).
+    TargetCount,
+    /// One target (CR 601.2c).
+    Target,
+    /// A payment plan, among plans with different consequences (§10, decision D7).
+    PaymentPlan,
+    /// One mana source to tap or floating mana to spend, under manual payment (§10).
+    ManaPayment,
+    /// Whether to cast a card a resolving spell or ability allows, and how (CR 608.2g).
+    CastOffer,
+    /// Yes or no, asked by a resolving spell or ability.
+    YesNo,
+    /// One object, asked by a resolving spell or ability.
+    ChooseObject,
 }
 
 /// The candidates of a decision. A `Choice(i)` names the `i`th object in ascending slot order,
 /// or the `i`th option.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(clippy::large_enum_variant)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Candidates {
     Objects(Bitboard),
     Options(Fixed<Opt, 64>),
@@ -134,6 +153,31 @@ pub enum Opt {
     Block(u8),
     /// Assign lethal damage to the blocker in this slot.
     Lethal(u8),
+    /// Cast the card in `slot` with face `face` up, paying the casting options in the bitmask
+    /// `costs` over the face's [`crate::card::Face::casting`] list.
+    Cast {
+        slot: u8,
+        face: u8,
+        costs: u8,
+    },
+    /// Activate ability `ability` of the object in `slot`'s face up.
+    Activate {
+        slot: u8,
+        ability: u8,
+    },
+    /// Tap the mana source in `slot` for one mana of the [`crate::card::ManaColor`] `color`.
+    Mana {
+        slot: u8,
+        color: u8,
+    },
+    /// Spend floating mana of the [`crate::card::ManaColor`] index.
+    Pool(u8),
+    /// A number: X, or how many targets.
+    Number(u8),
+    /// The `i`th payment plan.
+    Plan(u8),
+    /// A player, as a target.
+    Player(u8),
 }
 
 /// How a game ended.
@@ -158,8 +202,19 @@ pub enum StallReason {
 }
 
 /// Where a card body's mid-resolution choices come from (§3, §7.3).
+///
+/// An inline source, the rollout policy, answers every question as it is asked, so a body
+/// runs once on the committed state and never pauses. Any other source pauses: the body runs
+/// on a scratch copy, and a question the choice record cannot answer becomes the next
+/// decision.
 pub trait Answers {
-    /// Answers `d`, or returns `None` to pause the body until the answer is supplied.
+    /// Whether this source answers every question inline.
+    fn inline(&self) -> bool {
+        false
+    }
+
+    /// Answers `d`, observed by `d.player`. Asked only of an inline source, which must
+    /// answer.
     fn answer(&mut self, obs: Observation<'_>, d: &Decision) -> Option<Choice>;
 }
 

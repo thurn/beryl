@@ -40,6 +40,25 @@ pub struct Face {
     pub loyalty: Option<u8>,
     pub keywords: Keywords,
     pub abilities: &'static [Ability],
+    /// The alternative and additional costs it may be cast with, in the order its text lists
+    /// them. A stack entry records the ones paid as a bitmask over this list.
+    pub casting: &'static [CastingOption],
+}
+
+impl Face {
+    /// Whether this face is an instant or a sorcery: its spell resolves by following its
+    /// instructions, not by becoming a permanent
+    /// ([CR 608.2](https://yawgatog.com/resources/magic-rules/#R6082),
+    /// [CR 608.3](https://yawgatog.com/resources/magic-rules/#R6083)).
+    pub fn is_instant_or_sorcery(&self) -> bool {
+        self.types.intersects(Types::INSTANT.union(Types::SORCERY))
+    }
+
+    /// The spell ability of an instant or sorcery, or the targeting ability of an Aura
+    /// spell: what the spell targets and does as it resolves.
+    pub fn spell_ability(&self) -> Option<&'static Ability> {
+        self.abilities.iter().find(|a| a.kind == AbilityKind::Spell)
+    }
 }
 
 impl Face {
@@ -55,22 +74,86 @@ impl Face {
         loyalty: None,
         keywords: Keywords::NONE,
         abilities: &[],
+        casting: &[],
     };
 }
 
-/// A mana cost: generic mana plus colored and colorless symbols.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+/// A mana cost: generic mana plus colored and colorless symbols, and any {X}.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct ManaCost {
     pub generic: u8,
     /// Symbols by [`ManaColor`] index: W, U, B, R, G, C.
     pub symbols: [u8; 6],
+    /// How many {X} symbols it has
+    /// ([CR 107.3a](https://yawgatog.com/resources/magic-rules/#R1073a)): their value is
+    /// announced as the spell is cast or the ability activated.
+    pub x: u8,
 }
 
 impl ManaCost {
     pub const NONE: ManaCost = ManaCost {
         generic: 0,
         symbols: [0; 6],
+        x: 0,
     };
+
+    /// A cost of generic mana and colored or colorless symbols, by [`ManaColor`] index.
+    pub const fn new(generic: u8, symbols: [u8; 6]) -> ManaCost {
+        ManaCost {
+            generic,
+            symbols,
+            x: 0,
+        }
+    }
+
+    /// A cost of generic mana only, such as {3}.
+    pub const fn generic(n: u8) -> ManaCost {
+        ManaCost::new(n, [0; 6])
+    }
+
+    /// A cost of {X} alone, such as Thieving Skydiver's kicker.
+    pub const X: ManaCost = ManaCost {
+        generic: 0,
+        symbols: [0; 6],
+        x: 1,
+    };
+
+    /// The amount of mana paying it takes once X is `x`.
+    pub fn total(self, x: u8) -> u32 {
+        u32::from(self.generic)
+            + self.symbols.iter().map(|&n| u32::from(n)).sum::<u32>()
+            + u32::from(self.x) * u32::from(x)
+    }
+
+    /// Both costs together, X included: what
+    /// ([CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f)) totals as "the mana
+    /// cost or alternative cost ..., plus all additional costs and cost increases".
+    #[must_use]
+    pub fn plus(self, other: ManaCost) -> ManaCost {
+        let mut sum = self;
+        sum.generic = sum.generic.saturating_add(other.generic);
+        for (a, b) in sum.symbols.iter_mut().zip(other.symbols) {
+            *a = a.saturating_add(b);
+        }
+        sum.x = sum.x.saturating_add(other.x);
+        sum
+    }
+
+    /// This cost with X replaced by its announced value, as generic mana
+    /// ([CR 107.4b](https://yawgatog.com/resources/magic-rules/#R1074b)): "Numerical symbols
+    /// (such as {1}) and variable symbols (such as {X}) represent generic mana in costs."
+    #[must_use]
+    pub fn with_x(self, x: u8) -> ManaCost {
+        ManaCost {
+            generic: self.generic.saturating_add(self.x.saturating_mul(x)),
+            x: 0,
+            ..self
+        }
+    }
+
+    pub fn is_zero(self) -> bool {
+        self.total(0) == 0 && self.x == 0
+    }
 
     /// The mana value ([CR 202.3](https://yawgatog.com/resources/magic-rules/#R2023)): "The
     /// mana value of an object is a number equal to the total amount of mana in its mana cost,
@@ -195,6 +278,9 @@ bitset! {
         /// [CR 702.20b](https://yawgatog.com/resources/magic-rules/#R70220b): "Attacking
         /// doesn't cause creatures with vigilance to tap."
         VIGILANCE = 10,
+        /// [CR 702.8a](https://yawgatog.com/resources/magic-rules/#R7028a): "'Flash' means
+        /// 'You may play this card any time you could cast an instant.'"
+        FLASH = 1,
     }
 }
 
@@ -294,24 +380,52 @@ pub enum AbilityKind {
     Replacement,
 }
 
-/// An activation or casting cost beyond the mana cost.
+/// An activation cost: mana, and the other things paying it takes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Cost {
     pub mana: ManaCost,
     /// The tap symbol ([CR 107.5](https://yawgatog.com/resources/magic-rules/#R1075)): "The tap
     /// symbol in an activation cost means 'Tap this permanent.'"
     pub tap: bool,
+    /// "Sacrifice this permanent"
+    /// ([CR 701.21a](https://yawgatog.com/resources/magic-rules/#R70121a)): "To sacrifice a
+    /// permanent, its controller moves it from the battlefield directly to its owner's
+    /// graveyard."
+    pub sacrifice_self: bool,
+    /// "Discard this card". Only a card in a hand can be discarded, so an ability with this
+    /// cost is activated from its owner's hand, as cycling is.
+    pub discard_self: bool,
+    /// A loyalty ability's cost: loyalty counters to put on (positive) or remove (negative)
+    /// ([CR 606.4](https://yawgatog.com/resources/magic-rules/#R6064)). `Some(0)` is a
+    /// loyalty ability too.
+    pub loyalty: Option<i8>,
 }
 
 impl Cost {
     pub const NONE: Cost = Cost {
         mana: ManaCost::NONE,
         tap: false,
+        sacrifice_self: false,
+        discard_self: false,
+        loyalty: None,
     };
     pub const TAP: Cost = Cost {
-        mana: ManaCost::NONE,
         tap: true,
+        ..Cost::NONE
     };
+
+    /// A cost of mana only.
+    pub const fn mana(mana: ManaCost) -> Cost {
+        Cost { mana, ..Cost::NONE }
+    }
+
+    /// A loyalty ability's cost.
+    pub const fn loyalty(n: i8) -> Cost {
+        Cost {
+            loyalty: Some(n),
+            ..Cost::NONE
+        }
+    }
 }
 
 /// When an ability may be activated or a spell cast.
@@ -326,12 +440,99 @@ pub enum Timing {
     Sorcery,
 }
 
-/// One target an ability or spell requires.
+/// What kind of thing a target is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TargetKind {
+    /// A permanent: an object on the battlefield.
+    Permanent,
+    /// A spell on the stack.
+    Spell,
+    /// A card in a graveyard, such as "target instant or sorcery card from your graveyard".
+    GraveyardCard,
+    /// A player. The filter may be [`Filter::Any`] or [`Filter::Whose`], read for players.
+    Player,
+}
+
+/// One instance of the word "target" in a spell or ability: what it may choose and how many
+/// ([CR 115.1](https://yawgatog.com/resources/magic-rules/#R1151)).
 #[derive(Clone, Copy, Debug)]
 pub struct TargetSpec {
+    pub kind: TargetKind,
     pub filter: Filter,
+    /// Exactly this many, or up to this many when `optional`
+    /// ([CR 115.6](https://yawgatog.com/resources/magic-rules/#R1156)): "A spell or ability
+    /// that requires targets may allow zero targets to be chosen."
     pub count: u8,
     pub optional: bool,
+}
+
+impl TargetSpec {
+    /// One target of a kind that passes a filter.
+    pub const fn one(kind: TargetKind, filter: Filter) -> TargetSpec {
+        TargetSpec {
+            kind,
+            filter,
+            count: 1,
+            optional: false,
+        }
+    }
+
+    /// "Up to one target".
+    pub const fn up_to_one(kind: TargetKind, filter: Filter) -> TargetSpec {
+        TargetSpec {
+            optional: true,
+            ..TargetSpec::one(kind, filter)
+        }
+    }
+}
+
+/// An alternative or additional cost printed on a face, which its caster may choose to pay as
+/// they cast it ([CR 601.2b](https://yawgatog.com/resources/magic-rules/#R6012b)).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CastingOption {
+    /// [CR 702.33a](https://yawgatog.com/resources/magic-rules/#R70233a): "'Kicker [cost]'
+    /// means 'You may pay an additional [cost] as you cast this spell.'" `min_x` is the
+    /// least X a kicker of {X} allows, 1 for "X can't be 0".
+    Kicker { cost: ManaCost, min_x: u8 },
+    /// [CR 702.175a](https://yawgatog.com/resources/magic-rules/#R702175a): "'Offspring
+    /// [cost]' means 'You may pay an additional [cost] as you cast this spell'".
+    Offspring(ManaCost),
+    /// [CR 702.176a](https://yawgatog.com/resources/magic-rules/#R702176a): "'Impending
+    /// N--[cost]' means 'You may choose to pay [cost] rather than pay this spell's mana
+    /// cost,' 'If you chose to pay this permanent's impending cost, it enters with N time
+    /// counters on it'".
+    Impending { cost: ManaCost, counters: u8 },
+}
+
+impl CastingOption {
+    /// Whether it is paid rather than the mana cost
+    /// ([CR 118.9](https://yawgatog.com/resources/magic-rules/#R1189)) instead of on top of
+    /// it.
+    pub fn is_alternative(self) -> bool {
+        matches!(self, CastingOption::Impending { .. })
+    }
+
+    pub fn cost(self) -> ManaCost {
+        match self {
+            CastingOption::Kicker { cost, .. }
+            | CastingOption::Offspring(cost)
+            | CastingOption::Impending { cost, .. } => cost,
+        }
+    }
+}
+
+/// A static ability that changes a rule of the game rather than an object's characteristics
+/// ([CR 604.1](https://yawgatog.com/resources/magic-rules/#R6041)): "Static abilities do
+/// something all the time rather than being activated or triggered."
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Rule {
+    None,
+    /// "Each opponent can cast spells only any time they could cast a sorcery." (Teferi, Time
+    /// Raveler)
+    OpponentsCastAsSorceries,
+    /// "As long as this entered this turn, you may activate its loyalty abilities any time you
+    /// could cast an instant." (The Wandering Emperor)
+    InstantLoyaltyTheTurnItEntered,
 }
 
 /// One ability of a face: its interface as data, and what it does as a Rust function.
@@ -358,6 +559,8 @@ pub struct Ability {
     pub replacement: Replacement,
     /// Static abilities: the continuous effect they generate on the battlefield (§9).
     pub layer: Option<LayerSpec>,
+    /// Static abilities: the rule they change.
+    pub rule: Rule,
 }
 
 impl Ability {
@@ -374,6 +577,7 @@ impl Ability {
         condition: None,
         replacement: Replacement::None,
         layer: None,
+        rule: Rule::None,
     };
 
     /// A triggered ability.
@@ -401,6 +605,28 @@ impl Ability {
             replacement,
             ..Ability::NONE
         }
+    }
+
+    /// Cycling ([CR 702.29a](https://yawgatog.com/resources/magic-rules/#R70229a)): "Cycling
+    /// is an activated ability that functions only while the card with cycling is in a
+    /// player's hand. 'Cycling [cost]' means '[Cost], Discard this card: Draw a card.'"
+    pub const fn cycling(mana: ManaCost) -> Ability {
+        Ability {
+            kind: AbilityKind::Activated,
+            cost: Cost {
+                mana,
+                discard_self: true,
+                ..Cost::NONE
+            },
+            body: crate::effect::draw_a_card,
+            ..Ability::NONE
+        }
+    }
+
+    /// Whether this is a loyalty ability
+    /// ([CR 606.1](https://yawgatog.com/resources/magic-rules/#R6061)).
+    pub fn is_loyalty(&self) -> bool {
+        self.cost.loyalty.is_some()
     }
 
     /// A mana ability with the cost {T}, such as the intrinsic ability of a basic land type
