@@ -1,0 +1,34 @@
+// Fitting text to its box by shrinking it.
+import { useLayoutEffect, useRef } from "react";
+
+/** Shrinks a one-line text to fit its box rather than cutting it off, as a card's long name in its
+ * bar or the turn button's long label: `--fit` scales the text's size (components.css,
+ * screens.css) by how far it overflows, measured again whenever the box (the text's parent)
+ * resizes, as when a card turns to tap. */
+export function useTextFit(text: string) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const box = el?.parentElement;
+    if (!el || !box) return;
+    const fit = () => {
+      el.style.removeProperty("--fit");
+      // scrollWidth and clientWidth round to whole pixels, so a text overflowing by less than
+      // one would not shrink: also compare the unrounded on-screen lengths of the text
+      // and its box, along whichever screen axis the text runs (a tapped card's runs up).
+      const text = document.createRange();
+      text.selectNodeContents(el);
+      const [t, n] = [text.getBoundingClientRect(), el.getBoundingClientRect()];
+      const along =
+        n.width >= n.height ? t.width / n.width : t.height / n.height;
+      const over = Math.max(el.scrollWidth / el.clientWidth, along);
+      if (over > 1) el.style.setProperty("--fit", String(0.98 / over));
+    };
+    fit();
+    void document.fonts.ready.then(fit);
+    const observer = new ResizeObserver(fit);
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, [text]);
+  return ref;
+}

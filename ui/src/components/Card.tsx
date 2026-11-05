@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { motion, type MotionStyle } from "motion/react";
+import { useTextFit } from "./fit";
 import { AbilityBadge, type AbilityIcon, ManaCost, RulesText } from "./Mana";
 
 export type Color = "W" | "U" | "B" | "R" | "G";
@@ -138,40 +139,6 @@ export function CardArt({ card }: { card: CardFace }) {
 /** Rules text up to this long is centered in its box. */
 const SHORT_TEXT = 30;
 
-/** Shrinks a long name to fit its bar rather than cutting it off: `--fit` scales the name's size
- * (components.css) by how far it overflows, measured again whenever the bar resizes, as when a
- * card turns to tap. */
-function useNameFit(text: string) {
-  const ref = useRef<HTMLSpanElement>(null);
-  useLayoutEffect(() => {
-    const name = ref.current;
-    const bar = name?.parentElement;
-    if (!name || !bar) return;
-    const fit = () => {
-      name.style.removeProperty("--fit");
-      // scrollWidth and clientWidth round to whole pixels, so a name overflowing by less than
-      // one would keep its ellipsis: also compare the unrounded on-screen lengths of the text
-      // and its box, along whichever screen axis the name runs (a tapped card's runs up).
-      const text = document.createRange();
-      text.selectNodeContents(name);
-      const [t, n] = [
-        text.getBoundingClientRect(),
-        name.getBoundingClientRect(),
-      ];
-      const along =
-        n.width >= n.height ? t.width / n.width : t.height / n.height;
-      const over = Math.max(name.scrollWidth / name.clientWidth, along);
-      if (over > 1) name.style.setProperty("--fit", String(0.98 / over));
-    };
-    fit();
-    void document.fonts.ready.then(fit);
-    const observer = new ResizeObserver(fit);
-    observer.observe(bar);
-    return () => observer.disconnect();
-  }, [text]);
-  return ref;
-}
-
 /** Shrinks long rules text to fit its box rather than cutting it off mid-line, as the cube's
  * longer cards (planeswalkers, Aang's Iceberg) would be: `--fit` scales the text's size
  * (components.css), stepped down until the text fits, measured again whenever the box resizes.
@@ -237,7 +204,7 @@ export function Card({
   id,
 }: CardProps) {
   const height = givenHeight ?? width / ASPECT[variant];
-  const nameRef = useNameFit(card.name);
+  const nameRef = useTextFit(card.name);
   const rulesRef = useRulesFit(card.text);
   const pt = stats(card);
   const classes = [

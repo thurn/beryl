@@ -930,26 +930,15 @@
     transparent
   );
 }
-/* The turn controls at the bottom right, in stage pixels (the mockups' divided by 1.045): the
-   compact phase tracker, the priority pill while you wait, and the button that advances the turn
-   with its caption, right-aligned with the button's edge. */
+/* The turn controls at the bottom right, in stage pixels: the compact phase tracker over the
+   button that advances the turn, and under the button its caption or, while you wait, the
+   priority pill. Nothing moves between states. */
 .turn-controls > * {
   position: absolute;
 }
 .turn-controls .phase-tracker-compact {
   left: 1337px;
   top: 706px;
-}
-.turn-controls .priority-pill {
-  right: 42px;
-  top: 729px;
-  width: 269px;
-  height: 39px;
-  padding-left: 1.1em;
-  font-size: 20.2px;
-  border-color: rgb(111 101 96 / 35%);
-  border-top-color: #8a7f78;
-  font-size: 20.5px;
 }
 .turn-action {
   right: 39px;
@@ -958,26 +947,27 @@
   flex-direction: column;
   align-items: center;
 }
-.turn-controls-wait .turn-action {
-  right: 48px;
-  top: 784px;
-}
-/* The turn button: deep amber in the middle, under a gold rim (battlefield.png's Next). */
-/* Its icon and label sit left of center (battlefield.png, combat.png). */
+/* The turn button keeps one size and type style for every label and state: its icon and label
+   centered together, a label too long for it shrinking to fit (Controls.tsx's TurnButton). */
 .turn-action .button {
-  justify-content: flex-start;
-  gap: 0.4em;
-  min-width: 220px;
+  width: 250px;
   height: 48px;
-  padding: 0 21px 0 1.4em;
-  font-size: 29.5px;
-}
-.turn-action .button-icon {
-  width: 28px;
-  margin-right: 0;
-}
-.turn-action .button-primary:not(:disabled) {
+  padding: 0 21px;
   border-width: 1.5px;
+  font-weight: 700;
+}
+.turn-action .button > span:last-child {
+  min-width: 0;
+  white-space: nowrap;
+  font-size: calc(1em * var(--fit, 1));
+}
+.turn-action .button .button-icon {
+  flex: none;
+  width: 28px;
+  margin: 0;
+}
+/* Enabled: deep amber in the middle, under a gold rim. */
+.turn-action .button-primary:not(:disabled) {
   border-color: #fff2b1 #eba043 #f7bc56;
   background: linear-gradient(
     180deg,
@@ -996,27 +986,7 @@
     0 0 6px 3px rgb(240 140 50 / 55%),
     0 4px 8px rgb(0 0 0 / 35%);
 }
-/* A long label steps down a size so the button keeps its width (combat.png's Resolve Damage). */
-.turn-action .button-long {
-  min-width: 248px;
-  padding: 0 8px 0 24.5px;
-  font-size: 24px;
-  font-weight: 400;
-  -webkit-text-stroke: 0.5px currentColor;
-}
-.turn-action .button-long > span:last-child {
-  translate: 0 -3px;
-}
-.turn-action:has(.button-long) {
-  right: 37px;
-}
 .turn-action .button:disabled {
-  justify-content: center;
-  min-width: 243px;
-  height: 51.5px;
-  padding: 0 21px;
-  font-weight: 700;
-  font-size: 25px;
   color: #8a8480;
   border-color: #a4a09c #8c8884 #7f7b78;
   background: linear-gradient(180deg, #342f2b, #3a3430 50%, #433d39);
@@ -1025,9 +995,13 @@
     0 0 0 1px rgb(14 11 10 / 60%),
     0 5px 8px rgb(0 0 0 / 55%);
 }
-.turn-action .button:disabled .button-icon {
-  width: 23px;
-  margin-left: -4px;
+.turn-action .priority-pill {
+  margin-top: 8.5px;
+  height: 39px;
+  padding-left: 1.1em;
+  font-size: 20.5px;
+  border-color: rgb(111 101 96 / 35%);
+  border-top-color: #8a7f78;
 }
 .turn-caption {
   margin-top: 8.5px;

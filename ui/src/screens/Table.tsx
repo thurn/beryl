@@ -21,10 +21,9 @@ import {
   type Highlight,
 } from "../components/Card";
 import {
-  Button,
-  FastForwardIcon,
   PhaseTracker,
   PriorityPill,
+  TurnButton,
   type Phase,
 } from "../components/Controls";
 import {
@@ -382,25 +381,19 @@ export function TableScene({
           depth={{ x: 6, y: 12, twist: 7 }}
         />
       </Lying>
-      <div
-        className={
-          board.priority ? "turn-controls turn-controls-wait" : "turn-controls"
-        }
-      >
+      <div className="turn-controls">
         {board.phase && <PhaseTracker current={board.phase} compact />}
-        {board.priority && <PriorityPill>{board.priority}</PriorityPill>}
         <div className="turn-action">
-          <Button
-            icon={<FastForwardIcon />}
+          <TurnButton
+            label={board.action.label}
             disabled={board.action.disabled}
-            className={
-              board.action.label.length > 8 ? "button-long" : undefined
-            }
-          >
-            {board.action.label}
-          </Button>
-          {board.action.caption && (
-            <span className="turn-caption">{board.action.caption}</span>
+          />
+          {board.priority ? (
+            <PriorityPill>{board.priority}</PriorityPill>
+          ) : (
+            board.action.caption && (
+              <span className="turn-caption">{board.action.caption}</span>
+            )
           )}
         </div>
       </div>

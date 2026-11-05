@@ -1,10 +1,13 @@
 // Actions and status: buttons, the priority pill and the phase tracker.
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
+import { useTextFit } from "./fit";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary";
   icon?: ReactNode;
   size?: "regular" | "small";
+  /** The label's element, for fitting it to the button. */
+  labelRef?: Ref<HTMLSpanElement>;
 }
 
 /** Primary (ember), secondary (outlined) or, with `disabled`, the muted disabled button. */
@@ -14,6 +17,7 @@ export function Button({
   size = "regular",
   children,
   className,
+  labelRef,
   ...rest
 }: ButtonProps) {
   return (
@@ -25,8 +29,22 @@ export function Button({
       {...rest}
     >
       {icon && <span className="button-icon">{icon}</span>}
-      <span>{children}</span>
+      <span ref={labelRef}>{children}</span>
     </button>
+  );
+}
+
+/** The button that advances the turn: one size and type style for every label and state, a long
+ * label shrinking to fit (screens.css). */
+export function TurnButton({
+  label,
+  ...rest
+}: { label: string } & ButtonHTMLAttributes<HTMLButtonElement>) {
+  const labelRef = useTextFit(label);
+  return (
+    <Button icon={<FastForwardIcon />} labelRef={labelRef} {...rest}>
+      {label}
+    </Button>
   );
 }
 

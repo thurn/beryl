@@ -21,9 +21,9 @@ import {
 import { Card, type Highlight } from "../components/Card";
 import {
   Button,
-  FastForwardIcon,
   PhaseTracker,
   PriorityPill,
+  TurnButton,
 } from "../components/Controls";
 import {
   GraveyardEdges,
@@ -378,22 +378,8 @@ export function Board({
 
         {/* Under a screen over the table, the turn's controls give way (scry.png). */}
         {!inert && (
-          <div
-            className={
-              waiting ||
-              !decision ||
-              (decision.kind !== "priority" && !declaring)
-                ? "turn-controls turn-controls-wait"
-                : "turn-controls"
-            }
-          >
-            {/* While you wait, the priority pill takes the tracker's place
-            (trigger_on_stack_with_target.png). */}
-            {waiting ? (
-              <PriorityPill>Opponent has priority</PriorityPill>
-            ) : (
-              <PhaseTracker current={phaseOf(view.turn.step)} compact />
-            )}
+          <div className="turn-controls">
+            <PhaseTracker current={phaseOf(view.turn.step)} compact />
             {declaring ? (
               <Finish
                 view={view}
@@ -403,15 +389,16 @@ export function Board({
               />
             ) : decision?.kind === "priority" || waiting ? (
               <div className="turn-action">
-                <Button
-                  icon={<FastForwardIcon />}
+                <TurnButton
+                  label={waiting ? "Pass" : stop.label}
                   disabled={waiting || can.pass === undefined}
-                  className={stop.label.length > 8 ? "button-long" : undefined}
                   onClick={() => can.pass !== undefined && pick(can.pass)}
-                >
-                  {waiting ? "Pass" : stop.label}
-                </Button>
-                {!waiting && (
+                />
+                {/* While you wait, the priority pill takes the caption's place under the
+                button, leaving the tracker showing the phase. */}
+                {waiting ? (
+                  <PriorityPill>Opponent has priority</PriorityPill>
+                ) : (
                   <span className="turn-caption">{stop.caption}</span>
                 )}
               </div>
@@ -703,14 +690,11 @@ function Finish({
   const [label, caption] = labels[decision.kind] ?? ["Done", prompt(decision)];
   return (
     <div className="turn-action">
-      <Button
-        icon={<FastForwardIcon />}
+      <TurnButton
+        label={label}
         disabled={done === undefined}
-        className={label.length > 8 ? "button-long" : undefined}
         onClick={() => done !== undefined && onPick(done)}
-      >
-        {label}
-      </Button>
+      />
       <span className="turn-caption">{caption}</span>
     </div>
   );
