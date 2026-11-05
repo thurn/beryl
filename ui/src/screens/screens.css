@@ -375,7 +375,7 @@
 .metal-gold::after {
   content: "";
   position: absolute;
-  inset: -4px 37%;
+  inset: -3px 24%;
   background: radial-gradient(
     closest-side,
     rgb(255 236 200 / 90%),
