@@ -226,8 +226,13 @@ def app_lane() -> Lane:
 
 
 def shots_lane() -> Lane:
-    """Renders every screen in ui/shots.json headless; a page error or crash fails it."""
-    return Lane("shots", warm=True).step("ui-shots", [*BY, "ui-shots"])
+    """Renders every screen in ui/shots.json headless and plays the game screen through a
+    fixture; a page error, a crash or a failed interaction fails it."""
+    return (
+        Lane("shots", warm=True)
+        .step("ui-shots", [*BY, "ui-shots"])
+        .step("ui-test", [*BY, "ui-test"])
+    )
 
 
 def fast(args: argparse.Namespace) -> int:

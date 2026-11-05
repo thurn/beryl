@@ -1,7 +1,7 @@
 // Card display data from data/cards.json (written by `by cards`) and the art for it.
 import { useEffect, useState } from "react";
 import cardData from "../../data/cards.json";
-import { cardImageUrl } from "./ipc";
+import { artAvailable, cardImageUrl } from "./ipc";
 
 export type ImageVersion = "art_crop" | "normal" | "large";
 
@@ -62,7 +62,8 @@ export function useCardArt(
 ): CardArt | undefined {
   const found = byName.get(name);
   const entry = found?.card.faces[face ?? found.face];
-  const url = entry && cardImageUrl(entry.images[version]);
+  const url =
+    entry && artAvailable() ? cardImageUrl(entry.images[version]) : undefined;
   const [loaded, setLoaded] = useState<{ url: string; ok: boolean }>();
 
   useEffect(() => {
@@ -81,8 +82,13 @@ export function useCardArt(
   if (!found || !entry) {
     return undefined;
   }
-  const status =
-    !loaded || loaded.url !== url ? "loading" : loaded.ok ? "loaded" : "failed";
+  const status = !url
+    ? "failed"
+    : !loaded || loaded.url !== url
+      ? "loading"
+      : loaded.ok
+        ? "loaded"
+        : "failed";
   return {
     card: found.card,
     face: entry,

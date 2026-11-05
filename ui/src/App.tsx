@@ -1,14 +1,8 @@
-import {
-  lazy,
-  Suspense,
-  useEffect,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { lazy, Suspense, useEffect, useSyncExternalStore } from "react";
 import { MotionConfig } from "motion/react";
-import { appInfo, uiReady, type AppInfo } from "./ipc";
+import { appInfo, uiReady } from "./ipc";
 import { Gallery } from "./screens/Gallery";
-import { AgentPicker, GameScreen, useGameUpdates } from "./screens/Game";
+import { GameScreen, StartScreen, useGameUpdates } from "./screens/Game";
 import { TableScreen } from "./screens/Table";
 
 // Routes live in the hash so they work from the Tauri asset server and from Vite alike.
@@ -26,34 +20,15 @@ const Replica = import.meta.env.DEV
 const replica =
   Replica && new URLSearchParams(window.location.search).get("replica");
 
-function Home({ info }: { info: AppInfo | null }) {
-  return (
-    <main className="home">
-      <h1>Beryl</h1>
-      <p>{info ? `v${info.version}` : "connecting…"}</p>
-      <nav>
-        <a href="#/table">Table</a> · <a href="#/gallery">Component gallery</a>
-      </nav>
-      <AgentPicker />
-    </main>
-  );
-}
-
 export function App() {
-  const [info, setInfo] = useState<AppInfo | null>(null);
   const path = useSyncExternalStore(subscribe, route);
   // Listening from the start, so a game's first view is never missed.
   const game = useGameUpdates();
 
+  // The app hears the UI has loaded once it has answered a first command.
   useEffect(() => {
-    appInfo().then(setInfo);
+    void appInfo().then(() => uiReady());
   }, []);
-
-  useEffect(() => {
-    if (info) {
-      void uiReady();
-    }
-  }, [info]);
 
   // Motion honors the reduced-motion setting, which `just ui-shots` turns on for still captures.
   return (
@@ -71,7 +46,7 @@ export function App() {
       ) : path === "/game" ? (
         <GameScreen update={game} />
       ) : (
-        <Home info={info} />
+        <StartScreen />
       )}
     </MotionConfig>
   );

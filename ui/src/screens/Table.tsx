@@ -3,7 +3,13 @@
 // (depthScale), with a slab edge and a cast shadow under each; the hand leans back toward the
 // table through CSS perspective. No WebGL. The scene is drawn on a fixed 1600×900 stage scaled to
 // fit the window.
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  createContext,
+  useEffect,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { motion } from "motion/react";
 import {
   Card,
@@ -34,6 +40,9 @@ import { ScryOverlay } from "./Scry";
 
 export const STAGE = { width: 1600, height: 900 };
 
+/** How many window pixels a stage pixel takes, for turning pointer motion into stage pixels. */
+export const StageScale = createContext(1);
+
 /** Scales a fixed-size stage to fit the window, letterboxed on the table. */
 export function Stage({ children }: { children: ReactNode }) {
   const fit = () =>
@@ -50,7 +59,7 @@ export function Stage({ children }: { children: ReactNode }) {
   return (
     <div className="stage-frame">
       <div className="stage" style={{ ...STAGE, transform: `scale(${scale})` }}>
-        {children}
+        <StageScale.Provider value={scale}>{children}</StageScale.Provider>
       </div>
     </div>
   );
@@ -110,7 +119,7 @@ function OnTable({
 
 /** A zone lying on the table at a fixed place, its top-left corner at (x, y): it leans like
  * everything on the table and is foreshortened by `squash`. */
-function Lying({
+export function Lying({
   x,
   y,
   width,
@@ -201,10 +210,10 @@ export interface TableBoard {
   arrows?: ArrowSpec[];
 }
 
-const CREATURE_WIDTH = 232;
-const LAND_WIDTH = 190;
+export const CREATURE_WIDTH = 232;
+export const LAND_WIDTH = 190;
 /** Each copy beneath a land stack's top card, as a fraction of the card's width. */
-const LAND_STEP = { x: 0.12, y: 0.022 };
+export const LAND_STEP = { x: 0.12, y: 0.022 };
 
 function Creature({ permanent }: { permanent: Permanent }) {
   const withArt = useSlotArt();
@@ -249,7 +258,7 @@ function Lands({ lands }: { lands: LandPile[] }) {
 
 /** The hand's cards: each card's top center lies on an arc over the near edge, and the fan
  * turns each a little more clockwise than the one on its left, as in the mockups. */
-const HAND = {
+export const HAND = {
   width: 182,
   spacing: 180,
   top: 726.5,
@@ -342,15 +351,7 @@ export function TableScene({
           />
         </Lying>
       )}
-      <svg
-        className="gear"
-        viewBox="0 0 24 24"
-        aria-label="Settings"
-        role="img"
-      >
-        <circle className="gear-hole" cx="12" cy="12" r="4.9" />
-        <path d="M19.67 9.71 L22.34 9.69 L22.34 14.31 L19.67 14.29 L19.04 15.80 L20.95 17.68 L17.68 20.95 L15.80 19.04 L14.29 19.67 L14.31 22.34 L9.69 22.34 L9.71 19.67 L8.20 19.04 L6.32 20.95 L3.05 17.68 L4.96 15.80 L4.33 14.29 L1.66 14.31 L1.66 9.69 L4.33 9.71 L4.96 8.20 L3.05 6.32 L6.32 3.05 L8.20 4.96 L9.71 4.33 L9.69 1.66 L14.31 1.66 L14.29 4.33 L15.80 4.96 L17.68 3.05 L20.95 6.32 L19.04 8.20 Z M16.9 12 A4.9 4.9 0 1 0 7.1 12 A4.9 4.9 0 1 0 16.9 12 Z" />
-      </svg>
+      <Gear />
 
       {board.banner && (
         <div className="step-banner">
@@ -432,10 +433,27 @@ export function TableScreen({
       <TableScene board={board} dimmed={overlay !== undefined} />
       {overlay === "scry" && <ScryOverlay />}
       {/* Above any overlay: scry.png keeps the brand crisp over the dimmed table. */}
-      <div className="brand">
-        <Crest className="brand-crest" />
-        <span>Project Beryl</span>
-      </div>
+      <Brand />
     </Stage>
+  );
+}
+
+/** The settings gear at the top right. */
+export function Gear() {
+  return (
+    <svg className="gear" viewBox="0 0 24 24" aria-label="Settings" role="img">
+      <circle className="gear-hole" cx="12" cy="12" r="4.9" />
+      <path d="M19.67 9.71 L22.34 9.69 L22.34 14.31 L19.67 14.29 L19.04 15.80 L20.95 17.68 L17.68 20.95 L15.80 19.04 L14.29 19.67 L14.31 22.34 L9.69 22.34 L9.71 19.67 L8.20 19.04 L6.32 20.95 L3.05 17.68 L4.96 15.80 L4.33 14.29 L1.66 14.31 L1.66 9.69 L4.33 9.71 L4.96 8.20 L3.05 6.32 L6.32 3.05 L8.20 4.96 L9.71 4.33 L9.69 1.66 L14.31 1.66 L14.29 4.33 L15.80 4.96 L17.68 3.05 L20.95 6.32 L19.04 8.20 Z M16.9 12 A4.9 4.9 0 1 0 7.1 12 A4.9 4.9 0 1 0 16.9 12 Z" />
+    </svg>
+  );
+}
+
+/** The crest and wordmark at the top left. */
+export function Brand() {
+  return (
+    <div className="brand">
+      <Crest className="brand-crest" />
+      <span>Project Beryl</span>
+    </div>
   );
 }

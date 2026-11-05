@@ -28,6 +28,10 @@ try {
         const { context, page, errors } = await openPage(browser, shot);
         await page.goto(new URL(shot.route, base).href, { waitUntil: "load" });
         await settle(page);
+        if (shot.click) {
+            await page.click(shot.click);
+            await settle(page);
+        }
         const path = join(out, `${shot.name}.png`);
         await page.screenshot({ path, fullPage: true });
         if (errors.length) {

@@ -23,6 +23,11 @@ smoke *args:
 ui-shots *args:
     {{ by }} ui-shots "$@"
 
+# Play the game screen headless through a recorded fixture: drag, click, hover
+[group('app')]
+ui-test:
+    {{ by }} ui-test
+
 # Compare replicas with docs/ui_mockups part by part (part globs; --zoom N; --review: reviewer packets)
 [group('app')]
 ui-compare *args:

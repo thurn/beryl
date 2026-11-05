@@ -1,12 +1,4 @@
-/* Screens: the home shell, the component gallery, the table and the scry overlay's content. */
-
-.home {
-  padding: 2rem;
-  font-family: var(--font-serif);
-}
-.home a {
-  color: var(--gold);
-}
+/* Screens: the component gallery, the table and the scry overlay's content. */
 
 /* The gallery, laid out at ui_system.png's 1536×1024: the panels sit where the mockup puts them. */
 .gallery {
@@ -971,65 +963,368 @@
   -webkit-text-stroke: 0.3px currentColor;
 }
 
-/* The plain game screen (Game.tsx). */
-.agents {
+/* The game screen (game/Board.tsx), in stage pixels. Cards live in one layer, one element per
+   slot (game/CardLayer.tsx), placed by transforms about their top-left corner. */
+.card-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.card-el {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.card-el-hidden {
+  pointer-events: none;
+}
+.card-el-draggable {
+  cursor: grab;
+}
+.card-el-dragging {
+  cursor: grabbing;
+  filter: drop-shadow(0 18px 18px rgb(0 0 0 / 45%));
+}
+/* The wrapper takes its card's size, so it is what the pointer and tests hit. */
+.card-el .on-table,
+.card-el .hand-card {
+  position: relative;
+}
+.card-el-pile .card,
+.card-el-stack .card {
+  --card-shadow: 0 3px 8px rgb(0 0 0 / 55%);
+}
+/* Something to play or activate: a thin pale-blue edge and a soft halo, quieter than a target's
+   cyan. */
+.card-playable {
+  box-shadow:
+    0 0 0 1px rgb(190 236 255 / 85%),
+    0 0 6px 2px rgb(120 200 255 / 55%),
+    0 0 18px 4px rgb(90 170 255 / 25%),
+    var(--card-shadow, var(--shadow-card));
+}
+.stack-ability {
+  transform-origin: 0 0;
+}
+.life-target {
+  cursor: pointer;
+  border-radius: 50%;
+  filter: drop-shadow(0 0 3px #05c8f0)
+    drop-shadow(0 0 10px rgb(0 185 235 / 85%));
+}
+/* The settings gear is a button; its menu drops below it. */
+.gear-button {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 72px;
+  height: 72px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.settings {
+  position: absolute;
+  right: 18px;
+  top: 66px;
+  z-index: 1100;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  margin-top: 2rem;
-}
-.game {
-  min-height: 100%;
-  padding: 16px 24px;
-  background: var(--surface);
-  color: var(--text);
+  align-items: stretch;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--metal);
+  border-radius: 10px;
+  background: rgb(33 31 28 / 96%);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 55%);
   font-family: var(--font-sans);
+  color: var(--type);
 }
-.game h2 {
-  margin: 0 0 6px;
-  font: 600 18px var(--font-serif);
-  color: var(--gold);
-}
-.game h3 {
-  margin: 0 0 4px;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-dim);
-}
-.game-header {
+.settings-toggle {
   display: flex;
-  justify-content: space-between;
-  margin-bottom: 12px;
-  font-size: 15px;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 16px;
+  cursor: pointer;
 }
-.game-player,
-.game-decision {
-  margin-bottom: 16px;
-  padding: 10px 12px;
-  border: 1px solid var(--metal-line);
-  border-radius: 8px;
-  background: var(--surface-sunk);
+.settings-toggle input {
+  margin-top: 3px;
+  accent-color: var(--gold);
 }
-.game-zone {
-  margin: 6px 0;
+.settings-toggle small {
+  display: block;
+  color: var(--text-dim);
+  font-size: 13px;
 }
-.game-objects,
-.game-candidates {
+/* A decision other than priority: its question and every candidate, above the turn controls. */
+.prompt {
+  position: absolute;
+  right: 24px;
+  bottom: 208px;
+  z-index: 900;
+  width: 330px;
+  padding: 12px 16px 14px;
+  border: 1px solid var(--metal);
+  border-top-color: var(--metal-bright);
+  border-radius: 10px;
+  background: rgb(33 31 28 / 92%);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 50%);
+}
+.prompt-title {
+  margin: 0 0 10px;
+  font: 600 20px/1.2 var(--font-serif);
+  color: var(--gold);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 60%);
+}
+.prompt-choices {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
 }
-.game-object {
-  padding: 2px 8px;
-  border-radius: 4px;
-  background: var(--surface-raised);
-  font-size: 13px;
+/* A card's candidates, listed where it was clicked or dropped. */
+.menu-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1150;
 }
-.game-outcome {
+.action-menu {
+  position: absolute;
+  z-index: 1200;
+  min-width: 220px;
+  max-width: 330px;
+  padding: 6px;
+  border: 1px solid var(--metal);
+  border-top-color: var(--metal-bright);
+  border-radius: 9px;
+  background: rgb(33 31 28 / 97%);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 60%);
+  font-family: var(--font-sans);
+}
+.action-menu-title {
+  padding: 4px 10px 6px;
+  font: 600 15px var(--font-serif);
+  color: var(--gold);
+}
+.action-menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--type);
+  font: 15px var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+.action-menu-item:hover,
+.action-menu-item:focus-visible {
+  background: rgb(233 173 74 / 18%);
+  outline: none;
+}
+/* The hovered card's full scan, with the artist credit under it. */
+.inspect {
+  position: absolute;
+  top: 118px;
+  z-index: 1300;
+  width: 330px;
+  pointer-events: none;
+}
+.inspect-scan {
+  display: block;
+  width: 330px;
+  border-radius: 15px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 60%);
+}
+.inspect-artist {
+  margin: 8px 0 0;
   text-align: center;
+  font: italic 16px var(--font-serif);
+  color: var(--type);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 80%);
+}
+/* The opening decisions, over the dimmed table. */
+.opening,
+.game-over {
+  position: absolute;
+  inset: 0;
+  z-index: 1400;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 92px;
+}
+.opening > :not(.overlay-backdrop),
+.game-over > :not(.overlay-backdrop) {
+  position: relative;
+}
+.opening-title,
+.game-over-title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  color: #fbf8f4;
+  text-shadow:
+    1px 3px 2px rgb(0 0 0 / 80%),
+    0 4px 10px rgb(0 0 0 / 60%);
+}
+.opening-title {
+  font-size: 56px;
+  line-height: 1.05;
+}
+.opening-instruction {
+  margin: 12px 0 34px;
+  font-family: var(--font-sans);
+  font-size: 21px;
+  color: #fff;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 70%);
+}
+.opening-hand {
+  display: flex;
+  gap: 14px;
+}
+.opening-card {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.opening-card:disabled {
+  cursor: default;
+}
+.opening-buttons {
+  display: flex;
+  gap: 18px;
+  margin-top: 40px;
+}
+.game-over {
+  padding-top: 260px;
+}
+.game-over-title {
+  font-size: 72px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+  text-shadow:
+    0 2px 4px rgb(0 0 0 / 70%),
+    0 0 24px rgb(240 150 60 / 45%);
+}
+.game-toast {
+  position: absolute;
+  left: 50%;
+  top: 330px;
+  z-index: 1500;
+  translate: -50% 0;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: rgb(33 31 28 / 95%);
 }
 .game-error {
   color: var(--ember);
+}
+/* The start screen: one panel on the table. */
+.start-panel {
+  position: absolute;
+  left: 50%;
+  top: 110px;
+  translate: -50% 0;
+  width: 620px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 28px 36px 32px;
+  border: 1.5px solid #8a735a;
+  border-top-color: #e9c88a;
+  border-radius: 12px;
+  background: #29231f;
+  box-shadow:
+    inset 0 0 0 1px rgb(14 11 10 / 55%),
+    0 6px 18px rgb(0 0 0 / 40%);
+  color: var(--type);
+}
+.start-title {
+  margin: 0;
+  font: 700 38px var(--font-serif);
+  letter-spacing: 0.06em;
+  color: var(--gold);
+}
+.start-subtitle {
+  margin: -10px 0 0;
+  font: italic 19px var(--font-serif);
+  color: var(--text-dim);
+}
+.start-agents {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.start-agents legend {
+  margin-bottom: 6px;
+  font: 600 15px var(--font-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.start-agent {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  column-gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.start-agent:has(input:checked) {
+  background: rgb(233 173 74 / 14%);
+  box-shadow: inset 0 0 0 1px var(--gold-soft);
+}
+.start-agent input {
+  accent-color: var(--gold);
+}
+.start-agent-name {
+  font: 600 18px var(--font-serif);
+}
+.start-cheating {
+  margin-left: 10px;
+  font: italic 14px var(--font-serif);
+  color: var(--ember);
+}
+.start-agent-about {
+  grid-column: 2;
+  font: 14px var(--font-sans);
+  color: var(--text-dim);
+}
+.start-seed {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font: 600 15px var(--font-sans);
+  color: var(--text-dim);
+}
+.start-seed input {
+  width: 160px;
+  padding: 6px 10px;
+  border: 1px solid var(--metal);
+  border-radius: 6px;
+  background: var(--surface-sunk);
+  color: var(--type);
+  font: 16px var(--font-sans);
+}
+.start-seed input[aria-invalid="true"] {
+  border-color: var(--ember);
+}
+.start-link {
+  color: var(--gold);
+  font-family: var(--font-serif);
 }

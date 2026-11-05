@@ -32,21 +32,31 @@ struct Definition {
     until: String,
 }
 
-/// Where a recording stops: the human's first decision of a kind, or the end of the game.
+/// Where a recording stops: the human's first decision of a kind, from a turn on, or the end
+/// of the game.
 #[derive(Debug, PartialEq)]
 enum Until {
-    First { kind: Kind, seat: Seat },
+    First { kind: Kind, seat: Seat, turn: u16 },
     GameOver,
 }
 
 impl Until {
-    /// Parses "first <kind> decision for seat <n>", with the kind as the protocol names it
-    /// ("target", "chooseUpTo"), or "game over".
+    /// Parses "first <kind> decision for seat <n>", optionally followed by "from turn <t>",
+    /// with the kind as the protocol names it ("target", "chooseUpTo"), or "game over".
     fn parse(text: &str) -> Result<Until, String> {
         let words: Vec<&str> = text.split_whitespace().collect();
-        match words.as_slice() {
-            ["game", "over"] => Ok(Until::GameOver),
+        let (words, turn) = match words.as_slice() {
+            [first @ .., "from", "turn", turn] => (
+                first,
+                turn.parse()
+                    .map_err(|_| format!("{text:?}: no turn {turn:?}"))?,
+            ),
+            all => (all, 0),
+        };
+        match words {
+            ["game", "over"] if turn == 0 => Ok(Until::GameOver),
             ["first", kind, "decision", "for", "seat", seat] => Ok(Until::First {
+                turn,
                 kind: serde_json::from_value(json!(kind))
                     .map_err(|_| format!("no decision kind is named {kind:?}"))?,
                 seat: seat
@@ -56,7 +66,8 @@ impl Until {
                     .ok_or_else(|| format!("no seat {seat:?}"))?,
             }),
             _ => Err(format!(
-                "{text:?}: expected \"first <kind> decision for seat <n>\" or \"game over\""
+                "{text:?}: expected \"first <kind> decision for seat <n> [from turn <t>]\" or \
+                 \"game over\""
             )),
         }
     }
@@ -70,8 +81,12 @@ impl Until {
 
     fn reached(&self, view: &PlayerView) -> bool {
         match self {
-            Until::First { kind, .. } => {
-                matches!(&view.status, Status::Deciding { decision } if decision.kind == *kind)
+            Until::First { kind, turn, .. } => {
+                view.turn.number >= *turn
+                    && matches!(
+                        &view.status,
+                        Status::Deciding { decision } if decision.kind == *kind
+                    )
             }
             Until::GameOver => matches!(view.status, Status::Over { .. }),
         }
@@ -170,9 +185,19 @@ mod tests {
             Until::parse("first chooseUpTo decision for seat 1"),
             Ok(Until::First {
                 kind: Kind::ChooseUpTo,
-                seat: Seat::P1
+                seat: Seat::P1,
+                turn: 0,
             })
         );
+        assert_eq!(
+            Until::parse("first priority decision for seat 0 from turn 9"),
+            Ok(Until::First {
+                kind: Kind::Priority,
+                seat: Seat::P0,
+                turn: 9,
+            })
+        );
+        assert!(Until::parse("game over from turn 3").is_err());
         assert_eq!(Until::parse("game over"), Ok(Until::GameOver));
         assert!(Until::parse("first scrying decision for seat 0").is_err());
         assert!(Until::parse("first target decision for seat 2").is_err());

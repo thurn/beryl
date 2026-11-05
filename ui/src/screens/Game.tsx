@@ -1,7 +1,10 @@
-// A game against an agent, drawn plainly from the latest PlayerView: each player's zones, the
-// stack, and the open decision's candidates as buttons. The pseudo-3D game screen replaces it.
-import { useEffect, useState, type ReactNode } from "react";
+// A game against an agent: the start screen, then the battlefield (game/Board.tsx) with the
+// mulligan and game-over screens over it. Every view arrives as a `game-update` event; the
+// screen answers the open decision through `choose`.
+import { useEffect, useState } from "react";
 import { Button } from "../components/Controls";
+import { Card } from "../components/Card";
+import { useCardArt } from "../cards";
 import {
   choose,
   CommandError,
@@ -10,14 +13,18 @@ import {
   setStops,
   startGame,
   type AgentView,
+  type CandidateIndex,
+  type DecisionView,
   type GameUpdate,
   type ObjectView,
+  type OutcomeView,
   type PlayerView,
-  type Side,
   type Stall,
-  type StackItem,
-  type TargetRef,
 } from "../ipc";
+import { Board } from "../game/Board";
+import { isOpening } from "../game/decisions";
+import { frameFace, unknownFace } from "../game/faces";
+import { Brand, Stage } from "./Table";
 
 /** The latest view of the game in progress, from `game-update` events. Session numbers only
  * grow, so a late view from a replaced game is dropped. */
@@ -32,46 +39,78 @@ export function useGameUpdates(): GameUpdate | null {
   return update;
 }
 
-/** The opponents to choose from; choosing one starts a game and shows it. */
-export function AgentPicker() {
+/** The agent that plays on the true state, hidden cards included. */
+const CHEATING = "mcts-omniscient";
+
+/** Picks the opponent and an optional seed, and starts the game. */
+export function StartScreen() {
   const [agents, setAgents] = useState<AgentView[]>([]);
+  const [agent, setAgent] = useState<string>();
+  const [seed, setSeed] = useState("");
   const [error, setError] = useState<string>();
   useEffect(() => {
-    listAgents().then(setAgents);
+    listAgents().then((list) => {
+      setAgents(list);
+      setAgent((a) => a ?? list[0]?.name);
+    });
   }, []);
-  const play = (agent: string) =>
-    startGame(agent).then(
+  const seedValue = seed.trim() === "" ? undefined : Number(seed);
+  const seedOk =
+    seedValue === undefined ||
+    (Number.isInteger(seedValue) && seedValue >= 0 && seedValue < 2 ** 32);
+  const start = () =>
+    agent &&
+    startGame(agent, seedValue).then(
       () => (window.location.hash = "#/game"),
       (e: unknown) => setError(String(e)),
     );
   return (
-    <section className="agents">
-      <h2>Play the WU Control mirror against</h2>
-      {agents.map((a) => (
-        <Button key={a.name} variant="secondary" onClick={() => play(a.name)}>
-          {a.name}: {a.description}
-        </Button>
-      ))}
-      {error && <p className="game-error">{error}</p>}
-    </section>
+    <Stage>
+      <div className="table start-screen">
+        <Brand />
+        <section className="start-panel">
+          <h1 className="start-title">New game</h1>
+          <p className="start-subtitle">WU Control mirror</p>
+          <fieldset className="start-agents">
+            <legend>Opponent</legend>
+            {agents.map((a) => (
+              <label key={a.name} className="start-agent">
+                <input
+                  type="radio"
+                  name="agent"
+                  value={a.name}
+                  checked={agent === a.name}
+                  onChange={() => setAgent(a.name)}
+                />
+                <span className="start-agent-name">
+                  {a.name}
+                  {a.name === CHEATING && (
+                    <em className="start-cheating">cheating: sees your hand</em>
+                  )}
+                </span>
+                <span className="start-agent-about">{a.description}</span>
+              </label>
+            ))}
+          </fieldset>
+          <label className="start-seed">
+            <span>Seed</span>
+            <input
+              inputMode="numeric"
+              placeholder="random"
+              value={seed}
+              onChange={(e) => setSeed(e.target.value)}
+              aria-invalid={!seedOk}
+            />
+          </label>
+          <Button disabled={!agent || !seedOk} onClick={() => void start()}>
+            Start
+          </Button>
+          {error && <p className="game-error">{error}</p>}
+        </section>
+      </div>
+    </Stage>
   );
 }
-
-const STEPS: Record<PlayerView["turn"]["step"], string> = {
-  untap: "Untap",
-  upkeep: "Upkeep",
-  draw: "Draw",
-  precombatMain: "Main 1",
-  beginningOfCombat: "Beginning of combat",
-  declareAttackers: "Declare attackers",
-  declareBlockers: "Declare blockers",
-  firstStrikeDamage: "First-strike damage",
-  combatDamage: "Combat damage",
-  endOfCombat: "End of combat",
-  postcombatMain: "Main 2",
-  end: "End step",
-  cleanup: "Cleanup",
-};
 
 const STALLS: Record<Stall, string> = {
   decisionsPerTurn: "too many decisions in one turn",
@@ -79,8 +118,6 @@ const STALLS: Record<Stall, string> = {
   stateBasedIterations: "state-based actions did not settle",
   capacity: "a zone or queue was full",
 };
-
-const SIDES: Record<Side, string> = { you: "You", opponent: "Opponent" };
 
 /** A command's failure as the player should hear of it; none for an answer to a decision
  * that was answered already (a double click) or replaced. */
@@ -96,153 +133,191 @@ function failure(e: unknown): string | undefined {
 
 export function GameScreen({ update }: { update: GameUpdate | null }) {
   const [error, setError] = useState<string>();
+  // The view an answer was sent from: until another arrives, the opponent is acting.
+  const [answered, setAnswered] = useState<PlayerView>();
+  const [showOver, setShowOver] = useState(true);
   if (!update) {
     return (
-      <main className="game">
-        <p>No game in progress.</p>
-        <a href="#/">Home</a>
-      </main>
+      <Stage>
+        <div className="table start-screen">
+          <section className="start-panel">
+            <p className="start-subtitle">No game in progress.</p>
+            <a className="start-link" href="#/">
+              New game
+            </a>
+          </section>
+        </div>
+      </Stage>
     );
   }
   const { session, view } = update;
-  const objects = new Map(view.objects.map((o) => [o.slot, o]));
+  const waiting = answered === view;
   const fail = (e: unknown) => {
+    setAnswered(undefined);
     const message = failure(e);
-    if (message) {
-      setError(message);
-    }
+    if (message) setError(message);
   };
   const status = view.status;
+  const answer = (index: CandidateIndex) => {
+    if (status.kind !== "deciding" || waiting) return;
+    setError(undefined);
+    setAnswered(view);
+    choose(status.decision.id, index).catch(fail);
+  };
+  const decision = status.kind === "deciding" ? status.decision : undefined;
+  const opening = decision && isOpening(decision.kind) && !waiting;
+  const over = status.kind !== "deciding" && showOver;
   return (
-    <main className="game">
-      <header className="game-header">
-        <span>
-          Turn {view.turn.number} · {SIDES[view.turn.active]} ·{" "}
-          {STEPS[view.turn.step]}
-        </span>
-        <label>
-          <input
-            type="checkbox"
-            checked={view.stops === "exact"}
-            disabled={status.kind !== "deciding"}
-            onChange={(e) =>
-              setStops(session, e.target.checked ? "exact" : "smart").catch(
-                fail,
-              )
-            }
-          />{" "}
-          Stop at every priority
-        </label>
-      </header>
-      {(["opponent", "you"] as const).map((side) => {
-        const player = view.players[side];
-        const hand = view.objects.filter(
-          (o) => o.zone === "hand" && o.owner === side,
-        );
-        return (
-          <section key={side} className="game-player">
-            <h2>
-              {SIDES[side]}: {player.life} life · library{" "}
-              {player.library.length} · hand {hand.length}
-            </h2>
-            <Zone title="Battlefield">
-              {view.battlefield
-                .map((s) => objects.get(s))
-                .filter((o) => o?.controller === side)
-                .map((o) => o && <Permanent key={o.slot} object={o} />)}
-            </Zone>
-            <Zone title="Hand">
-              {hand.map((o) => (
-                <span key={o.slot} className="game-object">
-                  {o.name ?? "Card"}
-                </span>
-              ))}
-            </Zone>
-            <Zone title="Graveyard">
-              {player.graveyard.map((s) => (
-                <span key={s} className="game-object">
-                  {objects.get(s)?.name}
-                </span>
-              ))}
-            </Zone>
-          </section>
-        );
-      })}
-      {view.stack.length > 0 && (
-        <Zone title="Stack">
-          {view.stack.map((item, i) => (
-            <span key={i} className="game-object">
-              {stackName(item, objects)}
-              {item.targets.length > 0 &&
-                ` → ${item.targets.map((t) => target(t, objects)).join(", ")}`}
-            </span>
-          ))}
-        </Zone>
+    <Stage>
+      <Board
+        view={view}
+        waiting={waiting}
+        choose={answer}
+        setFullControl={(on) =>
+          setStops(session, on ? "exact" : "smart").catch(fail)
+        }
+        onLeave={() => (window.location.hash = "#/")}
+        dimmed={opening || over}
+      />
+      {opening && <Opening view={view} decision={decision} onPick={answer} />}
+      {status.kind === "over" && showOver && (
+        <GameOver outcome={status.outcome} onClose={() => setShowOver(false)} />
       )}
-      {status.kind === "deciding" && (
-        <section className="game-decision">
-          <h2>Your decision: {status.decision.kind}</h2>
-          <div className="game-candidates">
-            {status.decision.candidates.map((c, i) => (
-              <Button
-                key={i}
-                variant={i === 0 ? "primary" : "secondary"}
-                size="small"
-                onClick={() => choose(status.decision.id, i).catch(fail)}
-              >
-                {c.label}
-              </Button>
-            ))}
-          </div>
-        </section>
+      {status.kind === "stopped" && showOver && (
+        <GameOver onClose={() => setShowOver(false)} />
       )}
-      {status.kind === "stopped" && <h2 className="game-outcome">Stopped</h2>}
-      {status.kind === "over" && (
-        <h2 className="game-outcome">
-          {status.outcome.kind === "win"
-            ? status.outcome.winner === "you"
-              ? "You won"
-              : "Your opponent won"
-            : status.outcome.kind === "draw"
-              ? "A draw"
-              : `Stalled: ${STALLS[status.outcome.reason]}`}
-        </h2>
+      {error && (
+        <p className="game-error game-toast" role="alert">
+          {error}
+        </p>
       )}
-      {error && <p className="game-error">{error}</p>}
-    </main>
+    </Stage>
   );
 }
 
-function Zone({ title, children }: { title: string; children: ReactNode }) {
+/** The opening decisions over the dimmed table: play or draw, keep or mulligan, and the
+ * cards to put on the bottom, with the hand laid out to read. */
+function Opening({
+  view,
+  decision,
+  onPick,
+}: {
+  view: PlayerView;
+  decision: DecisionView;
+  onPick(index: CandidateIndex): void;
+}) {
+  const hand = view.objects.filter(
+    (o) => o.zone === "hand" && o.owner === "you",
+  );
+  const picks = new Map(
+    decision.candidates.flatMap((c, i) =>
+      c.option.kind === "object" ? [[c.option.slot, i] as const] : [],
+    ),
+  );
+  const buttons = decision.candidates.flatMap((c, i) =>
+    c.option.kind === "object" ? [] : [{ label: c.label, index: i }],
+  );
+  const mulligans = view.players.you.mulligans;
+  const [title, instruction] =
+    decision.kind === "playOrDraw"
+      ? ["Play or draw?", "Choose whether to take the first turn."]
+      : decision.kind === "keepOrMulligan"
+        ? [
+            "Opening hand",
+            mulligans === 0
+              ? "Keep these seven, or shuffle them away and draw seven more."
+              : `Mulligan ${mulligans}: keep these and put ${mulligans} on the bottom, or mulligan again.`,
+          ]
+        : [
+            "Put a card on the bottom",
+            "Choose a card to put on the bottom of your library.",
+          ];
   return (
-    <div className="game-zone">
-      <h3>{title}</h3>
-      <div className="game-objects">{children}</div>
+    <div className="opening" role="dialog" aria-label={title}>
+      <div className="overlay-backdrop" />
+      <h2 className="opening-title">{title}</h2>
+      <p className="opening-instruction">{instruction}</p>
+      <div className="opening-hand">
+        {hand.map((o) => (
+          <OpeningCard
+            key={o.slot}
+            object={o}
+            pick={picks.get(o.slot)}
+            onPick={onPick}
+          />
+        ))}
+      </div>
+      <div className="opening-buttons">
+        {buttons.map((b, i) => (
+          <Button
+            key={b.index}
+            variant={i === 0 ? "primary" : "secondary"}
+            onClick={() => onPick(b.index)}
+          >
+            {b.label}
+          </Button>
+        ))}
+      </div>
     </div>
   );
 }
 
-function Permanent({ object }: { object: ObjectView }) {
-  const details = [
-    object.pt && `${object.pt.power}/${object.pt.toughness}`,
-    ...object.counters.map((c) => `${c.count} ${c.kind}`),
-    object.tapped && "tapped",
-    object.combat?.kind,
-  ].filter(Boolean);
+function OpeningCard({
+  object,
+  pick,
+  onPick,
+}: {
+  object: ObjectView;
+  pick?: CandidateIndex;
+  onPick(index: CandidateIndex): void;
+}) {
+  const art = useCardArt(object.name ?? "");
+  const name = object.name ?? "";
   return (
-    <span className="game-object">
-      {object.name}
-      {details.length > 0 && ` (${details.join(", ")})`}
-    </span>
+    <button
+      type="button"
+      className="opening-card"
+      disabled={pick === undefined}
+      data-card={name}
+      onClick={() => pick !== undefined && onPick(pick)}
+    >
+      <Card
+        card={art ? frameFace(object, art) : unknownFace(name)}
+        width={176}
+        highlight={pick === undefined ? undefined : "target"}
+      />
+    </button>
   );
 }
 
-const stackName = (item: StackItem, objects: Map<number, ObjectView>) =>
-  item.kind === "spell"
-    ? (objects.get(item.slot)?.name ?? "a spell")
-    : `${item.name} (ability)`;
-
-const target = (t: TargetRef, objects: Map<number, ObjectView>) =>
-  t.kind === "player"
-    ? SIDES[t.player]
-    : (objects.get(t.slot)?.name ?? "a card");
+/** The end of the game: who won, or why there is no winner. */
+function GameOver({
+  outcome,
+  onClose,
+}: {
+  outcome?: OutcomeView;
+  onClose(): void;
+}) {
+  const [title, detail] = !outcome
+    ? ["Game stopped", "This game was replaced or closed."]
+    : outcome.kind === "win"
+      ? outcome.winner === "you"
+        ? ["Victory", "You won the game."]
+        : ["Defeat", "Your opponent won the game."]
+      : outcome.kind === "draw"
+        ? ["Draw", "The game is a draw."]
+        : ["Stalled", `The engine gave up: ${STALLS[outcome.reason]}.`];
+  return (
+    <div className="game-over" role="dialog" aria-label={title}>
+      <div className="overlay-backdrop" />
+      <h2 className="game-over-title">{title}</h2>
+      <p className="opening-instruction">{detail}</p>
+      <div className="opening-buttons">
+        <Button onClick={() => (window.location.hash = "#/")}>New game</Button>
+        <Button variant="secondary" onClick={onClose}>
+          View battlefield
+        </Button>
+      </div>
+    </div>
+  );
+}

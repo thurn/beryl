@@ -3,7 +3,7 @@
 //! here has a generated TypeScript twin in `ui/src/generated/protocol.ts`
 //! ([`crate::typescript`]).
 
-use beryl_engine::card::{AbilityIx, FaceAbility, ManaColor, Types};
+use beryl_engine::card::{AbilityIx, CastingOption, Cost, FaceAbility, ManaColor, ManaCost, Types};
 use beryl_engine::event::{Event, Reason, Recipient};
 use beryl_engine::state::{CounterKind, ObjectFlags, StackEntry, TurnStep};
 use beryl_engine::{
@@ -799,7 +799,7 @@ fn candidate(t: &GameTable, obs: Observation<'_>, o: Opt) -> CandidateView {
         Opt::Cast { slot, face, costs } => {
             let spell = face_name(t, obs, slot, face).unwrap_or("a hidden card");
             (
-                format!("Cast {spell}"),
+                format!("Cast {spell}{}", casting_options(t, obs, slot, face, costs)),
                 Candidate::Cast {
                     slot: slot.get(),
                     face,
@@ -807,9 +807,13 @@ fn candidate(t: &GameTable, obs: Observation<'_>, o: Opt) -> CandidateView {
                 },
             )
         }
-        Opt::Activate { slot, ability } => {
-            (format!("Activate {}", named(slot)), activate(slot, ability))
-        }
+        Opt::Activate { slot, ability } => (
+            match activated_cost(t, obs, slot, ability) {
+                Some(cost) => format!("{}: {cost}", named(slot)),
+                None => format!("Activate {}", named(slot)),
+            },
+            activate(slot, ability),
+        ),
         Opt::Mana { slot, color } => {
             let (color, symbol) = mana(color);
             (
@@ -842,6 +846,117 @@ fn candidate(t: &GameTable, obs: Observation<'_>, o: Opt) -> CandidateView {
         ),
     };
     CandidateView { label, option }
+}
+
+/// How a cast of face `face` of the card in `slot` paying the options in `costs` reads after
+/// "Cast <name>", so that the casts of one card tell apart
+/// ([CR 601.2b](https://yawgatog.com/resources/magic-rules/#R6012b): "If the spell has
+/// alternative or additional costs that will be paid as it's being cast ... the player
+/// announces their intentions to pay any or all of those costs").
+fn casting_options(t: &GameTable, obs: Observation<'_>, slot: Slot, face: u8, costs: u8) -> String {
+    let Some(card) = obs.card(slot) else {
+        return String::new();
+    };
+    t.def(card).faces[usize::from(face)]
+        .casting
+        .iter()
+        .enumerate()
+        .filter(|&(i, _)| costs & (1 << i) != 0)
+        .map(|(_, option)| match *option {
+            CastingOption::Kicker { cost, .. } => format!(" with kicker {}", mana_text(cost)),
+            CastingOption::Offspring(cost) => format!(" with offspring {}", mana_text(cost)),
+            CastingOption::Impending { cost, counters } => {
+                format!(" with impending {counters}, {}", mana_text(cost))
+            }
+        })
+        .collect()
+}
+
+/// The cost of activating ability `ability` of the object in `slot`, as its text reads
+/// ([CR 602.1a](https://yawgatog.com/resources/magic-rules/#R6021a): "Activated abilities
+/// have a cost and an effect. They are written as '[Cost]: [Effect.] [Activation
+/// instructions (if any).]'"), if the viewer knows the card. A loyalty ability's cost is its
+/// loyalty symbol ([CR 606.4](https://yawgatog.com/resources/magic-rules/#R6064)).
+fn activated_cost(
+    t: &GameTable,
+    obs: Observation<'_>,
+    slot: Slot,
+    ability: AbilityIx,
+) -> Option<String> {
+    let (card, face, ability) = match ability {
+        AbilityIx::Own(i) => (obs.card(slot)?, obs.object(slot).face, FaceAbility::Own(i)),
+        AbilityIx::Granted(k) => {
+            let grant = obs.derived(slot).granted[usize::from(k)]?;
+            (grant.card, 0, FaceAbility::Grant(grant.grant))
+        }
+    };
+    Some(cost_text(
+        &t.def(card).faces[usize::from(face)].ability(ability).cost,
+    ))
+}
+
+/// An activation cost as Oracle text writes it: "{W}, {T}, Remove a story counter".
+fn cost_text(cost: &Cost) -> String {
+    if let Some(loyalty) = cost.loyalty {
+        // A minus sign, as printed, rather than a hyphen.
+        return match loyalty {
+            0 => "0".to_owned(),
+            l if l > 0 => format!("+{l}"),
+            l => format!("\u{2212}{}", l.unsigned_abs()),
+        };
+    }
+    if cost.crew > 0 {
+        return format!("Crew {}", cost.crew);
+    }
+    let mut parts = Vec::new();
+    if cost.waterbend > 0 {
+        parts.push(format!("Waterbend {}", mana_text(cost.mana)));
+    } else if cost.mana != ManaCost::NONE {
+        parts.push(mana_text(cost.mana));
+    }
+    if cost.tap {
+        parts.push("{T}".to_owned());
+    }
+    if cost.sacrifice_self {
+        parts.push("Sacrifice this".to_owned());
+    }
+    if cost.discard_self {
+        parts.push("Discard this card".to_owned());
+    }
+    if let Some(kind) = cost.remove {
+        parts.push(format!("Remove a {} counter", counter_name(kind)));
+    }
+    if parts.is_empty() {
+        "Activate".to_owned()
+    } else {
+        parts.join(", ")
+    }
+}
+
+/// A mana cost in braces, X first, as Oracle text writes it: "{X}{2}{W}{W}"
+/// ([CR 107.4](https://yawgatog.com/resources/magic-rules/#R1074)).
+fn mana_text(cost: ManaCost) -> String {
+    let mut text = "{X}".repeat(usize::from(cost.x));
+    if cost.generic > 0 || (cost.x == 0 && cost.symbols == [0; 6]) {
+        text.push('{');
+        text.push_str(&cost.generic.to_string());
+        text.push('}');
+    }
+    for (symbol, &count) in MANA_SYMBOLS.iter().zip(&cost.symbols) {
+        text.push_str(&symbol.repeat(usize::from(count)));
+    }
+    text
+}
+
+fn counter_name(kind: CounterKind) -> &'static str {
+    match kind {
+        CounterKind::PlusOne => "+1/+1",
+        CounterKind::MinusOne => "-1/-1",
+        CounterKind::Loyalty => "loyalty",
+        CounterKind::Time => "time",
+        CounterKind::Story => "story",
+        CounterKind::Chorus => "chorus",
+    }
 }
 
 /// Activating ability `ability` of the object in `slot`.
@@ -998,5 +1113,41 @@ fn game_event(obs: Observation<'_>, e: &Event) -> GameEvent {
         Event::Win { player } => GameEvent::Win {
             player: side(player),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn costs_read_as_printed() {
+        let mana = |generic, symbols, x| ManaCost {
+            generic,
+            symbols,
+            x,
+        };
+        // Jace, the Mind Sculptor's -1, Map's cost, Staff of the Storyteller's, kicker {X}.
+        let loyalty = Cost {
+            loyalty: Some(-1),
+            ..Cost::NONE
+        };
+        assert_eq!(cost_text(&loyalty), "\u{2212}1");
+        let map = Cost {
+            mana: mana(1, [0; 6], 0),
+            tap: true,
+            sacrifice_self: true,
+            ..Cost::NONE
+        };
+        assert_eq!(cost_text(&map), "{1}, {T}, Sacrifice this");
+        let staff = Cost {
+            mana: mana(0, [1, 0, 0, 0, 0, 0], 0),
+            tap: true,
+            remove: Some(CounterKind::Story),
+            ..Cost::NONE
+        };
+        assert_eq!(cost_text(&staff), "{W}, {T}, Remove a story counter");
+        assert_eq!(mana_text(mana(0, [0; 6], 1)), "{X}");
+        assert_eq!(mana_text(mana(2, [0, 2, 0, 0, 0, 0], 0)), "{2}{U}{U}");
     }
 }

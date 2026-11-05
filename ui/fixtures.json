@@ -1,5 +1,5 @@
 {
-  "$comment": "UI fixtures `just ui-shots` records with `beryl_cli record-fixture` into ui/public/fixtures before capturing: a seeded game between named agents (`wu-control` or `fuzz:<seed>` decks), stopped at the human seat's first decision of a kind (`first <kind> decision for seat <n>`, kinds as ui/src/generated/protocol.ts names them) or at `game over`. Shots replay one with `?fixture=<name>`.",
+  "$comment": "UI fixtures `just ui-shots` records with `beryl_cli record-fixture` into ui/public/fixtures before capturing: a seeded game between named agents (`wu-control` or `fuzz:<seed>` decks), stopped at the human seat's first decision of a kind (`first <kind> decision for seat <n>`, kinds as ui/src/generated/protocol.ts names them, optionally `from turn <t>`) or at `game over`. Shots replay one with `?fixture=<name>`, from its nth view with `&at=<n>`.",
   "fixtures": [
     {
       "name": "first-target",
@@ -7,6 +7,13 @@
       "decks": ["wu-control", "wu-control"],
       "agents": ["random", "random"],
       "until": "first target decision for seat 0"
+    },
+    {
+      "name": "greedy-turn-9",
+      "seed": 1,
+      "decks": ["wu-control", "wu-control"],
+      "agents": ["greedy", "greedy"],
+      "until": "first target decision for seat 0 from turn 9"
     }
   ]
 }

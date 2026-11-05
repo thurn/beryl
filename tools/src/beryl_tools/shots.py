@@ -3,6 +3,9 @@ ui/fixtures.json defines with `beryl_cli record-fixture`, serves the UI with Vit
 routes listed in ui/shots.json with headless Playwright WebKit (ui/scripts/shots.mjs) and prints
 the paths. Pages run in a plain browser on the fixture transport (ui/src/ipc.ts).
 
+`ui-test` plays the game screen through a fixture the same way, dragging, clicking and hovering
+as a player would (ui/scripts/interactions.mjs).
+
 Screenshots go to the cache (`ui-shots/<checkout>/`), never into the tree; WebKit is installed
 there on first use. The serving and the replica art are shared with the mockup harness
 (mockups.py).
@@ -100,12 +103,14 @@ def cut_art(env: dict[str, str]) -> int:
     ).returncode
 
 
-def record_fixtures() -> int:
-    """Plays the fixtures' seeded games and records them into RECORDED, fresh each run."""
+def record_fixtures(only: list[str] | None = None) -> int:
+    """Plays the fixtures' seeded games (those named in `only`, or all) and records them into
+    RECORDED, fresh each run."""
     shutil.rmtree(RECORDED, ignore_errors=True)
     return subprocess.run(
         ["cargo", "run", "--quiet", "--package", "beryl_cli", "--"]
-        + ["record-fixture", str(FIXTURES), str(RECORDED)],
+        + ["record-fixture", str(FIXTURES), str(RECORDED)]
+        + (only or []),
         cwd=paths.RUST,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -169,7 +174,36 @@ def ui_shots(args: argparse.Namespace) -> int:
     return code
 
 
+# The fixture ui/scripts/interactions.mjs plays.
+INTERACTION_FIXTURE = "greedy-turn-9"
+
+
+def ui_test(args: argparse.Namespace) -> int:
+    try:
+        env = webkit_env()
+        code = record_fixtures([INTERACTION_FIXTURE])
+        if code == 0:
+            with served_ui(env) as url:
+                code = subprocess.run(
+                    ["node", "scripts/interactions.mjs", url, str(RECORDED)],
+                    cwd=paths.UI,
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                    check=False,
+                ).returncode
+    except UiError as e:
+        print(f"ui-test: {e}", file=sys.stderr)
+        code = 1
+    if code != 0:
+        print("ui-test: FAILED", file=sys.stderr)
+    return code
+
+
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser("ui-shots", help="screenshot UI states headless (ui/shots.json)")
     p.add_argument("only", nargs="*", help="shot names; all of them by default")
     p.set_defaults(func=ui_shots)
+    p = sub.add_parser(
+        "ui-test", help="play the game screen headless through a fixture"
+    )
+    p.set_defaults(func=ui_test)

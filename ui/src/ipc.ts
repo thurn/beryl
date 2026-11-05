@@ -51,21 +51,56 @@ const tauriTransport: Transport = {
   ) => listen<Events[E]>(event, (e) => handler(e.payload)),
 };
 
+/** A command the fixture transport received, for tests (`window.berylFixture`). */
+export interface FixtureCall {
+  command: Command;
+  args: unknown;
+}
+
 /** Replays a fixture: each command gets its recorded responses in order (the last one again
- * once they run out), and each listener gets every recorded event of its name, in order. A
- * fixture is the app's own recording, so its values are taken as their commands' types. */
-export function fixtureTransport(fixture: Fixture): Transport {
+ * once they run out). Listeners get the recorded events in order: all of them at once, or,
+ * given `at`, the first `at`, and then one more after each `choose`, as if the app played on
+ * from the recorded answer. Every command is logged in `calls`. A fixture is the app's own
+ * recording, so its values are taken as their commands' types. */
+export function fixtureTransport(
+  fixture: Fixture,
+  at?: number,
+): Transport & { calls: FixtureCall[] } {
   const responses = new Map<Command, unknown[]>();
+  const events: { event: keyof Events; payload: unknown }[] = [];
   for (const m of fixture.messages) {
     if (m.kind === "response") {
       responses.set(m.command, [...(responses.get(m.command) ?? []), m.value]);
+    } else {
+      events.push(m);
     }
   }
+  let released = at ?? events.length;
+  type Listener = { event: keyof Events; handler: (payload: never) => void };
+  const listeners = new Set<Listener>();
+  // Events from..to to `only`, or to every listener still listening.
+  const deliver = (from: number, to: number, only?: Listener) =>
+    queueMicrotask(() => {
+      for (const { event, payload } of events.slice(from, to)) {
+        for (const l of only ? [only] : [...listeners]) {
+          if (l.event === event && listeners.has(l)) {
+            l.handler(payload as never);
+          }
+        }
+      }
+    });
+  const calls: FixtureCall[] = [];
   return {
-    invoke<C extends Command>(command: C): Promise<Result<C>> {
+    calls,
+    invoke<C extends Command>(command: C, args: Args<C>): Promise<Result<C>> {
+      calls.push({ command, args });
       const queue = responses.get(command);
       if (!queue || queue.length === 0) {
         return Promise.reject(new Error(`fixture: no response for ${command}`));
+      }
+      if (command === "choose" && released < events.length) {
+        released += 1;
+        deliver(released - 1, released);
       }
       return Promise.resolve(
         (queue.length > 1 ? queue.shift() : queue[0]) as Result<C>,
@@ -75,14 +110,10 @@ export function fixtureTransport(fixture: Fixture): Transport {
       event: E,
       handler: (payload: Events[E]) => void,
     ) {
-      let live = true;
-      const payloads = fixture.messages.flatMap((m) =>
-        m.kind === "event" && m.event === event ? [m.payload as Events[E]] : [],
-      );
-      queueMicrotask(() => payloads.forEach((p) => live && handler(p)));
-      return () => {
-        live = false;
-      };
+      const listener = { event, handler: handler as (payload: never) => void };
+      listeners.add(listener);
+      deliver(0, released, listener);
+      return () => void listeners.delete(listener);
     },
   };
 }
@@ -106,8 +137,9 @@ async function chooseTransport(): Promise<Transport> {
   }
   // `?fixture=<name>` replays /fixtures/<name>.json, which `beryl_cli record-fixture` writes
   // and Vite serves from ui/public/fixtures, with the plain browser's responses to the commands
-  // it did not record.
-  const name = new URLSearchParams(window.location.search).get("fixture");
+  // it did not record; `&at=<n>` starts from its nth view and plays on as `choose` is called.
+  const params = new URLSearchParams(window.location.search);
+  const name = params.get("fixture");
   if (!name) {
     return fixtureTransport(browserFixture);
   }
@@ -122,7 +154,13 @@ async function chooseTransport(): Promise<Transport> {
   const defaults = browserFixture.messages.filter(
     (m) => m.kind === "response" && !recorded.has(m.command),
   );
-  return fixtureTransport({ messages: [...defaults, ...fixture.messages] });
+  const at = params.get("at");
+  const replay = fixtureTransport(
+    { messages: [...defaults, ...fixture.messages] },
+    at === null ? undefined : Number(at),
+  );
+  (window as { berylFixture?: unknown }).berylFixture = replay;
+  return replay;
 }
 
 let chosen: Promise<Transport> | undefined;
@@ -159,6 +197,11 @@ export const setStops = (session: SessionId, stops: StopsSetting) =>
 export const onGameUpdate = async (
   handler: (update: Events["game-update"]) => void,
 ) => (await transport()).listen("game-update", handler);
+
+/** Whether card images can load: only inside the app, whose `beryl-art` scheme serves them.
+ * A plain browser (fixtures, `just ui-shots`) draws placeholders and never touches the
+ * network. */
+export const artAvailable = () => "__TAURI_INTERNALS__" in window;
 
 // Card images come from the app's `beryl-art` URI scheme (rust/crates/beryl_app/src/art.rs),
 // which serves Scryfall's image paths from a disk cache and downloads misses.
