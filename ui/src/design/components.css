@@ -1104,7 +1104,7 @@
   .phase-current:not(:first-child, :last-child)
   .phase-icon
   :is(path, circle, rect) {
-  fill: #fff1a1;
+  fill: #f2c060;
 }
 .phase-tracker-compact .phase:nth-child(3).phase-current .phase-icon {
   scale: 1.1;
