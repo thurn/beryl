@@ -572,7 +572,7 @@
   position: relative;
   margin-top: -7.5px;
   --glow-cyan:
-    0 0 0 1px #2fc3f1, 0 0 3px 3px rgb(0 120 200 / 95%),
+    0 0 0 1px #2fc3f1, 0 0 3px 4px rgb(0 120 200 / 95%),
     0 0 18px 7px rgb(0 70 135 / 65%);
   --glow-cyan-in:
     inset 0 0 0 1px #e6fcff, inset 0 0 0 2px #8ef0fc,
