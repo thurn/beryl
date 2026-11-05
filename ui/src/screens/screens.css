@@ -557,18 +557,21 @@
 /* The scry choice. */
 .scry-zone {
   position: relative;
+  margin-top: -7.5px;
   width: 1000px;
-  height: 464px;
+  height: 468px;
   border: 2px solid rgb(242 236 225 / 45%);
   border-radius: 10px;
   background: rgb(0 0 0 / 18%);
 }
 .scry-label {
   position: absolute;
-  bottom: -38.5px;
+  bottom: -35.5px;
   font-family: var(--font-serif);
   font-style: italic;
   font-weight: 400;
+  -webkit-text-stroke: 0.6px currentColor;
+  text-shadow: 0 2px 4px rgb(0 0 0 / 70%);
   font-size: 33px;
   line-height: 1;
   color: #fff;
@@ -603,7 +606,7 @@
   font-family: var(--font-serif);
 }
 .table-dimmed {
-  filter: blur(3.5px) brightness(0.4) saturate(0.8);
+  filter: blur(3.5px) brightness(0.5) saturate(0.8);
 }
 /* Permanents lying on the table (Table.tsx places them in depth): each card shows a dark slab
    edge below it and casts a soft shadow down and away from the light. The cast shadow is a
@@ -681,7 +684,7 @@
   translate: -50% 0;
 }
 .opponent-hand .card-back + .card-back {
-  margin-left: -6px;
+  margin-left: -2px;
 }
 .hand-card {
   position: absolute;

@@ -253,7 +253,7 @@ const HAND = {
   width: 182,
   spacing: 180,
   top: 726.5,
-  sag: 6.7,
+  sag: 9,
   turn: 6.3,
   bias: 0.8,
 };
@@ -311,7 +311,7 @@ export function TableScene({
               key={i}
               width={105}
               style={{
-                transform: `rotate(${(i - mid) * -3.5}deg) translateY(${-((i - mid) ** 2) * 3.5}px)`,
+                transform: `rotate(${(i - mid) * -4.2}deg) translateY(${-((i - mid) ** 2) * 3.5}px)`,
               }}
             />
           );
