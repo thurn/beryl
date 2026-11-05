@@ -25,3 +25,11 @@ missing_panics_doc = "allow"
 debug = "line-tables-only"
 codegen-units = 1
 lto = "thin"
+
+# Benchmarks and headless research binaries (architecture §18). Recipes that build it pass
+# `-C target-cpu=apple-m4`, which a profile cannot set; the app keeps `release`.
+[profile.search]
+inherits = "release"
+lto = "fat"
+panic = "abort"
+codegen-units = 1

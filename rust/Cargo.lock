@@ -135,6 +135,9 @@ dependencies = [
 name = "beryl_bench"
 version = "0.1.0"
 dependencies = [
+ "beryl_cards",
+ "beryl_engine",
+ "beryl_search",
  "criterion",
  "gungraun",
  "libc",

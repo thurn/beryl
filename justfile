@@ -5,6 +5,9 @@ set positional-arguments := true
 
 by := "uv run --quiet --project tools by"
 
+# The CPU the `search` profile builds for: a Cargo profile cannot set it (architecture §18)
+search_cpu := "-C target-cpu=apple-m4"
+
 default:
     @just --list --unsorted
 
@@ -102,13 +105,13 @@ fuzz games="10000":
 [group('agents')]
 [no-cd]
 play *args:
-    cargo run --quiet --release --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- play "$@"
+    RUSTFLAGS="{{ search_cpu }}" cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- play "$@"
 
 # A round robin between agents, games in parallel (--games N, --seed N, --json FILE, --check)
 [group('agents')]
 [no-cd]
 tournament *args:
-    cargo run --quiet --release --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- tournament "$@"
+    RUSTFLAGS="{{ search_cpu }}" cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- tournament "$@"
 
 # The tools' tests
 [group('test')]

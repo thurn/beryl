@@ -1,13 +1,18 @@
 [package]
 name = "beryl_bench"
 version = "0.1.0"
-description = "Benchmark support: deterministic inputs, core placement and ABBA timing"
+description = "Benchmark support (deterministic inputs, core placement, ABBA timing) and the cube rollout benchmark"
 edition.workspace = true
 license.workspace = true
 publish = false
 
 [lints]
 workspace = true
+
+[dependencies]
+beryl_cards = { path = "../beryl_cards" }
+beryl_engine = { path = "../beryl_engine" }
+beryl_search = { path = "../beryl_search" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2.191"
@@ -28,4 +33,20 @@ harness = false
 
 [[bench]]
 name = "example_counts"
+harness = false
+
+[[bench]]
+name = "rollout_timing"
+harness = false
+
+[[bench]]
+name = "rollout_abba"
+harness = false
+
+[[bench]]
+name = "rollout_counts"
+harness = false
+
+[[test]]
+name = "allocations"
 harness = false
