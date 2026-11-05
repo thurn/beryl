@@ -16,7 +16,7 @@ BINARY: Path = paths.TAURI_TARGET / "debug" / "beryl"
 
 
 def tauri(*args: str) -> int:
-    warm.ensure()
+    warm.ensure(tauri=True)
     return subprocess.run(
         ["npx", "--no-install", "tauri", *args],
         cwd=paths.UI,
