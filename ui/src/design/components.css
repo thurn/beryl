@@ -1097,14 +1097,14 @@
 .phase-tracker-compact
   .phase-current:not(:first-child, :last-child)
   .phase-icon {
-  stroke: #8a3a08;
-  stroke-width: 1.2;
+  stroke: #b06a18;
+  stroke-width: 0.8;
 }
 .phase-tracker-compact
   .phase-current:not(:first-child, :last-child)
   .phase-icon
   :is(path, circle, rect) {
-  fill: url(#phase-gold);
+  fill: #ffe08a;
 }
 .phase-tracker-compact .phase:nth-child(3).phase-current .phase-icon {
   scale: 1.1;
@@ -1142,25 +1142,15 @@
   );
   box-shadow: 0 0 8px 2px rgb(240 150 40 / 50%);
 }
-/* The blades' center ridge shows only on the lit glyph. */
-.phase-tracker-compact .phase-icon path.phase-ridge {
-  fill: none;
-  stroke: none;
-}
-.phase-tracker-compact .phase.phase-current .phase-icon path.phase-ridge {
-  fill: none;
-  stroke: rgb(255 245 210 / 85%);
-  stroke-width: 0.8;
-}
 /* The combat glyph stands on a low tab that lifts the rule around it. */
 .phase-tracker-compact .phase .phase-icon path.phase-tab {
-  fill: rgb(20 16 14 / 25%);
-  stroke: rgb(160 150 136 / 50%);
-  stroke-width: 1;
+  fill: rgb(150 140 126 / 22%);
+  stroke: none;
 }
 .phase-tracker-compact .phase.phase-current .phase-icon path.phase-tab {
-  fill: rgb(60 30 10 / 30%);
-  stroke: #ffb850;
+  fill: rgb(70 40 16 / 30%);
+  stroke: rgb(255 170 70 / 75%);
+  stroke-width: 1;
 }
 
 /* Life orbs, drawn in mockup pixels (Player.tsx); --orb scales one to CSS pixels. */
