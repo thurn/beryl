@@ -132,7 +132,7 @@ const trigger: TableBoard = {
       tone: "gold",
       fromSide: "right",
       toSide: { x: 0, y: 0.87 },
-      leave: [38, 105],
+      leave: [30, 150],
       arrive: [115, -48],
     },
     {

@@ -315,7 +315,7 @@ export function TableScene({
               key={i}
               width={112}
               style={{
-                transform: `perspective(700px) rotateX(-12deg) rotate(${180 + (i - mid) * 4.1}deg) translateY(${(i - mid) ** 2 * 3.2}px)`,
+                transform: `rotate(${(i - mid) * -4.6}deg) translateY(${-((i - mid) ** 2) * 5.5}px)`,
               }}
             />
           );
