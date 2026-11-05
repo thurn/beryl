@@ -588,6 +588,7 @@ impl Expert<'_> {
             .any(|s| !self.is(s, names::MANA_TITHE));
         self.counters_in_hand()
             .filter(move |&s| !others || !self.is(s, names::MANA_TITHE))
+            .filter(|&s| self.colors_for(s))
             .filter_map(|s| self.counter_cost(s))
     }
 
@@ -1063,10 +1064,11 @@ impl Expert<'_> {
             return 950;
         }
         // Sphinx and Malcolm wait for the opponent's turn, unless the opponent is tapped out
-        // and can answer nothing now; instants always wait.
-        // A blocker we will need, or one cast into an empty hand, is worth casting now too.
+        // and can answer nothing now, or one is cast into an empty hand; instants always wait.
+        // Dying too, a flash blocker comes in during their attack, past their sorcery-speed
+        // removal.
         let instant = f.types.intersects(Types::INSTANT);
-        let now = !self.opp_can_counter() || self.dying() || self.hand(self.opp()).count() <= 1;
+        let now = !self.opp_can_counter() || self.hand(self.opp()).count() <= 1;
         if flash && !sorcery_only && (instant || !now) {
             return 0;
         }
@@ -1524,34 +1526,10 @@ impl Expert<'_> {
             .spell_ability()
             .or_else(|| self.etb_targets(card))?;
         let spec = a.targets.first()?;
-        let sink = name == names::SINK_INTO_STUPOR;
-        let worth = |s: Slot| {
-            if sink {
-                self.bounce_value(s)
-            } else if name == names::SWIFT_RECONFIGURATION && self.is(s, names::JACE_VRYNS_PRODIGY)
-            {
-                // A Vehicle Jace still loots, and still flips.
-                0
-            } else if name == names::GET_LOST && returns_as_token(&self.p, s) {
-                // It would come back as a token copy of itself.
-                0
-            } else if name == names::AANGS_ICEBERG && self.impending(s) {
-                // It would come back from Aang's Iceberg's exile in full, a 6/6 with Insects.
-                0
-            } else {
-                // Their Aang's Iceberg gives back the permanent of ours it holds.
-                self.value(s) + self.killer_bonus(s) + self.released(s)
-            }
-        };
-        // Before combat, a blocker whose removal opens lethal comes first; not for Oust, whose
-        // 3 life can be the 3 they survive at, nor one it would not remove (a Sphinx Get Lost
-        // trades for its token copy).
-        let opens = |s: Slot| name != names::OUST && worth(s) > 0 && self.lethal_blocker(s);
-        let rank = |s: Slot| worth(s) + if opens(s) { 1000 } else { 0 };
         let target = self
             .permanents(self.opp())
             .filter(|&s| self.obs().matches(self.p.t, &spec.filter, s))
-            .max_by_key(|&s| rank(s))?;
+            .max_by_key(|&s| self.removal_rank(name, s))?;
         let walker = self.has_type(target, Types::PLANESWALKER);
         let ours = self.obs().turn().active == self.me();
         // A planeswalker our attack can kill this turn needs no removal.
@@ -1561,12 +1539,32 @@ impl Expert<'_> {
         {
             return None;
         }
-        let mut v = worth(target);
-        // Removing a blocker before combat may open lethal.
-        if opens(target) {
-            v += 1000;
-        }
+        let v = self.removal_rank(name, target);
         (v > 0 && v >= min).then_some((v, walker))
+    }
+
+    /// What the removal spell `name` taking the opponent's permanent in `slot` is worth: its
+    /// value, more for the creature that would kill us or an Aang's Iceberg holding ours, and
+    /// 1000 more for a blocker whose removal opens lethal; 0 for one it would not answer.
+    fn removal_rank(&self, name: &str, slot: Slot) -> i32 {
+        let worth = if name == names::SINK_INTO_STUPOR {
+            self.bounce_value(slot)
+        } else if name == names::SWIFT_RECONFIGURATION && self.is(slot, names::JACE_VRYNS_PRODIGY) {
+            // A Vehicle Jace still loots, and still flips.
+            0
+        } else if name == names::GET_LOST && returns_as_token(&self.p, slot) {
+            // It would come back as a token copy of itself.
+            0
+        } else if name == names::AANGS_ICEBERG && self.impending(slot) {
+            // It would come back from Aang's Iceberg's exile in full, a 6/6 with Insects.
+            0
+        } else {
+            self.value(slot) + self.killer_bonus(slot) + self.released(slot)
+        };
+        // Not for Oust, whose 3 life can be the 3 they survive at, nor for a blocker it would
+        // not remove.
+        let opens = name != names::OUST && worth > 0 && self.lethal_blocker(slot);
+        worth + if opens { 1000 } else { 0 }
     }
 
     /// Whether removing untapped creatures of the opponent's before combat, as many as our
@@ -2322,6 +2320,9 @@ impl Expert<'_> {
             }));
         }
         let turn = self.obs().turn();
+        if let Some(c) = self.removal_target(d) {
+            return Some(c);
+        }
         if turn.active == self.me() && turn.step == TurnStep::PrecombatMain && self.opens_lethal() {
             return self.blocker_target(d);
         }
@@ -2341,6 +2342,30 @@ impl Expert<'_> {
             let slot = c.object()?;
             Some(if self.obs().controller(slot) == self.opp() {
                 self.their_attack_rank(slot)
+            } else {
+                -self.value(slot)
+            })
+        }))
+    }
+
+    /// Our removal spell's target outside their combat: by the ranking that chose to cast
+    /// it ([`Expert::removal_rank`]).
+    fn removal_target(&self, d: &Decision) -> Option<Choice> {
+        let turn = self.obs().turn();
+        let e = self.obs().stack().last()?;
+        let name = self.p.t.def(e.card).name;
+        if e.controller != self.me()
+            || !e.is_spell()
+            || !REMOVAL.contains(&name)
+            || (turn.active != self.me() && turn.step == TurnStep::DeclareAttackers)
+            || !matches!(d.candidates, beryl_engine::Candidates::Objects(_))
+        {
+            return None;
+        }
+        Some(best(d, |c| {
+            let slot = c.object()?;
+            Some(if self.obs().controller(slot) == self.opp() {
+                self.removal_rank(name, slot)
             } else {
                 -self.value(slot)
             })
