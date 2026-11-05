@@ -152,22 +152,24 @@ function PlayerAndZones() {
       <At x={22} y={186}>
         <Library count={40} width={94} depth={{ x: -25, y: 18 }} />
       </At>
-      <At x={180} y={197}>
+      <At x={171} y={191}>
         <Graveyard
           cards={[SAMPLE.counterspell, a(SAMPLE.doomBlade, "03-graveyard")]}
           width={98}
           height={123}
-          depth={{ x: -12, y: 15 }}
+          depth={{ x: -12, y: 15, twist: -4 }}
         />
       </At>
       <At x={326} y={196}>
-        <LandStack
-          card={a(SAMPLE.island, "03-island")}
-          count={3}
-          width={110}
-          height={121}
-          step={{ x: 0.18, y: 0 }}
-        />
+        <div style={{ transform: "skewX(-3deg)" }}>
+          <LandStack
+            card={a(SAMPLE.island, "03-island")}
+            count={3}
+            width={110}
+            height={121}
+            step={{ x: 0.18, y: 0.05 }}
+          />
+        </div>
       </At>
       <CaptionAt x={92} y={343}>
         Library

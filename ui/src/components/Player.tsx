@@ -35,8 +35,8 @@ function blade(
 const BLADES = {
   you: {
     light: [
-      blade([-46, -3], [-86, 3], [-125, 41], 9.5, 0.3),
-      blade([-48, 14], [-80, 19], [-107, 54], 9.5, 0.3),
+      blade([-46, -3], [-86, 3], [-125, 41], 10.5),
+      blade([-48, 14], [-80, 19], [-107, 54], 10.5),
     ],
     dark: [
       blade([-45, 6], [-84, 11], [-117, 47], 7),
@@ -44,11 +44,12 @@ const BLADES = {
     ],
     glints: [] as Point[],
     arch: "M-98 70 Q-64 30 0 30 Q64 30 98 70",
+    ring: "M-42 23.4 A52 43 0 0 0 42 23.4",
   },
   opponent: {
     light: [
       blade([-47, 18], [-80, 7], [-104, -17], 11, 0),
-      blade([-50, -9], [-92, -14], [-104, -57], 8, 0),
+      blade([-50, -9], [-92, -14], [-104, -57], 4.5, 0),
     ],
     dark: [blade([-48, 5], [-82, 0], [-99, -26], 6)],
     glints: [
@@ -56,6 +57,7 @@ const BLADES = {
       [-47, 17],
     ] as Point[],
     arch: "",
+    ring: "M-40 24 A50 40 0 0 0 40 24",
   },
 };
 
@@ -67,19 +69,21 @@ const CORE = {
 
 /** The active player's rays, by angle from straight up and length from the center. */
 const RAYS = [
-  [-80, 94],
-  [-62, 84],
-  [-38, 64],
-  [0, 52],
-  [38, 64],
-  [62, 84],
-  [80, 94],
+  [-86, 104],
+  [-72, 88],
+  [-56, 80],
+  [-36, 66],
+  [0, 54],
+  [36, 66],
+  [56, 80],
+  [72, 88],
+  [86, 104],
 ]
   .map(([deg, length]) => {
     const a = ((deg! - 90) * Math.PI) / 180;
     const point = (r: number, da = 0) =>
       `${(Math.cos(a + da) * r * 1.2).toFixed(1)} ${(Math.sin(a + da) * r).toFixed(1)}`;
-    return `M${point(36, -0.07)} L${point(length! / 1.1)} L${point(36, 0.07)} Z`;
+    return `M${point(36, -0.06)} L${point(length! / 1.1)} L${point(36, 0.06)} Z`;
   })
   .join(" ");
 
@@ -111,8 +115,8 @@ export function LifeOrb({
           className="life-orb-glint"
           cx={x}
           cy={y}
-          rx="6"
-          ry="4"
+          rx="7"
+          ry="5"
           filter="url(#orb-blur)"
         />
       ))}
@@ -128,15 +132,15 @@ export function LifeOrb({
       <svg className="life-orb-art" viewBox="-136 -57 272 116" aria-hidden>
         <defs>
           <linearGradient id="orb-blade" x1="0" y1="0" x2="0.3" y2="1">
-            <stop offset="0" stopColor="#ffffff" />
-            <stop offset="0.3" stopColor="#e2dbd1" />
-            <stop offset="0.7" stopColor="#a0958a" />
-            <stop offset="1" stopColor="#5a5148" />
+            <stop offset="0" stopColor="#fffaf2" />
+            <stop offset="0.35" stopColor="#e3d8c8" />
+            <stop offset="0.7" stopColor="#a39282" />
+            <stop offset="1" stopColor="#4f453c" />
           </linearGradient>
           <linearGradient id="orb-rim" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#c9c5bf" />
-            <stop offset="0.45" stopColor="#5a5652" />
-            <stop offset="1" stopColor="#2b2826" />
+            <stop offset="0" stopColor="#ebe7e1" />
+            <stop offset="0.5" stopColor="#8c8780" />
+            <stop offset="1" stopColor="#3a3633" />
           </linearGradient>
           <radialGradient id="orb-core" cx="0.5" cy="0.32" r="0.7">
             <stop offset="0" stopColor="#3d3936" />
@@ -149,8 +153,8 @@ export function LifeOrb({
             r="100"
             gradientUnits="userSpaceOnUse"
           >
-            <stop offset="0.35" stopColor="#fff0b0" />
-            <stop offset="0.55" stopColor="#ff8c1a" />
+            <stop offset="0.35" stopColor="#ffe08a" />
+            <stop offset="0.5" stopColor="#ff8410" />
             <stop offset="1" stopColor="#f2560c" stopOpacity="0" />
           </radialGradient>
           <filter id="orb-blur" x="-50%" y="-50%" width="200%" height="200%">
@@ -172,12 +176,7 @@ export function LifeOrb({
           {side}
           <g transform="scale(-1 1)">{side}</g>
         </g>
-        <path
-          className="life-orb-ring life-orb-ring-glow"
-          d="M-40 25 A51 40 0 0 0 40 25"
-          filter="url(#orb-blur)"
-        />
-        <path className="life-orb-ring" d="M-40 25 A51 40 0 0 0 40 25" />
+
         {active && (
           <path
             className="life-orb-halo"
@@ -193,11 +192,16 @@ export function LifeOrb({
           ry={core.ry}
           filter="url(#orb-shadow)"
         />
+        <path
+          className="life-orb-ring life-orb-ring-glow"
+          d={blades.ring}
+          filter="url(#orb-blur)"
+        />
+        <path className="life-orb-ring" d={blades.ring} />
         {active && (
           <path
             className="life-orb-crescent"
-            d="M-42 -22 A50 41 0 0 1 42 -22"
-            filter="url(#orb-blur)"
+            d="M-44 -19 A50 41 0 0 1 44 -19"
           />
         )}
       </svg>

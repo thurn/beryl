@@ -641,17 +641,19 @@
 }
 .land-count {
   position: absolute;
-  right: 0.4em;
-  bottom: -0.55em;
+  right: 0.35em;
+  bottom: -0.3em;
   padding: 0.05em 0.4em;
   border-radius: 0.3em;
   font-family: var(--font-serif);
   font-weight: 700;
-  font-size: 22px;
+  font-size: 25px;
   color: #1d1b19;
-  background: linear-gradient(180deg, #f6f1e7, #cfc7ba);
-  border: 1px solid #2a2724;
-  box-shadow: 0 2px 6px rgb(0 0 0 / 50%);
+  background: linear-gradient(180deg, #fbf0d8, #dcc49a);
+  border: 1.5px solid #b8924e;
+  box-shadow:
+    0 0 0 1px rgb(30 24 18 / 70%),
+    0 3px 8px rgb(0 0 0 / 65%);
 }
 
 /* Stack items: the source's frame over a shield-shaped rules box. */
@@ -1138,14 +1140,14 @@
 }
 .life-orb-blade {
   fill: url(#orb-blade);
-  stroke: rgb(30 26 22 / 55%);
-  stroke-width: 0.6;
+  stroke: rgb(24 20 16 / 80%);
+  stroke-width: 1.1;
 }
 .life-orb-blade-dark {
   fill: #1d1a18;
 }
 .life-orb-glint {
-  fill: #ffb060;
+  fill: #ff9a2e;
 }
 .life-orb-arch {
   fill: none;
@@ -1154,18 +1156,18 @@
 }
 .life-orb-ring {
   fill: none;
-  stroke: #ffc35a;
-  stroke-width: 2.2;
+  stroke: #ffb444;
+  stroke-width: 3;
   stroke-linecap: round;
 }
 .life-orb-ring-glow {
-  stroke: #f0841c;
-  stroke-width: 6;
+  stroke: #ff7a10;
+  stroke-width: 8;
 }
 .life-orb-core {
   fill: url(#orb-core);
   stroke: url(#orb-rim);
-  stroke-width: 2.5;
+  stroke-width: 3;
 }
 .life-orb-flare {
   fill: #ff6a00;
@@ -1176,18 +1178,18 @@
 }
 .life-orb-halo {
   fill: none;
-  stroke: #ffc54a;
-  stroke-width: 8;
+  stroke: #ff9a20;
+  stroke-width: 12;
 }
 .life-orb-crescent {
   fill: none;
-  stroke: #ffe9a0;
-  stroke-width: 9;
+  stroke: #ffe28a;
+  stroke-width: 4;
   stroke-linecap: round;
 }
 /* The far orb's ring is dull copper. */
 .life-orb-opponent .life-orb-ring {
-  stroke: #e9903e;
+  stroke: #ff9f3e;
   stroke-width: 4;
 }
 .life-orb-opponent .life-orb-ring-glow {

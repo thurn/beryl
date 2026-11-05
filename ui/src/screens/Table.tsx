@@ -204,7 +204,7 @@ export interface TableBoard {
 const CREATURE_WIDTH = 232;
 const LAND_WIDTH = 190;
 /** Each copy beneath a land stack's top card, as a fraction of the card's width. */
-const LAND_STEP = { x: 0.12, y: 0.015 };
+const LAND_STEP = { x: 0.12, y: 0.022 };
 
 function Creature({ permanent }: { permanent: Permanent }) {
   const withArt = useSlotArt();
@@ -332,13 +332,13 @@ export function TableScene({
         />
       </Lying>
       {opponent.graveyard.length > 0 && (
-        <Lying x={1321} y={39.5} width={84} squash={0.92}>
+        <Lying x={1317} y={37} width={92} squash={0.95}>
           <Graveyard
             cards={opponent.graveyard.map((c, i, all) =>
               i === all.length - 1 ? withArt(c, "opponent-graveyard") : c,
             )}
-            width={84}
-            depth={{ x: 4, y: 6 }}
+            width={92}
+            depth={{ x: 0, y: 0 }}
           />
         </Lying>
       )}
