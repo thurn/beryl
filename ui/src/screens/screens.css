@@ -485,23 +485,6 @@
 .at {
   position: absolute;
 }
-/* The library draws cards flat, off the table: a slimmer foot. */
-.at {
-  --card-foot: 0.5em;
-}
-/* The mini hand's cards are cut off at their type lines by the panel's edge, under larger, bolder
-   names than the table's hand. */
-.mini-hand .card-art {
-  flex-basis: 6.1em;
-}
-.mini-hand .card-name-bar {
-  height: 1.22em;
-  padding: 0 0.25em;
-}
-.mini-hand .card-name {
-  --name-size: 1em;
-  font-weight: 900;
-}
 .caption-at {
   width: 240px;
 }
@@ -819,15 +802,6 @@
 /* ...the more for a land, which has no rules text to make room for. */
 .hand-card .card:not(.card-land) .card-art {
   flex-basis: 7.8em;
-}
-/* A wide black border, the name bar inset within the rim. */
-.hand-card .card {
-  --name-size: 0.98em;
-  padding-inline: 0.62em;
-}
-.hand-card .card-name-bar {
-  height: 1.3em;
-  margin-inline: -0.1em -0.38em;
 }
 /* A step announcement over the battlefield (combat.png's "Combat / Blockers declared"): a gold
    title between ornamented rules over an italic detail, on a smoky shade. Laid out from its

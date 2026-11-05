@@ -279,31 +279,29 @@ function CardsAndStates() {
       <CaptionAt x={344} y={322}>
         Target (cyan)
       </CaptionAt>
-      <div className="mini-hand">
-        <At x={54} y={347}>
-          <Card
-            card={a(costless(SAMPLE.swords), "04-hand-swords")}
-            width={128}
-            unit={13.5}
-            style={{ rotate: -7 }}
-          />
-        </At>
-        <At x={168} y={358}>
-          <Card
-            card={a(SAMPLE.mountain, "04-hand-mountain")}
-            width={124}
-            unit={13.5}
-          />
-        </At>
-        <At x={274} y={367}>
-          <Card
-            card={a(SAMPLE.plateau, "04-hand-plateau")}
-            width={128}
-            unit={13.5}
-            style={{ rotate: 7 }}
-          />
-        </At>
-      </div>
+      <At x={54} y={347}>
+        <Card
+          card={a(costless(SAMPLE.swords), "04-hand-swords")}
+          width={128}
+          unit={13.5}
+          style={{ rotate: -7 }}
+        />
+      </At>
+      <At x={168} y={358}>
+        <Card
+          card={a(SAMPLE.mountain, "04-hand-mountain")}
+          width={124}
+          unit={13.5}
+        />
+      </At>
+      <At x={274} y={367}>
+        <Card
+          card={a(SAMPLE.plateau, "04-hand-plateau")}
+          width={128}
+          unit={13.5}
+          style={{ rotate: 7 }}
+        />
+      </At>
     </Panel>
   );
 }

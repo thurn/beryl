@@ -1,5 +1,6 @@
 // The card frame: a name bar colored by the card's colors, art, a P/T badge and, on the full
-// frame, the type line and rules box. Battlefield permanents use the compact `field` frame.
+// frame, the type line and rules box. Battlefield permanents use the compact `field` frame,
+// which tapping turns without changing.
 import {
   createContext,
   useContext,
@@ -24,8 +25,6 @@ export interface CardFace {
   loyalty?: string;
   /** Art URL; a placeholder painting is drawn until there is one. */
   art?: string;
-  /** Art fills the frame below the name bar, without a type line (full-art basic lands). */
-  fullArt?: boolean;
   ability?: AbilityIcon;
 }
 
@@ -244,10 +243,8 @@ export function Card({
   const classes = [
     "card",
     `card-${variant}`,
-    variant === "full" && card.fullArt && "card-full-art",
     `frame-${frameKey(card)}`,
     isLand(card) && "card-land",
-    tapped && "card-tapped",
     card.colors.length > 1 && `accent-${card.colors[0]?.toLowerCase()}`,
     highlight && `card-${highlight}`,
     combat && `card-${combat}`,
@@ -288,7 +285,7 @@ export function Card({
             )}
           </div>
           <CardArt card={card} />
-          {variant === "full" && !card.fullArt && (
+          {variant === "full" && (
             <>
               <div className="card-type-bar">{card.typeLine}</div>
               <div

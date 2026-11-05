@@ -354,7 +354,7 @@ const scry = game(
     {
       zone: "library",
       owner: "you",
-      face: SAMPLE.fullArtIsland,
+      face: SAMPLE.island,
       slot: "scry-island",
       id: "island",
     },

@@ -1,15 +1,15 @@
 /* The component library (docs/ui_mockups/ui_system.png). Cards size everything in em: a card's
    font size is a twelfth of its width. */
 
-/* Frame palettes, sampled from the mockups: the colored rim (with its highlight and the dark
-   line that edges it), the name and type bars, and the rules box. */
+/* Frame palettes, one per color: the colored rim (with its highlight and the dark line that
+   edges it) and the name and type bars. The rules box is the bars' color thinned toward
+   parchment (.card-rules). */
 .frame-w {
   --rim: #d3d1cd;
   --rim-hi: #f8f8f7;
   --rim-lo: #2e2b30;
   --bar: #e2dfda;
   --bar-hi: #f5f3f0;
-  --box: #eee8df;
 }
 .frame-u {
   --rim: #2a7fc4;
@@ -17,7 +17,6 @@
   --rim-lo: #06275a;
   --bar: #b9d3ea;
   --bar-hi: #dcf0fb;
-  --box: #cedeef;
 }
 .frame-b {
   --rim: #2e2b29;
@@ -25,14 +24,6 @@
   --rim-lo: #0c0b0a;
   --bar: #b4ada8;
   --bar-hi: #d3cdc8;
-  /* Greyer than other frames' boxes: the mockups' Doom Blade. */
-  --box: #dbd4d0;
-}
-/* A Swamp keeps the silver rim of the mockups' basic lands. */
-.frame-b.card-land {
-  --rim: #a8a19b;
-  --rim-hi: #ddd6d0;
-  --rim-lo: #36302d;
 }
 .frame-r {
   --rim: #cc2e14;
@@ -40,7 +31,6 @@
   --rim-lo: #6d0806;
   --bar: #e0b4a0;
   --bar-hi: #f0d2c4;
-  --box: #efcbb0;
 }
 .frame-g {
   --rim: #2a7e51;
@@ -48,7 +38,6 @@
   --rim-lo: #0d2f19;
   --bar: #b6bcb0;
   --bar-hi: #d6dbd0;
-  --box: #dde4d4;
 }
 .frame-m {
   --rim: #d9b46a;
@@ -56,7 +45,6 @@
   --rim-lo: #6f5422;
   --bar: #dab872;
   --bar-hi: #ecd197;
-  --box: #f1e4c2;
 }
 /* A multicolored card's gold rim is edged in its first color, as on the mockups' Baleful Strix. */
 [class*="accent-"] .card-name-bar {
@@ -77,21 +65,13 @@
 .accent-g {
   --accent: #1d6a40;
 }
-/* A colorless card's name bar is a grey plate in a crisp white rim and a dark keyline
-   (battlefield.png's Plateau). */
+/* Colorless: a pale stone frame. */
 .frame-c {
   --rim: #ddd4c2;
   --rim-hi: #f7f2e8;
   --rim-lo: #6e5536;
   --bar: #d0c7bc;
   --bar-hi: #e2dbd1;
-  --box: #ece8e1;
-}
-.frame-c .card-name-bar {
-  border-color: transparent;
-  box-shadow:
-    inset 0 0 0 0.09em #f7f4ef,
-    0 0 0 0.07em #1d1915;
 }
 
 /* Mana symbols. */
@@ -144,10 +124,10 @@
 .ability-badge {
   position: absolute;
   --ink: #2b2b30;
-  left: 0.37em;
-  bottom: 0.6em;
-  width: 2em;
-  height: 1.9em;
+  left: 0.62em;
+  bottom: 0.28em;
+  width: 2.2em;
+  height: 2.1em;
   border-radius: 0.38em;
   display: grid;
   place-items: center;
@@ -166,10 +146,12 @@
   font: normal 1.3em/1 Mana;
 }
 
-/* The card frame, measured on the mockups' cards (in em, a twelfth of the card's width): a black
+/* The card frame, in em (a twelfth of the card's width, so a frame scales as a whole): a black
    body, deepest at the bottom; a colored rim inset in it; name and type bars spanning the rim;
-   the art and rules box inset in the rim, each edged by the rim's dark line. Battlefield cards
-   (`card-field`) have a thinner top and a slimmer name bar. */
+   the art and rules box inset in the rim, each edged by the rim's dark line. Two frames share
+   these rules: the full frame (`card-full`), wherever a card is read whole, and the battlefield
+   frame (`card-field`), with a thinner top, a slimmer name bar and no text boxes. Tapping turns
+   the battlefield frame without changing it (Card.tsx). */
 .card-slot {
   position: relative;
   display: flex;
@@ -192,7 +174,8 @@
   transition: box-shadow 0.25s;
 }
 .card-field {
-  padding: 0.3em 0.56em var(--card-foot, 0.95em);
+  --name-size: 0.86em;
+  padding: 0.3em 0.56em 0.95em;
 }
 .card-rim {
   height: 100%;
@@ -228,19 +211,6 @@
 .card-field .card-rim {
   padding: 0.24em 0.36em 0.1em;
 }
-/* A white land's art closes on a bright rule along its bottom (battlefield.png's Plains). */
-.card-field.card-land.frame-w .card-art {
-  box-shadow:
-    0 0 0 0.06em var(--rim-lo),
-    0 0.12em 0 #f4f2ee;
-}
-/* Lands' rims show a copper bevel at their outer edge (battlefield.png's Island and Swamp). */
-.card-land .card-rim {
-  box-shadow:
-    inset 0 0 0 0.05em var(--rim-lo),
-    inset 0.1em 0 0 #8c6444,
-    inset -0.1em 0 0 #8c6444;
-}
 /* The bars' outline is the rim's dark line; a multicolored card's runs in its accent color over
    the left part (the mockups' Baleful Strix). */
 .card-name-bar,
@@ -273,16 +243,6 @@
   margin: 0 -0.3em;
   padding: 0 0.26em;
 }
-/* Lying on the table, an untapped creature's frame shows a thicker top border over a name bar
-   set in from the rim (battlefield.png); a land keeps the bar further out, so the first letter of
-   each copy's name peeks out of its pile. */
-.on-table .card-field:not(.card-tapped, .card-land) {
-  padding-top: 0.48em;
-}
-.on-table .card-field:not(.card-tapped, .card-land) .card-name-bar {
-  margin: 0 -0.12em;
-  padding: 0 0.44em;
-}
 .card-name {
   overflow: hidden;
   padding-bottom: 0.06em;
@@ -290,17 +250,6 @@
   font-size: calc(var(--name-size, 0.92em) * var(--fit, 1));
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-.card-field {
-  --name-size: 0.86em;
-}
-/* A tapped battlefield card's name bar runs up its left side, wider. */
-.card-field.card-tapped .card-name-bar {
-  height: 1.3em;
-  margin: 0 -0.2em;
-}
-.card-field.card-tapped {
-  --name-size: 0.92em;
 }
 /* Sizes below are in the type bar's own em (0.8 of the card's). */
 .card-type-bar {
@@ -334,52 +283,12 @@
 .card-full .card-art {
   flex: 0 0 7.3em;
 }
-/* A full-art land (scry.png's Island): a black-edged silver rim, its name bar as wide as the art,
-   and both ringed in a bright blue line between navy ones; below the art no rim shows. */
-.card-full-art {
-  --rim-streaks: repeating-linear-gradient(
-    160deg,
-    transparent 0 0.25em,
-    rgb(255 255 255 / 50%) 0.35em,
-    rgb(30 30 40 / 40%) 0.5em,
-    transparent 0.6em 0.8em,
-    rgb(60 50 40 / 30%) 0.9em,
-    transparent 1.05em 1.4em
-  );
-  --rim-lo: #050608;
-  --blue-lines:
-    0 0 0 1px #020219, 0 0 0 2px #0a6ab0, 0 0 0 3.5px #05b4ff,
-    0 0 0 4.5px #0065a5, 0 0 0 5.5px #0c0c17;
-}
-.card-full-art .card-rim {
-  gap: 0.25em;
-  padding: 0.4em 0.56em 0.23em;
-  background:
-    var(--rim-streaks),
-    linear-gradient(110deg, #8d99a8, #b5bfca 30%, #dcdfe2 65%, #b4b6b9);
-}
-.card-full-art .card-name {
-  --name-size: 1.08em;
-  font-weight: 800;
-}
-.card-full-art .card-name-bar {
-  margin: 0;
-  padding-left: 0.05em;
-  border: none;
-  border-radius: 0.35em;
-  box-shadow:
-    inset 0 0.05em 0 rgb(255 255 255 / 55%),
-    var(--blue-lines);
-}
-.card-full.card-full-art .card-art {
-  flex: 1 1 0;
-  box-shadow: var(--blue-lines);
-}
 .card-rules {
   flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
   padding: 0.35em 0.45em;
+  --box: color-mix(in srgb, var(--bar) 44%, #f8f5ec);
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--box) 92%, white),
@@ -411,11 +320,11 @@
   padding-bottom: 0.9em;
   text-align: center;
 }
-/* Power and toughness in a framed plaque, numerals in a blue-black ink (blue on battlefield.png,
-   near black on the other mockups). */
+/* Power and toughness in a framed plaque, numerals in a blue-black ink. The full frame draws
+   it smaller. */
 .card-pt {
   position: absolute;
-  right: 0.37em;
+  right: 0.68em;
   bottom: 0.3em;
   width: 4.2em;
   height: 1.9em;
@@ -433,34 +342,14 @@
     var(--bar) 45%,
     color-mix(in srgb, var(--bar) 88%, black)
   );
-  border: 0.1em solid #14110f;
-  box-shadow:
-    inset 0 0 0 0.12em color-mix(in srgb, var(--bar) 55%, #4a3a28),
-    inset 0 0 0 0.18em rgb(0 0 0 / 35%),
-    inset 0 0.25em 0.1em rgb(255 255 255 / 30%),
-    0 0.06em 0.2em rgb(0 0 0 / 55%);
-}
-.card-pt span {
-  font-size: 1.55em;
-}
-/* Lying on the table, the ability badge sits inset over the frame, larger; the P/T plaque sits
-   inset from the frame's edge in a thicker bevel, its numerals larger (battlefield.png). */
-.on-table .ability-badge {
-  left: 0.62em;
-  bottom: 0.28em;
-  width: 2.2em;
-  height: 2.1em;
-}
-.on-table .card-pt {
-  right: 0.68em;
-  border-width: 0.12em;
+  border: 0.12em solid #14110f;
   box-shadow:
     inset 0 0 0 0.2em color-mix(in srgb, var(--bar) 55%, #4a3a28),
     inset 0 0 0 0.18em rgb(0 0 0 / 35%),
     inset 0 0.25em 0.1em rgb(255 255 255 / 30%),
     0 0.06em 0.2em rgb(0 0 0 / 55%);
 }
-.on-table .card-pt span {
+.card-pt span {
   font-size: 1.7em;
 }
 /* The slash no taller than the numerals. */

@@ -91,7 +91,6 @@ export const SAMPLE = {
   swamp: land("Swamp", "Basic Land — Swamp"),
   mountain: land("Mountain", "Basic Land — Mountain"),
   plateau: land("Plateau", "Land — Mountain Plains"),
-  fullArtIsland: { ...land("Island", "Basic Land — Island"), fullArt: true },
 } satisfies Record<string, CardFace>;
 
 /** A card as the mockups draw it in the hand: without its mana cost. */

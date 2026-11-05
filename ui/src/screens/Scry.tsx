@@ -38,7 +38,7 @@ export function ScryOverlay({ className }: { className?: string }) {
           style={{ ...fanned(715, 229, 273, 3.2), zIndex: 2 }}
         />
         <Card
-          card={a(SAMPLE.fullArtIsland, "scry-island")}
+          card={a(SAMPLE.island, "scry-island")}
           width={297}
           height={366}
           highlight="target"
