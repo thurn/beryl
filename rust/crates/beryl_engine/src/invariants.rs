@@ -80,6 +80,18 @@ impl State {
                     Some(slot),
                 )?;
             }
+            let on_battlefield = |link: u8| self.object(link).zone == Zone::Battlefield;
+            check(
+                o.attached_to == NONE || on_battlefield(o.attached_to),
+                "attached to an object off the battlefield",
+                Some(slot),
+            )?;
+            // An object exiled "until" its exiler leaves returns as it leaves (CR 610.3).
+            check(
+                !o.flags.has(ObjectFlags::EXILED_UNTIL) || on_battlefield(o.linked),
+                "exiled until a permanent that already left",
+                Some(slot),
+            )?;
             if !matches!(o.zone, Zone::Battlefield | Zone::Stack) {
                 // What may stay off the battlefield: being a token, and a link to the
                 // permanent that exiled it "until" it leaves (CR 610.3).

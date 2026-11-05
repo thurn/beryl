@@ -211,16 +211,21 @@ pub enum Subtype {
     Forest,
     /// An artifact type ([CR 301.7](https://yawgatog.com/resources/magic-rules/#R3017)).
     Vehicle,
+    /// An enchantment type ([CR 303.4](https://yawgatog.com/resources/magic-rules/#R3034)):
+    /// "Some enchantments have the subtype "Aura." An Aura enters the battlefield attached to
+    /// an object or player."
+    Aura,
 }
 
 impl Subtype {
-    pub const ALL: [Subtype; 6] = [
+    pub const ALL: [Subtype; 7] = [
         Subtype::Plains,
         Subtype::Island,
         Subtype::Swamp,
         Subtype::Mountain,
         Subtype::Forest,
         Subtype::Vehicle,
+        Subtype::Aura,
     ];
 
     /// The card type this subtype belongs to (CR 205.3).
@@ -232,6 +237,7 @@ impl Subtype {
             | Subtype::Mountain
             | Subtype::Forest => Types::LAND,
             Subtype::Vehicle => Types::ARTIFACT,
+            Subtype::Aura => Types::ENCHANTMENT,
         }
     }
 }

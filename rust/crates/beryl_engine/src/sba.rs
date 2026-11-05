@@ -1,12 +1,12 @@
 //! State-based actions (architecture §8.4).
 
 use crate::bitboard::Bitboard;
-use crate::card::{Supertypes, Types};
+use crate::card::{Subtype, Subtypes, Supertypes, Types};
 use crate::decision::{Outcome, StallReason};
 use crate::event::{self, Entry, Event, Reason, Sink};
 use crate::fixed::Full;
 use crate::layers;
-use crate::state::{ObjectFlags, Pending, SLOTS, State, TOKEN_SLOTS, Zone};
+use crate::state::{NONE, ObjectFlags, Pending, SLOTS, State, TOKEN_SLOTS, Zone};
 use crate::table::GameTable;
 use crate::turn::apnap;
 use crate::zone;
@@ -79,6 +79,12 @@ pub(crate) fn check(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<boo
 ///
 /// [CR 704.5i](https://yawgatog.com/resources/magic-rules/#R7045i): "If a planeswalker has
 /// loyalty 0, it's put into its owner's graveyard."
+///
+/// [CR 704.5m](https://yawgatog.com/resources/magic-rules/#R7045m): "If an Aura is attached to
+/// an illegal object or player, or is not attached to an object or player, that Aura is put
+/// into its owner's graveyard." The cube's one Aura, Swift Reconfiguration, makes what it
+/// enchants a Vehicle, which its "enchant creature or Vehicle" allows, so only the second
+/// case arises: what it enchanted left the battlefield (`zone::leave` detaches it).
 fn doomed(s: &State) -> (Bitboard, Bitboard) {
     let mut graveyard = Bitboard::EMPTY;
     for &slot in &s.battlefield {
@@ -88,7 +94,8 @@ fn doomed(s: &State) -> (Bitboard, Bitboard) {
         let dies = types.contains(Types::CREATURE)
             && (d.toughness <= 0
                 || (o.damage > 0 && i16::from(o.damage) >= i16::from(d.toughness)));
-        if dies || (types.contains(Types::PLANESWALKER) && o.counters.loyalty == 0) {
+        let unattached = o.attached_to == NONE && Subtypes(d.subtypes).contains(Subtype::Aura);
+        if dies || unattached || (types.contains(Types::PLANESWALKER) && o.counters.loyalty == 0) {
             graveyard.insert(slot);
         }
     }

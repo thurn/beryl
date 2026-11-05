@@ -101,11 +101,17 @@ fn leave(s: &mut State, slot: u8) {
             // [CR 506.4](https://yawgatog.com/resources/magic-rules/#R5064): "A permanent is
             // removed from combat if it leaves the battlefield". The creatures attacking it or
             // blocked by it stay in combat, related to nothing; the slot may soon hold
-            // another object.
+            // another object. What was attached to it is attached to nothing: the object it
+            // returns as is new ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)),
+            // and an Aura left unattached goes to the graveyard as a state-based action
+            // (CR 704.5m).
             for i in 0..s.battlefield.len() {
-                let other = s.battlefield.as_slice()[i];
-                if s.object(other).combat == slot {
-                    s.object_mut(other).combat = NONE;
+                let other = s.object_mut(s.battlefield.as_slice()[i]);
+                if other.combat == slot {
+                    other.combat = NONE;
+                }
+                if other.attached_to == slot {
+                    other.attached_to = NONE;
                 }
             }
         }

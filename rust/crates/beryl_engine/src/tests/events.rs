@@ -7,7 +7,7 @@
 use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityKind, Affected, CardDef, Cost, Delayed, Face, Keywords, LayerSpec, ManaColor,
-    Modification, Replacement, StaticCondition, Subtype, Trigger, Types,
+    Modification, Replacement, StaticCondition, Subtype, Subtypes, Trigger, Types,
 };
 use crate::effect::EffectCtx;
 use crate::event::{self, Event, Reason, Recipient, TokenEntry};
@@ -383,6 +383,7 @@ static RECONFIG: CardDef = CardDef {
     name: "Test Reconfiguration",
     faces: &[Face {
         types: Types::ENCHANTMENT,
+        subtypes: Subtypes::of(&[Subtype::Aura]),
         abilities: &[
             Ability::statik(LayerSpec {
                 affected: Affected::Enchanted,
@@ -1092,6 +1093,90 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     assert_eq!(types(&s, bear), Types::ARTIFACT.union(Types::CREATURE));
     advance_to(&t, &mut s, &mut x, opponent(p), TurnStep::PrecombatMain);
     assert_eq!(types(&s, bear), Types::ARTIFACT);
+}
+
+#[test]
+fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveyard() {
+    // A card that leaves and returns before state-based actions are checked is a new object
+    // the Aura was never attached to (CR 400.7).
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let bear = put(&t, &mut s, &mut x, p, "Test Bear");
+    let aura = put(&t, &mut s, &mut x, p, "Test Reconfiguration");
+    s.object_mut(aura).attached_to = bear;
+    s.flags.derived_dirty = true;
+    crate::layers::refresh(&mut s, &t);
+    let r = s.object_ref(bear);
+    with_ctx(&t, &mut s, &mut x, aura, |ctx| {
+        ctx.destroy(r);
+        let r = ctx.state().object_ref(bear);
+        ctx.put_onto_battlefield(r, 0, None);
+    });
+    assert_eq!(s.object(aura).attached_to, crate::state::NONE);
+    assert_eq!(types(&s, bear), Types::CREATURE);
+    decide_with(&t, &mut s, &mut x);
+    assert_eq!(s.object(aura).zone, Zone::Graveyard);
+
+    // On a token, the token ceases to exist and the Aura goes, in one check.
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let aura = put(&t, &mut s, &mut x, p, "Test Reconfiguration");
+    let mut token = Bitboard::EMPTY;
+    with_ctx(&t, &mut s, &mut x, aura, |ctx| {
+        token = ctx.create_tokens(&MAP, 1, TokenEntry::default());
+    });
+    let token = token.first().unwrap();
+    s.object_mut(aura).attached_to = token;
+    s.flags.derived_dirty = true;
+    crate::layers::refresh(&mut s, &t);
+    let r = s.object_ref(token);
+    with_ctx(&t, &mut s, &mut x, aura, |ctx| ctx.destroy(r));
+    decide_with(&t, &mut s, &mut x);
+    assert_eq!(s.object(token).zone, Zone::Nowhere);
+    assert_eq!(s.object(aura).zone, Zone::Graveyard);
+}
+
+#[test]
+fn a_stolen_creatures_dies_trigger_belongs_to_its_last_controller() {
+    // CR 603.3a: "the player who controlled its source when it triggered"; the last-known
+    // information of a permanent that left is how it last existed on the battlefield.
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let q = opponent(p);
+    let sphinx = put(&t, &mut s, &mut x, q, "Test Sphinx");
+    let thief = put(&t, &mut s, &mut x, p, "Test Bear");
+    let r = s.object_ref(sphinx);
+    with_ctx(&t, &mut s, &mut x, thief, |ctx| {
+        ctx.gain_control(r, Duration::Indefinite);
+        ctx.destroy(r);
+    });
+    assert_eq!(s.triggers().len(), 1);
+    assert_eq!(s.triggers()[0].controller, p);
+    assert!(s.zone(q, Zone::Graveyard).contains(sphinx));
+    resolve_all(&t, &mut s, &mut x);
+    let copy = *s
+        .battlefield()
+        .iter()
+        .find(|&&slot| s.object(slot).flags.has(ObjectFlags::TOKEN))
+        .expect("a token copy");
+    assert_eq!((s.object(copy).owner, s.controller(copy)), (p, p));
+}
+
+#[test]
+fn removing_a_counter_kind_an_object_lacks_changes_nothing() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::recording();
+    let staff = put(&t, &mut s, &mut x, p, "Test Staff");
+    let r = s.object_ref(staff);
+    with_ctx(&t, &mut s, &mut x, staff, |ctx| {
+        ctx.add_counters(r, CounterKind::Story, 2);
+    });
+    x.events.drain();
+    with_ctx(&t, &mut s, &mut x, staff, |ctx| {
+        ctx.remove_counters(r, CounterKind::Time, 1);
+    });
+    assert_eq!(s.object(staff).counters.get(CounterKind::Story), 2);
+    assert!(x.events.events().is_empty());
 }
 
 #[test]

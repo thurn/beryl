@@ -587,13 +587,14 @@ pub(crate) fn remove_counters(
     if !s.is_current(object) {
         return Ok(());
     }
-    let n = s.object_mut(object.slot).counters.get_mut(kind);
-    let amount = amount.min(*n);
-    *n -= amount;
-    s.flags.derived_dirty = true;
+    // Read before writing: asking for the count to change would make `kind` the object's
+    // long-tail kind even when it has none to remove.
+    let amount = amount.min(s.object(object.slot).counters.get(kind));
     if amount == 0 {
         return Ok(());
     }
+    *s.object_mut(object.slot).counters.get_mut(kind) -= amount;
+    s.flags.derived_dirty = true;
     settle(
         s,
         t,
