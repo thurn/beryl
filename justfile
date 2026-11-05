@@ -18,6 +18,11 @@ dev *args:
 smoke *args:
     {{ by }} smoke "$@"
 
+# Screenshot UI states headless into the cache and print the paths (shot names; ui/shots.json)
+[group('app')]
+ui-shots *args:
+    {{ by }} ui-shots "$@"
+
 # The release Beryl.app, under rust/target/tauri/release/bundle/macos
 [group('app')]
 bundle:

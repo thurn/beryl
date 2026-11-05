@@ -1,0 +1,91 @@
+/* Design tokens from docs/ui_mockups/ui_system.png ("01 Foundations"). */
+:root {
+  --table: #625c56;
+  --surface: #242321;
+  --text: #f2ece1;
+  --gold: #e9ad4a;
+  --cyan: #38dcff;
+
+  --text-dim: rgb(242 236 225 / 62%);
+  --text-faint: rgb(242 236 225 / 38%);
+  --surface-raised: #2e2c29;
+  --surface-sunk: #1b1a18;
+  --gold-soft: rgb(233 173 74 / 45%);
+  --cyan-soft: rgb(56 220 255 / 45%);
+  --ember: #f07a1c;
+  --ember-deep: #c84a0c;
+
+  /* Thin metallic borders: a pale gold line that catches the light. */
+  --metal: rgb(214 192 150 / 42%);
+  --metal-bright: rgb(236 220 186 / 75%);
+  --metal-line: linear-gradient(
+    90deg,
+    transparent,
+    rgb(233 173 74 / 85%) 30%,
+    rgb(255 226 170 / 95%) 50%,
+    rgb(233 173 74 / 85%) 70%,
+    transparent
+  );
+  --silver-line: linear-gradient(
+    90deg,
+    transparent,
+    rgb(220 214 204 / 70%) 30%,
+    rgb(250 248 244 / 85%) 50%,
+    rgb(220 214 204 / 70%) 70%,
+    transparent
+  );
+
+  --font-serif: "EB Garamond Variable", "Iowan Old Style", Georgia, serif;
+  --font-sans: "Inter Variable", -apple-system, "Helvetica Neue", sans-serif;
+
+  --radius-card: 7px;
+  --shadow-card: 0 2px 3px rgb(0 0 0 / 45%), 0 10px 18px rgb(0 0 0 / 35%);
+  --shadow-lifted: 0 6px 10px rgb(0 0 0 / 45%), 0 24px 40px rgb(0 0 0 / 40%);
+  --glow-gold:
+    0 0 0 2px var(--gold), 0 0 14px 3px rgb(233 173 74 / 70%),
+    0 0 34px rgb(233 173 74 / 35%);
+  --glow-cyan:
+    0 0 0 2px var(--cyan), 0 0 14px 3px rgb(56 220 255 / 70%),
+    0 0 34px rgb(56 220 255 / 35%);
+
+  /* The matte tabletop: the table color, a faint grain and a vignette. */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --tabletop:
+    var(--grain),
+    radial-gradient(ellipse at 50% 45%, rgb(255 250 240 / 7%), transparent 60%),
+    radial-gradient(ellipse at 50% 50%, transparent 55%, rgb(0 0 0 / 38%)),
+    var(--table);
+
+  color-scheme: dark;
+  font-family: var(--font-sans);
+  color: var(--text);
+  background: var(--surface);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+.serif {
+  font-family: var(--font-serif);
+}
+
+.sans {
+  font-family: var(--font-sans);
+}

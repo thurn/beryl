@@ -1,0 +1,13 @@
+{
+  "$comment": "What `just ui-shots` captures: a route (hash route, optionally ?fixture=<name>) at a viewport size.",
+  "shots": [
+    { "name": "gallery", "route": "/#/gallery", "width": 1536, "height": 1024 },
+    { "name": "table", "route": "/#/table", "width": 1600, "height": 900 },
+    {
+      "name": "table-scry",
+      "route": "/#/table/scry",
+      "width": 1600,
+      "height": 900
+    }
+  ]
+}

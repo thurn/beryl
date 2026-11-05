@@ -1,0 +1,456 @@
+/* Screens: the home shell, the component gallery, the table and the scry overlay's content. */
+
+.home {
+  padding: 2rem;
+  font-family: var(--font-serif);
+}
+.home a {
+  color: var(--gold);
+}
+
+/* The gallery, 1536 wide as in ui_system.png. */
+.gallery {
+  min-height: 100%;
+  padding: 18px 16px 20px;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgb(255 240 220 / 6%), transparent 55%),
+    var(--grain), #2d2a27;
+  font-family: var(--font-serif);
+}
+.gallery-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+.wordmark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+}
+.wordmark h1 {
+  margin: 0;
+  font-weight: 600;
+  font-size: 40px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #ecc37c;
+  background: linear-gradient(180deg, #f8dfa8, #d79a3e);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.wordmark-crest {
+  width: 46px;
+  color: var(--gold);
+  filter: drop-shadow(0 0 6px rgb(233 173 74 / 40%));
+}
+.wordmark-rule {
+  flex: 0 1 340px;
+  height: 1px;
+  background: var(--metal-line);
+}
+.gallery-subtitle {
+  margin: 4px 0 0;
+  font-style: italic;
+  font-size: 25px;
+  color: var(--text);
+}
+.gallery-grid {
+  display: grid;
+  grid-template-columns: 470px 490px 510px;
+  justify-content: space-between;
+  grid-auto-rows: 390px 482px;
+  row-gap: 18px;
+}
+.panel {
+  position: relative;
+  overflow: hidden;
+  padding: 6px 26px 18px;
+  border-radius: 14px;
+  border: 1px solid rgb(214 170 100 / 55%);
+  background: linear-gradient(180deg, rgb(48 45 42 / 92%), rgb(33 31 29 / 94%));
+  box-shadow:
+    inset 0 1px 0 rgb(255 235 200 / 10%),
+    0 10px 30px rgb(0 0 0 / 35%);
+}
+.panel-title {
+  margin: 0 -26px 14px;
+  padding: 0 26px 8px;
+  font-weight: 500;
+  font-size: 25px;
+  color: var(--text);
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(
+      90deg,
+      rgb(214 170 100 / 30%),
+      rgb(214 170 100 / 6%)
+    )
+    1;
+}
+.panel-number {
+  margin-right: 10px;
+  color: var(--gold);
+}
+.panel-rule {
+  height: 1px;
+  margin: 13px 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(214 192 150 / 28%) 20%,
+    rgb(214 192 150 / 28%) 80%,
+    transparent
+  );
+}
+.caption {
+  display: block;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 17px;
+  color: var(--text);
+  text-align: center;
+}
+.centered {
+  display: flex;
+  justify-content: center;
+}
+.panel figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 01 Foundations. */
+.swatches {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.swatch-chip {
+  width: 66px;
+  height: 66px;
+  border-radius: 9px;
+  border: 2px solid rgb(240 230 210 / 70%);
+  box-shadow: 0 4px 10px rgb(0 0 0 / 40%);
+}
+.swatch figcaption {
+  text-align: center;
+  font-size: 17px;
+  line-height: 1.1;
+}
+.swatch small {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.type-specimens {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin: 14px 0 8px;
+}
+.specimen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.specimen-serif {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 54px;
+  line-height: 1;
+  text-shadow: 0 3px 6px rgb(0 0 0 / 60%);
+}
+.specimen-sans {
+  font-family: var(--font-sans);
+  font-size: 19px;
+  white-space: nowrap;
+  padding: 6px 0 10px;
+}
+.specimen .caption {
+  font-size: 15px;
+}
+.specimen-divider {
+  align-self: stretch;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, var(--metal), transparent);
+}
+.material-specimens {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+}
+.material-specimens figure {
+  flex: 1;
+}
+.tabletop-chip {
+  width: 100%;
+  height: 58px;
+  border-radius: 8px;
+  border: 1px solid var(--metal);
+  background: var(--tabletop);
+  box-shadow: inset 0 2px 8px rgb(0 0 0 / 30%);
+}
+.metal-chip {
+  width: 100%;
+  height: 58px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 28px;
+}
+.metal-chip i {
+  height: 2px;
+}
+.metal-gold {
+  background: var(--metal-line);
+}
+.metal-silver {
+  background: var(--silver-line);
+}
+
+/* 02 Actions & status. */
+.button-rows {
+  display: grid;
+  grid-template-columns: auto 90px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px 34px;
+}
+.button-rows .button {
+  width: 240px;
+  font-size: 24px;
+}
+.button-rows .caption {
+  text-align: left;
+}
+
+/* 03 Player & zones. */
+.player-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.player-row .life-orb {
+  font-size: 14px;
+}
+.player-row .player-badge {
+  font-size: 20px;
+  padding-right: 0.8em;
+}
+.zone-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  gap: 12px;
+}
+
+/* 04 Cards & states. */
+.states-grid {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.states-glow {
+  justify-content: space-around;
+  margin-top: 22px;
+}
+.mini-hand {
+  display: flex;
+  justify-content: center;
+  margin-top: 22px;
+}
+.mini-hand .card-slot + .card-slot {
+  margin-left: -14px;
+}
+
+/* 05 Combat & stack. */
+.combat-stack {
+  position: relative;
+}
+.combat-row {
+  display: flex;
+  justify-content: space-around;
+  padding-top: 22px;
+}
+.stack-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.stack-captions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+/* 06 Scry overlay: the real overlay on the table, at 44%. */
+.panel-scry {
+  padding-left: 0;
+  padding-right: 0;
+}
+.panel-scry .panel-title {
+  margin-left: 0;
+  margin-right: 0;
+}
+.scry-preview {
+  height: 332px;
+  margin-top: -14px;
+  overflow: hidden;
+}
+.scry-preview-stage {
+  position: relative;
+  width: 1460px;
+  height: 950px;
+  overflow: hidden;
+  transform: scale(0.35);
+  transform-origin: 0 0;
+}
+.scry-preview-stage .table {
+  left: -70px;
+  width: 1600px;
+}
+.scry-captions {
+  display: flex;
+  justify-content: space-around;
+  margin: 10px 0 8px;
+  padding: 0 20px;
+}
+.scry-captions .caption + .caption {
+  border-left: 1px solid var(--metal);
+  padding-left: 30px;
+}
+
+/* The scry choice. */
+.scry-zone {
+  position: relative;
+  width: 960px;
+  height: 470px;
+  border: 2px solid rgb(242 236 225 / 45%);
+  border-radius: 10px;
+  background: rgb(0 0 0 / 18%);
+}
+.scry-label {
+  position: absolute;
+  bottom: -46px;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 600;
+  font-size: 28px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.scry-bottom {
+  left: 26px;
+}
+.scry-top {
+  right: 26px;
+}
+.overlay-main .overlay-confirm {
+  margin-top: 40px;
+}
+
+/* The table: a fixed stage scaled to the window. */
+.stage-frame {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--tabletop);
+}
+.stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  transform-origin: 50% 50%;
+}
+.table {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--tabletop);
+  font-family: var(--font-serif);
+}
+.table-dimmed {
+  filter: blur(5px) brightness(0.5) saturate(0.75);
+}
+/* Permanents lying on the table (Table.tsx places them in depth): each card shows a dark slab
+   edge below it and casts a soft shadow down and away from the light. */
+.on-table {
+  position: absolute;
+  --card-shadow:
+    0 5px 0 -1px #0b0a09, 0 7px 5px rgb(0 0 0 / 40%),
+    3px 18px 24px rgb(0 0 0 / 34%);
+}
+.hud {
+  position: absolute;
+}
+.table .life-orb {
+  font-size: 19px;
+}
+.brand {
+  position: absolute;
+  left: 26px;
+  top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgb(236 214 170 / 72%);
+}
+.brand-crest {
+  width: 24px;
+  color: rgb(222 186 120 / 75%);
+}
+.gear {
+  position: absolute;
+  right: 22px;
+  top: 18px;
+  width: 38px;
+  fill: rgb(220 214 206 / 78%);
+  fill-rule: evenodd;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 45%));
+}
+.opponent-hand {
+  position: absolute;
+  left: 50%;
+  top: -105px;
+  display: flex;
+  translate: -50% 0;
+}
+.opponent-hand .card-back + .card-back {
+  margin-left: -6px;
+}
+.hand {
+  position: absolute;
+  left: 50%;
+  top: 725px;
+  display: flex;
+  translate: -50% 0;
+}
+.hand-card + .hand-card {
+  margin-left: -18px;
+}
+.turn-controls {
+  right: 34px;
+  top: 698px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.turn-controls .button {
+  min-width: 230px;
+}
+.turn-caption {
+  font-size: 17px;
+  color: var(--text);
+}
