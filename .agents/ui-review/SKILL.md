@@ -1,6 +1,6 @@
 ---
 name: ui-review
-description: Play Beryl's game UI headless against the live engine and report the usability defects a player would hit (broken flows, dead ends, silent AI turns, misleading highlights, unstable layout, hidden or unreadable state, confusing prompts), with measurements and repro steps. Use when asked to review, QA, playtest or audit the UI, or to check a UI change from the player's side before it ships.
+description: Play Beryl's game UI headless against the live engine and report the usability defects a player would hit (feedback, flow, state legibility, layout, prompts and AI activity), with measurements and repro steps. Use when asked to review, QA, playtest or audit the UI, or to check a UI change from the player's side before it ships.
 ---
 
 # UI review
@@ -92,10 +92,8 @@ Keep a ledger as you go and do not stop until it is full:
   the engine can ask. For each kind, meet it live if you can (or else in a
   fixture), answer it at least two different ways, and note how it was asked.
 - **Every piece of state.** `ObjectView`, `PlayerView` and `StackItem` in the
-  same file list what the engine tells the UI: tapped, summoning sick, damage,
-  counters, attachments, the permanent that exiled a card, combat roles, the
-  stack and its targets, each zone, life, mana. For each one, find how the
-  screen shows it. If you cannot find it, that is a finding.
+  same file list what the engine tells the UI. For every field of those types,
+  find how the screen shows it. If you cannot find it, that is a finding.
 - **Every opponent.** The start screen lists agents. Play at least one full game
   against the default and one against the slowest, searching agent. Waiting on
   the AI is part of the experience.
@@ -139,17 +137,14 @@ everywhere it could occur, not just at the first place you think of.
 - **Feedback and waiting.** Any gap of more than about 300 ms between an action
   and a visible response is a finding. So is any wait of more than about a
   second with no sign of what the game is doing. Report the measured time.
-- **Transient states.** Screenshot every intermediate screen during waits
-  (loading, empty and placeholder states). Click what they offer. A screen that
-  says something false, or offers a control that strands the player, is a
-  serious defect even if it only lasts a few seconds.
+- **Transient states.** Treat loading, empty, waiting and error states as
+  screens in their own right. Capture them, check that what they say is true,
+  and use every control they offer.
 - **Things that happen without you.** When several views arrive between two of
   your decisions (`views` > 1), the game moved on without you. Check that each
   event in those views was visible as it happened, in order, and long enough to
-  read. It is not enough that the end state is right. The opponent's actions
-  matter most.
-  Something you can only work out afterwards from a changed zone count is
-  invisible.
+  read. It is not enough that the end state is right: each opponent action and
+  automatic event must be visible as it happens.
 - **Stopping and skipping.** At each decision, ask: would a strong player want
   to stop here? A stop where nobody would act is a needless question. Skipping
   ahead where a player would want to look, respond, or at least see what
@@ -157,13 +152,12 @@ everywhere it could occur, not just at the first place you think of.
   passes from one player to the other.
 - **Highlights mean something.** Find out what each glow, outline or dim state
   is meant to mark, from the screen or the code. Then check it on every element
-  against the decision's candidates. Identical cards in identical situations
-  must look identical. Anything marked must work when used, and anything usable
-  must be marked.
+  against the decision's candidates. Anything marked must work when used, and
+  anything usable must be marked.
 - **Multi-pick decisions.** Wherever the player picks several things (attackers,
-  blockers, targets, cards to discard or bottom), check that all eligible things
-  are marked at once. Pick them in different orders, unpick some, and pick
-  everything.
+  blockers, targets, cards to discard or bottom), test selecting, deselecting,
+  selecting everything and the count limits, and check the highlights again
+  after each change.
 - **Prompts.** For each prompt, note what you were asked, in how many separate
   steps, and whether every option says what it does. Flag these: options that
   differ in ways the label does not say, prompts that hide the
@@ -182,17 +176,16 @@ everywhere it could occur, not just at the first place you think of.
 - **Legible state.** For each piece of state in the coverage ledger, find two
   objects that differ only in that state. Crop both from a screenshot at normal
   size and compare. Could a player tell them apart at a glance, across the
-  table? Also check that showing the state keeps the card readable. Check that
-  relations between objects
-  (attachments, exiled-by links, targets, attackers and blockers) can be read
-  from a still screenshot on a crowded board.
-- **Arrows and links.** For every arrow or connector, ask someone who has not
-  seen the action to say from a still frame what connects to what. Try it with
-  objects close together and with several arrows at once.
-- **Layout.** Check that each zone's contents are centered or aligned in their
-  area as the design intends, and that symmetric things are symmetric (your
-  side and the opponent's). Measure them, rather than eyeballing. Nothing on
-  the game screen should scroll.
+  table? A state's indicator must not obscure the card's identity. Every
+  relation between objects that the protocol carries (each field that names
+  another object) must be readable from a still frame on a crowded board,
+  however the UI draws it.
+- **Layout.** Measure each region's alignment, spacing and symmetry against its
+  container and its counterpart, rather than eyeballing. Nothing on the game
+  screen should scroll.
+- **Accessibility basics.** Check text contrast and size at normal viewing
+  distance, keyboard access to the main actions (pass, confirm, cancel), and
+  visible focus.
 - **Truncation.** Run `probe.truncated()` on every prompt, overlay, tooltip and
   badge you meet, with long card names.
 - **Abuse.** Double-click, click while waiting, drag to wrong places, press
