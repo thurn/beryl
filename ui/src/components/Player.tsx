@@ -35,8 +35,8 @@ function blade(
 const BLADES = {
   you: {
     light: [
-      blade([-44, -3], [-86, 3], [-125, 41], 11),
-      blade([-46, 14], [-80, 19], [-107, 54], 11),
+      blade([-44, -3], [-86, 3], [-125, 41], 11, 0.3),
+      blade([-46, 14], [-80, 19], [-107, 54], 11, 0.3),
     ],
     dark: [
       blade([-45, 6], [-84, 11], [-117, 47], 10),
@@ -64,7 +64,7 @@ const RAYS = [
   [-80, 94],
   [-62, 84],
   [-38, 64],
-  [0, 64],
+  [0, 52],
   [38, 64],
   [62, 84],
   [80, 94],
@@ -73,7 +73,7 @@ const RAYS = [
     const a = ((deg! - 90) * Math.PI) / 180;
     const point = (r: number, da = 0) =>
       `${(Math.cos(a + da) * r * 1.2).toFixed(1)} ${(Math.sin(a + da) * r).toFixed(1)}`;
-    return `M${point(36, -0.09)} L${point(length! / 1.1)} L${point(36, 0.09)} Z`;
+    return `M${point(36, -0.07)} L${point(length! / 1.1)} L${point(36, 0.07)} Z`;
   })
   .join(" ");
 
@@ -117,14 +117,14 @@ export function LifeOrb({
       <svg className="life-orb-art" viewBox="-136 -57 272 116" aria-hidden>
         <defs>
           <linearGradient id="orb-blade" x1="0" y1="0" x2="0.3" y2="1">
-            <stop offset="0" stopColor="#f4ede4" />
-            <stop offset="0.3" stopColor="#c4b8aa" />
-            <stop offset="0.7" stopColor="#8a7e72" />
-            <stop offset="1" stopColor="#4a423b" />
+            <stop offset="0" stopColor="#fbf6ee" />
+            <stop offset="0.3" stopColor="#ddd2c3" />
+            <stop offset="0.7" stopColor="#a99b8a" />
+            <stop offset="1" stopColor="#5e544a" />
           </linearGradient>
           <linearGradient id="orb-rim" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#8d8984" />
-            <stop offset="0.5" stopColor="#4c4844" />
+            <stop offset="0" stopColor="#c9c5bf" />
+            <stop offset="0.45" stopColor="#5a5652" />
             <stop offset="1" stopColor="#2b2826" />
           </linearGradient>
           <radialGradient id="orb-core" cx="0.5" cy="0.32" r="0.7">
@@ -163,14 +163,14 @@ export function LifeOrb({
         </g>
         <path
           className="life-orb-ring life-orb-ring-glow"
-          d="M-50 12 A51 40 0 0 0 50 12"
+          d="M-40 25 A51 40 0 0 0 40 25"
           filter="url(#orb-blur)"
         />
-        <path className="life-orb-ring" d="M-50 12 A51 40 0 0 0 50 12" />
+        <path className="life-orb-ring" d="M-40 25 A51 40 0 0 0 40 25" />
         {active && (
           <path
             className="life-orb-halo"
-            d="M-50 -2 A50 40 0 0 1 50 -2"
+            d="M-46 -12 A50 40 0 0 1 46 -12"
             filter="url(#orb-blur)"
           />
         )}
@@ -182,6 +182,12 @@ export function LifeOrb({
           ry="38"
           filter="url(#orb-shadow)"
         />
+        {active && (
+          <path
+            className="life-orb-crescent"
+            d="M-40 -22 A48 38 0 0 1 40 -22"
+          />
+        )}
       </svg>
       <span className="life-orb-total">{life}</span>
     </div>
@@ -219,10 +225,13 @@ export function PlayerBadge({ name }: { name: string }) {
 }
 
 /** Where a pile's bottom card lies relative to its top card, in pixels: the edges of the cards
- * between show along that side. */
+ * between show along that side. Seen in perspective, the bottom card may also look `flare`
+ * pixels wider (growing to the right) and turned `twist` degrees. */
 export interface PileDepth {
   x: number;
   y: number;
+  flare?: number;
+  twist?: number;
 }
 
 /** A pile of cards: the top one over the edges of those beneath, one edge per few cards. */
@@ -262,8 +271,9 @@ function Pile({
             style={{
               left: left + depth.x * k,
               top: depth.y * k,
-              width,
+              width: width + (depth.flare ?? 0) * k,
               height: width / ASPECT.full,
+              rotate: `${(depth.twist ?? 0) * k}deg`,
             }}
           />
         );

@@ -204,7 +204,7 @@ export interface TableBoard {
 const CREATURE_WIDTH = 232;
 const LAND_WIDTH = 190;
 /** Each copy beneath a land stack's top card, as a fraction of the card's width. */
-const LAND_STEP = { x: 0.13, y: 0.025 };
+const LAND_STEP = { x: 0.12, y: 0.015 };
 
 function Creature({ permanent }: { permanent: Permanent }) {
   const withArt = useSlotArt();
@@ -309,9 +309,9 @@ export function TableScene({
           return (
             <CardBack
               key={i}
-              width={112}
+              width={105}
               style={{
-                transform: `rotate(${(i - mid) * -4.6}deg) translateY(${-((i - mid) ** 2) * 5.5}px)`,
+                transform: `rotate(${(i - mid) * -4.2}deg) translateY(${-((i - mid) ** 2) * 5.5}px)`,
               }}
             />
           );
@@ -328,11 +328,11 @@ export function TableScene({
         <Library
           count={opponent.library}
           width={93}
-          depth={{ x: -29, y: 37 }}
+          depth={{ x: -29, y: 37, flare: 32 }}
         />
       </Lying>
       {opponent.graveyard.length > 0 && (
-        <Lying x={1322} y={34} width={88} squash={0.9}>
+        <Lying x={1322} y={36.5} width={88} squash={0.86}>
           <Graveyard
             cards={opponent.graveyard.map((c, i, all) =>
               i === all.length - 1 ? withArt(c, "opponent-graveyard") : c,
@@ -382,7 +382,11 @@ export function TableScene({
       </div>
       <Hand cards={you.hand} />
       <Lying x={168} y={731} width={116}>
-        <Library count={you.library} width={104} depth={{ x: 12, y: 19 }} />
+        <Library
+          count={you.library}
+          width={104}
+          depth={{ x: 3, y: 19, twist: 5 }}
+        />
       </Lying>
       <div className="hud" style={{ left: 18, top: 814 }}>
         <PlayerBadge name="You" />

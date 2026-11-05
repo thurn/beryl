@@ -434,7 +434,7 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: rgb(0 0 0 / 30%);
+  background: rgb(0 0 0 / 14%);
 }
 /* CSS filters reach an svg element in WebKit, not the shapes inside it. */
 .combat-marker {
@@ -449,16 +449,16 @@
 .attack-chevron {
   left: -4%;
   width: 108%;
-  height: 2.2em;
+  height: 1.9em;
   bottom: calc(100% + 0.15em);
 }
 .block-arc {
   left: -1%;
   width: 102%;
-  height: 2.4em;
-  top: calc(100% - 1.5em);
+  height: 2.9em;
+  top: calc(100% - 2em);
   filter: drop-shadow(0 0 2px rgb(255 205 110 / 100%))
-    drop-shadow(0 0 6px rgb(245 140 30 / 75%));
+    drop-shadow(0 0 8px rgb(245 130 25 / 90%));
 }
 .combat-line {
   fill: none;
@@ -711,9 +711,9 @@
   z-index: 5;
 }
 .arrow-gold {
-  --weight: 5px;
+  --weight: 5.5px;
   --tone: #ffb846;
-  --tone-soft: rgb(255 150 40 / 70%);
+  --tone-soft: rgb(255 130 20 / 85%);
   --tone-core: #fff1c2;
 }
 /* Cyan arrows are tubes: bright edges round a deeper core. */
@@ -750,14 +750,16 @@
 .arrow-dot-glow {
   fill: var(--tone-soft);
 }
-.arrow-glow .arrow-head-gold {
+/* A gold arrow ends in a small solid tip. */
+.arrow-glow .arrow-head-solid {
   fill: var(--tone-soft);
 }
-.arrow-line .arrow-head-gold {
-  fill: var(--tone);
+.arrow-line .arrow-head-solid {
+  stroke-width: 3px;
 }
-.arrow-core .arrow-head-gold {
+.arrow-core .arrow-head-solid {
   fill: var(--tone-core);
+  stroke: none;
 }
 .arrow-dot {
   r: 7px;
@@ -1142,8 +1144,8 @@
   stroke-width: 0.8;
 }
 .life-orb-blade-dark {
-  fill: #2a2623;
-  stroke: #110f0e;
+  fill: #4a4440;
+  stroke: #1a1715;
   stroke-width: 1;
 }
 .life-orb-glint {
@@ -1157,12 +1159,12 @@
 .life-orb-ring {
   fill: none;
   stroke: #ffd36a;
-  stroke-width: 2.6;
+  stroke-width: 2.2;
   stroke-linecap: round;
 }
 .life-orb-ring-glow {
   stroke: #f08a1c;
-  stroke-width: 7;
+  stroke-width: 9;
 }
 .life-orb-core {
   fill: url(#orb-core);
@@ -1178,8 +1180,14 @@
 }
 .life-orb-halo {
   fill: none;
-  stroke: #fff1b8;
+  stroke: #ffc54a;
   stroke-width: 8;
+}
+.life-orb-crescent {
+  fill: none;
+  stroke: #ffe58a;
+  stroke-width: 3.5;
+  stroke-linecap: round;
 }
 /* The far orb's ring is dull copper. */
 .life-orb-opponent .life-orb-ring {

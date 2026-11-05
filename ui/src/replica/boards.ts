@@ -65,7 +65,7 @@ const combat: TableBoard = {
       tone: "gold",
       fromSide: "top",
       toSide: { x: 0.673, y: 0.733 },
-      leave: [-24, -140],
+      leave: [-34, -138],
       arrive: [-100, -85],
       start: "none",
       fine: true,
@@ -97,7 +97,7 @@ const trigger: TableBoard = {
     ...you,
     active: false,
     hand: you.hand.slice(1),
-    lands: [{ ...you.lands[0]!, tapped: 1 }, ...you.lands.slice(1)],
+    lands: [{ ...you.lands[0]!, tapped: 3 }, ...you.lands.slice(1)],
     creatures: [
       {
         card: SAMPLE.infernoTitan,
@@ -131,7 +131,7 @@ const trigger: TableBoard = {
       to: "stack-trigger",
       tone: "gold",
       fromSide: "right",
-      toSide: { x: 0.03, y: 0.87 },
+      toSide: { x: 0.07, y: 0.84 },
       leave: [30, 150],
       arrive: [115, -48],
     },

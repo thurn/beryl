@@ -285,8 +285,8 @@ function AttackChevron({ id }: { id?: string }) {
       <defs>
         <linearGradient id="chevron-light" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#ffe6a6" stopOpacity="1" />
-          <stop offset="0.5" stopColor="#ffb446" stopOpacity="0.55" />
-          <stop offset="1" stopColor="#f0901f" stopOpacity="0.08" />
+          <stop offset="0.5" stopColor="#ffb446" stopOpacity="0.7" />
+          <stop offset="1" stopColor="#f0901f" stopOpacity="0.15" />
         </linearGradient>
       </defs>
       <path d={`${tent} Z`} fill="url(#chevron-light)" />
@@ -312,7 +312,7 @@ function BlockArc({ id }: { id?: string }) {
         </linearGradient>
       </defs>
       <path
-        d="M0 0 C1.5 12 22 19.5 50 19.5 C78 19.5 98.5 12 100 0 C97 10 78 16.5 53.5 16.5 L50 12.5 L46.5 16.5 C22 16.5 3 10 0 0 Z"
+        d="M0 0 C1.5 12 22 19.5 50 19.5 C78 19.5 98.5 12 100 0 C97 9 78 14.5 53.5 14.5 L50 11 L46.5 14.5 C22 14.5 3 9 0 0 Z"
         fill="url(#block-gold)"
       />
     </svg>
