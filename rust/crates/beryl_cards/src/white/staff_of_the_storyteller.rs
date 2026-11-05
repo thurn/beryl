@@ -162,7 +162,7 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::choose(P0, DecisionKind::Attacker, names::OVERLORD_OF_THE_MISTMOORS),
             Action::assert(Assertion::Controls {
                 player: P0,
-                card: "Insect",
+                card: super::overlord_of_the_mistmoors::INSECT_TOKEN,
                 count: 2,
             }),
             story(1),

@@ -15,9 +15,12 @@ use crate::names;
 
 /// The Human token ([CR 111.4](https://yawgatog.com/resources/magic-rules/#R1114)): "If the
 /// spell or ability doesn't specify the name of the token, its name is the same as its
-/// subtype(s) plus the word 'Token.'" Token names here leave the word off.
+/// subtype(s) plus the word 'Token.'"
+pub const HUMAN_TOKEN: &str = "Human Token";
+
+/// The Human token.
 pub static HUMAN: CardDef = CardDef {
-    name: "Human",
+    name: HUMAN_TOKEN,
     faces: &[Face {
         types: Types::CREATURE,
         subtypes: Subtypes::of(&[Subtype::Human]),
@@ -120,14 +123,14 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Assert {
                 assertion: Assertion::Attacking {
                     player: P0,
-                    card: "Human",
+                    card: HUMAN_TOKEN,
                     count: 1,
                 },
             },
             Action::Assert {
                 assertion: Assertion::Tapped {
                     player: P0,
-                    card: "Human",
+                    card: HUMAN_TOKEN,
                     count: 1,
                 },
             },
@@ -194,7 +197,7 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Assert {
                 assertion: Assertion::Attacking {
                     player: P0,
-                    card: "Human",
+                    card: HUMAN_TOKEN,
                     count: 1,
                 },
             },
@@ -216,5 +219,42 @@ pub const SCENARIOS: &[Scenario] = &[
                     life: 16,
                 },
             },
+        ]),
+    // "Attacking that player or a planeswalker they control": its controller picks Teferi
+    // (CR 508.4), whom the Human's damage then removes loyalty from (CR 120.3c).
+    Scenario::new("Adeline's Human attacks a planeswalker")
+        .battlefield(P0, &[Permanent::new(ADELINE)])
+        .battlefield(P1, &[Permanent::new(names::TEFERI_TIME_RAVELER)])
+        .actions(&[
+            Action::AdvanceTo {
+                turn: 1,
+                step: TurnStep::BeginningOfCombat,
+            },
+            Action::pass(P0),
+            Action::choose(P0, DecisionKind::Attacker, ADELINE),
+            // Adeline at the player; with no other creature, attackers are declared and the
+            // trigger resolves straight to its question.
+            Action::answer(P0, DecisionKind::AttackTarget, Pick::DefendingPlayer),
+            Action::choose(P0, DecisionKind::AttackTarget, names::TEFERI_TIME_RAVELER),
+            Action::assert(Assertion::Attacking {
+                player: P0,
+                card: HUMAN_TOKEN,
+                count: 1,
+            }),
+            Action::AdvanceTo {
+                turn: 1,
+                step: TurnStep::EndOfCombat,
+            },
+            // Adeline's 2 to the player, the Human's 1 to Teferi.
+            Action::assert(Assertion::Life {
+                player: P1,
+                life: 18,
+            }),
+            Action::assert(Assertion::Counters {
+                player: P1,
+                card: names::TEFERI_TIME_RAVELER,
+                kind: beryl_engine::state::CounterKind::Loyalty,
+                count: 3,
+            }),
         ]),
 ];

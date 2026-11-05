@@ -50,6 +50,19 @@ impl Filter {
         let o = s.object(slot);
         let face = || &t.def(o.card).faces[usize::from(o.face)];
         let derived = || (o.zone == Zone::Battlefield).then(|| s.derived(slot));
+        // [CR 712.8e](https://yawgatog.com/resources/magic-rules/#R7128e): a transforming
+        // double-faced permanent with its back face up "has only the characteristics of its
+        // back face. However, its mana value is calculated using the mana cost of its front
+        // face."
+        let mana_value = || {
+            let up = face();
+            let cost = if up.transformed {
+                t.def(o.card).front().cost
+            } else {
+                up.cost
+            };
+            cost.mana_value()
+        };
         match *self {
             Filter::Any => true,
             Filter::Types(types) => derived()
@@ -74,8 +87,8 @@ impl Filter {
                     }
             }
             Filter::Tapped => o.flags.has(ObjectFlags::TAPPED),
-            Filter::ManaValueAtMost(n) => face().cost.mana_value() <= n,
-            Filter::ManaValueAtMostX => face().cost.mana_value() <= x,
+            Filter::ManaValueAtMost(n) => mana_value() <= n,
+            Filter::ManaValueAtMostX => mana_value() <= x,
             Filter::Not(f) => !f.matches_x(s, t, slot, you, x),
             Filter::All(fs) => fs.iter().all(|f| f.matches_x(s, t, slot, you, x)),
             Filter::AnyOf(fs) => fs.iter().any(|f| f.matches_x(s, t, slot, you, x)),

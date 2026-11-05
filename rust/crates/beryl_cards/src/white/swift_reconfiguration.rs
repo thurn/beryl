@@ -66,6 +66,15 @@ const SWIFT: &str = names::SWIFT_RECONFIGURATION;
 const JACE: &str = names::JACE_VRYNS_PRODIGY;
 const PLAINS: &str = names::PLAINS;
 const OVERLORD: &str = names::OVERLORD_OF_THE_MISTMOORS;
+const SKYDIVER: &str = names::THIEVING_SKYDIVER;
+/// A Plains for the Aura, and four Islands for a Thieving Skydiver kicked for up to 2.
+const SKYDIVER_LANDS: &[Permanent] = &[
+    Permanent::new(PLAINS),
+    Permanent::new(names::ISLAND),
+    Permanent::new(names::ISLAND),
+    Permanent::new(names::ISLAND),
+    Permanent::new(names::ISLAND),
+];
 
 pub const SCENARIOS: &[Scenario] = &[
     Scenario::new("a creature becomes a noncreature Vehicle that can't crew alone")
@@ -159,6 +168,69 @@ pub const SCENARIOS: &[Scenario] = &[
                 turn: 2,
                 step: TurnStep::Upkeep,
             },
+            Action::assert(Assertion::Creature {
+                player: P0,
+                card: JACE,
+                creature: false,
+            }),
+        ]),
+    // The enchanted creature is an artifact whose mana value is still its card's
+    // ([CR 202.3](https://yawgatog.com/resources/magic-rules/#R2023)), so a kicked Thieving
+    // Skydiver reaches it only with X of at least 2.
+    Scenario::new("Thieving Skydiver kicked for 1 can't take a reconfigured 2-drop")
+        .hand(P0, &[SWIFT, SKYDIVER])
+        .battlefield(P0, SKYDIVER_LANDS)
+        .battlefield(P1, &[Permanent::new(JACE)])
+        .library(P0, &[PLAINS])
+        .library(P1, &[PLAINS])
+        .actions(&[
+            Action::cast(P0, SWIFT),
+            Action::Resolve,
+            Action::Cast {
+                player: P0,
+                card: SKYDIVER,
+                face: 0,
+                costs: 1,
+            },
+            Action::answer(P0, DecisionKind::X, Pick::Number { n: 1 }),
+            Action::Resolve,
+            // No artifact of mana value 1 or less: the trigger is removed (CR 603.3d).
+            Action::assert(Assertion::Stack { count: 0 }),
+            Action::assert(Assertion::Controls {
+                player: P1,
+                card: JACE,
+                count: 1,
+            }),
+        ]),
+    Scenario::new("Thieving Skydiver kicked for 2 takes the reconfigured creature")
+        .hand(P0, &[SWIFT, SKYDIVER])
+        .battlefield(P0, SKYDIVER_LANDS)
+        .battlefield(P1, &[Permanent::new(JACE)])
+        .library(P0, &[PLAINS])
+        .library(P1, &[PLAINS])
+        .actions(&[
+            Action::cast(P0, SWIFT),
+            Action::Resolve,
+            Action::Cast {
+                player: P0,
+                card: SKYDIVER,
+                face: 0,
+                costs: 1,
+            },
+            Action::answer(P0, DecisionKind::X, Pick::Number { n: 2 }),
+            Action::Resolve,
+            Action::Resolve,
+            Action::assert(Assertion::Controls {
+                player: P0,
+                card: JACE,
+                count: 1,
+            }),
+            // The Aura stays its controller's, still attached: Jace is no creature.
+            Action::assert(Assertion::Controls {
+                player: P0,
+                card: SWIFT,
+                count: 1,
+            }),
             Action::assert(Assertion::Creature {
                 player: P0,
                 card: JACE,

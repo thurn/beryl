@@ -16,9 +16,13 @@ use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
 
-/// The Insect token: a 2/1 white Insect creature token with flying (CR 111.4).
+/// The Insect token's name ([CR 111.4](https://yawgatog.com/resources/magic-rules/#R1114)):
+/// its subtype plus the word "Token".
+pub const INSECT_TOKEN: &str = "Insect Token";
+
+/// The Insect token: a 2/1 white Insect creature token with flying.
 pub static INSECT: CardDef = CardDef {
-    name: "Insect",
+    name: INSECT_TOKEN,
     faces: &[Face {
         types: Types::CREATURE,
         subtypes: Subtypes::of(&[Subtype::Insect]),
@@ -147,7 +151,7 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Assert {
                 assertion: Assertion::Controls {
                     player: P0,
-                    card: "Insect",
+                    card: INSECT_TOKEN,
                     count: 2,
                 },
             },
@@ -228,14 +232,14 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Assert {
                 assertion: Assertion::Controls {
                     player: P0,
-                    card: "Insect",
+                    card: INSECT_TOKEN,
                     count: 4,
                 },
             },
             Action::Assert {
                 assertion: Assertion::Attacking {
                     player: P0,
-                    card: "Insect",
+                    card: INSECT_TOKEN,
                     count: 0,
                 },
             },

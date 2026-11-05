@@ -95,7 +95,7 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Assert {
                 assertion: Assertion::Controls {
                     player: P1,
-                    card: "Map",
+                    card: crate::white::get_lost::MAP_TOKEN,
                     count: 2,
                 },
             },
@@ -149,7 +149,7 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Assert {
                 assertion: Assertion::Controls {
                     player: P1,
-                    card: "Map",
+                    card: crate::white::get_lost::MAP_TOKEN,
                     count: 2,
                 },
             },

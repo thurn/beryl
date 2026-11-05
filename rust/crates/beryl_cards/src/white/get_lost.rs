@@ -44,8 +44,11 @@ pub static CARD: CardDef = CardDef {
 /// ([CR 111.10s](https://yawgatog.com/resources/magic-rules/#R11110s)): "A Map token is a
 /// colorless Map artifact token with "{1}, {T}, Sacrifice this token: Target creature you
 /// control explores. Activate only as a sorcery.""
+/// The Map token's name: its subtype plus the word "Token" (CR 111.4).
+pub const MAP_TOKEN: &str = "Map Token";
+
 pub static MAP: CardDef = CardDef {
-    name: "Map",
+    name: MAP_TOKEN,
     faces: &[Face {
         types: Types::ARTIFACT,
         subtypes: Subtypes::of(&[Subtype::Map]),

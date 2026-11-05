@@ -1539,3 +1539,48 @@ fn an_enters_ability_targets_by_the_x_its_spell_was_cast_with() {
         }
     }
 }
+
+/// A transforming double-faced card, its back face a planeswalker with no mana cost.
+static PRODIGY: CardDef = CardDef {
+    name: "Test Prodigy",
+    faces: &[
+        Face {
+            cost: ManaCost::new(1, [0, 1, 0, 0, 0, 0]),
+            types: Types::CREATURE,
+            power: Some(0),
+            toughness: Some(2),
+            ..Face::EMPTY
+        },
+        Face {
+            name: "Test Telepath",
+            types: Types::PLANESWALKER,
+            loyalty: Some(5),
+            transformed: true,
+            ..Face::EMPTY
+        },
+    ],
+    tokens: &[],
+};
+
+static PRODIGY_CARDS: CardTable = CardTable::new(&[&LAND, &PRODIGY]);
+
+/// [CR 712.8e](https://yawgatog.com/resources/magic-rules/#R7128e): with its back face up, a
+/// transforming permanent's mana value is still its front face's.
+#[test]
+fn a_transformed_permanent_has_its_front_faces_mana_value() {
+    let t = GameTable::new(
+        &PRODIGY_CARDS,
+        [
+            &[(1, "Test Prodigy"), (5, "Test Land")],
+            &[(6, "Test Land")],
+        ],
+    )
+    .unwrap();
+    let mut s = State::new(&t, 1, Profile::EXACT);
+    s.begin_at(1, 0, TurnStep::PrecombatMain);
+    let prodigy = find(&s, &t, 0, "Test Prodigy");
+    s.place(prodigy, Zone::Battlefield).unwrap();
+    s.set_face(prodigy, 1);
+    assert!(!Filter::ManaValueAtMost(1).matches(&s, &t, prodigy, 0));
+    assert!(Filter::ManaValueAtMost(2).matches(&s, &t, prodigy, 0));
+}
