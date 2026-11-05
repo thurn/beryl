@@ -17,6 +17,8 @@ struct Apply {
     order: u8,
     /// The battlefield index of the permanent it affects.
     target: u8,
+    /// The game index of the effect's source card, which a granted ability is printed on.
+    source: u8,
     modification: Option<Modification>,
 }
 
@@ -96,6 +98,7 @@ fn recompute(s: &mut State, t: &GameTable) {
                     timestamp: o.timestamp,
                     order: n as u8,
                     target: target as u8,
+                    source: o.card,
                     modification: Some(spec.modification),
                 });
             }
@@ -109,11 +112,13 @@ fn recompute(s: &mut State, t: &GameTable) {
             continue;
         }
         if let Some(target) = s.battlefield.position(e.affected.slot) {
+            let source = s.object(e.source.slot);
             let _ = list.push(Apply {
                 layer: m.layer() as u8,
                 timestamp: e.timestamp,
                 order: 0,
                 target: target as u8,
+                source: source.card,
                 modification: Some(m),
             });
         }
@@ -124,7 +129,7 @@ fn recompute(s: &mut State, t: &GameTable) {
     for a in &list {
         let Some(m) = a.modification else { continue };
         let i = usize::from(a.target);
-        apply(&mut s.derived[..len], i, m);
+        apply(&mut s.derived[..len], i, a.source, m);
     }
     // Layer 7c: counters modify power and toughness
     // ([CR 613.4c](https://yawgatog.com/resources/magic-rules/#R6134c)): "Effects and counters
@@ -140,7 +145,7 @@ fn recompute(s: &mut State, t: &GameTable) {
 }
 
 /// Applies one modification to the permanent at battlefield index `i`.
-fn apply(derived: &mut [Derived], i: usize, m: Modification) {
+fn apply(derived: &mut [Derived], i: usize, source: u8, m: Modification) {
     match m {
         // CR 613.1b: "Layer 2: Control-changing effects are applied."
         Modification::Control(player) => derived[i].controller = player,
@@ -164,7 +169,10 @@ fn apply(derived: &mut [Derived], i: usize, m: Modification) {
         Modification::AddKeywords(k) => derived[i].keywords |= k.0,
         Modification::Grant(ability) => {
             if let Some(free) = derived[i].granted.iter_mut().find(|g| g.card == NONE) {
-                *free = ability;
+                *free = AbilityRef {
+                    card: source,
+                    ability,
+                };
             }
         }
         // CR 613.4a: "Layer 7a: Effects from characteristic-defining abilities that define

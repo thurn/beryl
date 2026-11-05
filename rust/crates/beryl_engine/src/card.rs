@@ -479,8 +479,9 @@ pub enum Modification {
     AddSubtype(Subtype),
     /// Layer 6: "gains [keywords]".
     AddKeywords(Keywords),
-    /// Layer 6: "has [ability]", an ability of a card in the game table.
-    Grant(crate::state::AbilityRef),
+    /// Layer 6: "has [ability]": the ability at this index on the front face of the effect
+    /// source's card, such as the crew ability Swift Reconfiguration grants.
+    Grant(u8),
     /// Layer 7a: a characteristic-defining ability, "power is equal to the number of
     /// creatures you control" (Adeline).
     PowerIsCreaturesYouControl,

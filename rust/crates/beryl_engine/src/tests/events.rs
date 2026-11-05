@@ -1,0 +1,1207 @@
+//! Events, triggers, replacement effects, state-based actions and layers, on positions built
+//! through the event pipeline with test-only cards.
+
+// Bodies share the `Flow` signature of `Ability::body`, whether or not they can pause.
+#![allow(clippy::unnecessary_wraps)]
+
+use crate::bitboard::Bitboard;
+use crate::card::{
+    Ability, AbilityKind, Affected, CardDef, Cost, Delayed, Face, Keywords, LayerSpec, ManaColor,
+    Modification, Replacement, StaticCondition, Subtype, Trigger, Types,
+};
+use crate::effect::EffectCtx;
+use crate::event::{self, Event, Reason, Recipient, TokenEntry};
+use crate::filter::Whose;
+use crate::state::{
+    Continuous, CounterKind, Duration, ObjectFlags, PendingTrigger, TurnStep, Zone, opponent,
+};
+use crate::{
+    CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Outcome, Profile, Replay,
+    Scratch, State, Step, apply, next,
+};
+
+use super::{LAND, begin};
+
+fn gain_one(ctx: &mut EffectCtx) -> crate::card::Flow {
+    ctx.gain_life(ctx.controller(), 1);
+    Ok(())
+}
+
+fn draw_one(ctx: &mut EffectCtx) -> crate::card::Flow {
+    ctx.draw(ctx.controller(), 1);
+    Ok(())
+}
+
+static GAIN_LAND: CardDef = CardDef {
+    name: "Test Gain Land",
+    faces: &[Face {
+        types: Types::LAND,
+        abilities: &[Ability::triggered(Trigger::Enters, gain_one)],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static TAPLAND: CardDef = CardDef {
+    name: "Test Tapland",
+    faces: &[Face {
+        types: Types::LAND,
+        abilities: &[Ability::replacing(Replacement::EntersTapped)],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static COAST: CardDef = CardDef {
+    name: "Test Coast",
+    faces: &[Face {
+        types: Types::LAND,
+        abilities: &[Ability::replacing(Replacement::EntersTappedUnlessFewLands(
+            2,
+        ))],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static SPRINGS: CardDef = CardDef {
+    name: "Test Springs",
+    faces: &[Face {
+        types: Types::LAND,
+        abilities: &[Ability::replacing(Replacement::EntersTappedUnlessPayLife(
+            3,
+        ))],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+fn crypt_flip(ctx: &mut EffectCtx) -> crate::card::Flow {
+    let you = ctx.controller();
+    if !ctx.flip_coin(you) {
+        ctx.deal_damage(Recipient::Player(you), 3);
+    }
+    Ok(())
+}
+
+/// Mana Crypt's upkeep trigger, on a land so random games can play it.
+static CRYPT_LAND: CardDef = CardDef {
+    name: "Test Crypt Land",
+    faces: &[Face {
+        types: Types::LAND,
+        abilities: &[Ability::triggered(
+            Trigger::Step(TurnStep::Upkeep, Whose::You),
+            crypt_flip,
+        )],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static WATCHER: CardDef = CardDef {
+    name: "Test Watcher",
+    faces: &[Face {
+        types: Types::LAND,
+        abilities: &[Ability::triggered(
+            Trigger::Step(TurnStep::Upkeep, Whose::Opponent),
+            gain_one,
+        )],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static ENDER: CardDef = CardDef {
+    name: "Test Ender",
+    faces: &[Face {
+        types: Types::LAND,
+        abilities: &[Ability::triggered(
+            Trigger::Step(TurnStep::End, Whose::You),
+            draw_one,
+        )],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+fn drain_delay(ctx: &mut EffectCtx) -> crate::card::Flow {
+    ctx.delay(1, Delayed::YourNextMainPhase, 2);
+    Ok(())
+}
+
+fn drain_mana(ctx: &mut EffectCtx) -> crate::card::Flow {
+    let amount = ctx.trigger().amount;
+    ctx.add_mana(ctx.controller(), ManaColor::Colorless, amount);
+    Ok(())
+}
+
+/// Mana Drain's delayed trigger, created by a land's enters trigger.
+static DRAIN_LAND: CardDef = CardDef {
+    name: "Test Drain Land",
+    faces: &[Face {
+        types: Types::LAND,
+        abilities: &[
+            Ability::triggered(Trigger::Enters, drain_delay),
+            Ability::triggered(Trigger::Delayed, drain_mana),
+        ],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+fn opponent_loses_one(ctx: &mut EffectCtx) -> crate::card::Flow {
+    ctx.lose_life(opponent(ctx.controller()), 1);
+    Ok(())
+}
+
+static EMBLEM: CardDef = CardDef {
+    name: "Test Emblem",
+    faces: &[Face {
+        abilities: &[Ability::triggered(Trigger::YouCast, opponent_loses_one)],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+fn get_emblem(ctx: &mut EffectCtx) -> crate::card::Flow {
+    ctx.create_emblem(ctx.controller(), &EMBLEM);
+    Ok(())
+}
+
+static EMBLEM_LAND: CardDef = CardDef {
+    name: "Test Emblem Land",
+    faces: &[Face {
+        types: Types::LAND,
+        abilities: &[Ability::triggered(Trigger::Enters, get_emblem)],
+        ..Face::EMPTY
+    }],
+    tokens: &[&EMBLEM],
+};
+
+static BEAR: CardDef = CardDef {
+    name: "Test Bear",
+    faces: &[Face {
+        types: Types::CREATURE,
+        power: Some(2),
+        toughness: Some(2),
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+fn not_a_token(_: &State, _: &GameTable, tr: &PendingTrigger) -> bool {
+    !tr.info.lki.token
+}
+
+fn copy_of_the_dead(ctx: &mut EffectCtx) -> crate::card::Flow {
+    let card = ctx.trigger().lki.card;
+    ctx.create_tokens_of(card, 1, TokenEntry::default());
+    Ok(())
+}
+
+/// Sphinx of False Conclusions's dies trigger: "if it wasn't a token, create a token that's a
+/// copy of it".
+static SPHINX: CardDef = CardDef {
+    name: "Test Sphinx",
+    faces: &[Face {
+        types: Types::CREATURE,
+        power: Some(3),
+        toughness: Some(3),
+        abilities: &[Ability {
+            condition: Some(not_a_token),
+            ..Ability::triggered(Trigger::Dies, copy_of_the_dead)
+        }],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+/// Thundertrap Trainer stand-in: a creature with an enters trigger, for token copies.
+static TRAINER: CardDef = CardDef {
+    name: "Test Trainer",
+    faces: &[Face {
+        types: Types::CREATURE,
+        power: Some(3),
+        toughness: Some(3),
+        abilities: &[Ability::triggered(Trigger::Enters, gain_one)],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static RAIDER: CardDef = CardDef {
+    name: "Test Raider",
+    faces: &[Face {
+        types: Types::CREATURE,
+        power: Some(2),
+        toughness: Some(2),
+        abilities: &[
+            Ability::triggered(Trigger::Attacks, gain_one),
+            Ability::triggered(Trigger::CombatDamageToPlayer, draw_one),
+        ],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static HUMAN: CardDef = CardDef {
+    name: "Test Human",
+    faces: &[Face {
+        types: Types::CREATURE,
+        power: Some(1),
+        toughness: Some(1),
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+fn human_attacking(ctx: &mut EffectCtx) -> crate::card::Flow {
+    ctx.create_tokens(
+        &HUMAN,
+        1,
+        TokenEntry {
+            tapped: true,
+            attacking: true,
+            ..TokenEntry::default()
+        },
+    );
+    Ok(())
+}
+
+/// Adeline, Resplendent Cathar: power equal to the creatures you control; whenever you
+/// attack, a 1/1 Human tapped and attacking.
+static ADELINE: CardDef = CardDef {
+    name: "Test Adeline",
+    faces: &[Face {
+        types: Types::CREATURE,
+        power: Some(0),
+        toughness: Some(4),
+        abilities: &[
+            Ability::statik(LayerSpec {
+                affected: Affected::Itself,
+                condition: StaticCondition::Always,
+                modification: Modification::PowerIsCreaturesYouControl,
+            }),
+            Ability::triggered(Trigger::YouAttack, human_attacking),
+        ],
+        ..Face::EMPTY
+    }],
+    tokens: &[&HUMAN],
+};
+
+static INSECT: CardDef = CardDef {
+    name: "Test Insect",
+    faces: &[Face {
+        types: Types::CREATURE,
+        power: Some(2),
+        toughness: Some(1),
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static MAP: CardDef = CardDef {
+    name: "Test Map",
+    faces: &[Face {
+        types: Types::ARTIFACT,
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+fn two_insects(ctx: &mut EffectCtx) -> crate::card::Flow {
+    ctx.create_tokens(&INSECT, 2, TokenEntry::default());
+    Ok(())
+}
+
+/// Overlord of the Mistmoors: not a creature while it has a time counter (impending); when
+/// it enters, two Insects.
+static OVERLORD: CardDef = CardDef {
+    name: "Test Overlord",
+    faces: &[Face {
+        types: Types::ENCHANTMENT.union(Types::CREATURE),
+        power: Some(5),
+        toughness: Some(5),
+        abilities: &[
+            Ability::statik(LayerSpec {
+                affected: Affected::Itself,
+                condition: StaticCondition::HasCounter(CounterKind::Time),
+                modification: Modification::RemoveTypes(Types::CREATURE),
+            }),
+            Ability::triggered(Trigger::Enters, two_insects),
+        ],
+        ..Face::EMPTY
+    }],
+    tokens: &[&INSECT],
+};
+
+fn story_counter(ctx: &mut EffectCtx) -> crate::card::Flow {
+    ctx.add_counters(ctx.source(), CounterKind::Story, 1);
+    Ok(())
+}
+
+fn two_maps(ctx: &mut EffectCtx) -> crate::card::Flow {
+    ctx.create_tokens(&MAP, 2, TokenEntry::default());
+    Ok(())
+}
+
+/// Staff of the Storyteller: a story counter whenever you create one or more creature
+/// tokens. Its second ability makes noncreature tokens, for the test that they don't count.
+static STAFF: CardDef = CardDef {
+    name: "Test Staff",
+    faces: &[Face {
+        types: Types::ARTIFACT,
+        abilities: &[
+            Ability::triggered(Trigger::YouCreateTokens(Types::CREATURE), story_counter),
+            Ability::triggered(Trigger::Delayed, two_maps),
+        ],
+        ..Face::EMPTY
+    }],
+    tokens: &[&MAP],
+};
+
+static WALKER: CardDef = CardDef {
+    name: "Test Walker",
+    faces: &[Face {
+        types: Types::PLANESWALKER,
+        loyalty: Some(3),
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+/// The crew ability Swift Reconfiguration grants ("crew 5"): its body is the combat work's.
+const CREW: Ability = Ability {
+    kind: AbilityKind::Activated,
+    cost: Cost::NONE,
+    ..Ability::NONE
+};
+
+/// Swift Reconfiguration: "Enchanted permanent is a Vehicle artifact with crew 5 and it loses
+/// all other card types."
+static RECONFIG: CardDef = CardDef {
+    name: "Test Reconfiguration",
+    faces: &[Face {
+        types: Types::ENCHANTMENT,
+        abilities: &[
+            Ability::statik(LayerSpec {
+                affected: Affected::Enchanted,
+                condition: StaticCondition::Always,
+                modification: Modification::SetTypes(Types::ARTIFACT),
+            }),
+            Ability::statik(LayerSpec {
+                affected: Affected::Enchanted,
+                condition: StaticCondition::Always,
+                modification: Modification::AddSubtype(Subtype::Vehicle),
+            }),
+            Ability::statik(LayerSpec {
+                affected: Affected::Enchanted,
+                condition: StaticCondition::Always,
+                modification: Modification::Grant(3),
+            }),
+            CREW,
+        ],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+fn exile_an_opposing_creature(ctx: &mut EffectCtx) -> crate::card::Flow {
+    let them = opponent(ctx.controller());
+    let s = ctx.state();
+    let target = s
+        .battlefield()
+        .iter()
+        .copied()
+        .find(|&slot| {
+            s.controller(slot) == them && Types(s.derived(slot).types).contains(Types::CREATURE)
+        })
+        .map(|slot| s.object_ref(slot));
+    if let Some(target) = target {
+        ctx.exile_until_source_leaves(target);
+    }
+    Ok(())
+}
+
+/// Aang's Iceberg: "exile ... until this leaves the battlefield".
+static ICEBERG: CardDef = CardDef {
+    name: "Test Iceberg",
+    faces: &[Face {
+        types: Types::ARTIFACT,
+        abilities: &[Ability::triggered(
+            Trigger::Enters,
+            exile_an_opposing_creature,
+        )],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static CARDS: CardTable = CardTable::new(&[
+    &LAND,
+    &GAIN_LAND,
+    &TAPLAND,
+    &COAST,
+    &SPRINGS,
+    &CRYPT_LAND,
+    &WATCHER,
+    &ENDER,
+    &DRAIN_LAND,
+    &EMBLEM_LAND,
+    &BEAR,
+    &SPHINX,
+    &TRAINER,
+    &RAIDER,
+    &ADELINE,
+    &OVERLORD,
+    &STAFF,
+    &WALKER,
+    &RECONFIG,
+    &ICEBERG,
+]);
+
+/// Every card once, then lands: every test finds what it needs in either library.
+const DECK: &Decklist = &[
+    (1, "Test Gain Land"),
+    (1, "Test Tapland"),
+    (2, "Test Coast"),
+    (1, "Test Springs"),
+    (2, "Test Crypt Land"),
+    (2, "Test Watcher"),
+    (1, "Test Ender"),
+    (1, "Test Drain Land"),
+    (1, "Test Emblem Land"),
+    (3, "Test Bear"),
+    (1, "Test Sphinx"),
+    (1, "Test Trainer"),
+    (2, "Test Raider"),
+    (1, "Test Adeline"),
+    (1, "Test Overlord"),
+    (1, "Test Staff"),
+    (1, "Test Walker"),
+    (1, "Test Reconfiguration"),
+    (1, "Test Iceberg"),
+    (15, "Test Land"),
+];
+
+/// A game in the starting player's first main phase, with that player and the table.
+fn game() -> (GameTable, State, u8) {
+    game_with_seed(7)
+}
+
+/// Each player gets a basic land in hand, so every main phase of theirs is a decision
+/// (passing priority never plays it) and tests can stop there.
+fn game_with_seed(seed: u64) -> (GameTable, State, u8) {
+    let t = GameTable::new(&CARDS, [DECK, DECK]).unwrap();
+    let mut s = State::new(&t, seed, Profile::EXACT);
+    begin(&t, &mut s);
+    for player in 0..2 {
+        let land = (s.zone(player, Zone::Library))
+            .iter()
+            .find(|&slot| t.def(s.object(slot).card).name == "Test Land")
+            .unwrap();
+        crate::zone::move_to(&mut s, land, Zone::Hand).unwrap();
+    }
+    let p = s.turn().starting_player;
+    (t, s, p)
+}
+
+/// A slot holding `name` in the player's library or hand.
+fn find(s: &State, t: &GameTable, player: u8, name: &str) -> u8 {
+    (s.zone(player, Zone::Library) | s.zone(player, Zone::Hand))
+        .iter()
+        .find(|&slot| t.def(s.object(slot).card).name == name)
+        .unwrap_or_else(|| panic!("no {name}"))
+}
+
+/// Puts a card onto the battlefield through the pipeline, under its owner's control.
+fn put(t: &GameTable, s: &mut State, x: &mut Scratch, player: u8, name: &str) -> u8 {
+    let slot = find(s, t, player, name);
+    event::move_one(s, t, &mut x.events, slot, Zone::Battlefield, Reason::Effect).unwrap();
+    slot
+}
+
+/// Runs `body` as an ability of the permanent in `slot`.
+fn with_ctx(
+    t: &GameTable,
+    s: &mut State,
+    x: &mut Scratch,
+    slot: u8,
+    body: impl FnOnce(&mut EffectCtx),
+) {
+    let trigger = PendingTrigger {
+        source: s.object_ref(slot),
+        card: s.object(slot).card,
+        controller: s.controller(slot),
+        ..PendingTrigger::default()
+    };
+    let mut ctx = EffectCtx::new(s, t, &mut x.events, &trigger, &Ability::NONE);
+    body(&mut ctx);
+    ctx.finish().unwrap();
+}
+
+fn decide_with(t: &GameTable, s: &mut State, x: &mut Scratch) -> Decision {
+    match next(s, t, x, &mut Replay) {
+        Step::Decide(d) => d,
+        Step::Over(o) => panic!("the game ended: {o:?}"),
+    }
+}
+
+/// Puts waiting triggers on the stack and passes until both are empty, returning the
+/// decision reached.
+fn resolve_all(t: &GameTable, s: &mut State, x: &mut Scratch) -> Decision {
+    loop {
+        let d = decide_with(t, s, x);
+        if s.stack().is_empty() && s.triggers().is_empty() {
+            return d;
+        }
+        assert!(matches!(
+            d.kind,
+            DecisionKind::Priority | DecisionKind::TriggerOrder
+        ));
+        apply(s, t, x, &mut Replay, Choice(0));
+    }
+}
+
+/// Passes priority until the active player has priority with an empty stack in `step` of
+/// their turn. Only main phases are sure to stop: elsewhere a player with nothing but a pass
+/// passes silently.
+fn advance_to(
+    t: &GameTable,
+    s: &mut State,
+    x: &mut Scratch,
+    active: u8,
+    step: TurnStep,
+) -> Decision {
+    loop {
+        let d = decide_with(t, s, x);
+        if s.turn().step == step
+            && s.turn().active == active
+            && s.stack().is_empty()
+            && s.triggers().is_empty()
+        {
+            return d;
+        }
+        apply(s, t, x, &mut Replay, Choice(0));
+    }
+}
+
+fn types(s: &State, slot: u8) -> Types {
+    Types(s.derived(slot).types)
+}
+
+#[test]
+fn an_enters_trigger_resolves_after_the_land_is_played() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::recording();
+    let land = find(&s, &t, p, "Test Gain Land");
+    crate::zone::move_to(&mut s, land, Zone::Hand).unwrap();
+    let d = decide_with(&t, &mut s, &mut x);
+    let play = (0..d.len() as u8)
+        .find(|&i| d.candidates.option(Choice(i)) == Some(Opt::PlayLand(land)))
+        .unwrap();
+    apply(&mut s, &t, &mut x, &mut Replay, Choice(play));
+    assert_eq!(s.triggers().len(), 1);
+    resolve_all(&t, &mut s, &mut x);
+    assert_eq!(s.player(p).life, 21);
+    let events: Vec<Event> = x.events.drain().collect();
+    let entered = events
+        .iter()
+        .position(|e| {
+            matches!(
+                e,
+                Event::ZoneChange {
+                    to: Zone::Battlefield,
+                    reason: Reason::Play,
+                    ..
+                }
+            )
+        })
+        .unwrap();
+    let gained = events
+        .iter()
+        .position(|e| {
+            *e == Event::LifeGain {
+                player: p,
+                amount: 1,
+            }
+        })
+        .unwrap();
+    assert!(entered < gained);
+}
+
+#[test]
+fn a_dies_trigger_looks_back_and_its_intervening_if_skips_tokens() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let sphinx = put(&t, &mut s, &mut x, p, "Test Sphinx");
+    with_ctx(&t, &mut s, &mut x, sphinx, |ctx| {
+        ctx.deal_damage(Recipient::Permanent(ctx.source()), 3);
+    });
+    resolve_all(&t, &mut s, &mut x);
+    assert_eq!(s.object(sphinx).zone, Zone::Graveyard);
+    let token = *s
+        .battlefield()
+        .iter()
+        .find(|&&slot| s.object(slot).flags.has(ObjectFlags::TOKEN))
+        .expect("a token copy");
+    assert_eq!(t.def(s.object(token).card).name, "Test Sphinx");
+    assert_eq!((s.derived(token).power, s.derived(token).toughness), (3, 3));
+    // The copy is a token: when it dies it triggers nothing, and then ceases to exist.
+    let token_ref = s.object_ref(token);
+    with_ctx(&t, &mut s, &mut x, token, |ctx| ctx.destroy(token_ref));
+    assert!(s.triggers().is_empty());
+    resolve_all(&t, &mut s, &mut x);
+    assert_eq!(s.object(token).zone, Zone::Nowhere);
+    assert!(!s.zone(p, Zone::Graveyard).contains(token));
+}
+
+#[test]
+fn lethal_damage_zero_toughness_and_zero_loyalty_are_state_based() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let hurt = put(&t, &mut s, &mut x, p, "Test Bear");
+    let shrunk = put(&t, &mut s, &mut x, p, "Test Bear");
+    let walker = put(&t, &mut s, &mut x, p, "Test Walker");
+    let healthy = put(&t, &mut s, &mut x, p, "Test Bear");
+    assert_eq!(
+        s.object(walker).counters.loyalty,
+        3,
+        "enters with its loyalty"
+    );
+    let shrunk_ref = s.object_ref(shrunk);
+    let walker_ref = s.object_ref(walker);
+    with_ctx(&t, &mut s, &mut x, hurt, |ctx| {
+        ctx.deal_damage(Recipient::Permanent(ctx.source()), 2);
+        ctx.add_effect(
+            shrunk_ref,
+            Continuous::Layer(Modification::ModifyPt(0, -2)),
+            Duration::EndOfTurn,
+        );
+        ctx.deal_damage(Recipient::Permanent(walker_ref), 3);
+    });
+    let healthy_ref = s.object_ref(healthy);
+    with_ctx(&t, &mut s, &mut x, healthy, |ctx| {
+        ctx.deal_damage(Recipient::Permanent(healthy_ref), 1);
+    });
+    resolve_all(&t, &mut s, &mut x);
+    for slot in [hurt, shrunk, walker] {
+        assert_eq!(s.object(slot).zone, Zone::Graveyard);
+    }
+    assert_eq!(s.object(healthy).zone, Zone::Battlefield);
+}
+
+#[test]
+fn attack_triggers_fire_per_attacker_and_whenever_you_attack_once() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let a = put(&t, &mut s, &mut x, p, "Test Raider");
+    let b = put(&t, &mut s, &mut x, p, "Test Raider");
+    let adeline = put(&t, &mut s, &mut x, p, "Test Adeline");
+    let attackers: Bitboard = [a, b, adeline].into_iter().collect();
+    for slot in attackers.iter() {
+        s.object_mut(slot).flags.set(ObjectFlags::ATTACKING, true);
+    }
+    event::settle(
+        &mut s,
+        &t,
+        &mut x.events,
+        Event::Attack {
+            player: p,
+            attackers,
+        },
+    )
+    .unwrap();
+    // Two Raider triggers and one Adeline trigger.
+    assert_eq!(s.triggers().len(), 3);
+    resolve_all(&t, &mut s, &mut x);
+    assert_eq!(s.player(p).life, 22);
+    let human = *s
+        .battlefield()
+        .iter()
+        .find(|&&slot| t.def(s.object(slot).card).name == "Test Human")
+        .unwrap();
+    let o = s.object(human);
+    assert!(o.flags.has(ObjectFlags::TAPPED) && o.flags.has(ObjectFlags::ATTACKING));
+    // A creature put onto the battlefield attacking was never declared: no new triggers.
+    assert!(s.triggers().is_empty());
+    // Adeline counts the creatures her controller controls, the Human included.
+    assert_eq!(s.derived(adeline).power, 4);
+}
+
+#[test]
+fn combat_damage_to_a_player_triggers_and_noncombat_damage_does_not() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let raider = put(&t, &mut s, &mut x, p, "Test Raider");
+    let source = s.object_ref(raider);
+    let q = opponent(p);
+    event::deal_damage(
+        &mut s,
+        &t,
+        &mut x.events,
+        source,
+        Recipient::Player(q),
+        2,
+        false,
+    )
+    .unwrap();
+    assert!(s.triggers().is_empty());
+    event::deal_damage(
+        &mut s,
+        &t,
+        &mut x.events,
+        source,
+        Recipient::Player(q),
+        2,
+        true,
+    )
+    .unwrap();
+    assert_eq!(s.triggers().len(), 1);
+    assert_eq!(s.triggers()[0].info.player, q);
+    let hand = s.zone(p, Zone::Hand).count();
+    resolve_all(&t, &mut s, &mut x);
+    assert_eq!(s.zone(p, Zone::Hand).count(), hand + 1);
+    assert_eq!(s.player(q).life, 16);
+}
+
+#[test]
+fn upkeep_triggers_are_ordered_apnap_and_flip_coins() {
+    let mut flips = [0, 0];
+    for seed in 0..16 {
+        let (t, mut s, p) = game_with_seed(seed);
+        let q = opponent(p);
+        let mut x = Scratch::recording();
+        put(&t, &mut s, &mut x, q, "Test Crypt Land");
+        put(&t, &mut s, &mut x, p, "Test Watcher");
+        x.events.drain();
+        advance_to(&t, &mut s, &mut x, q, TurnStep::PrecombatMain);
+        // q's upkeep: q's Crypt and p's Watcher trigger. The active player's goes on the stack
+        // first, so the Watcher, on top, resolves first.
+        let events: Vec<Event> = x.events.drain().collect();
+        let upkeep = events
+            .iter()
+            .position(|e| {
+                *e == Event::StepBegins {
+                    step: TurnStep::Upkeep,
+                    active: q,
+                }
+            })
+            .unwrap();
+        let gain = events.iter().position(|e| {
+            *e == Event::LifeGain {
+                player: p,
+                amount: 1,
+            }
+        });
+        let flip = events
+            .iter()
+            .position(|e| matches!(e, Event::CoinFlip { player, .. } if *player == q));
+        let (gain, flip) = (gain.unwrap(), flip.unwrap());
+        assert!(
+            upkeep < gain && gain < flip,
+            "the nonactive player's trigger resolves first"
+        );
+        let won = events
+            .iter()
+            .any(|e| matches!(e, Event::CoinFlip { won: true, .. }));
+        flips[usize::from(won)] += 1;
+        assert_eq!(s.player(q).life, if won { 20 } else { 17 });
+    }
+    assert!(flips[0] > 0 && flips[1] > 0, "{flips:?}");
+}
+
+/// The trigger-order decisions on the way from the starting player's first main phase to
+/// their next one, with two Crypt Lands of theirs and two Watchers of the opponent's.
+fn order_decisions(distinct: bool) -> (u8, Vec<(u8, usize)>) {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let a = put(&t, &mut s, &mut x, p, "Test Crypt Land");
+    put(&t, &mut s, &mut x, p, "Test Crypt Land");
+    put(&t, &mut s, &mut x, opponent(p), "Test Watcher");
+    put(&t, &mut s, &mut x, opponent(p), "Test Watcher");
+    if distinct {
+        let r = s.object_ref(a);
+        with_ctx(&t, &mut s, &mut x, a, |ctx| {
+            ctx.add_counters(r, CounterKind::Story, 1);
+        });
+    }
+    let mut asked = Vec::new();
+    let mut turns = 0;
+    loop {
+        let d = decide_with(&t, &mut s, &mut x);
+        if d.kind == DecisionKind::TriggerOrder {
+            asked.push((d.player, d.len()));
+        }
+        if s.turn().step == TurnStep::PrecombatMain && s.turn().active == p && s.stack().is_empty()
+        {
+            turns += 1;
+            if turns == 2 {
+                return (p, asked);
+            }
+        }
+        apply(&mut s, &t, &mut x, &mut Replay, Choice(0));
+    }
+}
+
+#[test]
+fn a_player_orders_their_own_triggers_only_when_they_differ() {
+    let (_, same) = order_decisions(false);
+    assert!(
+        same.is_empty(),
+        "equivalent triggers are ordered silently: {same:?}"
+    );
+    let (p, distinct) = order_decisions(true);
+    assert_eq!(distinct, vec![(p, 2)]);
+}
+
+#[test]
+fn a_delayed_trigger_fires_once_at_your_next_main_phase() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    put(&t, &mut s, &mut x, p, "Test Drain Land");
+    resolve_all(&t, &mut s, &mut x);
+    assert_eq!(s.delayed.len(), 1);
+    // Created in the precombat main phase: the next main phase is the postcombat one.
+    advance_to(&t, &mut s, &mut x, p, TurnStep::PostcombatMain);
+    assert!(s.delayed.is_empty());
+    assert_eq!(s.player(p).mana[ManaColor::Colorless as usize], 2);
+    advance_to(&t, &mut s, &mut x, p, TurnStep::PrecombatMain);
+    assert_eq!(s.player(p).mana, [0; 6], "it triggered only once");
+}
+
+#[test]
+fn an_emblem_triggers_from_the_command_zone() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let land = put(&t, &mut s, &mut x, p, "Test Emblem Land");
+    resolve_all(&t, &mut s, &mut x);
+    assert_eq!(s.player(p).emblems.len(), 1);
+    // The emblem stays when its creator leaves.
+    with_ctx(&t, &mut s, &mut x, land, |ctx| ctx.destroy(ctx.source()));
+    let spell = s.object_ref(find(&s, &t, p, "Test Land"));
+    event::settle(
+        &mut s,
+        &t,
+        &mut x.events,
+        Event::Cast {
+            spell,
+            controller: p,
+        },
+    )
+    .unwrap();
+    let them = Event::Cast {
+        spell,
+        controller: opponent(p),
+    };
+    event::settle(&mut s, &t, &mut x.events, them).unwrap();
+    assert_eq!(s.triggers().len(), 1, "only its owner's spells");
+    resolve_all(&t, &mut s, &mut x);
+    assert_eq!(s.player(opponent(p)).life, 19);
+}
+
+#[test]
+fn whenever_you_create_creature_tokens_triggers_once_per_event() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let staff = put(&t, &mut s, &mut x, p, "Test Staff");
+    put(&t, &mut s, &mut x, p, "Test Overlord");
+    // Overlord's enters trigger makes two Insects: one event, one story counter.
+    resolve_all(&t, &mut s, &mut x);
+    assert_eq!(s.object(staff).counters.get(CounterKind::Story), 1);
+    // Noncreature tokens don't count.
+    with_ctx(&t, &mut s, &mut x, staff, |ctx| {
+        ctx.create_tokens(&MAP, 2, TokenEntry::default());
+    });
+    assert!(s.triggers().is_empty());
+    let insects = s
+        .battlefield()
+        .iter()
+        .filter(|&&slot| t.def(s.object(slot).card).name == "Test Insect")
+        .count();
+    assert_eq!(insects, 2);
+}
+
+#[test]
+fn lands_enter_tapped_conditionally_or_unless_life_is_paid() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let tapped = |s: &State, slot: u8| s.object(slot).flags.has(ObjectFlags::TAPPED);
+    let tapland = put(&t, &mut s, &mut x, p, "Test Tapland");
+    assert!(tapped(&s, tapland));
+    // Seachrome Coast: untapped with two or fewer other lands, tapped with three.
+    let coast = put(&t, &mut s, &mut x, p, "Test Coast");
+    assert!(!tapped(&s, coast), "one other land");
+    put(&t, &mut s, &mut x, p, "Test Land");
+    put(&t, &mut s, &mut x, p, "Test Land");
+    let late = put(&t, &mut s, &mut x, p, "Test Coast");
+    assert!(tapped(&s, late), "four other lands");
+
+    // Soporific Springs, played: its controller is asked.
+    for (pay, life, enters_tapped) in [(true, 17, false), (false, 20, true)] {
+        let (t, mut s, p) = game();
+        let mut x = Scratch::new();
+        let springs = find(&s, &t, p, "Test Springs");
+        crate::zone::move_to(&mut s, springs, Zone::Hand).unwrap();
+        let d = decide_with(&t, &mut s, &mut x);
+        let play = (0..d.len() as u8)
+            .find(|&i| d.candidates.option(Choice(i)) == Some(Opt::PlayLand(springs)))
+            .unwrap();
+        apply(&mut s, &t, &mut x, &mut Replay, Choice(play));
+        let d = decide_with(&t, &mut s, &mut x);
+        assert_eq!((d.kind, d.player), (DecisionKind::PayLife, p));
+        let answer = if pay { Opt::Yes } else { Opt::No };
+        let c = (0..2)
+            .find(|&i| d.candidates.option(Choice(i)) == Some(answer))
+            .unwrap();
+        apply(&mut s, &t, &mut x, &mut Replay, Choice(c));
+        assert_eq!(s.object(springs).zone, Zone::Battlefield);
+        assert_eq!(tapped(&s, springs), enters_tapped);
+        assert_eq!(s.player(p).life, life);
+    }
+
+    // A player who can't pay isn't asked.
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    s.player_mut(p).life = 2;
+    let springs = find(&s, &t, p, "Test Springs");
+    crate::zone::move_to(&mut s, springs, Zone::Hand).unwrap();
+    let d = decide_with(&t, &mut s, &mut x);
+    let play = (0..d.len() as u8)
+        .find(|&i| d.candidates.option(Choice(i)) == Some(Opt::PlayLand(springs)))
+        .unwrap();
+    apply(&mut s, &t, &mut x, &mut Replay, Choice(play));
+    assert_eq!(s.object(springs).zone, Zone::Battlefield);
+    assert!(tapped(&s, springs));
+    assert_eq!(s.player(p).life, 2);
+}
+
+#[test]
+fn exile_instead_of_the_graveyard_replaces_the_move() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let a = put(&t, &mut s, &mut x, p, "Test Bear");
+    let b = put(&t, &mut s, &mut x, p, "Test Bear");
+    let a_ref = s.object_ref(a);
+    with_ctx(&t, &mut s, &mut x, b, |ctx| {
+        ctx.add_effect(
+            a_ref,
+            Continuous::ExileInsteadOfGraveyard,
+            Duration::EndOfTurn,
+        );
+        ctx.destroy(a_ref);
+        ctx.destroy(ctx.source());
+    });
+    assert_eq!(s.object(a).zone, Zone::Exile);
+    assert_eq!(s.object(b).zone, Zone::Graveyard);
+}
+
+#[test]
+fn impending_counters_and_type_changes_apply_in_layer_four() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let overlord = find(&s, &t, p, "Test Overlord");
+    let r = s.object_ref(overlord);
+    let land = put(&t, &mut s, &mut x, p, "Test Land");
+    with_ctx(&t, &mut s, &mut x, land, |ctx| {
+        ctx.put_onto_battlefield(r, Some((CounterKind::Time, 4)));
+    });
+    assert_eq!(s.object(overlord).counters.get(CounterKind::Time), 4);
+    assert_eq!(types(&s, overlord), Types::ENCHANTMENT, "not a creature");
+    let r = s.object_ref(overlord);
+    with_ctx(&t, &mut s, &mut x, land, |ctx| {
+        ctx.remove_counters(r, CounterKind::Time, 4);
+    });
+    assert_eq!(
+        types(&s, overlord),
+        Types::ENCHANTMENT.union(Types::CREATURE)
+    );
+}
+
+#[test]
+fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let bear = put(&t, &mut s, &mut x, p, "Test Bear");
+    let aura = put(&t, &mut s, &mut x, p, "Test Reconfiguration");
+    s.object_mut(aura).attached_to = bear;
+    s.flags.derived_dirty = true;
+    crate::layers::refresh(&mut s, &t);
+    let d = s.derived(bear);
+    assert_eq!(Types(d.types), Types::ARTIFACT);
+    assert!(crate::card::Subtypes(d.subtypes).contains(Subtype::Vehicle));
+    assert_eq!(d.granted[0].card, s.object(aura).card);
+    let granted = &t.def(d.granted[0].card).front().abilities[usize::from(d.granted[0].ability)];
+    assert_eq!(granted.kind, AbilityKind::Activated);
+    // Crewed: an artifact creature until end of turn, by a later timestamp.
+    let r = s.object_ref(bear);
+    with_ctx(&t, &mut s, &mut x, bear, |ctx| {
+        ctx.add_effect(
+            r,
+            Continuous::Layer(Modification::AddTypes(Types::CREATURE)),
+            Duration::EndOfTurn,
+        );
+    });
+    assert_eq!(types(&s, bear), Types::ARTIFACT.union(Types::CREATURE));
+    advance_to(&t, &mut s, &mut x, opponent(p), TurnStep::PrecombatMain);
+    assert_eq!(types(&s, bear), Types::ARTIFACT);
+}
+
+#[test]
+fn gaining_control_changes_the_controller_until_the_effect_ends() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let q = opponent(p);
+    let theirs = put(&t, &mut s, &mut x, q, "Test Bear");
+    let mine = put(&t, &mut s, &mut x, p, "Test Adeline");
+    assert_eq!(s.derived(mine).power, 1);
+    let r = s.object_ref(theirs);
+    with_ctx(&t, &mut s, &mut x, mine, |ctx| {
+        ctx.gain_control(r, Duration::Indefinite);
+    });
+    assert_eq!(s.controller(theirs), p);
+    assert_eq!(s.object(theirs).owner, q);
+    assert!(s.object(theirs).flags.has(ObjectFlags::SUMMONING_SICK));
+    assert_eq!(s.derived(mine).power, 2, "Adeline counts it");
+    // It untaps in its new controller's untap step and goes to its owner's graveyard.
+    s.object_mut(theirs).flags.set(ObjectFlags::TAPPED, true);
+    advance_to(&t, &mut s, &mut x, q, TurnStep::PrecombatMain);
+    assert!(
+        s.object(theirs).flags.has(ObjectFlags::TAPPED),
+        "not in its owner's"
+    );
+    advance_to(&t, &mut s, &mut x, p, TurnStep::PrecombatMain);
+    assert!(!s.object(theirs).flags.has(ObjectFlags::TAPPED));
+    assert_eq!(s.controller(theirs), p, "an indefinite effect lasts");
+    with_ctx(&t, &mut s, &mut x, mine, |ctx| ctx.destroy(r));
+    assert_eq!(s.object(theirs).zone, Zone::Graveyard);
+    assert!(s.zone(q, Zone::Graveyard).contains(theirs));
+    assert!(s.effects().is_empty(), "the effect ended with its object");
+}
+
+#[test]
+fn granted_keywords_end_at_cleanup_and_until_your_next_turn_lasts_through_theirs() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let bear = put(&t, &mut s, &mut x, p, "Test Bear");
+    let r = s.object_ref(bear);
+    with_ctx(&t, &mut s, &mut x, bear, |ctx| {
+        ctx.add_effect(
+            r,
+            Continuous::Layer(Modification::AddKeywords(Keywords::FIRST_STRIKE)),
+            Duration::EndOfTurn,
+        );
+        ctx.add_effect(
+            r,
+            Continuous::Layer(Modification::ModifyPt(-2, 0)),
+            Duration::UntilYourNextTurn(p),
+        );
+        ctx.add_counters(r, CounterKind::PlusOne, 1);
+    });
+    let d = s.derived(bear);
+    assert!(Keywords(d.keywords).contains(Keywords::FIRST_STRIKE));
+    // Layer 7c: -2/-0 and a +1/+1 counter.
+    assert_eq!((d.power, d.toughness), (1, 3));
+    advance_to(&t, &mut s, &mut x, opponent(p), TurnStep::PrecombatMain);
+    let d = s.derived(bear);
+    assert!(!Keywords(d.keywords).contains(Keywords::FIRST_STRIKE));
+    assert_eq!((d.power, d.toughness), (1, 3), "until your next turn");
+    advance_to(&t, &mut s, &mut x, p, TurnStep::PrecombatMain);
+    assert_eq!((s.derived(bear).power, s.derived(bear).toughness), (3, 3));
+}
+
+#[test]
+fn a_one_one_token_copy_has_the_cards_abilities() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let trainer = put(&t, &mut s, &mut x, p, "Test Trainer");
+    resolve_all(&t, &mut s, &mut x);
+    assert_eq!(s.player(p).life, 21);
+    let card = s.object(trainer).card;
+    let mut token = Bitboard::EMPTY;
+    with_ctx(&t, &mut s, &mut x, trainer, |ctx| {
+        token = ctx.create_tokens_of(
+            card,
+            1,
+            TokenEntry {
+                one_one: true,
+                ..TokenEntry::default()
+            },
+        );
+    });
+    let token = token.first().unwrap();
+    assert_eq!((s.derived(token).power, s.derived(token).toughness), (1, 1));
+    resolve_all(&t, &mut s, &mut x);
+    assert_eq!(s.player(p).life, 22, "the copy's enters trigger");
+}
+
+#[test]
+fn an_object_exiled_until_its_exiler_leaves_returns_under_its_owners_control() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let q = opponent(p);
+    let bear = put(&t, &mut s, &mut x, q, "Test Bear");
+    let iceberg = put(&t, &mut s, &mut x, p, "Test Iceberg");
+    resolve_all(&t, &mut s, &mut x);
+    assert_eq!(s.object(bear).zone, Zone::Exile);
+    let r = s.object_ref(iceberg);
+    with_ctx(&t, &mut s, &mut x, iceberg, |ctx| ctx.destroy(r));
+    assert_eq!(s.object(bear).zone, Zone::Battlefield);
+    assert_eq!(s.controller(bear), q);
+    assert!(!s.object(bear).flags.has(ObjectFlags::EXILED_UNTIL));
+
+    // CR 610.3b: if the exiler leaves before its trigger resolves, nothing is exiled.
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let q = opponent(p);
+    let bear = put(&t, &mut s, &mut x, q, "Test Bear");
+    let iceberg = put(&t, &mut s, &mut x, p, "Test Iceberg");
+    let r = s.object_ref(iceberg);
+    with_ctx(&t, &mut s, &mut x, iceberg, |ctx| ctx.destroy(r));
+    resolve_all(&t, &mut s, &mut x);
+    assert_eq!(s.object(bear).zone, Zone::Battlefield);
+}
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "derived read while dirty")]
+fn reading_derived_after_a_raw_change_without_a_refresh_panics() {
+    let (t, mut s, p) = game();
+    let bear = find(&s, &t, p, "Test Bear");
+    crate::zone::move_to(&mut s, bear, Zone::Battlefield).unwrap();
+    let _ = s.derived(bear);
+}
+
+/// Random games over lands with enters, upkeep, end-step and delayed triggers and entering
+/// replacements. Every `derived` read in them asserts it is clean (debug builds), so
+/// finishing them shows nothing read `derived` dirty.
+#[cfg(debug_assertions)]
+#[test]
+fn random_games_with_triggers_never_read_derived_dirty() {
+    const LANDS: &Decklist = &[
+        (6, "Test Gain Land"),
+        (4, "Test Tapland"),
+        (4, "Test Coast"),
+        (4, "Test Springs"),
+        (6, "Test Crypt Land"),
+        (4, "Test Watcher"),
+        (4, "Test Ender"),
+        (4, "Test Drain Land"),
+        (4, "Test Emblem Land"),
+    ];
+    let t = GameTable::new(&CARDS, [LANDS, LANDS]).unwrap();
+    for seed in 0..20 {
+        let mut s = State::new(&t, seed, Profile::EXACT);
+        let mut rng = crate::rng::SplitMix64::new(seed);
+        let outcome = super::play(
+            &t,
+            &mut s,
+            |_, d| Choice(rng.below(d.len() as u64) as u8),
+            |s, _| assert!(!s.flags.derived_dirty),
+        );
+        assert!(
+            matches!(outcome, Outcome::Win(_) | Outcome::Draw),
+            "{outcome:?}"
+        );
+    }
+}

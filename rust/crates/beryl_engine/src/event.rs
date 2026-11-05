@@ -286,8 +286,7 @@ pub(crate) fn move_batch(
         // CR 111.8: "A token that has left the battlefield can't move to another zone or
         // come back onto the battlefield. If such a token would change zones, it remains in
         // its current zone instead."
-        if o.flags.has(ObjectFlags::TOKEN) && !matches!(o.zone, Zone::Battlefield | Zone::Nowhere)
-        {
+        if o.flags.has(ObjectFlags::TOKEN) && !matches!(o.zone, Zone::Battlefield | Zone::Nowhere) {
             continue;
         }
         let dest = destination(s, slot, to);

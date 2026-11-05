@@ -215,7 +215,8 @@ pub struct Derived {
     pub granted: [AbilityRef; 4],
 }
 
-/// An ability of a card in the game table.
+/// An ability of a card in the game table: the index into its front face's abilities, for an
+/// ability granted by another object (§9). A `card` of [`NONE`] refers to nothing.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct AbilityRef {
     pub card: u8,

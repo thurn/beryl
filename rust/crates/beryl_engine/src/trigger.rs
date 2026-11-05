@@ -74,7 +74,11 @@ pub(crate) fn match_event(s: &mut State, t: &GameTable, e: &Event) -> Result<(),
     Ok(())
 }
 
-fn face_abilities(t: &GameTable, card: u8, face: u8) -> impl Iterator<Item = (u8, &'static Ability)> {
+fn face_abilities(
+    t: &GameTable,
+    card: u8,
+    face: u8,
+) -> impl Iterator<Item = (u8, &'static Ability)> {
     t.def(card).faces[usize::from(face)]
         .abilities
         .iter()
@@ -271,7 +275,8 @@ fn equivalent(s: &State, a: &PendingTrigger, b: &PendingTrigger) -> bool {
     let same_source = a.source == b.source
         || (a.source.slot != NONE
             && b.source.slot != NONE
-            && crate::zone::signature(s, a.source.slot) == crate::zone::signature(s, b.source.slot));
+            && crate::zone::signature(s, a.source.slot)
+                == crate::zone::signature(s, b.source.slot));
     same_source
         && (a.card, a.face, a.ability, a.controller, a.info)
             == (b.card, b.face, b.ability, b.controller, b.info)

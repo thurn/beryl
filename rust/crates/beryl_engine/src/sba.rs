@@ -86,7 +86,8 @@ fn doomed(s: &State) -> (Bitboard, Bitboard) {
         let o = s.object(slot);
         let types = Types(d.types);
         let dies = types.contains(Types::CREATURE)
-            && (d.toughness <= 0 || (o.damage > 0 && i16::from(o.damage) >= i16::from(d.toughness)));
+            && (d.toughness <= 0
+                || (o.damage > 0 && i16::from(o.damage) >= i16::from(d.toughness)));
         if dies || (types.contains(Types::PLANESWALKER) && o.counters.loyalty == 0) {
             graveyard.insert(slot);
         }
