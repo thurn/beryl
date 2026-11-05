@@ -6,7 +6,7 @@ use std::process::ExitCode;
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let json = beryl_scenario::to_json(beryl_cards::SCENARIOS);
+    let json = beryl_scenario::to_json(&beryl_cards::CARDS, beryl_cards::SCENARIOS);
     match args.as_slice() {
         [dump] if dump == "dump" => println!("{json}"),
         [dump, path] if dump == "dump" => {

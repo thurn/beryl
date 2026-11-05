@@ -16,7 +16,7 @@ use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot};
 use crate::mana;
 use crate::observation::Observation;
-use crate::profile::Payment;
+use crate::profile::{Payment, Stops};
 use crate::state::{
     CastPermission, Continuous, CounterKind, Duration, FloatingEffect, ObjectFlags, ObjectRef,
     PendingTrigger, StackEntry, State, Target, TriggerInfo, Zone,
@@ -221,15 +221,16 @@ impl<'a> EffectCtx<'a> {
         Some(cost.mana_value().saturating_add(cost.x.saturating_mul(e.x)))
     }
 
-    /// Asks a question (§7.3). A question with one answer is answered silently. Otherwise
-    /// the choice record answers it, or an inline source does, or the body pauses here.
+    /// Asks a question (§7.3). A question with one answer is answered silently, except under
+    /// [`Stops::Forced`]. Otherwise the choice record answers it, or an inline source does, or
+    /// the body pauses here.
     fn ask(&mut self, d: &Decision) -> Result<Choice, Pause> {
         debug_assert!(
             self.ability.may_pause,
             "a body asked a question without declaring may_pause"
         );
         debug_assert!(!d.is_empty(), "a question with no answer");
-        if d.len() == 1 {
+        if d.len() == 1 && self.state.profile.stops != Stops::Forced {
             return Ok(Choice(0));
         }
         if let Some(&c) = self.record.get(self.used) {

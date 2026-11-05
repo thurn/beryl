@@ -3,13 +3,14 @@
 use std::fmt;
 
 use beryl_engine::card::Types;
+use beryl_engine::event::Event;
 use beryl_engine::state::{CounterKind, ObjectFlags};
 use beryl_engine::{
     Breakpoint, CardTable, Choice, Decision, DecisionKind, GameTable, Opt, Outcome, Profile,
-    Replay, Scratch, Seat, Slot, State, Step, Zone, apply, next,
+    Replay, Scratch, Seat, Slot, State, Step, Stops, Zone, apply, next,
 };
 
-use crate::{Action, Assertion, Ending, Pick, Scenario};
+use crate::{Action, Assertion, CoinFlip, Ending, Forced, Pick, Position, Scenario, StackItem};
 
 /// Why a scenario failed: at which action, and what went wrong.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -31,8 +32,23 @@ impl fmt::Display for Failure {
 
 impl std::error::Error for Failure {}
 
-/// Runs a scenario over the cards of `cards`, under the exact profile.
+/// The exact profile, except that a question with one answer stops too: the runner answers it
+/// as the engine would have silently, and the trace records the answer.
+const TRACED: Profile = Profile {
+    stops: Stops::Forced,
+    ..Profile::EXACT
+};
+
+/// Runs a scenario over the cards of `cards`, under the exact profile. The questions with one
+/// answer that profile answers silently stop here (`Stops::Forced`), and the runner answers
+/// them the same way, so that [`trace`] can record them.
 pub fn run(cards: &'static CardTable, scenario: &Scenario) -> Result<(), Failure> {
+    trace(cards, scenario).map(|_| ())
+}
+
+/// Runs a scenario like [`run`], and returns the position each action began from: what the
+/// oracle exporters need to place an action at its turn, step and stack (§17.2).
+pub fn trace(cards: &'static CardTable, scenario: &Scenario) -> Result<Vec<Position>, Failure> {
     let fail = |action, message: String| Failure {
         scenario: scenario.name,
         action,
@@ -45,14 +61,19 @@ pub fn run(cards: &'static CardTable, scenario: &Scenario) -> Result<(), Failure
     let mut runner = Runner {
         t: &t,
         s,
-        x: Scratch::new(),
+        // Recording, for the coin flips each position reports.
+        x: Scratch::recording(),
         actions: scenario.actions,
         position: None,
+        forced: Vec::new(),
     };
+    let mut positions = Vec::with_capacity(scenario.actions.len());
     for i in 0..scenario.actions.len() {
+        let step = runner.position(i).map_err(|m| fail(Some(i), m))?;
+        positions.push(runner.describe_position(&step));
         runner.act(i).map_err(|m| fail(Some(i), m))?;
     }
-    Ok(())
+    Ok(positions)
 }
 
 /// Every card the setup names, by owner: the decks the game is built from.
@@ -144,6 +165,8 @@ struct Runner<'a> {
     actions: &'static [Action],
     /// What `next` returned for the current state, or `None` after an `apply`.
     position: Option<Step>,
+    /// The forced answers since the last position, for [`trace`].
+    forced: Vec<Forced>,
 }
 
 impl Runner<'_> {
@@ -174,14 +197,32 @@ impl Runner<'_> {
         };
         self.s.set_profile(Profile {
             breakpoint,
-            ..Profile::EXACT
+            ..TRACED
         });
-        let step = next(&mut self.s, self.t, &mut self.x, &mut Replay);
-        self.s
-            .check_invariants(self.t)
-            .map_err(|v| format!("an engine invariant broke: {v:?}"))?;
-        self.position = Some(step);
-        Ok(step)
+        loop {
+            let step = next(&mut self.s, self.t, &mut self.x, &mut Replay);
+            self.s
+                .check_invariants(self.t)
+                .map_err(|v| format!("an engine invariant broke: {v:?}"))?;
+            match step {
+                // A question with one answer, which the exact profile answers silently.
+                Step::Decide(d) if d.len() == 1 && d.kind != DecisionKind::Priority => {
+                    if let Some(pick) = self.forced_pick(&d) {
+                        let turn = self.s.turn();
+                        self.forced.push(Forced {
+                            turn: turn.number,
+                            step: turn.step,
+                            answer: Action::answer(d.player, d.kind, pick),
+                        });
+                    }
+                    apply(&mut self.s, self.t, &mut self.x, &mut Replay, Choice(0));
+                }
+                _ => {
+                    self.position = Some(step);
+                    return Ok(step);
+                }
+            }
+        }
     }
 
     fn decision(&mut self, i: usize) -> Result<Decision, String> {
@@ -287,7 +328,7 @@ impl Runner<'_> {
                 }
                 if here == target && d.player == now.active {
                     // Stopped: keep the decision, and stop no more.
-                    self.s.set_profile(Profile::EXACT);
+                    self.s.set_profile(TRACED);
                     return Ok(());
                 }
                 let pass = option_index(&d, |o| o == Opt::Pass).expect("passing is offered");
@@ -311,6 +352,47 @@ impl Runner<'_> {
                 "unscripted decision: {}, where the scenario has player {player} answer {kind:?}",
                 self.describe(&d)
             ))
+        }
+    }
+
+    /// The position an action begins from, for [`trace`]. It takes the coin flips and taps
+    /// since the last position from the recorded events.
+    fn describe_position(&mut self, step: &Step) -> Position {
+        let mut flips = Vec::new();
+        let mut taps = Vec::new();
+        for e in self.x.events.drain() {
+            match e {
+                Event::CoinFlip { player, won } => flips.push(CoinFlip { player, won }),
+                Event::Tap { object } => taps.push(object.slot),
+                _ => {}
+            }
+        }
+        let taps = taps.into_iter().map(|slot| self.name(slot)).collect();
+        let turn = self.s.turn();
+        let stack = self
+            .s
+            .stack()
+            .iter()
+            .map(|e| StackItem {
+                name: self.t.def(e.card).face_name(e.face),
+                spell: e.is_spell(),
+                controller: e.controller,
+            })
+            .collect();
+        let (decider, kind) = match *step {
+            Step::Decide(d) => (Some(d.player), Some(d.kind)),
+            Step::Over(_) => (None, None),
+        };
+        Position {
+            forced: std::mem::take(&mut self.forced),
+            turn: turn.number,
+            step: turn.step,
+            active: turn.active,
+            decider,
+            kind,
+            stack,
+            flips,
+            taps,
         }
     }
 
@@ -338,6 +420,33 @@ impl Runner<'_> {
                 .map(|r| r.slot),
             _ => None,
         }
+    }
+
+    /// The only answer to `d` as a pick, where the scenario vocabulary can name it.
+    fn forced_pick(&self, d: &Decision) -> Option<Pick> {
+        let c = Choice(0);
+        if let Some(slot) = d.candidates.object(c) {
+            return Some(Pick::Card {
+                card: self.name(slot),
+            });
+        }
+        let o = d.candidates.option(c)?;
+        if let Some(slot) = self.named(o) {
+            return Some(Pick::Card {
+                card: self.name(slot),
+            });
+        }
+        Some(match o {
+            Opt::Pass => Pick::Pass,
+            Opt::Yes => Pick::Yes,
+            Opt::No => Pick::No,
+            Opt::Done => Pick::Done,
+            Opt::Number(n) => Pick::Number { n },
+            Opt::Plan(i) => Pick::Plan { i },
+            Opt::Player(player) => Pick::Player { player },
+            Opt::Defender(None) => Pick::DefendingPlayer,
+            _ => return None,
+        })
     }
 
     /// The candidate of `d` that `pick` names.

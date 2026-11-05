@@ -12,6 +12,11 @@ pub enum Stops {
     /// Priority only at the smart stops (§15, decision D18); elsewhere both players pass
     /// silently.
     Smart,
+    /// As `Exact`, and a question with one answer is a decision too rather than answered
+    /// silently, for a caller that records every answer: the scenario trace, whose oracles
+    /// must script the answers Beryl takes for granted (§17.2). Passing priority when it is
+    /// all a player can do stays silent.
+    Forced,
 }
 
 /// The budgets whose exhaustion is `Outcome::Stalled` (architecture §12.3).
@@ -82,7 +87,7 @@ impl Profile {
     /// Whether `player`'s priority now is a decision, given they have a legal action.
     pub(crate) fn stops_for(self, s: &State, player: Seat) -> bool {
         match self.stops {
-            Stops::Exact => true,
+            Stops::Exact | Stops::Forced => true,
             Stops::Smart => is_smart_stop(s, player),
         }
     }

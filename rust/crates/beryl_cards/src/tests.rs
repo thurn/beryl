@@ -241,7 +241,7 @@ fn every_card_has_scenarios_and_they_pass() {
 #[test]
 fn the_dump_is_valid_json_with_every_scenario() {
     let json: serde_json::Value =
-        serde_json::from_str(&beryl_scenario::to_json(SCENARIOS)).unwrap();
+        serde_json::from_str(&beryl_scenario::to_json(&CARDS, SCENARIOS)).unwrap();
     let total: usize = SCENARIOS.iter().map(|(_, s)| s.len()).sum();
     assert_eq!(json.as_array().unwrap().len(), total);
     assert_eq!(json[0]["card"], names::PLAINS);

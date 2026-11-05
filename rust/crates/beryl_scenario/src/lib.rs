@@ -5,7 +5,7 @@
 //! constants with the `const` builder below. [`run`] plays one through the engine's public
 //! decision API under the exact profile, and is strict: every decision the engine offers must
 //! be scripted, so the decision surface itself stays under test. [`to_json`] serializes
-//! scenarios for the oracle exporters (§17.2).
+//! scenarios for the oracle exporters (§17.2), each with its [`trace`].
 //!
 //! The actions and assertions are the ones the engine's mechanics support so far.
 
@@ -16,10 +16,10 @@ mod tests;
 use beryl_engine::card::AbilityIx;
 use beryl_engine::card::ManaColor;
 use beryl_engine::state::CounterKind;
-use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
+use beryl_engine::{CardTable, DecisionKind, Seat, TurnStep, Zone};
 use serde::{Serialize, Serializer};
 
-pub use run::{Failure, run};
+pub use run::{Failure, run, trace};
 
 /// The players, in seat order.
 pub const P0: Seat = Seat::P0;
@@ -467,23 +467,116 @@ impl Scenario {
     }
 }
 
-/// One scenario as the dump writes it: the card it belongs to, and the scenario.
+/// Where the game stood when an action began, as Beryl played it: the turn, the step, the
+/// open decision and the stack, with the coin flips, taps and forced answers on the way. Oracles
+/// script by turn and step rather than by decision, so the exporters place each action with
+/// this (§17.2).
+#[derive(Clone, Debug, Serialize)]
+pub struct Position {
+    pub turn: u16,
+    #[serde(serialize_with = "variant")]
+    pub step: TurnStep,
+    #[serde(serialize_with = "seat")]
+    pub active: Seat,
+    /// Who decides at the open decision, and what; both `None` once the game is over.
+    #[serde(serialize_with = "optional_seat")]
+    pub decider: Option<Seat>,
+    #[serde(serialize_with = "optional_variant")]
+    pub kind: Option<DecisionKind>,
+    /// Bottom first.
+    pub stack: Vec<StackItem>,
+    /// The coin flips since the previous action began, in order, so that an oracle can
+    /// replay Beryl's seeded results with its own.
+    pub flips: Vec<CoinFlip>,
+    /// The permanents that became tapped since the previous action began, by name: among
+    /// them the mana sources a payment tapped, which an oracle may choose differently.
+    pub taps: Vec<&'static str>,
+    /// The questions with one answer since the previous action began, which Beryl answers
+    /// without asking and an oracle may ask.
+    pub forced: Vec<Forced>,
+}
+
+/// A question with one answer, as the answer a scenario would script, and the turn and step
+/// it came in.
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct Forced {
+    pub turn: u16,
+    #[serde(serialize_with = "variant")]
+    pub step: TurnStep,
+    #[serde(flatten)]
+    pub answer: Action,
+}
+
+/// A coin flip ([CR 705.2](https://yawgatog.com/resources/magic-rules/#R7052)): "If the call
+/// matches the result, the player wins the flip."
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct CoinFlip {
+    #[serde(serialize_with = "seat")]
+    pub player: Seat,
+    pub won: bool,
+}
+
+/// A spell or ability on the stack.
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct StackItem {
+    /// The spell's name, or the name of the ability's source.
+    pub name: &'static str,
+    pub spell: bool,
+    #[serde(serialize_with = "seat")]
+    pub controller: Seat,
+}
+
+#[allow(clippy::ref_option, clippy::trivially_copy_pass_by_ref)] // as `serialize_with` calls
+fn optional_seat<S: Serializer>(player: &Option<Seat>, s: S) -> Result<S::Ok, S::Error> {
+    match player {
+        Some(p) => s.serialize_some(&p.get()),
+        None => s.serialize_none(),
+    }
+}
+
+#[allow(clippy::ref_option)] // the signature `serialize_with` calls
+fn optional_variant<T: std::fmt::Debug, S: Serializer>(
+    value: &Option<T>,
+    s: S,
+) -> Result<S::Ok, S::Error> {
+    match value {
+        Some(v) => s.serialize_some(&format!("{v:?}")),
+        None => s.serialize_none(),
+    }
+}
+
+/// One scenario as the dump writes it: the card it belongs to, the scenario, and the position
+/// each action began from, or why Beryl failed it.
 #[derive(Serialize)]
 struct Entry<'a> {
     card: &'a str,
     #[serde(flatten)]
     scenario: &'a Scenario,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    trace: Option<Vec<Position>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    failure: Option<String>,
 }
 
-/// The scenarios of every card, as a JSON array of `{card, name, setup, actions}` objects:
+/// The scenarios of every card, each played on `table`, as a JSON array of `{card, name,
+/// setup, actions, trace}` objects (`failure` in place of `trace` for a scenario Beryl fails):
 /// what `beryl_scenario dump` writes for the oracle exporters (§17.2).
-pub fn to_json(cards: &[(&str, &[Scenario])]) -> String {
+pub fn to_json(table: &'static CardTable, cards: &[(&str, &[Scenario])]) -> String {
     let entries: Vec<Entry> = cards
         .iter()
         .flat_map(|&(card, scenarios)| {
-            scenarios
-                .iter()
-                .map(move |scenario| Entry { card, scenario })
+            scenarios.iter().map(move |scenario| {
+                let (trace, failure) = match trace(table, scenario) {
+                    Ok(t) => (Some(t), None),
+                    Err(e) => (None, Some(e.to_string())),
+                };
+                Entry {
+                    card,
+                    scenario,
+                    trace,
+                    failure,
+                }
+            })
         })
         .collect();
     serde_json::to_string_pretty(&entries).expect("scenarios always serialize")

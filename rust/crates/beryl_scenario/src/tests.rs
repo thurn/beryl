@@ -358,7 +358,7 @@ fn scenarios_serialize_with_engine_names() {
         Action::activate(P1, L, 0),
         Action::activate_granted(P0, L, 1),
     ]);
-    let json: serde_json::Value = serde_json::from_str(&to_json(&[(L, &[S])])).unwrap();
+    let json: serde_json::Value = serde_json::from_str(&to_json(&CARDS, &[(L, &[S])])).unwrap();
     assert_eq!(json[0]["card"], L);
     assert_eq!(json[0]["name"], "json");
     assert_eq!(json[0]["setup"]["step"], "PrecombatMain");
@@ -369,4 +369,41 @@ fn scenarios_serialize_with_engine_names() {
     assert_eq!(json[0]["actions"][1]["ability"]["Own"], 0);
     assert_eq!(json[0]["actions"][2]["player"], 0);
     assert_eq!(json[0]["actions"][2]["ability"]["Granted"], 1);
+    // Player 1 never holds priority in turn 1's end step.
+    let failure = json[0]["failure"].as_str().unwrap();
+    assert!(failure.starts_with("json: action 1: "), "{failure}");
+    assert!(json[0].get("trace").is_none());
+}
+
+#[test]
+fn the_dump_traces_where_each_action_began() {
+    const B: &str = "Test Bear";
+    const S: Scenario = Scenario::new("traced")
+        .hand(P0, &[B])
+        .battlefield(P0, &[Permanent::new(L), Permanent::new(L)])
+        .actions(&[
+            Action::cast(P0, B),
+            Action::Resolve,
+            Action::assert(Assertion::Stack { count: 0 }),
+        ]);
+    let json: serde_json::Value = serde_json::from_str(&to_json(&CARDS, &[(B, &[S])])).unwrap();
+    let trace = json[0]["trace"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{}", json[0]["failure"]));
+    assert_eq!(trace.len(), 3);
+    assert_eq!(trace[0]["turn"], 1);
+    assert_eq!(trace[0]["step"], "PrecombatMain");
+    assert_eq!(trace[0]["active"], 0);
+    assert_eq!(trace[0]["decider"], 0);
+    assert_eq!(trace[0]["kind"], "Priority");
+    assert_eq!(trace[0]["stack"].as_array().unwrap().len(), 0);
+    // The bear is on the stack, its caster holding priority; then it has resolved.
+    assert_eq!(trace[1]["stack"][0]["name"], B);
+    assert_eq!(trace[1]["stack"][0]["spell"], true);
+    assert_eq!(trace[1]["stack"][0]["controller"], 0);
+    assert_eq!(trace[1]["decider"], 0);
+    assert_eq!(trace[2]["stack"].as_array().unwrap().len(), 0);
+    // Its cost tapped both lands.
+    assert_eq!(trace[1]["taps"], serde_json::json!([L, L]));
+    assert!(json[0].get("failure").is_none());
 }

@@ -9,7 +9,7 @@ use crate::decision::{
 use crate::event::{self, Entry, Reason, Sink};
 use crate::fixed::{Fixed, Full};
 use crate::ids::{Seat, Slot};
-use crate::profile::Profile;
+use crate::profile::{Profile, Stops};
 use crate::state::{Pending, State, Zone};
 use crate::table::GameTable;
 use crate::{cast, combat, layers, mana, resolve, sba, start, trigger, turn, zone};
@@ -133,7 +133,8 @@ pub fn next(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers) 
         };
         debug_assert!(!d.is_empty());
         let priority = d.kind == DecisionKind::Priority;
-        let silent = (d.len() == 1 || (priority && !s.profile.stops_for(s, d.player)))
+        let forced = d.len() == 1 && (priority || s.profile.stops != Stops::Forced);
+        let silent = (forced || (priority && !s.profile.stops_for(s, d.player)))
             && !(priority && s.profile.breaks_at(s.turn));
         if silent {
             x.counts.silent += 1;
