@@ -13,6 +13,7 @@ static LAND: CardDef = CardDef {
         abilities: &[Ability::tap_for_mana(ManaSet::one(ManaColor::White))],
         ..Face::EMPTY
     }],
+    tokens: &[],
 };
 
 static OTHER: CardDef = CardDef {
@@ -21,6 +22,7 @@ static OTHER: CardDef = CardDef {
         types: Types::LAND,
         ..Face::EMPTY
     }],
+    tokens: &[],
 };
 
 static CARDS: CardTable = CardTable::new(&[&LAND, &OTHER]);

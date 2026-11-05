@@ -15,7 +15,7 @@ fn the_invariants_hold_in_play_and_fail_on_corruption() {
     assert_eq!(s.check_invariants(&t), Ok(()));
     let p = s.turn().active;
     let hand = s.zone(p, Zone::Hand).first().unwrap();
-    let corruptions: [(&str, Corruption); 5] = [
+    let corruptions: [(&str, Corruption); 6] = [
         ("zone bitboards disagree", |s, _, slot| {
             s.object_mut(slot).zone = Zone::Library;
         }),
@@ -30,6 +30,9 @@ fn the_invariants_hold_in_play_and_fail_on_corruption() {
         }),
         ("a player who has lost has priority", |s, p, _| {
             s.player_mut(p).life = 0;
+        }),
+        ("derived characteristics are stale", |s, _, _| {
+            s.flags.derived_dirty = true;
         }),
     ];
     for (what, corrupt) in corruptions {

@@ -2,7 +2,9 @@
 //! §17.4). A violation is an engine bug, never a rules outcome.
 
 use crate::bitboard::Bitboard;
-use crate::state::{DECK_SLOTS, NONE, Object, Pending, SLOTS, State, Zone};
+use crate::state::{
+    DECK_SLOTS, NONE, Object, ObjectFlags, Pending, SLOTS, State, TOKEN_SLOTS, Zone,
+};
 use crate::table::GameTable;
 
 /// Which invariant failed, and the slot or player it failed for.
@@ -25,11 +27,17 @@ impl State {
     /// Checks the invariants that hold whenever `next` has returned: zone bitboards and lists
     /// agree with the objects' zones, no object is in two zones, every stack reference names
     /// a live incarnation, knowledge covers the public zones, off-battlefield objects carry no
-    /// permanent status, and no player who has lost is still playing.
+    /// permanent status, no player who has lost is still playing, and derived characteristics
+    /// are up to date (§9: reads never recompute).
     pub fn check_invariants(&self, t: &GameTable) -> Result<(), Violation> {
         self.check_objects(t)?;
         self.check_zones()?;
-        self.check_players()
+        self.check_players()?;
+        check(
+            self.outcome.is_some() || !self.flags.derived_dirty,
+            "derived characteristics are stale",
+            None,
+        )
     }
 
     fn check_objects(&self, t: &GameTable) -> Result<(), Violation> {
@@ -39,16 +47,30 @@ impl State {
             let deck_owner = i / DECK_SLOTS;
             let in_deck = deck_owner < 2 && i % DECK_SLOTS < t.deck(deck_owner as u8).len();
             if o.zone == Zone::Nowhere {
-                // Tokens and copies arrive with the cards that make them.
                 check(!in_deck, "a deck card is nowhere", Some(slot))?;
                 continue;
             }
-            check(in_deck, "an object outside the deck slots", Some(slot))?;
-            check(
-                usize::from(o.owner) == deck_owner,
-                "a deck card with another owner",
-                Some(slot),
-            )?;
+            let token = o.flags.has(ObjectFlags::TOKEN);
+            if i >= usize::from(TOKEN_SLOTS) {
+                // The shared pool holds tokens; slot NONE is never used.
+                check(
+                    token && slot != NONE,
+                    "a non-token in the token pool",
+                    Some(slot),
+                )?;
+                check(o.owner < 2, "no such owner", Some(slot))?;
+            } else {
+                check(
+                    in_deck && !token,
+                    "an object outside the deck slots",
+                    Some(slot),
+                )?;
+                check(
+                    usize::from(o.owner) == deck_owner,
+                    "a deck card with another owner",
+                    Some(slot),
+                )?;
+            }
             check(o.controller < 2, "no such controller", Some(slot))?;
             check(usize::from(o.card) < t.len(), "no such card", Some(slot))?;
             for link in [o.attached_to, o.linked] {
@@ -59,6 +81,10 @@ impl State {
                 )?;
             }
             if !matches!(o.zone, Zone::Battlefield | Zone::Stack) {
+                // What may stay off the battlefield: being a token, and a link to the
+                // permanent that exiled it "until" it leaves (CR 610.3).
+                let kept = ObjectFlags::TOKEN | ObjectFlags::ONE_ONE | ObjectFlags::EXILED_UNTIL;
+                let until = o.flags.has(ObjectFlags::EXILED_UNTIL);
                 check(
                     *o == Object {
                         card: o.card,
@@ -67,8 +93,10 @@ impl State {
                         owner: o.owner,
                         controller: o.owner,
                         timestamp: o.timestamp,
+                        flags: ObjectFlags(o.flags.0 & kept),
+                        linked: if until { o.linked } else { NONE },
                         ..Object::EMPTY
-                    },
+                    } && (!until || o.zone == Zone::Exile),
                     "permanent status off the battlefield",
                     Some(slot),
                 )?;
