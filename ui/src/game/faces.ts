@@ -1,8 +1,9 @@
 // What a card in a PlayerView looks like: its frame data from data/cards.json, with the
 // battlefield's current power, toughness and loyalty.
+import { createContext, useContext } from "react";
 import type { CardFace as FrameFace, Color } from "../components/Card";
 import type { AbilityIcon } from "../components/Mana";
-import type { CardArt } from "../cards";
+import { useCardArt, type CardArt } from "../cards";
 import type { ObjectView } from "../generated/protocol";
 
 const ABILITIES: [RegExp, AbilityIcon][] = [
@@ -41,6 +42,19 @@ export const unknownFace = (name: string): FrameFace => ({
   typeLine: "",
   colors: [],
 });
+
+/** Faces that stand in for the card data's: replica mode (src/replica/) draws a mockup's
+ * cards, which the data need not have, with art cut from the mockup. Elsewhere there are none. */
+export const ObjectFaces = createContext<
+  (o: ObjectView) => FrameFace | undefined
+>(() => undefined);
+
+/** The frame for object `o`, as the game draws it. */
+export function useFace(o: ObjectView): FrameFace {
+  const art = useCardArt(o.name ?? "");
+  const stand = useContext(ObjectFaces)(o);
+  return stand ?? (art ? frameFace(o, art) : unknownFace(o.name ?? ""));
+}
 
 /** The paragraph of a card's rules text that says one of its abilities: the `nth` triggered
  * ability ("When", "Whenever", "At", or a keyword whose reminder text says one, as offspring

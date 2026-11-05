@@ -686,6 +686,20 @@
 .table-dimmed {
   filter: blur(3.5px) brightness(0.5) saturate(0.8);
 }
+/* The far edge of the table lies in shadow under the opponent's hand and life orb, darkest at
+   the edge and gone a third of the way to the creatures (the screen mockups). */
+.far-shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 300px 85px at 800px 48px,
+    rgb(10 7 5 / 80%),
+    rgb(10 7 5 / 64%) 50%,
+    rgb(10 7 5 / 32%) 80%,
+    rgb(10 7 5 / 0%)
+  );
+}
 /* Permanents lying on the table (Table.tsx places them in depth): each card shows a dark slab
    edge below it and casts a soft shadow down and away from the light. The cast shadow is a
    gradient, not a blurred box-shadow, which WebKit draws with hard edges on a scaled layer. */

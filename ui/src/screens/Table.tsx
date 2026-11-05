@@ -303,6 +303,7 @@ export function TableScene({
   const { opponent, you } = board;
   return (
     <div className={dimmed ? "table table-dimmed" : "table"}>
+      <div className="far-shade" />
       <Lands lands={opponent.lands} />
       {[...opponent.creatures, ...you.creatures].map((p, i) => (
         <Creature key={i} permanent={p} />

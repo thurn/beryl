@@ -54,12 +54,13 @@ export type Layout = Map<number, Placement>;
 /** The hand's full frames, and the width of everything drawn from a full frame. */
 export const FULL_WIDTH = HAND.width;
 const BACK_WIDTH = 105;
-const PILE_WIDTH = 84;
+export const PILE_WIDTH = 84;
 
-/** Each side's rows, in stage pixels (the mockup's divided by 1.045). */
+/** Each side's rows, in stage pixels (the mockup's divided by 1.045), and the gap between land
+ * piles before depth scaling: battlefield.png spaces the far piles wider than the near ones. */
 const ROWS = {
-  opponent: { lands: { x: 159, y: 125 }, permanents: 221 },
-  you: { lands: { x: 105, y: 564 }, permanents: 418 },
+  opponent: { lands: { x: 159, y: 125, gap: 23 }, permanents: 221 },
+  you: { lands: { x: 105, y: 564, gap: 3 }, permanents: 418 },
 };
 /** Lands fill from the left up to here; other permanents center on the table between. */
 const LANDS_END = 600;
@@ -69,7 +70,7 @@ const PERMANENTS = { start: 580, end: 1250, center: 800 };
 export const PILES = {
   opponent: {
     library: { x: 1174, y: 13, width: 93 },
-    graveyard: { x: 1321, y: 37 },
+    graveyard: { x: 1331, y: 40 },
   },
   you: {
     library: { x: 168, y: 731, width: 104 },
@@ -284,7 +285,7 @@ function battlefieldPlacements(
     LAND_WIDTH * (1 + LAND_STEP.x * (n - 1)) * landScale;
   const landXs = row(
     landPiles.map((p) => pileWidth(p.length)),
-    12 * landScale,
+    rows.lands.gap * landScale,
     rows.lands.x,
     LANDS_END,
   );

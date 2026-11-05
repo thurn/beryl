@@ -25,7 +25,8 @@
   --rim-lo: #0c0b0a;
   --bar: #b4ada8;
   --bar-hi: #d3cdc8;
-  --box: #ecebe8;
+  /* Greyer than other frames' boxes: the mockups' Doom Blade. */
+  --box: #dbd4d0;
 }
 /* A Swamp keeps the silver rim of the mockups' basic lands. */
 .frame-b.card-land {
@@ -1236,13 +1237,16 @@
   height: 100%;
   overflow: visible;
 }
+/* Light blades catch the light along their edges. */
 .life-orb-blade {
-  fill: url(#orb-blade);
-  stroke: rgb(24 20 16 / 80%);
-  stroke-width: 1.1;
+  stroke: #ece5d8;
+  stroke-width: 1.2;
 }
+/* Steel struts between the blades. */
 .life-orb-blade-dark {
-  fill: #1d1a18;
+  fill: #57534e;
+  stroke: #12100e;
+  stroke-width: 1;
 }
 .life-orb-glint {
   fill: #ff9a2e;
@@ -1280,7 +1284,7 @@
   stroke-width: 12;
 }
 .life-orb-bloom {
-  fill: #fff6dc;
+  fill: #ffc764;
 }
 .life-orb-crescent {
   fill: none;
@@ -1288,14 +1292,15 @@
   stroke-width: 4;
   stroke-linecap: round;
 }
-/* The far orb's ring is dull copper. */
+/* The far orb's ring is copper with a dim glow. */
 .life-orb-opponent .life-orb-ring {
-  stroke: #f59a42;
-  stroke-width: 2.5;
+  stroke: #e0974a;
+  stroke-width: 3;
 }
 .life-orb-opponent .life-orb-ring-glow {
-  stroke: #d8651a;
-  stroke-width: 8;
+  stroke: #b0581a;
+  stroke-width: 6;
+  opacity: 0.6;
 }
 .life-orb-total {
   position: absolute;
@@ -1305,6 +1310,7 @@
   font-family: var(--font-serif);
   font-weight: 700;
   font-size: calc(48 * var(--orb));
+  letter-spacing: calc(-4 * var(--orb));
   line-height: 1;
   color: #fdfcfa;
   text-shadow: 0 calc(2 * var(--orb)) calc(3 * var(--orb)) rgb(0 0 0 / 80%);

@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "../components/Controls";
 import { Card } from "../components/Card";
 import { RulesText } from "../components/Mana";
-import { useCardArt } from "../cards";
 import {
   choose,
   CommandError,
@@ -26,7 +25,7 @@ import { Board } from "../game/Board";
 import { ChoiceOverlay } from "../game/ChoiceOverlay";
 import { choiceOf, type Choice } from "../game/choices";
 import { intended, isOpening, type Intent } from "../game/decisions";
-import { frameFace, unknownFace } from "../game/faces";
+import { useFace } from "../game/faces";
 import { Brand, Stage } from "./Table";
 
 /** The latest view of the game in progress, from `game-update` events. Session numbers only
@@ -333,7 +332,7 @@ function OpeningCard({
   pick?: CandidateIndex;
   onPick(index: CandidateIndex): void;
 }) {
-  const art = useCardArt(object.name ?? "");
+  const face = useFace(object);
   const name = object.name ?? "";
   return (
     <button
@@ -344,7 +343,7 @@ function OpeningCard({
       onClick={() => pick !== undefined && onPick(pick)}
     >
       <Card
-        card={art ? frameFace(object, art) : unknownFace(name)}
+        card={face}
         width={176}
         highlight={pick === undefined ? undefined : "target"}
       />

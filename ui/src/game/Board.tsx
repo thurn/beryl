@@ -25,7 +25,13 @@ import {
   PhaseTracker,
   PriorityPill,
 } from "../components/Controls";
-import { Library, LifeOrb, PlayerBadge } from "../components/Player";
+import {
+  GRAVEYARD_DEPTH,
+  GraveyardEdges,
+  Library,
+  LifeOrb,
+  PlayerBadge,
+} from "../components/Player";
 import { Arrows, StackItem, type ArrowSpec } from "../components/Stack";
 import { cardEntry, useCardArt } from "../cards";
 import type {
@@ -54,11 +60,12 @@ import {
   type Act,
   type Intent,
 } from "./decisions";
-import { abilityText, frameFace, unknownFace } from "./faces";
+import { abilityText, frameFace, unknownFace, useFace } from "./faces";
 import {
   layout,
   nextStop,
   phaseOf,
+  PILE_WIDTH,
   PILES,
   STACK_Z,
   stackPlace,
@@ -263,6 +270,7 @@ export function Board({
       className={dimmed ? "table table-dimmed" : "table"}
       onPointerDown={() => setSettings(false)}
     >
+      <div className="far-shade" />
       <Lying
         x={PILES.opponent.library.x}
         y={PILES.opponent.library.y}
@@ -282,6 +290,22 @@ export function Board({
           depth={{ x: 6, y: 12, twist: 7 }}
         />
       </Lying>
+      {(["opponent", "you"] as const).map((side) => {
+        const count = view.players[side].graveyard.length;
+        const { x, y } = PILES[side].graveyard;
+        return (
+          count > 1 && (
+            <Lying
+              key={side}
+              x={x + GRAVEYARD_DEPTH.x}
+              y={y}
+              width={PILE_WIDTH}
+            >
+              <GraveyardEdges count={count} width={PILE_WIDTH} />
+            </Lying>
+          )
+        );
+      })}
 
       <div className="hud" style={{ left: 18, top: 62 }}>
         <PlayerBadge name="Opponent" />
@@ -795,7 +819,7 @@ function Inspect({
 }) {
   const name = object?.name;
   const scan = useCardArt(name ?? "", undefined, "normal");
-  const art = useCardArt(name ?? "");
+  const face = useFace(object ?? BLANK);
   if (!object || !name || !place || place.look === "hidden") return null;
   const entry = cardEntry(name);
   const left = place.x < 800 ? 1600 - 330 - 24 : 24;
@@ -804,10 +828,7 @@ function Inspect({
       {scan?.src ? (
         <img className="inspect-scan" src={scan.src} alt={name} />
       ) : (
-        <Card
-          card={art ? frameFace(object, art) : unknownFace(name)}
-          width={330}
-        />
+        <Card card={face} width={330} />
       )}
       {entry && <p className="inspect-artist">Illustrated by {entry.artist}</p>}
     </div>

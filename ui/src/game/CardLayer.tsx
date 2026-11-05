@@ -20,10 +20,9 @@ import {
   type MotionValue,
 } from "motion/react";
 import { Card, CardBack, type Highlight } from "../components/Card";
-import { useCardArt } from "../cards";
 import type { ObjectView, Side } from "../generated/protocol";
 import { StageScale } from "../screens/Table";
-import { frameFace, unknownFace } from "./faces";
+import { useFace } from "./faces";
 import type { Layout, Placement } from "./layout";
 
 /** Where on the stage a pointer is, in stage pixels. */
@@ -291,12 +290,11 @@ function Look({
   place: Placement;
   state: CardState;
 }) {
-  const art = useCardArt(object.name ?? "");
+  const card = useFace(object);
   if (place.look === "hidden") return null;
   if (place.look === "back" || object.name === null) {
     return <CardBack width={place.width} />;
   }
-  const card = art ? frameFace(object, art) : unknownFace(object.name);
   const field = place.look === "field" || place.look === "land";
   const combat = field ? object.combat?.kind : undefined;
   const card_ = (

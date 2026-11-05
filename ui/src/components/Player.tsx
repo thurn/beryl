@@ -30,60 +30,96 @@ function blade(
   );
 }
 
-/** One side's blades (the left; the right is mirrored): dark struts behind light blades, and
- * copper glints where the blades meet the oval. */
-const BLADES = {
+/** How a light blade is shaded, root to tip: the mockups paint the near orb's blades warm tan,
+ * the far orb's upper blade grey silver and its lower one a pale wing, each coppery at its root. */
+const TONES = {
+  tan: ["#87643f", "#9a8064", "#b8ab9c"],
+  pale: ["#9c7c56", "#c2ae94", "#d2c6b6"],
+  silver: ["#8d5b3a", "#77706a", "#8a867e"],
+  wing: ["#b0703e", "#c3a780", "#d8c8aa"],
+} as const;
+type Tone = keyof typeof TONES;
+
+/** One side's blades (the left; the right is mirrored): steel struts behind light blades, and
+ * copper glints where the blades meet the oval. Each blade runs from its root at the oval to its
+ * tip; `from` is the corner of its box its root is in, where its tone starts. */
+const BLADES: Record<
+  "you" | "opponent",
+  {
+    light: { d: string; tone: Tone }[];
+    dark: string[];
+    from: [number, number];
+    glints: Point[];
+    arch: string;
+    ring: string;
+  }
+> = {
   you: {
     light: [
-      blade([-46, -3], [-86, 3], [-125, 41], 10.5),
-      blade([-48, 14], [-80, 19], [-107, 54], 10.5),
+      { d: blade([-46, -5], [-96, 1], [-124, 37], 9.5), tone: "tan" },
+      { d: blade([-42, 13], [-78, 14], [-109, 48], 9), tone: "pale" },
     ],
     dark: [
-      blade([-45, 6], [-84, 11], [-117, 47], 7),
-      blade([-46, 25], [-71, 33], [-95, 63], 7),
+      blade([-45, 8], [-84, 14], [-114, 47], 5),
+      blade([-46, 25], [-71, 33], [-95, 63], 5),
     ],
-    glints: [] as Point[],
+    from: [1, 0],
+    glints: [],
     arch: "M-98 70 Q-64 30 0 30 Q64 30 98 70",
     ring: "M-42 23.4 A52 43 0 0 0 42 23.4",
   },
   opponent: {
     light: [
-      blade([-47, 18], [-80, 7], [-104, -17], 11, 0),
-      blade([-50, -9], [-92, -14], [-104, -57], 4.5, 0),
+      { d: blade([-46, 19], [-75, 9], [-101, -14], 11), tone: "wing" },
+      {
+        d: blade([-48, -8], [-71, -12], [-100, -39], 9.5, 0.4),
+        tone: "silver",
+      },
     ],
-    dark: [blade([-48, 5], [-82, 0], [-99, -26], 6)],
+    dark: [
+      blade([-50, -6], [-67, -7], [-84, -8], 5),
+      blade([-47, 4], [-60, 2], [-74, -1], 5),
+    ],
+    from: [1, 1],
     glints: [
       [-48, -9],
       [-47, 17],
-    ] as Point[],
+    ],
     arch: "",
-    ring: "M-40 24 A50 40 0 0 0 40 24",
+    ring: "M-46 19 A52.5 40.5 0 0 0 46 19",
   },
 };
 
 /** The oval, a little larger on the near side of the table. */
 const CORE = {
   you: { rx: 50, ry: 41, cy: -2 },
-  opponent: { rx: 48, ry: 38, cy: 0 },
+  opponent: { rx: 52, ry: 38, cy: 0 },
 };
 
-/** The active player's rays, by angle from straight up and length from the center. */
-const RAYS = [
-  [-86, 104],
-  [-72, 88],
-  [-56, 80],
-  [-36, 66],
-  [0, 54],
-  [36, 66],
-  [56, 80],
-  [72, 88],
-  [86, 104],
-]
-  .map(([deg, length]) => {
-    const a = ((deg! - 90) * Math.PI) / 180;
-    const point = (r: number, da = 0) =>
-      `${(Math.cos(a + da) * r * 1.2).toFixed(1)} ${(Math.sin(a + da) * r).toFixed(1)}`;
-    return `M${point(36, -0.06)} L${point(length! / 1.1)} L${point(36, 0.06)} Z`;
+/** The active player's rays, by where each tip lies (the left half; mirrored on the right):
+ * each widens from the rim of the oval to its tip. */
+const RAYS = (
+  [
+    [-47, -47],
+    [-82, -35],
+    [-105, -13],
+    [-62, -5],
+    [0, -58],
+  ] as const
+)
+  .flatMap(([x, y]) =>
+    x === 0
+      ? [[x, y]]
+      : [
+          [x, y],
+          [-x, y],
+        ],
+  )
+  .map(([x, y]) => {
+    const a = Math.atan2(y!, x! / 1.2);
+    const rim = (da: number) =>
+      `${(Math.cos(a + da) * 36 * 1.2).toFixed(1)} ${(Math.sin(a + da) * 36).toFixed(1)}`;
+    return `M${rim(-0.09)} L${x} ${y} L${rim(0.09)} Z`;
   })
   .join(" ");
 
@@ -104,6 +140,7 @@ export function LifeOrb({
 }) {
   const blades = BLADES[seat];
   const core = CORE[seat];
+  const [fx, fy] = blades.from;
   const side = (
     <>
       {blades.dark.map((d) => (
@@ -120,8 +157,13 @@ export function LifeOrb({
           filter="url(#orb-blur)"
         />
       ))}
-      {[...blades.light].reverse().map((d) => (
-        <path key={d} className="life-orb-blade" d={d} />
+      {[...blades.light].reverse().map(({ d, tone }) => (
+        <path
+          key={d}
+          className="life-orb-blade"
+          d={d}
+          fill={`url(#orb-blade-${seat}-${tone})`}
+        />
       ))}
     </>
   );
@@ -131,12 +173,20 @@ export function LifeOrb({
     >
       <svg className="life-orb-art" viewBox="-136 -57 272 116" aria-hidden>
         <defs>
-          <linearGradient id="orb-blade" x1="0" y1="0" x2="0.3" y2="1">
-            <stop offset="0" stopColor="#fffaf2" />
-            <stop offset="0.35" stopColor="#e3d8c8" />
-            <stop offset="0.7" stopColor="#a39282" />
-            <stop offset="1" stopColor="#4f453c" />
-          </linearGradient>
+          {Object.entries(TONES).map(([tone, [root, mid, tip]]) => (
+            <linearGradient
+              key={tone}
+              id={`orb-blade-${seat}-${tone}`}
+              x1={fx}
+              y1={fy}
+              x2={1 - fx}
+              y2={1 - fy}
+            >
+              <stop offset="0" stopColor={root} />
+              <stop offset="0.45" stopColor={mid} />
+              <stop offset="1" stopColor={tip} />
+            </linearGradient>
+          ))}
           <linearGradient id="orb-rim" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor="#b9b4ae" />
             <stop offset="0.5" stopColor="#77726c" />
@@ -150,12 +200,12 @@ export function LifeOrb({
             id="orb-ray"
             cx="0"
             cy="0"
-            r="100"
+            r="120"
             gradientUnits="userSpaceOnUse"
           >
-            <stop offset="0.35" stopColor="#fff8d8" />
-            <stop offset="0.48" stopColor="#ffd060" />
-            <stop offset="0.62" stopColor="#ff8410" />
+            <stop offset="0.3" stopColor="#fffcea" />
+            <stop offset="0.45" stopColor="#ffd060" />
+            <stop offset="0.65" stopColor="#ff8410" />
             <stop offset="1" stopColor="#f2560c" stopOpacity="0" />
           </radialGradient>
           <filter id="orb-blur" x="-50%" y="-50%" width="200%" height="200%">
@@ -337,12 +387,15 @@ export function Library({
   );
 }
 
+/** Where a graveyard's bottom card lies relative to its top card. */
+export const GRAVEYARD_DEPTH: PileDepth = { x: -6, y: 8 };
+
 /** A graveyard, its top card face up. */
 export function Graveyard({
   cards,
   width = 110,
   height,
-  depth = { x: -6, y: 8 },
+  depth = GRAVEYARD_DEPTH,
 }: {
   cards: CardFace[];
   width?: number;
@@ -364,6 +417,29 @@ export function Graveyard({
       ) : (
         <div className="pile-empty" style={{ width }} />
       )}
+    </Pile>
+  );
+}
+
+/** The edges beneath the top card of a graveyard of `count` cards, for a top card drawn by
+ * someone else: the game screen draws every card itself, so it can move. The top card's place
+ * is `-GRAVEYARD_DEPTH.x` pixels in from the left. */
+export function GraveyardEdges({
+  count,
+  width,
+}: {
+  count: number;
+  width: number;
+}) {
+  return (
+    <Pile
+      count={Math.max(0, count - 1) * 3}
+      depth={GRAVEYARD_DEPTH}
+      width={width}
+      label={`Graveyard, ${count} cards`}
+      className="graveyard"
+    >
+      <div style={{ width, height: width / ASPECT.full }} />
     </Pile>
   );
 }
