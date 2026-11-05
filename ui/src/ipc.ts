@@ -3,6 +3,10 @@
 // in a plain browser (`just ui-shots`).
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import type { AgentView, GameUpdate, StopsSetting } from "./generated/protocol";
+
+// The game protocol's types are generated from rust/crates/beryl_session.
+export type * from "./generated/protocol";
 
 export interface AppInfo {
   version: string;
@@ -71,6 +75,7 @@ const browserFixture: Fixture = {
       value: { version: "browser", smoke: false },
     },
     { kind: "response", command: "ui_ready", value: null },
+    { kind: "response", command: "list_agents", value: [] },
   ],
 };
 
@@ -78,7 +83,9 @@ async function chooseTransport(): Promise<Transport> {
   if ("__TAURI_INTERNALS__" in window) {
     return tauriTransport;
   }
-  // `?fixture=<name>` replays /fixtures/<name>.json, served by Vite from ui/public/fixtures.
+  // `?fixture=<name>` replays /fixtures/<name>.json, which `beryl_cli record-fixture` writes
+  // and Vite serves from ui/public/fixtures, with the plain browser's responses to the commands
+  // it did not record.
   const name = new URLSearchParams(window.location.search).get("fixture");
   if (!name) {
     return fixtureTransport(browserFixture);
@@ -87,7 +94,14 @@ async function chooseTransport(): Promise<Transport> {
   if (!response.ok) {
     throw new Error(`fixture ${name}: HTTP ${response.status}`);
   }
-  return fixtureTransport((await response.json()) as Fixture);
+  const fixture = (await response.json()) as Fixture;
+  const recorded = new Set(
+    fixture.messages.flatMap((m) => (m.kind === "response" ? [m.command] : [])),
+  );
+  const defaults = browserFixture.messages.filter(
+    (m) => m.kind === "response" && !recorded.has(m.command),
+  );
+  return fixtureTransport({ messages: [...defaults, ...fixture.messages] });
 }
 
 let chosen: Promise<Transport> | undefined;
@@ -101,6 +115,26 @@ export const appInfo = async () =>
   (await transport()).invoke<AppInfo>("app_info");
 
 export const uiReady = async () => (await transport()).invoke<void>("ui_ready");
+
+// Games (rust/crates/beryl_app/src/games.rs): one at a time, against an agent. Every view of
+// the human's arrives as a `game-update` event.
+
+export const listAgents = async () =>
+  (await transport()).invoke<AgentView[]>("list_agents");
+
+/** Starts a game against `agent`, replacing any in progress; resolves to its session number. */
+export const startGame = async (agent: string, seed?: number) =>
+  (await transport()).invoke<number>("start_game", { agent, seed });
+
+/** Answers the human's decision `seq` with its candidate `index`. */
+export const choose = async (session: number, seq: number, index: number) =>
+  (await transport()).invoke<void>("choose", { session, seq, index });
+
+export const setStops = async (session: number, stops: StopsSetting) =>
+  (await transport()).invoke<void>("set_stops", { session, stops });
+
+export const onGameUpdate = async (handler: (update: GameUpdate) => void) =>
+  (await transport()).listen<GameUpdate>("game-update", handler);
 
 // Card images come from the app's `beryl-art` URI scheme (rust/crates/beryl_app/src/art.rs),
 // which serves Scryfall's image paths from a disk cache and downloads misses.

@@ -1,7 +1,8 @@
 //! The Tauri shell: windows, IPC commands, the card-art cache and the smoke mode agents and CI
-//! launch the app in.
+//! launch the app in. Games run in `beryl_session` ([`games`]).
 
 mod art;
+mod games;
 
 use std::time::Duration;
 
@@ -47,7 +48,15 @@ fn smoke_seconds() -> Option<u64> {
 
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![app_info, ui_ready])
+        .manage(games::Games::default())
+        .invoke_handler(tauri::generate_handler![
+            app_info,
+            ui_ready,
+            games::list_agents,
+            games::start_game,
+            games::choose,
+            games::set_stops,
+        ])
         .register_asynchronous_uri_scheme_protocol(art::SCHEME, |ctx, request, responder| {
             let app = ctx.app_handle().clone();
             let path = request.uri().path().to_owned();

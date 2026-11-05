@@ -8,6 +8,7 @@ import {
 import { MotionConfig } from "motion/react";
 import { appInfo, uiReady, type AppInfo } from "./ipc";
 import { Gallery } from "./screens/Gallery";
+import { AgentPicker, GameScreen, useGameUpdates } from "./screens/Game";
 import { TableScreen } from "./screens/Table";
 
 // Routes live in the hash so they work from the Tauri asset server and from Vite alike.
@@ -33,6 +34,7 @@ function Home({ info }: { info: AppInfo | null }) {
       <nav>
         <a href="#/table">Table</a> · <a href="#/gallery">Component gallery</a>
       </nav>
+      <AgentPicker />
     </main>
   );
 }
@@ -40,6 +42,8 @@ function Home({ info }: { info: AppInfo | null }) {
 export function App() {
   const [info, setInfo] = useState<AppInfo | null>(null);
   const path = useSyncExternalStore(subscribe, route);
+  // Listening from the start, so a game's first view is never missed.
+  const game = useGameUpdates();
 
   useEffect(() => {
     appInfo().then(setInfo);
@@ -64,6 +68,8 @@ export function App() {
         <TableScreen />
       ) : path === "/table/scry" ? (
         <TableScreen overlay="scry" />
+      ) : path === "/game" ? (
+        <GameScreen update={game} />
       ) : (
         <Home info={info} />
       )}

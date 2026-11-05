@@ -1,6 +1,7 @@
-"""`ui-shots`: screenshots of UI states without opening a window. It serves the UI with Vite,
-captures the routes listed in ui/shots.json with headless Playwright WebKit (ui/scripts/shots.mjs)
-and prints the paths. Pages run in a plain browser on the fixture transport (ui/src/ipc.ts).
+"""`ui-shots`: screenshots of UI states without opening a window. It records the game fixtures
+ui/fixtures.json defines with `beryl_cli record-fixture`, serves the UI with Vite, captures the
+routes listed in ui/shots.json with headless Playwright WebKit (ui/scripts/shots.mjs) and prints
+the paths. Pages run in a plain browser on the fixture transport (ui/src/ipc.ts).
 
 Screenshots go to the cache (`ui-shots/<checkout>/`), never into the tree; WebKit is installed
 there on first use. The serving and the replica art are shared with the mockup harness
@@ -31,6 +32,9 @@ NPM_BIN: Path = paths.UI / "node_modules" / ".bin"
 # Vite in development only (src/replica/).
 REGIONS: Path = paths.REPO / "docs" / "ui_mockups" / "regions.json"
 REPLICA_ART: Path = paths.UI / "replica-art"
+# The game fixtures' definitions, and where they are recorded to: gitignored, served by Vite.
+FIXTURES: Path = paths.UI / "fixtures.json"
+RECORDED: Path = paths.UI / "public" / "fixtures"
 
 
 class UiError(Exception):
@@ -96,6 +100,19 @@ def cut_art(env: dict[str, str]) -> int:
     ).returncode
 
 
+def record_fixtures() -> int:
+    """Plays the fixtures' seeded games and records them into RECORDED, fresh each run."""
+    shutil.rmtree(RECORDED, ignore_errors=True)
+    return subprocess.run(
+        ["cargo", "run", "--quiet", "--package", "beryl_cli", "--"]
+        + ["record-fixture", str(FIXTURES), str(RECORDED)],
+        cwd=paths.RUST,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        check=False,
+    ).returncode
+
+
 @contextmanager
 def served_ui(env: dict[str, str]) -> Iterator[str]:
     """Serves ui/ with Vite on a free port for the duration; yields its base URL."""
@@ -131,8 +148,9 @@ def ui_shots(args: argparse.Namespace) -> int:
     out.mkdir(parents=True)
     try:
         env = webkit_env()
-        # The replica shots draw the art windows cut from the mockups.
-        code = cut_art(env)
+        # The replica shots draw the art windows cut from the mockups; the game shots replay
+        # recorded fixtures.
+        code = cut_art(env) or record_fixtures()
         if code == 0:
             with served_ui(env) as url:
                 code = subprocess.run(

@@ -1,5 +1,5 @@
 {
-  "$comment": "What `just ui-shots` captures: a route (hash route, optionally ?fixture=<name>, or a dev-only ?replica=<mockup>) at a viewport size. Replicas render at their mockup's native size.",
+  "$comment": "What `just ui-shots` captures: a route (hash route, optionally ?fixture=<name> for a fixture ui/fixtures.json defines, or a dev-only ?replica=<mockup>) at a viewport size. Replicas render at their mockup's native size.",
   "shots": [
     {
       "name": "gallery",
@@ -16,6 +16,12 @@
     {
       "name": "table-scry",
       "route": "/#/table/scry",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-first-target",
+      "route": "/?fixture=first-target#/game",
       "width": 1600,
       "height": 900
     },
