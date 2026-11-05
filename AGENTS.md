@@ -64,9 +64,6 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
 - `/enact <bead|epic|task>` runs work inline in one session;
   `/enact-plan <bead|plan|task>` runs it unattended across sessions. Most work
   uses neither.
-- **Runs are light**: treat every `/enact` and `/enact-plan` invocation as if it
-  carried the keyword **light** (Executor, Warden and Steward only; at most one
-  final Warden), unless it says **full**.
 
 ## Testing your work
 
@@ -109,6 +106,5 @@ counts, `just bench` for timing (it refuses a busy machine).
   place.
 - Markdown: agents add none unless explicitly requested. README.md, AGENTS.md
   and `docs/` are all there is; plans, designs and notes go in beads.
-- Never commit logs, screenshots or other evidence of a run.
-- Keep things lightweight: the simplest version that answers the question, no
-  speculative infrastructure.
+- Never commit logs, screenshots or other evidence of a run. speculative
+  infrastructure.
