@@ -1,6 +1,7 @@
 //! No heap allocation on the hot path (architecture §17.4, §18): a counting allocator around
 //! random games, from the first `next` to the end, with the agents' choices, a determinization
-//! and an invariant check at every decision.
+//! and an invariant check at every decision; and around rollouts of the WU Control mirror
+//! under the rollout policy, its questions answered inline.
 //!
 //! The global allocator counts every thread's allocations, so this binary runs without the
 //! test harness and its threads.
@@ -14,8 +15,9 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::{Observation, Scratch};
-use common::{agents, game, play};
+use beryl_engine::{Observation, Outcome, Profile, Scratch, State};
+use beryl_search::{RolloutPolicy, rollout};
+use common::{agents, game, mirror, play};
 
 struct Counting;
 
@@ -67,4 +69,29 @@ fn main() {
         );
     }
     println!("allocations: no heap allocation in 4 random games");
+
+    let t = mirror();
+    let policy = RolloutPolicy::new(&t);
+    let mut x = Scratch::new();
+    for seed in 0..8 {
+        let mut s = State::new(&t, seed, Profile::SMART);
+        let before = x.counts.decisions;
+        COUNTING.store(true, Ordering::Relaxed);
+        let outcome = rollout(&mut s, &t, &mut x, &policy);
+        COUNTING.store(false, Ordering::Relaxed);
+        let allocations = ALLOCATIONS.swap(0, Ordering::Relaxed);
+        assert!(
+            x.counts.decisions - before > 40,
+            "seed {seed}: a short rollout"
+        );
+        assert!(
+            matches!(outcome, Outcome::Win(_)),
+            "seed {seed}: {outcome:?}"
+        );
+        assert_eq!(
+            allocations, 0,
+            "seed {seed}: {allocations} allocations in a rollout"
+        );
+    }
+    println!("allocations: no heap allocation in 8 rollouts under the rollout policy");
 }

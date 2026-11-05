@@ -1,13 +1,26 @@
-//! The agents (architecture §19.1): everything that plays the game, behind one trait.
-//! Milestone 1 starts with the seeded [`RandomAgent`] that fuzzing plays; [`AGENTS`] names
-//! every agent a game can be played against.
+//! The agents (architecture §19.1): everything that plays the game, behind one trait. The
+//! seeded [`RandomAgent`] fuzzes; the [`GreedyAgent`] is the [`RolloutPolicy`] search plays
+//! rollouts with. [`AGENTS`] names every agent a game can be played against.
+
+mod rollout;
+mod values;
 
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::{Choice, Decision, Observation};
+use beryl_engine::{Choice, Decision, GameTable, Observation};
+
+pub use rollout::{COUNTER_MIN, Inline, REMOVAL_MIN, RolloutPolicy, rollout};
+pub use values::{CardInfo, CardValues};
 
 /// A player: answers decisions from what its seat can see.
 pub trait Agent {
     fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice;
+}
+
+/// A boxed agent, as the registry builds them, plays like the agent inside.
+impl<T: Agent + ?Sized> Agent for Box<T> {
+    fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice {
+        (**self).choose(obs, d)
+    }
 }
 
 /// Picks uniformly among the candidates, from its own seeded stream, so a seed reproduces its
@@ -31,6 +44,30 @@ impl Agent for RandomAgent {
     }
 }
 
+/// The rollout policy as an opponent (decision 4 of the Milestone 1 plan): deterministic, so
+/// it needs no seed. It keeps its own copy of the game's table, since an agent outlives the
+/// borrow it was built from.
+#[derive(Clone, Debug)]
+pub struct GreedyAgent {
+    table: GameTable,
+    policy: RolloutPolicy,
+}
+
+impl GreedyAgent {
+    pub fn new(t: &GameTable) -> Self {
+        Self {
+            table: t.clone(),
+            policy: RolloutPolicy::new(t),
+        }
+    }
+}
+
+impl Agent for GreedyAgent {
+    fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice {
+        self.policy.choose(&self.table, obs, d)
+    }
+}
+
 /// An agent a game can be played against, by name: the registry the app and the CLI choose
 /// opponents from.
 #[derive(Clone, Copy, Debug)]
@@ -38,19 +75,30 @@ pub struct AgentInfo {
     pub name: &'static str,
     /// One line for a human choosing an opponent.
     pub description: &'static str,
-    /// Builds the agent from a seed, so a seed reproduces its games.
-    pub new: fn(seed: u64) -> Box<dyn Agent + Send>,
+    /// Builds the agent for a game from a seed, so a seed reproduces its games.
+    pub new: fn(t: &GameTable, seed: u64) -> Box<dyn Agent + Send>,
 }
 
 /// Every agent, in the order a human is offered them.
-pub static AGENTS: &[AgentInfo] = &[AgentInfo {
-    name: "random",
-    description: "Chooses uniformly at random among its legal options",
-    new: random,
-}];
+pub static AGENTS: &[AgentInfo] = &[
+    AgentInfo {
+        name: "random",
+        description: "Chooses uniformly at random among its legal options",
+        new: random,
+    },
+    AgentInfo {
+        name: "greedy",
+        description: "Plays its most valuable card, attacks when safe, never looks ahead",
+        new: greedy,
+    },
+];
 
-fn random(seed: u64) -> Box<dyn Agent + Send> {
+fn random(_t: &GameTable, seed: u64) -> Box<dyn Agent + Send> {
     Box::new(RandomAgent::new(seed))
+}
+
+fn greedy(t: &GameTable, _seed: u64) -> Box<dyn Agent + Send> {
+    Box::new(GreedyAgent::new(t))
 }
 
 /// The agent registered under `name`.

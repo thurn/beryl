@@ -103,14 +103,19 @@ impl Game {
             log: Vec::new(),
         };
         let (table, state) = replay.setup(cards)?;
+        // The agent draws from its own stream, apart from the game's.
+        let agent = new_agent(
+            &start.opponent,
+            &table,
+            SplitMix64::new(start.seed).next_u64(),
+        )?;
         Ok(Game {
             table,
             state,
             scratch: Scratch::recording(),
             human: start.human,
             session,
-            // The agent draws from its own stream, apart from the game's.
-            agent: new_agent(&start.opponent, SplitMix64::new(start.seed).next_u64())?,
+            agent,
             stand_in: None,
             open: None,
             seq: 0,
@@ -127,6 +132,7 @@ impl Game {
         // The stand-in draws from its own stream, apart from the game's and the agent's.
         self.stand_in = Some(new_agent(
             name,
+            &self.table,
             SplitMix64::new(self.replay.seed ^ 0x9e37_79b9).next_u64(),
         )?);
         Ok(())
@@ -341,11 +347,11 @@ impl Game {
     }
 }
 
-fn new_agent(name: &str, seed: u64) -> Result<Box<dyn Agent + Send>, SessionError> {
+fn new_agent(name: &str, t: &GameTable, seed: u64) -> Result<Box<dyn Agent + Send>, SessionError> {
     let agent = beryl_search::agent(name).ok_or_else(|| SessionError::UnknownAgent {
         name: name.to_owned(),
     })?;
-    Ok((agent.new)(seed))
+    Ok((agent.new)(t, seed))
 }
 
 pub(crate) fn with_stops(profile: Profile, stops: StopsSetting) -> Profile {

@@ -154,6 +154,8 @@ name = "beryl_cli"
 version = "0.1.0"
 dependencies = [
  "beryl_cards",
+ "beryl_engine",
+ "beryl_search",
  "beryl_session",
  "serde",
  "serde_json",

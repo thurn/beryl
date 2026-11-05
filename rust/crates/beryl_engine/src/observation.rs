@@ -2,6 +2,7 @@
 //! (architecture §13, decision D9).
 
 use crate::bitboard::Bitboard;
+use crate::filter::Filter;
 use crate::fixed::Fixed;
 use crate::ids::{CardIx, Seat, Slot};
 use crate::rng::{Rng, SplitMix64};
@@ -104,6 +105,12 @@ impl<'a> Observation<'a> {
     /// [`crate::DecisionKind::TriggerOrder`] options index this list.
     pub fn triggers(&self) -> &'a [PendingTrigger] {
         self.state.triggers()
+    }
+
+    /// Whether the object in `slot` passes `filter`, evaluated for the viewer: always false
+    /// for an object the viewer does not know, whose characteristics would betray it.
+    pub fn matches(&self, t: &GameTable, filter: &Filter, slot: Slot) -> bool {
+        self.knows(slot) && filter.matches(self.state, t, slot, self.viewer)
     }
 
     /// A full state consistent with everything the viewer knows: the unknown remainder of

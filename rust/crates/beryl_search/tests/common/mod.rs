@@ -6,9 +6,10 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use beryl_cards::CARDS;
-use beryl_cards::decks::fuzz_deck;
+use beryl_cards::decks::{WU_CONTROL, fuzz_deck};
 use beryl_engine::{
     Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch, State, Step, apply, next,
+    view,
 };
 use beryl_search::{Agent, RandomAgent};
 
@@ -24,6 +25,11 @@ pub fn game(seed: u64) -> (GameTable, State) {
     };
     let s = State::new(&t, seed, profile);
     (t, s)
+}
+
+/// The WU Control mirror's table.
+pub fn mirror() -> GameTable {
+    GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap()
 }
 
 /// A random agent per seat, seeded from the game's seed.
@@ -45,7 +51,9 @@ pub fn play(
             Step::Over(outcome) => return outcome,
             Step::Decide(d) => {
                 watch(s, &d);
-                let c = agents[d.player.index()].choose(Observation::new(s, d.player), &d);
+                // A paused resolution is seen where its body stopped (§7.3).
+                let c =
+                    agents[d.player.index()].choose(Observation::new(view(s, t, x), d.player), &d);
                 apply(s, t, x, &mut Replay, c);
             }
         }

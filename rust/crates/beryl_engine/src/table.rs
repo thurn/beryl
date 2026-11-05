@@ -42,8 +42,8 @@ pub enum TableError {
 
 /// The cards one game can contain, under dense game-local indices: the [`CardIx`] that
 /// `State` stores for an object's card. Built once per game and shared, read-only, by every thread
-/// searching it.
-#[derive(Debug)]
+/// searching it, or cloned into an agent that outlives the borrow.
+#[derive(Clone, Debug)]
 pub struct GameTable {
     cards: &'static CardTable,
     defs: Vec<&'static CardDef>,
