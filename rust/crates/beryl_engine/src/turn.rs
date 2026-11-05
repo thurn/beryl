@@ -87,7 +87,11 @@ pub(crate) fn begin_step(
     let active = s.turn.active;
     event::settle(s, t, sink, Event::StepBegins { step, active })?;
     match step {
-        TurnStep::Untap => untap(s, t, sink)?,
+        TurnStep::Untap => {
+            untap(s, t, sink)?;
+            // CR 502.4: "No player receives priority during the untap step".
+            return end_step(s, t, sink);
+        }
         TurnStep::Draw => {
             // CR 103.8a: "In a two-player game, the player who plays first skips the draw
             // step (see rule 504, "Draw Step") of their first turn."
@@ -98,10 +102,6 @@ pub(crate) fn begin_step(
         }
         TurnStep::Cleanup => cleanup(s),
         _ => {}
-    }
-    if step == TurnStep::Untap {
-        // CR 502.4: "No player receives priority during the untap step".
-        return end_step(s, t, sink);
     }
     Ok(())
 }

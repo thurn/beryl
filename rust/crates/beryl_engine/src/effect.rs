@@ -336,9 +336,15 @@ impl<'a> EffectCtx<'a> {
         won
     }
 
-    /// Puts a permanent card onto the battlefield, under this ability's controller, with
-    /// counters it enters with.
-    pub fn put_onto_battlefield(&mut self, object: ObjectRef, counters: Option<(CounterKind, u8)>) {
+    /// Puts a permanent card onto the battlefield under this ability's controller, with the
+    /// face up that it enters with (a double-faced card returned "transformed" enters with
+    /// its back face up) and any counters it enters with.
+    pub fn put_onto_battlefield(
+        &mut self,
+        object: ObjectRef,
+        face: u8,
+        counters: Option<(CounterKind, u8)>,
+    ) {
         if !self.state.is_current(object) {
             return;
         }
@@ -351,6 +357,7 @@ impl<'a> EffectCtx<'a> {
             Reason::Effect,
             Entry {
                 controller: Some(self.controller),
+                face,
                 counters,
                 ..Entry::default()
             },

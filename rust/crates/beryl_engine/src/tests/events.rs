@@ -860,6 +860,38 @@ fn a_player_orders_their_own_triggers_only_when_they_differ() {
 }
 
 #[test]
+fn an_end_step_trigger_fires_on_its_controllers_turn_only() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::recording();
+    put(&t, &mut s, &mut x, p, "Test Ender");
+    advance_to(&t, &mut s, &mut x, opponent(p), TurnStep::PrecombatMain);
+    advance_to(&t, &mut s, &mut x, p, TurnStep::PrecombatMain);
+    let draws: Vec<(u8, TurnStep)> = {
+        let mut step = TurnStep::Untap;
+        x.events
+            .drain()
+            .filter_map(|e| match e {
+                Event::StepBegins { step: now, .. } => {
+                    step = now;
+                    None
+                }
+                Event::Draw { player, .. } => Some((player, step)),
+                _ => None,
+            })
+            .collect()
+    };
+    // p's end step, then each player's draw step.
+    assert_eq!(
+        draws,
+        [
+            (p, TurnStep::End),
+            (opponent(p), TurnStep::Draw),
+            (p, TurnStep::Draw)
+        ]
+    );
+}
+
+#[test]
 fn a_delayed_trigger_fires_once_at_your_next_main_phase() {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
@@ -1008,7 +1040,7 @@ fn impending_counters_and_type_changes_apply_in_layer_four() {
     let r = s.object_ref(overlord);
     let land = put(&t, &mut s, &mut x, p, "Test Land");
     with_ctx(&t, &mut s, &mut x, land, |ctx| {
-        ctx.put_onto_battlefield(r, Some((CounterKind::Time, 4)));
+        ctx.put_onto_battlefield(r, 0, Some((CounterKind::Time, 4)));
     });
     assert_eq!(s.object(overlord).counters.get(CounterKind::Time), 4);
     assert_eq!(types(&s, overlord), Types::ENCHANTMENT, "not a creature");
