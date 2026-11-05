@@ -24,8 +24,8 @@
           "rect": [0, 0, 1672, 941],
           "verdict": "pass",
           "bead": "by-b0q.3.17",
-          "commit": "7b525db+",
-          "fingerprint": "NS8sQTc0Sj03RTMoRTMoRjo0KyYkODIwPzw9Vml4XFVUbFxUbFxUZlhSUEZCRTw5SkA8WE1JZ1lTc21dVFtEdmVeaFlTTkM+V0pFb19Ze2ljd2BWcWlie2ljb19ZV0pFV0pFb19ZeGZfYltdi354eGdhb19ZV0pFWD45eVhSj4FzdGBVdGFVdWReaFlTTkM+Ni0qOjEtZlBIfHBrhWBWdGVfY1FFWUMzKCMhLykmdEQ4hHdsiFlMdFRLSz01UDws",
+          "commit": "f7fdb09+",
+          "fingerprint": "NS8sQTc0Sj03RTMoRTMoRjo0KyYkODIwPzw9Vml4XFVUbFxUbFxUZlhSUEdCRTw5SkA8WE1JZ1lTc21dVFtEdmVeaFlTTkM+V0pFb19Ze2ljd2BWcWlie2ljb19ZV0pFV0pFb19ZeGZfYltdi354eGdhb19ZV0pFWD45eVhSj4FzdGBVdGFVdWReaFlTTkM+Ni0qOjEtZlBIfHBrhWBXdGZhY1FFWUMzKCMhLykmdEQ4hHdsiFpOdVVNSz01UDws",
           "accepted": [
             "by-b0q.3.17 conflict: the lit phase glyph: as battlefield/phase-tracker's by-b0q.3.17 conflict",
             "by-b0q.3.17 conflict: the opponent library's footprint and layers: as battlefield/opponent-library's conflict",
@@ -36,7 +36,11 @@
             "by-b0q.3.17 conflict: Plateau's frame: as battlefield/hand-plateau's conflict",
             "by-b0q.3.17 conflict: the opponent's card backs: as battlefield/opponent-hand's conflict",
             "by-b0q.3.17 residual: To Combat a little dimmer and thinner",
-            "by-b0q.3.17 residual: the hand names a few px off and slightly wider"
+            "by-b0q.3.17 residual: the hand names a few px off and slightly wider",
+            "by-b0q.3.17 residual: the creature names about 3-5 px lower and further right",
+            "by-b0q.3.17 residual: the near orb's rays a little shorter and softer",
+            "by-b0q.3.17 residual: the table about 2-4% darker, more in the lower-left corner",
+            "by-b0q.3.17 residual: the Next button's outer glow a little weaker"
           ]
         },
         "tabletop": {
@@ -319,15 +323,19 @@
           "rect": [466, 758, 744, 183],
           "verdict": "pass",
           "bead": "by-b0q.3.17",
-          "commit": "7b525db",
-          "fingerprint": "aFlUYE9Kcmxoe3h1h1hNcExDYVRNaFlUbk1Fsn5vmJeYjYyPrGNXsYBynpSHaV1TglRJj0Y5jZKgiIOFx2pbjFRVoYyWmIyDTComdjgvh4mMgH19zG9QhlJPrpGYZklJXTEshT0xi4eDkIBwp1hEcE5Jw5SBXkA+aDUtnUg5gXJjhHBRckE3Zk5Fr3JXVz8+fEY4uWdNa2phc105TzgxW0hBomBLbk9BZ0Eyt3FWm5eQsKagjWBWfFpOnW9NYEs6",
+          "commit": "f7fdb09+",
+          "fingerprint": "aFlUYE9Kcmxoe3h1h1hNcExEYlVPaFlUbk1Fsn5vmJeYjYyPrGNXsYF1oJiNaF5XglRJj0Y5jZKgiIOFx2pbjVZYppKfnpOMTComdjgvh4mMgH19zG9Qh1RSrpGYaExNXTEshT0xi4eDkIBwp1hEcVBNw5SBX0JBaDUtnUg5gXJjhHBRckE3Z1BIr3JXWUFCfEY4uWdNa2phc105TzgxXEpFomBLcFFEZ0Eyt3FWm5eQsKagjWBWfl1TnW9OYk0+",
           "accepted": [
             "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the red frames: darker than painted (by-b0q.1.27's accepted residual) against more crimson than the mockup's warmer, lighter red",
             "by-b0q.3.17 residual: the names about 2-5 px right of the mockup's",
             "by-b0q.3.17 residual: Swords to Plowshares' art window top about 5 px lower",
             "by-b0q.3.17 residual: Plateau's frame smooth cream where the mockup's is mottled tan",
             "by-b0q.3.17 residual: Swords' frame smooth cool grey-white where the mockup's is mottled cream-tan",
-            "by-b0q.3.17 residual: Bolt about 5 px right and 2-3 px lower"
+            "by-b0q.3.17 residual: Bolt about 5 px right and 2-3 px lower",
+            "by-b0q.3.17 conflict: Plateau's place in the fan: as battlefield/hand-plateau's conflict",
+            "by-b0q.3.17 residual: Mountain about 4 px left of the mockup's",
+            "by-b0q.3.17 residual: Swords' name box about 5-8 px further right",
+            "by-b0q.3.17 residual: Mountain's frame band solid red where the mockup has a thin red line over pink-cream"
           ]
         },
         "hand-bolt": {
@@ -365,28 +373,32 @@
           "rect": [826, 758, 194, 183],
           "verdict": "pass",
           "bead": "by-b0q.3.17",
-          "commit": "7b525db",
-          "fingerprint": "ZEA3i11SjmJXg1hOf1VLe1FIckpCWUA5fUI2s2FPoGBYo2tlvoZ+xIl+x4x9fF1QgkQ12Xlaym5gt2RklU9MmlZgnVZbbU1CjEgy54pdxnJYt19Ik0c5fkZJnFZXcltOkk81yHVSiEpHlUU2dDw3TjM+bkNEiHJZYTIqcEQ+ckM3d0E0eDwwNyw4NSw1qY5lUisiNCspY0E4Y0I3TTcwMTE5LCovsIJkildKjGBUhVtRl2RdhFxack9RUDk2q4Nd",
+          "commit": "f7fdb09+",
+          "fingerprint": "ZEA3i11SjmJXg1hOf1VLe1FIckpCWUA5fUI2s2FPoGBYo2tlvoZ+xIl+x4x9fWBUgkQ12Xlaym5gt2RklU9MmlZgnVZbcVROjEgy54pdxnJYt19Ik0c5fkZJnFZXdmNckk81yHVSiEpHlUU2dDw3TjM+bkNEjXlmYTIqcEQ+ckM3d0E0eDwwNyw4NSw1rpZyUisiNCspY0E4Y0I3TTcwMTE5LCovtIpxildKjGBUhVtRl2RdhFxack9RUDo4so5v",
           "accepted": [
             "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
             "by-b0q.3.17 residual: the name bar fill about 20 levels brighter, same hue",
             "by-b0q.3.17 residual: the red rim a little more saturated around the name bar",
             "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the hand card's type-line bar: unremarked in round 1, about 50 levels too bright in round 2",
             "by-b0q.3.17 residual: the card about 2 px higher and 2-3 px further left",
-            "by-b0q.3.17 residual: the left frame a plain orange-red band"
+            "by-b0q.3.17 residual: the left frame a plain orange-red band",
+            "by-b0q.3.17 residual: the name bar's rounded right end with a thin red rim",
+            "by-b0q.3.17 residual: the card's right edge about 3-4 px further left"
           ]
         },
         "hand-plateau": {
           "rect": [990, 762, 218, 179],
           "verdict": "pass",
           "bead": "by-b0q.3.17",
-          "commit": "7b525db+",
-          "fingerprint": "Z0dAb2JUYlZLWE1HY1VQaVpUZ1lTZlhSf1lPpZaFpZySt6yeoZeJhnxvb2RXV0xFcktFpJOlpouamX+MnoSFppWRuKujU0lBdlZLu6asuqu2uZ6kkU08VTdDeVpbQzo0hWhS37eXzaSRxJaFlko4TzM+dFJJQDczinRW57p/n2NWr2ZLeEI8WjlBa1BGQTg0kG1VuXVYo19LnFpHkFlGmmBKZ1FAQjg1lXRTrnpTonFNm21NgF9FgFg9VUk5QTg1",
+          "commit": "f7fdb09+",
+          "fingerprint": "Z0dAbWRbYVZPWU1IY1VQaVpUZ1lTZlhSgFpQraOYqqKYuLCkoZmPhX10bWRcV0xGdVBNpZWoqI6en4aWpY2Qr5+dwrewU0pDel1Wu6asuqu2uZ6kkU08VTdDfWFmQzs1iW5d37eXzaSRxJaFlko4TzM+eFlVQDczjnth57p/n2NWr2ZLeEI8WjlBcFdTQTg0lHNguXVYo19LnFpHkFlGmmBKbFlNQjg1m31ir3xXonFNm21NgF9FgFg9WlBGQTg1",
           "accepted": [
             "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
             "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on Plateau's frame: tan and gold (round 3) against silver-white (round 4)",
             "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on Plateau's place in the fan: further left to cover Mountain's rim (rounds 2-3) against 6-10 px further right (round 4)",
-            "by-b0q.3.17 residual: the black border about 1-2 px thicker on the left and thinner on the right"
+            "by-b0q.3.17 residual: the black border about 1-2 px thicker on the left and thinner on the right",
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on Plateau's name weight and size: matching (round 5) against lighter and smaller (round 8)",
+            "by-b0q.3.17 residual: the art window's inner rim a thin silver line where the mockup has a wider tan bevel"
           ]
         },
         "phase-tracker": {
@@ -1135,89 +1147,90 @@
         "04-title": [38, 526, 252, 40],
         "04-titan": {
           "rect": [42, 579, 150, 128],
-          "verdict": "pass",
-          "bead": "by-b0q.1.27",
-          "commit": "44861e7",
-          "fingerprint": "akE3kllMml9RkllMoGRVqmtcqmtcb0U7cjUqk0c9qk8+s1U5t1Y/sllGn1NGdjouczIpiEpL0mc/+qs6zG8y2GYygjwnbjIphDwt1ng2hU03mEosy2YoyHQnnE8qgjwumUoqnlotqlkqijwbdjUmsFMr43xDjUIqfzojmkss95c1sFEZiDggx3A+x2hGfTkmgTggrVkw65E64W0Vx2oyuH9cx4ZaflNEXikeo0srw14f6q07zpVUs4x8qYN1n3pn",
+          "verdict": "differs",
+          "bead": "by-b0q.3.17",
+          "commit": "f7fdb09",
           "accepted": [
-            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.3.17 conflict: the red frame's name bar and plaque tone: battlefield.png's red cards are a paler, duller cream (asked across rounds by by-b0q.3.17's reviewers), which the shared frame follows",
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the titan's plaque width, name bar height and name weight: by-b0q.1.27 passed them unchanged"
           ]
         },
         "04-tapped": {
           "rect": [212, 605, 124, 88],
-          "verdict": "pass",
-          "bead": "by-b0q.1.27",
-          "commit": "44861e7",
-          "fingerprint": "WDEoZCwhYygdYiccYicbYSYaYCUaRiEatntqpWhpkVd3ymRklVpQXEhMPD1ERhoZqHFiq2VixWVw1XJRgklHXUtOXUlMUyIfoGtdrmRgxGhorU49eD86VUdCYEVRWSonnmpcrmVgqF1kg0dLVj1JQD9ISkJTVSYgnWlbqGRkwGZ0x2RQXURUPkFRQTg0VSMZlWNWn2Jlplpt1m9joWVUQj1CNS0hRxoTcj8zejcsdjIsfjMpfjYlZisfYScbSiAZ",
+          "verdict": "differs",
+          "bead": "by-b0q.3.17",
+          "commit": "f7fdb09",
           "accepted": [
-            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the tapped card's left inset and the doubled rim at its art's right edge: by-b0q.1.27 passed them unchanged"
           ]
         },
         "04-untapped": {
           "rect": [354, 583, 102, 108],
-          "verdict": "pass",
-          "bead": "by-b0q.1.27",
-          "commit": "44861e7",
-          "fingerprint": "R0RCcG1rdnNxfHl3fHl3fHl3fHl2PTk3VVZXanqHaXqHkJ6pj5ymkJulk52mSkhHTVZeSZbSTJfRVJ3Riai7kae0fJKrSEZFV1VVua2fobm/2cSjybCeoKKkiJ+uR0VEW1dUuKWZyKmQ06+Sx7Kbt6mXqJuRR0VEVE1Fpnk5qn9NuIJCu4I3tH80qX9BRkRDSEVCVkUnkmUmtnwkp3IqdFo0WEoyRUNDOjc1QzknSjwmUT8lQjsnRjskPzkuODY1",
+          "verdict": "differs",
+          "bead": "by-b0q.3.17",
+          "commit": "f7fdb09",
           "accepted": [
-            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the untapped Plains' width and name weight: by-b0q.1.27 passed them unchanged"
           ]
         },
         "04-captions-tapped": [250, 698, 220, 28],
         "04-source": {
           "rect": [74, 732, 164, 113],
-          "verdict": "pass",
-          "bead": "by-b0q.1.31",
-          "commit": "636900b",
-          "fingerprint": "gVw0lXRIlXRIlnRHm3NAnHQ/nHRAeVg0h2xGl4dgm4tin41iza5vza5uza5ugmU+cV1BSllWV1FKcYJ+g4p+YFVIY3Rrh2lBcF5CYn+EUU1JdXNncGthYFVSfouUhmlAcF1Cc4uRd3lrVU1EaVpKpJyKlJGShmlAiXJajpSaepGLW1xXgnhesKeEopFzh2pCinNcbnJ5SGNnd3RgrZFdqZFguZ5nkHJGgF43hGtHh25Jh21JjHBImHhKmXlLfmA7",
+          "verdict": "differs",
+          "bead": "by-b0q.3.17",
+          "commit": "f7fdb09",
           "accepted": [
-            "by-b0q.1.31 residual: the mockup's slightly softer, wider halo; a flatter rim; badge tints and bezel; the flying glyph; name weight"
+            "by-b0q.1.31 residual: the mockup's slightly softer, wider halo; a flatter rim; badge tints and bezel; the flying glyph; name weight",
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the source card's P/T plaque and ability badge size, and the blue accent of its multicolor frame: by-b0q.1.31 passed them unchanged"
           ]
         },
         "04-target": {
           "rect": [278, 732, 158, 113],
-          "verdict": "pass",
-          "bead": "by-b0q.1.31",
-          "commit": "636900b",
-          "fingerprint": "MXCDRYGPRYGPRoGOS4GGTIGGTIGGMWt9THuCnItimYlhnoxizK1uza5uza5uSXl/NW1+UllTW1VLeYh/fYZ7Y1dIZHlwT3+ENXCDZH2CVFBKfnlrbWhdY1hUgJGZT3+ENG6CeJOXcnBfXFBFZ1hIqqSTmJaZT3+EVISXjpSagZeQWFZQhn1lsamGoI9yUH+DVYOXbHF5UGxuf3lirJRiqZFgt5xnX4eELXKKM3qSNX2VNX2VPX6QToSLT4SLN3OE",
+          "verdict": "differs",
+          "bead": "by-b0q.3.17",
+          "commit": "f7fdb09",
           "accepted": [
-            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the target card's plaque and ability badge size, card width and name weight: by-b0q.1.31 passed them unchanged"
           ]
         },
         "04-captions-glow": [106, 848, 342, 30],
         "04-hand": {
           "rect": [66, 882, 364, 124],
-          "verdict": "pass",
-          "bead": "by-b0q.1.31",
-          "commit": "636900b",
-          "fingerprint": "oZ6crqyoi3l2i1FFjFBEXE1EMy4pKiQgiZaroanAiG5knF9RxX9umIuCw7yxiYJ5eJGrfKXOhV1L1mlcpFtvmouVrpeio5mVf5KframhkmtT53ZTnUxOt5OFrnZzZlBdgYR/tJt7jGEtumZJaz1EzqV1oFxPYkdKdnpxhnlOclIsfU5ATzxEuHlbmlJDclNLbG9jpKKUnYZ/RTo3Rz1GtXU8qWw7Zk49f3l0tK+pnoZ9nGhYjl9Rj3ZgqmUuXks7",
+          "verdict": "differs",
+          "bead": "by-b0q.3.17",
+          "commit": "f7fdb09+",
           "accepted": [
             "by-b0q.1.31 residual: the Mountain cut a little lower: the mockup draws Swords with a shorter art window than the lands, and one shared frame can't match all three cuts",
-            "by-b0q.1.31 residual: Swords' silver slightly lighter"
+            "by-b0q.1.31 residual: Swords' silver slightly lighter",
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the sheet hand's card heights and Plateau's turn: by-b0q.1.31 passed the same placement"
           ]
         },
         "05-panel": [490, 520, 496, 488],
         "05-title": [516, 526, 258, 40],
         "05-attacker": {
           "rect": [550, 570, 136, 130],
-          "verdict": "pass",
-          "bead": "by-b0q.1.28",
-          "commit": "e915538",
-          "fingerprint": "LyYfTDwpgmQ8t4tPqYBIdFo5PzEjLSUfb1k7YU0xTzwkTjwlTDskUD0laVU3bVc6P1BCZoBte5WCgZyIgZyIgZyIgJuHLjUsLEEuNEAmaG5Hk4JSfYdkVWtFM0QpLzkrLj8tZWI7d1Qya00rXkIibGxIS08ov4xPMEIsU1syUUUoUUUqU0orT04lOUAablElL0AoYWIgYVgoZGUxgIBqhol9jZGGPz85JCwhJCcXODwZNjkYUVJHV1hTXmBaMzAs",
+          "verdict": "differs",
+          "bead": "by-b0q.3.17",
+          "commit": "f7fdb09",
           "accepted": [
             "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
-            "by-b0q.1.28 conflict: the sheet draws a double nested chevron and a detached arc; the screens a single chevron with a light fan and a notched crescent hugging the card, which the game follows"
+            "by-b0q.1.28 conflict: the sheet draws a double nested chevron and a detached arc; the screens a single chevron with a light fan and a notched crescent hugging the card, which the game follows",
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the sheet attacker's frame size, P/T plaque size and green tint: by-b0q.1.28 passed them unchanged"
           ]
         },
         "05-blocker": {
           "rect": [798, 596, 132, 124],
-          "verdict": "pass",
-          "bead": "by-b0q.1.28",
-          "commit": "e915538",
-          "fingerprint": "S0hGend1i4iGnpuYnpuYnZuYnpuYSUZEVFJQppR/pZeQa3WMfXmGtZ2Kr5iDUk9OiGRHcGpop4NomHxttZB3gGlZgXNpUk9NyJRmW3aTiXdqj3ttknlmrJF6hoyRT05PZllPtqeUkYyKiXdoiX12uqCLk4qIT01MaF9SkH1zwKCDtpV7raWep6ans7Gvg3lnWEgsjHdKhXVRgnJPjn5ZmolkoYtdW0suLSUdQDEdX0kmh24/iG9BX0kmQDEdLSUd",
+          "verdict": "differs",
+          "bead": "by-b0q.3.17",
+          "commit": "f7fdb09",
           "accepted": [
             "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
-            "by-b0q.1.28 conflict: the sheet draws a double nested chevron and a detached arc; the screens a single chevron with a light fan and a notched crescent hugging the card, which the game follows"
+            "by-b0q.1.28 conflict: the sheet draws a double nested chevron and a detached arc; the screens a single chevron with a light fan and a notched crescent hugging the card, which the game follows",
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the sheet blocker's bezel, plaque place and link orb: by-b0q.1.28 passed them unchanged"
           ]
         },
         "05-link": {
@@ -1305,14 +1318,14 @@
         },
         "06-counterspell": {
           "rect": [1220, 667, 126, 163],
-          "verdict": "pass",
-          "bead": "by-b0q.1.31",
-          "commit": "636900b",
-          "fingerprint": "L1F5Nl2MFlykFXXIIHW6IDxXIx4eIx4eYm9/NDxJSYa3SaDfN6fwI0ZlIx4eIx4eU22HTGiCVYi2V6HdSYvCLUFSIRwcIx4euc7itsrgtsvhtcvhtMrgMT9KIBsbIx4ezdzsxdPjw9Lhw9LhytrrJzZCIRwcIx4eJCYpKzAzMzY7OD5FPERMISIkIh4dIh4cJh8aIh8dKSMdKyYkKSQiKCMiKiUjRUFAt2EnLyQeLSIeLyQgMCYjKSMhLCgmKCQi",
+          "verdict": "differs",
+          "bead": "by-b0q.3.17",
+          "commit": "f7fdb09",
           "accepted": [
             "by-b0q.1.31 residual: the 06 layout and scale",
             "by-b0q.1.31 conflict: the gallery's 06 preview is the real scry overlay scaled down; the sketch's squatter card with larger text and pips is not drawn",
-            "by-b0q.1.29 conflict: the sheet's 06 sketch is not a uniform scale of the screen's overlay; the gallery shows the live overlay scaled down (by-b0q.1.31's decision)"
+            "by-b0q.1.29 conflict: the sheet's 06 sketch is not a uniform scale of the screen's overlay; the gallery shows the live overlay scaled down (by-b0q.1.31's decision)",
+            "by-b0q.3.17 conflict: reviewers contradicted each other on the card's place in the crop: by-b0q.3.17's first sheet reviewer passed it under by-b0q.1.31's accepted 06 layout and scale, the second counts the offset"
           ]
         },
         "06-source-card": {

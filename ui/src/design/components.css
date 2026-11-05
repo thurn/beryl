@@ -77,14 +77,21 @@
 .accent-g {
   --accent: #1d6a40;
 }
-/* A colorless land's rim is tan and gold, its name bar a cool grey (battlefield.png's Plateau). */
+/* A colorless card's name bar is a grey plate in a crisp white rim and a dark keyline
+   (battlefield.png's Plateau). */
 .frame-c {
-  --rim: #c3ab80;
-  --rim-hi: #e2cf9f;
+  --rim: #ddd4c2;
+  --rim-hi: #f7f2e8;
   --rim-lo: #6e5536;
-  --bar: #c9c0b8;
-  --bar-hi: #e2dcd5;
+  --bar: #d0c7bc;
+  --bar-hi: #e2dbd1;
   --box: #ece8e1;
+}
+.frame-c .card-name-bar {
+  border-color: transparent;
+  box-shadow:
+    inset 0 0 0 0.09em #f7f4ef,
+    0 0 0 0.07em #1d1915;
 }
 
 /* Mana symbols. */
