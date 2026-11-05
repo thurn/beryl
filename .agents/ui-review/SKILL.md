@@ -15,18 +15,55 @@ sees, waits through, or cannot do.
 
 ## The bar
 
-Measure the UI against two references and report every gap:
+Measure the UI against three references and report every gap:
 
 1. **The player's intent.** At every moment a player wants to know: what just
    happened, whose move it is, what can I do, and what will this do. Anything
    that leaves one of those unanswered is a defect.
-2. **Strong digital Magic clients.** [conventions.md](conventions.md) lists what
+2. **The design philosophy below.** It is the project owner's, and it outranks
+   everything else here.
+3. **Strong digital Magic clients.** [conventions.md](conventions.md) lists what
    good clients do for each part of the game. When Beryl does less, or asks
    more of the player, that is a finding. It is a defect if a player would be
-   confused or blocked, and a design note otherwise.
+   confused or blocked, and a design note otherwise. The checklist describes
+   what clients do. Where it accepts something the philosophy rejects, such as
+   an extra prompt or a stop, follow the philosophy.
 
 Do not dismiss something because it is "technically correct" per the rules or
 "probably intended". A rules-correct UI that a player cannot follow is broken.
+
+## Design philosophy
+
+Beryl should feel seamless. Judge every flow by these principles:
+
+- **The common case is one gesture.** The things a player does all game
+  (playing a land, casting a spell, attacking, blocking, passing) should take
+  the fewest decisions and clicks possible. Rare cases can take more steps, but
+  the common case must never pay for them. Count the clicks and prompts a
+  routine action takes, and report the count.
+- **The client does the bookkeeping.** When a strong player would answer a
+  question the same way nearly every time, the client answers it: an
+  obviously indifferent order, an evident payment, a stop where nobody would
+  act, a choice with one sensible answer. It shows what it chose, and it lets
+  the player change that in place. A question the player must stop and answer
+  is the last resort.
+- **Ask once, in context.** A choice that is really needed is asked once,
+  where the action happens, with the board in view and each option saying what
+  it does. One intent should not become a chain of modal prompts, and options
+  should not be abstract labels.
+- **Convention over invention.** MTG Arena is the primary reference for how
+  standard things look and behave, then MTGO. A player who knows Arena should
+  never have to learn a Beryl-specific way to do a standard thing. Beryl may
+  depart from Arena only where a player would see the result as clearly
+  better. Report each departure and say whether it is better.
+- **Show, don't make them infer.** Whatever happens is shown happening, at a
+  pace a player can follow. Whatever matters is visible without a hunt.
+- **Few words.** On-screen text is a cost. Where an icon, a highlight or the
+  board itself can say it, words are noise. Flag text that could be half as
+  long.
+
+A flow that works but breaks one of these principles is a finding. It is Major
+when it affects something players do every turn, and Design otherwise.
 
 ## Harness
 
