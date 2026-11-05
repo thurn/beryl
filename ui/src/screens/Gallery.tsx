@@ -275,7 +275,7 @@ function CardsAndStates() {
         Target (cyan)
       </CaptionAt>
       <div className="mini-hand">
-        <At x={54} y={366}>
+        <At x={54} y={360}>
           <Card
             card={a(costless(SAMPLE.swords), "04-hand-swords")}
             width={128}

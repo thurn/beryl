@@ -497,9 +497,17 @@
 .at {
   --card-foot: 0.5em;
 }
-/* The mini hand shows less art above each type line than the table's hand. */
+/* The mini hand's cards are cut off at their type lines by the panel's edge, under larger, bolder
+   names than the table's hand. */
 .mini-hand .card-art {
-  flex-basis: 5.8em;
+  flex-basis: 6.4em;
+}
+.mini-hand .card-name-bar {
+  height: 1.22em;
+}
+.mini-hand .card-name {
+  --name-size: 0.96em;
+  font-weight: 800;
 }
 .caption-at {
   width: 240px;
@@ -557,15 +565,25 @@
   padding-left: 30px;
 }
 
-/* The scry choice. */
+/* The scry choice. The card being dragged glows in a crisp blue line, its light only grazing
+   its black frame, and casts a deep shadow on the cards below it. */
 .scry-zone {
   position: relative;
   margin-top: -7.5px;
+  --glow-cyan:
+    0 0 0 1px #2fc3f1, 0 0 3px 3px rgb(0 120 200 / 95%),
+    0 0 18px 7px rgb(0 70 135 / 65%);
+  --glow-cyan-in:
+    inset 0 0 0 1px #e6fcff, inset 0 0 0 2px #8ef0fc,
+    inset 0 0 3px 2px rgb(0 125 195 / 95%), inset 0 0 0 30px rgb(10 35 55 / 30%);
   width: 1000px;
   height: 468px;
   border: 2px solid rgb(242 236 225 / 45%);
   border-radius: 10px;
   background: rgb(0 0 0 / 18%);
+}
+.scry-zone .card-target {
+  --card-shadow: 12px 10px 26px rgb(0 0 0 / 60%), 0 6px 10px rgb(0 0 0 / 45%);
 }
 .scry-label {
   position: absolute;
@@ -617,6 +635,19 @@
 .on-table {
   position: absolute;
   --card-shadow: 0 5px 0 -1px #0b0a09, 0 7px 4px rgb(0 0 0 / 38%);
+  /* A glowing card on the table wears a thicker neon line, a broad halo and a frame steeped in
+     its light (trigger_on_stack_with_target.png). */
+  --glow-gold:
+    0 0 0 1px #fde3a0, 0 0 2px 3px rgb(235 140 50 / 80%),
+    0 0 16px 5px rgb(235 125 10 / 60%);
+  --glow-gold-in:
+    inset 0 0 0 1px #fffef8, inset 0 0 0 2px #fbe7a8, inset 0 0 0 3px #f6c959,
+    inset 0 0 4px 4px rgb(215 125 30 / 85%),
+    inset 0 0 0 30px rgb(110 70 20 / 45%);
+  --glow-cyan: 0 0 0 1px #05c8f0, 0 0 6px 6px rgb(0 165 225 / 85%);
+  --glow-cyan-in:
+    inset 0 0 0 1px #00dcf8, inset 0 0 0 2px #01eeff, inset 0 0 0 3px #02c0e4,
+    inset 0 0 5px 4px rgb(3 110 155 / 90%), inset 0 0 0 30px rgb(0 60 85 / 80%);
 }
 .on-table .card::before {
   content: "";

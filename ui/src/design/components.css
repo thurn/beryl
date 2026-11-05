@@ -321,21 +321,41 @@
 .card-full .card-art {
   flex: 0 0 7.3em;
 }
-/* A full-art land wears a silver rim edged in its color (scry.png's Island). */
+/* A full-art land (scry.png's Island): a black-edged silver rim, its name bar as wide as the art,
+   and both ringed in a bright blue line between navy ones; below the art no rim shows. */
 .card-full-art {
-  --rim: #a3a4a8;
-  --rim-hi: #e2e3e6;
   --rim-streaks: repeating-linear-gradient(
     160deg,
-    transparent 0 0.3em,
-    rgb(255 255 255 / 35%) 0.4em,
-    rgb(40 40 48 / 25%) 0.55em,
-    transparent 0.7em 1em
+    transparent 0 0.25em,
+    rgb(255 255 255 / 50%) 0.35em,
+    rgb(30 30 40 / 40%) 0.5em,
+    transparent 0.6em 0.8em,
+    rgb(60 50 40 / 30%) 0.9em,
+    transparent 1.05em 1.4em
   );
-  --rim-lo: #2a86dc;
+  --rim-lo: #050608;
+  --blue-lines:
+    0 0 0 1px #020219, 0 0 0 2px #0a6ab0, 0 0 0 3.5px #05b4ff,
+    0 0 0 4.5px #0065a5, 0 0 0 5.5px #0c0c17;
+}
+.card-full-art .card-rim {
+  gap: 0.25em;
+  padding: 0.4em 0.44em 0.23em;
+  background:
+    var(--rim-streaks),
+    linear-gradient(110deg, #86a2c4, #b4c4d6 35%, #e4e1da 65%, #f0e8dc);
+}
+.card-full-art .card-name-bar {
+  margin: 0;
+  border: none;
+  border-radius: 0.35em;
+  box-shadow:
+    inset 0 0.05em 0 rgb(255 255 255 / 55%),
+    var(--blue-lines);
 }
 .card-full.card-full-art .card-art {
   flex: 1 1 0;
+  box-shadow: var(--blue-lines);
 }
 .card-rules {
   flex: 1 1 0;
@@ -411,21 +431,17 @@
 
 /* States: tapped turns the card (Card.tsx), source glows gold, target glows cyan, an attacker
    wears an angular chevron above and a blocker a rounded arc below. */
-/* A glowing card: a bright line at its edge, its light bleeding a little into the black frame,
-   and a wide halo (--glow-gold and --glow-cyan). */
+/* A glowing card: tokens.css draws the glow, outside the card and inside its black frame, over
+   the card's shadow. */
 .card-source {
   box-shadow:
-    inset 0 0 0 0.1em #f7ae45,
-    inset 0 0 0.25em 0.12em rgb(247 165 54 / 70%),
-    var(--card-shadow, var(--shadow-card)),
-    var(--glow-gold);
+    var(--glow-gold-in), var(--glow-gold),
+    var(--card-shadow, var(--shadow-card));
 }
 .card-target {
   box-shadow:
-    inset 0 0 0 0.1em #2ccbff,
-    inset 0 0 0.25em 0.12em rgb(44 203 255 / 70%),
-    var(--card-shadow, var(--shadow-card)),
-    var(--glow-cyan);
+    var(--glow-cyan-in), var(--glow-cyan),
+    var(--card-shadow, var(--shadow-card));
 }
 /* Copies beneath the top card of a stack sit in its shade (an overlay: a filter would clip
    the card's shadow at the filter region in WebKit). */
@@ -553,11 +569,18 @@
     0 0 0 0.05em rgb(0 0 0 / 50%),
     inset 0 0 0.6em rgb(0 0 0 / 35%);
 }
+/* The crest and wordmark are struck in gold, edged dark where they sink into the leather (vector
+   strokes and text shadows: a filter would blur them on a turned card). */
 .card-back-crest {
-  width: 2.8em;
+  width: 2.5em;
   margin-top: 0.4em;
-  color: #e6bb7c;
-  filter: drop-shadow(0 0.05em 0.05em rgb(0 0 0 / 55%));
+  color: #d6a964;
+  overflow: visible;
+}
+.card-back-crest path {
+  stroke: #2b1607;
+  stroke-width: 1.2;
+  paint-order: stroke;
 }
 .card-back-title {
   margin-top: 0.5em;
@@ -567,9 +590,13 @@
   line-height: 1.15;
   text-transform: uppercase;
   text-align: center;
-  color: #e6bd84;
   width: 5em;
-  text-shadow: 0 0.04em 0.05em rgb(0 0 0 / 45%);
+  color: #d8ab63;
+  -webkit-text-stroke: 0.025em #d8ab63;
+  text-shadow:
+    0 -0.03em 0 rgb(255 232 180 / 45%),
+    0 0.05em 0 rgb(40 20 6 / 90%),
+    0 0 0.04em rgb(40 20 6 / 80%);
 }
 /* Four dots sit in a diamond. */
 .card-back-dots {
@@ -700,7 +727,15 @@
   margin: 0 -0.12em;
 }
 .stack-item-compact .card-rules {
-  font-size: 0.86em;
+  padding: 0.66em 0.12em 0.4em 0.7em;
+  font-weight: 640;
+  font-size: 0.8em;
+  letter-spacing: -0.03em;
+  line-height: 1.16;
+  box-shadow:
+    0 0 0 0.08em var(--rim-lo),
+    inset 0 0 0 0.1em color-mix(in srgb, var(--rim-lo) 70%, transparent),
+    inset 0 0 0.4em rgb(60 20 10 / 30%);
 }
 /* Arrows. */
 .arrows {
