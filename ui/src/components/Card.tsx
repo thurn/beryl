@@ -3,6 +3,8 @@
 import {
   createContext,
   useContext,
+  useLayoutEffect,
+  useRef,
   type CSSProperties,
   type ReactNode,
 } from "react";
@@ -137,15 +139,27 @@ export function CardArt({ card }: { card: CardFace }) {
 /** Rules text up to this long is centered in its box. */
 const SHORT_TEXT = 30;
 
-/** Shrinks a long name to fit its bar rather than cutting it off: components.css caps the name's
- * size by the bar's `--room` (frame units inside the frame's borders, beside the cost) over its
- * `--chars`. `units` is
- * the frame's width in frame units: 12 unless overridden or turned. */
-function nameFit(name: string, units: number, cost = 0): CSSProperties {
-  return {
-    "--chars": name.length,
-    "--room": units - 2.4 - 0.85 * cost,
-  } as CSSProperties;
+/** Shrinks a long name to fit its bar rather than cutting it off: `--fit` scales the name's size
+ * (components.css) by how far it overflows, measured again whenever the bar resizes, as when a
+ * card turns to tap. */
+function useNameFit(text: string) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const name = ref.current;
+    const bar = name?.parentElement;
+    if (!name || !bar) return;
+    const fit = () => {
+      name.style.removeProperty("--fit");
+      const over = name.scrollWidth / name.clientWidth;
+      if (over > 1) name.style.setProperty("--fit", String(0.98 / over));
+    };
+    fit();
+    void document.fonts.ready.then(fit);
+    const observer = new ResizeObserver(fit);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, [text]);
+  return ref;
 }
 
 /** Power and toughness (or loyalty), numerals inked blue and the slash black as on the mockups. */
@@ -178,6 +192,7 @@ export function Card({
   id,
 }: CardProps) {
   const height = givenHeight ?? width / ASPECT[variant];
+  const nameRef = useNameFit(card.name);
   const pt = stats(card);
   const classes = [
     "card",
@@ -218,16 +233,7 @@ export function Card({
       >
         <div className="card-rim">
           <div className="card-name-bar">
-            <span
-              className="card-name"
-              style={nameFit(
-                card.name,
-                frame.width / (unit ?? width / 12),
-                variant === "full"
-                  ? (card.manaCost?.split("{").length ?? 1) - 1
-                  : 0,
-              )}
-            >
+            <span className="card-name" ref={nameRef}>
               {card.name}
             </span>
             {variant === "full" && card.manaCost && (
