@@ -1,0 +1,20 @@
+[package]
+name = "beryl_session"
+version = "0.1.0"
+description = "Game sessions: a game on its own thread, the PlayerView protocol and replay files"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+beryl_engine = { path = "../beryl_engine" }
+beryl_search = { path = "../beryl_search" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+ts-rs = "12.0.1"
+
+[dev-dependencies]
+beryl_cards = { path = "../beryl_cards" }

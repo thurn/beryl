@@ -4,7 +4,9 @@
 use crate::bitboard::Bitboard;
 use crate::fixed::Fixed;
 use crate::rng::{Rng, SplitMix64};
-use crate::state::{DECK_SLOTS, NONE, Object, Player, State, Turn, Zone};
+use crate::state::{
+    DECK_SLOTS, Derived, NONE, Object, PendingTrigger, Player, StackEntry, State, Turn, Zone,
+};
 use crate::table::GameTable;
 
 /// What [`Observation::card`] reads for a slot whose identity the viewer does not know.
@@ -78,6 +80,29 @@ impl<'a> Observation<'a> {
 
     pub fn battlefield(&self) -> &'a [u8] {
         self.state.battlefield()
+    }
+
+    /// A permanent's characteristics after continuous effects, public as the battlefield is
+    /// ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)).
+    ///
+    /// # Panics
+    ///
+    /// If `slot` is not on the battlefield.
+    pub fn derived(&self, slot: u8) -> &'a Derived {
+        self.state.derived(slot)
+    }
+
+    /// The stack, bottom first. It is a public zone (CR 400.2), and a spell is revealed as it
+    /// is cast ([CR 601.2a](https://yawgatog.com/resources/magic-rules/#R6012a)): "a player
+    /// first moves that card ... from where it is to the stack".
+    pub fn stack(&self) -> &'a [StackEntry] {
+        self.state.stack()
+    }
+
+    /// The triggered abilities waiting to be put on the stack. Each names its public source;
+    /// [`crate::DecisionKind::TriggerOrder`] options index this list.
+    pub fn triggers(&self) -> &'a [PendingTrigger] {
+        self.state.triggers()
     }
 
     /// A full state consistent with everything the viewer knows: the unknown remainder of
