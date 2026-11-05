@@ -67,3 +67,9 @@ fmt:
     cd ui && node_modules/.bin/prettier --write --log-level warn .
     just --fmt --unstable
     git ls-files -co --exclude-standard '*.md' | grep -v -e '^.beads/' -e '^.agents/' | xargs uv run --quiet --project tools mdformat
+
+# Edit one file in $EDITOR in a fresh worktree, then commit and `enact push` it
+[group('enact')]
+[no-cd]
+edit file:
+    @uv run --quiet --project {{ quote(justfile_directory() / "tools") }} by edit "$1"

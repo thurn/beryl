@@ -5,13 +5,13 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import app, bench, checks, warm
+from . import app, bench, checks, edit, warm
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="by", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    for module in (app, bench, checks, warm):
+    for module in (app, bench, checks, edit, warm):
         module.register(sub)
     # Commands marked `passthrough` hand arguments they don't know to another tool.
     args, extra = parser.parse_known_args(argv)
