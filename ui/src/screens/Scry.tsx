@@ -34,7 +34,8 @@ export function ScryOverlay({ className }: { className?: string }) {
         />
         <Card
           card={a(SAMPLE.fullArtIsland, "scry-island")}
-          width={300}
+          width={290}
+          height={358}
           highlight="target"
           style={{
             position: "absolute",

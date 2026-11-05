@@ -98,8 +98,12 @@
   box-shadow: -0.05em 0.1em 0 rgb(0 0 0 / 65%);
   vertical-align: -0.12em;
 }
+/* Costs in the name bar: small symbols, each ringed in black as on the mockups' Counterspell. */
 .mana-cost .mana-symbol {
-  font-size: 0.9em;
+  font-size: 0.66em;
+  box-shadow:
+    0 0 0 0.09em #10161c,
+    -0.04em 0.08em 0.06em rgb(0 0 0 / 55%);
 }
 .mana-w {
   background: #f6f2c8;
@@ -182,8 +186,14 @@
     repeating-linear-gradient(
       172deg,
       transparent 0 0.5em,
-      rgb(255 255 255 / 10%) 0.65em,
+      rgb(255 255 255 / 20%) 0.65em,
       transparent 0.8em 1.3em
+    ),
+    repeating-linear-gradient(
+      8deg,
+      transparent 0 0.9em,
+      rgb(0 0 0 / 10%) 1.05em,
+      transparent 1.2em 1.9em
     ),
     linear-gradient(
       90deg,
@@ -250,6 +260,12 @@
 .card-full .card-art {
   flex: 0 0 7.3em;
 }
+/* A full-art land wears a silver rim edged in its color (scry.png's Island). */
+.card-full-art {
+  --rim: #a9a8a6;
+  --rim-hi: #eeedeb;
+  --rim-lo: #1677d2;
+}
 .card-full.card-full-art .card-art {
   flex: 1 1 0;
 }
@@ -267,7 +283,7 @@
     0 0 0 0.06em var(--rim-lo),
     inset 0 0 0.3em rgb(0 0 0 / 12%);
   font-weight: 500;
-  font-size: 0.75em;
+  font-size: 0.82em;
   line-height: 1.2;
 }
 .card-rules p {
