@@ -949,7 +949,7 @@
   position: relative;
   gap: 7.5px;
   height: auto;
-  padding: 0 0 4px;
+  padding: 0 0 2px;
   border: none;
   border-radius: 0;
   background: none;
@@ -1010,30 +1010,43 @@
   filter: drop-shadow(0 0 2px rgb(255 200 90))
     drop-shadow(0 0 5px rgb(245 140 30 / 85%));
 }
-/* The current diamond is smaller than the others: a glowing core in a gold rim. */
+.phase-tracker-compact .phase:nth-child(3):not(.phase-current) .phase-icon {
+  stroke: #8a7a5e;
+  stroke-width: 0.8;
+}
+/* The current diamond: a glowing core in a double gold rim. */
 .phase-tracker-compact
   .phase:is(:first-child, :last-child).phase-current
   .phase-icon {
-  transform: scale(0.78);
-  stroke: #2a1c08;
-  stroke-width: 1;
-  filter: drop-shadow(0 0 1.5px rgb(255 190 80 / 80%));
+  stroke: #f2c060;
+  stroke-width: 1.4;
+  filter: drop-shadow(0 0 1.5px rgb(255 190 80 / 80%))
+    drop-shadow(0 0 4px rgb(245 140 30 / 60%));
 }
 .phase-tracker-compact .phase-current .phase-icon :is(path, circle) {
   fill: url(#phase-glow);
 }
 .phase-tracker-compact
   .phase-current:not(:first-child, :last-child)
+  .phase-icon {
+  stroke: #9a6a1c;
+}
+.phase-tracker-compact
+  .phase-current:not(:first-child, :last-child)
   .phase-icon
   :is(path, circle, rect) {
-  fill: #ffe7a6;
+  fill: #fbd877;
+}
+/* The combat glyph's plinth catches the glow when combat is current. */
+.phase-tracker-compact .phase-current:nth-child(3)::before {
+  background: rgb(222 156 59 / 55%);
 }
 .phase-tracker-compact .phase-current::after {
   content: "";
   position: absolute;
-  left: -10px;
-  right: 4px;
-  bottom: -4px;
+  left: 2px;
+  right: 2px;
+  bottom: -2px;
   height: 2px;
   z-index: 1;
   background:
@@ -1055,7 +1068,7 @@
   position: absolute;
   left: -6px;
   right: -6px;
-  bottom: -4px;
+  bottom: -2px;
   height: 10px;
   clip-path: polygon(0 100%, 18% 0, 82% 0, 100% 100%);
   background: rgb(190 180 166 / 22%);
@@ -1224,10 +1237,9 @@
     linear-gradient(
       90deg,
       transparent,
-      #8b8a86 20%,
-      #cbc9c6 40%,
-      #d0d0ce 65%,
-      #a19f9d 88%,
+      #c8c6c3 12%,
+      #e6e6e5 25%,
+      #e6e6e5 85%,
       transparent
     );
 }
@@ -1236,15 +1248,17 @@
   width: 851px;
   top: 131px;
   height: 2px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgb(150 147 144 / 70%) 15%,
-    #fff 30%,
-    #fff 65%,
-    rgb(150 147 144 / 70%) 82%,
-    transparent 95%
-  );
+  background:
+    linear-gradient(180deg, transparent 50%, rgb(0 0 0 / 45%) 50%),
+    linear-gradient(
+      90deg,
+      transparent,
+      rgb(150 147 144 / 70%) 8%,
+      #fff 17%,
+      #fff 85%,
+      rgb(150 147 144 / 70%) 92%,
+      transparent
+    );
 }
 .overlay-title {
   position: absolute;
@@ -1277,8 +1291,15 @@
   margin-top: 52px;
   translate: -4px 0;
   min-width: 0;
-  width: 279px;
+  width: 275px;
   height: 61px;
+  padding-bottom: 3px;
+  box-shadow:
+    inset 0 2px 2px rgb(253 202 87 / 85%),
+    inset 0 0 8px rgb(255 190 80 / 45%),
+    0 0 0 1px rgb(178 40 4 / 85%),
+    0 0 6px 3px rgb(255 100 20 / 85%),
+    0 0 14px 5px rgb(226 70 16 / 45%);
   font-size: 39.5px;
 }
 .overlay-side {
