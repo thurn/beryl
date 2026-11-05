@@ -338,6 +338,7 @@
 }
 .card-full-art .card-name-bar {
   margin: 0;
+  padding-left: 0.05em;
   border: none;
   border-radius: 0.35em;
   box-shadow:
@@ -657,6 +658,12 @@
   border-bottom-color: #3a332e;
   background: #1a1715;
 }
+/* A graveyard's cards lie face up: the edges beneath show their lighter rims. */
+.graveyard .pile-edge {
+  border-color: #4a443f;
+  border-bottom-color: #615a53;
+  background: #141210;
+}
 .pile-edge:first-child {
   box-shadow: var(--shadow-card);
 }
@@ -671,13 +678,13 @@
 }
 .land-count {
   position: absolute;
-  right: 0;
-  bottom: 0.38em;
+  right: 0.2em;
+  bottom: 0.15em;
   padding: 0.05em 0.4em;
   border-radius: 0.3em;
   font-family: var(--font-serif);
   font-weight: 700;
-  font-size: 25px;
+  font-size: 22px;
   color: #1d1b19;
   background: linear-gradient(180deg, #fbf0d8, #dcc49a);
   border: 1.5px solid #b8924e;

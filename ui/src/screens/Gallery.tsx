@@ -154,20 +154,25 @@ function PlayerAndZones() {
       </At>
       <At x={171} y={191}>
         <Graveyard
-          cards={[SAMPLE.counterspell, a(SAMPLE.doomBlade, "03-graveyard")]}
+          cards={[
+            SAMPLE.counterspell,
+            SAMPLE.counterspell,
+            SAMPLE.counterspell,
+            a(SAMPLE.doomBlade, "03-graveyard"),
+          ]}
           width={98}
           height={138}
-          depth={{ x: -12, y: 15, twist: -4 }}
+          depth={{ x: -14, y: 18, twist: -3 }}
         />
       </At>
-      <At x={326} y={196}>
+      <At x={318} y={192}>
         <div style={{ transform: "skewX(-3deg)" }}>
           <LandStack
             card={a(SAMPLE.island, "03-island")}
             count={3}
-            width={110}
-            height={121}
-            step={{ x: 0.18, y: 0.05 }}
+            width={122}
+            height={118}
+            step={{ x: 0.13, y: 0.065 }}
           />
         </div>
       </At>
@@ -379,12 +384,12 @@ function CombatAndStack() {
             unit={12.6}
           />
         </At>
-        <At x={173} y={241}>
+        <At x={180} y={241}>
           <StackItem
             id="g-trigger"
             source={SAMPLE.infernoTitan}
             text="When Inferno Titan enters the battlefield, it deals 3 damage divided as you choose among one, two, or three targets."
-            width={130}
+            width={136}
             height={172}
             unit={16}
           />

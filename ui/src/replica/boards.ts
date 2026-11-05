@@ -97,7 +97,10 @@ const trigger: TableBoard = {
     ...you,
     active: false,
     hand: you.hand.slice(1),
-    lands: [{ ...you.lands[0]!, count: 2, tapped: 2 }, ...you.lands.slice(1)],
+    lands: [
+      { ...you.lands[0]!, count: 2, tapped: 2, x: 110, y: 557 },
+      ...you.lands.slice(1),
+    ],
     creatures: [
       {
         card: SAMPLE.infernoTitan,

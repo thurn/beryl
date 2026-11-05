@@ -332,12 +332,12 @@ export function TableScene({
         />
       </Lying>
       {opponent.graveyard.length > 0 && (
-        <Lying x={1325} y={37} width={92} squash={0.89}>
+        <Lying x={1321} y={37} width={84}>
           <Graveyard
             cards={opponent.graveyard.map((c, i, all) =>
               i === all.length - 1 ? withArt(c, "opponent-graveyard") : c,
             )}
-            width={92}
+            width={84}
             depth={{ x: -6, y: 8 }}
           />
         </Lying>
