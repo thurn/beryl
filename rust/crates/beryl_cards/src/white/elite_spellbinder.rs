@@ -10,7 +10,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::{Filter, Whose};
-use beryl_engine::{DecisionKind, TurnStep, Zone};
+use beryl_engine::{Ask, DecisionKind, TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -30,7 +30,14 @@ fn spellbind(ctx: &mut EffectCtx) -> Flow {
     ctx.look_at(you, hand);
     let nonland =
         Filter::Not(&Filter::Types(Types::LAND)).select(ctx.state(), ctx.table(), hand, you);
-    if let Some(slot) = ctx.may_choose_object(you, nonland)? {
+    let look = Ask::Look {
+        player: them,
+        zone: Zone::Hand,
+        count: u8::try_from(hand.count()).unwrap_or(u8::MAX),
+        to: Zone::Exile,
+        eligible: nonland,
+    };
+    if let Some(slot) = ctx.may_choose_object(you, nonland, look)? {
         ctx.move_to(ctx.state().object_ref(slot), Zone::Exile, Reason::Exile);
         let exiled = ctx.state().object_ref(slot);
         ctx.allow_cast(exiled, them, 2, false, false);

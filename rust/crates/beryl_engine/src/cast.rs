@@ -15,7 +15,7 @@ use crate::card::{
     Ability, AbilityIx, AbilityKind, CastingOption, Castings, Face, FaceAbility, FaceIx, Keywords,
     ManaCost, Rule, TargetKind, TargetSpec, Timing, Types,
 };
-use crate::decision::{Candidates, Decision, DecisionKind, Opt};
+use crate::decision::{Ask, Candidates, Decision, DecisionKind, Opt};
 use crate::engine::collapse;
 use crate::event::{self, Event, Reason, Sink};
 use crate::filter::{Filter, Whose};
@@ -1049,6 +1049,7 @@ pub(crate) fn decision(
         player: c.player,
         kind,
         candidates: Candidates::Options(list),
+        ask: Ask::Plain,
     };
     Ok(match c.step {
         CastStep::X => options(DecisionKind::X, x_options(s, t, c)?),
@@ -1067,6 +1068,7 @@ pub(crate) fn decision(
                 player: c.player,
                 kind: DecisionKind::Target,
                 candidates: Candidates::Objects(collapse(s, b)),
+                ask: Ask::Plain,
             },
             TargetSet::Players(p) => {
                 let mut list = Fixed::new();
@@ -1100,6 +1102,7 @@ pub(crate) fn decision(
                 s,
                 crew_candidates(s, c.player, source_of(&top(s)).expect("a Vehicle to crew")),
             )),
+            ask: Ask::Plain,
         },
         CastStep::Manual => options(
             DecisionKind::ManaPayment,

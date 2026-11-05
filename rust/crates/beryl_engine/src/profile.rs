@@ -1,8 +1,11 @@
 //! Restriction profiles: which decisions are offered, and the budgets (architecture §12.3,
 //! §15).
 
+use crate::combat;
 use crate::ids::Seat;
+use crate::observation::Observation;
 use crate::state::{State, Turn, TurnStep};
+use crate::turn::any_attacking;
 
 /// Where players get priority as a decision.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -106,14 +109,65 @@ impl Profile {
 /// The smart stops (§15): "their own main phases, after attackers and after blockers are
 /// declared, the opponent's end step, and whenever the stack is non-empty."
 fn is_smart_stop(s: &State, player: Seat) -> bool {
-    if !s.stack.is_empty() {
-        return true;
-    }
-    let active = s.turn.active == player;
-    match s.turn.step {
+    !s.stack.is_empty() || smart_stop_in(s.turn.step, s.turn.active == player, any_attacking(s))
+}
+
+/// Whether a player gets priority at a smart stop in `step` with an empty stack, as the
+/// active player or not, with creatures attacking or not.
+fn smart_stop_in(step: TurnStep, active: bool, attacking: bool) -> bool {
+    match step {
         TurnStep::PrecombatMain | TurnStep::PostcombatMain => active,
-        TurnStep::DeclareAttackers | TurnStep::DeclareBlockers => crate::turn::any_attacking(s),
+        TurnStep::DeclareAttackers | TurnStep::DeclareBlockers => attacking,
         TurnStep::End => !active,
         _ => false,
     }
+}
+
+/// Where passing priority now takes the viewer, as the pass button says (decision D13).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum NextStop {
+    /// The top of the stack resolves.
+    Resolve,
+    /// Combat damage is dealt.
+    CombatDamage,
+    /// The viewer next gets priority, or declares attackers, in this step of the turn.
+    Step(TurnStep),
+    /// The turn ends.
+    NextTurn,
+}
+
+/// Where passing priority now takes the viewer of `obs` under `stops`, if the other player
+/// passes too: the resolution of the top of the stack; combat damage once blockers are
+/// declared; under smart stops, the next step of the turn that is one of the viewer's
+/// ([`is_smart_stop`]), counting the combat in which the viewer, as the active player, can
+/// declare attackers; otherwise the next step.
+pub fn next_stop(obs: Observation<'_>, stops: Stops) -> NextStop {
+    let s = obs.shown();
+    if !s.stack.is_empty() {
+        return NextStop::Resolve;
+    }
+    let step = s.turn.step;
+    let attacking = any_attacking(s);
+    if attacking
+        && matches!(
+            step,
+            TurnStep::DeclareBlockers | TurnStep::FirstStrikeDamage
+        )
+    {
+        return NextStop::CombatDamage;
+    }
+    let later = TurnStep::ALL.into_iter().filter(|&l| l > step);
+    if stops != Stops::Smart {
+        return NextStop::Step(later.min().unwrap_or(TurnStep::Untap));
+    }
+    let active = s.turn.active == obs.viewer();
+    let declares = active && step < TurnStep::BeginningOfCombat && combat::can_declare_attackers(s);
+    for l in later {
+        if (l == TurnStep::BeginningOfCombat && declares)
+            || smart_stop_in(l, active, attacking || declares)
+        {
+            return NextStop::Step(l);
+        }
+    }
+    NextStop::NextTurn
 }

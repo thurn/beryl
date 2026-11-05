@@ -162,7 +162,26 @@ id: DecisionId, kind: Kind, candidates: Array<CandidateView>,
  * resolving is an instant spell, a sorcery spell, or an ability, its resolution may involve
  * several steps." A resolving spell's card is still among the objects, on the stack.
  */
-resolving: StackItem | null, };
+resolving: StackItem | null, 
+/**
+ * What the decision asks, where its kind alone does not say.
+ */
+ask: AskView, 
+/**
+ * For a priority decision, where passing takes the viewer, for the pass button.
+ */
+passTo: PassTo | null, 
+/**
+ * The card the decision is for: the spell or ability resolving, or else the one on top of
+ * the stack (which a target, an X or a payment is chosen for); the attacker whose combat
+ * damage is divided; the land asking for life. None for priority and the other combat
+ * declarations.
+ */
+source: number | null, };
+
+export type AskView = { "kind": "plain" } | { "kind": "scry", count: number, } | { "kind": "look", player: Side, zone: ZoneName, count: number, to: ZoneName, eligible: Array<number>, } | { "kind": "putBack", count: number, } | { "kind": "fateseal", player: Side, } | { "kind": "explore" } | { "kind": "untap", max: number, } | { "kind": "unlessPays", cost: string, } | { "kind": "payLife", life: number, } | { "kind": "cleanup", count: number, };
+
+export type PassTo = { "kind": "resolve" } | { "kind": "combatDamage" } | { "kind": "step", step: Step, } | { "kind": "nextTurn" };
 
 export type CandidateView = { 
 /**

@@ -360,7 +360,7 @@ pub struct Player {
 /// The steps of a turn ([CR 500.1](https://yawgatog.com/resources/magic-rules/#R5001)): "A
 /// turn consists of five phases, in this order: beginning, precombat main, combat, postcombat
 /// main, and ending."
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TurnStep {
     Untap,
     Upkeep,
@@ -377,6 +377,25 @@ pub enum TurnStep {
     PostcombatMain,
     End,
     Cleanup,
+}
+
+impl TurnStep {
+    /// Every step, in turn order.
+    pub const ALL: [TurnStep; 13] = [
+        TurnStep::Untap,
+        TurnStep::Upkeep,
+        TurnStep::Draw,
+        TurnStep::PrecombatMain,
+        TurnStep::BeginningOfCombat,
+        TurnStep::DeclareAttackers,
+        TurnStep::DeclareBlockers,
+        TurnStep::FirstStrikeDamage,
+        TurnStep::CombatDamage,
+        TurnStep::EndOfCombat,
+        TurnStep::PostcombatMain,
+        TurnStep::End,
+        TurnStep::Cleanup,
+    ];
 }
 
 /// Where the game is in its turns (architecture §4.4).

@@ -10,6 +10,7 @@ use crate::card::{
     ManaColor, ManaCost, ManaSet, Rule, Subtype, Subtypes, Supertypes, TargetKind, TargetSpec,
     Trigger, Types,
 };
+use crate::decision::Ask;
 use crate::effect::EffectCtx;
 use crate::event::Reason;
 use crate::filter::{Filter, Whose};
@@ -69,7 +70,7 @@ fn ponder(ctx: &mut EffectCtx) -> Flow {
     ctx.draw(you, 2);
     let hand = ctx.state().zone(you, Zone::Hand);
     if !hand.is_empty() {
-        let card = ctx.choose_object(you, hand)?;
+        let card = ctx.choose_object(you, hand, Ask::Plain)?;
         let card = ctx.state().object_ref(card);
         ctx.move_to(card, Zone::Library, Reason::Effect);
     }
@@ -98,10 +99,10 @@ fn binder(ctx: &mut EffectCtx) -> Flow {
         .iter()
         .filter(|&slot| !LANDS.matches(s, ctx.table, slot, opponent))
         .collect();
-    if nonland.is_empty() || !ctx.choose_yes_no(ctx.controller())? {
+    if nonland.is_empty() || !ctx.choose_yes_no(ctx.controller(), Ask::Plain)? {
         return Ok(());
     }
-    let card = ctx.choose_object(ctx.controller(), nonland)?;
+    let card = ctx.choose_object(ctx.controller(), nonland, Ask::Plain)?;
     ctx.move_to(ctx.state().object_ref(card), Zone::Exile, Reason::Exile);
     let exiled = ctx.state().object_ref(card);
     ctx.allow_cast(exiled, opponent, 2, false, false);
@@ -115,7 +116,7 @@ fn loot_and_cast(ctx: &mut EffectCtx) -> Flow {
     if hand.is_empty() {
         return Ok(());
     }
-    let card = ctx.choose_object(you, hand)?;
+    let card = ctx.choose_object(you, hand, Ask::Plain)?;
     ctx.move_to(
         ctx.state().object_ref(card),
         Zone::Graveyard,

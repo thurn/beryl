@@ -4,7 +4,7 @@
 use crate::bitboard::Bitboard;
 use crate::card::{FaceIx, Types};
 use crate::decision::{
-    Answers, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, StallReason, Step,
+    Answers, Ask, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, StallReason, Step,
 };
 use crate::event::{self, Entry, Reason, Sink};
 use crate::fixed::{Fixed, Full};
@@ -242,6 +242,7 @@ pub(crate) fn decision(s: &State, t: &GameTable, sink: &mut Sink) -> Result<Deci
                     player,
                     kind: DecisionKind::TriggerOrder,
                     candidates: Candidates::Options(list),
+                    ask: Ask::Plain,
                 }
             }
             None => priority_decision(s, t)?,
@@ -255,18 +256,27 @@ pub(crate) fn decision(s: &State, t: &GameTable, sink: &mut Sink) -> Result<Deci
         },
         Pending::Discard => {
             let p = s.turn.active;
-            objects(p, DecisionKind::Discard, collapse(s, turn::hand(s, p)))
+            let count = zone::hand_size(s, p).saturating_sub(turn::MAX_HAND_SIZE);
+            Decision {
+                ask: Ask::Cleanup {
+                    count: u8::try_from(count).unwrap_or(u8::MAX),
+                },
+                ..objects(p, DecisionKind::Discard, collapse(s, turn::hand(s, p)))
+            }
         }
         Pending::LegendRule { kept } => {
             let (p, group) =
                 sba::unresolved_legends(s, t, kept).expect("a legend-rule group without a keeper");
             objects(p, DecisionKind::LegendRule, collapse(s, group))
         }
-        Pending::EnterPayingLife { slot, .. } => options(
-            s.object(slot).owner,
-            DecisionKind::PayLife,
-            &[Opt::Yes, Opt::No],
-        )?,
+        Pending::EnterPayingLife { slot, life } => Decision {
+            ask: Ask::PayLife { land: slot, life },
+            ..options(
+                s.object(slot).owner,
+                DecisionKind::PayLife,
+                &[Opt::Yes, Opt::No],
+            )?
+        },
         Pending::DeclareAttackers { attacker } => combat::attack_decision(s, attacker)?,
         Pending::DeclareBlockers { blocker } => combat::block_decision(s, blocker)?,
         Pending::CombatDamage { done, lethal } => combat::division_decision(s, done, lethal)?,
@@ -280,6 +290,7 @@ pub(crate) fn decision(s: &State, t: &GameTable, sink: &mut Sink) -> Result<Deci
             player,
             kind: DecisionKind::CastOffer,
             candidates: Candidates::Options(cast::offer_options(s, t, object, player, free)?),
+            ask: Ask::Plain,
         },
     })
 }
@@ -289,6 +300,7 @@ fn objects(player: Seat, kind: DecisionKind, candidates: Bitboard) -> Decision {
         player,
         kind,
         candidates: Candidates::Objects(candidates),
+        ask: Ask::Plain,
     }
 }
 
@@ -301,6 +313,7 @@ fn options(player: Seat, kind: DecisionKind, opts: &[Opt]) -> Result<Decision, F
         player,
         kind,
         candidates: Candidates::Options(list),
+        ask: Ask::Plain,
     })
 }
 
@@ -326,6 +339,7 @@ fn priority_decision(s: &State, t: &GameTable) -> Result<Decision, Full> {
         player,
         kind: DecisionKind::Priority,
         candidates: Candidates::Options(list),
+        ask: Ask::Plain,
     })
 }
 

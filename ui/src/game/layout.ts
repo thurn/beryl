@@ -5,6 +5,7 @@
 // the view: the screen animates between their results.
 import type {
   ObjectView,
+  PassTo,
   PlayerView,
   Side,
   Step,
@@ -636,65 +637,33 @@ export const STEP_NAMES: Record<Step, string> = {
   cleanup: "Cleanup",
 };
 
-const STEPS = Object.keys(STEP_NAMES) as Step[];
-
-/** What passing priority advances to, for the turn button (decision D13): with a spell or
- * ability on the stack, its resolution; otherwise the next stop, the smart stops of
- * docs/engine-architecture.md §15 ("their own main phases, after attackers and after blockers
- * are declared, the opponent's end step") or, under full control, the next step. */
-export function nextStop(view: PlayerView): { label: string; caption: string } {
-  const { step, active } = view.turn;
-  const top = view.stack[view.stack.length - 1];
-  if (top) {
-    const name =
-      top.kind === "spell"
-        ? (view.objects.find((o) => o.slot === top.slot)?.name ?? "the spell")
-        : top.name;
-    return { label: "Resolve", caption: name };
-  }
-  // Once blockers are declared, passing deals combat damage (combat.png's Resolve Damage).
-  const fighting = view.objects.some((o) => o.combat?.kind === "attacking");
-  if (
-    fighting &&
-    (step === "declareBlockers" || step === "firstStrikeDamage")
-  ) {
-    return { label: "Resolve Damage", caption: "Combat damage" };
-  }
-  if (view.stops === "exact") {
-    const next = STEPS[(STEPS.indexOf(step) + 1) % STEPS.length]!;
-    return { label: "Next", caption: `To ${STEP_NAMES[next]}` };
-  }
-  if (fighting && step === "declareAttackers") {
-    return { label: "Next", caption: "To Blockers" };
-  }
-  if (active === "opponent") {
-    return step === "end" || step === "cleanup"
-      ? { label: "Next", caption: "To Your Turn" }
-      : { label: "Next", caption: "To End Step" };
-  }
-  const canAttack = view.objects.some(
-    (o) =>
-      o.zone === "battlefield" &&
-      o.controller === "you" &&
-      o.pt !== null &&
-      !o.tapped &&
-      !o.summoningSick,
-  );
-  switch (step) {
-    case "untap":
-    case "upkeep":
-    case "draw":
-      return { label: "Next", caption: "To Main 1" };
-    case "precombatMain":
-      return canAttack
-        ? { label: "Next", caption: "To Combat" }
-        : { label: "Next", caption: "To Main 2" };
-    case "postcombatMain":
-    case "end":
-    case "cleanup":
-      return { label: "End Turn", caption: "To Opponent's Turn" };
-    default:
-      return { label: "Next", caption: "To Main 2" };
+/** The turn button for passing priority (decision D13): where the pass goes, as the engine
+ * says (`DecisionView.passTo`). */
+export function passButton(
+  view: PlayerView,
+  to: PassTo,
+): { label: string; caption: string } {
+  switch (to.kind) {
+    case "resolve": {
+      const top = view.stack[view.stack.length - 1];
+      const name =
+        top?.kind === "spell"
+          ? (view.objects.find((o) => o.slot === top.slot)?.name ?? "the spell")
+          : (top?.name ?? "the stack");
+      return { label: "Resolve", caption: name };
+    }
+    case "combatDamage":
+      // combat.png's Resolve Damage.
+      return { label: "Resolve Damage", caption: "Combat damage" };
+    case "step":
+      return {
+        label: "Next",
+        caption: `To ${to.step === "end" ? "End Step" : STEP_NAMES[to.step]}`,
+      };
+    case "nextTurn":
+      return view.turn.active === "you"
+        ? { label: "End Turn", caption: "To Opponent's Turn" }
+        : { label: "Next", caption: "To Your Turn" };
   }
 }
 

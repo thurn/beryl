@@ -16,7 +16,7 @@ use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::Filter;
 use beryl_engine::state::CounterKind;
-use beryl_engine::{DecisionKind, TurnStep, Zone};
+use beryl_engine::{Ask, DecisionKind, TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -86,7 +86,7 @@ fn fateseal(ctx: &mut EffectCtx) -> Flow {
     let top = ctx.state().object_ref(top);
     let you = ctx.controller();
     ctx.look_at(you, Bitboard::single(top.slot));
-    if ctx.choose_yes_no(you)? {
+    if ctx.choose_yes_no(you, Ask::Fateseal { player })? {
         ctx.put_library_card_on_bottom(top);
     }
     Ok(())
@@ -99,12 +99,12 @@ fn fateseal(ctx: &mut EffectCtx) -> Flow {
 fn brainstorm(ctx: &mut EffectCtx) -> Flow {
     let you = ctx.controller();
     ctx.draw(you, 3);
-    for _ in 0..2 {
+    for count in (1..=2).rev() {
         let hand = ctx.state().zone(you, Zone::Hand);
         if hand.is_empty() {
             break;
         }
-        let card = ctx.choose_object(you, hand)?;
+        let card = ctx.choose_object(you, hand, Ask::PutBack { count })?;
         let card = ctx.state().object_ref(card);
         ctx.move_to(card, Zone::Library, Reason::Effect);
     }

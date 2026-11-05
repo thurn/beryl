@@ -37,13 +37,14 @@ mod zone;
 
 pub use bitboard::Bitboard;
 pub use decision::{
-    Answers, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, Replay, StallReason, Step,
+    Answers, Ask, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, Replay, StallReason,
+    Step,
 };
 pub use engine::{Counts, Scratch, apply, next, observe, view};
 pub use ids::{CardIx, Seat, Slot};
 pub use invariants::{At, Violation};
 pub use observation::Observation;
-pub use profile::{Breakpoint, Payment, Profile, Stops};
+pub use profile::{Breakpoint, NextStop, Payment, Profile, Stops, next_stop};
 pub use state::{State, TurnStep, Zone};
 pub use table::{CardTable, Decklist, GameTable, TableError};
 

@@ -192,6 +192,7 @@ version = "0.1.0"
 dependencies = [
  "beryl_cards",
  "beryl_engine",
+ "beryl_scenario",
  "beryl_search",
  "serde",
  "serde_json",

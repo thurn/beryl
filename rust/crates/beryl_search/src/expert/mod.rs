@@ -38,14 +38,13 @@ use std::cell::OnceCell;
 
 use beryl_cards::names;
 use beryl_engine::card::{
-    Ability, AbilityIx, CastingOption, Castings, Face, FaceAbility, FaceIx, Keywords, ManaColor,
-    Types,
+    Ability, AbilityIx, CastingOption, Castings, Face, FaceIx, Keywords, ManaColor, Types,
 };
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{ObjectFlags, StackEntry};
 use beryl_engine::{
-    Bitboard, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Scratch, Seat, Slot,
-    Step, TurnStep, Zone, apply, next,
+    Ask, Bitboard, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Scratch, Seat,
+    Slot, Step, TurnStep, Zone, apply, next,
 };
 
 use crate::Agent;
@@ -505,21 +504,16 @@ impl Expert<'_> {
             .sum()
     }
 
-    /// A card to take from the opponent's hand, as Elite Spellbinder does: by its value, but
-    /// a Mana Crypt is little to a player with lands enough, and a wheel is their way out of
-    /// an emptying library. From our own library, as Thundertrap Trainer looks, dying: the
-    /// removal we can cast now.
+    /// A card to take from a look at the opponent's hand, as Elite Spellbinder's: by its
+    /// value, but a Mana Crypt is little to a player with lands enough, and a wheel is their
+    /// way out of an emptying library. From a look at our own library, as Thundertrap
+    /// Trainer's, dying: the removal we can cast now.
     fn take_from_hand(&self, d: &Decision) -> Option<Choice> {
-        let beryl_engine::Candidates::Objects(b) = d.candidates else {
+        let Ask::Look { player, zone, .. } = d.ask else {
             return None;
         };
-        // Thundertrap Trainer's look at our library: dying, the answer we can cast now.
-        if self.dying()
-            && b.iter().all(|s| {
-                let o = self.obs().object(s);
-                o.zone == Zone::Library && o.owner == self.me()
-            })
-        {
+        // A look at our library: dying, the answer we can cast now.
+        if zone == Zone::Library && player == self.me() && self.dying() {
             let mana = self.mana(self.me());
             return Some(best(d, |c| {
                 let slot = c.object()?;
@@ -529,10 +523,7 @@ impl Expert<'_> {
                 Some(self.value(slot) + 1000 * i32::from(now && answer))
             }));
         }
-        if !b.iter().all(|s| {
-            let o = self.obs().object(s);
-            o.zone == Zone::Hand && o.owner == self.opp()
-        }) {
+        if zone != Zone::Hand || player != self.opp() {
             return None;
         }
         let library = self.obs().library(self.opp()).len();
@@ -2482,15 +2473,9 @@ impl Expert<'_> {
         }))
     }
 
-    /// Up to some permanents, as Time Spiral's "You untap up to six lands": ours only.
+    /// Permanents to untap, as Time Spiral's "You untap up to six lands": ours only.
     fn choose_up_to(&self, d: &Decision) -> Option<Choice> {
-        let beryl_engine::Candidates::Options(o) = &d.candidates else {
-            return None;
-        };
-        let on_battlefield = o.iter().any(
-            |&o| matches!(o, Opt::Object(s) if self.obs().object(s).zone == Zone::Battlefield),
-        );
-        if !on_battlefield {
+        if !matches!(d.ask, Ask::Untap { .. }) {
             return None;
         }
         Some(best(d, |c| match c.option() {
@@ -2504,20 +2489,15 @@ impl Expert<'_> {
 
     // --- Questions while resolving ----------------------------------------------------------
 
-    /// Jace, the Mind Sculptor's +2: put the top card on the bottom when it is one the
-    /// opponent would want, or one we would not. A Map's explore: put the revealed card into
-    /// the graveyard only if it is not worth drawing.
+    /// A fateseal, as Jace, the Mind Sculptor's +2: put the top card on the bottom when it is
+    /// one the opponent would want, or one we would not. An explore, as a Map's: put the
+    /// revealed card into the graveyard only if it is not worth drawing.
     fn yes_no(&self, d: &Decision) -> Option<Choice> {
-        let e = self.obs().stack().last()?;
-        let name = self.p.t.def(e.card).name;
-        let player =
-            if name == names::JACE_THE_MIND_SCULPTOR && e.ability == Some(FaceAbility::Own(0)) {
-                e.targets.iter().next()?.as_player()?
-            } else if name == MAP_TOKEN {
-                self.me()
-            } else {
-                return None;
-            };
+        let player = match d.ask {
+            Ask::Fateseal { player } => player,
+            Ask::Explore => self.me(),
+            _ => return None,
+        };
         let &top = self.obs().library(player).last()?;
         let worth = self.p.in_hand(top);
         let away = if player == self.me() {

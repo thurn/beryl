@@ -6,6 +6,7 @@ import type { CardFace } from "../components/Card";
 import type {
   CardType,
   ObjectView,
+  PassTo,
   PlayerView,
   Side,
   Status,
@@ -199,15 +200,19 @@ const hand = {
   },
 } satisfies Record<string, Thing>;
 
-const priority: Status = {
+/** A priority decision whose pass goes to `passTo`. */
+const priority = (passTo: PassTo): Status => ({
   kind: "deciding",
   decision: {
     id: { session: 1, seq: 1 },
     kind: "priority",
     candidates: [{ label: "Pass", option: { kind: "pass" } }],
     resolving: null,
+    ask: { kind: "plain" },
+    passTo,
+    source: null,
   },
-};
+});
 
 /** battlefield.png: your first main phase, priority to you, and Next goes to combat. */
 const battlefield = game(
@@ -227,7 +232,7 @@ const battlefield = game(
   ],
   {
     life: { you: 22, opponent: 17 },
-    status: priority,
+    status: priority({ kind: "step", step: "beginningOfCombat" }),
     turn: { number: 7, active: "you", step: "precombatMain", priority: "you" },
     stack: [],
     stops: "smart",
@@ -265,7 +270,7 @@ const combat = game(
   ],
   {
     life: { you: 22, opponent: 17 },
-    status: priority,
+    status: priority({ kind: "combatDamage" }),
     turn: {
       number: 7,
       active: "you",
@@ -313,7 +318,7 @@ const trigger = game(
   ],
   (slot) => ({
     life: { you: 22, opponent: 17 },
-    status: priority,
+    status: priority({ kind: "resolve" }),
     turn: {
       number: 7,
       active: "you",
@@ -398,6 +403,9 @@ const scry = game(
           targets: [],
           x: 0,
         },
+        ask: { kind: "scry", count: 2 },
+        passTo: null,
+        source: slot("preordain"),
       },
     },
     turn: { number: 7, active: "you", step: "precombatMain", priority: "you" },

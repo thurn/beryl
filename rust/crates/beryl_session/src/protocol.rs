@@ -10,8 +10,8 @@ use beryl_engine::card::{
 use beryl_engine::event::{Event, Reason, Recipient};
 use beryl_engine::state::{CounterKind, ObjectFlags, StackEntry, TurnStep};
 use beryl_engine::{
-    Candidates, Decision, DecisionKind, GameTable, Observation, Opt, Outcome, Seat, Slot,
-    StallReason, Stops, Zone,
+    Ask, Candidates, Decision, DecisionKind, GameTable, NextStop, Observation, Opt, Outcome, Seat,
+    Slot, StallReason, Stops, Zone, next_stop,
 };
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -236,6 +236,66 @@ pub struct DecisionView {
     /// resolving is an instant spell, a sorcery spell, or an ability, its resolution may involve
     /// several steps." A resolving spell's card is still among the objects, on the stack.
     pub resolving: Option<StackItem>,
+    /// What the decision asks, where its kind alone does not say.
+    pub ask: AskView,
+    /// For a priority decision, where passing takes the viewer, for the pass button.
+    pub pass_to: Option<PassTo>,
+    /// The card the decision is for: the spell or ability resolving, or else the one on top of
+    /// the stack (which a target, an X or a payment is chosen for); the attacker whose combat
+    /// damage is divided; the land asking for life. None for priority and the other combat
+    /// declarations.
+    pub source: Option<u8>,
+}
+
+/// What a decision asks ([`Ask`]), by public slot and relative to the viewer.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum AskView {
+    /// Nothing more than the decision's kind says.
+    Plain,
+    /// Scry `count`: a `chooseUpTo` picks a card for the bottom, a `chooseObject` the next
+    /// card for the top.
+    Scry { count: u8 },
+    /// A look at the cards in `player`'s `zone` (the top `count` of a library, or a whole
+    /// hand) that may move one of the `eligible` cards to `to`: a `yesNo` whether to, then a
+    /// `chooseObject` for which.
+    Look {
+        player: Side,
+        zone: ZoneName,
+        count: u8,
+        to: ZoneName,
+        eligible: Vec<u8>,
+    },
+    /// A card from the hand to put on top of the library, `count` of them still to put, each
+    /// on the one before.
+    PutBack { count: u8 },
+    /// Whether to put the top card of `player`'s library on the bottom.
+    Fateseal { player: Side },
+    /// Whether the card an explore revealed goes to the graveyard.
+    Explore,
+    /// Permanents to untap, up to `max`.
+    Untap { max: u8 },
+    /// Whether to pay `cost`, as Oracle text writes it, so that the effect does not happen.
+    UnlessPays { cost: String },
+    /// Whether to pay `life` so that a land doesn't enter tapped.
+    PayLife { life: u8 },
+    /// A card to discard in the cleanup step, `count` of them still to discard to reach the
+    /// maximum hand size.
+    Cleanup { count: u8 },
+}
+
+/// Where passing priority takes the viewer if the other player passes too ([`NextStop`]).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum PassTo {
+    /// The top of the stack resolves.
+    Resolve,
+    /// Combat damage is dealt.
+    CombatDamage,
+    /// The viewer next gets priority, or declares attackers, in this step of the turn.
+    Step { step: Step },
+    /// The turn ends.
+    NextTurn,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -598,10 +658,7 @@ pub fn player_view(
         Moment::Deciding(id, d, resolving) => {
             debug_assert_eq!(d.player, viewer, "a view shows only its viewer's decision");
             Status::Deciding {
-                decision: DecisionView {
-                    resolving: resolving.map(|e| stack_item(t, obs, e)),
-                    ..decision_view(t, obs, id, d)
-                },
+                decision: decision_view(t, obs, id, d, resolving, stops),
             }
         }
         Moment::Stopped => Status::Stopped,
@@ -785,6 +842,8 @@ fn decision_view(
     obs: Observation<'_>,
     id: DecisionId,
     d: &Decision,
+    resolving: Option<&StackEntry>,
+    stops: StopsSetting,
 ) -> DecisionView {
     let candidates = match &d.candidates {
         Candidates::Objects(b) => b
@@ -800,8 +859,85 @@ fn decision_view(
         id,
         kind: d.kind.into(),
         candidates,
-        resolving: None,
+        resolving: resolving.map(|e| stack_item(t, obs, e)),
+        ask: ask_view(obs, d.ask),
+        pass_to: (d.kind == DecisionKind::Priority).then(|| pass_to(obs, stops)),
+        source: decision_source(obs, d, resolving),
     }
+}
+
+fn ask_view(obs: Observation<'_>, ask: Ask) -> AskView {
+    match ask {
+        Ask::Plain => AskView::Plain,
+        Ask::Scry { count } => AskView::Scry { count },
+        Ask::Look {
+            player,
+            zone,
+            count,
+            to,
+            eligible,
+        } => AskView::Look {
+            player: side(obs, player),
+            zone: zone.into(),
+            count,
+            to: to.into(),
+            eligible: slots(eligible.iter()),
+        },
+        Ask::PutBack { count } => AskView::PutBack { count },
+        Ask::Fateseal { player } => AskView::Fateseal {
+            player: side(obs, player),
+        },
+        Ask::Explore => AskView::Explore,
+        Ask::Untap { max } => AskView::Untap { max },
+        Ask::UnlessPays { cost } => AskView::UnlessPays {
+            cost: mana_text(cost),
+        },
+        Ask::PayLife { life, .. } => AskView::PayLife { life },
+        Ask::Cleanup { count } => AskView::Cleanup { count },
+    }
+}
+
+fn pass_to(obs: Observation<'_>, stops: StopsSetting) -> PassTo {
+    match next_stop(obs, stops.stops()) {
+        NextStop::Resolve => PassTo::Resolve,
+        NextStop::CombatDamage => PassTo::CombatDamage,
+        NextStop::Step(step) => PassTo::Step { step: step.into() },
+        NextStop::NextTurn => PassTo::NextTurn,
+    }
+}
+
+/// [`DecisionView::source`].
+fn decision_source(
+    obs: Observation<'_>,
+    d: &Decision,
+    resolving: Option<&StackEntry>,
+) -> Option<u8> {
+    let slot = match (d.kind, d.ask) {
+        (_, Ask::PayLife { land, .. }) => Some(land),
+        (
+            DecisionKind::Priority
+            | DecisionKind::Attacker
+            | DecisionKind::AttackTarget
+            | DecisionKind::Blocker
+            | DecisionKind::BlockTarget,
+            _,
+        ) => None,
+        (DecisionKind::DamageDivision, _) => {
+            // The blockers offered block the attacker being divided.
+            let Candidates::Options(opts) = &d.candidates else {
+                return None;
+            };
+            opts.iter().find_map(|&o| match o {
+                Opt::Lethal(blocker) => obs.object(blocker).combat,
+                _ => None,
+            })
+        }
+        _ => resolving
+            .or_else(|| obs.stack().last())
+            .and_then(|e| e.object)
+            .map(|r| r.slot),
+    };
+    slot.map(Slot::get)
 }
 
 fn candidate(t: &GameTable, obs: Observation<'_>, o: Opt) -> CandidateView {

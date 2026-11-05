@@ -11,6 +11,7 @@ scenarios checked against XMage and Forge).
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -18,10 +19,11 @@ import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import paths, warm
+from . import cards, paths, warm
 
 FAST_BUDGET = 60
 SLOW_BUDGET = 300
@@ -34,6 +36,9 @@ TEXT_SUFFIXES = (".py", ".rs", ".md", ".toml", ".json", ".ts", ".tsx", ".css", "
 
 BY: list[str] = [sys.executable, "-m", "beryl_tools.cli"]
 NPM_BIN: Path = paths.UI / "node_modules" / ".bin"
+# The game screen's code: it reads what a decision asks from the protocol
+# (`DecisionView.ask`), never from the card asking, so a new card needs no change here.
+GAME_UI: Path = paths.UI / "src" / "game"
 
 
 @dataclass
@@ -221,6 +226,7 @@ def ui_lane() -> Lane:
         Lane("ui", warm=True)
         .step("prettier", [str(NPM_BIN / "prettier"), "--check", "."], paths.UI)
         .step("tsc", [str(NPM_BIN / "tsc"), "-b"], paths.UI)
+        .step("card-names", [sys.executable, "-m", "beryl_tools.checks", "card-names"])
     )
 
 
@@ -288,6 +294,36 @@ def slow(args: argparse.Namespace) -> int:
     return run_lanes([lanes[n] for n in chosen], "ci", budget, strict=True)
 
 
+def card_names_in(directory: Path, names: Iterable[str]) -> list[str]:
+    """Each place a file under `directory` names one of `names`, as `path:line: name`."""
+    alternatives = "|".join(re.escape(n) for n in sorted(names, key=len, reverse=True))
+    pattern = re.compile(rf"(?<!\w)(?:{alternatives})(?!\w)")
+    found: list[str] = []
+    for path in sorted(p for p in directory.rglob("*") if p.is_file()):
+        for number, line in enumerate(path.read_text().splitlines(), 1):
+            found += [f"{path}:{number}: {m.group(0)}" for m in pattern.finditer(line)]
+    return found
+
+
+def all_card_names() -> set[str]:
+    """The cube's cards, and the cards and tokens of the card data, but a token named by one
+    word, such as Copy, which is no name in prose."""
+    names = set(cards.cube_names(cards.CUBE))
+    data = json.loads(cards.OUTPUT.read_text())
+    tokens = {t["name"] for t in data["tokens"]}
+    for entry in [*data["cards"], *data["tokens"]]:
+        names.add(entry["name"])
+        names.update(face["name"] for face in entry.get("faces", []))
+    return {n for n in names if " " in n or n not in tokens}
+
+
+def card_names_step() -> int:
+    found = card_names_in(GAME_UI, all_card_names())
+    for place in found:
+        print(f"card-names: {place}: the game screen names a card")
+    return 1 if found else 0
+
+
 def pytest_step() -> int:
     code = subprocess.run(
         [sys.executable, "-m", "pytest", "-q"], cwd=paths.TOOLS, check=False
@@ -346,5 +382,9 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
 
 
 if __name__ == "__main__":
-    steps = {"pytest": pytest_step, "rust-tests": rust_tests_step}
+    steps = {
+        "pytest": pytest_step,
+        "rust-tests": rust_tests_step,
+        "card-names": card_names_step,
+    }
     sys.exit(steps[sys.argv[1]]())

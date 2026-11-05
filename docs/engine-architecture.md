@@ -464,7 +464,7 @@ expressed as an IR (the path **D1** rejected), were considered and dropped.
 ### 7.1 The decision value
 
 ```rust
-pub struct Decision { pub player: u8, pub kind: DecisionKind, pub candidates: Candidates }
+pub struct Decision { pub player: u8, pub kind: DecisionKind, pub candidates: Candidates, pub ask: Ask }
 pub enum Candidates { Objects(Bitboard), Options(Fixed<Opt, 64>) }
 ```
 
@@ -476,6 +476,12 @@ blocks, a damage division, the next trigger to put on the stack, the next
 replacement to apply, one card from a set, the next card in an ordering, yes or
 no, a number, a color, a player, a vote, a pile assignment, keep or mulligan.
 Every answer is `Choice(u8)`: an index into the candidates.
+
+The kind says the shape of an answer; `Ask` says what a question is for where
+the kind alone does not: a scry, a look that may take a card, a fateseal, an
+explore, "untap up to six", "unless pays", the cleanup discard. Card code states
+it where it asks, so the UI and agents dispatch on it and never on the name of
+the card asking.
 
 ### 7.2 What the engine settles itself
 

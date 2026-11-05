@@ -7,7 +7,7 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{Keywords, Types};
-use crate::decision::{Candidates, Decision, DecisionKind, Opt};
+use crate::decision::{Ask, Candidates, Decision, DecisionKind, Opt};
 use crate::engine::collapse;
 use crate::event::{self, Event, Recipient, Sink};
 use crate::fixed::{Fixed, Full};
@@ -81,11 +81,17 @@ fn may_attack(s: &State, slot: Slot) -> bool {
         && !o.flags.has(ObjectFlags::ATTACKING)
 }
 
+/// Whether the active player has a creature that can attack now, so that declaring attackers
+/// is a decision.
+pub(crate) fn can_declare_attackers(s: &State) -> bool {
+    s.battlefield().iter().any(|&slot| may_attack(s, slot))
+}
+
 /// The declare attackers step's turn-based action begins
 /// ([CR 508.1](https://yawgatog.com/resources/magic-rules/#R5081)): "First, the active player
 /// declares attackers. This turn-based action doesn't use the stack."
 pub(crate) fn begin_attackers(s: &mut State) {
-    if s.battlefield().iter().any(|&slot| may_attack(s, slot)) {
+    if can_declare_attackers(s) {
         s.pending = Pending::DeclareAttackers { attacker: None };
     }
 }
@@ -119,6 +125,7 @@ pub(crate) fn attack_decision(s: &State, attacker: Option<Slot>) -> Result<Decis
         player,
         kind,
         candidates: Candidates::Options(list),
+        ask: Ask::Plain,
     })
 }
 
@@ -251,6 +258,7 @@ pub(crate) fn block_decision(s: &State, blocker: Option<Slot>) -> Result<Decisio
             player,
             kind: DecisionKind::BlockTarget,
             candidates: Candidates::Objects(collapse(s, attackers)),
+            ask: Ask::Plain,
         });
     }
     let mut list = Fixed::new();
@@ -268,6 +276,7 @@ pub(crate) fn block_decision(s: &State, blocker: Option<Slot>) -> Result<Decisio
         player,
         kind: DecisionKind::Blocker,
         candidates: Candidates::Options(list),
+        ask: Ask::Plain,
     })
 }
 
@@ -428,6 +437,7 @@ pub(crate) fn division_decision(
         player: s.turn.active,
         kind: DecisionKind::DamageDivision,
         candidates: Candidates::Options(list),
+        ask: Ask::Plain,
     })
 }
 

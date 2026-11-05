@@ -1,13 +1,13 @@
 //! Time Spiral. {4}{U}{U} Sorcery. "Exile Time Spiral. Each player shuffles their hand and
 //! graveyard into their library, then draws seven cards. You untap up to six lands."
 
-use beryl_engine::DecisionKind;
 use beryl_engine::Seat;
 use beryl_engine::Zone;
 use beryl_engine::card::{Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, Types};
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::Filter;
+use beryl_engine::{Ask, DecisionKind};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::blue::timetwister::wheel;
@@ -30,6 +30,9 @@ pub static CARD: CardDef = CardDef {
     tokens: &[],
 };
 
+/// "You untap up to six lands."
+const LANDS: u8 = 6;
+
 /// The instructions in order ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)):
 /// "The controller of the spell or ability follows its instructions in the order written."
 /// Exiled first, Time Spiral is not shuffled away, and it is not put into a graveyard as the
@@ -49,7 +52,10 @@ fn spiral(ctx: &mut EffectCtx) -> Flow {
         s.zone(Seat::P0, Zone::Battlefield) | s.zone(Seat::P1, Zone::Battlefield),
         ctx.controller(),
     );
-    for slot in ctx.choose_up_to(ctx.controller(), lands, 6)?.iter() {
+    for slot in ctx
+        .choose_up_to(ctx.controller(), lands, LANDS, Ask::Untap { max: LANDS })?
+        .iter()
+    {
         let land = ctx.state().object_ref(slot);
         ctx.untap(land);
     }

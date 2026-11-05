@@ -11,7 +11,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::Filter;
-use beryl_engine::{DecisionKind, TurnStep, Zone};
+use beryl_engine::{Ask, DecisionKind, TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -28,7 +28,14 @@ fn dig(ctx: &mut EffectCtx) -> Flow {
     let mut rest = ctx.top_of_library(you, 4);
     ctx.look_at(you, rest);
     let spells = NONCREATURE_NONLAND.select(ctx.state(), ctx.table(), rest, you);
-    if let Some(slot) = ctx.may_choose_object(you, spells)? {
+    let look = Ask::Look {
+        player: you,
+        zone: Zone::Library,
+        count: 4,
+        to: Zone::Hand,
+        eligible: spells,
+    };
+    if let Some(slot) = ctx.may_choose_object(you, spells, look)? {
         ctx.reveal(slot);
         ctx.move_to(ctx.state().object_ref(slot), Zone::Hand, Reason::Effect);
         rest.remove(slot);

@@ -2,10 +2,11 @@
 //! (§12.2).
 
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityIx, Castings, FaceIx, ManaColor};
+use crate::card::{AbilityIx, Castings, FaceIx, ManaColor, ManaCost};
 use crate::fixed::Fixed;
 use crate::ids::{Seat, Slot};
 use crate::observation::Observation;
+use crate::state::Zone;
 
 /// What `next` returns: a decision to make, or the end of the game. A decision is a flat
 /// value with its candidates inline, so it can live in the state and be copied with it.
@@ -26,6 +27,8 @@ pub struct Decision {
     pub player: Seat,
     pub kind: DecisionKind,
     pub candidates: Candidates,
+    /// What the question is for, where the kind alone does not say.
+    pub ask: Ask,
 }
 
 impl Decision {
@@ -95,6 +98,53 @@ pub enum DecisionKind {
     /// An artifact or creature to tap for one generic mana of a waterbend cost, as an
     /// [`Opt::Object`], or [`Opt::Done`] to pay the rest with mana (CR 701.67a).
     Waterbend,
+}
+
+/// What a decision asks, said once where the rules or a card's code asks it, so that
+/// consumers (the UI, agents) need not recover it from the card asking. The [`DecisionKind`]
+/// says the shape of the answer; this says its meaning.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Ask {
+    /// Nothing more than the kind says.
+    #[default]
+    Plain,
+    /// Scry `count`
+    /// ([CR 701.22a](https://yawgatog.com/resources/magic-rules/#R70122a)): "look at the top
+    /// N cards of your library, then put any number of them on the bottom of your library in
+    /// any order and the rest on top of your library in any order." A
+    /// [`DecisionKind::ChooseUpTo`] picks a card for the bottom; a
+    /// [`DecisionKind::ChooseObject`] the next card for the top.
+    Scry { count: u8 },
+    /// A look at the cards in `player`'s `zone` (the top `count` of a library, or a whole
+    /// hand) that may move one of the `eligible` cards to `to`: a [`DecisionKind::YesNo`]
+    /// whether to, then a [`DecisionKind::ChooseObject`] for which.
+    Look {
+        player: Seat,
+        zone: Zone,
+        count: u8,
+        to: Zone,
+        eligible: Bitboard,
+    },
+    /// A card from the hand to put on top of the library, `count` of them still to put, each
+    /// on the one before.
+    PutBack { count: u8 },
+    /// Whether to put the top card of `player`'s library on the bottom.
+    Fateseal { player: Seat },
+    /// Whether the card an explore revealed goes to the graveyard
+    /// ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)): the controller
+    /// "may put the revealed card into their graveyard."
+    Explore,
+    /// Permanents to untap, up to `max`.
+    Untap { max: u8 },
+    /// Whether to pay `cost` so that the effect does not happen
+    /// ([CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a)): "[Effect] unless
+    /// [player] pays [cost]".
+    UnlessPays { cost: ManaCost },
+    /// Whether to pay `life` so that the land in `land` doesn't enter tapped.
+    PayLife { land: Slot, life: u8 },
+    /// A card to discard in the cleanup step, `count` of them still to discard to reach the
+    /// maximum hand size ([CR 514.1](https://yawgatog.com/resources/magic-rules/#R5141)).
+    Cleanup { count: u8 },
 }
 
 /// The candidates of a decision. A `Choice(i)` names the `i`th object in ascending slot order,

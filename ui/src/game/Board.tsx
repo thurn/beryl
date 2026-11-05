@@ -63,7 +63,7 @@ import { abilityText, useAbilityFace, useFace } from "./faces";
 import {
   combatBanner,
   layout,
-  nextStop,
+  passButton,
   phaseOf,
   PILE_DEPTH,
   PILE_SQUASH,
@@ -261,7 +261,9 @@ export function Board({
     (top.kind === "spell"
       ? (objects.get(top.slot)?.name ?? undefined)
       : top.name);
-  const stop = nextStop(view);
+  const stop = decision?.passTo
+    ? passButton(view, decision.passTo)
+    : { label: "Pass", caption: "" };
   const arrows = useMemo(
     () => boardArrows(view, placements),
     [view, placements],
@@ -660,7 +662,7 @@ function boardArrows(view: PlayerView, placements: Layout): ArrowSpec[] {
   return out;
 }
 
-/** The result of a coin flip (Mana Crypt's, each upkeep), while the view it happened in shows. */
+/** The result of a coin flip, while the view it happened in shows. */
 function coinFlipBanner(
   view: PlayerView,
 ): { title: string; detail: string } | undefined {

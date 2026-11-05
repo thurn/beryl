@@ -6,10 +6,10 @@ use ts_rs::{Config, TS};
 
 use crate::ipc::{AppInfo, ChooseRequest, Fixture, FixtureMessage, SetStopsRequest};
 use crate::protocol::{
-    Candidate, CandidateIndex, CandidateView, CardType, Combat, Counter, CounterView, DecisionId,
-    DecisionView, GameEvent, Kind, Mana, ManaPool, ObjectView, OutcomeView, PlayerState,
-    PlayerView, Players, PowerToughness, SessionId, Side, StackItem, Stall, Status, Step,
-    StopsSetting, TargetRef, TurnView, Why, ZoneName,
+    AskView, Candidate, CandidateIndex, CandidateView, CardType, Combat, Counter, CounterView,
+    DecisionId, DecisionView, GameEvent, Kind, Mana, ManaPool, ObjectView, OutcomeView, PassTo,
+    PlayerState, PlayerView, Players, PowerToughness, SessionId, Side, StackItem, Stall, Status,
+    Step, StopsSetting, TargetRef, TurnView, Why, ZoneName,
 };
 use crate::{AgentView, GameUpdate, SessionError, StartRequest};
 
@@ -46,6 +46,8 @@ pub fn typescript() -> String {
         StackItem::decl(&cfg),
         TargetRef::decl(&cfg),
         DecisionView::decl(&cfg),
+        AskView::decl(&cfg),
+        PassTo::decl(&cfg),
         CandidateView::decl(&cfg),
         Candidate::decl(&cfg),
         OutcomeView::decl(&cfg),

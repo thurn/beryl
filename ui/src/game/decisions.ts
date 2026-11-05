@@ -110,29 +110,8 @@ export function interactions(view: PlayerView): Interactions {
     pass,
     done,
     picking: decision.kind !== "priority",
-    source: sourceOf(view, decision),
+    source: decision.source ?? undefined,
   };
-}
-
-/** The card a decision is for: the attacker whose damage is being divided, or the spell or
- * ability on top of the stack (which a target, an X or a crew cost is chosen for). */
-function sourceOf(view: PlayerView, decision: DecisionView) {
-  if (decision.kind === "priority") return undefined;
-  if (decision.kind === "damageDivision") {
-    const blocker = decision.candidates.find((c) => c.option.kind === "lethal");
-    const slot = blocker && slotOf(blocker.option);
-    const combat = view.objects.find((o) => o.slot === slot)?.combat;
-    return combat?.kind === "blocking"
-      ? (combat.attacker ?? undefined)
-      : undefined;
-  }
-  if (isCombat(decision.kind)) return undefined;
-  const top = view.stack[view.stack.length - 1];
-  return !top
-    ? undefined
-    : top.kind === "spell"
-      ? top.slot
-      : (top.source ?? undefined);
 }
 
 /** The combat declarations: made on the board, finished with the turn button. */

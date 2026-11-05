@@ -49,6 +49,25 @@ pub fn run(cards: &'static CardTable, scenario: &Scenario) -> Result<(), Failure
 /// Runs a scenario like [`run`], and returns the position each action began from: what the
 /// oracle exporters need to place an action at its turn, step and stack (§17.2).
 pub fn trace(cards: &'static CardTable, scenario: &Scenario) -> Result<Vec<Position>, Failure> {
+    walk(cards, scenario, &mut |_, _, _| {})
+}
+
+/// Runs a scenario like [`run`], showing `visit` the table, the state and the open decision
+/// each action other than an assertion answers or passes through: for tests of what a
+/// decision says beyond the engine, such as the protocol's views of it.
+pub fn visit(
+    cards: &'static CardTable,
+    scenario: &Scenario,
+    mut visit: impl FnMut(&GameTable, &State, &Decision),
+) -> Result<(), Failure> {
+    walk(cards, scenario, &mut visit).map(|_| ())
+}
+
+fn walk(
+    cards: &'static CardTable,
+    scenario: &Scenario,
+    visit: &mut dyn FnMut(&GameTable, &State, &Decision),
+) -> Result<Vec<Position>, Failure> {
     let fail = |action, message: String| Failure {
         scenario: scenario.name,
         action,
@@ -67,6 +86,11 @@ pub fn trace(cards: &'static CardTable, scenario: &Scenario) -> Result<Vec<Posit
     let mut positions = Vec::with_capacity(scenario.actions.len());
     for i in 0..scenario.actions.len() {
         let step = runner.position(i).map_err(|m| fail(Some(i), m))?;
+        if let Step::Decide(d) = &step
+            && !matches!(scenario.actions[i], Action::Assert { .. })
+        {
+            visit(&t, &runner.s, d);
+        }
         positions.push(runner.describe_position(&step));
         runner.act(i).map_err(|m| fail(Some(i), m))?;
     }

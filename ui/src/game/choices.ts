@@ -5,18 +5,20 @@
 // say it, which the game screen sends as each decision arrives. Pure functions of the view.
 import { cardEntry } from "../cards";
 import type {
+  AskView,
   Candidate,
   DecisionView,
   Kind,
   ObjectView,
   PlayerView,
+  Side,
   StackItem,
 } from "../generated/protocol";
 import { abilityText } from "./faces";
 import { optionsMatch, type Intent } from "./decisions";
 
 /** The card at the overlay's right: what asks the choice. A card by name alone when the view
- * has no object for it (a land about to enter). */
+ * has no object for it (an ability whose source has left). */
 export interface Source {
   slot?: number;
   name: string;
@@ -67,53 +69,55 @@ export interface Ask extends Common {
 
 export type Choice = Arrange | Pick | Ask;
 
-const ICEBERG = "Aang's Iceberg";
-const JACE = "Jace, the Mind Sculptor";
-const TRAINER = "Thundertrap Trainer";
-const SPELLBINDER = "Elite Spellbinder";
-const TIME_SPIRAL = "Time Spiral";
-const SKYDIVER = "Thieving Skydiver";
-const SPRINGS = "Soporific Springs";
-
-/** How many cards from the top of the library a card's ability looks at. */
-const LOOKS: Record<string, number> = { [ICEBERG]: 2, [TRAINER]: 4 };
-/** "Untap up to six lands." */
-const TIME_SPIRAL_LANDS = 6;
-/** The maximum hand size ([CR 402.2](https://yawgatog.com/resources/magic-rules/#R4022)):
- * none of these cards changes it. */
-const HAND_SIZE = 7;
-
 /** What the open decision asks, as the overlay shows it; none for a decision made on the board
  * (priority, targets, combat, mana) or on the opening screen. */
 export function choiceOf(view: PlayerView): Choice | undefined {
   if (view.status.kind !== "deciding") return undefined;
   const at = new Situation(view, view.status.decision);
+  const ask = at.decision.ask;
+  switch (ask.kind) {
+    case "plain":
+      return plain(at);
+    case "scry":
+      return scry(at, ask);
+    case "look":
+      return look(at, ask);
+    case "putBack":
+      return putBack(at, ask);
+    case "fateseal":
+      return fateseal(at, ask);
+    case "explore":
+      return yesNo(at);
+    case "untap":
+      return untap(at, ask);
+    case "unlessPays":
+      return payOrCounter(at, ask) ?? yesNo(at);
+    case "payLife":
+      return payLife(at, ask);
+    case "cleanup":
+      return discard(at, ask.count);
+    default:
+      return assertNever(ask);
+  }
+}
+
+function assertNever(ask: never): never {
+  throw new Error(`an unknown ask: ${JSON.stringify(ask)}`);
+}
+
+/** A decision that asks no more than its kind says. */
+function plain(at: Situation): Choice | undefined {
   switch (at.decision.kind) {
     case "chooseUpTo":
-      return at.inLibrary(at.offered)
-        ? scry(at)
-        : at.resolvingName === TIME_SPIRAL
-          ? untapLands(at)
-          : chooseUpTo(at);
+      return chooseUpTo(at);
     case "chooseObject":
-      if (at.resolvingName === ICEBERG) return scry(at);
-      if (at.resolvingName === JACE) return putBack(at);
-      if (at.resolvingName === TRAINER || at.resolvingName === SPELLBINDER) {
-        return look(at);
-      }
       return chooseObject(at);
     case "yesNo":
-      if (at.resolvingName === JACE) return fateseal(at);
-      if (at.resolvingName === TRAINER || at.resolvingName === SPELLBINDER) {
-        return look(at);
-      }
-      return payOrCounter(at) ?? yesNo(at);
+      return yesNo(at);
     case "discard":
       return discard(at);
     case "legendRule":
       return legendRule(at);
-    case "payLife":
-      return payLife(at);
     case "castOffer":
       return castOffer(at);
     case "x":
@@ -122,6 +126,29 @@ export function choiceOf(view: PlayerView): Choice | undefined {
       return undefined;
   }
 }
+
+/** One kind of ask's fields. */
+type AskOf<K extends AskView["kind"]> = Extract<AskView, { kind: K }>;
+
+/** Small numbers in words, as rules text writes them. */
+const NUMBERS = [
+  "zero",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+];
+const inWords = (n: number) => NUMBERS[n] ?? String(n);
+const capitalized = (word: string) =>
+  word.charAt(0).toUpperCase() + word.slice(1);
+/** A player's, from the viewer's side. */
+const whose = (side: Side) => (side === "you" ? "your" : "your opponent's");
 
 /** The view around a decision, with the lookups the choices share. */
 class Situation {
@@ -153,12 +180,17 @@ class Situation {
     return this.objects.get(slot)?.name ?? undefined;
   }
 
-  /** The card the decision is for: what is resolving, or the spell being cast. */
+  /** The card the decision is for, as the engine names it: what is resolving, the spell or
+   * ability being cast or activated, or the land asking for life. */
   get source(): Source | undefined {
-    const r = this.resolving ?? this.view.stack[this.view.stack.length - 1];
-    if (!r) return undefined;
-    const slot = r.kind === "spell" ? r.slot : (r.source ?? undefined);
-    const name = r.kind === "ability" ? r.name : this.name(r.slot);
+    const r = this.resolving;
+    const slot = this.decision.source ?? undefined;
+    const name =
+      r?.kind === "ability"
+        ? r.name
+        : slot === undefined
+          ? undefined
+          : this.name(slot);
     return name ? { slot, name } : undefined;
   }
 
@@ -170,19 +202,12 @@ class Situation {
     return r?.kind === "ability" ? abilityText(text, r.triggered, r.nth) : text;
   }
 
-  inLibrary(slots: number[]) {
-    return (
-      slots.length > 0 &&
-      slots.every((s) => this.objects.get(s)?.zone === "library")
-    );
-  }
-
   /** A player's library, top first. */
-  library(side: "you" | "opponent") {
+  library(side: Side) {
     return [...this.view.players[side].library].reverse();
   }
 
-  hand(side: "you" | "opponent") {
+  hand(side: Side) {
     return this.view.objects
       .filter((o) => o.zone === "hand" && o.owner === side)
       .map((o) => o.slot);
@@ -197,10 +222,9 @@ class Situation {
     );
   }
 
-  /** The cards a look at the top of your library shows, top first, the ones the decision
-   * offers among them. */
-  looked(count: number) {
-    return this.library("you")
+  /** The cards a look at the top `count` of a player's library shows, top first. */
+  looked(count: number, side: Side = "you") {
+    return this.library(side)
       .slice(0, count)
       .filter((s) => this.name(s) !== undefined);
   }
@@ -238,19 +262,13 @@ const done = (kind: Kind): Intent => ({
   wants: (o) => o.kind === "done",
 });
 
-/** Front-face types, from the card data: what a card in a hidden zone is. */
-function typeLine(name?: string) {
-  return (name && cardEntry(name)?.faces[0]?.type_line) || "";
-}
-
 /** Scry ([CR 701.22a](https://yawgatog.com/resources/magic-rules/#R70122a)): "look at the top
  * N cards of your library, then put any number of them on the bottom of your library in any
  * order and the rest on top of your library in any order." The engine takes the cards for the
  * bottom one at a time, each under the one before, then done, then the rest from the top down
  * (`EffectCtx::scry`). Asked for the order alone, the bottom is settled. */
-function scry(at: Situation): Arrange {
+function scry(at: Situation, { count }: AskOf<"scry">): Arrange {
   const ordering = at.decision.kind === "chooseObject";
-  const count = LOOKS[at.resolvingName ?? ""] ?? at.offered.length;
   // Top first; a card the engine collapsed with an identical one still shows.
   const cards = at.offeredAmong(at.looked(count));
   const shown = cards.length > 0 ? cards : at.offered;
@@ -283,19 +301,15 @@ function scry(at: Situation): Arrange {
   };
 }
 
-/** Jace, the Mind Sculptor's 0: "Draw three cards, then put two cards from your hand on top
- * of your library in any order." Each card put back goes on the one before. */
-function putBack(at: Situation): Arrange {
-  const back = at.view.events.filter(
-    (e) => e.kind === "zoneChange" && e.from === "hand" && e.to === "library",
-  ).length;
+/** Cards from your hand put on top of your library in any order, each on the one before. */
+function putBack(at: Situation, { count }: AskOf<"putBack">): Arrange {
   const hand = at.hand("you");
-  const need = Math.min(2 - back, hand.length);
+  const need = Math.min(count, hand.length);
   return {
     kind: "arrange",
     key: at.key,
     title: "Put Back",
-    instruction: `Drag ${need === 1 ? "a card" : "two cards"} from your hand onto your library, top card rightmost.`,
+    instruction: `Drag ${need === 1 ? "a card" : `${inWords(need)} cards`} from your hand onto your library, top card rightmost.`,
     source: at.source,
     labels: ["Hand", "Top"],
     left: hand,
@@ -306,17 +320,14 @@ function putBack(at: Situation): Arrange {
   };
 }
 
-/** Jace, the Mind Sculptor's +2: "Look at the top card of target player's library. You may
- * put that card on the bottom of that player's library." */
-function fateseal(at: Situation): Ask {
-  const target = at.resolving?.targets[0];
-  const whose = target?.kind === "player" ? target.player : "you";
-  const top = at.library(whose)[0];
+/** Whether the top card of a player's library goes to the bottom. */
+function fateseal(at: Situation, { player }: AskOf<"fateseal">): Ask {
+  const top = at.library(player)[0];
   return {
     kind: "ask",
     key: at.key,
     title: "Top of Library",
-    instruction: `You may put the top card of ${whose === "you" ? "your" : "your opponent's"} library on the bottom.`,
+    instruction: `You may put the top card of ${whose(player)} library on the bottom.`,
     source: at.source,
     cards: top === undefined ? [] : [top],
     answers: [
@@ -326,41 +337,35 @@ function fateseal(at: Situation): Ask {
   };
 }
 
-/** Thundertrap Trainer's look at the top four and Elite Spellbinder's at the opponent's hand:
- * may take a card of a kind. Asked yes or no first, then which (`may_choose_object`). */
-function look(at: Situation): Pick {
-  const trainer = at.resolvingName === TRAINER;
-  const cards = trainer ? at.looked(LOOKS[TRAINER]!) : at.hand("opponent");
+/** A look at the top of a library or at a hand that may move one of some cards, in the card's
+ * own words: asked yes or no first, then which (`may_choose_object`). */
+function look(at: Situation, ask: AskOf<"look">): Pick {
+  const { player, zone, count, to, eligible } = ask;
+  const library = zone === "library";
+  const cards = library ? at.looked(count, player) : at.hand(player);
   const asking = at.decision.kind === "yesNo";
-  const fits = (slot: number) => {
-    const types = typeLine(at.name(slot));
-    return trainer
-      ? !/\b(Creature|Land)\b/.test(types)
-      : !/\bLand\b/.test(types);
-  };
-  const pickable = asking ? cards.filter(fits) : at.offeredAmong(cards);
-  const [title, instruction, verb] = trainer
-    ? [
-        "Top Four",
-        "You may take a noncreature, nonland card. The rest go on the bottom.",
-        "Put in Hand",
-      ]
-    : [
-        "Opponent's Hand",
-        "You may exile a nonland card. Its owner may cast it for {2} more.",
-        "Exile",
-      ];
+  const pickable = asking
+    ? cards.filter((s) => eligible.includes(s))
+    : at.offeredAmong(cards);
+  const title = library
+    ? `Top ${capitalized(inWords(count))}`
+    : player === "you"
+      ? "Your Hand"
+      : "Opponent's Hand";
+  const taking = to === "hand";
+  const verb = taking ? "Put in Hand" : capitalized(to);
   return {
     kind: "pick",
     key: at.key,
     title,
-    instruction,
+    instruction: at.sourceText || "You may choose a card.",
     source: at.source,
     cards,
     pickable,
     min: asking ? 0 : 1,
     max: 1,
-    confirm: (n) => (n > 0 ? verb : trainer ? "Take Nothing" : "Exile Nothing"),
+    confirm: (n) =>
+      n > 0 ? verb : taking ? "Take Nothing" : `${capitalized(to)} Nothing`,
     plan: ([slot]) =>
       slot === undefined
         ? [no("yesNo")]
@@ -371,19 +376,21 @@ function look(at: Situation): Pick {
   };
 }
 
-/** Time Spiral's "untap up to six lands", one land at a time, then done. */
-function untapLands(at: Situation): Pick {
+/** Permanents to untap, up to a number, one at a time, then done. */
+function untap(at: Situation, { max }: AskOf<"untap">): Pick {
   const cards = at.offeredAmong(at.view.battlefield);
+  const lands = cards.every((s) => at.objects.get(s)?.types.includes("land"));
+  const noun = lands ? "lands" : "permanents";
   return {
     kind: "pick",
     key: at.key,
-    title: "Untap Lands",
-    instruction: "Choose up to six lands to untap.",
+    title: `Untap ${capitalized(noun)}`,
+    instruction: `Choose up to ${inWords(max)} ${noun} to untap.`,
     source: at.source,
     cards,
     pickable: cards,
     min: 0,
-    max: TIME_SPIRAL_LANDS,
+    max,
     confirm: (n) => (n > 0 ? `Untap ${n}` : "Untap None"),
     plan: (picked) => [
       ...picked.map((slot) => at.pickCard("chooseUpTo", slot)),
@@ -431,12 +438,11 @@ function chooseObject(at: Situation): Pick {
 }
 
 /** A discard of the player's choice ([CR 701.9b](https://yawgatog.com/resources/magic-rules/#R7019b)),
- * one card at a time; in the cleanup step, down to the maximum hand size
+ * one card at a time; in the cleanup step, `cleanup` of them down to the maximum hand size
  * ([CR 514.1](https://yawgatog.com/resources/magic-rules/#R5141)). */
-function discard(at: Situation): Pick {
+function discard(at: Situation, cleanup?: number): Pick {
   const hand = at.hand("you");
-  const count =
-    at.view.turn.step === "cleanup" ? Math.max(1, hand.length - HAND_SIZE) : 1;
+  const count = Math.max(1, cleanup ?? 1);
   return {
     kind: "pick",
     key: at.key,
@@ -444,8 +450,8 @@ function discard(at: Situation): Pick {
     instruction:
       count === 1
         ? "Choose a card to discard."
-        : `Choose ${count} cards to discard down to seven.`,
-    source: at.view.turn.step === "cleanup" ? undefined : at.source,
+        : `Choose ${count} cards to discard down to ${inWords(hand.length - count)}.`,
+    source: cleanup === undefined ? at.source : undefined,
     cards: hand,
     pickable: at.offeredAmong(hand),
     min: count,
@@ -477,19 +483,15 @@ function legendRule(at: Situation): Pick {
   };
 }
 
-/** Soporific Springs: "As this land enters, you may pay 3 life. If you don't, it enters
- * tapped." */
-function payLife(at: Situation): Ask {
-  const text = cardEntry(SPRINGS)?.faces.find(
-    (f) => f.name === SPRINGS,
-  )?.oracle_text;
-  const life = /pay (\d+) life/.exec(text ?? "")?.[1] ?? "3";
+/** "As this land enters, you may pay N life. If you don't, it enters tapped." */
+function payLife(at: Situation, { life }: AskOf<"payLife">): Ask {
+  const source = at.source;
   return {
     kind: "ask",
     key: at.key,
     title: `Pay ${life} Life?`,
-    instruction: `${SPRINGS} enters tapped unless you pay ${life} life.`,
-    source: { name: SPRINGS },
+    instruction: `${source?.name ?? "This land"} enters tapped unless you pay ${life} life.`,
+    source,
     cards: [],
     answers: [
       { label: `Pay ${life} Life`, plan: [yes("payLife")] },
@@ -498,16 +500,15 @@ function payLife(at: Situation): Ask {
   };
 }
 
-/** Mana Tithe and No More Lies: "Counter target spell unless its controller pays {1}" (or
- * {3}), asked of that spell's controller
+/** "Counter target spell unless its controller pays {N}", asked of that spell's controller
  * ([CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a)). */
-function payOrCounter(at: Situation): Ask | undefined {
+function payOrCounter(
+  at: Situation,
+  { cost }: AskOf<"unlessPays">,
+): Ask | undefined {
   const r = at.resolving;
   const target = r?.targets[0];
   if (r?.kind !== "spell" || target?.kind !== "object") return undefined;
-  const text = at.sourceText;
-  const cost = /unless its controller pays ((?:\{[^}]+\})+)/.exec(text)?.[1];
-  if (!cost) return undefined;
   const spell = at.name(target.slot) ?? "your spell";
   return {
     kind: "ask",
@@ -535,10 +536,9 @@ function yesNo(at: Situation): Ask {
   };
 }
 
-/** A card a resolved ability lets its controller cast now
- * ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)). Among these cards only
- * Malcolm, Alluring Scoundrel offers one: the card it discarded, without paying its mana
- * cost. The ability has finished resolving, so the decision names no source. */
+/** A card a resolved ability lets its controller cast now, without paying its mana cost
+ * ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)). The ability has finished
+ * resolving, so the decision names no source. */
 function castOffer(at: Situation): Ask {
   const casts = at.decision.candidates.filter((c) => c.option.kind === "cast");
   const first = casts[0]?.option;
@@ -561,17 +561,14 @@ function castOffer(at: Situation): Ask {
 }
 
 /** The value of X as a spell is cast ([CR 601.2b](https://yawgatog.com/resources/magic-rules/#R6012b)),
- * Thieving Skydiver's kicker X among them. */
+ * a kicker's X among them. */
 function chooseX(at: Situation): Ask {
   const name = at.source?.name;
   return {
     kind: "ask",
     key: at.key,
     title: "Choose X",
-    instruction:
-      name === SKYDIVER
-        ? "Kicker {X}: X can't be 0. When it enters, gain control of an artifact with mana value X or less."
-        : `Choose the value of X${name ? ` for ${name}` : ""}.`,
+    instruction: `Choose the value of X${name ? ` for ${name}` : ""}.`,
     source: at.source,
     cards: [],
     answers: at.answers((_, label) => label),

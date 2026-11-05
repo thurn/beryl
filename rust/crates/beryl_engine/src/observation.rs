@@ -48,6 +48,11 @@ impl<'a> Observation<'a> {
         }
     }
 
+    /// The position shown, for the engine's own reads of public facts about it.
+    pub(crate) fn shown(&self) -> &'a State {
+        self.state
+    }
+
     pub fn viewer(&self) -> Seat {
         self.viewer
     }

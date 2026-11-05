@@ -11,7 +11,7 @@ use crate::card::{
     Types,
 };
 use crate::cast;
-use crate::decision::{Answers, Candidates, Choice, Decision, DecisionKind, Opt, StallReason};
+use crate::decision::{Answers, Ask, Candidates, Choice, Decision, DecisionKind, Opt, StallReason};
 use crate::event::{self, Entry, Reason, Recipient, Sink, TokenEntry};
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot};
@@ -266,6 +266,7 @@ impl<'a> EffectCtx<'a> {
         player: Seat,
         kind: DecisionKind,
         opts: &[Opt],
+        ask: Ask,
     ) -> Result<Opt, Pause> {
         let mut list = Fixed::new();
         for &o in opts {
@@ -278,27 +279,30 @@ impl<'a> EffectCtx<'a> {
             player,
             kind,
             candidates: Candidates::Options(list),
+            ask,
         };
         let c = self.ask(&d)?;
         Ok(d.candidates.option(c).expect("an answer among the options"))
     }
 
-    /// Asks `player` yes or no.
-    pub fn choose_yes_no(&mut self, player: Seat) -> Result<bool, Pause> {
-        Ok(self.ask_options(player, DecisionKind::YesNo, &[Opt::Yes, Opt::No])? == Opt::Yes)
+    /// Asks `player` yes or no, for the purpose `ask`.
+    pub fn choose_yes_no(&mut self, player: Seat, ask: Ask) -> Result<bool, Pause> {
+        Ok(self.ask_options(player, DecisionKind::YesNo, &[Opt::Yes, Opt::No], ask)? == Opt::Yes)
     }
 
     /// Asks `player` to choose up to `n` of `candidates`, one at a time, each answer either one
-    /// more object or [`Opt::Done`]. Interchangeable candidates are one answer (§7.2).
+    /// more object or [`Opt::Done`], for the purpose `ask`. Interchangeable candidates are one
+    /// answer (§7.2).
     pub fn choose_up_to(
         &mut self,
         player: Seat,
         candidates: Bitboard,
         n: u8,
+        ask: Ask,
     ) -> Result<Bitboard, Pause> {
         let mut chosen = Bitboard::EMPTY;
         while chosen.count() < u32::from(n) && !(candidates & !chosen).is_empty() {
-            match self.choose_or_done(player, candidates & !chosen)? {
+            match self.choose_or_done(player, candidates & !chosen, ask)? {
                 Some(slot) => chosen.insert(slot),
                 None => break,
             }
@@ -312,6 +316,7 @@ impl<'a> EffectCtx<'a> {
         &mut self,
         player: Seat,
         candidates: Bitboard,
+        ask: Ask,
     ) -> Result<Option<Slot>, Pause> {
         let mut opts: Fixed<Opt, 64> = Fixed::new();
         let left = crate::engine::collapse(self.state, candidates);
@@ -322,16 +327,22 @@ impl<'a> EffectCtx<'a> {
             }
         }
         Ok(
-            match self.ask_options(player, DecisionKind::ChooseUpTo, opts.as_slice())? {
+            match self.ask_options(player, DecisionKind::ChooseUpTo, opts.as_slice(), ask)? {
                 Opt::Object(slot) => Some(slot),
                 _ => None,
             },
         )
     }
 
-    /// Asks `player` to choose one of `candidates`, which must not be empty.
-    pub fn choose_object(&mut self, player: Seat, candidates: Bitboard) -> Result<Slot, Pause> {
-        self.ask_object(player, DecisionKind::ChooseObject, candidates)
+    /// Asks `player` to choose one of `candidates`, which must not be empty, for the purpose
+    /// `ask`.
+    pub fn choose_object(
+        &mut self,
+        player: Seat,
+        candidates: Bitboard,
+        ask: Ask,
+    ) -> Result<Slot, Pause> {
+        self.ask_object(player, DecisionKind::ChooseObject, candidates, ask)
     }
 
     fn ask_object(
@@ -339,11 +350,13 @@ impl<'a> EffectCtx<'a> {
         player: Seat,
         kind: DecisionKind,
         candidates: Bitboard,
+        ask: Ask,
     ) -> Result<Slot, Pause> {
         let d = Decision {
             player,
             kind,
             candidates: Candidates::Objects(crate::engine::collapse(self.state, candidates)),
+            ask,
         };
         let c = self.ask(&d)?;
         Ok(d.candidates.object(c).expect("an answer among the objects"))
@@ -358,22 +371,24 @@ impl<'a> EffectCtx<'a> {
         if hand.is_empty() {
             return Ok(None);
         }
-        let slot = self.ask_object(player, DecisionKind::Discard, hand)?;
+        let slot = self.ask_object(player, DecisionKind::Discard, hand, Ask::Plain)?;
         self.discard(self.state.object_ref(slot));
         Ok(Some(self.state.object_ref(slot)))
     }
 
     /// Asks `player` to choose one of `candidates`, or none when they may decline: a yes or
-    /// no first, then the object. With no candidates there is nothing to ask.
+    /// no first, then the object, both for the purpose `ask`. With no candidates there is
+    /// nothing to ask.
     pub fn may_choose_object(
         &mut self,
         player: Seat,
         candidates: Bitboard,
+        ask: Ask,
     ) -> Result<Option<Slot>, Pause> {
-        if candidates.is_empty() || !self.choose_yes_no(player)? {
+        if candidates.is_empty() || !self.choose_yes_no(player, ask)? {
             return Ok(None);
         }
-        self.choose_object(player, candidates).map(Some)
+        self.choose_object(player, candidates, ask).map(Some)
     }
 
     /// "[Effect] unless [player] pays [cost]"
@@ -390,7 +405,7 @@ impl<'a> EffectCtx<'a> {
         if !self.checked(r) {
             return Ok(false);
         }
-        if !self.choose_yes_no(player)? {
+        if !self.choose_yes_no(player, Ask::UnlessPays { cost })? {
             return Ok(false);
         }
         self.pay(player, cost)?;
@@ -410,8 +425,12 @@ impl<'a> EffectCtx<'a> {
                     Bitboard::EMPTY,
                 );
                 let options = self.checked(r);
-                let option =
-                    self.ask_options(player, DecisionKind::ManaPayment, options.as_slice())?;
+                let option = self.ask_options(
+                    player,
+                    DecisionKind::ManaPayment,
+                    options.as_slice(),
+                    Ask::Plain,
+                )?;
                 let r =
                     mana::manual_pay(self.state, self.table, self.sink, player, remaining, option);
                 remaining = self.checked(r);
@@ -433,7 +452,12 @@ impl<'a> EffectCtx<'a> {
         for i in 0..plans.len() {
             let _ = opts.push(Opt::Plan(i as u8));
         }
-        let Opt::Plan(i) = self.ask_options(player, DecisionKind::PaymentPlan, opts.as_slice())?
+        let Opt::Plan(i) = self.ask_options(
+            player,
+            DecisionKind::PaymentPlan,
+            opts.as_slice(),
+            Ask::Plain,
+        )?
         else {
             unreachable!("a plan");
         };
@@ -658,7 +682,7 @@ impl<'a> EffectCtx<'a> {
             self.add_counters(object, CounterKind::PlusOne, 1);
         }
         if let Some(slot) = top
-            && self.choose_yes_no(player)?
+            && self.choose_yes_no(player, Ask::Explore)?
         {
             self.move_to(self.state.object_ref(slot), Zone::Graveyard, Reason::Effect);
         }
@@ -741,10 +765,11 @@ impl<'a> EffectCtx<'a> {
     /// Every arrangement is one sequence of answers. [CR 701.22b](https://yawgatog.com/resources/magic-rules/#R70122b):
     /// "If a player is instructed to scry 0, no scry event occurs."
     pub fn scry(&mut self, player: Seat, n: u8) -> Flow {
+        let ask = Ask::Scry { count: n };
         let mut left = self.top_of_library(player, n);
         self.look_at(player, left);
         while !left.is_empty() {
-            let Some(slot) = self.choose_or_done(player, left)? else {
+            let Some(slot) = self.choose_or_done(player, left, ask)? else {
                 break;
             };
             let r = zone::reorder_library(self.state, slot, Place::Bottom);
@@ -753,7 +778,7 @@ impl<'a> EffectCtx<'a> {
         }
         let mut order: Fixed<Slot, 60> = Fixed::new();
         while left.count() > 1 {
-            let slot = self.choose_object(player, left)?;
+            let slot = self.choose_object(player, left, ask)?;
             left.remove(slot);
             let _ = order.push(slot);
         }
@@ -915,7 +940,7 @@ impl<'a> EffectCtx<'a> {
             crate::combat::in_combat(self.state.turn.step) && self.state.turn.active == you;
         let walker = if attacking {
             let opts = crate::combat::attack_targets(self.state, you.opponent());
-            match self.ask_options(you, DecisionKind::AttackTarget, opts.as_slice())? {
+            match self.ask_options(you, DecisionKind::AttackTarget, opts.as_slice(), Ask::Plain)? {
                 Opt::Defender(slot) => Some(slot),
                 _ => unreachable!("a defender"),
             }
