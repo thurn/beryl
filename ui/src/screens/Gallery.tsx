@@ -368,7 +368,7 @@ function CombatAndStack() {
             text="When Inferno Titan enters the battlefield, it deals 3 damage divided as you choose among one, two, or three targets."
             width={130}
             height={172}
-            unit={16.5}
+            unit={16}
           />
         </At>
         <At x={356} y={267}>

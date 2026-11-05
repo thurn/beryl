@@ -677,7 +677,7 @@
 }
 .stack-item .card-rim {
   flex: 1;
-  padding: 0.3em 0.46em 0.36em;
+  padding: 0.3em 0.38em 0.36em;
   border-radius: 0.3em 0.3em 50% 50% / 0.3em 0.3em 20% 20%;
 }
 .stack-item .card-name-bar {
@@ -692,7 +692,7 @@
 }
 .stack-item .card-rules {
   border-radius: 0 0 50% 50% / 0 0 34% 34%;
-  padding: 0.4em 0.36em;
+  padding: 0.4em 0.26em;
   font-weight: 600;
   font-size: 0.76em;
   line-height: 1.04;
