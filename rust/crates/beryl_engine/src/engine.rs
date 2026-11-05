@@ -11,7 +11,7 @@ use crate::fixed::{Fixed, Full};
 use crate::ids::{Seat, Slot};
 use crate::observation::Observation;
 use crate::profile::{Profile, Stops};
-use crate::state::{Pending, State, Zone};
+use crate::state::{Pending, State, TurnStep, Zone};
 use crate::table::GameTable;
 use crate::{cast, combat, layers, mana, resolve, sba, start, trigger, turn, zone};
 
@@ -131,19 +131,54 @@ impl Scratch {
 /// repeated." Waiting triggers come before priority as decisions of their own, one pick at a
 /// time ([`DecisionKind::TriggerOrder`]).
 pub fn next(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers) -> Step {
-    let step = advance(s, t, x, a);
+    let step = advance::<false>(s, t, x, a, (s.turn.number, s.turn.step));
+    x.settle_counts();
+    step.expect("`next` stops only at a decision or the end of the game")
+}
+
+/// Advances the game as [`next`] does, but returns `None` rather than go on once the turn is
+/// at a step other than `seen`, a turn number and step: so a caller that shows the game (the
+/// app's sessions) can show each step as it begins, and stop the game there. Calling it again
+/// with the new step goes on exactly as `next` would have; the profile, and so what is a
+/// decision, is the state's own.
+///
+/// A step is seen once its turn-based actions are done
+/// ([CR 117.3a](https://yawgatog.com/resources/magic-rules/#R1173a)): "The active player
+/// receives priority at the beginning of most steps and phases, after any turn-based actions
+/// (such as drawing a card during the draw step; see rule 703) have been dealt with". The
+/// untap step is never seen on its own, as it ends at once
+/// ([CR 502.4](https://yawgatog.com/resources/magic-rules/#R5024)): "No player receives
+/// priority during the untap step".
+pub fn next_in_step(
+    s: &mut State,
+    t: &GameTable,
+    x: &mut Scratch,
+    a: &mut dyn Answers,
+    seen: (u16, TurnStep),
+) -> Option<Step> {
+    let step = advance::<true>(s, t, x, a, seen);
     x.settle_counts();
     step
 }
 
-fn advance(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers) -> Step {
+/// The engine loop; with `STEPS`, it returns `None` once the turn is past `seen`.
+fn advance<const STEPS: bool>(
+    s: &mut State,
+    t: &GameTable,
+    x: &mut Scratch,
+    a: &mut dyn Answers,
+    seen: (u16, TurnStep),
+) -> Option<Step> {
     loop {
         if let Some(outcome) = s.outcome {
-            return Step::Over(outcome);
+            return Some(Step::Over(outcome));
         }
         layers::refresh(s, t, &mut x.events);
         if combat::in_combat(s.turn.step) {
             combat::prune(s);
+        }
+        if STEPS && (s.turn.number, s.turn.step) != seen {
+            return None;
         }
         if s.pending == Pending::None {
             // CR 117.5: "Each time a player would get priority, the game first performs all
@@ -192,7 +227,7 @@ fn advance(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers) -
         }
         s.budgets.decisions += 1;
         x.counts.decisions += 1;
-        return Step::Decide(d);
+        return Some(Step::Decide(d));
     }
 }
 
