@@ -6,8 +6,6 @@
 /ui/*.tsbuildinfo
 # Fixture streams beryl_cli records for the UI's fixture transport; generated, never committed.
 /ui/public/fixtures/
-# Card art cut from docs/ui_mockups for the dev-only replicas; generated, never committed.
-/ui/replica-art/
 /tools/.venv/
 /tools/.pyre/
 /tools/.pytest_cache/

@@ -15,7 +15,6 @@ import {
   Card,
   CardBack,
   Crest,
-  useSlotArt,
   type CardFace,
   type CombatRole,
   type Highlight,
@@ -156,8 +155,6 @@ export interface Permanent {
   combat?: CombatRole;
   /** For arrows. */
   id?: string;
-  /** For art supplied by slot (SlotArt). */
-  slot?: string;
 }
 
 /** Copies of one land, fanned as a stack. */
@@ -168,7 +165,6 @@ export interface LandPile {
   y: number;
   /** How many of them are tapped, from the top. */
   tapped?: number;
-  slot?: string;
 }
 
 export interface SideView {
@@ -190,14 +186,13 @@ export interface StackView {
   y: number;
   width: number;
   id?: string;
-  slot?: string;
 }
 
 /** Everything the table draws. The life orbs carry the ids `opponent-life` and `you-life` for
  * arrows. */
 export interface TableBoard {
   opponent: SideView & { hand: number };
-  you: SideView & { hand: { card: CardFace; slot?: string }[] };
+  you: SideView & { hand: { card: CardFace }[] };
   /** The step tracker's current step; no tracker without one. */
   phase?: Phase;
   action: { label: string; caption?: string; disabled?: boolean };
@@ -215,14 +210,13 @@ export const LAND_WIDTH = 190;
 export const LAND_STEP = { x: 0.103, y: 0.022 };
 
 function Creature({ permanent }: { permanent: Permanent }) {
-  const withArt = useSlotArt();
   const [tapped, setTapped] = useState(permanent.tapped ?? false);
   return (
     <OnTable x={permanent.x} y={permanent.y} width={CREATURE_WIDTH}>
       <div onClick={() => setTapped(!tapped)}>
         <Card
           id={permanent.id}
-          card={withArt(permanent.card, permanent.slot)}
+          card={permanent.card}
           variant="field"
           width={CREATURE_WIDTH}
           tapped={tapped}
@@ -235,7 +229,6 @@ function Creature({ permanent }: { permanent: Permanent }) {
 }
 
 function Lands({ lands }: { lands: LandPile[] }) {
-  const withArt = useSlotArt();
   return lands.map((pile, i) => (
     <OnTable
       key={i}
@@ -244,7 +237,7 @@ function Lands({ lands }: { lands: LandPile[] }) {
       width={LAND_WIDTH * (1 + LAND_STEP.x * (pile.count - 1))}
     >
       <LandStack
-        card={withArt(pile.card, pile.slot)}
+        card={pile.card}
         count={pile.count}
         tapped={pile.tapped}
         width={LAND_WIDTH}
@@ -268,9 +261,8 @@ export const HAND = {
 
 /** The hand: a fan held at the near edge. A hovered card straightens and rises. */
 function Hand({ cards }: { cards: TableBoard["you"]["hand"] }) {
-  const withArt = useSlotArt();
   const mid = (cards.length - 1) / 2;
-  return cards.map(({ card, slot }, i) => (
+  return cards.map(({ card }, i) => (
     <motion.div
       key={i}
       className="hand-card"
@@ -285,7 +277,7 @@ function Hand({ cards }: { cards: TableBoard["you"]["hand"] }) {
       whileHover={{ y: -60, rotate: 0, scale: 1.05, zIndex: 30 }}
       transition={{ type: "spring", stiffness: 380, damping: 30 }}
     >
-      <Card card={withArt(card, slot)} width={HAND.width} />
+      <Card card={card} width={HAND.width} />
     </motion.div>
   ));
 }
@@ -298,7 +290,6 @@ export function TableScene({
   board?: TableBoard;
   dimmed?: boolean;
 }) {
-  const withArt = useSlotArt();
   const { opponent, you } = board;
   return (
     <div className={dimmed ? "table table-dimmed" : "table"}>
@@ -343,9 +334,7 @@ export function TableScene({
       {opponent.graveyard.length > 0 && (
         <Lying x={1321} y={37} width={84}>
           <Graveyard
-            cards={opponent.graveyard.map((c, i, all) =>
-              i === all.length - 1 ? withArt(c, "opponent-graveyard") : c,
-            )}
+            cards={opponent.graveyard}
             width={84}
             depth={{ x: -6, y: 8 }}
           />
@@ -358,7 +347,7 @@ export function TableScene({
         <div key={i} className="hud" style={{ left: item.x, top: item.y }}>
           <StackItem
             id={item.id}
-            source={withArt(item.source, item.slot)}
+            source={item.source}
             label={item.label}
             text={item.text}
             width={item.width}

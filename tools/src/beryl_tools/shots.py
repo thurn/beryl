@@ -7,8 +7,7 @@ the paths. Pages run in a plain browser on the fixture transport (ui/src/ipc.ts)
 as a player would (ui/scripts/interactions.mjs).
 
 Screenshots go to the cache (`ui-shots/<checkout>/`), never into the tree; WebKit is installed
-there on first use. The serving and the replica art are shared with the mockup harness
-(mockups.py).
+there on first use.
 """
 
 from __future__ import annotations
@@ -31,10 +30,6 @@ from . import paths, warm
 
 SERVER_TIMEOUT = 60.0
 NPM_BIN: Path = paths.UI / "node_modules" / ".bin"
-# The mockups' parts and art windows, and where the art windows are cut to: gitignored, served by
-# Vite in development only (src/replica/).
-REGIONS: Path = paths.REPO / "docs" / "ui_mockups" / "regions.json"
-REPLICA_ART: Path = paths.UI / "replica-art"
 # The game fixtures' definitions, and where they are recorded to: gitignored, served by Vite.
 FIXTURES: Path = paths.UI / "fixtures.json"
 RECORDED: Path = paths.UI / "public" / "fixtures"
@@ -91,18 +86,6 @@ def webkit_env() -> dict[str, str]:
     return env
 
 
-def cut_art(env: dict[str, str]) -> int:
-    """Cuts each card's art window out of the mockups into REPLICA_ART, for the replicas."""
-    shutil.rmtree(REPLICA_ART, ignore_errors=True)
-    return subprocess.run(
-        ["node", "scripts/mockups.mjs", "art", str(REGIONS), str(REPLICA_ART)],
-        cwd=paths.UI,
-        env=env,
-        stdin=subprocess.DEVNULL,
-        check=False,
-    ).returncode
-
-
 def record_fixtures(only: list[str] | None = None) -> int:
     """Plays the fixtures' seeded games (those named in `only`, or all) and records them into
     RECORDED, fresh each run."""
@@ -153,9 +136,7 @@ def ui_shots(args: argparse.Namespace) -> int:
     out.mkdir(parents=True)
     try:
         env = webkit_env()
-        # The replica shots draw the art windows cut from the mockups; the game shots replay
-        # recorded fixtures.
-        code = cut_art(env) or record_fixtures()
+        code = record_fixtures()
         if code == 0:
             with served_ui(env) as url:
                 code = subprocess.run(

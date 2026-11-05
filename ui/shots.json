@@ -1,5 +1,5 @@
 {
-  "$comment": "What `just ui-shots` captures: a route (hash route, optionally ?fixture=<name>[&at=<n>] for a fixture ui/fixtures.json defines, from its nth view, or a dev-only ?replica=<mockup>) at a viewport size, after clicking the element `click` selects, if given. Replicas render at their mockup's native size.",
+  "$comment": "What `just ui-shots` captures: a route (hash route, optionally ?fixture=<name>[&at=<n>] for a fixture ui/fixtures.json defines, from its nth view) at a viewport size, after clicking the element `click` selects, if given.",
   "shots": [
     {
       "name": "gallery",
@@ -151,36 +151,6 @@
       "route": "/?fixture=choice-pay#/game",
       "width": 1600,
       "height": 900
-    },
-    {
-      "name": "replica-battlefield",
-      "route": "/?replica=battlefield",
-      "width": 1672,
-      "height": 941
-    },
-    {
-      "name": "replica-combat",
-      "route": "/?replica=combat",
-      "width": 1672,
-      "height": 941
-    },
-    {
-      "name": "replica-trigger_on_stack_with_target",
-      "route": "/?replica=trigger_on_stack_with_target",
-      "width": 1672,
-      "height": 941
-    },
-    {
-      "name": "replica-scry",
-      "route": "/?replica=scry",
-      "width": 1672,
-      "height": 941
-    },
-    {
-      "name": "replica-ui_system",
-      "route": "/?replica=ui_system",
-      "width": 1536,
-      "height": 1024
     }
   ]
 }

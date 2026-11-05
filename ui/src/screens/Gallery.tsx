@@ -1,7 +1,7 @@
 // The component library on one page, laid out as docs/ui_mockups/ui_system.png. `just ui-shots`
 // captures it; it is also the place to look at a component while changing it.
 import { useMemo, type CSSProperties, type ReactNode } from "react";
-import { Card, Crest, useSlotArt } from "../components/Card";
+import { Card, Crest } from "../components/Card";
 import {
   Button,
   FastForwardIcon,
@@ -127,7 +127,6 @@ function ActionsAndStatus() {
 }
 
 function PlayerAndZones() {
-  const a = useSlotArt();
   return (
     <Panel n="03" title="Player & zones">
       <At x={0} y={50}>
@@ -158,7 +157,7 @@ function PlayerAndZones() {
             SAMPLE.counterspell,
             SAMPLE.counterspell,
             SAMPLE.counterspell,
-            a(SAMPLE.doomBlade, "03-graveyard"),
+            SAMPLE.doomBlade,
           ]}
           width={98}
           height={138}
@@ -168,7 +167,7 @@ function PlayerAndZones() {
       <At x={318} y={192}>
         <div style={{ transform: "skewX(-3deg)" }}>
           <LandStack
-            card={a(SAMPLE.island, "03-island")}
+            card={SAMPLE.island}
             count={3}
             width={122}
             height={118}
@@ -216,12 +215,11 @@ function CaptionAt({
 }
 
 function CardsAndStates() {
-  const a = useSlotArt();
   return (
     <Panel n="04" title="Cards & states">
       <At x={24} y={55}>
         <Card
-          card={a(SAMPLE.infernoTitan, "04-titan")}
+          card={SAMPLE.infernoTitan}
           variant="field"
           width={152}
           height={135}
@@ -230,7 +228,7 @@ function CardsAndStates() {
       </At>
       <At x={194} y={80}>
         <Card
-          card={a(SAMPLE.mountain, "04-tapped")}
+          card={SAMPLE.mountain}
           variant="field"
           width={126}
           height={92}
@@ -240,7 +238,7 @@ function CardsAndStates() {
       </At>
       <At x={337} y={61}>
         <Card
-          card={a(SAMPLE.plains, "04-untapped")}
+          card={SAMPLE.plains}
           variant="field"
           width={101}
           height={109}
@@ -255,7 +253,7 @@ function CardsAndStates() {
       </CaptionAt>
       <At x={64} y={215}>
         <Card
-          card={a(SAMPLE.balefulStrix, "04-source")}
+          card={SAMPLE.balefulStrix}
           variant="field"
           width={148}
           height={100}
@@ -265,7 +263,7 @@ function CardsAndStates() {
       </At>
       <At x={266} y={215}>
         <Card
-          card={a(SAMPLE.balefulStrix, "04-target")}
+          card={SAMPLE.balefulStrix}
           variant="field"
           width={146}
           height={100}
@@ -281,22 +279,18 @@ function CardsAndStates() {
       </CaptionAt>
       <At x={54} y={347}>
         <Card
-          card={a(costless(SAMPLE.swords), "04-hand-swords")}
+          card={costless(SAMPLE.swords)}
           width={128}
           unit={13.5}
           style={{ rotate: -7 }}
         />
       </At>
       <At x={168} y={358}>
-        <Card
-          card={a(SAMPLE.mountain, "04-hand-mountain")}
-          width={124}
-          unit={13.5}
-        />
+        <Card card={SAMPLE.mountain} width={124} unit={13.5} />
       </At>
       <At x={274} y={367}>
         <Card
-          card={a(SAMPLE.plateau, "04-hand-plateau")}
+          card={SAMPLE.plateau}
           width={128}
           unit={13.5}
           style={{ rotate: 7 }}
@@ -307,7 +301,6 @@ function CardsAndStates() {
 }
 
 function CombatAndStack() {
-  const a = useSlotArt();
   const arrows = useMemo<ArrowSpec[]>(
     () => [
       {
@@ -346,7 +339,7 @@ function CombatAndStack() {
         <At x={57} y={74}>
           <Card
             id="g-attacker"
-            card={a(SAMPLE.beast, "05-attacker")}
+            card={SAMPLE.beast}
             variant="field"
             width={129}
             height={100}
@@ -357,7 +350,7 @@ function CombatAndStack() {
         <At x={307} y={72}>
           <Card
             id="g-blocker"
-            card={a(SAMPLE.angel, "05-blocker")}
+            card={SAMPLE.angel}
             variant="field"
             width={126}
             height={101}
@@ -375,7 +368,7 @@ function CombatAndStack() {
         <At x={20} y={268}>
           <Card
             id="g-titan"
-            card={a(SAMPLE.infernoTitan, "05-source")}
+            card={SAMPLE.infernoTitan}
             variant="field"
             width={119}
             height={104}
@@ -395,7 +388,7 @@ function CombatAndStack() {
         <At x={356} y={267}>
           <Card
             id="g-beast"
-            card={a(SAMPLE.beast, "05-target")}
+            card={SAMPLE.beast}
             variant="field"
             width={116}
             height={105}

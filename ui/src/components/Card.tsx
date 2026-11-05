@@ -2,8 +2,6 @@
 // frame, the type line and rules box. Battlefield permanents use the compact `field` frame,
 // which tapping turns without changing.
 import {
-  createContext,
-  useContext,
   useLayoutEffect,
   useRef,
   type CSSProperties,
@@ -27,21 +25,6 @@ export interface CardFace {
   /** Art URL; a placeholder painting is drawn until there is one. */
   art?: string;
   ability?: AbilityIcon;
-}
-
-/** Art for named card slots (`you-mountain`, `04-titan`): replica mode (src/replica/) supplies
- * the art cut from a mockup; elsewhere there is none and cards keep their own art. */
-export const SlotArt = createContext<(slot: string) => string | undefined>(
-  () => undefined,
-);
-
-/** Gives a card the art of its slot, when there is any. */
-export function useSlotArt() {
-  const art = useContext(SlotArt);
-  return (card: CardFace, slot: string | undefined): CardFace => {
-    const url = slot && art(slot);
-    return url ? { ...card, art: url } : card;
-  };
 }
 
 export type Highlight = "source" | "target";

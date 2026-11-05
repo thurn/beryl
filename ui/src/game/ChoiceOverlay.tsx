@@ -32,9 +32,6 @@ export interface ChoiceOverlayProps {
   busy: boolean;
   onPlan(plan: Intent[]): void;
   onViewBattlefield(): void;
-  /** A tray card already held mid-drag, its center at (x, y) in the tray: how replica mode
-   * shows scry.png's moment. */
-  holding?: { slot: number; x: number; y: number };
 }
 
 export function ChoiceOverlay(props: ChoiceOverlayProps) {
@@ -178,7 +175,6 @@ function ArrangeChoice({
   busy,
   onPlan,
   onViewBattlefield,
-  holding,
 }: ChoiceOverlayProps & { choice: Arrange }) {
   const [piles, setPiles] = useState({
     left: choice.left,
@@ -207,13 +203,7 @@ function ArrangeChoice({
     return items;
   };
   // While a card is held, the others make room where it would drop.
-  const [held, setHeld] = useState(
-    () =>
-      holding && {
-        slot: holding.slot,
-        sequence: place(holding.slot, holding.x, sequence),
-      },
-  );
+  const [held, setHeld] = useState<{ slot: number; sequence: number[] }>();
   const heldFrom = (slot: number) =>
     held?.slot === slot ? held.sequence : sequence;
   const shown = held?.sequence ?? sequence;
@@ -291,7 +281,6 @@ function ArrangeChoice({
                 z={i + 1}
                 turn={i < libraryAt ? -FACE.turn : FACE.turn}
                 disabled={busy}
-                hold={holding?.slot === item ? holding : undefined}
                 onMove={(x) =>
                   setHeld(
                     x === undefined
@@ -327,15 +316,13 @@ const BACK_WIDTH = 220;
 const DRAG_THRESHOLD = 6;
 
 /** A tray card that glides to its place and can be dragged about the tray, lifted while
- * held; `onMove` follows the held card's center (undefined once let go). `hold` starts it
- * held there. */
+ * held; `onMove` follows the held card's center (undefined once let go). */
 function DraggableCard({
   object,
   x: centerX,
   z,
   turn,
   disabled,
-  hold,
   onMove,
   onDrop,
   onClick,
@@ -345,16 +332,15 @@ function DraggableCard({
   z: number;
   turn: number;
   disabled: boolean;
-  hold?: { x: number; y: number };
   onMove(x: number | undefined): void;
   onDrop(x: number): void;
   onClick(): void;
 }) {
   const reduce = useReducedMotion() ?? false;
   const stageScale = useContext(StageScale);
-  const x = useMotionValue(hold?.x ?? centerX);
-  const y = useMotionValue(hold?.y ?? FACE.y);
-  const [dragging, setDragging] = useState(hold !== undefined);
+  const x = useMotionValue(centerX);
+  const y = useMotionValue(FACE.y);
+  const [dragging, setDragging] = useState(false);
   const drag = useRef<{
     start: number;
     startY: number;

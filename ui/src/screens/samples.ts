@@ -96,8 +96,7 @@ export const SAMPLE = {
 /** A card as the mockups draw it in the hand: without its mana cost. */
 export const costless = ({ manaCost, ...card }: CardFace): CardFace => card;
 
-/** The board of docs/ui_mockups/battlefield.png: the table demo, and the base of the replicas
- * (src/replica/). Slots name each card's art in replica mode. */
+/** The board of docs/ui_mockups/battlefield.png: the table demo. */
 export const SAMPLE_BOARD: TableBoard = {
   opponent: {
     life: 17,
@@ -110,13 +109,12 @@ export const SAMPLE_BOARD: TableBoard = {
         count: 3,
         x: 159,
         y: 127,
-        slot: "opponent-island",
       },
-      { card: SAMPLE.swamp, count: 3, x: 367, y: 122, slot: "opponent-swamp" },
+      { card: SAMPLE.swamp, count: 3, x: 367, y: 122 },
     ],
     creatures: [
-      { card: SAMPLE.balefulStrix, x: 607, y: 221, slot: "opponent-strix" },
-      { card: SAMPLE.beast, x: 808, y: 221, slot: "opponent-beast" },
+      { card: SAMPLE.balefulStrix, x: 607, y: 221 },
+      { card: SAMPLE.beast, x: 808, y: 221 },
     ],
   },
   you: {
@@ -125,18 +123,18 @@ export const SAMPLE_BOARD: TableBoard = {
     library: 26,
     graveyard: [],
     hand: [
-      { card: costless(SAMPLE.bolt), slot: "hand-bolt" },
-      { card: costless(SAMPLE.swords), slot: "hand-swords" },
-      { card: SAMPLE.mountain, slot: "hand-mountain" },
-      { card: SAMPLE.plateau, slot: "hand-plateau" },
+      { card: costless(SAMPLE.bolt) },
+      { card: costless(SAMPLE.swords) },
+      { card: SAMPLE.mountain },
+      { card: SAMPLE.plateau },
     ],
     lands: [
-      { card: SAMPLE.mountain, count: 3, x: 105, y: 564, slot: "you-mountain" },
-      { card: SAMPLE.plains, count: 3, x: 326, y: 564, slot: "you-plains" },
+      { card: SAMPLE.mountain, count: 3, x: 105, y: 564 },
+      { card: SAMPLE.plains, count: 3, x: 326, y: 564 },
     ],
     creatures: [
-      { card: SAMPLE.goblinGuide, x: 588, y: 418, slot: "you-goblin-guide" },
-      { card: SAMPLE.angel, x: 810, y: 419, slot: "you-angel" },
+      { card: SAMPLE.goblinGuide, x: 588, y: 418 },
+      { card: SAMPLE.angel, x: 810, y: 419 },
     ],
   },
   phase: "main1",

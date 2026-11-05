@@ -33,14 +33,15 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
   the scenarios where an oracle is wrong, each with its CR citation. The app
   downloads images on demand into its cache (`beryl_app`'s `art.rs`); none are
   committed.
-- `docs/ui_mockups/`: the UI's target images. `regions.json` names their parts
-  and records each part's pixel-fidelity verdict.
+- `docs/ui_mockups/`: generated images of the UI, kept as visual references.
+  They disagree with one another in details, so they are not a spec: never tune
+  the UI's values to match one image.
 - `tools/`: `by`, the Python CLI behind the justfile, including the XMage and
   Forge exporters and their Java harnesses. `just` lists the commands.
 - Outside the tree: `~/Library/Caches/beryl` (`$BERYL_CACHE`: warm `rust/target`
   and `ui/node_modules` shared by worktrees, the oracle builds and their last
-  report in `oracles/logs/oracle.json`, and the screenshot and comparison
-  images). Never crawl `~` or `/` with `find`.
+  report in `oracles/logs/oracle.json`, and the screenshots). Never crawl `~` or
+  `/` with `find`.
 
 ## Enact
 
@@ -89,10 +90,7 @@ Cheapest first. Agents never open a window: `just dev` refuses to for them.
    `just fuzz` plays random games at length.
 2. UI: `cd ui && npm run typecheck`. `just ui-shots [names]` screenshots UI
    states headless and prints their paths; `just ui-test` plays the game screen
-   through a fixture. For pixel fidelity, `just ui-compare [parts] --review`
-   writes per-part comparisons with `docs/ui_mockups` and a packet for a fresh
-   reviewer subagent, `just ui-verdict` records its verdict, and `just ui-probe`
-   and `just ui-fonts` measure colors, edges and font candidates.
+   through a fixture.
 3. The app: `just smoke` builds the debug app and launches it with no window and
    no Dock icon until the UI reports over IPC that it loaded (about a second
    once built). It fails on a build error or a UI that never loads.
