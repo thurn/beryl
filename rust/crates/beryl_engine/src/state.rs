@@ -848,6 +848,11 @@ impl State {
         self.stack.as_slice()
     }
 
+    /// The permissions to cast a card from a zone it could not otherwise be cast from.
+    pub fn permissions(&self) -> &[CastPermission] {
+        self.permissions.as_slice()
+    }
+
     /// The floating continuous effects.
     pub fn effects(&self) -> &[FloatingEffect] {
         self.effects.as_slice()

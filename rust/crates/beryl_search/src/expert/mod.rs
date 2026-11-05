@@ -19,8 +19,12 @@
 //!   advantage, never when winning or (but for a big gain) far behind; Strip Mine on an
 //!   opponent short of lands; Thieving Skydiver kicked only for an artifact worth taking;
 //!   Swift Reconfiguration never on Jace, Vryn's Prodigy; Aang's Iceberg never on an
-//!   impending Overlord; bounces on tokens and costly permanents, not on enters-the-
-//!   battlefield creatures or Mana Crypt.
+//!   impending Overlord; Get Lost never on a Sphinx that would come back as a token; bounces
+//!   on tokens and costly permanents, not on enters-the-battlefield creatures, Mana Crypt or
+//!   a Swift Reconfiguration they could flash straight back.
+//! - A counterspell we have seen, in their hand or in our Elite Spellbinder's exile, holds
+//!   back our major threats; facing No More Lies, a major threat goes first, while we can
+//!   still pay its {3}.
 //! - Planeswalkers are worth their loyalty, more near an ultimate. Ours: an ultimate when it
 //!   is there; protect the walker when the opponent's creatures threaten it, bounce a blocker
 //!   to open lethal, else grow or draw.
@@ -159,6 +163,7 @@ impl Agent for ExpertAgent {
                 let sick = obs.object(slot).flags.has(ObjectFlags::SUMMONING_SICK);
                 Some(i32::from(sick) * 1000 - e.value(slot))
             }),
+            DecisionKind::PayLife => e.pay_life(d),
             DecisionKind::ChooseObject => e
                 .take_from_hand(d)
                 .unwrap_or_else(|| self.policy.decide(t, obs, d, true)),
@@ -202,6 +207,17 @@ pub(crate) fn appraise(p: &Policy<'_>, slot: Slot, base: i32) -> Option<i32> {
     if neutralized {
         return Some(5);
     }
+    // Our Get Lost being aimed: destroying a Sphinx of False Conclusions only trades it for
+    // its token copy (and gives its controller two Maps).
+    if controller != p.me
+        && returns_as_token(p, slot)
+        && obs
+            .stack()
+            .last()
+            .is_some_and(|e| e.controller == p.me && p.t.def(e.card).name == names::GET_LOST)
+    {
+        return Some(0);
+    }
     // Jace, Vryn's Prodigy loots every turn and becomes a planeswalker.
     if name(slot) == Some(names::JACE_VRYNS_PRODIGY) && o.face == 0 {
         return Some(base + 20);
@@ -218,6 +234,16 @@ pub(crate) fn appraise(p: &Policy<'_>, slot: Slot, base: i32) -> Option<i32> {
         }
     }
     None
+}
+
+/// Whether a permanent dying comes back as a token copy of itself: a Sphinx of False
+/// Conclusions that is not a token ("When this creature dies, if it isn't a token, create a
+/// token that's a copy of it").
+fn returns_as_token(p: &Policy<'_>, slot: Slot) -> bool {
+    p.obs
+        .card(slot)
+        .is_some_and(|c| p.t.def(c).name == names::SPHINX_OF_FALSE_CONCLUSIONS)
+        && !p.obs.object(slot).flags.has(ObjectFlags::TOKEN)
 }
 
 /// When a priority decision comes: what the expert may do then.
@@ -396,12 +422,23 @@ impl Expert<'_> {
 
     /// Whether a counterspell we have seen in the opponent's hand (Thundertrap Trainer and
     /// Elite Spellbinder show them) is one they have the mana for: Mana Drain or No More Lies.
-    fn counter_known(&self) -> bool {
-        self.mana(self.opp()) >= 2
-            && self
-                .hand(self.opp())
-                .iter()
-                .any(|s| matches!(self.name(s), Some(names::MANA_DRAIN | names::NO_MORE_LIES)))
+    /// `left` is the mana we would have left to pay No More Lies's {3} with.
+    fn counter_known(&self, left: i32) -> bool {
+        let (white, blue) = self.colors_up(self.opp());
+        let counter = |s: Slot| match self.name(s) {
+            Some(names::MANA_DRAIN) => blue >= 2,
+            Some(names::NO_MORE_LIES) => white >= 1 && blue >= 1 && left < 3,
+            _ => false,
+        };
+        let mana = self.mana(self.opp());
+        // Our Elite Spellbinder's exile shows the card too, castable for {2} more.
+        let exiled = self.obs().permissions().iter().any(|p| {
+            p.player == self.opp()
+                && self.obs().object(p.object.slot).zone == Zone::Exile
+                && counter(p.object.slot)
+                && mana >= 2 + i32::from(p.extra)
+        });
+        exiled || (mana >= 2 && self.hand(self.opp()).iter().any(counter))
     }
 
     /// Whether we have seen a Mana Tithe in the opponent's hand, as Elite Spellbinder shows.
@@ -503,13 +540,26 @@ impl Expert<'_> {
 
     /// The score of a priority action; passing is 0, and nothing scored 0 or less is done.
     fn action(&self, o: Opt) -> i32 {
-        match self.timing() {
+        let v = match self.timing() {
             Timing::Respond(top) => self.respond(top, o),
             Timing::Main { precombat } => self.main(o, precombat),
             Timing::TheirAttack => self.their_attack(o),
             Timing::TheirEnd => self.their_end(o),
             Timing::Other => 0,
+        };
+        // Into a Mana Tithe we know they hold, keep a mana to pay for it.
+        if v > 0
+            && let Opt::Cast { slot, face, costs } = o
+            && let Some(card) = self.obs().card(slot)
+            && self.tithe_known()
+            && !self.dying()
+            && self.mana(self.opp()) >= 1
+            && self.colors_up(self.opp()).0 >= 1
+            && self.mana_after(&self.p.t.def(card).faces[usize::from(face)], costs) < 1
+        {
+            return 0;
         }
+        v
     }
 
     // --- Responding to the stack --------------------------------------------------------
@@ -612,6 +662,10 @@ impl Expert<'_> {
         if e.costs != 0 && def.name == names::THIEVING_SKYDIVER {
             v += 20;
         }
+        // Mana Crypt is little to a player with lands enough.
+        if def.name == names::MANA_CRYPT && self.lands(self.opp()) >= 5 {
+            v = v.min(10);
+        }
         // Elite Spellbinder takes the best nonland card from our hand, the counterspell too.
         if def.name == names::ELITE_SPELLBINDER {
             v += self
@@ -630,8 +684,15 @@ impl Expert<'_> {
 
     fn main(&self, o: Opt, precombat: bool) -> i32 {
         match o {
-            Opt::PlayLand(slot) => self.land(slot),
-            Opt::Cast { slot, face, costs } => self.main_cast(slot, face, costs, precombat),
+            Opt::PlayLand(slot) => self.land(slot, precombat),
+            Opt::Cast { slot, face, costs } => {
+                let v = self.main_cast(slot, face, costs, precombat);
+                if v > 0 && self.spoils_tax_room(slot, face, costs) {
+                    v.min(50)
+                } else {
+                    v
+                }
+            }
             Opt::Activate {
                 slot,
                 ability: AbilityIx::Own(i),
@@ -686,7 +747,7 @@ impl Expert<'_> {
     /// Which land to play: one that enters untapped and makes the color we have less of,
     /// a tapped land when the mana wouldn't be used this turn, Strip Mine when it has a
     /// target, and a modal land face only when no other land is in hand.
-    fn land(&self, slot: Slot) -> i32 {
+    fn land(&self, slot: Slot, precombat: bool) -> i32 {
         let me = self.me();
         let lands = self.lands(me);
         // With lands enough, a looter out and nothing else in hand, a land is worth more in
@@ -704,6 +765,12 @@ impl Expert<'_> {
         let spells = self.hand(me).iter().any(|s| !self.p.is_land(s));
         if lands >= 7 && looter && !spells {
             return 0;
+        }
+        // Our last card waits for Jace, Vryn's Prodigy's loot after combat, which would
+        // otherwise have to discard the card it draws; then below the loot, but still played if
+        // he does not loot.
+        if self.hand(me).count() == 1 && self.can_loot() {
+            return if precombat { 0 } else { 40 };
         }
         let base = 1000;
         match self.name(slot) {
@@ -776,6 +843,47 @@ impl Expert<'_> {
         (1..=3).contains(&theirs) && ours > 2 && ours >= theirs
     }
 
+    /// Whether casting the card in `slot` first would leave a major threat in hand too little
+    /// to pay for No More Lies ("Counter target spell unless its controller pays {3}") that
+    /// it could pay for now, while the opponent has the mana for No More Lies up.
+    fn spoils_tax_room(&self, slot: Slot, face: u8, costs: u8) -> bool {
+        let (white, blue) = self.colors_up(self.opp());
+        if self.sorcery_only_for_them()
+            || white < 1
+            || blue < 1
+            || self.mana(self.opp()) < 2
+            || self.seen(names::NO_MORE_LIES)
+        {
+            return false;
+        }
+        let Some(card) = self.obs().card(slot) else {
+            return false;
+        };
+        if i32::from(self.p.values.get(card).value) >= MAJOR {
+            return false;
+        }
+        let mana = self.mana(self.me());
+        let left = self.mana_after(&self.p.t.def(card).faces[usize::from(face)], costs);
+        self.hand(self.me()).iter().any(|s| {
+            s != slot
+                && self.obs().card(s).is_some_and(|c| {
+                    let f = self.p.t.def(c).front();
+                    let cost = i32::from(f.cost.mana_value());
+                    !f.types.intersects(Types::LAND)
+                        && i32::from(self.p.values.get(c).value) >= MAJOR
+                        && cost + 3 <= mana
+                        && cost + 3 > left
+                })
+        })
+    }
+
+    /// Whether our Teferi, Time Raveler keeps the opponent to sorcery speed: "Each opponent
+    /// can cast spells only any time they could cast a sorcery."
+    fn sorcery_only_for_them(&self) -> bool {
+        self.permanents(self.me())
+            .any(|s| self.is(s, names::TEFERI_TIME_RAVELER))
+    }
+
     fn main_cast(&self, slot: Slot, face: u8, costs: u8, precombat: bool) -> i32 {
         let Some(name) = self.name(slot) else {
             return 0;
@@ -845,7 +953,9 @@ impl Expert<'_> {
         }
         let walker = f.types.intersects(Types::PLANESWALKER);
         // A major threat waits while they hold a counterspell we have seen and can cast it.
-        if i32::from(self.p.values.get(card).value) >= MAJOR && self.counter_known() {
+        if i32::from(self.p.values.get(card).value) >= MAJOR
+            && self.counter_known(self.mana_after(f, costs))
+        {
             return 0;
         }
         // Dead on board, blockers come first: ones that can block what is coming.
@@ -862,14 +972,6 @@ impl Expert<'_> {
         } else {
             100 + v
         };
-        // Into a Mana Tithe we know they hold, keep a mana to pay for it.
-        if self.tithe_known()
-            && !self.dying()
-            && self.mana(self.opp()) >= 1
-            && self.mana_after(f, costs) < 1
-        {
-            return 0;
-        }
         self.hold_for_counter(slot, v)
     }
 
@@ -880,10 +982,29 @@ impl Expert<'_> {
         Some(match name {
             // Free mana, until there are lands enough and the coin flips cost too much life.
             names::MANA_CRYPT => {
-                let late = self.lands(self.me()) >= 5 && self.obs().player(self.me()).life <= 12;
+                let lands = self.lands(self.me());
+                let late = lands >= 7 || (lands >= 5 && self.obs().player(self.me()).life <= 12);
                 if late { 0 } else { 2000 }
             }
-            names::TEFERI_TIME_RAVELER => 850,
+            names::TEFERI_TIME_RAVELER if self.counter_known(self.mana(self.me()) - 3) => 0,
+            names::TEFERI_TIME_RAVELER => {
+                // Teferi first when more is to follow: once he resolves, nothing we cast this
+                // turn can be countered.
+                let left = self.mana(self.me()) - 3;
+                let more = self.hand(self.me()).iter().any(|s| {
+                    s != slot
+                        && self.obs().card(s).is_some_and(|c| {
+                            let f = self.p.t.def(c).front();
+                            !f.types.intersects(Types::LAND)
+                                && i32::from(f.cost.mana_value()) <= left
+                        })
+                });
+                if more && self.opp_can_counter() {
+                    1600
+                } else {
+                    850
+                }
+            }
             names::TIMETWISTER | names::TIME_SPIRAL => {
                 // After any threat worth casting, and after combat: a wheel shuffles away what
                 // we hold.
@@ -919,6 +1040,9 @@ impl Expert<'_> {
                 let power = self.attack_power(0);
                 if power > 0 && power < life && power + 1 >= life {
                     1500
+                } else if self.counter_known(self.mana(self.me()) - 4) {
+                    // A counterspell we have seen waits for her.
+                    0
                 } else if !self.opp_can_counter() {
                     // A safe window for the best threat in hand, before any removal.
                     750
@@ -1032,6 +1156,50 @@ impl Expert<'_> {
             .is_none_or(|keep| self.mana(self.me()) - cost >= keep)
     }
 
+    /// Soporific Springs: "As this land enters, you may pay 3 life. If you don't, it enters
+    /// tapped." Pay only when its mana now is the one that lets a card in hand be cast, this
+    /// turn or on theirs.
+    fn pay_life(&self, d: &Decision) -> Choice {
+        let springs = |s: Slot| self.is(s, names::SINK_INTO_STUPOR);
+        let others = self.mana(self.me())
+            - self
+                .permanents(self.me())
+                .filter(|&s| springs(s) && !self.tapped(s))
+                .count() as i32;
+        // Its {U} with the white and blue we have up, Soporific Springs left out.
+        let (white, blue) = self.colors_up(self.me());
+        let up = i32::from(
+            self.permanents(self.me())
+                .any(|s| springs(s) && !self.tapped(s)),
+        );
+        let enables = self.hand(self.me()).iter().any(|s| {
+            !springs(s)
+                && !self.p.is_land(s)
+                && self.obs().card(s).is_some_and(|c| {
+                    let cost = self.p.t.def(c).front().cost;
+                    i32::from(cost.mana_value()) == others + 1
+                        && i32::from(cost.symbols[0]) <= white
+                        && i32::from(cost.symbols[1]) <= blue - up + 1
+                })
+        });
+        let yes = enables && self.life() > 10;
+        best(d, |c| {
+            Some(i32::from((c.option() == Some(Opt::Yes)) == yes))
+        })
+    }
+
+    /// Whether our Jace, Vryn's Prodigy could loot now: "{T}: Draw a card, then discard a card."
+    fn can_loot(&self) -> bool {
+        !self.obs().library(self.me()).is_empty()
+            && self.creatures(self.me()).any(|s| {
+                let o = self.obs().object(s);
+                self.is(s, names::JACE_VRYNS_PRODIGY)
+                    && o.face == 0
+                    && !o.flags.has(ObjectFlags::TAPPED)
+                    && !o.flags.has(ObjectFlags::SUMMONING_SICK)
+            })
+    }
+
     /// Whether any creature of ours could attack this turn.
     fn can_attack(&self) -> bool {
         self.creatures(self.me()).any(|s| {
@@ -1083,7 +1251,9 @@ impl Expert<'_> {
             .hand(self.me())
             .iter()
             .any(|s| !self.is(s, wheel) && !self.p.is_land(s) && self.value(s) >= COUNTER_SPARE);
-        decking || (!winning && !behind && !holding && refill)
+        // Our hand empty and theirs full, it refuels us more than them, behind or not.
+        let empty = ours == 0 && theirs >= 3;
+        decking || (!winning && !holding && (empty || (!behind && refill)))
     }
 
     /// The value of the best artifact of the opponent's that Thieving Skydiver could take,
@@ -1153,6 +1323,9 @@ impl Expert<'_> {
             } else if name == names::SWIFT_RECONFIGURATION && self.is(s, names::JACE_VRYNS_PRODIGY)
             {
                 // A Vehicle Jace still loots, and still flips.
+                0
+            } else if name == names::GET_LOST && returns_as_token(&self.p, s) {
+                // It would come back as a token copy of itself.
                 0
             } else if name == names::AANGS_ICEBERG && self.impending(s) {
                 // It would come back from Aang's Iceberg's exile in full, a 6/6 with Insects.
@@ -1648,13 +1821,18 @@ impl Expert<'_> {
         if self.obs().object(slot).flags.has(ObjectFlags::TOKEN) {
             return v + 15;
         }
-        // Their Swift Reconfiguration on our creature: returning it frees the creature.
-        if self.is(slot, names::SWIFT_RECONFIGURATION)
-            && let Some(host) = self.obs().object(slot).attached_to
-            && self.obs().controller(host) == self.me()
-            && let Some(card) = self.obs().card(host)
-        {
-            v += i32::from(self.p.values.get(card).value);
+        // Their Swift Reconfiguration on our creature: returning it frees the creature, but it
+        // has flash and costs {W}, so with a white mana up they put it straight back.
+        if self.is(slot, names::SWIFT_RECONFIGURATION) {
+            if self.colors_up(self.opp()).0 >= 1 {
+                return 0;
+            }
+            if let Some(host) = self.obs().object(slot).attached_to
+                && self.obs().controller(host) == self.me()
+                && let Some(card) = self.obs().card(host)
+            {
+                v += i32::from(self.p.values.get(card).value);
+            }
         }
         match self.name(slot) {
             Some(names::MANA_CRYPT) => 0,
@@ -1735,6 +1913,8 @@ impl Expert<'_> {
             && self.p.t.def(e.card).name == names::SWIFT_RECONFIGURATION
             && matches!(d.candidates, beryl_engine::Candidates::Objects(_))
         {
+            // In their combat, ranked as removal there: an attacker is removed from combat as
+            // it stops being a creature.
             return Some(best(d, |c| {
                 let slot = c.object()?;
                 Some(if self.obs().controller(slot) != self.opp() {
@@ -1742,7 +1922,7 @@ impl Expert<'_> {
                 } else if self.is(slot, names::JACE_VRYNS_PRODIGY) {
                     0
                 } else {
-                    self.value(slot)
+                    self.their_attack_rank(slot)
                 })
             }));
         }
@@ -1771,34 +1951,54 @@ impl Expert<'_> {
         if self.p.targeting().is_none_or(|(_, friendly)| friendly) {
             return None;
         }
-        let attacking = |s: Slot| {
-            self.obs().object(s).zone == Zone::Battlefield
-                && self.obs().controller(s) == self.opp()
-                && self.obs().object(s).flags.has(ObjectFlags::ATTACKING)
-        };
-        let attackers: Vec<Slot> = self
-            .creatures(self.opp())
-            .filter(|&s| attacking(s))
-            .collect();
-        if attackers.is_empty() || !matches!(d.candidates, beryl_engine::Candidates::Objects(_)) {
+        if !self.creatures(self.opp()).any(|s| self.attacking(s))
+            || !matches!(d.candidates, beryl_engine::Candidates::Objects(_))
+        {
             return None;
         }
-        let damage: i32 = attackers
-            .iter()
-            .map(|&s| i32::from(self.obs().derived(s).power.max(0)))
-            .sum();
-        let lethal = damage >= i32::from(self.obs().player(self.me()).life);
         Some(best(d, |c| {
             let slot = c.object()?;
-            Some(if attacking(slot) {
-                let power = i32::from(self.obs().derived(slot).power.max(0));
-                100_000 + if lethal { 1000 * power } else { 0 } + self.value(slot)
-            } else if self.obs().controller(slot) == self.opp() {
-                self.value(slot)
+            Some(if self.obs().controller(slot) == self.opp() {
+                self.their_attack_rank(slot)
             } else {
                 -self.value(slot)
             })
         }))
+    }
+
+    fn attacking(&self, slot: Slot) -> bool {
+        let o = self.obs().object(slot);
+        o.zone == Zone::Battlefield
+            && self.obs().controller(slot) == self.opp()
+            && o.flags.has(ObjectFlags::ATTACKING)
+    }
+
+    /// In their combat, what removing their permanent in `slot` is worth: a lethal attack's
+    /// attackers first, the ones dealing most; in an attack for half our life, any attacker;
+    /// otherwise its value, and an attacker also what it would kill of our planeswalkers, so
+    /// that a harmless attacker does not draw the answer a bigger threat needs.
+    fn their_attack_rank(&self, slot: Slot) -> i32 {
+        let v = self.value(slot);
+        if !self.attacking(slot) {
+            return v;
+        }
+        let power = |s: Slot| i32::from(self.obs().derived(s).power.max(0));
+        let damage: i32 = self
+            .creatures(self.opp())
+            .filter(|&s| self.attacking(s) && self.obs().object(s).combat.is_none())
+            .map(power)
+            .sum();
+        if damage >= self.life() {
+            return 100_000 + 1000 * power(slot) + v;
+        }
+        if 2 * damage >= self.life() && self.obs().object(slot).combat.is_none() {
+            return 100_000 + v;
+        }
+        let walker = self.obs().object(slot).combat.filter(|&w| {
+            self.has_type(w, Types::PLANESWALKER)
+                && power(slot) >= i32::from(self.obs().object(w).counters.loyalty)
+        });
+        v + walker.map_or(0, |w| self.value(w))
     }
 
     /// Before combat, when removing one blocker opens lethal, a harmful effect's target is an

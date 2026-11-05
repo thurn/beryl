@@ -223,6 +223,31 @@ fn strip_mine_takes_the_dual_of_an_opponent_short_of_lands() {
     assert_eq!(name(&t, &s, d.candidates.object(c).unwrap()), names::TUNDRA);
 }
 
+/// Get Lost destroys: aimed at a Sphinx of False Conclusions, it would only trade the Sphinx
+/// for its token copy, so it takes the next creature instead.
+#[test]
+fn get_lost_leaves_a_sphinx_that_comes_back() {
+    const SPHINX: Scenario = Scenario::new("sphinx")
+        .at(5, P1, TurnStep::PrecombatMain)
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(names::SPHINX_OF_FALSE_CONCLUSIONS),
+                Permanent::new(names::ELITE_SPELLBINDER),
+            ],
+        )
+        .library(P1, LIBRARY)
+        .hand(P0, &[names::GET_LOST])
+        .battlefield(P0, &[Permanent::new(PLAINS), Permanent::new(PLAINS)])
+        .library(P0, LIBRARY);
+    let (t, mut s) = arrange(&SPHINX);
+    let (d, c) = expert_at(&t, &mut s, casts(""), |s, d| {
+        d.kind == DecisionKind::Target && !s.stack().is_empty()
+    });
+    let target = d.candidates.object(c).expect("a creature");
+    assert_eq!(name(&t, &s, target), names::ELITE_SPELLBINDER);
+}
+
 /// Jace bounces the creature whose attack would kill him when that saves him, and grows when
 /// he is safe.
 #[test]
