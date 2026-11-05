@@ -51,6 +51,7 @@ import {
   type Point,
 } from "./CardLayer";
 import {
+  follow,
   interactions,
   isCombat,
   isOpening,
@@ -59,6 +60,14 @@ import {
   type Act,
   type Intent,
 } from "./decisions";
+import {
+  attackPlan,
+  blockable,
+  blockPlan,
+  declared,
+  emptyDraft,
+  type Draft,
+} from "./combat";
 import { abilityText, useAbilityFace, useFace } from "./faces";
 import {
   asksCastStep,
@@ -146,6 +155,8 @@ export function Board({
   const [hovered, setHovered] = useState<number>();
   const [menu, setMenu] = useState<Menu>();
   const [casting, setCasting] = useState<Casting>();
+  // The combat declaration being made, shown as if declared until it is confirmed.
+  const [draft, setDraft] = useState<Draft>(emptyDraft);
   // The card being dragged.
   const [lifted, setLifted] = useState<number>();
   const [settings, setSettings] = useState(false);
@@ -160,6 +171,16 @@ export function Board({
     () => new Map(view.objects.map((o) => [o.slot, o])),
     [view],
   );
+  // Declaring attackers or blockers: the creatures are picked on the table, in any order.
+  const drafting =
+    deciding && (decision?.kind === "attacker" || decision?.kind === "blocker")
+      ? decision.kind
+      : undefined;
+  // The table as the declaration would leave it.
+  const shown = useMemo(
+    () => (drafting ? declared(view, draft) : view),
+    [view, draft, drafting],
+  );
   // A decision other than priority, the opening's and combat's asks in a prompt over the
   // turn controls, under the stack, which rises to clear it.
   const prompting =
@@ -172,14 +193,15 @@ export function Board({
   // The prompt or the cast step sits over the turn controls; the stack rises to clear it.
   const asking = prompting || castingNow !== undefined;
   const placements = useMemo(
-    () => layout(view, asking, dimmed),
-    [view, asking, dimmed],
+    () => layout(shown, asking, dimmed),
+    [shown, asking, dimmed],
   );
 
-  // A new view closes whatever was open on the old one.
+  // A new view closes whatever was open on the old one, and starts any declaration afresh.
   useEffect(() => {
     setMenu(undefined);
     setCasting(undefined);
+    setDraft(emptyDraft());
   }, [view]);
 
   const pick = (index: CandidateIndex, then?: Intent[]) => {
@@ -264,6 +286,49 @@ export function Board({
     states.set(slot, { ...states.get(slot), paying: true, playable: false });
   }
 
+  // A declaration's creatures: those still to pick glow cyan, the one waiting for its attacker
+  // or planeswalker gold; once picked, their combat marks say what they do.
+  const declarable = (slot: number) =>
+    (can.bySlot.get(slot) ?? []).find(
+      (a) => a.option.kind === "attack" || a.option.kind === "block",
+    );
+  const walkers = view.battlefield.filter((slot) => {
+    const o = objects.get(slot);
+    return o?.controller === "opponent" && o.types.includes("planeswalker");
+  });
+  // The attackers the chosen blocker may block.
+  const blockTargets =
+    drafting === "blocker" && draft.selected !== undefined
+      ? blockable(declarable(draft.selected)?.blocks ?? [], objects)
+      : new Set<number>();
+  // The creature picked last waits for what it attacks or blocks.
+  const aiming = drafting === "blocker" || walkers.length > 0;
+  if (drafting) {
+    for (const [slot, state] of states) {
+      if (!declarable(slot)) continue;
+      const picked = draft.attacks.has(slot) || draft.blocks.has(slot);
+      states.set(slot, {
+        ...state,
+        highlight:
+          slot === draft.selected && aiming
+            ? "source"
+            : picked || (drafting === "blocker" && draft.selected !== undefined)
+              ? undefined
+              : "target",
+        playable: false,
+      });
+    }
+    const aims =
+      drafting === "blocker"
+        ? [...blockTargets]
+        : draft.selected !== undefined
+          ? walkers
+          : [];
+    for (const slot of aims) {
+      states.set(slot, { ...states.get(slot), highlight: "target" });
+    }
+  }
+
   const onClick = (slot: number, at: Point) => {
     if (castingNow) {
       // A permanent another payment taps pays that way.
@@ -279,6 +344,10 @@ export function Board({
       }
       if (slot === castingNow.slot) return;
       setCasting(undefined);
+    }
+    if (drafting) {
+      setDraft(drafted(draft, slot));
+      return;
     }
     const acts = deciding ? can.bySlot.get(slot) : undefined;
     if (!acts) {
@@ -321,45 +390,69 @@ export function Board({
       }
       return false;
     }
-    const declare = acts.find(
-      (a) => a.option.kind === "attack" || a.option.kind === "block",
-    );
-    const over = onto && "slot" in onto ? objects.get(onto.slot) : undefined;
-    if (declare?.option.kind === "block") {
-      // A blocker goes onto the attacker it blocks (CR 509.1a).
-      if (over?.combat?.kind !== "attacking") return false;
-      pick(declare.index, [
-        {
-          kind: "blockTarget",
-          wants: (c) => c.kind === "object" && c.slot === over.slot,
-        },
-      ]);
-      return true;
+    // A creature dragged in a declaration joins it, as clicking would, and goes to its new
+    // place: a blocker onto the attacker it blocks (CR 509.1a); an attacker forward, or onto
+    // what it attacks, the defending player or one of their planeswalkers (CR 508.1b).
+    const over = onto && "slot" in onto ? onto.slot : undefined;
+    if (drafting === "blocker" && declarable(slot) && over !== undefined) {
+      setDraft(drafted({ ...draft, selected: slot }, over));
+    } else if (drafting === "attacker" && declarable(slot)) {
+      const walker = over !== undefined && walkers.includes(over) ? over : null;
+      const atPlayer = onto && "player" in onto && onto.player === "opponent";
+      if (walker !== null || atPlayer || start.y - at.y >= FORWARD) {
+        const attacks = new Map(draft.attacks).set(slot, walker);
+        setDraft({ ...draft, attacks, selected: slot });
+      }
     }
-    if (declare?.option.kind !== "attack") return false;
-    // An attacker goes forward, or onto what it attacks: the defending player or one of their
-    // planeswalkers (CR 508.1b), which the next decision asks when there is a choice.
-    const walker =
-      over?.controller === "opponent" && over.types.includes("planeswalker")
-        ? over.slot
-        : undefined;
-    const atPlayer = onto && "player" in onto && onto.player === "opponent";
-    if (walker === undefined && !atPlayer && start.y - at.y < FORWARD) {
-      return false;
+    return false;
+  };
+
+  /** The declaration with the card in `slot` clicked: a creature to attack with joins it or
+   * leaves it, and a planeswalker clicked next is what it attacks; a creature to block with is
+   * chosen, or taken back to choose again, and the attacker clicked next is what it blocks. */
+  const drafted = (d: Draft, slot: number): Draft => {
+    const { selected } = d;
+    if (drafting === "attacker") {
+      const attacks = new Map(d.attacks);
+      if (attacks.delete(slot)) return { ...d, attacks, selected: undefined };
+      if (declarable(slot)) {
+        return { ...d, attacks: attacks.set(slot, null), selected: slot };
+      }
+      if (selected !== undefined && walkers.includes(slot)) {
+        return { ...d, attacks: attacks.set(selected, slot) };
+      }
+      return { ...d, selected: undefined };
     }
-    pick(
-      declare.index,
-      walker !== undefined || atPlayer
-        ? [
-            {
-              kind: "attackTarget",
-              wants: (c) =>
-                c.kind === "defender" && c.planeswalker === (walker ?? null),
-            },
-          ]
-        : [],
-    );
-    return true;
+    const blocks = new Map(d.blocks);
+    if (declarable(slot)) {
+      blocks.delete(slot);
+      return { ...d, blocks, selected: slot === selected ? undefined : slot };
+    }
+    const may =
+      selected !== undefined &&
+      blockable(declarable(selected)?.blocks ?? [], objects).has(slot);
+    if (may) blocks.set(selected, slot);
+    return { ...d, blocks, selected: undefined };
+  };
+
+  /** Confirms the declaration: the picks that make it, as the engine asks them. */
+  const declare = () => {
+    if (!decision) return;
+    const plan =
+      drafting === "attacker"
+        ? attackPlan(draft.attacks, objects)
+        : blockPlan(draft.blocks, objects);
+    const { index, rest } = follow(decision, plan);
+    if (index !== undefined) pick(index, rest);
+  };
+  /** Every creature that may attack, attacking the defending player but for those aimed at a
+   * planeswalker already. */
+  const attackWithAll = () => {
+    const attacks = new Map(draft.attacks);
+    for (const slot of can.bySlot.keys()) {
+      if (declarable(slot) && !attacks.has(slot)) attacks.set(slot, null);
+    }
+    setDraft({ ...draft, attacks, selected: undefined });
   };
 
   const nameOf = (slot: number) => objects.get(slot)?.name ?? "a card";
@@ -375,8 +468,13 @@ export function Board({
     : decision?.passTo
       ? passButton(view, decision.passTo)
       : { label: "Pass", caption: "" };
-  const arrows = useMemo(() => boardArrows(view), [view]);
-  const banner = combatBanner(view) ?? coinFlipBanner(view);
+  const arrows = useMemo(() => boardArrows(shown), [shown]);
+  const banner = drafting
+    ? {
+        title: "Combat",
+        detail: instruction(drafting, draft, walkers.length > 0, nameOf),
+      }
+    : (combatBanner(view) ?? coinFlipBanner(view));
   // A combat declaration is finished with the turn button, where priority is passed.
   const declaring =
     deciding && decision && isCombat(decision.kind) ? decision : undefined;
@@ -466,7 +564,7 @@ export function Board({
 
         <CardLayer
           epoch={view}
-          objects={view.objects}
+          objects={shown.objects}
           placements={placements}
           hovered={hovered}
           states={states}
@@ -484,13 +582,22 @@ export function Board({
         {!inert && (
           <div className="turn-controls">
             <PhaseTracker current={phaseOf(view.turn.step)} compact />
-            {declaring ? (
-              <Finish
-                view={view}
-                decision={declaring}
-                done={can.done}
-                onPick={pick}
+            {drafting ? (
+              <Declare
+                kind={drafting}
+                draft={draft}
+                everyone={
+                  drafting === "attacker" &&
+                  [...can.bySlot.keys()].some(
+                    (slot) => declarable(slot) && !draft.attacks.has(slot),
+                  )
+                }
+                onDeclare={declare}
+                onAll={attackWithAll}
+                onClear={() => setDraft(emptyDraft())}
               />
+            ) : declaring ? (
+              <Finish decision={declaring} done={can.done} onPick={pick} />
             ) : decision?.kind === "priority" || waiting ? (
               <div className="turn-action">
                 <TurnButton
@@ -739,9 +846,11 @@ const stackId = (index: number) => `stack-${index}`;
 /** The element id of the oval of a player's life orb. */
 const lifeId = (side: Side) => `${side}-life-orb`;
 
-/** The lines over the table (decision D10): each attacker's to what it attacks or to its
- * blockers (combat.png), and for the top of the stack, a gold line from an ability's source
- * and a cyan one to each target (trigger_on_stack_with_target.png). */
+/** The lines over the table (decision D10): each blocked attacker's to its blockers and each
+ * attacker's at a planeswalker to it (combat.png), and for the top of the stack, a gold line
+ * from an ability's source and a cyan one to each target (trigger_on_stack_with_target.png).
+ * An attacker at the defending player draws none: its chevron and its step out of its row say
+ * it attacks, and a line from each attacker to the life orb crossed the whole table. */
 function boardArrows(view: PlayerView): ArrowSpec[] {
   const objects = new Map(view.objects.map((o) => [o.slot, o]));
   const out: ArrowSpec[] = [];
@@ -754,26 +863,27 @@ function boardArrows(view: PlayerView): ArrowSpec[] {
       const c = objects.get(b)?.combat;
       return c?.kind === "blocking" && c.attacker === slot;
     });
+    // A block is a straight link over both cards, from the attacker's middle to the blocker's,
+    // a dot on each: a pair reads as one even where the rows could not set them face to face,
+    // where a line between their edges would hide among the combat marks.
     for (const b of blockers) {
       out.push({
         from: cardId(slot),
-        to: `${cardId(b)}-mark`,
+        to: cardId(b),
         tone: "gold",
         bend: 0,
-        fromSide: up ? "top" : "bottom",
-        toSide: { x: 0.5, y: up ? 0.85 : 0.15 },
-        start: "none",
-        end: "none",
-        fine: true,
+        fromSide: "center",
+        toSide: "center",
+        start: "dot",
+        end: "dot",
       });
     }
-    if (o.combat.blocked) continue;
-    // Out of its chevron's apex and into the oval of the life orb or the planeswalker it
-    // attacks, wherever that stands.
     const walker = o.combat.planeswalker;
+    if (o.combat.blocked || walker === null) continue;
+    // Out of its chevron's apex and into the planeswalker it attacks, wherever that stands.
     out.push({
       from: `${cardId(slot)}-mark`,
-      to: walker === null ? lifeId(up ? "opponent" : "you") : cardId(walker),
+      to: cardId(walker),
       tone: "gold",
       fromSide: up ? "top" : "bottom",
       toSide: "facing",
@@ -825,28 +935,93 @@ function coinFlipBanner(
   };
 }
 
-/** The turn button during a combat declaration: it finishes the declaration ("Attack", "No
- * Blocks"), or, while a creature's attacker or defender is being chosen, waits for that. */
+/** The turn button while attackers or blockers are picked on the table: it confirms the
+ * declaration, with shortcuts above it to attack with everything and to start over. */
+function Declare({
+  kind,
+  draft,
+  everyone,
+  onDeclare,
+  onAll,
+  onClear,
+}: {
+  kind: "attacker" | "blocker";
+  draft: Draft;
+  /** Some creature that may attack is not attacking yet. */
+  everyone: boolean;
+  onDeclare(): void;
+  onAll(): void;
+  onClear(): void;
+}) {
+  const attack = kind === "attacker";
+  const n = attack ? draft.attacks.size : draft.blocks.size;
+  const label = attack
+    ? n > 0
+      ? "Attack"
+      : "No Attacks"
+    : n > 0
+      ? "Block"
+      : "No Blocks";
+  const caption =
+    n === 0
+      ? attack
+        ? "Declare attackers"
+        : "Declare blockers"
+      : `${n} ${attack ? "attacking" : "blocking"}`;
+  return (
+    <>
+      <div className="combat-actions">
+        {everyone && (
+          <Button variant="secondary" size="small" onClick={onAll}>
+            Attack with All
+          </Button>
+        )}
+        {n > 0 && (
+          <Button variant="secondary" size="small" onClick={onClear}>
+            Clear
+          </Button>
+        )}
+      </div>
+      <div className="turn-action">
+        <TurnButton label={label} onClick={onDeclare} />
+        <span className="turn-caption">{caption}</span>
+      </div>
+    </>
+  );
+}
+
+/** What to do next in a declaration, for the step banner. */
+function instruction(
+  kind: "attacker" | "blocker",
+  draft: Draft,
+  walkers: boolean,
+  nameOf: (slot: number) => string,
+): string {
+  const selected = draft.selected;
+  if (kind === "attacker") {
+    return walkers && selected !== undefined
+      ? `Click a planeswalker for ${nameOf(selected)} to attack`
+      : "Click creatures to attack with them";
+  }
+  return selected === undefined
+    ? "Click a creature to block with"
+    : `Click the attacker ${nameOf(selected)} blocks`;
+}
+
+/** The turn button at the rest of combat's decisions, which the engine asks only where a
+ * declaration sent from the table could not say it all: what an attacker attacks, which
+ * attacker a blocker blocks, how damage is divided. It waits for the choice on the table. */
 function Finish({
-  view,
   decision,
   done,
   onPick,
 }: {
-  view: PlayerView;
   decision: DecisionView;
   done?: CandidateIndex;
   onPick(index: CandidateIndex): void;
 }) {
-  const yours = (kind: "attacking" | "blocking") =>
-    view.objects.some((o) => o.controller === "you" && o.combat?.kind === kind);
   const labels: Partial<Record<Kind, [string, string]>> = {
-    attacker: [
-      yours("attacking") ? "Attack" : "No Attacks",
-      "Declare attackers",
-    ],
     attackTarget: ["Attack", "Choose what it attacks"],
-    blocker: [yours("blocking") ? "Block" : "No Blocks", "Declare blockers"],
     blockTarget: ["Block", "Choose an attacker to block"],
     damageDivision: ["Assign Damage", "Choose blockers to destroy"],
   };

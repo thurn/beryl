@@ -1030,6 +1030,15 @@
   left: 1337px;
   top: 706px;
 }
+/* A declaration's shortcuts, over the phase tracker. */
+.combat-actions {
+  right: 39px;
+  top: 650px;
+  width: 250px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
 .turn-action {
   right: 39px;
   top: 765px;

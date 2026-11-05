@@ -5,12 +5,12 @@
 // from their hand; the page starts one view earlier, at the priority decision, and the fixture
 // transport plays the recorded views up to the next decision once the page calls `choose`
 // (src/ipc.ts), which the page plays back paced (src/game/playback.ts) on Playwright's clock.
-// `opponent-turn` plays out an opponent's turn to the session's halts. The combat
-// fixtures end on the human's attack declaration (`combat-attack`) and on the attacker for a
-// blocker just declared (`combat-block`). Animation is measured on Playwright's clock, so the
-// checks do not depend on the machine's speed. The `choice-*` fixtures end on decisions the
-// choice overlays ask. Exits non-zero on the first failed check or any
-// page error.
+// `opponent-turn` plays out an opponent's turn to the session's halts. The combat fixtures
+// `combat-declare` and `combat-double-block` end past the human's attack and block
+// declarations, which the page makes whole and sends one pick at a time. Animation is
+// measured on Playwright's clock, so the checks do not depend on the machine's speed. The
+// `choice-*` fixtures end on decisions the choice overlays ask. Exits non-zero on the first
+// failed check or any page error.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -632,111 +632,290 @@ await check(
     { fixture: "opponent-turn", at: lookAt + 1, ready: ".choice" },
 );
 
-// The attack declaration: the creature that may attack, and what declares it.
-const attackViews = await load("combat-attack");
-const attackDecision = attackViews.at(-1).status.decision;
-const attackIndex = attackDecision.candidates.findIndex(
-    (c) => c.option.kind === "attack",
+/** A recorded combat declaration: the last run of the human's decisions of `kinds` in
+ * `views`, the `at` that opens a page on its first, and the candidate each was answered with,
+ * as the views after them show: the creature newly attacking or blocking, the attacker the
+ * blocker waiting for one blocks, or done. */
+function recordedDeclaration(views, kinds) {
+    const asked = views.flatMap((v, i) =>
+        v.status.kind === "deciding" ? [[v, i]] : [],
+    );
+    const of = (k) => kinds.includes(asked[k][0].status.decision.kind);
+    let last = asked.length - 1;
+    while (!of(last)) last -= 1;
+    let first = last;
+    while (first > 0 && of(first - 1)) first -= 1;
+    const combat = (view, slot) =>
+        view.objects.find((o) => o.slot === slot)?.combat;
+    const picks = [];
+    for (let k = first; k <= last; k++) {
+        const [view] = asked[k];
+        const next = asked[k + 1]?.[0] ?? views.at(-1);
+        const { candidates } = view.status.decision;
+        const waiting = view.objects.find(
+            (o) => o.combat?.kind === "blocking" && o.combat.attacker === null,
+        );
+        const index = candidates.findIndex(({ option: o }) =>
+            o.kind === "attack" || o.kind === "block"
+                ? !combat(view, o.slot) &&
+                  combat(next, o.slot)?.kind ===
+                      (o.kind === "attack" ? "attacking" : "blocking")
+                : o.kind === "object" &&
+                  combat(next, waiting.slot)?.attacker === o.slot,
+        );
+        picks.push(
+            index >= 0
+                ? index
+                : candidates.findIndex((c) => c.option.kind === "done"),
+        );
+    }
+    return { at: asked[first][1] + 1, view: asked[first][0], picks };
+}
+
+const slotOf = (slot) => `[data-slot="${slot}"]`;
+/** Whether the card in `slot` shows `role` ("attacker" or "blocker") on the table. */
+const shows = async (page, slot, role) =>
+    Boolean(await page.$(`${slotOf(slot)} .card-${role}`));
+const named = (view, name) =>
+    view.objects
+        .filter((o) => o.zone === "battlefield" && o.name === name)
+        .map((o) => o.slot);
+
+// The attack declaration (`combat-declare`): Elite Spellbinder, Malcolm and two Insect tokens
+// attack, of six creatures that may, the engine offering one of the twin tokens at a time.
+const attackViews = await load("combat-declare");
+const attackRecord = recordedDeclaration(attackViews, ["attacker"]);
+const attackView = attackRecord.view;
+const declaredAttackers = attackViews
+    .at(-1)
+    .objects.filter(
+        (o) => o.controller === "you" && o.combat?.kind === "attacking",
+    )
+    .map((o) => o.slot);
+const insects = named(attackView, "Insect Token");
+assert.equal(insects.length, 2, "two Insect tokens");
+assert.deepEqual(
+    [...declaredAttackers].sort((a, b) => a - b),
+    [
+        ...named(attackView, "Elite Spellbinder"),
+        ...named(attackView, "Malcolm, Alluring Scoundrel"),
+        ...insects,
+    ].sort((a, b) => a - b),
+    "the fixture declares the four attackers",
 );
-assert.ok(attackIndex >= 0, "the attack fixture offers an attacker");
-const attacker = `[data-slot="${attackDecision.candidates[attackIndex].option.slot}"]`;
+// Every creature of yours that may attack: the candidates and their twins.
+const mayAttack = attackView.objects.filter(
+    (o) =>
+        o.zone === "battlefield" &&
+        o.controller === "you" &&
+        o.types.includes("creature") &&
+        !o.tapped &&
+        !o.summoningSick,
+);
+assert.ok(
+    mayAttack.length > declaredAttackers.length,
+    "some creature that may attack stays home",
+);
+const offeredAttackers = attackView.status.decision.candidates.flatMap((c) =>
+    c.option.kind === "attack" ? [c.option.slot] : [],
+);
+assert.ok(
+    insects.some((slot) => !offeredAttackers.includes(slot)),
+    "the engine offers one of the twin tokens",
+);
 const attackRun = {
-    fixture: "combat-attack",
-    at: attackViews.length,
-    ready: attacker,
+    fixture: "combat-declare",
+    at: attackRecord.at,
+    ready: slotOf(insects[1]),
 };
 
 await check(
-    "dragging a creature forward declares it an attacker",
+    "every creature that may attack glows, identical tokens included",
     async (page) => {
         await page.clock.runFor(2000);
+        for (const o of mayAttack) {
+            assert.ok(
+                await page.$(`${slotOf(o.slot)} .card-target`),
+                `${o.name} (${o.slot}) glows`,
+            );
+        }
+    },
+    attackRun,
+);
+
+await check(
+    "attackers picked in any order are declared together",
+    async (page) => {
+        await page.clock.runFor(2000);
+        // The twin the engine does not offer first, then the rest from right to left.
+        const order = [
+            insects[1],
+            ...[...declaredAttackers]
+                .filter((s) => s !== insects[1])
+                .sort((a, b) => b - a),
+        ];
+        for (const slot of order) {
+            await page.click(slotOf(slot));
+            await page.clock.runFor(500);
+        }
+        // Changing one's mind: a second click takes an attacker back, a third returns it.
+        const malcolm = named(attackView, "Malcolm, Alluring Scoundrel")[0];
+        await page.click(slotOf(malcolm));
+        await page.clock.runFor(500);
+        assert.ok(!(await shows(page, malcolm, "attacker")), "taken back");
+        await page.click(slotOf(malcolm));
+        await page.clock.runFor(500);
+        for (const slot of declaredAttackers) {
+            assert.ok(await shows(page, slot, "attacker"), `${slot} attacks`);
+        }
+        assert.deepEqual(await chosen(page), [], "nothing is sent yet");
+        await page.getByText(`${declaredAttackers.length} attacking`).waitFor();
+        await page.getByRole("button", { name: "Attack", exact: true }).click();
+        assert.deepEqual(
+            await settled(page, attackRecord.picks.length),
+            attackRecord.picks,
+            "the engine's picks, one attacker at a time, then done",
+        );
+        // The views that follow show the declaration.
+        await page.clock.runFor(2000);
+        for (const o of mayAttack) {
+            assert.equal(
+                await shows(page, o.slot, "attacker"),
+                declaredAttackers.includes(o.slot),
+                `${o.name} (${o.slot})`,
+            );
+        }
+    },
+    attackRun,
+);
+
+await check(
+    "Attack with All picks every creature that may attack; Clear none",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.getByRole("button", { name: "Attack with All" }).click();
+        await page.clock.runFor(500);
+        await page.getByText(`${mayAttack.length} attacking`).waitFor();
+        await page.getByRole("button", { name: "Clear" }).click();
+        await page.clock.runFor(500);
+        await page.getByRole("button", { name: "No Attacks" }).waitFor();
+        assert.deepEqual(await chosen(page), []);
+    },
+    attackRun,
+);
+
+await check(
+    "dragging a creature forward joins the attack",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const spellbinder = named(attackView, "Elite Spellbinder")[0];
         // Not far enough: it goes back to its place.
-        await drag(page, attacker, { by: { x: 0, y: -20 } });
-        assert.deepEqual(
-            await settled(page, 1),
-            [],
-            "a nudge declares nothing",
-        );
-        await page.clock.runFor(2000);
-        await drag(page, attacker, { by: { x: 0, y: -150 } });
-        assert.deepEqual(await settled(page, 1), [attackIndex], "attacks");
+        await drag(page, slotOf(spellbinder), { by: { x: 0, y: -20 } });
+        await page.clock.runFor(1000);
+        assert.ok(!(await shows(page, spellbinder, "attacker")), "a nudge");
+        await drag(page, slotOf(spellbinder), { by: { x: 0, y: -150 } });
+        await page.clock.runFor(1000);
+        assert.ok(await shows(page, spellbinder, "attacker"), "attacks");
+        assert.deepEqual(await chosen(page), []);
     },
     attackRun,
 );
 
-await check(
-    "clicking a creature that may attack declares it",
-    async (page) => {
-        await page.clock.runFor(2000);
-        assert.ok(
-            await page.$(`${attacker} .card-target`),
-            "the creature that may attack glows",
-        );
-        await page.click(attacker);
-        assert.deepEqual(await settled(page, 1), [attackIndex]);
-    },
-    attackRun,
+// The block declaration (`combat-double-block`): two blockers on one attacker, a Human token,
+// and one on another, Overlord of the Mistmoors.
+const blockViews = await load("combat-double-block");
+const blockRecord = recordedDeclaration(blockViews, ["blocker", "blockTarget"]);
+const blockView = blockRecord.view;
+const declaredBlocks = new Map(
+    blockViews
+        .at(-1)
+        .objects.filter((o) => o.combat?.kind === "blocking")
+        .map((o) => [o.slot, o.combat.attacker]),
 );
-
-await check(
-    "the turn button finishes the attack declaration",
-    async (page) => {
-        await page.getByRole("button", { name: "No Attacks" }).click();
-        const done = attackDecision.candidates.findIndex(
-            (c) => c.option.kind === "done",
-        );
-        assert.deepEqual(await settled(page, 1), [done]);
-    },
-    attackRun,
+const doubled = [...declaredBlocks.values()].find(
+    (a) => [...declaredBlocks.values()].filter((b) => b === a).length === 2,
 );
-
-// The block declaration: the blocker the stand-in declared, and the attackers it may block.
-const blockViews = await load("combat-block");
-const [blockBefore, blockAfter] = blockViews.slice(-2);
-const blockerSlot = blockAfter.objects.find(
-    (o) => o.controller === "you" && o.combat?.kind === "blocking",
-).slot;
-const blockIndex = blockBefore.status.decision.candidates.findIndex(
-    (c) => c.option.kind === "block" && c.option.slot === blockerSlot,
+assert.ok(doubled !== undefined, "the fixture blocks one attacker twice");
+assert.equal(
+    new Set(declaredBlocks.values()).size,
+    2,
+    "and another attacker once",
 );
-assert.ok(blockIndex >= 0, "the block fixture declares a blocker");
-const blockTargets = blockAfter.status.decision.candidates;
-const blocked = blockTargets.length - 1;
-const blocker = `[data-slot="${blockerSlot}"]`;
-const blockedCard = `[data-slot="${blockTargets[blocked].option.slot}"]`;
 const blockRun = {
-    fixture: "combat-block",
-    at: blockViews.length - 1,
-    ready: blocker,
+    fixture: "combat-double-block",
+    at: blockRecord.at,
+    ready: slotOf(doubled),
 };
+const nameIn = (view, slot) => view.objects.find((o) => o.slot === slot).name;
 
 await check(
-    "dragging a blocker onto an attacker blocks that attacker",
+    "blockers paired with attackers in any order are declared together",
     async (page) => {
         await page.clock.runFor(2000);
-        await drag(page, blocker, { to: blockedCard });
+        const banner = page.locator(".step-banner-detail");
+        assert.equal(
+            await banner.textContent(),
+            "Click a creature to block with",
+        );
+        // From the last blocker to the first: each, then its attacker.
+        const pairs = [...declaredBlocks].sort(([a], [b]) => b - a);
+        for (const [blocker, attacker] of pairs) {
+            await page.click(slotOf(blocker));
+            await page.clock.runFor(500);
+            assert.equal(
+                await banner.textContent(),
+                `Click the attacker ${nameIn(blockView, blocker)} blocks`,
+            );
+            assert.ok(
+                await page.$(`${slotOf(attacker)} .card-target`),
+                "the attackers it may block glow",
+            );
+            await page.click(slotOf(attacker));
+            await page.clock.runFor(500);
+            assert.ok(
+                await shows(page, blocker, "blocker"),
+                `${blocker} blocks`,
+            );
+        }
+        // Changing one's mind: a blocker clicked again waits for an attacker anew.
+        const [again, its] = pairs[0];
+        await page.click(slotOf(again));
+        await page.clock.runFor(500);
+        assert.ok(!(await shows(page, again, "blocker")), "taken back");
+        await page.click(slotOf(its));
+        await page.clock.runFor(500);
+        assert.deepEqual(await chosen(page), [], "nothing is sent yet");
+        await page.getByText(`${declaredBlocks.size} blocking`).waitFor();
+        await page.getByRole("button", { name: "Block", exact: true }).click();
         assert.deepEqual(
-            await settled(page, 2),
-            [blockIndex, blocked],
-            "declared the blocker, then picked the attacker it was dropped on",
+            await settled(page, blockRecord.picks.length),
+            blockRecord.picks,
+            "the engine's picks, each blocker then its attacker, then done",
         );
     },
     blockRun,
 );
 
 await check(
-    "clicking a blocker, then an attacker, blocks it",
+    "a blocker blocks only an attacker it may, and can be dragged onto it",
     async (page) => {
         await page.clock.runFor(2000);
-        await page.click(blocker);
-        assert.deepEqual(await settled(page, 1), [blockIndex]);
-        await page.clock.runFor(2000);
+        // A creature without flying or reach may not block a flyer (CR 702.9b).
+        const trainer = named(blockView, "Thundertrap Trainer")[0];
+        const skydiver = named(blockView, "Thieving Skydiver")[0];
+        await page.click(slotOf(trainer));
+        await page.clock.runFor(500);
+        assert.ok(!(await page.$(`${slotOf(skydiver)} .card-target`)));
+        await page.click(slotOf(skydiver));
+        await page.clock.runFor(500);
+        assert.ok(!(await shows(page, trainer, "blocker")), "no block");
+        await drag(page, slotOf(trainer), { to: slotOf(doubled) });
+        await page.clock.runFor(1000);
         assert.ok(
-            await page.$(`${blockedCard} .card-target`),
-            "the attackers it may block glow",
+            await shows(page, trainer, "blocker"),
+            "dragged on, it blocks",
         );
-        await page.click(blockedCard);
-        assert.deepEqual(await settled(page, 2), [blockIndex, blocked]);
+        assert.deepEqual(await chosen(page), []);
     },
     blockRun,
 );

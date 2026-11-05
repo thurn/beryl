@@ -22,7 +22,7 @@ import {
 import { Board } from "../game/Board";
 import { ChoiceOverlay } from "../game/ChoiceOverlay";
 import { choiceOf, type Choice } from "../game/choices";
-import { intended, isOpening, type Intent } from "../game/decisions";
+import { follow, isOpening, type Intent } from "../game/decisions";
 import { useFace } from "../game/faces";
 import type { Playback } from "../game/playback";
 import { Brand, Stage } from "../game/Stage";
@@ -235,13 +235,14 @@ function Playing({ playback }: { playback: Playback }) {
       if (planned.current.length === 0) setHeld(undefined);
       return;
     }
-    const [next, ...rest] = planned.current;
+    const { intent, index, rest } = decision
+      ? follow(decision, planned.current)
+      : { rest: [] };
     planned.current = [];
-    const index = next && decision ? intended(decision, next) : undefined;
     if (index === undefined) {
       // A pick that waits stays planned while the player answers the decisions before it.
-      if (next?.waits && decision && decision.kind !== "priority") {
-        planned.current = [next, ...rest];
+      if (intent?.waits && decision && decision.kind !== "priority") {
+        planned.current = [intent, ...rest];
       }
       setHeld(undefined);
       return;
@@ -252,9 +253,9 @@ function Playing({ playback }: { playback: Playback }) {
 
   const choice = held ?? (waiting ? undefined : choiceOf(view));
   const plan = (picks: Intent[]) => {
-    const [first, ...rest] = picks;
-    const index = first && decision ? intended(decision, first) : undefined;
-    if (index === undefined || !choice) return;
+    if (!decision || !choice) return;
+    const { index, rest } = follow(decision, picks);
+    if (index === undefined) return;
     setHeld(choice);
     answer(index, rest);
   };

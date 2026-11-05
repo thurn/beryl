@@ -176,8 +176,8 @@ def ui_shots(args: argparse.Namespace) -> int:
 INTERACTION_FIXTURES = [
     "greedy-turn-9",
     "opponent-turn",
-    "combat-attack",
-    "combat-block",
+    "combat-declare",
+    "combat-double-block",
     "combat-blockers",
     "choice-scry",
     "choice-jace",

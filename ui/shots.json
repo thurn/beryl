@@ -1,5 +1,5 @@
 {
-  "$comment": "What `just ui-shots` captures: a route (hash route, optionally ?fixture=<name>[&at=<n>] for a fixture ui/fixtures.json defines, from its nth view) at a viewport size, after clicking the element `click` selects, if given.",
+  "$comment": "What `just ui-shots` captures: a route (hash route, optionally ?fixture=<name>[&at=<n>] for a fixture ui/fixtures.json defines, from its nth view) at a viewport size, after clicking the element `click` selects, if given, or each element of a list of them in turn.",
   "shots": [
     {
       "name": "gallery",
@@ -166,6 +166,59 @@
       "route": "/?fixture=combat-blockers#/game",
       "width": 1280,
       "height": 800
+    },
+    {
+      "name": "game-declare-attack",
+      "route": "/?fixture=combat-declare&at=227#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-declare-attack-picked",
+      "route": "/?fixture=combat-declare&at=227#/game",
+      "width": 1600,
+      "height": 900,
+      "click": [
+        "[data-slot='123']",
+        "[data-slot='30']",
+        "[data-slot='120']",
+        "[data-slot='29']"
+      ]
+    },
+    {
+      "name": "game-declare-block-choosing",
+      "route": "/?fixture=combat-double-block&at=417#/game",
+      "width": 1600,
+      "height": 900,
+      "click": ["[data-slot='125']", "[data-slot='84']", "[data-slot='25']"]
+    },
+    {
+      "name": "game-declare-block",
+      "route": "/?fixture=combat-double-block&at=417#/game",
+      "width": 1600,
+      "height": 900,
+      "click": [
+        "[data-slot='125']",
+        "[data-slot='84']",
+        "[data-slot='25']",
+        "[data-slot='123']",
+        "[data-slot='22']",
+        "[data-slot='123']"
+      ]
+    },
+    {
+      "name": "game-declare-block-1280",
+      "route": "/?fixture=combat-double-block&at=417#/game",
+      "width": 1280,
+      "height": 800,
+      "click": [
+        "[data-slot='125']",
+        "[data-slot='84']",
+        "[data-slot='25']",
+        "[data-slot='123']",
+        "[data-slot='22']",
+        "[data-slot='123']"
+      ]
     },
     {
       "name": "game-trigger-1920",

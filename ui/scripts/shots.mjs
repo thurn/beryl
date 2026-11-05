@@ -28,8 +28,15 @@ try {
         const { context, page, errors } = await openPage(browser, shot);
         await page.goto(new URL(shot.route, base).href, { waitUntil: "load" });
         await settle(page);
-        if (shot.click) {
-            await page.click(shot.click);
+        // One selector, or several clicked in turn; then the pointer leaves, so that no card
+        // it rests on is inspected over the table.
+        const clicks = [shot.click ?? []].flat();
+        for (const selector of clicks) {
+            await page.click(selector);
+            await settle(page);
+        }
+        if (clicks.length > 1) {
+            await page.mouse.move(0, 0);
             await settle(page);
         }
         const path = join(out, `${shot.name}.png`);

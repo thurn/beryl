@@ -397,10 +397,11 @@
   filter: drop-shadow(0 0 2px rgb(255 190 80 / 100%))
     drop-shadow(0 0 6px rgb(245 130 25 / 85%));
 }
-/* Both drawn at the card's scale: 100 units across 104–108% of a card 12em wide. */
+/* Both drawn at the card's scale: 100 units across 92–102% of a card 12em wide, the chevron
+   inside its card's width so that a row of attackers' chevrons stay apart. */
 .attack-chevron {
-  left: -4%;
-  width: 108%;
+  left: 4%;
+  width: 92%;
   height: 1.9em;
   bottom: calc(100% + 0.15em);
 }

@@ -31,25 +31,11 @@
       "where": ["step precombatMain"]
     },
     {
-      "name": "combat-attack",
-      "seed": 2,
-      "decks": ["wu-control", "wu-control"],
-      "agents": ["greedy", "greedy"],
-      "until": "first attacker decision for seat 0"
-    },
-    {
       "name": "combat-attackers",
       "seed": 2,
       "decks": ["wu-control", "wu-control"],
       "agents": ["greedy", "greedy"],
       "until": "first blocker decision for seat 0"
-    },
-    {
-      "name": "combat-block",
-      "seed": 2,
-      "decks": ["wu-control", "wu-control"],
-      "agents": ["greedy", "greedy"],
-      "until": "first blockTarget decision for seat 0"
     },
     {
       "name": "combat-blockers",
@@ -58,6 +44,22 @@
       "agents": ["greedy", "greedy"],
       "until": "first priority decision for seat 0",
       "where": ["step declareBlockers", "blocking"]
+    },
+    {
+      "name": "combat-declare",
+      "seed": 17,
+      "decks": ["wu-control", "wu-control"],
+      "agents": ["greedy", "greedy"],
+      "until": "first attacker decision for seat 0 from turn 14",
+      "after": 5
+    },
+    {
+      "name": "combat-double-block",
+      "seed": 120,
+      "decks": ["wu-control", "wu-control"],
+      "agents": ["random", "random"],
+      "until": "first blocker decision for seat 0 from turn 23",
+      "after": 8
     },
     {
       "name": "stack-trigger",

@@ -5,18 +5,20 @@ import type {
   CandidateIndex,
   DecisionView,
   Kind,
+  ObjectView,
   Payment,
   PlayerView,
   Side,
 } from "../generated/protocol";
 
-/** One thing a card offers: the candidate's index and its label, and for a cast or an
- * activation, the ways it can be paid. */
+/** One thing a card offers: the candidate's index and its label; for a cast or an activation,
+ * the ways it can be paid; for a blocker, the attackers it may block. */
 export interface Act {
   index: CandidateIndex;
   label: string;
   option: Candidate;
   payments: Payment[];
+  blocks: number[];
 }
 
 export interface Interactions {
@@ -37,15 +39,20 @@ export interface Interactions {
 
 /** A pick a later decision should get: one of its kind, the candidate `wants` names or,
  * failing that, one `alike` names (a card the engine offers in place of an interchangeable
- * one, architecture §7.2). A drag says the block target after the blocker it declares; an
- * overlay says a whole scry. A pick that `waits` stays planned while the player answers other
- * decisions before it (a cast's payment, after the targets they pick on the board), until
- * priority returns. */
+ * one, architecture §7.2); `picked` hears which it was. An overlay says a whole scry; the
+ * board, a whole combat declaration. A pick that `waits` stays planned while the player
+ * answers other decisions before it (a cast's payment, after the targets they pick on the
+ * board), until priority returns. An `optional` pick is passed over, as `skipped` hears, when
+ * the engine does not ask its decision, having made the pick itself (a blocker's attacker
+ * when it may block only one). */
 export interface Intent {
   kind: Kind;
   wants(option: Candidate): boolean;
   alike?(option: Candidate): boolean;
+  picked?(option: Candidate): void;
+  skipped?(): void;
   waits?: boolean;
+  optional?: boolean;
 }
 
 /** The candidate of `decision` that `intent` names, if it is of the intent's kind. */
@@ -60,6 +67,44 @@ export function intended(
     index = options.findIndex((o) => intent.alike!(o));
   }
   return index < 0 ? undefined : index;
+}
+
+/** What `plan` picks at `decision`: its next intent, past optional ones the engine did not
+ * ask, with the candidate it names, if any (which it is told of), and the intents after it. */
+export function follow(
+  decision: DecisionView,
+  plan: Intent[],
+): { intent?: Intent; index?: CandidateIndex; rest: Intent[] } {
+  let i = 0;
+  while (plan[i]?.optional && plan[i]!.kind !== decision.kind) {
+    plan[i]!.skipped?.();
+    i += 1;
+  }
+  const intent = plan[i];
+  const index = intent && intended(decision, intent);
+  if (intent && index !== undefined) {
+    intent.picked?.(decision.candidates[index]!.option);
+  }
+  return { intent, index, rest: plan.slice(i + 1) };
+}
+
+/** Whether two objects are interchangeable, as the engine offers one candidate for both
+ * (architecture §7.2): the same card, or token, in the same zone and state. */
+export function twins(a: ObjectView, b: ObjectView): boolean {
+  return (
+    a.slot !== b.slot &&
+    a.name !== null &&
+    a.name === b.name &&
+    a.zone === b.zone &&
+    a.controller === b.controller &&
+    a.token === b.token &&
+    a.tapped === b.tapped &&
+    a.summoningSick === b.summoningSick &&
+    a.damage === b.damage &&
+    a.attachedTo === b.attachedTo &&
+    JSON.stringify([a.pt, a.counters, a.combat]) ===
+      JSON.stringify([b.pt, b.counters, b.combat])
+  );
 }
 
 /** Whether two candidates are the same answer. */
@@ -95,10 +140,10 @@ export function interactions(view: PlayerView): Interactions {
   const decision = status.decision;
   let pass: CandidateIndex | undefined;
   let done: CandidateIndex | undefined;
-  decision.candidates.forEach(({ label, option, payments }, index) => {
+  decision.candidates.forEach(({ label, option, payments, blocks }, index) => {
     const slot = slotOf(option);
     if (slot !== undefined) {
-      const act = { index, label, option, payments };
+      const act = { index, label, option, payments, blocks };
       bySlot.set(slot, [...(bySlot.get(slot) ?? []), act]);
     } else if (option.kind === "player") {
       players.set(option.player, index);
@@ -112,13 +157,14 @@ export function interactions(view: PlayerView): Interactions {
     }
   });
   // Interchangeable cards collapse to one candidate (architecture §7.2): of two basic lands
-  // of a name in your hand the engine offers one. Either card offers it.
-  const offered = view.objects.filter(
-    (o) => o.zone === "hand" && o.owner === "you" && bySlot.has(o.slot),
-  );
+  // of a name in your hand the engine offers one, of two untapped Insect tokens one attacker.
+  // Either card offers it.
+  const offered = view.objects.filter((o) => bySlot.has(o.slot));
   for (const o of view.objects) {
-    if (o.zone !== "hand" || o.owner !== "you" || bySlot.has(o.slot)) continue;
-    const twin = offered.find((t) => o.name !== null && t.name === o.name);
+    if (bySlot.has(o.slot) || (o.zone !== "hand" && o.zone !== "battlefield")) {
+      continue;
+    }
+    const twin = offered.find((t) => twins(o, t));
     if (twin) bySlot.set(o.slot, bySlot.get(twin.slot)!);
   }
   return {
