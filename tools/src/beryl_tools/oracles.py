@@ -292,10 +292,12 @@ def forge_deck(path: Path) -> Path:
 
 def forge_jar() -> Path:
     target = checkout(FORGE) / "forge-gui-desktop" / "target"
-    jars = sorted(target.glob("forge-gui-desktop-*-jar-with-dependencies.jar"))
+    jars = list(target.glob("forge-gui-desktop-*-jar-with-dependencies.jar"))
     if not jars:
         raise StepFailed(f"no Forge desktop jar in {target}; run `just oracle-setup`")
-    return jars[-1]
+    # A new pin builds a new version beside the old jar, and versions do not sort as text
+    # (2.0.100 before 2.0.99): the newest jar is the one the last build wrote.
+    return max(jars, key=lambda jar: jar.stat().st_mtime)
 
 
 def smoke_forge(log: Path) -> str:

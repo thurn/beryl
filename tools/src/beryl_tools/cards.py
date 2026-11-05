@@ -281,6 +281,12 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         "--cube", action="store_true", help="the whole cube, not the M1 deck"
     )
     p.add_argument("--output", default=str(OUTPUT))
-    p.add_argument("--record", metavar="FILE", help="save requests and responses here")
-    p.add_argument("--replay", metavar="FILE", help="answer requests from a recording")
+    # A replay records nothing, so --record with it would overwrite FILE with an empty log.
+    source = p.add_mutually_exclusive_group()
+    source.add_argument(
+        "--record", metavar="FILE", help="save requests and responses here"
+    )
+    source.add_argument(
+        "--replay", metavar="FILE", help="answer requests from a recording"
+    )
     p.set_defaults(func=cards)
