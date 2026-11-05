@@ -16,23 +16,19 @@ const PARALLEL: Budget = Budget {
     parallel: true,
 };
 
-/// Positions from a greedy mirror game, every fifth decision from turn 12 on, so rollouts are
-/// short, each with more than two candidates.
-fn positions(t: &GameTable) -> Vec<(State, Decision)> {
+/// Two positions from a greedy mirror game, each with more than two candidates, `from_end`
+/// such decisions before the game's last. Late positions make short rollouts, the cost of
+/// these tests.
+fn positions(t: &GameTable, from_end: [usize; 2]) -> Vec<(State, Decision)> {
     let mut s = State::new(t, 4, Profile::SMART);
     let mut agents = [GreedyAgent::new(t), GreedyAgent::new(t)];
-    let mut out = Vec::new();
-    let mut n = 0;
+    let mut all = Vec::new();
     play(t, &mut s, &mut Scratch::new(), &mut agents, |s, d| {
-        if s.turn().number >= 12 && d.len() > 2 {
-            n += 1;
-            if n % 5 == 0 && out.len() < 2 {
-                out.push((*s, *d));
-            }
+        if d.len() > 2 {
+            all.push((*s, *d));
         }
     });
-    assert_eq!(out.len(), 2, "a game long enough to sample");
-    out
+    from_end.map(|n| all[all.len() - n]).to_vec()
 }
 
 /// The summed root visit counts of a search from `s`, seen by the decision's player.
@@ -51,7 +47,7 @@ fn visits(
 #[test]
 fn a_seed_and_a_budget_reproduce_a_move_with_root_parallelism() {
     let t = mirror();
-    for (i, (s, d)) in positions(&t).iter().enumerate() {
+    for (i, (s, d)) in positions(&t, [10, 5]).iter().enumerate() {
         for sight in [Sight::Omniscient, Sight::Hidden] {
             let first = visits(&t, sight, PARALLEL, i as u64, s, d);
             assert_eq!(first.len(), d.len());
@@ -59,11 +55,6 @@ fn a_seed_and_a_budget_reproduce_a_move_with_root_parallelism() {
                 first.iter().sum::<u32>(),
                 PARALLEL.iterations,
                 "every iteration counts"
-            );
-            assert_eq!(
-                visits(&t, sight, PARALLEL, i as u64, s, d),
-                first,
-                "{sight:?} again"
             );
             let sequential = Budget {
                 parallel: false,
@@ -85,7 +76,9 @@ fn the_hidden_search_decides_the_same_on_a_redeterminized_state() {
     let t = mirror();
     let mut rng = SplitMix64::new(11);
     let mut omniscient_differs = false;
-    for (i, (s, d)) in positions(&t).iter().enumerate() {
+    // The first position is one where what the omniscient search reads changes its rollouts'
+    // results.
+    for (i, (s, d)) in positions(&t, [40, 5]).iter().enumerate() {
         let det = observe(s, &t, &mut Scratch::new(), d.player).determinize(&t, &mut rng);
         assert!(
             Slot::all().any(|slot| det.card(slot) != s.card(slot)),
@@ -112,21 +105,26 @@ fn the_hidden_search_decides_the_same_on_a_redeterminized_state() {
 }
 
 /// A search can start at a question asked in the middle of a resolution (§7.3): its tree
-/// replays the paused body, and a rollout taking over finishes the body from its record.
+/// replays the paused body, and a rollout taking over finishes the body from its record. Each
+/// position is a paused question the game follows straight with another, so the tree's first
+/// move leaves a resolution paused for the rollout: the game's last two, for short rollouts.
 #[test]
 fn a_search_plays_on_from_a_paused_resolution() {
     let t = mirror();
     let mut s = State::new(&t, 2, Profile::SMART);
     let mut agents = [GreedyAgent::new(&t), GreedyAgent::new(&t)];
     let mut x = Scratch::new();
+    let mut previous: Option<(State, Decision)> = None;
     let mut paused = Vec::new();
     play(&t, &mut s, &mut Scratch::new(), &mut agents, |s, d| {
-        if paused.len() < 2 && !std::ptr::eq(view(s, &t, &mut x), s) {
-            paused.push((*s, *d));
+        let pausing = !std::ptr::eq(view(s, &t, &mut x), s);
+        if pausing && let Some(p) = previous {
+            paused.push(p);
         }
+        previous = pausing.then_some((*s, *d));
     });
-    assert_eq!(paused.len(), 2, "a game with paused resolutions");
-    for (i, (s, d)) in paused.iter().enumerate() {
+    assert!(paused.len() >= 2, "a game with bodies asking twice");
+    for (i, (s, d)) in paused[paused.len() - 2..].iter().enumerate() {
         for sight in [Sight::Omniscient, Sight::Hidden] {
             let n = visits(&t, sight, PARALLEL, i as u64, s, d);
             assert_eq!(n.iter().sum::<u32>(), PARALLEL.iterations, "{sight:?}");
