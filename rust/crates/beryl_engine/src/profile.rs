@@ -1,7 +1,7 @@
 //! Restriction profiles: which decisions are offered, and the budgets (architecture §12.3,
 //! §15).
 
-use crate::state::{State, TurnStep};
+use crate::state::{State, Turn, TurnStep};
 
 /// Where players get priority as a decision.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -29,12 +29,22 @@ impl Limits {
     };
 }
 
+/// A turn and step where the active player's first priority is a decision even when passing
+/// is all they can do, so a caller can stop the game where the engine would otherwise pass
+/// silently. The scenario runner uses one to advance to a step (architecture §17.1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Breakpoint {
+    pub turn: u16,
+    pub step: TurnStep,
+}
+
 /// A restriction of the decision surface plus budgets. Every profile is sound: any line it
 /// produces is a legal line of the real game.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Profile {
     pub stops: Stops,
     pub limits: Limits,
+    pub breakpoint: Option<Breakpoint>,
 }
 
 impl Profile {
@@ -42,11 +52,13 @@ impl Profile {
     pub const EXACT: Profile = Profile {
         stops: Stops::Exact,
         limits: Limits::DEFAULT,
+        breakpoint: None,
     };
     /// The smart stops, for search and, by default, for humans.
     pub const SMART: Profile = Profile {
         stops: Stops::Smart,
         limits: Limits::DEFAULT,
+        breakpoint: None,
     };
 
     /// Whether `player`'s priority now is a decision, given they have a legal action.
@@ -55,6 +67,16 @@ impl Profile {
             Stops::Exact => true,
             Stops::Smart => is_smart_stop(s, player),
         }
+    }
+
+    /// Whether the open priority is the active player's first in the breakpoint's step.
+    pub(crate) fn breaks_at(self, turn: Turn) -> bool {
+        self.breakpoint.is_some_and(|b| {
+            b.turn == turn.number
+                && b.step == turn.step
+                && turn.priority == turn.active
+                && turn.passes == 0
+        })
     }
 }
 

@@ -840,17 +840,17 @@ searcher optimistic, which is tuned, not fixed.
 
 ## 16. Crate map (D12)
 
-| Crate            | Holds                                                                                                                                    | Depends on                                     |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `beryl_engine`   | `State`, events, layers, mana, combat, turn structure, decisions, the Observation view, the `CardDef` types, `GameTable` and `EffectCtx` | nothing in the workspace                       |
-| `beryl_cards`    | 540 card files under color directories, the generated `names` module, the static table, per-card scenarios                               | `beryl_engine`                                 |
-| `beryl_scenario` | Scenario value types, the strict runner, the JSON dump                                                                                   | `beryl_engine`                                 |
-| `beryl_search`   | The `Agent` trait, `RandomAgent`, the greedy agent that is also the rollout policy, the expert system, MCTS, determinization, evaluation | `beryl_engine`                                 |
-| `beryl_session`  | `GameSession` and its thread, the `PlayerView` protocol with generated TypeScript types, replay files                                    | `beryl_engine`, `beryl_search`                 |
-| `beryl_cli`      | Headless games between agents, tournaments, transcripts, UI fixtures recorded from sessions                                              | `beryl_cards`, `beryl_search`, `beryl_session` |
-| `beryl_draft`    | Pack generation, draft state, the draft bot, deckbuilding (a later milestone)                                                            | `beryl_cards`                                  |
-| `beryl_bench`    | Benchmark support, as today, plus the engine's `_counts`, `_abba` and `_timing` targets and the cube rollout benchmark                   | the above as dev-dependencies                  |
-| `beryl_app`      | The Tauri shell: IPC commands and events around `beryl_session`, the card-art cache                                                      | all of the above                               |
+| Crate            | Holds                                                                                                                                                        | Depends on                                     |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| `beryl_engine`   | `State`, events, layers, mana, combat, turn structure, decisions, the Observation view and determinization, the `CardDef` types, `GameTable` and `EffectCtx` | nothing in the workspace                       |
+| `beryl_cards`    | 540 card files under color directories, the generated `names` module, the static table, per-card scenarios and the `beryl_scenario dump` command             | `beryl_engine`, `beryl_scenario`               |
+| `beryl_scenario` | Scenario value types, the strict runner, the JSON serialization                                                                                              | `beryl_engine`                                 |
+| `beryl_search`   | The `Agent` trait, `RandomAgent`, the greedy agent that is also the rollout policy, the expert system, MCTS, evaluation                                      | `beryl_engine`                                 |
+| `beryl_session`  | `GameSession` and its thread, the `PlayerView` protocol with generated TypeScript types, replay files                                                        | `beryl_engine`, `beryl_search`                 |
+| `beryl_cli`      | Headless games between agents, tournaments, transcripts, UI fixtures recorded from sessions                                                                  | `beryl_cards`, `beryl_search`, `beryl_session` |
+| `beryl_draft`    | Pack generation, draft state, the draft bot, deckbuilding (a later milestone)                                                                                | `beryl_cards`                                  |
+| `beryl_bench`    | Benchmark support, as today, plus the engine's `_counts`, `_abba` and `_timing` targets and the cube rollout benchmark                                       | the above as dev-dependencies                  |
+| `beryl_app`      | The Tauri shell: IPC commands and events around `beryl_session`, the card-art cache                                                                          | all of the above                               |
 
 The engine knows no card and no card knows the engine's internals: cards use
 `EffectCtx` and the table types only. One card edit recompiles `beryl_cards`,

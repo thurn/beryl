@@ -63,6 +63,11 @@ oracle-smoke *args:
 test-rust *args:
     cd rust && cargo test "$@"
 
+# Random-game fuzzing at length: N games, optimized but with debug assertions on
+[group('test')]
+fuzz games="10000":
+    cd rust && BERYL_FUZZ_GAMES="$1" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true cargo test --release -p beryl_search --test games
+
 # The tools' tests
 [group('test')]
 test-py *args:

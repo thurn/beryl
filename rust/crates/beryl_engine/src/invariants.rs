@@ -1,0 +1,180 @@
+//! The state's internal invariants, which fuzzing checks after every decision (architecture
+//! §17.4). A violation is an engine bug, never a rules outcome.
+
+use crate::bitboard::Bitboard;
+use crate::state::{DECK_SLOTS, NONE, Object, Pending, SLOTS, State, Zone};
+use crate::table::GameTable;
+
+/// Which invariant failed, and the slot or player it failed for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Violation {
+    pub what: &'static str,
+    /// The slot or player concerned, if one is.
+    pub at: Option<u8>,
+}
+
+fn fail(what: &'static str, at: Option<u8>) -> Result<(), Violation> {
+    Err(Violation { what, at })
+}
+
+fn check(ok: bool, what: &'static str, at: Option<u8>) -> Result<(), Violation> {
+    if ok { Ok(()) } else { fail(what, at) }
+}
+
+impl State {
+    /// Checks the invariants that hold whenever `next` has returned: zone bitboards and lists
+    /// agree with the objects' zones, no object is in two zones, every stack reference names
+    /// a live incarnation, knowledge covers the public zones, off-battlefield objects carry no
+    /// permanent status, and no player who has lost is still playing.
+    pub fn check_invariants(&self, t: &GameTable) -> Result<(), Violation> {
+        self.check_objects(t)?;
+        self.check_zones()?;
+        self.check_players()
+    }
+
+    fn check_objects(&self, t: &GameTable) -> Result<(), Violation> {
+        for i in 0..SLOTS {
+            let slot = i as u8;
+            let o = self.object(slot);
+            let deck_owner = i / DECK_SLOTS;
+            let in_deck = deck_owner < 2 && i % DECK_SLOTS < t.deck(deck_owner as u8).len();
+            if o.zone == Zone::Nowhere {
+                // Tokens and copies arrive with the cards that make them.
+                check(!in_deck, "a deck card is nowhere", Some(slot))?;
+                continue;
+            }
+            check(in_deck, "an object outside the deck slots", Some(slot))?;
+            check(
+                usize::from(o.owner) == deck_owner,
+                "a deck card with another owner",
+                Some(slot),
+            )?;
+            check(o.controller < 2, "no such controller", Some(slot))?;
+            check(usize::from(o.card) < t.len(), "no such card", Some(slot))?;
+            for link in [o.attached_to, o.linked] {
+                check(
+                    link == NONE || self.object(link).zone != Zone::Nowhere,
+                    "a link to an empty slot",
+                    Some(slot),
+                )?;
+            }
+            if !matches!(o.zone, Zone::Battlefield | Zone::Stack) {
+                check(
+                    *o == Object {
+                        card: o.card,
+                        incarnation: o.incarnation,
+                        zone: o.zone,
+                        owner: o.owner,
+                        controller: o.owner,
+                        timestamp: o.timestamp,
+                        ..Object::EMPTY
+                    },
+                    "permanent status off the battlefield",
+                    Some(slot),
+                )?;
+            }
+            // CR 400.2: public zones are seen by everyone; CR 402.3: a hand by its owner.
+            let known_by = |p: u8| self.knows(p, slot);
+            if o.zone.is_public() {
+                check(
+                    known_by(0) && known_by(1),
+                    "a public card unknown",
+                    Some(slot),
+                )?;
+            }
+            if o.zone == Zone::Hand {
+                check(
+                    known_by(o.owner),
+                    "a hand card its owner doesn't know",
+                    Some(slot),
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    fn check_zones(&self) -> Result<(), Violation> {
+        let mut members = [[Bitboard::EMPTY; Zone::OWNED]; 2];
+        let mut stack = Bitboard::EMPTY;
+        for i in 0..SLOTS {
+            let slot = i as u8;
+            let o = self.object(slot);
+            match o.zone {
+                Zone::Stack => stack.insert(slot),
+                Zone::Nowhere => {}
+                zone => members[usize::from(o.owner)][zone as usize].insert(slot),
+            }
+        }
+        check(
+            members == self.zones.members,
+            "zone bitboards disagree",
+            None,
+        )?;
+        check(
+            stack == self.zones.stack,
+            "the stack bitboard disagrees",
+            None,
+        )?;
+        for p in 0..2u8 {
+            let owned = |zone: Zone| members[usize::from(p)][zone as usize];
+            let listed = |list: &[u8]| -> Option<Bitboard> {
+                let set: Bitboard = list.iter().copied().collect();
+                (set.count() as usize == list.len()).then_some(set)
+            };
+            check(
+                listed(self.library(p)) == Some(owned(Zone::Library)),
+                "the library list disagrees",
+                Some(p),
+            )?;
+            check(
+                listed(self.graveyard(p)) == Some(owned(Zone::Graveyard)),
+                "the graveyard list disagrees",
+                Some(p),
+            )?;
+        }
+        let battlefield =
+            members[0][Zone::Battlefield as usize] | members[1][Zone::Battlefield as usize];
+        let listed: Bitboard = self.battlefield().iter().copied().collect();
+        check(
+            listed == battlefield && listed.count() as usize == self.battlefield().len(),
+            "the battlefield list disagrees",
+            None,
+        )?;
+        for e in &self.stack {
+            if e.ability == NONE {
+                check(
+                    self.is_current(e.object) && self.object(e.object.slot).zone == Zone::Stack,
+                    "a spell on the stack names a stale object",
+                    Some(e.object.slot),
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    fn check_players(&self) -> Result<(), Violation> {
+        let t = self.turn;
+        check(
+            t.active < 2 && t.priority < 2 && t.passes < 2,
+            "a bad turn",
+            None,
+        )?;
+        // State-based actions are checked before anyone gets priority, so a player who has
+        // lost has left the game by the time a priority decision is open.
+        // [CR 704.5a](https://yawgatog.com/resources/magic-rules/#R7045a): "If a player has 0
+        // or less life, that player loses the game." [CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b):
+        // "If a player attempted to draw a card from a library with no cards in it since the
+        // last time state-based actions were checked, that player loses the game."
+        if self.outcome.is_none() && self.pending == Pending::None {
+            for p in 0..2u8 {
+                let player = self.player(p);
+                check(
+                    player.life > 0 && !player.drew_from_empty,
+                    "a player who has lost has priority",
+                    Some(p),
+                )?;
+            }
+        }
+        Ok(())
+    }
+}

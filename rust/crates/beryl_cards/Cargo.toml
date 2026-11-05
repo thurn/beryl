@@ -11,3 +11,7 @@ workspace = true
 
 [dependencies]
 beryl_engine = { path = "../beryl_engine" }
+beryl_scenario = { path = "../beryl_scenario" }
+
+[dev-dependencies]
+serde_json = "1"

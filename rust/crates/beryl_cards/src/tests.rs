@@ -9,7 +9,7 @@ use beryl_engine::{
     apply, next,
 };
 
-use crate::{CARDS, decks, names};
+use crate::{CARDS, SCENARIOS, decks, names};
 
 const CSV: &str = "data/vintage-cube-2026-10-07.csv";
 const BASIC_LANDS: [&str; 5] = ["Plains", "Island", "Swamp", "Mountain", "Forest"];
@@ -175,4 +175,32 @@ fn a_game_of_the_three_lands_runs_to_decking() {
     };
     assert_eq!(outcome, Outcome::Win(s.turn().starting_player));
     assert_eq!(s.battlefield().len(), 67);
+}
+
+#[test]
+fn every_card_has_scenarios_and_they_pass() {
+    let mut cards: Vec<_> = SCENARIOS.iter().map(|&(name, _)| name).collect();
+    cards.sort_unstable();
+    let mut table: Vec<_> = CARDS.cards().iter().map(|c| c.name).collect();
+    table.sort_unstable();
+    assert_eq!(cards, table, "one SCENARIOS entry per card");
+    let mut failures = Vec::new();
+    for &(card, scenarios) in SCENARIOS {
+        assert!(!scenarios.is_empty(), "{card} has no scenario");
+        for scenario in scenarios {
+            if let Err(e) = beryl_scenario::run(&CARDS, scenario) {
+                failures.push(format!("{card}: {e}"));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn the_dump_is_valid_json_with_every_scenario() {
+    let json: serde_json::Value =
+        serde_json::from_str(&beryl_scenario::to_json(SCENARIOS)).unwrap();
+    let total: usize = SCENARIOS.iter().map(|(_, s)| s.len()).sum();
+    assert_eq!(json.as_array().unwrap().len(), total);
+    assert_eq!(json[0]["card"], names::PLAINS);
 }

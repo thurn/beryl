@@ -1,0 +1,20 @@
+[package]
+name = "beryl_search"
+version = "0.1.0"
+description = "The agents behind one trait: random, and the searchers that come after it"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+beryl_engine = { path = "../beryl_engine" }
+
+[dev-dependencies]
+beryl_cards = { path = "../beryl_cards" }
+
+[[test]]
+name = "allocations"
+harness = false

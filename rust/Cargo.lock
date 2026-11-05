@@ -146,11 +146,30 @@ name = "beryl_cards"
 version = "0.1.0"
 dependencies = [
  "beryl_engine",
+ "beryl_scenario",
+ "serde_json",
 ]
 
 [[package]]
 name = "beryl_engine"
 version = "0.1.0"
+
+[[package]]
+name = "beryl_scenario"
+version = "0.1.0"
+dependencies = [
+ "beryl_engine",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "beryl_search"
+version = "0.1.0"
+dependencies = [
+ "beryl_cards",
+ "beryl_engine",
+]
 
 [[package]]
 name = "bincode-next"

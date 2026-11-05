@@ -2,7 +2,10 @@
 //! (architecture §13, decision D9).
 
 use crate::bitboard::Bitboard;
-use crate::state::{NONE, Object, Player, State, Turn, Zone};
+use crate::fixed::Fixed;
+use crate::rng::{Rng, SplitMix64};
+use crate::state::{DECK_SLOTS, NONE, Object, Player, State, Turn, Zone};
+use crate::table::GameTable;
 
 /// What [`Observation::card`] reads for a slot whose identity the viewer does not know.
 pub const UNKNOWN: u8 = u8::MAX;
@@ -75,5 +78,41 @@ impl<'a> Observation<'a> {
 
     pub fn battlefield(&self) -> &'a [u8] {
         self.state.battlefield()
+    }
+
+    /// A full state consistent with everything the viewer knows: the unknown remainder of
+    /// each decklist, dealt at random into that player's slots the viewer does not know
+    /// (architecture §13). Decklists are public (decision D19), so the remainder is exact.
+    /// The cards the viewer knows, every public fact and the slot order of every zone are
+    /// kept; the game's random streams are reseeded from `rng`, so its seed does not leak.
+    pub fn determinize(&self, t: &GameTable, rng: &mut SplitMix64) -> State {
+        let mut s = *self.state;
+        for player in 0..2u8 {
+            let deck = t.deck(player);
+            let mut remainder: Fixed<u8, DECK_SLOTS> = Fixed::new();
+            for &card in deck {
+                // A deck never holds more than DECK_SLOTS cards (GameTable::new).
+                let _ = remainder.push(card);
+            }
+            let mut unknown: Fixed<u8, DECK_SLOTS> = Fixed::new();
+            for i in 0..deck.len() {
+                let slot = (usize::from(player) * DECK_SLOTS + i) as u8;
+                if self.knows(slot) {
+                    let card = s.object(slot).card;
+                    let at = remainder
+                        .position(card)
+                        .expect("a known card not in its deck");
+                    remainder.remove(at);
+                } else {
+                    let _ = unknown.push(slot);
+                }
+            }
+            rng.shuffle(remainder.as_mut_slice());
+            for (&slot, &card) in unknown.iter().zip(remainder.iter()) {
+                s.object_mut(slot).card = card;
+            }
+        }
+        s.rng = Rng::new(rng.next_u64());
+        s
     }
 }

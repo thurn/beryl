@@ -8,6 +8,7 @@ pub mod names;
 pub mod white;
 
 use beryl_engine::CardTable;
+use beryl_scenario::Scenario;
 
 /// Every card Beryl implements.
 pub static CARDS: CardTable = CardTable::new(&[
@@ -15,6 +16,13 @@ pub static CARDS: CardTable = CardTable::new(&[
     &blue::island::CARD,
     &azorius::tundra::CARD,
 ]);
+
+/// Every card's scenarios (architecture §17.1), by card name.
+pub static SCENARIOS: &[(&str, &[Scenario])] = &[
+    (names::PLAINS, white::plains::SCENARIOS),
+    (names::ISLAND, blue::island::SCENARIOS),
+    (names::TUNDRA, azorius::tundra::SCENARIOS),
+];
 
 #[cfg(test)]
 mod tests;

@@ -2,6 +2,7 @@
 
 mod banned;
 mod game;
+mod invariants;
 mod mulligan;
 mod rules;
 

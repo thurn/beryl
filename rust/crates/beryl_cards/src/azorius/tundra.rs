@@ -2,6 +2,9 @@
 
 use beryl_engine::card::{Ability, CardDef, Face, ManaColor, ManaSet, Subtype, Subtypes, Types};
 
+use beryl_engine::{DecisionKind, TurnStep, Zone};
+use beryl_scenario::{Action, Assertion, P0, Scenario};
+
 use crate::names;
 
 /// Not basic, but it has both basic land types, and with them both intrinsic mana abilities
@@ -24,3 +27,47 @@ pub static CARD: CardDef = CardDef {
         ..Face::EMPTY
     }],
 };
+
+/// Tundra is not a Plains or an Island card, so it is a candidate of its own beside them.
+pub const SCENARIOS: &[Scenario] = &[Scenario::new("Tundra played beside a Plains in hand")
+    .hand(P0, &[names::TUNDRA, names::PLAINS])
+    .actions(&[
+        Action::Assert {
+            assertion: Assertion::Decision {
+                player: P0,
+                kind: DecisionKind::Priority,
+                candidates: 3,
+            },
+        },
+        Action::PlayLand {
+            player: P0,
+            card: names::TUNDRA,
+        },
+        Action::AdvanceTo {
+            turn: 1,
+            step: TurnStep::PostcombatMain,
+        },
+        Action::Assert {
+            assertion: Assertion::Count {
+                player: P0,
+                zone: Zone::Battlefield,
+                card: Some(names::TUNDRA),
+                count: 1,
+            },
+        },
+        Action::Assert {
+            assertion: Assertion::Tapped {
+                player: P0,
+                card: names::TUNDRA,
+                count: 0,
+            },
+        },
+        Action::Assert {
+            assertion: Assertion::Count {
+                player: P0,
+                zone: Zone::Hand,
+                card: Some(names::PLAINS),
+                count: 1,
+            },
+        },
+    ])];

@@ -15,10 +15,12 @@ pub mod effect;
 mod engine;
 pub mod filter;
 pub mod fixed;
+mod invariants;
 pub mod observation;
 pub mod profile;
 pub mod rng;
 mod sba;
+mod setup;
 mod start;
 pub mod state;
 pub mod table;
@@ -29,10 +31,11 @@ pub use bitboard::Bitboard;
 pub use decision::{
     Answers, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, Replay, StallReason, Step,
 };
-pub use engine::{Scratch, apply, next};
+pub use engine::{Counts, Scratch, apply, next};
+pub use invariants::Violation;
 pub use observation::{Observation, UNKNOWN};
-pub use profile::{Profile, Stops};
-pub use state::State;
+pub use profile::{Breakpoint, Profile, Stops};
+pub use state::{State, TurnStep, Zone};
 pub use table::{CardTable, Decklist, GameTable, TableError};
 
 #[cfg(test)]

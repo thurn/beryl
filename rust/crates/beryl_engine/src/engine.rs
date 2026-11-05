@@ -16,12 +16,28 @@ use crate::{sba, start, turn, zone};
 /// solver's arrays, the event buffer and the spare state for transactional replay arrive with
 /// the work that needs them.
 #[derive(Debug, Default)]
-pub struct Scratch {}
+pub struct Scratch {
+    pub counts: Counts,
+}
 
 impl Scratch {
     pub fn new() -> Self {
-        Self {}
+        Self::default()
     }
+}
+
+/// Deterministic counts of the engine's logical operations, the stable performance signal CI
+/// gates on with tolerance bands (architecture §17.4), summed over every game the scratch
+/// serves. State copies, layer recomputes, solver runs and events join them with the work
+/// that does them.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Counts {
+    /// Decisions `next` returned.
+    pub decisions: u64,
+    /// Decisions `next` settled itself: one candidate, or a priority pass away from a stop.
+    pub silent: u64,
+    /// State-based action checks.
+    pub state_based_checks: u64,
 }
 
 /// Advances the game until a player must decide or the game is over.
@@ -29,7 +45,7 @@ impl Scratch {
 /// What the exact profile settles itself (§7.2): a decision with one candidate is applied
 /// silently, so a player whose only legal action is to pass passes silently. Under smart stops
 /// a player away from a stop passes silently too (§15).
-pub fn next(s: &mut State, t: &GameTable, _x: &mut Scratch, _a: &mut dyn Answers) -> Step {
+pub fn next(s: &mut State, t: &GameTable, x: &mut Scratch, _a: &mut dyn Answers) -> Step {
     loop {
         if let Some(outcome) = s.outcome {
             return Step::Over(outcome);
@@ -37,6 +53,7 @@ pub fn next(s: &mut State, t: &GameTable, _x: &mut Scratch, _a: &mut dyn Answers
         if s.pending == Pending::None {
             // CR 117.5: "Each time a player would get priority, the game first performs all
             // applicable state-based actions as a single event".
+            x.counts.state_based_checks += 1;
             if sba::check(s, t) {
                 s.turn.cleanup_check = false;
                 continue;
@@ -58,9 +75,11 @@ pub fn next(s: &mut State, t: &GameTable, _x: &mut Scratch, _a: &mut dyn Answers
             continue;
         };
         debug_assert!(!d.is_empty());
-        let silent =
-            d.len() == 1 || (d.kind == DecisionKind::Priority && !s.profile.stops_for(s, d.player));
+        let priority = d.kind == DecisionKind::Priority;
+        let silent = (d.len() == 1 || (priority && !s.profile.stops_for(s, d.player)))
+            && !(priority && s.profile.breaks_at(s.turn));
         if silent {
+            x.counts.silent += 1;
             perform_or_stall(s, t, &d, Choice(0));
             continue;
         }
@@ -69,6 +88,7 @@ pub fn next(s: &mut State, t: &GameTable, _x: &mut Scratch, _a: &mut dyn Answers
             continue;
         }
         s.budgets.decisions += 1;
+        x.counts.decisions += 1;
         return Step::Decide(d);
     }
 }

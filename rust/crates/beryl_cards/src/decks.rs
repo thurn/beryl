@@ -1,8 +1,10 @@
 //! Decklists.
 
 use beryl_engine::Decklist;
+use beryl_engine::card::{CardDef, Supertypes};
+use beryl_engine::rng::SplitMix64;
 
-use crate::names;
+use crate::{CARDS, names};
 
 /// The 40-card main deck of `docs/sample-decks/2026-10-17-PrinceJools-wu-control.txt`, the
 /// Milestone 1 mirror.
@@ -37,3 +39,31 @@ pub const WU_CONTROL: &Decklist = &[
     (1, names::SINK_INTO_STUPOR),
     (1, names::TIMETWISTER),
 ];
+
+/// The size of a fuzz deck: the minimum for limited play
+/// ([CR 100.2b](https://yawgatog.com/resources/magic-rules/#R1002b)): "each deck has a
+/// minimum deck size of 40 cards."
+const FUZZ_DECK: usize = 40;
+
+/// Nonbasic cards in a fuzz deck at most, about a cube deck's spells and nonbasic lands.
+const FUZZ_NONBASICS: usize = 23;
+
+/// A legal 40-card deck of the cards implemented so far, for random play: up to 23 nonbasic
+/// cards chosen by `seed`, each at most once as in a cube draft, and basic lands in turn for
+/// the rest. A limited deck holds "as many duplicates of a card as are included with the
+/// product" (CR 100.2b), and the cube holds one of each.
+pub fn fuzz_deck(seed: u64) -> Vec<(u8, &'static str)> {
+    let (basics, mut nonbasics): (Vec<&CardDef>, Vec<&CardDef>) = CARDS
+        .cards()
+        .iter()
+        .partition(|c| c.front().supertypes.contains(Supertypes::BASIC));
+    SplitMix64::new(seed).shuffle(&mut nonbasics);
+    nonbasics.truncate(FUZZ_NONBASICS);
+    let mut deck: Vec<(u8, &'static str)> = nonbasics.iter().map(|c| (1, c.name)).collect();
+    let lands = FUZZ_DECK - nonbasics.len();
+    for (i, c) in basics.iter().enumerate() {
+        let count = lands / basics.len() + usize::from(i < lands % basics.len());
+        deck.push((count as u8, c.name));
+    }
+    deck
+}
