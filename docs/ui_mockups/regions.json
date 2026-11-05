@@ -21,33 +21,267 @@
       },
       "parts": {
         "screen": [0, 0, 1672, 941],
-        "tabletop": [1080, 240, 300, 300],
-        "brand": [26, 6, 224, 46],
-        "settings-gear": [1606, 12, 52, 50],
-        "opponent-badge": [20, 64, 232, 50],
-        "opponent-hand": [556, 0, 560, 62],
-        "opponent-life-orb": [728, 60, 216, 96],
-        "opponent-library": [1244, 10, 124, 156],
-        "opponent-graveyard": [1384, 40, 114, 124],
-        "opponent-island-stack": [146, 128, 210, 144],
-        "opponent-swamp-stack": [366, 124, 226, 146],
-        "you-mountain-stack": [98, 586, 234, 156],
-        "you-plains-stack": [332, 584, 226, 158],
-        "you-life-orb": [700, 646, 272, 116],
-        "you-library": [154, 764, 150, 170],
-        "you-badge": [18, 846, 154, 56],
-        "opponent-strix": [630, 228, 206, 162],
-        "opponent-beast": [842, 228, 206, 162],
-        "you-goblin-guide": [610, 436, 218, 168],
-        "you-angel": [844, 436, 218, 170],
-        "hand": [466, 758, 744, 183],
-        "hand-bolt": [468, 766, 194, 175],
-        "hand-swords": [648, 760, 190, 181],
-        "hand-mountain": [826, 758, 194, 183],
-        "hand-plateau": [990, 762, 218, 179],
-        "phase-tracker": [1398, 734, 214, 46],
-        "next-button": [1396, 794, 240, 62],
-        "next-caption": [1464, 856, 104, 30]
+        "tabletop": {
+          "rect": [1080, 240, 300, 300],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "dmVec2JccGBab19YbV1Xa1xWaVpUZldSemhieGdgdmVecmJbb19Zbl5YbFxWaVpVfGpke2ljeWhhd2Zfc2NccGBZbl5YbFxWfWtkfWtke2pjeWhhd2Zfc2Jbb19ZbV1XfWtkfWtkfWtke2lieWdhdWRdcWFabl5YfmtkfWtkfWtke2pjemhhdmVfcmJbb19YfmtkfWtkfWtkfGpjemhhd2VfcmJbb19YfWtkfWtkfWtke2ljeWhhdmVecWFabl5Y",
+          "accepted": [
+            "by-b0q.1.26 residual: the painted grain and felt mottling of the tabletop"
+          ]
+        },
+        "brand": {
+          "rect": [26, 6, 224, 46],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "IR4dJSIgKSUjLSgmMCspNC0rNzAuOTEvJiIgJyMhKyYlLyknMiwqNi8tODEvOjIwNC0nKyckLSgmMSspNS4sODAuOjIwOzMwTkM0QzoxTkQ5ST82UEU7T0Q7Vko+Sj84a1pCPDUuTUM4ST82Rjw2UEU7TkM6Sj84QzovMSsoPDQvPjYxQDczQzo0RDs1RTs2LyomLiknMiwqNi8tOTEvOjIwPDMxPTQyLCclMCooMy0rNzAuOTIvOzMwPDQxPTUy",
+          "accepted": [
+            "by-b0q.1.26 residual: swash and garbled glyphs in the mockup's brand"
+          ]
+        },
+        "settings-gear": {
+          "rect": [1606, 12, 52, 50],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "JiMhJSIgJCEfJSEgJiMiIh4dIR0dHxwcKCQiJyMhOTY2QD09a2lqNDEwLCkpIR4dKiYkKCUjZmRkY2FiT01ObmxtTktLIh8eKyYlPzw7ZmNkIR8eGxkYOzk5X11eKygnLCgmQT49ZmRlIiAfHRsaPDo6YV9fLCkoLiknKyYkZmNkZWNjUlBQbmxtTkxMJyMhMCooLSgmPDg4QT49amhpNTIyMS0sKSUjMSspMCspLiknLCcmLCgmKiYkKyYlKyYk"
+        },
+        "opponent-badge": {
+          "rect": [20, 64, 232, 50],
+          "verdict": "pass",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "fingerprint": "JSAeLScjJSEfJiEfJyIgKSQiLykmNS4rKyYgMiskIRwaIRwaIh0bJB8dKyUjMywpNS8mNy8mKCQiIR0aIh0bJB8dKyUjMywpQjovRjwxRkJBWFVTQT08WFRTLSckNCwqRz4yQzovRUJBj46OhoWEhoSDLCYjNC0qMywkNS0kLSooYV9eOzg3SEVELCYkNC0qKyUfLicgIBwaKygmIRwaJB8dLCYkNS0qJSAcKSMeIRwbIR0aIh0bJSAeLSYkNS0r",
+          "accepted": [
+            "by-b0q.1.28 residual: the name sits about 2 px low; the mockup's hand-painted notch in the diamond"
+          ]
+        },
+        "opponent-hand": {
+          "rect": [556, 0, 560, 62],
+          "verdict": "pass",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "fingerprint": "WjglVTUkaTwjXDwoWjonaj0jVTUkWDglWjYjVDMhazsgWTYiWTYiazsgVDMhWTUiWDUiUTIhZTkhWDQgVjUhZTkhUjIhVjQhVzglTzQkYTcjVTIfVDIfYjcjTzQkVDUkTDEeUzMcWzcmUjIfUTEfXDcmUzQcSi8dKiEcTTEcWjonTzQkTjIjXDsoTTEcKiEcOzIvJh4ZSi0YVTUeUjMdTS8ZJh4ZOzIvSD45PDMvJSAdJRwVJBwVJSAdPDMvSD45"
+        },
+        "opponent-life-orb": {
+          "rect": [728, 60, 216, 96],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538"
+        },
+        "opponent-library": {
+          "rect": [1244, 10, 124, 156],
+          "verdict": "pass",
+          "bead": "by-b0q.1.31",
+          "commit": "636900b",
+          "fingerprint": "NC0qMiQcFhMRFhIRFhIQFRIQFRIQNy8tFRMRJRoRAAAAAAAAAAAAAAAAAAAAKyYkFBIQGRMNAAAAAAAAAAAAAAAAAAAAJR8cFRIQEA0LAAAAAAAAAAAAAAAAAAAAJh0XFRMRCwoJAAAAAAAAAAAAAAAAAAAAKR0VFRMRCgkIAAAAAAAAAAAAAAAAAAAALR0UFhQSGhcVFxQSFxQSFxQSFxQSFxQSGRYUJiEeJiEeJiEeJSEeJSAeJSAdJCAdJSEe",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.1.28 residual: a warm brown tint on the mockup's card edges"
+          ]
+        },
+        "opponent-graveyard": {
+          "rect": [1384, 40, 114, 124],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.1.29 residual: the tilt: replica and mockup lean the same (a reviewer's 'missing tilt' was checked and wrong)"
+          ]
+        },
+        "opponent-island-stack": {
+          "rect": [146, 128, 210, 144],
+          "verdict": "pass",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "fingerprint": "QDc0Ojk7SFBbWGh4X2+AYHCBYXGCVmJwOjMyRVdpQFp0TG6TY4ivYoqyXYOrSmmIOjk6MEdfPl9/c5e5apO5WIKpV4i2O1+APD5CRFZna4egiabChZ6wboigkrbSWG+DREdNSFRgXYGdWXuPVHB5OFZrW4GgQVltM0JKJTxFJmd8JGNzLltoP3OCQXiIOVBeKi8zHCAjHiYuHysyGycvHCoyGykwOTk7NzAtLSckKSMhKCIgKiQiMConRz05YFJN",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.1.28 residual: the copies step down 1-4 px differently (onion only)"
+          ]
+        },
+        "opponent-swamp-stack": {
+          "rect": [366, 124, 226, 146],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.1.29 conflict: the cards are about 7% smaller than painted: the size is shared with the Island stack, which passes"
+          ]
+        },
+        "you-mountain-stack": {
+          "rect": [98, 586, 234, 156],
+          "verdict": "pass",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "fingerprint": "UEA6Vz84f1NIjVxQmmZYnmlbnmlciVtPX0A3WDgui0pChlJTpmFbrWdhnmFegUxGWTEoUioih0VGjFNal11gtWljnV5icD08VjApXzAnl1JQu21afEtFu2ZEwmxYeD00UzAoazUoflFLYkdITzk6d0Q4j1hNeT4yOCMdWCsfLSomNTM3NzExRjs1SDs5azkuOSEaQyMbLiAbOSklOSosUzQvQSgjSTErGBUUFBMSExIRExIRExIRFBMSIh8dQjk2",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.1.28 residual: the copies step down 1-4 px differently (onion only)"
+          ]
+        },
+        "you-plains-stack": {
+          "rect": [332, 584, 226, 158],
+          "verdict": "pass",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "fingerprint": "XVFLXlRPenNwi4WBjoeEj4iEj4iFjIWCXVhVU1JRgouRiZijnq23qbG2rbGyqKmqXVpYUk9NkJKUoKmpnK+2z7yisqefnJeXV1JRUk1Ln5ONr5uNyrOZw6uWuKqcpZuPWFFLWFFLkHxnooRlroxmro1mo4RhinxsRj83VU5GUUY0ZE8yjms7rnw3hGMxeGlUOjYxRUE8NzEmWUImZEknV0InPDYqRUE8GBcWFBMSFBIRFBIRExIRFBIRHBoYNzAt",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.1.28 residual: the copies step down 1-4 px differently (onion only)"
+          ]
+        },
+        "you-life-orb": {
+          "rect": [700, 646, 272, 116],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538"
+        },
+        "you-library": {
+          "rect": [154, 764, 150, 170],
+          "verdict": "pass",
+          "bead": "by-b0q.1.31",
+          "commit": "636900b",
+          "fingerprint": "QTg0HBURIBcQIBcQHxYPHhUOIBkUSD45OzIwAAAAAAAAAAAAAAAAAAAACAgHMSonNS4rAAAAAAAAAAAAAAAAAAAABwYFOjEuLykmAAAAAAAAAAAAAAAAAAAACggIQjg1JR4aAAAAAAAAAAAAAAAAAAAAFBEQQjk1Jx0XAAAAAAAAAAAAAAAAAAAAGRUUQTg1LSEYAAAAAAAAAAAAAAAAAAAAGRYVPzYzIB0bGhcVGxcWGRYUGRYUGhcVNC0rPTQy",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.1.28 residual: a warm brown tint on the mockup's card edges"
+          ]
+        },
+        "you-badge": {
+          "rect": [18, 846, 154, 56],
+          "verdict": "pass",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "fingerprint": "MCooMywqMywqNC0rNS4sNi4sNzAtLickIR0bPTUrIh4bIRwbIR0bIR0bJB8dJh8bIh4bSkEyMCkiIRwaIRwaIR0bJB8dJx8aMiwlWU4/OjEmJB8eW1hXLyspJB8dKSAaPDQqWU9EPjQoIBwacnBviIaFJB8dKyAZKiQfQzksMiohIBwaQ0A/SUZFIx8dLCEZHxsaOzEmKCIdIBwaIBwaIBwaIx4cLiEYIBwaLSYgIBwaIR0bIh0bIh4cJB8dMCIY",
+          "accepted": [
+            "by-b0q.1.28 residual: the name sits about 2 px low; the mockup's hand-painted notch in the diamond"
+          ]
+        },
+        "opponent-strix": {
+          "rect": [630, 228, 206, 162],
+          "verdict": "pass",
+          "bead": "by-b0q.1.31",
+          "commit": "636900b",
+          "fingerprint": "ZVxOg3ddg3ddinxgmoRdm4Rcm4RcbF1LWVdNbGdVd3JgjohyrZduj3xXjHpVa1xGT1NRXFxaQzs6ioR6e3dxTkA7b2ZmZ1xMVltZeoiKWFNOY15VaGRYcGVXkomLZ1tLTlJRfIqFeX5xVlFDaF5LmZeAmZGKZllIWlxcZ3JweIJ4XVtNbmdSmpJyloxzY1ZFZGNnZm93TWJobG1hiXxbxapztJxrhXJWNTAtKiYlJiMhJSIgKyYiWEs3Wk04Wk1D",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.1.27 conflict: P/T ink is one blue-black: battlefield.png paints it blue, the other mockups near black"
+          ]
+        },
+        "opponent-beast": {
+          "rect": [842, 228, 206, 162],
+          "verdict": "pass",
+          "bead": "by-b0q.1.27",
+          "commit": "44861e7",
+          "fingerprint": "VFlOaHZocX9wcH9wcH9wcH9wcH5wWFdPPEs+QlVCW29ae4drdYlxa4BqV2pWRVJENEIzNDongHRRk3VLjnVNbXFWTFU9O0s8NkM0SE42XE00RDgkTT8oSUMsV10+OUc4N0Q1SU8zZmdHNDIhTUUtRkgxQ0otNkQ1OEU1TlQtXmI6YGVCSksuVFk9REgzOkQ5NUA0KDQhSFMtTVYsO0UroKWflpuWgYB4QDg1KCQiJiMhJiIgJSIgTUtFT0xHTkhD",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.1.27 conflict: P/T ink is one blue-black: battlefield.png paints it blue, the other mockups near black"
+          ]
+        },
+        "you-goblin-guide": {
+          "rect": [610, 436, 218, 168],
+          "verdict": "pass",
+          "bead": "by-b0q.1.27",
+          "commit": "44861e7",
+          "fingerprint": "cE5FklxPm2RVl2FTrHFgrHFgrHFgd1JIZT01cFJTf2FmdltiiWhrhWNmgV9iakM8VTcxUWuHWWyDZmdnYmBeVFliUWiFW0JCVjk1a4GYiJGZcnFsTUM6fX+EcoihZElIVjo1T19qhouDf3drVlZQZ2hpTmByXD87WjovSkY9T01HT1BIbndvV1tZWWFhWDkyUywjRi0rRy4qVDw4WkM9zqaVvpqKk3hqIyAfHRsZHRoZHRoZIx8daVNJY09FXUxE",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.1.27 conflict: P/T ink is one blue-black: battlefield.png paints it blue, the other mockups near black"
+          ]
+        },
+        "you-angel": {
+          "rect": [844, 436, 218, 170],
+          "verdict": "pass",
+          "bead": "by-b0q.1.27",
+          "commit": "44861e7",
+          "fingerprint": "bmhkj4qHop2aop6aop6aop6aop6acGlmYl9fiYB6saachYSLjoiNn5aTrqKYb2pnWVdZZFpbsZmDgnV0nomCnYh1emtmamNgeG9mb2ZofWxjrZJ3nIRxk3xtnIuEZWJleW5niIOGmImDdmtmk35wvKOUmI2UZWFkaWNhvaWPoZ6gno+DhXh0pJGGlImKaGJiaF9ccWpxpZGDrpqLhXVturm3raytnpuYNzEuHhwbHhwbHhwaHRsaXFlWXltZU09M",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.1.27 conflict: P/T ink is one blue-black: battlefield.png paints it blue, the other mockups near black"
+          ]
+        },
+        "hand": {
+          "rect": [466, 758, 744, 183],
+          "verdict": "pass",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "fingerprint": "aFlUWklEdG9sfnt4iVtPcEtCXVJMaFlTc05FuH9snp2elJOWsGVXv4NzsKmgbmZfkl9RlUU3lp6ujoqKxWpaj05PqJWhuK+pSyYjfTovjpKXgX+AzXBQi05Kt56kb01PZDAqgTsvk5KRkYV5qFlEcEhHzqGLZ0NBcDUskkM1kIJyiHRVcEA2XUVDvIFgYEJCikU1rFhEenVtd2M+TjcwUkVDp2VOeVRGjFlFtHJVgYBxmIp4jl5TfFtUonNQalJB"
+        },
+        "hand-bolt": {
+          "rect": [468, 766, 194, 175],
+          "verdict": "pass",
+          "bead": "by-b0q.1.27",
+          "commit": "44861e7",
+          "fingerprint": "ZldRZ1hTaFlUaVpUYlVPWktGZUM7XEA5XUlDckM6iFdMmGFTpWhY3pV+35+IiVtOY0c+q3dmilxOdEg9f0M4sFNApE0+aishUDs1XCkjRiYkRCMgcjQttVlHYyojYCohRDo2dzEnWi0qdjgwlj0tvV9LViciYiskRDo2cTAmZjAqkT0wp0c0u1xJlEE1XiokQjk1djcqjkg6t1xD2YRkv1tCqlI/dj40QTg1azcrfU89u3ZWz5Vxx4VluWhLej4w",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+          ]
+        },
+        "hand-swords": {
+          "rect": [648, 760, 190, 181],
+          "verdict": "pass",
+          "bead": "by-b0q.1.27",
+          "commit": "44861e7",
+          "fingerprint": "WU1IV0xHWU5KU0tIUUtHYVlVZV1ZXFRRallUsK6rsK6rsrCsqaajqqelsbCvh4aEelVOkZimkJqzqq68rbC/o52ninxxd3l6eFFJkaOyio6WkZahnKvCl6CtfGlWYFdRc05Hp62viYmMlY2FwrqwrbG1hXpqWkhAZEVAmJ+ggGBEqpeA0sKvq5lxZ1Q0WDwrY0hDkpmbeFo9eW5kopmBiXQ7aVs3YT4qYUI6gYZ8d31xhIFunY9qmI54nJN9gF9W",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+          ]
+        },
+        "hand-mountain": {
+          "rect": [826, 758, 194, 183],
+          "verdict": "pass",
+          "bead": "by-b0q.1.27",
+          "commit": "44861e7",
+          "fingerprint": "XEY/a0M7ZkQ9Vz85RDg0Wk5JX1JNY1ZQfFZMs3lotXxqx4hz3piB2pR9zIt1a0k+kVdL1HBWw2thrWRplVJWmlBWmk9PfE5DoWBM5YZb0nVbv2NOj0Y7lVFUpFxgjWJWn1tB3IRXkVFLnks6eD45VjVAk1NNnHhlaDYsfkpFdkM6eD80czsxPC88QzE9rZRyVywjNiwpakQ4aUI0UTYuMjA5Li00rYhyhU9AhVlMf1RLj1xWc01NYUBETDMzwaSJ",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+          ]
+        },
+        "hand-plateau": {
+          "rect": [990, 762, 218, 179],
+          "verdict": "pass",
+          "bead": "by-b0q.1.27",
+          "commit": "44861e7",
+          "fingerprint": "WUtHaF1VXVFLZlhSaltVaVpUZ1lTZlhSkWFTr6idubOps6yilY6EeG5lX1RNXVBLekM8q5yqqZSirJiiuauuzcW/2NHGVUtEi1xUvKaquai0tpqikU09WD1Mh25yRz05nG9d3reWzqWSxZeHlUo4TTI+cVdVSD46lHxl6L2BoWNVrmZLdkE8WjpBa1dTRzw4kHRjt3RYpmJNn11Ik1xImF9JaFlPRDo2pY12tYpmpnZQnG5LfVxDe1Q5WlJLQjk1",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+          ]
+        },
+        "phase-tracker": {
+          "rect": [1398, 734, 214, 46],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "VkpEU0dBT0M+TkI8Sj86RTs3RDo2Qjg1WEpCVUlBUkY9QDcwPTQuU0g8Qzk2Qjg1fVw3QTcxNS4oOTApNi4pLicgPzYySD42pH5CQDUtMislNy8oPTQtLiggPDQuNS4ol3A6QDYuMislOjEqNy8pLiggPTQvODApb1Q6RDozNzApRjwzQjgxMywjPTQxRTw1clY/WEpBUkc/WExEVUlDUkg+Rz46RTw4eltAV0lBT0VAQjk1Qzo2S0E9SUA8SD87",
+          "accepted": [
+            "by-b0q.1.26 residual: a slightly greyer sword fill and lighter outline, a smaller bloom under the lit diamond, a fainter smoky band",
+            "by-b0q.1.26 conflict: reviewers contradicted each other across rounds on the 33 px sword glyph: wider/thinner, lobed/pointed, paler/deeper gold",
+            "by-b0q.1.26 conflict: the first glyph is lit, as the mockup lights it while offering To Combat"
+          ]
+        },
+        "next-button": {
+          "rect": [1396, 794, 240, 62],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "X0s8hGNDg2JCgmJBgWFBgGBAf19AVUI0m2g40Xgk0Xgk0Xgk0Xgk0Xgk0XgkmGUzpWAiuWMWuWMWv3QxuWMWuGETuGEUpF4foVoav4BHwoVOvIdav4teqVkSq1kQoVkYolsavXk7vns+v41ivIxirFsRrVsQo1oYq2Qix20Zx20ZwXEpvnY2xWwZx20Zq2IfnGcw6JAt6JAt6JAt6JAt6JAt6JAtmmUtU0AyeFMvd1MvdlIudlIudVEtdFAtSzkr",
+          "accepted": [
+            "by-b0q.1.26 residual: painted specular glints along the button's rim"
+          ]
+        },
+        "next-caption": {
+          "rect": [1464, 856, 104, 30],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "QTUwQDUwPzQvPjQvPjMuPTMuPTIuPDItPzYzQDc1PTUyPzY0PDMxPTUzOjMwOjIwRj47ZF5bTERCVk5MPzY0UElHQDg2Pzc1PjUzYltYZV5bTUVDfnl1eXRxdnFuRT48PjUyY11aY11aVE1KbWdkXlhVdnFuQDk3PTUyVU5LRz88VU5MWVJPWVJQVU9MQjo4PTQyPDQxPDMxOzMxOjIwOjIwOTEvODEvPTQyPDQxOzMxOzMwOjIwOTIwOTEvNzAu"
+        }
       }
     },
     "combat": {
@@ -73,29 +307,147 @@
         "tabletop": [1080, 240, 300, 300],
         "brand": [26, 6, 224, 46],
         "settings-gear": [1606, 12, 52, 50],
-        "opponent-badge": [20, 64, 232, 50],
+        "opponent-badge": {
+          "rect": [20, 64, 232, 50],
+          "verdict": "pass",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "fingerprint": "JSAeLScjJSEfJiEfJyIgKSQiLykmNS4rKyYgMiskIRwaIRwaIh0bJB8dKyUjMywpNS8mNy8mKCQiIR0aIh0bJB8dKyUjMywpQjovRjwxRkJBWFVTQT08WFRTLSckNCwqRz4yQzovRUJBj46OhoWEhoSDLCYjNC0qMywkNS0kLSooYV9eOzg3SEVELCYkNC0qKyUfLicgIBwaKygmIRwaJB8dLCYkNS0qJSAcKSMeIRwbIR0aIh0bJSAeLSYkNS0r",
+          "accepted": [
+            "by-b0q.1.28 residual: the name sits about 2 px low; the mockup's hand-painted notch in the diamond"
+          ]
+        },
         "opponent-hand": [556, 0, 560, 62],
-        "opponent-life-orb": [728, 60, 216, 96],
+        "opponent-life-orb": {
+          "rect": [728, 60, 216, 96],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538"
+        },
         "opponent-library": [1244, 10, 124, 156],
-        "opponent-graveyard": [1384, 40, 114, 124],
+        "opponent-graveyard": {
+          "rect": [1384, 40, 114, 124],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "accepted": [
+            "by-b0q.1.29 residual: the tilt: replica and mockup lean the same (a reviewer's 'missing tilt' was checked and wrong)"
+          ]
+        },
         "opponent-island-stack": [146, 128, 210, 144],
         "opponent-swamp-stack": [366, 124, 226, 146],
         "you-mountain-stack": [98, 586, 234, 156],
         "you-plains-stack": [332, 584, 226, 158],
-        "you-life-orb": [700, 646, 272, 116],
+        "you-life-orb": {
+          "rect": [700, 646, 272, 116],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538"
+        },
         "you-library": [154, 764, 150, 170],
-        "you-badge": [18, 846, 154, 56],
-        "combat-banner": [648, 158, 378, 96],
-        "opponent-strix": [448, 272, 200, 158],
-        "opponent-beast-blocker": [680, 270, 214, 172],
-        "you-goblin-guide-attacker": [680, 438, 198, 204],
-        "you-angel-attacker": [900, 438, 214, 204],
-        "block-link": [684, 392, 196, 100],
-        "attack-arc": [868, 118, 144, 340],
+        "you-badge": {
+          "rect": [18, 846, 154, 56],
+          "verdict": "pass",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "fingerprint": "MCooMywqMywqNC0rNS4sNi4sNzAtLickIR0bPTUrIh4bIRwbIR0bIR0bJB8dJh8bIh4bSkEyMCkiIRwaIRwaIR0bJB8dJx8aMiwlWU4/OjEmJB8eW1hXLyspJB8dKSAaPDQqWU9EPjQoIBwacnBviIaFJB8dKyAZKiQfQzksMiohIBwaQ0A/SUZFIx8dLCEZHxsaOzEmKCIdIBwaIBwaIBwaIx4cLiEYIBwaLSYgIBwaIR0bIh0bIh4cJB8dMCIY",
+          "accepted": [
+            "by-b0q.1.28 residual: the name sits about 2 px low; the mockup's hand-painted notch in the diamond"
+          ]
+        },
+        "combat-banner": {
+          "rect": [648, 158, 378, 96],
+          "verdict": "pass",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "fingerprint": "ZldRVEdDRDo2Rjw1SD42aE85U0dCZVZRX1FKU0Q6QjcuXEozb1g6WUIuSj43XlBJZ1NFaVM8LyYgMiYcOiwdOiwhZ1A6Z1NFVEhDOTAsPDIpNiwhOC4jNCoiV0IwU0dCVklEOjEuUUxHYFxXYl1YUEtHV0IxVUhDXE9JQjg0KiQiIx4cIx4cKiQhXUc2W05JZ1hST0Q/OzMvOTAqOTApOzIuZ1A/ZldRc2JcX1JMTkM+RTs2RTs2TUI+dFtKc2Jb"
+        },
+        "opponent-strix": {
+          "rect": [448, 272, 200, 158],
+          "verdict": "pass",
+          "bead": "by-b0q.1.31",
+          "commit": "636900b",
+          "fingerprint": "ZFpNhHhfhHhfinxikn5ck35bk35beGdNVldNbGtYenpmfn1orZVlnopemIVYe2pHQk1QU1JQR0A/fn9+hYJ8UEVAW1RQZV9QTFdaaXN2RkdDaWJYbGdbV1FIfnN2ZVxQTlhcfZCJY15SUUxAW1RHkIRumJCMZVpMQktPaXhydoZ8UU9FbWhWmJh/m5SFYVVEf3+FZ21uZW9pdm1VkX9YuqJyrZdsg3FTQkFDMDQ5JS4zKzE0ODk0gm9KemhGZ1lC",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+          ]
+        },
+        "opponent-beast-blocker": {
+          "rect": [680, 270, 214, 172],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.1.28 conflict: reviewers contradicted each other across rounds on the attack chevron and block crescent: concave vs straight vs bowed arms, pale vs saturated gold"
+          ]
+        },
+        "you-goblin-guide-attacker": {
+          "rect": [680, 438, 198, 204],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.1.28 conflict: reviewers contradicted each other across rounds on the attack chevron and block crescent: concave vs straight vs bowed arms, pale vs saturated gold",
+            "by-b0q.1.29 conflict: combat.png paints the attackers about 10% smaller than battlefield.png does at a nearer row; the card size is shared"
+          ]
+        },
+        "you-angel-attacker": {
+          "rect": [900, 438, 214, 204],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.1.28 conflict: reviewers contradicted each other across rounds on the attack chevron and block crescent: concave vs straight vs bowed arms, pale vs saturated gold",
+            "by-b0q.1.29 conflict: combat.png paints the attackers about 10% smaller than battlefield.png does at a nearer row; the card size is shared"
+          ]
+        },
+        "block-link": {
+          "rect": [684, 392, 196, 100],
+          "verdict": "pass",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "fingerprint": "Rk9CNTkdYGEyWFYzRUgqbnFgkJOLlpqSX1xCKTIeND4lVFwsQEkmcnhriI2Jl5yVeWVGcWA7LCYbJCEbLykeQkA3a2ZVsqF0cmBTqYta2L1/xbF828KGx7J92Lx+mn1SfmxkhW9gl3dUwJVZ7sN8totTk3VWg25hgGxkjHFfwpxt4Kxm3qVc3q1puZVriG5ftpVuwJlqroFVqX5UroRaqX1SsIRXwZprYU4/S0A6SUA6SD45TkI4Qjk0Qzk0Rjs0"
+        },
+        "attack-arc": {
+          "rect": [868, 118, 144, 340],
+          "verdict": "pass",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "fingerprint": "dFI4hmRGbFhNY1VPZVZRZ1hSaFlUaVpUTj4tOC0mTzsqZkoyVUQ3UUQ8W0tCYFFIQTs3Pjg0Pjc0OC8sZUw3bFE8VEhDXlBLVVNKYlRPbF1Xb19Zc2Jcim1blXNaemhiSGdPWE1IfWtkfWtkfWtkfWtknXhdi3BgK00xWExHfmtkfmtkfmtkfmtkgGtjqH1bbHtpYFJJfmxkfmxkfmxkfmtkfmtklnVejnlceWZbfmxkfmxkf2xkgGxjiXNkmn5m"
+        },
         "hand": [466, 758, 744, 183],
-        "phase-tracker": [1398, 734, 214, 46],
-        "resolve-damage-button": [1372, 794, 268, 62],
-        "resolve-damage-caption": [1434, 856, 144, 30]
+        "phase-tracker": {
+          "rect": [1398, 734, 214, 46],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "VkpEU0dBT0Q+il81gFk1RTs3RDo2Qjg1VUlDVUlBU0c9t4JAo3hBU0g8Qzk2Qjg1VkpAQDcxNi4oqnk9k208LicgPzYySD42QTgvPTQuMislrHs9hlowLiggPDQuNS4oRDsxPTUuMyslsn09mW86LiggPTQvODApUUU9QzozOTAps3c3onA5MywjPTQxRTw1U0hCVElBVEg+s3Qzn2kzUkg+Rz46RTw4VUpEUkdCUEVAfFY1cVE2S0E9SUA8SD87",
+          "accepted": [
+            "by-b0q.1.26 residual: slimmer painted blades with more pronounced hilts, a tighter glow streak on the rule, the smoky band, 1-2 px card and diamond edges",
+            "by-b0q.1.26 conflict: reviewers contradicted each other on the lit swords' glow on the rule (pooled vs streaked); the pooled version passed and stays"
+          ]
+        },
+        "resolve-damage-button": {
+          "rect": [1372, 794, 268, 62],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "bFM/hWRDhGNCg2JCgWFBgGBAf19AVUI0r3A00Xgk0Xgk0Xgk0Xgk0Xgk0XgklGIysmQfuWMWvnIvumggvG8rumYauGEUnlsfsWssypRjvJBruIhgs3tMwZp6vZBsnl4lsmspxIZMr31VsH9YrHNCsIJgtIttm1kfumkex20ZwmkYwmoYw2oYwWkYvG4npF8gtXUv6JAt6JAt6JAt6JAt6JAt6JAtlmMsXkUxeFQwd1MvdlMvdlIudVEtdFEtSzgr",
+          "accepted": [
+            "by-b0q.1.26 residual: painted specular glints along the button's rim",
+            "by-b0q.1.26 residual: the mockup's swash R in Resolve Damage"
+          ]
+        },
+        "resolve-damage-caption": {
+          "rect": [1434, 856, 144, 30],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "QjYxQTYwQDUwPzQvPjMvPjMuPTIuPDItQTg1Pzc0QDc0PTUyPjUzOzMxOjIwOjIwUUlGSkI/TkZERDw6TERCPjYzPTUzOjMwTkZDamRhgHt3aGJfcWtofHd0c25rS0RCT0dEZmBdbGZjYltYbmhlaWRhb2pnPzg2S0NAVU1LWlNQVU5MXldUXFZTaGJfQDk3PjYzPTUyPDQyPDMxOzMwOjIwR0A+NzAuPjUzPTQyPDQxOzMxOjIwOjIwODEvNi8t"
+        }
       }
     },
     "trigger_on_stack_with_target": {
@@ -121,28 +473,142 @@
         "tabletop": [1080, 240, 300, 300],
         "brand": [26, 6, 224, 46],
         "settings-gear": [1606, 12, 52, 50],
-        "opponent-badge": [20, 64, 232, 50],
+        "opponent-badge": {
+          "rect": [20, 64, 232, 50],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "accepted": [
+            "by-b0q.1.28 conflict: this mockup paints the emblem bright gold with a notch, battlefield and combat dim; no game state tells them apart, so the majority look is kept"
+          ]
+        },
         "opponent-hand": [556, 0, 560, 62],
-        "opponent-life-orb": [728, 60, 216, 96],
+        "opponent-life-orb": {
+          "rect": [728, 60, 216, 96],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538"
+        },
         "opponent-library": [1244, 10, 124, 156],
-        "opponent-graveyard": [1384, 40, 114, 124],
+        "opponent-graveyard": {
+          "rect": [1384, 40, 114, 124],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "accepted": [
+            "by-b0q.1.29 residual: the tilt: replica and mockup lean the same (a reviewer's 'missing tilt' was checked and wrong)"
+          ]
+        },
         "opponent-island-stack": [146, 128, 210, 144],
         "opponent-swamp-stack": [366, 124, 226, 146],
         "you-plains-stack": [332, 584, 226, 158],
-        "you-life-orb": [700, 646, 272, 116],
+        "you-life-orb": {
+          "rect": [700, 646, 272, 116],
+          "verdict": "pass",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "fingerprint": "kmpPkmpPl25TmHJZgWtgTkI9lWtHtoFKgWthgWthg21jVk9KVU9LfmxmfGpjimlVe2lifGpibF9ZR0NBR0NAbF9Ze2ljemlieWhhe2pja2JbW1hWXFlWa2Jbe2pjeWhhd2ZglIh9XllSYV5cYV5cXllSlIh9d2ZgfGtjeHBlh2xQMCYeMCYeh2xQeHBlfGtjXFBIZ1xTQDMopmgrpmgrQTMoZ1xTXFBIZlhRQjo1XVFLbFhNcFtPY1ZQQTo1YlVP"
+        },
         "you-library": [154, 764, 150, 170],
         "you-badge": [18, 846, 154, 56],
-        "you-mountain-stack-tapped": [98, 586, 234, 156],
-        "opponent-strix-target": [474, 270, 216, 172],
-        "opponent-beast": [726, 274, 198, 162],
-        "you-titan-source": [616, 462, 210, 190],
-        "you-angel": [854, 478, 194, 164],
-        "stack-trigger": [1256, 226, 322, 460],
-        "cyan-arrow": [570, 132, 704, 210],
-        "gold-arrow": [798, 552, 490, 124],
-        "hand": [552, 760, 572, 181],
-        "priority-pill": [1342, 758, 288, 48],
-        "pass-button": [1364, 814, 262, 70]
+        "you-mountain-stack-tapped": {
+          "rect": [98, 586, 234, 156],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+          ]
+        },
+        "opponent-strix-target": {
+          "rect": [474, 270, 216, 172],
+          "verdict": "pass",
+          "bead": "by-b0q.1.31",
+          "commit": "636900b",
+          "fingerprint": "RX6KT5CXTJObMrHER9HmUJeYV5GQQouXO32KhntbiYNlP7zLQ8nVsqBts5xnWomALnaJWV5fS0I9S5KcOa/EU05KYFhQS4aLM3qNc4SKUlBJWldOcXZvW1VJhXuAUYiPMXiMfY2Ob29iVExBWU1BlYRtqaCaT4eON3qNcX1+gpCIVVNOa2JTqZ+BpqKSSoSJTYSWa3F5XG9yenZojH9gwadztJxsX5CLHHqUE2qDDWmEDGiEFGuCSIOCS4aEQ4KO",
+          "accepted": [
+            "by-b0q.1.31 residual: the mockup's slightly softer, wider halo; a flatter rim; badge tints and bezel; the flying glyph; name weight"
+          ]
+        },
+        "opponent-beast": {
+          "rect": [726, 274, 198, 162],
+          "verdict": "pass",
+          "bead": "by-b0q.1.27",
+          "commit": "44861e7",
+          "fingerprint": "XFpRZ3NlaHNlaHRlaHRlaHRlaHRlYGtdRlBFUWdTbIFsepF3fZR6hp2GeIx1YX1nO0Y4MT0iVls4pIZVp4ZWhoVhZXBNNEwwOkY4PUcsgWI+b1EuW0MlV0MlcXlSOE8xOkU3Rk8sWlMzNysWRzYcPzMcT0wpM0wrOUY2REglZW5CR0AnYVg4Z2o5P0AfMEcmOEQ1RUUcZmItaGczTk0jh4l3jJCIlpySNDAsHiAaHiEbICMbHiEbUlNNXV9aZWZg",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+          ]
+        },
+        "you-titan-source": {
+          "rect": [616, 462, 210, 190],
+          "verdict": "pass",
+          "bead": "by-b0q.1.31",
+          "commit": "636900b",
+          "fingerprint": "onZSuHlTuXlTuXlTuXlTuXlTuXlTuHhSomlCnltJqmRRq2BKw3Raz3xhxHhhxHVeo2A4fTo0kE1K6n0/5I1A5HU2oUgrgjoroVw1pU4+wG02gks0uFUo13wppVMiuFYypl82zW5ClU8rqFgnjj0gmEkp1nM62XFIpFsyolEt0HI744ctlD8frmI9yYFiuW9VkVkzbzgggEIqnlcjl0odtoFnsIt8w5mJlXFPkGtEjmlCjGdAi2dAjGhDkGxHkm1J",
+          "accepted": [
+            "by-b0q.1.31 residual: the mockup's slightly softer, wider halo; a flatter rim; badge tints and bezel; the flying glyph; name weight"
+          ]
+        },
+        "you-angel": {
+          "rect": [854, 478, 194, 164],
+          "verdict": "pass",
+          "bead": "by-b0q.1.27",
+          "commit": "44861e7",
+          "fingerprint": "cGBWj4iFjYaDkImFkImGkImFkImFkImFbGFafn19ua6jr6uqq6uuraqss6yqwriuaF5YW2BoqY90nId5enWBln96sY9xlH5sbGBZYmZyem9ooH1iqXlWrIhtgGpbooVua19WkIJ7bHiIlHhkkn1tm3xlwpl6lYqGhG9Xr5J8q5qMjX54h3NjjHhsx51/o4h6s41dl35stJZ9s6COr5F4c2Rcu62kuquhXkw9nHtPZVNFYVBEYVJITkhDs7CvpqSj",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+          ]
+        },
+        "stack-trigger": {
+          "rect": [1256, 226, 322, 460],
+          "verdict": "pass",
+          "bead": "by-b0q.1.27",
+          "commit": "44861e7",
+          "fingerprint": "fmVhml9Qn2JSm19PsW9dsG5crW1bcktAazEmh0Q5qFg6s18t0Gou0mkkj0MlajYqh0Apt2I2sWM0rFEckkAkwGMz0XE/eTwqfkEyo1g6zHRF1ng10Ww1xm8/s2c/aDovmGVVvZJ+v5N/wZWByZuG06OM16aPiFlLmGlYxKiTyKyXxamUxqqVxqqV4MCoil1Oo3Vh78yy78yy78yy78yy78yy78yyeVNGZ1VIeV1Rpn9tu456uY14nnloZk1DPzYy",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+          ]
+        },
+        "cyan-arrow": {
+          "rect": [570, 132, 704, 210],
+          "verdict": "pass",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "fingerprint": "ZFZRa1tWa2tfW6KmUbG/WJ6nYV1ZRTs3aVpUZXBvWKi0Y3BuamJdX3d3V56oXVBLa15YW5+nb2ZgcmJbcWBabl9YYnl5X3d4Zn+AbXh2eGZgeGZgdmVecmJbbl9YW4eLYo2UeGlkemlie2liemhhd2ZfcWFaYoyOUaq7Z3d8X2BUX2BUemhiemhidWReY2Vhd62dZ3Frd4p1g5mDdGNdfGpjeWdgbFZOUXN2YXBwbGE7amxJdGNdfWtkemlib1hQ",
+          "accepted": [
+            "by-b0q.1.28 residual: the glow slightly paler (borderline)"
+          ]
+        },
+        "gold-arrow": {
+          "rect": [798, 552, 490, 124],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538"
+        },
+        "hand": {
+          "rect": [552, 760, 572, 181],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538"
+        },
+        "priority-pill": {
+          "rect": [1342, 758, 288, 48],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "VkpFUEVATEI+ST87Rj05RDw4Qzs3QTg1OzMvJSAdJSAdJSAdJSAdJSAdJSAdLykmLykmKScnKSQhJSAdKCMgJSAdJSAdKCMgMS0tS05SVVFNQTw5S0ZDQTw5UExILikmMC0sTlFVb2tnd3NvbGhkXVlVbWllNzIvLSckKSgoUk1KQT05RUA9Qz87Qz47LikmMSonJSAdKiUiJSAdJSAdJyMfJiEeKSMhPTUxLykmLiglLSckLSckLCYjKyYjMCkn"
+        },
+        "pass-button": {
+          "rect": [1364, 814, 262, 70],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "T0VBV09LVU5KVE1JU0xJUktIUUpHQjo4Rj87NjAsNjAsNjAsNjAsNjAsNjAsQjw4Pzk1NzIuODIuPDYyOTQwNzIuNzIuPTc0Pzk1OjQwSkVBU05KVE9LPjg0OjQwPTczQTs3PDczQTw4SUM/VE9LQz46PDczPzk1Qzw5QDo2QDo2QDo2QDo2QDo2QDo2Pzo2Pzk2Qz47Qj06Qj06Qj06Qj06QT06NzIwPDMwMyspMSooMCknLygnLScmKyUkLign",
+          "accepted": [
+            "by-b0q.1.26 residual: painted specular glints along the button's rim"
+          ]
+        }
       }
     },
     "scry": {
@@ -155,20 +621,125 @@
       },
       "parts": {
         "screen": [0, 0, 1672, 941],
-        "backdrop": [16, 500, 330, 240],
-        "brand": [26, 6, 224, 44],
-        "title": [186, 44, 1004, 86],
-        "instruction": [326, 130, 698, 34],
-        "lower-rule": [266, 178, 836, 16],
-        "view-battlefield-button": [1346, 56, 276, 66],
-        "tray": [138, 206, 1052, 492],
-        "tray-island": [288, 280, 366, 424],
-        "tray-backs": [448, 214, 316, 394],
-        "tray-counterspell": [742, 242, 302, 408],
-        "bottom-label": [164, 700, 148, 40],
-        "top-label": [1088, 700, 74, 40],
-        "done-button": [508, 746, 300, 74],
-        "source-card": [1256, 210, 364, 496]
+        "backdrop": {
+          "rect": [16, 500, 330, 240],
+          "verdict": "pass",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "fingerprint": "HBkYHhoZIRwbIh4dHhkZHhsZHx8iN2V6HBgYHhoZIBwbIh4cHhkZHhoZHx4eJlZrGxgXHRkZIBsaIR0cHRkZHhoZHxwcIVJnGxcWHRkYHRkXIhsZHhcUGxMSGhQTHUxiGhcWHBgXIBgVNikkNy4jGBEOEw0MFj1QGhYWGhcWIhgTNiokOzQoGBEOEw4LEis7GRYVGRYVGxEPPjMtT0Y7ODIuLCYjGSIqGRYVGBUUGA8NQTQwWE1HPTQxS0NCExIS"
+        },
+        "brand": {
+          "rect": [26, 6, 224, 44],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "EA4OEQ8PExAQFBEQFBIRFhMSFhMTFxQTExEQERAPExAQFBERFRISFhMSFhMTFxQTIBwXFBIQExEQFBIRFRISFhMTFxQTFxQTNy8kLSYfNy8mLykiODAnMiskOjIpKSQeaFc/LCUfOTIoMSojKiQfNy8nMywkKiUgPjQnGxcVLSchKyUfKCMeLCYgLCYgKyYgHxoWFBEQFRISFhMSFhMTFxQTFxUUFxUUFBERFBIRFRISFhMTFxQTFxQTFxUUGBUU",
+          "accepted": [
+            "by-b0q.1.26 residual: swash and garbled glyphs in the mockup's brand"
+          ]
+        },
+        "title": {
+          "rect": [186, 44, 1004, 86],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "GBUVGhYWGxgXFREQGxQPHBUQFhEOGhYWGBUUGhYWHBgYKygnFREQFREPGBQUHBgYFhMTGhcWHRkYWVVTIBwbHhsaHhoZHhoZFxQTGxcXHhoZgH17IR0cHRoZIRwbHxsaGBUUHBgXHxsaaGVjHxsaIR4dIh4cIBwbFxQTHBkYIBsaT0xKIBwbIR4cIx8eIR0bGBUUHRkYIRwbLiopIR0bIB0cJB8eIh0cKCUkPTo5Qj8/Qj8+Qz8+QD07REBALisq"
+        },
+        "instruction": {
+          "rect": [326, 130, 698, 34],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "HBkZKCUkKCUkJR8eJSAfHhgUJB0ZJSAfHx4fMjAvMzAvJyIhJyIhIxsWLCUhKyYlOTg5QT8+RkRDNjIxNTEwOTArNi8rOTU0YGBhc3Fxe3l6b21sZ2Vke3Vxa2ZkZ2RjVlZXXFldZWJlWVZVUk9OW1VRWVVTWVZVZmZobWlxbWlvWldWXVpZZ2NgXlpZX1xbKywvMis6MCg1Ix4dKCQiJB4dKiUkKiUkJicqMSk8Mys5JiEfJyIhJiEgKCQiKCQi"
+        },
+        "lower-rule": {
+          "rect": [266, 178, 836, 16],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "JDE2Ih0sKCE1JiEgJiEgJyIgJiEgJiEgIzE1IhwrJR4yJiEgJiEgJyIgJiEgJiEgIjA0IRsrIhwvJiEgJiEgJyIgJiEgJiEgIC4yIBsqHxorJiEgJyIgJyIgJyIgJiEgIy0vLys3LSo1NDEwNTEwNjIwNTEwKiUlZmlpwsHCxMTFxcXFxcXFxcXFxMTEcG5tFh4gGBQfExEaHxsaIBwbIBwbHxsaHxsaGSMkHBclFRMdJiEgJyIhKCIhJyIhJiEg"
+        },
+        "view-battlefield-button": {
+          "rect": [1346, 56, 276, 66],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "LyspUU1PXlVcW1NaTElITElITElIJyQkMi0qHhoYHhoYHhoYHhoYHhoYHhoYLywrMCspNjIwHhkYNC8uKCQiMi4sMCsqKyclKyclZGFfTElHd3RydHFva2hlb2tpKSYkKiYkeXZ0YV5blZKQgX57iYaDgn99KSYkLSkmKiYjJCAdMCwpLCclMi4rMi4rLCgmNjAtIh0aIh0aIh0aIh0aIh0aIh0aMzAuLikmUU9OX11cX11cUlBPUE5NUE5MJiMi"
+        },
+        "tray": {
+          "rect": [138, 206, 1052, 492],
+          "verdict": "pass",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "fingerprint": "ExUVFRUWHxoZSDYoPDEoKC4zJSUkJSAfHRkYITtHUXB8ZnFzXkc7UHOZTG6RJB8eHxsaUnSOXpHFXHOIXUc9PmeWNW+kJCAfHxsaN2WOT4jCXn6aW0Y+N1d6OG6gJSAfHxsaUnSPYoimWnuUWEtHaY+zS2mGJB8fHxsaQ2d6O3uMNG+EWFZXxtTjh5WiJB8fIhoYJExaFGuCK2qFOkNMorTHd4eXJB8fLyYfHzxIH1ltGSs1JiIhJCAcIh8eJiIg",
+          "accepted": [
+            "by-b0q.1.28 residual: the mockup paints its middle back taller than a card"
+          ]
+        },
+        "tray-island": {
+          "rect": [288, 280, 366, 424],
+          "verdict": "pass",
+          "bead": "by-b0q.1.31",
+          "commit": "636900b",
+          "fingerprint": "HyoyITI9KD5NPVZlYHeEaIedUnOIaEAnO1lsW3+dWoSqX5LCUoi+OHKuOWOHbVZDM0pZGV6mOnrAPYPKQ363U4zLSHqqWFFJJThEXI6+g6zXiavNO2aKapS8e6PKSk1OITM/d5Krdpu7TnmVVXh+J1pxMnKaQVViHSUtPXaOLZSsKIKaJGt6Mm6BQZGpM1pwEg8QMV50EmV8DHuVDWJ2ClRtCT9ZKE9kEw8OJ0ldFUxlGEFWHDdHERcbGiInJjM8",
+          "accepted": [
+            "by-b0q.1.31 residual: rim warmth and streaks; the mockup's halo slightly brighter and wider"
+          ]
+        },
+        "tray-backs": {
+          "rect": [448, 214, 316, 394],
+          "verdict": "pass",
+          "bead": "by-b0q.1.31",
+          "commit": "636900b",
+          "fingerprint": "FxMTJBwXMiQcUTckSzUkQjAkPCsdNykdR0ZEU1RRP1JdTV1kXTopYjggXzwoVzcff6G8eaPFcJrBTnCJY09AiVoxZTgeSzMkNni9KHK9OXa6P2yZWVVOfU4qajwfQi8naZbASnyuZ5zRapjESU9Qaz4gXjUfPjMubJKvPGN+S3aeaJfESFpnVzUgUzMjPDQxX46eNm52JWV4J3OTOV90OCceQScWNDlAC1p1J1pmO3qQPIulPGh8DxcgEAsLIjVG",
+          "accepted": [
+            "by-b0q.1.31 residual: leather tooling vs scuffs; the Island covers more of the back (tray placement)"
+          ]
+        },
+        "tray-counterspell": {
+          "rect": [742, 242, 302, 408],
+          "verdict": "pass",
+          "bead": "by-b0q.1.27",
+          "commit": "44861e7",
+          "fingerprint": "SUE6VGRxTFtoSVpmS1xpSVpmQFFbLTg/QUhOL0ltMVN9LVqMN2ylR4K6PmmYNlJtPUlVSVp0R1l2OG+pOoDGOIbWQJbbJkdoQFFgR01aIDFHS2yOUYvDSJXfSJzdKEZkO09iRV55PldyQnSkWZTLR4a/NmCQKUFUWHGIqr/VrMPZrsXcrsXcrMTcrMTcMkFObomhytnowtDfw9LhwtDfwM7dytrrJDZFSl1ue4uag5OjipuskqS1mqy+lKrBICky",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+          ]
+        },
+        "bottom-label": {
+          "rect": [164, 700, 148, 40],
+          "verdict": "pass",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "fingerprint": "WExESUAzW09EUUlEQz06OTIwKCEfJyEga2JdhoF5d29ojYmHdXJwc3BvTkhHVVBPd29qfHZvYllQTkhDbGlnU09NWFRTXFdXgXp2cWpiZVxTS0Q/dnJwTUhGb2xqRD8+fnZybmdfcGdfQjo1b2tpTEdFZmJhQz08cmhkW1BJVUdATUE8RTs4TkVDTURDOjIwLBoVLhsVLRoUKBYRJRMPIxIPIxIPGw8NHBIQHBIQGxIQGhEPGhEPGhAPGhAPFhAP"
+        },
+        "top-label": {
+          "rect": [1088, 700, 74, 40],
+          "verdict": "pass",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "fingerprint": "KCIhVFBPVFBPLSgnVlJRMi4sVFBOLyopODIxl5WVd3V1end3aGVkPjo5i4qJgoB/KSQjeHZ1MS4sdnRzVFBPa2loZ2VkfHp5JyIgeXd2VlJRVFFQcW5tcnBwa2lpKCMjJiEfenh3TEhHV1RTfHp5eXd2Ih4dJiEgMy4ta2loJB8eb21sPTo5bmxrLSgnJiEgJSAfIx8eJiEgIx4dJSAfIx4eJSEgJiEgJiEgJiEgJiEgJiEgJiEgJiEgJiEfJiEf"
+        },
+        "done-button": {
+          "rect": [508, 746, 300, 74],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "sGw99qJS9qFR9qFR9qFR9qJT9qNUrWs84XIo/XUY/XUc/XMa/W8T/XQY/Xkd3XMr8XIj/XMZ+4E16oRI+nUm/G8Z/XUc8HQm9XMj/XUd/IE245525KF79HQo/XEa9HIk8Xwp/YQl+Yk42ZBh3ptu9nYf/Xkd8Xko34U2/pgx/ZMs+o0n+own/Y8o/pEr4oQ1sXVE+r1p+rxo+rtn+rtn+rtn+rtnuXxJVCwajEEcmU4jmk4imk4hmU0hkUEbbEAm",
+          "accepted": [
+            "by-b0q.1.26 residual: the cloudy fill, warmer rim glow and halo strength"
+          ]
+        },
+        "source-card": {
+          "rect": [1256, 210, 364, 496],
+          "verdict": "pass",
+          "bead": "by-b0q.1.27",
+          "commit": "44861e7",
+          "fingerprint": "P0hRWmt7WGh2ZXiJaX2PaX2PY3iKQExXJkFbJj9qLEt/OGqsP22sQmypLU2AJD9aJUFdVnWkQ22rXpPSWYrLVYjHRmidKkdlKUdnQWKXb4KkhrDceaLSd4qtOlR/JUFdMUxkQ198W32kT3aiWn+oXHWUSmqPNE9pTWJ2qr/Tr8TZssjes8jes8jessjeUmh9U2l9xtTjxNPiw9Hgwc/extTkxdTjVm2CPk9ei5uri5uri5uri5urjJysi5urQFFh",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+          ]
+        }
       }
     },
     "ui_system": {
@@ -198,72 +769,447 @@
         "header": [150, 4, 1240, 96],
         "header-wordmark": [552, 6, 438, 64],
         "header-subtitle": [600, 62, 340, 36],
-        "01-panel": [14, 114, 476, 394],
+        "01-panel": {
+          "rect": [14, 114, 476, 394],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "Oi8kQTo0SkI7OzQuLygjLygiLiciLygiQjkzTEM8KSUicmtjhn1zrn46Pnd7MW96Qjo0TUQ+Lywob2hggnpwq309PnR3Mmx2MiwnNzEtPDYzMSsnNC8rPDYzMy0pNS8rNC4qYl5aRUA8LCUhOjQwOjUxOTQwNS8rLykkOTMuOTMuMSsmLyklNC4qNjEtLCYhQTcwV0tDWk1FVEhAMSokPDIqPDIqMyslMiokQDgyRDw2Ni4oLSYhOTMvOTMvLykk"
+        },
         "01-title": [38, 122, 224, 38],
-        "01-swatch-table": [42, 174, 76, 120],
-        "01-swatch-surface": [130, 174, 76, 120],
-        "01-swatch-text": [216, 174, 78, 120],
-        "01-swatch-gold": [304, 174, 78, 120],
-        "01-swatch-cyan": [392, 174, 76, 120],
-        "01-serif": [58, 298, 194, 94],
-        "01-specimen-divider": [234, 310, 12, 74],
-        "01-sans": [254, 306, 218, 82],
-        "01-tabletop": [42, 402, 216, 96],
-        "01-metallic-borders": [274, 410, 198, 88],
-        "02-panel": [500, 114, 496, 394],
+        "01-swatch-table": {
+          "rect": [42, 174, 76, 120],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "QTo1YFZOYFZOYFZOYFZOYFZOYFZOSkI8U0tEa19Wa19Wa19Wa19Wa19Wa19WX1ZPU0tEa19Wa19Wa19Wa19Wa19Wa19WX1ZPU0tEa19Wa19Wa19Wa19Wa19Wa19WX1ZPQjs2YlhQY1lRY1lRY1lRY1lRY1lRS0Q+KSMfKCIeSkVCSkVCWFNQTEdDKSMfKSMfKSMfODMvRUA8UExIU09LU09LNC4rKSMfKSMfQz87T0tHSkZCS0ZDQTw4R0I/KSMf",
+          "accepted": [
+            "by-b0q.1.26 conflict: the hex digits differ by design: the tokens are the colors as rendered"
+          ]
+        },
+        "01-swatch-surface": {
+          "rect": [130, 174, 76, 120],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "NC4qLywoLywoLywoLywoLywoLywoNjEsNjEtIR8cIR8cIR8cIR8cIR8cIR8cNjMuNjEtIR8cIR8cIR8cIR8cIR8cIR8cNjMuNjEtIR8cIR8cIR8cIR8cIR8cIR8cNjMuMy4qLSomLSomLSomLSomLSomLSomNTAsKSMfSURBS0ZDQz46W1ZTPTg1Pzo3KSMfKSMfRUA8UEtIS0ZCVVBNSkVBSkVCKSMfKSMfQz47Pjg1R0I+QDs4Pjk1OjUxKSMf",
+          "accepted": [
+            "by-b0q.1.26 conflict: the hex digits differ by design: the tokens are the colors as rendered"
+          ]
+        },
+        "01-swatch-text": {
+          "rect": [216, 174, 78, 120],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "TkhCuK+jvLKmvLKmvLKmvLKmurClYVpTd3Bo8ufY8ufY8ufY8ufY8ufY8ufYlo6Ed3Bo8ufY8ufY8ufY8ufY8ufY8ufYlo6Ed3Bo8ufY8ufY8ufY8ufY8ufY8ufYlo6EUkxGxLquyL6xyL6xyL6xyL6xxrywZl9ZKSMfKCIeODMvUU1JR0I+OzYyKCIeKSMfKSMfODIuQz46VE9MUk1KSkVCOzUxKSMfKSMfQj05RUA9S0ZDPjg1Qz47SURAKSMf",
+          "accepted": [
+            "by-b0q.1.26 conflict: the hex digits differ by design: the tokens are the colors as rendered"
+          ]
+        },
+        "01-swatch-gold": {
+          "rect": [304, 174, 78, 120],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "TD0sr4A/soM/soM/soM/soM/sIE/Xkowclg25KJC5KJC5KJC5KJC5KJC5KJCj2w8clg25KJC5KJC5KJC5KJC5KJC5KJCj2w8clg25KJC5KJC5KJC5KJC5KJC5KJCj2w8UEAsuoc/vYpAvYpAvYpAvYpAu4lAY00xKSMfKCIeQz46TEhETEhES0ZCKCIeKSMfKSMfODIuRkE9SURBSkVBUEtHNzEtKSMfKSMfQTw5TEdDSURBRD88SkVCPTc0KSMf",
+          "accepted": [
+            "by-b0q.1.26 conflict: the hex digits differ by design: the tokens are the colors as rendered"
+          ]
+        },
+        "01-swatch-cyan": {
+          "rect": [392, 174, 76, 120],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "M1JWOKm+OKvBOKvBOKvBOKvBOKrANmVtOH6LM9z+M9z+M9z+M9z+M9z+M9z+O52wOH6LM9z+M9z+M9z+M9z+M9z+M9z+O52wOH6LM9z+M9z+M9z+M9z+M9z+M9z+O52wM1dcN7TMN7bON7bON7bON7bON7XNNWx1KSMfKCIeQz47Qj05SURBR0I/KCIeKSMfKSMfOzUySkVCVFBNT0pHVlFOPjk1KiQgKSMfRkI+RkI+RD87SEM/RD87R0I/KyUh",
+          "accepted": [
+            "by-b0q.1.26 conflict: the hex digits differ by design: the tokens are the colors as rendered"
+          ]
+        },
+        "01-serif": {
+          "rect": [58, 298, 194, 94],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "KyUhKiQgKSMfKSMfKSMfKSMfKSMfKSMfX1tXSkVBLicjLigkKyUhKSMfKSMfKyQgfXl1hYF9hYF+lpOQXFhUKSMfKSMfMCkkR0I+pqOgbGdkS0ZCamZiKSMfKSMfMiolQTw4Pjk2TEdESUNAPjg1KSMfKSMfMiolKiMfKiQgKiQgNzIuKyUhKSMfKSMfMSokWFRRT0tHZmJfWVVSXVlVY19bOTQwLSciKCIeLScjKCIeKCIeKCIeKCIeKSMfKSMf",
+          "accepted": [
+            "by-b0q.1.26 residual: the mockup's slightly stronger painted glow on 'Scry'"
+          ]
+        },
+        "01-specimen-divider": {
+          "rect": [234, 310, 12, 74],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "KSMfKSMfKSMfNi4oMCkjKSMfKSMfKSMfKSMfKSMfKSMfc2FQTkI4KSMfKSMfKSMfKSMfKSMfKSMfjXdhW01AKSMfKSMfKSMfKSMfKSMfKSMfkXtkXU9CKSMfKSMfKSMfKSMfKSMfKSMfkntlXk9CKSMfKSMfKSMfKSMfKSMfKSMfjXdhW01AKSMfKSMfKSMfKSMfKSMfKSMfeWZUUUQ5KSMfKSMfKSMfKSMfKSMfKSMfPTMsMysmKSMfKSMfKSMf"
+        },
+        "01-sans": {
+          "rect": [254, 306, 218, 82],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "KSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfRD87Pjg1OzYyRkE+OzYyOjUxRUA9NzIuWlZTbWlma2dkZmJfWFRQaGRhbGhlWVRRKSMfODMvKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfMSsnKSMfMSsnLCYiLCYiKSMfKSMfKSMfWFRQYFxZTkpGamZjaWViVVBNKSMfKSMfKSMfKSMfLCYiKSMfKSMfKSMfKSMf"
+        },
+        "01-tabletop": {
+          "rect": [42, 402, 216, 96],
+          "verdict": "pass",
+          "bead": "by-b0q.1.29",
+          "commit": "636900b",
+          "fingerprint": "PzYvRDozRDszRTszRTszRDszRDozOjErUEQ8U0Y/VEhAVklBVklBVEhAUkY/SD02UkU9VUlBWEtDWk1FWk1FWEtDVUhBSj43U0Y9V0tDW05GXlBIXlBIWk1FV0pCSz83U0Y+WEtDXE5GX1FJX1FJW05GV0pCSz83PzUsRTkvRjoxRzsxRzsxRjowRDkvOjEpKSMfKSMfY19cWFNQU05LU05KKSMfKSMfKSMfKSMfMy4qNjEtMiwpMy0qKSMfKSMf",
+          "accepted": [
+            "by-b0q.1.26 residual: the painted grain and felt mottling of the tabletop"
+          ]
+        },
+        "01-metallic-borders": {
+          "rect": [274, 410, 198, 88],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "LiUfLyYfMSYfOCogNyogMCYfLyYfLSUfRTgqUEEyUkExXEYxW0QvUkExUEExQDQoKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfPTcyR0E9SUM+S0VASkVASUM+R0E8OTMuKCIeJyEeJyEeJyEeJyEeJyEeJyEeKCIeKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfVlFOYVxZaWVhYV1aZmFeUk1KKSMfKSMfKSMfKSMfKSMgKSQgKSMfKSMgKSMf",
+          "accepted": [
+            "by-b0q.1.26 residual: the painted white-hot glint and halo width on the gold rule"
+          ]
+        },
+        "02-panel": {
+          "rect": [500, 114, 496, 394],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "OjAlQjs0RDw2Rj84MSokLygjLiciLygjKyUguWYn0HY0zXMz0W8nNSwmMSsoKyUgKyUgTj8yZlRCalhGWkk5MSsnNS8sKyUgKyUgODQwQDs4Qz47Pjo3LigkLScjKyUgKyUgMi0pNzIuOjUxNTAsMColMComKyQgKyUgKiQgMi4tPDc0OjUxNjEuKiUhKyQgKyUgNC4pLCcjNSsiOjAlMSwnLCcjKiQgLiciOTMtOjMtOS8mQDQqNS8pMy0oLSci"
+        },
         "02-title": [522, 122, 240, 38],
-        "02-primary-button": [566, 170, 252, 58],
-        "02-secondary-button": [566, 228, 252, 54],
-        "02-disabled-button": [566, 284, 258, 58],
-        "02-caption-primary": [842, 182, 72, 30],
-        "02-caption-secondary": [842, 238, 86, 30],
-        "02-caption-disabled": [842, 296, 82, 30],
-        "02-priority-pill": [608, 358, 290, 56],
-        "02-phase-tracker": [540, 424, 418, 66],
+        "02-primary-button": {
+          "rect": [566, 170, 252, 58],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "ZUYwo3JJo3JJo3JJo3JJo3JJo3JJX0Iuw3Qw/Yck/YUi/YQh/YQh/Yck/YoounIy4G4g/HMZ/G4V9oM9/GkQ/G8W/XYd2G4j6m0d/XQc/GsU6qF47JVk/GkT/XEb42wf53Yj/oIk/nkc46mD3aJ8/HMX/ngc4HAh04Ex/poy/pUu334l3X4l/pIq/pMty3svnnFE87Jj87Ji87Fi87Fi87Fi87FilWpBOCceSiwdSiwdSiwdSiwdSiwdSiwdNiYe",
+          "accepted": [
+            "by-b0q.1.26 residual: the cloudy painted flame texture in Done's fill"
+          ]
+        },
+        "02-secondary-button": {
+          "rect": [566, 228, 252, 54],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "KSIeJyEcJyEcJyEcJyEcJyEcJyEcKCIeSURBXVlXXVlXXVlXXVlXXVlXXVlXTUhGMSwqKyclIR0bKiYkIx8dKCQiKCQiMCwqLiknR0NBT0xKX1xZbGlnYl5cV1NRLSknLSknQz89iYaEb2xqjouJfHl2ZmNhLSkmMi0qJSEfOTUyPDg2Qj47RkI/OTYzMS0qSERBYFxZYFxZYFxZYFxZYFxZYFxZTUhFJiAdIBsYIBsYIBsYIBsYIBsYIBsYJSAc"
+        },
+        "02-disabled-button": {
+          "rect": [566, 284, 258, 58],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "ODIuUk1JUk1JUk1JUk1JUk1JUk1JOjQwPTk1NzMwNzMwNzMwNzMwNzMwNzMwPzo3OzYzODMxOjUzOzc0QDw5ODMxODMxPDc0Ozc0OTUyUExJSUVCVVFOQDw5OTUyPDg1PTg1Ozc0R0I/REA9WVVRSERBOzc0Pjk2PTg0Pzo2Pzo2Pzo2Pzs3Pzs3Pzo2Pjk2ODMwTUpHTUpHTUpHTUpHTUpHTUpHOTUyJSAcHxsYHxsYHxsYHxsYHxsYHxsYJR8c"
+        },
+        "02-caption-primary": {
+          "rect": [842, 182, 72, 30],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "KSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKyUhYFtXLigkNC4qKSMfKSMfKSMfKSMfKiQgfHl2UUxIUk1JOjUxVE5LRUA8MSsnOTMvX1tYi4iGjImGfHl2fXp3a2hlOjUxT0tHPjk1XVlWY19ce3h1c3BtU05LKSMfJyEdKCIeJyIeJyIeJiAdJyEdRkI/KSMfKSMfKSMfKSMfKSMfKSMfKSMfKCIeKSMf"
+        },
+        "02-caption-secondary": {
+          "rect": [842, 238, 86, 30],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "KSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKiQgKSMfKSMfKSMfKyUhKSMfKSMfSEM/SkVCKSMfKSMfKSQgS0ZCKSMfKSMfQz46dHBtcm5rhoJ/enZzh4OAko+MRUA8OjUxhIF+bWlmcm5rhIF9hYJ/Y19cPDczPjk1Qj47Qj06PDg1SkZDR0NATkpGKiQgKSMfKSMfKSMfKSMfKSMfKSMfLykmKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMf"
+        },
+        "02-caption-disabled": {
+          "rect": [842, 296, 82, 30],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "KSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfPzo2VlJOPTg0KSMfWFNQNS8rSURAKSMfSURAWlZTZmJfXVhUhoJ/VVBMaGNgKSMfSkVBYl5baGVidXFvc29sdHFuXVlVKSMfSURBUU1KWVVSbmtoVlJQWlZTWFRRKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMf"
+        },
+        "02-priority-pill": {
+          "rect": [608, 358, 290, 56],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "KSMfKSMfKSMfKSMfKSMfKSMfKSMfKSMfNC4rODMwODMwODMwODMwODMwODMwMy0pKiUhJSEeJSAdJSAdJSAdJSAdJSAdKiUiKSQhNzk+Qj06Mi0qOzczNC8sODMwKSQhKiYkUlZbdXFteXVxbWhlZGBcZ2NfKSQgKSQhKCYlRkE+NTAtNjEuOjYyNDAsKSQhMy4qNzIvNzIvNzIvNzIvNzIvNzIvMi0pJSAcIh0aIh0aIh0aIh0aIh0aIh0aJiAd",
+          "accepted": [
+            "by-b0q.1.26 residual: a slightly softer sparkle"
+          ]
+        },
+        "02-phase-tracker": {
+          "rect": [540, 424, 418, 66],
+          "verdict": "pass",
+          "bead": "by-b0q.1.26",
+          "commit": "2f7cf8a",
+          "fingerprint": "LScjMiwoMiwoMiwoMiwoMiwoMiwoLScjJSEeHhsYHhsYJB4YIh0YHhsYHhsYJiIePTgxIh8bIR4aQzIhQzEgLismHhsYKSUhSEE5KiYiMy8pUj0pZk82VE1CIR4aPjkySkM7NjIuU01EXUcyd2NLTUY9MS0qMi4oWVJIKCMgXlZMUT0rW0MsRD43JyMgQjw1KyYjKyYjKiYjNSsjMikjKyYjKyYjLCYjLiklMi0pMi0pMy0pMi0pMi0pMi0pLigk",
+          "accepted": [
+            "by-b0q.1.26 residual: the mockup's whiter sword core and painted pill-rim highlight"
+          ]
+        },
         "03-panel": [1006, 114, 516, 394],
         "03-title": [1032, 122, 226, 38],
-        "03-life-active": [1032, 168, 154, 108],
-        "03-life-inactive": [1184, 168, 128, 108],
-        "03-opponent-badge": [1334, 184, 188, 54],
+        "03-life-active": {
+          "rect": [1032, 168, 154, 108],
+          "verdict": "pass",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "fingerprint": "KSMfLCQfSDMfm4Jds5x1VzwjLSQfKSMfLCQfRy4cnXI8S0Q6RUA5k3RGXDkbMCUeOCgdfEYZVkQwcG1qbmxpNjItlFcgQCscKiMfYVRISEI9ZmNhY2FfMS0pdmlcLSUhLygkT0c+eE0iSzMdPCsdgVAfUEc9NS4pKSMfJSAdMicehFIgkFkhQS4eJSEdKCMfJyIfKSMfKSMfSURBSENAKyUhKSMfJyIfKSMfKSMfLScjPTc0OzYyKSMfKSMfKSMf",
+          "accepted": [
+            "by-b0q.1.28 conflict: the sheet omits the screens' rays and under-glow and fans its blades flatter; the game follows the screens"
+          ]
+        },
+        "03-life-inactive": {
+          "rect": [1184, 168, 128, 108],
+          "verdict": "pass",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "fingerprint": "KSMfKSMfKSMfKyUhMiwoKSMfKSMfKSMfKSMfMComOjUxSENAQz88SEM/LigkMSsmLSQfPDYwOjYzZGFeYV9cTElGPDczODMuKSMfPzgyMy8sc3BuTktJLSonRT85LScjKSMfKSMfaUEjQi0eMicgYj0iRjAhKSMfKSMfKSMfMCUfaUAieEcjUDQgKiMfKSMfKSMfKSMfQj05RUA8SENAQDo3KSMfKSMfKSMfKSMfNjAsRUA8OzYyNzEuKSMfKSMf",
+          "accepted": [
+            "by-b0q.1.28 conflict: the sheet omits the screens' rays and under-glow and fans its blades flatter; the game follows the screens"
+          ]
+        },
+        "03-opponent-badge": {
+          "rect": [1334, 184, 188, 54],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "accepted": [
+            "by-b0q.1.28 conflict: this mockup paints the emblem bright gold with a notch, battlefield and combat dim; no game state tells them apart, so the majority look is kept"
+          ]
+        },
         "03-library": {
           "rect": [1028, 298, 136, 150],
-          "masks": [[1056, 306, 92, 130]]
+          "masks": [[1056, 306, 92, 130]],
+          "verdict": "pass",
+          "bead": "by-b0q.1.31",
+          "commit": "636900b",
+          "fingerprint": "KSMfHBgVEA4NEA4NEA4NEA4NEA4NJiEdGxcVDAoKAAAAAAAAAAAAAAAAAAAAJB4aGBQSDAoJAAAAAAAAAAAAAAAAAAAAIx4aGBQSDAoJAAAAAAAAAAAAAAAAAAAAIx0ZGBQSDAoJAAAAAAAAAAAAAAAAAAAAIh0ZGBQSDAoJAAAAAAAAAAAAAAAAAAAAIh0ZGBQSDAoJAAAAAAAAAAAAAAAAAAAAIRwZGRUTHRoXGRYUGRYUGRYUGRYUFxQSJB8c",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.1.28 residual: a warm brown tint on the mockup's card edges"
+          ]
         },
-        "03-graveyard": [1184, 306, 116, 148],
-        "03-lands-stacked": [1330, 306, 166, 144],
+        "03-graveyard": {
+          "rect": [1184, 306, 116, 148],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+          ]
+        },
+        "03-lands-stacked": {
+          "rect": [1330, 306, 166, 144],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+          ]
+        },
         "03-captions": [1050, 456, 450, 32],
         "04-panel": [14, 520, 468, 488],
         "04-title": [38, 526, 252, 40],
-        "04-titan": [42, 579, 150, 128],
-        "04-tapped": [212, 605, 124, 88],
-        "04-untapped": [354, 583, 102, 108],
+        "04-titan": {
+          "rect": [42, 579, 150, 128],
+          "verdict": "pass",
+          "bead": "by-b0q.1.27",
+          "commit": "44861e7",
+          "fingerprint": "akE3kllMml9RkllMoGRVqmtcqmtcb0U7cjUqk0c9qk8+s1U5t1Y/sllGn1NGdjouczIpiEpL0mc/+qs6zG8y2GYygjwnbjIphDwt1ng2hU03mEosy2YoyHQnnE8qgjwumUoqnlotqlkqijwbdjUmsFMr43xDjUIqfzojmkss95c1sFEZiDggx3A+x2hGfTkmgTggrVkw65E64W0Vx2oyuH9cx4ZaflNEXikeo0srw14f6q07zpVUs4x8qYN1n3pn",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+          ]
+        },
+        "04-tapped": {
+          "rect": [212, 605, 124, 88],
+          "verdict": "pass",
+          "bead": "by-b0q.1.27",
+          "commit": "44861e7",
+          "fingerprint": "WDEoZCwhYygdYiccYicbYSYaYCUaRiEatntqpWhpkVd3ymRklVpQXEhMPD1ERhoZqHFiq2VixWVw1XJRgklHXUtOXUlMUyIfoGtdrmRgxGhorU49eD86VUdCYEVRWSonnmpcrmVgqF1kg0dLVj1JQD9ISkJTVSYgnWlbqGRkwGZ0x2RQXURUPkFRQTg0VSMZlWNWn2Jlplpt1m9joWVUQj1CNS0hRxoTcj8zejcsdjIsfjMpfjYlZisfYScbSiAZ",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+          ]
+        },
+        "04-untapped": {
+          "rect": [354, 583, 102, 108],
+          "verdict": "pass",
+          "bead": "by-b0q.1.27",
+          "commit": "44861e7",
+          "fingerprint": "R0RCcG1rdnNxfHl3fHl3fHl3fHl2PTk3VVZXanqHaXqHkJ6pj5ymkJulk52mSkhHTVZeSZbSTJfRVJ3Riai7kae0fJKrSEZFV1VVua2fobm/2cSjybCeoKKkiJ+uR0VEW1dUuKWZyKmQ06+Sx7Kbt6mXqJuRR0VEVE1Fpnk5qn9NuIJCu4I3tH80qX9BRkRDSEVCVkUnkmUmtnwkp3IqdFo0WEoyRUNDOjc1QzknSjwmUT8lQjsnRjskPzkuODY1",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+          ]
+        },
         "04-captions-tapped": [250, 698, 220, 28],
-        "04-source": [74, 732, 164, 113],
-        "04-target": [278, 732, 158, 113],
+        "04-source": {
+          "rect": [74, 732, 164, 113],
+          "verdict": "pass",
+          "bead": "by-b0q.1.31",
+          "commit": "636900b",
+          "fingerprint": "gVw0lXRIlXRIlnRHm3NAnHQ/nHRAeVg0h2xGl4dgm4tin41iza5vza5uza5ugmU+cV1BSllWV1FKcYJ+g4p+YFVIY3Rrh2lBcF5CYn+EUU1JdXNncGthYFVSfouUhmlAcF1Cc4uRd3lrVU1EaVpKpJyKlJGShmlAiXJajpSaepGLW1xXgnhesKeEopFzh2pCinNcbnJ5SGNnd3RgrZFdqZFguZ5nkHJGgF43hGtHh25Jh21JjHBImHhKmXlLfmA7",
+          "accepted": [
+            "by-b0q.1.31 residual: the mockup's slightly softer, wider halo; a flatter rim; badge tints and bezel; the flying glyph; name weight"
+          ]
+        },
+        "04-target": {
+          "rect": [278, 732, 158, 113],
+          "verdict": "pass",
+          "bead": "by-b0q.1.31",
+          "commit": "636900b",
+          "fingerprint": "MXCDRYGPRYGPRoGOS4GGTIGGTIGGMWt9THuCnItimYlhnoxizK1uza5uza5uSXl/NW1+UllTW1VLeYh/fYZ7Y1dIZHlwT3+ENXCDZH2CVFBKfnlrbWhdY1hUgJGZT3+ENG6CeJOXcnBfXFBFZ1hIqqSTmJaZT3+EVISXjpSagZeQWFZQhn1lsamGoI9yUH+DVYOXbHF5UGxuf3lirJRiqZFgt5xnX4eELXKKM3qSNX2VNX2VPX6QToSLT4SLN3OE",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+          ]
+        },
         "04-captions-glow": [106, 848, 342, 30],
-        "04-hand": [66, 882, 364, 124],
+        "04-hand": {
+          "rect": [66, 882, 364, 124],
+          "verdict": "pass",
+          "bead": "by-b0q.1.31",
+          "commit": "636900b",
+          "fingerprint": "oZ6crqyoi3l2i1FFjFBEXE1EMy4pKiQgiZaroanAiG5knF9RxX9umIuCw7yxiYJ5eJGrfKXOhV1L1mlcpFtvmouVrpeio5mVf5KframhkmtT53ZTnUxOt5OFrnZzZlBdgYR/tJt7jGEtumZJaz1EzqV1oFxPYkdKdnpxhnlOclIsfU5ATzxEuHlbmlJDclNLbG9jpKKUnYZ/RTo3Rz1GtXU8qWw7Zk49f3l0tK+pnoZ9nGhYjl9Rj3ZgqmUuXks7",
+          "accepted": [
+            "by-b0q.1.31 residual: the Mountain cut a little lower: the mockup draws Swords with a shorter art window than the lands, and one shared frame can't match all three cuts",
+            "by-b0q.1.31 residual: Swords' silver slightly lighter"
+          ]
+        },
         "05-panel": [490, 520, 496, 488],
         "05-title": [516, 526, 258, 40],
-        "05-attacker": [550, 570, 136, 130],
-        "05-blocker": [798, 596, 132, 124],
-        "05-link": [674, 640, 132, 22],
+        "05-attacker": {
+          "rect": [550, 570, 136, 130],
+          "verdict": "pass",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "fingerprint": "LyYfTDwpgmQ8t4tPqYBIdFo5PzEjLSUfb1k7YU0xTzwkTjwlTDskUD0laVU3bVc6P1BCZoBte5WCgZyIgZyIgZyIgJuHLjUsLEEuNEAmaG5Hk4JSfYdkVWtFM0QpLzkrLj8tZWI7d1Qya00rXkIibGxIS08ov4xPMEIsU1syUUUoUUUqU0orT04lOUAablElL0AoYWIgYVgoZGUxgIBqhol9jZGGPz85JCwhJCcXODwZNjkYUVJHV1hTXmBaMzAs",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.1.28 conflict: the sheet draws a double nested chevron and a detached arc; the screens a single chevron with a light fan and a notched crescent hugging the card, which the game follows"
+          ]
+        },
+        "05-blocker": {
+          "rect": [798, 596, 132, 124],
+          "verdict": "pass",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "fingerprint": "S0hGend1i4iGnpuYnpuYnZuYnpuYSUZEVFJQppR/pZeQa3WMfXmGtZ2Kr5iDUk9OiGRHcGpop4NomHxttZB3gGlZgXNpUk9NyJRmW3aTiXdqj3ttknlmrJF6hoyRT05PZllPtqeUkYyKiXdoiX12uqCLk4qIT01MaF9SkH1zwKCDtpV7raWep6ans7Gvg3lnWEgsjHdKhXVRgnJPjn5ZmolkoYtdW0suLSUdQDEdX0kmh24/iG9BX0kmQDEdLSUd",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.1.28 conflict: the sheet draws a double nested chevron and a detached arc; the screens a single chevron with a light fan and a notched crescent hugging the card, which the game follows"
+          ]
+        },
+        "05-link": {
+          "rect": [674, 640, 132, 22],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538"
+        },
         "05-captions-combat": [580, 718, 356, 30],
-        "05-source": [514, 789, 120, 106],
-        "05-trigger": [672, 762, 144, 244],
-        "05-target": [848, 789, 120, 106],
-        "05-arrows": [626, 800, 236, 100],
+        "05-source": {
+          "rect": [514, 789, 120, 106],
+          "verdict": "pass",
+          "bead": "by-b0q.1.27",
+          "commit": "44861e7",
+          "fingerprint": "Sy8pcUU8dUg/bEE5dEg/dUg/dUg/SS8pazovj05AlFFColtJl1FAwW9avm5ZajswXC0kazpAt1dF740z44Iz1mQ3eTovXSwkbjIltltBtGcxk1kuwmQt4ocekUccpmA3eTgky3U4kEwpkUMZfTcgmUUl2XI2zINNajIkoE0l3n01y3UchzkYpFcoxGQ5ZC8iazAhkEgsy2g38IAazKCDtpSFv5uLfWVYQiIbVSMZeTUWeT8ZhGRUeF5ThGhbWUc+",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+          ]
+        },
+        "05-trigger": {
+          "rect": [672, 762, 144, 244],
+          "verdict": "pass",
+          "bead": "by-b0q.1.31",
+          "commit": "636900b",
+          "fingerprint": "oWJMl2JRmWVUnWhWmWRTrXRgiE47KCMf0Z2DzauW0a6ZzKqV0rCazqyXpG5ZKCIezZ2DwKSQw6eSvKGNvKGNzrCak3tqLF9k2KSH0rSd1ref2bmi2Lih17igk5+VL1tevW9Sv6GMwKOOwKOO2big27KZlU42KCIeLR8aVjIncVNGdlpNako+SigeJyAcKSMfRkA9LCYiKSMfKSMfKSMfKSMfPDYzPzk2LSYhLSYhLSYhLSYhLSYhLSYhLSYhLSYh",
+          "accepted": [
+            "by-b0q.1.31 residual: the line breaks after line 3: the mockup's face is narrower than any real font at its letter height",
+            "by-b0q.1.31 residual: the mockup's stray struck-through rule"
+          ]
+        },
+        "05-target": {
+          "rect": [848, 789, 120, 106],
+          "verdict": "pass",
+          "bead": "by-b0q.1.27",
+          "commit": "44861e7",
+          "fingerprint": "MjgwTVxPUWBTVWVYVWVYVWRYVWVYMjgwNEU5QFtGU21XZYJpZYFraYZuYn1nNEQ4JU5LNT0jUl8/qJBfkIhfdodjTVczKz4vLIqmRlE0oHdKdlIsdlMtaVY1W21IKj0uKo2qR1c0V0UpNygVTDUbPS8YWFwqKTwsJ0E1U1olaGs4XVs6T0MjX2MsOj4WKTsqJzorQUQUZF0fc3Yjo6aZk5eRoaWeXVxWIy0jIjAVJDEWJjMVaWpiYWNeamxnREI9",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+          ]
+        },
+        "05-arrows": {
+          "rect": [626, 800, 236, 100],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538"
+        },
         "05-captions-stack": [532, 942, 416, 32],
         "06-panel": [996, 520, 526, 488],
         "06-title": [1020, 526, 190, 40],
         "06-scry-title": [1170, 576, 80, 44],
         "06-view-battlefield": [1376, 580, 128, 36],
         "06-instruction": [1078, 616, 292, 22],
-        "06-tray": [1016, 644, 352, 200],
-        "06-island": [1030, 675, 163, 180],
-        "06-backs": [1105, 652, 133, 173],
-        "06-counterspell": [1220, 667, 126, 163],
-        "06-source-card": [1378, 655, 130, 178],
-        "06-labels": [1020, 842, 346, 30],
+        "06-tray": {
+          "rect": [1016, 644, 352, 200],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "accepted": [
+            "by-b0q.1.28 conflict: the sheet shows the live overlay at 44%; its painted tray is squarer, with larger cards than the screen's, so one component cannot match both",
+            "by-b0q.1.29 conflict: the sheet's 06 sketch is not a uniform scale of the screen's overlay; the gallery shows the live overlay scaled down (by-b0q.1.31's decision)"
+          ]
+        },
+        "06-island": {
+          "rect": [1030, 675, 163, 180],
+          "verdict": "pass",
+          "bead": "by-b0q.1.31",
+          "commit": "636900b",
+          "fingerprint": "HhoZJzU+SoSyVZTJVZTIUpbSRmqFfU8rHhoZHyw2W424f6zWZZG1VIWwYYijaUMoHhoZHSMoao2mYImjZY+aMXB8NG+ESDw3IBoZIRwcLXKIHpqvEXOKLGp2R4+jGScwLiUdKR8ZJU1hC2h/DnCDEVpsEUZfJzZAMCwrLCclGSQrFyUuGCQrGhwgKSMiKiQhHRYTGxcWHxsaIBwbJB0bIRIKDAUCrmUwJRoTFxQTHBgXHRoZLR8dDwkJAwICPC0f",
+          "accepted": [
+            "by-b0q.1.31 residual: the 06 layout and scale",
+            "by-b0q.1.29 conflict: the sheet's 06 sketch is not a uniform scale of the screen's overlay; the gallery shows the live overlay scaled down (by-b0q.1.31's decision)"
+          ]
+        },
+        "06-backs": {
+          "rect": [1105, 652, 133, 173],
+          "verdict": "pass",
+          "bead": "by-b0q.1.31",
+          "commit": "636900b",
+          "fingerprint": "O05aYHB4YHuMUFZZbkIjYTolTj4zRWWHX6HXVpTHT5PQRmd+glUvbD4gQz9CQFVyhrLZPm+ZcqHLXISeakctYjcfP0FGVl9sUXuYWn+CKGV8O22ER0E+UzIgSEpPhaG8LZaoJ3uILnKBT5msJDE6IRUOSFVjy9rqCYOaC2+BDGR9CUdfLEFOHhoaLzdAZXB7GS89GigxHis0JjE5JSYoJyIhKyUiJSAbGhcWKh0WFgwJGhALekQjsV4qs10keEMh",
+          "accepted": [
+            "by-b0q.1.31 residual: leather tooling vs scuffs; the Island covers more of the back (tray placement)",
+            "by-b0q.1.31 residual: the 06 layout and scale",
+            "by-b0q.1.29 conflict: the sheet's 06 sketch is not a uniform scale of the screen's overlay; the gallery shows the live overlay scaled down (by-b0q.1.31's decision)"
+          ]
+        },
+        "06-counterspell": {
+          "rect": [1220, 667, 126, 163],
+          "verdict": "pass",
+          "bead": "by-b0q.1.31",
+          "commit": "636900b",
+          "fingerprint": "L1F5Nl2MFlykFXXIIHW6IDxXIx4eIx4eYm9/NDxJSYa3SaDfN6fwI0ZlIx4eIx4eU22HTGiCVYi2V6HdSYvCLUFSIRwcIx4euc7itsrgtsvhtcvhtMrgMT9KIBsbIx4ezdzsxdPjw9Lhw9LhytrrJzZCIRwcIx4eJCYpKzAzMzY7OD5FPERMISIkIh4dIh4cJh8aIh8dKSMdKyYkKSQiKCMiKiUjRUFAt2EnLyQeLSIeLyQgMCYjKSMhLCgmKCQi",
+          "accepted": [
+            "by-b0q.1.31 residual: the 06 layout and scale",
+            "by-b0q.1.31 conflict: the gallery's 06 preview is the real scry overlay scaled down; the sketch's squatter card with larger text and pips is not drawn",
+            "by-b0q.1.29 conflict: the sheet's 06 sketch is not a uniform scale of the screen's overlay; the gallery shows the live overlay scaled down (by-b0q.1.31's decision)"
+          ]
+        },
+        "06-source-card": {
+          "rect": [1378, 655, 130, 178],
+          "verdict": "pass",
+          "bead": "by-b0q.1.27",
+          "commit": "44861e7",
+          "fingerprint": "JzdGFzhnG0R9JGu1L3C5MmmvHkqDIjlOJzdGUHGeP3CyU5HWWpXXTpDXO2SdKEBWJzhIN2CZZ3mRdq3eb6PVcIipMk97JDxRLzxIV3WSaYmqZoy1dpvCb42sZYmvNklbKztJzNrqy9rpx9Xkx9Xly9nozNrqPlJjKjpJzdzsy9rqy9rqy9vrzNvrzNzsPVFjHx8hKi81KS41KS40KS40KC0zJy0zGx0gHBgYGxcXGRYVGhYUJR0VGxcTGhUSGRUT",
+          "accepted": [
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+          ]
+        },
+        "06-labels": {
+          "rect": [1020, 842, 346, 30],
+          "verdict": "differs",
+          "bead": "by-b0q.1.28",
+          "commit": "e915538",
+          "accepted": [
+            "by-b0q.1.28 conflict: the sheet shows the live overlay at 44%; its painted tray is squarer, with larger cards than the screen's, so one component cannot match both",
+            "by-b0q.1.29 conflict: the sheet's 06 sketch is not a uniform scale of the screen's overlay; the gallery shows the live overlay scaled down (by-b0q.1.31's decision)"
+          ]
+        },
         "06-done": [1156, 860, 166, 50],
         "06-captions": [1036, 920, 464, 34],
         "06-backdrop-caption": [1152, 960, 206, 36]
