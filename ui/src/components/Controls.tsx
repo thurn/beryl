@@ -60,10 +60,13 @@ export function PriorityPill({ children }: { children: ReactNode }) {
 
 export type Phase = "beginning" | "main1" | "combat" | "main2" | "end";
 
-const DIAMOND = <path d="M12 3 L20.5 12 L12 21 L3.5 12 Z" />;
-const CARD = <rect x="6.5" y="3" width="11" height="18" rx="2" />;
+const DIAMOND = <path d="M12 5 L19 12 L12 19 L5 12 Z" />;
+const CARD = (
+  <path d="M5.5 3.2 Q12 2.6 18.6 3.4 Q19.2 12 18.8 20.6 Q12 21.2 5.7 20.8 Q5 12 5.5 3.2 Z" />
+);
 
-/** Each phase's outline icon (the full tracker) and filled glyph (the compact one on the
+/** Each phase's icon (the full tracker, ui_system.png section 02: cream outlines over dark or
+ * stone fills) and glyph (the compact one on the
  * table, as in battlefield.png). */
 const PHASES: {
   phase: Phase;
@@ -77,14 +80,32 @@ const PHASES: {
     icon: (
       <>
         <rect
-          x="5"
-          y="3"
+          className="phase-dark"
+          x="1.5"
+          y="5"
           width="11"
-          height="15"
-          rx="1.5"
-          transform="rotate(-12 10 10)"
+          height="16.5"
+          rx="1.2"
+          transform="rotate(-14 7 13.25)"
         />
-        <rect x="9" y="5" width="11" height="15" rx="1.5" />
+        <rect
+          className="phase-dark"
+          x="5"
+          y="3.5"
+          width="11"
+          height="16.5"
+          rx="1.2"
+          transform="rotate(-6 10.5 11.75)"
+        />
+        <rect
+          className="phase-dark"
+          x="10"
+          y="2"
+          width="11.5"
+          height="17"
+          rx="1.2"
+          transform="rotate(5 15.75 10.5)"
+        />
       </>
     ),
     glyph: DIAMOND,
@@ -93,7 +114,17 @@ const PHASES: {
     phase: "main1",
     label: "First main phase",
     icon: (
-      <path d="M2 20 L10 6 L14 12 L16 9 L22 20 Z M10 6 L8 11 L10 10 L12 12" />
+      <>
+        <path
+          className="phase-dark"
+          d="M1.5 21.5 L8.5 9.5 L10.5 11.5 L12 2.8 L15 9 L17.5 7.5 L22.5 21.5 Z"
+        />
+        <path
+          className="phase-stone"
+          stroke="none"
+          d="M5 20 L9.5 13.5 L11 14.5 L12.2 10.5 L14 14 L16 12.5 L19.5 20 Z"
+        />
+      </>
     ),
     glyph: CARD,
   },
@@ -101,14 +132,15 @@ const PHASES: {
     phase: "combat",
     label: "Combat",
     icon: (
-      <path d="M3 3 L13 13 M21 3 L11 13 M3 3 L6 3 M3 3 L3 6 M21 3 L18 3 M21 3 L21 6 M8 15 L4 19 M16 15 L20 19 M6 13 L10 17 M18 13 L14 17" />
+      <g transform="translate(12 12) scale(1.22) translate(-12 -12)">
+        <path d="M2 2 L4.5 2 L15.5 13 L13 15.5 L2 4.5 Z M12 17.5 L17.5 12 M15.5 16 L20.5 21 M20.5 18.5 L18.5 20.5" />
+        <path d="M22 2 L19.5 2 L8.5 13 L11 15.5 L22 4.5 Z M12 17.5 L6.5 12 M8.5 16 L3.5 21 M3.5 18.5 L5.5 20.5" />
+      </g>
     ),
     glyph: (
       <>
-        <path d="M3 2 L6 2 L17 13 L13 17 L2 6 L2 3 Z" />
-        <path d="M21 2 L18 2 L7 13 L11 17 L22 6 L22 3 Z" />
-        <path d="M5 13 L11 19 L9 21 L3 15 Z M19 13 L13 19 L15 21 L21 15 Z" />
-        <path d="M3.5 19 L5 20.5 L3 22.5 L1.5 21 Z M20.5 19 L19 20.5 L21 22.5 L22.5 21 Z" />
+        <path d="M1.5 1.5 L6 2.8 L15.6 12.4 L12.4 15.6 L2.8 6 Z M10 17 L17 10 L19 12 L12 19 Z M15 17.2 L17.2 15 L20 17.8 L17.8 20 Z M18.8 20.5 L20.5 18.8 L22.6 20.9 L20.9 22.6 Z" />
+        <path d="M22.5 1.5 L18 2.8 L8.4 12.4 L11.6 15.6 L21.2 6 Z M14 17 L7 10 L5 12 L12 19 Z M9 17.2 L6.8 15 L4 17.8 L6.2 20 Z M5.2 20.5 L3.5 18.8 L1.4 20.9 L3.1 22.6 Z" />
       </>
     ),
   },
@@ -116,14 +148,24 @@ const PHASES: {
     phase: "main2",
     label: "Second main phase",
     icon: (
-      <path d="M12 2 L20 5 L20 11 C20 16 16 20 12 22 C8 20 4 16 4 11 L4 5 Z" />
+      <>
+        <path
+          className="phase-stone"
+          d="M12 3 C15 4.5 18 5 21.4 5 L21.4 11 C21.4 16.5 17 20 12 21.6 C7 20 2.6 16.5 2.6 11 L2.6 5 C6 5 9 4.5 12 3 Z"
+        />
+        <path
+          className="phase-light"
+          stroke="none"
+          d="M12 4.2 C9.2 5.5 6.5 6 3.8 6.1 L3.8 11 C3.8 15.6 7.4 18.8 12 20.3 Z"
+        />
+      </>
     ),
     glyph: CARD,
   },
   {
     phase: "end",
     label: "End",
-    icon: <path d="M19 12 A7 7 0 1 1 12 5 L17 5 M14 2 L17 5 L14 8" />,
+    icon: <path d="M9.8 5.5 A8 8 0 1 1 5 15.7 M13 2.5 L9.6 5.5 L13 8.5" />,
     glyph: DIAMOND,
   },
 ];
@@ -148,8 +190,24 @@ export function PhaseTracker({
           key={phase}
           className={phase === current ? "phase phase-current" : "phase"}
         >
-          {i > 0 && !compact && <span className="phase-arrow" aria-hidden />}
-          <svg viewBox="0 0 24 24" role="img" aria-label={label}>
+          {i > 0 && !compact && (
+            <svg className="phase-arrow" viewBox="0 0 9 11" aria-hidden>
+              <path d="M0.5 0.5 L8.5 5.5 L0.5 10.5 Z" />
+            </svg>
+          )}
+          <svg
+            className="phase-icon"
+            viewBox="0 0 24 24"
+            role="img"
+            aria-label={label}
+          >
+            {compact && phase === current && (
+              <radialGradient id="phase-glow">
+                <stop offset="0" stopColor="#fffbe0" />
+                <stop offset="0.55" stopColor="#ffd77a" />
+                <stop offset="1" stopColor="#eea33c" />
+              </radialGradient>
+            )}
             {compact ? glyph : icon}
           </svg>
         </li>

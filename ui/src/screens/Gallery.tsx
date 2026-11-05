@@ -32,7 +32,9 @@ function Panel({
   className?: string;
 }) {
   return (
-    <section className={["panel", className].filter(Boolean).join(" ")}>
+    <section
+      className={["panel", `panel-${n}`, className].filter(Boolean).join(" ")}
+    >
       <h2 className="panel-title">
         <span className="panel-number">{n}</span> {title}
       </h2>
@@ -45,12 +47,13 @@ function Caption({ children }: { children: ReactNode }) {
   return <span className="caption">{children}</span>;
 }
 
+// The tokens' values (design/tokens.css), measured from the mockups as they render.
 const SWATCHES = [
-  ["Table", "#625C56", "var(--table)"],
-  ["Surface", "#242321", "var(--surface)"],
-  ["Text", "#F2ECE1", "var(--text)"],
-  ["Gold", "#E9AD4A", "var(--gold)"],
-  ["Cyan", "#38DCFF", "var(--cyan)"],
+  ["Table", "#6B5F56", "var(--table)"],
+  ["Surface", "#211F1C", "var(--surface)"],
+  ["Text", "#F2E7D8", "var(--text)"],
+  ["Gold", "#E4A242", "var(--gold)"],
+  ["Cyan", "#33DCFE", "var(--cyan)"],
 ] as const;
 
 function Foundations() {
@@ -422,14 +425,12 @@ export function Gallery() {
         </div>
         <p className="gallery-subtitle">Game UI · Component Library</p>
       </header>
-      <div className="gallery-grid">
-        <Foundations />
-        <ActionsAndStatus />
-        <PlayerAndZones />
-        <CardsAndStates />
-        <CombatAndStack />
-        <ScryPanel />
-      </div>
+      <Foundations />
+      <ActionsAndStatus />
+      <PlayerAndZones />
+      <CardsAndStates />
+      <CombatAndStack />
+      <ScryPanel />
     </main>
   );
 }

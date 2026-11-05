@@ -153,8 +153,11 @@ const scry: TableBoard = {
   you: { ...you, hand: you.hand.slice(1) },
 };
 
+/** battlefield.png lights the tracker's first glyph while offering "To Combat". */
+const battlefield: TableBoard = { ...SAMPLE_BOARD, phase: "beginning" };
+
 export const BOARDS: Record<string, TableBoard> = {
-  battlefield: SAMPLE_BOARD,
+  battlefield,
   combat,
   trigger_on_stack_with_target: trigger,
   scry,

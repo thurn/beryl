@@ -390,15 +390,27 @@ export function TableScene({
       <div className="hud" style={{ left: 18, top: 814 }}>
         <PlayerBadge name="You" />
       </div>
-      <div className="hud turn-controls">
+      <div
+        className={
+          board.priority ? "turn-controls turn-controls-wait" : "turn-controls"
+        }
+      >
         {board.phase && <PhaseTracker current={board.phase} compact />}
         {board.priority && <PriorityPill>{board.priority}</PriorityPill>}
-        <Button icon={<FastForwardIcon />} disabled={board.action.disabled}>
-          {board.action.label}
-        </Button>
-        {board.action.caption && (
-          <span className="turn-caption">{board.action.caption}</span>
-        )}
+        <div className="turn-action">
+          <Button
+            icon={<FastForwardIcon />}
+            disabled={board.action.disabled}
+            className={
+              board.action.label.length > 8 ? "button-long" : undefined
+            }
+          >
+            {board.action.label}
+          </Button>
+          {board.action.caption && (
+            <span className="turn-caption">{board.action.caption}</span>
+          )}
+        </div>
       </div>
       {board.arrows && <Arrows arrows={board.arrows} />}
     </div>

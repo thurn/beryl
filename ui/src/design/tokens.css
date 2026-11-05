@@ -1,10 +1,12 @@
-/* Design tokens from docs/ui_mockups/ui_system.png ("01 Foundations"). */
+/* Design tokens from docs/ui_mockups/ui_system.png ("01 Foundations"), as its swatches render:
+   the swatches' labels (#625C56, #242321, #F2ECE1, #E9AD4A, #38DCFF) differ a little from the
+   colors they show, and the screens are painted in the shown ones. */
 :root {
-  --table: #625c56;
-  --surface: #242321;
-  --text: #f2ece1;
-  --gold: #e9ad4a;
-  --cyan: #38dcff;
+  --table: #6b5f56;
+  --surface: #211f1c;
+  --text: #f2e7d8;
+  --gold: #e4a242;
+  --cyan: #33dcfe;
 
   --text-dim: rgb(242 236 225 / 62%);
   --text-faint: rgb(242 236 225 / 38%);
@@ -53,13 +55,26 @@
     0 0 0 1.5px #e6fcff, 0 0 0 5.5px #18b2ff,
     0 0 11px 6px rgb(25 160 255 / 80%), 0 0 28px 11px rgb(20 130 255 / 38%);
 
-  /* The matte tabletop: the table color, a faint grain and a vignette. */
+  /* The matte tabletop: warm brown under a faint grain, lit evenly across the middle and
+     falling off to dark edges and darker corners (battlefield.png: #837069 across the middle,
+     #493f3b at the sides' middle, #1b1818 in the corners). */
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --tabletop:
     var(--grain),
-    radial-gradient(ellipse at 50% 45%, rgb(255 250 240 / 7%), transparent 60%),
-    radial-gradient(ellipse at 50% 50%, transparent 55%, rgb(0 0 0 / 38%)),
-    var(--table);
+    radial-gradient(
+      ellipse 50% 50% at 50% 50%,
+      #857169,
+      #837069 42%,
+      #7e6c65 52%,
+      #75645d 61%,
+      #70605a 71%,
+      #685953 81%,
+      #594c46 90%,
+      #4a3f3b 100%,
+      #3b3331 123%,
+      #2a2624 133%,
+      #1b1818 141%
+    );
 
   color-scheme: dark;
   font-family: var(--font-sans);

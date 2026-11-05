@@ -350,13 +350,14 @@ export function CardBack({
   );
 }
 
-/** The Beryl crest: a five-pointed crown of flame over a stem, after the mockup's wordmark. */
+/** The Beryl crest: five slender flames rising from a shield that tapers to a point, after the
+ * mockups' wordmark (ui_system.png's header, the brand at the screens' top left). */
 export function Crest({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 48 56" aria-hidden>
+    <svg className={className} viewBox="0 0 48 66" aria-hidden>
       <path
         fill="currentColor"
-        d="M24 56 C21 46 19 40 12 33 C6 27 3 20 4 9 C8 16 10 20 14 23 C13 15 13 8 16 1 C18 9 19 16 21 21 C21 13 22 7 24 0 C26 7 27 13 27 21 C29 16 30 9 32 1 C35 8 35 15 34 23 C38 20 40 16 44 9 C45 20 42 27 36 33 C29 40 27 46 24 56 Z"
+        d="M24 66 C22 56 15 47 4 39 C1 37 0 35 1 32 Q4 24 5.5 13 Q6.5 22 9 29 Q11 30 12.5 28 Q13 16 13.5 4 Q15 16 16.5 27 Q19 30 21.5 27 Q22.5 12 24 0 Q25.5 12 26.5 27 Q29 30 31.5 27 Q33 16 34.5 4 Q35 16 35.5 28 Q37 30 39 29 Q41.5 22 42.5 13 Q44 24 47 32 C48 35 47 37 44 39 C33 47 26 56 24 66 Z"
       />
     </svg>
   );
