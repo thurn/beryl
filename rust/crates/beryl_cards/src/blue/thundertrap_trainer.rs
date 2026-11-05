@@ -18,8 +18,11 @@ use crate::names;
 
 const NONCREATURE_NONLAND: Filter = Filter::Not(&Filter::Types(Types::CREATURE.union(Types::LAND)));
 
-/// The look, the optional reveal (CR 701.20a), and the rest to the bottom in a random order
-/// (CR 401.4).
+/// The look, the optional reveal
+/// ([CR 701.20a](https://yawgatog.com/resources/magic-rules/#R70120a)): "To reveal a card,
+/// show that card to all players for a brief time", and the rest to the bottom in a random
+/// order ([CR 401.4](https://yawgatog.com/resources/magic-rules/#R4014)): "That library's
+/// owner doesn't reveal the order in which the cards go into the library."
 fn dig(ctx: &mut EffectCtx) -> Flow {
     let you = ctx.controller();
     let mut rest = ctx.top_of_library(you, 4);

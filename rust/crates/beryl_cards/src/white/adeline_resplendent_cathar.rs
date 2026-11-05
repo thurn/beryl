@@ -75,86 +75,146 @@ const ADELINE: &str = names::ADELINE_RESPLENDENT_CATHAR;
 
 /// Adeline attacks beside another creature: the Human enters tapped and attacking, her power
 /// counts it, and vigilance keeps her untapped.
-pub const SCENARIOS: &[Scenario] = &[Scenario::new("Adeline's Human arrives attacking")
-    .battlefield(
-        P0,
-        &[
-            Permanent::new(ADELINE),
-            Permanent::new(names::ELITE_SPELLBINDER),
-        ],
-    )
-    .actions(&[
-        Action::Assert {
-            assertion: Assertion::Pt {
+pub const SCENARIOS: &[Scenario] = &[
+    Scenario::new("Adeline's Human arrives attacking")
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(ADELINE),
+                Permanent::new(names::ELITE_SPELLBINDER),
+            ],
+        )
+        .actions(&[
+            Action::Assert {
+                assertion: Assertion::Pt {
+                    player: P0,
+                    card: ADELINE,
+                    token: false,
+                    power: 2,
+                    toughness: 4,
+                },
+            },
+            Action::AdvanceTo {
+                turn: 1,
+                step: TurnStep::BeginningOfCombat,
+            },
+            Action::Answer {
                 player: P0,
-                card: ADELINE,
-                token: false,
-                power: 2,
-                toughness: 4,
+                kind: DecisionKind::Priority,
+                pick: Pick::Pass,
             },
-        },
-        Action::AdvanceTo {
-            turn: 1,
-            step: TurnStep::BeginningOfCombat,
-        },
-        Action::Answer {
-            player: P0,
-            kind: DecisionKind::Priority,
-            pick: Pick::Pass,
-        },
-        Action::Answer {
-            player: P0,
-            kind: DecisionKind::Attacker,
-            pick: Pick::Card { card: ADELINE },
-        },
-        Action::Answer {
-            player: P0,
-            kind: DecisionKind::Attacker,
-            pick: Pick::Done,
-        },
-        Action::Assert {
-            assertion: Assertion::Stack { count: 1 },
-        },
-        Action::Resolve,
-        Action::Assert {
-            assertion: Assertion::Attacking {
+            Action::Answer {
                 player: P0,
-                card: "Human",
-                count: 1,
+                kind: DecisionKind::Attacker,
+                pick: Pick::Card { card: ADELINE },
             },
-        },
-        Action::Assert {
-            assertion: Assertion::Tapped {
+            Action::Answer {
                 player: P0,
-                card: "Human",
-                count: 1,
+                kind: DecisionKind::Attacker,
+                pick: Pick::Done,
             },
-        },
-        Action::Assert {
-            assertion: Assertion::Tapped {
+            Action::Assert {
+                assertion: Assertion::Stack { count: 1 },
+            },
+            Action::Resolve,
+            Action::Assert {
+                assertion: Assertion::Attacking {
+                    player: P0,
+                    card: "Human",
+                    count: 1,
+                },
+            },
+            Action::Assert {
+                assertion: Assertion::Tapped {
+                    player: P0,
+                    card: "Human",
+                    count: 1,
+                },
+            },
+            Action::Assert {
+                assertion: Assertion::Tapped {
+                    player: P0,
+                    card: ADELINE,
+                    count: 0,
+                },
+            },
+            Action::Assert {
+                assertion: Assertion::Pt {
+                    player: P0,
+                    card: ADELINE,
+                    token: false,
+                    power: 3,
+                    toughness: 4,
+                },
+            },
+            Action::AdvanceTo {
+                turn: 1,
+                step: TurnStep::EndOfCombat,
+            },
+            // Adeline's 3 and the Human's 1.
+            Action::Assert {
+                assertion: Assertion::Life {
+                    player: P1,
+                    life: 16,
+                },
+            },
+        ]),
+    // Adeline stays home while the Spellbinder attacks: "you attack" all the same.
+    Scenario::new("Adeline's Human arrives when she stays home")
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(ADELINE),
+                Permanent::new(names::ELITE_SPELLBINDER),
+            ],
+        )
+        .actions(&[
+            Action::AdvanceTo {
+                turn: 1,
+                step: TurnStep::BeginningOfCombat,
+            },
+            Action::Answer {
                 player: P0,
-                card: ADELINE,
-                count: 0,
+                kind: DecisionKind::Priority,
+                pick: Pick::Pass,
             },
-        },
-        Action::Assert {
-            assertion: Assertion::Pt {
+            Action::Answer {
                 player: P0,
-                card: ADELINE,
-                token: false,
-                power: 3,
-                toughness: 4,
+                kind: DecisionKind::Attacker,
+                pick: Pick::Card {
+                    card: names::ELITE_SPELLBINDER,
+                },
             },
-        },
-        Action::AdvanceTo {
-            turn: 1,
-            step: TurnStep::EndOfCombat,
-        },
-        // Adeline's 3 and the Human's 1.
-        Action::Assert {
-            assertion: Assertion::Life {
-                player: P1,
-                life: 16,
+            Action::Answer {
+                player: P0,
+                kind: DecisionKind::Attacker,
+                pick: Pick::Done,
             },
-        },
-    ])];
+            Action::Resolve,
+            Action::Assert {
+                assertion: Assertion::Attacking {
+                    player: P0,
+                    card: "Human",
+                    count: 1,
+                },
+            },
+            Action::Assert {
+                assertion: Assertion::Attacking {
+                    player: P0,
+                    card: ADELINE,
+                    count: 0,
+                },
+            },
+            Action::AdvanceTo {
+                turn: 1,
+                step: TurnStep::EndOfCombat,
+            },
+            // The Spellbinder's 3 and the Human's 1.
+            Action::Assert {
+                assertion: Assertion::Life {
+                    player: P1,
+                    life: 16,
+                },
+            },
+        ]),
+];

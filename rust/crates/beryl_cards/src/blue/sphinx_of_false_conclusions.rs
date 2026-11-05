@@ -21,7 +21,9 @@ fn loot(ctx: &mut EffectCtx) -> Flow {
     Ok(())
 }
 
-/// "If it isn't a token", as it last existed on the battlefield (CR 603.10a).
+/// "If it isn't a token", as it last existed on the battlefield
+/// ([CR 603.10a](https://yawgatog.com/resources/magic-rules/#R60310a)): "Some zone-change
+/// triggers look back in time."
 fn not_a_token(_: &State, _: &GameTable, tr: &PendingTrigger) -> bool {
     !tr.info.lki.token
 }

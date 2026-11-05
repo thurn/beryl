@@ -65,7 +65,9 @@ pub static CARD: CardDef = CardDef {
 };
 
 const MALCOLM: &str = names::MALCOLM_ALLURING_SCOUNDREL;
-const SPHINX: &str = names::SPHINX_OF_FALSE_CONCLUSIONS;
+/// A creature without flash: cast during the combat damage step, timing is ignored
+/// ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)).
+const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
 
 /// Malcolm attacks alone in `turn` and his trigger resolves; the discard has one kind of card
 /// to choose from.
@@ -109,11 +111,12 @@ const fn chorus_counters(count: u8) -> Action {
 }
 
 pub const SCENARIOS: &[Scenario] = &[
-    // Four hits: each loots, and the fourth discards the Sphinx it drew and casts it free.
+    // Four hits: each loots, and the fourth discards the Spellbinder it drew and casts it free
+    // in the combat damage step.
     Scenario::new("Malcolm's fourth chorus counter casts the discard")
         .battlefield(P0, &[Permanent::new(MALCOLM)])
         // Malcolm's draws in turns 1, 3, 5 and 7 and the draw steps of 3, 5 and 7: Islands,
-        // then the Sphinx last.
+        // then the Spellbinder last.
         .library(
             P0,
             &[
@@ -123,7 +126,7 @@ pub const SCENARIOS: &[Scenario] = &[
                 names::ISLAND,
                 names::ISLAND,
                 names::ISLAND,
-                SPHINX,
+                SPELLBINDER,
             ],
         )
         .library(P1, &[names::PLAINS, names::PLAINS, names::PLAINS])
@@ -150,16 +153,16 @@ pub const SCENARIOS: &[Scenario] = &[
             HITS[3][2],
             HITS[3][3],
             HITS[3][4],
-            // Three Islands and the Sphinx in hand.
+            // Three Islands and the Spellbinder in hand.
             Action::Answer {
                 player: P0,
                 kind: DecisionKind::Discard,
-                pick: Pick::Card { card: SPHINX },
+                pick: Pick::Card { card: SPELLBINDER },
             },
             Action::Answer {
                 player: P0,
                 kind: DecisionKind::CastOffer,
-                pick: Pick::Card { card: SPHINX },
+                pick: Pick::Card { card: SPELLBINDER },
             },
             Action::Assert {
                 assertion: Assertion::Stack { count: 1 },
@@ -169,7 +172,7 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Assert {
                 assertion: Assertion::Controls {
                     player: P0,
-                    card: SPHINX,
+                    card: SPELLBINDER,
                     count: 1,
                 },
             },
