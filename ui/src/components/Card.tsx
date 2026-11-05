@@ -33,12 +33,8 @@ export type CombatRole = "attacker" | "blocker";
 export interface CardProps {
   card: CardFace;
   variant?: "full" | "field";
-  /** The card's width in pixels; everything else scales with it. */
+  /** The card's width in pixels; the frame's aspect and everything else scale with it. */
   width?: number;
-  /** The card's height in pixels, when it is not the frame's usual aspect. */
-  height?: number;
-  /** The frame's unit in pixels (bars, borders and type scale with it), when not width / 12. */
-  unit?: number;
   tapped?: boolean;
   highlight?: Highlight;
   combat?: CombatRole;
@@ -174,8 +170,6 @@ export function Card({
   card,
   variant = "full",
   width = 160,
-  height: givenHeight,
-  unit,
   tapped = false,
   highlight,
   combat,
@@ -183,7 +177,7 @@ export function Card({
   style,
   id,
 }: CardProps) {
-  const height = givenHeight ?? width / ASPECT[variant];
+  const height = width / ASPECT[variant];
   const nameRef = useTextFit(card.name);
   const rulesRef = useRulesFit(card.text);
   const pt = stats(card);
@@ -210,7 +204,7 @@ export function Card({
     <motion.div
       layout
       className="card-slot"
-      style={{ ...slot, fontSize: unit ?? width / 12, ...style }}
+      style={{ ...slot, fontSize: width / 12, ...style }}
       id={id}
     >
       {combat === "attacker" && <AttackChevron id={id} />}

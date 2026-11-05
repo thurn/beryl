@@ -159,7 +159,6 @@ function PlayerAndZones() {
             SAMPLE.doomBlade,
           ]}
           width={98}
-          height={138}
           depth={{ x: -14, y: 18 }}
         />
       </At>
@@ -169,7 +168,6 @@ function PlayerAndZones() {
             card={SAMPLE.island}
             count={3}
             width={122}
-            height={118}
             step={{ x: 0.13, y: 0.065 }}
           />
         </div>
@@ -217,32 +215,13 @@ function CardsAndStates() {
   return (
     <Panel n="04" title="Cards & states">
       <At x={24} y={55}>
-        <Card
-          card={SAMPLE.infernoTitan}
-          variant="field"
-          width={152}
-          height={135}
-          unit={14.6}
-        />
+        <Card card={SAMPLE.infernoTitan} variant="field" width={152} />
       </At>
       <At x={194} y={80}>
-        <Card
-          card={SAMPLE.mountain}
-          variant="field"
-          width={126}
-          height={92}
-          unit={13}
-          tapped
-        />
+        <Card card={SAMPLE.mountain} variant="field" width={126} tapped />
       </At>
       <At x={337} y={61}>
-        <Card
-          card={SAMPLE.plains}
-          variant="field"
-          width={101}
-          height={109}
-          unit={12}
-        />
+        <Card card={SAMPLE.plains} variant="field" width={101} />
       </At>
       <CaptionAt x={263} y={176}>
         Tapped
@@ -250,50 +229,40 @@ function CardsAndStates() {
       <CaptionAt x={389} y={176}>
         Untapped
       </CaptionAt>
-      <At x={64} y={215}>
+      <At x={64} y={200}>
         <Card
           card={SAMPLE.balefulStrix}
           variant="field"
           width={148}
-          height={100}
-          unit={13.6}
           highlight="source"
         />
       </At>
-      <At x={266} y={215}>
+      <At x={266} y={200}>
         <Card
           card={SAMPLE.balefulStrix}
           variant="field"
           width={146}
-          height={100}
-          unit={13.6}
           highlight="target"
         />
       </At>
-      <CaptionAt x={139} y={322}>
+      <CaptionAt x={139} y={325}>
         Source (gold)
       </CaptionAt>
-      <CaptionAt x={344} y={322}>
+      <CaptionAt x={344} y={325}>
         Target (cyan)
       </CaptionAt>
       <At x={54} y={347}>
         <Card
           card={costless(SAMPLE.swords)}
           width={128}
-          unit={13.5}
           style={{ rotate: -7 }}
         />
       </At>
       <At x={168} y={358}>
-        <Card card={SAMPLE.mountain} width={124} unit={13.5} />
+        <Card card={SAMPLE.mountain} width={124} />
       </At>
       <At x={274} y={367}>
-        <Card
-          card={SAMPLE.plateau}
-          width={128}
-          unit={13.5}
-          style={{ rotate: 7 }}
-        />
+        <Card card={SAMPLE.plateau} width={128} style={{ rotate: 7 }} />
       </At>
     </Panel>
   );
@@ -341,8 +310,6 @@ function CombatAndStack() {
             card={SAMPLE.beast}
             variant="field"
             width={129}
-            height={100}
-            unit={12.6}
             combat="attacker"
           />
         </At>
@@ -352,8 +319,6 @@ function CombatAndStack() {
             card={SAMPLE.angel}
             variant="field"
             width={126}
-            height={101}
-            unit={12.6}
             combat="blocker"
           />
         </At>
@@ -370,8 +335,6 @@ function CombatAndStack() {
             card={SAMPLE.infernoTitan}
             variant="field"
             width={119}
-            height={104}
-            unit={12.6}
           />
         </At>
         <At x={180} y={241}>
@@ -385,14 +348,7 @@ function CombatAndStack() {
           />
         </At>
         <At x={356} y={267}>
-          <Card
-            id="g-beast"
-            card={SAMPLE.beast}
-            variant="field"
-            width={116}
-            height={105}
-            unit={12.6}
-          />
+          <Card id="g-beast" card={SAMPLE.beast} variant="field" width={116} />
         </At>
         <CaptionAt x={121} y={422}>
           Gold: source → ability

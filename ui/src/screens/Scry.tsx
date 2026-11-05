@@ -5,13 +5,8 @@ import { Overlay } from "../components/Overlay";
 import { SAMPLE } from "./samples";
 
 /** Lays a card `width` wide in the tray with its center at (x, y), turned `turn` degrees. */
-function fanned(
-  x: number,
-  y: number,
-  width: number,
-  turn: number,
-  height = width / ASPECT.full,
-) {
+function fanned(x: number, y: number, width: number, turn: number) {
+  const height = width / ASPECT.full;
   return {
     position: "absolute",
     left: x - width / 2,
@@ -39,9 +34,8 @@ export function ScryOverlay({ className }: { className?: string }) {
         <Card
           card={SAMPLE.island}
           width={297}
-          height={366}
           highlight="target"
-          style={{ ...fanned(315, 269.5, 297, -8.6, 366), zIndex: 3 }}
+          style={{ ...fanned(315, 269.5, 297, -8.6), zIndex: 3 }}
         />
         <span className="scry-label scry-bottom">Bottom</span>
         <span className="scry-label scry-top">Top</span>

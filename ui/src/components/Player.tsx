@@ -396,13 +396,10 @@ export const GRAVEYARD_DEPTH: PileDepth = { x: -6, y: 8 };
 export function Graveyard({
   cards,
   width = 110,
-  height,
   depth = GRAVEYARD_DEPTH,
 }: {
   cards: CardFace[];
   width?: number;
-  /** The top card's height, when not the full frame's usual aspect. */
-  height?: number;
   depth?: PileDepth;
 }) {
   const top = cards[cards.length - 1];
@@ -415,7 +412,7 @@ export function Graveyard({
       className="graveyard"
     >
       {top ? (
-        <Card card={top} width={width} height={height} />
+        <Card card={top} width={width} />
       ) : (
         <div className="pile-empty" style={{ width }} />
       )}
@@ -454,7 +451,6 @@ export function LandStack({
   card,
   count,
   width = 150,
-  height,
   tapped = 0,
   step = { x: 0.117, y: 0.034 },
   showCount = true,
@@ -462,8 +458,6 @@ export function LandStack({
   card: CardFace;
   count: number;
   width?: number;
-  /** The cards' height, when not the field frame's usual aspect. */
-  height?: number;
   tapped?: number;
   step?: { x: number; y: number };
   /** The ×N badge; on the table the edges of the copies beneath show the count instead. */
@@ -486,7 +480,6 @@ export function LandStack({
             card={card}
             variant="field"
             width={width}
-            height={height}
             tapped={i >= count - tapped}
             className={depth > 0 ? "card-under" : undefined}
             style={
