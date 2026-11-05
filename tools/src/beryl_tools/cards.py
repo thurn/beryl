@@ -19,7 +19,6 @@ import sys
 import time
 import urllib.request
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
 from importlib import metadata
 from pathlib import Path
 from typing import cast
@@ -189,17 +188,6 @@ def collection(post: Post, identifiers: list[Identifier]) -> list[Json]:
     return cards
 
 
-@dataclass(frozen=True)
-class Card:
-    """One entry of data/cards.json."""
-
-    entry: Json
-
-    @property
-    def sort_key(self) -> tuple[str, str]:
-        return (str(self.entry["name"]), str(self.entry["scryfall_id"]))
-
-
 def faces(card: Json) -> list[Json]:
     """Per face its display text and images. Single-faced cards keep these on the card;
     split and adventure faces share the card's single image and, sometimes, its colors.
@@ -218,19 +206,17 @@ def faces(card: Json) -> list[Json]:
     return out
 
 
-def entry(card: Json, **extra: object) -> Card:
-    return Card(
-        {
-            "name": card["name"],
-            "scryfall_id": card["id"],
-            "set": card["set"],
-            "collector_number": card["collector_number"],
-            "layout": card["layout"],
-            "artist": card.get("artist", ""),
-            **extra,
-            "faces": faces(card),
-        }
-    )
+def entry(card: Json, **extra: object) -> Json:
+    return {
+        "name": card["name"],
+        "scryfall_id": card["id"],
+        "set": card["set"],
+        "collector_number": card["collector_number"],
+        "layout": card["layout"],
+        "artist": card.get("artist", ""),
+        **extra,
+        "faces": faces(card),
+    }
 
 
 def token_parts(cards: Iterable[Json]) -> dict[str, list[str]]:
@@ -254,19 +240,16 @@ def build(names: list[str], pinned: dict[str, Identifier], post: Post) -> Json:
     made = token_parts(cards)
     tokens = collection(post, [{"id": i} for i in sorted(made)])
     return {
-        "cards": [e.entry for e in sorted((entry(c) for c in cards), key=_key)],
-        "tokens": [
-            e.entry
-            for e in sorted(
-                (entry(t, made_by=sorted(made[str(t["id"])])) for t in tokens),
-                key=_key,
-            )
-        ],
+        "cards": sorted((entry(c) for c in cards), key=by_name),
+        "tokens": sorted(
+            (entry(t, made_by=sorted(made[str(t["id"])])) for t in tokens),
+            key=by_name,
+        ),
     }
 
 
-def _key(card: Card) -> tuple[str, str]:
-    return card.sort_key
+def by_name(card: Json) -> tuple[str, str]:
+    return (str(card["name"]), str(card["scryfall_id"]))
 
 
 def render(data: Json) -> str:
