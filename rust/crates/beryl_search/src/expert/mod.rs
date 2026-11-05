@@ -219,6 +219,13 @@ pub(crate) fn appraise(p: &Policy<'_>, slot: Slot, base: i32) -> Option<i32> {
     {
         return Some(0);
     }
+    // A creature whose enters-the-battlefield ability is spent is worth its body.
+    if matches!(
+        name(slot),
+        Some(names::ELITE_SPELLBINDER | names::THUNDERTRAP_TRAINER | names::THIEVING_SKYDIVER)
+    ) {
+        return Some(base / 2 + 3 * i32::from(obs.derived(slot).power.max(0)));
+    }
     // Jace, Vryn's Prodigy loots every turn and becomes a planeswalker.
     if name(slot) == Some(names::JACE_VRYNS_PRODIGY) && o.face == 0 {
         return Some(base + 20);
@@ -460,14 +467,14 @@ impl Expert<'_> {
             .any(|s| self.is(s, names::MANA_TITHE))
     }
 
-    /// What removing our permanent in `slot` would give back to the opponent: the permanent
-    /// our Aang's Iceberg exiled "until this enchantment leaves the battlefield".
+    /// What removing the permanent in `slot` would give back to the other side: the
+    /// permanent an Aang's Iceberg exiled "until this enchantment leaves the battlefield".
     fn released(&self, slot: Slot) -> i32 {
         if !self.is(slot, names::AANGS_ICEBERG) {
             return 0;
         }
         self.obs()
-            .zone(self.opp(), Zone::Exile)
+            .zone(self.obs().controller(slot).opponent(), Zone::Exile)
             .iter()
             .filter(|&s| self.obs().object(s).linked == Some(slot))
             .map(|s| self.value(s))
@@ -1027,7 +1034,8 @@ impl Expert<'_> {
             && self.opp_can_counter()
             && !self.hand(self.opp()).is_empty()
         {
-            return 700;
+            // Before the cheap spells that would spend the mana to pay for Mana Tithe.
+            return 900;
         }
         if precombat && creature && name != names::ADELINE_RESPLENDENT_CATHAR && self.can_attack() {
             // Creatures come down after combat, giving nothing away before it.
@@ -1386,15 +1394,7 @@ impl Expert<'_> {
         // attempted to draw a card from a library with no cards in it ... that player loses
         // the game").
         let drawable = pool - usize::from(from_hand) >= 7;
-        // Dead on board, it is the way out when it leaves mana to cast what it draws: Time
-        // Spiral untaps six lands, Timetwister costs three.
-        let left = if spiral {
-            self.mana(me) - 6 + self.lands(me).min(6) as i32
-        } else {
-            self.mana(me) - 3
-        };
-        let out = self.dying() && left >= 3;
-        drawable && (decking || out || (!winning && !holding && (empty || (!behind && refill))))
+        drawable && (decking || (!winning && !holding && (empty || (!behind && refill))))
     }
 
     /// The value of the best artifact of the opponent's that Thieving Skydiver could take,
@@ -1478,7 +1478,8 @@ impl Expert<'_> {
                 // It would come back from Aang's Iceberg's exile in full, a 6/6 with Insects.
                 0
             } else {
-                self.value(s) + self.killer_bonus(s)
+                // Their Aang's Iceberg gives back the permanent of ours it holds.
+                self.value(s) + self.killer_bonus(s) + self.released(s)
             }
         };
         // Before combat, a blocker whose removal opens lethal comes first; not for Oust, whose
@@ -1967,7 +1968,8 @@ impl Expert<'_> {
             .iter()
             .map(|&s| i32::from(self.obs().derived(s).power.max(0)))
             .sum();
-        let lethal = damage >= i32::from(self.obs().player(self.me()).life);
+        // An attack that kills us, or leaves us at 3 life or less, is worth a chump blocker.
+        let chump = damage >= i32::from(self.obs().player(self.me()).life) - 3;
         // An attack for half our life or more, or one that kills a planeswalker of ours, is
         // worth any removal on it.
         let kills_walker = self.permanents(self.me()).any(|w| {
@@ -1996,7 +1998,7 @@ impl Expert<'_> {
                         .map_or(0, |(v, _)| 500 + v)
                 }
                 Some(names::SPHINX_OF_FALSE_CONCLUSIONS | names::MALCOLM_ALLURING_SCOUNDREL)
-                    if lethal
+                    if chump
                         || (self.good_block(slot, &attackers)
                             && !self.obs().card(slot).is_some_and(|c| self.tithe_risk(c))) =>
                 {
@@ -2036,6 +2038,14 @@ impl Expert<'_> {
                 }
                 if let Some((v, _)) = self.removal_score(slot, name, face, min) {
                     return 600 + v;
+                }
+                // A counterspell we have seen waits for any of them.
+                let cost = self
+                    .obs()
+                    .card(slot)
+                    .map_or(0, |c| i32::from(self.p.t.def(c).front().cost.mana_value()));
+                if self.counter_known(self.mana(self.me()) - cost) {
+                    return 0;
                 }
                 match name {
                     names::THE_WANDERING_EMPEROR => 500,
@@ -2121,7 +2131,7 @@ impl Expert<'_> {
         if self.lethal_blocker(slot) {
             v += 500;
         }
-        v += self.killer_bonus(slot);
+        v += self.killer_bonus(slot) + self.released(slot);
         if self.obs().object(slot).flags.has(ObjectFlags::TOKEN) {
             return v + 15;
         }

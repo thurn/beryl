@@ -91,9 +91,9 @@ impl Sim<'_> {
                 } else {
                     self.block_plans(start, d)
                 };
-                let mut top: (&[Declare], i32) = (&[], self.weigh(start, d, &[]));
+                let mut top: (&[Declare], i32) = (&[], self.weigh(start, d, &[], None));
                 for p in &plans {
-                    let score = self.weigh(start, d, p);
+                    let score = self.weigh(start, d, p, None);
                     // Every attacker, the unsafe ones too, is the lethal check only.
                     if matches!(p.first(), Some(Declare::Every(_))) && score < DECIDED {
                         continue;
@@ -305,7 +305,7 @@ impl Sim<'_> {
         };
         let mut top = (0, i32::MIN);
         for (i, &o) in candidates.iter().enumerate() {
-            let score = self.run(start, &[], Some(o), true);
+            let score = self.weigh(start, d, &[], Some(o));
             if score > top.1 {
                 top = (i, score);
             }
@@ -329,17 +329,27 @@ impl Sim<'_> {
         out
     }
 
-    /// The score of declaring `plan` at decision `d`: for an attack, the worse of the
-    /// defender blocking as planned and not blocking at all, so that an attack is not made
-    /// on a block the defender need not make (one that leaves us dead on board if it does
-    /// not come).
-    fn weigh(&mut self, start: &State, d: &Decision, plan: &[Declare]) -> i32 {
-        let planned = self.run(start, plan, None, true);
-        if d.kind == DecisionKind::Attacker && !self.nested && planned < DECIDED {
-            planned.min(self.run(start, plan, None, false))
-        } else {
-            planned
+    /// The score of declaring `plan` at decision `d`, with `pending` answering the
+    /// follow-up question: for our attack, mostly the worse of the defender blocking as
+    /// planned and not blocking at all, so that an attack is not made on a block the
+    /// defender need not make (one that leaves us dead on board if it does not come), and a
+    /// quarter of what the better one adds, so that of two lines alike when blocked, the one
+    /// that gains more unblocked is taken.
+    fn weigh(
+        &mut self,
+        start: &State,
+        d: &Decision,
+        plan: &[Declare],
+        pending: Option<Opt>,
+    ) -> i32 {
+        let planned = self.run(start, plan, pending, true);
+        let ours = matches!(d.kind, DecisionKind::Attacker | DecisionKind::AttackTarget);
+        if !ours || self.nested || planned >= DECIDED {
+            return planned;
         }
+        let free = self.run(start, plan, pending, false);
+        let (lo, hi) = (planned.min(free), planned.max(free));
+        lo + (hi - lo) / 4
     }
 
     /// Plays combat on from `start` with our next declarations `plan`, then stopping, and

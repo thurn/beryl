@@ -233,7 +233,7 @@ fn get_lost_leaves_a_sphinx_that_comes_back() {
             P1,
             &[
                 Permanent::new(names::SPHINX_OF_FALSE_CONCLUSIONS),
-                Permanent::new(names::ELITE_SPELLBINDER),
+                Permanent::new(names::ADELINE_RESPLENDENT_CATHAR),
             ],
         )
         .library(P1, LIBRARY)
@@ -245,7 +245,7 @@ fn get_lost_leaves_a_sphinx_that_comes_back() {
         d.kind == DecisionKind::Target && !s.stack().is_empty()
     });
     let target = d.candidates.object(c).expect("a creature");
-    assert_eq!(name(&t, &s, target), names::ELITE_SPELLBINDER);
+    assert_eq!(name(&t, &s, target), names::ADELINE_RESPLENDENT_CATHAR);
 }
 
 /// Jace bounces the creature whose attack would kill him when that saves him, and grows when
