@@ -19,17 +19,28 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
 - `rust/`: the Cargo workspace. `crates/beryl_app` is the Tauri shell (window,
   IPC commands, `tauri.conf.json`, capabilities, icons). Keep it thin: game
   rules, drafting and AI go in their own library crates under `rust/crates/`,
-  which build and test without Tauri.
+  which build and test without Tauri. `docs/engine-architecture.md` §16 maps the
+  crates.
 - `ui/`: the frontend, Vite + React + TypeScript (strict). `src/ipc.ts` holds
-  typed wrappers for the Rust commands; call Rust only through it.
+  typed wrappers for the Rust commands; call Rust only through it. Its fixture
+  transport replays sessions recorded from seeded games (`fixtures.json`), which
+  `just ui-shots` captures in the states `shots.json` names.
+  `src/generated/protocol.ts` is generated from `beryl_session` by ts-rs: a test
+  fails when it is stale, and its header says how to regenerate it.
 - `data/`: the V1 cube cardlist (`color,name` CSV); `cards.json`, the card data
   `just cards` writes from Scryfall (printing, artist, per-face text and image
-  URLs); `card-printings.csv`, the printings it pins. The app downloads images
-  on demand into its cache (`beryl_app`'s `art.rs`); none are committed.
-- `tools/`: `by`, the Python CLI behind the justfile. `just` lists the commands.
+  URLs); `card-printings.csv`, the printings it pins; `oracle-divergences.json`,
+  the scenarios where an oracle is wrong, each with its CR citation. The app
+  downloads images on demand into its cache (`beryl_app`'s `art.rs`); none are
+  committed.
+- `docs/ui_mockups/`: the UI's target images. `regions.json` names their parts
+  and records each part's pixel-fidelity verdict.
+- `tools/`: `by`, the Python CLI behind the justfile, including the XMage and
+  Forge exporters and their Java harnesses. `just` lists the commands.
 - Outside the tree: `~/Library/Caches/beryl` (`$BERYL_CACHE`: warm `rust/target`
-  and `ui/node_modules` shared by worktrees). Never crawl `~` or `/` with
-  `find`.
+  and `ui/node_modules` shared by worktrees, the oracle builds and their last
+  report in `oracles/logs/oracle.json`, and the screenshot and comparison
+  images). Never crawl `~` or `/` with `find`.
 
 ## Enact
 
@@ -73,8 +84,15 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
 Cheapest first. Agents never open a window: `just dev` refuses to for them.
 
 1. Logic: `just test-rust` runs the workspace's tests. Engine, draft and AI
-   behavior is tested here, not through the app.
-2. UI: `cd ui && npm run typecheck`.
+   behavior is tested here, not through the app. A card's scenarios live in its
+   file; `just oracle <card names>` checks them against XMage and Forge, and
+   `just fuzz` plays random games at length.
+2. UI: `cd ui && npm run typecheck`. `just ui-shots [names]` screenshots UI
+   states headless and prints their paths; `just ui-test` plays the game screen
+   through a fixture. For pixel fidelity, `just ui-compare [parts] --review`
+   writes per-part comparisons with `docs/ui_mockups` and a packet for a fresh
+   reviewer subagent, `just ui-verdict` records its verdict, and `just ui-probe`
+   and `just ui-fonts` measure colors, edges and font candidates.
 3. The app: `just smoke` builds the debug app and launches it with no window and
    no Dock icon until the UI reports over IPC that it loaded (about a second
    once built). It fails on a build error or a UI that never loads.

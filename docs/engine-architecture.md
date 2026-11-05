@@ -7,9 +7,9 @@ way [benchmarking.md](benchmarking.md) describes.*
 This is the design of the Rust rules engine and of the boundaries that search,
 the desktop UI and drafting build on. It is not an implementation plan:
 milestone plans are Enact epics in beads, written against this document.
-Milestone 1 builds the engine, the game UI and the first AI opponents for 29
+Milestone 1 built the engine, the game UI and the first AI opponents for 29
 cards, a mirror match of the deck in
-`docs/sample-decks/2026-10-17-PrinceJools-wu-control.txt`. It builds the
+`docs/sample-decks/2026-10-17-PrinceJools-wu-control.txt`. It built the
 structures described here, but only the mechanics those cards use. Drafting and
 the rest of the cube come in later milestones. The twenty-two decisions it rests
 on are marked **D1** to **D22** where they apply and listed again in the
@@ -851,17 +851,17 @@ searcher optimistic, which is tuned, not fixed.
 
 ## 16. Crate map (D12)
 
-| Crate            | Holds                                                                                                                                                        | Depends on                                     |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
-| `beryl_engine`   | `State`, events, layers, mana, combat, turn structure, decisions, the Observation view and determinization, the `CardDef` types, `GameTable` and `EffectCtx` | nothing in the workspace                       |
-| `beryl_cards`    | 540 card files under color directories, the generated `names` module, the static table, per-card scenarios and the `beryl_scenario dump` command             | `beryl_engine`, `beryl_scenario`               |
-| `beryl_scenario` | Scenario value types, the strict runner, the JSON serialization                                                                                              | `beryl_engine`                                 |
-| `beryl_search`   | The `Agent` trait, `RandomAgent`, the greedy agent that is also the rollout policy, the expert system, MCTS, evaluation                                      | `beryl_engine`                                 |
-| `beryl_session`  | `Sessions` and their threads, the `PlayerView` protocol and IPC names with generated TypeScript types, replay files                                          | `beryl_cards`, `beryl_engine`, `beryl_search`  |
-| `beryl_cli`      | Headless games between agents, tournaments, transcripts, UI fixtures recorded from sessions                                                                  | `beryl_cards`, `beryl_search`, `beryl_session` |
-| `beryl_draft`    | Pack generation, draft state, the draft bot, deckbuilding (a later milestone)                                                                                | `beryl_cards`                                  |
-| `beryl_bench`    | Benchmark support, as today, plus the engine's `_counts`, `_abba` and `_timing` targets and the cube rollout benchmark                                       | the above as dev-dependencies                  |
-| `beryl_app`      | The Tauri shell: IPC commands and events around `beryl_session`, the card-art cache                                                                          | all of the above                               |
+| Crate            | Holds                                                                                                                                                                 | Depends on                                     |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `beryl_engine`   | `State`, events, layers, mana, combat, turn structure, decisions, the Observation view and determinization, the `CardDef` types, `GameTable` and `EffectCtx`          | nothing in the workspace                       |
+| `beryl_cards`    | One file per card under color directories (so far the 29 WU Control cards), the generated `names` module, the static table, per-card scenarios, `beryl_scenario dump` | `beryl_engine`, `beryl_scenario`               |
+| `beryl_scenario` | Scenario value types, the strict runner, the JSON serialization                                                                                                       | `beryl_engine`                                 |
+| `beryl_search`   | The `Agent` trait, `RandomAgent`, the greedy agent that is also the rollout policy, the expert system, MCTS, evaluation                                               | `beryl_engine`                                 |
+| `beryl_session`  | `Sessions` and their threads, the `PlayerView` protocol and IPC names with generated TypeScript types, replay files                                                   | `beryl_cards`, `beryl_engine`, `beryl_search`  |
+| `beryl_cli`      | Headless games between agents, tournaments, transcripts, UI fixtures recorded from sessions                                                                           | `beryl_cards`, `beryl_search`, `beryl_session` |
+| `beryl_draft`    | Pack generation, draft state, the draft bot, deckbuilding (not yet created)                                                                                           | `beryl_cards`                                  |
+| `beryl_bench`    | Benchmark support and the `_counts`, `_abba` and `_timing` targets of the example and of the cube rollout benchmark                                                   | `beryl_cards`, `beryl_engine`, `beryl_search`  |
+| `beryl_app`      | The Tauri shell: IPC commands and events around `beryl_session`, the card-art cache                                                                                   | all of the above                               |
 
 The engine knows no card and no card knows the engine's internals: cards use
 `EffectCtx` and the table types only. One card edit recompiles `beryl_cards`,
@@ -895,33 +895,34 @@ action began as Beryl played it: the turn, step, open decision and stack, the
 coin flips and taps on the way, and the answers to questions with one answer,
 which `Stops::Forced` stops at so the trace sees them. Oracles script by turn
 and step rather than by decision, so the exporters place each action from the
-trace. Python exporters generate:
+trace. Python exporters in `tools/` generate:
 
-- **XMage**, the primary oracle. A JUnit class per card under
-  `Mage.Tests/src/test/java`, on `CardTestPlayerBase`: `addCard`, `setLife`,
-  `castSpell`, `activateAbility`, `playLand`, `attack`, `block`, `addTarget`,
-  `setChoice`, `setModeChoice`, `setStrictChooseMode(true)`, `setStopAt`,
-  `execute`, and the `assert*` family. Its build files indicate that classes
-  dropped into that tree run under Maven's defaults after a one-time build.
-- **Forge**, the secondary oracle. Its `forge.game.GameState` text format can
-  set up any board (`p0life`, `p0hand`, `p0battlefield` with `|Tapped`,
-  `|Counters:P1P1=1`, `|Id:n`, `|AttachedTo:id`), but its scripted-player
-  harnesses reject modes and combat damage, so the exporter emits only the
-  scenarios inside Forge's vocabulary and reports the rest as unsupported.
-  Forge's headless `sim` command plays AI-versus-AI matches from decklists with
-  logs, which serves statistical differential testing later.
+- **XMage**, the primary oracle. A JUnit class per card in the XMage checkout's
+  `Mage.Tests`, on `CardTestPlayerBase` through Beryl's `BerylScenarioTest`
+  helpers: `addCard`, `castSpell`, `attack`, `addTarget`, `setChoice`,
+  `setStrictChooseMode(true)`, the `assert*` family. Where XMage asks a card's
+  questions differently from Beryl, tables at the top of `xmage.py` translate
+  them; a new card's scenario that fails on XMage usually needs an entry there.
+- **Forge**, the secondary oracle. Each scenario becomes a
+  `forge.game.GameState` text setup (`p0life`, `p0hand`, `p0battlefield` with
+  `|Tapped` and `|Counters:LOYALTY=3`) and a list of steps that Beryl's own
+  scripted harness, `tools/oracles/BerylForgeHarness.java`, plays. A scenario
+  outside that vocabulary is reported as unsupported with the reason.
 
-Both oracles are part of Milestone 1. `just oracle-setup` installs Maven with
-Homebrew if it is missing, shallow-clones XMage and Forge at pinned commits into
+`just oracle-setup` installs Maven with Homebrew if it is missing,
+shallow-clones XMage and Forge at pinned commits into
 `~/Library/Caches/beryl/oracles` and builds them once with JDK 21; agents run it
-unattended. `just oracle` exports the scenarios and runs them on both, in about
-half a minute once built; it is `just ci`'s `oracle` lane.
+unattended. `just oracle [cards]` exports the scenarios and runs them on both,
+in under a minute once built, and writes its full report to
+`oracles/logs/oracle.json` there; it is `just ci`'s `oracle` lane.
 
 - A card an oracle does not implement, or a scenario outside its harness's
   vocabulary, is reported as unsupported, not failed.
 - A disagreement is a bug to investigate, and the Comprehensive Rules decide it.
   When the oracle is wrong, the scenario joins a short allowlist of known
-  divergences, each with its CR citation (`data/oracle-divergences.json`).
+  divergences, each with its CR citation (`data/oracle-divergences.json`). Only
+  a different game outcome belongs there: a question an oracle asks that Beryl
+  does not is the exporter's to answer.
 
 ### 17.3 The bar for a supported card
 
@@ -969,9 +970,9 @@ rollouts per core-second.
 binaries: fat LTO, `panic = "abort"` and `codegen-units = 1`, with
 `-C target-cpu=apple-m4` passed by the recipes that build it, since a Cargo
 profile cannot set the CPU; `apple-m4` is what `native` resolves to here under
-rustc 1.98. Profile-guided optimization follows once the cube rollout benchmark
-exists, trained on it. It needs `llvm-tools` in `rust/rust-toolchain.toml`, and
-BOLT, the usual next step on Linux, does not support macOS binaries.
+rustc 1.98. Profile-guided optimization, trained on the cube rollout benchmark,
+is not used yet. It needs `llvm-tools` in `rust/rust-toolchain.toml`, and BOLT,
+the usual next step on Linux, does not support macOS binaries.
 
 - Estimated gains for a branchy engine: PGO 5 to 15%, fat LTO and abort a few
   percent together, the CPU target 0 to 2%.
@@ -1000,13 +1001,12 @@ Rules for the hot path:
 
 ### 19.1 Search
 
-Milestone 1 ships four agents behind one trait: a random agent, a greedy agent
-that is also the rollout policy, an expert system (**D15**), and a basic MCTS in
-an omniscient and a hidden-information variant. Stronger search comes in later
-milestones. The engine already provides what search needs: cheap copies,
-factored decisions inside the state, the `Observation` view and determinization,
-profiles, budgets, the state hash, per-thread `Scratch`, inline answers, and the
-inlined rollout loop.
+Milestone 1 ships five agents behind one trait, named in `beryl_search::AGENTS`:
+`random`, `greedy` (the rollout policy), `expert` (**D15**), and a basic MCTS as
+`mcts-omniscient` and `mcts-hidden`. The engine already provides what search
+needs: cheap copies, factored decisions inside the state, the `Observation` view
+and determinization, profiles, budgets, the state hash, per-thread `Scratch`,
+inline answers, and the inlined rollout loop.
 
 ```rust
 pub trait Agent {
@@ -1016,9 +1016,12 @@ pub trait Agent {
 
 **The expert system** is the scripted baseline: a prioritized rule set with
 card-specific knowledge (when to hold a counterspell, when to cast a wheel,
-which land to Strip Mine), using engine copies only for combat math and lethal
-checks. It ships beside a `RandomAgent` used for fuzzing, and its games and the
-greedy agent's supply the positions of the cube rollout benchmark (§18).
+which land to Strip Mine), using engine copies only for combat math, lethal
+checks and comparing payment plans. At the tournament budget of 300 iterations
+and 4 trees it beats both MCTS agents about 88% of the time: the search is
+starved by engine speed, at about 120 rollouts per core-second. It ships beside
+a `RandomAgent` used for fuzzing, and its games and the greedy agent's supply
+the positions of the cube rollout benchmark (§18).
 
 **The rollout policy** (**D21**) is separate from the expert system, and
 cheaper. Wrapped as an `Agent`, it is also the greedy opponent:
