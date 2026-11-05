@@ -1,6 +1,8 @@
 //! No heap allocation in the rollout loop (architecture §17.4, §18): a counting allocator
-//! around the cube rollout benchmark's rollouts, every start played to the end under the
-//! rollout policy, mid-game positions with their stacks, payments and resolutions.
+//! around rollouts from every position of the cube rollout benchmark's corpus, each played to
+//! the end under the rollout policy, mid-game positions with their stacks, payments and
+//! resolutions. One rollout per position, not the benchmark's four: in a debug build all of
+//! them, and the recording the benchmarks need, took over 20 s of the fast check.
 //!
 //! The global allocator counts every thread's allocations, so this binary runs without the
 //! test harness and its threads.
@@ -11,7 +13,9 @@
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-use beryl_bench::rollout::{self, Workload};
+use beryl_bench::rollout::{self, Corpus, ROLLOUTS};
+use beryl_engine::Scratch;
+use beryl_search::RolloutPolicy;
 
 struct Counting;
 
@@ -42,20 +46,25 @@ unsafe impl GlobalAlloc for Counting {
 static ALLOCATOR: Counting = Counting;
 
 fn main() {
-    let w = Workload::new();
-    let (mut x, mut s) = w.memory();
+    let c = Corpus::new();
+    let policy = RolloutPolicy::new(&c.table);
+    let starts: Vec<_> = c.starts().into_iter().step_by(ROLLOUTS as usize).collect();
+    let (mut x, mut s) = (Scratch::new(), Box::new(starts[0]));
     COUNTING.store(true, Ordering::Relaxed);
-    rollout::roll(&w.table, &w.starts, &w.policy, &mut s, &mut x);
+    rollout::roll(&c.table, &starts, &policy, &mut s, &mut x);
     COUNTING.store(false, Ordering::Relaxed);
     let allocations = ALLOCATIONS.load(Ordering::Relaxed);
     assert_eq!(
-        allocations, 0,
+        allocations,
+        0,
         "{allocations} allocations in {} rollouts",
-        w.summary.rollouts
+        starts.len()
     );
-    assert!(w.summary.rollouts > 0 && w.summary.decisions > 1000);
+    assert!(starts.len() == c.positions.len() && x.counts.decisions > 1000);
     println!(
-        "allocations: no heap allocation in {} rollouts of the cube rollout benchmark",
-        w.summary.rollouts
+        "allocations: no heap allocation in {} rollouts, {} decisions, from the cube rollout \
+         benchmark's positions",
+        starts.len(),
+        x.counts.decisions
     );
 }
