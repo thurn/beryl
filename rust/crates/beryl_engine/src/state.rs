@@ -350,6 +350,10 @@ pub struct Turn {
     /// The cleanup step is checking for state-based actions (CR 514.3a): if none are
     /// performed, the turn ends instead of a player receiving priority.
     pub cleanup_check: bool,
+    /// Creatures were declared as attackers this combat, so the declare blockers and combat
+    /// damage steps happen even if none is attacking any more
+    /// ([CR 508.8](https://yawgatog.com/resources/magic-rules/#R5088)).
+    pub attacked: bool,
 }
 
 /// Targets per stack entry (architecture §4.2).

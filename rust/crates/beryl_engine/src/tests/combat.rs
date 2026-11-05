@@ -597,6 +597,54 @@ fn an_attacker_whose_planeswalker_left_deals_no_damage() {
     assert_eq!(g.life(d), 20);
 }
 
+#[test]
+fn combat_goes_on_when_every_declared_attacker_is_removed() {
+    // CR 508.8 skips the declare blockers and combat damage steps only if no creature was
+    // declared as an attacker, not when the attackers are gone by the end of the step.
+    let mut g = Game::new();
+    let bear = g.put(g.attacker, "Bear");
+    g.pass_to_combat();
+    g.pick(DecisionKind::Attacker, Opt::Attack(bear));
+    stop_at(&mut g, TurnStep::DeclareAttackers);
+    zone::move_to(&mut g.s, bear, Zone::Graveyard).unwrap();
+    g.finish_combat();
+    let steps = g.steps();
+    assert!(steps.contains(&TurnStep::DeclareBlockers), "{steps:?}");
+    assert!(steps.contains(&TurnStep::CombatDamage), "{steps:?}");
+}
+
+#[test]
+fn attackers_blocked_by_different_creatures_are_not_interchangeable() {
+    // Two Ogres, one blocked by a Bear and one by a Sentry. A Spider joining the Bear kills
+    // that Ogre (2 + 1 damage); joining the Sentry kills neither (1 + 1).
+    let mut g = Game::new();
+    let (a, d) = (g.attacker, g.defender());
+    let x = g.put(a, "Ogre");
+    let y = g.put(a, "Ogre");
+    let (first, second) = (x.min(y), x.max(y));
+    let bear = g.put(d, "Bear");
+    let sentry = g.put(d, "Sentry");
+    let spider = g.put(d, "Spider");
+    g.pass_to_combat();
+    g.pick(DecisionKind::Attacker, Opt::Attack(first));
+    g.pick(DecisionKind::Attacker, Opt::Attack(second));
+    // The Bear's two attackers are still interchangeable: it blocks the first silently.
+    g.pick(DecisionKind::Blocker, Opt::Block(bear));
+    g.pick(DecisionKind::Blocker, Opt::Block(sentry));
+    g.pick_object(DecisionKind::BlockTarget, second);
+    g.pick(DecisionKind::Blocker, Opt::Block(spider));
+    let target = g.expect(DecisionKind::BlockTarget);
+    assert_eq!(
+        target.candidates,
+        Candidates::Objects([first, second].into_iter().collect())
+    );
+    g.pick_object(DecisionKind::BlockTarget, first);
+    g.pick(DecisionKind::DamageDivision, Opt::Done);
+    g.finish_combat();
+    assert!(!g.on_battlefield(first));
+    assert!(g.on_battlefield(second));
+}
+
 /// Stops at the active player's priority in `step` of this turn.
 fn stop_at(g: &mut Game, step: TurnStep) {
     let turn = g.s.turn().number;

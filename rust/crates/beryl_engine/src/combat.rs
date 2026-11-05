@@ -54,6 +54,17 @@ fn blockers_of(s: &State, attacker: u8) -> Bitboard {
         .collect()
 }
 
+/// The objects another object's `combat` names: the attacked planeswalkers and the blocked
+/// attackers with a blocker still blocking them. Two Ogres, one blocked by a 2/2 and one by
+/// a 1/3, share a signature but are not interchangeable to a third blocker.
+pub(crate) fn related(s: &State) -> Bitboard {
+    s.battlefield()
+        .iter()
+        .map(|&slot| s.object(slot).combat)
+        .filter(|&other| other != NONE)
+        .collect()
+}
+
 /// Whether any creature can attack now, so that the declaration is worth starting.
 ///
 /// [CR 508.1a](https://yawgatog.com/resources/magic-rules/#R5081a): "The active player
@@ -167,6 +178,7 @@ fn finish_attack(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<(), Fu
     if attackers.is_empty() {
         return Ok(());
     }
+    s.turn.attacked = true;
     let player = s.turn.active;
     event::settle(s, t, sink, Event::Attack { player, attackers })
 }
@@ -586,6 +598,7 @@ pub(crate) fn in_combat(step: TurnStep) -> bool {
 /// the end of combat step ends, all creatures, battles, and planeswalkers are removed from
 /// combat."
 pub(crate) fn end_combat(s: &mut State) {
+    s.turn.attacked = false;
     for i in 0..s.battlefield.len() {
         let slot = s.battlefield.as_slice()[i];
         let o = s.object_mut(slot);

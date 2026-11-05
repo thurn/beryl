@@ -537,10 +537,11 @@ fn enter_from_hand(
 /// else counts: the face up, the owner (a stolen Mana Crypt goes to another graveyard than
 /// your own), copy, link and chosen value as much as card, counters and flags. An object a
 /// pending reference names, a target on the stack or a cast permission, is never collapsed
-/// with another.
+/// with another; nor is one that combat relates another object to, since its signature
+/// doesn't show what attacks or blocks it.
 pub(crate) fn collapse(s: &State, candidates: Bitboard) -> Bitboard {
     let signature = |slot: u8| zone::signature(s, slot);
-    let referenced = cast::referenced(s);
+    let referenced = cast::referenced(s) | combat::related(s);
     let mut kept = Bitboard::EMPTY;
     for slot in candidates.iter() {
         let sig = signature(slot);

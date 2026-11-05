@@ -152,7 +152,9 @@ pub(crate) fn end_step(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<
         TurnStep::BeginningOfCombat => TurnStep::DeclareAttackers,
         // CR 508.8: "If no creatures are declared as attackers or put onto the battlefield
         // attacking, skip the declare blockers and combat damage steps."
-        TurnStep::DeclareAttackers if any_attacking(s) => TurnStep::DeclareBlockers,
+        TurnStep::DeclareAttackers if s.turn.attacked || any_attacking(s) => {
+            TurnStep::DeclareBlockers
+        }
         TurnStep::DeclareAttackers | TurnStep::CombatDamage => TurnStep::EndOfCombat,
         TurnStep::DeclareBlockers => {
             layers::refresh(s, t);

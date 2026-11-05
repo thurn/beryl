@@ -93,6 +93,7 @@ impl State {
                 priority: 0,
                 passes: 0,
                 cleanup_check: false,
+                attacked: false,
             },
             stack: Fixed::new(),
             triggers: Fixed::new(),
