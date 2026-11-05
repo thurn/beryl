@@ -323,7 +323,10 @@ function Look({
   ) : place.look === "hand" ? (
     <div className="hand-card">{card_}</div>
   ) : place.look === "pile" ? (
-    <div style={{ scale: `1 ${PILE_SQUASH}`, transformOrigin: "top" }}>
+    <div
+      className="pile-card"
+      style={{ scale: `1 ${PILE_SQUASH}`, transformOrigin: "top" }}
+    >
       {card_}
     </div>
   ) : (

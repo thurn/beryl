@@ -136,10 +136,10 @@
 .ability-badge {
   position: absolute;
   --ink: #2b2b30;
-  left: 0.62em;
-  bottom: 0.28em;
-  width: 2.2em;
-  height: 2.1em;
+  left: 0.37em;
+  bottom: 0.6em;
+  width: 2em;
+  height: 1.9em;
   border-radius: 0.38em;
   display: grid;
   place-items: center;
@@ -184,7 +184,7 @@
   transition: box-shadow 0.25s;
 }
 .card-field {
-  padding: 0.48em 0.56em var(--card-foot, 0.95em);
+  padding: 0.3em 0.56em var(--card-foot, 0.95em);
 }
 .card-rim {
   height: 100%;
@@ -219,6 +219,12 @@
 }
 .card-field .card-rim {
   padding: 0.24em 0.36em 0.1em;
+}
+/* A white land's art closes on a bright rule along its bottom (battlefield.png's Plains). */
+.card-field.card-land.frame-w .card-art {
+  box-shadow:
+    0 0 0 0.06em var(--rim-lo),
+    0 0.12em 0 #f4f2ee;
 }
 /* Lands' rims show a copper bevel at their outer edge (battlefield.png's Island and Swamp). */
 .card-land .card-rim {
@@ -256,17 +262,18 @@
 }
 .card-field .card-name-bar {
   height: 1em;
-  margin: 0 -0.12em;
-  padding: 0 0.44em;
-}
-/* A land's name bar starts further out under a thinner top border, so the first letter of each
-   copy's name peeks out of its pile (battlefield.png). */
-.card-field.card-land {
-  padding-top: 0.3em;
-}
-.card-field.card-land .card-name-bar {
   margin: 0 -0.3em;
   padding: 0 0.26em;
+}
+/* Lying on the table, an untapped creature's frame shows a thicker top border over a name bar
+   set in from the rim (battlefield.png); a land keeps the bar further out, so the first letter of
+   each copy's name peeks out of its pile. */
+.on-table .card-field:not(.card-tapped, .card-land) {
+  padding-top: 0.48em;
+}
+.on-table .card-field:not(.card-tapped, .card-land) .card-name-bar {
+  margin: 0 -0.12em;
+  padding: 0 0.44em;
 }
 .card-name {
   overflow: hidden;
@@ -414,9 +421,9 @@
     var(--bar) 45%,
     color-mix(in srgb, var(--bar) 88%, black)
   );
-  border: 0.12em solid #14110f;
+  border: 0.1em solid #14110f;
   box-shadow:
-    inset 0 0 0 0.2em color-mix(in srgb, var(--bar) 55%, #4a3a28),
+    inset 0 0 0 0.12em color-mix(in srgb, var(--bar) 55%, #4a3a28),
     inset 0 0 0 0.18em rgb(0 0 0 / 35%),
     inset 0 0.25em 0.1em rgb(255 255 255 / 30%),
     0 0.06em 0.2em rgb(0 0 0 / 55%);
@@ -424,11 +431,24 @@
 .card-pt span {
   font-size: 1.55em;
 }
-/* On the battlefield the plaque sits inset from the frame's edge, its numerals larger. */
-.card-field .card-pt {
-  right: 0.68em;
+/* Lying on the table, the ability badge sits inset over the frame, larger; the P/T plaque sits
+   inset from the frame's edge in a thicker bevel, its numerals larger (battlefield.png). */
+.on-table .ability-badge {
+  left: 0.62em;
+  bottom: 0.28em;
+  width: 2.2em;
+  height: 2.1em;
 }
-.card-field .card-pt span {
+.on-table .card-pt {
+  right: 0.68em;
+  border-width: 0.12em;
+  box-shadow:
+    inset 0 0 0 0.2em color-mix(in srgb, var(--bar) 55%, #4a3a28),
+    inset 0 0 0 0.18em rgb(0 0 0 / 35%),
+    inset 0 0.25em 0.1em rgb(255 255 255 / 30%),
+    0 0.06em 0.2em rgb(0 0 0 / 55%);
+}
+.on-table .card-pt span {
   font-size: 1.7em;
 }
 /* The slash no taller than the numerals. */
@@ -1323,6 +1343,16 @@
   stroke-linecap: round;
 }
 .life-orb-opponent .life-orb-core {
+  stroke-width: 5;
+}
+/* The near orb's face is a flatter, lighter grey inside a thick rim. */
+/* Under the near orb the ring glows only along the rim, over a shadow. */
+.life-orb-you .life-orb-ring-glow {
+  stroke-width: 4;
+  opacity: 0.4;
+}
+.life-orb-you .life-orb-core {
+  fill: #2c2926;
   stroke-width: 5;
 }
 /* The far orb's ring is copper with a dim glow. */

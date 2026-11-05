@@ -67,7 +67,7 @@ export const PILE_SQUASH = 0.86;
  * `center`, `gap` card widths apart (the far row's closer). */
 const ROWS = {
   opponent: {
-    lands: { x: 158, y: 127, gap: 12, size: 1.07 },
+    lands: { x: 158, y: 124, gap: 30, size: 1.045 },
     permanents: { y: 221, center: 802, gap: 0.044 },
   },
   you: {

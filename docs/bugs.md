@@ -21,6 +21,7 @@ was not found and fixed in the same session. Newest first.
   Prevention: allowlist only a different game outcome, never a question the
   oracle asks and Beryl does not; translate those in the exporter, like its
   other per-card question tables.
+
 - **The oracles ran only by hand.** `just oracle` was documented as nightly, but
   nothing ran it, so a card change could break agreement with XMage or Forge
   unnoticed. It is now slow CI's `oracle` lane. Prevention: a check that is not

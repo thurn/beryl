@@ -796,6 +796,11 @@
 .hand-card {
   position: absolute;
 }
+/* A graveyard's small top card: its rules text reads heavier (battlefield.png's Doom Blade). */
+.pile-card .card-rules {
+  font-weight: 700;
+  font-size: 0.6em;
+}
 /* Hand cards show more art above their type line than a card read whole, under a taller name
    bar (battlefield.png). */
 .hand-card .card-art {
