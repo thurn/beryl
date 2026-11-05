@@ -36,6 +36,8 @@ NPM_BIN: Path = paths.UI / "node_modules" / ".bin"
 @dataclass
 class Lane:
     name: str
+    # Whether it builds, so needs warm caches; Markdown and Python lanes skip the clone.
+    warm: bool = False
     steps: list[tuple[str, list[str], Path]] = field(default_factory=list)
 
     def step(self, name: str, cmd: list[str], cwd: Path = paths.REPO) -> Lane:
@@ -87,7 +89,8 @@ def run_lane(lane: Lane, script: str, env: dict[str, str]) -> Outcome:
 
 def run_lanes(lanes: list[Lane], script: str, budget: int, strict: bool) -> int:
     started = time.monotonic()
-    warm.ensure()
+    if any(lane.warm for lane in lanes):
+        warm.ensure()
     env = dict(os.environ)
     with ThreadPoolExecutor(max_workers=max(1, len(lanes))) as pool:
         outcomes = list(pool.map(lambda lane: run_lane(lane, script, env), lanes))
@@ -199,7 +202,7 @@ def python_lane() -> Lane:
 
 def rust_lane() -> Lane:
     return (
-        Lane("rust")
+        Lane("rust", warm=True)
         .step("fmt", ["cargo", "fmt", "--all", "--check"], paths.RUST)
         .step(
             "clippy",
@@ -212,14 +215,14 @@ def rust_lane() -> Lane:
 
 def ui_lane() -> Lane:
     return (
-        Lane("ui")
+        Lane("ui", warm=True)
         .step("prettier", [str(NPM_BIN / "prettier"), "--check", "."], paths.UI)
         .step("tsc", [str(NPM_BIN / "tsc"), "-b"], paths.UI)
     )
 
 
 def app_lane() -> Lane:
-    return Lane("app").step("smoke", [*BY, "smoke"])
+    return Lane("app", warm=True).step("smoke", [*BY, "smoke"])
 
 
 def fast(args: argparse.Namespace) -> int:
