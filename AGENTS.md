@@ -78,6 +78,9 @@ Cheapest first. Agents never open a window: `just dev` refuses to for them.
 A human runs `just dev` for the app with hot reload, or `just bundle` for a
 release `Beryl.app`.
 
+Benchmarks follow `docs/benchmarking.md`: `just bench-count` for instruction
+counts, `just bench` for timing (it refuses a busy machine).
+
 ## Checks
 
 - `just check` (fast, budget 60 s) runs the lanes whose files changed since the

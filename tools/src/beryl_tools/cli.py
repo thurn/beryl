@@ -5,15 +5,19 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import app, checks, warm
+from . import app, bench, checks, warm
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="by", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    for module in (app, checks, warm):
+    for module in (app, bench, checks, warm):
         module.register(sub)
-    args = parser.parse_args(argv)
+    # Commands marked `passthrough` hand arguments they don't know to another tool.
+    args, extra = parser.parse_known_args(argv)
+    if extra and not getattr(args, "passthrough", False):
+        parser.error(f"unrecognized arguments: {' '.join(extra)}")
+    args.extra = extra
     try:
         return int(args.func(args))
     except KeyboardInterrupt:

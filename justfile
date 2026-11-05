@@ -28,6 +28,16 @@ bundle:
 warm *args:
     {{ by }} warm "$@"
 
+# Time benchmarks, refusing a busy, unplugged or throttled machine (cargo bench flags; --force)
+[group('bench')]
+bench *args:
+    {{ by }} bench "$@"
+
+# Gungraun instruction counts in the Lima VM (cargo bench flags; default --bench '*_counts')
+[group('bench')]
+bench-count *args:
+    {{ by }} bench-count "$@"
+
 # The Rust tests (cargo test flags, e.g. -p beryl_app)
 [group('test')]
 test-rust *args:
