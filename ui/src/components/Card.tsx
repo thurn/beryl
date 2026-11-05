@@ -173,6 +173,39 @@ function useNameFit(text: string) {
   return ref;
 }
 
+/** Shrinks long rules text to fit its box rather than cutting it off mid-line, as the cube's
+ * longer cards (planeswalkers, Aang's Iceberg) would be: `--fit` scales the text's size
+ * (components.css), stepped down until the text fits, measured again whenever the box resizes.
+ * Text rewraps as it shrinks, so its height falls faster than its size: each step shrinks by
+ * the square root of the overflow. */
+function useRulesFit(text: string | undefined) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  useLayoutEffect(() => {
+    const p = ref.current;
+    const box = p?.parentElement;
+    if (!p || !box) return;
+    const fit = () => {
+      p.style.removeProperty("--fit");
+      const style = getComputedStyle(box);
+      const room =
+        box.clientHeight -
+        parseFloat(style.paddingTop) -
+        parseFloat(style.paddingBottom);
+      let scale = 1;
+      for (let i = 0; i < 8 && room > 0 && p.scrollHeight > room + 0.5; i++) {
+        scale *= Math.sqrt(room / p.scrollHeight) * 0.98;
+        p.style.setProperty("--fit", scale.toFixed(3));
+      }
+    };
+    fit();
+    void document.fonts.ready.then(fit);
+    const observer = new ResizeObserver(fit);
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, [text]);
+  return ref;
+}
+
 /** Power and toughness (or loyalty), numerals inked blue and the slash black as on the mockups. */
 function stats(card: CardFace): ReactNode {
   if (card.power !== undefined && card.toughness !== undefined) {
@@ -206,6 +239,7 @@ export function Card({
 }: CardProps) {
   const height = givenHeight ?? width / ASPECT[variant];
   const nameRef = useNameFit(card.name);
+  const rulesRef = useRulesFit(card.text);
   const pt = stats(card);
   const classes = [
     "card",
@@ -265,7 +299,7 @@ export function Card({
                 }
               >
                 {card.text && (
-                  <p>
+                  <p ref={rulesRef}>
                     <RulesText text={card.text} />
                   </p>
                 )}

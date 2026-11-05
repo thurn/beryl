@@ -465,6 +465,34 @@ await check(
     },
 );
 
+// A crowded row (five permanents a side, attackers raised over their neighbors) spreads into
+// the table's clear right rather than laying its cards over one another's numbers.
+await check(
+    "every creature on a crowded table shows its power and toughness",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const hidden = await page.evaluate(() =>
+            [...document.querySelectorAll('[data-zone="battlefield"]')]
+                .filter((el) => !el.querySelector(".card-under"))
+                .flatMap((el) => {
+                    const pt = el.querySelector(".card-pt");
+                    if (!pt) return [];
+                    const r = pt.getBoundingClientRect();
+                    const top = document
+                        .elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)
+                        ?.closest("[data-slot]");
+                    return top === el ? [] : [el.dataset.card];
+                }),
+        );
+        assert.deepEqual(hidden, [], "power and toughness covered");
+    },
+    {
+        fixture: "combat-blockers",
+        at: blockersViews.length,
+        ready: `[data-slot="${standing[0].slot}"]`,
+    },
+);
+
 // The choice overlays: a scry, Jace's put-back and a pay-or-counter prompt, each the last view
 // of its fixture. An overlay sends the first pick of its plan at once; the rest wait for the
 // decisions they answer, which these fixtures don't record.
@@ -506,6 +534,25 @@ await check(
             [scry.bySlot.get(scryTop)],
             "the first pick puts that card on the bottom",
         );
+    },
+    { fixture: "choice-scry", at: scry.views.length, ready: tray(scryNext) },
+);
+
+// The scry's source, Aang's Iceberg, has four paragraphs of rules: they shrink to fit its box.
+await check(
+    "long rules text fits its card rather than being cut off",
+    async (page) => {
+        await page.evaluate(() => document.fonts.ready.then(() => {}));
+        await page.clock.runFor(2000);
+        const cut = await page.evaluate(() =>
+            [...document.querySelectorAll(".card-rules p")]
+                .filter((p) => {
+                    const box = p.parentElement.getBoundingClientRect();
+                    return p.getBoundingClientRect().bottom > box.bottom + 1;
+                })
+                .map((p) => p.textContent.slice(0, 30)),
+        );
+        assert.deepEqual(cut, [], "rules text overflowing its box");
     },
     { fixture: "choice-scry", at: scry.views.length, ready: tray(scryNext) },
 );

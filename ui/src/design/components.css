@@ -395,6 +395,10 @@
 }
 .card-rules p {
   margin: 0;
+  /* Each ability its own paragraph, as printed; long text shrinks to fit its box (Card.tsx's
+     useRulesFit). */
+  white-space: pre-line;
+  font-size: calc(1em * var(--fit, 1));
 }
 /* Longer rules text runs smaller, from the top left (the mockups' Doom Blade). */
 .card-rules:not(.card-rules-short) {
@@ -838,11 +842,15 @@
   --tone-soft: rgb(255 120 10 / 90%);
   --tone-core: #fff6dc;
 }
-/* Cyan arrows are tubes: bright edges round a deeper core. */
+/* Cyan arrows are tubes: thin bright edges round a deeper core, in a full bloom (the target arrow of
+   trigger_on_stack_with_target.png, ~13 mockup px across). */
 .arrow-cyan {
-  --weight: 9px;
+  --weight: 12px;
+  --core: 0.62;
+  --glow: 0.95;
+  --glow-width: 1.9;
   --tone: #c9fbff;
-  --tone-soft: rgb(2 225 254 / 85%);
+  --tone-soft: rgb(2 225 254 / 90%);
   --tone-core: #0fc4f2;
 }
 .arrow path {
@@ -855,8 +863,10 @@
 }
 .arrow-glow path {
   stroke: var(--tone-soft);
-  stroke-width: calc(var(--weight) * var(--arrow-scale) * 2.6);
-  opacity: 0.7;
+  stroke-width: calc(
+    var(--weight) * var(--arrow-scale) * var(--glow-width, 2.6)
+  );
+  opacity: var(--glow, 0.7);
 }
 .arrow-line path {
   stroke: var(--tone);
@@ -864,7 +874,7 @@
 }
 .arrow-core path {
   stroke: var(--tone-core);
-  stroke-width: calc(var(--weight) * var(--arrow-scale) * 0.42);
+  stroke-width: calc(var(--weight) * var(--arrow-scale) * var(--core, 0.42));
 }
 .arrow-fine {
   --weight: 2.6px;

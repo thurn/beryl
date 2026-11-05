@@ -23,8 +23,8 @@
         "screen": {
           "rect": [0, 0, 1672, 941],
           "verdict": "pass",
-          "bead": "by-b0q.3.17",
-          "commit": "f7fdb09+",
+          "bead": "by-b0q.3.20",
+          "commit": "8e69f82",
           "fingerprint": "NS8sQTc0Sj03RTMoRTMoRjo0KyYkODIwPzw9Vml4XFVUbFxUbFxUZlhSUEdCRTw5SkA8WE1JZ1lTc21dVFtEdmVeaFlTTkM+V0pFb19Ze2ljd2BWcWlie2ljb19ZV0pFV0pFb19ZeGZfYltdi354eGdhb19ZV0pFWD45eVhSj4FzdGBVdGFVdWReaFlTTkM+Ni0qOjEtZlBIfHBrhWBXdGZhY1FFWUMzKCMhLykmdEQ4hHdsiFpOdVVNSz01UDws",
           "accepted": [
             "by-b0q.3.17 conflict: the lit phase glyph: as battlefield/phase-tracker's by-b0q.3.17 conflict",
@@ -40,7 +40,8 @@
             "by-b0q.3.17 residual: the creature names about 3-5 px lower and further right",
             "by-b0q.3.17 residual: the near orb's rays a little shorter and softer",
             "by-b0q.3.17 residual: the table about 2-4% darker, more in the lower-left corner",
-            "by-b0q.3.17 residual: the Next button's outer glow a little weaker"
+            "by-b0q.3.17 residual: the Next button's outer glow a little weaker",
+            "by-b0q.3.20 residual: by-b0q.3.20 review: Goblin Guide and Angel 3-5 px low and a few px right; hand type lines differ where the mockup's are garbled; badge bands slightly different width and fade"
           ]
         },
         "tabletop": {
@@ -464,12 +465,13 @@
         "screen": {
           "rect": [0, 0, 1672, 941],
           "verdict": "pass",
-          "bead": "by-b0q.3.18",
-          "commit": "05b8a20",
+          "bead": "by-b0q.3.20",
+          "commit": "8e69f82",
           "fingerprint": "NS8sQTc0Sj03RTMoRTMoRjo0KyYjODIwPzw9VGl4WlRSVUdAWko/ZlhSUEdCRTw5SkA8WE1KYVlNY15QcWNYdmVeaFlTTkM+V0pFb19ZcWdcdmdNhnFffmxjb19ZV0pFV0pFb19ZfGpjcV9ZgHFpf25nb19ZV0pFWD04elhRkIFyd2JXc2BVdGVeaFlTTkM+Ni0qOjEtZlBHe29rhWBXdGZhYU9EYkk1KCMhLykmd0Q4gnZqiFpNdFRMUEA1UT0u",
           "accepted": [
             "by-b0q.3.18 residual: Strix P/T box ~10px left; banner backdrop a little wider; Doom Blade ~3px low; badge nameplates slightly more opaque",
-            "by-b0q.3.18 conflict: by-b0q.3.18 reviewer's differences all contradict passed verdicts on the same components: card names in a sans (the fonts bead chose the serif by overlay), Baleful Strix's blue-left frame and the opponent library's depth (passed on battlefield.png)"
+            "by-b0q.3.18 conflict: by-b0q.3.18 reviewer's differences all contradict passed verdicts on the same components: card names in a sans (the fonts bead chose the serif by overlay), Baleful Strix's blue-left frame and the opponent library's depth (passed on battlefield.png)",
+            "by-b0q.3.20 residual: by-b0q.3.20 review: orb wings arch slightly higher and brighter; opponent hand backs slightly darker; third hand card's type line differs (clipped by the crop); graveyard rules box blank where the mockup paints lines; hand fan Bolt and Plateau a few px off"
           ]
         },
         "tabletop": [1080, 240, 300, 300],
@@ -652,11 +654,14 @@
         "screen": {
           "rect": [0, 0, 1672, 941],
           "verdict": "differs",
-          "bead": "by-b0q.3.18",
-          "commit": "05b8a20",
+          "bead": "by-b0q.3.20",
+          "commit": "8e69f82+",
           "accepted": [
             "by-b0q.3.18 residual: stack card's bottom red border thinner than painted; gold line thicker and more orange; source Titan ~8px low (Titan conflict); Strix badge ~10px left; library ~10px left",
-            "by-b0q.3.18 conflict: by-b0q.3.18 reviewer raised orb wings and badge nameplates, which battlefield.png passed unchanged"
+            "by-b0q.3.18 conflict: by-b0q.3.18 reviewer raised orb wings and badge nameplates, which battlefield.png passed unchanged",
+            "by-b0q.3.20 residual: by-b0q.3.20: opponent hand backs a little short and dark; Beast, Angel and Strix 4-6 px high; Strix art wider and paler (Strix 11 px narrow, as recorded); stack card text 2-3 px high; land stacks and hand a few px off",
+            "by-b0q.3.20 residual: by-b0q.3.20: cyan arrowhead reads smaller although measured as large (barbs 36 px apart vs 32, tip within 3 px): the mockup's white outline and bloom",
+            "by-b0q.3.20 conflict: cyan arc weight: round 1 called it thin, a white-cored double line; after widening to the mockup's measured ~13 px tube (ours 14), the screen reviewer still called it thin while the cyan-arrow part reviewer called it too wide"
           ]
         },
         "tabletop": [1080, 240, 300, 300],
@@ -712,11 +717,12 @@
         "opponent-strix-target": {
           "rect": [474, 270, 216, 172],
           "verdict": "differs",
-          "bead": "by-b0q.3.18",
-          "commit": "05b8a20",
+          "bead": "by-b0q.3.20",
+          "commit": "8e69f82+",
           "accepted": [
             "by-b0q.1.31 residual: the mockup's slightly softer, wider halo; a flatter rim; badge tints and bezel; the flying glyph; name weight",
-            "by-b0q.3.18 residual: card ~11px narrow (the busy far frame), badge ~12px left; arrowhead smaller and filled; the arrow's glow tints the name's end"
+            "by-b0q.3.18 residual: card ~11px narrow (the busy far frame), badge ~12px left; arrowhead smaller and filled; the arrow's glow tints the name's end",
+            "by-b0q.3.20 residual: by-b0q.3.20: target halo dimmer, darker teal, with a dark gap at the frame where the mockup's bright rim hugs it (shared --glow-cyan; the card is 11 px narrow as recorded); arrowhead less white-hot; title and badge tints"
           ]
         },
         "opponent-beast": {
@@ -760,11 +766,13 @@
         "cyan-arrow": {
           "rect": [570, 132, 704, 210],
           "verdict": "differs",
-          "bead": "by-b0q.3.18",
-          "commit": "05b8a20",
+          "bead": "by-b0q.3.20",
+          "commit": "8e69f82+",
           "accepted": [
             "by-b0q.1.28 residual: the glow slightly paler (borderline)",
-            "by-b0q.3.18 residual: arrowhead smaller with a rounded tip, tilted, where the mockup's is a larger sharp hollow chevron pointing straight down; library sliver wider; Strix ~6px narrow"
+            "by-b0q.3.18 residual: arrowhead smaller with a rounded tip, tilted, where the mockup's is a larger sharp hollow chevron pointing straight down; library sliver wider; Strix ~6px narrow",
+            "by-b0q.3.20 residual: by-b0q.3.20: arc top ~2 px low, flatter near its right end; table slightly warmer",
+            "by-b0q.3.20 conflict: cyan arc weight: widened to the mockup's measured ~13 px tube (ours 14); this part's reviewer calls it too wide and flat while the trigger screen's reviewer calls it too thin"
           ]
         },
         "gold-arrow": {
@@ -817,11 +825,12 @@
         "screen": {
           "rect": [0, 0, 1672, 941],
           "verdict": "differs",
-          "bead": "by-b0q.3.19",
-          "commit": "01b9f32+",
+          "bead": "by-b0q.3.20",
+          "commit": "8e69f82+",
           "accepted": [
             "by-b0q.3.19 residual: card frames: the mockup's art windows a little taller and black borders thinner than the shared Card frame's",
-            "by-b0q.3.19 residual: the backdrop's '22' orb keeps its active glow under the overlay"
+            "by-b0q.3.19 residual: the backdrop's '22' orb keeps its active glow under the overlay",
+            "by-b0q.3.20 residual: by-b0q.3.20: BOTTOM ~3 px low and TOP ~4 px high of a shared baseline; middle back's wordmark sits ~10 px left and is clipped harder by the Island (the mockup paints that back taller, as recorded); Island ~6 px taller and Counterspell a few px shorter with its bars ~3 px high (shared full-frame proportions, as recorded); Preordain rules text ~4 px low; backdrop a little darker and blurrier"
           ]
         },
         "backdrop": {
@@ -1327,40 +1336,43 @@
         "05-captions-combat": [580, 718, 356, 30],
         "05-source": {
           "rect": [514, 789, 120, 106],
-          "verdict": "pass",
-          "bead": "by-b0q.1.27",
-          "commit": "44861e7",
-          "fingerprint": "Sy8pcUU8dUg/bEE5dEg/dUg/dUg/SS8pazovj05AlFFColtJl1FAwW9avm5ZajswXC0kazpAt1dF740z44Iz1mQ3eTovXSwkbjIltltBtGcxk1kuwmQt4ocekUccpmA3eTgky3U4kEwpkUMZfTcgmUUl2XI2zINNajIkoE0l3n01y3UchzkYpFcoxGQ5ZC8iazAhkEgsy2g38IAazKCDtpSFv5uLfWVYQiIbVSMZeTUWeT8ZhGRUeF5ThGhbWUc+",
+          "verdict": "differs",
+          "bead": "by-b0q.3.20",
+          "commit": "8e69f82+",
           "accepted": [
-            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.3.20 residual: by-b0q.3.20 (drift predates 3.17): title plate paler and pinker with an outline; art window edges offset; P/T badge lighter and off-center; an extra gold dot at the right edge where the source line leaves"
           ]
         },
         "05-trigger": {
           "rect": [672, 762, 144, 244],
-          "verdict": "pass",
-          "bead": "by-b0q.1.31",
-          "commit": "636900b",
-          "fingerprint": "oWJMl2JRmWVUnWhWmWRTrXRgiE47KCMf0Z2DzauW0a6ZzKqV0rCazqyXpG5ZKCIezZ2DwKSQw6eSvKGNvKGNzrCak3tqLF9k2KSH0rSd1ref2bmi2Lih17igk5+VL1tevW9Sv6GMwKOOwKOO2big27KZlU42KCIeLR8aVjIncVNGdlpNako+SigeJyAcKSMfRkA9LCYiKSMfKSMfKSMfKSMfPDYzPzk2LSYhLSYhLSYhLSYhLSYhLSYhLSYhLSYh",
+          "verdict": "differs",
+          "bead": "by-b0q.3.20",
+          "commit": "8e69f82+",
           "accepted": [
             "by-b0q.1.31 residual: the line breaks after line 3: the mockup's face is narrower than any real font at its letter height",
-            "by-b0q.1.31 residual: the mockup's stray struck-through rule"
+            "by-b0q.1.31 residual: the mockup's stray struck-through rule",
+            "by-b0q.3.20 residual: by-b0q.3.20 (drift predates 3.17): body text heavier, smaller and tighter, breaking one line later; title smaller and bolder in a shorter pill; rim darker and thicker at the bottom; cream panel paler"
           ]
         },
         "05-target": {
           "rect": [848, 789, 120, 106],
-          "verdict": "pass",
-          "bead": "by-b0q.1.27",
-          "commit": "44861e7",
-          "fingerprint": "MjgwTVxPUWBTVWVYVWVYVWRYVWVYMjgwNEU5QFtGU21XZYJpZYFraYZuYn1nNEQ4JU5LNT0jUl8/qJBfkIhfdodjTVczKz4vLIqmRlE0oHdKdlIsdlMtaVY1W21IKj0uKo2qR1c0V0UpNygVTDUbPS8YWFwqKTwsJ0E1U1olaGs4XVs6T0MjX2MsOj4WKTsqJzorQUQUZF0fc3Yjo6aZk5eRoaWeXVxWIy0jIjAVJDEWJjMVaWpiYWNeamxnREI9",
+          "verdict": "differs",
+          "bead": "by-b0q.3.20",
+          "commit": "8e69f82+",
           "accepted": [
-            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.3.20 residual: by-b0q.3.20 (drift predates 3.17): left-edge teal glow missing but for a dot; P/T badge lighter and smaller; name plate text bolder and placed differently"
           ]
         },
         "05-arrows": {
           "rect": [626, 800, 236, 100],
           "verdict": "differs",
-          "bead": "by-b0q.1.28",
-          "commit": "e915538"
+          "bead": "by-b0q.3.20",
+          "commit": "8e69f82+",
+          "accepted": [
+            "by-b0q.3.20 residual: by-b0q.3.20: card text larger face and breaks differ; panel more saturated with a heavier border; gold curve ends ~15 px high; cyan line arcs where the mockup's runs straight, with a bolder head"
+          ]
         },
         "05-captions-stack": [532, 942, 416, 32],
         "06-panel": [996, 520, 526, 488],

@@ -151,6 +151,10 @@ const ROWS: Record<
 };
 /** Lands fill from the left up to here. */
 const LANDS_END = 600;
+/** A crowded row of permanents may run on to here while the table's right is clear (no stack,
+ * no prompt): the mockups' rows end by `end`, but squeezed there five or six permanents hide
+ * one another's names and power and toughness. */
+const OPEN_END = 1480;
 
 /** How the table is laid out: lines cross it in combat and while something is on the stack. */
 type Mode = keyof (typeof ROWS)["you"]["permanents"];
@@ -377,6 +381,7 @@ function battlefieldPlacements(
   side: Side,
   objects: ObjectView[],
   mode: Mode,
+  open: boolean,
   across: Placement[] = [],
 ): Placement[] {
   const rows = {
@@ -429,7 +434,8 @@ function battlefieldPlacements(
   const groupWidth = (n: number) => width * (1 + LAND_STEP.x * (n - 1));
   const widths = groups.map((g) => groupWidth(g.length));
   const gap = rows.permanents.gap * width;
-  const { start, end } = rows.permanents;
+  const { start } = rows.permanents;
+  const end = open ? OPEN_END : rows.permanents.end;
   const xs = row(widths, gap, start, end, rows.permanents.center);
   // Where each blocker wants to stand: its attacker's blockers side by side about its center.
   const attackers = new Map(across.map((p) => [p.slot, p]));
@@ -521,6 +527,8 @@ export function layout(
       side,
       permanents.filter((o) => o.controller === side),
       mode,
+      // The stack and a prompt stand at the table's right.
+      mode !== "stack" && !lifted,
       across,
     );
   const yours = field("you", field("opponent"));
