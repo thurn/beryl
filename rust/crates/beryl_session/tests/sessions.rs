@@ -10,6 +10,7 @@ use beryl_engine::state::Pending;
 use beryl_engine::{
     Decision, GameTable, Observation, Replay, Scratch, Seat, Slot, State, Step, next,
 };
+use beryl_session::preview::add_payments;
 use beryl_session::protocol::{DecisionView, Moment, player_view};
 use beryl_session::{
     CandidateIndex, DecisionId, Game, PlayerView, ReplayFile, SessionError, SessionId, Sessions,
@@ -231,12 +232,11 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
                 );
             }
             if !resolving {
-                let d;
+                let mut d = None;
                 let moment = match &view.status {
                     Status::Deciding { decision } if decision.halt => Moment::Halted(decision.id),
                     Status::Deciding { decision } => {
-                        d = open_decision(s, t);
-                        Moment::Deciding(decision.id, &d, None)
+                        Moment::Deciding(decision.id, d.insert(open_decision(s, t)), None)
                     }
                     Status::Thinking => Moment::Thinking,
                     Status::Playing => Moment::Playing,
@@ -245,13 +245,17 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
                 };
                 let det = Observation::new(s, Seat::P0).determinize(t, &mut rng);
                 let mut x = Scratch::new();
-                let theirs = player_view(
+                let mut theirs = player_view(
                     t,
                     Observation::new(beryl_engine::view(&det, t, &mut x), Seat::P0),
                     moment,
                     view.stops,
                     game.events(),
                 );
+                // What a cast taps, played out on the redealt state.
+                if let Some(d) = &d {
+                    add_payments(&mut theirs, &det, t, d);
+                }
                 assert_eq!(theirs, view, "seed {seed}");
                 events += view.events.len();
             }

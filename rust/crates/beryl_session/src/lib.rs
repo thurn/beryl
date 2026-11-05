@@ -7,6 +7,7 @@
 
 mod game;
 pub mod ipc;
+pub mod preview;
 pub mod protocol;
 pub mod replay;
 mod session;

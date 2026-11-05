@@ -194,7 +194,23 @@ export type CandidateView = {
 /**
  * A short English description, such as "Cast Mana Drain".
  */
-label: string, option: Candidate, };
+label: string, option: Candidate, 
+/**
+ * For a candidate that casts a spell or activates an ability, or answers its X or its
+ * payment plan: each way the cast can then be paid, with what it taps. None otherwise.
+ */
+payments: Array<Payment>, };
+
+export type Payment = { x: number | null, 
+/**
+ * The index of the payment plan among those the cast offers (they differ in what they
+ * consume or leave floating, architecture §10).
+ */
+plan: number | null, 
+/**
+ * Permanents, by slot.
+ */
+taps: Array<number>, };
 
 export type Candidate = { "kind": "object", slot: number, } | { "kind": "pass" } | { "kind": "playLand", slot: number, } | { "kind": "play" } | { "kind": "draw" } | { "kind": "keep" } | { "kind": "mulligan" } | { "kind": "trigger", index: number, source: number | null, } | { "kind": "yes" } | { "kind": "no" } | { "kind": "done" } | { "kind": "attack", slot: number, } | { "kind": "defender", planeswalker: number | null, } | { "kind": "block", slot: number, } | { "kind": "lethal", slot: number, } | { "kind": "cast", slot: number, face: number, costs: Array<number>, } | { "kind": "activate", slot: number, ability: number, granted: boolean, } | { "kind": "mana", slot: number, color: Mana, } | { "kind": "pool", color: Mana, } | { "kind": "number", n: number, } | { "kind": "plan", index: number, } | { "kind": "player", player: Side, };
 

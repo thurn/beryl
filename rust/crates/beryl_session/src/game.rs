@@ -15,6 +15,7 @@ use beryl_engine::{
 };
 use beryl_search::{Agent, Budget};
 
+use crate::preview;
 use crate::protocol::{
     CandidateIndex, DecisionId, Moment, PlayerView, SessionId, StopsSetting, player_view,
 };
@@ -450,7 +451,11 @@ impl Game {
             view(&self.state, &self.table, &mut self.scratch),
             self.human,
         );
-        player_view(&self.table, obs, moment, self.stops, &self.events)
+        let mut view = player_view(&self.table, obs, moment, self.stops, &self.events);
+        if let At::Human(_, Open::Decision(d)) = &self.at {
+            preview::add_payments(&mut view, &self.state, &self.table, d);
+        }
+        view
     }
 }
 

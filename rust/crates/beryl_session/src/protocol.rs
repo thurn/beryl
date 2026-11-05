@@ -318,6 +318,23 @@ pub struct CandidateView {
     /// A short English description, such as "Cast Mana Drain".
     pub label: String,
     pub option: Candidate,
+    /// For a candidate that casts a spell or activates an ability, or answers its X or its
+    /// payment plan: each way the cast can then be paid, with what it taps. None otherwise.
+    pub payments: Vec<Payment>,
+}
+
+/// One way a cast or activation is paid, found by playing it out on a copy of the game: the
+/// value of X and the payment plan it takes, where the cast asks for them, and the permanents
+/// it taps. The engine's default payment is the first with a given X.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct Payment {
+    pub x: Option<u8>,
+    /// The index of the payment plan among those the cast offers (they differ in what they
+    /// consume or leave floating, architecture §10).
+    pub plan: Option<u8>,
+    /// Permanents, by slot.
+    pub taps: Vec<u8>,
 }
 
 /// What a candidate does, by public slot (architecture §7.1).
@@ -874,6 +891,7 @@ fn decision_view(
             .map(|slot| CandidateView {
                 label: name(t, obs, slot).unwrap_or("a hidden card").to_owned(),
                 option: Candidate::Object { slot: slot.get() },
+                payments: Vec::new(),
             })
             .collect(),
         Candidates::Options(opts) => opts.iter().map(|&o| candidate(t, obs, o)).collect(),
@@ -898,6 +916,7 @@ fn halt_view(obs: Observation<'_>, id: DecisionId, stops: StopsSetting) -> Decis
         candidates: vec![CandidateView {
             label: "Pass".to_owned(),
             option: Candidate::Pass,
+            payments: Vec::new(),
         }],
         resolving: None,
         ask: AskView::Plain,
@@ -1073,7 +1092,11 @@ fn candidate(t: &GameTable, obs: Observation<'_>, o: Opt) -> CandidateView {
             Candidate::Object { slot: slot.get() },
         ),
     };
-    CandidateView { label, option }
+    CandidateView {
+        label,
+        option,
+        payments: Vec::new(),
+    }
 }
 
 /// How a cast of face `face` of the card in `slot` paying the options in `costs` reads after
