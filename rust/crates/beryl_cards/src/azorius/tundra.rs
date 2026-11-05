@@ -26,6 +26,7 @@ pub static CARD: CardDef = CardDef {
         ],
         ..Face::EMPTY
     }],
+    tokens: &[],
 };
 
 /// Tundra is not a Plains or an Island card, so it is a candidate of its own beside them.

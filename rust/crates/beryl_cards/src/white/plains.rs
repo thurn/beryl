@@ -21,6 +21,7 @@ pub static CARD: CardDef = CardDef {
         abilities: &[Ability::tap_for_mana(ManaSet::one(ManaColor::White))],
         ..Face::EMPTY
     }],
+    tokens: &[],
 };
 
 /// [CR 305.2](https://yawgatog.com/resources/magic-rules/#R3052): "A player can normally play

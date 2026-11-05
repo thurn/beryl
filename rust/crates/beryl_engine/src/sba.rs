@@ -1,10 +1,12 @@
 //! State-based actions (architecture §8.4).
 
 use crate::bitboard::Bitboard;
-use crate::card::Supertypes;
+use crate::card::{Supertypes, Types};
 use crate::decision::{Outcome, StallReason};
+use crate::event::{self, Entry, Event, Reason, Sink};
 use crate::fixed::Full;
-use crate::state::{Pending, State, Zone};
+use crate::layers;
+use crate::state::{ObjectFlags, Pending, SLOTS, State, TOKEN_SLOTS, Zone};
 use crate::table::GameTable;
 use crate::turn::apnap;
 use crate::zone;
@@ -21,23 +23,82 @@ use crate::zone;
 ///
 /// Repeated checks that keep performing actions are bounded by the profile's
 /// `state_based_iterations` (architecture §8.4).
-pub(crate) fn check(s: &mut State, t: &GameTable) -> bool {
-    if check_losses(s) {
-        return true;
+///
+/// The legend rule asks its controller first, so it follows the other actions of the same
+/// check, in the repeated check, rather than with them.
+pub(crate) fn check(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<bool, Full> {
+    if check_losses(s, sink) {
+        return Ok(true);
     }
-    if unresolved_legends(s, t, Bitboard::EMPTY).is_none() {
+    layers::refresh(s, t);
+    let (graveyard, tokens) = doomed(s);
+    let legends = unresolved_legends(s, t, Bitboard::EMPTY).is_some();
+    if graveyard.is_empty() && tokens.is_empty() && !legends {
         s.budgets.state_based_iterations = 0;
-        return false;
+        return Ok(false);
     }
     s.budgets.state_based_iterations += 1;
     if s.budgets.state_based_iterations > s.profile.limits.state_based_iterations {
         s.outcome = Some(Outcome::Stalled(StallReason::StateBasedIterations));
-        return true;
+        return Ok(true);
     }
-    s.pending = Pending::LegendRule {
-        kept: Bitboard::EMPTY,
-    };
-    true
+    if graveyard.is_empty() && tokens.is_empty() {
+        s.pending = Pending::LegendRule {
+            kept: Bitboard::EMPTY,
+        };
+        return Ok(true);
+    }
+    for slot in tokens.iter() {
+        zone::cease_to_exist(s, slot);
+    }
+    event::move_batch(
+        s,
+        t,
+        sink,
+        graveyard,
+        Zone::Graveyard,
+        Reason::StateBased,
+        Entry::default(),
+    )?;
+    Ok(true)
+}
+
+/// The permanents state-based actions put into graveyards, and the tokens that cease to
+/// exist.
+///
+/// [CR 704.5d](https://yawgatog.com/resources/magic-rules/#R7045d): "If a token is in a zone
+/// other than the battlefield, it ceases to exist."
+///
+/// [CR 704.5f](https://yawgatog.com/resources/magic-rules/#R7045f): "If a creature has
+/// toughness 0 or less, it's put into its owner's graveyard."
+///
+/// [CR 704.5g](https://yawgatog.com/resources/magic-rules/#R7045g): "If a creature has
+/// toughness greater than 0, it has damage marked on it, and the total damage marked on it is
+/// greater than or equal to its toughness, that creature has been dealt lethal damage and is
+/// destroyed."
+///
+/// [CR 704.5i](https://yawgatog.com/resources/magic-rules/#R7045i): "If a planeswalker has
+/// loyalty 0, it's put into its owner's graveyard."
+fn doomed(s: &State) -> (Bitboard, Bitboard) {
+    let mut graveyard = Bitboard::EMPTY;
+    for &slot in &s.battlefield {
+        let d = s.derived(slot);
+        let o = s.object(slot);
+        let types = Types(d.types);
+        let dies = types.contains(Types::CREATURE)
+            && (d.toughness <= 0 || (o.damage > 0 && i16::from(o.damage) >= i16::from(d.toughness)));
+        if dies || (types.contains(Types::PLANESWALKER) && o.counters.loyalty == 0) {
+            graveyard.insert(slot);
+        }
+    }
+    let tokens = (usize::from(TOKEN_SLOTS)..SLOTS)
+        .map(|slot| slot as u8)
+        .filter(|&slot| {
+            let o = s.object(slot);
+            o.flags.has(ObjectFlags::TOKEN) && !matches!(o.zone, Zone::Battlefield | Zone::Nowhere)
+        })
+        .collect();
+    (graveyard, tokens)
 }
 
 /// Ends the game if a player has lost.
@@ -51,7 +112,7 @@ pub(crate) fn check(s: &mut State, t: &GameTable) -> bool {
 ///
 /// [CR 104.4a](https://yawgatog.com/resources/magic-rules/#R1044a): "If all the players
 /// remaining in a game lose simultaneously, the game is a draw."
-fn check_losses(s: &mut State) -> bool {
+fn check_losses(s: &mut State, sink: &mut Sink) -> bool {
     let lost = s.players.map(|p| p.life <= 0 || p.drew_from_empty);
     s.outcome = match lost {
         [false, false] => return false,
@@ -59,26 +120,31 @@ fn check_losses(s: &mut State) -> bool {
         [true, false] => Some(Outcome::Win(1)),
         [false, true] => Some(Outcome::Win(0)),
     };
+    for player in 0..2u8 {
+        sink.push(if lost[usize::from(player)] {
+            Event::Lose { player }
+        } else {
+            Event::Win { player }
+        });
+    }
     true
 }
 
-fn is_legendary(s: &State, t: &GameTable, slot: u8) -> bool {
-    let o = s.object(slot);
-    t.def(o.card).faces[usize::from(o.face)]
-        .supertypes
-        .contains(Supertypes::LEGENDARY)
+fn is_legendary(s: &State, slot: u8) -> bool {
+    Supertypes(s.derived(slot).supertypes).contains(Supertypes::LEGENDARY)
 }
 
 /// The legendary permanents with the same controller and name as the one in `slot`.
 fn legend_group(s: &State, t: &GameTable, slot: u8) -> Bitboard {
-    let o = s.object(slot);
-    let name = t.def(o.card).name;
+    let name = t.def(s.object(slot).card).name;
+    let controller = s.controller(slot);
     s.battlefield
         .iter()
         .copied()
         .filter(|&other| {
-            let x = s.object(other);
-            x.controller == o.controller && t.def(x.card).name == name && is_legendary(s, t, other)
+            s.controller(other) == controller
+                && t.def(s.object(other).card).name == name
+                && is_legendary(s, other)
         })
         .collect()
 }
@@ -97,7 +163,7 @@ pub(crate) fn unresolved_legends(
 ) -> Option<(u8, Bitboard)> {
     for player in apnap(s) {
         for &slot in &s.battlefield {
-            if s.object(slot).controller != player || !is_legendary(s, t, slot) {
+            if s.controller(slot) != player || !is_legendary(s, slot) {
                 continue;
             }
             let group = legend_group(s, t, slot);
@@ -111,19 +177,29 @@ pub(crate) fn unresolved_legends(
 
 /// Applies the legend rule once every group has a kept permanent: the rest go to their
 /// owners' graveyards, simultaneously.
-pub(crate) fn apply_legend_rule(s: &mut State, t: &GameTable, kept: Bitboard) -> Result<(), Full> {
+pub(crate) fn apply_legend_rule(
+    s: &mut State,
+    t: &GameTable,
+    sink: &mut Sink,
+    kept: Bitboard,
+) -> Result<(), Full> {
     let mut doomed = Bitboard::EMPTY;
     for &slot in &s.battlefield {
-        if is_legendary(s, t, slot) {
+        if is_legendary(s, slot) {
             let group = legend_group(s, t, slot);
             if group.count() >= 2 {
                 doomed |= group & !kept;
             }
         }
     }
-    for slot in doomed.iter() {
-        zone::move_to(s, slot, Zone::Graveyard)?;
-    }
     s.pending = Pending::None;
-    Ok(())
+    event::move_batch(
+        s,
+        t,
+        sink,
+        doomed,
+        Zone::Graveyard,
+        Reason::StateBased,
+        Entry::default(),
+    )
 }

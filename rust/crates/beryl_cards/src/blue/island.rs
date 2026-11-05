@@ -21,6 +21,7 @@ pub static CARD: CardDef = CardDef {
         abilities: &[Ability::tap_for_mana(ManaSet::one(ManaColor::Blue))],
         ..Face::EMPTY
     }],
+    tokens: &[],
 };
 
 /// [CR 305.1](https://yawgatog.com/resources/magic-rules/#R3051): "A player who has priority

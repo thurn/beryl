@@ -3,8 +3,9 @@
 use super::{DUAL, LANDS, MIXED, begin, decide, table};
 use crate::card::{ManaColor, Types};
 use crate::effect::EffectCtx;
+use crate::event::Sink;
 use crate::filter::{Filter, Whose};
-use crate::state::{ObjectFlags, Zone, opponent};
+use crate::state::{ObjectFlags, PendingTrigger, Zone, opponent};
 use crate::{
     Choice, DecisionKind, Decklist, Outcome, Profile, Replay, Scratch, State, Step, apply, next,
     zone,
@@ -180,19 +181,19 @@ fn a_dual_land_has_a_mana_ability_for_each_basic_land_type() {
     let t = table([&[(40, "Test Dual")], LANDS]);
     let mut s = State::new(&t, 1, Profile::EXACT);
     let source = s.object_ref(0);
+    let mut sink = Sink::off();
     for (ability, color) in DUAL
         .front()
         .abilities
         .iter()
         .zip([ManaColor::White, ManaColor::Blue])
     {
-        let mut ctx = EffectCtx {
-            state: &mut s,
+        let trigger = PendingTrigger {
             source,
-            controller: 0,
-            ability,
-            mana: color,
+            ..PendingTrigger::default()
         };
+        let mut ctx = EffectCtx::new(&mut s, &t, &mut sink, &trigger, ability);
+        ctx.mana = color;
         (ability.body)(&mut ctx).unwrap();
     }
     assert_eq!(s.player(0).mana, [1, 1, 0, 0, 0, 0]);

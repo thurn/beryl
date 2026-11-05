@@ -25,6 +25,7 @@ pub(crate) static LAND: CardDef = CardDef {
         abilities: &[Ability::tap_for_mana(ManaSet::one(ManaColor::White))],
         ..Face::EMPTY
     }],
+    tokens: &[],
 };
 
 pub(crate) static DUAL: CardDef = CardDef {
@@ -38,6 +39,7 @@ pub(crate) static DUAL: CardDef = CardDef {
         ],
         ..Face::EMPTY
     }],
+    tokens: &[],
 };
 
 pub(crate) static LEGEND: CardDef = CardDef {
@@ -47,6 +49,7 @@ pub(crate) static LEGEND: CardDef = CardDef {
         types: Types::LAND,
         ..Face::EMPTY
     }],
+    tokens: &[],
 };
 
 /// Nonland cards nothing can cast yet: they only sit in hands and libraries.
@@ -56,6 +59,7 @@ pub(crate) static SPELL_A: CardDef = CardDef {
         types: Types::SORCERY,
         ..Face::EMPTY
     }],
+    tokens: &[],
 };
 
 pub(crate) static SPELL_B: CardDef = CardDef {
@@ -64,6 +68,7 @@ pub(crate) static SPELL_B: CardDef = CardDef {
         types: Types::INSTANT,
         ..Face::EMPTY
     }],
+    tokens: &[],
 };
 
 pub(crate) static CARDS: CardTable = CardTable::new(&[&LAND, &DUAL, &LEGEND, &SPELL_A, &SPELL_B]);

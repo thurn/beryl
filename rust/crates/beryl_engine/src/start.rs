@@ -1,6 +1,7 @@
 //! Starting the game: deck slots, who plays first, and the London mulligan (CR 103).
 
 use crate::bitboard::Bitboard;
+use crate::event::Sink;
 use crate::fixed::{Fixed, Full};
 use crate::profile::Profile;
 use crate::rng::Rng;
@@ -17,15 +18,18 @@ const STARTING_HAND: u8 = 7;
 
 /// A player before the game begins ([CR 103.4](https://yawgatog.com/resources/magic-rules/#R1034)):
 /// "Each player begins the game with a starting life total of 20."
-const NEW_PLAYER: Player = Player {
-    life: 20,
-    mana: [0; 6],
-    lands_played: 0,
-    drew_from_empty: false,
-    mulligans: 0,
-    mulligan: MulliganStatus::Undeclared,
-    to_bottom: 0,
-};
+fn new_player() -> Player {
+    Player {
+        life: 20,
+        mana: [0; 6],
+        lands_played: 0,
+        drew_from_empty: false,
+        mulligans: 0,
+        mulligan: MulliganStatus::Undeclared,
+        to_bottom: 0,
+        emblems: Fixed::new(),
+    }
+}
 
 impl State {
     /// A new game between the two decks of `t`, determined entirely by `seed` and the choices
@@ -48,7 +52,7 @@ impl State {
                 graveyard: [Fixed::new(); 2],
                 next_timestamp: 0,
             },
-            players: [NEW_PLAYER; 2],
+            players: [new_player(); 2],
             turn: Turn {
                 number: 0,
                 active: 0,
@@ -105,14 +109,19 @@ impl State {
 ///
 /// [CR 103.5](https://yawgatog.com/resources/magic-rules/#R1035): "Each player draws a number
 /// of cards equal to their starting hand size, which is normally seven."
-pub(crate) fn set_starting_player(s: &mut State, starting: u8) -> Result<(), Full> {
+pub(crate) fn set_starting_player(
+    s: &mut State,
+    t: &GameTable,
+    sink: &mut Sink,
+    starting: u8,
+) -> Result<(), Full> {
     s.turn.starting_player = starting;
     s.turn.active = starting;
     for player in [starting, opponent(starting)] {
         zone::draw_n(s, player, STARTING_HAND)?;
     }
     s.pending = Pending::Mulligans;
-    advance_mulligans(s)
+    advance_mulligans(s, t, sink)
 }
 
 /// The players in turn order from the starting player.
@@ -121,20 +130,32 @@ pub(crate) fn turn_order(s: &State) -> [u8; 2] {
 }
 
 /// Records a keep or mulligan declaration.
-pub(crate) fn declare(s: &mut State, player: u8, mulligan: bool) -> Result<(), Full> {
+pub(crate) fn declare(
+    s: &mut State,
+    t: &GameTable,
+    sink: &mut Sink,
+    player: u8,
+    mulligan: bool,
+) -> Result<(), Full> {
     s.player_mut(player).mulligan = if mulligan {
         MulliganStatus::WillMulligan
     } else {
         MulliganStatus::Kept
     };
-    advance_mulligans(s)
+    advance_mulligans(s, t, sink)
 }
 
 /// Puts one card from a player's hand on the bottom of their library after a mulligan.
-pub(crate) fn put_on_bottom(s: &mut State, player: u8, slot: u8) -> Result<(), Full> {
+pub(crate) fn put_on_bottom(
+    s: &mut State,
+    t: &GameTable,
+    sink: &mut Sink,
+    player: u8,
+    slot: u8,
+) -> Result<(), Full> {
     zone::put_on_bottom(s, slot)?;
     s.player_mut(player).to_bottom -= 1;
-    advance_mulligans(s)
+    advance_mulligans(s, t, sink)
 }
 
 /// Runs the London mulligan until a player must answer or every player has kept, then begins
@@ -149,7 +170,7 @@ pub(crate) fn put_on_bottom(s: &mut State, player: u8, slot: u8) -> Result<(), F
 /// the bottom of their library in any order. ... This process is then repeated until no
 /// player takes a mulligan. A player can take mulligans until their opening hand would be zero
 /// cards, after which they may not take further mulligans."
-fn advance_mulligans(s: &mut State) -> Result<(), Full> {
+fn advance_mulligans(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<(), Full> {
     let order = turn_order(s);
     loop {
         for &p in &order {
@@ -187,7 +208,7 @@ fn advance_mulligans(s: &mut State) -> Result<(), Full> {
         }
         if !any {
             s.pending = Pending::None;
-            return turn::begin_turn(s);
+            return turn::begin_turn(s, t, sink);
         }
     }
 }

@@ -2,6 +2,7 @@
 //! decisions D3 and D4).
 
 use crate::bitboard::Bitboard;
+use crate::card::{Delayed, Modification, Types};
 use crate::decision::Outcome;
 use crate::fixed::Fixed;
 use crate::profile::Profile;
@@ -12,13 +13,15 @@ pub const SLOTS: usize = 256;
 /// Slots reserved for each player's deck: player `p`'s cards sit in
 /// `p * DECK_SLOTS .. p * DECK_SLOTS + deck size`.
 pub const DECK_SLOTS: usize = 60;
+/// The first slot of the shared pool for tokens and spell copies, after both decks'.
+pub const TOKEN_SLOTS: u8 = 2 * DECK_SLOTS as u8;
 /// Permanents on the battlefield at once.
 pub const BATTLEFIELD: usize = 128;
 /// A `u8` slot or index field that refers to nothing.
 pub const NONE: u8 = u8::MAX;
 
 /// Where an object is. Objects in [`Zone::Nowhere`] are unused slots.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum Zone {
     Library,
@@ -27,6 +30,7 @@ pub enum Zone {
     Graveyard,
     Exile,
     Stack,
+    #[default]
     Nowhere,
 }
 
@@ -55,6 +59,16 @@ impl ObjectFlags {
     /// ([CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026)).
     pub const SUMMONING_SICK: u32 = 1 << 1;
     pub const ATTACKING: u32 = 1 << 2;
+    /// A token ([CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111)): "a marker
+    /// used to represent any permanent that isn't represented by a card."
+    pub const TOKEN: u32 = 1 << 3;
+    /// A copy whose copiable values are 1/1 by exception, such as an offspring token
+    /// ([CR 707.9b](https://yawgatog.com/resources/magic-rules/#R7079b)): "Some copy effects
+    /// modify a characteristic as part of the copying process. The final set of values for
+    /// that characteristic becomes part of the copiable values of the copy."
+    pub const ONE_ONE: u32 = 1 << 4;
+    /// Exiled until the permanent in `linked` leaves the battlefield (CR 610.3).
+    pub const EXILED_UNTIL: u32 = 1 << 5;
 
     pub fn has(self, flag: u32) -> bool {
         self.0 & flag != 0
@@ -69,14 +83,59 @@ impl ObjectFlags {
     }
 }
 
+/// A kind of counter ([CR 122.1](https://yawgatog.com/resources/magic-rules/#R1221)):
+/// "Counters with the same name or description are interchangeable."
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum CounterKind {
+    #[default]
+    PlusOne,
+    MinusOne,
+    Loyalty,
+    Time,
+    Story,
+    Chorus,
+}
+
 /// Counters on an object: the common kinds, and one (kind, count) pair for the long tail.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Counters {
     pub plus_one: u8,
     pub minus_one: u8,
     pub loyalty: u8,
-    pub other_kind: u8,
+    pub other_kind: CounterKind,
     pub other: u8,
+}
+
+impl Counters {
+    /// How many counters of a kind there are.
+    pub fn get(self, kind: CounterKind) -> u8 {
+        match kind {
+            CounterKind::PlusOne => self.plus_one,
+            CounterKind::MinusOne => self.minus_one,
+            CounterKind::Loyalty => self.loyalty,
+            _ if self.other_kind == kind => self.other,
+            _ => 0,
+        }
+    }
+
+    /// The count of a kind, to change. One object carries one long-tail kind at a time,
+    /// which the cube's cards never exceed; adding a second kind replaces the first.
+    pub(crate) fn get_mut(&mut self, kind: CounterKind) -> &mut u8 {
+        match kind {
+            CounterKind::PlusOne => &mut self.plus_one,
+            CounterKind::MinusOne => &mut self.minus_one,
+            CounterKind::Loyalty => &mut self.loyalty,
+            _ => {
+                if self.other_kind != kind {
+                    debug_assert_eq!(self.other, 0, "a second long-tail counter kind");
+                    self.other_kind = kind;
+                    self.other = 0;
+                }
+                &mut self.other
+            }
+        }
+    }
 }
 
 /// The base data of the object in one slot (architecture §4.2).
@@ -120,7 +179,7 @@ impl Object {
             plus_one: 0,
             minus_one: 0,
             loyalty: 0,
-            other_kind: 0,
+            other_kind: CounterKind::PlusOne,
             other: 0,
         },
         attached_to: NONE,
@@ -203,6 +262,11 @@ pub struct Player {
     pub mulligan: MulliganStatus,
     /// Cards still to put on the bottom after the latest mulligan.
     pub to_bottom: u8,
+    /// The emblems the player has, as game indices
+    /// ([CR 114.1](https://yawgatog.com/resources/magic-rules/#R1141)): "An emblem is a
+    /// marker used to represent an object that has one or more abilities, but usually no
+    /// other characteristics."
+    pub emblems: Fixed<u8, 4>,
 }
 
 /// The steps of a turn ([CR 500.1](https://yawgatog.com/resources/magic-rules/#R5001)): "A
@@ -248,39 +312,112 @@ pub struct StackEntry {
     pub controller: u8,
     /// The ability, or [`NONE`] for a spell.
     pub ability: u8,
+    /// For an ability: the game index and face of the card that has it.
+    pub card: u8,
+    pub face: u8,
+    /// For a triggered ability: what it triggered on.
+    pub info: TriggerInfo,
+}
+
+/// Last-known information about a permanent that left the battlefield (architecture §5),
+/// as it last existed there
+/// ([CR 603.10](https://yawgatog.com/resources/magic-rules/#R60310)): the game "looks back in
+/// time" for leaves-the-battlefield abilities.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Lki {
+    /// The game index of the card, the copiable values of a token copy.
+    pub card: u8,
+    pub power: i8,
+    pub toughness: i8,
+    pub types: Types,
+    pub controller: u8,
+    pub token: bool,
+}
+
+/// What a triggered ability triggered on: the object and player the event involved, an
+/// amount, and last-known information for look-back triggers.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct TriggerInfo {
+    pub object: ObjectRef,
+    pub player: u8,
+    pub amount: u8,
+    pub lki: Lki,
 }
 
 /// An ability that has triggered and waits to be put on the stack.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct PendingTrigger {
+    /// The object with the ability; an emblem's trigger has none, so its slot is [`NONE`].
     pub source: ObjectRef,
-    pub controller: u8,
+    pub card: u8,
+    pub face: u8,
     pub ability: u8,
+    /// The player who controlled the source when it triggered
+    /// ([CR 603.3a](https://yawgatog.com/resources/magic-rules/#R6033a)).
+    pub controller: u8,
+    pub info: TriggerInfo,
 }
 
-/// A delayed triggered ability, waiting for its event.
+/// A delayed triggered ability, waiting for its moment (CR 603.7).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct DelayedTrigger {
-    pub source: ObjectRef,
-    pub controller: u8,
-    pub ability: u8,
+    pub trigger: PendingTrigger,
+    pub at: Delayed,
 }
 
-/// How long a floating effect lasts.
+/// How long a floating effect lasts
+/// ([CR 611.2a](https://yawgatog.com/resources/magic-rules/#R6112a)): "A continuous effect
+/// generated by the resolution of a spell or ability lasts as long as stated by the spell or
+/// ability creating it (such as 'until end of turn'). If no duration is stated, it lasts
+/// until the end of the game."
+///
+/// Every floating effect in the cube's cards affects one object, and ends too when that
+/// object leaves its zone: the object it applied to no longer exists (CR 400.7).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Duration {
     /// "Until end of turn" and "this turn" (CR 514.2).
     #[default]
     EndOfTurn,
+    /// "Until your next turn": it ends as that player's next turn begins.
+    UntilYourNextTurn(u8),
+    /// No duration stated.
+    Indefinite,
 }
 
-/// A continuous effect from a resolved spell or ability. The layers work extends it with
-/// its layer, affected set and modification.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+/// What a floating effect does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Continuous {
+    /// Modifies the affected permanent in a layer (§9).
+    Layer(Modification),
+    /// "If it would be put into a graveyard, exile it instead"
+    /// ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)): "Effects that use
+    /// the word 'instead' are replacement effects."
+    ExileInsteadOfGraveyard,
+}
+
+/// A continuous effect from a resolved spell or ability
+/// ([CR 611.2c](https://yawgatog.com/resources/magic-rules/#R6112c)): "the set of objects it
+/// affects is determined when that continuous effect begins. After that point, the set won't
+/// change."
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FloatingEffect {
     pub source: ObjectRef,
     pub timestamp: u16,
     pub duration: Duration,
+    pub affected: ObjectRef,
+    pub effect: Continuous,
+}
+
+impl Default for FloatingEffect {
+    fn default() -> Self {
+        FloatingEffect {
+            source: ObjectRef::default(),
+            timestamp: 0,
+            duration: Duration::EndOfTurn,
+            affected: ObjectRef::default(),
+            effect: Continuous::ExileInsteadOfGraveyard,
+        }
+    }
 }
 
 /// The open question when it belongs to a machine step rather than to priority.
@@ -298,6 +435,9 @@ pub enum Pending {
     /// The legend rule (CR 704.5j): `kept` holds the permanent each player chose to keep so
     /// far.
     LegendRule { kept: Bitboard },
+    /// A land being played asks whether its controller pays life so that it doesn't enter
+    /// tapped ([`crate::card::Replacement::EntersTappedUnlessPayLife`]).
+    EnterPayingLife { slot: u8, life: u8 },
 }
 
 /// Counters toward the budgets of the profile (architecture §12.3).
@@ -410,6 +550,47 @@ impl State {
     /// Whether `player` knows the identity of the object in `slot`.
     pub fn knows(&self, player: u8, slot: u8) -> bool {
         self.knowledge[usize::from(player)].contains(slot)
+    }
+
+    /// A permanent's characteristics after continuous effects (architecture §9). Reads never
+    /// recompute: every path that changes a layer input recomputes before anything reads.
+    ///
+    /// # Panics
+    ///
+    /// If `slot` is not on the battlefield, or, in debug builds, if `derived` is stale.
+    pub fn derived(&self, slot: u8) -> &Derived {
+        debug_assert!(!self.flags.derived_dirty, "derived read while dirty");
+        let i = self
+            .battlefield
+            .position(slot)
+            .expect("derived characteristics of a permanent");
+        &self.derived[i]
+    }
+
+    /// Who controls an object: for a permanent the layer-2 result, otherwise the base
+    /// controller ([CR 109.4](https://yawgatog.com/resources/magic-rules/#R1094)).
+    pub fn controller(&self, slot: u8) -> u8 {
+        let o = self.object(slot);
+        if o.zone == Zone::Battlefield {
+            self.derived(slot).controller
+        } else {
+            o.controller
+        }
+    }
+
+    /// The abilities waiting to be put on the stack.
+    pub fn triggers(&self) -> &[PendingTrigger] {
+        self.triggers.as_slice()
+    }
+
+    /// The stack, bottom first.
+    pub fn stack(&self) -> &[StackEntry] {
+        self.stack.as_slice()
+    }
+
+    /// The floating continuous effects.
+    pub fn effects(&self) -> &[FloatingEffect] {
+        self.effects.as_slice()
     }
 
     pub(crate) fn object_mut(&mut self, slot: u8) -> &mut Object {

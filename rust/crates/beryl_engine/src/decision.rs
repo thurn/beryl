@@ -49,6 +49,10 @@ pub enum DecisionKind {
     Discard,
     /// The legendary permanent to keep under the legend rule (CR 704.5j).
     LegendRule,
+    /// The next of a player's waiting triggered abilities to put on the stack (CR 603.3b).
+    TriggerOrder,
+    /// Whether to pay the life an entering permanent asks so that it doesn't enter tapped.
+    PayLife,
 }
 
 /// The candidates of a decision. A `Choice(i)` names the `i`th object in ascending slot order,
@@ -102,6 +106,10 @@ pub enum Opt {
     Draw,
     Keep,
     Mulligan,
+    /// The waiting trigger at this index.
+    Trigger(u8),
+    Yes,
+    No,
 }
 
 /// How a game ended.

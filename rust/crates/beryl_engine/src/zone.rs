@@ -4,7 +4,7 @@
 
 use crate::bitboard::Bitboard;
 use crate::fixed::{Fixed, Full};
-use crate::state::{Counters, DECK_SLOTS, NONE, ObjectFlags, State, Zone};
+use crate::state::{Counters, DECK_SLOTS, Derived, NONE, Object, ObjectFlags, State, Zone};
 
 /// Where in a library an object goes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -13,7 +13,8 @@ pub(crate) enum Place {
     Bottom,
 }
 
-/// Moves an object to the top of a zone that has an order.
+/// Moves an object to the top of a zone that has an order: the raw execution step of the
+/// pipeline (architecture §8.2), which `event` wraps with replacements and triggers.
 ///
 /// [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007): "An object that moves from
 /// one zone to another becomes a new object with no memory of, or relation to, its previous
@@ -32,14 +33,15 @@ pub(crate) fn put_on_bottom(s: &mut State, slot: u8) -> Result<(), Full> {
     move_to_place(s, slot, Zone::Library, Place::Bottom)
 }
 
-fn move_to_place(s: &mut State, slot: u8, to: Zone, place: Place) -> Result<(), Full> {
+pub(crate) fn move_to_place(s: &mut State, slot: u8, to: Zone, place: Place) -> Result<(), Full> {
     leave(s, slot);
     let timestamp = s.zones.next_timestamp;
     let o = s.object_mut(slot);
     o.incarnation = o.incarnation.wrapping_add(1);
     o.zone = to;
     o.controller = o.owner;
-    o.flags = ObjectFlags::default();
+    // A token stays a token wherever it goes, until it ceases to exist (CR 111.7).
+    o.flags = ObjectFlags(o.flags.0 & (ObjectFlags::TOKEN | ObjectFlags::ONE_ONE));
     o.damage = 0;
     o.counters = Counters::default();
     o.attached_to = NONE;
@@ -169,26 +171,37 @@ pub(crate) fn shuffle_library(s: &mut State, player: u8) {
     s.rng.shuffle.shuffle(s.zones.library[p].as_mut_slice());
 }
 
-/// Plays a land: a special action that puts it onto the battlefield.
-///
-/// [CR 305.1](https://yawgatog.com/resources/magic-rules/#R3051): "Playing a land is a
-/// special action; it doesn't use the stack (see rule 116). Rather, the player simply puts the
-/// land onto the battlefield."
-///
-/// [CR 116.3](https://yawgatog.com/resources/magic-rules/#R1163): "If a player takes a special
-/// action, that player receives priority afterward."
-pub(crate) fn play_land(s: &mut State, player: u8, slot: u8) -> Result<(), Full> {
-    move_to(s, slot, Zone::Battlefield)?;
-    s.player_mut(player).lands_played += 1;
-    s.turn.priority = player;
-    s.turn.passes = 0;
-    Ok(())
+/// A token in a zone other than the battlefield ceases to exist, and its slot returns to the
+/// shared pool ([CR 704.5d](https://yawgatog.com/resources/magic-rules/#R7045d)): "If a token
+/// is in a zone other than the battlefield, it ceases to exist." The incarnation is kept and
+/// bumped, so references to the token stay stale after the slot is reused.
+pub(crate) fn cease_to_exist(s: &mut State, slot: u8) {
+    leave(s, slot);
+    let incarnation = s.object(slot).incarnation.wrapping_add(1);
+    *s.object_mut(slot) = Object {
+        incarnation,
+        ..Object::EMPTY
+    };
+    for k in &mut s.knowledge {
+        k.remove(slot);
+    }
 }
 
-/// Discards a card ([CR 701.9a](https://yawgatog.com/resources/magic-rules/#R7019a)): "To
-/// discard a card, move it from its owner's hand to that player's graveyard."
-pub(crate) fn discard(s: &mut State, slot: u8) -> Result<(), Full> {
-    move_to(s, slot, Zone::Graveyard)
+/// What makes two objects interchangeable (§7.2): every field but the incarnation and the
+/// timestamp, and for a permanent its characteristics after continuous effects, so two
+/// untapped basic lands match but a stolen Mana Crypt does not match your own, nor a
+/// creature that got -2/-0 one that didn't.
+pub(crate) fn signature(s: &State, slot: u8) -> (Object, Option<Derived>) {
+    let o = s.object(slot);
+    let derived = (o.zone == Zone::Battlefield).then(|| *s.derived(slot));
+    (
+        Object {
+            incarnation: 0,
+            timestamp: 0,
+            ..*o
+        },
+        derived,
+    )
 }
 
 /// The number of cards in a player's hand.

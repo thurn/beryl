@@ -5,7 +5,9 @@
 //! it stores game-table indices (§6.4) and ability indices instead.
 
 use crate::effect::EffectCtx;
-use crate::filter::Filter;
+use crate::filter::{Filter, Whose};
+use crate::state::{CounterKind, PendingTrigger, State, TurnStep};
+use crate::table::GameTable;
 
 /// One card: its name and its faces.
 #[derive(Debug)]
@@ -13,6 +15,8 @@ pub struct CardDef {
     pub name: &'static str,
     /// One face, or two for double-faced, modal double-faced, split and adventure cards.
     pub faces: &'static [Face],
+    /// The tokens and emblems this card can create, so a game's table holds them (§6.4).
+    pub tokens: &'static [&'static CardDef],
 }
 
 impl CardDef {
@@ -178,7 +182,11 @@ bitset! {
 
 bitset! {
     /// Keyword abilities, one bit each. The cards that need them add them.
-    Keywords(u64) {}
+    Keywords(u64) {
+        /// [CR 702.7a](https://yawgatog.com/resources/magic-rules/#R7027a): "First strike is
+        /// a static ability that modifies the rules for the combat damage step."
+        FIRST_STRIKE = 0,
+    }
 }
 
 /// A subtype ([CR 205.3](https://yawgatog.com/resources/magic-rules/#R2053)). The cards that
@@ -192,6 +200,8 @@ pub enum Subtype {
     Swamp,
     Mountain,
     Forest,
+    /// An artifact type ([CR 301.7](https://yawgatog.com/resources/magic-rules/#R3017)).
+    Vehicle,
 }
 
 /// A set of [`Subtype`]s, one bit each.
@@ -229,6 +239,8 @@ pub enum AbilityKind {
     Mana,
     Triggered,
     Static,
+    /// A static ability that creates a replacement effect (CR 614).
+    Replacement,
 }
 
 /// An activation or casting cost beyond the mana cost.
@@ -283,9 +295,63 @@ pub struct Ability {
     /// Whether the body may ask its controller a question mid-resolution (§7.3).
     pub may_pause: bool,
     pub body: fn(&mut EffectCtx) -> Flow,
+    /// Triggered abilities: the event they trigger on (§8.3).
+    pub trigger: Trigger,
+    /// Triggered abilities: an intervening "if" clause, checked when the ability triggers
+    /// and again as it resolves
+    /// ([CR 603.4](https://yawgatog.com/resources/magic-rules/#R6034)): "The ability triggers
+    /// only if it is; otherwise it does nothing. If the ability triggers, it checks the
+    /// stated condition again as it resolves."
+    pub condition: Option<fn(&State, &GameTable, &PendingTrigger) -> bool>,
+    /// Replacement abilities: the event they modify.
+    pub replacement: Replacement,
+    /// Static abilities: the continuous effect they generate on the battlefield (§9).
+    pub layer: Option<LayerSpec>,
 }
 
 impl Ability {
+    /// An ability with no cost, interface or effect, for `..Ability::NONE` in card files.
+    pub const NONE: Ability = Ability {
+        kind: AbilityKind::Static,
+        cost: Cost::NONE,
+        timing: Timing::Instant,
+        targets: &[],
+        produces: ManaSet::NONE,
+        may_pause: false,
+        body: crate::effect::nothing,
+        trigger: Trigger::None,
+        condition: None,
+        replacement: Replacement::None,
+        layer: None,
+    };
+
+    /// A triggered ability.
+    pub const fn triggered(trigger: Trigger, body: fn(&mut EffectCtx) -> Flow) -> Ability {
+        Ability {
+            kind: AbilityKind::Triggered,
+            trigger,
+            body,
+            ..Ability::NONE
+        }
+    }
+
+    /// A static ability generating a continuous effect.
+    pub const fn statik(layer: LayerSpec) -> Ability {
+        Ability {
+            layer: Some(layer),
+            ..Ability::NONE
+        }
+    }
+
+    /// A static ability creating a replacement effect.
+    pub const fn replacing(replacement: Replacement) -> Ability {
+        Ability {
+            kind: AbilityKind::Replacement,
+            replacement,
+            ..Ability::NONE
+        }
+    }
+
     /// A mana ability with the cost {T}, such as the intrinsic ability of a basic land type
     /// ([CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056)): "An object with the
     /// land card type and a basic land type has the intrinsic ability '{T}: Add [mana
@@ -294,11 +360,160 @@ impl Ability {
         Ability {
             kind: AbilityKind::Mana,
             cost: Cost::TAP,
-            timing: Timing::Instant,
-            targets: &[],
             produces,
-            may_pause: false,
             body: crate::effect::add_produced_mana,
+            ..Ability::NONE
+        }
+    }
+}
+
+/// What a triggered ability triggers on
+/// ([CR 603.2](https://yawgatog.com/resources/magic-rules/#R6032)): "Whenever a game event
+/// or game state matches a triggered ability's trigger event, that ability automatically
+/// triggers." The kinds the cube's cards use.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Trigger {
+    None,
+    /// "When this enters"
+    /// ([CR 603.6a](https://yawgatog.com/resources/magic-rules/#R6036a)).
+    Enters,
+    /// "When this dies": a leaves-the-battlefield ability, which looks back in time
+    /// ([CR 603.10a](https://yawgatog.com/resources/magic-rules/#R60310a)).
+    Dies,
+    /// "Whenever this attacks"
+    /// ([CR 508.3a](https://yawgatog.com/resources/magic-rules/#R5083a)): it "triggers if
+    /// that creature is declared as an attacker."
+    Attacks,
+    /// "Whenever you attack"
+    /// ([CR 508.3d](https://yawgatog.com/resources/magic-rules/#R5083d)): it "triggers if
+    /// one or more creatures that player controls are declared as attackers."
+    YouAttack,
+    /// "Whenever this deals combat damage to a player".
+    CombatDamageToPlayer,
+    /// "At the beginning of [whose] [step]"
+    /// ([CR 500.6](https://yawgatog.com/resources/magic-rules/#R5006)): "When a phase or
+    /// step begins, any abilities that trigger 'at the beginning of' that phase or step
+    /// trigger."
+    Step(TurnStep, Whose),
+    /// "Whenever you create one or more tokens" of these types: once per event, however
+    /// many tokens it creates.
+    YouCreateTokens(Types),
+    /// "Whenever you cast a spell".
+    YouCast,
+    /// A delayed triggered ability (CR 603.7): never matched against events, but created by
+    /// a body with the moment it waits for.
+    Delayed,
+}
+
+/// The moment a delayed triggered ability waits for. It triggers once, the next time that
+/// moment comes ([CR 603.7b](https://yawgatog.com/resources/magic-rules/#R6037b)): "A
+/// delayed triggered ability will trigger only once--the next time its trigger event
+/// occurs--unless it has a stated duration".
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Delayed {
+    /// "At the beginning of your next main phase" (Mana Drain): the controller's next
+    /// precombat or postcombat main phase.
+    #[default]
+    YourNextMainPhase,
+}
+
+/// A replacement effect of a permanent's own static ability that modifies how it enters
+/// ([CR 614.1c](https://yawgatog.com/resources/magic-rules/#R6141c)): "Effects that read
+/// '[This permanent] enters with . . . ,' 'As [this permanent] enters . . . ,' or '[This
+/// permanent] enters as . . . ' are replacement effects."
+///
+/// [CR 614.12](https://yawgatog.com/resources/magic-rules/#R61412): "Some replacement effects
+/// modify how a permanent enters the battlefield. ... Such effects may come from the
+/// permanent itself if they affect only that permanent".
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Replacement {
+    None,
+    /// "This enters tapped."
+    EntersTapped,
+    /// "This enters tapped unless you control N or fewer other lands." (Seachrome Coast)
+    EntersTappedUnlessFewLands(u8),
+    /// "As this enters, you may pay N life. If you don't, it enters tapped." (Soporific
+    /// Springs) Whoever puts it onto the battlefield asks its controller first.
+    EntersTappedUnlessPayLife(u8),
+}
+
+/// A static ability's continuous effect: what it affects, when, and how (§9).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct LayerSpec {
+    pub affected: Affected,
+    pub condition: StaticCondition,
+    pub modification: Modification,
+}
+
+/// Which permanent a static ability affects.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Affected {
+    /// The permanent with the ability.
+    Itself,
+    /// The permanent an Aura with the ability enchants.
+    Enchanted,
+}
+
+/// When a static ability applies.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum StaticCondition {
+    Always,
+    /// "As long as it has a [kind] counter on it" (impending's "isn't a creature").
+    HasCounter(CounterKind),
+}
+
+/// What a continuous effect does to a permanent. The layer it applies in follows from the
+/// modification ([CR 613.1](https://yawgatog.com/resources/magic-rules/#R6131)).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Modification {
+    /// Layer 2: "gain control of".
+    Control(u8),
+    /// Layer 4: "becomes [types] in addition to its other types".
+    AddTypes(Types),
+    /// Layer 4: "isn't a [type]".
+    RemoveTypes(Types),
+    /// Layer 4: "is a [types] and loses all other card types". Subtypes go with the card
+    /// types they belong to; the subtypes it keeps or gains are added separately.
+    SetTypes(Types),
+    /// Layer 4: "is a [subtype]".
+    AddSubtype(Subtype),
+    /// Layer 6: "gains [keywords]".
+    AddKeywords(Keywords),
+    /// Layer 6: "has [ability]", an ability of a card in the game table.
+    Grant(crate::state::AbilityRef),
+    /// Layer 7a: a characteristic-defining ability, "power is equal to the number of
+    /// creatures you control" (Adeline).
+    PowerIsCreaturesYouControl,
+    /// Layer 7c: "gets +X/+Y".
+    ModifyPt(i8, i8),
+}
+
+/// The layers and sublayers continuous effects apply in, in order
+/// ([CR 613.1](https://yawgatog.com/resources/magic-rules/#R6131),
+/// [CR 613.4](https://yawgatog.com/resources/magic-rules/#R6134)). Layer 1, copy effects, is
+/// applied by choosing the copiable values before any of these.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Layer {
+    Control = 2,
+    Type = 4,
+    Ability = 6,
+    /// 7a: characteristic-defining abilities that define power and toughness.
+    PtDefining = 7,
+    /// 7c: effects and counters that modify power and toughness.
+    PtModifying = 9,
+}
+
+impl Modification {
+    pub fn layer(self) -> Layer {
+        match self {
+            Modification::Control(_) => Layer::Control,
+            Modification::AddTypes(_)
+            | Modification::RemoveTypes(_)
+            | Modification::SetTypes(_)
+            | Modification::AddSubtype(_) => Layer::Type,
+            Modification::AddKeywords(_) | Modification::Grant(_) => Layer::Ability,
+            Modification::PowerIsCreaturesYouControl => Layer::PtDefining,
+            Modification::ModifyPt(..) => Layer::PtModifying,
         }
     }
 }

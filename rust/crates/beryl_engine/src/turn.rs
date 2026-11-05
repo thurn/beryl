@@ -1,8 +1,11 @@
 //! Turn structure: turns, steps and their turn-based actions (architecture §12.1).
 
 use crate::decision::{Outcome, StallReason};
+use crate::event::{self, Event, Reason, Sink};
 use crate::fixed::Full;
+use crate::layers;
 use crate::state::{Duration, ObjectFlags, Pending, State, TurnStep, Zone, opponent};
+use crate::table::GameTable;
 use crate::zone;
 
 /// The maximum hand size ([CR 514.1](https://yawgatog.com/resources/magic-rules/#R5141)),
@@ -25,7 +28,7 @@ pub(crate) fn any_attacking(s: &State) -> bool {
 /// Begins the next turn: the starting player's first, then alternating
 /// ([CR 103.8](https://yawgatog.com/resources/magic-rules/#R1038)): "The starting player takes
 /// their first turn."
-pub(crate) fn begin_turn(s: &mut State) -> Result<(), Full> {
+pub(crate) fn begin_turn(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<(), Full> {
     if s.turn.number >= s.profile.limits.turns {
         s.outcome = Some(Outcome::Stalled(StallReason::Turns));
         return Ok(());
@@ -40,17 +43,27 @@ pub(crate) fn begin_turn(s: &mut State) -> Result<(), Full> {
     for p in &mut s.players {
         p.lands_played = 0;
     }
+    let active = s.turn.active;
+    // CR 611.2a: an effect lasts "as long as stated by the spell or ability creating it";
+    // one that lasts until a player's next turn ends as that turn begins.
+    let before = s.effects.len();
+    s.effects
+        .retain(|e| e.duration != Duration::UntilYourNextTurn(active));
+    if s.effects.len() != before {
+        s.flags.derived_dirty = true;
+    }
+    layers::refresh(s, t);
     // CR 302.6: the active player's permanents have now been under their control since their
     // most recent turn began.
-    let active = s.turn.active;
     for i in 0..s.battlefield.len() {
         let slot = s.battlefield.as_slice()[i];
-        let o = s.object_mut(slot);
-        if o.controller == active {
-            o.flags.set(ObjectFlags::SUMMONING_SICK, false);
+        if s.controller(slot) == active {
+            s.object_mut(slot)
+                .flags
+                .set(ObjectFlags::SUMMONING_SICK, false);
         }
     }
-    begin_step(s, TurnStep::Untap)
+    begin_step(s, t, sink, TurnStep::Untap)
 }
 
 /// Begins a step: its turn-based actions, then priority for the active player.
@@ -58,26 +71,37 @@ pub(crate) fn begin_turn(s: &mut State) -> Result<(), Full> {
 /// [CR 117.3a](https://yawgatog.com/resources/magic-rules/#R1173a): "The active player
 /// receives priority at the beginning of most steps and phases, after any turn-based actions
 /// (such as drawing a card during the draw step; see rule 703) have been dealt with".
-pub(crate) fn begin_step(s: &mut State, step: TurnStep) -> Result<(), Full> {
+///
+/// [CR 500.6](https://yawgatog.com/resources/magic-rules/#R5006): "When a phase or step
+/// begins, any abilities that trigger 'at the beginning of' that phase or step trigger. They
+/// are put on the stack the next time a player would receive priority."
+pub(crate) fn begin_step(
+    s: &mut State,
+    t: &GameTable,
+    sink: &mut Sink,
+    step: TurnStep,
+) -> Result<(), Full> {
     s.turn.step = step;
     s.turn.priority = s.turn.active;
     s.turn.passes = 0;
+    let active = s.turn.active;
     match step {
-        TurnStep::Untap => {
-            untap(s);
-            // CR 502.4: "No player receives priority during the untap step".
-            return end_step(s);
-        }
+        TurnStep::Untap => untap(s, t, sink)?,
         TurnStep::Draw => {
             // CR 103.8a: "In a two-player game, the player who plays first skips the draw
             // step (see rule 504, "Draw Step") of their first turn."
             if s.turn.number > 1 {
                 // CR 504.1: "First, the active player draws a card."
-                zone::draw(s, s.turn.active)?;
+                event::draw(s, t, sink, active, 1)?;
             }
         }
         TurnStep::Cleanup => cleanup(s),
         _ => {}
+    }
+    event::settle(s, t, sink, Event::StepBegins { step, active })?;
+    if step == TurnStep::Untap {
+        // CR 502.4: "No player receives priority during the untap step".
+        return end_step(s, t, sink);
     }
     Ok(())
 }
@@ -86,15 +110,17 @@ pub(crate) fn begin_step(s: &mut State, step: TurnStep) -> Result<(), Full> {
 /// ([CR 502.3](https://yawgatog.com/resources/magic-rules/#R5023)): "the active player
 /// determines which permanents they control will untap. Then they untap them all
 /// simultaneously."
-fn untap(s: &mut State) {
+fn untap(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<(), Full> {
     let active = s.turn.active;
-    for i in 0..s.battlefield.len() {
+    let mut i = 0;
+    while i < s.battlefield.len() {
         let slot = s.battlefield.as_slice()[i];
-        let o = s.object_mut(slot);
-        if o.controller == active {
-            o.flags.set(ObjectFlags::TAPPED, false);
+        if s.controller(slot) == active {
+            event::set_tapped(s, t, sink, s.object_ref(slot), false)?;
         }
+        i += 1;
     }
+    Ok(())
 }
 
 /// Ends the current step and begins the next.
@@ -104,7 +130,7 @@ fn untap(s: &mut State) {
 ///
 /// [CR 500.5](https://yawgatog.com/resources/magic-rules/#R5005): "As a step or phase ends ...
 /// any unspent mana left in a player's mana pool empties."
-pub(crate) fn end_step(s: &mut State) -> Result<(), Full> {
+pub(crate) fn end_step(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<(), Full> {
     for p in &mut s.players {
         p.mana = [0; 6];
     }
@@ -125,7 +151,7 @@ pub(crate) fn end_step(s: &mut State) -> Result<(), Full> {
         // received priority, "another cleanup step begins."
         TurnStep::End | TurnStep::Cleanup => TurnStep::Cleanup,
     };
-    begin_step(s, next)
+    begin_step(s, t, sink, next)
 }
 
 /// The cleanup step's first turn-based action
@@ -142,8 +168,16 @@ fn cleanup(s: &mut State) {
 }
 
 /// Discards one card in the cleanup step, finishing the step once the hand is small enough.
-pub(crate) fn cleanup_discard(s: &mut State, slot: u8) -> Result<(), Full> {
-    zone::discard(s, slot)?;
+///
+/// [CR 701.9a](https://yawgatog.com/resources/magic-rules/#R7019a): "To discard a card, move
+/// it from its owner's hand to that player's graveyard."
+pub(crate) fn cleanup_discard(
+    s: &mut State,
+    t: &GameTable,
+    sink: &mut Sink,
+    slot: u8,
+) -> Result<(), Full> {
+    event::move_one(s, t, sink, slot, Zone::Graveyard, Reason::Discard)?;
     if zone::hand_size(s, s.turn.active) <= MAX_HAND_SIZE {
         s.pending = Pending::None;
         finish_cleanup(s);
@@ -167,7 +201,11 @@ fn finish_cleanup(s: &mut State) {
         let slot = s.battlefield.as_slice()[i];
         s.object_mut(slot).damage = 0;
     }
+    let before = s.effects.len();
     s.effects.retain(|e| e.duration != Duration::EndOfTurn);
+    if s.effects.len() != before {
+        s.flags.derived_dirty = true;
+    }
     s.turn.cleanup_check = true;
 }
 
