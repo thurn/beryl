@@ -13,6 +13,7 @@ mod run;
 #[cfg(test)]
 mod tests;
 
+use beryl_engine::card::ManaColor;
 use beryl_engine::state::CounterKind;
 use beryl_engine::{DecisionKind, TurnStep, Zone};
 use serde::{Serialize, Serializer};
@@ -129,6 +130,42 @@ pub enum Action {
     Assert { assertion: Assertion },
 }
 
+/// Shorthands for the common actions.
+impl Action {
+    /// `player` answers a decision of `kind` with `pick`.
+    pub const fn answer(player: u8, kind: DecisionKind, pick: Pick) -> Action {
+        Action::Answer { player, kind, pick }
+    }
+
+    /// `player` passes priority.
+    pub const fn pass(player: u8) -> Action {
+        Action::answer(player, DecisionKind::Priority, Pick::Pass)
+    }
+
+    /// `player` casts `card`'s front face, with none of its casting options.
+    pub const fn cast(player: u8, card: &'static str) -> Action {
+        Action::Cast {
+            player,
+            card,
+            face: 0,
+            costs: 0,
+        }
+    }
+
+    /// `player` activates ability `ability` of `card`.
+    pub const fn activate(player: u8, card: &'static str, ability: u8) -> Action {
+        Action::Activate {
+            player,
+            card,
+            ability,
+        }
+    }
+
+    pub const fn assert(assertion: Assertion) -> Action {
+        Action::Assert { assertion }
+    }
+}
+
 /// The answer to a decision.
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(tag = "pick")]
@@ -230,6 +267,18 @@ pub enum Assertion {
     /// How many spells and abilities are on the stack.
     Stack {
         count: u8,
+    },
+    /// The top cards of `player`'s library, top first.
+    Library {
+        player: u8,
+        top: &'static [&'static str],
+    },
+    /// How much unspent mana of `color` `player` has.
+    Mana {
+        player: u8,
+        #[serde(serialize_with = "variant")]
+        color: ManaColor,
+        amount: u8,
     },
 }
 

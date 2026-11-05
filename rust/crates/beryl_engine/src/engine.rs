@@ -422,7 +422,8 @@ fn perform(
         | DecisionKind::Crew
         | DecisionKind::CastOffer
         | DecisionKind::YesNo
-        | DecisionKind::ChooseObject => unreachable!("answered through the pending state"),
+        | DecisionKind::ChooseObject
+        | DecisionKind::ChooseUpTo => unreachable!("answered through the pending state"),
         DecisionKind::PlayOrDraw => {
             let starting = if option() == Opt::Play {
                 d.player
@@ -473,6 +474,9 @@ fn pass(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers) -> R
     if s.stack.is_empty() {
         turn::end_step(s, t, &mut x.events)
     } else {
+        // The passes are spent: a resolution that pauses for a question waits over this
+        // state, and priority starts afresh once it resolves.
+        s.turn.passes = 0;
         resolve::resolve(s, t, x, a)
     }
 }

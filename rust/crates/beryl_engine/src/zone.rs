@@ -11,6 +11,9 @@ use crate::state::{Counters, DECK_SLOTS, Derived, NONE, Object, ObjectFlags, Sta
 pub(crate) enum Place {
     Top,
     Bottom,
+    /// Under this many cards from the top, or at the bottom of a library with fewer: Oust's
+    /// "second from the top" is `UnderTop(1)`.
+    UnderTop(u8),
 }
 
 /// Moves an object to the top of a zone that has an order: the raw execution step of the
@@ -55,6 +58,10 @@ pub(crate) fn move_to_place(s: &mut State, slot: u8, to: Zone, place: Place) -> 
         Zone::Library => match place {
             Place::Top => s.zones.library[owner].push(slot)?,
             Place::Bottom => s.zones.library[owner].insert(0, slot)?,
+            Place::UnderTop(n) => {
+                let library = &mut s.zones.library[owner];
+                library.insert(library.len().saturating_sub(usize::from(n)), slot)?;
+            }
         },
         Zone::Graveyard => s.zones.graveyard[owner].push(slot)?,
         Zone::Battlefield => {

@@ -121,8 +121,11 @@ fn library_slot(s: &State, t: &GameTable, player: u8, name: &str) -> u8 {
         .expect("the deck holds every card the setup names")
 }
 
+/// The name of the object in `slot`: its face up's, which is the card's own name everywhere
+/// but on the stack and the battlefield (CR 712.8a, 712.8f).
 fn name_of(s: &State, t: &GameTable, slot: u8) -> &'static str {
-    t.def(s.object(slot).card).name
+    let o = s.object(slot);
+    t.def(o.card).face_name(o.face)
 }
 
 struct Runner<'a> {
@@ -303,7 +306,8 @@ impl Runner<'_> {
             | Opt::Lethal(slot)
             | Opt::Cast { slot, .. }
             | Opt::Activate { slot, .. }
-            | Opt::Mana { slot, .. } => Some(slot),
+            | Opt::Mana { slot, .. }
+            | Opt::Object(slot) => Some(slot),
             Opt::Defender(slot) if slot != NONE => Some(slot),
             Opt::Trigger(i) => self
                 .s
@@ -482,6 +486,19 @@ impl Runner<'_> {
                 self.permanent_fact(assertion)?
             }
             Assertion::Stack { count } => (s.stack().len().to_string(), count.to_string()),
+            Assertion::Library { player, top } => {
+                let library = s.library(player).iter().rev().take(top.len());
+                let actual: Vec<&str> = library.map(|&slot| self.name(slot)).collect();
+                (format!("{actual:?}"), format!("{top:?}"))
+            }
+            Assertion::Mana {
+                player,
+                color,
+                amount,
+            } => (
+                s.player(player).mana[color as usize].to_string(),
+                amount.to_string(),
+            ),
             Assertion::Decision {
                 player,
                 kind,

@@ -21,6 +21,7 @@ use crate::state::{
     PendingTrigger, StackEntry, State, Target, TriggerInfo, Zone,
 };
 use crate::table::GameTable;
+use crate::zone::{self, Place};
 use crate::{layers, trigger};
 
 /// What a body runs against: the working state and tables, the event sink, the stack entry
@@ -199,11 +200,23 @@ impl<'a> EffectCtx<'a> {
 
     /// The controller of a spell on the stack.
     pub fn spell_controller(&self, spell: ObjectRef) -> Option<u8> {
+        self.spell_entry(spell).map(|e| e.controller)
+    }
+
+    fn spell_entry(&self, spell: ObjectRef) -> Option<&StackEntry> {
         self.state
             .stack()
             .iter()
             .find(|e| e.is_spell() && e.object == spell)
-            .map(|e| e.controller)
+    }
+
+    /// The mana value of a spell on the stack, X included
+    /// ([CR 202.3e](https://yawgatog.com/resources/magic-rules/#R2023e)): "X is treated as the
+    /// number chosen for it while the object is on the stack."
+    pub fn spell_mana_value(&self, spell: ObjectRef) -> Option<u8> {
+        let e = self.spell_entry(spell)?;
+        let cost = self.table.def(e.card).faces[usize::from(e.face)].cost;
+        Some(cost.mana_value().saturating_add(cost.x.saturating_mul(e.x)))
     }
 
     /// Asks a question (§7.3). A question with one answer is answered silently. Otherwise
@@ -264,6 +277,35 @@ impl<'a> EffectCtx<'a> {
     /// Asks `player` yes or no.
     pub fn choose_yes_no(&mut self, player: u8) -> Result<bool, Pause> {
         Ok(self.ask_options(player, DecisionKind::YesNo, &[Opt::Yes, Opt::No])? == Opt::Yes)
+    }
+
+    /// Asks `player` to choose up to `n` of `candidates`, one at a time, each answer either one
+    /// more object or [`Opt::Done`]. Interchangeable candidates are one answer (§7.2).
+    pub fn choose_up_to(
+        &mut self,
+        player: u8,
+        candidates: Bitboard,
+        n: u8,
+    ) -> Result<Bitboard, Pause> {
+        let mut chosen = Bitboard::EMPTY;
+        while chosen.count() < u32::from(n) {
+            let left = crate::engine::collapse(self.state, candidates & !chosen);
+            if left.is_empty() {
+                break;
+            }
+            let mut opts: Fixed<Opt, 64> = Fixed::new();
+            for o in core::iter::once(Opt::Done).chain(left.iter().map(Opt::Object)) {
+                if opts.push(o).is_err() {
+                    self.full = true;
+                    return Err(Pause);
+                }
+            }
+            match self.ask_options(player, DecisionKind::ChooseUpTo, opts.as_slice())? {
+                Opt::Object(slot) => chosen.insert(slot),
+                _ => break,
+            }
+        }
+        Ok(chosen)
     }
 
     /// Asks `player` to choose one of `candidates`, which must not be empty.
@@ -453,6 +495,114 @@ impl<'a> EffectCtx<'a> {
         self.check(r);
     }
 
+    /// Returns a spell or a permanent to its owner's hand
+    /// ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)): "If an object would go
+    /// to any library, graveyard, or hand other than its owner's, it goes to its owner's
+    /// corresponding zone." A spell leaves the stack without resolving.
+    pub fn return_to_hand(&mut self, object: ObjectRef) {
+        if !self.state.is_current(object) {
+            return;
+        }
+        let returns = match self.state.object(object.slot).zone {
+            Zone::Battlefield => true,
+            Zone::Stack => cast::take_spell(self.state, object).is_some(),
+            _ => false,
+        };
+        if returns {
+            self.move_to(object, Zone::Hand, Reason::Effect);
+        }
+    }
+
+    /// Puts a permanent into its owner's library under `under` cards from the top, or at the
+    /// bottom of a library with fewer, as Oust's "second from the top" is under one.
+    pub fn put_into_library(&mut self, object: ObjectRef, under: u8) {
+        if !self.on_battlefield(object) {
+            return;
+        }
+        let r = event::move_batch_to(
+            self.state,
+            self.table,
+            self.sink,
+            Bitboard::single(object.slot),
+            Zone::Library,
+            Place::UnderTop(under),
+            Reason::Effect,
+            Entry::default(),
+        );
+        self.check(r);
+    }
+
+    /// Moves a set of objects to one zone simultaneously, each to its owner's (CR 400.3).
+    pub fn move_all(&mut self, objects: Bitboard, to: Zone, reason: Reason) {
+        let r = event::move_batch(
+            self.state,
+            self.table,
+            self.sink,
+            objects,
+            to,
+            reason,
+            Entry::default(),
+        );
+        self.check(r);
+    }
+
+    /// Shuffles a player's library
+    /// ([CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a)): "To shuffle a
+    /// library or a face-down pile of cards, randomize the cards within it so that no player
+    /// knows their order."
+    pub fn shuffle(&mut self, player: u8) {
+        zone::shuffle_library(self.state, player);
+    }
+
+    /// Reveals a card to every player
+    /// ([CR 701.20a](https://yawgatog.com/resources/magic-rules/#R70120a)): "To reveal a card,
+    /// show that card to all players for a brief time." Each player knows it from then on,
+    /// until it is shuffled or otherwise hidden anew.
+    pub fn reveal(&mut self, slot: u8) {
+        for k in &mut self.state.knowledge {
+            k.insert(slot);
+        }
+    }
+
+    /// A permanent explores ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)):
+    /// "that permanent's controller reveals the top card of their library. If a land card is
+    /// revealed this way, that player puts that card into their hand. Otherwise, that player
+    /// puts a +1/+1 counter on the exploring permanent and may put the revealed card into
+    /// their graveyard."
+    ///
+    /// [CR 701.44b](https://yawgatog.com/resources/magic-rules/#R70144b): it "explores ... even
+    /// if some or all of those actions were impossible": with an empty library no land is
+    /// revealed, so it gets the counter. [CR 701.44c](https://yawgatog.com/resources/magic-rules/#R70144c):
+    /// "If a permanent is no longer on the battlefield as an effect instructs it to explore,
+    /// its last known information is used to determine which object explored and who
+    /// controlled it." The only explorer here is a target, which this ability's controller
+    /// controls, so that is the controller once it is gone.
+    pub fn explore(&mut self, object: ObjectRef) -> Flow {
+        let player = if self.on_battlefield(object) {
+            self.state.controller(object.slot)
+        } else {
+            self.entry.controller
+        };
+        let top = self.state.library(player).last().copied();
+        if let Some(slot) = top {
+            self.reveal(slot);
+            let card = self.state.object(slot).card;
+            if self.table.def(card).front().types.contains(Types::LAND) {
+                self.move_to(self.state.object_ref(slot), Zone::Hand, Reason::Effect);
+                return Ok(());
+            }
+        }
+        if self.on_battlefield(object) {
+            self.add_counters(object, CounterKind::PlusOne, 1);
+        }
+        if let Some(slot) = top
+            && self.choose_yes_no(player)?
+        {
+            self.move_to(self.state.object_ref(slot), Zone::Graveyard, Reason::Effect);
+        }
+        Ok(())
+    }
+
     /// Destroys a permanent ([CR 701.8a](https://yawgatog.com/resources/magic-rules/#R7018a)):
     /// "To destroy a permanent, move it from the battlefield to its owner's graveyard."
     pub fn destroy(&mut self, object: ObjectRef) {
@@ -499,22 +649,33 @@ impl<'a> EffectCtx<'a> {
     /// Creates `count` tokens of a predefined kind under this ability's controller
     /// ([CR 111.10](https://yawgatog.com/resources/magic-rules/#R11110)).
     pub fn create_tokens(&mut self, def: &'static CardDef, count: u8, how: TokenEntry) -> Bitboard {
+        self.create_tokens_for(self.entry.controller, def, count, how)
+    }
+
+    /// Creates `count` tokens of a predefined kind under `player`'s control, as in Get Lost's
+    /// "Its controller creates two Map tokens."
+    /// ([CR 111.2](https://yawgatog.com/resources/magic-rules/#R1112)): "The player who
+    /// creates a token is its owner."
+    pub fn create_tokens_for(
+        &mut self,
+        player: u8,
+        def: &'static CardDef,
+        count: u8,
+        how: TokenEntry,
+    ) -> Bitboard {
         let card = self.game_index(def);
-        self.create_tokens_of(card, count, how)
+        self.tokens(player, card, count, how)
     }
 
     /// Creates `count` tokens that are copies of the card with this game index, such as the
     /// card a last-known-information record names (CR 707.2).
     pub fn create_tokens_of(&mut self, card: u8, count: u8, how: TokenEntry) -> Bitboard {
-        let created = event::create_tokens(
-            self.state,
-            self.table,
-            self.sink,
-            self.entry.controller,
-            card,
-            count,
-            how,
-        );
+        self.tokens(self.entry.controller, card, count, how)
+    }
+
+    fn tokens(&mut self, player: u8, card: u8, count: u8, how: TokenEntry) -> Bitboard {
+        let created =
+            event::create_tokens(self.state, self.table, self.sink, player, card, count, how);
         created.unwrap_or_else(|Full| {
             self.full = true;
             Bitboard::EMPTY

@@ -142,16 +142,22 @@ fn is_legendary(s: &State, slot: u8) -> bool {
     Supertypes(s.derived(slot).supertypes).contains(Supertypes::LEGENDARY)
 }
 
+/// The name of the permanent in `slot`: its face up's (CR 712.8d, 712.8e).
+fn name(s: &State, t: &GameTable, slot: u8) -> &'static str {
+    let o = s.object(slot);
+    t.def(o.card).face_name(o.face)
+}
+
 /// The legendary permanents with the same controller and name as the one in `slot`.
 fn legend_group(s: &State, t: &GameTable, slot: u8) -> Bitboard {
-    let name = t.def(s.object(slot).card).name;
+    let name_of = name(s, t, slot);
     let controller = s.controller(slot);
     s.battlefield
         .iter()
         .copied()
         .filter(|&other| {
             s.controller(other) == controller
-                && t.def(s.object(other).card).name == name
+                && name(s, t, other) == name_of
                 && is_legendary(s, other)
         })
         .collect()

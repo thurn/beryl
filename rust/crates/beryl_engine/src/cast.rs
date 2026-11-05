@@ -219,6 +219,7 @@ fn candidates(s: &State, t: &GameTable, spec: &TargetSpec, you: u8, itself: u8) 
         }
         TargetKind::Permanent => in_zone(s, Zone::Battlefield),
         TargetKind::Spell => spells(s),
+        TargetKind::SpellOrPermanent => spells(s) | in_zone(s, Zone::Battlefield),
         TargetKind::GraveyardCard => in_zone(s, Zone::Graveyard),
     };
     if itself != NONE {
@@ -1050,16 +1051,21 @@ pub(crate) fn counter(
     spell: ObjectRef,
     exile: bool,
 ) -> Result<bool, Full> {
-    let Some(i) = s
-        .stack
-        .iter()
-        .position(|e| e.is_spell() && e.object == spell)
-    else {
+    let Some(entry) = take_spell(s, spell) else {
         return Ok(false);
     };
-    let entry = s.stack.remove(i);
     leave_stack(s, t, sink, &entry, exile, Reason::Counter)?;
     Ok(true)
+}
+
+/// Removes a spell's entry from the stack, if it is there, for an effect that moves the
+/// spell's card elsewhere.
+pub(crate) fn take_spell(s: &mut State, spell: ObjectRef) -> Option<StackEntry> {
+    let i = s
+        .stack
+        .iter()
+        .position(|e| e.is_spell() && e.object == spell)?;
+    Some(s.stack.remove(i))
 }
 
 /// Puts a spell that leaves the stack without becoming a permanent into its owner's

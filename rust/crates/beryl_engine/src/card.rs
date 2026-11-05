@@ -25,11 +25,32 @@ impl CardDef {
     pub fn front(&self) -> &'static Face {
         &self.faces[0]
     }
+
+    /// The name of the face at `face`, the name a spell or permanent with that face up has
+    /// ([CR 712.8f](https://yawgatog.com/resources/magic-rules/#R7128f)): "While a modal
+    /// double-faced spell is on the stack or a modal double-faced permanent is on the
+    /// battlefield, it has only the characteristics of the face that's up." The same holds of
+    /// a nonmodal one ([CR 712.8e](https://yawgatog.com/resources/magic-rules/#R7128e)):
+    /// "While a nonmodal double-faced permanent has its back face up, it has only the
+    /// characteristics of its back face."
+    pub fn face_name(&self, face: u8) -> &'static str {
+        if face == 0 {
+            self.name
+        } else {
+            self.faces[usize::from(face)].name
+        }
+    }
 }
 
 /// The characteristics printed on one face.
 #[derive(Debug)]
 pub struct Face {
+    /// The name of a back face. A front face's name is its card's, [`CardDef::name`], which
+    /// is the card's name wherever it is not a permanent or spell with another face up
+    /// ([CR 712.8a](https://yawgatog.com/resources/magic-rules/#R7128a)): "While a
+    /// double-faced card is outside the game or in a zone other than the battlefield or
+    /// stack, it has only the characteristics of its front face."
+    pub name: &'static str,
     pub cost: ManaCost,
     pub supertypes: Supertypes,
     pub types: Types,
@@ -64,6 +85,7 @@ impl Face {
 impl Face {
     /// A face with no cost, types or abilities, for `..Face::EMPTY` in card files.
     pub const EMPTY: Face = Face {
+        name: "",
         cost: ManaCost::NONE,
         supertypes: Supertypes::NONE,
         types: Types::NONE,
@@ -301,10 +323,12 @@ pub enum Subtype {
     /// "Some enchantments have the subtype "Aura." An Aura enters the battlefield attached to
     /// an object or player."
     Aura,
+    /// An artifact type (CR 301.7), of the Map tokens Get Lost creates.
+    Map,
 }
 
 impl Subtype {
-    pub const ALL: [Subtype; 7] = [
+    pub const ALL: [Subtype; 8] = [
         Subtype::Plains,
         Subtype::Island,
         Subtype::Swamp,
@@ -312,6 +336,7 @@ impl Subtype {
         Subtype::Forest,
         Subtype::Vehicle,
         Subtype::Aura,
+        Subtype::Map,
     ];
 
     /// The card type this subtype belongs to (CR 205.3).
@@ -322,7 +347,7 @@ impl Subtype {
             | Subtype::Swamp
             | Subtype::Mountain
             | Subtype::Forest => Types::LAND,
-            Subtype::Vehicle => Types::ARTIFACT,
+            Subtype::Vehicle | Subtype::Map => Types::ARTIFACT,
             Subtype::Aura => Types::ENCHANTMENT,
         }
     }
@@ -454,6 +479,8 @@ pub enum TargetKind {
     Permanent,
     /// A spell on the stack.
     Spell,
+    /// A spell on the stack or a permanent, such as "target spell or nonland permanent".
+    SpellOrPermanent,
     /// A card in a graveyard, such as "target instant or sorcery card from your graveyard".
     GraveyardCard,
     /// A player. The filter may be [`Filter::Any`] or [`Filter::Whose`], read for players.

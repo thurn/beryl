@@ -306,6 +306,21 @@ pub(crate) fn move_batch(
     reason: Reason,
     entry: Entry,
 ) -> Result<(), Full> {
+    move_batch_to(s, t, sink, objects, to, Place::Top, reason, entry)
+}
+
+/// [`move_batch`] to a place in a library other than the top.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn move_batch_to(
+    s: &mut State,
+    t: &GameTable,
+    sink: &mut Sink,
+    objects: Bitboard,
+    to: Zone,
+    place: Place,
+    reason: Reason,
+    entry: Entry,
+) -> Result<(), Full> {
     layers::refresh(s, t);
     let mut moves: Fixed<(u8, Zone, Zone, Entry), 128> = Fixed::new();
     let mut returning = Bitboard::EMPTY;
@@ -333,7 +348,7 @@ pub(crate) fn move_batch(
         if dest == Zone::Battlefield && entry.pay_life {
             pay_life_to_enter(s, t, sink, slot, entry)?;
         }
-        zone::move_to_place(s, slot, dest, Place::Top)?;
+        zone::move_to_place(s, slot, dest, place)?;
         if dest == Zone::Battlefield {
             let o = s.object_mut(slot);
             o.flags.set(ObjectFlags::TAPPED, entry.tapped);

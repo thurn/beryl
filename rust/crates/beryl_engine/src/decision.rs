@@ -87,6 +87,9 @@ pub enum DecisionKind {
     /// A creature to tap for a crew cost, until the tapped creatures' power is enough
     /// (CR 702.122a).
     Crew,
+    /// One more object, as an [`Opt::Object`], or [`Opt::Done`]: a resolving spell or
+    /// ability's choice of up to a number of objects, one at a time.
+    ChooseUpTo,
 }
 
 /// The candidates of a decision. A `Choice(i)` names the `i`th object in ascending slot order,
@@ -181,6 +184,8 @@ pub enum Opt {
     Plan(u8),
     /// A player, as a target.
     Player(u8),
+    /// The object in this slot, among options that also offer [`Opt::Done`].
+    Object(u8),
 }
 
 /// How a game ended.

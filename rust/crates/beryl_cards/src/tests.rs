@@ -186,7 +186,9 @@ fn every_card_has_scenarios_and_they_pass() {
     assert_eq!(cards, table, "one SCENARIOS entry per card");
     let mut failures = Vec::new();
     for &(card, scenarios) in SCENARIOS {
-        assert!(!scenarios.is_empty(), "{card} has no scenario");
+        if scenarios.is_empty() {
+            failures.push(format!("{card} has no scenario"));
+        }
         for scenario in scenarios {
             if let Err(e) = beryl_scenario::run(&CARDS, scenario) {
                 failures.push(format!("{card}: {e}"));

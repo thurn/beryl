@@ -1,0 +1,102 @@
+//! Mana Tithe. {W} Instant. "Counter target spell unless its controller pays {1}."
+
+use beryl_engine::card::{
+    Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, TargetKind, TargetSpec, Types,
+};
+use beryl_engine::effect::EffectCtx;
+use beryl_engine::filter::Filter;
+use beryl_engine::{DecisionKind, Zone};
+use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+
+use crate::names;
+
+pub static CARD: CardDef = CardDef {
+    name: names::MANA_TITHE,
+    faces: &[Face {
+        cost: ManaCost::new(0, [1, 0, 0, 0, 0, 0]),
+        types: Types::INSTANT,
+        colors: Colors::WHITE,
+        abilities: &[Ability {
+            kind: AbilityKind::Spell,
+            targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any)],
+            may_pause: true,
+            body: counter_unless_pays_one,
+            ..Ability::NONE
+        }],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+/// [CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a): "[Do something] unless
+/// [a player does something else]" means "[A player may do something else]. If [that player
+/// doesn't], [do something]." A controller who can't pay is never asked.
+fn counter_unless_pays_one(ctx: &mut EffectCtx) -> Flow {
+    let Some(spell) = ctx.target_object(0) else {
+        return Ok(());
+    };
+    let Some(controller) = ctx.spell_controller(spell) else {
+        return Ok(());
+    };
+    if !ctx.unless_pays(controller, ManaCost::generic(1))? {
+        ctx.counter(spell, false);
+    }
+    Ok(())
+}
+
+/// P1 has a card to draw, so the game waits in their turn 2 once the stack is empty. Mana
+/// Crypt is the spell to counter: it costs nothing, so its controller's lands stay free
+/// to pay the tithe. Strip Mine's activation keeps P0's priority a decision.
+pub const SCENARIOS: &[Scenario] = &[
+    Scenario::new("Mana Tithe: the controller pays {1}")
+        .battlefield(P0, &[Permanent::new(names::STRIP_MINE)])
+        .hand(P0, &[names::MANA_CRYPT])
+        .battlefield(P1, &[Permanent::new(names::PLAINS)])
+        .hand(P1, &[names::MANA_TITHE])
+        .library(P1, &[names::ISLAND])
+        .actions(&[
+            Action::cast(P0, names::MANA_CRYPT),
+            Action::pass(P0),
+            Action::cast(P1, names::MANA_TITHE),
+            Action::pass(P0),
+            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+            Action::assert(Assertion::Count {
+                player: P0,
+                zone: Zone::Battlefield,
+                card: Some(names::MANA_CRYPT),
+                count: 1,
+            }),
+            Action::assert(Assertion::Tapped {
+                player: P0,
+                card: names::STRIP_MINE,
+                count: 1,
+            }),
+            Action::assert(Assertion::Count {
+                player: P1,
+                zone: Zone::Graveyard,
+                card: Some(names::MANA_TITHE),
+                count: 1,
+            }),
+        ]),
+    Scenario::new("Mana Tithe: a controller who can't pay isn't asked")
+        .hand(P0, &[names::MANA_CRYPT])
+        .battlefield(P1, &[Permanent::new(names::PLAINS)])
+        .hand(P1, &[names::MANA_TITHE])
+        .library(P1, &[names::ISLAND])
+        .actions(&[
+            Action::cast(P0, names::MANA_CRYPT),
+            Action::cast(P1, names::MANA_TITHE),
+            Action::assert(Assertion::Count {
+                player: P0,
+                zone: Zone::Graveyard,
+                card: Some(names::MANA_CRYPT),
+                count: 1,
+            }),
+            Action::assert(Assertion::Count {
+                player: P0,
+                zone: Zone::Battlefield,
+                card: None,
+                count: 0,
+            }),
+        ]),
+];
