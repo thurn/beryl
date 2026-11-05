@@ -1097,14 +1097,14 @@
 .phase-tracker-compact
   .phase-current:not(:first-child, :last-child)
   .phase-icon {
-  stroke: #b06a18;
-  stroke-width: 0.8;
+  stroke: #8a3208;
+  stroke-width: 0.9;
 }
 .phase-tracker-compact
   .phase-current:not(:first-child, :last-child)
   .phase-icon
   :is(path, circle, rect) {
-  fill: #ffe08a;
+  fill: #fff1a1;
 }
 .phase-tracker-compact .phase:nth-child(3).phase-current .phase-icon {
   scale: 1.1;
@@ -1143,13 +1143,15 @@
   box-shadow: 0 0 8px 2px rgb(240 150 40 / 50%);
 }
 /* The combat glyph stands on a low tab that lifts the rule around it. */
+/* Opaque in the table's local tone, so the rule breaks under the tab. */
 .phase-tracker-compact .phase .phase-icon path.phase-tab {
-  fill: rgb(150 140 126 / 22%);
-  stroke: none;
+  fill: #5f524b;
+  stroke: rgb(160 150 136 / 55%);
+  stroke-width: 1;
 }
 .phase-tracker-compact .phase.phase-current .phase-icon path.phase-tab {
-  fill: rgb(70 40 16 / 30%);
-  stroke: rgb(255 170 70 / 75%);
+  fill: #6a4a30;
+  stroke: rgb(255 170 70 / 80%);
   stroke-width: 1;
 }
 
