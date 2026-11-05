@@ -269,17 +269,19 @@ pub(crate) fn next_to_stack(s: &State) -> Option<(u8, Bitboard)> {
     Some((player, kept))
 }
 
-/// Triggers from interchangeable sources with the same ability and the same event lead to
-/// the same game whatever their order (§7.2).
+/// Triggers of the same ability from interchangeable sources, on the same event with
+/// interchangeable objects, lead to the same game whatever their order (§7.2).
 fn equivalent(s: &State, a: &PendingTrigger, b: &PendingTrigger) -> bool {
-    let same_source = a.source == b.source
-        || (a.source.slot != NONE
-            && b.source.slot != NONE
-            && crate::zone::signature(s, a.source.slot)
-                == crate::zone::signature(s, b.source.slot));
-    same_source
-        && (a.card, a.face, a.ability, a.controller, a.info)
-            == (b.card, b.face, b.ability, b.controller, b.info)
+    let interchangeable = |x: ObjectRef, y: ObjectRef| {
+        x == y
+            || (x.slot != NONE
+                && y.slot != NONE
+                && crate::zone::signature(s, x.slot) == crate::zone::signature(s, y.slot))
+    };
+    interchangeable(a.source, b.source)
+        && interchangeable(a.info.object, b.info.object)
+        && (a.card, a.face, a.ability, a.controller) == (b.card, b.face, b.ability, b.controller)
+        && (a.info.player, a.info.amount, a.info.lki) == (b.info.player, b.info.amount, b.info.lki)
 }
 
 /// Puts the waiting trigger at `index` on the stack

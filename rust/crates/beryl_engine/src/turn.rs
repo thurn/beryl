@@ -85,6 +85,7 @@ pub(crate) fn begin_step(
     s.turn.priority = s.turn.active;
     s.turn.passes = 0;
     let active = s.turn.active;
+    event::settle(s, t, sink, Event::StepBegins { step, active })?;
     match step {
         TurnStep::Untap => untap(s, t, sink)?,
         TurnStep::Draw => {
@@ -98,7 +99,6 @@ pub(crate) fn begin_step(
         TurnStep::Cleanup => cleanup(s),
         _ => {}
     }
-    event::settle(s, t, sink, Event::StepBegins { step, active })?;
     if step == TurnStep::Untap {
         // CR 502.4: "No player receives priority during the untap step".
         return end_step(s, t, sink);

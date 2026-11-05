@@ -606,10 +606,14 @@ pub(crate) fn remove_counters(
     )
 }
 
-/// Taps or untaps a permanent
-/// ([CR 701.26a](https://yawgatog.com/resources/magic-rules/#R70126a)): "To tap a permanent,
-/// turn it sideways from an upright position. To untap a permanent, rotate it back to the
-/// upright position from a sideways position."
+/// Taps or untaps a permanent.
+///
+/// [CR 701.26a](https://yawgatog.com/resources/magic-rules/#R70126a): "To tap a permanent,
+/// turn it sideways from an upright position. Only untapped permanents can be tapped."
+///
+/// [CR 701.26b](https://yawgatog.com/resources/magic-rules/#R70126b): "To untap a permanent,
+/// rotate it back to the upright position from a sideways position. Only tapped permanents
+/// can be untapped."
 pub(crate) fn set_tapped(
     s: &mut State,
     t: &GameTable,
@@ -661,7 +665,8 @@ pub(crate) fn create_tokens(
     how: TokenEntry,
 ) -> Result<Bitboard, Full> {
     let mut tokens = Bitboard::EMPTY;
-    let mut free = (TOKEN_SLOTS..=u8::MAX).filter(|&slot| s.object(slot).zone == Zone::Nowhere);
+    // Slot NONE is never used: it means "no object" in references.
+    let mut free = (TOKEN_SLOTS..NONE).filter(|&slot| s.object(slot).zone == Zone::Nowhere);
     for _ in 0..count {
         let slot = free.next().ok_or(Full)?;
         tokens.insert(slot);

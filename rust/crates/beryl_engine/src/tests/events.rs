@@ -1033,6 +1033,17 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     assert_eq!(d.granted[0].card, s.object(aura).card);
     let granted = &t.def(d.granted[0].card).front().abilities[usize::from(d.granted[0].ability)];
     assert_eq!(granted.kind, AbilityKind::Activated);
+    // A land loses its land types with its land type (CR 205.1a), and keeps the Vehicle.
+    let land = put(&t, &mut s, &mut x, p, "Test Land");
+    s.object_mut(aura).attached_to = land;
+    s.flags.derived_dirty = true;
+    crate::layers::refresh(&mut s, &t);
+    let subtypes = crate::card::Subtypes(s.derived(land).subtypes);
+    assert_eq!(subtypes.iter().collect::<Vec<_>>(), vec![Subtype::Vehicle]);
+    assert_eq!(types(&s, bear), Types::CREATURE, "no longer enchanted");
+    s.object_mut(aura).attached_to = bear;
+    s.flags.derived_dirty = true;
+    crate::layers::refresh(&mut s, &t);
     // Crewed: an artifact creature until end of turn, by a later timestamp.
     let r = s.object_ref(bear);
     with_ctx(&t, &mut s, &mut x, bear, |ctx| {

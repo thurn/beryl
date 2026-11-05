@@ -153,16 +153,23 @@ fn apply(derived: &mut [Derived], i: usize, source: u8, m: Modification) {
         // change an object's card type, subtype, and/or supertype."
         Modification::AddTypes(types) => derived[i].types |= types.0,
         Modification::RemoveTypes(types) => derived[i].types &= !types.0,
-        // CR 205.1b: an effect that makes an object an "artifact creature" or similar
-        // without saying it keeps its prior types makes it lose its other card types and the
-        // subtypes that go with them.
+        // CR 205.1a: "Some effects set an object's card type. In most such cases, the new
+        // card type(s) replaces any existing card types. ... If an object's card type is
+        // removed, the subtypes correlated with that card type will remain if they are also
+        // the subtypes of a card type the object currently has; otherwise, they are also
+        // removed".
         Modification::SetTypes(types) => {
             derived[i].types = types.0;
-            derived[i].subtypes = Subtypes::NONE.0;
+            let mut kept = Subtypes::NONE;
+            for subtype in Subtypes(derived[i].subtypes).iter() {
+                if types.intersects(subtype.card_type()) {
+                    kept = kept.with(subtype);
+                }
+            }
+            derived[i].subtypes = kept.0;
         }
         Modification::AddSubtype(subtype) => {
-            let s = subtype as u8;
-            derived[i].subtypes[usize::from(s >> 6)] |= 1 << (s & 63);
+            derived[i].subtypes = Subtypes(derived[i].subtypes).with(subtype).0;
         }
         // CR 613.1f: "Layer 6: Ability-adding effects, keyword counters, ability-removing
         // effects, and effects that say an object can't have an ability are applied."

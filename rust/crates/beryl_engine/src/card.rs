@@ -204,6 +204,29 @@ pub enum Subtype {
     Vehicle,
 }
 
+impl Subtype {
+    pub const ALL: [Subtype; 6] = [
+        Subtype::Plains,
+        Subtype::Island,
+        Subtype::Swamp,
+        Subtype::Mountain,
+        Subtype::Forest,
+        Subtype::Vehicle,
+    ];
+
+    /// The card type this subtype belongs to (CR 205.3).
+    pub const fn card_type(self) -> Types {
+        match self {
+            Subtype::Plains
+            | Subtype::Island
+            | Subtype::Swamp
+            | Subtype::Mountain
+            | Subtype::Forest => Types::LAND,
+            Subtype::Vehicle => Types::ARTIFACT,
+        }
+    }
+}
+
 /// A set of [`Subtype`]s, one bit each.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Subtypes(pub [u64; 2]);
@@ -225,6 +248,19 @@ impl Subtypes {
     pub fn contains(self, subtype: Subtype) -> bool {
         let s = subtype as u8;
         self.0[usize::from(s >> 6)] & (1 << (s & 63)) != 0
+    }
+
+    #[must_use]
+    pub fn with(self, subtype: Subtype) -> Subtypes {
+        let mut bits = self.0;
+        let s = subtype as u8;
+        bits[usize::from(s >> 6)] |= 1 << (s & 63);
+        Subtypes(bits)
+    }
+
+    /// The subtypes in the set.
+    pub fn iter(self) -> impl Iterator<Item = Subtype> {
+        Subtype::ALL.into_iter().filter(move |&s| self.contains(s))
     }
 }
 
@@ -473,7 +509,7 @@ pub enum Modification {
     /// Layer 4: "isn't a [type]".
     RemoveTypes(Types),
     /// Layer 4: "is a [types] and loses all other card types". Subtypes go with the card
-    /// types they belong to; the subtypes it keeps or gains are added separately.
+    /// types they belong to; subtypes it gains are added separately.
     SetTypes(Types),
     /// Layer 4: "is a [subtype]".
     AddSubtype(Subtype),

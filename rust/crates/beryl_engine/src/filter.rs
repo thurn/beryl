@@ -1,7 +1,7 @@
 //! `Filter`: the predicates targets and affected sets are written in (architecture §6.2).
 
 use crate::bitboard::Bitboard;
-use crate::card::{Subtype, Supertypes, Types};
+use crate::card::{Subtype, Subtypes, Supertypes, Types};
 use crate::state::{ObjectFlags, State, Zone, opponent};
 use crate::table::GameTable;
 
@@ -15,8 +15,8 @@ pub enum Whose {
 /// A predicate over objects. Evaluating one is a pass over a candidate set; the hot ones
 /// become ANDs over per-slot attribute bitboards as the cards that need them arrive.
 ///
-/// Characteristics are read from the card's face until the layers work provides derived
-/// ones for permanents.
+/// A permanent's characteristics and controller are its derived ones, after continuous
+/// effects (§9); elsewhere they are the face's.
 #[derive(Clone, Copy, Debug)]
 pub enum Filter {
     Any,
@@ -40,14 +40,21 @@ impl Filter {
     pub fn matches(&self, s: &State, t: &GameTable, slot: u8, you: u8) -> bool {
         let o = s.object(slot);
         let face = || &t.def(o.card).faces[usize::from(o.face)];
+        let derived = || (o.zone == Zone::Battlefield).then(|| s.derived(slot));
         match *self {
             Filter::Any => true,
-            Filter::Types(types) => face().types.intersects(types),
-            Filter::Supertypes(supertypes) => face().supertypes.intersects(supertypes),
-            Filter::Subtype(subtype) => face().subtypes.contains(subtype),
+            Filter::Types(types) => derived()
+                .map_or(face().types, |d| Types(d.types))
+                .intersects(types),
+            Filter::Supertypes(supertypes) => derived()
+                .map_or(face().supertypes, |d| Supertypes(d.supertypes))
+                .intersects(supertypes),
+            Filter::Subtype(subtype) => derived()
+                .map_or(face().subtypes, |d| Subtypes(d.subtypes))
+                .contains(subtype),
             Filter::Whose(whose) => {
                 let player = if matches!(o.zone, Zone::Battlefield | Zone::Stack) {
-                    o.controller
+                    s.controller(slot)
                 } else {
                     o.owner
                 };
