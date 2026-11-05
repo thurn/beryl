@@ -381,6 +381,72 @@ fn bounces_both_flying_blockers_for_lethal() {
     assert_eq!(outcome, Some(Outcome::Win(P0)));
 }
 
+/// No wheel that would deck us: from an empty hand against a full one Timetwister refuels,
+/// but with a library of one and three cards in the graveyard there are not seven to draw.
+#[test]
+fn no_wheel_without_seven_cards_to_draw() {
+    const THIN: Scenario = Scenario::new("thin library")
+        .at(9, P0, TurnStep::PrecombatMain)
+        .hand(P0, &[names::TIMETWISTER])
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(ISLAND),
+                Permanent::new(ISLAND),
+                Permanent::new(ISLAND),
+            ],
+        )
+        .library(P0, &[ISLAND])
+        .graveyard(P0, &[PLAINS, PLAINS, ISLAND])
+        .hand(P1, &[PLAINS, ISLAND, PLAINS, ISLAND, PLAINS])
+        .library(P1, LIBRARY);
+    let (t, mut s) = arrange(&THIN);
+    let (d, c) = expert_at(&t, &mut s, casts(""), |_, d| {
+        d.kind == DecisionKind::Priority
+    });
+    assert_ne!(cast_name(&t, &s, chosen(&d, c)), Some(names::TIMETWISTER));
+}
+
+/// Dead on board, the opponent's Teferi on the stack is the last chance to cast an instant:
+/// "Each opponent can cast spells only any time they could cast a sorcery." Aang's Iceberg
+/// goes in response.
+#[test]
+fn flash_removal_answers_teferi_before_it_locks_us_out() {
+    const LOCK: Scenario = Scenario::new("teferi lock")
+        .at(9, P1, TurnStep::PrecombatMain)
+        .hand(P1, &[names::TEFERI_TIME_RAVELER])
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(names::TUNDRA),
+                Permanent::new(PLAINS),
+                Permanent::new(ISLAND),
+                Permanent::new(names::SPHINX_OF_FALSE_CONCLUSIONS),
+                Permanent::new(names::ADELINE_RESPLENDENT_CATHAR),
+            ],
+        )
+        .library(P1, LIBRARY)
+        .life(P0, 6)
+        .hand(P0, &[names::AANGS_ICEBERG])
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(PLAINS),
+                Permanent::new(PLAINS),
+                Permanent::new(PLAINS),
+            ],
+        )
+        .library(P0, LIBRARY);
+    let (t, mut s) = arrange(&LOCK);
+    let (d, c) = expert_at(
+        &t,
+        &mut s,
+        casts(names::TEFERI_TIME_RAVELER),
+        facing_a_spell,
+    );
+    assert_eq!(cast_name(&t, &s, chosen(&d, c)), Some(names::AANGS_ICEBERG));
+}
+
 /// Expert against random, seats alternated. The CLI's 200-game tournament measures the gate
 /// (at least 90%); this pins a smaller seeded sample.
 #[test]
