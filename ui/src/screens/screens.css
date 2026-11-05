@@ -220,12 +220,15 @@
   border-radius: 9px;
   border: 1px solid color-mix(in srgb, var(--chip) 35%, #f6efe4);
   background: var(--chip);
+}
+.swatch:nth-child(-n + 2) .swatch-chip {
+  border: 1.5px solid #e4dccf;
   box-shadow:
     0 0 0 1px rgb(10 8 7 / 60%),
     0 3px 6px rgb(0 0 0 / 40%);
 }
 .swatch figcaption {
-  margin-top: -2px;
+  margin-top: -4px;
   -webkit-text-stroke: 0.4px currentColor;
   text-align: center;
   font-size: 17px;
@@ -330,8 +333,8 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 30px;
-  padding-bottom: 1px;
+  gap: 29px;
+  padding-bottom: 4px;
 }
 .metal-chip i {
   position: relative;
@@ -614,21 +617,23 @@
    gold, in stage pixels. */
 .brand {
   position: absolute;
-  left: 28px;
-  top: 10px;
+  z-index: 30;
+  font-family: var(--font-serif);
+  left: 27px;
+  top: 7.5px;
   display: flex;
   align-items: center;
   gap: 13px;
-  font-size: 18.5px;
+  font-size: 17.5px;
   line-height: 1;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.17em;
   text-transform: uppercase;
   color: #b9a283;
   -webkit-text-stroke: 0.35px currentColor;
 }
 .brand-crest {
   width: 25px;
-  height: 35px;
+  height: 40px;
   color: #b49970;
 }
 /* The settings gear at the top right: brushed grey metal. */
@@ -802,16 +807,17 @@
   top: 706px;
 }
 .turn-controls .priority-pill {
-  right: 48px;
+  right: 42px;
   top: 729px;
-  width: 263px;
-  height: 41px;
-  padding-left: 1.3em;
+  width: 269px;
+  height: 37.5px;
+  padding-left: 1.1em;
+  border-color: #6f6560;
   font-size: 20.5px;
 }
 .turn-action {
   right: 39px;
-  top: 762px;
+  top: 765px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -821,17 +827,21 @@
   top: 784px;
 }
 /* The turn button: deep amber in the middle, under a gold rim (battlefield.png's Next). */
+/* Its icon and label sit left of center (battlefield.png, combat.png). */
 .turn-action .button {
+  justify-content: flex-start;
+  gap: 0.5em;
   min-width: 218px;
-  height: 51px;
-  padding: 0 21px;
-  font-size: 31px;
+  height: 48px;
+  padding: 0 21px 0 1.3em;
+  font-size: 29.5px;
 }
 .turn-action .button-icon {
   width: 25px;
+  margin-right: 0;
 }
 .turn-action .button-primary:not(:disabled) {
-  border-color: #fde3a6 #f6c46a #fbd770;
+  border-color: #ffd36b #f0a03a #ffc95a;
   background: linear-gradient(
     180deg,
     #e28322,
@@ -844,33 +854,33 @@
     #f6a83c 100%
   );
   box-shadow:
+    inset 0 1px 2px rgb(255 240 190 / 80%),
+    inset 0 -1px 2px rgb(255 220 140 / 70%),
     0 0 0 1px rgb(120 60 14 / 85%),
-    0 0 7px 2px rgb(232 150 50 / 45%),
+    0 0 6px 2px rgb(255 170 60 / 55%),
     0 4px 8px rgb(0 0 0 / 35%);
 }
 /* A long label steps down a size so the button keeps its width (combat.png's Resolve Damage). */
 .turn-action .button-long {
   min-width: 249px;
+  padding-left: 1.55em;
   font-size: 24px;
 }
 .turn-action .button:disabled {
-  min-width: 247px;
-  height: 42px;
+  justify-content: center;
+  min-width: 243px;
+  height: 50px;
+  padding: 0 21px;
   font-weight: 700;
-  font-size: 29px;
+  font-size: 25px;
   color: #8a8480;
-  background: linear-gradient(
-    180deg,
-    rgb(56 50 46 / 85%),
-    rgb(58 52 48 / 85%) 50%,
-    rgb(64 58 54 / 85%)
-  );
+  background: linear-gradient(180deg, #38322e, #3a3430 50%, #403a36);
 }
 .turn-caption {
-  margin-top: 6px;
-  font-size: 17.5px;
+  margin-top: 8.5px;
+  font-size: 18.2px;
   line-height: 22px;
-  color: #e9e2d8;
+  color: #cfc6ba;
   -webkit-text-stroke: 0.3px currentColor;
 }
 

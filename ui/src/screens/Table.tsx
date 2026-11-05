@@ -300,10 +300,6 @@ export function TableScene({
       ))}
       <Lands lands={you.lands} />
 
-      <div className="brand">
-        <Crest className="brand-crest" />
-        <span>Project Beryl</span>
-      </div>
       <div className="hud" style={{ left: 18, top: 62 }}>
         <PlayerBadge name="Opponent" />
       </div>
@@ -352,7 +348,7 @@ export function TableScene({
         aria-label="Settings"
         role="img"
       >
-        <path d="M10.3 2h3.4l.5 2.6 1.9.8 2.2-1.5 2.4 2.4-1.5 2.2.8 1.9 2.6.5v3.4l-2.6.5-.8 1.9 1.5 2.2-2.4 2.4-2.2-1.5-1.9.8-.5 2.6h-3.4l-.5-2.6-1.9-.8-2.2 1.5-2.4-2.4 1.5-2.2-.8-1.9L2 13.7v-3.4l2.6-.5.8-1.9-1.5-2.2 2.4-2.4 2.2 1.5 1.9-.8zM12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z" />
+        <path d="M19.83 9.92 L22.45 10.21 L22.45 13.79 L19.83 14.08 L19.01 16.06 L20.66 18.12 L18.12 20.66 L16.06 19.01 L14.08 19.83 L13.79 22.45 L10.21 22.45 L9.92 19.83 L7.94 19.01 L5.88 20.66 L3.34 18.12 L4.99 16.06 L4.17 14.08 L1.55 13.79 L1.55 10.21 L4.17 9.92 L4.99 7.94 L3.34 5.88 L5.88 3.34 L7.94 4.99 L9.92 4.17 L10.21 1.55 L13.79 1.55 L14.08 4.17 L16.06 4.99 L18.12 3.34 L20.66 5.88 L19.01 7.94 Z M17.4 12 A5.4 5.4 0 1 0 6.6 12 A5.4 5.4 0 1 0 17.4 12 Z" />
       </svg>
 
       {board.banner && (
@@ -428,6 +424,11 @@ export function TableScreen({
     <Stage>
       <TableScene board={board} dimmed={overlay !== undefined} />
       {overlay === "scry" && <ScryOverlay />}
+      {/* Above any overlay: scry.png keeps the brand crisp over the dimmed table. */}
+      <div className="brand">
+        <Crest className="brand-crest" />
+        <span>Project Beryl</span>
+      </div>
     </Stage>
   );
 }

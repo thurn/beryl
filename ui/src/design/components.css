@@ -763,7 +763,7 @@
   text-shadow:
     1px 1px 0 rgb(90 30 6 / 85%),
     1px 2px 2px rgb(60 18 4 / 60%);
-  border-color: #ffe7a8 #ffd27a #fff0c0;
+  border-color: #fff1c2 #ffd77e #fff4cc;
   background:
     radial-gradient(
       ellipse 22% 60% at 18% 62%,
@@ -777,19 +777,20 @@
     ),
     linear-gradient(
       180deg,
-      #fb9a2a,
-      #fd8420 10%,
-      #fd7319 26%,
-      #fc650e 46%,
-      #fd6c11 56%,
-      #fe8420 70%,
-      #fea038 84%,
-      #ffc252 100%
+      #fc8a1e,
+      #fd7114 14%,
+      #fc620c 40%,
+      #fc5f0b 50%,
+      #fd6810 60%,
+      #fe7c18 72%,
+      #fe9a30 86%,
+      #ffbb4a 100%
     );
   box-shadow:
+    inset 0 0 3px rgb(255 226 140 / 85%),
     0 0 0 1px rgb(178 40 4 / 85%),
-    0 0 8px 3px rgb(250 104 20 / 75%),
-    0 0 20px 6px rgb(220 76 16 / 40%);
+    0 0 10px 4px rgb(255 108 20 / 72%),
+    0 0 24px 8px rgb(226 78 16 / 38%);
 }
 .button-secondary {
   color: #fffdfa;
@@ -848,6 +849,9 @@
   line-height: 1;
   white-space: nowrap;
   color: #f7f4ef;
+}
+.priority-pill span {
+  -webkit-text-stroke: 0.25px currentColor;
 }
 .sparkle {
   flex: none;
@@ -966,16 +970,23 @@
   width: 34.5px;
   height: 34.5px;
   fill: #1b1713;
-  stroke: #b8ab98;
-  stroke-width: 1.3;
+  stroke: #a8946f;
+  stroke-width: 1.1;
   filter: drop-shadow(0 2px 2px rgb(0 0 0 / 45%));
 }
 .phase-tracker-compact .phase-current .phase-icon {
-  fill: #ffd76a;
-  stroke: #d27c1c;
-  stroke-width: 1.4;
-  filter: drop-shadow(0 0 2px rgb(255 200 90))
-    drop-shadow(0 0 6px rgb(245 140 30 / 85%));
+  stroke: #c9771c;
+  stroke-width: 1.2;
+  filter: drop-shadow(0 0 1.5px rgb(255 200 90))
+    drop-shadow(0 0 3.5px rgb(245 140 30 / 80%));
+}
+/* The current diamond is smaller than the others: a glowing core in a gold rim. */
+.phase-tracker-compact
+  .phase:is(:first-child, :last-child).phase-current
+  .phase-icon {
+  transform: scale(0.78);
+  stroke: #f2b44a;
+  stroke-width: 1.8;
 }
 .phase-tracker-compact .phase-current .phase-icon path {
   fill: url(#phase-glow);
@@ -983,25 +994,23 @@
 .phase-tracker-compact .phase-current::after {
   content: "";
   position: absolute;
-  left: -10px;
-  right: -10px;
+  left: -6px;
+  right: -2px;
   bottom: -4px;
   height: 2px;
   z-index: 1;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgb(255 200 100 / 90%) 30%,
-    rgb(255 236 170) 50%,
-    rgb(255 200 100 / 90%) 70%,
-    transparent
-  );
-  box-shadow: 0 0 6px 1px rgb(240 150 40 / 70%);
-}
-.phase-tracker-compact .phase:nth-child(3) .phase-icon {
-  width: 41px;
-  height: 41px;
-  margin: -3px;
+  background:
+    radial-gradient(closest-side, rgb(255 250 220), transparent) 50% 50% / 8px
+      4px no-repeat,
+    linear-gradient(
+      90deg,
+      transparent,
+      rgb(255 200 100 / 90%) 30%,
+      rgb(255 236 170) 50%,
+      rgb(255 200 100 / 90%) 70%,
+      transparent
+    );
+  box-shadow: 0 0 5px 1px rgb(240 150 40 / 65%);
 }
 /* The combat glyph stands on a low plinth that lifts the rule around it. */
 .phase-tracker-compact .phase:nth-child(3)::before {
@@ -1193,10 +1202,10 @@
   background: linear-gradient(
     90deg,
     transparent,
-    rgb(150 147 144 / 75%) 30%,
-    rgb(215 213 210 / 85%) 55%,
-    rgb(150 147 144 / 75%) 80%,
-    transparent
+    rgb(150 147 144 / 70%) 28%,
+    #fff 52%,
+    rgb(150 147 144 / 70%) 72%,
+    transparent 90%
   );
 }
 .overlay-title {
@@ -1221,6 +1230,8 @@
   font-family: var(--font-sans);
   font-size: 22.8px;
   line-height: 1.2;
+  letter-spacing: 0.012em;
+  -webkit-text-stroke: 0.2px currentColor;
   color: #f4f1ec;
   text-shadow: 0 1px 3px rgb(0 0 0 / 70%);
 }

@@ -32,8 +32,8 @@ export function Button({
 
 export function FastForwardIcon() {
   return (
-    <svg viewBox="0 0 24 14" aria-hidden>
-      <path fill="currentColor" d="M1 1 L11 7 L1 13 Z M12 1 L22 7 L12 13 Z" />
+    <svg viewBox="0 0 24 16" aria-hidden>
+      <path fill="currentColor" d="M1 1 L11 8 L1 15 Z M12 1 L22 8 L12 15 Z" />
     </svg>
   );
 }
@@ -62,7 +62,7 @@ export type Phase = "beginning" | "main1" | "combat" | "main2" | "end";
 
 const DIAMOND = <path d="M12 5 L19 12 L12 19 L5 12 Z" />;
 const CARD = (
-  <path d="M5.5 3.2 Q12 2.6 18.6 3.4 Q19.2 12 18.8 20.6 Q12 21.2 5.7 20.8 Q5 12 5.5 3.2 Z" />
+  <path d="M3.4 2 Q12 1.5 20.6 2.2 Q21.2 12 20.8 22 Q12 22.5 3.6 22.1 Q2.9 12 3.4 2 Z" />
 );
 
 /** Each phase's icon (the full tracker, ui_system.png section 02: cream outlines over dark or
@@ -211,8 +211,9 @@ export function PhaseTracker({
             {compact && phase === current && (
               <radialGradient id="phase-glow">
                 <stop offset="0" stopColor="#fffbe0" />
-                <stop offset="0.55" stopColor="#ffd77a" />
-                <stop offset="1" stopColor="#eea33c" />
+                <stop offset="0.45" stopColor="#ffe9a0" />
+                <stop offset="0.62" stopColor="#ffc95e" />
+                <stop offset="1" stopColor="#e9a23e" />
               </radialGradient>
             )}
             {compact ? glyph : icon}
