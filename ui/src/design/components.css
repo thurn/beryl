@@ -603,8 +603,8 @@
   border-bottom-color: #3a332e;
   background: #1a1715;
 }
-/* A graveyard's cards lie face up: the edges beneath show their lighter rims. */
-.graveyard .pile-edge {
+/* A graveyard's or exile's cards lie face up: the edges beneath show their lighter rims. */
+.pile-face-up .pile-edge {
   border-color: #4a443f;
   border-bottom-color: #615a53;
   background: #141210;

@@ -196,6 +196,9 @@ function CardElement({
   // inside its element, which stays turned in the fan.
   const raise = useRaise(lifted ? place.rotate : undefined, reduce);
   const drag = useRef<{ start: Point; from: Point; moved: boolean }>(undefined);
+  // A card in a library is unseen, and one on a graveyard or exile pile is the pile's: the
+  // pile's button opens it (Piles.tsx). Neither is pointed at alone.
+  const untouchable = place.look === "hidden" || place.look === "pile";
 
   const stagePoint = (e: ReactPointerEvent) => {
     const stage = (e.currentTarget as HTMLElement).closest(".stage");
@@ -280,7 +283,7 @@ function CardElement({
         zIndex: dragging ? 1000 : lifted ? RAISED_Z : place.z,
       }}
       exit={reduce ? undefined : { opacity: 0, transition: { duration: 0.3 } }}
-      onPointerDown={place.look === "hidden" ? undefined : onPointerDown}
+      onPointerDown={untouchable ? undefined : onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={() => {
@@ -289,7 +292,7 @@ function CardElement({
         setHeld(undefined);
       }}
       onPointerEnter={() =>
-        !drag.current && place.look !== "hidden" && layer.onHover(object.slot)
+        !drag.current && !untouchable && layer.onHover(object.slot)
       }
       onPointerLeave={() => !drag.current && layer.onHover(undefined)}
     >

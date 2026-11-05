@@ -428,7 +428,7 @@ export function Graveyard({
       depth={depth}
       width={width}
       label={`Graveyard, ${cards.length} cards`}
-      className="graveyard"
+      className="pile-face-up"
     >
       {top ? (
         <Card card={top} width={width} />
@@ -439,10 +439,10 @@ export function Graveyard({
   );
 }
 
-/** The edges beneath the top card of a graveyard of `count` cards, for a top card drawn by
- * someone else: the game screen draws every card itself, so it can move. The top card's place
- * is `-depth.x` pixels in from the left. */
-export function GraveyardEdges({
+/** The edges beneath the top card of a face-up pile of `count` cards, a graveyard or exile,
+ * for a top card drawn by someone else: the game screen draws every card itself, so it can
+ * move. The top card's place is `-depth.x` pixels in from the left. */
+export function FaceUpEdges({
   count,
   width,
   depth = GRAVEYARD_DEPTH,
@@ -456,8 +456,8 @@ export function GraveyardEdges({
       count={Math.max(0, count - 1) * 3}
       depth={depth}
       width={width}
-      label={`Graveyard, ${count} cards`}
-      className="graveyard"
+      label={`${count} cards`}
+      className="pile-face-up"
     >
       <div style={{ width, height: width / ASPECT.full }} />
     </Pile>

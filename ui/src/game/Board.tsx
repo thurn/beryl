@@ -6,7 +6,6 @@
 // step banner; spells and abilities large at the right, a gold line from an ability's source
 // and cyan lines to targets.
 import {
-  Fragment,
   useEffect,
   useMemo,
   useState,
@@ -19,7 +18,7 @@ import {
   useMotionValue,
   useReducedMotion,
 } from "motion/react";
-import { Card, type Highlight } from "../components/Card";
+import type { Highlight } from "../components/Card";
 import {
   Button,
   PhaseTracker,
@@ -27,13 +26,12 @@ import {
   TurnButton,
 } from "../components/Controls";
 import {
-  GraveyardEdges,
+  FaceUpEdges,
   Library,
   LifeOrb,
   PlayerBadge,
 } from "../components/Player";
 import { Arrows, StackItem, type ArrowSpec } from "../components/Stack";
-import { cardEntry, useCardArt } from "../cards";
 import type {
   CandidateIndex,
   DecisionView,
@@ -68,7 +66,7 @@ import {
   emptyDraft,
   type Draft,
 } from "./combat";
-import { abilityText, useAbilityFace, useFace } from "./faces";
+import { abilityText, BLANK, useAbilityFace } from "./faces";
 import {
   asksCastStep,
   castActs,
@@ -89,8 +87,8 @@ import {
   PILES,
   STACK_Z,
   stackPlace,
-  type PileLook,
-  type Placement,
+  zonePiles,
+  type ZonePile,
 } from "./layout";
 import type { LogEntry } from "./log";
 import {
@@ -99,6 +97,7 @@ import {
   GameLog,
   opponentActivity,
 } from "./Narration";
+import { Inspect, Lying, pileMark, PileButton, ZoneViewer } from "./Piles";
 import { Brand } from "./Stage";
 
 export interface BoardProps {
@@ -160,6 +159,8 @@ export function Board({
   // The card being dragged.
   const [lifted, setLifted] = useState<number>();
   const [settings, setSettings] = useState(false);
+  // The graveyard or exile pile open in the zone viewer, which stays open as views go by.
+  const [viewing, setViewing] = useState<Pick<ZonePile, "side" | "zone">>();
   const can = useMemo(() => interactions(view), [view]);
   // Under a screen over the table (the opening hand, a choice, the game's end), the table only
   // shows.
@@ -195,6 +196,17 @@ export function Board({
   const placements = useMemo(
     () => layout(shown, asking, dimmed),
     [shown, asking, dimmed],
+  );
+  // The hovered card, unless it has since gone where it is not shown alone.
+  const hoveredPlace =
+    hovered === undefined ? undefined : placements.get(hovered);
+  const inspected =
+    hoveredPlace?.look === "hidden" || hoveredPlace?.look === "pile"
+      ? undefined
+      : hoveredPlace;
+  const piles = useMemo(() => zonePiles(shown), [shown]);
+  const viewed = piles.find(
+    (p) => p.side === viewing?.side && p.zone === viewing.zone,
   );
 
   // A new view closes whatever was open on the old one, and starts any declaration afresh.
@@ -487,33 +499,30 @@ export function Board({
       >
         <div className="far-shade" />
         {(["opponent", "you"] as const).map((side) => {
-          const { library, graveyard } = view.players[side];
-          const libraryPile = pileLook(PILES[side].library, library.length);
-          const graveyardPile = pileLook(
-            PILES[side].graveyard,
-            graveyard.length,
-          );
+          const { library } = view.players[side];
+          const pile = pileLook(side, PILES[side].library, library.length);
           return (
-            <Fragment key={side}>
-              <Lying look={libraryPile}>
-                <Library
-                  count={library.length}
-                  width={libraryPile.width}
-                  depth={libraryPile.depth}
-                />
-              </Lying>
-              {graveyard.length > 1 && (
-                <Lying look={graveyardPile}>
-                  <GraveyardEdges
-                    count={graveyard.length}
-                    width={graveyardPile.width}
-                    depth={graveyardPile.depth}
-                  />
-                </Lying>
-              )}
-            </Fragment>
+            <Lying key={side} look={pile}>
+              <Library
+                count={library.length}
+                width={pile.width}
+                depth={pile.depth}
+              />
+            </Lying>
           );
         })}
+        {piles.map(
+          ({ side, zone, cards, look }) =>
+            cards.length > 1 && (
+              <Lying key={`${side}-${zone}`} look={look}>
+                <FaceUpEdges
+                  count={cards.length}
+                  width={look.width}
+                  depth={look.depth}
+                />
+              </Lying>
+            ),
+        )}
 
         <div className="hud" style={{ left: 18, top: 62 }}>
           <PlayerBadge
@@ -521,7 +530,7 @@ export function Board({
             activity={opponentActivity(view, waiting)}
           />
         </div>
-        <div className="hud" style={{ left: 18, top: 814 }}>
+        <div className="hud" style={{ left: 18, top: 704 }}>
           <PlayerBadge name="You" />
         </div>
         <Life
@@ -573,6 +582,22 @@ export function Board({
           onHover={setHovered}
           onLift={setLifted}
         />
+
+        {/* Over the cards on them: a pile is opened, never pointed at card by card. */}
+        {piles.map(
+          (pile) =>
+            pile.cards.length > 0 && (
+              <PileButton
+                key={`${pile.side}-${pile.zone}`}
+                pile={pile}
+                mark={pileMark(pile, states)}
+                onOpen={() => {
+                  setMenu(undefined);
+                  setViewing({ side: pile.side, zone: pile.zone });
+                }}
+              />
+            ),
+        )}
 
         <div className="board-arrows">
           <Arrows arrows={arrows} follow />
@@ -647,10 +672,24 @@ export function Board({
           />
         )}
 
-        {hovered !== undefined && !menu && !castingNow && !dimmed && (
+        {inspected && !menu && !castingNow && !dimmed && (
           <Inspect
-            object={objects.get(hovered)}
-            place={placements.get(hovered)}
+            object={objects.get(inspected.slot)}
+            // Beside the table on the side away from the card.
+            left={inspected.x < 800 ? 1600 - 330 - 24 : 24}
+          />
+        )}
+
+        {viewed && !dimmed && (
+          <ZoneViewer
+            pile={viewed}
+            states={states}
+            offers={(slot) => deciding && can.bySlot.has(slot)}
+            onPick={(slot) => {
+              setViewing(undefined);
+              onClick(slot, { x: viewed.look.x, y: viewed.look.y });
+            }}
+            onClose={() => setViewing(undefined)}
           />
         )}
 
@@ -690,24 +729,6 @@ export function Board({
           (scry.png). */}
       <Brand />
     </>
-  );
-}
-
-/** A pile lying on the table as `look` says: its top card's top-left corner at the look's
- * corner, the edges beneath on whichever side they show. */
-function Lying({ look, children }: { look: PileLook; children: ReactNode }) {
-  return (
-    <div
-      className="hud"
-      style={{
-        left: look.x - Math.max(0, -look.depth.x),
-        top: look.y,
-        transformOrigin: "0 0",
-        transform: `skewX(${look.skew}deg)`,
-      }}
-    >
-      {children}
-    </div>
   );
 }
 
@@ -1038,25 +1059,6 @@ function Finish({
   );
 }
 
-/** An object with nothing on it, for an ability whose source has left its zone. */
-const BLANK: ObjectView = {
-  slot: 0,
-  zone: "stack",
-  owner: "you",
-  controller: "you",
-  name: null,
-  token: false,
-  tapped: false,
-  summoningSick: false,
-  damage: 0,
-  counters: [],
-  types: [],
-  pt: null,
-  attachedTo: null,
-  exiledBy: null,
-  combat: null,
-};
-
 /** A decision other than priority: what it asks, with every candidate as a button, so each
  * pick on the board has a click fallback here too. */
 function Prompt({
@@ -1151,31 +1153,4 @@ function menuLabel(act: Act, name?: string): ReactNode {
     return label.slice(name.length + 2);
   }
   return label;
-}
-
-/** The hovered card's full Scryfall scan, which carries the artist credit, beside the table on
- * the side away from the card; outside the app, its frame stands in for the scan. */
-function Inspect({
-  object,
-  place,
-}: {
-  object?: ObjectView;
-  place?: Placement;
-}) {
-  const name = object?.name;
-  const scan = useCardArt(name ?? "", undefined, "normal");
-  const face = useFace(object ?? BLANK);
-  if (!object || !name || !place || place.look === "hidden") return null;
-  const entry = cardEntry(name);
-  const left = place.x < 800 ? 1600 - 330 - 24 : 24;
-  return (
-    <div className="inspect" style={{ left }} aria-label={`${name}, inspected`}>
-      {scan?.src ? (
-        <img className="inspect-scan" src={scan.src} alt={name} />
-      ) : (
-        <Card card={face} width={330} />
-      )}
-      {entry && <p className="inspect-artist">Illustrated by {entry.artist}</p>}
-    </div>
-  );
 }

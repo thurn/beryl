@@ -71,8 +71,8 @@ export type Look =
   | "land" // a battlefield frame in a land pile
   | "beneath" // a battlefield frame tucked beneath the permanent that exiled it
   | "stack" // a full frame on the stack
-  | "pile" // a full frame on a graveyard
-  | "hidden"; // nothing drawn: libraries and exile
+  | "pile" // a full frame on a graveyard or exile pile, which the pile's button covers
+  | "hidden"; // nothing drawn: libraries
 
 /** One card on the stage: its element's top-left corner at (x, y), then scaled, turned and
  * sheared about that corner, in that order (Motion's transform order). */
@@ -127,20 +127,25 @@ const STACK_MARGIN = 25;
 /** How the table is laid out: lines cross it in combat and while something is on the stack. */
 type Mode = keyof typeof PERMANENT_GAP;
 
-/** Where each side's library and graveyard lie: their top cards' top-left corners. */
+/** Where each side's library, graveyard and exile lie: their top cards' top-left corners, and
+ * how wide a top card is before its depth shrinks it. The opponent's lie at the far right; yours
+ * lie side by side in the near left corner, under your badge and left of the hand's widest fan,
+ * so nothing covers them. */
 export const PILES = {
   opponent: {
+    width: 104,
     library: { x: 1174, y: 13 },
     graveyard: { x: 1327, y: 40 },
+    exile: { x: 1432, y: 40 },
   },
   you: {
-    library: { x: 168, y: 731 },
-    graveyard: { x: 300, y: 770 },
+    width: 80,
+    library: { x: 18, y: 772 },
+    graveyard: { x: 126, y: 772 },
+    exile: { x: 226, y: 772 },
   },
 };
 
-/** A pile's top card at full size, before its depth shrinks it. */
-const PILE_WIDTH = 104;
 /** Where a pile's upright sides meet, below the stage. Seen from above the near edge, the cards
  * beneath a pile's top card show on its side toward this point, and the farther the pile lies
  * from it the more of its side shows: the camera looks at the far table more nearly level. */
@@ -161,13 +166,14 @@ export interface PileLook {
   depth: { x: number; y: number };
 }
 
-/** How a pile of `count` cards with its top card's top-left corner `at` looks, from where it
- * lies alone: one rule for both sides' libraries and graveyards. */
+/** How one of `side`'s piles of `count` cards looks, its top card's top-left corner at `at`,
+ * from where it lies alone: one rule for every library, graveyard and exile. */
 export function pileLook(
+  side: Side,
   at: { x: number; y: number },
   count: number,
 ): PileLook {
-  const width = PILE_WIDTH * depthScale(at.y);
+  const width = PILES[side].width * depthScale(at.y);
   const center = at.x + width / 2;
   const rise = Math.max(0, count - 1) * CARD_RISE;
   return {
@@ -567,12 +573,48 @@ function battlefieldPlacements(
   return out;
 }
 
-/** A full frame drawn as a pile's top card, `shrink` times smaller. */
-function onPile(look: PileLook, shrink = 1) {
+/** A pile of one player's cards lying face up, which opens to show them all: their graveyard,
+ * or what they own in exile that no permanent holds beneath it (those lie under it). */
+export interface ZonePile {
+  side: Side;
+  zone: "graveyard" | "exile";
+  /** Bottom first: the last lies on top. */
+  cards: ObjectView[];
+  look: PileLook;
+}
+
+/** Each side's graveyard and exile piles. */
+export function zonePiles(view: PlayerView): ZonePile[] {
+  const bySlot = new Map(view.objects.map((o) => [o.slot, o]));
+  const holding = new Set(view.battlefield);
+  return (["opponent", "you"] as const).flatMap((side) => {
+    const graveyard = view.players[side].graveyard.flatMap(
+      (slot) => bySlot.get(slot) ?? [],
+    );
+    const exile = view.objects.filter(
+      (o) =>
+        o.owner === side &&
+        o.zone === "exile" &&
+        !(o.exiledBy !== null && holding.has(o.exiledBy)),
+    );
+    return [
+      { zone: "graveyard" as const, cards: graveyard },
+      { zone: "exile" as const, cards: exile },
+    ].map(({ zone, cards }) => ({
+      side,
+      zone,
+      cards,
+      look: pileLook(side, PILES[side][zone], cards.length),
+    }));
+  });
+}
+
+/** A full frame drawn as a pile's top card. */
+function onPile(look: PileLook) {
   return {
     x: look.x,
     y: look.y,
-    scale: (look.width / FULL_WIDTH) * shrink,
+    scale: look.width / FULL_WIDTH,
     rotate: 0,
     skew: look.skew,
   };
@@ -617,15 +659,10 @@ export function layout(
     );
   const yours = field("you", field("opponent"));
   out.push(...yours, ...field("opponent", yours));
-  const placedBeneath = new Set(
-    out.filter((p) => p.look === "beneath").map((p) => p.slot),
-  );
   for (const side of ["opponent", "you"] as const) {
     const player = view.players[side];
-    const library = pileLook(PILES[side].library, player.library.length);
-    const graveyard = pileLook(PILES[side].graveyard, player.graveyard.length);
-    // Library cards wait, unseen, on their library; exiled cards not beneath a permanent fade
-    // out over the graveyard.
+    const library = pileLook(side, PILES[side].library, player.library.length);
+    // Library cards wait, unseen, on their library.
     for (const o of owned(side, "library")) {
       out.push({
         slot: o.slot,
@@ -638,34 +675,20 @@ export function layout(
         ...onPile(library),
       });
     }
-    player.graveyard.forEach((slot, i) => {
-      const o = bySlot.get(slot);
-      if (!o) return;
+  }
+  for (const pile of zonePiles(view)) {
+    pile.cards.forEach((o, i) => {
       out.push({
-        slot,
+        slot: o.slot,
         zone: o.zone,
         look: "pile",
         width: FULL_WIDTH,
         span: FULL_WIDTH,
         opacity: 1,
         z: 20 + i,
-        ...onPile(graveyard),
+        ...onPile(pile.look),
       });
     });
-    for (const o of owned(side, "exile")) {
-      if (placedBeneath.has(o.slot)) continue;
-      out.push({
-        slot: o.slot,
-        zone: o.zone,
-        look: "hidden",
-        width: FULL_WIDTH,
-        span: FULL_WIDTH,
-        opacity: 0,
-        z: 1,
-        ...onPile(graveyard, 0.6),
-        y: graveyard.y - 40,
-      });
-    }
   }
   view.stack.forEach((item, i) => {
     if (item.kind !== "spell") return;

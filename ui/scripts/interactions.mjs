@@ -1432,6 +1432,113 @@ await check(
     { fixture: "choice-scry", at: scry.views.length, ready: tray(scryNext) },
 );
 
+// Late in the scry fixture both players have graveyards and exiled cards, and the human holds
+// a hand wide enough to fan out as far as it goes.
+const pilesAt = scry.views.findLastIndex(
+    (v) => v.status.decision?.kind === "priority",
+);
+const pilesView = scry.views[pilesAt];
+const pile = (side, zone) => `[data-pile="${zone}"][data-side="${side}"]`;
+const pileRun = {
+    fixture: "choice-scry",
+    at: pilesAt,
+    ready: pile("you", "graveyard"),
+};
+const overlaps = (a, b) =>
+    a.x < b.x + b.width &&
+    b.x < a.x + a.width &&
+    a.y < b.y + b.height &&
+    b.y < a.y + a.height;
+
+for (const viewport of [
+    { width: 1600, height: 900 },
+    { width: 1280, height: 800 },
+]) {
+    await check(
+        `your graveyard and exile lie clear of the hand at ${viewport.width}`,
+        async (page) => {
+            await page.clock.runFor(2000);
+            const hand = await page.locator(".card-el-hand").all();
+            assert.ok(hand.length >= 6, "the hand fans out as far as it goes");
+            for (const zone of ["graveyard", "exile"]) {
+                const box = await page.locator(pile("you", zone)).boundingBox();
+                for (const card of hand) {
+                    const name = await card.getAttribute("data-card");
+                    assert.ok(
+                        !overlaps(box, await card.boundingBox()),
+                        `${name} covers your ${zone}`,
+                    );
+                }
+            }
+        },
+        { ...pileRun, viewport },
+    );
+}
+
+/** The names of the cards a pile in the piles' view holds. */
+function pileNames(side, zone) {
+    const slots =
+        zone === "graveyard"
+            ? pilesView.players[side].graveyard
+            : pilesView.objects
+                  .filter(
+                      (o) =>
+                          o.owner === side &&
+                          o.zone === "exile" &&
+                          !pilesView.battlefield.includes(o.exiledBy),
+                  )
+                  .map((o) => o.slot);
+    return slots.map(
+        (slot) => pilesView.objects.find((o) => o.slot === slot).name,
+    );
+}
+
+await check(
+    "a pile opens a viewer listing each of its cards, which closes",
+    async (page) => {
+        await page.clock.runFor(2000);
+        // A pile is not pointed at card by card: hovering it shows no card whole.
+        await page.hover(pile("you", "graveyard"));
+        await page.clock.runFor(500);
+        assert.equal(await page.$(".inspect"), null, "a pile card is hovered");
+        const close = [
+            (p) => p.keyboard.press("Escape"),
+            (p) => p.getByRole("button", { name: "Close" }).click(),
+            (p) => p.mouse.click(20, 450),
+        ];
+        const piles = [
+            ["you", "graveyard"],
+            ["opponent", "graveyard"],
+            ["opponent", "exile"],
+        ];
+        for (const [i, [side, zone]] of piles.entries()) {
+            const names = pileNames(side, zone);
+            assert.ok(names.length > 0, `the ${side}'s ${zone} has cards`);
+            await page.click(pile(side, zone));
+            const viewer = `.zone-viewer${pile(side, zone)}`;
+            await page.waitForSelector(viewer);
+            const listed = await page.$$eval(
+                `${viewer} [data-viewer-slot]`,
+                (cards) => cards.map((c) => c.dataset.card),
+            );
+            assert.deepEqual(
+                [...listed].sort(),
+                [...names].sort(),
+                `the ${side}'s ${zone} lists each of its cards`,
+            );
+            // Each card shows whole on hover.
+            await page.hover(`${viewer} [data-card="${listed[0]}"]`);
+            await page
+                .getByLabel(`${listed[0]}, inspected`)
+                .waitFor({ state: "visible" });
+            await close[i](page);
+            await page.waitForSelector(viewer, { state: "detached" });
+        }
+        assert.deepEqual(await chosen(page), [], "browsing answers nothing");
+    },
+    pileRun,
+);
+
 const jace = await lastDecision("choice-jace");
 const [first, second] = [...jace.bySlot.keys()];
 await check(

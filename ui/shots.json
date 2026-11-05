@@ -144,6 +144,32 @@
       "height": 900
     },
     {
+      "name": "game-piles",
+      "route": "/?fixture=choice-scry&at=520#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-piles-1280",
+      "route": "/?fixture=choice-scry&at=520#/game",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "name": "game-graveyard-viewer",
+      "route": "/?fixture=choice-scry&at=520#/game",
+      "width": 1600,
+      "height": 900,
+      "click": "[data-pile=graveyard][data-side=you]"
+    },
+    {
+      "name": "game-exile-viewer",
+      "route": "/?fixture=choice-scry&at=520#/game",
+      "width": 1600,
+      "height": 900,
+      "click": "[data-pile=exile][data-side=opponent]"
+    },
+    {
       "name": "game-target",
       "route": "/?fixture=greedy-turn-9#/game",
       "width": 1600,

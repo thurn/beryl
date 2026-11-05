@@ -42,6 +42,25 @@ export const unknownFace = (name: string): FrameFace => ({
   colors: [],
 });
 
+/** An object with nothing on it, for an ability whose source has left its zone. */
+export const BLANK: ObjectView = {
+  slot: 0,
+  zone: "stack",
+  owner: "you",
+  controller: "you",
+  name: null,
+  token: false,
+  tapped: false,
+  summoningSick: false,
+  damage: 0,
+  counters: [],
+  types: [],
+  pt: null,
+  attachedTo: null,
+  exiledBy: null,
+  combat: null,
+};
+
 /** The frame for object `o`, as the game draws it. */
 export function useFace(o: ObjectView): FrameFace {
   const art = useCardArt(o.name ?? "");
