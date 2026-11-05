@@ -5,7 +5,7 @@
 
 use beryl_engine::card::{ManaColor, Types};
 use beryl_engine::event::{Event, Reason, Recipient};
-use beryl_engine::state::{CounterKind, NONE, Object, ObjectFlags, StackEntry, TurnStep};
+use beryl_engine::state::{CounterKind, NONE, Object, ObjectFlags, StackEntry, TurnStep, opponent};
 use beryl_engine::{
     Candidates, Decision, DecisionKind, GameTable, Observation, Opt, Outcome, StallReason, Stops,
     UNKNOWN, Zone,
@@ -13,17 +13,15 @@ use beryl_engine::{
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// Everything the UI draws for one player at one moment: the game as they see it, the decision
-/// they must make (if any), and what happened since the previous view.
+/// Everything the UI draws for one player at one moment: the game as they see it, where it
+/// stands (their open decision, a stop or the end), and what happened since the previous view.
+/// Players are named relative to the viewer.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerView {
-    /// Numbers the viewer's decisions; `choose` names the one it answers.
-    pub seq: u32,
-    pub viewer: u8,
+    pub status: Status,
     pub turn: TurnView,
-    /// By seat.
-    pub players: Vec<PlayerState>,
+    pub players: Players,
     /// Permanents, in the order they entered.
     pub battlefield: Vec<u8>,
     /// Every object in a zone, by slot: the battlefield, the stack, and each player's library,
@@ -31,42 +29,99 @@ pub struct PlayerView {
     pub objects: Vec<ObjectView>,
     /// Bottom first.
     pub stack: Vec<StackItem>,
-    /// The viewer's open decision; none once the game is over.
-    pub decision: Option<DecisionView>,
-    pub outcome: Option<OutcomeView>,
     /// The viewer's priority stops.
     pub stops: StopsSetting,
     /// What happened since the previous view, oldest first, for animation.
     pub events: Vec<GameEvent>,
 }
 
+/// Where the game stands for the viewer.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Status {
+    /// The viewer must decide; the game waits for their answer.
+    Deciding {
+        decision: DecisionView,
+    },
+    /// The session stopped while the agent was deciding (it was replaced or closed): no
+    /// decision opens again.
+    Stopped,
+    Over {
+        outcome: OutcomeView,
+    },
+}
+
+/// A player, relative to the viewer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum Side {
+    You,
+    Opponent,
+}
+
+/// A game session, numbered from 1 in the order sessions start.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, TS)]
+pub struct SessionId(pub u32);
+
+/// Names one decision of the human's in one session. The UI echoes the one it received to
+/// answer it, and never looks inside.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct DecisionId {
+    pub session: SessionId,
+    /// Numbers the session's decisions of the human's from 1.
+    pub seq: u32,
+}
+
+/// A candidate of a decision, by its position in [`DecisionView::candidates`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct CandidateIndex(pub u8);
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TurnView {
     /// 0 before the first turn.
     pub number: u16,
-    pub active: u8,
+    pub active: Side,
     pub step: Step,
-    pub priority: u8,
+    pub priority: Side,
 }
 
-/// One player's public state, and the slots in their zones.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct Players {
+    pub you: PlayerState,
+    pub opponent: PlayerState,
+}
+
+/// One player's public state and their ordered zones. Their hand and exile are the objects
+/// they own in those zones.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerState {
     pub life: i16,
-    /// Unspent mana: white, blue, black, red, green, colorless.
-    pub mana: Vec<u8>,
+    /// Unspent mana.
+    pub mana: ManaPool,
     pub lands_played: u8,
     pub mulligans: u8,
     /// Bottom first.
     pub library: Vec<u8>,
-    pub hand: Vec<u8>,
     /// Bottom first.
     pub graveyard: Vec<u8>,
-    pub exile: Vec<u8>,
     /// The emblems' names.
     pub emblems: Vec<String>,
+}
+
+/// Mana by type.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ManaPool {
+    pub white: u8,
+    pub blue: u8,
+    pub black: u8,
+    pub red: u8,
+    pub green: u8,
+    pub colorless: u8,
 }
 
 /// One object, with its identity only if the viewer knows it.
@@ -75,8 +130,8 @@ pub struct PlayerState {
 pub struct ObjectView {
     pub slot: u8,
     pub zone: ZoneName,
-    pub owner: u8,
-    pub controller: u8,
+    pub owner: Side,
+    pub controller: Side,
     /// The name of the face up, which keys the card data in `data/cards.json`; none for a card
     /// the viewer has not seen.
     pub name: Option<String>,
@@ -89,12 +144,18 @@ pub struct ObjectView {
     /// On the battlefield: the card types after continuous effects.
     pub types: Vec<CardType>,
     /// On the battlefield, for creatures: power and toughness after continuous effects.
-    pub power: Option<i8>,
-    pub toughness: Option<i8>,
+    pub pt: Option<PowerToughness>,
     pub attached_to: Option<u8>,
     /// The permanent that exiled it until it leaves (CR 610.3).
     pub exiled_by: Option<u8>,
     pub combat: Option<Combat>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct PowerToughness {
+    pub power: i8,
+    pub toughness: i8,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -121,33 +182,42 @@ pub enum Combat {
 
 /// A spell or ability on the stack.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct StackItem {
-    /// The spell, or the ability's source (which may have left its zone since).
-    pub slot: u8,
-    pub controller: u8,
-    /// The spell's face name, or the name of the card with the ability.
-    pub name: String,
-    /// The index of the ability on that face; none for a spell.
-    pub ability: Option<u8>,
-    pub targets: Vec<TargetRef>,
-    /// The announced value of X.
-    pub x: u8,
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum StackItem {
+    /// The spell in `slot`, whose object says what it is and who controls it.
+    Spell {
+        slot: u8,
+        targets: Vec<TargetRef>,
+        /// The announced value of X.
+        x: u8,
+    },
+    /// The ability at index `ability` of the face named `name`, from the object in `source`
+    /// (which may have left its zone since).
+    Ability {
+        source: u8,
+        ability: u8,
+        name: String,
+        controller: Side,
+        targets: Vec<TargetRef>,
+        /// The announced value of X.
+        x: u8,
+    },
 }
 
 /// A player or an object, as a target or a recipient of damage.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum TargetRef {
-    Player { player: u8 },
+    Player { player: Side },
     Object { slot: u8 },
 }
 
-/// A decision, its candidates in the order `choose` indexes them.
+/// The viewer's decision, its candidates in the order a [`CandidateIndex`] counts them.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct DecisionView {
-    pub player: u8,
+    /// What an answer names.
+    pub id: DecisionId,
     pub kind: Kind,
     pub candidates: Vec<CandidateView>,
 }
@@ -221,7 +291,7 @@ pub enum Candidate {
         index: u8,
     },
     Player {
-        player: u8,
+        player: Side,
     },
 }
 
@@ -229,12 +299,12 @@ pub enum Candidate {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum OutcomeView {
     Win {
-        player: u8,
+        winner: Side,
     },
     Draw,
     /// The engine gave up when a budget or capacity ran out; not a rules outcome.
     Stalled {
-        reason: String,
+        reason: Stall,
     },
 }
 
@@ -258,7 +328,7 @@ impl StopsSetting {
     }
 }
 
-/// One thing that happened (architecture §8.1), by public slot.
+/// One thing that happened (architecture §8.1), by public slot and relative to the viewer.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum GameEvent {
@@ -276,15 +346,15 @@ pub enum GameEvent {
         combat: bool,
     },
     Draw {
-        player: u8,
+        player: Side,
         cards: u8,
     },
     LifeGain {
-        player: u8,
+        player: Side,
         amount: u8,
     },
     LifeLoss {
-        player: u8,
+        player: Side,
         amount: u8,
     },
     CountersAdded {
@@ -304,34 +374,34 @@ pub enum GameEvent {
         slot: u8,
     },
     TokensCreated {
-        controller: u8,
+        controller: Side,
         tokens: Vec<u8>,
     },
     Cast {
         slot: u8,
-        controller: u8,
+        controller: Side,
     },
     Attack {
-        player: u8,
+        player: Side,
         attackers: Vec<u8>,
     },
     StepBegins {
         step: Step,
-        active: u8,
+        active: Side,
     },
     GainControl {
         slot: u8,
-        player: u8,
+        player: Side,
     },
     CoinFlip {
-        player: u8,
+        player: Side,
         won: bool,
     },
     Lose {
-        player: u8,
+        player: Side,
     },
     Win {
-        player: u8,
+        player: Side,
     },
 }
 
@@ -392,6 +462,11 @@ mirror! {
 }
 
 mirror! {
+    /// Why the engine gave up on a game ([`StallReason`]).
+    Stall from StallReason { DecisionsPerTurn, Turns, StateBasedIterations, Capacity }
+}
+
+mirror! {
     /// A type of mana ([`ManaColor`]).
     Mana from ManaColor { White, Blue, Black, Red, Green, Colorless }
 }
@@ -421,47 +496,66 @@ impl CardType {
     ];
 }
 
-/// Builds `viewer`'s view of `obs`'s position: the position the open decision is made in
-/// (`beryl_engine::view`), with that decision when it is the viewer's.
+/// Where the game stands, as the session knows it: what [`player_view`] turns into a [`Status`].
+#[derive(Clone, Copy, Debug)]
+pub enum Moment<'a> {
+    /// The viewer's decision `id` is open.
+    Deciding(DecisionId, &'a Decision),
+    Stopped,
+    Over(Outcome),
+}
+
+/// Builds the viewer's view of `obs`'s position (the position the open decision is made in,
+/// `beryl_engine::view`) at `moment`, with `events`, the engine's events since the previous view.
+/// Everything in it, events included, comes through `obs`.
 pub fn player_view(
     t: &GameTable,
     obs: Observation<'_>,
-    seq: u32,
-    decision: Option<&Decision>,
-    outcome: Option<Outcome>,
+    moment: Moment<'_>,
     stops: StopsSetting,
-    events: Vec<GameEvent>,
+    events: &[Event],
 ) -> PlayerView {
-    let viewer = obs.viewer();
     let turn = obs.turn();
     let mut objects = Vec::new();
-    let players = (0..2u8)
-        .map(|p| {
-            let player = obs.player(p);
-            let slots = |zone| obs.zone(p, zone).iter().collect::<Vec<u8>>();
-            let state = PlayerState {
-                life: player.life,
-                mana: player.mana.to_vec(),
-                lands_played: player.lands_played,
-                mulligans: player.mulligans,
-                library: obs.library(p).to_vec(),
-                hand: slots(Zone::Hand),
-                graveyard: obs.graveyard(p).to_vec(),
-                exile: slots(Zone::Exile),
-                emblems: player
-                    .emblems
-                    .iter()
-                    .map(|&e| t.def(e).name.to_owned())
-                    .collect(),
-            };
-            for slots in [&state.library, &state.hand, &state.graveyard, &state.exile] {
-                objects.extend(slots.iter().map(|&slot| object_view(t, obs, slot)));
-            }
-            state
-        })
-        .collect();
+    let mut player_state = |p: u8| {
+        let player = obs.player(p);
+        let [white, blue, black, red, green, colorless] = player.mana;
+        let state = PlayerState {
+            life: player.life,
+            mana: ManaPool {
+                white,
+                blue,
+                black,
+                red,
+                green,
+                colorless,
+            },
+            lands_played: player.lands_played,
+            mulligans: player.mulligans,
+            library: obs.library(p).to_vec(),
+            graveyard: obs.graveyard(p).to_vec(),
+            emblems: player
+                .emblems
+                .iter()
+                .map(|&e| t.def(e).name.to_owned())
+                .collect(),
+        };
+        for slots in [&state.library, &state.graveyard] {
+            objects.extend(slots.iter().map(|&slot| object_view(t, obs, slot)));
+        }
+        // Unordered zones: their objects say where they are.
+        for slots in [Zone::Hand, Zone::Exile].map(|zone| obs.zone(p, zone)) {
+            objects.extend(slots.iter().map(|slot| object_view(t, obs, slot)));
+        }
+        state
+    };
+    let viewer = obs.viewer();
+    let players = Players {
+        you: player_state(viewer),
+        opponent: player_state(opponent(viewer)),
+    };
     objects.extend(obs.battlefield().iter().map(|&s| object_view(t, obs, s)));
-    let stack = obs.stack().iter().map(|e| stack_item(t, e)).collect();
+    let stack = obs.stack().iter().map(|e| stack_item(t, obs, e)).collect();
     objects.extend(
         obs.stack()
             .iter()
@@ -469,25 +563,41 @@ pub fn player_view(
             .map(|e| object_view(t, obs, e.object.slot)),
     );
     objects.sort_by_key(|o| o.slot);
+    let status = match moment {
+        Moment::Deciding(id, d) => {
+            debug_assert_eq!(d.player, viewer, "a view shows only its viewer's decision");
+            Status::Deciding {
+                decision: decision_view(t, obs, id, d),
+            }
+        }
+        Moment::Stopped => Status::Stopped,
+        Moment::Over(outcome) => Status::Over {
+            outcome: outcome_view(obs, outcome),
+        },
+    };
     PlayerView {
-        seq,
-        viewer,
+        status,
         turn: TurnView {
             number: turn.number,
-            active: turn.active,
+            active: side(obs, turn.active),
             step: turn.step.into(),
-            priority: turn.priority,
+            priority: side(obs, turn.priority),
         },
         players,
         battlefield: obs.battlefield().to_vec(),
         objects,
         stack,
-        decision: decision
-            .filter(|d| d.player == viewer)
-            .map(|d| decision_view(t, obs, d)),
-        outcome: outcome.map(outcome_view),
         stops,
-        events,
+        events: events.iter().map(|e| game_event(obs, e)).collect(),
+    }
+}
+
+/// Player `p` as the viewer of `obs` sees them.
+fn side(obs: Observation<'_>, p: u8) -> Side {
+    if p == obs.viewer() {
+        Side::You
+    } else {
+        Side::Opponent
     }
 }
 
@@ -531,8 +641,8 @@ fn object_view(t: &GameTable, obs: Observation<'_>, slot: u8) -> ObjectView {
     ObjectView {
         slot,
         zone: o.zone.into(),
-        owner: o.owner,
-        controller: derived.map_or(o.controller, |d| d.controller),
+        owner: side(obs, o.owner),
+        controller: side(obs, derived.map_or(o.controller, |d| d.controller)),
         name: name(t, obs, slot).map(str::to_owned),
         token: flags.has(ObjectFlags::TOKEN),
         tapped: flags.has(ObjectFlags::TAPPED),
@@ -544,8 +654,10 @@ fn object_view(t: &GameTable, obs: Observation<'_>, slot: u8) -> ObjectView {
             .filter(|&&(bit, _)| types.contains(bit))
             .map(|&(_, ty)| ty)
             .collect(),
-        power: derived.filter(|_| creature).map(|d| d.power),
-        toughness: derived.filter(|_| creature).map(|d| d.toughness),
+        pt: derived.filter(|_| creature).map(|d| PowerToughness {
+            power: d.power,
+            toughness: d.toughness,
+        }),
         attached_to: some(o.attached_to),
         exiled_by: if flags.has(ObjectFlags::EXILED_UNTIL) {
             some(o.linked)
@@ -571,26 +683,42 @@ fn object_view(t: &GameTable, obs: Observation<'_>, slot: u8) -> ObjectView {
     }
 }
 
-fn stack_item(t: &GameTable, e: &StackEntry) -> StackItem {
-    StackItem {
-        slot: e.object.slot,
-        controller: e.controller,
-        name: t.def(e.card).face_name(e.face).to_owned(),
-        ability: (!e.is_spell()).then_some(e.ability),
-        targets: e
-            .targets
-            .iter()
-            .map(|target| match (target.as_player(), target.as_object()) {
-                (Some(player), _) => TargetRef::Player { player },
-                (None, Some(o)) => TargetRef::Object { slot: o.slot },
-                (None, None) => unreachable!("a target is a player or an object"),
-            })
-            .collect(),
-        x: e.x,
+fn stack_item(t: &GameTable, obs: Observation<'_>, e: &StackEntry) -> StackItem {
+    let targets = e
+        .targets
+        .iter()
+        .map(|target| match (target.as_player(), target.as_object()) {
+            (Some(player), _) => TargetRef::Player {
+                player: side(obs, player),
+            },
+            (None, Some(o)) => TargetRef::Object { slot: o.slot },
+            (None, None) => unreachable!("a target is a player or an object"),
+        })
+        .collect();
+    if e.is_spell() {
+        StackItem::Spell {
+            slot: e.object.slot,
+            targets,
+            x: e.x,
+        }
+    } else {
+        StackItem::Ability {
+            source: e.object.slot,
+            ability: e.ability,
+            name: t.def(e.card).face_name(e.face).to_owned(),
+            controller: side(obs, e.controller),
+            targets,
+            x: e.x,
+        }
     }
 }
 
-fn decision_view(t: &GameTable, obs: Observation<'_>, d: &Decision) -> DecisionView {
+fn decision_view(
+    t: &GameTable,
+    obs: Observation<'_>,
+    id: DecisionId,
+    d: &Decision,
+) -> DecisionView {
     let candidates = match &d.candidates {
         Candidates::Objects(b) => b
             .iter()
@@ -602,7 +730,7 @@ fn decision_view(t: &GameTable, obs: Observation<'_>, d: &Decision) -> DecisionV
         Candidates::Options(opts) => opts.iter().map(|&o| candidate(t, obs, o)).collect(),
     };
     DecisionView {
-        player: d.player,
+        id,
         kind: d.kind.into(),
         candidates,
     }
@@ -610,12 +738,9 @@ fn decision_view(t: &GameTable, obs: Observation<'_>, d: &Decision) -> DecisionV
 
 fn candidate(t: &GameTable, obs: Observation<'_>, o: Opt) -> CandidateView {
     let named = |slot: u8| name(t, obs, slot).unwrap_or("a hidden card");
-    let player = |p: u8| {
-        if p == obs.viewer() {
-            "you"
-        } else {
-            "your opponent"
-        }
+    let player = |p: u8| match side(obs, p) {
+        Side::You => "you",
+        Side::Opponent => "your opponent",
     };
     let mana = |color: u8| (mana_color(color), MANA_SYMBOLS[usize::from(color)]);
     let (label, option) = match o {
@@ -637,10 +762,7 @@ fn candidate(t: &GameTable, obs: Observation<'_>, o: Opt) -> CandidateView {
             Candidate::Attack { slot },
         ),
         Opt::Defender(slot) if slot == NONE => (
-            format!(
-                "Attack {}",
-                player(beryl_engine::state::opponent(obs.turn().active))
-            ),
+            format!("Attack {}", player(opponent(obs.turn().active))),
             Candidate::Defender { planeswalker: None },
         ),
         Opt::Defender(slot) => (
@@ -694,13 +816,14 @@ fn candidate(t: &GameTable, obs: Observation<'_>, o: Opt) -> CandidateView {
         Opt::Number(n) => (n.to_string(), Candidate::Number { n }),
         Opt::Plan(index) => (format!("Payment {}", index + 1), Candidate::Plan { index }),
         Opt::Player(p) => (
-            if p == obs.viewer() {
-                "You"
-            } else {
-                "Your opponent"
+            match side(obs, p) {
+                Side::You => "You",
+                Side::Opponent => "Your opponent",
             }
             .to_owned(),
-            Candidate::Player { player: p },
+            Candidate::Player {
+                player: side(obs, p),
+            },
         ),
         Opt::Object(slot) => (named(slot).to_owned(), Candidate::Object { slot }),
     };
@@ -738,96 +861,111 @@ fn mana_color(index: u8) -> Mana {
     .into()
 }
 
-fn outcome_view(o: Outcome) -> OutcomeView {
+fn outcome_view(obs: Observation<'_>, o: Outcome) -> OutcomeView {
     match o {
-        Outcome::Win(player) => OutcomeView::Win { player },
+        Outcome::Win(player) => OutcomeView::Win {
+            winner: side(obs, player),
+        },
         Outcome::Draw => OutcomeView::Draw,
         Outcome::Stalled(reason) => OutcomeView::Stalled {
-            reason: match reason {
-                StallReason::DecisionsPerTurn => "too many decisions in one turn",
-                StallReason::Turns => "too many turns",
-                StallReason::StateBasedIterations => "state-based actions did not settle",
-                StallReason::Capacity => "a zone or queue was full",
-            }
-            .to_owned(),
+            reason: reason.into(),
         },
     }
 }
 
-impl From<&Event> for GameEvent {
-    fn from(e: &Event) -> Self {
-        match *e {
-            Event::ZoneChange {
-                object,
-                from,
-                to,
-                reason,
-            } => GameEvent::ZoneChange {
-                slot: object.slot,
-                from: from.into(),
-                to: to.into(),
-                reason: reason.into(),
-            },
-            Event::Damage {
-                source,
-                to,
-                amount,
-                combat,
-            } => GameEvent::Damage {
-                source: source.slot,
-                to: match to {
-                    Recipient::Player(player) => TargetRef::Player { player },
-                    Recipient::Permanent(o) => TargetRef::Object { slot: o.slot },
+/// An engine event as the viewer of `obs` is told it. Events name objects by public slot, so
+/// none carries an identity; one that did would have to come from `obs`.
+fn game_event(obs: Observation<'_>, e: &Event) -> GameEvent {
+    let side = |p| side(obs, p);
+    match *e {
+        Event::ZoneChange {
+            object,
+            from,
+            to,
+            reason,
+        } => GameEvent::ZoneChange {
+            slot: object.slot,
+            from: from.into(),
+            to: to.into(),
+            reason: reason.into(),
+        },
+        Event::Damage {
+            source,
+            to,
+            amount,
+            combat,
+        } => GameEvent::Damage {
+            source: source.slot,
+            to: match to {
+                Recipient::Player(player) => TargetRef::Player {
+                    player: side(player),
                 },
-                amount,
-                combat,
+                Recipient::Permanent(o) => TargetRef::Object { slot: o.slot },
             },
-            Event::Draw { player, cards } => GameEvent::Draw { player, cards },
-            Event::LifeGain { player, amount } => GameEvent::LifeGain { player, amount },
-            Event::LifeLoss { player, amount } => GameEvent::LifeLoss { player, amount },
-            Event::CountersAdded {
-                object,
-                kind,
-                amount,
-            } => GameEvent::CountersAdded {
-                slot: object.slot,
-                counter: kind.into(),
-                amount,
-            },
-            Event::CountersRemoved {
-                object,
-                kind,
-                amount,
-            } => GameEvent::CountersRemoved {
-                slot: object.slot,
-                counter: kind.into(),
-                amount,
-            },
-            Event::Tap { object } => GameEvent::Tap { slot: object.slot },
-            Event::Untap { object } => GameEvent::Untap { slot: object.slot },
-            Event::TokensCreated { controller, tokens } => GameEvent::TokensCreated {
-                controller,
-                tokens: tokens.iter().collect(),
-            },
-            Event::Cast { spell, controller } => GameEvent::Cast {
-                slot: spell.slot,
-                controller,
-            },
-            Event::Attack { player, attackers } => GameEvent::Attack {
-                player,
-                attackers: attackers.iter().collect(),
-            },
-            Event::StepBegins { step, active } => GameEvent::StepBegins {
-                step: step.into(),
-                active,
-            },
-            Event::GainControl { object, player } => GameEvent::GainControl {
-                slot: object.slot,
-                player,
-            },
-            Event::CoinFlip { player, won } => GameEvent::CoinFlip { player, won },
-            Event::Lose { player } => GameEvent::Lose { player },
-            Event::Win { player } => GameEvent::Win { player },
-        }
+            amount,
+            combat,
+        },
+        Event::Draw { player, cards } => GameEvent::Draw {
+            player: side(player),
+            cards,
+        },
+        Event::LifeGain { player, amount } => GameEvent::LifeGain {
+            player: side(player),
+            amount,
+        },
+        Event::LifeLoss { player, amount } => GameEvent::LifeLoss {
+            player: side(player),
+            amount,
+        },
+        Event::CountersAdded {
+            object,
+            kind,
+            amount,
+        } => GameEvent::CountersAdded {
+            slot: object.slot,
+            counter: kind.into(),
+            amount,
+        },
+        Event::CountersRemoved {
+            object,
+            kind,
+            amount,
+        } => GameEvent::CountersRemoved {
+            slot: object.slot,
+            counter: kind.into(),
+            amount,
+        },
+        Event::Tap { object } => GameEvent::Tap { slot: object.slot },
+        Event::Untap { object } => GameEvent::Untap { slot: object.slot },
+        Event::TokensCreated { controller, tokens } => GameEvent::TokensCreated {
+            controller: side(controller),
+            tokens: tokens.iter().collect(),
+        },
+        Event::Cast { spell, controller } => GameEvent::Cast {
+            slot: spell.slot,
+            controller: side(controller),
+        },
+        Event::Attack { player, attackers } => GameEvent::Attack {
+            player: side(player),
+            attackers: attackers.iter().collect(),
+        },
+        Event::StepBegins { step, active } => GameEvent::StepBegins {
+            step: step.into(),
+            active: side(active),
+        },
+        Event::GainControl { object, player } => GameEvent::GainControl {
+            slot: object.slot,
+            player: side(player),
+        },
+        Event::CoinFlip { player, won } => GameEvent::CoinFlip {
+            player: side(player),
+            won,
+        },
+        Event::Lose { player } => GameEvent::Lose {
+            player: side(player),
+        },
+        Event::Win { player } => GameEvent::Win {
+            player: side(player),
+        },
     }
 }

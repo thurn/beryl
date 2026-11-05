@@ -6,7 +6,7 @@ mod games;
 
 use std::time::Duration;
 
-use serde::Serialize;
+use beryl_session::ipc::AppInfo;
 use tauri::Manager;
 use tauri::http::{Response, StatusCode};
 
@@ -16,16 +16,12 @@ use crate::art::ArtCache;
 /// that it loaded, or with an error after this many seconds.
 const SMOKE_ENV: &str = "BERYL_SMOKE";
 
-#[derive(Debug, Serialize)]
-struct AppInfo {
-    version: &'static str,
-    smoke: bool,
-}
+// The commands' names are `beryl_session::ipc`'s, which `ui/src/ipc.ts` calls them by.
 
 #[tauri::command]
 fn app_info() -> AppInfo {
     AppInfo {
-        version: env!("CARGO_PKG_VERSION"),
+        version: env!("CARGO_PKG_VERSION").to_owned(),
         smoke: smoke_seconds().is_some(),
     }
 }
@@ -48,7 +44,6 @@ fn smoke_seconds() -> Option<u64> {
 
 pub fn run() {
     tauri::Builder::default()
-        .manage(games::Games::default())
         .invoke_handler(tauri::generate_handler![
             app_info,
             ui_ready,
@@ -74,6 +69,7 @@ pub fn run() {
             });
         })
         .setup(|app| {
+            app.manage(games::sessions(app.handle()));
             let dir = app.path().app_cache_dir()?.join("art");
             app.manage(ArtCache::new(dir, art::SCRYFALL_IMAGES));
             // The main window starts hidden (tauri.conf.json) so a smoke run never shows it.

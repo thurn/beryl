@@ -26,12 +26,24 @@ def test_the_recording_regenerates_the_data_file(tmp_path: Path) -> None:
         for t in data["tokens"]
     }
     assert {
-        ("Map", None, None),
-        ("Insect", "2", "1"),
-        ("Human", "1", "1"),
-        ("Samurai", "2", "2"),
-        ("Spirit", "1", "1"),
+        ("Map Token", None, None),
+        ("Insect Token", "2", "1"),
+        ("Human Token", "1", "1"),
+        ("Samurai Token", "2", "2"),
+        ("Spirit Token", "1", "1"),
+        ("Thundertrap Trainer", "1", "1"),
+        ("Jace, Telepath Unbound Emblem", None, None),
     } <= tokens
+
+
+def test_tokens_take_the_engine_s_names() -> None:
+    assert cards.engine_name("Samurai", "Token Creature — Samurai") == "Samurai Token"
+    assert cards.engine_name("Map", "Token Artifact — Map") == "Map Token"
+    # A named token keeps its name, as does an emblem.
+    named = cards.engine_name("Thundertrap Trainer", "Token Creature — Otter Wizard")
+    assert named == "Thundertrap Trainer"
+    emblem = "Jace, Telepath Unbound Emblem"
+    assert cards.engine_name(emblem, "Emblem — Jace") == emblem
 
 
 def test_lookups_go_in_batches_and_honor_pinned_printings() -> None:

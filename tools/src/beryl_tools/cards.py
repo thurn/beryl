@@ -126,7 +126,7 @@ CARD_FIELDS: tuple[str, ...] = (
     "all_parts",
     *FACE_FIELDS,
 )
-PART_FIELDS = ("id", "component")
+PART_FIELDS = ("id", "component", "type_line")
 
 
 def pruned(response: Json) -> Json:
@@ -220,15 +220,39 @@ def entry(card: Json, **extra: object) -> Json:
 
 
 def token_parts(cards: Iterable[Json]) -> dict[str, list[str]]:
-    """The tokens and emblems these cards make, by Scryfall id, with the cards making each."""
+    """The tokens and emblems these cards make, by Scryfall id, with the cards making each.
+    Scryfall lists a token as a "token" part, and an emblem as a "combo_piece" whose type is
+    Emblem."""
     made: dict[str, list[str]] = {}
     for card in cards:
         for part in cast(list[Json], card.get("all_parts", [])):
-            if part["component"] == "token" and part["id"] != card["id"]:
+            makes = part["component"] == "token" or str(part["type_line"]).startswith(
+                "Emblem"
+            )
+            if makes and part["id"] != card["id"]:
                 makers = made.setdefault(str(part["id"]), [])
                 if card["name"] not in makers:
                     makers.append(str(card["name"]))
     return made
+
+
+def engine_name(name: str, type_line: str) -> str:
+    """A token's name as the engine and the rules have it: a token whose name is its subtypes
+    is named for them "plus the word 'Token'" (CR 111.4), which Scryfall leaves off ("Samurai"
+    for a Samurai Token). A token with a name of its own, or none, keeps it."""
+    _, dash, subtypes = type_line.partition(" — ")
+    if type_line.startswith("Token") and dash and subtypes == name:
+        return f"{name} Token"
+    return name
+
+
+def token_entry(token: Json, made_by: list[str]) -> Json:
+    out = entry(token, made_by=made_by)
+    for face in cast(list[Json], out["faces"]):
+        face["name"] = engine_name(str(face["name"]), str(face["type_line"]))
+    if len(cast(list[Json], out["faces"])) == 1:
+        out["name"] = cast(list[Json], out["faces"])[0]["name"]
+    return out
 
 
 def build(names: list[str], pinned: dict[str, Identifier], post: Post) -> Json:
@@ -242,7 +266,7 @@ def build(names: list[str], pinned: dict[str, Identifier], post: Post) -> Json:
     return {
         "cards": sorted((entry(c) for c in cards), key=by_name),
         "tokens": sorted(
-            (entry(t, made_by=sorted(made[str(t["id"])])) for t in tokens),
+            (token_entry(t, sorted(made[str(t["id"])])) for t in tokens),
             key=by_name,
         ),
     }

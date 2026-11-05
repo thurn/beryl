@@ -58,7 +58,7 @@ impl ReplayFile {
                     cards
                         .get(name)
                         .map(|def| (*count, def.name))
-                        .ok_or_else(|| SessionError::UnknownCard(name.clone()))
+                        .ok_or_else(|| SessionError::UnknownCard { name: name.clone() })
                 })
                 .collect::<Result<Vec<_>, _>>()
         });
@@ -66,8 +66,12 @@ impl ReplayFile {
         let decks = [a?, b?];
         let table = GameTable::new(cards, [decks[0].as_slice(), decks[1].as_slice()]).map_err(
             |e| match e {
-                TableError::UnknownCard(name) => SessionError::UnknownCard(name.to_owned()),
-                e => SessionError::Deck(format!("{e:?}")),
+                TableError::UnknownCard(name) => SessionError::UnknownCard {
+                    name: name.to_owned(),
+                },
+                e => SessionError::Deck {
+                    reason: format!("{e:?}"),
+                },
             },
         )?;
         let profile = with_stops(beryl_engine::Profile::SMART, self.stops);
@@ -77,7 +81,9 @@ impl ReplayFile {
 
     pub fn load(path: &Path) -> Result<ReplayFile, SessionError> {
         let text = std::fs::read_to_string(path).map_err(SessionError::io(path))?;
-        serde_json::from_str(&text).map_err(|e| SessionError::BadReplay(e.to_string()))
+        serde_json::from_str(&text).map_err(|e| SessionError::BadReplay {
+            reason: e.to_string(),
+        })
     }
 
     /// Writes the file whole: to a sibling first, then renamed over `path`, so a reader never

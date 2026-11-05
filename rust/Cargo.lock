@@ -125,10 +125,7 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 name = "beryl_app"
 version = "0.1.0"
 dependencies = [
- "beryl_cards",
  "beryl_session",
- "serde",
- "serde_json",
  "tauri",
  "tauri-build",
  "ureq",
@@ -157,8 +154,6 @@ name = "beryl_cli"
 version = "0.1.0"
 dependencies = [
  "beryl_cards",
- "beryl_engine",
- "beryl_search",
  "beryl_session",
  "serde",
  "serde_json",

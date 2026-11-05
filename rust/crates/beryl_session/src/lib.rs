@@ -1,14 +1,16 @@
-//! Game sessions (architecture §19.2, decisions D12 to D14): a human against an agent, the
-//! game on its own thread ([`GameSession`]), the [`PlayerView`] protocol the UI draws from,
-//! and the replay files that reproduce a game.
+//! Game sessions (architecture §19.2, decisions D12 to D14): a human against an agent, one
+//! game at a time on its own thread ([`Sessions`]), the [`PlayerView`] protocol the UI draws
+//! from, the app's IPC names ([`ipc`]) and the replay files that reproduce a game.
 //!
 //! The UI never sees a `State`: each view is built from the human's `Observation`, so it
 //! holds only what they know.
 
 mod game;
+pub mod ipc;
 pub mod protocol;
 pub mod replay;
 mod session;
+mod sessions;
 pub mod typescript;
 
 use std::fmt;
@@ -17,10 +19,10 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-pub use game::Game;
-pub use protocol::{PlayerView, StopsSetting};
+pub use game::{Answer, Game, OpenDecision};
+pub use protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status, StopsSetting};
 pub use replay::ReplayFile;
-pub use session::GameSession;
+pub use sessions::{Sessions, StartRequest};
 
 /// How to start a game.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -59,56 +61,81 @@ pub fn agents() -> Vec<AgentView> {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GameUpdate {
-    pub session: u32,
+    /// Session numbers only grow, so the UI can drop a view from a replaced game.
+    pub session: SessionId,
     pub view: PlayerView,
 }
 
-/// Why a session could not start or take a command.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// Why a session could not start or take a command. Commands return it to the UI as is.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
 pub enum SessionError {
-    UnknownAgent(String),
-    UnknownCard(String),
+    UnknownAgent {
+        name: String,
+    },
+    UnknownCard {
+        name: String,
+    },
     /// The decklists do not make a game.
-    Deck(String),
-    /// No decision of the human's is open: the agent is deciding, or the game is over.
+    Deck {
+        reason: String,
+    },
+    /// The command names a session other than the one in progress: it was replaced, or never
+    /// started.
+    StaleSession {
+        session: SessionId,
+    },
+    /// No decision of the human's is open: the agent is deciding, the open one was answered
+    /// already, or the game is over.
     NotDeciding,
     /// The answer names a decision other than the open one.
     StaleDecision {
-        seq: u32,
-        open: u32,
+        decision: DecisionId,
+        open: DecisionId,
     },
     NoSuchCandidate {
-        index: usize,
+        index: CandidateIndex,
         candidates: usize,
     },
     /// The session's thread has ended.
     Ended,
-    BadReplay(String),
-    Io(String),
+    BadReplay {
+        reason: String,
+    },
+    Io {
+        reason: String,
+    },
 }
 
 impl SessionError {
     pub(crate) fn io(path: &Path) -> impl FnOnce(std::io::Error) -> SessionError + '_ {
-        move |e| SessionError::Io(format!("{}: {e}", path.display()))
+        move |e| SessionError::Io {
+            reason: format!("{}: {e}", path.display()),
+        }
     }
 }
 
 impl fmt::Display for SessionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SessionError::UnknownAgent(name) => write!(f, "no agent is named {name:?}"),
-            SessionError::UnknownCard(name) => write!(f, "no card is named {name:?}"),
-            SessionError::Deck(why) => write!(f, "the decks do not make a game: {why}"),
-            SessionError::NotDeciding => write!(f, "no decision is open"),
-            SessionError::StaleDecision { seq, open } => {
-                write!(f, "decision {seq} is not the open one, {open}")
+            SessionError::UnknownAgent { name } => write!(f, "no agent is named {name:?}"),
+            SessionError::UnknownCard { name } => write!(f, "no card is named {name:?}"),
+            SessionError::Deck { reason } => write!(f, "the decks do not make a game: {reason}"),
+            SessionError::StaleSession { session } => {
+                write!(f, "game {} is not in progress", session.0)
             }
+            SessionError::NotDeciding => write!(f, "no decision is open"),
+            SessionError::StaleDecision { decision, open } => write!(
+                f,
+                "decision {} of game {} is not the open one, {} of game {}",
+                decision.seq, decision.session.0, open.seq, open.session.0
+            ),
             SessionError::NoSuchCandidate { index, candidates } => {
-                write!(f, "candidate {index} of {candidates}")
+                write!(f, "candidate {} of {candidates}", index.0)
             }
             SessionError::Ended => write!(f, "the session has ended"),
-            SessionError::BadReplay(why) => write!(f, "not a replay: {why}"),
-            SessionError::Io(why) => write!(f, "{why}"),
+            SessionError::BadReplay { reason } => write!(f, "not a replay: {reason}"),
+            SessionError::Io { reason } => write!(f, "{reason}"),
         }
     }
 }

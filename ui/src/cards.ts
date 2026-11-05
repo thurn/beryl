@@ -31,14 +31,11 @@ export interface CardEntry {
 
 const data = cardData as { cards: CardEntry[]; tokens: CardEntry[] };
 
-// By card name and by each face's name, with the face it names. Tokens come first so a card
-// wins over a token of the same name (Thundertrap Trainer's offspring). The engine names a
-// token its subtypes plus the word "Token" (CR 111.4, "Samurai Token"); Scryfall leaves the
-// word off, so each token is under both names.
+// By card name and by each face's name, with the face it names: the names the engine gives
+// faces, tokens and emblems (`by cards` writes tokens under them, and a beryl_cards test checks
+// every one is here). Tokens come first so a card wins over a token of the same name
+// (Thundertrap Trainer's offspring).
 const byName = new Map<string, { card: CardEntry; face: number }>();
-for (const token of data.tokens) {
-  byName.set(`${token.name} Token`, { card: token, face: 0 });
-}
 for (const card of [...data.tokens, ...data.cards]) {
   byName.set(card.name, { card, face: 0 });
   card.faces.forEach((f, face) => byName.set(f.name, { card, face }));

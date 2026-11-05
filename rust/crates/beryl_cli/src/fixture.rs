@@ -1,19 +1,16 @@
-//! UI fixtures (decision D11): a seeded game between named agents, played through a
-//! [`Game`] whose human seat an agent plays, recorded as the messages the app would have sent
-//! the UI up to a named stopping condition.
+//! UI fixtures (decision D11): a seeded game between named agents, played through the app's
+//! [`Sessions`] with an agent standing in for the human seat, recorded as the messages the
+//! app would have sent the UI up to a named stopping condition.
 
 use std::path::Path;
+use std::sync::mpsc::channel;
 
-use beryl_cards::CARDS;
 use beryl_cards::decks::{WU_CONTROL, fuzz_deck};
-use beryl_engine::rng::SplitMix64;
+use beryl_session::ipc::{self, Fixture, FixtureMessage};
 use beryl_session::protocol::Kind;
-use beryl_session::{Game, GameUpdate, PlayerView, StartGame, StopsSetting, agents};
-use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
-
-/// The session number fixtures report: one game per fixture.
-const SESSION: u32 = 1;
+use beryl_session::{PlayerView, Sessions, StartGame, Status, StopsSetting, agents};
+use serde::Deserialize;
+use serde_json::json;
 
 /// The definitions file.
 #[derive(Debug, Deserialize)]
@@ -33,14 +30,6 @@ struct Definition {
     agents: [String; 2],
     stops: Option<StopsSetting>,
     until: String,
-}
-
-/// One message of the stream, as `FixtureMessage` in `ui/src/ipc.ts`.
-#[derive(Debug, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-enum Message {
-    Response { command: &'static str, value: Value },
-    Event { event: &'static str, payload: Value },
 }
 
 /// Where a recording stops: the human's first decision of a kind, or the end of the game.
@@ -81,8 +70,10 @@ impl Until {
 
     fn reached(&self, view: &PlayerView) -> bool {
         match self {
-            Until::First { kind, .. } => view.decision.as_ref().is_some_and(|d| d.kind == *kind),
-            Until::GameOver => view.outcome.is_some(),
+            Until::First { kind, .. } => {
+                matches!(&view.status, Status::Deciding { decision } if decision.kind == *kind)
+            }
+            Until::GameOver => matches!(view.status, Status::Over { .. }),
         }
     }
 }
@@ -106,62 +97,51 @@ pub fn record_all(definitions: &Path, out: &Path, only: &[String]) -> Result<(),
         }
         let messages = record(def).map_err(|e| format!("fixture {}: {e}", def.name))?;
         let path = out.join(format!("{}.json", def.name));
-        let json =
-            serde_json::to_string(&json!({ "messages": messages })).expect("a fixture serializes");
+        let json = serde_json::to_string(&Fixture { messages }).expect("a fixture serializes");
         std::fs::write(&path, json).map_err(|e| format!("{}: {e}", path.display()))?;
         println!("{}", path.display());
     }
     Ok(())
 }
 
-fn record(def: &Definition) -> Result<Vec<Message>, String> {
+fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
     let until = Until::parse(&def.until)?;
     let human = until.seat();
-    let opponent = 1 - human;
-    let agent = |seat: u8| {
-        let name = &def.agents[usize::from(seat)];
-        beryl_search::agent(name).ok_or_else(|| format!("no agent is named {name:?}"))
-    };
     let start = StartGame {
         seed: def.seed,
         decks: [deck(&def.decks[0])?, deck(&def.decks[1])?],
         human,
-        opponent: agent(opponent)?.name.to_owned(),
+        opponent: def.agents[usize::from(1 - human)].clone(),
         stops: def.stops.unwrap_or(StopsSetting::Smart),
     };
-    // The human's seat draws from its own stream, apart from the game's and the opponent's.
-    let mut stand_in = (agent(human)?.new)(SplitMix64::new(def.seed ^ 0x9e37_79b9).next_u64());
-    let mut game = Game::new(&CARDS, &start).map_err(|e| e.to_string())?;
+    let (sent, updates) = channel();
+    let sessions = Sessions::new(None, move |update| {
+        // The recording stops listening once it has what it came for.
+        let _ = sent.send(update);
+    });
+    let session = sessions
+        .start_game(&start, Some(&def.agents[usize::from(human)]))
+        .map_err(|e| e.to_string())?;
     let mut messages = vec![
-        response("list_agents", json!(agents())),
-        response("start_game", json!(SESSION)),
+        FixtureMessage::response(ipc::LIST_AGENTS, &agents()),
+        FixtureMessage::response(ipc::START_GAME, &session),
     ];
-    let mut view = game.begin();
     loop {
-        let reached = until.reached(&view);
-        let over = view.outcome.is_some();
-        messages.push(Message::Event {
-            event: "game-update",
-            payload: json!(GameUpdate {
-                session: SESSION,
-                view,
-            }),
-        });
+        let update = updates
+            .recv()
+            .map_err(|_| "the session ended without a view".to_owned())?;
+        let reached = until.reached(&update.view);
+        let deciding = matches!(update.view.status, Status::Deciding { .. });
+        messages.push(FixtureMessage::game_update(&update));
         if reached {
             return Ok(messages);
         }
-        if over {
+        if !deciding {
             return Err(format!("the game ended before {:?}", def.until));
         }
-        view = game
-            .choose_for_human(stand_in.as_mut())
-            .map_err(|e| e.to_string())?;
-        messages.push(response("choose", Value::Null));
+        // The stand-in answered; the UI's `choose` would have returned nothing.
+        messages.push(FixtureMessage::response(ipc::CHOOSE, &()));
     }
-}
-
-fn response(command: &'static str, value: Value) -> Message {
-    Message::Response { command, value }
 }
 
 fn deck(name: &str) -> Result<Vec<(u8, String)>, String> {
@@ -180,6 +160,8 @@ fn deck(name: &str) -> Result<Vec<(u8, String)>, String> {
 
 #[cfg(test)]
 mod tests {
+    use beryl_session::GameUpdate;
+
     use super::*;
 
     #[test]
@@ -207,11 +189,13 @@ mod tests {
             until: "first target decision for seat 1".to_owned(),
         };
         let messages = record(&def).unwrap();
-        let Some(Message::Event { payload, .. }) = messages.last() else {
+        let Some(FixtureMessage::Event { payload, .. }) = messages.last() else {
             panic!("a recording ends on a view");
         };
         let update: GameUpdate = serde_json::from_value(payload.clone()).unwrap();
-        let d = update.view.decision.unwrap();
-        assert_eq!((d.kind, d.player, update.view.viewer), (Kind::Target, 1, 1));
+        let Status::Deciding { decision } = update.view.status else {
+            panic!("a recording stops at a decision");
+        };
+        assert_eq!(decision.kind, Kind::Target);
     }
 }

@@ -1,62 +1,83 @@
-// Typed wrappers for the Tauri commands in rust/crates/beryl_app/src/lib.rs, over a transport:
-// Tauri inside the app, or a fixture that replays a recorded stream of messages so screens run
-// in a plain browser (`just ui-shots`).
+// Typed wrappers for the Tauri commands in rust/crates/beryl_app, over a transport: Tauri
+// inside the app, or a fixture that replays a recorded stream of messages so screens run in a
+// plain browser (`just ui-shots`). Every command, its arguments, result and error, and every
+// event are generated from rust/crates/beryl_session (`Commands`, `Events`).
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { AgentView, GameUpdate, StopsSetting } from "./generated/protocol";
+import type {
+  CandidateIndex,
+  Commands,
+  DecisionId,
+  Events,
+  Fixture,
+  SessionId,
+  StopsSetting,
+} from "./generated/protocol";
 
-// The game protocol's types are generated from rust/crates/beryl_session.
 export type * from "./generated/protocol";
-
-export interface AppInfo {
-  version: string;
-  smoke: boolean;
-}
 
 export type Unlisten = () => void;
 
-export interface Transport {
-  invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>;
-  listen<T>(event: string, handler: (payload: T) => void): Promise<Unlisten>;
+type Command = keyof Commands;
+type Args<C extends Command> = Commands[C]["args"];
+type Result<C extends Command> = Commands[C]["result"];
+
+/** A command's rejection: the typed error the Rust command returned. */
+export class CommandError<C extends Command = Command> extends Error {
+  constructor(
+    readonly command: C,
+    readonly error: Commands[C]["error"],
+  ) {
+    super(`${command}: ${JSON.stringify(error)}`);
+  }
 }
 
-/** One recorded message: a command's response, or an event the app emitted. */
-export type FixtureMessage =
-  | { kind: "response"; command: string; value: unknown }
-  | { kind: "event"; event: string; payload: unknown };
-
-export interface Fixture {
-  messages: FixtureMessage[];
+export interface Transport {
+  invoke<C extends Command>(command: C, args: Args<C>): Promise<Result<C>>;
+  listen<E extends keyof Events>(
+    event: E,
+    handler: (payload: Events[E]) => void,
+  ): Promise<Unlisten>;
 }
 
 const tauriTransport: Transport = {
-  invoke: (command, args) => invoke(command, args),
-  listen: (event, handler) => listen(event, (e) => handler(e.payload as never)),
+  invoke: <C extends Command>(command: C, args: Args<C>) =>
+    invoke<Result<C>>(command, args).catch((error: Commands[C]["error"]) => {
+      throw new CommandError(command, error);
+    }),
+  listen: <E extends keyof Events>(
+    event: E,
+    handler: (payload: Events[E]) => void,
+  ) => listen<Events[E]>(event, (e) => handler(e.payload)),
 };
 
 /** Replays a fixture: each command gets its recorded responses in order (the last one again
- * once they run out), and each listener gets every recorded event of its name, in order. */
+ * once they run out), and each listener gets every recorded event of its name, in order. A
+ * fixture is the app's own recording, so its values are taken as their commands' types. */
 export function fixtureTransport(fixture: Fixture): Transport {
-  const responses = new Map<string, unknown[]>();
+  const responses = new Map<Command, unknown[]>();
   for (const m of fixture.messages) {
     if (m.kind === "response") {
       responses.set(m.command, [...(responses.get(m.command) ?? []), m.value]);
     }
   }
   return {
-    invoke<T>(command: string): Promise<T> {
+    invoke<C extends Command>(command: C): Promise<Result<C>> {
       const queue = responses.get(command);
       if (!queue || queue.length === 0) {
         return Promise.reject(new Error(`fixture: no response for ${command}`));
       }
       return Promise.resolve(
-        (queue.length > 1 ? queue.shift() : queue[0]) as T,
+        (queue.length > 1 ? queue.shift() : queue[0]) as Result<C>,
       );
     },
-    async listen<T>(event: string, handler: (payload: T) => void) {
+    async listen<E extends keyof Events>(
+      event: E,
+      handler: (payload: Events[E]) => void,
+    ) {
       let live = true;
       const payloads = fixture.messages.flatMap((m) =>
-        m.kind === "event" && m.event === event ? [m.payload as T] : [],
+        m.kind === "event" && m.event === event ? [m.payload as Events[E]] : [],
       );
       queueMicrotask(() => payloads.forEach((p) => live && handler(p)));
       return () => {
@@ -111,30 +132,33 @@ export function transport(): Promise<Transport> {
   return chosen;
 }
 
-export const appInfo = async () =>
-  (await transport()).invoke<AppInfo>("app_info");
+const call = async <C extends Command>(command: C, args: Args<C>) =>
+  (await transport()).invoke(command, args);
 
-export const uiReady = async () => (await transport()).invoke<void>("ui_ready");
+export const appInfo = () => call("app_info", {});
 
-// Games (rust/crates/beryl_app/src/games.rs): one at a time, against an agent. Every view of
-// the human's arrives as a `game-update` event.
+export const uiReady = () => call("ui_ready", {});
 
-export const listAgents = async () =>
-  (await transport()).invoke<AgentView[]>("list_agents");
+// Games: one at a time, against an agent. Every view of the human's arrives as a
+// `game-update` event. The game commands reject with a `CommandError` carrying a
+// `SessionError`.
 
-/** Starts a game against `agent`, replacing any in progress; resolves to its session number. */
-export const startGame = async (agent: string, seed?: number) =>
-  (await transport()).invoke<number>("start_game", { agent, seed });
+export const listAgents = () => call("list_agents", {});
 
-/** Answers the human's decision `seq` with its candidate `index`. */
-export const choose = async (session: number, seq: number, index: number) =>
-  (await transport()).invoke<void>("choose", { session, seq, index });
+/** Starts a game against `agent`, replacing any in progress; resolves to its session. */
+export const startGame = (agent: string, seed?: number) =>
+  call("start_game", { request: { agent, seed: seed ?? null } });
 
-export const setStops = async (session: number, stops: StopsSetting) =>
-  (await transport()).invoke<void>("set_stops", { session, stops });
+/** Answers the human's decision `decision` with its candidate `index`. */
+export const choose = (decision: DecisionId, index: CandidateIndex) =>
+  call("choose", { decision, index });
 
-export const onGameUpdate = async (handler: (update: GameUpdate) => void) =>
-  (await transport()).listen<GameUpdate>("game-update", handler);
+export const setStops = (session: SessionId, stops: StopsSetting) =>
+  call("set_stops", { session, stops });
+
+export const onGameUpdate = async (
+  handler: (update: Events["game-update"]) => void,
+) => (await transport()).listen("game-update", handler);
 
 // Card images come from the app's `beryl-art` URI scheme (rust/crates/beryl_app/src/art.rs),
 // which serves Scryfall's image paths from a disk cache and downloads misses.

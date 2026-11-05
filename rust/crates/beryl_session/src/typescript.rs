@@ -1,15 +1,17 @@
-//! The protocol's TypeScript types, generated with ts-rs into one checked-in file,
-//! `ui/src/generated/protocol.ts`. A test fails when that file is stale; running it with
-//! `BERYL_UPDATE_TS=1` rewrites the file.
+//! The protocol's and the IPC surface's TypeScript types, generated with ts-rs into one
+//! checked-in file, `ui/src/generated/protocol.ts`. A test fails when that file is stale;
+//! running it with `BERYL_UPDATE_TS=1` rewrites the file.
 
 use ts_rs::{Config, TS};
 
+use crate::ipc::{AppInfo, Fixture, FixtureMessage};
 use crate::protocol::{
-    Candidate, CandidateView, CardType, Combat, Counter, CounterView, DecisionView, GameEvent,
-    Kind, Mana, ObjectView, OutcomeView, PlayerState, PlayerView, StackItem, Step, StopsSetting,
-    TargetRef, TurnView, Why, ZoneName,
+    Candidate, CandidateIndex, CandidateView, CardType, Combat, Counter, CounterView, DecisionId,
+    DecisionView, GameEvent, Kind, Mana, ManaPool, ObjectView, OutcomeView, PlayerState,
+    PlayerView, Players, PowerToughness, SessionId, Side, StackItem, Stall, Status, Step,
+    StopsSetting, TargetRef, TurnView, Why, ZoneName,
 };
-use crate::{AgentView, GameUpdate};
+use crate::{AgentView, GameUpdate, SessionError, StartRequest};
 
 /// Where the generated file lives, from the repository root.
 pub const PATH: &str = "ui/src/generated/protocol.ts";
@@ -18,12 +20,25 @@ pub const PATH: &str = "ui/src/generated/protocol.ts";
 pub fn typescript() -> String {
     let cfg = Config::new();
     let decls = [
+        AppInfo::decl(&cfg),
+        Fixture::decl(&cfg),
+        FixtureMessage::decl(&cfg),
+        StartRequest::decl(&cfg),
+        SessionError::decl(&cfg),
         GameUpdate::decl(&cfg),
         AgentView::decl(&cfg),
+        SessionId::decl(&cfg),
+        DecisionId::decl(&cfg),
+        CandidateIndex::decl(&cfg),
         PlayerView::decl(&cfg),
+        Status::decl(&cfg),
+        Side::decl(&cfg),
         TurnView::decl(&cfg),
+        Players::decl(&cfg),
         PlayerState::decl(&cfg),
+        ManaPool::decl(&cfg),
         ObjectView::decl(&cfg),
+        PowerToughness::decl(&cfg),
         CounterView::decl(&cfg),
         Combat::decl(&cfg),
         StackItem::decl(&cfg),
@@ -32,6 +47,7 @@ pub fn typescript() -> String {
         CandidateView::decl(&cfg),
         Candidate::decl(&cfg),
         OutcomeView::decl(&cfg),
+        Stall::decl(&cfg),
         StopsSetting::decl(&cfg),
         GameEvent::decl(&cfg),
         Kind::decl(&cfg),
@@ -52,5 +68,7 @@ pub fn typescript() -> String {
         out.push_str(&decl);
         out.push('\n');
     }
+    out.push('\n');
+    out.push_str(&crate::ipc::typescript(&cfg));
     out
 }

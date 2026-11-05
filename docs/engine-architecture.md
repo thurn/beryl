@@ -846,7 +846,7 @@ searcher optimistic, which is tuned, not fixed.
 | `beryl_cards`    | 540 card files under color directories, the generated `names` module, the static table, per-card scenarios and the `beryl_scenario dump` command             | `beryl_engine`, `beryl_scenario`               |
 | `beryl_scenario` | Scenario value types, the strict runner, the JSON serialization                                                                                              | `beryl_engine`                                 |
 | `beryl_search`   | The `Agent` trait, `RandomAgent`, the greedy agent that is also the rollout policy, the expert system, MCTS, evaluation                                      | `beryl_engine`                                 |
-| `beryl_session`  | `GameSession` and its thread, the `PlayerView` protocol with generated TypeScript types, replay files                                                        | `beryl_engine`, `beryl_search`                 |
+| `beryl_session`  | `Sessions` and their threads, the `PlayerView` protocol and IPC names with generated TypeScript types, replay files                                          | `beryl_cards`, `beryl_engine`, `beryl_search`  |
 | `beryl_cli`      | Headless games between agents, tournaments, transcripts, UI fixtures recorded from sessions                                                                  | `beryl_cards`, `beryl_search`, `beryl_session` |
 | `beryl_draft`    | Pack generation, draft state, the draft bot, deckbuilding (a later milestone)                                                                                | `beryl_cards`                                  |
 | `beryl_bench`    | Benchmark support, as today, plus the engine's `_counts`, `_abba` and `_timing` targets and the cube rollout benchmark                                       | the above as dev-dependencies                  |
@@ -1050,17 +1050,21 @@ root and the choices (§2), so either is exact.
 
 ### 19.2 Sessions and IPC (D14)
 
-`beryl_session` owns a `GameSession` per game on a dedicated thread running the
-step/apply loop, and `beryl_app` wraps it in Tauri commands and events. When the
-pending decision belongs to the human, the session emits a `PlayerView`: a
-reduced, owned view built from the human's Observation (§13), holding only what
-the UI draws, rather than the 17 KiB masked state. With it go the Decision, its
-candidates described by public slot, and the engine events since the last view
-for animation. The session then waits for one
-`choose(session, decision_seq, index)` command. AI decisions run on the session
-thread, and a search may use a pool, so IPC never blocks. The webview never sees
-a `State`. Every session records seed, decklists and the choice log as a replay
-file. The protocol's TypeScript types are generated from the Rust types, and
+`beryl_session` owns `Sessions`, which numbers games, starts each on a dedicated
+thread running the step/apply loop and refuses commands for a replaced one;
+`beryl_app` only wraps it in Tauri commands and events, and the CLI's fixture
+recorder drives the same API. When the pending decision belongs to the human,
+the session emits a `PlayerView`: a reduced, owned view built from the human's
+Observation (§13), holding only what the UI draws, rather than the 17 KiB masked
+state, and naming players relative to the viewer. Its status is the open
+Decision, with its candidates described by public slot, a stop, or the outcome;
+the engine events since the last view, for animation, also pass through the
+Observation. The session then waits for one `choose(decision, index)` command,
+naming the decision id it received; the session's record of the open decision is
+the one place an answer is checked. AI decisions run on the session thread, and
+a search may use a pool, so IPC never blocks. The webview never sees a `State`.
+Every session records seed, decklists and the choice log as a replay file. The
+protocol's TypeScript types are generated from the Rust types, and
 `ui/src/ipc.ts` keeps the typed wrappers for the commands and events.
 
 The human plays under the smart stops of §15 by default. A setting switches to
