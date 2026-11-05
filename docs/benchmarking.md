@@ -45,10 +45,29 @@ just bench -p beryl_bench --bench example_timing
 - `just bench [--force] [cargo bench flags] [-- harness flags]` builds, checks
   the machine is quiet, then times. `-- --quick` gives the ABBA harness 30
   rounds instead of 300; Criterion takes its own flags, such as
-  `-- --save-baseline before`.
+  `-- --save-baseline before`. It builds under the `search` profile with
+  `-C target-cpu=apple-m4` unless the flags name a `--profile`.
 
 Name benchmark targets by kind: `<subject>_counts`, `<subject>_abba`,
 `<subject>_timing`.
+
+## The cube rollout benchmark
+
+`rollout_*` measure what search spends its time on (architecture §18), over a
+corpus of mid-game WU Control mirror positions cut from seeded `expert` and
+`greedy` games, each rolled out four times to the end of the game under the
+rollout policy and smart stops (`beryl_bench::rollout`). Four subjects, each
+over the whole corpus:
+
+- `copy`: one `State` copy per rollout start;
+- `next_apply`: the engine alone, replaying each rollout's recorded answers;
+- `policy`: the rollout policy alone, on decisions sampled from the rollouts;
+- `rollouts`: whole rollouts, the three together.
+
+`rollout_timing` prints the decisions per rollout and per turn first, and its
+throughputs read as copies, decisions and rollouts per second on one core.
+`rollout_abba` runs the current code on both sides until an optimization puts
+its old version in A. `rollout::tests::corpus_never_changes` pins the corpus.
 
 ## Determinism
 
@@ -235,8 +254,11 @@ compares. Trust a small change only when counts and ABBA agree.
 - **Code layout.** An unrelated change can move a hot loop across a cache-line
   or page boundary and shift its time by a few percent. Counts don't move. Be
   skeptical of timing differences under about 2% that counts don't show.
-- **The bench profile inherits `release`** (`codegen-units = 1`, thin LTO), the
-  same as the shipped app. Never benchmark a debug build.
+- **`just bench` builds the `search` profile** (fat LTO, `panic = "abort"`,
+  `codegen-units = 1`, the M4 CPU), as the headless research binaries are built.
+  `--profile bench` inherits `release` instead, the shipped app's thin LTO;
+  `just bench-count` uses it, since Valgrind's CPU is not the M4. Never
+  benchmark a debug build.
 - **Don't time in CI.** `just ci` shares the machine with whatever else is
   running; instruction counts could gate CI later, timing never.
 

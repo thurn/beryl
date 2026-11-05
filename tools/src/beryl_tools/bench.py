@@ -1,7 +1,8 @@
 """Benchmarks (docs/benchmarking.md).
 
 - `bench` builds the wall-clock benchmarks, refuses to time them on a machine that is busy, on
-  battery, in Low Power Mode or throttled, then runs them on this Mac.
+  battery, in Low Power Mode or throttled, then runs them on this Mac. It builds them under the
+  `search` profile for this CPU (architecture §18) unless the arguments name a `--profile`.
 - `bench-count` runs the Gungraun (Valgrind) instruction-count benchmarks in a Lima Linux VM,
   creating and provisioning it on first use. Counts don't depend on load, so there's no check.
 
@@ -30,6 +31,8 @@ BUILD_PROCESSES = ("rustc", "cargo", "clippy-driver", "clang", "swift-frontend")
 VM = "beryl-bench"
 VM_TARGET = "$HOME/target"  # inside the VM; the checkout is mounted read-only
 COUNT_BENCHES = ["--bench", "*_counts"]
+# A Cargo profile can't set the CPU, so the recipes building the `search` profile pass it.
+SEARCH_CPU = "-C target-cpu=apple-m4"
 
 
 def log(message: str) -> None:
@@ -118,10 +121,22 @@ def cargo_bench(extra: list[str], *flags: str) -> list[str]:
     return ["cargo", "bench", "--locked", *flags, *extra]
 
 
+def timing_build(extra: list[str]) -> tuple[list[str], dict[str, str]]:
+    """The `search` profile and its CPU, unless the cargo flags name a profile of their own."""
+    cargo_flags = extra[: extra.index("--")] if "--" in extra else extra
+    if any(a == "--profile" or a.startswith("--profile=") for a in cargo_flags):
+        return [], {}
+    return ["--profile", "search"], {"RUSTFLAGS": SEARCH_CPU}
+
+
 def bench(args: argparse.Namespace) -> int:
     warm.ensure()
     extra: list[str] = args.extra
-    build = subprocess.run(cargo_bench(extra, "--no-run"), cwd=paths.RUST, check=False)
+    profile, env = timing_build(extra)
+    env = {**os.environ, **env}
+    build = subprocess.run(
+        cargo_bench(extra, "--no-run", *profile), cwd=paths.RUST, env=env, check=False
+    )
     if build.returncode != 0:
         return build.returncode
     found = problems(probe())
@@ -130,7 +145,8 @@ def bench(args: argparse.Namespace) -> int:
     if found and not args.force:
         log("not timing on a noisy machine; fix the above, or pass --force")
         return 2
-    return subprocess.run(cargo_bench(extra), cwd=paths.RUST, check=False).returncode
+    run = cargo_bench(extra, *profile)
+    return subprocess.run(run, cwd=paths.RUST, env=env, check=False).returncode
 
 
 # The Lima VM for Gungraun.

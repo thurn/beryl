@@ -113,7 +113,8 @@ impl Counts {
 
 /// The counts of work done where no [`Scratch`] reaches: per thread, moved into the
 /// scratch's counts each time `next` or `apply` returns, so they land on the game that did
-/// the work (a `view` in between lands on the next of them). Recomputes and solver runs are heavy enough that the tally is noise.
+/// the work (a `view` in between lands on the next of them). Layer recomputes and solver
+/// runs are heavy enough that the tally costs nothing measurable.
 #[derive(Clone, Copy)]
 pub(crate) struct Tally {
     layer_recomputes: u64,
@@ -121,21 +122,19 @@ pub(crate) struct Tally {
 }
 
 thread_local! {
-    static TALLY: Cell<Tally> = const {
-        Cell::new(Tally {
-            layer_recomputes: 0,
-            solver_runs: 0,
-        })
-    };
+    static TALLY: Cell<Tally> = const { Cell::new(Tally::ZERO) };
 }
 
 impl Tally {
+    const ZERO: Tally = Tally {
+        layer_recomputes: 0,
+        solver_runs: 0,
+    };
+
     fn update(f: impl FnOnce(&mut Tally)) {
-        TALLY.with(|cell| {
-            let mut tally = cell.get();
-            f(&mut tally);
-            cell.set(tally);
-        });
+        let mut tally = TALLY.get();
+        f(&mut tally);
+        TALLY.set(tally);
     }
 
     pub(crate) fn layer_recompute() {
@@ -150,14 +149,9 @@ impl Tally {
 impl Scratch {
     /// Moves this thread's tally and the sink's event count into the counts.
     fn settle_counts(&mut self) {
-        Tally::update(|t| {
-            self.counts.layer_recomputes += t.layer_recomputes;
-            self.counts.solver_runs += t.solver_runs;
-            *t = Tally {
-                layer_recomputes: 0,
-                solver_runs: 0,
-            };
-        });
+        let tally = TALLY.replace(Tally::ZERO);
+        self.counts.layer_recomputes += tally.layer_recomputes;
+        self.counts.solver_runs += tally.solver_runs;
         self.counts.events += self.events.take_executed();
     }
 }

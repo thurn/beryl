@@ -6,6 +6,7 @@ set positional-arguments := true
 by := "uv run --quiet --project tools by"
 
 # The CPU the `search` profile builds for: a Cargo profile cannot set it (architecture §18)
+
 search_cpu := "-C target-cpu=apple-m4"
 
 default:
@@ -61,7 +62,7 @@ bundle:
 warm *args:
     {{ by }} warm "$@"
 
-# Time benchmarks, refusing a busy, unplugged or throttled machine (cargo bench flags; --force)
+# Time benchmarks under the search profile, refusing a busy, unplugged or throttled machine (cargo bench flags; --force)
 [group('bench')]
 bench *args:
     {{ by }} bench "$@"

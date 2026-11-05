@@ -70,6 +70,17 @@ def test_cargo_flags_go_before_the_harness_arguments() -> None:
     ]
 
 
+def test_timing_builds_the_search_profile_unless_told_otherwise() -> None:
+    assert bench.timing_build(["--bench", "x", "--", "--quick"]) == (
+        ["--profile", "search"],
+        {"RUSTFLAGS": bench.SEARCH_CPU},
+    )
+    assert bench.timing_build(["--profile", "bench"]) == ([], {})
+    assert bench.timing_build(["--profile=release", "--bench", "x"]) == ([], {})
+    # A harness argument named --profile isn't cargo's.
+    assert bench.timing_build(["--", "--profile", "x"])[0] == ["--profile", "search"]
+
+
 def test_runner_version_comes_from_the_lockfile() -> None:
     lock = '[[package]]\nname = "gungraun"\nversion = "0.20.0"\n'
     assert bench.locked_version(lock, "gungraun") == "0.20.0"

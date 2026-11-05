@@ -1,7 +1,7 @@
 //! Wall-clock timing of the cube rollout benchmark (`beryl_bench::rollout`) with Criterion:
-//! `just bench -p beryl_bench --bench rollout_timing`, under the `search` profile with
-//! `--profile search` for the headline numbers. Throughputs are per copy, per decision and
-//! per rollout, so `rollouts` reads as rollouts per core-second.
+//! `just bench -p beryl_bench --bench rollout_timing`, which builds the `search` profile.
+//! Throughputs are per copy, per decision, per sampled decision and per rollout, so
+//! `rollouts` reads as rollouts per core-second.
 
 use std::hint::black_box;
 use std::time::Duration;
