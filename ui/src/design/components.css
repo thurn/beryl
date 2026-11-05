@@ -455,8 +455,8 @@
 .block-arc {
   left: -1%;
   width: 102%;
-  height: 2.9em;
-  top: calc(100% - 2em);
+  height: 2.5em;
+  top: calc(100% - 1.6em);
   filter: drop-shadow(0 0 2px rgb(255 205 110 / 100%))
     drop-shadow(0 0 8px rgb(245 130 25 / 90%));
 }
@@ -713,14 +713,14 @@
 .arrow-gold {
   --weight: 5.5px;
   --tone: #ffb846;
-  --tone-soft: rgb(255 130 20 / 85%);
+  --tone-soft: rgb(255 120 10 / 90%);
   --tone-core: #fff1c2;
 }
 /* Cyan arrows are tubes: bright edges round a deeper core. */
 .arrow-cyan {
   --weight: 9px;
   --tone: #c9fbff;
-  --tone-soft: rgb(0 170 255 / 85%);
+  --tone-soft: rgb(0 205 255 / 85%);
   --tone-core: #1cc8f6;
 }
 .arrow path {
@@ -750,7 +750,7 @@
 .arrow-dot-glow {
   fill: var(--tone-soft);
 }
-/* A gold arrow ends in a small solid tip. */
+/* Solid heads: filled with the core color inside an outline of the edge color. */
 .arrow-glow .arrow-head-solid {
   fill: var(--tone-soft);
 }

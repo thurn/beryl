@@ -214,9 +214,7 @@ export function Arrows({ arrows }: { arrows: ArrowSpec[] }) {
                 {a.endMark === "head" && (
                   <path
                     className={
-                      a.tone === "gold" && !a.fine
-                        ? "arrow-head arrow-head-solid"
-                        : "arrow-head"
+                      a.fine ? "arrow-head" : "arrow-head arrow-head-solid"
                     }
                     d={a.fine ? FINE_HEAD : HEADS[a.tone]}
                     transform={head}
@@ -244,17 +242,18 @@ function Dot({ at: [x, y] }: { at: Vector }) {
         className="arrow-dot-glow"
         cx={x}
         cy={y}
-        r="11"
+        r="13"
         filter="url(#arrow-blur)"
       />
-      <circle className="arrow-dot" cx={x} cy={y} />
+      <circle className="arrow-dot" cx={x} cy={y} r="5" />
     </>
   );
 }
 
-/** An open arrowhead, its tip at the origin, pointing along +x. */
+/** Arrowheads, each with its tip at the origin, pointing along +x: solid barbed heads, and an
+ * open one for hairlines. */
 const HEADS = {
-  gold: "M-12 -7 L2 0 L-12 7 Z",
-  cyan: "M-26 -17 L0 0 L-26 17",
+  gold: "M-12 -7 L2 0 L-12 7 L-9 0 Z",
+  cyan: "M-30 -17 L0 0 L-30 17 L-23 0 Z",
 } as const;
 const FINE_HEAD = "M-9 -5.5 L0 0 L-9 5.5";

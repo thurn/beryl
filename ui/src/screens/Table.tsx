@@ -311,7 +311,7 @@ export function TableScene({
               key={i}
               width={105}
               style={{
-                transform: `rotate(${(i - mid) * -4.2}deg) translateY(${-((i - mid) ** 2) * 5.5}px)`,
+                transform: `rotate(${(i - mid) * -3.5}deg) translateY(${-((i - mid) ** 2) * 3.5}px)`,
               }}
             />
           );
@@ -361,7 +361,9 @@ export function TableScene({
           <i className="step-banner-rule step-banner-rule-right" />
           <i className="step-banner-underline" />
           <span className="step-banner-detail">{board.banner.detail}</span>
-          <i className="step-banner-notch" />
+          <svg className="step-banner-notch" viewBox="0 0 140 12" aria-hidden>
+            <path d="M0 1.5 H60.5 L70 10.5 L79.5 1.5 H140" />
+          </svg>
         </div>
       )}
       {board.stack?.map((item, i) => (

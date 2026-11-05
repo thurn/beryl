@@ -141,7 +141,7 @@ const trigger: TableBoard = {
       tone: "cyan",
       fromSide: { x: 0, y: 0.055 },
       toSide: { x: 0.5, y: 0.2 },
-      leave: [-150, -180],
+      leave: [-150, -195],
       arrive: [-35, 150],
     },
   ],

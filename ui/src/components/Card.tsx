@@ -283,11 +283,18 @@ function AttackChevron({ id }: { id?: string }) {
       aria-hidden
     >
       <defs>
-        <linearGradient id="chevron-light" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#ffe6a6" stopOpacity="1" />
-          <stop offset="0.5" stopColor="#ffb446" stopOpacity="0.7" />
-          <stop offset="1" stopColor="#f0901f" stopOpacity="0.15" />
-        </linearGradient>
+        <radialGradient
+          id="chevron-light"
+          cx="50"
+          cy="0"
+          r="62"
+          gradientUnits="userSpaceOnUse"
+          gradientTransform="translate(50 0) scale(1 0.45) translate(-50 0)"
+        >
+          <stop offset="0" stopColor="#fff2c8" stopOpacity="1" />
+          <stop offset="0.4" stopColor="#ffc060" stopOpacity="0.55" />
+          <stop offset="1" stopColor="#e88a20" stopOpacity="0" />
+        </radialGradient>
       </defs>
       <path d={`${tent} Z`} fill="url(#chevron-light)" />
       <path className="combat-line" d={tent} />
@@ -306,13 +313,13 @@ function BlockArc({ id }: { id?: string }) {
     >
       <defs>
         <linearGradient id="block-gold" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#fff8dc" />
-          <stop offset="0.7" stopColor="#ffe08e" />
-          <stop offset="1" stopColor="#f7b24a" />
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="0.6" stopColor="#fff0b8" />
+          <stop offset="1" stopColor="#ffc860" />
         </linearGradient>
       </defs>
       <path
-        d="M0 0 C1.5 12 22 19.5 50 19.5 C78 19.5 98.5 12 100 0 C97 9 78 14.5 53.5 14.5 L50 11 L46.5 14.5 C22 14.5 3 9 0 0 Z"
+        d="M0 0 C1.5 12 22 19.5 50 19.5 C78 19.5 98.5 12 100 0 C98 11 78 16 53.5 16 L50 12 L46.5 16 C22 16 2 11 0 0 Z"
         fill="url(#block-gold)"
       />
     </svg>
