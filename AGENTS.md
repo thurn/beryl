@@ -10,6 +10,10 @@ V1 targets exclusively the 540 cards of the MTGO Vintage Cube as of October 7,
 <https://www.mtgo.com/vintage-cube-cardlist>). Rules support, drafting and AI
 need only handle these cards.
 
+All rules engine code must contain comments referencing the relevant portion of
+the Comprehensive Rules which they are implementing, linking to
+https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
+
 ## Layout
 
 - `rust/`: the Cargo workspace. `crates/beryl_app` is the Tauri shell (window,
