@@ -41,7 +41,6 @@ const castIndex = decision.candidates.findIndex(
 assert.ok(castIndex >= 0, "the view before offers the cast");
 const castLabel = decision.candidates[castIndex].label;
 const name = before.objects.find((o) => o.slot === slot).name;
-const route = `/?fixture=${FIXTURE}&at=${views.length - 1}#/game`;
 const card = `[data-slot="${slot}"]`;
 
 /** The `choose` commands the page has sent, as recorded by the fixture transport. */
@@ -59,11 +58,23 @@ const where = (handle) =>
         return [Math.round(r.left), Math.round(r.top)];
     });
 
+/** The center of a bounding box. */
+const center = (box) => ({
+    x: box.x + box.width / 2,
+    y: box.y + box.height / 2,
+});
+
 const browser = await launch();
 const errors = [];
 let failed = false;
 
-async function check(title, body) {
+/** Runs `body` on a fresh page of the fixture's first `at` views, once the hand card `ready`
+ * is in hand. */
+async function check(
+    title,
+    body,
+    { at = views.length - 1, ready = card } = {},
+) {
     const context = await browser.newContext({
         viewport: { width: 1600, height: 900 },
         deviceScaleFactor: 1,
@@ -77,8 +88,9 @@ async function check(title, body) {
     );
     try {
         await page.clock.install();
+        const route = `/?fixture=${FIXTURE}&at=${at}#/game`;
         await page.goto(new URL(route, base).href, { waitUntil: "load" });
-        await page.waitForSelector(`${card}[data-zone="hand"]`);
+        await page.waitForSelector(`${ready}[data-zone="hand"]`);
         await body(page);
         console.log(`ok: ${title}`);
     } catch (e) {
@@ -96,19 +108,34 @@ await check(
         // Let the hand settle into its fan before picking the card up.
         await page.clock.runFor(2000);
         const box = await handle.boundingBox();
-        await page.mouse.move(box.x + box.width / 2, box.y + 40);
+        const grab = { x: box.x + box.width / 2, y: box.y + 40 };
+        await page.mouse.move(grab.x, grab.y);
+        // Hovered, the card rises under the pointer; then it is picked up there.
+        await page.clock.runFor(1000);
+        const held = center(await handle.boundingBox());
+        // From here on time passes only when the test says so.
+        await page.clock.pauseAt(Date.now() + 60_000);
         await page.mouse.down();
+        const drop = { x: 800, y: 380 };
         for (let i = 1; i <= 10; i++) {
             await page.mouse.move(
-                box.x +
-                    box.width / 2 +
-                    ((800 - box.x - box.width / 2) * i) / 10,
-                box.y + 40 + ((380 - box.y - 40) * i) / 10,
+                grab.x + ((drop.x - grab.x) * i) / 10,
+                grab.y + ((drop.y - grab.y) * i) / 10,
             );
         }
         await page.clock.runFor(100);
-        // From here on time passes only when the test says so.
-        await page.clock.pauseAt(Date.now() + 60_000);
+        // It follows the pointer rather than sinking back into the fan as it stops being
+        // hovered. (It straightens and shrinks back from its hover scale, hence the slack.)
+        const followed = center(await handle.boundingBox());
+        assert.ok(
+            Math.hypot(
+                followed.x - held.x - (drop.x - grab.x),
+                followed.y - held.y - (drop.y - grab.y),
+            ) < 20,
+            `the dragged card follows the pointer: moved by ` +
+                `${followed.x - held.x}, ${followed.y - held.y} for a pointer ` +
+                `moved by ${drop.x - grab.x}, ${drop.y - grab.y}`,
+        );
         await page.mouse.up();
         assert.deepEqual(
             await chosen(page),
@@ -193,6 +220,52 @@ await check("hovering a card shows it whole, with its artist", async (page) => {
         .getByText(`Illustrated by ${artist}`)
         .waitFor();
 });
+
+// The first view in which the opponent plays a card from their hand onto the table, at the
+// human's priority, and that card.
+const opponentPlay = views.findIndex(
+    (v, i) =>
+        views[i - 1]?.status.decision?.kind === "priority" &&
+        v.events.some((e) => played(v, e)),
+);
+assert.ok(opponentPlay > 0, "the opponent plays a card from their hand");
+const back = `[data-slot="${views[opponentPlay].events.find((e) => played(views[opponentPlay], e)).slot}"]`;
+
+/** Whether event `e` of view `v` moves an opponent's card from their hand to the table. */
+function played(v, e) {
+    return (
+        e.kind === "zoneChange" &&
+        e.from === "hand" &&
+        ["battlefield", "graveyard", "stack"].includes(e.to) &&
+        v.objects.find((o) => o.slot === e.slot)?.owner === "opponent"
+    );
+}
+
+await check(
+    "an opponent's card grows out of its back rather than jumping in size",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const handle = await page.$(back);
+        const { width } = await handle.boundingBox();
+        await page.clock.pauseAt(Date.now() + 60_000);
+        await page.getByRole("button", { name: /^(Next|End Turn)/ }).click();
+        await page.waitForSelector(`${back}:not([data-zone="hand"])`);
+        // A frame in, it has barely begun to turn and grow (a jump would nearly double it).
+        await page.clock.runFor(16);
+        const first = await handle.boundingBox();
+        assert.ok(
+            Math.abs(first.width / width - 1) < 0.1,
+            `as it leaves the hand it is ${first.width} wide, as its back was ${width}`,
+        );
+        await page.clock.runFor(3000);
+        const landed = await handle.boundingBox();
+        assert.ok(
+            Math.abs(landed.width - width) > 10,
+            "it then takes its new size",
+        );
+    },
+    { at: opponentPlay, ready: back },
+);
 
 await browser.close();
 if (errors.length) {

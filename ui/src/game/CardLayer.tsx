@@ -6,7 +6,7 @@
 import {
   useContext,
   useEffect,
-  useMemo,
+  useLayoutEffect,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -42,9 +42,8 @@ export interface CardState {
 }
 
 export interface CardLayerProps {
-  /** Changes with each view shown (the view itself will do): each sends every card to its
-   * placement again, so a card left where it was dropped returns if the view did not move
-   * it. */
+  /** Changes with each view shown (the view itself will do): a card left where it was dropped
+   * to be played stays there until the epoch changes, then goes to its placement. */
   epoch: unknown;
   objects: ObjectView[];
   placements: Layout;
@@ -95,18 +94,25 @@ export function CardLayer(props: CardLayerProps) {
   );
 }
 
-/** Animates `value` to `to` whenever `to` or `epoch` changes. */
+/** Animates `value` to `to` whenever `to` or `restart` changes, unless the pointer is
+ * `holding` the value where it is; once let go, the value glides to `to`. */
 function useGlide(
   value: MotionValue<number>,
   to: number,
   instant: boolean,
-  epoch: unknown,
+  holding = false,
+  restart?: unknown,
 ) {
   useEffect(() => {
+    if (holding) return;
     const controls = animate(value, to, instant ? { duration: 0 } : SPRING);
     return () => controls.stop();
-  }, [value, to, instant, epoch]);
+  }, [value, to, instant, holding, restart]);
 }
+
+/** Where the pointer has a card: dragging it, or dropped where it was played until the view
+ * it was played on (its epoch) is replaced. */
+type Held = { dragging: true } | { dragging: false; epoch: unknown };
 
 function CardElement({
   object,
@@ -130,16 +136,27 @@ function CardElement({
   const rotate = useMotionValue(place.rotate);
   const skewX = useMotionValue(place.skew);
   const opacity = useMotionValue(grow ? 0 : place.opacity);
-  const [dragging, setDragging] = useState(false);
-  // Each view, and each drop that did not play the card, sends it to its placement again.
-  const [returns, setReturns] = useState(0);
-  const epoch = useMemo(() => ({}), [layer.epoch, returns]);
-  useGlide(x, place.x, reduce, epoch);
-  useGlide(y, place.y, reduce, epoch);
-  useGlide(scale, place.scale, reduce, epoch);
-  useGlide(rotate, dragging ? 0 : place.rotate, reduce, epoch);
-  useGlide(skewX, place.skew, reduce, epoch);
-  useGlide(opacity, place.opacity, reduce, epoch);
+  const [held, setHeld] = useState<Held>();
+  const dragging = held?.dragging === true;
+  // The pointer places the card while it holds it, whatever its placement does meanwhile (it
+  // changes as soon as a raised hand card stops being hovered).
+  const holding =
+    held !== undefined && (held.dragging || held.epoch === layer.epoch);
+  useGlide(x, place.x, reduce, holding);
+  useGlide(y, place.y, reduce, holding);
+  // A card changing looks is drawn at another width (a back, a full frame, a battlefield
+  // frame): before that is painted, its scale makes up the difference, and then glides, so the
+  // card's size changes smoothly too.
+  const drawnWidth = useRef(place.width);
+  useLayoutEffect(() => {
+    if (drawnWidth.current === place.width) return;
+    scale.jump((scale.get() * drawnWidth.current) / place.width);
+    drawnWidth.current = place.width;
+  }, [scale, place.width]);
+  useGlide(scale, place.scale, reduce, false, place.width);
+  useGlide(rotate, dragging ? 0 : place.rotate, reduce);
+  useGlide(skewX, place.skew, reduce);
+  useGlide(opacity, place.opacity, reduce);
   const drag = useRef<{ start: Point; from: Point; moved: boolean }>(undefined);
 
   const stagePoint = (e: ReactPointerEvent) => {
@@ -170,7 +187,7 @@ function CardElement({
       d.moved = true;
       x.stop();
       y.stop();
-      setDragging(true);
+      setHeld({ dragging: true });
       layer.onHover(undefined);
     }
     x.set(d.from.x + dx);
@@ -185,10 +202,10 @@ function CardElement({
       layer.onClick(object.slot, at);
       return;
     }
-    setDragging(false);
-    // A played card stays where it was dropped until the next view moves it on.
+    // A played card stays where it was dropped until the next view moves it on; any other
+    // goes back to its place.
     const played = at.y < BATTLEFIELD_EDGE && layer.onDrop(object.slot, at);
-    if (!played) setReturns((n) => n + 1);
+    setHeld(played ? { dragging: false, epoch: layer.epoch } : undefined);
   };
 
   const classes = [
@@ -223,8 +240,7 @@ function CardElement({
       onPointerUp={onPointerUp}
       onPointerCancel={() => {
         drag.current = undefined;
-        setDragging(false);
-        setReturns((n) => n + 1);
+        setHeld(undefined);
       }}
       onPointerEnter={() =>
         !drag.current && place.look !== "hidden" && layer.onHover(object.slot)
