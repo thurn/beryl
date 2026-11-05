@@ -1146,6 +1146,7 @@
     rgb(240 130 30 / 35%) 60%,
     transparent
   );
+  box-shadow: none;
 }
 /* The combat glyph stands on a low tab that lifts the rule around it. */
 /* Opaque in the table's local tone, so the rule breaks under the tab. */
