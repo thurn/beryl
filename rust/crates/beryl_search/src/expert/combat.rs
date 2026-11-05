@@ -462,7 +462,31 @@ impl Sim<'_> {
             })
             .max()
             .unwrap_or(0);
-        e - to_us.max(to_walker)
+        e - to_us.max(to_walker) - self.exiled_next(s, &p, ours)
+    }
+
+    /// After our attack, what the opponent's The Wandering Emperor takes on their turn: "−2:
+    /// Exile target tapped creature", our most valuable attacker still tapped, while she has
+    /// the loyalty for it.
+    fn exiled_next(&self, s: &State, p: &crate::rollout::Policy<'_>, ours: bool) -> i32 {
+        let emperor = s.battlefield().iter().any(|&w| {
+            s.controller(w) != self.me
+                && self.t.def(s.card(w)).name == names::THE_WANDERING_EMPEROR
+                && s.object(w).counters.loyalty >= 2
+        });
+        if !ours || !emperor {
+            return 0;
+        }
+        s.battlefield()
+            .iter()
+            .filter(|&&c| {
+                s.controller(c) == self.me
+                    && s.derived(c).types.intersects(Types::CREATURE)
+                    && s.object(c).flags.has(ObjectFlags::TAPPED)
+            })
+            .map(|&c| p.value(c))
+            .max()
+            .unwrap_or(0)
     }
 }
 

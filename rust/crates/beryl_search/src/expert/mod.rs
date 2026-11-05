@@ -34,6 +34,8 @@
 
 mod combat;
 
+use std::cell::OnceCell;
+
 use beryl_cards::names;
 use beryl_engine::card::{Ability, AbilityIx, FaceAbility, Keywords, Types};
 use beryl_engine::rng::SplitMix64;
@@ -88,9 +90,7 @@ impl ExpertAgent {
 impl Agent for ExpertAgent {
     fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice {
         let t = &self.table;
-        let e = Expert {
-            p: self.policy.view(t, obs, d.player, true),
-        };
+        let e = Expert::new(self.policy.view(t, obs, d.player, true));
         match d.kind {
             DecisionKind::Priority => best(d, |c| c.option().map(|o| e.action(o))),
             DecisionKind::Attacker
@@ -149,11 +149,12 @@ impl Agent for ExpertAgent {
                     // What each plan leaves untapped: a look at the payment, not ahead.
                     let mut s = start;
                     apply(&mut s, t, x, &mut inline, Choice(i));
-                    let after = Expert {
-                        p: self
-                            .policy
-                            .view(t, Observation::new(&s, d.player), d.player, true),
-                    };
+                    let after = Expert::new(self.policy.view(
+                        t,
+                        Observation::new(&s, d.player),
+                        d.player,
+                        true,
+                    ));
                     Some(after.castable())
                 })
             }
@@ -264,6 +265,17 @@ enum Timing {
 /// One decision's view, for the rules above.
 struct Expert<'a> {
     p: Policy<'a>,
+    /// [`Expert::lethal_blockers`], worked out once.
+    lethal: OnceCell<Option<Vec<Slot>>>,
+}
+
+impl<'a> Expert<'a> {
+    fn new(p: Policy<'a>) -> Expert<'a> {
+        Expert {
+            p,
+            lethal: OnceCell::new(),
+        }
+    }
 }
 
 impl Expert<'_> {
@@ -579,7 +591,26 @@ impl Expert<'_> {
             let spellbinder = self.p.t.def(top.card).name == names::ELITE_SPELLBINDER;
             return if spellbinder { self.their_end(o) } else { 0 };
         }
-        let threat = self.threat(&top);
+        let counter = self.counter_score(&top, slot, face);
+        // A wheel we let resolve shuffles our hand away, and their Teferi keeps us to sorcery
+        // speed ("Each opponent can cast spells only any time they could cast a sorcery"):
+        // what we could cast now is better cast than lost, unless we counter it.
+        let teferi = self.p.t.def(top.card).name == names::TEFERI_TIME_RAVELER;
+        let countered = self.hand(self.me()).iter().any(|s| {
+            self.obs().card(s).is_some_and(|c| {
+                i32::from(self.p.t.def(c).front().cost.mana_value()) <= self.mana(self.me())
+            }) && self.counter_score(&top, s, 0) > 0
+        });
+        if counter == 0 && !countered && (self.p.values.get(top.card).wheel || teferi) {
+            return self.instant_speed(o, if teferi { -1 } else { 0 });
+        }
+        counter
+    }
+
+    /// The score of countering the opponent's spell `top` with the card in `slot`, cast as
+    /// face `face`, by counterspell discipline; 0 when it is no counter or not worth it.
+    fn counter_score(&self, top: &StackEntry, slot: Slot, face: u8) -> i32 {
+        let threat = self.threat(top);
         let spare = self.counters_in_hand().count() >= 2;
         let last_card = self.hand(self.opp()).count() <= 1;
         let min = if spare || last_card {
@@ -588,7 +619,7 @@ impl Expert<'_> {
             MAJOR
         };
         let theirs = self.mana(self.opp());
-        let counter = match (self.name(slot), face) {
+        match (self.name(slot), face) {
             // Mana Tithe: "Counter target spell unless its controller pays {1}."
             (Some(names::MANA_TITHE), _) if theirs < 1 && threat >= TITHE_MIN => 300,
             // Mana Tithe first when No More Lies alone could be paid for: paying {1} leaves too
@@ -608,13 +639,7 @@ impl Expert<'_> {
             // for a major threat when no counterspell can answer it.
             (Some(names::SINK_INTO_STUPOR), 0) if threat >= MAJOR => 150,
             _ => 0,
-        };
-        // A wheel we let resolve shuffles our hand away: what we could cast now is better
-        // cast than lost.
-        if counter == 0 && self.p.values.get(top.card).wheel {
-            return self.instant_speed(o, 0);
         }
-        counter
     }
 
     /// What letting an opponent's spell resolve would cost us: its value, or for a spell
@@ -914,8 +939,11 @@ impl Expert<'_> {
                 let card = self.obs().card(slot).expect("a known card");
                 self.keeps_counter_mana(i32::from(self.p.t.def(card).front().cost.mana_value()))
             };
+            // Sink into Stupor's bounce goes after the removal that answers for good, which
+            // then takes the target both want.
+            let bounce = if name == names::SINK_INTO_STUPOR { 40 } else { 0 };
             return if (!flash || sorcery_only || urgent) && keeps {
-                700 + removal.0
+                700 + removal.0 - bounce
             } else {
                 0
             };
@@ -1044,7 +1072,7 @@ impl Expert<'_> {
                 // makes our attack lethal, there is a tapped creature to exile now, or the
                 // opponent is tapped out.
                 let life = i32::from(self.obs().player(self.opp()).life);
-                let power = self.attack_power(0);
+                let power = self.attack_power(&[]);
                 if power > 0 && power < life && power + 1 >= life {
                     1500
                 } else if self.counter_known(self.mana(self.me()) - 4) {
@@ -1240,9 +1268,7 @@ impl Expert<'_> {
             .map(|s| i32::from(self.obs().derived(s).power.max(0)))
             .sum();
         let winning = power >= i32::from(self.obs().player(self.opp()).life);
-        // Nor when far behind on board: seven fresh cards serve the side already winning.
-
-        // Far behind, facing a swing for half our life or low on it, a wheel refills the hand
+        // Nor when far behind, facing a swing for half our life or low on it, a wheel refills the hand
         // that wins the game for them.
         let behind = 2 * self.threat_past(None) >= self.life()
             || self.life() <= 7
@@ -1261,8 +1287,9 @@ impl Expert<'_> {
             .hand(self.me())
             .iter()
             .any(|s| !self.is(s, wheel) && !self.p.is_land(s) && self.value(s) >= COUNTER_SPARE);
-        // Our hand empty and theirs full, it refuels us more than them, behind or not.
-        let empty = ours == 0 && theirs >= 3;
+        // Our hand empty and theirs full, it refuels us more than them, behind or not; so
+        // does one that gives them two cards or fewer and us three more than them.
+        let empty = (ours == 0 && theirs >= 3) || (theirs >= 5 && gain >= 3);
         decking || (!winning && !holding && (empty || (!behind && refill)))
     }
 
@@ -1341,15 +1368,13 @@ impl Expert<'_> {
                 // It would come back from Aang's Iceberg's exile in full, a 6/6 with Insects.
                 0
             } else {
-                self.value(s)
+                self.value(s) + self.killer_bonus(s)
             }
         };
-        // Before combat, the blocker whose removal opens lethal comes first.
-        let opens = self.opens_lethal();
-        let rank = |s: Slot| {
-            let blocker = self.has_type(s, Types::CREATURE) && !self.tapped(s);
-            worth(s) + if opens && blocker { 1000 } else { 0 }
-        };
+        // Before combat, a blocker whose removal opens lethal comes first; not for Oust, whose
+        // 3 life can be the 3 they survive at.
+        let opens = |s: Slot| name != names::OUST && self.lethal_blocker(s);
+        let rank = |s: Slot| worth(s) + if opens(s) { 1000 } else { 0 };
         let target = self
             .permanents(self.opp())
             .filter(|&s| self.obs().matches(self.p.t, &spec.filter, s))
@@ -1359,46 +1384,177 @@ impl Expert<'_> {
         // A planeswalker our attack can kill this turn needs no removal.
         if walker
             && ours
-            && self.attack_power(0) >= i32::from(self.obs().object(target).counters.loyalty)
+            && self.attack_power(&[]) >= i32::from(self.obs().object(target).counters.loyalty)
         {
             return None;
         }
         let mut v = worth(target);
-        // Removing their only untapped blocker before combat may open lethal.
-        if ours && self.has_type(target, Types::CREATURE) && self.opens_lethal() {
+        // Removing a blocker before combat may open lethal.
+        if opens(target) {
             v += 1000;
         }
         (v > 0 && v >= min).then_some((v, walker))
     }
 
-    /// Whether removing one untapped creature of the opponent's before combat would let our
-    /// attack kill them when it would not now.
+    /// Whether removing untapped creatures of the opponent's before combat, as many as our
+    /// removal and bounces could take now, would let our attack kill them when it would not
+    /// now.
     fn opens_lethal(&self) -> bool {
-        let life = i32::from(self.obs().player(self.opp()).life);
-        self.attack_power(0) < life && self.attack_power(1) >= life
+        self.lethal_blockers().is_some_and(|b| !b.is_empty())
+    }
+
+    /// Whether `slot` is one of the blockers whose removal before combat opens lethal.
+    fn lethal_blocker(&self, slot: Slot) -> bool {
+        self.lethal_blockers().is_some_and(|b| b.contains(&slot))
+    }
+
+    /// The fewest untapped creatures of the opponent's whose removal before combat lets our
+    /// attack kill them, no more than we have removal and bounces for this turn: empty when
+    /// the attack kills already, `None` when no such set exists.
+    fn lethal_blockers(&self) -> Option<&[Slot]> {
+        self.lethal
+            .get_or_init(|| {
+                let life = i32::from(self.obs().player(self.opp()).life);
+                if self.obs().turn().step != TurnStep::PrecombatMain
+                    || self.obs().turn().active != self.me()
+                {
+                    return None;
+                }
+                let blockers: Vec<Slot> = self
+                    .creatures(self.opp())
+                    .filter(|&s| !self.tapped(s))
+                    .collect();
+                // A wall of more blockers than this is not one removal or two from lethal.
+                let most = if blockers.len() > 12 {
+                    0
+                } else {
+                    self.removals_now().min(blockers.len())
+                };
+                // Every subset of `size` blockers, as a bit set over `blockers`.
+                for size in 0..=most {
+                    let found = (0u32..1 << blockers.len())
+                        .filter(|m| m.count_ones() as usize == size)
+                        .map(|m| {
+                            (0..blockers.len())
+                                .filter(|&i| m & (1 << i) != 0)
+                                .map(|i| blockers[i])
+                                .collect::<Vec<Slot>>()
+                        })
+                        .find(|removed| self.attack_power(removed) >= life);
+                    if found.is_some() {
+                        return found;
+                    }
+                }
+                None
+            })
+            .as_deref()
+    }
+
+    /// How many of the opponent's creatures our removal and bounces could take this turn:
+    /// each planeswalker of ours with a bounce it has the loyalty for and has not used (Jace,
+    /// the Mind Sculptor's −1, Teferi's −3), and the removal spells in hand our mana could
+    /// cast, the cheapest first. Oust is left out: its 3 life can be the 3 they survive at.
+    fn removals_now(&self) -> usize {
+        let walkers = self
+            .permanents(self.me())
+            .filter(|&s| !self.obs().object(s).flags.has(ObjectFlags::LOYALTY_ACTIVATED))
+            .filter(|&s| {
+                let loyalty = self.obs().object(s).counters.loyalty;
+                match self.name(s) {
+                    Some(names::JACE_THE_MIND_SCULPTOR) => loyalty >= 1,
+                    Some(names::TEFERI_TIME_RAVELER) => loyalty >= 3,
+                    _ => false,
+                }
+            })
+            .count();
+        let mut costs: Vec<i32> = self
+            .hand(self.me())
+            .iter()
+            .filter(|&s| {
+                matches!(
+                    self.name(s),
+                    Some(
+                        names::GET_LOST
+                            | names::AANGS_ICEBERG
+                            | names::SWIFT_RECONFIGURATION
+                            | names::SINK_INTO_STUPOR
+                    )
+                )
+            })
+            .filter_map(|s| self.obs().card(s))
+            .map(|c| i32::from(self.p.t.def(c).front().cost.mana_value()))
+            .collect();
+        costs.sort_unstable();
+        let mut mana = self.mana(self.me());
+        let spells = costs
+            .iter()
+            .take_while(|&&c| {
+                mana -= c;
+                mana >= 0
+            })
+            .count();
+        // One of them being aimed now, already paid for.
+        let aiming = self.obs().stack().last().is_some_and(|e| {
+            e.controller == self.me()
+                && matches!(
+                    self.p.t.def(e.card).name,
+                    names::JACE_THE_MIND_SCULPTOR
+                        | names::TEFERI_TIME_RAVELER
+                        | names::GET_LOST
+                        | names::AANGS_ICEBERG
+                        | names::SWIFT_RECONFIGURATION
+                        | names::SINK_INTO_STUPOR
+                )
+        });
+        walkers + spells + usize::from(aiming)
     }
 
     /// The damage our creatures able to attack would deal past the opponent's untapped
-    /// creatures but `spared` of them, each blocking our strongest, as before combat.
-    fn attack_power(&self, spared: usize) -> i32 {
+    /// creatures but those `removed`, as before combat: each blocker blocks the strongest
+    /// attacker it can, fliers only by fliers
+    /// ([CR 702.9b](https://yawgatog.com/resources/magic-rules/#R7029b): "A creature with
+    /// flying can't be blocked except by creatures with flying and/or reach"), a ground
+    /// attacker by a blocker that could not block a flier when there is one.
+    fn attack_power(&self, removed: &[Slot]) -> i32 {
         if self.obs().turn().step != TurnStep::PrecombatMain {
             return 0;
         }
-        let mut powers: Vec<i32> = self
+        let flies = |s: Slot, k: Keywords| self.obs().derived(s).keywords.intersects(k);
+        let mut attackers: Vec<(i32, bool)> = self
             .creatures(self.me())
             .filter(|&s| {
                 let o = self.obs().object(s);
                 !o.flags.has(ObjectFlags::TAPPED) && !o.flags.has(ObjectFlags::SUMMONING_SICK)
             })
-            .map(|s| i32::from(self.obs().derived(s).power.max(0)))
+            .map(|s| {
+                let power = i32::from(self.obs().derived(s).power.max(0));
+                (power, flies(s, Keywords::FLYING))
+            })
             .collect();
-        powers.sort_unstable_by(|a, b| b.cmp(a));
-        let blockers = self
+        attackers.sort_unstable_by(|a, b| b.cmp(a));
+        let mut reach: Vec<bool> = self
             .creatures(self.opp())
-            .filter(|&s| !self.tapped(s))
-            .count()
-            .saturating_sub(spared);
-        powers.iter().skip(blockers).sum()
+            .filter(|&s| !self.tapped(s) && !removed.contains(&s))
+            .map(|s| flies(s, Keywords::FLYING.union(Keywords::REACH)))
+            .collect();
+        let mut through = 0;
+        for (power, flying) in attackers {
+            let blocker = if flying {
+                reach.iter().position(|&r| r)
+            } else {
+                reach
+                    .iter()
+                    .position(|&r| !r)
+                    .or_else(|| reach.iter().position(|&r| r))
+            };
+            match blocker {
+                Some(i) => {
+                    reach.swap_remove(i);
+                }
+                None => through += power,
+            }
+        }
+        through
     }
 
     /// The first targeted ability of a card's front face, such as Aang's Iceberg's "When
@@ -1463,13 +1619,14 @@ impl Expert<'_> {
         let card = self.obs().card(slot)?;
         let face = &self.p.t.def(card).faces[usize::from(o.face)];
         let loyalty = i32::from(o.counters.loyalty);
-        // An ability that would leave no loyalty is no option, short of an ultimate; the
-        // walker then grows instead.
+        // An ability that would leave no loyalty is no option, short of an ultimate or one
+        // that opens lethal; the walker then grows instead.
+        let lethal = self.opens_lethal();
         let keeps = |i: u8| {
             face.abilities[usize::from(i)]
                 .cost
                 .loyalty
-                .is_some_and(|l| loyalty + i32::from(l) >= 1 || l <= -9)
+                .is_some_and(|l| loyalty + i32::from(l) >= 1 || l <= -9 || lethal)
         };
         self.preferred_ability(slot)
             .filter(|&i| keeps(i))
@@ -1501,6 +1658,10 @@ impl Expert<'_> {
                 if loyalty >= 12 {
                     return by_cost(-12);
                 }
+                // Returning a blocker opens lethal.
+                if self.opens_lethal() {
+                    return by_cost(-1);
+                }
                 // +2 leaves him at loyalty + 2; the opponent's swing back decides the rest.
                 if threatened >= loyalty + 2 {
                     // −1 returns the creature best returned: worth it if that saves him.
@@ -1514,10 +1675,6 @@ impl Expert<'_> {
                         return by_cost(-1);
                     }
                     return by_cost(0);
-                }
-                // Returning their only untapped blocker opens lethal.
-                if loyalty >= 2 && self.opens_lethal() {
-                    return by_cost(-1);
                 }
                 // Dead on board ourselves, or low on life, he returns the biggest attacker.
                 let low = self.life() <= 6 || self.dying();
@@ -1559,7 +1716,7 @@ impl Expert<'_> {
             names::THE_WANDERING_EMPEROR => {
                 // +1 on an attacker when one more power is lethal.
                 let life = i32::from(self.obs().player(self.opp()).life);
-                let power = self.attack_power(0);
+                let power = self.attack_power(&[]);
                 if power > 0 && power < life && power + 1 >= life {
                     return by_cost(1);
                 }
@@ -1821,13 +1978,10 @@ impl Expert<'_> {
     fn bounce_value(&self, slot: Slot) -> i32 {
         let mut v = self.value(slot);
         // Before combat, returning a blocker may open lethal.
-        if self.opens_lethal() && self.has_type(slot, Types::CREATURE) && !self.tapped(slot) {
+        if self.lethal_blocker(slot) {
             v += 500;
         }
-        // Dead on board, or low on life, the creature that would kill us is the one to return.
-        if (self.dying() || self.life() <= 6) && self.has_type(slot, Types::CREATURE) {
-            v += 20 * i32::from(self.obs().derived(slot).power.max(0));
-        }
+        v += self.killer_bonus(slot);
         if self.obs().object(slot).flags.has(ObjectFlags::TOKEN) {
             return v + 15;
         }
@@ -1855,6 +2009,16 @@ impl Expert<'_> {
             // Recast for impending it is little set back; a full one costs seven again.
             Some(names::OVERLORD_OF_THE_MISTMOORS) if self.impending(slot) => v / 4,
             _ => v,
+        }
+    }
+
+    /// Dead on board, or low on life, what removing or returning a creature of theirs is worth
+    /// beyond its value: the creature that would kill us is the one to answer.
+    fn killer_bonus(&self, slot: Slot) -> i32 {
+        if (self.dying() || self.life() <= 6) && self.has_type(slot, Types::CREATURE) {
+            20 * i32::from(self.obs().derived(slot).power.max(0))
+        } else {
+            0
         }
     }
 
@@ -2011,8 +2175,8 @@ impl Expert<'_> {
         v + walker.map_or(0, |w| self.value(w))
     }
 
-    /// Before combat, when removing one blocker opens lethal, a harmful effect's target is an
-    /// untapped creature of theirs.
+    /// Before combat, when removing blockers opens lethal, a harmful effect's target is one of
+    /// those blockers.
     fn blocker_target(&self, d: &Decision) -> Option<Choice> {
         let (_, friendly) = self.p.targeting()?;
         if friendly || !matches!(d.candidates, beryl_engine::Candidates::Objects(_)) {
@@ -2022,7 +2186,7 @@ impl Expert<'_> {
             let slot = c.object()?;
             Some(if self.obs().controller(slot) != self.opp() {
                 -self.value(slot)
-            } else if self.has_type(slot, Types::CREATURE) && !self.tapped(slot) {
+            } else if self.lethal_blocker(slot) {
                 1000 + self.value(slot)
             } else {
                 self.value(slot)
