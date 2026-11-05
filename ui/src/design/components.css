@@ -1075,7 +1075,7 @@
     drop-shadow(0 0 5px rgb(245 140 30 / 85%));
 }
 .phase-tracker-compact .phase:nth-child(3):not(.phase-current) .phase-icon {
-  stroke: #5e5040;
+  stroke: #7d6c52;
   stroke-width: 0.8;
 }
 /* The combat glyph's tab sits over the rule, so the rule steps up into it. */
