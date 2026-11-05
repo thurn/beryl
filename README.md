@@ -6,6 +6,8 @@ Apple silicon Macs: a Rust workspace behind a React and TypeScript UI. Free and
 open source, under the Apache License 2.0.
 
 - [AGENTS.md](AGENTS.md): how every change is made, tested and delivered.
+- [docs/engine-architecture.md](docs/engine-architecture.md): the rules engine's
+  design and the boundaries search, the UI and drafting build on.
 
 ## Setup
 
