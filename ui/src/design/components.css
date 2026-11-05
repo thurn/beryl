@@ -933,7 +933,7 @@
   align-items: center;
   margin: 0;
   height: 54px;
-  padding: 0 0 0 19px;
+  padding: 0 20px;
   list-style: none;
   border-radius: 999px;
   border: 1px solid #8a837c;
@@ -997,40 +997,35 @@
   fill: rgb(255 214 140 / 35%);
   stroke-width: 1.1;
 }
-/* Amber haze on the pill behind the current phase. */
+/* Amber haze on the pill behind the current phase, centered on its icon. */
 .phase-tracker:not(.phase-tracker-compact) .phase-current {
   position: relative;
 }
 .phase-tracker:not(.phase-tracker-compact) .phase-current::before {
   content: "";
   position: absolute;
-  inset: -12px -14px -12px 18px;
+  top: -12px;
+  bottom: -12px;
+  right: -14px;
+  width: 60px;
   background: radial-gradient(closest-side, rgb(210 120 40 / 28%), transparent);
 }
-/* Spaced as in the mockup, which is not quite even. */
 .phase-arrow {
   width: 9px;
   height: 11px;
-  margin: 0 21.5px 0 22.5px;
+  margin: 0 22px;
   fill: #ece6de;
   filter: drop-shadow(0 1px 1px rgb(0 0 0 / 70%));
 }
-.phase:nth-child(3) .phase-arrow {
-  margin: 0 26.5px 0 20.5px;
-}
-.phase:nth-child(4) .phase-arrow,
-.phase:nth-child(5) .phase-arrow {
-  margin: 0 19.5px 0 22.5px;
-}
 
-/* The compact tracker on the table (battlefield.png, combat.png), in stage pixels: dark glyphs
-   in a beige outline over a thin rule; the current one is filled gold and glows, and the rule
-   under it turns gold. */
+/* The compact tracker on the table, in stage pixels: the same icons, smaller, evenly spaced
+   over a thin rule with no pill or arrows. The current one glows as in the full tracker, and
+   the rule under it turns gold. */
 .phase-tracker-compact {
   position: relative;
-  gap: 7.5px;
+  gap: 13px;
   height: auto;
-  padding: 0 0 2px;
+  padding: 0 0 4px;
   border: none;
   border-radius: 0;
   background: none;
@@ -1040,7 +1035,7 @@
   content: "";
   position: absolute;
   left: -6px;
-  right: -14px;
+  right: -6px;
   bottom: 0;
   height: 2px;
   background: linear-gradient(
@@ -1051,14 +1046,14 @@
     transparent
   );
 }
-/* A dark groove runs behind the glyphs. */
+/* A dark groove runs behind the icons. */
 .phase-tracker-compact::before {
   content: "";
   position: absolute;
   left: 0;
-  right: -8px;
-  top: 30%;
-  height: 34%;
+  right: 0;
+  top: 20%;
+  height: 50%;
   background: linear-gradient(
     90deg,
     transparent,
@@ -1068,76 +1063,20 @@
   );
   filter: blur(3px);
 }
-.phase-tracker-compact .phase:nth-child(2) .phase-icon {
-  rotate: -4deg;
-  translate: -3.8px 0;
-}
-.phase-tracker-compact .phase:nth-child(4) .phase-icon {
-  rotate: 3deg;
-}
 .phase-tracker-compact .phase {
   position: relative;
 }
 .phase-tracker-compact .phase-icon {
   position: relative;
-  width: 34.5px;
-  height: 34.5px;
-  fill: #1b1713;
-  stroke: #a8946f;
-  stroke-width: 1.1;
-  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 45%));
-}
-.phase-tracker-compact .phase-current .phase-icon {
-  stroke: #b8560e;
-  stroke-width: 1;
-  filter: drop-shadow(0 0 2px rgb(255 200 90))
-    drop-shadow(0 0 5px rgb(245 140 30 / 85%));
-}
-.phase-tracker-compact .phase:nth-child(3):not(.phase-current) .phase-icon {
-  stroke: #7d6c52;
-  stroke-width: 0.8;
-}
-/* The combat glyph's tab sits over the rule, so the rule steps up into it. */
-.phase-tracker-compact .phase:nth-child(3) {
-  z-index: 1;
-}
-/* The current diamond: a bright core in a dark ring and a gold rim. */
-.phase-tracker-compact
-  .phase:is(:first-child, :last-child).phase-current
-  .phase-icon {
-  stroke: none;
-  filter: drop-shadow(0 0 3px rgb(245 140 30 / 85%));
-}
-.phase-tracker-compact .phase-icon .lit-rim {
-  fill: #eba232;
-}
-.phase-tracker-compact .phase-icon .lit-ring {
-  fill: #3a2810;
-}
-.phase-tracker-compact .phase-icon .lit-core {
-  fill: #fff3b0;
-}
-.phase-tracker-compact
-  .phase-current:not(:first-child, :last-child)
-  .phase-icon {
-  stroke: #8a3208;
-  stroke-width: 0.9;
-}
-.phase-tracker-compact
-  .phase-current:not(:first-child, :last-child)
-  .phase-icon
-  :is(path, circle, rect) {
-  fill: #f2c060;
-}
-.phase-tracker-compact .phase:nth-child(3).phase-current .phase-icon {
-  scale: 1.1;
+  width: 30px;
+  height: 30px;
 }
 .phase-tracker-compact .phase-current::after {
   content: "";
   position: absolute;
-  left: 5px;
-  right: 5px;
-  bottom: -2px;
+  left: 0;
+  right: 0;
+  bottom: -4px;
   height: 2px;
   z-index: 1;
   background:
@@ -1152,31 +1091,6 @@
       transparent
     );
   box-shadow: 0 0 4px 1px rgb(245 130 30 / 55%);
-}
-/* Lit, the tab is only the swords' glow pooling on the rule. */
-.phase-tracker-compact .phase-current:nth-child(3)::after {
-  left: -10px;
-  right: -10px;
-  bottom: -5px;
-  height: 10px;
-  background: radial-gradient(
-    closest-side,
-    rgb(255 190 80 / 95%),
-    rgb(240 130 30 / 55%) 55%,
-    transparent
-  );
-  box-shadow: none;
-}
-/* The combat glyph stands on a low tab that lifts the rule around it. */
-/* Opaque in the table's local tone, so the rule breaks under the tab. */
-.phase-tracker-compact .phase .phase-icon path.phase-tab {
-  fill: #5a4d46;
-  stroke: rgb(150 140 126 / 38%);
-  stroke-width: 1;
-}
-.phase-tracker-compact .phase.phase-current .phase-icon path.phase-tab {
-  fill: none;
-  stroke: none;
 }
 
 /* Life orbs, drawn in mockup pixels (Player.tsx); --orb scales one to CSS pixels. */

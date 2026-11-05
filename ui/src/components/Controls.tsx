@@ -78,26 +78,8 @@ export function PriorityPill({ children }: { children: ReactNode }) {
 
 export type Phase = "beginning" | "main1" | "combat" | "main2" | "end";
 
-const DIAMOND = <path d="M12 5 L19 12 L12 19 L5 12 Z" />;
-/** The current diamond on the compact tracker: a gold rim, a dark ring and a bright core. */
-const DIAMOND_LIT = (
-  <>
-    <path className="lit-rim" d="M12 4.6 L19.4 12 L12 19.4 L4.6 12 Z" />
-    <path className="lit-ring" d="M12 7 L17 12 L12 17 L7 12 Z" />
-    <path className="lit-rim" d="M12 8.4 L15.6 12 L12 15.6 L8.4 12 Z" />
-    <path className="lit-core" d="M12 9.3 L14.7 12 L12 14.7 L9.3 12 Z" />
-  </>
-);
-const CARD = <rect x="4.5" y="3" width="15" height="18" rx="2.2" />;
-
-/** Each phase's icon (the full tracker, ui_system.png section 02: cream outlines over dark or
- * stone fills) and glyph (the compact one on the table, as in battlefield.png). */
-const PHASES: {
-  phase: Phase;
-  label: string;
-  icon: ReactNode;
-  glyph: ReactNode;
-}[] = [
+/** Each phase's icon, cream outlines over dark or stone fills, drawn by both trackers. */
+const PHASES: { phase: Phase; label: string; icon: ReactNode }[] = [
   {
     phase: "beginning",
     label: "Beginning",
@@ -132,7 +114,6 @@ const PHASES: {
         />
       </>
     ),
-    glyph: DIAMOND,
   },
   {
     phase: "main1",
@@ -154,7 +135,6 @@ const PHASES: {
         />
       </>
     ),
-    glyph: CARD,
   },
   {
     phase: "combat",
@@ -171,18 +151,6 @@ const PHASES: {
           d="M22.32 1.68 L20.41 2.03 L7.97 14.47 L8.11 14.62 L4.58 18.15 L4.15 17.73 L2.60 19.28 L4.72 21.40 L6.27 19.85 L5.85 19.42 L9.38 15.89 L9.53 16.03 L21.97 3.59 Z"
         />
         <path d="M19.78 4.22 L10.23 13.77 M5.92 12.14 L11.86 18.08" />
-      </>
-    ),
-    glyph: (
-      <>
-        <path
-          className="phase-tab"
-          d="M-3.2 24 L1.8 19.6 L22.2 19.6 L27.2 24"
-        />
-        <g transform="translate(12 9.8) scale(1.12 1.08) translate(-12 -12)">
-          <path d="M3.23 3.23 L6.34 2.95 L11.29 7.05 L17.23 13.27 L18.51 12.00 L19.92 13.41 L17.94 15.39 L20.49 17.94 L20.84 17.59 L21.55 17.73 L22.32 18.36 L22.61 19.21 L22.11 20.27 L21.26 21.26 L20.27 22.11 L19.21 22.61 L18.36 22.32 L17.73 21.55 L17.59 20.84 L17.94 20.49 L15.39 17.94 L13.41 19.92 L12.00 18.51 L13.27 17.23 L7.05 11.29 L2.95 6.34 Z" />
-          <path d="M20.77 3.23 L17.66 2.95 L12.71 7.05 L6.77 13.27 L5.49 12.00 L4.08 13.41 L6.06 15.39 L3.51 17.94 L3.16 17.59 L2.45 17.73 L1.68 18.36 L1.39 19.21 L1.89 20.27 L2.74 21.26 L3.73 22.11 L4.79 22.61 L5.64 22.32 L6.27 21.55 L6.41 20.84 L6.06 20.49 L8.61 17.94 L10.59 19.92 L12.00 18.51 L10.73 17.23 L16.95 11.29 L21.05 6.34 Z" />
-        </g>
       </>
     ),
   },
@@ -202,7 +170,6 @@ const PHASES: {
         />
       </>
     ),
-    glyph: CARD,
   },
   {
     phase: "end",
@@ -213,12 +180,11 @@ const PHASES: {
         d="M9.8 5.5 A8 8 0 1 1 5 15.7 M13 2.5 L9.6 5.5 L13 8.5"
       />
     ),
-    glyph: DIAMOND,
   },
 ];
 
 /** The turn's phases, the current one lit gold. The compact variant sits on the table above
- * the pass button. */
+ * the pass button: smaller, with no pill or arrows, and a gold rule under the current phase. */
 export function PhaseTracker({
   current,
   compact = false,
@@ -232,7 +198,7 @@ export function PhaseTracker({
         compact ? "phase-tracker phase-tracker-compact" : "phase-tracker"
       }
     >
-      {PHASES.map(({ phase, label, icon, glyph }, i) => (
+      {PHASES.map(({ phase, label, icon }, i) => (
         <li
           key={phase}
           className={phase === current ? "phase phase-current" : "phase"}
@@ -248,11 +214,7 @@ export function PhaseTracker({
             role="img"
             aria-label={label}
           >
-            {!compact
-              ? icon
-              : glyph === DIAMOND && phase === current
-                ? DIAMOND_LIT
-                : glyph}
+            {icon}
           </svg>
         </li>
       ))}
