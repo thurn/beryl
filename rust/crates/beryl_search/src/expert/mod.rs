@@ -507,12 +507,14 @@ impl Expert<'_> {
     /// A card to take from a look at the opponent's hand, as Elite Spellbinder's: by its
     /// value, but a Mana Crypt is little to a player with lands enough, and a wheel is their
     /// way out of an emptying library. From a look at our own library, as Thundertrap
-    /// Trainer's, dying: the removal we can cast now.
+    /// Trainer's, or for the top of a scry, dying: the removal we can cast now.
     fn take_from_hand(&self, d: &Decision) -> Option<Choice> {
-        let Ask::Look { player, zone, .. } = d.ask else {
-            return None;
+        let (player, zone) = match d.ask {
+            Ask::Look { player, zone, .. } => (player, zone),
+            Ask::Scry { .. } => (self.me(), Zone::Library),
+            _ => return None,
         };
-        // A look at our library: dying, the answer we can cast now.
+        // Our library: dying, the answer we can cast now.
         if zone == Zone::Library && player == self.me() && self.dying() {
             let mana = self.mana(self.me());
             return Some(best(d, |c| {

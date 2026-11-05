@@ -849,3 +849,46 @@ fn random_combat_games_keep_the_invariants() {
         assert!(kinds.contains(kind), "no {kind} decision in any game");
     }
 }
+
+/// Where passing takes a player, as `next_stop` says for the pass button: the smart stops
+/// (§15), with the combat the active player can declare attackers in.
+#[test]
+fn passing_goes_to_the_next_smart_stop() {
+    use crate::Observation;
+    use crate::profile::{NextStop, Stops, next_stop};
+    let next = |g: &Game, p: Seat, stops| next_stop(Observation::new(&g.s, p), stops);
+    let mut g = Game::new();
+    let (a, d) = (g.attacker, g.defender());
+    // Nothing can attack: main 1 passes to main 2, and the defender's next stop is the
+    // opponent's end step. Under exact stops it is the next step.
+    assert_eq!(
+        next(&g, a, Stops::Smart),
+        NextStop::Step(TurnStep::PostcombatMain)
+    );
+    assert_eq!(next(&g, d, Stops::Smart), NextStop::Step(TurnStep::End));
+    assert_eq!(
+        next(&g, a, Stops::Exact),
+        NextStop::Step(TurnStep::BeginningOfCombat)
+    );
+    // A creature ready to attack: to combat.
+    let bear = g.put(a, "Bear");
+    let ogre = g.put(d, "Ogre");
+    // The same open decision, with the layers brought up to date.
+    g.expect(DecisionKind::Priority);
+    assert_eq!(
+        next(&g, a, Stops::Smart),
+        NextStop::Step(TurnStep::BeginningOfCombat)
+    );
+    g.pass_to_combat();
+    g.pick(DecisionKind::Attacker, Opt::Attack(bear));
+    // Blockers being declared, passing deals combat damage.
+    g.pick(DecisionKind::Blocker, Opt::Block(ogre));
+    assert_eq!(g.s.turn().step, TurnStep::DeclareBlockers);
+    assert_eq!(next(&g, a, Stops::Smart), NextStop::CombatDamage);
+    assert_eq!(next(&g, d, Stops::Exact), NextStop::CombatDamage);
+    // After combat, the active player's pass ends the turn; the defender's goes to the end
+    // step.
+    g.finish_combat();
+    assert_eq!(next(&g, a, Stops::Smart), NextStop::NextTurn);
+    assert_eq!(next(&g, d, Stops::Smart), NextStop::Step(TurnStep::End));
+}
