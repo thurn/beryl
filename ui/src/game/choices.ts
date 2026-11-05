@@ -337,8 +337,9 @@ function fateseal(at: Situation, { player }: AskOf<"fateseal">): Ask {
   };
 }
 
-/** A look at the top of a library or at a hand that may move one of some cards, in the card's
- * own words: asked yes or no first, then which (`may_choose_object`). */
+/** A look at the top of a library or at a hand that may move one of the cards it lights
+ * (the source card at the right says which, and what happens to the rest): asked yes or no
+ * first, then which (`may_choose_object`). */
 function look(at: Situation, ask: AskOf<"look">): Pick {
   const { player, zone, count, to, eligible } = ask;
   const library = zone === "library";
@@ -358,7 +359,11 @@ function look(at: Situation, ask: AskOf<"look">): Pick {
     kind: "pick",
     key: at.key,
     title,
-    instruction: at.sourceText || "You may choose a card.",
+    instruction: taking
+      ? "You may put a highlighted card into your hand."
+      : to === "exile"
+        ? "You may exile a highlighted card."
+        : "You may choose a highlighted card.",
     source: at.source,
     cards,
     pickable,
