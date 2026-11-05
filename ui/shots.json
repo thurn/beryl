@@ -15,7 +15,44 @@
     },
     {
       "name": "game-start",
-      "route": "/?fixture=greedy-turn-9#/",
+      "route": "/?fixture=greedy-turn-9&at=0#/",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-starting",
+      "route": "/?fixture=greedy-turn-9&at=0#/",
+      "width": 1600,
+      "height": 900,
+      "click": ".start-buttons button"
+    },
+    {
+      "name": "game-start-resume",
+      "route": "/?fixture=greedy-turn-9&at=50#/",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-opponent-thinking",
+      "route": "/?fixture=opponent-turn&at=44#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-halt-end-step",
+      "route": "/?fixture=opponent-turn&at=49#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-halt-main",
+      "route": "/?fixture=opponent-turn#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-log-counter",
+      "route": "/?fixture=choice-jace&at=130#/game",
       "width": 1600,
       "height": 900
     },

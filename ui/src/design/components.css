@@ -1206,6 +1206,54 @@
   stroke: url(#emblem-brass);
   stroke-width: 1.5;
 }
+/* What the player is doing, under their name while they act: small gold italic, with dots that
+   pulse so the table never looks frozen. */
+.player-badge-name {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+.player-badge-activity {
+  display: inline-flex;
+  align-items: baseline;
+  font: italic 600 14px var(--font-sans);
+  letter-spacing: 0.03em;
+  color: var(--gold);
+}
+.working-dots {
+  display: inline-flex;
+  gap: 0.22em;
+  margin-left: 0.3em;
+}
+.working-dots i {
+  width: 0.26em;
+  height: 0.26em;
+  border-radius: 50%;
+  background: currentColor;
+  animation: working-dot 1.2s ease-in-out infinite;
+}
+.working-dots i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.working-dots i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes working-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .working-dots i {
+    animation: none;
+    opacity: 0.8;
+  }
+}
 
 /* The overlay shell, on the 1600×900 stage: a 1000px choice column and a 338px side column. */
 .overlay {

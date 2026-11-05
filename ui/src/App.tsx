@@ -2,7 +2,8 @@ import { useEffect, useSyncExternalStore } from "react";
 import { MotionConfig } from "motion/react";
 import { appInfo, uiReady } from "./ipc";
 import { Gallery } from "./screens/Gallery";
-import { GameScreen, StartScreen, useGameUpdates } from "./screens/Game";
+import { GameScreen, StartScreen } from "./screens/Game";
+import { usePlayback } from "./game/playback";
 
 // Routes live in the hash so they work from the Tauri asset server and from Vite alike.
 const subscribe = (onChange: () => void) => {
@@ -14,7 +15,9 @@ const route = () => window.location.hash.replace(/^#/, "") || "/";
 export function App() {
   const path = useSyncExternalStore(subscribe, route);
   // Listening from the start, so a game's first view is never missed.
-  const game = useGameUpdates();
+  const { playback, starting, start } = usePlayback();
+  const status = playback?.update.view.status.kind;
+  const inProgress = playback && status !== "over" && status !== "stopped";
 
   // The app hears the UI has loaded once it has answered a first command.
   useEffect(() => {
@@ -27,9 +30,9 @@ export function App() {
       {path === "/gallery" ? (
         <Gallery />
       ) : path === "/game" ? (
-        <GameScreen update={game} />
+        <GameScreen playback={playback} starting={starting} />
       ) : (
-        <StartScreen />
+        <StartScreen inProgress={!!inProgress} onStart={start} />
       )}
     </MotionConfig>
   );

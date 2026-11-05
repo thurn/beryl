@@ -23,6 +23,14 @@
       "until": "first priority decision for seat 0 from turn 16"
     },
     {
+      "name": "opponent-turn",
+      "seed": 14,
+      "decks": ["wu-control", "wu-control"],
+      "agents": ["greedy", "greedy"],
+      "until": "first halt for seat 0",
+      "where": ["step precombatMain"]
+    },
+    {
       "name": "combat-attack",
       "seed": 2,
       "decks": ["wu-control", "wu-control"],

@@ -282,8 +282,15 @@ export function LifeOrb({
   );
 }
 
-/** A player's name on a dark band behind a nested brass diamond. */
-export function PlayerBadge({ name }: { name: string }) {
+/** A player's name on a dark band behind a nested brass diamond, and under it what they are
+ * doing, if anything: the opponent thinking or taking their turn. */
+export function PlayerBadge({
+  name,
+  activity,
+}: {
+  name: string;
+  activity?: string;
+}) {
   return (
     <div className="player-badge">
       <svg className="player-badge-emblem" viewBox="-24 -24 48 48" aria-hidden>
@@ -307,7 +314,19 @@ export function PlayerBadge({ name }: { name: string }) {
           strokeWidth="1.3"
         />
       </svg>
-      <span>{name}</span>
+      <span className="player-badge-name">
+        {name}
+        {activity && (
+          <small className="player-badge-activity" role="status">
+            {activity}
+            <i className="working-dots" aria-hidden>
+              <i />
+              <i />
+              <i />
+            </i>
+          </small>
+        )}
+      </span>
     </div>
   );
 }

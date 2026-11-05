@@ -4,7 +4,8 @@
 // The fixture `greedy-turn-9` ends on a target decision for a spell the human had just cast
 // from their hand; the page starts one view earlier, at the priority decision, and the fixture
 // transport plays the recorded views up to the next decision once the page calls `choose`
-// (src/ipc.ts). The combat
+// (src/ipc.ts), which the page plays back paced (src/game/playback.ts) on Playwright's clock.
+// `opponent-turn` plays out an opponent's turn to the session's halts. The combat
 // fixtures end on the human's attack declaration (`combat-attack`) and on the attacker for a
 // blocker just declared (`combat-block`). Animation is measured on Playwright's clock, so the
 // checks do not depend on the machine's speed. The `choice-*` fixtures end on decisions the
@@ -455,7 +456,8 @@ await check(
         const { width } = await handle.boundingBox();
         await page.clock.pauseAt(Date.now() + 60_000);
         await page.getByRole("button", { name: /^(Next|End Turn)/ }).click();
-        await page.waitForSelector(`${back}:not([data-zone="hand"])`);
+        // The views play back paced: a frame at a time until the card leaves the hand.
+        await until(page, `${back}:not([data-zone="hand"])`, 16);
         // A frame in, it has barely begun to turn and grow (a jump would nearly double it).
         await page.clock.runFor(16);
         const first = await handle.boundingBox();
@@ -472,6 +474,16 @@ await check(
     },
     { at: opponentPlay, ready: `${back}[data-zone="hand"]` },
 );
+
+/** Runs the page's clock `step` milliseconds at a time until `selector` matches, for at most
+ * a minute of page time; returns how long that took. */
+async function until(page, selector, step = 100) {
+    for (let ran = 0; ran <= 60_000; ran += step) {
+        if (await page.$(selector)) return ran;
+        await page.clock.runFor(step);
+    }
+    throw new Error(`${selector} never appeared`);
+}
 
 /** Drags the element `from` matches by its center to `to`'s center, or by `by`, in steps. */
 async function drag(page, from, { to, by }) {
@@ -497,6 +509,128 @@ async function settled(page, count) {
     }
     return chosen(page);
 }
+
+// The opponent's turn played back: `opponent-turn` ends on the session's halt at the human's
+// precombat main (End Turn), after one at the opponent's end step (Continue) that closes a turn
+// in which the opponent plays a land and casts spells. The page starts at the human's last
+// decision before that turn, a look at the top of their library.
+const turnViews = await load("opponent-turn");
+const halts = turnViews.flatMap((v, i) => (v.status.decision?.halt ? [i] : []));
+const mainHalt = turnViews.length - 1;
+const endHalt = halts.at(-2);
+assert.deepEqual(
+    [halts.at(-1), turnViews[endHalt]?.turn.active],
+    [mainHalt, "opponent"],
+    "the fixture ends on a halt at the human's main, after one in the opponent's turn",
+);
+const lookAt = turnViews.findLastIndex((v, i) => i < endHalt && awaits(v));
+assert.equal(
+    turnViews[lookAt].status.decision?.ask.kind,
+    "look",
+    "the human looks at their library before the opponent's turn",
+);
+const opponentLand = turnViews
+    .slice(lookAt + 1, endHalt + 1)
+    .flatMap((v) =>
+        v.events.filter(
+            (e) =>
+                e.kind === "zoneChange" &&
+                e.reason === "play" &&
+                v.objects.find((o) => o.slot === e.slot)?.owner === "opponent",
+        ),
+    )[0];
+assert.ok(opponentLand, "the opponent plays a land that turn");
+const landName = turnViews[endHalt].objects.find(
+    (o) => o.slot === opponentLand.slot,
+).name;
+// The spells that resolve into a graveyard that turn, which would otherwise vanish unseen.
+const vanished = turnViews
+    .slice(lookAt + 1, endHalt + 1)
+    .flatMap((v) =>
+        v.events.flatMap((e) =>
+            e.kind === "zoneChange" &&
+            e.from === "stack" &&
+            e.to === "graveyard"
+                ? [v.objects.find((o) => o.slot === e.slot).name]
+                : [],
+        ),
+    );
+assert.ok(vanished.length > 0, "a spell resolves into a graveyard");
+
+await check(
+    "the opponent's turn plays out at a pace, then the turn ends",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.clock.pauseAt(Date.now() + 60_000);
+        await page.getByRole("button", { name: "Take Nothing" }).click();
+        assert.deepEqual(await chosen(page), [
+            turnViews[lookAt].status.decision.candidates.findIndex(
+                (c) => c.option.kind === "no",
+            ),
+        ]);
+        // The overlay gives way to the table as the game plays on.
+        await until(page, ".table:not(.table-dimmed)");
+        assert.equal(await page.$(".choice"), null, "the overlay is gone");
+
+        // A tenth of a second at a time, what the board says as the turn plays out.
+        const pills = new Set();
+        let thinking = false;
+        let landBeforeHalt = false;
+        const announced = new Set();
+        let took = 0;
+        const land = `[data-slot="${opponentLand.slot}"][data-zone="battlefield"]`;
+        const halt = page.getByRole("button", { name: "Continue" });
+        while (!(await halt.isVisible())) {
+            assert.ok(took < 60_000, "the opponent's turn ends");
+            const pill = await page.$(".priority-pill");
+            if (pill) pills.add(await pill.textContent());
+            thinking ||= (await page.$(".player-badge-activity")) !== null;
+            landBeforeHalt ||= (await page.$(land)) !== null;
+            for (const card of await page.$$eval(".announced", (all) =>
+                all.map((e) => e.dataset.card),
+            )) {
+                announced.add(card);
+            }
+            await page.clock.runFor(100);
+            took += 100;
+        }
+        assert.ok(
+            pills.has("Opponent is thinking") && thinking,
+            `the opponent is seen thinking: ${[...pills].join(", ")}`,
+        );
+        assert.ok(
+            pills.size >= 5,
+            `the steps are seen passing: ${[...pills].join(", ")}`,
+        );
+        assert.ok(
+            landBeforeHalt,
+            "the land is seen played before the turn ends",
+        );
+        assert.ok(took >= 3000, `the turn took ${took} ms, not a jump`);
+        assert.deepEqual(
+            vanished.filter((card) => !announced.has(card)),
+            [],
+            "each spell that resolved into a graveyard was shown large",
+        );
+        const log = await page.locator(".game-log").textContent();
+        assert.ok(
+            log.includes(`Opponent played ${landName}`),
+            `the log says the land was played: ${log}`,
+        );
+
+        // Continue goes on to the human's turn, which halts at their main: End Turn.
+        assert.ok(await halt.isEnabled(), "Continue is the turn button");
+        await halt.click();
+        await until(page, "button:has-text('End Turn'):not([disabled])");
+        await page.getByRole("button", { name: "End Turn" }).click();
+        assert.deepEqual(
+            (await chosen(page)).slice(1),
+            [0, 0],
+            "continued, then ended the turn",
+        );
+    },
+    { fixture: "opponent-turn", at: lookAt + 1, ready: ".choice" },
+);
 
 // The attack declaration: the creature that may attack, and what declares it.
 const attackViews = await load("combat-attack");

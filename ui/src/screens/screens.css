@@ -781,6 +781,121 @@
 /* A step announcement over the battlefield (combat.png's "Combat / Blockers declared"): a gold
    title between ornamented rules over an italic detail, on a smoky shade. Laid out from its
    center line; the shade's box is the banner. */
+/* The game log at the table's left, between the far lands and the near ones: a heading for each
+   turn in small gold capitals, then an entry per line marked with its player's color (yours
+   cyan, the opponent's ember), the newest brightest at the foot and the oldest fading out at
+   the top. */
+.game-log {
+  position: absolute;
+  left: 18px;
+  top: 262px;
+  width: 300px;
+}
+.game-log-list {
+  max-height: 272px;
+  margin: 0;
+  padding: 10px 14px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  list-style: none;
+  border-radius: 10px;
+  background: rgb(24 21 19 / 62%);
+  box-shadow: inset 0 0 0 1px rgb(214 192 150 / 16%);
+  mask-image: linear-gradient(to bottom, transparent, #000 40px);
+  font: 14px/1.35 var(--font-sans);
+  color: var(--text-dim);
+}
+.game-log-list:empty {
+  display: none;
+}
+.game-log-entry {
+  position: relative;
+  padding: 2px 0 2px 15px;
+}
+.game-log-entry::before {
+  content: "";
+  position: absolute;
+  left: 1px;
+  top: 0.62em;
+  width: 5px;
+  height: 5px;
+  rotate: 45deg;
+  background: var(--cyan);
+}
+.game-log-opponent::before {
+  background: var(--ember);
+}
+.game-log-entry:last-child {
+  color: var(--text);
+}
+.game-log-turn {
+  margin-top: 8px;
+  padding-left: 0;
+  font: 600 12px var(--font-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.game-log-turn:first-child {
+  margin-top: 0;
+}
+.game-log-turn::before {
+  display: none;
+}
+.game-log-counter {
+  color: #ffab7c;
+}
+/* Spells that came and went in the view on screen, large beside the stack for a moment, each over
+   a pill saying who cast it or that it was countered; a countered one greyed under a stamp. */
+.announcements {
+  position: absolute;
+  right: 100px;
+  top: 190px;
+  z-index: 450;
+  display: flex;
+  gap: 16px;
+  pointer-events: none;
+}
+.announced {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  filter: drop-shadow(0 12px 22px rgb(0 0 0 / 50%));
+}
+.announced-label {
+  padding: 4px 16px;
+  border: 1.5px solid #a59e98;
+  border-radius: 999px;
+  background: #25201d;
+  font: 600 15px var(--font-sans);
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+.announced-countered .card {
+  filter: grayscale(0.7) brightness(0.7);
+}
+.announced-countered .announced-label {
+  border-color: var(--ember);
+  color: #ffab7c;
+}
+.announced-stamp {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  translate: -50% -50%;
+  rotate: -16deg;
+  padding: 4px 14px;
+  border: 3px solid var(--ember);
+  border-radius: 6px;
+  background: rgb(20 14 10 / 72%);
+  font: 800 24px var(--font-sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ember);
+}
 .step-banner {
   position: absolute;
   left: 802px;
@@ -1448,7 +1563,13 @@
 .start-seed input[aria-invalid="true"] {
   border-color: var(--ember);
 }
-.start-link {
-  color: var(--gold);
-  font-family: var(--font-serif);
+.start-buttons {
+  display: flex;
+  gap: 14px;
+}
+.start-buttons .button {
+  white-space: nowrap;
+}
+.start-working {
+  margin: 0;
 }

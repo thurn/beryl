@@ -34,9 +34,11 @@ export class CommandError<C extends Command = Command> extends Error {
 
 export interface Transport {
   invoke<C extends Command>(command: C, args: Args<C>): Promise<Result<C>>;
+  /** Calls `handler` with each event; `past` says it happened before the listener started
+   * listening (a fixture's recorded history), so the UI shows it at once rather than paced. */
   listen<E extends keyof Events>(
     event: E,
-    handler: (payload: Events[E]) => void,
+    handler: (payload: Events[E], past: boolean) => void,
   ): Promise<Unlisten>;
 }
 
@@ -47,8 +49,8 @@ const tauriTransport: Transport = {
     }),
   listen: <E extends keyof Events>(
     event: E,
-    handler: (payload: Events[E]) => void,
-  ) => listen<Events[E]>(event, (e) => handler(e.payload)),
+    handler: (payload: Events[E], past: boolean) => void,
+  ) => listen<Events[E]>(event, (e) => handler(e.payload, false)),
 };
 
 /** A command the fixture transport received, for tests (`window.berylFixture`). */
@@ -60,8 +62,9 @@ export interface FixtureCall {
 /** Replays a fixture: each command gets its recorded responses in order (the last one again
  * once they run out). Listeners get the recorded events in order: all of them at once, or,
  * given `at`, the first `at`, and then after each `choose` the views up to the next one the
- * player answers or the end, as if the app played on from the recorded answer. Every command
- * is logged in `calls`. A fixture is the app's own recording, so its values are taken as their
+ * player answers or the end, as if the app played on from the recorded answer. The events a
+ * listener gets as it starts listening are past; those released by `choose` happen live.
+ * Every command is logged in `calls`. A fixture is the app's own recording, so its values are taken as their
  * commands' types. */
 export function fixtureTransport(
   fixture: Fixture,
@@ -77,15 +80,18 @@ export function fixtureTransport(
     }
   }
   let released = at ?? events.length;
-  type Listener = { event: keyof Events; handler: (payload: never) => void };
+  type Listener = {
+    event: keyof Events;
+    handler: (payload: never, past: boolean) => void;
+  };
   const listeners = new Set<Listener>();
-  // Events from..to to `only`, or to every listener still listening.
+  // Events from..to to `only` (as past events), or to every listener still listening.
   const deliver = (from: number, to: number, only?: Listener) =>
     queueMicrotask(() => {
       for (const { event, payload } of events.slice(from, to)) {
         for (const l of only ? [only] : [...listeners]) {
           if (l.event === event && listeners.has(l)) {
-            l.handler(payload as never);
+            l.handler(payload as never, only !== undefined);
           }
         }
       }
@@ -114,9 +120,12 @@ export function fixtureTransport(
     },
     async listen<E extends keyof Events>(
       event: E,
-      handler: (payload: Events[E]) => void,
+      handler: (payload: Events[E], past: boolean) => void,
     ) {
-      const listener = { event, handler: handler as (payload: never) => void };
+      const listener = {
+        event,
+        handler: handler as (payload: never, past: boolean) => void,
+      };
       listeners.add(listener);
       deliver(0, released, listener);
       return () => void listeners.delete(listener);
@@ -208,7 +217,7 @@ export const setStops = (session: SessionId, stops: StopsSetting) =>
   call("set_stops", { request: { session, stops } });
 
 export const onGameUpdate = async (
-  handler: (update: Events["game-update"]) => void,
+  handler: (update: Events["game-update"], past: boolean) => void,
 ) => (await transport()).listen("game-update", handler);
 
 /** Whether card images can load: only inside the app, whose `beryl-art` scheme serves them.

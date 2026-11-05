@@ -83,10 +83,22 @@ import {
   type PileLook,
   type Placement,
 } from "./layout";
+import type { LogEntry } from "./log";
+import {
+  actingLabel,
+  Announcements,
+  GameLog,
+  opponentActivity,
+} from "./Narration";
 import { Brand } from "./Stage";
 
 export interface BoardProps {
   view: PlayerView;
+  /** The view was shown as the game played on: the spells that came and went in it are
+   * announced. */
+  live: boolean;
+  /** What has happened in the game, oldest first. */
+  log: LogEntry[];
   /** An answer was sent and the next view has not arrived, or the game plays on without the
    * player: the opponent is acting. */
   waiting: boolean;
@@ -122,6 +134,8 @@ interface Casting {
 
 export function Board({
   view,
+  live,
+  log,
   waiting,
   choose,
   setFullControl,
@@ -356,9 +370,11 @@ export function Board({
     (top.kind === "spell"
       ? (objects.get(top.slot)?.name ?? undefined)
       : top.name);
-  const stop = decision?.passTo
-    ? passButton(view, decision.passTo)
-    : { label: "Pass", caption: "" };
+  const stop = decision?.halt
+    ? haltButton(view)
+    : decision?.passTo
+      ? passButton(view, decision.passTo)
+      : { label: "Pass", caption: "" };
   const arrows = useMemo(() => boardArrows(view), [view]);
   const banner = combatBanner(view) ?? coinFlipBanner(view);
   // A combat declaration is finished with the turn button, where priority is passed.
@@ -402,7 +418,10 @@ export function Board({
         })}
 
         <div className="hud" style={{ left: 18, top: 62 }}>
-          <PlayerBadge name="Opponent" />
+          <PlayerBadge
+            name="Opponent"
+            activity={opponentActivity(view, waiting)}
+          />
         </div>
         <div className="hud" style={{ left: 18, top: 814 }}>
           <PlayerBadge name="You" />
@@ -425,6 +444,9 @@ export function Board({
         />
 
         {banner && <StepBanner {...banner} />}
+
+        <GameLog log={log} />
+        {live && <Announcements view={view} />}
 
         {view.stack.map(
           (item, i) =>
@@ -479,11 +501,7 @@ export function Board({
                 {/* While you wait, the priority pill takes the caption's place under the
                 button, leaving the tracker showing the phase. */}
                 {waiting ? (
-                  <PriorityPill>
-                    {view.status.kind === "thinking"
-                      ? "Opponent is thinking"
-                      : "Opponent has priority"}
-                  </PriorityPill>
+                  <PriorityPill>{actingLabel(view)}</PriorityPill>
                 ) : (
                   <span className="turn-caption">{stop.caption}</span>
                 )}
@@ -584,6 +602,15 @@ function Lying({ look, children }: { look: PileLook; children: ReactNode }) {
       {children}
     </div>
   );
+}
+
+/** The turn button at a halt of the session's (`DecisionView.halt`), where passing is all the
+ * player can do: ending their own turn from its first main phase, or going on from the
+ * opponent's end step. */
+function haltButton(view: PlayerView): { label: string; caption: string } {
+  return view.turn.active === "you"
+    ? { label: "End Turn", caption: "Nothing to play" }
+    : { label: "Continue", caption: "To Your Turn" };
 }
 
 /** A step announcement over the battlefield, such as "Combat" over "Blockers declared". */

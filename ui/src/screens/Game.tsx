@@ -1,6 +1,7 @@
 // A game against an agent: the start screen, then the battlefield (game/Board.tsx) with the
-// mulligan, choice (game/ChoiceOverlay.tsx) and game-over screens over it. Every view arrives
-// as a `game-update` event; the screen answers the open decision through `choose`.
+// mulligan, choice (game/ChoiceOverlay.tsx) and game-over screens over it. Views arrive as
+// `game-update` events and play back at a readable pace (game/playback.ts); the screen answers
+// the open decision through `choose`.
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../components/Controls";
 import { Card } from "../components/Card";
@@ -9,13 +10,10 @@ import {
   choose,
   CommandError,
   listAgents,
-  onGameUpdate,
   setStops,
-  startGame,
   type AgentView,
   type CandidateIndex,
   type DecisionView,
-  type GameUpdate,
   type ObjectView,
   type OutcomeView,
   type PlayerView,
@@ -26,30 +24,26 @@ import { ChoiceOverlay } from "../game/ChoiceOverlay";
 import { choiceOf, type Choice } from "../game/choices";
 import { intended, isOpening, type Intent } from "../game/decisions";
 import { useFace } from "../game/faces";
+import type { Playback } from "../game/playback";
 import { Brand, Stage } from "../game/Stage";
-
-/** The latest view of the game in progress, from `game-update` events. Session numbers only
- * grow, so a late view from a replaced game is dropped. */
-export function useGameUpdates(): GameUpdate | null {
-  const [update, setUpdate] = useState<GameUpdate | null>(null);
-  useEffect(() => {
-    const unlisten = onGameUpdate((next) =>
-      setUpdate((last) => (last && next.session < last.session ? last : next)),
-    );
-    return () => void unlisten.then((stop) => stop());
-  }, []);
-  return update;
-}
 
 /** The agent that plays on the true state, hidden cards included. */
 const CHEATING = "mcts-omniscient";
 
-/** Picks the opponent and an optional seed, and starts the game. */
-export function StartScreen() {
+/** Picks the opponent and an optional seed, and starts the game; or returns to the game in
+ * progress. */
+export function StartScreen({
+  inProgress,
+  onStart,
+}: {
+  inProgress: boolean;
+  onStart(agent: string, seed?: number): Promise<void>;
+}) {
   const [agents, setAgents] = useState<AgentView[]>([]);
   const [agent, setAgent] = useState<string>();
   const [seed, setSeed] = useState("");
   const [error, setError] = useState<string>();
+  const [pending, setPending] = useState(false);
   useEffect(() => {
     listAgents().then((list) => {
       setAgents(list);
@@ -60,12 +54,18 @@ export function StartScreen() {
   const seedOk =
     seedValue === undefined ||
     (Number.isInteger(seedValue) && seedValue >= 0 && seedValue < 2 ** 32);
-  const start = () =>
-    agent &&
-    startGame(agent, seedValue).then(
+  const start = () => {
+    if (!agent) return;
+    setPending(true);
+    setError(undefined);
+    onStart(agent, seedValue).then(
       () => (window.location.hash = "#/game"),
-      (e: unknown) => setError(String(e)),
+      (e: unknown) => {
+        setPending(false);
+        setError(String(e));
+      },
     );
+  };
   return (
     <Stage>
       <div className="table start-screen">
@@ -104,9 +104,21 @@ export function StartScreen() {
               aria-invalid={!seedOk}
             />
           </label>
-          <Button disabled={!agent || !seedOk} onClick={() => void start()}>
-            Start
-          </Button>
+          {/* With a game in progress, going back to it comes first. */}
+          <div className="start-buttons">
+            {inProgress && (
+              <Button onClick={() => (window.location.hash = "#/game")}>
+                Return to Game
+              </Button>
+            )}
+            <Button
+              variant={inProgress ? "secondary" : "primary"}
+              disabled={!agent || !seedOk || pending}
+              onClick={start}
+            >
+              {pending ? "Starting…" : inProgress ? "New Game" : "Start"}
+            </Button>
+          </div>
           {error && <p className="game-error">{error}</p>}
         </section>
       </div>
@@ -133,26 +145,49 @@ function failure(e: unknown): string | undefined {
     : e.message;
 }
 
-export function GameScreen({ update }: { update: GameUpdate | null }) {
-  if (!update) {
+export function GameScreen({
+  playback,
+  starting,
+}: {
+  playback?: Playback;
+  starting: boolean;
+}) {
+  if (starting || !playback) {
     return (
       <Stage>
         <div className="table start-screen">
-          <section className="start-panel">
-            <p className="start-subtitle">No game in progress.</p>
-            <a className="start-link" href="#/">
-              New game
-            </a>
+          <Brand />
+          <section className="start-panel" role="status">
+            {starting ? (
+              <>
+                <h1 className="start-title">Starting game</h1>
+                <p className="start-subtitle start-working">
+                  Shuffling up and drawing opening hands
+                  <i className="working-dots" aria-hidden>
+                    <i />
+                    <i />
+                    <i />
+                  </i>
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="start-subtitle">No game in progress.</p>
+                <Button onClick={() => (window.location.hash = "#/")}>
+                  New Game
+                </Button>
+              </>
+            )}
           </section>
         </div>
       </Stage>
     );
   }
-  return <Playing update={update} />;
+  return <Playing playback={playback} />;
 }
 
 /** A game in progress: the board, and over it the opening, a choice or the game's end. */
-function Playing({ update }: { update: GameUpdate }) {
+function Playing({ playback }: { playback: Playback }) {
   const [error, setError] = useState<string>();
   // The view an answer was sent from: until another arrives, the opponent is acting.
   const [answered, setAnswered] = useState<PlayerView>();
@@ -164,12 +199,14 @@ function Playing({ update }: { update: GameUpdate }) {
   const [held, setHeld] = useState<Choice>();
   // The choice whose overlay is put aside to see the battlefield.
   const [peek, setPeek] = useState<number>();
+  const { update, live, behind, log } = playback;
   const { session, view } = update;
   const status = view.status;
   // An answer is on its way, or the game plays on without the player: the opponent deciding,
-  // or a step passing.
+  // or a step passing, shown or still to show.
   const waiting =
     answered === view ||
+    behind ||
     status.kind === "thinking" ||
     status.kind === "playing";
   const fail = (e: unknown) => {
@@ -191,9 +228,13 @@ function Playing({ update }: { update: GameUpdate }) {
 
   // Each new decision takes the next planned pick, if it asks for it; otherwise the plan is
   // over (but for a pick that waits) and the player decides. The views of the game playing on
-  // in between keep the plan.
+  // in between keep a plan with picks to come, and the overlay that made it; with none left,
+  // the overlay gives way to the table so the player sees the game play on.
   useEffect(() => {
-    if (status.kind === "thinking" || status.kind === "playing") return;
+    if (status.kind === "thinking" || status.kind === "playing") {
+      if (planned.current.length === 0) setHeld(undefined);
+      return;
+    }
     const [next, ...rest] = planned.current;
     planned.current = [];
     const index = next && decision ? intended(decision, next) : undefined;
@@ -225,6 +266,8 @@ function Playing({ update }: { update: GameUpdate }) {
     <Stage>
       <Board
         view={view}
+        live={live}
+        log={log}
         waiting={waiting}
         choose={answer}
         setFullControl={(on) =>
