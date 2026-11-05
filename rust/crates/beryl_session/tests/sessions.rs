@@ -47,10 +47,20 @@ fn script(view: &PlayerView) -> (DecisionId, CandidateIndex) {
     (d.id, CandidateIndex(((d.id.seq * 7 + 3) % n) as u8))
 }
 
-/// Plays the scripted human's answer to `view`.
+/// Plays on to the human's next decision or the end, and returns the view there.
+fn to_human(game: &mut Game) -> PlayerView {
+    let mut last = None;
+    while let Some(view) = game.next_view() {
+        last = Some(view);
+    }
+    last.expect("the game plays on from where it is")
+}
+
+/// Plays the scripted human's answer to `view`, and on to their next decision or the end.
 fn play(game: &mut Game, view: &PlayerView) -> PlayerView {
     let (id, index) = script(view);
-    game.choose(game.answer(id, index).unwrap())
+    game.choose(game.answer(id, index).unwrap());
+    to_human(game)
 }
 
 #[test]
@@ -72,8 +82,10 @@ fn a_scripted_human_plays_a_whole_game_and_its_replay_reproduces_it() {
         let update = views.recv().unwrap();
         assert_eq!(update.session, session);
         let view = update.view;
-        if matches!(view.status, Status::Over { .. }) {
-            break view;
+        match view.status {
+            Status::Over { .. } => break view,
+            Status::Deciding { .. } => {}
+            _ => continue,
         }
         decisions += 1;
         // Halfway through, the human asks for every priority, which the replay must record.
@@ -141,7 +153,7 @@ fn a_scripted_human_plays_a_whole_game_and_its_replay_reproduces_it() {
 #[test]
 fn a_replay_cut_at_a_decision_resumes_there() {
     let mut game = Game::new(&CARDS, &start(3, StopsSetting::Exact), SESSION).unwrap();
-    let mut view = game.begin();
+    let mut view = to_human(&mut game);
     for _ in 0..30 {
         view = play(&mut game, &view);
     }
@@ -152,7 +164,7 @@ fn a_replay_cut_at_a_decision_resumes_there() {
 #[test]
 fn a_stopped_game_lets_the_agent_decide_no_more() {
     let mut game = Game::new(&CARDS, &start(7, StopsSetting::Exact), SESSION).unwrap();
-    let mut view = game.begin();
+    let mut view = to_human(&mut game);
     // Play to a decision whose answer hands the agent the next one, found on a replayed copy.
     let agent_decides_next = |game: &Game, view: &PlayerView| {
         let (mut probe, _) = Game::from_replay(&CARDS, game.replay(), SESSION).unwrap();
@@ -189,8 +201,7 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
             StopsSetting::Exact
         };
         let mut game = Game::new(&CARDS, &start(seed, stops), SESSION).unwrap();
-        let mut view = game.begin();
-        while matches!(view.status, Status::Deciding { .. }) {
+        while let Some(view) = game.next_view() {
             let (s, t) = (game.state(), game.table());
             // The position the human decides in: a paused resolution's, replayed.
             let mut x = Scratch::new();
@@ -211,28 +222,43 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
             // only, so that is all an identity could come from. A paused resolution replays
             // its body under the redealt state's own random streams, so those positions are
             // left to the check above.
-            if matches!(s.pending(), Pending::Resolving(_)) {
+            let resolving = matches!(s.pending(), Pending::Resolving(_));
+            if resolving && let Status::Deciding { decision } = &view.status {
                 // The paused resolution's entry, the top of the committed stack, is named.
                 assert!(
-                    decision(&view).resolving.is_some(),
+                    decision.resolving.is_some(),
                     "seed {seed}: a paused resolution without its entry"
                 );
-                view = play(&mut game, &view);
-                continue;
             }
-            let d = open_decision(s, t);
-            let det = Observation::new(s, Seat::P0).determinize(t, &mut rng);
-            let mut x = Scratch::new();
-            let theirs = player_view(
-                t,
-                Observation::new(beryl_engine::view(&det, t, &mut x), Seat::P0),
-                Moment::Deciding(decision(&view).id, &d, None),
-                view.stops,
-                game.events(),
-            );
-            assert_eq!(theirs, view, "seed {seed}");
-            events += view.events.len();
-            view = play(&mut game, &view);
+            if !resolving {
+                let d;
+                let moment = match &view.status {
+                    Status::Deciding { decision } if decision.halt => Moment::Halted(decision.id),
+                    Status::Deciding { decision } => {
+                        d = open_decision(s, t);
+                        Moment::Deciding(decision.id, &d, None)
+                    }
+                    Status::Thinking => Moment::Thinking,
+                    Status::Playing => Moment::Playing,
+                    // The end shows what the human knows by then; the game is over.
+                    Status::Over { .. } | Status::Stopped => break,
+                };
+                let det = Observation::new(s, Seat::P0).determinize(t, &mut rng);
+                let mut x = Scratch::new();
+                let theirs = player_view(
+                    t,
+                    Observation::new(beryl_engine::view(&det, t, &mut x), Seat::P0),
+                    moment,
+                    view.stops,
+                    game.events(),
+                );
+                assert_eq!(theirs, view, "seed {seed}");
+                events += view.events.len();
+            }
+            if matches!(view.status, Status::Deciding { .. }) {
+                let (id, index) = script(&view);
+                game.choose(game.answer(id, index).unwrap());
+            }
         }
     }
     assert!(events > 1000, "only {events} events compared");

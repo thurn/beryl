@@ -3,7 +3,8 @@
 //   node scripts/interactions.mjs <base-url> <fixtures-dir>
 // The fixture `greedy-turn-9` ends on a target decision for a spell the human had just cast
 // from their hand; the page starts one view earlier, at the priority decision, and the fixture
-// transport plays the recorded next view once the page calls `choose` (src/ipc.ts). The combat
+// transport plays the recorded views up to the next decision once the page calls `choose`
+// (src/ipc.ts). The combat
 // fixtures end on the human's attack declaration (`combat-attack`) and on the attacker for a
 // blocker just declared (`combat-block`). Animation is measured on Playwright's clock, so the
 // checks do not depend on the machine's speed. The `choice-*` fixtures end on decisions the
@@ -232,15 +233,30 @@ await check("hovering a card shows it whole, with its artist", async (page) => {
         .waitFor();
 });
 
-// The first view in which the opponent plays a card from their hand onto the table, at the
-// human's priority, and that card.
-const opponentPlay = views.findIndex(
-    (v, i) =>
-        views[i - 1]?.status.decision?.kind === "priority" &&
-        v.events.some((e) => played(v, e)),
-);
+/** Whether view `v` waits for the human: the views of the game playing on without them
+ * follow one another unasked. */
+const awaits = (v) =>
+    v.status.kind !== "thinking" && v.status.kind !== "playing";
+
+// The first pass of the human's priority after which the opponent plays a card from their
+// hand onto the table before the human next decides, as the view the pass leads to; and that
+// card.
+let opponentPlay = -1;
+let playedSlot;
+for (let i = 1; i < views.length && opponentPlay < 0; i++) {
+    if (views[i - 1].status.decision?.kind !== "priority") continue;
+    for (let j = i; j < views.length; j++) {
+        const play = views[j].events.find((e) => played(views[j], e));
+        if (play) {
+            opponentPlay = i;
+            playedSlot = play.slot;
+            break;
+        }
+        if (awaits(views[j])) break;
+    }
+}
 assert.ok(opponentPlay > 0, "the opponent plays a card from their hand");
-const back = `[data-slot="${views[opponentPlay].events.find((e) => played(views[opponentPlay], e)).slot}"]`;
+const back = `[data-slot="${playedSlot}"]`;
 
 /** Whether event `e` of view `v` moves an opponent's card from their hand to the table. */
 function played(v, e) {

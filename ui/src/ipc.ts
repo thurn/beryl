@@ -59,9 +59,10 @@ export interface FixtureCall {
 
 /** Replays a fixture: each command gets its recorded responses in order (the last one again
  * once they run out). Listeners get the recorded events in order: all of them at once, or,
- * given `at`, the first `at`, and then one more after each `choose`, as if the app played on
- * from the recorded answer. Every command is logged in `calls`. A fixture is the app's own
- * recording, so its values are taken as their commands' types. */
+ * given `at`, the first `at`, and then after each `choose` the views up to the next one the
+ * player answers or the end, as if the app played on from the recorded answer. Every command
+ * is logged in `calls`. A fixture is the app's own recording, so its values are taken as their
+ * commands' types. */
 export function fixtureTransport(
   fixture: Fixture,
   at?: number,
@@ -99,8 +100,13 @@ export function fixtureTransport(
         return Promise.reject(new Error(`fixture: no response for ${command}`));
       }
       if (command === "choose" && released < events.length) {
-        released += 1;
-        deliver(released - 1, released);
+        const from = released;
+        let last;
+        do {
+          last = events[released];
+          released += 1;
+        } while (released < events.length && last && playsOn(last));
+        deliver(from, released);
       }
       return Promise.resolve(
         (queue.length > 1 ? queue.shift() : queue[0]) as Result<C>,
@@ -117,6 +123,13 @@ export function fixtureTransport(
     },
   };
 }
+
+/** Whether a recorded event is a view of the game playing on without the player, which the
+ * next view follows unasked. */
+const playsOn = (e: { event: keyof Events; payload: unknown }) => {
+  const kind = (e.payload as Events["game-update"]).view.status.kind;
+  return kind === "thinking" || kind === "playing";
+};
 
 /** What a plain browser gets without `?fixture=`: enough for the shell to render. */
 const browserFixture: Fixture = {

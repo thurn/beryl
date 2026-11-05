@@ -17,8 +17,12 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 /// Everything the UI draws for one player at one moment: the game as they see it, where it
-/// stands (their open decision, a stop or the end), and what happened since the previous view.
-/// Players are named relative to the viewer.
+/// stands (their open decision, the opponent deciding, a step beginning, a stop or the end),
+/// and what happened since the previous view. Players are named relative to the viewer.
+///
+/// A session emits a view as the game starts, as each step of the turn begins, before and so
+/// after each of the opponent's decisions, at each of the viewer's, and at the end: every
+/// event of the game is in exactly one view.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerView {
@@ -46,6 +50,11 @@ pub enum Status {
     Deciding {
         decision: DecisionView,
     },
+    /// The opponent is deciding: the next view follows once they have.
+    Thinking,
+    /// A step of the turn began, and the game goes on through it without the viewer: the next
+    /// view follows at once.
+    Playing,
     /// The session stopped while the agent was deciding (it was replaced or closed): no
     /// decision opens again.
     Stopped,
@@ -245,6 +254,11 @@ pub struct DecisionView {
     /// damage is divided; the land asking for life. None for priority and the other combat
     /// declarations.
     pub source: Option<u8>,
+    /// The session halts the viewer here: a priority where passing is all they can do,
+    /// which the engine would pass for them, offered under the smart stops at the start of
+    /// their own precombat main phase (an end-turn button) and of the opponent's end step (a
+    /// continue button), so the turn never moves on unseen.
+    pub halt: bool,
 }
 
 /// What a decision asks ([`Ask`]), by public slot and relative to the viewer.
@@ -581,6 +595,10 @@ pub enum Moment<'a> {
     /// The viewer's decision `id` is open, asked by the resolution of the stack entry given,
     /// if one asks it.
     Deciding(DecisionId, &'a Decision, Option<&'a StackEntry>),
+    /// The viewer is halted ([`DecisionView::halt`]) with decision `id`.
+    Halted(DecisionId),
+    Thinking,
+    Playing,
     Stopped,
     Over(Outcome),
 }
@@ -661,6 +679,11 @@ pub fn player_view(
                 decision: decision_view(t, obs, id, d, resolving, stops),
             }
         }
+        Moment::Halted(id) => Status::Deciding {
+            decision: halt_view(obs, id, stops),
+        },
+        Moment::Thinking => Status::Thinking,
+        Moment::Playing => Status::Playing,
         Moment::Stopped => Status::Stopped,
         Moment::Over(outcome) => Status::Over {
             outcome: outcome_view(obs, outcome),
@@ -863,6 +886,24 @@ fn decision_view(
         ask: ask_view(obs, d.ask),
         pass_to: (d.kind == DecisionKind::Priority).then(|| pass_to(obs, stops)),
         source: decision_source(obs, d, resolving),
+        halt: false,
+    }
+}
+
+/// A halt ([`DecisionView::halt`]): priority with passing its one candidate.
+fn halt_view(obs: Observation<'_>, id: DecisionId, stops: StopsSetting) -> DecisionView {
+    DecisionView {
+        id,
+        kind: Kind::Priority,
+        candidates: vec![CandidateView {
+            label: "Pass".to_owned(),
+            option: Candidate::Pass,
+        }],
+        resolving: None,
+        ask: AskView::Plain,
+        pass_to: Some(pass_to(obs, stops)),
+        source: None,
+        halt: true,
     }
 }
 

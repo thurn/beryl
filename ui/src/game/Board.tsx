@@ -76,7 +76,8 @@ import { Brand } from "./Stage";
 
 export interface BoardProps {
   view: PlayerView;
-  /** An answer was sent and the next view has not arrived: the opponent is acting. */
+  /** An answer was sent and the next view has not arrived, or the game plays on without the
+   * player: the opponent is acting. */
   waiting: boolean;
   /** Answers the open decision, and the decisions after it with `then`, as each arrives. */
   choose(index: CandidateIndex, then?: Intent[]): void;
@@ -381,7 +382,11 @@ export function Board({
                 {/* While you wait, the priority pill takes the caption's place under the
                 button, leaving the tracker showing the phase. */}
                 {waiting ? (
-                  <PriorityPill>Opponent has priority</PriorityPill>
+                  <PriorityPill>
+                    {view.status.kind === "thinking"
+                      ? "Opponent is thinking"
+                      : "Opponent has priority"}
+                  </PriorityPill>
                 ) : (
                   <span className="turn-caption">{stop.caption}</span>
                 )}

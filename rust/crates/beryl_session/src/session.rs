@@ -27,9 +27,9 @@ enum Command {
 }
 
 impl GameSession {
-    /// Starts `game`. `emit` receives the human's view at each of their decisions and once
-    /// more at the end of the game; the replay file at `replay`, if any, is rewritten before
-    /// each view is emitted.
+    /// Starts `game`. `emit` receives every view of the human's as the game plays
+    /// ([`Game::next_view`]); the replay file at `replay`, if any, is rewritten before each
+    /// view at which the human decides or the game ends.
     pub(crate) fn start(
         game: Game,
         replay: Option<PathBuf>,
@@ -78,9 +78,9 @@ impl Drop for GameSession {
     }
 }
 
-/// The session thread: plays, emits, then waits for the human (or has the stand-in answer).
-/// Commands are taken only while the human decides, so a stops change lands at a definite
-/// point of the choice log.
+/// The session thread: plays and emits each view, then waits for the human (or has the
+/// stand-in answer). Commands are taken only while the human decides, so a stops change lands
+/// at a definite point of the choice log.
 fn run(
     mut game: Game,
     commands: &Receiver<Command>,
@@ -90,33 +90,37 @@ fn run(
 ) {
     let stop = game.stop_flag();
     // A stops change re-emits the open decision, which may already be answered, so it does
-    // not reopen it. Returns whether the session is over: the game ended or stopped, or the
-    // session was dropped.
+    // not reopen it. Returns whether the session is over: the session was dropped.
     let mut publish = |game: &Game, view: PlayerView, reopen: bool| {
+        let deciding = matches!(view.status, Status::Deciding { .. });
         if let Some(path) = replay
+            && (deciding || matches!(view.status, Status::Over { .. }))
             && let Err(e) = game.replay().save(path)
         {
             eprintln!("beryl_session: {e}");
         }
-        if reopen {
+        if reopen && deciding {
             *open.lock().unwrap_or_else(PoisonError::into_inner) = game.open();
         }
         if stop.load(Ordering::Relaxed) {
             return true;
         }
-        let over = !matches!(view.status, Status::Deciding { .. });
         emit(view);
-        over
+        false
     };
-    let mut view = game.begin();
-    let mut reopen = true;
     loop {
-        if publish(&game, view, reopen) {
+        while let Some(view) = game.next_view() {
+            if publish(&game, view, true) {
+                return;
+            }
+        }
+        if game.open().is_none() {
+            // The game is over, or stopped.
             return;
         }
-        (view, reopen) = loop {
-            if let Some(view) = game.answer_by_stand_in() {
-                break (view, true);
+        loop {
+            if game.answer_by_stand_in() {
+                break;
             }
             let Ok(command) = commands.recv() else {
                 return;
@@ -124,12 +128,19 @@ fn run(
             match command {
                 // The session checked the answer against the open decision, which only this
                 // thread changes.
-                Command::Choose(answer) => break (game.choose(answer), true),
+                Command::Choose(answer) => {
+                    game.choose(answer);
+                    break;
+                }
                 Command::SetStops(stops) => match game.set_stops(stops) {
-                    Ok(view) => break (view, false),
+                    Ok(view) => {
+                        if publish(&game, view, false) {
+                            return;
+                        }
+                    }
                     Err(e) => eprintln!("beryl_session: {e}"),
                 },
             }
-        };
+        }
     }
 }

@@ -68,7 +68,7 @@ stops: StopsSetting,
  */
 events: Array<GameEvent>, };
 
-export type Status = { "kind": "deciding", decision: DecisionView, } | { "kind": "stopped" } | { "kind": "over", outcome: OutcomeView, };
+export type Status = { "kind": "deciding", decision: DecisionView, } | { "kind": "thinking" } | { "kind": "playing" } | { "kind": "stopped" } | { "kind": "over", outcome: OutcomeView, };
 
 export type Side = "you" | "opponent";
 
@@ -177,7 +177,14 @@ passTo: PassTo | null,
  * damage is divided; the land asking for life. None for priority and the other combat
  * declarations.
  */
-source: number | null, };
+source: number | null, 
+/**
+ * The session halts the viewer here: a priority where passing is all they can do,
+ * which the engine would pass for them, offered under the smart stops at the start of
+ * their own precombat main phase (an end-turn button) and of the opponent's end step (a
+ * continue button), so the turn never moves on unseen.
+ */
+halt: boolean, };
 
 export type AskView = { "kind": "plain" } | { "kind": "scry", count: number, } | { "kind": "look", player: Side, zone: ZoneName, count: number, to: ZoneName, eligible: Array<number>, } | { "kind": "putBack", count: number, } | { "kind": "fateseal", player: Side, } | { "kind": "explore" } | { "kind": "untap", max: number, } | { "kind": "unlessPays", cost: string, } | { "kind": "payLife", life: number, } | { "kind": "cleanup", count: number, };
 

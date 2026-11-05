@@ -33,6 +33,8 @@ pub enum Entry {
     Choice(u8),
     /// The human changed their stops while their decision was open.
     Stops(StopsSetting),
+    /// The human went on from a halt, which the session, not the engine, asked.
+    Halt,
 }
 
 impl ReplayFile {

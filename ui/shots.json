@@ -27,38 +27,38 @@
     },
     {
       "name": "game-bottom",
-      "route": "/?fixture=first-target&at=3#/game",
+      "route": "/?fixture=first-target&at=4#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "game-castable",
-      "route": "/?fixture=greedy-turn-9&at=6#/game",
+      "route": "/?fixture=greedy-turn-9&at=48#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "game-cast-menu",
-      "route": "/?fixture=greedy-turn-9&at=6#/game",
+      "route": "/?fixture=greedy-turn-9&at=48#/game",
       "width": 1600,
       "height": 900,
       "click": "[data-zone=hand][data-card='Thieving Skydiver']"
     },
     {
       "name": "game-main",
-      "route": "/?fixture=greedy-turn-9&at=11#/game",
+      "route": "/?fixture=greedy-turn-9&at=93#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "game-main-1280",
-      "route": "/?fixture=greedy-turn-9&at=11#/game",
+      "route": "/?fixture=greedy-turn-9&at=93#/game",
       "width": 1280,
       "height": 800
     },
     {
       "name": "game-main-1920",
-      "route": "/?fixture=greedy-turn-9&at=11#/game",
+      "route": "/?fixture=greedy-turn-9&at=93#/game",
       "width": 1920,
       "height": 1080
     },

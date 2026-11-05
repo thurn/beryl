@@ -35,17 +35,19 @@ struct Definition {
     conditions: Vec<String>,
 }
 
-/// Where a recording stops: the human's first decision of a kind, from a turn on, or the end
-/// of the game.
+/// Where a recording stops: the human's first decision of a kind, or first halt
+/// (`DecisionView::halt`), from a turn on, or the end of the game.
 #[derive(Debug, PartialEq)]
 enum Until {
     First { kind: Kind, seat: Seat, turn: u16 },
+    Halt { seat: Seat, turn: u16 },
     GameOver,
 }
 
 impl Until {
-    /// Parses "first <kind> decision for seat <n>", optionally followed by "from turn <t>",
-    /// with the kind as the protocol names it ("target", "chooseUpTo"), or "game over".
+    /// Parses "first <kind> decision for seat <n>" or "first halt for seat <n>", optionally
+    /// followed by "from turn <t>", with the kind as the protocol names it ("target",
+    /// "chooseUpTo"), or "game over". A decision of a kind is the engine's, never a halt.
     fn parse(text: &str) -> Result<Until, String> {
         let words: Vec<&str> = text.split_whitespace().collect();
         let (words, turn) = match words.as_slice() {
@@ -56,40 +58,49 @@ impl Until {
             ),
             all => (all, 0),
         };
+        let seat = |seat: &str| {
+            seat.parse()
+                .ok()
+                .and_then(Seat::try_new)
+                .ok_or_else(|| format!("no seat {seat:?}"))
+        };
         match words {
             ["game", "over"] if turn == 0 => Ok(Until::GameOver),
-            ["first", kind, "decision", "for", "seat", seat] => Ok(Until::First {
+            ["first", kind, "decision", "for", "seat", n] => Ok(Until::First {
                 turn,
                 kind: serde_json::from_value(json!(kind))
                     .map_err(|_| format!("no decision kind is named {kind:?}"))?,
-                seat: seat
-                    .parse()
-                    .ok()
-                    .and_then(Seat::try_new)
-                    .ok_or_else(|| format!("no seat {seat:?}"))?,
+                seat: seat(n)?,
+            }),
+            ["first", "halt", "for", "seat", n] => Ok(Until::Halt {
+                turn,
+                seat: seat(n)?,
             }),
             _ => Err(format!(
-                "{text:?}: expected \"first <kind> decision for seat <n> [from turn <t>]\" or \
-                 \"game over\""
+                "{text:?}: expected \"first <kind> decision for seat <n> [from turn <t>]\", \
+                 \"first halt for seat <n> [from turn <t>]\" or \"game over\""
             )),
         }
     }
 
     fn seat(&self) -> Seat {
         match self {
-            Until::First { seat, .. } => *seat,
+            Until::First { seat, .. } | Until::Halt { seat, .. } => *seat,
             Until::GameOver => Seat::P0,
         }
     }
 
     fn reached(&self, view: &PlayerView) -> bool {
+        let decision = match &view.status {
+            Status::Deciding { decision } => Some(decision),
+            _ => None,
+        };
         match self {
             Until::First { kind, turn, .. } => {
-                view.turn.number >= *turn
-                    && matches!(
-                        &view.status,
-                        Status::Deciding { decision } if decision.kind == *kind
-                    )
+                view.turn.number >= *turn && decision.is_some_and(|d| d.kind == *kind && !d.halt)
+            }
+            Until::Halt { turn, .. } => {
+                view.turn.number >= *turn && decision.is_some_and(|d| d.halt)
             }
             Until::GameOver => matches!(view.status, Status::Over { .. }),
         }
@@ -249,16 +260,22 @@ fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
             .map_err(|_| "the session ended without a view".to_owned())?;
         let reached =
             until.reached(&update.view) && conditions.iter().all(|c| c.holds(&update.view));
-        let deciding = matches!(update.view.status, Status::Deciding { .. });
+        let status = &update.view.status;
+        let (deciding, ended) = (
+            matches!(status, Status::Deciding { .. }),
+            matches!(status, Status::Over { .. } | Status::Stopped),
+        );
         messages.push(FixtureMessage::game_update(&update));
         if reached {
             return Ok(messages);
         }
-        if !deciding {
+        if ended {
             return Err(format!("the game ended before {:?}", def.until));
         }
-        // The stand-in answered; the UI's `choose` would have returned nothing.
-        messages.push(FixtureMessage::response(ipc::CHOOSE, &()));
+        if deciding {
+            // The stand-in answered; the UI's `choose` would have returned nothing.
+            messages.push(FixtureMessage::response(ipc::CHOOSE, &()));
+        }
     }
 }
 
@@ -298,6 +315,13 @@ mod tests {
                 kind: Kind::Priority,
                 seat: Seat::P0,
                 turn: 9,
+            })
+        );
+        assert_eq!(
+            Until::parse("first halt for seat 1 from turn 4"),
+            Ok(Until::Halt {
+                seat: Seat::P1,
+                turn: 4,
             })
         );
         assert!(Until::parse("game over from turn 3").is_err());

@@ -165,7 +165,13 @@ function Playing({ update }: { update: GameUpdate }) {
   // The choice whose overlay is put aside to see the battlefield.
   const [peek, setPeek] = useState<number>();
   const { session, view } = update;
-  const waiting = answered === view;
+  const status = view.status;
+  // An answer is on its way, or the game plays on without the player: the opponent deciding,
+  // or a step passing.
+  const waiting =
+    answered === view ||
+    status.kind === "thinking" ||
+    status.kind === "playing";
   const fail = (e: unknown) => {
     setAnswered(undefined);
     planned.current = [];
@@ -173,7 +179,6 @@ function Playing({ update }: { update: GameUpdate }) {
     const message = failure(e);
     if (message) setError(message);
   };
-  const status = view.status;
   const decision = status.kind === "deciding" ? status.decision : undefined;
   const answer = (index: CandidateIndex, then: Intent[] = []) => {
     if (!decision || waiting) return;
@@ -183,9 +188,10 @@ function Playing({ update }: { update: GameUpdate }) {
     choose(decision.id, index).catch(fail);
   };
 
-  // Each new view takes the next planned pick, if it asks for it; otherwise the plan is over
-  // and the player decides.
+  // Each new decision takes the next planned pick, if it asks for it; otherwise the plan is
+  // over and the player decides. The views of the game playing on in between keep the plan.
   useEffect(() => {
+    if (status.kind === "thinking" || status.kind === "playing") return;
     const [next, ...rest] = planned.current;
     planned.current = [];
     const index = next && decision ? intended(decision, next) : undefined;
@@ -207,7 +213,8 @@ function Playing({ update }: { update: GameUpdate }) {
   };
   const peeking = choice !== undefined && peek === choice.key;
   const opening = decision && isOpening(decision.kind) && !waiting;
-  const over = status.kind !== "deciding" && showOver;
+  const over =
+    (status.kind === "over" || status.kind === "stopped") && showOver;
   return (
     <Stage>
       <Board

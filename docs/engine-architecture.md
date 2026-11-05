@@ -1072,17 +1072,24 @@ root and the choices (§2), so either is exact.
 `beryl_session` owns `Sessions`, which numbers games, starts each on a dedicated
 thread running the step/apply loop and refuses commands for a replaced one;
 `beryl_app` only wraps it in Tauri commands and events, and the CLI's fixture
-recorder drives the same API. When the pending decision belongs to the human,
-the session emits a `PlayerView`: a reduced, owned view built from the human's
-Observation (§13), holding only what the UI draws, rather than the 17 KiB masked
-state, and naming players relative to the viewer. Its status is the open
-Decision, with its candidates described by public slot, a stop, or the outcome;
-the engine events since the last view, for animation, also pass through the
-Observation. The session then waits for one `choose(decision, index)` command,
-naming the decision id it received; the session's record of the open decision is
-the one place an answer is checked. AI decisions run on the session thread, and
-a search may use a pool, so IPC never blocks. The webview never sees a `State`.
-Every session records seed, decklists and the choice log as a replay file. The
+recorder drives the same API. The session emits a `PlayerView` as the game
+starts, as each step begins (`next_in_step`, which pauses `next` at a new step),
+before each agent decision, at each of the human's and at the end: a reduced,
+owned view built from the human's Observation (§13), holding only what the UI
+draws, rather than the 17 KiB masked state, and naming players relative to the
+viewer. Its status is the open Decision, with its candidates described by public
+slot, the opponent thinking, a step playing on, a stop, or the outcome; the
+engine events since the last view, for animation, also pass through the
+Observation, so each event is in exactly one view. Under the smart stops the
+session also halts the human at the start of their precombat main phase and of
+the opponent's end step when the engine would pass their priority for them: a
+priority decision whose only candidate is to pass, which neither the engine's
+profile nor the agent sees, and which the replay records. At the human's
+decision the session waits for one `choose(decision, index)` command, naming the
+decision id it received; the session's record of the open decision is the one
+place an answer is checked. AI decisions run on the session thread, and a search
+may use a pool, so IPC never blocks. The webview never sees a `State`. Every
+session records seed, decklists and the choice log as a replay file. The
 protocol's TypeScript types are generated from the Rust types, and
 `ui/src/ipc.ts` keeps the typed wrappers for the commands and events.
 
