@@ -234,6 +234,7 @@ impl<'a> Tree<'a> {
     /// play it out, and score the game for every node on the way.
     fn iterate(&mut self, root: &State) {
         let mut s = *root;
+        self.x.counts.copied();
         let mut path: [u32; 256] = [0; 256];
         let mut depth = 0;
         let mut node = 0;

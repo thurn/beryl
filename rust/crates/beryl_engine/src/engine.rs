@@ -1,6 +1,8 @@
 //! The engine loop: `next` advances to the next decision, `apply` consumes one answer
 //! (architecture §3, §7).
 
+use std::cell::Cell;
+
 use crate::bitboard::Bitboard;
 use crate::card::{ManaColor, Types};
 use crate::decision::{
@@ -49,8 +51,10 @@ impl Scratch {
         }
     }
 
-    /// The spare state, and the sink, for a run of a body on a copy.
-    pub(crate) fn spare_and_sink(&mut self) -> (&mut State, &mut Sink) {
+    /// The spare state, a copy of `s`, and the sink, for a run of a body on a copy.
+    pub(crate) fn copy_to_spare(&mut self, s: &State) -> (&mut State, &mut Sink) {
+        *self.spare = *s;
+        self.counts.copied();
         (&mut self.spare, &mut self.events)
     }
 }
@@ -80,8 +84,7 @@ pub fn observe<'a>(
 
 /// Deterministic counts of the engine's logical operations, the stable performance signal CI
 /// gates on with tolerance bands (architecture §17.4), summed over every game the scratch
-/// serves. State copies, layer recomputes, solver runs and events join them with the work
-/// that does them.
+/// serves.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Counts {
     /// Decisions `next` returned.
@@ -90,6 +93,73 @@ pub struct Counts {
     pub silent: u64,
     /// State-based action checks.
     pub state_based_checks: u64,
+    /// Whole-state copies: the engine's, for transactional replay (§7.3), and a searcher's,
+    /// which it counts itself with [`Counts::copied`].
+    pub state_copies: u64,
+    /// Recomputes of the derived characteristics (§9).
+    pub layer_recomputes: u64,
+    /// Runs of the mana payment solver (§10).
+    pub solver_runs: u64,
+    /// Events executed (§8), whether or not the sink keeps them.
+    pub events: u64,
+}
+
+impl Counts {
+    /// Counts a copy of a whole state that a caller of the engine made.
+    pub fn copied(&mut self) {
+        self.state_copies += 1;
+    }
+}
+
+/// The counts of work done where no [`Scratch`] reaches: per thread, moved into the
+/// scratch's counts each time `next` or `apply` returns, so they land on the game that did
+/// the work (a `view` in between lands on the next of them). Recomputes and solver runs are heavy enough that the tally is noise.
+#[derive(Clone, Copy)]
+pub(crate) struct Tally {
+    layer_recomputes: u64,
+    solver_runs: u64,
+}
+
+thread_local! {
+    static TALLY: Cell<Tally> = const {
+        Cell::new(Tally {
+            layer_recomputes: 0,
+            solver_runs: 0,
+        })
+    };
+}
+
+impl Tally {
+    fn update(f: impl FnOnce(&mut Tally)) {
+        TALLY.with(|cell| {
+            let mut tally = cell.get();
+            f(&mut tally);
+            cell.set(tally);
+        });
+    }
+
+    pub(crate) fn layer_recompute() {
+        Self::update(|t| t.layer_recomputes += 1);
+    }
+
+    pub(crate) fn solver_run() {
+        Self::update(|t| t.solver_runs += 1);
+    }
+}
+
+impl Scratch {
+    /// Moves this thread's tally and the sink's event count into the counts.
+    fn settle_counts(&mut self) {
+        Tally::update(|t| {
+            self.counts.layer_recomputes += t.layer_recomputes;
+            self.counts.solver_runs += t.solver_runs;
+            *t = Tally {
+                layer_recomputes: 0,
+                solver_runs: 0,
+            };
+        });
+        self.counts.events += self.events.take_executed();
+    }
 }
 
 /// Advances the game until a player must decide or the game is over.
@@ -104,6 +174,12 @@ pub struct Counts {
 /// repeated." Waiting triggers come before priority as decisions of their own, one pick at a
 /// time ([`DecisionKind::TriggerOrder`]).
 pub fn next(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers) -> Step {
+    let step = advance(s, t, x, a);
+    x.settle_counts();
+    step
+}
+
+fn advance(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers) -> Step {
     loop {
         if let Some(outcome) = s.outcome {
             return Step::Over(outcome);
@@ -174,6 +250,7 @@ pub fn apply(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers,
         }
         Err(Full) => stall(s, StallReason::Capacity),
     }
+    x.settle_counts();
 }
 
 #[cold]

@@ -16,6 +16,7 @@ use crate::bitboard::Bitboard;
 use crate::card::{Ability, AbilityKind, Cost, ManaColor, ManaCost, Types};
 use crate::decision::Opt;
 use crate::effect::EffectCtx;
+use crate::engine::Tally;
 use crate::event::{self, Sink};
 use crate::fixed::{Fixed, Full};
 use crate::ids::{Seat, Slot};
@@ -533,6 +534,7 @@ pub(crate) fn plans(
     exclude: Bitboard,
     greedy: bool,
 ) -> Result<Fixed<Plan, 64>, Full> {
+    Tally::solver_run();
     let sources = Sources::of(s, t, player, exclude)?;
     let pool = s.player(player).mana;
     let mut out: Fixed<Plan, 64> = Fixed::new();

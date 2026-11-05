@@ -179,6 +179,8 @@ impl Event {
 pub struct Sink {
     events: Vec<Event>,
     on: bool,
+    /// Events executed since the scratch last took the count, kept or not.
+    executed: u64,
 }
 
 impl Sink {
@@ -190,8 +192,8 @@ impl Sink {
     /// A sink that keeps every event until drained.
     pub fn recording() -> Self {
         Self {
-            events: Vec::new(),
             on: true,
+            ..Self::default()
         }
     }
 
@@ -218,7 +220,13 @@ impl Sink {
         self.events.truncate(len);
     }
 
+    /// The number of events executed since the last call, for the scratch's counts.
+    pub(crate) fn take_executed(&mut self) -> u64 {
+        std::mem::take(&mut self.executed)
+    }
+
     pub(crate) fn push(&mut self, e: Event) {
+        self.executed += 1;
         if self.on {
             self.events.push(e);
         }

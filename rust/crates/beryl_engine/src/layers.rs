@@ -2,6 +2,7 @@
 //! dirty (architecture §9, decision D5, CR 613).
 
 use crate::card::{Affected, Colors, Modification, StaticCondition, Subtypes, Types};
+use crate::engine::Tally;
 use crate::fixed::Fixed;
 use crate::ids::CardIx;
 use crate::state::{Continuous, CounterKind, Derived, GrantRef, ObjectFlags, State, Zone};
@@ -28,6 +29,7 @@ struct Apply {
 /// calls this first, so reads never see stale values and never recompute.
 pub(crate) fn refresh(s: &mut State, t: &GameTable) {
     if s.flags.derived_dirty {
+        Tally::layer_recompute();
         recompute(s, t);
         s.flags.derived_dirty = false;
     }

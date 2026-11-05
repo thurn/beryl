@@ -57,13 +57,15 @@ pub(crate) fn resolve(
         );
         return Ok(());
     }
-    let (spare, sink) = x.spare_and_sink();
-    *spare = *s;
+    let (spare, sink) = x.copy_to_spare(s);
     spare.pending = Pending::None;
     // Events of a run that ends paused are discarded with the copy (§7.3).
     let mark = sink.len();
     match run(spare, t, sink, Some(a), record.as_slice(), entry, ability)? {
-        None => *s = *spare,
+        None => {
+            *s = *spare;
+            x.counts.copied();
+        }
         Some(question) => {
             sink.truncate(mark);
             keep_what_was_seen(s, spare);
@@ -110,8 +112,7 @@ pub(crate) fn replay_to_question<'a>(
     };
     let entry = *s.stack.as_slice().last().expect("a stack entry to resolve");
     let ability = entry_ability(t, &entry);
-    let (spare, sink) = x.spare_and_sink();
-    *spare = *s;
+    let (spare, sink) = x.copy_to_spare(s);
     spare.pending = Pending::None;
     let mark = sink.len();
     run(spare, t, sink, None, r.record.as_slice(), entry, ability)?;

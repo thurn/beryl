@@ -368,6 +368,7 @@ impl Sim<'_> {
         blocks: bool,
     ) -> i32 {
         let mut s = *start;
+        self.x.counts.copied();
         let turn = s.turn().number;
         let mut inline = Inline {
             policy: self.policy,

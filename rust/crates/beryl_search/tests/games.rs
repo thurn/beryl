@@ -7,14 +7,13 @@ mod common;
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-use beryl_cards::{CARDS, names};
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
     CardIx, Choice, Counts, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch,
     Seat, Slot, StallReason, State, Step, Zone, apply, next,
 };
-use beryl_search::{Agent, RandomAgent};
-use common::{agents, fingerprint, game, games, play};
+use beryl_search::{Agent, GreedyAgent, RandomAgent};
+use common::{agents, fingerprint, game, games, mirror, play};
 
 #[test]
 fn random_games_keep_the_invariants() {
@@ -179,40 +178,99 @@ fn determinization_keeps_the_size_of_every_hidden_group() {
     });
 }
 
-/// The perf counts of a pinned workload: random games of a fixed three-land mirror.
-fn perf_counts() -> Counts {
-    let deck = &[
-        (14, names::PLAINS),
-        (13, names::ISLAND),
-        (13, names::TUNDRA),
-    ];
-    let t = GameTable::new(&CARDS, [deck, deck]).unwrap();
-    let mut x = Scratch::new();
-    for seed in 0..8 {
-        let mut s = State::new(&t, seed, Profile::SMART);
-        let mut agents = [RandomAgent::new(seed), RandomAgent::new(!seed)];
-        play(&t, &mut s, &mut x, &mut agents, |_, _| {});
+/// The agents of a seeded WU Control mirror game: both random or both greedy.
+fn mirror_agents(t: &GameTable, greedy: bool, seed: u64) -> [Box<dyn Agent>; 2] {
+    if greedy {
+        [Box::new(GreedyAgent::new(t)), Box::new(GreedyAgent::new(t))]
+    } else {
+        [
+            Box::new(RandomAgent::new(seed * 2)),
+            Box::new(RandomAgent::new(seed * 2 + 1)),
+        ]
     }
-    x.counts
 }
 
-/// Each count with the value it is pinned at and its tolerance band, in percent, in the style
-/// of phase.rs: a change that moves one out of its band either fixes a regression or updates
-/// the pin on purpose.
+/// The perf counts of one seeded WU Control mirror game under smart stops, and its outcome.
+fn mirror_game(t: &GameTable, greedy: bool, seed: u64) -> (Counts, Outcome) {
+    let mut s = State::new(t, seed, Profile::SMART);
+    let mut x = Scratch::new();
+    let outcome = play(
+        t,
+        &mut s,
+        &mut x,
+        &mut mirror_agents(t, greedy, seed),
+        |_, _| {},
+    );
+    (x.counts, outcome)
+}
+
+/// The perf counts of seeded games (architecture §17.4), each with the value it is pinned at,
+/// within a tolerance band of 5%: a change that moves one out of its band either fixes a
+/// regression or updates the pin on purpose.
 #[test]
 fn perf_counts_stay_in_their_bands() {
-    let c = perf_counts();
-    let bands = [
-        ("decisions", c.decisions, 798, 5),
-        ("silent", c.silent, 8607, 5),
-        ("state_based_checks", c.state_based_checks, 9867, 5),
+    // (greedy, seed): decisions, silent, state-based checks, state copies, layer recomputes,
+    // solver runs, events.
+    let pinned: [(bool, u64, [u64; 7]); 6] = [
+        (false, 0, [443, 1009, 1250, 182, 228, 175, 2039]),
+        (false, 1, [263, 665, 827, 100, 129, 90, 1250]),
+        (false, 2, [156, 510, 599, 56, 79, 57, 660]),
+        (true, 0, [565, 589, 1072, 84, 193, 120, 1511]),
+        (true, 1, [456, 670, 1022, 110, 176, 127, 1492]),
+        (true, 2, [554, 582, 1032, 136, 198, 142, 1474]),
     ];
-    let outside: Vec<_> = bands
-        .iter()
-        .filter(|&&(_, actual, pinned, percent)| actual.abs_diff(pinned) * 100 > pinned * percent)
-        .collect();
+    let t = mirror();
+    let mut outside = Vec::new();
+    for (greedy, seed, pinned) in pinned {
+        let (c, _) = mirror_game(&t, greedy, seed);
+        let actual = [
+            c.decisions,
+            c.silent,
+            c.state_based_checks,
+            c.state_copies,
+            c.layer_recomputes,
+            c.solver_runs,
+            c.events,
+        ];
+        let names = [
+            "decisions",
+            "silent",
+            "state_based_checks",
+            "state_copies",
+            "layer_recomputes",
+            "solver_runs",
+            "events",
+        ];
+        for ((name, actual), pinned) in names.into_iter().zip(actual).zip(pinned) {
+            if actual.abs_diff(pinned) * 100 > pinned * 5 {
+                outside.push((greedy, seed, name, actual, pinned));
+            }
+        }
+    }
     assert!(
         outside.is_empty(),
-        "outside their bands (name, actual, pinned, %): {outside:?}"
+        "outside their bands (greedy, seed, name, actual, pinned): {outside:?}"
+    );
+}
+
+/// The stall-rate target (architecture §1): under 0.5% of seeded WU Control mirror games,
+/// random and greedy, stall.
+#[test]
+fn mirror_games_rarely_stall() {
+    let t = mirror();
+    let n = games(25);
+    let mut stalls = Vec::new();
+    for greedy in [false, true] {
+        for seed in 0..n {
+            if let (_, Outcome::Stalled(reason)) = mirror_game(&t, greedy, seed) {
+                stalls.push((greedy, seed, reason));
+            }
+        }
+    }
+    assert!(
+        stalls.len() * 200 < 2 * n as usize,
+        "{} of {} games stalled: {stalls:?}",
+        stalls.len(),
+        2 * n
     );
 }
