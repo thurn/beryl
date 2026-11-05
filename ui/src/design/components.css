@@ -1051,6 +1051,7 @@
 }
 .phase-tracker-compact .phase:nth-child(2) .phase-icon {
   rotate: -4deg;
+  translate: -3.8px 0;
 }
 .phase-tracker-compact .phase:nth-child(4) .phase-icon {
   rotate: 3deg;
@@ -1103,7 +1104,7 @@
   .phase-current:not(:first-child, :last-child)
   .phase-icon
   :is(path, circle, rect) {
-  fill: #fcdc8a;
+  fill: url(#phase-gold);
 }
 .phase-tracker-compact .phase:nth-child(3).phase-current .phase-icon {
   scale: 1.1;
@@ -1111,8 +1112,8 @@
 .phase-tracker-compact .phase-current::after {
   content: "";
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 5px;
+  right: 5px;
   bottom: -2px;
   height: 2px;
   z-index: 1;
@@ -1122,11 +1123,12 @@
     linear-gradient(
       90deg,
       transparent,
-      rgb(255 200 100 / 70%) 35%,
-      #fff4c8 50%,
-      rgb(255 200 100 / 70%) 65%,
+      rgb(255 150 40 / 85%) 35%,
+      #ffd27a 50%,
+      rgb(255 150 40 / 85%) 65%,
       transparent
     );
+  box-shadow: 0 0 4px 1px rgb(245 130 30 / 55%);
 }
 .phase-tracker-compact .phase-current:nth-child(3)::after {
   left: -14px;
