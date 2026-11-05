@@ -709,13 +709,14 @@
   left: 802px;
   top: 137px;
   width: 400px;
-  height: 100px;
+  height: 130px;
   translate: -50% 0;
   pointer-events: none;
   background: radial-gradient(
-    ellipse 50% 62% at 50% 55%,
-    rgb(14 12 11 / 72%),
-    rgb(14 12 11 / 45%) 55%,
+    ellipse 52% 54% at 50% 45%,
+    rgb(12 10 9 / 88%),
+    rgb(12 10 9 / 70%) 45%,
+    rgb(12 10 9 / 30%) 75%,
     transparent
   );
 }
@@ -745,9 +746,10 @@
   translate: -50% 0;
   font-size: 20.2px;
   font-style: italic;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
-  color: #f4efe8;
+  color: #fbf7f0;
   text-shadow:
     0 1px 1px rgb(0 0 0 / 85%),
     0 2px 6px rgb(0 0 0 / 55%);
@@ -787,10 +789,10 @@
   box-shadow: 0 0 4px rgb(245 150 50 / 90%);
 }
 .step-banner-underline {
-  top: 47.8px;
+  top: 48px;
   margin-left: -100px;
   width: 190px;
-  height: 1.5px;
+  height: 1px;
   background: linear-gradient(
     90deg,
     transparent,
@@ -809,8 +811,8 @@
   background: linear-gradient(
     90deg,
     transparent,
-    rgb(220 190 150 / 38%) 30%,
-    rgb(220 190 150 / 38%) 70%,
+    rgb(230 190 130 / 55%) 30%,
+    rgb(230 190 130 / 55%) 70%,
     transparent
   );
 }
@@ -818,13 +820,14 @@
   content: "";
   position: absolute;
   left: 50%;
-  top: -7px;
-  width: 11px;
-  height: 11px;
+  top: -10px;
+  width: 15px;
+  height: 15px;
   translate: -50% 0;
   rotate: 45deg;
-  border-right: 1.5px solid rgb(220 190 150 / 45%);
-  border-bottom: 1.5px solid rgb(220 190 150 / 45%);
+  border-right: 2px solid rgb(235 195 130 / 65%);
+  border-bottom: 2px solid rgb(235 195 130 / 65%);
+  box-shadow: 3px 3px 0 -1px rgb(235 195 130 / 30%);
 }
 /* The turn controls at the bottom right, in stage pixels (the mockups' divided by 1.045): the
    compact phase tracker, the priority pill while you wait, and the button that advances the turn
