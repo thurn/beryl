@@ -1,0 +1,386 @@
+[
+ {
+  "card": "Thieving Skydiver",
+  "name": "Thieving Skydiver kicked with no artifact around",
+  "setup": {
+   "seed": 0,
+   "turn": 1,
+   "active": 0,
+   "step": "PrecombatMain",
+   "players": [
+    {
+     "life": 20,
+     "hand": [
+      "Thieving Skydiver"
+     ],
+     "battlefield": [
+      {
+       "card": "Island",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      },
+      {
+       "card": "Island",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      },
+      {
+       "card": "Island",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      },
+      {
+       "card": "Island",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      }
+     ],
+     "graveyard": [],
+     "exile": [],
+     "library": []
+    },
+    {
+     "life": 20,
+     "hand": [],
+     "battlefield": [
+      {
+       "card": "Plains",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      }
+     ],
+     "graveyard": [],
+     "exile": [],
+     "library": []
+    }
+   ]
+  },
+  "actions": [
+   {
+    "action": "Cast",
+    "player": 0,
+    "card": "Thieving Skydiver",
+    "face": 0,
+    "costs": 1
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Decision",
+     "player": 0,
+     "kind": "X",
+     "candidates": 2
+    }
+   },
+   {
+    "action": "Answer",
+    "player": 0,
+    "kind": "X",
+    "pick": {
+     "pick": "Number",
+     "n": 2
+    }
+   },
+   {
+    "action": "Resolve"
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Stack",
+     "count": 0
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Tapped",
+     "player": 0,
+     "card": "Island",
+     "count": 4
+    }
+   },
+   {
+    "action": "AdvanceTo",
+    "turn": 1,
+    "step": "End"
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 1,
+     "zone": "Battlefield",
+     "card": null,
+     "count": 1
+    }
+   }
+  ]
+ },
+ {
+  "card": "Mana Crypt",
+  "name": "Mana Crypt's flip lost: 3 damage to its controller",
+  "setup": {
+   "seed": 2,
+   "turn": 2,
+   "active": 1,
+   "step": "PostcombatMain",
+   "players": [
+    {
+     "life": 20,
+     "hand": [],
+     "battlefield": [
+      {
+       "card": "Mana Crypt",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      }
+     ],
+     "graveyard": [],
+     "exile": [],
+     "library": [
+      "Island"
+     ]
+    },
+    {
+     "life": 20,
+     "hand": [],
+     "battlefield": [],
+     "graveyard": [],
+     "exile": [],
+     "library": []
+    }
+   ]
+  },
+  "actions": [
+   {
+    "action": "AdvanceTo",
+    "turn": 3,
+    "step": "Upkeep"
+   },
+   {
+    "action": "Answer",
+    "player": 0,
+    "kind": "Priority",
+    "pick": {
+     "pick": "Pass"
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Life",
+     "player": 0,
+     "life": 17
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Life",
+     "player": 1,
+     "life": 20
+    }
+   }
+  ],
+  "trace": [
+   {
+    "turn": 1,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "stack": [],
+    "flips": []
+   },
+   {
+    "turn": 3,
+    "step": "Upkeep",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "stack": [
+     {
+      "name": "Mana Crypt",
+      "spell": false,
+      "controller": 0
+     }
+    ],
+    "flips": []
+   },
+   {
+    "turn": 3,
+    "step": "Upkeep",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [
+     {
+      "player": 0,
+      "won": false
+     }
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "Upkeep",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "stack": [],
+    "flips": []
+   }
+  ]
+ },
+ {
+  "card": "Jace, Vryn's Prodigy",
+  "name": "+1 shrinks a creature until his controller's next turn",
+  "setup": {
+   "seed": 0,
+   "turn": 1,
+   "active": 0,
+   "step": "PrecombatMain",
+   "players": [
+    {
+     "life": 20,
+     "hand": [],
+     "battlefield": [
+      {
+       "card": "Jace, Vryn's Prodigy",
+       "tapped": false,
+       "face": 1,
+       "counters": null
+      }
+     ],
+     "graveyard": [],
+     "exile": [],
+     "library": [
+      "Island",
+      "Island"
+     ]
+    },
+    {
+     "life": 20,
+     "hand": [],
+     "battlefield": [
+      {
+       "card": "Jace, Vryn's Prodigy",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      }
+     ],
+     "graveyard": [],
+     "exile": [],
+     "library": [
+      "Plains",
+      "Plains"
+     ]
+    }
+   ]
+  },
+  "actions": [
+   {
+    "action": "Activate",
+    "player": 0,
+    "card": "Jace, Telepath Unbound",
+    "ability": {
+     "Own": 0
+    }
+   },
+   {
+    "action": "Answer",
+    "player": 0,
+    "kind": "TargetCount",
+    "pick": {
+     "pick": "Number",
+     "n": 1
+    }
+   },
+   {
+    "action": "Resolve"
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Counters",
+     "player": 0,
+     "card": "Jace, Telepath Unbound",
+     "kind": "Loyalty",
+     "count": 6
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Pt",
+     "player": 1,
+     "card": "Jace, Vryn's Prodigy",
+     "token": false,
+     "power": -2,
+     "toughness": 2
+    }
+   },
+   {
+    "action": "AdvanceTo",
+    "turn": 2,
+    "step": "BeginningOfCombat"
+   },
+   {
+    "action": "Answer",
+    "player": 1,
+    "kind": "Priority",
+    "pick": {
+     "pick": "Pass"
+    }
+   },
+   {
+    "action": "Answer",
+    "player": 1,
+    "kind": "Attacker",
+    "pick": {
+     "pick": "Done"
+    }
+   },
+   {
+    "action": "AdvanceTo",
+    "turn": 2,
+    "step": "End"
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Pt",
+     "player": 1,
+     "card": "Jace, Vryn's Prodigy",
+     "token": false,
+     "power": -2,
+     "toughness": 2
+    }
+   },
+   {
+    "action": "AdvanceTo",
+    "turn": 3,
+    "step": "Upkeep"
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Pt",
+     "player": 1,
+     "card": "Jace, Vryn's Prodigy",
+     "token": false,
+     "power": 0,
+     "toughness": 2
+    }
+   }
+  ]
+ }
+]

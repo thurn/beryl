@@ -9,6 +9,13 @@ no-op. Logs go to oracles/logs; the command prints a JSON summary on stdout.
 
 `oracle-smoke` runs one existing XMage test class and one Forge `sim` game of the Milestone 1
 deck against itself.
+
+`oracle` dumps every card scenario (`beryl_scenario dump`), plays them in Forge through the
+exporter and harness of `forge.py`, and prints a JSON summary: each scenario passes, fails, is
+on the divergence allowlist (data/oracle-divergences.json: where the oracle is wrong, with the
+Comprehensive Rules citation that says so) or is unsupported (outside the harness's vocabulary).
+It fails on any failure the allowlist does not explain. Logs and the full results go to
+oracles/logs.
 """
 
 from __future__ import annotations
@@ -27,7 +34,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import cards, paths
+from . import cards, forge, paths
 
 FORMULAS = ("maven", "openjdk@21")
 
@@ -256,8 +263,8 @@ def setup(_args: argparse.Namespace) -> int:
     return 0
 
 
-def require_built() -> None:
-    stale = [o.name for o in ORACLES if not built(o)]
+def require_built(oracles: Sequence[Oracle] = ORACLES) -> None:
+    stale = [o.name for o in oracles if not built(o)]
     if stale:
         raise StepFailed(
             f"{', '.join(stale)} not built at its pin; run `just oracle-setup`"
@@ -300,7 +307,9 @@ def forge_jar() -> Path:
     return max(jars, key=lambda jar: jar.stat().st_mtime)
 
 
-def smoke_forge(log: Path) -> str:
+def sim_forge(log: Path, games: int) -> list[str]:
+    """Forge's AI plays `games` games of the Milestone 1 deck against itself with `sim`;
+    returns each game's result line."""
     deck = forge_deck(root() / "beryl-m1.dck")
     output = run(
         [
@@ -316,7 +325,7 @@ def smoke_forge(log: Path) -> str:
             deck.name,
             deck.name,
             "-n",
-            "1",
+            str(games),
             "-s",
             "1",
             "-q",
@@ -326,10 +335,16 @@ def smoke_forge(log: Path) -> str:
     )
     # SimulateMatch prints "Game Result: Game 1 ended in ... ms. <player> has won!" or
     # "Game Result: Game 1 ended in a Draw! ...", and exits 0 even when a deck fails to load.
-    results = [line for line in output.splitlines() if line.startswith("Game Result:")]
-    if not results:
-        raise StepFailed(f"Forge sim finished without a result; see {log}")
-    return results[-1].strip()
+    results = [l.strip() for l in output.splitlines() if l.startswith("Game Result:")]
+    if len(results) != games:
+        raise StepFailed(
+            f"Forge sim finished {len(results)} of {games} games; see {log}"
+        )
+    return results
+
+
+def smoke_forge(log: Path) -> str:
+    return sim_forge(log, 1)[-1]
 
 
 def smoke(args: argparse.Namespace) -> int:
@@ -361,6 +376,83 @@ def smoke(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+# Games of the deck mirror `oracle` has Forge's AI play.
+SIM_GAMES = 3
+
+DIVERGENCES: Path = paths.REPO / "data" / "oracle-divergences.json"
+
+
+def dump_scenarios(path: Path, log: Path) -> list[dict[str, object]]:
+    """Every card scenario, as `beryl_scenario dump` writes them."""
+    run(
+        [
+            "cargo",
+            "run",
+            "--quiet",
+            "-p",
+            "beryl_cards",
+            "--bin",
+            "beryl_scenario",
+            "--",
+            "dump",
+            str(path),
+        ],
+        log,
+        paths.RUST,
+    )
+    return json.loads(path.read_text())
+
+
+def check_forge(entries: list[dict[str, object]], work: Path) -> dict[str, object]:
+    """Plays the scenarios in Forge; the summary of `forge.summarize`."""
+    exported, skipped = forge.export(entries, paths.REPO / "data" / "cards.json")
+    scenarios = work / "forge-scenarios.json"
+    scenarios.write_text(json.dumps(exported, indent=1))
+    classes = root() / "forge-harness"
+    forge.compile_harness(java_home(), forge_jar(), classes)
+    results = forge.play(
+        java_home(),
+        forge_jar(),
+        classes,
+        checkout(FORGE) / "forge-gui",
+        scenarios,
+        work / "forge-results.json",
+        log_dir() / "forge-oracle.log",
+    )
+    return forge.summarize(results, skipped, forge.divergences(DIVERGENCES, "forge"))
+
+
+def oracle(args: argparse.Namespace) -> int:
+    work = root() / "run"
+    work.mkdir(exist_ok=True)
+    try:
+        with locked():
+            require_built((FORGE,))
+            entries = dump_scenarios(work / "scenarios.json", log_dir() / "dump.log")
+            if args.cards:
+                entries = [e for e in entries if e["card"] in args.cards]
+            results: dict[str, dict[str, object]] = {
+                "forge": check_forge(entries, work)
+            }
+            # A few AI-versus-AI games of the deck: Forge knows every card of it.
+            sim_log = log_dir() / "forge-sim.log"
+            sim_log.write_text("")
+            results["forge"]["sim"] = sim_forge(sim_log, SIM_GAMES)
+    except (StepFailed, RuntimeError, subprocess.CalledProcessError) as e:
+        print(f"oracle: {e}", file=sys.stderr)
+        return 1
+    report = log_dir() / "oracle.json"
+    report.write_text(json.dumps(results, indent=2))
+    # Only what needs attention on stdout; the full report is in the log.
+    summary: dict[str, object] = {
+        name: {**result, "scenarios": forge.attention(result)}
+        for name, result in results.items()
+    }
+    summary["report"] = str(report)
+    print(json.dumps(summary, indent=2))
+    return 1 if any(r["fail"] for r in results.values()) else 0
+
+
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser(
         "oracle-setup", help="install, fetch and build XMage and Forge in the cache"
@@ -371,3 +463,9 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     )
     p.add_argument("only", nargs="?", choices=[o.name for o in ORACLES])
     p.set_defaults(func=smoke)
+    p = sub.add_parser(
+        "oracle",
+        help="check every card scenario against the oracles, with a JSON summary",
+    )
+    p.add_argument("cards", nargs="*", help="only these cards' scenarios")
+    p.set_defaults(func=oracle)

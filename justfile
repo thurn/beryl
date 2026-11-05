@@ -73,6 +73,11 @@ cards *args:
 oracle-setup:
     {{ by }} oracle-setup
 
+# Check every card scenario against the oracles, with a JSON summary (card names for just those)
+[group('oracles')]
+oracle *cards:
+    {{ by }} oracle "$@"
+
 # Run one XMage test class and one Forge sim game (xmage or forge for just one)
 [group('oracles')]
 oracle-smoke *args:
