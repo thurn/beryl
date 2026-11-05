@@ -412,6 +412,59 @@ await check(
     blockRun,
 );
 
+// Blockers declared: each blocker stands across from its attacker, and the rest of its row
+// makes room rather than lying under it.
+const blockersViews = await load("combat-blockers");
+const blockersView = blockersViews.at(-1);
+const defender = blockersView.objects.find(
+    (o) => o.combat?.kind === "blocking",
+)?.controller;
+assert.ok(defender, "the blockers fixture has a blocker");
+// The defending side's nonland permanents.
+const standing = blockersView.objects.filter(
+    (o) =>
+        o.zone === "battlefield" &&
+        o.controller === defender &&
+        !o.types.includes("land"),
+);
+
+await check(
+    "a blocker stands across from its attacker, covering no other card",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const box = async (slot) =>
+            page.locator(`[data-slot="${slot}"]`).boundingBox();
+        for (const o of standing) {
+            if (o.combat?.kind !== "blocking") continue;
+            const mine = await box(o.slot);
+            const theirs = center(await box(o.combat.attacker));
+            const blockers = standing.filter(
+                (b) => b.combat?.attacker === o.combat.attacker,
+            ).length;
+            assert.ok(
+                Math.abs(center(mine).x - theirs.x) < 120 * blockers,
+                `${o.name} stands across from what it blocks`,
+            );
+            for (const other of standing) {
+                if (other.slot === o.slot) continue;
+                const them = await box(other.slot);
+                const overlap =
+                    Math.min(mine.x + mine.width, them.x + them.width) -
+                    Math.max(mine.x, them.x);
+                assert.ok(
+                    overlap < them.width / 2,
+                    `${o.name} covers ${other.name} by ${Math.round(overlap)} px`,
+                );
+            }
+        }
+    },
+    {
+        fixture: "combat-blockers",
+        at: blockersViews.length,
+        ready: `[data-slot="${standing[0].slot}"]`,
+    },
+);
+
 // The choice overlays: a scry, Jace's put-back and a pay-or-counter prompt, each the last view
 // of its fixture. An overlay sends the first pick of its plan at once; the rest wait for the
 // decisions they answer, which these fixtures don't record.

@@ -179,6 +179,7 @@ INTERACTION_FIXTURES = [
     "greedy-turn-9",
     "combat-attack",
     "combat-block",
+    "combat-blockers",
     "choice-scry",
     "choice-jace",
     "choice-pay",

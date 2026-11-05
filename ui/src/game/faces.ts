@@ -43,14 +43,18 @@ export const unknownFace = (name: string): FrameFace => ({
 });
 
 /** The paragraph of a card's rules text that says one of its abilities: the `nth` triggered
- * ability ("When", "Whenever", "At") or activated one (a cost and a colon, loyalty abilities
- * included), counting as the engine lists them; the whole text when no paragraph matches, as
- * for an ability a keyword's reminder text describes. */
+ * ability ("When", "Whenever", "At", or a keyword whose reminder text says one, as offspring
+ * and impending do) or activated one (a cost and a colon, loyalty abilities included),
+ * counting as the engine lists them; the whole text when no paragraph matches, as for the
+ * second of two triggers one paragraph says ("Whenever this enchantment enters or
+ * attacks"). */
 export function abilityText(
   text: string,
   triggered: boolean,
   nth: number,
 ): string {
-  const kind = triggered ? /^(When|Whenever|At)\b/ : /^[^(]*:/;
+  const kind = triggered
+    ? /^(When|Whenever|At)\b|\(.*\b([Ww]hen|[Ww]henever|At the beginning)\b/
+    : /^[^(]*:/;
   return text.split("\n").filter((p) => kind.test(p))[nth] ?? text;
 }

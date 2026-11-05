@@ -185,9 +185,23 @@ function backPlacements(cards: ObjectView[]): Placement[] {
   }));
 }
 
+/** The step from each group's left edge to the next's in a row of groups `widths` wide, and
+ * the row's length: each group's width plus `gap`, cut down evenly when the row would be longer
+ * than `room`, but keeping a sliver of each group. */
+function steps(widths: number[], gap: number, room: number) {
+  const natural = widths.reduce((a, w) => a + w, 0) + gap * (widths.length - 1);
+  const cut =
+    natural > room && widths.length > 1
+      ? (natural - room) / (widths.length - 1)
+      : 0;
+  return {
+    steps: widths.map((w) => Math.max(w * 0.3, w + gap - cut)),
+    length: natural - cut * (widths.length - 1),
+  };
+}
+
 /** A row of groups laid left to right from `start`, or centered on `center` when given,
- * squeezed together so the row ends by `end`: each group's step to the next is its width plus
- * `gap`, cut down evenly when the row is too long. Returns each group's x. */
+ * squeezed together so the row ends by `end` (`steps`). Returns each group's x. */
 function row(
   widths: number[],
   gap: number,
@@ -196,23 +210,45 @@ function row(
   center?: number,
 ): number[] {
   if (widths.length === 0) return [];
-  const natural = widths.reduce((a, w) => a + w, 0) + gap * (widths.length - 1);
-  const room = end - start;
-  // Overlap, if need be, by cutting every step alike, but keep a sliver of each group.
-  const cut =
-    natural > room && widths.length > 1
-      ? (natural - room) / (widths.length - 1)
-      : 0;
-  const length = natural - cut * (widths.length - 1);
+  const { steps: step, length } = steps(widths, gap, end - start);
   let x =
     center === undefined
       ? start
       : Math.max(start, Math.min(center - length / 2, end - length));
-  return widths.map((w) => {
+  return step.map((s) => {
     const at = x;
-    x += Math.max(w * 0.3, w + gap - cut);
+    x += s;
     return at;
   });
+}
+
+/** Moves a row's groups, in order, as near as they can be to the lefts they `want`, spaced at
+ * least as `row` would space them and inside `start` to `end`: each pushed right of its left
+ * neighbor, then left of the end and its right neighbor, then right of the start again. */
+function settle(
+  wants: number[],
+  widths: number[],
+  gap: number,
+  start: number,
+  end: number,
+): number[] {
+  const n = wants.length;
+  const { steps: step } = steps(widths, gap, end - start);
+  const xs = [...wants];
+  const fromLeft = () => {
+    for (let i = 0; i < n; i++) {
+      xs[i] = Math.max(xs[i]!, i === 0 ? start : xs[i - 1]! + step[i - 1]!);
+    }
+  };
+  fromLeft();
+  for (let i = n - 1; i >= 0; i--) {
+    xs[i] = Math.min(
+      xs[i]!,
+      i === n - 1 ? end - widths[i]! : xs[i + 1]! - step[i]!,
+    );
+  }
+  fromLeft();
+  return xs;
 }
 
 /** Lands of one name (or tokens of one name), stacked as Table.tsx's LandStack: copies beneath
@@ -228,8 +264,15 @@ function piles(objects: ObjectView[], key: (o: ObjectView) => string) {
   );
 }
 
-/** One side's battlefield: land piles on the left, other permanents in the middle. */
-function battlefieldPlacements(side: Side, objects: ObjectView[]): Placement[] {
+/** One side's battlefield: land piles on the left, other permanents in the middle. A blocker
+ * stands across the table from the attacker it blocks among the other side's placements
+ * `across`, as combat.png does, an attacker's blockers side by side about its center, so a
+ * block reads as a short line; the rest of the row makes room. */
+function battlefieldPlacements(
+  side: Side,
+  objects: ObjectView[],
+  across: Placement[] = [],
+): Placement[] {
   const rows = ROWS[side];
   const lands = objects.filter((o) => o.types.includes("land"));
   const others = objects.filter((o) => !o.types.includes("land"));
@@ -269,20 +312,49 @@ function battlefieldPlacements(side: Side, objects: ObjectView[]): Placement[] {
     plain(o) ? `${o.name}|${o.tapped}` : `#${o.slot}`,
   );
   const scale = depthScale(rows.permanents);
-  const groupWidth = (n: number) =>
-    CREATURE_WIDTH * (1 + LAND_STEP.x * (n - 1)) * scale;
+  const width = CREATURE_WIDTH * scale;
+  const groupWidth = (n: number) => width * (1 + LAND_STEP.x * (n - 1));
+  const widths = groups.map((g) => groupWidth(g.length));
+  const gap = 0.08 * CREATURE_WIDTH * scale;
   const xs = row(
-    groups.map((g) => groupWidth(g.length)),
-    0.08 * CREATURE_WIDTH * scale,
+    widths,
+    gap,
     PERMANENTS.start,
     PERMANENTS.end,
     PERMANENTS.center,
   );
+  // Where each blocker wants to stand: its attacker's blockers side by side about its center.
+  const attackers = new Map(across.map((p) => [p.slot, p]));
+  const blocking = new Map<number, number[]>();
+  for (const o of objects) {
+    const attacker = o.combat?.kind === "blocking" ? o.combat.attacker : null;
+    if (attacker === null || !attackers.has(attacker)) continue;
+    blocking.set(attacker, [...(blocking.get(attacker) ?? []), o.slot]);
+  }
+  const wants = new Map<number, number>();
+  for (const [attacker, blockers] of blocking) {
+    const a = attackers.get(attacker)!;
+    const center = a.x + (CREATURE_WIDTH * a.scale) / 2;
+    blockers.forEach((slot, i) => {
+      const offset = (i - (blockers.length - 1) / 2) * width * 1.04;
+      wants.set(slot, center - width / 2 + offset);
+    });
+  }
+  const wanted = groups.map((g, i) => wants.get(g[0]!.slot) ?? xs[i]!);
+  const order = groups.map((_, i) => i).sort((a, b) => wanted[a]! - wanted[b]!);
+  const lefts = settle(
+    order.map((g) => wanted[g]!),
+    order.map((g) => widths[g]!),
+    gap,
+    PERMANENTS.start,
+    PERMANENTS.end,
+  );
   const forward = side === "you" ? -ADVANCE : ADVANCE;
-  groups.forEach((group, g) => {
+  order.forEach((g, k) => {
+    const group = groups[g]!;
     group.forEach((o, i) => {
       const depth = group.length - 1 - i;
-      const x = xs[g]! + i * CREATURE_WIDTH * LAND_STEP.x * scale;
+      const x = lefts[k]! + i * CREATURE_WIDTH * LAND_STEP.x * scale;
       const y =
         rows.permanents +
         depth * CREATURE_WIDTH * LAND_STEP.y * scale +
@@ -294,39 +366,12 @@ function battlefieldPlacements(side: Side, objects: ObjectView[]): Placement[] {
         width: CREATURE_WIDTH,
         opacity: 1,
         // Combat's creatures over their neighbors, so their marks show.
-        z: 40 + g * 8 + i + (o.combat ? 60 : 0),
+        z: 40 + k * 8 + i + (o.combat ? 60 : 0),
         ...onTable(x, y, CREATURE_WIDTH),
       });
     });
   });
   return out;
-}
-
-/** Stands each blocker across the table from the attacker it blocks, as combat.png does, its
- * blockers side by side about the attacker's center, so a block reads as a short line. */
-function facing(field: Placement[], bySlot: Map<number, ObjectView>) {
-  const placed = new Map(field.map((p) => [p.slot, p]));
-  const blockers = new Map<number, Placement[]>();
-  for (const p of field) {
-    const combat = bySlot.get(p.slot)?.combat;
-    if (combat?.kind !== "blocking" || combat.attacker === null) continue;
-    if (!placed.has(combat.attacker)) continue;
-    blockers.set(combat.attacker, [
-      ...(blockers.get(combat.attacker) ?? []),
-      p,
-    ]);
-  }
-  for (const [attacker, group] of blockers) {
-    const a = placed.get(attacker)!;
-    const center = a.x + (CREATURE_WIDTH * a.scale) / 2;
-    group.forEach((p, i) => {
-      const width = CREATURE_WIDTH * p.scale;
-      const step = width * 1.04;
-      const x = center - width / 2 + (i - (group.length - 1) / 2) * step;
-      placed.set(p.slot, { ...p, ...onTable(x, p.y, CREATURE_WIDTH) });
-    });
-  }
-  return [...placed.values()];
 }
 
 /** A pile lying at a fixed place, as Table.tsx's `Lying` draws it: unscaled, leaning. */
@@ -350,13 +395,16 @@ export function layout(
 
   out.push(...handPlacements(owned("you", "hand"), raised));
   out.push(...backPlacements(owned("opponent", "hand")));
-  const field = (["opponent", "you"] as const).flatMap((side) =>
+  // Blockers stand across from their attackers, which stand where they would anyway: only the
+  // defending side's row depends on the other's.
+  const field = (side: Side, across?: Placement[]) =>
     battlefieldPlacements(
       side,
       permanents.filter((o) => o.controller === side),
-    ),
-  );
-  out.push(...facing(field, bySlot));
+      across,
+    );
+  const yours = field("you", field("opponent"));
+  out.push(...yours, ...field("opponent", yours));
   for (const side of ["opponent", "you"] as const) {
     const { library, graveyard } = PILES[side];
     // Library cards wait, unseen, on their library; exiled cards fade out over the graveyard.
