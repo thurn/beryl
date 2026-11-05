@@ -13,9 +13,12 @@
 //!   a definitions file describes and writes, for each, the stream of messages the UI's
 //!   fixture transport replays (`ui/src/ipc.ts`) to `<out-dir>/<name>.json`. `just ui-shots`
 //!   runs it over `ui/fixtures.json`, so fixtures are generated, never committed.
+//! - `beryl_cli serve [--port N]` serves the app's game commands over HTTP for a UI in a plain
+//!   browser to play live games through (`just ui-live`, [`serve`]).
 
 mod fixture;
 mod game;
+mod serve;
 mod tournament;
 mod transcript;
 
@@ -29,13 +32,21 @@ const USAGE: &str = "usage:
   beryl_cli play <agent> <agent> [--seed N] [--out FILE] [--iterations N] [--trees K]
   beryl_cli tournament <agent>... [--games N] [--seed N] [--json FILE] [--check]
       [--iterations N] [--trees K]
-  beryl_cli record-fixture <definitions.json> <out-dir> [name...]";
+  beryl_cli record-fixture <definitions.json> <out-dir> [name...]
+  beryl_cli serve [--port N]";
+
+/// The port `serve` listens on unless told otherwise.
+const DEFAULT_PORT: u16 = 1421;
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.as_slice() {
         [command, definitions, out, names @ ..] if command == "record-fixture" => {
             fixture::record_all(Path::new(definitions), Path::new(out), names)
+        }
+        [command] if command == "serve" => serve::serve(DEFAULT_PORT),
+        [command, flag, port] if command == "serve" && flag == "--port" => {
+            number(flag, port).and_then(serve::serve)
         }
         [command, rest @ ..] if command == "play" => Flags::parse(rest).and_then(|f| play(&f)),
         [command, rest @ ..] if command == "tournament" => {

@@ -1,0 +1,372 @@
+// A headless WebKit page an agent drives one step at a time: `by ui-live` (tools/) starts it
+// beside the live game server and Vite. Usage:
+//   node scripts/drive.mjs <port> <app-url> <out-dir> [width] [height]
+// Each `POST /` body is the body of an async JavaScript function, run in Node with these in
+// scope, whose return value comes back as JSON:
+//   page, context   the Playwright page (opened at <app-url>) and its context
+//   shot(name)      screenshots the page to <out-dir>/<n>-<name>.png and returns the path
+//   probe           the measuring helpers below
+//   errors          the page's errors and console errors so far
+// Restart `by ui-live` to load a change to this file; changes under src/ reload in the page.
+// Motion is not reduced, unlike ui-shots: animation and layout shift are what a player sees.
+import { createServer } from "node:http";
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
+import { launch } from "./capture.mjs";
+
+const [port, url, out, width = "1600", height = "900"] = process.argv.slice(2);
+if (!port || !url || !out) {
+    console.error(
+        "usage: node scripts/drive.mjs <port> <app-url> <out-dir> [width] [height]",
+    );
+    process.exit(2);
+}
+await mkdir(out, { recursive: true });
+
+const browser = await launch();
+const context = await browser.newContext({
+    viewport: { width: Number(width), height: Number(height) },
+});
+const page = await context.newPage();
+const errors = [];
+page.on("pageerror", (e) => errors.push(e.message));
+page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+await page.goto(url);
+
+let shots = 0;
+const shot = async (name = "shot") => {
+    shots += 1;
+    const path = join(out, `${String(shots).padStart(3, "0")}-${name}.png`);
+    await page.screenshot({ path });
+    return path;
+};
+
+/** What the probes describe an element as: its tag, data attributes, role and some text. */
+const DESCRIBE = `(e) => {
+    const data = [...e.attributes]
+        .filter((a) => a.name.startsWith("data-") || a.name === "role" || a.name === "class")
+        .map((a) => a.name + "=" + JSON.stringify(a.value.slice(0, 40)))
+        .join(" ");
+    const text = (e.innerText || e.getAttribute("aria-label") || "").trim().slice(0, 40);
+    return e.tagName.toLowerCase() + (data ? " " + data : "") + (text ? " «" + text + "»" : "");
+}`;
+
+/** Elements whose movement the motion probe tracks by default. */
+const TRACKED =
+    "[data-slot], [data-zone], [data-card], button, [role=button], [role=dialog], h1, h2, h3, img, svg";
+
+const probe = {
+    /** Starts recording where every element matching `selector` is, each frame. Call the
+     * returned function after an action (it waits `ms` more first) for the elements that moved
+     * or resized since recording began, worst first: how far and over how many frames. */
+    async motion(selector = TRACKED) {
+        await page.evaluate(
+            ([selector, describe]) => {
+                const name = new Function(`return ${describe}`)();
+                const seen = new Map();
+                const frame = () => {
+                    for (const e of document.querySelectorAll(selector)) {
+                        const r = e.getBoundingClientRect();
+                        if (r.width === 0 && r.height === 0) continue;
+                        let s = seen.get(e);
+                        if (!s) {
+                            s = {
+                                name: name(e),
+                                first: r,
+                                last: r,
+                                moves: 0,
+                                max: 0,
+                            };
+                            seen.set(e, s);
+                        }
+                        const d = Math.max(
+                            Math.abs(r.left - s.first.left),
+                            Math.abs(r.top - s.first.top),
+                            Math.abs(r.width - s.first.width),
+                            Math.abs(r.height - s.first.height),
+                        );
+                        if (
+                            r.left !== s.last.left ||
+                            r.top !== s.last.top ||
+                            r.width !== s.last.width ||
+                            r.height !== s.last.height
+                        ) {
+                            s.moves += 1;
+                        }
+                        s.max = Math.max(s.max, d);
+                        s.last = r;
+                    }
+                    const m = window.__motion;
+                    if (m?.seen !== seen) return;
+                    for (const e of document.querySelectorAll("*")) {
+                        if (e.scrollTop || e.scrollLeft) {
+                            const was = m.scrolls.get(e) ?? [0, 0];
+                            m.scrolls.set(e, [
+                                Math.max(was[0], Math.abs(e.scrollLeft)),
+                                Math.max(was[1], Math.abs(e.scrollTop)),
+                            ]);
+                        }
+                    }
+                    requestAnimationFrame(frame);
+                };
+                window.__motion = {
+                    seen,
+                    scrolls: new Map(),
+                    start: performance.now(),
+                };
+                requestAnimationFrame(frame);
+            },
+            [selector, DESCRIBE],
+        );
+        return async (ms = 1000) => {
+            await page.waitForTimeout(ms);
+            return page.evaluate((describe) => {
+                const name = new Function(`return ${describe}`)();
+                const { seen, scrolls, start } = window.__motion;
+                window.__motion = undefined;
+                const moved = [...seen.values()]
+                    .filter((s) => s.max >= 2)
+                    .sort((a, b) => b.max - a.max)
+                    .map((s) => ({
+                        element: s.name,
+                        maxShiftPx: Math.round(s.max),
+                        framesMoving: s.moves,
+                    }));
+                return {
+                    ms: Math.round(performance.now() - start),
+                    // A scrolled box moves everything in it: a game screen should not scroll.
+                    scrolled: [...scrolls].map(([e, [x, y]]) => ({
+                        element: name(e),
+                        maxScrollPx: [x, y],
+                    })),
+                    tracked: seen.size,
+                    moved: moved.length,
+                    worst: moved.slice(0, 25),
+                };
+            }, DESCRIBE);
+        };
+    },
+
+    /** Moves the mouse onto the visible part of `locator`'s element without scrolling, as a
+     * player's pointer would (Playwright's `hover` and `click` scroll their target into view
+     * first, which moves the page). Returns the point, or null if none of it is on screen. */
+    async pointAt(locator) {
+        const box = await locator.boundingBox();
+        const view = page.viewportSize();
+        if (!box || !view) return null;
+        const left = Math.max(box.x, 0);
+        const right = Math.min(box.x + box.width, view.width);
+        const top = Math.max(box.y, 0);
+        const bottom = Math.min(box.y + box.height, view.height);
+        if (right - left < 2 || bottom - top < 2) return null;
+        const point = { x: (left + right) / 2, y: (top + bottom) / 2 };
+        await page.mouse.move(point.x, point.y);
+        return point;
+    },
+
+    /** Elements matching `selector` that something else covers: at their center or at points
+     * inset from their corners, the topmost element is neither they nor inside them. */
+    covered(selector = "[data-slot], [data-zone], button, [role=button]") {
+        return page.evaluate(
+            ([selector, describe]) => {
+                const name = new Function(`return ${describe}`)();
+                const out = [];
+                for (const e of document.querySelectorAll(selector)) {
+                    const r = e.getBoundingClientRect();
+                    if (r.width < 4 || r.height < 4) continue;
+                    const inset = Math.min(8, r.width / 4, r.height / 4);
+                    const points = [
+                        [r.left + r.width / 2, r.top + r.height / 2],
+                        [r.left + inset, r.top + inset],
+                        [r.right - inset, r.top + inset],
+                        [r.left + inset, r.bottom - inset],
+                        [r.right - inset, r.bottom - inset],
+                    ].filter(
+                        ([x, y]) =>
+                            x >= 0 &&
+                            y >= 0 &&
+                            x < innerWidth &&
+                            y < innerHeight,
+                    );
+                    if (points.length === 0) {
+                        out.push({ element: name(e), offscreen: true });
+                        continue;
+                    }
+                    const by = new Set();
+                    let hidden = 0;
+                    for (const [x, y] of points) {
+                        const top = document.elementFromPoint(x, y);
+                        if (
+                            top &&
+                            top !== e &&
+                            !e.contains(top) &&
+                            !top.contains(e)
+                        ) {
+                            hidden += 1;
+                            by.add(name(top));
+                        }
+                    }
+                    if (hidden > 0) {
+                        out.push({
+                            element: name(e),
+                            pointsCovered: `${hidden}/${points.length}`,
+                            by: [...by].slice(0, 3),
+                        });
+                    }
+                }
+                return out;
+            },
+            [selector, DESCRIBE],
+        );
+    },
+
+    /** Visible text cut off by its box: overflowing an element that clips, ellipsized or
+     * line-clamped. */
+    truncated() {
+        return page.evaluate((describe) => {
+            const name = new Function(`return ${describe}`)();
+            const out = [];
+            for (const e of document.querySelectorAll("body *")) {
+                if (!e.childNodes.length || !(e.innerText || "").trim())
+                    continue;
+                const s = getComputedStyle(e);
+                const clips =
+                    s.overflow !== "visible" ||
+                    s.overflowX !== "visible" ||
+                    s.textOverflow === "ellipsis" ||
+                    s.webkitLineClamp !== "none";
+                if (!clips) continue;
+                const over =
+                    e.scrollWidth > e.clientWidth + 1 ||
+                    e.scrollHeight > e.clientHeight + 1;
+                const r = e.getBoundingClientRect();
+                if (over && r.width > 0 && r.height > 0) {
+                    out.push({
+                        element: name(e),
+                        text: e.innerText.trim().slice(0, 80),
+                        box: [Math.round(r.width), Math.round(r.height)],
+                        content: [e.scrollWidth, e.scrollHeight],
+                    });
+                }
+            }
+            return out;
+        }, DESCRIBE);
+    },
+
+    /** The live game's messages so far (`window.berylLive.log`, src/ipc.ts), summarized: when
+     * each command was sent and answered, and each view that arrived, with its turn, step,
+     * who had priority, whether the human was asked a decision, and what happened in it. */
+    timeline({ since = 0 } = {}) {
+        return page.evaluate((since) => {
+            const log = window.berylLive?.log;
+            if (!log) return "not a live page (?live=)";
+            return log
+                .filter((m) => m.at >= since)
+                .map((m) => {
+                    const at = Math.round(m.at);
+                    if (m.kind === "invoke") {
+                        return { at, sent: m.command, args: m.args };
+                    }
+                    if (m.kind === "result") {
+                        return { at, answered: m.command, ok: m.ok };
+                    }
+                    const v = m.payload.view;
+                    const names = new Map(
+                        v.objects.map((o) => [o.slot, o.name]),
+                    );
+                    const what = (v.events ?? []).map((e) => {
+                        const parts = [e.kind];
+                        for (const [k, x] of Object.entries(e)) {
+                            if (k === "kind") continue;
+                            const named =
+                                (k === "slot" || k === "source") && names.has(x)
+                                    ? names.get(x)
+                                    : x;
+                            parts.push(`${k}=${JSON.stringify(named)}`);
+                        }
+                        return parts.join(" ");
+                    });
+                    return {
+                        at,
+                        view: `turn ${v.turn.number} ${v.turn.active} ${v.turn.step}, priority ${v.turn.priority}`,
+                        status:
+                            v.status.kind === "deciding"
+                                ? `deciding ${v.status.decision.kind}`
+                                : v.status.kind,
+                        events: what,
+                    };
+                });
+        }, since);
+    },
+
+    /** Runs `action` (an async function, e.g. a click), then waits up to `timeout` ms for the
+     * next view that asks the human a decision or ends the game. Says how long that took, how
+     * many views arrived meanwhile, and what the decision is. Without an action, waits for
+     * the next such view from now. */
+    async decision(action, timeout = 60000) {
+        const before = await page.evaluate(
+            () => window.berylLive?.log.length ?? 0,
+        );
+        const start = Date.now();
+        if (action) await action();
+        const found = await page.waitForFunction(
+            (before) => {
+                const log = window.berylLive?.log ?? [];
+                const next = log
+                    .slice(before)
+                    .find(
+                        (m) =>
+                            m.kind === "event" &&
+                            m.payload.view.status.kind !== "stopped",
+                    );
+                return next ? next.payload.view.status : false;
+            },
+            before,
+            { timeout },
+        );
+        const status = await found.jsonValue();
+        const views = await page.evaluate(
+            (before) =>
+                window.berylLive.log
+                    .slice(before)
+                    .filter((m) => m.kind === "event").length,
+            before,
+        );
+        return {
+            waitedMs: Date.now() - start,
+            views,
+            status:
+                status.kind === "deciding"
+                    ? `${status.decision.kind}: ${status.decision.candidates
+                          .map((c) => c.label)
+                          .slice(0, 12)
+                          .join(" | ")}`
+                    : status.kind,
+        };
+    },
+};
+
+createServer((request, response) => {
+    let body = "";
+    request.on("data", (chunk) => (body += chunk));
+    request.on("end", async () => {
+        let answer;
+        try {
+            const run = new (Object.getPrototypeOf(async () => {}).constructor)(
+                "page",
+                "context",
+                "shot",
+                "probe",
+                "errors",
+                body,
+            );
+            answer = { ok: await run(page, context, shot, probe, errors) };
+        } catch (e) {
+            answer = { error: String(e?.stack ?? e) };
+        }
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify(answer, null, 1) + "\n");
+    });
+}).listen(Number(port), "127.0.0.1", () =>
+    console.log(`drive: http://127.0.0.1:${port}/ driving ${url}`),
+);

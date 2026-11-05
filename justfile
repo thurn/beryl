@@ -32,6 +32,11 @@ ui-shots *args:
 ui-test:
     {{ by }} ui-test
 
+# Live games in a headless page an agent drives over HTTP, until interrupted (--release, --port N)
+[group('app')]
+ui-live *args:
+    {{ by }} ui-live "$@"
+
 # The release Beryl.app, under rust/target/tauri/release/bundle/macos
 [group('app')]
 bundle:

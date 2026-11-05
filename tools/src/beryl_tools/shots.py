@@ -6,6 +6,10 @@ the paths. Pages run in a plain browser on the fixture transport (ui/src/ipc.ts)
 `ui-test` plays the game screen through a fixture the same way, dragging, clicking and hovering
 as a player would (ui/scripts/interactions.mjs).
 
+`ui-live` serves live games instead: `beryl_cli serve` runs the app's game commands, Vite serves
+the UI against it (`?live=`, src/ipc.ts), and ui/scripts/drive.mjs holds a headless WebKit page
+open on it that an agent drives one step at a time over HTTP, until interrupted.
+
 Screenshots go to the cache (`ui-shots/<checkout>/`), never into the tree; WebKit is installed
 there on first use.
 """
@@ -194,6 +198,66 @@ def ui_test(args: argparse.Namespace) -> int:
     return code
 
 
+def ui_live(args: argparse.Namespace) -> int:
+    out = (
+        paths.cache_root()
+        / "ui-live"
+        / paths.REPO.name
+        / time.strftime("%Y%m%d-%H%M%S")
+    )
+    out.mkdir(parents=True)
+    profile = ["--release"] if args.release else []
+    built = subprocess.run(
+        ["cargo", "build", "--quiet", "--package", "beryl_cli", *profile],
+        cwd=paths.RUST,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
+    if built.returncode != 0:
+        print("ui-live: building beryl_cli failed", file=sys.stderr)
+        return built.returncode
+    binary = (
+        paths.RUST / "target" / ("release" if args.release else "debug") / "beryl_cli"
+    )
+    game_port, drive_port = free_port(), args.port or free_port()
+    children: list[subprocess.Popen[bytes]] = []
+    try:
+        env = webkit_env()
+        children.append(
+            subprocess.Popen(
+                [str(binary), "serve", "--port", str(game_port)],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+            )
+        )
+        with served_ui(env) as url:
+            app = f"{url}?live=http://127.0.0.1:{game_port}#/"
+            children.append(
+                subprocess.Popen(
+                    ["node", "scripts/drive.mjs", str(drive_port), app, str(out)]
+                    + [str(args.width), str(args.height)],
+                    cwd=paths.UI,
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                )
+            )
+            drive = f"http://127.0.0.1:{drive_port}/"
+            if not wait_for_server(drive, children[-1]):
+                raise UiError(f"the driver did not answer at {drive}")
+            print(f"ui-live: app {app}", flush=True)
+            print(f"ui-live: drive {drive} (POST a Playwright snippet)", flush=True)
+            print(f"ui-live: screenshots {out}", flush=True)
+            while all(c.poll() is None for c in children):
+                time.sleep(0.5)
+            raise UiError("the game server or the driver exited")
+    except UiError as e:
+        print(f"ui-live: {e}", file=sys.stderr)
+        return 1
+    finally:
+        for c in children:
+            c.terminate()
+
+
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser("ui-shots", help="screenshot UI states headless (ui/shots.json)")
     p.add_argument("only", nargs="*", help="shot names; all of them by default")
@@ -202,3 +266,16 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         "ui-test", help="play the game screen headless through a fixture"
     )
     p.set_defaults(func=ui_test)
+    p = sub.add_parser(
+        "ui-live",
+        help="live games in a headless page an agent drives over HTTP, until interrupted",
+    )
+    p.add_argument(
+        "--port", type=int, default=0, help="the driver's port; any free one"
+    )
+    p.add_argument("--width", type=int, default=1600)
+    p.add_argument("--height", type=int, default=900)
+    p.add_argument(
+        "--release", action="store_true", help="optimized agents (`just dev` is debug)"
+    )
+    p.set_defaults(func=ui_live)

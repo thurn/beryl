@@ -140,6 +140,67 @@ const playsOn = (e: { event: keyof Events; payload: unknown }) => {
   return kind === "thinking" || kind === "playing";
 };
 
+/** One message a live transport saw, for a reviewer's probes (`window.berylLive`): when it
+ * happened on the page's clock, and what it was. */
+export type LiveEntry =
+  | { at: number; kind: "invoke"; command: Command; args: unknown }
+  | {
+      at: number;
+      kind: "result";
+      command: Command;
+      ok: boolean;
+      value: unknown;
+    }
+  | { at: number; kind: "event"; event: keyof Events; payload: unknown };
+
+/** The app's commands and events from `beryl_cli serve` at `base`, so a plain browser plays
+ * live games with the app's real timing (`just ui-live`). Every message is logged in `log`. */
+export function liveTransport(base: string): Transport & { log: LiveEntry[] } {
+  const log: LiveEntry[] = [];
+  const events = new EventSource(`${base}/events`);
+  return {
+    log,
+    async invoke<C extends Command>(command: C, args: Args<C>) {
+      log.push({ at: performance.now(), kind: "invoke", command, args });
+      // A text body keeps the request simple: no CORS preflight.
+      const response = await fetch(`${base}/invoke/${command}`, {
+        method: "POST",
+        body: JSON.stringify(args),
+      });
+      const answer = (await response.json()) as
+        { ok: Result<C> } | { err: Commands[C]["error"] };
+      const ok = "ok" in answer;
+      log.push({
+        at: performance.now(),
+        kind: "result",
+        command,
+        ok,
+        value: ok ? answer.ok : answer.err,
+      });
+      if (!ok) {
+        throw new CommandError(command, answer.err);
+      }
+      return answer.ok;
+    },
+    async listen<E extends keyof Events>(
+      event: E,
+      handler: (payload: Events[E]) => void,
+    ) {
+      const listener = (e: MessageEvent<string>) => {
+        const payload = JSON.parse(e.data) as Events[E];
+        log.push({ at: performance.now(), kind: "event", event, payload });
+        handler(payload);
+      };
+      events.addEventListener(event, listener);
+      return () => events.removeEventListener(event, listener);
+    },
+  };
+}
+
+/** The `beryl_cli serve` base URL a page was opened with (`?live=<url>`), if any. */
+const liveBase = () =>
+  new URLSearchParams(window.location.search).get("live") ?? undefined;
+
 /** What a plain browser gets without `?fixture=`: enough for the shell to render. */
 const browserFixture: Fixture = {
   messages: [
@@ -156,6 +217,12 @@ const browserFixture: Fixture = {
 async function chooseTransport(): Promise<Transport> {
   if ("__TAURI_INTERNALS__" in window) {
     return tauriTransport;
+  }
+  const live = liveBase();
+  if (live) {
+    const transport = liveTransport(live);
+    (window as { berylLive?: unknown }).berylLive = transport;
+    return transport;
   }
   // `?fixture=<name>` replays /fixtures/<name>.json, which `beryl_cli record-fixture` writes
   // and Vite serves from ui/public/fixtures, with the plain browser's responses to the commands
@@ -220,20 +287,24 @@ export const onGameUpdate = async (
   handler: (update: Events["game-update"], past: boolean) => void,
 ) => (await transport()).listen("game-update", handler);
 
-/** Whether card images can load: only inside the app, whose `beryl-art` scheme serves them.
- * A plain browser (fixtures, `just ui-shots`) draws placeholders and never touches the
- * network. */
-export const artAvailable = () => "__TAURI_INTERNALS__" in window;
+/** Whether card images can load: inside the app, whose `beryl-art` scheme serves them, or in
+ * a live browser (`?live=`), which loads them from Scryfall. A fixture browser (`just
+ * ui-shots`) draws placeholders and never touches the network. */
+export const artAvailable = () =>
+  "__TAURI_INTERNALS__" in window || liveBase() !== undefined;
 
 // Card images come from the app's `beryl-art` URI scheme (rust/crates/beryl_app/src/art.rs),
 // which serves Scryfall's image paths from a disk cache and downloads misses.
 const SCRYFALL_IMAGES = "https://cards.scryfall.io/";
 
-/** The app URL for an image URL from data/cards.json. */
+/** The app URL for an image URL from data/cards.json: the URL itself in a live browser. */
 export const cardImageUrl = (scryfallUrl: string) => {
   const url = new URL(scryfallUrl);
   if (url.origin + "/" !== SCRYFALL_IMAGES) {
     throw new Error(`not a Scryfall image: ${scryfallUrl}`);
+  }
+  if (!("__TAURI_INTERNALS__" in window)) {
+    return scryfallUrl;
   }
   return `beryl-art://localhost${url.pathname}`;
 };
