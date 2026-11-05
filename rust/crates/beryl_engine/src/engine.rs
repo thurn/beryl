@@ -9,6 +9,7 @@ use crate::decision::{
 use crate::event::{self, Entry, Reason, Sink};
 use crate::fixed::{Fixed, Full};
 use crate::ids::{Seat, Slot};
+use crate::observation::Observation;
 use crate::profile::{Profile, Stops};
 use crate::state::{Pending, State, Zone};
 use crate::table::GameTable;
@@ -64,6 +65,17 @@ pub fn view<'a>(s: &'a State, t: &GameTable, x: &'a mut Scratch) -> &'a State {
         return paused;
     }
     s
+}
+
+/// What `viewer` sees of the open decision: [`view`]'s position, rooted at the committed
+/// state `s` so a search can play on from it.
+pub fn observe<'a>(
+    s: &'a State,
+    t: &GameTable,
+    x: &'a mut Scratch,
+    viewer: Seat,
+) -> Observation<'a> {
+    Observation::paused(view(s, t, x), s, viewer)
 }
 
 /// Deterministic counts of the engine's logical operations, the stable performance signal CI
@@ -551,11 +563,15 @@ pub(crate) fn collapse(s: &State, candidates: Bitboard) -> Bitboard {
     let referenced = cast::referenced(s) | combat::related(s);
     let mut kept = Bitboard::EMPTY;
     for slot in candidates.iter() {
-        let sig = signature(slot);
+        // The signature holds the card, so objects of other cards are told apart without
+        // building theirs.
+        let card = s.object(slot).card;
         if referenced.contains(slot)
-            || !kept
-                .iter()
-                .any(|k| !referenced.contains(k) && signature(k) == sig)
+            || !kept.iter().any(|k| {
+                !referenced.contains(k)
+                    && s.object(k).card == card
+                    && signature(k) == signature(slot)
+            })
         {
             kept.insert(slot);
         }

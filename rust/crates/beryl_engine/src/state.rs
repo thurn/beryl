@@ -775,6 +775,12 @@ impl State {
         self.profile = profile;
     }
 
+    /// Reseeds the game's random streams, as search does for each copy it plays on so sibling
+    /// rollouts diverge (architecture §14).
+    pub fn reseed(&mut self, seed: u64) {
+        self.rng = Rng::new(seed);
+    }
+
     /// The slots a player owns in a zone other than the stack.
     pub fn zone(&self, owner: Seat, zone: Zone) -> Bitboard {
         self.zones.members[owner.index()][zone as usize]

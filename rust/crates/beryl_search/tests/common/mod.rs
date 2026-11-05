@@ -8,8 +8,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use beryl_cards::CARDS;
 use beryl_cards::decks::{WU_CONTROL, fuzz_deck};
 use beryl_engine::{
-    Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch, State, Step, apply, next,
-    view,
+    Decision, GameTable, Outcome, Profile, Replay, Scratch, State, Step, apply, next, observe,
 };
 use beryl_search::{Agent, RandomAgent};
 
@@ -52,8 +51,7 @@ pub fn play(
             Step::Decide(d) => {
                 watch(s, &d);
                 // A paused resolution is seen where its body stopped (§7.3).
-                let c =
-                    agents[d.player.index()].choose(Observation::new(view(s, t, x), d.player), &d);
+                let c = agents[d.player.index()].choose(observe(s, t, x, d.player), &d);
                 apply(s, t, x, &mut Replay, c);
             }
         }

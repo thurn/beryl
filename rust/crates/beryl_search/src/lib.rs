@@ -1,8 +1,10 @@
 //! The agents (architecture §19.1): everything that plays the game, behind one trait. The
 //! seeded [`RandomAgent`] fuzzes; the [`GreedyAgent`] is the [`RolloutPolicy`] search plays
-//! rollouts with. [`AGENTS`] names every agent a game can be played against.
+//! rollouts with; [`Mcts`] searches with it. [`AGENTS`] names every agent a game can be played
+//! against.
 
 mod expert;
+mod mcts;
 mod rollout;
 mod values;
 
@@ -10,6 +12,7 @@ use beryl_engine::rng::SplitMix64;
 use beryl_engine::{Choice, Decision, GameTable, Observation};
 
 pub use expert::ExpertAgent;
+pub use mcts::{Budget, Mcts, Sight};
 pub use rollout::{COUNTER_MIN, Inline, REMOVAL_MIN, RolloutPolicy, rollout};
 pub use values::{CardInfo, CardValues};
 
@@ -77,8 +80,9 @@ pub struct AgentInfo {
     pub name: &'static str,
     /// One line for a human choosing an opponent.
     pub description: &'static str,
-    /// Builds the agent for a game from a seed, so a seed reproduces its games.
-    pub new: fn(t: &GameTable, seed: u64) -> Box<dyn Agent + Send>,
+    /// Builds the agent for a game from a seed, so a seed reproduces its games, and the
+    /// budget a searching agent may spend on a decision; the others ignore it.
+    pub new: fn(t: &GameTable, seed: u64, budget: Budget) -> Box<dyn Agent + Send>,
 }
 
 /// Every agent, in the order a human is offered them.
@@ -98,18 +102,36 @@ pub static AGENTS: &[AgentInfo] = &[
         description: "Plays by a strong player's rules for this deck, and works out combat",
         new: expert,
     },
+    AgentInfo {
+        name: "mcts-omniscient",
+        description: "Cheats: searches the true game, your hand and its library order included",
+        new: mcts_omniscient,
+    },
+    AgentInfo {
+        name: "mcts-hidden",
+        description: "Searches many guesses at the cards it cannot see, playing each out greedily",
+        new: mcts_hidden,
+    },
 ];
 
-fn random(_t: &GameTable, seed: u64) -> Box<dyn Agent + Send> {
+fn random(_t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn Agent + Send> {
     Box::new(RandomAgent::new(seed))
 }
 
-fn greedy(t: &GameTable, _seed: u64) -> Box<dyn Agent + Send> {
+fn greedy(t: &GameTable, _seed: u64, _budget: Budget) -> Box<dyn Agent + Send> {
     Box::new(GreedyAgent::new(t))
 }
 
-fn expert(t: &GameTable, seed: u64) -> Box<dyn Agent + Send> {
+fn expert(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn Agent + Send> {
     Box::new(ExpertAgent::new(t, seed))
+}
+
+fn mcts_omniscient(t: &GameTable, seed: u64, budget: Budget) -> Box<dyn Agent + Send> {
+    Box::new(Mcts::new(t, Sight::Omniscient, budget, seed))
+}
+
+fn mcts_hidden(t: &GameTable, seed: u64, budget: Budget) -> Box<dyn Agent + Send> {
+    Box::new(Mcts::new(t, Sight::Hidden, budget, seed))
 }
 
 /// The agent registered under `name`.

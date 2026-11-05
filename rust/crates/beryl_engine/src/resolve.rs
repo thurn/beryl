@@ -33,18 +33,30 @@ pub(crate) fn resolve(
 ) -> Result<(), Full> {
     let entry = *s.stack.as_slice().last().expect("a stack entry to resolve");
     let ability = entry_ability(t, &entry);
+    let record = match s.pending {
+        Pending::Resolving(r) => r.record,
+        _ => Fixed::new(),
+    };
     if !ability.is_some_and(|b| b.may_pause) || a.inline() {
-        let paused = run(s, t, &mut x.events, Some(a), &[], entry, ability)?;
+        // An inline source runs the body once on the committed state. A resolution that
+        // paused under another source, as search's tree nodes do before a rollout takes over,
+        // replays its record first.
+        s.pending = Pending::None;
+        let paused = run(
+            s,
+            t,
+            &mut x.events,
+            Some(a),
+            record.as_slice(),
+            entry,
+            ability,
+        )?;
         debug_assert!(
             paused.is_none() || s.outcome.is_some(),
             "a body paused outside a scratch copy"
         );
         return Ok(());
     }
-    let record = match s.pending {
-        Pending::Resolving(r) => r.record,
-        _ => Fixed::new(),
-    };
     let (spare, sink) = x.spare_and_sink();
     *spare = *s;
     spare.pending = Pending::None;

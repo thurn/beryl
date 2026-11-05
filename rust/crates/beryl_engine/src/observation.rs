@@ -5,7 +5,7 @@ use crate::bitboard::Bitboard;
 use crate::filter::Filter;
 use crate::fixed::Fixed;
 use crate::ids::{CardIx, Seat, Slot};
-use crate::rng::{Rng, SplitMix64};
+use crate::rng::SplitMix64;
 use crate::state::{
     CastPermission, DECK_SLOTS, Derived, Object, PendingTrigger, Player, StackEntry, State, Turn,
     Zone, deck_slot,
@@ -15,15 +15,36 @@ use crate::table::GameTable;
 /// The state as one player sees it. Slots are public handles; what is hidden is which card
 /// sits behind a slot the viewer has not seen. Agents, rollout policies and the UI read the
 /// game only through this.
+///
+/// While a resolution is paused (§7.3) the position shown is not the committed one: the body
+/// has run in scratch up to its question ([`crate::view`]). The view keeps the committed
+/// state as its root, the position search plays on from; [`crate::observe`] builds such a
+/// view.
 #[derive(Clone, Copy)]
 pub struct Observation<'a> {
     state: &'a State,
+    root: &'a State,
     viewer: Seat,
 }
 
 impl<'a> Observation<'a> {
+    /// The view of a committed state, which is its own root.
     pub fn new(state: &'a State, viewer: Seat) -> Self {
-        Self { state, viewer }
+        Self {
+            state,
+            root: state,
+            viewer,
+        }
+    }
+
+    /// The view of `shown`, the position a paused resolution's question is asked in, whose
+    /// committed state is `root`.
+    pub(crate) fn paused(shown: &'a State, root: &'a State, viewer: Seat) -> Self {
+        Self {
+            state: shown,
+            root,
+            viewer,
+        }
     }
 
     pub fn viewer(&self) -> Seat {
@@ -122,13 +143,23 @@ impl<'a> Observation<'a> {
         self.knows(slot) && filter.matches(self.state, t, slot, self.viewer)
     }
 
-    /// A full state consistent with everything the viewer knows: the unknown remainder of
-    /// each decklist, dealt at random into that player's slots the viewer does not know
-    /// (architecture §13). Decklists are public (decision D19), so the remainder is exact.
-    /// The cards the viewer knows, every public fact and the slot order of every zone are
-    /// kept; the game's random streams are reseeded from `rng`, so its seed does not leak.
+    /// The committed state behind the view, unmasked. Reading it is cheating: only the
+    /// omniscient search, which is labeled as cheating wherever a human meets it, does
+    /// (architecture §19.1). The information-independence test holds every other agent to the
+    /// masked accessors.
+    pub fn unmasked_root(&self) -> &'a State {
+        self.root
+    }
+
+    /// A full committed state consistent with everything the viewer knows there: the root,
+    /// with the unknown remainder of each decklist dealt at random into that player's slots
+    /// the viewer does not know (architecture §13). Decklists are public (decision D19), so
+    /// the remainder is exact. The cards the viewer knows, every public fact and the slot
+    /// order of every zone are kept; the game's random streams are reseeded from `rng`, so its
+    /// seed does not leak. A paused resolution keeps what it showed the viewer known in the
+    /// committed state, so it replays from here to the same question.
     pub fn determinize(&self, t: &GameTable, rng: &mut SplitMix64) -> State {
-        let mut s = *self.state;
+        let mut s = *self.root;
         for player in Seat::BOTH {
             let deck = t.deck(player);
             let mut remainder: Fixed<CardIx, DECK_SLOTS> = Fixed::new();
@@ -139,7 +170,7 @@ impl<'a> Observation<'a> {
             let mut unknown: Fixed<Slot, DECK_SLOTS> = Fixed::new();
             for i in 0..deck.len() {
                 let slot = deck_slot(player, i);
-                if self.knows(slot) {
+                if self.root.knows(self.viewer, slot) {
                     let card = s.object(slot).card;
                     let at = remainder
                         .position(card)
@@ -154,7 +185,7 @@ impl<'a> Observation<'a> {
                 s.object_mut(slot).card = card;
             }
         }
-        s.rng = Rng::new(rng.next_u64());
+        s.reseed(rng.next_u64());
         s
     }
 }

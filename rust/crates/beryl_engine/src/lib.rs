@@ -39,7 +39,7 @@ pub use bitboard::Bitboard;
 pub use decision::{
     Answers, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, Replay, StallReason, Step,
 };
-pub use engine::{Counts, Scratch, apply, next, view};
+pub use engine::{Counts, Scratch, apply, next, observe, view};
 pub use ids::{CardIx, Seat, Slot};
 pub use invariants::{At, Violation};
 pub use observation::Observation;

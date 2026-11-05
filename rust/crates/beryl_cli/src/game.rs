@@ -5,9 +5,9 @@ use beryl_cards::CARDS;
 use beryl_cards::decks::WU_CONTROL;
 use beryl_engine::event::Event;
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::{GameTable, Observation, Outcome, Profile, Replay, Scratch, State, Step};
-use beryl_engine::{apply, next, view};
-use beryl_search::{Agent, agent};
+use beryl_engine::{GameTable, Outcome, Profile, Replay, Scratch, State, Step};
+use beryl_engine::{apply, next, observe, view};
+use beryl_search::{Agent, Budget, agent};
 
 use crate::transcript::Transcript;
 
@@ -25,11 +25,13 @@ pub struct Played {
     pub decisions: u32,
 }
 
-/// The agents named for each seat, built for game `seed`, each from its own stream.
+/// The agents named for each seat, built for game `seed`, each from its own stream, a
+/// searching one with `budget`.
 pub fn agents(
     t: &GameTable,
     names: [&str; 2],
     seed: u64,
+    budget: Budget,
 ) -> Result<[Box<dyn Agent + Send>; 2], String> {
     let mut rng = SplitMix64::new(seed ^ 0xa9e1_7c3b_55d0_e4f1);
     let mut build = |name: &str| {
@@ -37,21 +39,23 @@ pub fn agents(
             let known: Vec<&str> = beryl_search::AGENTS.iter().map(|a| a.name).collect();
             format!("no agent is named {name:?} (agents: {})", known.join(", "))
         })?;
-        Ok::<_, String>((info.new)(t, rng.next_u64()))
+        Ok::<_, String>((info.new)(t, rng.next_u64(), budget))
     };
     Ok([build(names[0])?, build(names[1])?])
 }
 
-/// Plays game `seed` to its end, under the smart stops. With `check`, the invariants are
-/// checked at every decision; they are always checked at the end.
+/// Plays game `seed` to its end, under the smart stops, searching agents with `budget`. With
+/// `check`, the invariants are checked at every decision; they are always checked at the
+/// end.
 pub fn play(
     t: &GameTable,
     seed: u64,
     names: [&str; 2],
+    budget: Budget,
     check: bool,
     mut transcript: Option<&mut Transcript>,
 ) -> Result<Played, String> {
-    let mut agents = agents(t, names, seed)?;
+    let mut agents = agents(t, names, seed, budget)?;
     let mut s = State::new(t, seed, Profile::SMART);
     // A transcript tells what happened between decisions, from the engine's events.
     let mut x = if transcript.is_some() {
@@ -74,10 +78,9 @@ pub fn play(
                 }
                 let happened: Vec<Event> = x.events.drain().collect();
                 // A paused resolution is seen where its body stopped (§7.3).
-                let shown = view(&s, t, &mut x);
-                let c = agents[d.player.index()].choose(Observation::new(shown, d.player), &d);
+                let c = agents[d.player.index()].choose(observe(&s, t, &mut x, d.player), &d);
                 if let Some(tr) = transcript.as_deref_mut() {
-                    tr.decision(t, shown, &d, c, &happened);
+                    tr.decision(t, view(&s, t, &mut x), &d, c, &happened);
                 }
                 apply(&mut s, t, &mut x, &mut Replay, c);
             }

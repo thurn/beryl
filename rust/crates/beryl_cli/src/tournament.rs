@@ -10,6 +10,7 @@ use std::thread;
 
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{Outcome, Seat};
+use beryl_search::Budget;
 use serde::Serialize;
 
 use crate::game::{Played, mirror, play};
@@ -61,8 +62,20 @@ fn pairings(agents: &[String]) -> Vec<(usize, usize)> {
     out
 }
 
-/// Plays the tournament. The first invariant violation fails it.
-pub fn run(agents: &[String], games: u32, seed: u64, check: bool) -> Result<Results, String> {
+/// Plays the tournament, searching agents with `budget`'s iterations and trees. The first
+/// invariant violation fails it.
+pub fn run(
+    agents: &[String],
+    games: u32,
+    seed: u64,
+    budget: Budget,
+    check: bool,
+) -> Result<Results, String> {
+    // Games run in parallel, one thread each, so a search grows its trees one after another.
+    let budget = Budget {
+        parallel: false,
+        ..budget
+    };
     let t = mirror();
     let pairs = pairings(agents);
     let jobs: Vec<(usize, u32)> = (0..pairs.len())
@@ -83,7 +96,7 @@ pub fn run(agents: &[String], games: u32, seed: u64, check: bool) -> Result<Resu
                     } else {
                         [agents[b].as_str(), agents[a].as_str()]
                     };
-                    match play(&t, game_seed(seed, p, g), names, check, None) {
+                    match play(&t, game_seed(seed, p, g), names, budget, check, None) {
                         Ok(played) => results.lock().unwrap().push((p, g, played)),
                         Err(e) => {
                             failure.lock().unwrap().get_or_insert(e);
@@ -220,7 +233,7 @@ mod tests {
     #[test]
     fn wins_go_to_the_agent_not_the_seat() {
         let agents = ["greedy".to_owned(), "random".to_owned()];
-        let r = run(&agents, 8, 3, false).unwrap();
+        let r = run(&agents, 8, 3, Budget::DEFAULT, false).unwrap();
         let p = &r.pairings[0];
         assert_eq!(
             (p.a.as_str(), p.b.as_str(), p.games),

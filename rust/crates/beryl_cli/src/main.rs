@@ -1,11 +1,14 @@
 //! Beryl's headless command line (architecture §16).
 //!
-//! - `beryl_cli play <agent> <agent> [--seed N] [--out FILE]` plays one seeded game of the
-//!   WU Control mirror, the first agent in the first seat, and writes its transcript to
-//!   `FILE`, or to standard output.
-//! - `beryl_cli tournament <agent>... [--games N] [--seed N] [--json FILE] [--check]` plays
-//!   a round robin, N games per pairing (an agent alone plays itself), and prints the table;
-//!   `--json` also writes the results, `--check` checks the invariants at every decision.
+//! - `beryl_cli play <agent> <agent> [--seed N] [--out FILE] [budget]` plays one seeded game
+//!   of the WU Control mirror, the first agent in the first seat, and writes its transcript
+//!   to `FILE`, or to standard output.
+//! - `beryl_cli tournament <agent>... [--games N] [--seed N] [--json FILE] [--check]
+//!   [budget]` plays a round robin, N games per pairing (an agent alone plays itself), and
+//!   prints the table; `--json` also writes the results, `--check` checks the invariants at
+//!   every decision. Games run in parallel, one thread each.
+//! - The budget flags `--iterations N` and `--trees K` set a searching agent's iterations
+//!   per decision and how many independent trees share them (`beryl_search::Budget`).
 //! - `beryl_cli record-fixture <definitions.json> <out-dir> [name...]` plays the seeded games
 //!   a definitions file describes and writes, for each, the stream of messages the UI's
 //!   fixture transport replays (`ui/src/ipc.ts`) to `<out-dir>/<name>.json`. `just ui-shots`
@@ -19,11 +22,13 @@ mod transcript;
 use std::path::Path;
 use std::process::ExitCode;
 
+use beryl_search::Budget;
 use transcript::Transcript;
 
 const USAGE: &str = "usage:
-  beryl_cli play <agent> <agent> [--seed N] [--out FILE]
+  beryl_cli play <agent> <agent> [--seed N] [--out FILE] [--iterations N] [--trees K]
   beryl_cli tournament <agent>... [--games N] [--seed N] [--json FILE] [--check]
+      [--iterations N] [--trees K]
   beryl_cli record-fixture <definitions.json> <out-dir> [name...]";
 
 fn main() -> ExitCode {
@@ -56,6 +61,7 @@ struct Flags {
     out: Option<String>,
     json: Option<String>,
     check: bool,
+    budget: Budget,
 }
 
 impl Flags {
@@ -74,6 +80,8 @@ impl Flags {
                 "--out" => f.out = Some(value()?),
                 "--json" => f.json = Some(value()?),
                 "--check" => f.check = true,
+                "--iterations" => f.budget.iterations = number(arg, &value()?)?,
+                "--trees" => f.budget.trees = number(arg, &value()?)?,
                 flag if flag.starts_with("--") => {
                     return Err(format!("unknown flag {flag}\n{USAGE}"));
                 }
@@ -96,7 +104,7 @@ fn play(f: &Flags) -> Result<(), String> {
     let names = [a.as_str(), b.as_str()];
     let t = game::mirror();
     let mut transcript = Transcript::new(names);
-    let played = game::play(&t, f.seed, names, true, Some(&mut transcript))?;
+    let played = game::play(&t, f.seed, names, f.budget, true, Some(&mut transcript))?;
     match &f.out {
         Some(path) => {
             std::fs::write(path, transcript.text()).map_err(|e| format!("{path}: {e}"))?;
@@ -114,7 +122,7 @@ fn tournament(f: &Flags) -> Result<(), String> {
     if f.agents.is_empty() {
         return Err(format!("tournament takes at least one agent\n{USAGE}"));
     }
-    let results = tournament::run(&f.agents, f.games.unwrap_or(100), f.seed, f.check)?;
+    let results = tournament::run(&f.agents, f.games.unwrap_or(100), f.seed, f.budget, f.check)?;
     print!("{}", tournament::table(&results));
     if let Some(path) = &f.json {
         let json = serde_json::to_string_pretty(&results).map_err(|e| e.to_string())?;

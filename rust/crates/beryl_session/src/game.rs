@@ -9,9 +9,9 @@ use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::Pending;
 use beryl_engine::{
     CardTable, Choice, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch, Seat,
-    State, Step, apply, next, view,
+    State, Step, apply, next, observe, view,
 };
-use beryl_search::Agent;
+use beryl_search::{Agent, Budget};
 
 use crate::protocol::{
     CandidateIndex, DecisionId, Moment, PlayerView, SessionId, StopsSetting, player_view,
@@ -231,10 +231,7 @@ impl Game {
     /// ([`Game::set_stand_in`]) and a decision is open.
     pub fn answer_by_stand_in(&mut self) -> Option<PlayerView> {
         let (id, d) = self.open?;
-        let obs = Observation::new(
-            view(&self.state, &self.table, &mut self.scratch),
-            self.human,
-        );
+        let obs = observe(&self.state, &self.table, &mut self.scratch, self.human);
         let Choice(c) = self.stand_in.as_mut()?.choose(obs, &d);
         let answer = OpenDecision::new(id, &d)
             .answer(id, CandidateIndex(c))
@@ -296,10 +293,7 @@ impl Game {
                 }
                 Step::Decide(_) if self.stop.load(Ordering::Relaxed) => return self.view(None),
                 Step::Decide(d) => {
-                    let obs = Observation::new(
-                        view(&self.state, &self.table, &mut self.scratch),
-                        d.player,
-                    );
+                    let obs = observe(&self.state, &self.table, &mut self.scratch, d.player);
                     let c = self.agent.choose(obs, &d);
                     self.apply(c);
                 }
@@ -357,7 +351,7 @@ fn new_agent(name: &str, t: &GameTable, seed: u64) -> Result<Box<dyn Agent + Sen
     let agent = beryl_search::agent(name).ok_or_else(|| SessionError::UnknownAgent {
         name: name.to_owned(),
     })?;
-    Ok((agent.new)(t, seed))
+    Ok((agent.new)(t, seed, Budget::DEFAULT))
 }
 
 pub(crate) fn with_stops(profile: Profile, stops: StopsSetting) -> Profile {
