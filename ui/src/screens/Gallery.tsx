@@ -318,17 +318,19 @@ function CombatAndStack() {
         from: "g-titan",
         to: "g-trigger",
         tone: "gold",
-        bend: -0.3,
         fromSide: "right",
-        toSide: "left",
+        toSide: { x: 0.02, y: 0.64 },
+        leave: [12, 26],
+        arrive: [24, 0],
       },
       {
         from: "g-trigger",
         to: "g-beast",
         tone: "cyan",
-        bend: 0.3,
-        fromSide: "right",
-        toSide: "left",
+        fromSide: { x: 1, y: 0.55 },
+        toSide: { x: 0, y: 0.51 },
+        leave: [14, -20],
+        arrive: [18, 0],
       },
     ],
     [],
@@ -401,7 +403,7 @@ function CombatAndStack() {
         <CaptionAt x={367} y={422}>
           Cyan: ability → target
         </CaptionAt>
-        <Arrows arrows={arrows} />
+        <Arrows arrows={arrows} scale={0.5} />
       </div>
     </Panel>
   );

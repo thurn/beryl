@@ -39,18 +39,18 @@ const BLADES = {
       blade([-48, 14], [-80, 19], [-107, 54], 9.5, 0.3),
     ],
     dark: [
-      blade([-45, 6], [-84, 11], [-117, 47], 10),
-      blade([-46, 25], [-71, 33], [-95, 63], 10),
+      blade([-45, 6], [-84, 11], [-117, 47], 7),
+      blade([-46, 25], [-71, 33], [-95, 63], 7),
     ],
     glints: [] as Point[],
     arch: "M-98 70 Q-64 30 0 30 Q64 30 98 70",
   },
   opponent: {
     light: [
-      blade([-47, 18], [-90, 14], [-104, -17], 9, 0),
+      blade([-47, 18], [-80, 7], [-104, -17], 11, 0),
       blade([-50, -9], [-92, -14], [-104, -57], 8, 0),
     ],
-    dark: [blade([-48, 5], [-82, 0], [-99, -26], 8)],
+    dark: [blade([-48, 5], [-82, 0], [-99, -26], 6)],
     glints: [
       [-48, -9],
       [-47, 17],
@@ -128,10 +128,10 @@ export function LifeOrb({
       <svg className="life-orb-art" viewBox="-136 -57 272 116" aria-hidden>
         <defs>
           <linearGradient id="orb-blade" x1="0" y1="0" x2="0.3" y2="1">
-            <stop offset="0" stopColor="#f6f0e6" />
-            <stop offset="0.35" stopColor="#c2b6a8" />
-            <stop offset="0.75" stopColor="#82766a" />
-            <stop offset="1" stopColor="#4a423b" />
+            <stop offset="0" stopColor="#ffffff" />
+            <stop offset="0.3" stopColor="#e2dbd1" />
+            <stop offset="0.7" stopColor="#a0958a" />
+            <stop offset="1" stopColor="#5a5148" />
           </linearGradient>
           <linearGradient id="orb-rim" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor="#c9c5bf" />
@@ -197,6 +197,7 @@ export function LifeOrb({
           <path
             className="life-orb-crescent"
             d="M-42 -22 A50 41 0 0 1 42 -22"
+            filter="url(#orb-blur)"
           />
         )}
       </svg>

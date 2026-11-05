@@ -1,6 +1,6 @@
 // The stack-item frame (a spell or ability on the stack) and the arrows that tie it to its source
 // (gold) and targets (cyan).
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { CardArt, frameKey, type CardFace } from "./Card";
 import { RulesText } from "./Mana";
 
@@ -144,8 +144,15 @@ function curve(
 }
 
 /** Draws arrows between elements (by id) over its parent, which must be positioned. They are
- * measured after layout and again whenever the parent resizes. */
-export function Arrows({ arrows }: { arrows: ArrowSpec[] }) {
+ * measured after layout and again whenever the parent resizes. `scale` thins lines, heads and
+ * dots for small cards. */
+export function Arrows({
+  arrows,
+  scale = 1,
+}: {
+  arrows: ArrowSpec[];
+  scale?: number;
+}) {
   const svg = useRef<SVGSVGElement>(null);
   const [drawn, setDrawn] = useState<Drawn[]>([]);
 
@@ -195,14 +202,19 @@ export function Arrows({ arrows }: { arrows: ArrowSpec[] }) {
   }, [arrows]);
 
   return (
-    <svg ref={svg} className="arrows" aria-hidden>
+    <svg
+      ref={svg}
+      className="arrows"
+      style={{ "--arrow-scale": scale } as CSSProperties}
+      aria-hidden
+    >
       <defs>
         <filter id="arrow-blur" x="-20%" y="-20%" width="140%" height="140%">
           <feGaussianBlur stdDeviation="3.5" />
         </filter>
       </defs>
       {drawn.map((a) => {
-        const head = `translate(${point(a.end)}) rotate(${a.angle.toFixed(1)})`;
+        const head = `translate(${point(a.end)}) rotate(${a.angle.toFixed(1)}) scale(${scale})`;
         return (
           <g
             key={a.key}
@@ -222,11 +234,8 @@ export function Arrows({ arrows }: { arrows: ArrowSpec[] }) {
                 )}
               </g>
             ))}
-            {a.startMark === "dot" && <Dot at={a.start} />}
-            {(a.endMark === "dot" ||
-              (a.endMark === "head" && a.tone === "gold" && !a.fine)) && (
-              <Dot at={a.end} />
-            )}
+            {a.startMark === "dot" && <Dot at={a.start} scale={scale} />}
+            {a.endMark === "dot" && <Dot at={a.end} scale={scale} />}
           </g>
         );
       })}
@@ -235,17 +244,17 @@ export function Arrows({ arrows }: { arrows: ArrowSpec[] }) {
 }
 
 /** A bright dot in its own glow, where an arrow leaves or lands. */
-function Dot({ at: [x, y] }: { at: Vector }) {
+function Dot({ at: [x, y], scale }: { at: Vector; scale: number }) {
   return (
     <>
       <circle
         className="arrow-dot-glow"
         cx={x}
         cy={y}
-        r="13"
+        r={13 * scale}
         filter="url(#arrow-blur)"
       />
-      <circle className="arrow-dot" cx={x} cy={y} r="5" />
+      <circle className="arrow-dot" cx={x} cy={y} r={5 * scale} />
     </>
   );
 }
@@ -253,7 +262,7 @@ function Dot({ at: [x, y] }: { at: Vector }) {
 /** Arrowheads, each with its tip at the origin, pointing along +x: solid barbed heads, and an
  * open one for hairlines. */
 const HEADS = {
-  gold: "M-12 -7 L2 0 L-12 7 L-9 0 Z",
+  gold: "M-17 -10 L2 0 L-17 10 L-12 0 Z",
   cyan: "M-30 -17 L0 0 L-30 17 L-23 0 Z",
 } as const;
 const FINE_HEAD = "M-9 -5.5 L0 0 L-9 5.5";

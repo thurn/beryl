@@ -714,7 +714,7 @@
   --weight: 5.5px;
   --tone: #ffb846;
   --tone-soft: rgb(255 120 10 / 90%);
-  --tone-core: #fff1c2;
+  --tone-core: #fff6dc;
 }
 /* Cyan arrows are tubes: bright edges round a deeper core. */
 .arrow-cyan {
@@ -733,16 +733,16 @@
 }
 .arrow-glow path {
   stroke: var(--tone-soft);
-  stroke-width: calc(var(--weight) * 2.6);
+  stroke-width: calc(var(--weight) * var(--arrow-scale) * 2.6);
   opacity: 0.7;
 }
 .arrow-line path {
   stroke: var(--tone);
-  stroke-width: var(--weight);
+  stroke-width: calc(var(--weight) * var(--arrow-scale));
 }
 .arrow-core path {
   stroke: var(--tone-core);
-  stroke-width: calc(var(--weight) * 0.42);
+  stroke-width: calc(var(--weight) * var(--arrow-scale) * 0.42);
 }
 .arrow-fine {
   --weight: 2.6px;
@@ -1140,16 +1140,14 @@
 }
 .life-orb-blade {
   fill: url(#orb-blade);
-  stroke: rgb(30 26 22 / 70%);
-  stroke-width: 0.8;
+  stroke: rgb(30 26 22 / 55%);
+  stroke-width: 0.6;
 }
 .life-orb-blade-dark {
-  fill: #4a4440;
-  stroke: #1a1715;
-  stroke-width: 1;
+  fill: #1d1a18;
 }
 .life-orb-glint {
-  fill: #ff9a3a;
+  fill: #ffb060;
 }
 .life-orb-arch {
   fill: none;
@@ -1158,13 +1156,13 @@
 }
 .life-orb-ring {
   fill: none;
-  stroke: #ffd36a;
+  stroke: #ffc35a;
   stroke-width: 2.2;
   stroke-linecap: round;
 }
 .life-orb-ring-glow {
-  stroke: #f08a1c;
-  stroke-width: 9;
+  stroke: #f0841c;
+  stroke-width: 6;
 }
 .life-orb-core {
   fill: url(#orb-core);
@@ -1185,14 +1183,14 @@
 }
 .life-orb-crescent {
   fill: none;
-  stroke: #ffe27a;
-  stroke-width: 5;
+  stroke: #ffe9a0;
+  stroke-width: 9;
   stroke-linecap: round;
 }
 /* The far orb's ring is dull copper. */
 .life-orb-opponent .life-orb-ring {
-  stroke: #ffae4a;
-  stroke-width: 2.6;
+  stroke: #e9903e;
+  stroke-width: 4;
 }
 .life-orb-opponent .life-orb-ring-glow {
   stroke: #d8651a;

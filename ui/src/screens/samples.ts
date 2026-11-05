@@ -132,7 +132,7 @@ export const SAMPLE_BOARD: TableBoard = {
       { card: SAMPLE.plateau, slot: "hand-plateau" },
     ],
     lands: [
-      { card: SAMPLE.mountain, count: 3, x: 101, y: 566, slot: "you-mountain" },
+      { card: SAMPLE.mountain, count: 3, x: 105, y: 564, slot: "you-mountain" },
       { card: SAMPLE.plains, count: 3, x: 326, y: 564, slot: "you-plains" },
     ],
     creatures: [
