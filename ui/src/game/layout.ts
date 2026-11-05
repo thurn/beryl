@@ -11,7 +11,6 @@ import type {
   Step,
   ZoneName,
 } from "../generated/protocol";
-import { ASPECT } from "../components/Card";
 import type { Phase } from "../components/Controls";
 import {
   CREATURE_WIDTH,
@@ -41,9 +40,6 @@ export interface Placement {
   look: Look;
   /** The frame's width before scaling. */
   width: number;
-  /** Its height and type unit before scaling, where not the look's own for that width. */
-  height?: number;
-  unit?: number;
   x: number;
   y: number;
   scale: number;
@@ -66,99 +62,31 @@ export const PILE_DEPTH = { x: 0, y: 8 };
 /** How much a graveyard's cards are foreshortened, lying on the far table (battlefield.png). */
 export const PILE_SQUASH = 0.86;
 
-/** Each side's rows, in stage pixels (the mockup's divided by 1.045): the land piles from
- * (x, y), `size` times what depth alone makes them (battlefield.png paints the far lands larger),
- * with `gap` between them before depth scaling; the other permanents' row at `y`, centered on
- * `center`, `gap` frame widths apart (the far row's closer), between `start` and `end`, each
- * frame `frame` times the usual width and height. While lines cross the table, in combat
- * (combat.png) or with something on the stack (trigger_on_stack_with_target.png), the
- * permanents' rows draw apart and spread out to make room for them and for the step banner, and
- * their frames narrow, the near row's shortening too, with their bars and type kept full size. */
+/** Each side's rows, in stage pixels: its land piles from (x, y), filling rightward to
+ * `LANDS_END`, and its other permanents' row at `y`, centered on the table. Every row's cards
+ * are scaled by their depth alone (depthScale), keeping the field frame's shape. */
 const ROWS: Record<
   Side,
-  {
-    lands: { x: number; y: number; gap: number; size: number };
-    permanents: Record<
-      "main" | "combat" | "stack",
-      {
-        y: number;
-        center: number;
-        gap: number;
-        frame: [number, number];
-        start: number;
-        end: number;
-      }
-    >;
-  }
+  { lands: { x: number; y: number }; permanents: number }
 > = {
-  opponent: {
-    lands: { x: 158, y: 124, gap: 30, size: 1.045 },
-    permanents: {
-      main: {
-        y: 221,
-        center: 802,
-        gap: 0.044,
-        frame: [1, 1],
-        start: 580,
-        end: 1250,
-      },
-      combat: {
-        y: 260,
-        center: 673,
-        gap: 0.26,
-        frame: [0.952, 1],
-        start: 400,
-        end: 1250,
-      },
-      stack: {
-        y: 260,
-        center: 673,
-        gap: 0.26,
-        frame: [0.952, 1],
-        start: 400,
-        end: 1180,
-      },
-    },
-  },
-  you: {
-    lands: { x: 111, y: 564, gap: 3, size: 1 },
-    permanents: {
-      main: {
-        y: 418,
-        center: 801,
-        gap: 0.08,
-        frame: [1, 1],
-        start: 580,
-        end: 1250,
-      },
-      combat: {
-        y: 473,
-        center: 856,
-        gap: 0.22,
-        frame: [0.88, 0.957],
-        start: 580,
-        end: 1250,
-      },
-      stack: {
-        y: 457,
-        center: 802,
-        gap: 0.22,
-        frame: [0.88, 0.957],
-        start: 580,
-        end: 1180,
-      },
-    },
-  },
+  opponent: { lands: { x: 158, y: 124 }, permanents: 221 },
+  you: { lands: { x: 111, y: 564 }, permanents: 418 },
 };
-/** Lands fill from the left up to here. */
+/** Lands fill from the left up to here, `LAND_GAP` apart before depth scaling. */
 const LANDS_END = 600;
-/** A crowded row of permanents may run on to here while the table's right is clear (no stack,
- * no prompt): the mockups' rows end by `end`, but squeezed there five or six permanents hide
- * one another's names and power and toughness. */
+const LAND_GAP = 12;
+/** The other permanents' rows run from here at the least. */
+const PERMANENTS_START = 580;
+/** How far apart permanents stand, in frame widths: further while lines cross the table, in
+ * combat or with something on the stack, to make room for them. */
+const PERMANENT_GAP = { main: 0.06, lines: 0.24 };
+/** A crowded row of permanents may run on to here while the table's right is clear; while the
+ * stack or a prompt stands there, only to just left of the stack. */
 const OPEN_END = 1480;
+const STACK_MARGIN = 25;
 
 /** How the table is laid out: lines cross it in combat and while something is on the stack. */
-type Mode = keyof (typeof ROWS)["you"]["permanents"];
+type Mode = keyof typeof PERMANENT_GAP;
 
 /** Where each side's library and graveyard lie (Table.tsx draws the library piles). */
 export const PILES = {
@@ -382,24 +310,21 @@ function battlefieldPlacements(
   side: Side,
   objects: ObjectView[],
   mode: Mode,
-  open: boolean,
+  end: number,
   across: Placement[] = [],
 ): Placement[] {
-  const rows = {
-    lands: ROWS[side].lands,
-    permanents: ROWS[side].permanents[mode],
-  };
+  const rows = ROWS[side];
   const lands = objects.filter((o) => o.types.includes("land"));
   const others = objects.filter((o) => !o.types.includes("land"));
   const out: Placement[] = [];
 
   const landPiles = piles(lands, (o) => o.name ?? `#${o.slot}`);
-  const landScale = depthScale(rows.lands.y) * rows.lands.size;
+  const landScale = depthScale(rows.lands.y);
   const pileWidth = (n: number) =>
     LAND_WIDTH * (1 + LAND_STEP.x * (n - 1)) * landScale;
   const landXs = row(
     landPiles.map((p) => pileWidth(p.length)),
-    rows.lands.gap * landScale,
+    LAND_GAP * landScale,
     rows.lands.x,
     LANDS_END,
   );
@@ -408,7 +333,6 @@ function battlefieldPlacements(
       const depth = pile.length - 1 - i;
       const x = landXs[p]! + i * LAND_WIDTH * LAND_STEP.x * landScale;
       const y = rows.lands.y + depth * LAND_WIDTH * LAND_STEP.y * landScale;
-      const placed = onTable(x, y, LAND_WIDTH);
       out.push({
         slot: o.slot,
         zone: o.zone,
@@ -416,8 +340,7 @@ function battlefieldPlacements(
         width: LAND_WIDTH,
         opacity: 1,
         z: 10 + p * 8 + i,
-        ...placed,
-        scale: placed.scale * rows.lands.size,
+        ...onTable(x, y, LAND_WIDTH),
       });
     });
   });
@@ -428,16 +351,13 @@ function battlefieldPlacements(
   const groups = piles(others, (o) =>
     plain(o) ? `${o.name}|${o.tapped}` : `#${o.slot}`,
   ).sort((a, b) => Number(!attacking(a[0]!)) - Number(!attacking(b[0]!)));
-  const { frame } = rows.permanents;
-  const frameWidth = CREATURE_WIDTH * frame[0];
-  const scale = depthScale(rows.permanents.y);
-  const width = frameWidth * scale;
+  const scale = depthScale(rows.permanents);
+  const width = CREATURE_WIDTH * scale;
   const groupWidth = (n: number) => width * (1 + LAND_STEP.x * (n - 1));
   const widths = groups.map((g) => groupWidth(g.length));
-  const gap = rows.permanents.gap * width;
-  const { start } = rows.permanents;
-  const end = open ? OPEN_END : rows.permanents.end;
-  const xs = row(widths, gap, start, end, rows.permanents.center);
+  const gap = PERMANENT_GAP[mode] * width;
+  const start = PERMANENTS_START;
+  const xs = row(widths, gap, start, end, STAGE.width / 2);
   // Where each blocker wants to stand: its attacker's blockers side by side about its center.
   const attackers = new Map(across.map((p) => [p.slot, p]));
   const blocking = new Map<number, number[]>();
@@ -474,20 +394,18 @@ function battlefieldPlacements(
       const depth = group.length - 1 - i;
       const x = lefts[k]! + i * width * LAND_STEP.x;
       const y =
-        rows.permanents.y +
+        rows.permanents +
         depth * width * LAND_STEP.y +
         (o.combat?.kind === "attacking" ? forward : 0);
       out.push({
         slot: o.slot,
         zone: o.zone,
         look: "field",
-        width: frameWidth,
-        height: (CREATURE_WIDTH / ASPECT.field) * frame[1],
-        unit: CREATURE_WIDTH / 12,
+        width: CREATURE_WIDTH,
         opacity: 1,
         // Combat's creatures over their neighbors, so their marks show.
         z: 40 + k * 8 + i + (o.combat ? 60 : 0),
-        ...onTable(x, y, frameWidth),
+        ...onTable(x, y, CREATURE_WIDTH),
       });
     });
   });
@@ -518,18 +436,16 @@ export function layout(
   out.push(...backPlacements(owned("opponent", "hand")));
   // Blockers stand across from their attackers, which stand where they would anyway: only the
   // defending side's row depends on the other's.
-  const mode: Mode = combatBanner(view)
-    ? "combat"
-    : view.stack.length > 0
-      ? "stack"
-      : "main";
+  const stacked = view.stack.length > 0;
+  const mode: Mode = combatBanner(view) || stacked ? "lines" : "main";
+  // The stack and a prompt stand at the table's right.
+  const end = stacked || lifted ? STACK.x - STACK_MARGIN : OPEN_END;
   const field = (side: Side, across?: Placement[]) =>
     battlefieldPlacements(
       side,
       permanents.filter((o) => o.controller === side),
       mode,
-      // The stack and a prompt stand at the table's right.
-      mode !== "stack" && !lifted,
+      end,
       across,
     );
   const yours = field("you", field("opponent"));

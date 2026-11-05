@@ -156,9 +156,8 @@ function CardElement({
   useGlide(y, place.y, reduce, holding);
   // A card changing looks is drawn at another type unit (a back, a full frame, a battlefield
   // frame): before that is painted, its scale makes up the difference, and then glides, so the
-  // card's size changes smoothly too. A battlefield frame that only narrows keeps its unit, and
-  // its width animates instead (Card's layout animation).
-  const unit = place.unit ?? place.width / 12;
+  // card's size changes smoothly too.
+  const unit = place.width / 12;
   const drawnUnit = useRef(unit);
   useLayoutEffect(() => {
     if (drawnUnit.current === unit) return;
@@ -312,8 +311,6 @@ function Look({
       }
       variant={field ? "field" : "full"}
       width={place.width}
-      height={place.height}
-      unit={place.unit}
       tapped={field && object.tapped}
       highlight={state.highlight}
       // A gold or cyan glow says more than the playable edge, which would hide it.
