@@ -148,4 +148,11 @@ mod tests {
         assert_eq!((a | b).count(), 4);
         assert_eq!(slots(a & !b), vec![1]);
     }
+
+    #[test]
+    fn the_complement_holds_every_slot_and_no_more() {
+        let all = !Bitboard::EMPTY;
+        assert_eq!(all.count() as usize, Slot::COUNT);
+        assert_eq!(all.iter().last(), Some(Slot::new(254)));
+    }
 }

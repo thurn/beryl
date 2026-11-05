@@ -143,7 +143,7 @@ pub enum Action {
         #[serde(serialize_with = "seat")]
         player: Seat,
         card: &'static str,
-        #[serde(serialize_with = "variant")]
+        #[serde(serialize_with = "ability_ix")]
         ability: AbilityIx,
     },
     /// Players pass priority until the top of the stack resolves, or until the next decision
@@ -364,6 +364,15 @@ pub enum Ending {
 /// without mirroring them.
 fn variant<T: std::fmt::Debug, S: Serializer>(value: &T, s: S) -> Result<S::Ok, S::Error> {
     s.collect_str(&format_args!("{value:?}"))
+}
+
+/// An ability of a permanent, as `{"Own": i}` or `{"Granted": k}`.
+#[allow(clippy::trivially_copy_pass_by_ref)] // the signature `serialize_with` calls
+fn ability_ix<S: Serializer>(ability: &AbilityIx, s: S) -> Result<S::Ok, S::Error> {
+    match *ability {
+        AbilityIx::Own(i) => s.serialize_newtype_variant("AbilityIx", 0, "Own", &i),
+        AbilityIx::Granted(k) => s.serialize_newtype_variant("AbilityIx", 1, "Granted", &k),
+    }
 }
 
 /// A player, as their seat number.

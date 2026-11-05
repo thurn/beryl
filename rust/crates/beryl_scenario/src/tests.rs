@@ -350,12 +350,14 @@ fn a_game_that_ends_first_fails_an_advance() {
 
 #[test]
 fn scenarios_serialize_with_engine_names() {
-    const S: Scenario = Scenario::new("json")
-        .hand(P0, &[L])
-        .actions(&[Action::AdvanceTo {
+    const S: Scenario = Scenario::new("json").hand(P0, &[L]).actions(&[
+        Action::AdvanceTo {
             turn: 1,
             step: TurnStep::End,
-        }]);
+        },
+        Action::activate(P1, L, 0),
+        Action::activate_granted(P0, L, 1),
+    ]);
     let json: serde_json::Value = serde_json::from_str(&to_json(&[(L, &[S])])).unwrap();
     assert_eq!(json[0]["card"], L);
     assert_eq!(json[0]["name"], "json");
@@ -363,4 +365,8 @@ fn scenarios_serialize_with_engine_names() {
     assert_eq!(json[0]["setup"]["players"][0]["hand"][0], L);
     assert_eq!(json[0]["actions"][0]["action"], "AdvanceTo");
     assert_eq!(json[0]["actions"][0]["step"], "End");
+    assert_eq!(json[0]["actions"][1]["player"], 1);
+    assert_eq!(json[0]["actions"][1]["ability"]["Own"], 0);
+    assert_eq!(json[0]["actions"][2]["player"], 0);
+    assert_eq!(json[0]["actions"][2]["ability"]["Granted"], 1);
 }

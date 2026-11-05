@@ -130,9 +130,11 @@ fn condition_fails(s: &State, t: &GameTable, entry: &StackEntry, ability: &Abili
     if ability.kind != AbilityKind::Triggered {
         return false;
     }
-    let (Some(condition), Some(FaceAbility::Own(index))) = (ability.condition, entry.ability)
-    else {
+    let Some(condition) = ability.condition else {
         return false;
+    };
+    let Some(FaceAbility::Own(index)) = entry.ability else {
+        unreachable!("a triggered ability is one of its face's own");
     };
     let pending = PendingTrigger {
         source: entry.object,
