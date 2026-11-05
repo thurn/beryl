@@ -99,11 +99,12 @@ pub const SCENARIOS: &[Scenario] = &[
                     count: 2,
                 },
             },
+            // Get Lost costs {1}{W}: two Plains, which leaves four lands for the Skydiver.
             Action::Assert {
                 assertion: Assertion::Tapped {
                     player: P0,
                     card: names::PLAINS,
-                    count: 3,
+                    count: 2,
                 },
             },
             Action::Cast {
@@ -111,6 +112,11 @@ pub const SCENARIOS: &[Scenario] = &[
                 card: SKYDIVER,
                 face: 0,
                 costs: 1,
+            },
+            Action::Answer {
+                player: P0,
+                kind: DecisionKind::X,
+                pick: Pick::Number { n: 1 },
             },
             Action::Resolve,
             // Two Maps and the Crypt: the Maps are one candidate.

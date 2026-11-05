@@ -20,7 +20,8 @@ use crate::names;
 pub static CARD: CardDef = CardDef {
     name: names::GET_LOST,
     faces: &[Face {
-        cost: ManaCost::new(1, [2, 0, 0, 0, 0, 0]),
+        // {1}{W}.
+        cost: ManaCost::new(1, [1, 0, 0, 0, 0, 0]),
         types: Types::INSTANT,
         colors: Colors::WHITE,
         abilities: &[Ability {
