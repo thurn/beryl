@@ -8,6 +8,8 @@ export default defineConfig({
   server: {
     port: 1420,
     strictPort: true,
+    // The UI imports data/cards.json from the repository root.
+    fs: { allow: [".."] },
   },
   build: {
     target: "safari16",

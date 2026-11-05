@@ -38,6 +38,11 @@ bench *args:
 bench-count *args:
     {{ by }} bench-count "$@"
 
+# Look up card data on Scryfall into data/cards.json (--cube for the whole cube)
+[group('data')]
+cards *args:
+    {{ by }} cards "$@"
+
 # The Rust tests (cargo test flags, e.g. -p beryl_app)
 [group('test')]
 test-rust *args:

@@ -22,7 +22,10 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
   which build and test without Tauri.
 - `ui/`: the frontend, Vite + React + TypeScript (strict). `src/ipc.ts` holds
   typed wrappers for the Rust commands; call Rust only through it.
-- `data/`: the V1 cube cardlist (`color,name` CSV).
+- `data/`: the V1 cube cardlist (`color,name` CSV); `cards.json`, the card data
+  `just cards` writes from Scryfall (printing, artist, per-face text and image
+  URLs); `card-printings.csv`, the printings it pins. The app downloads images
+  on demand into its cache (`beryl_app`'s `art.rs`); none are committed.
 - `tools/`: `by`, the Python CLI behind the justfile. `just` lists the commands.
 - Outside the tree: `~/Library/Caches/beryl` (`$BERYL_CACHE`: warm `rust/target`
   and `ui/node_modules` shared by worktrees). Never crawl `~` or `/` with
