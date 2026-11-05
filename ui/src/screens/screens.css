@@ -567,7 +567,7 @@
 }
 
 /* The scry choice. The card being dragged glows in a crisp blue line, its light only grazing
-   its black frame, and casts a deep shadow on the cards below it. */
+   its black frame, and casts a shadow on the cards below it. */
 .scry-zone {
   position: relative;
   margin-top: -7.5px;

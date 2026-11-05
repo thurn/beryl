@@ -560,9 +560,9 @@
     0 0 0 0.05em rgb(0 0 0 / 50%),
     inset 0 0 0.6em rgb(0 0 0 / 35%);
 }
-/* The crest and wordmark are struck in gold, edged dark where they sink into the leather (vector
-   strokes and text shadows: a filter would blur them on a turned card). */
-/* The back's crest is drawn slimmer than the brand's. */
+/* The crest (slimmer than the brand's) and wordmark are struck in gold, edged dark where they
+   sink into the leather (vector strokes and text shadows: a filter would blur them on a turned
+   card). */
 .card-back-crest {
   width: 2.5em;
   margin-top: 0.8em;
@@ -722,8 +722,8 @@
   font-size: 0.76em;
   line-height: 1.04;
 }
-/* Without art (ui_system.png section 05) the rim is thin and the rules text fills the shield. */
-/* ...edged in crisp black, its red border bright and streaked. */
+/* Without art (ui_system.png section 05): a crisp black edge, a bright streaked border and heavy
+   rules text filling the shield. */
 .stack-item-compact {
   --rim: #e5481b;
   --rim-hi: #ff7d2a;

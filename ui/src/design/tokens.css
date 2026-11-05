@@ -48,8 +48,8 @@
   --radius-card: 7px;
   --shadow-card: 0 2px 3px rgb(0 0 0 / 45%), 0 10px 18px rgb(0 0 0 / 35%);
   --shadow-lifted: 0 6px 10px rgb(0 0 0 / 45%), 0 24px 40px rgb(0 0 0 / 40%);
-  /* Source and target glows, as ui_system.png section 04 draws them: a white-hot line 2px wide
-     outside the card's edge, a halo falling off fast with a faint tail, and light bleeding into
+  /* Source and target glows, as ui_system.png section 04 draws them: a white-hot line straddling
+     the card's edge, a halo falling off fast with a faint tail, and light bleeding into
      the black frame (the -in shadows, inset). Cards on the table glow broader (screens.css). */
   --glow-gold:
     0 0 0 1.5px #fff8c0, 0 0 1px 2.5px rgb(240 140 25 / 95%),
