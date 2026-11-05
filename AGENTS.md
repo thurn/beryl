@@ -109,5 +109,4 @@ counts, `just bench` for timing (it refuses a busy machine).
   place.
 - Markdown: agents add none unless explicitly requested. README.md, AGENTS.md
   and `docs/` are all there is; plans, designs and notes go in beads.
-- Never commit logs, screenshots or other evidence of a run. speculative
-  infrastructure.
+- Never commit logs, screenshots or other evidence of a run.
