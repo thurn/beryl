@@ -3,9 +3,11 @@
 
 mod common;
 
+use beryl_cards::{CARDS, names};
+use beryl_engine::card::AbilityIx;
 use beryl_engine::{
-    Answers, Choice, Decision, Observation, Outcome, Profile, Replay, Scratch, Seat, State, Step,
-    apply, next,
+    Answers, Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome,
+    Profile, Replay, Scratch, Seat, State, Step, TurnStep, Zone, apply, next,
 };
 use beryl_search::{Agent, GreedyAgent, Inline, RandomAgent, RolloutPolicy};
 use common::{fingerprint, mirror, play};
@@ -110,4 +112,75 @@ fn inline_answers_replay_to_the_same_game() {
     }
     // Bodies really asked questions inline: the test has something to compare.
     assert!(inlined > 8, "{inlined} inline answers");
+}
+
+/// Aang's Iceberg's waterbend scries 2 over a Plains and Jace, the Mind Sculptor, with six
+/// lands out: the inline answers send the Plains to the bottom and keep Jace on top, ahead of
+/// the Island under them.
+#[test]
+fn a_rollout_scry_keeps_the_card_worth_drawing() {
+    use names::{AANGS_ICEBERG, ISLAND, JACE_THE_MIND_SCULPTOR, PLAINS};
+    let deck = [
+        (1, AANGS_ICEBERG),
+        (4, PLAINS),
+        (4, ISLAND),
+        (1, JACE_THE_MIND_SCULPTOR),
+    ];
+    let t = GameTable::new(&CARDS, [&deck, &[(1, PLAINS)]]).unwrap();
+    let mut s = State::new(&t, 0, Profile::SMART);
+    s.begin_at(3, Seat::P0, TurnStep::PrecombatMain);
+    let named = |s: &State, name: &str| {
+        s.library(Seat::P0)
+            .iter()
+            .copied()
+            .find(|&slot| t.def(s.card(slot)).name == name)
+            .unwrap()
+    };
+    let iceberg = named(&s, AANGS_ICEBERG);
+    s.place(iceberg, Zone::Battlefield).unwrap();
+    for name in [PLAINS, PLAINS, PLAINS, ISLAND, ISLAND, ISLAND] {
+        s.place(named(&s, name), Zone::Battlefield).unwrap();
+    }
+    let top_first = [
+        named(&s, PLAINS),
+        named(&s, JACE_THE_MIND_SCULPTOR),
+        named(&s, ISLAND),
+    ];
+    s.order_library(Seat::P0, &top_first);
+
+    let policy = RolloutPolicy::new(&t);
+    let mut x = Scratch::new();
+    let mut inline = Inline {
+        policy: &policy,
+        t: &t,
+    };
+    let waterbend = Opt::Activate {
+        slot: iceberg,
+        ability: AbilityIx::Own(1),
+    };
+    let mut activated = false;
+    while s.object(iceberg).zone != Zone::Graveyard {
+        let Step::Decide(d) = next(&mut s, &t, &mut x, &mut inline) else {
+            panic!("the game ended");
+        };
+        let offered = match &d.candidates {
+            Candidates::Options(o) => o.iter().position(|&o| o == waterbend),
+            Candidates::Objects(_) => None,
+        };
+        let c = match offered {
+            Some(i) if !activated && d.kind == DecisionKind::Priority => {
+                activated = true;
+                Choice(i as u8)
+            }
+            _ => policy.choose(&t, Observation::new(&s, d.player), &d),
+        };
+        apply(&mut s, &t, &mut x, &mut inline, c);
+    }
+    let top_first: Vec<&str> = s
+        .library(Seat::P0)
+        .iter()
+        .rev()
+        .map(|&slot| t.def(s.card(slot)).name)
+        .collect();
+    assert_eq!(top_first, [JACE_THE_MIND_SCULPTOR, ISLAND, PLAINS]);
 }

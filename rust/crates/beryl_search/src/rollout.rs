@@ -16,7 +16,8 @@
 //!   or less.
 //! - Block when the blocker kills the attacker and survives, trades up, or survives; chump
 //!   only when the unblocked damage would be lethal.
-//! - Say yes to every "may" and every "unless pays"; keep the cards worth most.
+//! - Say yes to every "may" and every "unless pays"; keep the cards worth most, and scry to
+//!   the bottom only the cards not worth drawing.
 
 use beryl_engine::card::{
     Ability, AbilityIx, CardDef, CastingOption, Face, FaceAbility, Keywords, TargetKind,
@@ -36,6 +37,9 @@ pub const REMOVAL_MIN: i32 = 25;
 
 /// The least value of a spell worth countering.
 pub const COUNTER_MIN: i32 = 40;
+
+/// The least a card on top of the library must be worth in hand to stay there.
+const DRAW_MIN: i32 = 30;
 
 /// The most a land on the battlefield is worth.
 const LAND_MAX: i32 = 15;
@@ -115,9 +119,17 @@ impl RolloutPolicy {
                     }
                 })
             }),
-            DecisionKind::ChooseUpTo | DecisionKind::LegendRule => {
-                best(d, |c| c.object().map(|slot| p.value(slot)))
-            }
+            // Cards on top of a library are being chosen for the bottom, as a scry asks: only
+            // those not worth drawing go. Anything else, such as lands to untap, is worth
+            // taking by its value.
+            DecisionKind::ChooseUpTo => best(d, |c| match c.object() {
+                Some(slot) if obs.object(slot).zone == Zone::Library => {
+                    Some(DRAW_MIN - p.in_hand(slot))
+                }
+                Some(slot) => Some(p.value(slot)),
+                None => Some(0),
+            }),
+            DecisionKind::LegendRule => best(d, |c| c.object().map(|slot| p.value(slot))),
             DecisionKind::Crew => best(d, |c| c.object().map(|slot| -p.value(slot))),
             DecisionKind::Waterbend => best(d, |c| Some(i32::from(c.option() == Some(Opt::Done)))),
             DecisionKind::Attacker => best(d, |c| match c.option() {

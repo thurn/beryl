@@ -39,9 +39,12 @@ pub struct Results {
     pub pairings: Vec<Pairing>,
 }
 
-/// The seed of game `game` of pairing `pairing`.
+/// The seed of game `game` of pairing `pairing`. The tournament seed is hashed before the
+/// game's index is mixed in: combined by a bare XOR, nearby seeds would replay the same games,
+/// only reordered (seeds 1 and 3 would be one tournament).
 pub fn game_seed(seed: u64, pairing: usize, game: u32) -> u64 {
-    SplitMix64::new(seed ^ ((pairing as u64) << 40) ^ u64::from(game)).next_u64()
+    let base = SplitMix64::new(seed).next_u64();
+    SplitMix64::new(base ^ ((pairing as u64) << 32) ^ u64::from(game)).next_u64()
 }
 
 /// Every pairing of distinct agents, or an agent against itself when only one is named.
@@ -198,6 +201,32 @@ mod tests {
             (lo - 0.7225).abs() < 1e-3 && (hi - 1.0).abs() < 1e-9,
             "{lo} {hi}"
         );
+    }
+
+    #[test]
+    fn different_seeds_play_different_games() {
+        let games = |seed| {
+            (0..200)
+                .map(|g| game_seed(seed, 0, g))
+                .collect::<std::collections::HashSet<_>>()
+        };
+        for (a, b) in [(1, 3), (0, 2), (7, 11)] {
+            assert!(games(a).is_disjoint(&games(b)), "seeds {a} and {b}");
+        }
+    }
+
+    /// Seats alternate and each win is credited to the agent that won it, whichever seat it
+    /// held: greedy beats random from both.
+    #[test]
+    fn wins_go_to_the_agent_not_the_seat() {
+        let agents = ["greedy".to_owned(), "random".to_owned()];
+        let r = run(&agents, 8, 3, false).unwrap();
+        let p = &r.pairings[0];
+        assert_eq!(
+            (p.a.as_str(), p.b.as_str(), p.games),
+            ("greedy", "random", 8)
+        );
+        assert!(p.a_wins >= 6, "{p:?}");
     }
 
     #[test]
