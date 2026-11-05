@@ -54,7 +54,6 @@ export type Layout = Map<number, Placement>;
 /** The hand's full frames, and the width of everything drawn from a full frame. */
 export const FULL_WIDTH = HAND.width;
 const BACK_WIDTH = 105;
-const STACK_WIDTH = 190;
 const PILE_WIDTH = 84;
 
 /** Each side's rows, in stage pixels (the mockup's divided by 1.045). */
@@ -78,9 +77,28 @@ export const PILES = {
   },
 };
 
-/** The stack, spells and abilities alike, cascading down the right of the table from the
- * bottom item; the top item is in front. */
-export const STACK = { x: 1300, y: 150, step: 40 };
+/** The stack, spells and abilities alike, large at the right of the table as in
+ * docs/ui_mockups/trigger_on_stack_with_target.png: the top item in front where the mockup
+ * draws its trigger, each item beneath it peeking out above by its name bar, closer together
+ * the taller the stack. */
+export const STACK = { x: 1205, y: 222, width: 295, step: 46, reach: 200 };
+
+/** How far the stack rises to clear the prompt below it, while one is open. */
+const STACK_LIFT = 90;
+
+/** Where the stack item at `index` (bottom first) of `count` is drawn, `lifted` or not. */
+export function stackPlace(index: number, count: number, lifted = false) {
+  const step = count > 1 ? Math.min(STACK.step, STACK.reach / (count - 1)) : 0;
+  return {
+    x: STACK.x,
+    y: STACK.y - (lifted ? STACK_LIFT : 0) - (count - 1 - index) * step,
+    width: STACK.width,
+  };
+}
+
+/** How far attackers stand out of their row toward the other side, so an attack reads at a
+ * glance; the rows are too close for more. */
+const ADVANCE = 16;
 
 /** Places a thing `width` wide (before its depth scaling) lying on the table at (x, y). */
 function onTable(x: number, y: number, width: number) {
@@ -260,18 +278,23 @@ function battlefieldPlacements(side: Side, objects: ObjectView[]): Placement[] {
     PERMANENTS.end,
     PERMANENTS.center,
   );
+  const forward = side === "you" ? -ADVANCE : ADVANCE;
   groups.forEach((group, g) => {
     group.forEach((o, i) => {
       const depth = group.length - 1 - i;
       const x = xs[g]! + i * CREATURE_WIDTH * LAND_STEP.x * scale;
-      const y = rows.permanents + depth * CREATURE_WIDTH * LAND_STEP.y * scale;
+      const y =
+        rows.permanents +
+        depth * CREATURE_WIDTH * LAND_STEP.y * scale +
+        (o.combat?.kind === "attacking" ? forward : 0);
       out.push({
         slot: o.slot,
         zone: o.zone,
         look: "field",
         width: CREATURE_WIDTH,
         opacity: 1,
-        z: 40 + g * 8 + i,
+        // Combat's creatures over their neighbors, so their marks show.
+        z: 40 + g * 8 + i + (o.combat ? 60 : 0),
         ...onTable(x, y, CREATURE_WIDTH),
       });
     });
@@ -279,13 +302,45 @@ function battlefieldPlacements(side: Side, objects: ObjectView[]): Placement[] {
   return out;
 }
 
+/** Stands each blocker across the table from the attacker it blocks, as combat.png does, its
+ * blockers side by side about the attacker's center, so a block reads as a short line. */
+function facing(field: Placement[], bySlot: Map<number, ObjectView>) {
+  const placed = new Map(field.map((p) => [p.slot, p]));
+  const blockers = new Map<number, Placement[]>();
+  for (const p of field) {
+    const combat = bySlot.get(p.slot)?.combat;
+    if (combat?.kind !== "blocking" || combat.attacker === null) continue;
+    if (!placed.has(combat.attacker)) continue;
+    blockers.set(combat.attacker, [
+      ...(blockers.get(combat.attacker) ?? []),
+      p,
+    ]);
+  }
+  for (const [attacker, group] of blockers) {
+    const a = placed.get(attacker)!;
+    const center = a.x + (CREATURE_WIDTH * a.scale) / 2;
+    group.forEach((p, i) => {
+      const width = CREATURE_WIDTH * p.scale;
+      const step = width * 1.04;
+      const x = center - width / 2 + (i - (group.length - 1) / 2) * step;
+      placed.set(p.slot, { ...p, ...onTable(x, p.y, CREATURE_WIDTH) });
+    });
+  }
+  return [...placed.values()];
+}
+
 /** A pile lying at a fixed place, as Table.tsx's `Lying` draws it: unscaled, leaning. */
 function lying(x: number, y: number, width: number) {
   return { x, y, scale: 1, rotate: 0, skew: lean(x + width / 2, y) };
 }
 
-/** Every object's placement. `raised` is the hand card the pointer is over. */
-export function layout(view: PlayerView, raised?: number): Layout {
+/** Every object's placement. `raised` is the hand card the pointer is over; the stack is
+ * `lifted` over a prompt. */
+export function layout(
+  view: PlayerView,
+  raised?: number,
+  lifted = false,
+): Layout {
   const out: Placement[] = [];
   const objects = view.objects;
   const owned = (side: Side, zone: ZoneName) =>
@@ -295,13 +350,14 @@ export function layout(view: PlayerView, raised?: number): Layout {
 
   out.push(...handPlacements(owned("you", "hand"), raised));
   out.push(...backPlacements(owned("opponent", "hand")));
+  const field = (["opponent", "you"] as const).flatMap((side) =>
+    battlefieldPlacements(
+      side,
+      permanents.filter((o) => o.controller === side),
+    ),
+  );
+  out.push(...facing(field, bySlot));
   for (const side of ["opponent", "you"] as const) {
-    out.push(
-      ...battlefieldPlacements(
-        side,
-        permanents.filter((o) => o.controller === side),
-      ),
-    );
     const { library, graveyard } = PILES[side];
     // Library cards wait, unseen, on their library; exiled cards fade out over the graveyard.
     for (const o of owned(side, "library")) {
@@ -348,16 +404,17 @@ export function layout(view: PlayerView, raised?: number): Layout {
     if (item.kind !== "spell") return;
     const o = bySlot.get(item.slot);
     if (!o) return;
+    const place = stackPlace(i, view.stack.length, lifted);
     out.push({
       slot: item.slot,
       zone: o.zone,
       look: "stack",
       width: FULL_WIDTH,
       opacity: 1,
-      z: 400 + i,
-      x: STACK.x,
-      y: STACK.y + i * STACK.step,
-      scale: STACK_WIDTH / FULL_WIDTH,
+      z: STACK_Z + i,
+      x: place.x,
+      y: place.y,
+      scale: place.width / FULL_WIDTH,
       rotate: 0,
       skew: 0,
     });
@@ -365,12 +422,8 @@ export function layout(view: PlayerView, raised?: number): Layout {
   return new Map(out.map((p) => [p.slot, p]));
 }
 
-/** Where a stack item that is not a card (an ability) is drawn: its place in the cascade. */
-export const stackPlace = (index: number) => ({
-  x: STACK.x,
-  y: STACK.y + index * STACK.step,
-  width: STACK_WIDTH,
-});
+/** The stack's items are drawn over everything else on the table, the top item in front. */
+export const STACK_Z = 400;
 
 /** The compact phase tracker's phase for a step. */
 export function phaseOf(step: Step): Phase {
@@ -423,9 +476,20 @@ export function nextStop(view: PlayerView): { label: string; caption: string } {
         : top.name;
     return { label: "Resolve", caption: name };
   }
+  // Once blockers are declared, passing deals combat damage (combat.png's Resolve Damage).
+  const fighting = view.objects.some((o) => o.combat?.kind === "attacking");
+  if (
+    fighting &&
+    (step === "declareBlockers" || step === "firstStrikeDamage")
+  ) {
+    return { label: "Resolve Damage", caption: "Combat damage" };
+  }
   if (view.stops === "exact") {
     const next = STEPS[(STEPS.indexOf(step) + 1) % STEPS.length]!;
     return { label: "Next", caption: `To ${STEP_NAMES[next]}` };
+  }
+  if (fighting && step === "declareAttackers") {
+    return { label: "Next", caption: "To Blockers" };
   }
   if (active === "opponent") {
     return step === "end" || step === "cleanup"

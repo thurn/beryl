@@ -353,20 +353,7 @@ export function TableScene({
       )}
       <Gear />
 
-      {board.banner && (
-        <div className="step-banner">
-          <i className="step-banner-rule step-banner-rule-left" />
-          <i className="step-banner-diamond" />
-          <span className="step-banner-title">{board.banner.title}</span>
-          <i className="step-banner-dot" />
-          <i className="step-banner-rule step-banner-rule-right" />
-          <i className="step-banner-underline" />
-          <span className="step-banner-detail">{board.banner.detail}</span>
-          <svg className="step-banner-notch" viewBox="0 0 140 12" aria-hidden>
-            <path d="M0 1.5 H60.5 L70 10.5 L79.5 1.5 H140" />
-          </svg>
-        </div>
-      )}
+      {board.banner && <StepBanner {...board.banner} />}
       {board.stack?.map((item, i) => (
         <div key={i} className="hud" style={{ left: item.x, top: item.y }}>
           <StackItem
@@ -417,6 +404,30 @@ export function TableScene({
         </div>
       </div>
       {board.arrows && <Arrows arrows={board.arrows} />}
+    </div>
+  );
+}
+
+/** A step announcement over the battlefield, such as "Combat" over "Blockers declared". */
+export function StepBanner({
+  title,
+  detail,
+}: {
+  title: string;
+  detail: string;
+}) {
+  return (
+    <div className="step-banner" role="status">
+      <i className="step-banner-rule step-banner-rule-left" />
+      <i className="step-banner-diamond" />
+      <span className="step-banner-title">{title}</span>
+      <i className="step-banner-dot" />
+      <i className="step-banner-rule step-banner-rule-right" />
+      <i className="step-banner-underline" />
+      <span className="step-banner-detail">{detail}</span>
+      <svg className="step-banner-notch" viewBox="0 0 140 12" aria-hidden>
+        <path d="M0 1.5 H60.5 L70 10.5 L79.5 1.5 H140" />
+      </svg>
     </div>
   );
 }

@@ -3,7 +3,9 @@
 //! here has a generated TypeScript twin in `ui/src/generated/protocol.ts`
 //! ([`crate::typescript`]).
 
-use beryl_engine::card::{AbilityIx, CastingOption, Cost, FaceAbility, ManaColor, ManaCost, Types};
+use beryl_engine::card::{
+    Ability, AbilityIx, AbilityKind, CastingOption, Cost, FaceAbility, ManaColor, ManaCost, Types,
+};
 use beryl_engine::event::{Event, Reason, Recipient};
 use beryl_engine::state::{CounterKind, ObjectFlags, StackEntry, TurnStep};
 use beryl_engine::{
@@ -199,6 +201,11 @@ pub enum StackItem {
         ability: u8,
         granted: bool,
         name: String,
+        /// A triggered ability rather than an activated one.
+        triggered: bool,
+        /// How many abilities of its kind (triggered, or activated) come before it in its
+        /// list: the face's text says them in that order, so the UI finds its paragraph.
+        nth: u8,
         controller: Side,
         targets: Vec<TargetRef>,
         /// The announced value of X.
@@ -716,17 +723,37 @@ fn stack_item(t: &GameTable, obs: Observation<'_>, e: &StackEntry) -> StackItem 
             targets,
             x: e.x,
         },
-        Some(ability) => StackItem::Ability {
-            source,
-            ability: match ability {
-                FaceAbility::Own(i) | FaceAbility::Grant(i) => i,
-            },
-            granted: matches!(ability, FaceAbility::Grant(_)),
-            name: t.def(e.card).face_name(e.face).to_owned(),
-            controller: side(obs, e.controller),
-            targets,
-            x: e.x,
-        },
+        Some(ability) => {
+            let face = &t.def(e.card).faces[usize::from(e.face)];
+            let (list, index) = match ability {
+                FaceAbility::Own(i) => (face.abilities, i),
+                FaceAbility::Grant(i) => (face.grants, i),
+            };
+            // Triggered, or activated (mana abilities are written as activated ones are); the
+            // other kinds have no paragraph of their own to find.
+            let class = |a: &Ability| match a.kind {
+                AbilityKind::Triggered => Some(true),
+                AbilityKind::Activated | AbilityKind::Mana => Some(false),
+                _ => None,
+            };
+            let kind = list.get(usize::from(index)).and_then(class) == Some(true);
+            let nth = list
+                .iter()
+                .take(usize::from(index))
+                .filter(|a| class(a) == Some(kind))
+                .count();
+            StackItem::Ability {
+                source,
+                ability: index,
+                granted: matches!(ability, FaceAbility::Grant(_)),
+                name: t.def(e.card).face_name(e.face).to_owned(),
+                triggered: kind,
+                nth: u8::try_from(nth).expect("a face has fewer than 256 abilities"),
+                controller: side(obs, e.controller),
+                targets,
+                x: e.x,
+            }
+        }
     }
 }
 

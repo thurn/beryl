@@ -1010,6 +1010,25 @@
 .stack-ability {
   transform-origin: 0 0;
 }
+/* Combat and stack lines over the cards on the table, under the stack's items and menus. */
+.board-arrows {
+  position: absolute;
+  inset: 0;
+  z-index: 350;
+  pointer-events: none;
+}
+/* Combat marks face the other side: the opponent's attackers wear their chevron below, your
+   blockers their arc above. */
+.card-el-opponent .attack-chevron {
+  top: calc(100% + 0.15em);
+  bottom: auto;
+  scale: 1 -1;
+}
+.card-el-you .block-arc {
+  top: auto;
+  bottom: calc(100% - 1.6em);
+  scale: 1 -1;
+}
 .life-target {
   cursor: pointer;
   border-radius: 50%;

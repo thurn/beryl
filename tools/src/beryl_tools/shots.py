@@ -174,14 +174,14 @@ def ui_shots(args: argparse.Namespace) -> int:
     return code
 
 
-# The fixture ui/scripts/interactions.mjs plays.
-INTERACTION_FIXTURE = "greedy-turn-9"
+# The fixtures ui/scripts/interactions.mjs plays.
+INTERACTION_FIXTURES = ["greedy-turn-9", "combat-attack", "combat-block"]
 
 
 def ui_test(args: argparse.Namespace) -> int:
     try:
         env = webkit_env()
-        code = record_fixtures([INTERACTION_FIXTURE])
+        code = record_fixtures(INTERACTION_FIXTURES)
         if code == 0:
             with served_ui(env) as url:
                 code = subprocess.run(

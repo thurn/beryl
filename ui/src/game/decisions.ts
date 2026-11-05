@@ -23,6 +23,8 @@ export interface Interactions {
   players: Map<Side, CandidateIndex>;
   /** Passing priority, at a priority decision. */
   pass?: CandidateIndex;
+  /** Finishing a declaration or a division (attackers, blockers, combat damage). */
+  done?: CandidateIndex;
   /** At a decision among things (targets, cards): a card with one candidate is picked by
    * clicking it, so it glows cyan; elsewhere clicking a card lists its candidates. */
   picking: boolean;
@@ -58,31 +60,60 @@ export function interactions(view: PlayerView): Interactions {
   }
   const decision = status.decision;
   let pass: CandidateIndex | undefined;
+  let done: CandidateIndex | undefined;
   decision.candidates.forEach(({ label, option }, index) => {
     const slot = slotOf(option);
     if (slot !== undefined) {
       bySlot.set(slot, [...(bySlot.get(slot) ?? []), { index, label, option }]);
     } else if (option.kind === "player") {
       players.set(option.player, index);
+    } else if (option.kind === "defender") {
+      // Attacking no planeswalker is attacking the defending player (CR 508.1b).
+      players.set("opponent", index);
     } else if (option.kind === "pass") {
       pass = index;
+    } else if (option.kind === "done") {
+      done = index;
     }
   });
-  const top = view.stack[view.stack.length - 1];
-  const source =
-    decision.kind === "priority" || !top
-      ? undefined
-      : top.kind === "spell"
-        ? top.slot
-        : (top.source ?? undefined);
   return {
     bySlot,
     players,
     pass,
+    done,
     picking: decision.kind !== "priority",
-    source,
+    source: sourceOf(view, decision),
   };
 }
+
+/** The card a decision is for: the attacker whose damage is being divided, or the spell or
+ * ability on top of the stack (which a target, an X or a crew cost is chosen for). */
+function sourceOf(view: PlayerView, decision: DecisionView) {
+  if (decision.kind === "priority") return undefined;
+  if (decision.kind === "damageDivision") {
+    const blocker = decision.candidates.find((c) => c.option.kind === "lethal");
+    const slot = blocker && slotOf(blocker.option);
+    const combat = view.objects.find((o) => o.slot === slot)?.combat;
+    return combat?.kind === "blocking"
+      ? (combat.attacker ?? undefined)
+      : undefined;
+  }
+  if (isCombat(decision.kind)) return undefined;
+  const top = view.stack[view.stack.length - 1];
+  return !top
+    ? undefined
+    : top.kind === "spell"
+      ? top.slot
+      : (top.source ?? undefined);
+}
+
+/** The combat declarations: made on the board, finished with the turn button. */
+export const isCombat = (kind: Kind) =>
+  kind === "attacker" ||
+  kind === "attackTarget" ||
+  kind === "blocker" ||
+  kind === "blockTarget" ||
+  kind === "damageDivision";
 
 /** The decisions before the first turn, which the opening screen asks over the table. */
 export const isOpening = (kind: Kind) =>

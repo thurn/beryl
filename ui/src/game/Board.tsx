@@ -1,10 +1,14 @@
 // The battlefield screen of a game in progress, drawn from the latest PlayerView as
 // docs/ui_mockups/battlefield.png lays it out: the opponent's hand as card backs, life orbs,
 // land piles, permanents, libraries and graveyards, player badges, the phase tracker and the
-// turn button, with the hand fanned at the near edge (decisions D10 to D13).
+// turn button, with the hand fanned at the near edge (decisions D10 to D13). Combat and the
+// stack follow combat.png and trigger_on_stack_with_target.png: attack and block lines and the
+// step banner; spells and abilities large at the right, a gold line from an ability's source
+// and cyan lines to targets.
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type ReactNode,
@@ -15,7 +19,7 @@ import {
   useMotionValue,
   useReducedMotion,
 } from "motion/react";
-import { Card, type CardFace } from "../components/Card";
+import { Card, type CardFace, type Highlight } from "../components/Card";
 import {
   Button,
   FastForwardIcon,
@@ -23,30 +27,41 @@ import {
   PriorityPill,
 } from "../components/Controls";
 import { Library, LifeOrb, PlayerBadge } from "../components/Player";
-import { StackItem } from "../components/Stack";
+import { Arrows, StackItem, type ArrowSpec } from "../components/Stack";
 import { cardEntry, useCardArt } from "../cards";
 import type {
+  Candidate,
   CandidateIndex,
   DecisionView,
+  Kind,
   ObjectView,
   PlayerView,
   Side,
+  StackItem as StackItemView,
 } from "../generated/protocol";
-import { Brand, Gear, Lying } from "../screens/Table";
-import { CardLayer, type CardState, type Point } from "./CardLayer";
+import { Brand, Gear, Lying, StepBanner } from "../screens/Table";
+import {
+  CardLayer,
+  cardId,
+  type CardState,
+  type Drop,
+  type Point,
+} from "./CardLayer";
 import {
   interactions,
+  isCombat,
   isOpening,
   playActs,
   prompt,
   type Act,
 } from "./decisions";
-import { frameFace, unknownFace } from "./faces";
+import { abilityText, frameFace, unknownFace } from "./faces";
 import {
   layout,
   nextStop,
   phaseOf,
   PILES,
+  STACK_Z,
   stackPlace,
   type Placement,
 } from "./layout";
@@ -61,6 +76,18 @@ export interface BoardProps {
   onLeave(): void;
   /** Blurred and darkened behind a screen over it. */
   dimmed?: boolean;
+}
+
+/** Dropped above this line, a hand card is on the battlefield rather than back in the hand. */
+const BATTLEFIELD_EDGE = 690;
+/** Dragged forward at least this far, a creature attacks. */
+const FORWARD = 60;
+
+/** A pick a drag already said, for the decision that follows the one it answered: dropping a
+ * blocker onto an attacker declares the blocker, then picks the attacker it blocks. */
+interface Intent {
+  kind: Kind;
+  wants(option: Candidate): boolean;
 }
 
 /** A menu of a card's candidates, open at a point on the stage. */
@@ -94,10 +121,32 @@ export function Board({
     hovered !== undefined && objects.get(hovered)?.zone === "hand"
       ? hovered
       : undefined;
-  const placements = useMemo(() => layout(view, raised), [view, raised]);
+  // A decision other than priority, the opening's and combat's asks in a prompt over the
+  // turn controls, under the stack, which rises to clear it.
+  const prompting =
+    deciding &&
+    decision !== undefined &&
+    decision.kind !== "priority" &&
+    !isCombat(decision.kind) &&
+    !isOpening(decision.kind);
+  const placements = useMemo(
+    () => layout(view, raised, prompting),
+    [view, raised, prompting],
+  );
 
-  // A new view closes whatever was open on the old one.
-  useEffect(() => setMenu(undefined), [view]);
+  // A new view closes whatever was open on the old one, and answers a decision a drag already
+  // said the answer to.
+  const intent = useRef<Intent>(undefined);
+  useEffect(() => {
+    setMenu(undefined);
+    const want = intent.current;
+    intent.current = undefined;
+    if (!want || view.status.kind !== "deciding") return;
+    const { kind, candidates } = view.status.decision;
+    const index = candidates.findIndex((c) => want.wants(c.option));
+    if (kind === want.kind && index >= 0) choose(index);
+    // Only a new view answers (`choose` changes with every render).
+  }, [view]);
 
   const pick = (index: CandidateIndex) => {
     setMenu(undefined);
@@ -113,9 +162,27 @@ export function Board({
         highlight: single ? "target" : undefined,
         playable: !single,
         draggable:
-          o?.zone === "hand" && o.owner === "you" && playActs(acts).length > 0,
+          (o?.zone === "hand" &&
+            o.owner === "you" &&
+            playActs(acts).length > 0) ||
+          acts.some(
+            (a) => a.option.kind === "attack" || a.option.kind === "block",
+          ),
       });
     }
+  }
+  // The top of the stack's source glows gold and its targets cyan, whoever has priority
+  // (trigger_on_stack_with_target.png).
+  const top = view.stack[view.stack.length - 1];
+  const marks: [number | null | undefined, Highlight][] = [
+    [top?.kind === "ability" ? top.source : undefined, "source"],
+  ];
+  for (const t of top?.targets ?? []) {
+    if (t.kind === "object") marks.push([t.slot, "target"]);
+  }
+  for (const [slot, highlight] of marks) {
+    if (slot == null || states.get(slot)?.highlight) continue;
+    states.set(slot, { ...states.get(slot), highlight });
   }
   if (can.source !== undefined) {
     states.set(can.source, {
@@ -136,27 +203,68 @@ export function Board({
       setMenu({ slot, at, acts });
     }
   };
-  const onDrop = (slot: number, at: Point) => {
-    const acts = deciding ? playActs(can.bySlot.get(slot) ?? []) : [];
-    if (acts.length === 1) {
-      pick(acts[0]!.index);
+  const onDrop = (slot: number, { start, at, onto }: Drop) => {
+    const acts = deciding ? (can.bySlot.get(slot) ?? []) : [];
+    if (objects.get(slot)?.zone === "hand") {
+      const plays = at.y < BATTLEFIELD_EDGE ? playActs(acts) : [];
+      if (plays.length === 1) {
+        pick(plays[0]!.index);
+        return true;
+      }
+      if (plays.length > 1) {
+        setMenu({ slot, at, acts: plays });
+      }
+      return false;
+    }
+    const declare = acts.find(
+      (a) => a.option.kind === "attack" || a.option.kind === "block",
+    );
+    const over = onto && "slot" in onto ? objects.get(onto.slot) : undefined;
+    if (declare?.option.kind === "block") {
+      // A blocker goes onto the attacker it blocks (CR 509.1a).
+      if (over?.combat?.kind !== "attacking") return false;
+      intent.current = {
+        kind: "blockTarget",
+        wants: (c) => c.kind === "object" && c.slot === over.slot,
+      };
+      pick(declare.index);
       return true;
     }
-    if (acts.length > 1) {
-      setMenu({ slot, at, acts });
+    if (declare?.option.kind !== "attack") return false;
+    // An attacker goes forward, or onto what it attacks: the defending player or one of their
+    // planeswalkers (CR 508.1b), which the next decision asks when there is a choice.
+    const walker =
+      over?.controller === "opponent" && over.types.includes("planeswalker")
+        ? over.slot
+        : undefined;
+    const atPlayer = onto && "player" in onto && onto.player === "opponent";
+    if (walker === undefined && !atPlayer && start.y - at.y < FORWARD) {
+      return false;
     }
-    return false;
+    if (walker !== undefined || atPlayer) {
+      intent.current = {
+        kind: "attackTarget",
+        wants: (c) =>
+          c.kind === "defender" && c.planeswalker === (walker ?? null),
+      };
+    }
+    pick(declare.index);
+    return true;
   };
 
   const { you, opponent } = view.players;
   const active = view.turn.active;
-  const top = view.stack[view.stack.length - 1];
   const sourceName =
     top &&
     (top.kind === "spell"
       ? (objects.get(top.slot)?.name ?? undefined)
       : top.name);
   const stop = nextStop(view);
+  const arrows = useMemo(() => boardArrows(view), [view]);
+  const banner = combatBanner(view);
+  // A combat declaration is finished with the turn button, where priority is passed.
+  const declaring =
+    deciding && decision && isCombat(decision.kind) ? decision : undefined;
 
   return (
     <div
@@ -206,13 +314,17 @@ export function Board({
         onPick={pick}
       />
 
+      {banner && <StepBanner {...banner} />}
+
       {view.stack.map(
         (item, i) =>
           item.kind === "ability" && (
             <AbilityOnStack
               key={`${i}-${item.name}`}
               index={i}
-              name={item.name}
+              count={view.stack.length}
+              lifted={prompting}
+              item={item}
               source={
                 item.source === null ? undefined : objects.get(item.source)
               }
@@ -230,16 +342,27 @@ export function Board({
         onHover={setHovered}
       />
 
+      <div className="board-arrows">
+        <Arrows arrows={arrows} follow />
+      </div>
+
       <div
         className={
-          waiting || !decision || decision.kind !== "priority"
+          waiting || !decision || (decision.kind !== "priority" && !declaring)
             ? "turn-controls turn-controls-wait"
             : "turn-controls"
         }
       >
         <PhaseTracker current={phaseOf(view.turn.step)} compact />
         {waiting && <PriorityPill>Opponent has priority</PriorityPill>}
-        {decision?.kind === "priority" || waiting ? (
+        {declaring ? (
+          <Finish
+            view={view}
+            decision={declaring}
+            done={can.done}
+            onPick={pick}
+          />
+        ) : decision?.kind === "priority" || waiting ? (
           <div className="turn-action">
             <Button
               icon={<FastForwardIcon />}
@@ -254,12 +377,9 @@ export function Board({
         ) : null}
       </div>
 
-      {deciding &&
-        decision &&
-        decision.kind !== "priority" &&
-        !isOpening(decision.kind) && (
-          <Prompt decision={decision} source={sourceName} onPick={pick} />
-        )}
+      {prompting && decision && (
+        <Prompt decision={decision} source={sourceName} onPick={pick} />
+      )}
 
       {menu && (
         <ActionMenu
@@ -364,36 +484,191 @@ function Life({
   );
 }
 
-/** An activated or triggered ability on the stack, in the stack's cascade. */
+/** An activated or triggered ability on the stack, in the stack's cascade: its source's name
+ * and art over what kind of ability it is and the paragraph of rules text that says it, as
+ * trigger_on_stack_with_target.png draws a trigger. */
 function AbilityOnStack({
   index,
-  name,
+  count,
+  lifted,
+  item,
   source,
 }: {
   index: number;
-  name: string;
+  count: number;
+  lifted: boolean;
+  item: Extract<StackItemView, { kind: "ability" }>;
   source?: ObjectView;
 }) {
-  const art = useCardArt(name);
+  const art = useCardArt(item.name);
   const face: CardFace = art
     ? frameFace(source ?? BLANK, art)
-    : unknownFace(name);
-  const place = stackPlace(index);
+    : unknownFace(item.name);
+  const place = stackPlace(index, count, lifted);
   return (
     <motion.div
       className="hud stack-ability"
-      style={{ left: place.x, top: place.y, zIndex: 400 + index }}
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
+      style={{ zIndex: STACK_Z + index }}
+      initial={{ opacity: 0, scale: 0.8, x: place.x, y: place.y }}
+      animate={{ opacity: 1, scale: 1, x: place.x, y: place.y }}
     >
       <StackItem
+        id={stackId(index)}
         source={face}
-        label="Ability"
-        text={face.text ?? ""}
+        label={item.triggered ? "Triggered Ability" : "Activated Ability"}
+        text={abilityText(face.text ?? "", item.triggered, item.nth)}
         width={place.width}
         showArt
       />
     </motion.div>
+  );
+}
+
+/** The element id of the stack item at `index`: its card for a spell. */
+const stackId = (index: number) => `stack-${index}`;
+
+/** The lines over the table (decision D10): each attacker's to what it attacks or to its
+ * blockers (combat.png), and for the top of the stack, a gold line from an ability's source
+ * and a cyan one to each target (trigger_on_stack_with_target.png). */
+function boardArrows(view: PlayerView): ArrowSpec[] {
+  const objects = new Map(view.objects.map((o) => [o.slot, o]));
+  const out: ArrowSpec[] = [];
+  for (const slot of view.battlefield) {
+    const o = objects.get(slot);
+    if (o?.combat?.kind !== "attacking") continue;
+    // The opponent's attackers come down the table toward you; yours go up it.
+    const up = o.controller === "you";
+    const blockers = view.battlefield.filter((b) => {
+      const c = objects.get(b)?.combat;
+      return c?.kind === "blocking" && c.attacker === slot;
+    });
+    for (const b of blockers) {
+      out.push({
+        from: cardId(slot),
+        to: `${cardId(b)}-mark`,
+        tone: "gold",
+        bend: 0,
+        fromSide: up ? "top" : "bottom",
+        toSide: { x: 0.5, y: up ? 0.85 : 0.15 },
+        start: "none",
+        end: "none",
+        fine: true,
+      });
+    }
+    if (o.combat.blocked) continue;
+    const walker = o.combat.planeswalker;
+    const defender = up ? "opponent" : "you";
+    out.push({
+      from: `${cardId(slot)}-mark`,
+      to: walker === null ? `${defender}-life` : cardId(walker),
+      tone: "gold",
+      fromSide: up ? "top" : "bottom",
+      // Into the near edge of the life orb or the planeswalker.
+      toSide:
+        walker === null
+          ? { x: 0.5, y: up ? 0.85 : 0.15 }
+          : up
+            ? "bottom"
+            : "top",
+      bend: 0.15,
+      start: "none",
+      fine: true,
+    });
+  }
+  const top = view.stack.length - 1;
+  const item = view.stack[top];
+  if (item) {
+    const from = item.kind === "spell" ? cardId(item.slot) : stackId(top);
+    if (item.kind === "ability" && item.source !== null) {
+      out.push({
+        from: cardId(item.source),
+        to: from,
+        tone: "gold",
+        fromSide: "right",
+        toSide: { x: 0.07, y: 0.84 },
+        bow: "down",
+      });
+    }
+    for (const target of item.targets) {
+      out.push({
+        from,
+        to:
+          target.kind === "player"
+            ? `${target.player}-life`
+            : cardId(target.slot),
+        tone: "cyan",
+        fromSide: { x: 0, y: 0.055 },
+        toSide: target.kind === "player" ? "center" : { x: 0.5, y: 0.25 },
+        bow: "up",
+      });
+    }
+  }
+  return out;
+}
+
+/** The step banner during combat: what is being declared, what has been, or the damage. */
+function combatBanner(
+  view: PlayerView,
+): { title: string; detail: string } | undefined {
+  const step = view.turn.step;
+  const status = view.status;
+  const kind = status.kind === "deciding" ? status.decision.kind : undefined;
+  const fighting = view.objects.some((o) => o.combat?.kind === "attacking");
+  const detail =
+    kind === "attacker" || kind === "attackTarget"
+      ? "Declare attackers"
+      : kind === "blocker" || kind === "blockTarget"
+        ? "Declare blockers"
+        : !fighting
+          ? undefined
+          : step === "declareAttackers"
+            ? "Attackers declared"
+            : step === "declareBlockers"
+              ? "Blockers declared"
+              : step === "firstStrikeDamage" || step === "combatDamage"
+                ? "Combat damage"
+                : undefined;
+  return detail && { title: "Combat", detail };
+}
+
+/** The turn button during a combat declaration: it finishes the declaration ("Attack", "No
+ * Blocks"), or, while a creature's attacker or defender is being chosen, waits for that. */
+function Finish({
+  view,
+  decision,
+  done,
+  onPick,
+}: {
+  view: PlayerView;
+  decision: DecisionView;
+  done?: CandidateIndex;
+  onPick(index: CandidateIndex): void;
+}) {
+  const yours = (kind: "attacking" | "blocking") =>
+    view.objects.some((o) => o.controller === "you" && o.combat?.kind === kind);
+  const labels: Partial<Record<Kind, [string, string]>> = {
+    attacker: [
+      yours("attacking") ? "Attack" : "No Attacks",
+      "Declare attackers",
+    ],
+    attackTarget: ["Attack", "Choose what it attacks"],
+    blocker: [yours("blocking") ? "Block" : "No Blocks", "Declare blockers"],
+    blockTarget: ["Block", "Choose an attacker to block"],
+    damageDivision: ["Assign Damage", "Choose blockers to destroy"],
+  };
+  const [label, caption] = labels[decision.kind] ?? ["Done", prompt(decision)];
+  return (
+    <div className="turn-action">
+      <Button
+        icon={<FastForwardIcon />}
+        disabled={done === undefined}
+        className={label.length > 8 ? "button-long" : undefined}
+        onClick={() => done !== undefined && onPick(done)}
+      >
+        {label}
+      </Button>
+      <span className="turn-caption">{caption}</span>
+    </div>
   );
 }
 

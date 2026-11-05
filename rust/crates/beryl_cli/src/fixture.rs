@@ -7,7 +7,7 @@ use std::sync::mpsc::channel;
 
 use beryl_cards::decks::{WU_CONTROL, fuzz_deck};
 use beryl_session::ipc::{self, Fixture, FixtureMessage};
-use beryl_session::protocol::Kind;
+use beryl_session::protocol::{Candidate, Combat, Kind, Side, StackItem, Step};
 use beryl_session::{PlayerView, Seat, Sessions, StartGame, Status, StopsSetting, agents};
 use serde::Deserialize;
 use serde_json::json;
@@ -30,6 +30,9 @@ struct Definition {
     agents: [String; 2],
     stops: Option<StopsSetting>,
     until: String,
+    /// What else must hold of the view the recording stops at (see [`Condition::parse`]).
+    #[serde(default, rename = "where")]
+    conditions: Vec<String>,
 }
 
 /// Where a recording stops: the human's first decision of a kind, from a turn on, or the end
@@ -93,6 +96,87 @@ impl Until {
     }
 }
 
+/// A condition on the view a recording stops at, so a fixture can stop at a state rather
+/// than only at a kind of decision.
+#[derive(Debug, PartialEq)]
+enum Condition {
+    /// The turn is at this step.
+    Step(Step),
+    /// Some creature is attacking.
+    Attacking,
+    /// Some creature is blocking.
+    Blocking,
+    /// The top of the stack is a triggered ability with a target.
+    TargetedTrigger,
+    /// The top of the stack is a spell the opponent controls.
+    OpponentsSpell,
+    /// The human may cast a card of this name.
+    Castable(String),
+}
+
+impl Condition {
+    /// Parses "step <step>" (as the protocol names steps: "declareBlockers"), "attacking",
+    /// "blocking", "targeted trigger on the stack", "opponent's spell on the stack" or
+    /// "castable <card name>".
+    fn parse(text: &str) -> Result<Condition, String> {
+        let condition = match text {
+            "attacking" => Condition::Attacking,
+            "blocking" => Condition::Blocking,
+            "targeted trigger on the stack" => Condition::TargetedTrigger,
+            "opponent's spell on the stack" => Condition::OpponentsSpell,
+            _ => {
+                if let Some(step) = text.strip_prefix("step ") {
+                    Condition::Step(
+                        serde_json::from_value(json!(step))
+                            .map_err(|_| format!("no step is named {step:?}"))?,
+                    )
+                } else if let Some(name) = text.strip_prefix("castable ") {
+                    Condition::Castable(name.to_owned())
+                } else {
+                    return Err(format!("{text:?}: no such condition"));
+                }
+            }
+        };
+        Ok(condition)
+    }
+
+    fn holds(&self, view: &PlayerView) -> bool {
+        let name = |slot: u8| {
+            view.objects
+                .iter()
+                .find(|o| o.slot == slot)
+                .and_then(|o| o.name.as_deref())
+        };
+        match self {
+            Condition::Step(step) => view.turn.step == *step,
+            Condition::Attacking => view
+                .objects
+                .iter()
+                .any(|o| matches!(o.combat, Some(Combat::Attacking { .. }))),
+            Condition::Blocking => view
+                .objects
+                .iter()
+                .any(|o| matches!(o.combat, Some(Combat::Blocking { .. }))),
+            Condition::TargetedTrigger => matches!(
+                view.stack.last(),
+                Some(StackItem::Ability { triggered: true, targets, .. }) if !targets.is_empty()
+            ),
+            Condition::OpponentsSpell => matches!(
+                view.stack.last(),
+                Some(StackItem::Spell { slot, .. })
+                    if view.objects.iter().any(|o| o.slot == *slot && o.controller == Side::Opponent)
+            ),
+            Condition::Castable(card) => matches!(
+                &view.status,
+                Status::Deciding { decision } if decision.candidates.iter().any(|c| matches!(
+                    c.option,
+                    Candidate::Cast { slot, .. } if name(slot) == Some(card.as_str())
+                ))
+            ),
+        }
+    }
+}
+
 /// Records the fixtures in `definitions` named in `only`, or all of them, into `out`.
 pub fn record_all(definitions: &Path, out: &Path, only: &[String]) -> Result<(), String> {
     let text = std::fs::read_to_string(definitions)
@@ -121,6 +205,11 @@ pub fn record_all(definitions: &Path, out: &Path, only: &[String]) -> Result<(),
 
 fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
     let until = Until::parse(&def.until)?;
+    let conditions = def
+        .conditions
+        .iter()
+        .map(|c| Condition::parse(c))
+        .collect::<Result<Vec<_>, _>>()?;
     let human = until.seat();
     let start = StartGame {
         seed: def.seed,
@@ -145,7 +234,8 @@ fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
         let update = updates
             .recv()
             .map_err(|_| "the session ended without a view".to_owned())?;
-        let reached = until.reached(&update.view);
+        let reached =
+            until.reached(&update.view) && conditions.iter().all(|c| c.holds(&update.view));
         let deciding = matches!(update.view.status, Status::Deciding { .. });
         messages.push(FixtureMessage::game_update(&update));
         if reached {
@@ -204,6 +294,21 @@ mod tests {
     }
 
     #[test]
+    fn conditions_parse() {
+        assert_eq!(
+            Condition::parse("step declareBlockers"),
+            Ok(Condition::Step(Step::DeclareBlockers))
+        );
+        assert_eq!(
+            Condition::parse("castable Mana Drain"),
+            Ok(Condition::Castable("Mana Drain".to_owned()))
+        );
+        assert_eq!(Condition::parse("blocking"), Ok(Condition::Blocking));
+        assert!(Condition::parse("step lunch").is_err());
+        assert!(Condition::parse("raining").is_err());
+    }
+
+    #[test]
     fn a_recording_stops_at_its_condition() {
         let def = Definition {
             name: "t".to_owned(),
@@ -212,6 +317,7 @@ mod tests {
             agents: ["random".to_owned(), "random".to_owned()],
             stops: None,
             until: "first target decision for seat 1".to_owned(),
+            conditions: vec![],
         };
         let messages = record(&def).unwrap();
         let Some(FixtureMessage::Event { payload, .. }) = messages.last() else {

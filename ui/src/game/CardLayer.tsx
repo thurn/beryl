@@ -1,8 +1,8 @@
 // The game screen's cards: one element per public slot, placed by layout.ts and animated with
 // Motion from wherever it was to wherever the latest view puts it, so a card drawn, played,
 // cast, resolved, killed, bounced or exiled travels rather than jumps (decision D10). Hand
-// cards with something to play drag onto the battlefield; a click on any card asks the board
-// what it offers.
+// cards with something to play drag onto the battlefield, attackers forward and blockers onto
+// attackers; a click on any card asks the board what it offers.
 import {
   useContext,
   useEffect,
@@ -21,7 +21,7 @@ import {
 } from "motion/react";
 import { Card, CardBack, type Highlight } from "../components/Card";
 import { useCardArt } from "../cards";
-import type { ObjectView } from "../generated/protocol";
+import type { ObjectView, Side } from "../generated/protocol";
 import { StageScale } from "../screens/Table";
 import { frameFace, unknownFace } from "./faces";
 import type { Layout, Placement } from "./layout";
@@ -32,12 +32,26 @@ export interface Point {
   y: number;
 }
 
+/** What a dragged card was let go over: another card, or a player's life orb. */
+export type Onto = { slot: number } | { player: Side };
+
+/** Where a drag went: the pointer at its start and where it was let go, in stage pixels, and
+ * what it was let go over. */
+export interface Drop {
+  start: Point;
+  at: Point;
+  onto?: Onto;
+}
+
+/** The element ids arrows find a card by, and its combat mark by (`${id}-mark`). */
+export const cardId = (slot: number) => `card-${slot}`;
+
 /** How a card is shown beyond its placement. */
 export interface CardState {
   highlight?: Highlight;
   /** It has something to play or activate now. */
   playable?: boolean;
-  /** It can be dragged onto the battlefield. */
+  /** It can be dragged: onto the battlefield, forward to attack, onto an attacker to block. */
   draggable?: boolean;
 }
 
@@ -50,17 +64,14 @@ export interface CardLayerProps {
   states: Map<number, CardState>;
   /** A card was clicked (or tapped without dragging) at `at`. */
   onClick(slot: number, at: Point): void;
-  /** A dragged card was let go at `at`; resolves to whether it was played, so it stays where
-   * it was dropped until the next view moves it, rather than flying back to the hand. */
-  onDrop(slot: number, at: Point): boolean;
+  /** A dragged card was let go; returns whether that did something, so the card stays where
+   * it was dropped until the next view moves it, rather than flying back to its place. */
+  onDrop(slot: number, drop: Drop): boolean;
   onHover(slot: number | undefined): void;
 }
 
 /** A drag starts once the pointer has moved this far, in stage pixels; less is a click. */
 const DRAG_THRESHOLD = 6;
-
-/** Dropped above this line, a card is on the battlefield rather than back in the hand. */
-export const BATTLEFIELD_EDGE = 690;
 
 const SPRING = { type: "spring", stiffness: 210, damping: 28 } as const;
 
@@ -204,13 +215,18 @@ function CardElement({
     }
     // A played card stays where it was dropped until the next view moves it on; any other
     // goes back to its place.
-    const played = at.y < BATTLEFIELD_EDGE && layer.onDrop(object.slot, at);
+    const played = layer.onDrop(object.slot, {
+      start: d.start,
+      at,
+      onto: under(e, e.currentTarget as HTMLElement),
+    });
     setHeld(played ? { dragging: false, epoch: layer.epoch } : undefined);
   };
 
   const classes = [
     "card-el",
     `card-el-${place.look}`,
+    `card-el-${object.controller}`,
     state.playable && "card-el-playable",
     state.draggable && "card-el-draggable",
     dragging && "card-el-dragging",
@@ -252,6 +268,19 @@ function CardElement({
   );
 }
 
+/** What is under the pointer of event `e` besides the dragged element `self`: a card or a
+ * life orb. */
+function under(e: ReactPointerEvent, self: HTMLElement): Onto | undefined {
+  for (const hit of document.elementsFromPoint(e.clientX, e.clientY)) {
+    if (self.contains(hit)) continue;
+    const card = hit.closest<HTMLElement>("[data-slot]");
+    if (card?.dataset.slot) return { slot: Number(card.dataset.slot) };
+    const life = hit.closest<HTMLElement>("[data-life]")?.dataset.life;
+    if (life === "you" || life === "opponent") return { player: life };
+  }
+  return undefined;
+}
+
 /** The card itself, as its placement draws it. */
 function Look({
   object,
@@ -269,14 +298,26 @@ function Look({
   }
   const card = art ? frameFace(object, art) : unknownFace(object.name);
   const field = place.look === "field" || place.look === "land";
+  const combat = field ? object.combat?.kind : undefined;
   const card_ = (
     <Card
+      id={cardId(object.slot)}
       card={card}
+      combat={
+        combat === "attacking"
+          ? "attacker"
+          : combat === "blocking"
+            ? "blocker"
+            : undefined
+      }
       variant={field ? "field" : "full"}
       width={place.width}
       tapped={field && object.tapped}
       highlight={state.highlight}
-      className={state.playable ? "card-playable" : undefined}
+      // A gold or cyan glow says more than the playable edge, which would hide it.
+      className={
+        state.playable && !state.highlight ? "card-playable" : undefined
+      }
     />
   );
   return field ? (

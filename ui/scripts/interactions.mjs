@@ -1,11 +1,13 @@
-// Drives the game screen through a recorded fixture with headless Playwright WebKit, as a
+// Drives the game screen through recorded fixtures with headless Playwright WebKit, as a
 // player would: `by ui-test` (tools/) serves the UI and runs this. Usage:
 //   node scripts/interactions.mjs <base-url> <fixtures-dir>
 // The fixture `greedy-turn-9` ends on a target decision for a spell the human had just cast
 // from their hand; the page starts one view earlier, at the priority decision, and the fixture
-// transport plays the recorded next view once the page calls `choose` (src/ipc.ts). Animation is
-// measured on Playwright's clock, so the checks do not depend on the machine's speed.
-// Exits non-zero on the first failed check or any page error.
+// transport plays the recorded next view once the page calls `choose` (src/ipc.ts). The combat
+// fixtures end on the human's attack declaration (`combat-attack`) and on the attacker for a
+// blocker just declared (`combat-block`). Animation is measured on Playwright's clock, so the
+// checks do not depend on the machine's speed. Exits non-zero on the first failed check or any
+// page error.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -19,13 +21,18 @@ if (!base || !fixtures) {
     process.exit(2);
 }
 
+/** A recorded fixture's views, oldest first. */
+async function load(name) {
+    const fixture = JSON.parse(
+        await readFile(join(fixtures, `${name}.json`), "utf8"),
+    );
+    return fixture.messages
+        .filter((m) => m.kind === "event")
+        .map((m) => m.payload.view);
+}
+
 const FIXTURE = "greedy-turn-9";
-const fixture = JSON.parse(
-    await readFile(join(fixtures, `${FIXTURE}.json`), "utf8"),
-);
-const views = fixture.messages
-    .filter((m) => m.kind === "event")
-    .map((m) => m.payload.view);
+const views = await load(FIXTURE);
 const [before, after] = views.slice(-2);
 
 // The spell cast between the last two views, and the candidate that cast it.
@@ -68,12 +75,15 @@ const browser = await launch();
 const errors = [];
 let failed = false;
 
-/** Runs `body` on a fresh page of the fixture's first `at` views, once the hand card `ready`
- * is in hand. */
+/** Runs `body` on a fresh page of a fixture's first `at` views, once `ready` matches. */
 async function check(
     title,
     body,
-    { at = views.length - 1, ready = card } = {},
+    {
+        fixture = FIXTURE,
+        at = views.length - 1,
+        ready = `${card}[data-zone="hand"]`,
+    } = {},
 ) {
     const context = await browser.newContext({
         viewport: { width: 1600, height: 900 },
@@ -88,9 +98,9 @@ async function check(
     );
     try {
         await page.clock.install();
-        const route = `/?fixture=${FIXTURE}&at=${at}#/game`;
+        const route = `/?fixture=${fixture}&at=${at}#/game`;
         await page.goto(new URL(route, base).href, { waitUntil: "load" });
-        await page.waitForSelector(`${ready}[data-zone="hand"]`);
+        await page.waitForSelector(ready);
         await body(page);
         console.log(`ok: ${title}`);
     } catch (e) {
@@ -264,7 +274,141 @@ await check(
             "it then takes its new size",
         );
     },
-    { at: opponentPlay, ready: back },
+    { at: opponentPlay, ready: `${back}[data-zone="hand"]` },
+);
+
+/** Drags the element `from` matches by its center to `to`'s center, or by `by`, in steps. */
+async function drag(page, from, { to, by }) {
+    const start = center(await page.locator(from).boundingBox());
+    const end = to
+        ? center(await page.locator(to).boundingBox())
+        : { x: start.x + by.x, y: start.y + by.y };
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i++) {
+        await page.mouse.move(
+            start.x + ((end.x - start.x) * i) / 10,
+            start.y + ((end.y - start.y) * i) / 10,
+        );
+    }
+    await page.mouse.up();
+}
+
+/** The `choose` commands sent once the page has had time to answer, at most `count`. */
+async function settled(page, count) {
+    for (let i = 0; i < 20 && (await chosen(page)).length < count; i++) {
+        await page.clock.runFor(100);
+    }
+    return chosen(page);
+}
+
+// The attack declaration: the creature that may attack, and what declares it.
+const attackViews = await load("combat-attack");
+const attackDecision = attackViews.at(-1).status.decision;
+const attackIndex = attackDecision.candidates.findIndex(
+    (c) => c.option.kind === "attack",
+);
+assert.ok(attackIndex >= 0, "the attack fixture offers an attacker");
+const attacker = `[data-slot="${attackDecision.candidates[attackIndex].option.slot}"]`;
+const attackRun = {
+    fixture: "combat-attack",
+    at: attackViews.length,
+    ready: attacker,
+};
+
+await check(
+    "dragging a creature forward declares it an attacker",
+    async (page) => {
+        await page.clock.runFor(2000);
+        // Not far enough: it goes back to its place.
+        await drag(page, attacker, { by: { x: 0, y: -20 } });
+        assert.deepEqual(
+            await settled(page, 1),
+            [],
+            "a nudge declares nothing",
+        );
+        await page.clock.runFor(2000);
+        await drag(page, attacker, { by: { x: 0, y: -150 } });
+        assert.deepEqual(await settled(page, 1), [attackIndex], "attacks");
+    },
+    attackRun,
+);
+
+await check(
+    "clicking a creature that may attack declares it",
+    async (page) => {
+        await page.clock.runFor(2000);
+        assert.ok(
+            await page.$(`${attacker} .card-target`),
+            "the creature that may attack glows",
+        );
+        await page.click(attacker);
+        assert.deepEqual(await settled(page, 1), [attackIndex]);
+    },
+    attackRun,
+);
+
+await check(
+    "the turn button finishes the attack declaration",
+    async (page) => {
+        await page.getByRole("button", { name: "No Attacks" }).click();
+        const done = attackDecision.candidates.findIndex(
+            (c) => c.option.kind === "done",
+        );
+        assert.deepEqual(await settled(page, 1), [done]);
+    },
+    attackRun,
+);
+
+// The block declaration: the blocker the stand-in declared, and the attackers it may block.
+const blockViews = await load("combat-block");
+const [blockBefore, blockAfter] = blockViews.slice(-2);
+const blockerSlot = blockAfter.objects.find(
+    (o) => o.controller === "you" && o.combat?.kind === "blocking",
+).slot;
+const blockIndex = blockBefore.status.decision.candidates.findIndex(
+    (c) => c.option.kind === "block" && c.option.slot === blockerSlot,
+);
+assert.ok(blockIndex >= 0, "the block fixture declares a blocker");
+const blockTargets = blockAfter.status.decision.candidates;
+const blocked = blockTargets.length - 1;
+const blocker = `[data-slot="${blockerSlot}"]`;
+const blockedCard = `[data-slot="${blockTargets[blocked].option.slot}"]`;
+const blockRun = {
+    fixture: "combat-block",
+    at: blockViews.length - 1,
+    ready: blocker,
+};
+
+await check(
+    "dragging a blocker onto an attacker blocks that attacker",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await drag(page, blocker, { to: blockedCard });
+        assert.deepEqual(
+            await settled(page, 2),
+            [blockIndex, blocked],
+            "declared the blocker, then picked the attacker it was dropped on",
+        );
+    },
+    blockRun,
+);
+
+await check(
+    "clicking a blocker, then an attacker, blocks it",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.click(blocker);
+        assert.deepEqual(await settled(page, 1), [blockIndex]);
+        await page.clock.runFor(2000);
+        assert.ok(
+            await page.$(`${blockedCard} .card-target`),
+            "the attackers it may block glow",
+        );
+        await page.click(blockedCard);
+        assert.deepEqual(await settled(page, 2), [blockIndex, blocked]);
+    },
+    blockRun,
 );
 
 await browser.close();

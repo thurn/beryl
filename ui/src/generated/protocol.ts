@@ -133,7 +133,16 @@ export type StackItem = { "kind": "spell", slot: number, targets: Array<TargetRe
 /**
  * The announced value of X.
  */
-x: number, } | { "kind": "ability", source: number | null, ability: number, granted: boolean, name: string, controller: Side, targets: Array<TargetRef>, 
+x: number, } | { "kind": "ability", source: number | null, ability: number, granted: boolean, name: string, 
+/**
+ * A triggered ability rather than an activated one.
+ */
+triggered: boolean, 
+/**
+ * How many abilities of its kind (triggered, or activated) come before it in its
+ * list: the face's text says them in that order, so the UI finds its paragraph.
+ */
+nth: number, controller: Side, targets: Array<TargetRef>, 
 /**
  * The announced value of X.
  */

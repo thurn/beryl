@@ -66,6 +66,8 @@ export interface ArrowSpec {
   toSide?: Side;
   /** How far the curve bows, as a fraction of its length; negative bows the other way. */
   bend?: number;
+  /** Without `bend`: which way on the screen the curve bows, whichever way it runs. */
+  bow?: "up" | "down";
   /** The curve's heading out of its start and into its end, as handle vectors in pixels; given
    * both, they replace `bend`. */
   leave?: Vector;
@@ -131,7 +133,9 @@ function curve(
     };
   }
   const [dx, dy] = [end[0] - start[0], end[1] - start[1]];
-  const bend = a.bend ?? 0.25;
+  const bend =
+    a.bend ??
+    (a.bow ? (a.bow === "up" ? 0.25 : -0.25) * (dx < 0 ? -1 : 1) : 0.25);
   // The control point sits off the chord's midpoint, along its normal.
   const c: Vector = [
     (start[0] + end[0]) / 2 + dy * bend,
@@ -144,14 +148,17 @@ function curve(
 }
 
 /** Draws arrows between elements (by id) over its parent, which must be positioned. They are
- * measured after layout and again whenever the parent resizes. `scale` thins lines, heads and
- * dots for small cards. */
+ * measured after layout and again whenever the parent resizes, or, to `follow` elements that
+ * move (cards gliding to their places), on every animation frame. `scale` thins lines, heads
+ * and dots for small cards. */
 export function Arrows({
   arrows,
   scale = 1,
+  follow = false,
 }: {
   arrows: ArrowSpec[];
   scale?: number;
+  follow?: boolean;
 }) {
   const svg = useRef<SVGSVGElement>(null);
   const [drawn, setDrawn] = useState<Drawn[]>([]);
@@ -163,43 +170,57 @@ export function Arrows({
     const measure = () => {
       const origin = root.getBoundingClientRect();
       const scale = root.offsetWidth ? origin.width / root.offsetWidth : 1;
-      setDrawn(
-        arrows.flatMap((a) => {
-          const from = document.getElementById(a.from);
-          const to = document.getElementById(a.to);
-          if (!from || !to) return [];
-          const start = anchor(
-            from.getBoundingClientRect(),
-            origin,
-            scale,
-            a.fromSide ?? "right",
-          );
-          const end = anchor(
-            to.getBoundingClientRect(),
-            origin,
-            scale,
-            a.toSide ?? "left",
-          );
-          return [
-            {
-              key: `${a.from}-${a.to}`,
-              ...curve(a, start, end),
-              tone: a.tone,
-              start,
-              end,
-              startMark: a.start ?? "dot",
-              endMark: a.end ?? "head",
-              fine: a.fine ?? false,
-            },
-          ];
-        }),
+      const next = arrows.flatMap((a) => {
+        const from = document.getElementById(a.from);
+        const to = document.getElementById(a.to);
+        if (!from || !to) return [];
+        const start = anchor(
+          from.getBoundingClientRect(),
+          origin,
+          scale,
+          a.fromSide ?? "right",
+        );
+        const end = anchor(
+          to.getBoundingClientRect(),
+          origin,
+          scale,
+          a.toSide ?? "left",
+        );
+        return [
+          {
+            key: `${a.from}-${a.to}`,
+            ...curve(a, start, end),
+            tone: a.tone,
+            start,
+            end,
+            startMark: a.start ?? "dot",
+            endMark: a.end ?? "head",
+            fine: a.fine ?? false,
+          },
+        ];
+      });
+      // Unchanged, as on most frames when following, it keeps the drawn arrows.
+      setDrawn((last) =>
+        last.length === next.length &&
+        last.every((l, i) => l.key === next[i]!.key && l.d === next[i]!.d)
+          ? last
+          : next,
       );
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(root);
-    return () => observer.disconnect();
-  }, [arrows]);
+    let frame = 0;
+    const tick = () => {
+      measure();
+      frame = requestAnimationFrame(tick);
+    };
+    if (follow && arrows.length > 0) frame = requestAnimationFrame(tick);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, [arrows, follow]);
 
   return (
     <svg
