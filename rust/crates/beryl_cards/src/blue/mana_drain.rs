@@ -8,8 +8,8 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
-use beryl_engine::{TurnStep, Zone};
-use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
+use beryl_engine::{DecisionKind, TurnStep, Zone};
+use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
 
@@ -59,51 +59,104 @@ fn add_colorless(ctx: &mut EffectCtx) -> Flow {
 /// P0 counters P1's Timetwister (mana value 3) in P1's precombat main phase. The mana waits
 /// for P0's own next main phase: not P1's postcombat main, but P0's precombat main of turn 3,
 /// where the delayed trigger goes on the stack as the phase begins.
-pub const SCENARIOS: &[Scenario] = &[Scenario::new(
-    "Mana Drain: the countered spell's mana value at the caster's next main phase",
-)
-.at(2, P1, TurnStep::PrecombatMain)
-.battlefield(
-    P0,
-    &[Permanent::new(names::ISLAND), Permanent::new(names::ISLAND)],
-)
-.hand(P0, &[names::MANA_DRAIN])
-.library(P0, &[names::PLAINS])
-.battlefield(
-    P1,
-    &[
-        Permanent::new(names::ISLAND),
-        Permanent::new(names::ISLAND),
-        Permanent::new(names::ISLAND),
-    ],
-)
-.hand(P1, &[names::TIMETWISTER])
-.actions(&[
-    Action::cast(P1, names::TIMETWISTER),
-    Action::cast(P0, names::MANA_DRAIN),
-    Action::assert(Assertion::Count {
-        player: P1,
-        zone: Zone::Graveyard,
-        card: Some(names::TIMETWISTER),
-        count: 1,
-    }),
-    Action::AdvanceTo {
-        turn: 2,
-        step: TurnStep::PostcombatMain,
-    },
-    Action::assert(Assertion::Mana {
-        player: P0,
-        color: Color::Colorless,
-        amount: 0,
-    }),
-    Action::AdvanceTo {
-        turn: 3,
-        step: TurnStep::PrecombatMain,
-    },
-    Action::pass(P0),
-    Action::assert(Assertion::Mana {
-        player: P0,
-        color: Color::Colorless,
-        amount: 3,
-    }),
-])];
+///
+/// Cast in P0's own precombat main phase, against the Mana Tithe P1 aims at P0's Mana Crypt,
+/// the next main phase is the postcombat main of the same turn. The Plains in P0's hand
+/// keeps P0's priority a decision there.
+pub const SCENARIOS: &[Scenario] = &[
+    Scenario::new("Mana Drain: the countered spell's mana value at the caster's next main phase")
+        .at(2, P1, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[Permanent::new(names::ISLAND), Permanent::new(names::ISLAND)],
+        )
+        .hand(P0, &[names::MANA_DRAIN])
+        .library(P0, &[names::PLAINS])
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(names::ISLAND),
+                Permanent::new(names::ISLAND),
+                Permanent::new(names::ISLAND),
+            ],
+        )
+        .hand(P1, &[names::TIMETWISTER])
+        .actions(&[
+            Action::cast(P1, names::TIMETWISTER),
+            Action::cast(P0, names::MANA_DRAIN),
+            Action::assert(Assertion::Count {
+                player: P1,
+                zone: Zone::Graveyard,
+                card: Some(names::TIMETWISTER),
+                count: 1,
+            }),
+            Action::AdvanceTo {
+                turn: 2,
+                step: TurnStep::PostcombatMain,
+            },
+            Action::assert(Assertion::Mana {
+                player: P0,
+                color: Color::Colorless,
+                amount: 0,
+            }),
+            Action::AdvanceTo {
+                turn: 3,
+                step: TurnStep::PrecombatMain,
+            },
+            Action::pass(P0),
+            Action::assert(Assertion::Mana {
+                player: P0,
+                color: Color::Colorless,
+                amount: 3,
+            }),
+        ]),
+    Scenario::new("Mana Drain on the caster's own turn: mana at that turn's postcombat main")
+        .battlefield(
+            P0,
+            &[Permanent::new(names::ISLAND), Permanent::new(names::ISLAND)],
+        )
+        .hand(P0, &[names::MANA_CRYPT, names::MANA_DRAIN, names::PLAINS])
+        .battlefield(P1, &[Permanent::new(names::PLAINS)])
+        .hand(P1, &[names::MANA_TITHE])
+        .library(P1, &[names::ISLAND])
+        .actions(&[
+            Action::cast(P0, names::MANA_CRYPT),
+            Action::pass(P0),
+            Action::cast(P1, names::MANA_TITHE),
+            Action::cast(P0, names::MANA_DRAIN),
+            Action::answer(
+                P0,
+                DecisionKind::Target,
+                Pick::Card {
+                    card: names::MANA_TITHE,
+                },
+            ),
+            Action::assert(Assertion::Count {
+                player: P1,
+                zone: Zone::Graveyard,
+                card: Some(names::MANA_TITHE),
+                count: 1,
+            }),
+            Action::assert(Assertion::Count {
+                player: P0,
+                zone: Zone::Battlefield,
+                card: Some(names::MANA_CRYPT),
+                count: 1,
+            }),
+            Action::assert(Assertion::Mana {
+                player: P0,
+                color: Color::Colorless,
+                amount: 0,
+            }),
+            Action::AdvanceTo {
+                turn: 1,
+                step: TurnStep::PostcombatMain,
+            },
+            Action::pass(P0),
+            Action::assert(Assertion::Mana {
+                player: P0,
+                color: Color::Colorless,
+                amount: 1,
+            }),
+        ]),
+];
