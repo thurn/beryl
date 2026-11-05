@@ -371,6 +371,17 @@
   );
   box-shadow: 0 0 5px 2px rgb(150 85 30 / 35%);
 }
+.metal-gold::after {
+  content: "";
+  position: absolute;
+  inset: -4px 36%;
+  background: radial-gradient(
+    closest-side,
+    rgb(255 190 110 / 75%),
+    rgb(230 120 40 / 30%) 60%,
+    transparent
+  );
+}
 .metal-silver {
   background: linear-gradient(
     90deg,
