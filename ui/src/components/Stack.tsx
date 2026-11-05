@@ -69,20 +69,28 @@ interface Drawn {
   link: boolean;
 }
 
-function anchor(rect: DOMRect, origin: DOMRect, side: Side): [number, number] {
-  const x = rect.left - origin.left;
-  const y = rect.top - origin.top;
+/** A point on `rect`'s side in the parent's own coordinates: client rects are in screen pixels,
+ * which differ by `scale` inside a scaled stage. */
+function anchor(
+  rect: DOMRect,
+  origin: DOMRect,
+  scale: number,
+  side: Side,
+): [number, number] {
+  const x = (rect.left - origin.left) / scale;
+  const y = (rect.top - origin.top) / scale;
+  const [w, h] = [rect.width / scale, rect.height / scale];
   switch (side) {
     case "left":
-      return [x, y + rect.height / 2];
+      return [x, y + h / 2];
     case "right":
-      return [x + rect.width, y + rect.height / 2];
+      return [x + w, y + h / 2];
     case "top":
-      return [x + rect.width / 2, y];
+      return [x + w / 2, y];
     case "bottom":
-      return [x + rect.width / 2, y + rect.height];
+      return [x + w / 2, y + h];
     case "center":
-      return [x + rect.width / 2, y + rect.height / 2];
+      return [x + w / 2, y + h / 2];
   }
 }
 
@@ -98,6 +106,7 @@ export function Arrows({ arrows }: { arrows: ArrowSpec[] }) {
     if (!root) return;
     const measure = () => {
       const origin = root.getBoundingClientRect();
+      const scale = root.offsetWidth ? origin.width / root.offsetWidth : 1;
       setDrawn(
         arrows.flatMap((a) => {
           const from = document.getElementById(a.from);
@@ -106,11 +115,13 @@ export function Arrows({ arrows }: { arrows: ArrowSpec[] }) {
           const start = anchor(
             from.getBoundingClientRect(),
             origin,
+            scale,
             a.fromSide ?? "right",
           );
           const end = anchor(
             to.getBoundingClientRect(),
             origin,
+            scale,
             a.toSide ?? "left",
           );
           const [dx, dy] = [end[0] - start[0], end[1] - start[1]];
