@@ -288,24 +288,32 @@ impl<'a> EffectCtx<'a> {
         n: u8,
     ) -> Result<Bitboard, Pause> {
         let mut chosen = Bitboard::EMPTY;
-        while chosen.count() < u32::from(n) {
-            let left = crate::engine::collapse(self.state, candidates & !chosen);
-            if left.is_empty() {
-                break;
-            }
-            let mut opts: Fixed<Opt, 64> = Fixed::new();
-            for o in core::iter::once(Opt::Done).chain(left.iter().map(Opt::Object)) {
-                if opts.push(o).is_err() {
-                    self.full = true;
-                    return Err(Pause);
-                }
-            }
-            match self.ask_options(player, DecisionKind::ChooseUpTo, opts.as_slice())? {
-                Opt::Object(slot) => chosen.insert(slot),
-                _ => break,
+        while chosen.count() < u32::from(n) && !(candidates & !chosen).is_empty() {
+            match self.choose_or_done(player, candidates & !chosen)? {
+                Some(slot) => chosen.insert(slot),
+                None => break,
             }
         }
         Ok(chosen)
+    }
+
+    /// Asks `player` for one more of `candidates`, as an [`Opt::Object`], or [`Opt::Done`].
+    /// Interchangeable candidates are one answer (§7.2).
+    fn choose_or_done(&mut self, player: u8, candidates: Bitboard) -> Result<Option<u8>, Pause> {
+        let mut opts: Fixed<Opt, 64> = Fixed::new();
+        let left = crate::engine::collapse(self.state, candidates);
+        for o in core::iter::once(Opt::Done).chain(left.iter().map(Opt::Object)) {
+            if opts.push(o).is_err() {
+                self.full = true;
+                return Err(Pause);
+            }
+        }
+        Ok(
+            match self.ask_options(player, DecisionKind::ChooseUpTo, opts.as_slice())? {
+                Opt::Object(slot) => Some(slot),
+                _ => None,
+            },
+        )
     }
 
     /// Asks `player` to choose one of `candidates`, which must not be empty.
@@ -693,6 +701,95 @@ impl<'a> EffectCtx<'a> {
             zone::rebind(self.state, moved.as_slice(), &mut rng);
             self.state.rng.other = rng;
         }
+    }
+
+    /// Puts a card in a library on the bottom of that library, as Jace, the Mind Sculptor's
+    /// "You may put that card on the bottom of that player's library." It stays in the
+    /// library, so it is still the same object.
+    pub fn put_library_card_on_bottom(&mut self, object: ObjectRef) {
+        if self.state.is_current(object) && self.state.object(object.slot).zone == Zone::Library {
+            let r = zone::reorder_library(self.state, object.slot, Place::Bottom);
+            self.check(r);
+        }
+    }
+
+    /// `player` scries `n`
+    /// ([CR 701.22a](https://yawgatog.com/resources/magic-rules/#R70122a)): "To 'scry N' means
+    /// to look at the top N cards of your library, then put any number of them on the bottom
+    /// of your library in any order and the rest on top of your library in any order."
+    ///
+    /// The cards for the bottom are chosen one at a time, each going under the ones before,
+    /// until the player is done; then those left are chosen one at a time from the top down.
+    /// Every arrangement is one sequence of answers. [CR 701.22b](https://yawgatog.com/resources/magic-rules/#R70122b):
+    /// "If a player is instructed to scry 0, no scry event occurs."
+    pub fn scry(&mut self, player: u8, n: u8) -> Flow {
+        let mut left = self.top_of_library(player, n);
+        self.look_at(player, left);
+        while !left.is_empty() {
+            let Some(slot) = self.choose_or_done(player, left)? else {
+                break;
+            };
+            let r = zone::reorder_library(self.state, slot, Place::Bottom);
+            self.check(r);
+            left.remove(slot);
+        }
+        let mut order: Fixed<u8, 60> = Fixed::new();
+        while left.count() > 1 {
+            let slot = self.choose_object(player, left)?;
+            left.remove(slot);
+            let _ = order.push(slot);
+        }
+        if let Some(slot) = left.first() {
+            let _ = order.push(slot);
+        }
+        for &slot in order.iter().rev() {
+            let r = zone::reorder_library(self.state, slot, Place::Top);
+            self.check(r);
+        }
+        Ok(())
+    }
+
+    /// `player` mills `n` cards
+    /// ([CR 701.17a](https://yawgatog.com/resources/magic-rules/#R70117a)): "For a player to
+    /// mill a number of cards, that player puts that many cards from the top of their library
+    /// into their graveyard." [CR 701.17b](https://yawgatog.com/resources/magic-rules/#R70117b):
+    /// "A player can't mill a number of cards greater than the number of cards in their
+    /// library."
+    pub fn mill(&mut self, player: u8, n: u8) {
+        let top = self.top_of_library(player, n);
+        self.move_all(top, Zone::Graveyard, Reason::Effect);
+    }
+
+    /// Exiles a permanent, then returns it to the battlefield transformed under its owner's
+    /// control, as Jace, Vryn's Prodigy does. It returns as a new object
+    /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)) with its back face up
+    /// ([CR 712.14a](https://yawgatog.com/resources/magic-rules/#R71214a)): "If a spell or
+    /// ability puts a double-faced card onto the battlefield 'transformed' or 'converted,' it
+    /// enters the battlefield with its back face up." If it already left the battlefield, it
+    /// isn't exiled, so it doesn't return.
+    pub fn exile_and_return_transformed(&mut self, object: ObjectRef) {
+        if !self.on_battlefield(object) {
+            return;
+        }
+        self.move_to(object, Zone::Exile, Reason::Exile);
+        let o = *self.state.object(object.slot);
+        if o.zone != Zone::Exile {
+            return;
+        }
+        let r = event::move_batch(
+            self.state,
+            self.table,
+            self.sink,
+            Bitboard::single(object.slot),
+            Zone::Battlefield,
+            Reason::Effect,
+            Entry {
+                controller: Some(o.owner),
+                face: 1,
+                ..Entry::default()
+            },
+        );
+        self.check(r);
     }
 
     /// Destroys a permanent ([CR 701.8a](https://yawgatog.com/resources/magic-rules/#R7018a)):

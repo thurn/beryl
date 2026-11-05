@@ -399,10 +399,10 @@ static RECONFIG: CardDef = CardDef {
             Ability::statik(LayerSpec {
                 affected: Affected::Enchanted,
                 condition: StaticCondition::Always,
-                modification: Modification::Grant(3),
+                modification: Modification::Grant(0),
             }),
-            CREW,
         ],
+        grants: &[CREW],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -1069,7 +1069,7 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     assert_eq!(Types(d.types), Types::ARTIFACT);
     assert!(crate::card::Subtypes(d.subtypes).contains(Subtype::Vehicle));
     assert_eq!(d.granted[0].card, s.object(aura).card);
-    let granted = &t.def(d.granted[0].card).front().abilities[usize::from(d.granted[0].ability)];
+    let granted = &t.def(d.granted[0].card).front().grants[usize::from(d.granted[0].ability)];
     assert_eq!(granted.kind, AbilityKind::Activated);
     // A land loses its land types with its land type (CR 205.1a), and keeps the Vehicle.
     let land = put(&t, &mut s, &mut x, p, "Test Land");

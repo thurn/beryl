@@ -12,8 +12,8 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, CastingOption, Face, Keywords, ManaCost, Rule, TargetKind, TargetSpec,
-    Timing, Types,
+    Ability, AbilityKind, CastingOption, Face, GRANTED, Keywords, ManaCost, Rule, TargetKind,
+    TargetSpec, Timing, Types,
 };
 use crate::decision::{Candidates, Decision, DecisionKind, Opt};
 use crate::engine::collapse;
@@ -41,8 +41,28 @@ pub(crate) fn entry_ability(t: &GameTable, entry: &StackEntry) -> Option<&'stati
     if entry.is_spell() {
         face.spell_ability()
     } else {
-        Some(&face.abilities[usize::from(entry.ability)])
+        Some(face.ability(entry.ability))
     }
+}
+
+/// The ability of a stack entry that is an ability, by its card, face and index.
+fn entry_ability_of(t: &GameTable, entry: &StackEntry) -> &'static Ability {
+    t.def(entry.card).faces[usize::from(entry.face)].ability(entry.ability)
+}
+
+/// The card, face and ability index a stack entry records for activating ability `index` of
+/// the permanent in `slot`: its own, or, with the [`GRANTED`] bit, the `k`th ability granted
+/// to it, which is printed on the granting card (§9).
+fn activated(s: &State, slot: u8, index: u8) -> Option<(u8, u8, u8)> {
+    let o = s.object(slot);
+    if index & GRANTED == 0 {
+        return Some((o.card, o.face, index));
+    }
+    if o.zone != Zone::Battlefield {
+        return None;
+    }
+    let granted = s.derived(slot).granted[usize::from(index & !GRANTED)];
+    (granted.card != NONE).then_some((granted.card, 0, GRANTED | granted.ability))
 }
 
 /// Whether `player` may cast a sorcery now
@@ -209,7 +229,8 @@ fn in_zone(s: &State, zone: Zone) -> Bitboard {
 /// ([CR 115.5](https://yawgatog.com/resources/magic-rules/#R1155)): "A spell or ability on the
 /// stack is an illegal target for itself." Before it is cast it is not yet on the stack, but
 /// it will have left the zone it is in when its targets are chosen. `x` is the value of X of
-/// the spell or ability.
+/// the spell or ability. `source` is an ability's source, which "another target" can't
+/// choose.
 fn candidates(
     s: &State,
     t: &GameTable,
@@ -217,6 +238,7 @@ fn candidates(
     you: u8,
     itself: u8,
     x: u8,
+    source: u8,
 ) -> TargetSet {
     let mut within = match spec.kind {
         TargetKind::Player => {
@@ -232,6 +254,9 @@ fn candidates(
     };
     if itself != NONE {
         within.remove(itself);
+    }
+    if spec.other && source != NONE {
+        within.remove(source);
     }
     TargetSet::Objects(spec.filter.select_x(s, t, within, you, x))
 }
@@ -255,12 +280,23 @@ fn targetable(
     you: u8,
     itself: u8,
     x: u8,
+    source: u8,
 ) -> bool {
     ability.is_none_or(|a| {
         a.targets.iter().all(|spec| {
-            spec.optional || candidates(s, t, spec, you, itself, x).count() >= u32::from(spec.count)
+            spec.optional
+                || candidates(s, t, spec, you, itself, x, source).count() >= u32::from(spec.count)
         })
     })
+}
+
+/// The slot of an entry's ability source, or [`NONE`] for a spell.
+fn source_of(entry: &StackEntry) -> u8 {
+    if entry.is_spell() {
+        NONE
+    } else {
+        entry.object.slot
+    }
 }
 
 /// Whether a chosen target is still legal as its spell or ability resolves
@@ -290,7 +326,7 @@ pub(crate) fn still_legal(
     } else {
         NONE
     };
-    match candidates(s, t, spec, you, itself, entry.x) {
+    match candidates(s, t, spec, you, itself, entry.x, source_of(entry)) {
         TargetSet::Objects(b) => b.contains(r.slot),
         TargetSet::Players(_) => false,
     }
@@ -336,7 +372,7 @@ fn castable(
             (0, free)
         }
     };
-    if !targetable(s, t, face.spell_ability(), player, slot, 0) {
+    if !targetable(s, t, face.spell_ability(), player, slot, 0, NONE) {
         return Ok(false);
     }
     let x = x_range_start(face, costs, free).unwrap_or(0);
@@ -373,6 +409,9 @@ fn cast_options(
     for slot in collapse(s, cards).iter() {
         let def = t.def(s.object(slot).card);
         for (f, face) in def.faces.iter().enumerate() {
+            if face.transformed {
+                continue;
+            }
             for costs in option_masks(face, free) {
                 if castable(s, t, player, slot, f as u8, costs, from)? {
                     out.push(Opt::Cast {
@@ -430,10 +469,12 @@ fn crew_power(s: &State, player: u8, vehicle: u8) -> u32 {
 ///
 /// [CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025): "A player can't begin to
 /// activate an ability that's prohibited from being activated."
-fn activatable(s: &State, t: &GameTable, player: u8, slot: u8, index: usize) -> Result<bool, Full> {
+fn activatable(s: &State, t: &GameTable, player: u8, slot: u8, index: u8) -> Result<bool, Full> {
     let o = s.object(slot);
-    let face = face_of(s, t, slot);
-    let a = &face.abilities[index];
+    let Some((card, face, index)) = activated(s, slot, index) else {
+        return Ok(false);
+    };
+    let a = t.def(card).faces[usize::from(face)].ability(index);
     if a.kind != AbilityKind::Activated {
         return Ok(false);
     }
@@ -463,6 +504,11 @@ fn activatable(s: &State, t: &GameTable, player: u8, slot: u8, index: usize) -> 
     if a.cost.crew > 0 && crew_power(s, player, slot) < u32::from(a.cost.crew) {
         return Ok(false);
     }
+    // CR 118.3: "A player can't pay a cost without having the necessary resources to pay it
+    // fully."
+    if a.cost.remove.is_some_and(|kind| o.counters.get(kind) == 0) {
+        return Ok(false);
+    }
     let sorcery_speed = if let Some(loyalty) = a.cost.loyalty {
         // CR 606.3: "A player may activate a loyalty ability of a permanent they control any
         // time they have priority and the stack is empty during a main phase of their turn,
@@ -486,10 +532,50 @@ fn activatable(s: &State, t: &GameTable, player: u8, slot: u8, index: usize) -> 
     if sorcery_speed && !sorcery_timing(s, player) {
         return Ok(false);
     }
-    if !targetable(s, t, Some(a), player, NONE, 0) {
+    if !targetable(s, t, Some(a), player, NONE, 0, slot) {
         return Ok(false);
     }
-    mana::payable(s, t, player, a.cost.mana.with_x(0), spent_by_cost(slot, a))
+    let cost = a.cost.mana.with_x(0);
+    let spent = spent_by_cost(slot, a);
+    if a.cost.waterbend > 0 {
+        return waterbend_payable(s, t, player, cost, a.cost.waterbend, spent);
+    }
+    mana::payable(s, t, player, cost, spent)
+}
+
+/// Whether `player` can pay `cost`, tapping artifacts and creatures for up to `bendable` of
+/// its generic mana (CR 701.67a), with none of `exclude`. Tapping one that makes no mana now
+/// pays as much as it ever can, so those pay first; a mana source pays at least as much
+/// tapped for mana, so it never needs to.
+fn waterbend_payable(
+    s: &State,
+    t: &GameTable,
+    player: u8,
+    mut cost: ManaCost,
+    bendable: u8,
+    mut exclude: Bitboard,
+) -> Result<bool, Full> {
+    let free = benders(s, player) & !exclude & !mana::sources(s, t, player, exclude)?;
+    for slot in free.iter().take(usize::from(bendable.min(cost.generic))) {
+        cost.generic -= 1;
+        exclude.insert(slot);
+    }
+    mana::payable(s, t, player, cost, exclude)
+}
+
+/// The untapped artifacts and creatures `player` controls, which may each pay for one
+/// generic mana of a waterbend cost (CR 701.67a). Summoning sickness doesn't stop them:
+/// tapping them is a cost of the ability, not an ability of theirs with {T} (CR 302.6).
+fn benders(s: &State, player: u8) -> Bitboard {
+    s.battlefield()
+        .iter()
+        .copied()
+        .filter(|&slot| {
+            s.controller(slot) == player
+                && Types(s.derived(slot).types).intersects(Types::ARTIFACT.union(Types::CREATURE))
+                && !s.object(slot).flags.has(ObjectFlags::TAPPED)
+        })
+        .collect()
 }
 
 /// Appends the abilities `player` can activate now. CR 117.1b: "A player may activate an
@@ -504,11 +590,18 @@ fn activation_options(
     let objects = mine.iter().filter(|&slot| s.controller(slot) == player);
     let objects: Bitboard = objects.collect::<Bitboard>() | s.zone(player, Zone::Hand);
     for slot in collapse(s, objects).iter() {
-        for index in 0..face_of(s, t, slot).abilities.len() {
+        let own = face_of(s, t, slot).abilities.len() as u8;
+        let granted = if s.object(slot).zone == Zone::Battlefield {
+            s.derived(slot).granted.len() as u8
+        } else {
+            0
+        };
+        let indices = (0..own).chain((0..granted).map(|k| GRANTED | k));
+        for index in indices {
             if activatable(s, t, player, slot, index)? {
                 out.push(Opt::Activate {
                     slot,
-                    ability: index as u8,
+                    ability: index,
                 })?;
             }
         }
@@ -583,6 +676,7 @@ pub(crate) fn begin_cast(
         free,
         resolving: resolving.is_some(),
         remaining: ManaCost::NONE,
+        bent: 0,
         triggered: false,
     };
     advance(s, t, sink, c)
@@ -601,8 +695,8 @@ pub(crate) fn begin_activate(
     slot: u8,
     index: u8,
 ) -> Result<(), Full> {
-    let o = *s.object(slot);
-    let a = &face_of(s, t, slot).abilities[usize::from(index)];
+    let (card, face, index) = activated(s, slot, index).expect("an ability offered");
+    let a = t.def(card).faces[usize::from(face)].ability(index);
     if a.is_loyalty() {
         s.object_mut(slot)
             .flags
@@ -612,8 +706,8 @@ pub(crate) fn begin_activate(
         object: s.object_ref(slot),
         controller: player,
         ability: index,
-        card: o.card,
-        face: o.face,
+        card,
+        face,
         ..StackEntry::default()
     })?;
     let c = Casting {
@@ -629,6 +723,7 @@ pub(crate) fn begin_activate(
         free: false,
         resolving: false,
         remaining: ManaCost::NONE,
+        bent: 0,
         triggered: false,
     };
     advance(s, t, sink, c)
@@ -649,7 +744,15 @@ pub(crate) fn target_trigger(s: &mut State, t: &GameTable, sink: &mut Sink) -> R
     if ability.targets.is_empty() {
         return Ok(());
     }
-    if !targetable(s, t, Some(ability), entry.controller, NONE, entry.x) {
+    if !targetable(
+        s,
+        t,
+        Some(ability),
+        entry.controller,
+        NONE,
+        entry.x,
+        entry.object.slot,
+    ) {
         s.stack.pop();
         return Ok(());
     }
@@ -662,6 +765,7 @@ pub(crate) fn target_trigger(s: &mut State, t: &GameTable, sink: &mut Sink) -> R
         free: false,
         resolving: false,
         remaining: ManaCost::NONE,
+        bent: 0,
         triggered: true,
     };
     advance(s, t, sink, c)
@@ -692,10 +796,9 @@ fn total_cost(t: &GameTable, entry: &StackEntry, c: &Casting) -> ManaCost {
     if entry.is_spell() {
         spell_cost(face, entry.costs, entry.x, c.extra, c.free)
     } else {
-        face.abilities[usize::from(entry.ability)]
-            .cost
-            .mana
-            .with_x(entry.x)
+        let mut cost = face.ability(entry.ability).cost.mana.with_x(entry.x);
+        cost.generic -= c.bent;
+        cost
     }
 }
 
@@ -705,15 +808,18 @@ fn spent_by_entry(t: &GameTable, entry: &StackEntry) -> Bitboard {
     if entry.is_spell() {
         return Bitboard::EMPTY;
     }
-    let a = &t.def(entry.card).faces[usize::from(entry.face)].abilities[usize::from(entry.ability)];
-    spent_by_cost(entry.object.slot, a)
+    spent_by_cost(entry.object.slot, entry_ability_of(t, entry))
 }
 
 /// Moves the machine on to its next question, or finishes.
 fn advance(s: &mut State, t: &GameTable, sink: &mut Sink, mut c: Casting) -> Result<(), Full> {
     loop {
         match c.step {
-            CastStep::X | CastStep::Plan | CastStep::Manual | CastStep::Crew => break,
+            CastStep::X
+            | CastStep::Plan
+            | CastStep::Manual
+            | CastStep::Crew
+            | CastStep::Waterbend => break,
             CastStep::TargetCount | CastStep::Target => {
                 let entry = top(s);
                 let specs = specs(t, &entry);
@@ -766,8 +872,7 @@ fn begin_payment(
 ) -> Result<(), Full> {
     let entry = top(s);
     if !entry.is_spell() {
-        let a =
-            &t.def(entry.card).faces[usize::from(entry.face)].abilities[usize::from(entry.ability)];
+        let a = entry_ability_of(t, &entry);
         let source = entry.object;
         if a.cost.tap {
             event::set_tapped(s, t, sink, source, true)?;
@@ -788,7 +893,54 @@ fn begin_payment(
         if a.cost.discard_self {
             event::move_one(s, t, sink, source.slot, Zone::Graveyard, Reason::Discard)?;
         }
+        if let Some(kind) = a.cost.remove {
+            event::remove_counters(s, t, sink, source, kind, 1)?;
+        }
+        if a.cost.waterbend > 0 {
+            c.left = a.cost.waterbend.min(total_cost(t, &entry, &c).generic);
+            if c.left > 0 && !waterbend_options(s, t, &c)?.is_empty() {
+                c.step = CastStep::Waterbend;
+                s.pending = Pending::Casting(c);
+                return Ok(());
+            }
+        }
     }
+    pay_mana(s, t, sink, c)
+}
+
+/// The answers of a waterbend step (CR 701.67a): tap one more artifact or creature, while the
+/// rest stays payable, or pay what is left with mana, when it can be. Interchangeable ones are
+/// one answer (§7.2). Empty when no artifact or creature can help.
+fn waterbend_options(s: &State, t: &GameTable, c: &Casting) -> Result<Fixed<Opt, 64>, Full> {
+    let mut out = Fixed::new();
+    let entry = top(s);
+    let cost = total_cost(t, &entry, c);
+    let mut objects = Fixed::<Opt, 64>::new();
+    if c.left > 0 {
+        let mut fewer = cost;
+        fewer.generic -= 1;
+        for slot in collapse(s, benders(s, c.player)).iter() {
+            let rest = waterbend_payable(s, t, c.player, fewer, c.left - 1, Bitboard::single(slot));
+            if rest? {
+                objects.push(Opt::Object(slot))?;
+            }
+        }
+    }
+    if objects.is_empty() {
+        return Ok(out);
+    }
+    if mana::payable(s, t, c.player, cost, Bitboard::EMPTY)? {
+        out.push(Opt::Done)?;
+    }
+    for &o in &objects {
+        out.push(o)?;
+    }
+    Ok(out)
+}
+
+/// Pays the mana of the total cost: by plan, or one source at a time under manual payment.
+fn pay_mana(s: &mut State, t: &GameTable, sink: &mut Sink, mut c: Casting) -> Result<(), Full> {
+    let entry = top(s);
     let cost = total_cost(t, &entry, &c);
     match s.profile.payment {
         Payment::Manual => {
@@ -881,7 +1033,7 @@ fn target_options(s: &State, t: &GameTable, c: &Casting) -> TargetSet {
     } else {
         NONE
     };
-    match candidates(s, t, spec, c.player, itself, entry.x) {
+    match candidates(s, t, spec, c.player, itself, entry.x, source_of(&entry)) {
         TargetSet::Objects(mut b) => {
             for target in entry.targets.iter().filter(|x| x.spec == c.spec) {
                 if let Some(r) = target.as_object() {
@@ -962,6 +1114,7 @@ pub(crate) fn decision(s: &State, t: &GameTable, c: &Casting) -> Result<Decision
             DecisionKind::ManaPayment,
             mana::manual_options(s, t, c.player, c.remaining, Bitboard::EMPTY)?,
         ),
+        CastStep::Waterbend => options(DecisionKind::Waterbend, waterbend_options(s, t, c)?),
     })
 }
 
@@ -1026,6 +1179,21 @@ pub(crate) fn perform(
             if c.left == 0 {
                 return begin_payment(s, t, sink, c);
             }
+        }
+        CastStep::Waterbend => {
+            // CR 701.67a: "you may tap an untapped artifact or creature you control rather
+            // than pay that mana."
+            let Some(Opt::Object(slot)) = option else {
+                return pay_mana(s, t, sink, c);
+            };
+            event::set_tapped(s, t, sink, s.object_ref(slot), true)?;
+            c.bent += 1;
+            c.left -= 1;
+            if waterbend_options(s, t, &c)?.is_empty() {
+                return pay_mana(s, t, sink, c);
+            }
+            s.pending = Pending::Casting(c);
+            return Ok(());
         }
         CastStep::Manual => {
             let option = option.expect("a manual payment");

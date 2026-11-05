@@ -64,6 +64,16 @@ pub struct Face {
     /// The alternative and additional costs it may be cast with, in the order its text lists
     /// them. A stack entry records the ones paid as a bitmask over this list.
     pub casting: &'static [CastingOption],
+    /// The back face of a transforming double-faced card, which is never cast: "A
+    /// double-faced spell is cast with its front face up by default"
+    /// ([CR 712.11](https://yawgatog.com/resources/magic-rules/#R71211)). Only a modal
+    /// double-faced card lets its caster choose the face
+    /// ([CR 712.11b](https://yawgatog.com/resources/magic-rules/#R71211b)).
+    pub transformed: bool,
+    /// Abilities this face grants to another object rather than has itself, such as the crew
+    /// ability of Swift Reconfiguration's "Enchanted permanent is a Vehicle artifact with crew
+    /// 5". [`Modification::Grant`] names one by its index here.
+    pub grants: &'static [Ability],
 }
 
 impl Face {
@@ -97,8 +107,25 @@ impl Face {
         keywords: Keywords::NONE,
         abilities: &[],
         casting: &[],
+        transformed: false,
+        grants: &[],
     };
+
+    /// The ability at `index`: one of this face's own, or, with the [`GRANTED`] bit, one it
+    /// grants.
+    pub fn ability(&'static self, index: u8) -> &'static Ability {
+        if index & GRANTED == 0 {
+            &self.abilities[usize::from(index)]
+        } else {
+            &self.grants[usize::from(index & !GRANTED)]
+        }
+    }
 }
+
+/// The bit of an ability index that names a granted ability: in a stack entry, an index into
+/// its card face's [`Face::grants`]; in [`crate::decision::Opt::Activate`], an index into the
+/// permanent's [`crate::state::Derived::granted`].
+pub const GRANTED: u8 = 0x80;
 
 /// A mana cost: generic mana plus colored and colorless symbols, and any {X}.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -337,13 +364,18 @@ pub enum Subtype {
     Otter,
     Pirate,
     Rogue,
+    Samurai,
     Siren,
     Sphinx,
+    Spirit,
     Wizard,
+    // Planeswalker types ([CR 205.3j](https://yawgatog.com/resources/magic-rules/#R2053j)).
+    Jace,
+    Teferi,
 }
 
 impl Subtype {
-    pub const ALL: [Subtype; 22] = [
+    pub const ALL: [Subtype; 26] = [
         Subtype::Plains,
         Subtype::Island,
         Subtype::Swamp,
@@ -363,9 +395,13 @@ impl Subtype {
         Subtype::Otter,
         Subtype::Pirate,
         Subtype::Rogue,
+        Subtype::Samurai,
         Subtype::Siren,
         Subtype::Sphinx,
+        Subtype::Spirit,
         Subtype::Wizard,
+        Subtype::Jace,
+        Subtype::Teferi,
     ];
 
     /// The card type this subtype belongs to (CR 205.3).
@@ -389,9 +425,12 @@ impl Subtype {
             | Subtype::Otter
             | Subtype::Pirate
             | Subtype::Rogue
+            | Subtype::Samurai
             | Subtype::Siren
             | Subtype::Sphinx
+            | Subtype::Spirit
             | Subtype::Wizard => Types::CREATURE,
+            Subtype::Jace | Subtype::Teferi => Types::PLANESWALKER,
         }
     }
 }
@@ -473,6 +512,14 @@ pub struct Cost {
     /// 'Tap any number of other untapped creatures you control with total power N or greater:
     /// This permanent becomes an artifact creature until end of turn.'"
     pub crew: u8,
+    /// "Remove a [kind] counter from this permanent", as Staff of the Storyteller's.
+    pub remove: Option<CounterKind>,
+    /// How much of the generic mana is a waterbend cost's
+    /// ([CR 701.67a](https://yawgatog.com/resources/magic-rules/#R70167a)): "'Waterbend
+    /// [cost]' means 'Pay [cost]. For each generic mana in that cost, you may tap an untapped
+    /// artifact or creature you control rather than pay that mana.'" Only that much may be
+    /// paid by tapping ([CR 701.67b](https://yawgatog.com/resources/magic-rules/#R70167b)).
+    pub waterbend: u8,
 }
 
 impl Cost {
@@ -483,6 +530,8 @@ impl Cost {
         discard_self: false,
         loyalty: None,
         crew: 0,
+        remove: None,
+        waterbend: 0,
     };
     pub const TAP: Cost = Cost {
         tap: true,
@@ -541,6 +590,8 @@ pub struct TargetSpec {
     /// that requires targets may allow zero targets to be chosen."
     pub count: u8,
     pub optional: bool,
+    /// "Other target": not the object whose ability this is.
+    pub other: bool,
 }
 
 impl TargetSpec {
@@ -551,6 +602,7 @@ impl TargetSpec {
             filter,
             count: 1,
             optional: false,
+            other: false,
         }
     }
 
@@ -559,6 +611,15 @@ impl TargetSpec {
         TargetSpec {
             optional: true,
             ..TargetSpec::one(kind, filter)
+        }
+    }
+
+    /// The same spec for "another target": its ability's source can't be chosen.
+    #[must_use]
+    pub const fn other(self) -> TargetSpec {
+        TargetSpec {
+            other: true,
+            ..self
         }
     }
 }
@@ -885,8 +946,8 @@ pub enum Modification {
     AddSubtype(Subtype),
     /// Layer 6: "gains [keywords]".
     AddKeywords(Keywords),
-    /// Layer 6: "has [ability]": the ability at this index on the front face of the effect
-    /// source's card, such as the crew ability Swift Reconfiguration grants.
+    /// Layer 6: "has [ability]": the ability at this index of the effect source's front
+    /// face's [`Face::grants`], such as the crew ability Swift Reconfiguration grants.
     Grant(u8),
     /// Layer 7a: a characteristic-defining ability, "power is equal to the number of
     /// creatures you control" (Adeline).

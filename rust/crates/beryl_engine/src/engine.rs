@@ -423,7 +423,8 @@ fn perform(
         | DecisionKind::CastOffer
         | DecisionKind::YesNo
         | DecisionKind::ChooseObject
-        | DecisionKind::ChooseUpTo => unreachable!("answered through the pending state"),
+        | DecisionKind::ChooseUpTo
+        | DecisionKind::Waterbend => unreachable!("answered through the pending state"),
         DecisionKind::PlayOrDraw => {
             let starting = if option() == Opt::Play {
                 d.player

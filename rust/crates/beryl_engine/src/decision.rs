@@ -90,6 +90,9 @@ pub enum DecisionKind {
     /// One more object, as an [`Opt::Object`], or [`Opt::Done`]: a resolving spell or
     /// ability's choice of up to a number of objects, one at a time.
     ChooseUpTo,
+    /// An artifact or creature to tap for one generic mana of a waterbend cost, as an
+    /// [`Opt::Object`], or [`Opt::Done`] to pay the rest with mana (CR 701.67a).
+    Waterbend,
 }
 
 /// The candidates of a decision. A `Choice(i)` names the `i`th object in ascending slot order,

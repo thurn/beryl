@@ -242,6 +242,20 @@ pub(crate) fn available(
     Ok(sources.units(s.player(player).mana, &[0; CLASSES]))
 }
 
+/// The untapped mana sources `player` controls, but those in `exclude`.
+pub(crate) fn sources(
+    s: &State,
+    t: &GameTable,
+    player: u8,
+    exclude: Bitboard,
+) -> Result<Bitboard, Full> {
+    let sources = Sources::of(s, t, player, exclude)?;
+    Ok(sources
+        .classes()
+        .iter()
+        .fold(Bitboard::EMPTY, |b, c| b | c.members))
+}
+
 /// The payability prefilter: whether `player` can pay `cost` at all.
 pub(crate) fn payable(
     s: &State,

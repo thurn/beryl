@@ -4,7 +4,9 @@
 //! so identities, knowledge and zone membership stay in agreement.
 
 use crate::fixed::Full;
-use crate::state::{MulliganStatus, ObjectFlags, Pending, State, TurnStep, Zone, opponent};
+use crate::state::{
+    CounterKind, MulliganStatus, ObjectFlags, Pending, State, TurnStep, Zone, opponent,
+};
 use crate::zone;
 
 impl State {
@@ -60,6 +62,21 @@ impl State {
                 .set(ObjectFlags::SUMMONING_SICK, false);
         }
         Ok(())
+    }
+
+    /// Sets how many counters of a kind a permanent has, such as a planeswalker's loyalty.
+    pub fn set_counters(&mut self, slot: u8, kind: CounterKind, n: u8) {
+        debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
+        *self.object_mut(slot).counters.get_mut(kind) = n;
+    }
+
+    /// Turns a double-faced permanent so that the face at `face` is up, as one that entered
+    /// transformed has its back face up
+    /// ([CR 712.14a](https://yawgatog.com/resources/magic-rules/#R71214a)).
+    pub fn set_face(&mut self, slot: u8, face: u8) {
+        debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
+        self.object_mut(slot).face = face;
+        self.flags.derived_dirty = true;
     }
 
     /// Taps or untaps a permanent.

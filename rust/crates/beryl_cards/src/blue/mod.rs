@@ -1,4 +1,6 @@
 pub mod island;
+pub mod jace_the_mind_sculptor;
+pub mod jace_vryns_prodigy;
 pub mod malcolm_alluring_scoundrel;
 pub mod mana_drain;
 pub mod sink_into_stupor;

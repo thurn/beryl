@@ -164,6 +164,22 @@ pub(crate) fn draw_n(s: &mut State, player: u8, n: u8) -> Result<(), Full> {
     Ok(())
 }
 
+/// Moves a card within its owner's library to its top or bottom. Not a zone change, so the
+/// card stays the same object and whoever knew it still does: a player who scries or looks
+/// knows where they put each card.
+pub(crate) fn reorder_library(s: &mut State, slot: u8, place: Place) -> Result<(), Full> {
+    let library = &mut s.zones.library[usize::from(s.objects[usize::from(slot)].owner)];
+    let i = library
+        .position(slot)
+        .expect("a card in its owner's library");
+    library.remove(i);
+    match place {
+        Place::Top => library.push(slot),
+        Place::Bottom => library.insert(0, slot),
+        Place::UnderTop(n) => library.insert(library.len().saturating_sub(usize::from(n)), slot),
+    }
+}
+
 /// Shuffles a library.
 ///
 /// [CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a): "To shuffle a library

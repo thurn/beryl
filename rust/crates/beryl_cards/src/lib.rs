@@ -39,6 +39,13 @@ pub static CARDS: CardTable = CardTable::new(&[
     &multicolor::sparas_headquarters::CARD,
     &colorless::mana_crypt::CARD,
     &colorless::strip_mine::CARD,
+    &azorius::teferi_time_raveler::CARD,
+    &white::the_wandering_emperor::CARD,
+    &blue::jace_the_mind_sculptor::CARD,
+    &blue::jace_vryns_prodigy::CARD,
+    &white::staff_of_the_storyteller::CARD,
+    &white::swift_reconfiguration::CARD,
+    &white::aangs_iceberg::CARD,
 ]);
 
 /// Every card's scenarios (architecture §17.1), by card name.
@@ -86,6 +93,31 @@ pub static SCENARIOS: &[(&str, &[Scenario])] = &[
     ),
     (names::MANA_CRYPT, colorless::mana_crypt::SCENARIOS),
     (names::STRIP_MINE, colorless::strip_mine::SCENARIOS),
+    (
+        names::TEFERI_TIME_RAVELER,
+        azorius::teferi_time_raveler::SCENARIOS,
+    ),
+    (
+        names::THE_WANDERING_EMPEROR,
+        white::the_wandering_emperor::SCENARIOS,
+    ),
+    (
+        names::JACE_THE_MIND_SCULPTOR,
+        blue::jace_the_mind_sculptor::SCENARIOS,
+    ),
+    (
+        names::JACE_VRYNS_PRODIGY,
+        blue::jace_vryns_prodigy::SCENARIOS,
+    ),
+    (
+        names::STAFF_OF_THE_STORYTELLER,
+        white::staff_of_the_storyteller::SCENARIOS,
+    ),
+    (
+        names::SWIFT_RECONFIGURATION,
+        white::swift_reconfiguration::SCENARIOS,
+    ),
+    (names::AANGS_ICEBERG, white::aangs_iceberg::SCENARIOS),
 ];
 
 #[cfg(test)]

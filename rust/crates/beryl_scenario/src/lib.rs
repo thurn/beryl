@@ -62,11 +62,23 @@ pub struct PlayerSetup {
 }
 
 /// A permanent on the battlefield at the start, under its owner's control. It has been there
-/// since its controller's turn began.
+/// since its controller's turn began. A planeswalker has the printed loyalty of its face up
+/// unless `counters` says otherwise.
 #[derive(Clone, Copy, Debug, Serialize)]
 pub struct Permanent {
     pub card: &'static str,
     pub tapped: bool,
+    /// The face up: 1 for a double-faced card that entered transformed.
+    pub face: u8,
+    pub counters: Option<Counters>,
+}
+
+/// Counters of one kind on a permanent at the start.
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct Counters {
+    #[serde(serialize_with = "variant")]
+    pub kind: CounterKind,
+    pub count: u8,
 }
 
 impl Permanent {
@@ -74,6 +86,23 @@ impl Permanent {
         Permanent {
             card,
             tapped: false,
+            face: 0,
+            counters: None,
+        }
+    }
+
+    /// With its back face up, as a double-faced card put onto the battlefield transformed.
+    #[must_use]
+    pub const fn transformed(self) -> Permanent {
+        Permanent { face: 1, ..self }
+    }
+
+    /// With `count` counters of `kind`.
+    #[must_use]
+    pub const fn counters(self, kind: CounterKind, count: u8) -> Permanent {
+        Permanent {
+            counters: Some(Counters { kind, count }),
+            ..self
         }
     }
 
@@ -143,7 +172,7 @@ impl Action {
         Action::answer(player, DecisionKind::Priority, Pick::Pass)
     }
 
-    /// `player` casts `card`'s front face, with none of its casting options.
+    /// `player` casts `card`'s front face at priority, with none of its casting options.
     pub const fn cast(player: u8, card: &'static str) -> Action {
         Action::Cast {
             player,
@@ -153,7 +182,8 @@ impl Action {
         }
     }
 
-    /// `player` activates ability `ability` of `card`.
+    /// `player` activates ability `ability` (an index into the face's abilities) of `card`
+    /// at priority.
     pub const fn activate(player: u8, card: &'static str, ability: u8) -> Action {
         Action::Activate {
             player,
@@ -162,6 +192,12 @@ impl Action {
         }
     }
 
+    /// `player` chooses the card named `card` for a decision of `kind`.
+    pub const fn choose(player: u8, kind: DecisionKind, card: &'static str) -> Action {
+        Action::answer(player, kind, Pick::Card { card })
+    }
+
+    /// `assertion` must hold.
     pub const fn assert(assertion: Assertion) -> Action {
         Action::Assert { assertion }
     }

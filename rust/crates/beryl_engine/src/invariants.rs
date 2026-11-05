@@ -203,8 +203,11 @@ impl State {
 
     fn check_players(&self) -> Result<(), Violation> {
         let t = self.turn;
+        // Both players have passed in succession while the top of the stack resolves, and a
+        // resolution paused for an answer is still resolving (§7.3).
+        let resolving = matches!(self.pending, Pending::Resolving(_));
         check(
-            t.active < 2 && t.priority < 2 && t.passes < 2,
+            t.active < 2 && t.priority < 2 && (t.passes < 2 || (t.passes == 2 && resolving)),
             "a bad turn",
             None,
         )?;

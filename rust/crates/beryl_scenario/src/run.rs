@@ -3,7 +3,7 @@
 use std::fmt;
 
 use beryl_engine::card::Types;
-use beryl_engine::state::{NONE, ObjectFlags};
+use beryl_engine::state::{CounterKind, NONE, ObjectFlags};
 use beryl_engine::{
     Breakpoint, CardTable, Choice, Decision, DecisionKind, GameTable, Opt, Outcome, Profile,
     Replay, Scratch, State, Step, Zone, apply, next,
@@ -86,6 +86,17 @@ fn arrange(t: &GameTable, scenario: &Scenario) -> Result<State, String> {
             let slot = library_slot(&s, t, p, b.card);
             s.place(slot, Zone::Battlefield).map_err(full)?;
             s.set_tapped(slot, b.tapped);
+            s.set_face(slot, b.face);
+            // CR 306.5b: a planeswalker "enters with a number of loyalty counters on it equal
+            // to its printed loyalty number."
+            let printed = t.def(s.object(slot).card).faces[usize::from(b.face)].loyalty;
+            let counters = b
+                .counters
+                .map(|c| (c.kind, c.count))
+                .or(printed.map(|n| (CounterKind::Loyalty, n)));
+            if let Some((kind, n)) = counters {
+                s.set_counters(slot, kind, n);
+            }
         }
         // Top first: the last placed is on top.
         for &name in player.graveyard.iter().rev() {

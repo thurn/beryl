@@ -571,6 +571,9 @@ pub enum CastStep {
     /// Tapping creatures for a crew cost one at a time; `left` is the power still needed
     /// (CR 702.122a).
     Crew,
+    /// Tapping artifacts and creatures for a waterbend cost's generic mana one at a time;
+    /// `left` is the generic mana they may still pay (CR 701.67a).
+    Waterbend,
 }
 
 /// A spell being cast or an ability being activated.
@@ -592,6 +595,9 @@ pub struct Casting {
     pub resolving: bool,
     /// What remains to pay under manual payment.
     pub remaining: ManaCost,
+    /// Generic mana paid by tapping artifacts and creatures for a waterbend cost
+    /// (CR 701.67a).
+    pub bent: u8,
     /// A triggered ability being put on the stack: targets only, no costs and no change of
     /// priority (CR 603.3d).
     pub triggered: bool,
