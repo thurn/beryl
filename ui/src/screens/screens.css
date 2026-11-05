@@ -323,23 +323,24 @@
 .scry-zone {
   position: relative;
   width: 1000px;
-  height: 460px;
+  height: 464px;
   border: 2px solid rgb(242 236 225 / 45%);
   border-radius: 10px;
   background: rgb(0 0 0 / 18%);
 }
 .scry-label {
   position: absolute;
-  bottom: -43px;
+  bottom: -38.5px;
   font-family: var(--font-serif);
   font-style: italic;
-  font-weight: 600;
-  font-size: 28px;
-  letter-spacing: 0.04em;
+  font-weight: 400;
+  font-size: 33px;
+  line-height: 1;
+  color: #fff;
   text-transform: uppercase;
 }
 .scry-bottom {
-  left: 26px;
+  left: 21px;
 }
 .scry-top {
   right: 26px;
@@ -423,7 +424,7 @@
 .opponent-hand {
   position: absolute;
   left: 50%;
-  top: -95px;
+  top: -88px;
   display: flex;
   translate: -50% 0;
 }

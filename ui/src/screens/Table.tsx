@@ -202,7 +202,7 @@ export interface TableBoard {
 }
 
 const CREATURE_WIDTH = 232;
-const LAND_WIDTH = 176;
+const LAND_WIDTH = 190;
 /** Each copy beneath a land stack's top card, as a fraction of the card's width. */
 const LAND_STEP = { x: 0.13, y: 0.025 };
 
@@ -328,21 +328,21 @@ export function TableScene({
           seat="opponent"
         />
       </div>
-      <Lying x={1181} y={13} width={124} squash={0.814}>
+      <Lying x={1174} y={13} width={122} squash={0.85}>
         <Library
           count={opponent.library}
-          width={95}
-          depth={{ x: -29, y: 39 }}
+          width={93}
+          depth={{ x: -29, y: 37 }}
         />
       </Lying>
       {opponent.graveyard.length > 0 && (
-        <Lying x={1333} y={40} width={88} squash={0.82}>
+        <Lying x={1322} y={34} width={88} squash={0.9}>
           <Graveyard
             cards={opponent.graveyard.map((c, i, all) =>
               i === all.length - 1 ? withArt(c, "opponent-graveyard") : c,
             )}
             width={88}
-            depth={{ x: -6, y: 12 }}
+            depth={{ x: 0, y: 6 }}
           />
         </Lying>
       )}
@@ -384,10 +384,10 @@ export function TableScene({
         <LifeOrb life={you.life} active={you.active} />
       </div>
       <Hand cards={you.hand} />
-      <Lying x={151} y={731} width={129} squash={0.875}>
-        <Library count={you.library} width={116} depth={{ x: -13, y: 19 }} />
+      <Lying x={168} y={731} width={116}>
+        <Library count={you.library} width={104} depth={{ x: 12, y: 19 }} />
       </Lying>
-      <div className="hud" style={{ left: 18, top: 812 }}>
+      <div className="hud" style={{ left: 18, top: 814 }}>
         <PlayerBadge name="You" />
       </div>
       <div className="hud turn-controls">

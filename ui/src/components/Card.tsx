@@ -264,8 +264,8 @@ export function Card({
 }
 
 // The combat marks, as in docs/ui_mockups/combat.png: over an attacker a wide gold chevron with
-// light falling from its apex; under a blocker a gold bowl hugging the card's bottom, cusped
-// where the line from its attacker meets it. Arrows anchor to them by `${card id}-mark`.
+// light falling from its apex; under a blocker a gold crescent hugging the card's bottom,
+// notched where the line from its attacker meets it. Arrows anchor to them by `${card id}-mark`.
 function AttackChevron({ id }: { id?: string }) {
   const tent = "M0 17 Q35 13 50 0.5 Q65 13 100 17";
   return (
@@ -278,9 +278,9 @@ function AttackChevron({ id }: { id?: string }) {
     >
       <defs>
         <linearGradient id="chevron-light" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#ffd98a" stopOpacity="0.9" />
-          <stop offset="0.45" stopColor="#f7a53a" stopOpacity="0.4" />
-          <stop offset="1" stopColor="#f0901f" stopOpacity="0" />
+          <stop offset="0" stopColor="#ffe6a6" stopOpacity="1" />
+          <stop offset="0.5" stopColor="#ffb446" stopOpacity="0.55" />
+          <stop offset="1" stopColor="#f0901f" stopOpacity="0.08" />
         </linearGradient>
       </defs>
       <path d={`${tent} Z`} fill="url(#chevron-light)" />
@@ -294,13 +294,20 @@ function BlockArc({ id }: { id?: string }) {
     <svg
       id={id && `${id}-mark`}
       className="combat-marker block-arc"
-      viewBox="0 0 100 23"
+      viewBox="0 0 100 20"
       preserveAspectRatio="none"
       aria-hidden
     >
+      <defs>
+        <linearGradient id="block-gold" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff8dc" />
+          <stop offset="0.7" stopColor="#ffe08e" />
+          <stop offset="1" stopColor="#f7b24a" />
+        </linearGradient>
+      </defs>
       <path
-        className="combat-line"
-        d="M0 0 C0.5 14 14 23 38 23 C44 23 48 21.5 50 19.5 C52 21.5 56 23 62 23 C86 23 99.5 14 100 0"
+        d="M0 0 C1.5 12 22 19.5 50 19.5 C78 19.5 98.5 12 100 0 C97 10 78 16.5 53.5 16.5 L50 12.5 L46.5 16.5 C22 16.5 3 10 0 0 Z"
+        fill="url(#block-gold)"
       />
     </svg>
   );

@@ -213,8 +213,8 @@ export function Arrows({ arrows }: { arrows: ArrowSpec[] }) {
                 <path d={a.d} />
                 {a.endMark === "head" && (
                   <path
-                    className="arrow-head"
-                    d={a.fine ? FINE_HEAD : HEAD}
+                    className={`arrow-head arrow-head-${a.tone}`}
+                    d={a.fine ? FINE_HEAD : HEADS[a.tone]}
                     transform={head}
                   />
                 )}
@@ -246,5 +246,10 @@ function Dot({ at: [x, y] }: { at: Vector }) {
 }
 
 /** An open arrowhead, its tip at the origin, pointing along +x. */
-const HEAD = "M-24 -14 L0 0 L-24 14";
+const HEADS = {
+  /** A filled tip. */
+  gold: "M-17 -9 L2 0 L-17 9 Z",
+  /** Two nested chevrons. */
+  cyan: "M-26 -17 L0 0 L-26 17 M-38 -17 L-12 0 L-38 17",
+} as const;
 const FINE_HEAD = "M-9 -5.5 L0 0 L-9 5.5";

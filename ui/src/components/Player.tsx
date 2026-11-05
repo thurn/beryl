@@ -9,45 +9,62 @@ import { ASPECT, Card, CardBack, type CardFace } from "./Card";
 
 type Point = readonly [number, number];
 
-/** A curved blade `width` thick, cut off square at its tip. */
-function blade(root: Point, control: Point, tip: Point, width: number) {
+/** A curved blade `width` thick at its root, its tip cut square (`tip` = 1) or drawn to a point
+ * (`tip` = 0). */
+function blade(
+  root: Point,
+  control: Point,
+  tip: Point,
+  width: number,
+  end = 1,
+) {
   const [dx, dy] = [tip[0] - root[0], tip[1] - root[1]];
   const length = Math.hypot(dx, dy);
   const [nx, ny] = [(-dy / length) * (width / 2), (dx / length) * (width / 2)];
   const p = (x: number, y: number) => `${x.toFixed(1)} ${y.toFixed(1)}`;
   return (
     `M${p(root[0] + nx, root[1] + ny)} Q${p(control[0] + nx, control[1] + ny)} ` +
-    `${p(tip[0] + nx * 0.6, tip[1] + ny * 0.6)} L${p(tip[0] - nx * 0.5, tip[1] - ny * 0.5)} ` +
+    `${p(tip[0] + nx * 0.6 * end, tip[1] + ny * 0.6 * end)} ` +
+    `L${p(tip[0] - nx * 0.5 * end, tip[1] - ny * 0.5 * end)} ` +
     `Q${p(control[0] - nx, control[1] - ny)} ${p(root[0] - nx, root[1] - ny)} Z`
   );
 }
 
-/** One side's blades (the left; the right is mirrored), front to back. */
+/** One side's blades (the left; the right is mirrored): dark struts behind light blades, and
+ * copper glints where the blades meet the oval. */
 const BLADES = {
   you: {
     light: [
       blade([-44, -3], [-86, 3], [-125, 41], 11),
       blade([-46, 14], [-80, 19], [-107, 54], 11),
     ],
-    dark: [blade([-46, 27], [-71, 35], [-95, 63], 9)],
+    dark: [
+      blade([-45, 6], [-84, 11], [-117, 47], 10),
+      blade([-46, 25], [-71, 33], [-95, 63], 10),
+    ],
+    glints: [] as Point[],
     arch: "M-98 70 Q-64 30 0 30 Q64 30 98 70",
   },
   opponent: {
     light: [
-      blade([-48, 17], [-82, 10], [-103, -14], 10),
-      blade([-50, -9], [-90, -13], [-106, -48], 9),
+      blade([-47, 18], [-90, 14], [-104, -17], 9, 0),
+      blade([-50, -9], [-92, -12], [-106, -48], 8, 0),
     ],
-    dark: [blade([-48, 4], [-80, -2], [-98, -24], 7)],
+    dark: [blade([-48, 5], [-82, 0], [-99, -26], 8)],
+    glints: [
+      [-48, -9],
+      [-47, 17],
+    ] as Point[],
     arch: "",
   },
-} as const;
+};
 
 /** The active player's rays, by angle from straight up and length from the center. */
 const RAYS = [
   [-80, 94],
   [-62, 84],
   [-38, 64],
-  [0, 58],
+  [0, 64],
   [38, 64],
   [62, 84],
   [80, 94],
@@ -56,7 +73,7 @@ const RAYS = [
     const a = ((deg! - 90) * Math.PI) / 180;
     const point = (r: number, da = 0) =>
       `${(Math.cos(a + da) * r * 1.2).toFixed(1)} ${(Math.sin(a + da) * r).toFixed(1)}`;
-    return `M${point(36, -0.06)} L${point(length! / 1.1)} L${point(36, 0.06)} Z`;
+    return `M${point(36, -0.09)} L${point(length! / 1.1)} L${point(36, 0.09)} Z`;
   })
   .join(" ");
 
@@ -77,6 +94,17 @@ export function LifeOrb({
       {blades.dark.map((d) => (
         <path key={d} className="life-orb-blade-dark" d={d} />
       ))}
+      {blades.glints.map(([x, y]) => (
+        <ellipse
+          key={`${x} ${y}`}
+          className="life-orb-glint"
+          cx={x}
+          cy={y}
+          rx="5"
+          ry="3.5"
+          filter="url(#orb-blur)"
+        />
+      ))}
       {[...blades.light].reverse().map((d) => (
         <path key={d} className="life-orb-blade" d={d} />
       ))}
@@ -89,25 +117,31 @@ export function LifeOrb({
       <svg className="life-orb-art" viewBox="-136 -57 272 116" aria-hidden>
         <defs>
           <linearGradient id="orb-blade" x1="0" y1="0" x2="0.3" y2="1">
-            <stop offset="0" stopColor="#fbf5ec" />
-            <stop offset="0.3" stopColor="#ddd2c4" />
-            <stop offset="0.7" stopColor="#a69a8c" />
-            <stop offset="1" stopColor="#5b5249" />
+            <stop offset="0" stopColor="#f4ede4" />
+            <stop offset="0.3" stopColor="#c4b8aa" />
+            <stop offset="0.7" stopColor="#8a7e72" />
+            <stop offset="1" stopColor="#4a423b" />
           </linearGradient>
           <linearGradient id="orb-rim" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#e9e6e1" />
-            <stop offset="0.5" stopColor="#77736e" />
-            <stop offset="1" stopColor="#3b3835" />
+            <stop offset="0" stopColor="#8d8984" />
+            <stop offset="0.5" stopColor="#4c4844" />
+            <stop offset="1" stopColor="#2b2826" />
           </linearGradient>
           <radialGradient id="orb-core" cx="0.5" cy="0.32" r="0.7">
             <stop offset="0" stopColor="#3d3936" />
             <stop offset="1" stopColor="#1d1a18" />
           </radialGradient>
-          <linearGradient id="orb-ray" x1="0" y1="1" x2="0" y2="0">
-            <stop offset="0" stopColor="#fff0b4" />
-            <stop offset="0.35" stopColor="#ff8a1c" />
+          <radialGradient
+            id="orb-ray"
+            cx="0"
+            cy="0"
+            r="100"
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop offset="0.35" stopColor="#fff4c8" />
+            <stop offset="0.6" stopColor="#ffa22e" />
             <stop offset="1" stopColor="#f2560c" stopOpacity="0" />
-          </linearGradient>
+          </radialGradient>
           <filter id="orb-blur" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur stdDeviation="3" />
           </filter>
@@ -166,14 +200,14 @@ export function PlayerBadge({ name }: { name: string }) {
             <stop offset="1" stopColor="#7a6244" />
           </linearGradient>
           <linearGradient id="emblem-stone" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#a39a92" />
-            <stop offset="1" stopColor="#47413c" />
+            <stop offset="0" stopColor="#857b72" />
+            <stop offset="1" stopColor="#35302b" />
           </linearGradient>
         </defs>
         <path className="player-badge-ring" d="M0 -23 L23 0 L0 23 L-23 0 Z" />
         <path className="player-badge-ring" d="M0 -16 L16 0 L0 16 L-16 0 Z" />
         <path
-          d="M0 -11 L11 0 L0 11 L-11 0 Z"
+          d="M0 -9 L9 0 L0 9 L-9 0 Z"
           fill="url(#emblem-stone)"
           stroke="url(#emblem-brass)"
           strokeWidth="1.3"

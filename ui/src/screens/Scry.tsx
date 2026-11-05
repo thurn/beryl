@@ -34,15 +34,15 @@ export function ScryOverlay({ className }: { className?: string }) {
         <CardBack width={220} style={fanned(482, 171, 220, 5)} />
         <Card
           card={a(SAMPLE.counterspell, "scry-counterspell")}
-          width={257}
-          style={{ ...fanned(715, 235, 257, 3.2), zIndex: 2 }}
+          width={273}
+          style={{ ...fanned(715, 229, 273, 3.2), zIndex: 2 }}
         />
         <Card
           card={a(SAMPLE.fullArtIsland, "scry-island")}
           width={290}
           height={358}
           highlight="target"
-          style={{ ...fanned(321, 272, 290, -8.6, 358), zIndex: 3 }}
+          style={{ ...fanned(318, 268, 290, -8.6, 358), zIndex: 3 }}
         />
         <span className="scry-label scry-bottom">Bottom</span>
         <span className="scry-label scry-top">Top</span>

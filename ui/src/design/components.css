@@ -401,27 +401,30 @@
 /* CSS filters reach an svg element in WebKit, not the shapes inside it. */
 .combat-marker {
   position: absolute;
+  z-index: 1;
   overflow: visible;
   pointer-events: none;
-  filter: drop-shadow(0 0 2px rgb(255 190 80 / 100%))
-    drop-shadow(0 0 6px rgb(245 130 25 / 95%));
+  filter: drop-shadow(0 0 3px rgb(255 190 80 / 100%))
+    drop-shadow(0 0 10px rgb(245 130 25 / 90%));
 }
 /* Both drawn at the card's scale: 100 units across 104–108% of a card 12em wide. */
 .attack-chevron {
   left: -4%;
   width: 108%;
   height: 2.2em;
-  bottom: calc(100% + 0.3em);
+  bottom: calc(100% + 0.15em);
 }
 .block-arc {
-  left: -2%;
-  width: 104%;
-  height: 2.87em;
-  top: calc(100% - 1.64em);
+  left: -1%;
+  width: 102%;
+  height: 2.4em;
+  top: calc(100% - 1.5em);
+  filter: drop-shadow(0 0 2px rgb(255 205 110 / 100%))
+    drop-shadow(0 0 6px rgb(245 140 30 / 75%));
 }
 .combat-line {
   fill: none;
-  stroke: #ffd982;
+  stroke: #ffe9b0;
   stroke-width: 1.7;
   stroke-linecap: round;
 }
@@ -672,11 +675,12 @@
   --tone-soft: rgb(255 150 40 / 70%);
   --tone-core: #fff1c2;
 }
+/* Cyan arrows are tubes: bright edges round a deeper core. */
 .arrow-cyan {
   --weight: 9px;
-  --tone: var(--cyan);
-  --tone-soft: rgb(56 220 255 / 75%);
-  --tone-core: #d2ffff;
+  --tone: #c9fbff;
+  --tone-soft: rgb(0 170 255 / 85%);
+  --tone-core: #1cc8f6;
 }
 .arrow path {
   fill: none;
@@ -703,10 +707,19 @@
   --weight: 2.6px;
 }
 .arrow-dot-glow {
+  fill: var(--tone-soft);
+}
+.arrow-glow .arrow-head-gold {
+  fill: var(--tone-soft);
+}
+.arrow-line .arrow-head-gold {
   fill: var(--tone);
 }
+.arrow-core .arrow-head-gold {
+  fill: var(--tone-core);
+}
 .arrow-dot {
-  r: 5.5px;
+  r: 7px;
   fill: var(--tone-core);
   stroke: var(--tone);
   stroke-width: 2;
@@ -915,9 +928,12 @@
   stroke-width: 0.8;
 }
 .life-orb-blade-dark {
-  fill: #2f2b28;
-  stroke: #151311;
+  fill: #2a2623;
+  stroke: #110f0e;
   stroke-width: 1;
+}
+.life-orb-glint {
+  fill: #e98a2c;
 }
 .life-orb-arch {
   fill: none;
@@ -937,7 +953,7 @@
 .life-orb-core {
   fill: url(#orb-core);
   stroke: url(#orb-rim);
-  stroke-width: 3;
+  stroke-width: 2.5;
 }
 .life-orb-flare {
   fill: #ff7a14;
@@ -948,8 +964,8 @@
 }
 .life-orb-halo {
   fill: none;
-  stroke: #ffe28a;
-  stroke-width: 7;
+  stroke: #fff1b8;
+  stroke-width: 8;
 }
 /* The far orb's ring is dull copper. */
 .life-orb-opponent .life-orb-ring {
@@ -976,7 +992,7 @@
 .player-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.83em;
+  gap: 0.73em;
   height: 2.09em;
   padding: 0 4em 0 0.34em;
   background: linear-gradient(
