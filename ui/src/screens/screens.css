@@ -699,7 +699,7 @@
   height: 1.3em;
 }
 .hand-card .card {
-  --name-size: 1.08em;
+  --name-size: 0.98em;
 }
 /* A step announcement over the battlefield (combat.png's "Combat / Blockers declared"): a gold
    title between ornamented rules over an italic detail, on a smoky shade. Laid out from its

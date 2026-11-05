@@ -25,7 +25,7 @@
   --rim-lo: #0c0b0a;
   --bar: #b4ada8;
   --bar-hi: #d3cdc8;
-  --box: #dcd7d3;
+  --box: #ecebe8;
 }
 /* A Swamp keeps the silver rim of the mockups' basic lands. */
 .frame-b.card-land {
@@ -34,7 +34,7 @@
   --rim-lo: #36302d;
 }
 .frame-r {
-  --rim: #da3517;
+  --rim: #cc2e14;
   --rim-hi: #f7743e;
   --rim-lo: #6d0806;
   --bar: #efb79c;
@@ -115,7 +115,8 @@
   background: #f6f2c8;
 }
 .mana-u {
-  background: #c6e6f5;
+  color: #0f3d6e;
+  background: radial-gradient(circle at 35% 30%, #eef9ff, #b8def3 60%, #93c6e6);
 }
 .mana-b {
   background: #b3a8a3;
@@ -140,8 +141,8 @@
   display: grid;
   place-items: center;
   color: #0f0e0d;
-  background: linear-gradient(180deg, #e4e4ec, #c8c8d2 55%, #b0b0ba);
-  border: 0.1em solid #1c1a19;
+  background: linear-gradient(180deg, #d9d9e1, #bdbdc7 55%, #9e9ea9);
+  border: 0.12em solid #151413;
   box-shadow:
     inset 0 0.05em 0 rgb(255 255 255 / 80%),
     0 0.08em 0.2em rgb(0 0 0 / 55%);
@@ -257,13 +258,14 @@
 }
 .card-name {
   overflow: hidden;
-  font-weight: 800;
+  padding-bottom: 0.06em;
+  font-weight: 750;
   font-size: calc(var(--name-size, 0.92em) * var(--fit, 1));
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 .card-field {
-  --name-size: 0.96em;
+  --name-size: 0.86em;
 }
 /* A tapped battlefield card's name bar runs up its left side, wider. */
 .card-field.card-tapped .card-name-bar {
@@ -271,7 +273,7 @@
   margin: 0 -0.2em;
 }
 .card-field.card-tapped {
-  --name-size: 1.08em;
+  --name-size: 0.92em;
 }
 /* Sizes below are in the type bar's own em (0.8 of the card's). */
 .card-type-bar {
@@ -292,6 +294,22 @@
   object-fit: cover;
   background-size: cover;
   box-shadow: 0 0 0 0.06em var(--rim-lo);
+}
+/* ...and its rim carries the accent along the left and bottom. */
+.card[class*="accent-"] .card-rim {
+  background:
+    linear-gradient(90deg, var(--accent) 0.1em, transparent 0.1em) 0.12em 0 /
+      100% 100% no-repeat,
+    linear-gradient(0deg, var(--accent) 0.08em, transparent 0.08em) 0 -0.04em /
+      60% 100% no-repeat,
+    linear-gradient(
+      90deg,
+      var(--rim) 0.08em,
+      var(--rim-hi) 0.16em,
+      var(--rim) 0.28em calc(100% - 0.28em),
+      var(--rim-hi) calc(100% - 0.16em),
+      var(--rim) calc(100% - 0.08em)
+    );
 }
 .card[class*="accent-"] .card-art {
   box-shadow:
@@ -331,6 +349,10 @@
 }
 .card-rules p {
   margin: 0;
+}
+/* Longer rules text runs smaller, from the top left (the mockups' Doom Blade). */
+.card-rules:not(.card-rules-short) {
+  font-size: 0.7em;
 }
 /* Short rules text sits centered in its box, as on the mockups' Counterspell and Preordain. */
 .card-rules-short {
@@ -381,11 +403,21 @@
 
 /* States: tapped turns the card (Card.tsx), source glows gold, target glows cyan, an attacker
    wears an angular chevron above and a blocker a rounded arc below. */
+/* A glowing card's light fills its black frame up to a hairline at the rim, so the glow wraps
+   the colored rim (ui_system.png section 04). */
 .card-source {
-  box-shadow: var(--card-shadow, var(--shadow-card)), var(--glow-gold);
+  box-shadow:
+    inset 0 0 0 0.12em #fff0c8,
+    inset 0 0 0 0.44em #f5a536,
+    var(--card-shadow, var(--shadow-card)),
+    var(--glow-gold);
 }
 .card-target {
-  box-shadow: var(--card-shadow, var(--shadow-card)), var(--glow-cyan);
+  box-shadow:
+    inset 0 0 0 0.12em #e6fcff,
+    inset 0 0 0 0.44em #18b2ff,
+    var(--card-shadow, var(--shadow-card)),
+    var(--glow-cyan);
 }
 /* Copies beneath the top card of a stack sit in its shade (an overlay: a filter would clip
    the card's shadow at the filter region in WebKit). */
@@ -457,7 +489,7 @@
       rgb(255 220 170 / 12%),
       transparent 60%
     ),
-    linear-gradient(160deg, #94582a, #7f4a22 55%, #6a3c1b);
+    linear-gradient(160deg, #7a4a21, #66401c 55%, #553317);
   box-shadow:
     inset 0 0 0 0.06em rgb(0 0 0 / 55%),
     inset 0 0 0 0.3em rgb(0 0 0 / 14%),
@@ -505,9 +537,9 @@
   border: 0.1em solid #2a5ec4;
   background: radial-gradient(
     ellipse 70% 60% at 50% 42%,
-    #9a5a31,
-    #87502c 55%,
-    #6f4124
+    #87502c,
+    #774426 55%,
+    #613720
   );
   box-shadow:
     0 0 0 0.05em rgb(0 0 0 / 50%),
@@ -516,8 +548,8 @@
 .card-back-crest {
   width: 2.8em;
   margin-top: 0.4em;
-  color: #d9ad70;
-  filter: drop-shadow(0 0.05em 0.05em rgb(0 0 0 / 50%));
+  color: #e6bb7c;
+  filter: drop-shadow(0 0.05em 0.05em rgb(0 0 0 / 55%));
 }
 .card-back-title {
   margin-top: 0.5em;
@@ -527,7 +559,7 @@
   line-height: 1.15;
   text-transform: uppercase;
   text-align: center;
-  color: #dcb47c;
+  color: #e6bd84;
   width: 5em;
   text-shadow: 0 0.04em 0.05em rgb(0 0 0 / 45%);
 }
@@ -647,7 +679,7 @@
   flex: 0 0 6.06em;
 }
 .stack-item .card-type-bar {
-  height: 1.05em;
+  height: 1.28em;
   font-size: 0.86em;
 }
 .stack-item .card-rules {

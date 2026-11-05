@@ -73,7 +73,7 @@ export function RulesText({ text }: { text: string }) {
 /** Flying, drawn as on the mockups' badges: an eagle facing left, wings raised, the right one
  * feathered. */
 const EAGLE =
-  "M2.7 3.2 L5.5 3.9 L13.9 15.1 L30 2.6 L28.6 7.6 L23.7 10.1 L27.9 10.8 L21.6 15.1 L25.8 16.4 L16.7 20.1 L16 24.5 L14.6 29.5 L11.1 29.5 L10.4 23.9 L2.7 23.9 L3.4 22 L9.7 19.5 L11.1 17.6 Z";
+  "M2.7 3.2 L7.6 3.2 L15.3 15.1 L31.4 2.6 L30.7 8.2 L25.8 10.8 L30 11.4 L24.4 15.8 L27.9 17 L18.8 21.4 L18.1 25.1 L16.7 30.1 L12.5 30.8 L11.1 25.1 L9 25.1 L3.4 25.1 L4.1 22.6 L9.7 20.1 L6.2 12.6 Z";
 
 export function AbilityBadge({ ability }: { ability: AbilityIcon }) {
   return (

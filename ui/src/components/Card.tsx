@@ -339,8 +339,8 @@ export function CardBack({
       }}
     >
       <div className="card-back-field">
-        {["r", "w", "g", "u"].map((c) => (
-          <i key={c} className={`card-back-stud dot-${c}`} />
+        {["r", "w", "w", "r"].map((c, i) => (
+          <i key={i} className={`card-back-stud dot-${c}`} />
         ))}
         <div className="card-back-oval">
           <Crest className="card-back-crest" />

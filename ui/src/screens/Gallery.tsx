@@ -361,14 +361,14 @@ function CombatAndStack() {
             unit={12.6}
           />
         </At>
-        <At x={182} y={241}>
+        <At x={173} y={241}>
           <StackItem
             id="g-trigger"
             source={SAMPLE.infernoTitan}
             text="When Inferno Titan enters the battlefield, it deals 3 damage divided as you choose among one, two, or three targets."
             width={130}
             height={172}
-            unit={17}
+            unit={16}
           />
         </At>
         <At x={356} y={267}>
