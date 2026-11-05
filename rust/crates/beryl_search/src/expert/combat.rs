@@ -467,12 +467,12 @@ impl Sim<'_> {
 
     /// After our attack, what the opponent's The Wandering Emperor takes on their turn: "−2:
     /// Exile target tapped creature", our most valuable attacker still tapped, while she has
-    /// the loyalty for it.
+    /// the loyalty to survive it (at 2 she trades herself for it).
     fn exiled_next(&self, s: &State, p: &crate::rollout::Policy<'_>, ours: bool) -> i32 {
         let emperor = s.battlefield().iter().any(|&w| {
             s.controller(w) != self.me
                 && self.t.def(s.card(w)).name == names::THE_WANDERING_EMPEROR
-                && s.object(w).counters.loyalty >= 2
+                && s.object(w).counters.loyalty >= 3
         });
         if !ours || !emperor {
             return 0;

@@ -518,6 +518,17 @@ impl Expert<'_> {
             .filter(|&s| self.counter_cost(s).is_some())
     }
 
+    /// The mana each counterspell in hand worth holding up costs: Mana Tithe, which a player
+    /// with a mana to spare pays, only when it is the only one.
+    fn counter_mana(&self) -> impl Iterator<Item = i32> + '_ {
+        let others = self
+            .counters_in_hand()
+            .any(|s| !self.is(s, names::MANA_TITHE));
+        self.counters_in_hand()
+            .filter(move |&s| !others || !self.is(s, names::MANA_TITHE))
+            .filter_map(|s| self.counter_cost(s))
+    }
+
     /// The mana a counterspell in hand costs; `None` for any other card.
     fn counter_cost(&self, slot: Slot) -> Option<i32> {
         match self.name(slot)? {
@@ -1159,14 +1170,16 @@ impl Expert<'_> {
             return v;
         };
         let worth = i32::from(self.p.values.get(card).value);
-        if worth >= COUNTER_SPARE || self.hand(self.opp()).is_empty() || self.dying() {
+        // Against a hand of three or more, any spell short of a major threat waits.
+        let minor = if self.hand(self.opp()).count() >= 3 {
+            MAJOR
+        } else {
+            COUNTER_SPARE
+        };
+        if worth >= minor || self.hand(self.opp()).is_empty() || self.dying() {
             return v;
         }
-        let Some(keep) = self
-            .counters_in_hand()
-            .filter_map(|s| self.counter_cost(s))
-            .min()
-        else {
+        let Some(keep) = self.counter_mana().min() else {
             return v;
         };
         let cost = i32::from(self.p.t.def(card).front().cost.mana_value());
@@ -1190,8 +1203,7 @@ impl Expert<'_> {
             });
         // Only what our mana could cast at all is worth keeping it for.
         let mana = self.mana(self.me());
-        self.counters_in_hand()
-            .filter_map(|s| self.counter_cost(s))
+        self.counter_mana()
             .chain(flash)
             .filter(|&keep| keep <= mana)
             .min()
@@ -1294,7 +1306,12 @@ impl Expert<'_> {
         // Our hand empty and theirs full, it refuels us more than them, behind or not; so
         // does one that gives them two cards or fewer and us three more than them.
         let empty = (ours == 0 && theirs >= 3) || (theirs >= 5 && gain >= 3);
-        decking || (!winning && !holding && (empty || (!behind && refill)))
+        // Never with fewer than seven cards to shuffle into the library and draw
+        // ([CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b): "If a player
+        // attempted to draw a card from a library with no cards in it ... that player loses
+        // the game").
+        let drawable = pool - usize::from(from_hand) >= 7;
+        drawable && (decking || (!winning && !holding && (empty || (!behind && refill))))
     }
 
     /// The value of the best artifact of the opponent's that Thieving Skydiver could take,
