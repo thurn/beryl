@@ -99,6 +99,10 @@ counts, `just bench` for timing (it refuses a busy machine).
 - A fresh worktree clones the cached `rust/target` and `ui/node_modules` in
   seconds (copy-on-write); removing it saves them back.
 
+## Workflow
+
+- When launching more than one subagent at a time, please always use Sonnet.
+
 ## Conventions
 
 - Commits: short Conventional Commits, e.g. `feat: mulligan decisions`; subjects
