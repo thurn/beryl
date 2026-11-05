@@ -212,6 +212,11 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
             // its body under the redealt state's own random streams, so those positions are
             // left to the check above.
             if matches!(s.pending(), Pending::Resolving(_)) {
+                // The paused resolution's entry, the top of the committed stack, is named.
+                assert!(
+                    decision(&view).resolving.is_some(),
+                    "seed {seed}: a paused resolution without its entry"
+                );
                 view = play(&mut game, &view);
                 continue;
             }
@@ -221,7 +226,7 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
             let theirs = player_view(
                 t,
                 Observation::new(beryl_engine::view(&det, t, &mut x), Seat::P0),
-                Moment::Deciding(decision(&view).id, &d),
+                Moment::Deciding(decision(&view).id, &d, None),
                 view.stops,
                 game.events(),
             );

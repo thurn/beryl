@@ -1,5 +1,5 @@
 {
-  "$comment": "UI fixtures `just ui-shots` records with `beryl_cli record-fixture` into ui/public/fixtures before capturing: a seeded game between named agents (`wu-control` or `fuzz:<seed>` decks), stopped at the human seat's first decision of a kind (`first <kind> decision for seat <n>`, kinds as ui/src/generated/protocol.ts names them, optionally `from turn <t>`) or at `game over`, where every condition in `where` also holds of the view (`step <step>`, `attacking`, `blocking`, `targeted trigger on the stack`, `opponent's spell on the stack`, `castable <card>`). Shots replay one with `?fixture=<name>`, from its nth view with `&at=<n>`.",
+  "$comment": "UI fixtures `just ui-shots` records with `beryl_cli record-fixture` into ui/public/fixtures before capturing: a seeded game between named agents (`wu-control` or `fuzz:<seed>` decks), stopped at the human seat's first decision of a kind (`first <kind> decision for seat <n>`, kinds as ui/src/generated/protocol.ts names them, optionally `from turn <t>`) or at `game over`, where every condition in `where` also holds of the view (`step <step>`, `attacking`, `blocking`, `targeted trigger on the stack`, `opponent's spell on the stack`, `castable <card>`, `resolving <card>`: the decision is asked by that card's spell or ability as it resolves). Shots replay one with `?fixture=<name>`, from its nth view with `&at=<n>`.",
   "fixtures": [
     {
       "name": "first-target",
@@ -59,6 +59,38 @@
       "agents": ["greedy", "greedy"],
       "until": "first priority decision for seat 0",
       "where": ["opponent's spell on the stack", "castable Mana Drain"]
+    },
+    {
+      "name": "choice-scry",
+      "seed": 3,
+      "decks": ["wu-control", "wu-control"],
+      "agents": ["random", "random"],
+      "until": "first chooseUpTo decision for seat 0",
+      "where": ["resolving Aang's Iceberg"]
+    },
+    {
+      "name": "choice-jace",
+      "seed": 3,
+      "decks": ["wu-control", "wu-control"],
+      "agents": ["random", "random"],
+      "until": "first chooseObject decision for seat 0",
+      "where": ["resolving Jace, the Mind Sculptor"]
+    },
+    {
+      "name": "choice-look",
+      "seed": 1,
+      "decks": ["wu-control", "wu-control"],
+      "agents": ["greedy", "greedy"],
+      "until": "first yesNo decision for seat 0",
+      "where": ["resolving Thundertrap Trainer"]
+    },
+    {
+      "name": "choice-pay",
+      "seed": 1,
+      "decks": ["wu-control", "wu-control"],
+      "agents": ["greedy", "greedy"],
+      "until": "first yesNo decision for seat 0",
+      "where": ["resolving Mana Tithe"]
     }
   ]
 }

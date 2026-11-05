@@ -32,6 +32,34 @@ export interface Interactions {
   source?: number;
 }
 
+/** A pick a later decision should get: one of its kind, the candidate `wants` names or,
+ * failing that, one `alike` names (a card the engine offers in place of an interchangeable
+ * one, architecture §7.2). A drag says the block target after the blocker it declares; an
+ * overlay says a whole scry. */
+export interface Intent {
+  kind: Kind;
+  wants(option: Candidate): boolean;
+  alike?(option: Candidate): boolean;
+}
+
+/** The candidate of `decision` that `intent` names, if it is of the intent's kind. */
+export function intended(
+  decision: DecisionView,
+  intent: Intent,
+): CandidateIndex | undefined {
+  if (decision.kind !== intent.kind) return undefined;
+  const options = decision.candidates.map((c) => c.option);
+  let index = options.findIndex((o) => intent.wants(o));
+  if (index < 0 && intent.alike) {
+    index = options.findIndex((o) => intent.alike!(o));
+  }
+  return index < 0 ? undefined : index;
+}
+
+/** Whether two candidates are the same answer. */
+export const optionsMatch = (a: Candidate, b: Candidate) =>
+  JSON.stringify(a) === JSON.stringify(b);
+
 /** The card a candidate is about, if any. */
 export function slotOf(option: Candidate): number | undefined {
   switch (option.kind) {

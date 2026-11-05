@@ -8,7 +8,6 @@
 import {
   useEffect,
   useMemo,
-  useRef,
   useState,
   type CSSProperties,
   type ReactNode,
@@ -30,7 +29,6 @@ import { Library, LifeOrb, PlayerBadge } from "../components/Player";
 import { Arrows, StackItem, type ArrowSpec } from "../components/Stack";
 import { cardEntry, useCardArt } from "../cards";
 import type {
-  Candidate,
   CandidateIndex,
   DecisionView,
   Kind,
@@ -54,6 +52,7 @@ import {
   playActs,
   prompt,
   type Act,
+  type Intent,
 } from "./decisions";
 import { abilityText, frameFace, unknownFace } from "./faces";
 import {
@@ -70,25 +69,21 @@ export interface BoardProps {
   view: PlayerView;
   /** An answer was sent and the next view has not arrived: the opponent is acting. */
   waiting: boolean;
-  choose(index: CandidateIndex): void;
+  /** Answers the open decision, and the decisions after it with `then`, as each arrives. */
+  choose(index: CandidateIndex, then?: Intent[]): void;
   /** Full control: stop at every priority (decision D13). */
   setFullControl(on: boolean): void;
   onLeave(): void;
   /** Blurred and darkened behind a screen over it. */
   dimmed?: boolean;
+  /** A screen over it answers the decision: the table only shows. */
+  inert?: boolean;
 }
 
 /** Dropped above this line, a hand card is on the battlefield rather than back in the hand. */
 const BATTLEFIELD_EDGE = 690;
 /** Dragged forward at least this far, a creature attacks. */
 const FORWARD = 60;
-
-/** A pick a drag already said, for the decision that follows the one it answered: dropping a
- * blocker onto an attacker declares the blocker, then picks the attacker it blocks. */
-interface Intent {
-  kind: Kind;
-  wants(option: Candidate): boolean;
-}
 
 /** A menu of a card's candidates, open at a point on the stage. */
 interface Menu {
@@ -104,13 +99,16 @@ export function Board({
   setFullControl,
   onLeave,
   dimmed = false,
+  inert = false,
 }: BoardProps) {
   const [hovered, setHovered] = useState<number>();
   const [menu, setMenu] = useState<Menu>();
   const [settings, setSettings] = useState(false);
   const can = useMemo(() => interactions(view), [view]);
-  // Under a screen over the table (the opening hand, the game's end), the table only shows.
-  const deciding = view.status.kind === "deciding" && !waiting && !dimmed;
+  // Under a screen over the table (the opening hand, a choice, the game's end), the table only
+  // shows.
+  const deciding =
+    view.status.kind === "deciding" && !waiting && !dimmed && !inert;
   const decision =
     view.status.kind === "deciding" ? view.status.decision : undefined;
   const objects = useMemo(
@@ -134,23 +132,12 @@ export function Board({
     [view, raised, prompting],
   );
 
-  // A new view closes whatever was open on the old one, and answers a decision a drag already
-  // said the answer to.
-  const intent = useRef<Intent>(undefined);
-  useEffect(() => {
-    setMenu(undefined);
-    const want = intent.current;
-    intent.current = undefined;
-    if (!want || view.status.kind !== "deciding") return;
-    const { kind, candidates } = view.status.decision;
-    const index = candidates.findIndex((c) => want.wants(c.option));
-    if (kind === want.kind && index >= 0) choose(index);
-    // Only a new view answers (`choose` changes with every render).
-  }, [view]);
+  // A new view closes whatever was open on the old one.
+  useEffect(() => setMenu(undefined), [view]);
 
-  const pick = (index: CandidateIndex) => {
+  const pick = (index: CandidateIndex, then?: Intent[]) => {
     setMenu(undefined);
-    choose(index);
+    choose(index, then);
   };
 
   const states = new Map<number, CardState>();
@@ -223,11 +210,12 @@ export function Board({
     if (declare?.option.kind === "block") {
       // A blocker goes onto the attacker it blocks (CR 509.1a).
       if (over?.combat?.kind !== "attacking") return false;
-      intent.current = {
-        kind: "blockTarget",
-        wants: (c) => c.kind === "object" && c.slot === over.slot,
-      };
-      pick(declare.index);
+      pick(declare.index, [
+        {
+          kind: "blockTarget",
+          wants: (c) => c.kind === "object" && c.slot === over.slot,
+        },
+      ]);
       return true;
     }
     if (declare?.option.kind !== "attack") return false;
@@ -241,14 +229,18 @@ export function Board({
     if (walker === undefined && !atPlayer && start.y - at.y < FORWARD) {
       return false;
     }
-    if (walker !== undefined || atPlayer) {
-      intent.current = {
-        kind: "attackTarget",
-        wants: (c) =>
-          c.kind === "defender" && c.planeswalker === (walker ?? null),
-      };
-    }
-    pick(declare.index);
+    pick(
+      declare.index,
+      walker !== undefined || atPlayer
+        ? [
+            {
+              kind: "attackTarget",
+              wants: (c) =>
+                c.kind === "defender" && c.planeswalker === (walker ?? null),
+            },
+          ]
+        : [],
+    );
     return true;
   };
 
@@ -261,7 +253,7 @@ export function Board({
       : top.name);
   const stop = nextStop(view);
   const arrows = useMemo(() => boardArrows(view), [view]);
-  const banner = combatBanner(view);
+  const banner = combatBanner(view) ?? coinFlipBanner(view);
   // A combat declaration is finished with the turn button, where priority is passed.
   const declaring =
     deciding && decision && isCombat(decision.kind) ? decision : undefined;
@@ -629,6 +621,19 @@ function combatBanner(
                 ? "Combat damage"
                 : undefined;
   return detail && { title: "Combat", detail };
+}
+
+/** The result of a coin flip (Mana Crypt's, each upkeep), while the view it happened in shows. */
+function coinFlipBanner(
+  view: PlayerView,
+): { title: string; detail: string } | undefined {
+  const flip = view.events.find((e) => e.kind === "coinFlip");
+  if (flip?.kind !== "coinFlip") return undefined;
+  const who = flip.player === "you" ? "You" : "Your opponent";
+  return {
+    title: "Coin Flip",
+    detail: `${who} ${flip.won ? "won" : "lost"} the flip`,
+  };
 }
 
 /** The turn button during a combat declaration: it finishes the declaration ("Attack", "No

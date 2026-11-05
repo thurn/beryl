@@ -112,12 +112,15 @@ enum Condition {
     OpponentsSpell,
     /// The human may cast a card of this name.
     Castable(String),
+    /// The open decision is asked by the resolution of a spell of this name or an ability of
+    /// a card of this name.
+    Resolving(String),
 }
 
 impl Condition {
     /// Parses "step <step>" (as the protocol names steps: "declareBlockers"), "attacking",
     /// "blocking", "targeted trigger on the stack", "opponent's spell on the stack" or
-    /// "castable <card name>".
+    /// "castable <card name>" or "resolving <card name>".
     fn parse(text: &str) -> Result<Condition, String> {
         let condition = match text {
             "attacking" => Condition::Attacking,
@@ -132,6 +135,8 @@ impl Condition {
                     )
                 } else if let Some(name) = text.strip_prefix("castable ") {
                     Condition::Castable(name.to_owned())
+                } else if let Some(name) = text.strip_prefix("resolving ") {
+                    Condition::Resolving(name.to_owned())
                 } else {
                     return Err(format!("{text:?}: no such condition"));
                 }
@@ -173,6 +178,14 @@ impl Condition {
                     Candidate::Cast { slot, .. } if name(slot) == Some(card.as_str())
                 ))
             ),
+            Condition::Resolving(card) => match &view.status {
+                Status::Deciding { decision } => match &decision.resolving {
+                    Some(StackItem::Spell { slot, .. }) => name(*slot) == Some(card.as_str()),
+                    Some(StackItem::Ability { name, .. }) => name == card,
+                    None => false,
+                },
+                _ => false,
+            },
         }
     }
 }
@@ -304,6 +317,10 @@ mod tests {
             Ok(Condition::Castable("Mana Drain".to_owned()))
         );
         assert_eq!(Condition::parse("blocking"), Ok(Condition::Blocking));
+        assert_eq!(
+            Condition::parse("resolving Mana Tithe"),
+            Ok(Condition::Resolving("Mana Tithe".to_owned()))
+        );
         assert!(Condition::parse("step lunch").is_err());
         assert!(Condition::parse("raining").is_err());
     }

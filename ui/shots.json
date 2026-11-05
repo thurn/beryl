@@ -93,6 +93,30 @@
       "height": 900
     },
     {
+      "name": "game-choice-scry",
+      "route": "/?fixture=choice-scry#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-choice-jace",
+      "route": "/?fixture=choice-jace#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-choice-look",
+      "route": "/?fixture=choice-look#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-choice-pay",
+      "route": "/?fixture=choice-pay#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
       "name": "replica-battlefield",
       "route": "/?replica=battlefield",
       "width": 1672,

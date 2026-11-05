@@ -598,6 +598,70 @@
   right: 26px;
 }
 
+/* The choice overlays (game/ChoiceOverlay.tsx) in the scry tray: cards placed by transform,
+   the library's backs between the piles of an arrangement, cards that can't be picked dimmed. */
+.choice-card {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  touch-action: none;
+}
+.choice-card:disabled {
+  cursor: default;
+}
+.choice-card-out {
+  filter: brightness(0.55) saturate(0.6);
+}
+.choice-card-dragging {
+  cursor: grabbing;
+}
+.choice-ghost {
+  position: absolute;
+  border: 2px dashed rgb(242 236 225 / 40%);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 4%);
+}
+.choice-library {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+/* Its buttons: the primary as wide as its label needs, alternatives outlined beside it. */
+.overlay-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px 28px;
+  margin-top: 47px;
+}
+.overlay-actions .overlay-confirm {
+  margin-top: 0;
+  width: auto;
+  min-width: 280px;
+  padding: 0 36px 3px;
+}
+.overlay-alternative {
+  min-width: 200px;
+  height: 61px;
+  padding: 0 32px;
+  font-size: 30px;
+}
+/* While the battlefield shows, the way back sits where "View Battlefield" was. */
+.overlay-return {
+  position: absolute;
+  top: 58px;
+  right: 54px;
+  z-index: 30;
+  height: 53px;
+  padding: 0 28px;
+  font-size: 26px;
+}
+
 /* The table: a fixed stage scaled to the window. */
 .stage-frame {
   position: fixed;

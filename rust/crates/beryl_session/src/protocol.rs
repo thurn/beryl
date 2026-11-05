@@ -229,6 +229,12 @@ pub struct DecisionView {
     pub id: DecisionId,
     pub kind: Kind,
     pub candidates: Vec<CandidateView>,
+    /// The spell or ability whose resolution asks this, if one does. It has left the stack
+    /// list by then, as the first step of resolving it
+    /// ([CR 608.2](https://yawgatog.com/resources/magic-rules/#R6082)): "If the object that's
+    /// resolving is an instant spell, a sorcery spell, or an ability, its resolution may involve
+    /// several steps." A resolving spell's card is still among the objects, on the stack.
+    pub resolving: Option<StackItem>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -511,8 +517,9 @@ impl CardType {
 /// Where the game stands, as the session knows it: what [`player_view`] turns into a [`Status`].
 #[derive(Clone, Copy, Debug)]
 pub enum Moment<'a> {
-    /// The viewer's decision `id` is open.
-    Deciding(DecisionId, &'a Decision),
+    /// The viewer's decision `id` is open, asked by the resolution of the stack entry given,
+    /// if one asks it.
+    Deciding(DecisionId, &'a Decision, Option<&'a StackEntry>),
     Stopped,
     Over(Outcome),
 }
@@ -578,12 +585,22 @@ pub fn player_view(
             .filter_map(StackEntry::spell)
             .map(|r| object_view(t, obs, r.slot)),
     );
+    // A resolving spell's card stays on the stack until its resolution ends (CR 608.2n).
+    if let Moment::Deciding(_, _, Some(entry)) = moment
+        && let Some(r) = entry.spell()
+        && obs.object(r.slot).zone == Zone::Stack
+    {
+        objects.push(object_view(t, obs, r.slot));
+    }
     objects.sort_by_key(|o| o.slot);
     let status = match moment {
-        Moment::Deciding(id, d) => {
+        Moment::Deciding(id, d, resolving) => {
             debug_assert_eq!(d.player, viewer, "a view shows only its viewer's decision");
             Status::Deciding {
-                decision: decision_view(t, obs, id, d),
+                decision: DecisionView {
+                    resolving: resolving.map(|e| stack_item(t, obs, e)),
+                    ..decision_view(t, obs, id, d)
+                },
             }
         }
         Moment::Stopped => Status::Stopped,
@@ -777,6 +794,7 @@ fn decision_view(
         id,
         kind: d.kind.into(),
         candidates,
+        resolving: None,
     }
 }
 

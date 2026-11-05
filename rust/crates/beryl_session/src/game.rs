@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use beryl_engine::event::Event;
 use beryl_engine::rng::SplitMix64;
+use beryl_engine::state::Pending;
 use beryl_engine::{
     CardTable, Choice, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch, Seat,
     State, Step, apply, next, view,
@@ -334,9 +335,14 @@ impl Game {
     /// The human's view now, with the events of the latest view: over with `outcome`, at the
     /// open decision, or stopped.
     fn draw(&mut self, outcome: Option<Outcome>) -> PlayerView {
+        // A paused resolution's entry is still on top of the committed stack; the position
+        // replayed to its question has taken it off.
+        let resolving = matches!(self.state.pending(), Pending::Resolving(_))
+            .then(|| self.state.stack().last())
+            .flatten();
         let moment = match (outcome, &self.open) {
             (Some(outcome), _) => Moment::Over(outcome),
-            (None, Some((id, d))) => Moment::Deciding(*id, d),
+            (None, Some((id, d))) => Moment::Deciding(*id, d, resolving),
             (None, None) => Moment::Stopped,
         };
         let obs = Observation::new(

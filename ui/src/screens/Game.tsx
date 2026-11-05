@@ -1,9 +1,10 @@
 // A game against an agent: the start screen, then the battlefield (game/Board.tsx) with the
-// mulligan and game-over screens over it. Every view arrives as a `game-update` event; the
-// screen answers the open decision through `choose`.
-import { useEffect, useState } from "react";
+// mulligan, choice (game/ChoiceOverlay.tsx) and game-over screens over it. Every view arrives
+// as a `game-update` event; the screen answers the open decision through `choose`.
+import { useEffect, useRef, useState } from "react";
 import { Button } from "../components/Controls";
 import { Card } from "../components/Card";
+import { RulesText } from "../components/Mana";
 import { useCardArt } from "../cards";
 import {
   choose,
@@ -22,7 +23,9 @@ import {
   type Stall,
 } from "../ipc";
 import { Board } from "../game/Board";
-import { isOpening } from "../game/decisions";
+import { ChoiceOverlay } from "../game/ChoiceOverlay";
+import { choiceOf, type Choice } from "../game/choices";
+import { intended, isOpening, type Intent } from "../game/decisions";
 import { frameFace, unknownFace } from "../game/faces";
 import { Brand, Stage } from "./Table";
 
@@ -132,10 +135,6 @@ function failure(e: unknown): string | undefined {
 }
 
 export function GameScreen({ update }: { update: GameUpdate | null }) {
-  const [error, setError] = useState<string>();
-  // The view an answer was sent from: until another arrives, the opponent is acting.
-  const [answered, setAnswered] = useState<PlayerView>();
-  const [showOver, setShowOver] = useState(true);
   if (!update) {
     return (
       <Stage>
@@ -150,21 +149,64 @@ export function GameScreen({ update }: { update: GameUpdate | null }) {
       </Stage>
     );
   }
+  return <Playing update={update} />;
+}
+
+/** A game in progress: the board, and over it the opening, a choice or the game's end. */
+function Playing({ update }: { update: GameUpdate }) {
+  const [error, setError] = useState<string>();
+  // The view an answer was sent from: until another arrives, the opponent is acting.
+  const [answered, setAnswered] = useState<PlayerView>();
+  const [showOver, setShowOver] = useState(true);
+  // The picks still to send for a choice already made (a drag's follow-up, an overlay's
+  // whole scry), one per decision as each arrives; and the overlay that made them, shown
+  // until they are sent.
+  const planned = useRef<Intent[]>([]);
+  const [held, setHeld] = useState<Choice>();
+  // The choice whose overlay is put aside to see the battlefield.
+  const [peek, setPeek] = useState<number>();
   const { session, view } = update;
   const waiting = answered === view;
   const fail = (e: unknown) => {
     setAnswered(undefined);
+    planned.current = [];
+    setHeld(undefined);
     const message = failure(e);
     if (message) setError(message);
   };
   const status = view.status;
-  const answer = (index: CandidateIndex) => {
-    if (status.kind !== "deciding" || waiting) return;
+  const decision = status.kind === "deciding" ? status.decision : undefined;
+  const answer = (index: CandidateIndex, then: Intent[] = []) => {
+    if (!decision || waiting) return;
     setError(undefined);
     setAnswered(view);
-    choose(status.decision.id, index).catch(fail);
+    planned.current = then;
+    choose(decision.id, index).catch(fail);
   };
-  const decision = status.kind === "deciding" ? status.decision : undefined;
+
+  // Each new view takes the next planned pick, if it asks for it; otherwise the plan is over
+  // and the player decides.
+  useEffect(() => {
+    const [next, ...rest] = planned.current;
+    planned.current = [];
+    const index = next && decision ? intended(decision, next) : undefined;
+    if (index === undefined) {
+      setHeld(undefined);
+      return;
+    }
+    answer(index, rest);
+    // Only a new view answers (`answer` changes with every render).
+  }, [view]);
+
+  const choice = held ?? (waiting ? undefined : choiceOf(view));
+  const plan = (picks: Intent[]) => {
+    const [first, ...rest] = picks;
+    const index = first && decision ? intended(decision, first) : undefined;
+    if (index === undefined || !choice) return;
+    setHeld(choice);
+    answer(index, rest);
+  };
+  const peeking = choice !== undefined && peek === choice.key;
   const opening = decision && isOpening(decision.kind) && !waiting;
   const over = status.kind !== "deciding" && showOver;
   return (
@@ -177,9 +219,29 @@ export function GameScreen({ update }: { update: GameUpdate | null }) {
           setStops(session, on ? "exact" : "smart").catch(fail)
         }
         onLeave={() => (window.location.hash = "#/")}
-        dimmed={opening || over}
+        dimmed={opening || over || (choice !== undefined && !peeking)}
+        inert={choice !== undefined}
       />
       {opening && <Opening view={view} decision={decision} onPick={answer} />}
+      {choice && !peeking && (
+        <ChoiceOverlay
+          key={choice.key}
+          view={view}
+          choice={choice}
+          busy={waiting || held !== undefined}
+          onPlan={plan}
+          onViewBattlefield={() => setPeek(choice.key)}
+        />
+      )}
+      {choice && peeking && (
+        <Button
+          variant="secondary"
+          className="overlay-return"
+          onClick={() => setPeek(undefined)}
+        >
+          Back to <RulesText text={choice.title} />
+        </Button>
+      )}
       {status.kind === "over" && showOver && (
         <GameOver outcome={status.outcome} onClose={() => setShowOver(false)} />
       )}

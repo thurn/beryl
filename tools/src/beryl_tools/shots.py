@@ -175,7 +175,14 @@ def ui_shots(args: argparse.Namespace) -> int:
 
 
 # The fixtures ui/scripts/interactions.mjs plays.
-INTERACTION_FIXTURES = ["greedy-turn-9", "combat-attack", "combat-block"]
+INTERACTION_FIXTURES = [
+    "greedy-turn-9",
+    "combat-attack",
+    "combat-block",
+    "choice-scry",
+    "choice-jace",
+    "choice-pay",
+]
 
 
 def ui_test(args: argparse.Namespace) -> int:

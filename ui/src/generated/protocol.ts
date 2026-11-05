@@ -154,7 +154,15 @@ export type DecisionView = {
 /**
  * What an answer names.
  */
-id: DecisionId, kind: Kind, candidates: Array<CandidateView>, };
+id: DecisionId, kind: Kind, candidates: Array<CandidateView>, 
+/**
+ * The spell or ability whose resolution asks this, if one does. It has left the stack
+ * list by then, as the first step of resolving it
+ * ([CR 608.2](https://yawgatog.com/resources/magic-rules/#R6082)): "If the object that's
+ * resolving is an instant spell, a sorcery spell, or an ability, its resolution may involve
+ * several steps." A resolving spell's card is still among the objects, on the stack.
+ */
+resolving: StackItem | null, };
 
 export type CandidateView = { 
 /**

@@ -6,7 +6,8 @@
 // transport plays the recorded next view once the page calls `choose` (src/ipc.ts). The combat
 // fixtures end on the human's attack declaration (`combat-attack`) and on the attacker for a
 // blocker just declared (`combat-block`). Animation is measured on Playwright's clock, so the
-// checks do not depend on the machine's speed. Exits non-zero on the first failed check or any
+// checks do not depend on the machine's speed. The `choice-*` fixtures end on decisions the
+// choice overlays ask. Exits non-zero on the first failed check or any
 // page error.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -409,6 +410,120 @@ await check(
         assert.deepEqual(await settled(page, 2), [blockIndex, blocked]);
     },
     blockRun,
+);
+
+// The choice overlays: a scry, Jace's put-back and a pay-or-counter prompt, each the last view
+// of its fixture. An overlay sends the first pick of its plan at once; the rest wait for the
+// decisions they answer, which these fixtures don't record.
+/** A fixture's last decision, and the candidate index of each card it offers, by slot. */
+async function lastDecision(name) {
+    const views = await load(name);
+    const decision = views.at(-1).status.decision;
+    const bySlot = new Map(
+        decision.candidates.flatMap((c, i) =>
+            c.option.kind === "object" ? [[c.option.slot, i]] : [],
+        ),
+    );
+    return { views, decision, bySlot };
+}
+const tray = (slot) => `.choice-zone [data-slot="${slot}"]`;
+
+const scry = await lastDecision("choice-scry");
+const [scryTop, scryNext] = scry.views
+    .at(-1)
+    .players.you.library.slice(-2)
+    .reverse();
+await check(
+    "clicking a scried card sends it to the bottom",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const before = await page.locator(tray(scryTop)).boundingBox();
+        await page.click(tray(scryTop));
+        await page.clock.runFor(2000);
+        const after = await page.locator(tray(scryTop)).boundingBox();
+        const library = await page.locator(".choice-library").boundingBox();
+        assert.ok(
+            after.x + after.width / 2 < library.x,
+            "the card moved left of the library, to the bottom",
+        );
+        assert.ok(after.x < before.x, "the card moved left");
+        await page.getByRole("button", { name: "Done" }).click();
+        assert.deepEqual(
+            await settled(page, 1),
+            [scry.bySlot.get(scryTop)],
+            "the first pick puts that card on the bottom",
+        );
+    },
+    { fixture: "choice-scry", at: scry.views.length, ready: tray(scryNext) },
+);
+
+const jace = await lastDecision("choice-jace");
+const [first, second] = [...jace.bySlot.keys()];
+await check(
+    "dragging two cards onto the library puts them back in order",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const done = page.getByRole("button", { name: "Done" });
+        assert.ok(await done.isDisabled(), "Done waits for two cards");
+        const zone = await page.locator(".choice-zone").boundingBox();
+        const end = {
+            x: zone.x + zone.width - 30,
+            y: zone.y + zone.height / 2,
+        };
+        for (const slot of [first, second]) {
+            // By its left edge, which the fanned cards after it leave showing.
+            const box = await page.locator(tray(slot)).boundingBox();
+            const grab = { x: box.x + 20, y: box.y + box.height / 2 };
+            await page.mouse.move(grab.x, grab.y);
+            await page.mouse.down();
+            for (let i = 1; i <= 10; i++) {
+                await page.mouse.move(
+                    grab.x + ((end.x - grab.x) * i) / 10,
+                    grab.y,
+                );
+            }
+            await page.mouse.up();
+            await page.clock.runFor(2000);
+        }
+        assert.ok(await done.isEnabled(), "two cards are on the library");
+        await done.click();
+        assert.deepEqual(
+            await settled(page, 1),
+            [jace.bySlot.get(first)],
+            "the card under the top one goes back first",
+        );
+    },
+    { fixture: "choice-jace", at: jace.views.length, ready: tray(first) },
+);
+
+const pay = await lastDecision("choice-pay");
+const decline = pay.decision.candidates.findIndex(
+    (c) => c.option.kind === "no",
+);
+await check(
+    "a pay-or-counter prompt answers from its buttons",
+    async (page) => {
+        await page.getByRole("button", { name: "Don't Pay" }).click();
+        assert.deepEqual(await settled(page, 1), [decline]);
+    },
+    { fixture: "choice-pay", at: pay.views.length, ready: ".choice" },
+);
+
+await check(
+    "View Battlefield puts the overlay aside until asked back",
+    async (page) => {
+        await page.getByRole("button", { name: "View Battlefield" }).click();
+        assert.equal(await page.$(".choice"), null, "the overlay is aside");
+        assert.equal(
+            await page.$(".table-dimmed"),
+            null,
+            "the battlefield is clear",
+        );
+        await page.click(".overlay-return");
+        await page.waitForSelector(".choice");
+        assert.deepEqual(await chosen(page), [], "peeking answers nothing");
+    },
+    { fixture: "choice-pay", at: pay.views.length, ready: ".choice" },
 );
 
 await browser.close();

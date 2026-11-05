@@ -6,14 +6,23 @@ import type { ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { Button } from "./Controls";
 
+/** A button under the choice. */
+export interface OverlayAction {
+  label: ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+}
+
 export interface OverlayProps {
-  title: string;
-  instruction: string;
+  title: ReactNode;
+  instruction: ReactNode;
   children: ReactNode;
   /** The side panel, usually the source card. */
   aside?: ReactNode;
   confirm?: string;
   onConfirm?: () => void;
+  /** The buttons under the choice, the first one primary; given, they replace `confirm`. */
+  actions?: OverlayAction[];
   onViewBattlefield?: () => void;
   className?: string;
 }
@@ -25,6 +34,7 @@ export function Overlay({
   aside,
   confirm = "Done",
   onConfirm,
+  actions,
   onViewBattlefield,
   className,
 }: OverlayProps) {
@@ -44,9 +54,25 @@ export function Overlay({
           <p className="overlay-instruction">{instruction}</p>
         </header>
         {children}
-        <Button className="overlay-confirm" onClick={onConfirm}>
-          {confirm}
-        </Button>
+        {actions ? (
+          <div className="overlay-actions">
+            {actions.map((a, i) => (
+              <Button
+                key={i}
+                variant={i === 0 ? "primary" : "secondary"}
+                className={i === 0 ? "overlay-confirm" : "overlay-alternative"}
+                disabled={a.disabled}
+                onClick={a.onClick}
+              >
+                {a.label}
+              </Button>
+            ))}
+          </div>
+        ) : (
+          <Button className="overlay-confirm" onClick={onConfirm}>
+            {confirm}
+          </Button>
+        )}
       </div>
       <div className="overlay-side">
         <Button
