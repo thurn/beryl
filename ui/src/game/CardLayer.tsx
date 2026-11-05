@@ -154,16 +154,18 @@ function CardElement({
     held !== undefined && (held.dragging || held.epoch === layer.epoch);
   useGlide(x, place.x, reduce, holding);
   useGlide(y, place.y, reduce, holding);
-  // A card changing looks is drawn at another width (a back, a full frame, a battlefield
+  // A card changing looks is drawn at another type unit (a back, a full frame, a battlefield
   // frame): before that is painted, its scale makes up the difference, and then glides, so the
-  // card's size changes smoothly too.
-  const drawnWidth = useRef(place.width);
+  // card's size changes smoothly too. A battlefield frame that only narrows keeps its unit, and
+  // its width animates instead (Card's layout animation).
+  const unit = place.unit ?? place.width / 12;
+  const drawnUnit = useRef(unit);
   useLayoutEffect(() => {
-    if (drawnWidth.current === place.width) return;
-    scale.jump((scale.get() * drawnWidth.current) / place.width);
-    drawnWidth.current = place.width;
-  }, [scale, place.width]);
-  useGlide(scale, place.scale, reduce, false, place.width);
+    if (drawnUnit.current === unit) return;
+    scale.jump((scale.get() * drawnUnit.current) / unit);
+    drawnUnit.current = unit;
+  }, [scale, unit]);
+  useGlide(scale, place.scale, reduce, false, unit);
   useGlide(rotate, dragging ? 0 : place.rotate, reduce);
   useGlide(skewX, place.skew, reduce);
   useGlide(opacity, place.opacity, reduce);
@@ -310,6 +312,8 @@ function Look({
       }
       variant={field ? "field" : "full"}
       width={place.width}
+      height={place.height}
+      unit={place.unit}
       tapped={field && object.tapped}
       highlight={state.highlight}
       // A gold or cyan glow says more than the playable edge, which would hide it.

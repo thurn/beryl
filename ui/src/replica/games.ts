@@ -268,6 +268,7 @@ const trigger = game(
   [
     ...opponentSide,
     ...hidden(26, "you", "library"),
+    field("you", SAMPLE.mountain, "you-mountain"),
     ...copies(2, {
       ...field("you", SAMPLE.mountain, "you-mountain"),
       tapped: true,

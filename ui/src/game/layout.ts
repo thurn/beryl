@@ -10,6 +10,7 @@ import type {
   Step,
   ZoneName,
 } from "../generated/protocol";
+import { ASPECT } from "../components/Card";
 import type { Phase } from "../components/Controls";
 import {
   CREATURE_WIDTH,
@@ -39,6 +40,9 @@ export interface Placement {
   look: Look;
   /** The frame's width before scaling. */
   width: number;
+  /** Its height and type unit before scaling, where not the look's own for that width. */
+  height?: number;
+  unit?: number;
   x: number;
   y: number;
   scale: number;
@@ -64,28 +68,52 @@ export const PILE_SQUASH = 0.86;
 /** Each side's rows, in stage pixels (the mockup's divided by 1.045): the land piles from
  * (x, y), `size` times what depth alone makes them (battlefield.png paints the far lands larger),
  * with `gap` between them before depth scaling; the other permanents' row at `y`, centered on
- * `center`, `gap` card widths apart (the far row's closer), `size` times what depth makes them,
- * between `start` and `end`. While lines cross the table, in combat (combat.png) or with
- * something on the stack (trigger_on_stack_with_target.png), the permanents' rows draw apart
- * and smaller to make room for them and for the step banner, and spread out. */
-const ROWS = {
+ * `center`, `gap` frame widths apart (the far row's closer), between `start` and `end`, each
+ * frame `frame` times the usual width and height. While lines cross the table, in combat
+ * (combat.png) or with something on the stack (trigger_on_stack_with_target.png), the
+ * permanents' rows draw apart and spread out to make room for them and for the step banner, and
+ * their frames narrow, the near row's shortening too, with their bars and type kept full size. */
+const ROWS: Record<
+  Side,
+  {
+    lands: { x: number; y: number; gap: number; size: number };
+    permanents: Record<
+      "main" | "combat" | "stack",
+      {
+        y: number;
+        center: number;
+        gap: number;
+        frame: [number, number];
+        start: number;
+        end: number;
+      }
+    >;
+  }
+> = {
   opponent: {
     lands: { x: 158, y: 124, gap: 30, size: 1.045 },
     permanents: {
-      main: { y: 221, center: 802, gap: 0.044, size: 1, start: 580, end: 1250 },
+      main: {
+        y: 221,
+        center: 802,
+        gap: 0.044,
+        frame: [1, 1],
+        start: 580,
+        end: 1250,
+      },
       combat: {
-        y: 264,
+        y: 260,
         center: 673,
-        gap: 0.25,
-        size: 0.946,
+        gap: 0.26,
+        frame: [0.952, 1],
         start: 400,
         end: 1250,
       },
       stack: {
-        y: 264,
+        y: 260,
         center: 673,
-        gap: 0.25,
-        size: 0.946,
+        gap: 0.26,
+        frame: [0.952, 1],
         start: 400,
         end: 1180,
       },
@@ -94,20 +122,27 @@ const ROWS = {
   you: {
     lands: { x: 111, y: 564, gap: 3, size: 1 },
     permanents: {
-      main: { y: 418, center: 801, gap: 0.08, size: 1, start: 580, end: 1250 },
+      main: {
+        y: 418,
+        center: 801,
+        gap: 0.08,
+        frame: [1, 1],
+        start: 580,
+        end: 1250,
+      },
       combat: {
-        y: 477,
+        y: 473,
         center: 856,
         gap: 0.22,
-        size: 0.885,
+        frame: [0.88, 0.957],
         start: 580,
         end: 1250,
       },
       stack: {
-        y: 461,
+        y: 457,
         center: 802,
         gap: 0.22,
-        size: 0.875,
+        frame: [0.88, 0.957],
         start: 580,
         end: 1180,
       },
@@ -154,6 +189,9 @@ export function stackPlace(index: number, count: number, lifted = false) {
 /** How far attackers stand out of their row toward the other side, so an attack reads at a
  * glance; the rows are too close for more. */
 const ADVANCE = 16;
+
+/** How far a blocker's center leans from its attacker's toward the table's middle. */
+const ACROSS_LEAN = 0.16;
 
 const attacking = (o: ObjectView) => o.combat?.kind === "attacking";
 
@@ -380,11 +418,13 @@ function battlefieldPlacements(
   const groups = piles(others, (o) =>
     plain(o) ? `${o.name}|${o.tapped}` : `#${o.slot}`,
   ).sort((a, b) => Number(!attacking(a[0]!)) - Number(!attacking(b[0]!)));
-  const scale = depthScale(rows.permanents.y) * rows.permanents.size;
-  const width = CREATURE_WIDTH * scale;
+  const { frame } = rows.permanents;
+  const frameWidth = CREATURE_WIDTH * frame[0];
+  const scale = depthScale(rows.permanents.y);
+  const width = frameWidth * scale;
   const groupWidth = (n: number) => width * (1 + LAND_STEP.x * (n - 1));
   const widths = groups.map((g) => groupWidth(g.length));
-  const gap = rows.permanents.gap * CREATURE_WIDTH * scale;
+  const gap = rows.permanents.gap * width;
   const { start, end } = rows.permanents;
   const xs = row(widths, gap, start, end, rows.permanents.center);
   // Where each blocker wants to stand: its attacker's blockers side by side about its center.
@@ -398,7 +438,9 @@ function battlefieldPlacements(
   const wants = new Map<number, number>();
   for (const [attacker, blockers] of blocking) {
     const a = attackers.get(attacker)!;
-    const center = a.x + (CREATURE_WIDTH * a.scale) / 2;
+    // Across the table, a little toward its middle, as combat.png's perspective draws it.
+    const below = a.x + (a.width * a.scale) / 2;
+    const center = below + (STAGE.width / 2 - below) * ACROSS_LEAN;
     blockers.forEach((slot, i) => {
       const offset = (i - (blockers.length - 1) / 2) * width * 1.04;
       wants.set(slot, center - width / 2 + offset);
@@ -419,22 +461,22 @@ function battlefieldPlacements(
     const group = groups[g]!;
     group.forEach((o, i) => {
       const depth = group.length - 1 - i;
-      const x = lefts[k]! + i * CREATURE_WIDTH * LAND_STEP.x * scale;
+      const x = lefts[k]! + i * width * LAND_STEP.x;
       const y =
         rows.permanents.y +
-        depth * CREATURE_WIDTH * LAND_STEP.y * scale +
+        depth * width * LAND_STEP.y +
         (o.combat?.kind === "attacking" ? forward : 0);
-      const placed = onTable(x, y, CREATURE_WIDTH * rows.permanents.size);
       out.push({
         slot: o.slot,
         zone: o.zone,
         look: "field",
-        width: CREATURE_WIDTH,
+        width: frameWidth,
+        height: (CREATURE_WIDTH / ASPECT.field) * frame[1],
+        unit: CREATURE_WIDTH / 12,
         opacity: 1,
         // Combat's creatures over their neighbors, so their marks show.
         z: 40 + k * 8 + i + (o.combat ? 60 : 0),
-        ...placed,
-        scale: placed.scale * rows.permanents.size,
+        ...onTable(x, y, frameWidth),
       });
     });
   });

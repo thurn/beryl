@@ -327,7 +327,7 @@ export function Board({
       <Life
         side="opponent"
         life={opponent.life}
-        active={active === "opponent"}
+        active={active === "opponent" && view.turn.priority === "opponent"}
         style={{ left: 670, top: 48 }}
         target={deciding ? can.players.get("opponent") : undefined}
         onPick={pick}
@@ -335,7 +335,7 @@ export function Board({
       <Life
         side="you"
         life={you.life}
-        active={active === "you"}
+        active={active === "you" && view.turn.priority === "you"}
         style={{ left: 670, top: 618 }}
         target={deciding ? can.players.get("you") : undefined}
         onPick={pick}
@@ -623,8 +623,8 @@ function boardArrows(view: PlayerView, placements: Layout): ArrowSpec[] {
         tone: "gold",
         fromSide: "right",
         toSide: { x: 0.07, y: 0.84 },
-        leave: [30, 150],
-        arrive: [115, -48],
+        leave: [30, 175],
+        arrive: [130, -55],
       });
     }
     for (const target of item.targets) {
@@ -637,7 +637,7 @@ function boardArrows(view: PlayerView, placements: Layout): ArrowSpec[] {
         tone: "cyan",
         // High over the table out of the stack's upper left, then straight down onto it.
         fromSide: { x: 0, y: 0.055 },
-        toSide: target.kind === "player" ? "center" : { x: 0.5, y: 0.25 },
+        toSide: target.kind === "player" ? "center" : { x: 0.5, y: 0.32 },
         leave: [-150, -195],
         arrive: [0, 150],
       });

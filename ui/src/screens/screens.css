@@ -1100,11 +1100,12 @@
 .stack-ability {
   transform-origin: 0 0;
 }
-/* Combat and stack lines over the cards on the table, under the stack's items and menus. */
+/* Combat and stack lines over the cards on the table and the stack's items, whose edges their
+   dots and heads overlap (trigger_on_stack_with_target.png), under menus. */
 .board-arrows {
   position: absolute;
   inset: 0;
-  z-index: 350;
+  z-index: 450;
   pointer-events: none;
 }
 /* Combat marks face the other side: the opponent's attackers wear their chevron below, your
