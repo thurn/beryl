@@ -6,41 +6,58 @@ way [benchmarking.md](benchmarking.md) describes.*
 
 This is the design of the Rust rules engine and of the boundaries that search,
 the desktop UI and drafting build on. It is not the Phase 1 implementation plan;
-that plan is written against this document. The seventeen decisions it rests on
-are marked **D1** to **D17** where they apply and listed again in the appendix.
+that plan is written against this document. The twenty-two decisions it rests on
+are marked **D1** to **D22** where they apply and listed again in the appendix.
 
 ## 1. Goals
 
 - **Exact rules for one card pool.** The 540 cards of the V1 cube in
   `data/vintage-cube-2026-10-07.csv`, plus the five basic lands that decks add
-  at deckbuilding. Two players, 40-card decks. Nothing is approximated inside
-  the engine.
+  at deckbuilding. Two players, 40-card decks, both decklists public (**D19**).
+  Nothing is approximated inside the engine.
 
-- **Search throughput.** The targets, in a release build, single-threaded on a
-  Super core, with caches hot (**D16**):
+- **Search throughput.** The targets, in the `search` build (§18),
+  single-threaded on a Super core, with caches hot, measured on the cube rollout
+  benchmark (§18, **D16**):
 
-  | Metric                                                         | Target                                   |
-  | -------------------------------------------------------------- | ---------------------------------------- |
-  | `size_of::<State>()`                                           | 20 KiB or less, asserted at compile time |
-  | Copy a state                                                   | 100 ns or less                           |
-  | One decision: `next` plus `apply`, averaged over a random game | 1.5 µs or less                           |
-  | Heap allocations on the hot path                               | 0                                        |
-  | Random-agent games                                             | 5,000 or more per core-second            |
-  | Games ending in `Stalled` under random play                    | below 0.5%                               |
+  | Metric                                                    | Target                                   |
+  | --------------------------------------------------------- | ---------------------------------------- |
+  | `size_of::<State>()`                                      | 20 KiB or less, asserted at compile time |
+  | Copy a state                                              | 170 ns or less                           |
+  | One decision: `next` plus `apply`, averaged over rollouts | 1.5 µs or less                           |
+  | The rollout policy's choice, per decision                 | 300 ns or less (**D21**)                 |
+  | Heap allocations on the hot path                          | 0                                        |
+  | Decisions per turn under the search profile               | reported; about 8 expected (**D18**)     |
+  | Games ending in `Stalled` under random play               | below 0.5%                               |
 
-  Where the numbers come from: dirac's random games run about 120 decisions over
-  24 turns. At 1.5 µs per decision a game costs 180 µs, which is 5,500 games per
-  core-second, and the M5 Max's 18 cores then play roughly 100,000 games per
-  second. That machine-wide figure is a consequence, not a target. The
-  per-decision budget is about half of dirac's 2.7 µs and is what the layout in
-  §4 is designed around.
+  Where the numbers come from:
+
+  - **The workload** is rollouts as MCTS runs them: from mid-game positions
+    between real cube decks, under the rollout policy (§19.1) and the search
+    profile (§15). Random games stay for fuzzing and stall rates, but they
+    undercount the decisions search pays for, because a random agent spends its
+    fetchlands and instants at once.
+  - **Per decision**, dirac costs 4.54 µs in its random games (its 2.7 µs figure
+    is a single-transition microbenchmark), so 1.5 µs is about a third of dirac
+    in play. The layout in §4 is designed around this budget.
+  - **Decisions per turn** multiply it. Under exact stops, a policy that holds a
+    fetchland or an instant faces 16 to 20 empty-stack priority passes a turn on
+    top of about 5 real decisions. Smart stops (§15) bring a turn to about 8
+    decisions, an estimate. At 1.8 µs per decision with the policy, a 24-turn
+    game then costs about 350 µs, about 2,900 games per core-second; the
+    machine-wide figure that follows is a consequence, not a target.
+  - **The copy** target is what the hardware does: a hot 20 KiB copy measured
+    167 ns on an M5 Max Super core, store-bandwidth bound at about 120 bytes per
+    ns, and 12 KiB measured 110 ns. Rollouts copy once each, so the copy matters
+    for tree nodes (§19.1), not for rollouts.
 
 - **Hardware.** Apple M5 Max: 6 Super cores with 128 KiB of L1 data cache each,
   12 Performance cores with 64 KiB, 128-byte cache lines, 64 GiB of memory. A 20
   KiB state and its scratch buffers fit in L1 on either kind of core.
 
-**Non-goals.** Cards outside the cube, more than two players, WebAssembly,
-parsing Oracle text, and any mode that plays a different game from the real one.
+**Non-goals.** Cards outside the cube, more than two players, hidden decklists,
+WebAssembly, parsing Oracle text, and any mode that plays a different game from
+the real one.
 
 **The rules surface the cube needs.** From the card list: the full stack with
 APNAP trigger ordering, replacement and prevention effects, layers including
@@ -62,13 +79,15 @@ restarts, dungeons, wishes, day and night, dredge, morph and manifest.
 ## 2. Principles
 
 01. **One exact engine** (**D2**). Speed comes from the representation and from
-    restriction profiles (§15) that offer fewer decisions during search. Every
-    transition is rules-exact, so any line search finds is a legal line.
+    restriction profiles (§15), smart stops above all, that offer fewer
+    decisions during search. Every transition is rules-exact, so any line search
+    finds is a legal line.
 02. **The engine never calls the AI.** It is a state machine: `next` advances
     until it needs a choice or the game ends, `apply` consumes one choice, and
     the pending decision lives inside the state.
 03. **The state is a flat `Copy` value** with fixed capacities and no heap
-    (**D3**, **D4**). Everything static lives in one shared read-only table.
+    (**D3**, **D4**). Everything static lives in shared read-only tables: one
+    for the cube, and one built per game from the two decklists (**D20**).
 04. **Code for bodies, data for interfaces** (**D1**). What the engine must
     inspect about an ability is typed Rust data; what an ability does is a Rust
     function.
@@ -76,8 +95,9 @@ restarts, dungeons, wishes, day and night, dredge, morph and manifest.
     Candidates that lead to the same game state are one candidate.
 06. **Determinism.** A game is a pure function of the decks, the seed and the
     sequence of choices. No clocks, no global state, no randomly seeded hashing.
-07. **The engine tracks who knows what** (**D9**). Agents and the UI see an
-    Observation, never the state.
+07. **The engine tracks who knows what** (**D9**). Agents, rollout policies and
+    the UI see an Observation, a borrowed view that masks what the viewer does
+    not know, never the state.
 08. **Budgets with an honest outcome** (**D11**). Magic is Turing complete, so
     every loop has a bound, and running out is a distinct terminal.
 09. **Correctness by black-box scenarios**, checked against XMage and Forge
@@ -88,8 +108,8 @@ restarts, dungeons, wishes, day and night, dredge, morph and manifest.
 ## 3. The engine in one loop
 
 ```rust
-pub fn next(s: &mut State, t: &CardTable, x: &mut Scratch) -> Step;
-pub fn apply(s: &mut State, t: &CardTable, x: &mut Scratch, c: Choice);
+pub fn next(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers) -> Step;
+pub fn apply(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers, c: Choice);
 
 pub enum Step { Decide(Decision), Over(Outcome) }
 pub struct Choice(pub u8);
@@ -97,34 +117,44 @@ pub struct Choice(pub u8);
 
 - `CardTable` is immutable, built once at startup from `beryl_cards`, and shared
   by every thread as a `&'static`.
+- `GameTable` is built at game start from the two decklists (§6.4) and shared,
+  read-only, by every thread searching that game. It holds the `CardTable`.
 - `Scratch` is per-thread working memory: candidate buffers, the mana solver's
   arrays, the event buffer the UI reads, and a spare `State` used by
   transactional replay (§7.3). It is never copied with the state.
+- `Answers` is where a card body's mid-resolution choices come from (§7.3).
+  `Replay` answers from the choice record and pauses the body when the record
+  runs out, for tree nodes and the UI; the rollout policy answers inline and
+  never pauses.
 - A rollout is the loop below. The search crate inlines it, so the "callback"
   shape costs nothing where it is the right shape:
 
 ```rust
 let mut s = root; // State is Copy
 loop {
-    match next(&mut s, t, x) {
+    match next(&mut s, t, x, &mut policy) {
         Step::Over(outcome) => break outcome,
-        Step::Decide(d) => apply(&mut s, t, x, policy.choose(&d)),
+        Step::Decide(d) => {
+            let c = policy.choose(Observation::new(&s, d.player), &d);
+            apply(&mut s, t, x, &mut policy, c);
+        }
     }
 }
 ```
 
 **Why the engine does not call the AI.** A synchronous callback is the fastest
-structure for a rollout, and the loop above matches it. It fails everywhere
-else. Tree search stores a position in each node and copies it to expand; a
-position paused inside a Rust function has no copyable representation, so no
-node could sit at a mid-resolution choice. The choices that decide games in this
-cube are exactly those: what to fetch with Demonic Tutor, what to put back with
-Brainstorm, what to keep from a scry, what the opponent puts down with Show and
-Tell. Under callbacks the AI answers them by heuristic because it cannot copy
-the position and simulate forward. DeepScry and Ironsmith both started with
-callbacks and both had to bolt on checkpoint-and-replay to get back into a
-decision. Here the paused position is a value (§7.3), so a tutor choice is an
-ordinary node with forty legal children.
+structure for a rollout, and the loop above matches it; inside a rollout the
+policy even answers mid-resolution choices inline (§7.3). It fails everywhere
+else. Tree search must be able to hold a position at any node and copy it to
+expand; a position paused inside a Rust function has no copyable representation,
+so no node could sit at a mid-resolution choice. The choices that decide games
+in this cube are exactly those: what to fetch with Demonic Tutor, what to put
+back with Brainstorm, what to keep from a scry, what the opponent puts down with
+Show and Tell. Under callbacks the AI answers them by heuristic because it
+cannot copy the position and simulate forward. DeepScry and Ironsmith both
+started with callbacks and both had to bolt on checkpoint-and-replay to get back
+into a decision. Here the paused position is a value (§7.3), so a tutor choice
+is an ordinary node with forty legal children.
 
 ## 4. State layout (D3, D4)
 
@@ -164,6 +194,10 @@ const _: () = assert!(size_of::<State>() <= 20 * 1024);
 - The estimate above lands near 17 KiB. The assertion at 20 KiB leaves room for
   what the card work discovers; growth past it must be argued for in a
   benchmark.
+- A hot 20 KiB copy costs about 170 ns (§1). A leaner layout of about 12 KiB
+  would save about 60 ns per copy, which a rollout pays once, and would not
+  change what bounds tree memory, the search's node-storage policy (§19.1). So
+  the layout stays generous.
 
 ### 4.2 Objects and slots
 
@@ -172,18 +206,18 @@ The object in a slot:
 
 | Field                         | Size | Notes                                                                                       |
 | ----------------------------- | ---- | ------------------------------------------------------------------------------------------- |
-| `card: CardId`                | 2    | Index into `CardTable`. Tokens and copies point at their definition too                     |
+| `card: u8`                    | 1    | Index into the game's table (§6.4). Tokens and copies point at their definition too         |
 | `incarnation: u16`            | 2    | Bumped on every zone change (§5)                                                            |
 | `zone`, `owner`, `controller` | 2    | Small enums and player bits                                                                 |
 | `flags`                       | 4    | tapped, summoning sick, attacking, blocking, face down, transformed, phased out, token, ... |
 | `damage: u8`                  | 1    | Marked damage this turn                                                                     |
 | `counters`                    | 5    | +1/+1, -1/-1, loyalty, and one (kind, count) pair for the long tail                         |
 | `attached_to`, `linked`       | 2    | Equipment and auras; what exiled, imprinted or hid this card                                |
-| `copy_of: CardId`             | 2    | Layer 1 copiable values when this object is a copy                                          |
+| `copy_of: u8`                 | 1    | Layer 1 copiable values when this object is a copy, as a game-table index                   |
 | `timestamp: u16`              | 2    | Battlefield entry order, for layers                                                         |
 | `chosen`, `face`              | 2    | A chosen color or type; which face is up                                                    |
 
-About 24 bytes, so the table is about 6 KiB.
+About 22 bytes, so the table is under 6 KiB.
 
 - **Deck cards get fixed slots.** Each player's deck, up to 60 cards, is
   assigned slots by a random permutation drawn from the hidden RNG at game
@@ -347,7 +381,7 @@ pub type Flow = Result<(), Pending>; // Err carries the question to ask
   Evaluating one is a few ANDs over `State`'s bitboards.
 - `fn` pointers are fine in the table because the table is `&'static` data
   shared by all threads; they are banned from `State`, which stores only
-  `CardId` and ability indices.
+  game-table indices and ability indices.
 - A generated `names` module (`names::LIGHTNING_BOLT`, built from the cube CSV)
   makes a misspelled card a compile error in both card files and scenarios.
 - One file per card under color directories in `beryl_cards`. The file holds the
@@ -356,7 +390,7 @@ pub type Flow = Result<(), Pending>; // Err carries the question to ask
 ### 6.3 Bodies
 
 Bodies are straight-line Rust against `EffectCtx`, which wraps the working
-state, the table, the scratch space and a cursor into the choice record:
+state, the tables, the scratch space and the answer source (§3):
 
 ```rust
 fn lightning_bolt(ctx: &mut EffectCtx) -> Flow {
@@ -376,14 +410,44 @@ fn brainstorm(ctx: &mut EffectCtx) -> Flow {
 }
 ```
 
-Every `ctx.choose_*` call either pops the next recorded answer or returns
-`Err(Pending)` through `?`, carrying the question to ask. The primitives
-(`deal_damage`, `draw`, `move_to`, `create_token`, `add_counters`,
+Every `ctx.choose_*` call asks the answer source (§3): `Replay` pops the next
+recorded answer or, when the record has none, returns `Err(Pending)` through
+`?`, carrying the question to ask; the rollout policy answers inline. The
+primitives (`deal_damage`, `draw`, `move_to`, `create_token`, `add_counters`,
 `gain_control`, `search_library`, `each_player`, `reveal`, `shuffle`, ...) are
 the only way a body touches the state, and each builds the event that flows
 through §8. Painter's Servant's color change on cards in every zone, and the
 cost modifiers of Elite Spellbinder, Zirda and Leyline Binding, are reached
 through explicit engine hooks rather than the battlefield layer pass.
+
+### 6.4 The per-game table (D20)
+
+Both decklists are public (§13), so the cards a game can contain are known when
+it starts: the two decks plus every token they can create. `GameTable` is built
+from them once per game:
+
+- **Dense game-local indices**, at most 256, which is what `State` stores. The
+  hot static data for those cards sits contiguously, a few KiB that stay in L1:
+  types, costs, timing class, keywords, listener masks and mana production, with
+  each mana source's flexibility rank (§10).
+- **Capability masks** per game and per player: whether any card can create a
+  replacement effect, a layer effect or an instant-speed action. A mechanic that
+  is absent costs one AND.
+- **Static filter parts** become per-slot attribute bitboards in `State` (card
+  types, colors, mana value), rebuilt from the table wherever identities bind:
+  game start, shuffles and determinization. Most target and affected-set checks
+  are then one to three ANDs.
+
+A build compiled for one matchup (only its cards, absent mechanics as constants,
+bodies and filters inlined) gains in the same places the table already targets.
+What remains is constant-folding table reads; dispatch to inlined bodies still
+compiles to a jump table, an indirect branch like the call through a `fn`
+pointer. It is estimated at single-digit percent over the table, costs a minute
+or more of compilation per matchup, and does nothing for draft simulation, where
+every candidate pick is a new deck. It is tried once the cube rollout benchmark
+exists and adopted only if it clears 10%. Engine variants compiled per
+combination of mechanics (about 1 to 2%) and a JIT, which would need the engine
+expressed as an IR (the path **D1** rejected), were considered and dropped.
 
 ## 7. Decisions (D6) and transactional replay
 
@@ -408,9 +472,11 @@ Every answer is `Choice(u8)`: an index into the candidates.
 The exact profile offers a choice only across **distinct consequences**:
 
 - A choice with one legal answer is applied silently.
-- A player with no legal action passes priority silently. Most of a game, the
-  non-active player has no instant-speed action, so most steps cost no decision
-  at all.
+- A player with no legal action passes priority silently. In this cube that is
+  rarer than it sounds: an uncracked fetchland, Wasteland, a manland, Lightning
+  Bolt or Brainstorm is a legal action at almost every priority pass, so under
+  the exact profile most of the 16 to 20 empty-stack passes in a turn are
+  decisions. Search profiles cut them with smart stops (§15).
 - Interchangeable objects collapse to one candidate: two untapped basic Forests,
   two identical tokens with the same counters and nothing attached. The
   signature compared is card, zone, controller, counters, damage, flags and
@@ -424,9 +490,9 @@ The exact profile offers a choice only across **distinct consequences**:
   mana and Force of Will exiling a blue card are two options, and the card to
   exile is a following pick.
 
-The result is that the surface a human sees in the UI and the surface search
-expands are the same, and the branching factor never multiplies by factors that
-cannot change the game.
+The result is that the surface the UI offers and the surface search expands
+differ only by the restrictions of §15, and the branching factor never
+multiplies by factors that cannot change the game.
 
 ### 7.3 Transactional replay
 
@@ -449,15 +515,26 @@ copies it like any other state. Randomness inside a body replays identically
 because the RNG is part of the copied pre-state. A body with k choices costs k
 short re-runs; the record holds 32 answers, which covers Balance and Doomsday,
 and overflowing it is a stall. Events emitted during a run that ends pending are
-discarded with the scratch state. Building an Observation (§13) for a paused
-position replays the body once into scratch so the viewer sees, for example, the
-three cards Brainstorm just drew.
+discarded with the scratch state. Viewing a paused position (§13) replays the
+body once into scratch and takes the view there, so the viewer sees, for
+example, the three cards Brainstorm just drew.
 
 An ability declares `may_pause` in its data; only those bodies run on the
-scratch copy, which costs about 100 ns, and a debug assertion catches a body
+scratch copy, which costs about 170 ns, and a debug assertion catches a body
 that asks a question without declaring it. The alternative, a hand-written step
 enum per multi-step card, was rejected (**D1**) as the error-prone half of the
 work for no measurable speed.
+
+**Rollouts never pause.** Their answer source is the rollout policy, called
+inline, so a `may_pause` body runs once on the committed state, with no scratch
+copy and no re-run. This cube is full of such bodies: twelve fetch-style lands,
+tutors, Thoughtseize, Brainstorm, Ponder, Preordain, Sensei's Divining Top and
+Fact or Fiction. At 10 to 20 resolutions a game, replaying them would cost about
+2 to 3% of rollout time. Both paths must reach the same state for the same
+answers, so a differential test records a rollout's inline answers, replays them
+through `Replay`, and compares state hashes at every decision (§17.4). An undo
+log that rolls back on pause was considered and rejected: exact undo for every
+primitive is the bug class that broke DeepScry's rewind.
 
 ### 7.4 Casting
 
@@ -579,8 +656,19 @@ an exact matching runs only for candidates that pass.
 What becomes a decision:
 
 - Among plans that differ only in which lands or rocks are tapped, the solver
-  picks the one that keeps the largest set of still-payable costs and offers
-  nothing. This is the one heuristic inside the exact surface, named as such.
+  picks one and offers nothing. It picks by one of two heuristics, the only ones
+  inside the exact surface, named as such (**D7**):
+  - **At tree nodes and in the exact profile**, the plan that leaves the largest
+    set of still-payable costs. That is a search over distinct plans. On a
+    mid-game cube mana base, say five lands, a Mox and Sol Ring, a three-mana
+    spell has 10 to 20, and testing the other costs against each is an estimated
+    0.5 to 1.5 µs per cast, growing combinatorially with Moxen, Signets,
+    Talismans and dual lands.
+  - **In rollouts**, greedily. Each mana source carries a flexibility rank in
+    the per-game table (§6.4): fewest colors first, then no other ability, then
+    no restriction. Payment taps the least flexible sources that cover the
+    colors, in tens of nanoseconds. It always pays legally and occasionally taps
+    a source wanted later in the turn.
 - A decision is offered when plans differ in consumed resources: permanents
   sacrificed, life paid, cards exiled for delve, counters removed, restricted
   mana spent, floating mana left over.
@@ -660,7 +748,11 @@ is a later profile meta-action that proposes a loop and a count as one decision
 in the spirit of the rules on shortcuts, executed as that many real activations;
 it is noted in §20 and not part of Phase 1.
 
-## 13. Hidden information (D9)
+## 13. Hidden information (D9, D19)
+
+**Decklists are public.** Both players know both decklists, so hidden
+information is only where the known cards are: in hands, in library order and
+face down in exile.
 
 Slots are public handles. Both players see that the object in slot 17 moved from
 a hand to the top of a library; what is hidden is which card sits behind the
@@ -677,16 +769,18 @@ slot.
   a Brainstormed-back Ponder would know where it went.
 - Face-down exile (Memory Jar, Shelldock Isle) is a known-to-owner slot in
   exile; cards exiled face up are known to both.
-- **Observation** is a masked copy of the state for one viewer: every slot the
-  viewer does not know has `card = UNKNOWN`, with the fields that could betray
-  it cleared. Agents and the UI receive Observations only; the webview never
-  holds a `State`.
-- **Determinization** takes an Observation, a belief and an RNG and fills every
-  unknown slot into a full `State`, keeping everything the viewer knows. The
-  belief supplies the candidate multiset per hidden group. Phase 1 uses the real
-  decklists; a draft-informed prior over the cube comes later, and in cube it
-  matters more than in constructed, because uniform sampling over 540 cards is a
-  weak prior.
+- **Observation** is a borrowed view of the state for one viewer.
+  `Observation<'a>` wraps `&State` and the viewer, and its accessors mask on
+  read: a slot the viewer does not know reads as `card = UNKNOWN`, with the
+  fields that could betray it hidden. Agents and rollout policies receive views
+  only, at about one bit test per masked read. A masked copy would cost about
+  170 ns per decision, over 10% of the decision budget, and a third 20 KiB
+  buffer in the 64 KiB L1 of a Performance core. The UI receives an owned masked
+  copy built from the view, so the webview never holds a `State`.
+- **Determinization** takes an Observation and an RNG and deals the unknown
+  remainder of each decklist into that player's unknown slots, keeping
+  everything the viewer knows. With public decklists the candidate multiset per
+  hidden group is exact, so no belief model over the cube is needed.
 - **The information-independence test** runs in CI: the same agent must make
   identical decisions from the full state and from a re-determinized one over
   many games, which catches a leaking accessor.
@@ -715,9 +809,22 @@ zone.
 ## 15. Restriction profiles
 
 A `Profile` restricts which decisions are offered and sets budgets. The exact
-profile offers everything §7.2 describes. Search profiles shrink it: never offer
-instant-speed responses on the opponent's turn in rollouts, use the default
-damage division, order all triggers by rule, cap X, attack the player only.
+profile offers everything §7.2 describes. Search profiles, used at tree nodes
+and in rollouts, shrink it:
+
+- **Smart stops** (**D18**). A player gets priority only at a stop: their own
+  main phases, after attackers and after blockers are declared, the opponent's
+  end step, and whenever the stack is non-empty. Elsewhere both players pass
+  silently. A turn has 8 to 10 steps in which both players get priority, and a
+  player holding a fetchland or an instant turns most of those 16 to 20 passes
+  into decisions; smart stops bring a turn from about 20 to 25 decisions to
+  about 8. Lines that need another stop, such as an upkeep activation of
+  Sensei's Divining Top, are lost unless the stop set adds them.
+- The default damage division, all triggers ordered by rule, X capped, and
+  attacks on the player only.
+- In rollouts only, greedy mana taps (§10) and mid-resolution choices answered
+  inline by the rollout policy (§7.3).
+
 Every profile is sound in the sense that any line it produces is a legal line of
 the real game; it may miss options, which is a search-quality question, not a
 correctness one. A profile that restricts the opponent's options makes the
@@ -725,15 +832,15 @@ searcher optimistic, which is tuned, not fixed.
 
 ## 16. Crate map (D12)
 
-| Crate            | Holds                                                                                                              | Depends on                    |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------- |
-| `beryl_engine`   | `State`, events, layers, mana, combat, turn structure, decisions, observation, the `CardDef` types and `EffectCtx` | nothing in the workspace      |
-| `beryl_cards`    | 540 card files under color directories, the generated `names` module, the static table, per-card scenarios         | `beryl_engine`                |
-| `beryl_scenario` | Scenario value types, the strict runner, the JSON dump                                                             | `beryl_engine`                |
-| `beryl_search`   | The `Agent` trait, `RandomAgent`, the heuristic baseline, later MCTS, determinization, evaluation                  | `beryl_engine`                |
-| `beryl_draft`    | Pack generation, draft state, the draft bot, deckbuilding                                                          | `beryl_cards`                 |
-| `beryl_bench`    | Benchmark support, as today, plus the engine's `_counts`, `_abba` and `_timing` targets                            | the above as dev-dependencies |
-| `beryl_app`      | The Tauri shell: sessions, IPC commands, events                                                                    | all of the above              |
+| Crate            | Holds                                                                                                                                    | Depends on                    |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `beryl_engine`   | `State`, events, layers, mana, combat, turn structure, decisions, the Observation view, the `CardDef` types, `GameTable` and `EffectCtx` | nothing in the workspace      |
+| `beryl_cards`    | 540 card files under color directories, the generated `names` module, the static table, per-card scenarios                               | `beryl_engine`                |
+| `beryl_scenario` | Scenario value types, the strict runner, the JSON dump                                                                                   | `beryl_engine`                |
+| `beryl_search`   | The `Agent` trait, `RandomAgent`, the heuristic baseline, the rollout policy, later MCTS, determinization, evaluation                    | `beryl_engine`                |
+| `beryl_draft`    | Pack generation, draft state, the draft bot, deckbuilding                                                                                | `beryl_cards`                 |
+| `beryl_bench`    | Benchmark support, as today, plus the engine's `_counts`, `_abba` and `_timing` targets and the cube rollout benchmark                   | the above as dev-dependencies |
+| `beryl_app`      | The Tauri shell: sessions, IPC commands, events                                                                                          | all of the above              |
 
 The engine knows no card and no card knows the engine's internals: cards use
 `EffectCtx` and the table types only. One card edit recompiles `beryl_cards`,
@@ -795,6 +902,8 @@ play including the card raises no invariant. dirac's lockstep bar is the model.
   counters and life are in range.
 - **Determinism:** the same decks, seed and choices reproduce the same state
   hash at every decision.
+- **Inline and replayed answers agree:** a rollout's inline answers, replayed
+  through `Replay`, give the same state hash at every decision (§7.3).
 - **Information independence** (§13).
 - **No allocation:** a counting allocator in tests asserts zero heap allocations
   across a random game.
@@ -802,26 +911,51 @@ play including the card raises no invariant. dirac's lockstep bar is the model.
   (state copies, layer recomputes, solver runs, events) with tolerance bands, in
   the style of phase.rs, as the stable signal CI can gate on.
 
-## 18. Performance discipline (D16)
+## 18. Performance discipline (D16, D22)
 
 Every target in §1 gets a `_counts` Gungraun benchmark and a `_timing` Criterion
 baseline in Phase 1, following `docs/benchmarking.md`: deterministic inputs
 pinned by a test, instruction counts first, ABBA timing to confirm on a quiet
 machine, single-threaded on a Super core. Gates come once baselines exist.
 
+**The cube rollout benchmark** is the workload the targets are measured on: a
+pinned corpus of mid-game positions between real cube decks, cut from
+heuristic-agent games, rolled out under the rollout policy and the search
+profile to the horizon Phase 2 chooses. It reports decisions per turn and per
+rollout, nanoseconds per decision for the engine and for the policy, and
+rollouts per core-second. Until the Phase 1 heuristic agent exists, random games
+stand in.
+
+**Builds.** A `search` Cargo profile builds the benchmark and headless research
+binaries: fat LTO, `panic = "abort"` and `codegen-units = 1`, with
+`-C target-cpu=apple-m4` passed by the recipes that build it, since a Cargo
+profile cannot set the CPU; `apple-m4` is what `native` resolves to here under
+rustc 1.98. Profile-guided optimization follows once the cube rollout benchmark
+exists, trained on it. It needs `llvm-tools` in `rust/rust-toolchain.toml`, and
+BOLT, the usual next step on Linux, does not support macOS binaries.
+
+- Estimated gains for a branchy engine: PGO 5 to 15%, fat LTO and abort a few
+  percent together, the CPU target 0 to 2%.
+- Code changes are compared without PGO, by counts and ABBA; PGO applies only to
+  the build behind the headline numbers.
+- The app keeps the release profile until a measured gain argues for moving it
+  over. Fat LTO and abort are whole-binary settings, so in the app they would
+  cover Tauri's dependency graph too.
+
 Rules for the hot path:
 
 - `u8` indices and bitboards; no `Vec`, no maps, no `Box<dyn>`, no `Rc`.
-- One `memcpy` per copy; no `Clone` impls that do work.
+- One `memcpy` per copy; no `Clone` impls that do work. A rollout copies once,
+  at its start; nothing copies per decision.
 - Fast paths for the common emptiness: no active replacement effects, no dirty
-  derived data, no pending triggers, no instant-speed action for the non-active
-  player.
+  derived data, no pending triggers, no stop for either player (§15).
 - Per-kind bitmask indexes for replacement effects and triggers, rebuilt when
   the battlefield changes, so matching touches only listeners.
 - `#[inline]` on primitives, `#[cold]` on stall paths, no formatting or logging
   in the engine crate.
-- Everything static precomputed into `CardTable` at startup: per-card bitmasks
-  of event kinds listened to, keyword sets, mana produce sets.
+- Everything static precomputed: into `CardTable` at startup (per-card bitmasks
+  of event kinds listened to, keyword sets, mana produce sets) and into
+  `GameTable` at game start (§6.4).
 
 ## 19. Boundaries
 
@@ -829,41 +963,63 @@ Rules for the hot path:
 
 Phase 1 ships a baseline (**D15**); the real search is Phase 2. The engine
 already provides what that search needs: cheap copies, factored decisions inside
-the state, `Observation` and determinization, profiles, budgets, the state hash,
-per-thread `Scratch`, and the inlined rollout loop.
+the state, the `Observation` view and determinization, profiles, budgets, the
+state hash, per-thread `Scratch`, inline answers, and the inlined rollout loop.
 
 ```rust
 pub trait Agent {
-    fn choose(&mut self, obs: &Observation, d: &Decision) -> Choice;
+    fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice;
 }
 ```
 
 The baseline is a scripted heuristic with a static evaluation: play a land, cast
 the most expensive castable spell with sensible targets, attack when the simple
 combat math says safe, block to avoid lethal or trade up, pass otherwise. It
-doubles as the rollout policy later, which the literature says should be simple,
-and it ships beside a `RandomAgent` used for fuzzing and throughput benchmarks.
+ships beside a `RandomAgent` used for fuzzing, and its games supply the
+positions of the cube rollout benchmark (§18).
+
+**The rollout policy** (**D21**) is separate from the baseline, and cheaper:
+
+- It reads per-card scores that the search crate precomputes per game, indexed
+  by game-table index (§6.4), plus simple combat rules: attack when no untapped
+  blocker can kill the attacker, and chump only to prevent lethal.
+- It makes no copies and no lookahead. Its budget is about 300 ns per decision,
+  20% of the engine's, tracked by the cube rollout benchmark.
+- It reads the same `Observation` view as agents and answers mid-resolution
+  choices inline (§7.3).
+
+Lookahead would cost about 10 µs a decision for five candidates (a copy, an
+`apply` and an evaluation each), seven times the engine. Cheap is also better:
+Cowling et al. found rollouts driven by a weaker, reduced-rules player beat the
+expert player's by about 10 percentage points.
 
 The intended search, from the research: ensemble determinized MCTS at the root,
 many shallow determinizations rather than few deep ones, each factored decision
-a node, rollouts under the heuristic policy truncated after a few turns and
-scored by the static evaluation, common random numbers across candidates, and
-root parallelization across determinizations on all 18 cores with no shared
-mutable state. Then a draft-informed belief model for sampling hidden cards, a
-learned value function at the leaves, and EPIMC-style deferred evaluation for
-bluff-sensitive spots. ISMCTS is an experiment, not the default.
+a node, rollouts under the rollout policy to a horizon Phase 2 chooses (full
+games, or a few turns scored by the static evaluation), common random numbers
+across candidates, and root parallelization across determinizations on all 18
+cores with no shared mutable state. Then a learned value function at the leaves,
+and EPIMC-style deferred evaluation for bluff-sensitive spots. ISMCTS is an
+experiment, not the default.
+
+**Node storage** is a Phase 2 decision. At about 10,000 new nodes per second per
+thread, a 20 KiB state in every node would be 3.6 GB/s across 18 threads, or 36
+GB for a 10-second search, and restoring one from DRAM takes about 630 ns.
+Search can replay choices from the root, or keep states only in nodes visited at
+least twice; a state is a pure function of the root and the choices (§2), so
+either is exact.
 
 ### 19.2 Sessions and IPC (D14)
 
 `beryl_app` owns a `GameSession` per game on a dedicated thread running the
 step/apply loop. When the pending decision belongs to the human, the session
-emits a Tauri event with the human's Observation, the Decision with its
-candidates described by public slot, and the engine events since the last view
-for animation, then waits for one `choose(session, decision_seq, index)`
-command. AI decisions run on the session thread, and a search may use a pool, so
-IPC never blocks. The webview never sees a `State`. Every session records seed,
-decklists and the choice log as a replay file, and `ui/src/ipc.ts` keeps the
-typed wrappers for the commands and events.
+emits a Tauri event with an owned masked copy of the human's Observation (§13),
+the Decision with its candidates described by public slot, and the engine events
+since the last view for animation, then waits for one
+`choose(session, decision_seq, index)` command. AI decisions run on the session
+thread, and a search may use a pool, so IPC never blocks. The webview never sees
+a `State`. Every session records seed, decklists and the choice log as a replay
+file, and `ui/src/ipc.ts` keeps the typed wrappers for the commands and events.
 
 ### 19.3 Draft
 
@@ -873,7 +1029,9 @@ shape as `Agent`. The Phase 1 bot is a pick-order rating with color commitment,
 the Forge and XMage baseline, and the deckbuilder picks a two-color 23 with 17
 lands including basics. A human drafts and builds in the UI. Learned card
 representations and simulation-based evaluation are later work, and the latter
-is one more reason the engine must be fast.
+is one more reason the engine must be fast. Simulation plays a new deck for
+every candidate pick, so it runs on the generic engine with per-game tables
+(§6.4), never on builds compiled per matchup.
 
 ## 20. Open questions
 
@@ -884,31 +1042,41 @@ is one more reason the engine must be fast.
   should propose counts.
 - **613.8 corpus.** Which cube interactions, if any, exercise same-layer
   dependencies; the scenario suite should contain the candidates.
-- **Observation size over IPC.** A full masked copy is about 17 KiB; the webview
-  may want a reduced `PlayerView` instead, derived from it.
+- **Observation size over IPC.** The owned masked copy is about 17 KiB; the
+  webview may want a reduced `PlayerView` instead, derived from the view.
 - **Forge's reach as an oracle**, given its scripted harness's limits, versus
   investing in XMage only.
-- **Belief modeling in cube**, where the opponent's deck is drafted and partly
-  observed during the draft.
+- **Rollout horizon and node storage** (§19.1): full games, or a few turns and
+  an evaluation; replay from the root, or states in nodes visited twice.
+- **Per-matchup builds** (§6.4): the experiment, once the cube rollout benchmark
+  exists, adopted at 10% or more.
+- **To measure once the engine runs:** how often layers recompute with equipment
+  attached all game (§9), and what declaring combat one creature at a time costs
+  a rollout against declaring a whole attack at once (§11).
 
 ## Appendix: decisions
 
-| ID  | Decision                                                                                           | Why                                                                                                            |
-| --- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| D1  | Typed Rust data for ability interfaces, Rust functions for bodies, transactional replay for pauses | Dispatch cost is 1 to 2%; the engine must inspect abilities; bodies must pause without callbacks or step enums |
-| D2  | One exact engine; speed from representation plus restriction profiles                              | dirac shows exact and fast coexist; two implementations double the card work; search exploits approximations   |
-| D3  | Flat `Copy` state, fixed capacities, no heap                                                       | 40 ns copies and zero allocations are the proven pattern; copy-make suits determinized root-parallel search    |
-| D4  | u8 slots, 256 objects, decks to 60, generous queues, about 17 to 20 KiB                            | Fits L1 on both core types; token and storm decks do not stall; emblems as a bitmask                           |
-| D5  | Base plus derived arrays, full recompute when dirty, pairwise 613.8 test                           | Reads are array loads; the cube has few active effects; incremental schemes are where layer bugs live          |
-| D6  | Offer only distinct consequences                                                                   | Same surface for the UI and search; branching never multiplies by outcome-neutral factors                      |
-| D7  | Mana solver picks taps, offers resource trade-offs, `manual_mana` flag                             | Payability needs a solver anyway; sacrifices and life are real decisions; tap choice rarely is                 |
-| D8  | Sequential combat picks with legality-aware candidates; division by distinct outcomes              | Whole-declaration decisions are combinatorial; defenders and divisions are real decisions                      |
-| D9  | Engine-tracked knowledge over public slots; shuffles rebind identities; Observation API            | The chokepoints are in the engine; every engine that tracked knowledge elsewhere leaked                        |
-| D10 | Typed `Event` enum for about 30 kinds, per-kind indexes, set-carrying events                       | One replacement and trigger protocol; everything-is-an-event is slow; per-primitive hooks drift                |
-| D11 | Distinct `Stalled(reason)` terminal scored as a draw                                               | Budgets are unavoidable; a stall must be distinguishable from a rules draw in tests and statistics             |
-| D12 | Crates: engine, cards, scenario, search, draft, bench, app                                         | The engine knows no card; card edits do not rebuild rules tests; the AI cannot reach engine internals          |
-| D13 | Scenarios as Rust-built serde values, strict runner, exported to XMage and Forge                   | Typo-safe authoring with the compiler's help; one scenario, three engines                                      |
-| D14 | Rust `GameSession` on its own thread; Observations over IPC; replay files                          | AI thinking never blocks the window; hidden identities never reach the webview                                 |
-| D15 | Scripted heuristic baseline behind an `Agent` trait over Observations                              | Plays sanely in Phase 1 and becomes the rollout policy; no API change for MCTS                                 |
-| D16 | Per-core budgets with 100k games/s as the derived figure; metrics first-class                      | The per-decision budget drives the layout; machine-wide numbers reward degenerate games                        |
-| D17 | This document at `docs/engine-architecture.md`, engine plus boundaries                             | Reference material every session reads; the interfaces the UI and AI consume are written down                  |
+| ID  | Decision                                                                                                                                                   | Why                                                                                                                                                                                  |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| D1  | Typed Rust data for ability interfaces, Rust functions for bodies; transactional replay for pauses at tree nodes and in the UI, inline answers in rollouts | Dispatch cost is 1 to 2%; the engine must inspect abilities; bodies must pause without callbacks or step enums; rollouts never need to pause, and replaying there would cost 2 to 3% |
+| D2  | One exact engine; speed from representation plus restriction profiles                                                                                      | dirac shows exact and fast coexist; two implementations double the card work; search exploits approximations                                                                         |
+| D3  | Flat `Copy` state, fixed capacities, no heap                                                                                                               | One-`memcpy` copies and zero allocations are the proven pattern; copy-make suits determinized root-parallel search                                                                   |
+| D4  | u8 slots, 256 objects, decks to 60, generous queues, about 17 to 20 KiB; copies 170 ns or less                                                             | Fits L1 on both core types; token and storm decks do not stall; emblems as a bitmask; a 20 KiB copy measured 167 ns and rollouts copy once, so a leaner layout buys little           |
+| D5  | Base plus derived arrays, full recompute when dirty, pairwise 613.8 test                                                                                   | Reads are array loads; the cube has few active effects; incremental schemes are where layer bugs live                                                                                |
+| D6  | Offer only distinct consequences                                                                                                                           | One surface for the UI and search, which search profiles only restrict; branching never multiplies by outcome-neutral factors                                                        |
+| D7  | Mana solver picks taps (greedily in rollouts, keeping the most costs payable at tree nodes), offers resource trade-offs, `manual_mana` flag                | Payability needs a solver anyway; sacrifices and life are real decisions; tap choice rarely is; searching tap plans costs about 1 µs a cast                                          |
+| D8  | Sequential combat picks with legality-aware candidates; division by distinct outcomes                                                                      | Whole-declaration decisions are combinatorial; defenders and divisions are real decisions                                                                                            |
+| D9  | Engine-tracked knowledge over public slots; shuffles rebind identities; Observation as a borrowed view                                                     | The chokepoints are in the engine; every engine that tracked knowledge elsewhere leaked; a masked copy per decision would cost over 10% of the budget                                |
+| D10 | Typed `Event` enum for about 30 kinds, per-kind indexes, set-carrying events                                                                               | One replacement and trigger protocol; everything-is-an-event is slow; per-primitive hooks drift                                                                                      |
+| D11 | Distinct `Stalled(reason)` terminal scored as a draw                                                                                                       | Budgets are unavoidable; a stall must be distinguishable from a rules draw in tests and statistics                                                                                   |
+| D12 | Crates: engine, cards, scenario, search, draft, bench, app                                                                                                 | The engine knows no card; card edits do not rebuild rules tests; the AI cannot reach engine internals                                                                                |
+| D13 | Scenarios as Rust-built serde values, strict runner, exported to XMage and Forge                                                                           | Typo-safe authoring with the compiler's help; one scenario, three engines                                                                                                            |
+| D14 | Rust `GameSession` on its own thread; Observations over IPC; replay files                                                                                  | AI thinking never blocks the window; hidden identities never reach the webview                                                                                                       |
+| D15 | Scripted heuristic baseline behind an `Agent` trait over Observations                                                                                      | Plays sanely in Phase 1 and supplies the benchmark's positions; no API change for MCTS                                                                                               |
+| D16 | Per-core budgets measured on cube rollouts as MCTS runs them; metrics first-class                                                                          | The per-decision budget drives the layout; random games undercount the decisions search pays for; machine-wide numbers reward degenerate games                                       |
+| D17 | This document at `docs/engine-architecture.md`, engine plus boundaries                                                                                     | Reference material every session reads; the interfaces the UI and AI consume are written down                                                                                        |
+| D18 | Search profiles give priority only at smart stops                                                                                                          | A held fetchland or instant makes most of a turn's 16 to 20 priority passes into decisions; smart stops cut decisions 2.5 to 3 times, which no codegen recovers                      |
+| D19 | Decklists are public; hidden information is where the known cards are                                                                                      | The AI is built for open decklists; determinization deals each list's unknown remainder, so no belief model is needed                                                                |
+| D20 | A dense per-game table over the game's known cards; per-matchup builds only on a measured gain of 10% or more                                              | Decision cost is generic machinery whose work depends on the board; the table gets most of specialization's gain and serves draft simulation, where every pick is a new deck         |
+| D21 | A table-driven rollout policy with no copies or lookahead, about 300 ns per decision                                                                       | Policy cost multiplies every rollout decision; lookahead costs seven times the engine; weaker rollout players gave better estimates in Cowling et al.                                |
+| D22 | A `search` build with fat LTO, abort and the M4 CPU target, then PGO trained on the rollout benchmark                                                      | An estimated 5 to 20% for a build profile; the app follows only once the gain is measured                                                                                            |
