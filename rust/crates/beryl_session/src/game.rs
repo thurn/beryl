@@ -2,8 +2,9 @@
 //! its thread, and that tests drive directly. It plays on view by view ([`Game::next_view`]):
 //! as each step of the turn begins, before each of the agent's decisions, at each of the
 //! human's, and at the end, so the human sees the agent's turn as it is played. Under the
-//! smart stops the session also answers two kinds of the human's decisions for them
-//! ([`Game::auto_answer`]).
+//! smart stops the session also halts the human where the engine would pass them by, and
+//! answers some of their decisions for them: passing to their own spell, and ordering their
+//! triggers.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};

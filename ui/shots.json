@@ -96,10 +96,10 @@
     },
     {
       "name": "game-pay-plans",
-      "route": "/?fixture=pay-other&at=210#/game",
+      "route": "/?fixture=pay-other&at=84#/game",
       "width": 1600,
       "height": 900,
-      "click": "[data-zone=hand][data-card='Get Lost']"
+      "click": "[data-zone=hand][data-card='Thundertrap Trainer']"
     },
     {
       "name": "game-main",
@@ -195,13 +195,13 @@
     },
     {
       "name": "game-declare-attack",
-      "route": "/?fixture=combat-declare&at=227#/game",
+      "route": "/?fixture=combat-declare&at=219#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "game-declare-attack-picked",
-      "route": "/?fixture=combat-declare&at=227#/game",
+      "route": "/?fixture=combat-declare&at=219#/game",
       "width": 1600,
       "height": 900,
       "click": [
@@ -213,37 +213,37 @@
     },
     {
       "name": "game-declare-block-choosing",
-      "route": "/?fixture=combat-double-block&at=417#/game",
+      "route": "/?fixture=combat-double-block&at=507#/game",
       "width": 1600,
       "height": 900,
-      "click": ["[data-slot='125']", "[data-slot='84']", "[data-slot='25']"]
+      "click": ["[data-slot='121']", "[data-slot='120']", "[data-slot='28']"]
     },
     {
       "name": "game-declare-block",
-      "route": "/?fixture=combat-double-block&at=417#/game",
+      "route": "/?fixture=combat-double-block&at=507#/game",
       "width": 1600,
       "height": 900,
       "click": [
-        "[data-slot='125']",
-        "[data-slot='84']",
-        "[data-slot='25']",
-        "[data-slot='123']",
-        "[data-slot='22']",
-        "[data-slot='123']"
+        "[data-slot='121']",
+        "[data-slot='120']",
+        "[data-slot='28']",
+        "[data-slot='122']",
+        "[data-slot='10']",
+        "[data-slot='122']"
       ]
     },
     {
       "name": "game-declare-block-1280",
-      "route": "/?fixture=combat-double-block&at=417#/game",
+      "route": "/?fixture=combat-double-block&at=507#/game",
       "width": 1280,
       "height": 800,
       "click": [
-        "[data-slot='125']",
-        "[data-slot='84']",
-        "[data-slot='25']",
-        "[data-slot='123']",
-        "[data-slot='22']",
-        "[data-slot='123']"
+        "[data-slot='121']",
+        "[data-slot='120']",
+        "[data-slot='28']",
+        "[data-slot='122']",
+        "[data-slot='10']",
+        "[data-slot='122']"
       ]
     },
     {
