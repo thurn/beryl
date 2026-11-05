@@ -113,7 +113,8 @@
 .card {
   position: relative;
   flex: none;
-  padding: 0.22em;
+  /* The black body, a little deeper at the bottom, with the colored frame inset in it. */
+  padding: 0.34em 0.34em 0.46em;
   border-radius: var(--radius-card);
   background: linear-gradient(160deg, #2c2a28, #0d0c0b);
   box-shadow: var(--card-shadow, var(--shadow-card));
@@ -192,6 +193,12 @@
 .card-rules p {
   margin: 0;
 }
+/* Short rules text sits centered in its box, as on the mockups' Counterspell and Preordain. */
+.card-rules-short {
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
 .card-pt {
   position: absolute;
   right: 0.45em;
@@ -212,53 +219,43 @@
   font-size: 1.1em;
 }
 
-/* States: tapped turns the card (Card.tsx), source glows gold, target glows cyan, attackers are
-   angular, blockers rounded. */
+/* States: tapped turns the card (Card.tsx), source glows gold, target glows cyan, an attacker
+   wears an angular chevron above and a blocker a rounded arc below. */
 .card-source {
   box-shadow: var(--card-shadow, var(--shadow-card)), var(--glow-gold);
 }
 .card-target {
   box-shadow: var(--card-shadow, var(--shadow-card)), var(--glow-cyan);
 }
-/* Copies beneath the top card of a stack sit in its shade. */
-.card-under {
-  filter: brightness(0.72);
-}
-.card-attacker {
-  clip-path: polygon(
-    0.9em 0,
-    calc(100% - 0.9em) 0,
-    100% 0.9em,
-    100% calc(100% - 0.9em),
-    calc(100% - 0.9em) 100%,
-    0.9em 100%,
-    0 calc(100% - 0.9em),
-    0 0.9em
-  );
-}
-.card-attacker .card-rim {
-  clip-path: inherit;
-  border-radius: 0;
-}
-.card-blocker,
-.card-blocker .card-rim {
-  border-radius: 1.4em;
-}
-.card-blocker .card-name-bar {
-  border-radius: 1em 1em 0.45em 0.45em;
-}
-.attack-chevron {
+/* Copies beneath the top card of a stack sit in its shade (an overlay: a filter would clip
+   the card's shadow at the filter region in WebKit). */
+.card-under::after {
+  content: "";
   position: absolute;
-  top: -1.9em;
+  inset: 0;
+  border-radius: inherit;
+  background: rgb(0 0 0 / 30%);
+}
+.combat-marker {
+  position: absolute;
   left: 50%;
-  width: 4.2em;
+  width: 82%;
   transform: translateX(-50%);
   fill: none;
-  stroke: var(--ember);
-  stroke-width: 2.6;
+  stroke: var(--gold);
+  stroke-linecap: round;
   stroke-linejoin: miter;
-  filter: drop-shadow(0 0 4px rgb(240 122 28 / 80%));
+  filter: drop-shadow(0 0 3px rgb(255 190 90 / 95%))
+    drop-shadow(0 0 8px rgb(240 122 28 / 70%));
   overflow: visible;
+}
+.attack-chevron {
+  bottom: calc(100% + 0.25em);
+  stroke-width: 2.4;
+}
+.block-arc {
+  top: calc(100% + 0.25em);
+  stroke-width: 2.4;
 }
 
 /* Card backs and piles. */
@@ -368,29 +365,33 @@
   box-shadow: 0 2px 6px rgb(0 0 0 / 50%);
 }
 
-/* Stack items. */
+/* Stack items: the source's frame over a shield-shaped rules box. */
 .stack-item {
-  padding: 0.22em;
-  border-radius: 0.9em 0.9em 50% 50% / 0.9em 0.9em 22% 22%;
+  padding: 0.3em 0.3em 0.4em;
+  border-radius: 0.9em 0.9em 50% 50% / 0.9em 0.9em 26% 26%;
   background: linear-gradient(160deg, #2c2a28, #0d0c0b);
   box-shadow: var(--shadow-lifted);
   font-family: var(--font-serif);
   color: #191715;
 }
 .stack-item .card-rim {
-  min-height: 13em;
-  border-radius: 0.75em 0.75em 50% 50% / 0.75em 0.75em 21% 21%;
+  padding: 0.35em;
+  border-radius: 0.7em 0.7em 50% 50% / 0.7em 0.7em 25% 25%;
+}
+.stack-item .card-name {
+  font-size: 1.15em;
 }
 .stack-item .card-art {
   flex: 0 0 9em;
 }
 .stack-item .card-rules {
-  border-radius: 0.2em 0.2em 50% 50% / 0.2em 0.2em 25% 25%;
-  padding: 0.5em 0.6em 2.4em;
-  font-size: 0.86em;
-  line-height: 1.25;
+  flex: none;
+  border-radius: 0.2em 0.2em 50% 50% / 0.2em 0.2em 22% 22%;
+  padding: 0.5em 0.55em 2em;
+  font-size: 1.08em;
+  line-height: 1.22;
+  text-align: center;
 }
-
 /* Arrows. */
 .arrows {
   position: absolute;
@@ -416,12 +417,18 @@
 }
 .arrow-glow {
   stroke: var(--tone-soft);
-  stroke-width: 9;
-  opacity: 0.55;
+  stroke-width: 12;
+  opacity: 0.7;
+  filter: blur(3px);
 }
 .arrow-line {
   stroke: var(--tone);
-  stroke-width: 2.6;
+  stroke-width: 3.6;
+}
+.arrow-core {
+  fill: none;
+  stroke: rgb(255 255 255 / 75%);
+  stroke-width: 1.2;
 }
 .arrow-dot,
 .arrow-head {
@@ -559,24 +566,60 @@
   border-left: 0.22em solid rgb(242 236 225 / 75%);
 }
 .phase-tracker-compact {
-  padding: 0.2em 0.6em;
-  font-size: 26px;
+  gap: 0.5em;
+  padding: 0 0.4em 0.35em;
+  font-size: 30px;
+  border: none;
+  border-radius: 0;
   background: none;
-  border: none;
   box-shadow: none;
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(
+      90deg,
+      transparent,
+      rgb(242 236 225 / 30%) 15%,
+      rgb(242 236 225 / 30%) 85%,
+      transparent
+    )
+    1;
 }
-.phase-tracker-compact .phase-arrow {
-  margin: 0 0.3em;
-  border: none;
+.phase-tracker-compact .phase {
+  position: relative;
+}
+.phase-tracker-compact svg {
+  fill: #1e1c1a;
+  stroke: rgb(236 226 206 / 70%);
+  stroke-width: 1.1;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 50%));
+}
+.phase-tracker-compact .phase:first-child svg,
+.phase-tracker-compact .phase:last-child svg {
+  font-size: 0.7em;
+}
+.phase-tracker-compact .phase-current svg {
+  fill: rgb(233 173 74 / 18%);
+  stroke: var(--gold);
+  stroke-width: 1.8;
+  filter: drop-shadow(0 0 5px rgb(233 173 74 / 90%));
+}
+.phase-tracker-compact .phase-current::after {
+  content: "";
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  bottom: -0.38em;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--gold);
+  box-shadow: 0 0 6px var(--gold);
 }
 
-/* Life orbs and badges. */
-/* Sized in em: the table sets a larger font size than the gallery. */
+/* Life orbs and badges. Sized in em: the table sets a larger font size than the gallery. */
 .life-orb {
   position: relative;
   font-size: 17px;
   width: 10em;
-  height: 5em;
+  height: 4.4em;
   display: grid;
   place-items: center;
 }
@@ -587,36 +630,41 @@
   height: 100%;
   overflow: visible;
 }
-.life-orb-flare {
-  fill: url(#orb-flare);
+.life-orb-blades {
+  fill: url(#blade-metal);
+  stroke: rgb(20 18 16 / 70%);
+  stroke-width: 0.8;
 }
 .life-orb-core {
   position: relative;
-  width: 4.1em;
-  height: 4.1em;
+  width: 3.8em;
+  height: 2.95em;
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 35%, #3a3835, #121110 70%);
-  border: 3px solid #b9b3aa;
+  border: 0.17em solid transparent;
+  background:
+    radial-gradient(ellipse at 50% 30%, #44413d, #161514 72%) padding-box,
+    linear-gradient(180deg, #f6f3ee, #8f8982 55%, #3d3935) border-box;
   box-shadow:
-    inset 0 2px 4px rgb(255 255 255 / 15%),
-    0 0 0 2px #26231f,
-    0 4px 12px rgb(0 0 0 / 60%);
+    inset 0 0.1em 0.25em rgb(255 255 255 / 14%),
+    0 0.25em 0.6em rgb(0 0 0 / 60%);
   font-family: var(--font-serif);
   font-weight: 600;
-  font-size: 1em;
   color: #fbf8f2;
 }
 .life-orb-core span {
-  font-size: 2.2em;
+  font-size: 2em;
+  line-height: 1;
+  text-shadow: 0 2px 3px rgb(0 0 0 / 70%);
 }
 .life-orb-active .life-orb-core {
-  border-color: #f2c06a;
+  background:
+    radial-gradient(ellipse at 50% 30%, #44413d, #161514 72%) padding-box,
+    linear-gradient(180deg, #fff1cc, #e8a849 55%, #7a4512) border-box;
   box-shadow:
-    inset 0 2px 4px rgb(255 255 255 / 15%),
-    0 0 0 2px #6a3a10,
-    0 6px 16px rgb(240 122 28 / 70%);
+    inset 0 0.1em 0.25em rgb(255 255 255 / 14%),
+    0 0.3em 0.9em rgb(240 122 28 / 75%);
 }
 .player-badge {
   display: inline-flex;
@@ -628,93 +676,87 @@
   font-weight: 700;
   font-size: 22px;
   color: var(--text);
+  text-shadow: 0 1px 3px rgb(0 0 0 / 70%);
 }
 .player-badge-emblem {
   width: 1.6em;
   height: 1.6em;
-}
-.emblem-outer {
-  fill: #2a2622;
-  stroke: var(--gold);
-  stroke-width: 2.2;
-}
-.emblem-inner {
-  fill: none;
-  stroke: #f4cf87;
-  stroke-width: 1.6;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 60%));
 }
 
-/* The overlay shell. */
+/* The overlay shell, on the 1600×900 stage: a 1000px choice column and a 338px side column. */
 .overlay {
   position: absolute;
   inset: 0;
   z-index: 20;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 1000px 338px;
+  column-gap: 72px;
+  align-items: start;
+  padding: 30px 54px 0 136px;
 }
 /* Darkens whatever is behind; the table also blurs itself (.table-dimmed) while an overlay is up. */
 .overlay-backdrop {
   position: absolute;
   inset: 0;
-  background: rgb(14 13 12 / 45%);
+  background: rgb(14 13 12 / 40%);
+}
+.overlay-main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 .overlay-header {
-  position: relative;
-  width: min(70%, 1000px);
-  padding-top: 2.2em;
+  width: 100%;
+  margin-bottom: 26px;
   text-align: center;
 }
 .overlay-title {
   margin: 0;
   font-family: var(--font-serif);
-  font-weight: 600;
-  font-size: 60px;
-  line-height: 1.1;
-  text-shadow: 0 3px 8px rgb(0 0 0 / 70%);
+  font-weight: 700;
+  font-size: 66px;
+  line-height: 1.05;
+  text-shadow: 0 3px 8px rgb(0 0 0 / 75%);
 }
 .overlay-title::after {
   content: "";
   display: block;
   height: 1px;
-  margin-top: 0.08em;
+  margin: 0.06em -6% 0;
   background: var(--silver-line);
 }
 .overlay-instruction {
-  margin: 0.6em 0 0;
+  margin: 0.55em 0 0;
   font-family: var(--font-sans);
-  font-size: 19px;
+  font-size: 21px;
   color: var(--text);
+  text-shadow: 0 1px 3px rgb(0 0 0 / 70%);
 }
 .overlay-instruction::after {
   content: "";
   display: block;
-  width: 80%;
+  width: 84%;
   height: 1px;
-  margin: 0.9em auto 0;
+  margin: 0.7em auto 0;
   background: var(--silver-line);
-  opacity: 0.6;
+  opacity: 0.55;
 }
-.overlay-view {
-  position: absolute;
-  top: 2.4em;
-  right: 2.4em;
-  font-size: 22px;
+.overlay-confirm {
+  margin-top: 60px;
+  min-width: 9em;
+  font-size: 30px;
 }
-.overlay-body {
+.overlay-side {
   position: relative;
-  flex: 1;
-  display: flex;
-  align-items: flex-start;
-  gap: 50px;
-  padding: 28px 40px 0;
-}
-.overlay-main {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 1.6em;
+  align-items: flex-end;
+  gap: 92px;
+  padding-top: 26px;
 }
-.overlay-aside {
-  padding-top: 0.2em;
+.overlay-view {
+  min-width: 0;
+  font-size: 26px;
 }

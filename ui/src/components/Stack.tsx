@@ -146,9 +146,10 @@ export function Arrows({ arrows }: { arrows: ArrowSpec[] }) {
         <g key={a.key} className={`arrow arrow-${a.tone}`}>
           <path className="arrow-glow" d={a.d} />
           <path className="arrow-line" d={a.d} />
-          <circle className="arrow-dot" cx={a.start[0]} cy={a.start[1]} r="4" />
+          <path className="arrow-core" d={a.d} />
+          <circle className="arrow-dot" cx={a.start[0]} cy={a.start[1]} r="5" />
           {a.link ? (
-            <circle className="arrow-dot" cx={a.end[0]} cy={a.end[1]} r="4" />
+            <circle className="arrow-dot" cx={a.end[0]} cy={a.end[1]} r="5" />
           ) : (
             <path
               className="arrow-head"

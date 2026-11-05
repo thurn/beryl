@@ -1,12 +1,23 @@
 // Player and zones: life orbs, player badges, the library, the graveyard and stacked lands.
 import { ASPECT, Card, CardBack, type CardFace } from "./Card";
 
-const WING =
-  "M0 0 C-14 -2 -30 -12 -44 -26 C-36 -10 -22 2 -4 8 Z " +
-  "M-2 10 C-20 8 -40 0 -54 -10 C-44 6 -26 16 -6 18 Z " +
-  "M-4 20 C-20 22 -36 18 -48 10 C-38 24 -22 30 -8 28 Z";
+// Two metallic blades per side, tucked under the orb and sweeping out to an upturned tip
+// (left side; the right is mirrored). Units: the orb's center is the origin.
+const BLADES =
+  "M-18 24 C-42 32 -74 22 -94 -14 C-80 4 -54 12 -26 12 Z " +
+  "M-12 34 C-46 44 -82 34 -99 0 C-88 24 -52 30 -16 24 Z";
 
-/** A life total between silver wings; the active player's glows ember. */
+// The active player's flare: rays fanning up from behind the orb.
+const RAYS = Array.from({ length: 11 }, (_, i) => {
+  const angle = ((-165 + i * 15) * Math.PI) / 180;
+  const length = i % 2 ? 48 : 60;
+  const spread = 0.07;
+  const point = (a: number, r: number) =>
+    `${(Math.cos(a) * r).toFixed(1)} ${(Math.sin(a) * r).toFixed(1)}`;
+  return `M${point(angle - spread, 18)} L${point(angle, length)} L${point(angle + spread, 18)} Z`;
+}).join(" ");
+
+/** A life total in a dark orb on metallic blades; the active player's flares ember. */
 export function LifeOrb({
   life,
   active = false,
@@ -16,28 +27,52 @@ export function LifeOrb({
 }) {
   return (
     <div className={active ? "life-orb life-orb-active" : "life-orb"}>
-      <svg className="life-orb-wings" viewBox="-80 -40 160 80" aria-hidden>
+      <svg className="life-orb-wings" viewBox="-100 -44 200 88" aria-hidden>
         <defs>
-          <linearGradient id="wing-silver" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#f4f1ec" />
-            <stop offset="0.5" stopColor="#a8a29a" />
-            <stop offset="1" stopColor="#5d5852" />
+          <linearGradient id="blade-metal" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#fbf9f5" />
+            <stop offset="0.45" stopColor="#b9b3ab" />
+            <stop offset="1" stopColor="#4d4843" />
           </linearGradient>
-          <radialGradient id="orb-flare" cx="0.5" cy="0.62" r="0.5">
-            <stop offset="0" stopColor="#ffd27a" stopOpacity="0.95" />
-            <stop offset="0.45" stopColor="#f07a1c" stopOpacity="0.6" />
+          <radialGradient
+            id="orb-ray"
+            cx="0"
+            cy="0"
+            r="62"
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop offset="0.25" stopColor="#fff1c2" />
+            <stop offset="0.55" stopColor="#ffae3a" stopOpacity="0.95" />
+            <stop offset="1" stopColor="#f0701c" stopOpacity="0" />
+          </radialGradient>
+          <radialGradient id="orb-glow" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0" stopColor="#ffb54a" stopOpacity="0.9" />
             <stop offset="1" stopColor="#f07a1c" stopOpacity="0" />
           </radialGradient>
         </defs>
         {active && (
-          <ellipse className="life-orb-flare" cx="0" cy="12" rx="54" ry="30" />
+          <>
+            <ellipse
+              cx="0"
+              cy="-4"
+              rx="62"
+              ry="40"
+              fill="url(#orb-glow)"
+              opacity="0.55"
+            />
+            <path d={RAYS} fill="url(#orb-ray)" />
+          </>
         )}
-        <path d={WING} transform="translate(-24 -6)" fill="url(#wing-silver)" />
-        <path
-          d={WING}
-          transform="translate(24 -6) scale(-1 1)"
-          fill="url(#wing-silver)"
+        <ellipse
+          className="life-orb-underglow"
+          cx="0"
+          cy="28"
+          rx={active ? 40 : 28}
+          ry={active ? 9 : 4}
+          fill="url(#orb-glow)"
         />
+        <path className="life-orb-blades" d={BLADES} />
+        <path className="life-orb-blades" d={BLADES} transform="scale(-1 1)" />
       </svg>
       <div className="life-orb-core">
         <span>{life}</span>
@@ -50,8 +85,22 @@ export function PlayerBadge({ name }: { name: string }) {
   return (
     <div className="player-badge">
       <svg className="player-badge-emblem" viewBox="0 0 40 40" aria-hidden>
-        <path d="M20 2 L38 20 L20 38 L2 20 Z" className="emblem-outer" />
-        <path d="M20 9 L31 20 L20 31 L9 20 Z" className="emblem-inner" />
+        <defs>
+          <linearGradient id="emblem-gold" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#fbe2a6" />
+            <stop offset="0.5" stopColor="#d99a3c" />
+            <stop offset="1" stopColor="#7c4f18" />
+          </linearGradient>
+        </defs>
+        <path d="M20 1 L39 20 L20 39 L1 20 Z" fill="url(#emblem-gold)" />
+        <path d="M20 6 L34 20 L20 34 L6 20 Z" fill="#2a2420" />
+        <path
+          d="M20 11 L29 20 L20 29 L11 20 Z"
+          fill="none"
+          stroke="url(#emblem-gold)"
+          strokeWidth="2.2"
+        />
+        <path d="M20 16 L24 20 L20 24 L16 20 Z" fill="#f6d690" />
       </svg>
       <span>{name}</span>
     </div>
@@ -126,13 +175,16 @@ export function LandStack({
   count,
   width = 150,
   tapped = 0,
+  showCount = true,
 }: {
   card: CardFace;
   count: number;
   width?: number;
   tapped?: number;
+  /** The ×N badge; on the table the edges of the copies beneath show the count instead. */
+  showCount?: boolean;
 }) {
-  const offset = width * 0.06;
+  const offset = width * 0.075;
   return (
     <div className="land-stack" style={{ paddingLeft: (count - 1) * offset }}>
       {Array.from({ length: count }, (_, i) => (
@@ -150,7 +202,7 @@ export function LandStack({
           }
         />
       ))}
-      {count > 1 && <span className="land-count">×{count}</span>}
+      {showCount && count > 1 && <span className="land-count">×{count}</span>}
     </div>
   );
 }

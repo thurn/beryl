@@ -1,5 +1,7 @@
-// The overlay shell every choice screen uses (scry, Jace's put-back, modes): a title and an
-// instruction over the dimmed battlefield, a "View Battlefield" escape and a confirm button.
+// The overlay shell every choice screen uses (scry, Jace's put-back, modes), laid out on the
+// 1600×900 table stage as in docs/ui_mockups/scry.png: a title and an instruction over the
+// choice, a confirm button under it, and on the right a "View Battlefield" escape over the
+// source card, all on the dimmed battlefield.
 import type { ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { Button } from "./Controls";
@@ -36,25 +38,24 @@ export function Overlay({
       transition={{ duration: 0.25 }}
     >
       <div className="overlay-backdrop" />
-      <header className="overlay-header">
-        <h2 className="overlay-title">{title}</h2>
-        <p className="overlay-instruction">{instruction}</p>
-      </header>
-      <Button
-        variant="secondary"
-        size="small"
-        className="overlay-view"
-        onClick={onViewBattlefield}
-      >
-        View Battlefield
-      </Button>
-      <div className="overlay-body">
-        <div className="overlay-main">
-          {children}
-          <Button className="overlay-confirm" onClick={onConfirm}>
-            {confirm}
-          </Button>
-        </div>
+      <div className="overlay-main">
+        <header className="overlay-header">
+          <h2 className="overlay-title">{title}</h2>
+          <p className="overlay-instruction">{instruction}</p>
+        </header>
+        {children}
+        <Button className="overlay-confirm" onClick={onConfirm}>
+          {confirm}
+        </Button>
+      </div>
+      <div className="overlay-side">
+        <Button
+          variant="secondary"
+          className="overlay-view"
+          onClick={onViewBattlefield}
+        >
+          View Battlefield
+        </Button>
         {aside && <aside className="overlay-aside">{aside}</aside>}
       </div>
     </motion.div>

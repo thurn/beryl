@@ -106,6 +106,17 @@ export function CardArt({ card }: { card: CardFace }) {
   );
 }
 
+/** Rules text up to this long is centered in its box. */
+const SHORT_TEXT = 40;
+
+/** Shrinks a long name to fit its bar rather than cutting it off. */
+function nameFit(name: string): CSSProperties | undefined {
+  const fits = 16;
+  return name.length > fits
+    ? { fontSize: `${(0.98 * fits) / name.length}em` }
+    : undefined;
+}
+
 function stats(card: CardFace): string | undefined {
   if (card.power !== undefined && card.toughness !== undefined) {
     return `${card.power}/${card.toughness}`;
@@ -137,8 +148,14 @@ export function Card({
   ]
     .filter(Boolean)
     .join(" ");
-  // A tapped card's slot takes its turned footprint, so neighbors make room as it turns.
-  const slot = tapped ? { width: height, height: width } : { width, height };
+  // Turned a quarter left when tapped. A battlefield card keeps its footprint, as in the mockups:
+  // its frame turns portrait as it rotates, so the name bar runs up the left side. A full card's
+  // slot takes its turned footprint instead, so neighbors make room.
+  const keep = variant === "field";
+  const slot =
+    tapped && !keep ? { width: height, height: width } : { width, height };
+  const frame =
+    tapped && keep ? { width: height, height: width } : { width, height };
   return (
     <motion.div
       layout
@@ -147,16 +164,18 @@ export function Card({
       id={id}
     >
       {combat === "attacker" && <AttackChevron />}
+      {combat === "blocker" && <BlockArc />}
       <motion.div
         className={classes}
-        style={{ width, height }}
         initial={false}
-        animate={{ rotate: tapped ? -90 : 0 }}
+        animate={{ rotate: tapped ? -90 : 0, ...frame }}
         transition={{ type: "spring", stiffness: 260, damping: 26 }}
       >
         <div className="card-rim">
           <div className="card-name-bar">
-            <span className="card-name">{card.name}</span>
+            <span className="card-name" style={nameFit(card.name)}>
+              {card.name}
+            </span>
             {variant === "full" && card.manaCost && (
               <ManaCost cost={card.manaCost} />
             )}
@@ -166,7 +185,13 @@ export function Card({
             <>
               <div className="card-type-bar">{card.typeLine}</div>
               {card.text && (
-                <div className="card-rules">
+                <div
+                  className={
+                    card.text.length <= SHORT_TEXT
+                      ? "card-rules card-rules-short"
+                      : "card-rules"
+                  }
+                >
                   <p>
                     <RulesText text={card.text} />
                   </p>
@@ -186,9 +211,21 @@ export function Card({
 
 function AttackChevron() {
   return (
-    <svg className="attack-chevron" viewBox="0 0 60 18" aria-hidden>
-      <path d="M2 16 L30 3 L58 16" />
-      <path d="M12 17 L30 9 L48 17" />
+    <svg
+      className="combat-marker attack-chevron"
+      viewBox="0 0 100 18"
+      aria-hidden
+    >
+      <path d="M3 16 L50 2 L97 16" />
+      <path d="M22 17 L50 9 L78 17" strokeWidth="1.4" />
+    </svg>
+  );
+}
+
+function BlockArc() {
+  return (
+    <svg className="combat-marker block-arc" viewBox="0 0 100 16" aria-hidden>
+      <path d="M3 2 Q50 26 97 2" />
     </svg>
   );
 }

@@ -4,6 +4,8 @@
 /ui/node_modules/
 /ui/dist/
 /ui/*.tsbuildinfo
+# Fixture streams beryl_cli records for the UI's fixture transport; generated, never committed.
+/ui/public/fixtures/
 /tools/.venv/
 /tools/.pyre/
 /tools/.pytest_cache/

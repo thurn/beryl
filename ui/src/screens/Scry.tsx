@@ -10,37 +10,46 @@ export function ScryOverlay({ className }: { className?: string }) {
       className={className}
       title="Scry"
       instruction="Drag cards to put them on the top or bottom of your library."
-      aside={<Card card={SAMPLE.preordain} width={300} />}
+      aside={<Card card={SAMPLE.preordain} width={338} />}
     >
       <div className="scry-zone">
+        <CardBack
+          width={262}
+          style={{
+            position: "absolute",
+            left: 392,
+            top: 6,
+            transform: "rotate(-3deg)",
+          }}
+        />
+        <CardBack
+          width={262}
+          style={{
+            position: "absolute",
+            left: 300,
+            top: 14,
+            transform: "rotate(-8deg)",
+          }}
+        />
         <Card
           card={SAMPLE.island}
           width={300}
           highlight="target"
           style={{
             position: "absolute",
-            left: 150,
-            top: 60,
-            rotate: -8,
+            left: 140,
+            top: 66,
+            rotate: -9,
             zIndex: 3,
-          }}
-        />
-        <CardBack
-          width={270}
-          style={{
-            position: "absolute",
-            left: 390,
-            top: 10,
-            transform: "rotate(-5deg)",
           }}
         />
         <Card
           card={SAMPLE.counterspell}
-          width={280}
+          width={288}
           style={{
             position: "absolute",
-            left: 590,
-            top: 30,
+            left: 575,
+            top: 36,
             rotate: 3,
             zIndex: 2,
           }}

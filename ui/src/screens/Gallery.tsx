@@ -268,7 +268,7 @@ function CombatAndStack() {
             id="g-trigger"
             source={SAMPLE.infernoTitan}
             text="When Inferno Titan enters the battlefield, it deals 3 damage divided as you choose among one, two, or three targets."
-            width={128}
+            width={142}
           />
           <Card id="g-beast" card={SAMPLE.beast} variant="field" width={104} />
         </div>
@@ -287,8 +287,10 @@ function ScryPanel() {
     <Panel n="06" title="Scry overlay" className="panel-scry">
       <div className="scry-preview">
         <div className="scry-preview-stage">
-          <TableScene dimmed />
-          <ScryOverlay />
+          <div className="scry-preview-inner">
+            <TableScene dimmed />
+            <ScryOverlay />
+          </div>
         </div>
       </div>
       <div className="scry-captions">

@@ -45,7 +45,7 @@ export function Stage({ children }: { children: ReactNode }) {
 const CAMERA_DISTANCE = 1400;
 /** Depth grows linearly up the table, from zero at the near edge. */
 const NEAR_Y = 760;
-const DEPTH_PER_PX = 0.35;
+const DEPTH_PER_PX = 0.6;
 
 /** How much a thing lying at screen height `y` is shrunk by distance: d / (d + z), what
  * `perspective(d)` does to something `z` behind the screen plane. */
@@ -85,7 +85,7 @@ function Creature({ card, x, y }: { card: CardFace; x: number; y: number }) {
   return (
     <OnTable x={x} y={y}>
       <div onClick={() => setTapped(!tapped)}>
-        <Card card={card} variant="field" width={215} tapped={tapped} />
+        <Card card={card} variant="field" width={227} tapped={tapped} />
       </div>
     </OnTable>
   );
@@ -124,20 +124,40 @@ export function TableScene({ dimmed = false }: { dimmed?: boolean }) {
   return (
     <div className={dimmed ? "table table-dimmed" : "table"}>
       <OnTable x={150} y={127}>
-        <LandStack card={SAMPLE.island} count={3} width={186} />
+        <LandStack
+          card={SAMPLE.island}
+          count={3}
+          width={192}
+          showCount={false}
+        />
       </OnTable>
       <OnTable x={372} y={122}>
-        <LandStack card={SAMPLE.swamp} count={3} width={186} />
+        <LandStack
+          card={SAMPLE.swamp}
+          count={3}
+          width={192}
+          showCount={false}
+        />
       </OnTable>
       <Creature card={SAMPLE.balefulStrix} x={608} y={223} />
       <Creature card={SAMPLE.beast} x={810} y={223} />
       <Creature card={SAMPLE.goblinGuide} x={589} y={421} />
       <Creature card={SAMPLE.angel} x={813} y={421} />
       <OnTable x={104} y={566}>
-        <LandStack card={SAMPLE.mountain} count={3} width={186} />
+        <LandStack
+          card={SAMPLE.mountain}
+          count={3}
+          width={192}
+          showCount={false}
+        />
       </OnTable>
       <OnTable x={338} y={564}>
-        <LandStack card={SAMPLE.plains} count={3} width={186} />
+        <LandStack
+          card={SAMPLE.plains}
+          count={3}
+          width={192}
+          showCount={false}
+        />
       </OnTable>
 
       <div className="brand">
@@ -158,14 +178,14 @@ export function TableScene({ dimmed = false }: { dimmed?: boolean }) {
           />
         ))}
       </div>
-      <div className="hud" style={{ left: 705, top: 50 }}>
+      <div className="hud" style={{ left: 670, top: 40 }}>
         <LifeOrb life={17} />
       </div>
       <div className="hud" style={{ left: 1195, top: 14 }}>
         <Library count={33} width={98} />
       </div>
       <div className="hud" style={{ left: 1330, top: 40 }}>
-        <Graveyard cards={[SAMPLE.doomBlade]} width={84} />
+        <Graveyard cards={[SAMPLE.counterspell, SAMPLE.doomBlade]} width={96} />
       </div>
       <svg
         className="gear"
@@ -176,7 +196,7 @@ export function TableScene({ dimmed = false }: { dimmed?: boolean }) {
         <path d="M10.3 2h3.4l.5 2.6 1.9.8 2.2-1.5 2.4 2.4-1.5 2.2.8 1.9 2.6.5v3.4l-2.6.5-.8 1.9 1.5 2.2-2.4 2.4-2.2-1.5-1.9.8-.5 2.6h-3.4l-.5-2.6-1.9-.8-2.2 1.5-2.4-2.4 1.5-2.2-.8-1.9L2 13.7v-3.4l2.6-.5.8-1.9-1.5-2.2 2.4-2.4 2.2 1.5 1.9-.8zM12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z" />
       </svg>
 
-      <div className="hud" style={{ left: 705, top: 622 }}>
+      <div className="hud" style={{ left: 670, top: 612 }}>
         <LifeOrb life={22} active />
       </div>
       <Hand
@@ -189,7 +209,7 @@ export function TableScene({ dimmed = false }: { dimmed?: boolean }) {
         <PlayerBadge name="You" />
       </div>
       <div className="hud turn-controls">
-        <PhaseTracker current="main" compact />
+        <PhaseTracker current="main1" compact />
         <Button icon={<FastForwardIcon />}>Next</Button>
         <span className="turn-caption">To Combat</span>
       </div>

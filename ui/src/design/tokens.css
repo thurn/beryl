@@ -42,11 +42,11 @@
   --shadow-card: 0 2px 3px rgb(0 0 0 / 45%), 0 10px 18px rgb(0 0 0 / 35%);
   --shadow-lifted: 0 6px 10px rgb(0 0 0 / 45%), 0 24px 40px rgb(0 0 0 / 40%);
   --glow-gold:
-    0 0 0 2px var(--gold), 0 0 14px 3px rgb(233 173 74 / 70%),
-    0 0 34px rgb(233 173 74 / 35%);
+    0 0 0 2px #ffd486, 0 0 0 4px rgb(233 173 74 / 85%),
+    0 0 18px 6px rgb(233 173 74 / 65%), 0 0 44px 12px rgb(240 140 40 / 30%);
   --glow-cyan:
-    0 0 0 2px var(--cyan), 0 0 14px 3px rgb(56 220 255 / 70%),
-    0 0 34px rgb(56 220 255 / 35%);
+    0 0 0 2px #b8f3ff, 0 0 0 4px rgb(56 220 255 / 85%),
+    0 0 18px 6px rgb(56 220 255 / 65%), 0 0 44px 12px rgb(56 180 255 / 30%);
 
   /* The matte tabletop: the table color, a faint grain and a vignette. */
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
