@@ -143,9 +143,9 @@
 }
 .swatch small {
   display: block;
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: 0.04em;
-  color: var(--text-dim);
+  color: var(--text);
 }
 .type-specimens {
   display: flex;
@@ -304,22 +304,23 @@
   margin-right: 0;
 }
 .scry-preview {
-  height: 332px;
+  height: 327px;
   margin-top: -14px;
   overflow: hidden;
 }
 /* The table stage at a third of its size, cropped to the overlay's columns. */
 .scry-preview-stage {
   position: relative;
-  width: 1500px;
+  width: 1450px;
   height: 900px;
   overflow: hidden;
-  transform: scale(0.34);
+  transform: scale(0.35);
   transform-origin: 0 0;
 }
 .scry-preview-inner {
   position: absolute;
-  left: -100px;
+  left: -110px;
+  top: -10px;
   width: 1600px;
   height: 900px;
 }

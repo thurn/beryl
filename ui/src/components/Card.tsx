@@ -48,14 +48,14 @@ const BASIC_TYPES: [string, Color][] = [
   ["Forest", "G"],
 ];
 
-/** The frame's palette key: a color, `m` for multicolored, `c` for colorless. Lands without a
- * color take the color of their basic land types. */
+/** The frame's palette key: a color, `m` for multicolored, `c` for colorless. A colorless land
+ * with one basic land type takes that type's color; a dual land keeps the silver land frame, as
+ * on the mockups' Plateau. */
 export function frameKey(card: CardFace): string {
   let colors = card.colors;
   if (colors.length === 0 && card.typeLine.includes("Land")) {
-    colors = BASIC_TYPES.filter(([type]) => card.typeLine.includes(type)).map(
-      ([, c]) => c,
-    );
+    const basics = BASIC_TYPES.filter(([type]) => card.typeLine.includes(type));
+    colors = basics.length === 1 ? basics.map(([, c]) => c) : [];
   }
   if (colors.length === 0) return "c";
   if (colors.length > 1) return "m";

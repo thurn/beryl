@@ -157,9 +157,13 @@ export function Graveyard({
       className="pile graveyard"
       aria-label={`Graveyard, ${cards.length} cards`}
     >
-      {cards.length > 1 && (
-        <div className="pile-edge" style={{ left: 3, top: 3 }} />
-      )}
+      {Array.from({ length: Math.min(4, cards.length - 1) }, (_, i) => (
+        <div
+          key={i}
+          className="pile-edge"
+          style={{ left: (4 - i) * 2, top: (4 - i) * 2 }}
+        />
+      ))}
       {top ? (
         <Card card={top} width={width} />
       ) : (
