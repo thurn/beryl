@@ -905,9 +905,10 @@ impl Expert<'_> {
         }
         if let Some(removal) = self.removal_score(slot, name, face, -1) {
             // Instant-speed removal waits for an attacker or the end step unless its target
-            // is urgent, or Jace, Telepath Unbound's −3 lets us cast it this turn only.
+            // is urgent, Jace, Telepath Unbound's −3 lets us cast it this turn only, or the
+            // opponent could not counter it now.
             let flashback = self.obs().object(slot).zone == Zone::Graveyard;
-            let urgent = removal.0 >= MAJOR || removal.1 || flashback;
+            let urgent = removal.0 >= MAJOR || removal.1 || flashback || !self.opp_can_counter();
             // Not with the counterspell's mana, short of a planeswalker or dying.
             let keeps = removal.1 || self.dying() || {
                 let card = self.obs().card(slot).expect("a known card");
@@ -982,8 +983,14 @@ impl Expert<'_> {
         Some(match name {
             // Free mana, until there are lands enough and the coin flips cost too much life.
             names::MANA_CRYPT => {
+                // Nor with nothing else in hand to spend its mana on.
                 let lands = self.lands(self.me());
-                let late = lands >= 7 || (lands >= 5 && self.obs().player(self.me()).life <= 12);
+                let spells = self
+                    .hand(self.me())
+                    .iter()
+                    .any(|s| s != slot && !self.p.is_land(s));
+                let late = lands >= 7
+                    || (lands >= 5 && (!spells || self.obs().player(self.me()).life <= 12));
                 if late { 0 } else { 2000 }
             }
             names::TEFERI_TIME_RAVELER if self.counter_known(self.mana(self.me()) - 3) => 0,
@@ -1149,11 +1156,14 @@ impl Expert<'_> {
                 names::MALCOLM_ALLURING_SCOUNDREL => Some(2),
                 _ => None,
             });
+        // Only what our mana could cast at all is worth keeping it for.
+        let mana = self.mana(self.me());
         self.counters_in_hand()
             .filter_map(|s| self.counter_cost(s))
             .chain(flash)
+            .filter(|&keep| keep <= mana)
             .min()
-            .is_none_or(|keep| self.mana(self.me()) - cost >= keep)
+            .is_none_or(|keep| mana - cost >= keep)
     }
 
     /// Soporific Springs: "As this land enters, you may pay 3 life. If you don't, it enters
