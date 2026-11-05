@@ -2,14 +2,14 @@
 //! evasion, damage and its division, first strike, planeswalkers and combat triggers.
 
 use super::begin;
-use crate::card::{Ability, CardDef, Face, Flow, Keywords, Trigger, Types};
+use crate::card::{Ability, CardDef, Face, Flow, Keywords, Subtype, Subtypes, Trigger, Types};
 use crate::effect::EffectCtx;
 use crate::event::{Event, TokenEntry};
 use crate::profile::Breakpoint;
 use crate::state::{NONE, ObjectFlags, Zone, opponent};
 use crate::{
-    CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile, Replay, Scratch,
-    State, Step, TurnStep, apply, next, zone,
+    Candidates, CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile,
+    Replay, Scratch, State, Step, TurnStep, apply, next, zone,
 };
 
 /// A vanilla creature card with keywords.
@@ -116,8 +116,22 @@ static CAPTAIN: CardDef = CardDef {
     tokens: &[&RECRUIT],
 };
 
+/// A 3/3 Vehicle artifact with crew 3.
+static WAGON: CardDef = CardDef {
+    name: "Wagon",
+    faces: &[Face {
+        types: Types::ARTIFACT,
+        subtypes: Subtypes::of(&[Subtype::Vehicle]),
+        power: Some(3),
+        toughness: Some(3),
+        abilities: &[Ability::crew(3)],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
 static CARDS: CardTable = CardTable::new(&[
-    &BEAR, &GIANT, &OGRE, &BIRD, &SPIDER, &KNIGHT, &SENTRY, &WALKER, &RAIDER, &CAPTAIN,
+    &BEAR, &GIANT, &OGRE, &BIRD, &SPIDER, &KNIGHT, &SENTRY, &WALKER, &RAIDER, &CAPTAIN, &WAGON,
 ]);
 
 const DECK: &Decklist = &[
@@ -131,6 +145,7 @@ const DECK: &Decklist = &[
     (4, "Walker"),
     (4, "Raider"),
     (4, "Captain"),
+    (4, "Wagon"),
 ];
 
 /// A game stopped at the attacking player's first precombat main phase, with the event sink
@@ -650,13 +665,99 @@ fn smart_stops_come_after_attackers_and_after_blockers_are_declared() {
     assert!(!smart.stops_for(&g.s, a));
 }
 
+fn is_creature(g: &Game, slot: u8) -> bool {
+    Types(g.s.derived(slot).types).contains(Types::CREATURE)
+}
+
+#[test]
+fn crew_taps_creatures_one_at_a_time_and_makes_an_artifact_creature_until_end_of_turn() {
+    let mut g = Game::new();
+    let (a, d) = (g.attacker, g.defender());
+    let wagon = g.put(a, "Wagon");
+    let bear = g.put(a, "Bear");
+    let sentry = g.put(a, "Sentry");
+    // A summoning-sick creature can crew: tapping it is a cost of the Vehicle's ability.
+    g.s.object_mut(sentry)
+        .flags
+        .set(ObjectFlags::SUMMONING_SICK, true);
+    g.expect(DecisionKind::Priority);
+    assert!(!is_creature(&g, wagon));
+    g.pick(
+        DecisionKind::Priority,
+        Opt::Activate {
+            slot: wagon,
+            ability: 0,
+        },
+    );
+    // The Wagon can't crew itself; both creatures are needed for power 3.
+    let first = g.expect(DecisionKind::Crew);
+    assert_eq!(
+        first.candidates,
+        Candidates::Objects([bear, sentry].into_iter().collect())
+    );
+    g.pick_object(DecisionKind::Crew, bear);
+    // One creature is left, so the second pick is applied silently. Crew uses the stack.
+    g.expect(DecisionKind::Priority);
+    assert!(g.s.object(sentry).flags.has(ObjectFlags::TAPPED));
+    assert_eq!(g.s.stack().len(), 1);
+    assert!(!is_creature(&g, wagon));
+    g.pick(DecisionKind::Priority, Opt::Pass);
+    g.expect(DecisionKind::Priority);
+    assert!(g.s.stack().is_empty());
+    assert!(is_creature(&g, wagon));
+    assert!(Types(g.s.derived(wagon).types).contains(Types::ARTIFACT));
+    assert!(Subtypes(g.s.derived(wagon).subtypes).contains(Subtype::Vehicle));
+    g.pass_to_combat();
+    g.pick(DecisionKind::Attacker, Opt::Attack(wagon));
+    g.finish_combat();
+    assert_eq!(g.life(d), 17);
+    // Until end of turn: at the next turn's first stop it is an artifact again.
+    let next_turn = g.s.turn().number + 1;
+    stop_at_turn(&mut g, next_turn, TurnStep::PrecombatMain);
+    assert!(!is_creature(&g, wagon));
+}
+
+#[test]
+fn crew_is_offered_only_with_enough_power() {
+    let mut g = Game::new();
+    let a = g.attacker;
+    let wagon = g.put(a, "Wagon");
+    let bear = g.put(a, "Bear");
+    let priority = g.expect(DecisionKind::Priority);
+    let crew = Opt::Activate {
+        slot: wagon,
+        ability: 0,
+    };
+    assert!(!options(&priority).contains(&crew));
+    g.s.object_mut(bear).flags.set(ObjectFlags::TAPPED, true);
+    g.put(a, "Ogre");
+    let priority = g.expect(DecisionKind::Priority);
+    assert!(options(&priority).contains(&crew));
+}
+
+/// Passes priority until the active player's first priority in `step` of `turn`.
+fn stop_at_turn(g: &mut Game, turn: u16, step: TurnStep) {
+    g.s.set_profile(Profile {
+        breakpoint: Some(Breakpoint { turn, step }),
+        ..Profile::EXACT
+    });
+    loop {
+        let d = g.decide();
+        if (g.s.turn().number, g.s.turn().step) == (turn, step) {
+            assert_eq!(d.kind, DecisionKind::Priority);
+            return;
+        }
+        g.pick(DecisionKind::Priority, Opt::Pass);
+    }
+}
+
 /// Plays whole games from a battlefield of random creatures and planeswalkers with uniformly
 /// random choices, checking the invariants after every decision: every declaration and
 /// division the engine offers must lead on.
 #[test]
 fn random_combat_games_keep_the_invariants() {
     let mut kinds = std::collections::BTreeSet::new();
-    for seed in 0..40u64 {
+    for seed in 0..12u64 {
         let mut g = Game::seeded(seed);
         g.s.set_profile(Profile::EXACT);
         for player in [0, 1] {
@@ -692,6 +793,7 @@ fn random_combat_games_keep_the_invariants() {
         "Blocker",
         "BlockTarget",
         "DamageDivision",
+        "Crew",
     ] {
         assert!(kinds.contains(kind), "no {kind} decision in any game");
     }

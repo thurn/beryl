@@ -6,7 +6,9 @@
 //! ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
 
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, CardDef, Delayed, Flow, ManaColor, ManaCost, Pause};
+use crate::card::{
+    Ability, CardDef, Delayed, Flow, ManaColor, ManaCost, Modification, Pause, Types,
+};
 use crate::cast;
 use crate::decision::{Answers, Candidates, Choice, Decision, DecisionKind, Opt, StallReason};
 use crate::event::{self, Entry, Reason, Recipient, Sink, TokenEntry};
@@ -642,6 +644,22 @@ impl<'a> EffectCtx<'a> {
         );
         self.check(r);
     }
+}
+
+/// The body of crew ([CR 702.122a](https://yawgatog.com/resources/magic-rules/#R702122a)):
+/// "This permanent becomes an artifact creature until end of turn." It keeps its other types
+/// and subtypes ([CR 205.1b](https://yawgatog.com/resources/magic-rules/#R2051b)): "Some
+/// effects state that an object becomes an 'artifact creature'; these effects also allow the
+/// object to retain all of its prior card types and subtypes."
+pub fn becomes_artifact_creature(ctx: &mut EffectCtx) -> Flow {
+    ctx.add_effect(
+        ctx.source(),
+        Continuous::Layer(Modification::AddTypes(
+            Types::ARTIFACT.union(Types::CREATURE),
+        )),
+        Duration::EndOfTurn,
+    );
+    Ok(())
 }
 
 /// The body of a mana ability: add what it produces, of the kind its activator chose

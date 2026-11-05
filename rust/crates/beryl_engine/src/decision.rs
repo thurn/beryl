@@ -84,6 +84,9 @@ pub enum DecisionKind {
     YesNo,
     /// One object, asked by a resolving spell or ability.
     ChooseObject,
+    /// A creature to tap for a crew cost, until the tapped creatures' power is enough
+    /// (CR 702.122a).
+    Crew,
 }
 
 /// The candidates of a decision. A `Choice(i)` names the `i`th object in ascending slot order,

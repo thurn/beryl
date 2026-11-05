@@ -564,6 +564,9 @@ pub enum CastStep {
     Plan,
     /// Paying mana one source at a time, under the `manual_mana` profile.
     Manual,
+    /// Tapping creatures for a crew cost one at a time; `left` is the power still needed
+    /// (CR 702.122a).
+    Crew,
 }
 
 /// A spell being cast or an ability being activated.

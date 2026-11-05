@@ -419,6 +419,7 @@ fn perform(
         | DecisionKind::Target
         | DecisionKind::PaymentPlan
         | DecisionKind::ManaPayment
+        | DecisionKind::Crew
         | DecisionKind::CastOffer
         | DecisionKind::YesNo
         | DecisionKind::ChooseObject => unreachable!("answered through the pending state"),

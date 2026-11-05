@@ -399,6 +399,12 @@ pub struct Cost {
     /// ([CR 606.4](https://yawgatog.com/resources/magic-rules/#R6064)). `Some(0)` is a
     /// loyalty ability too.
     pub loyalty: Option<i8>,
+    /// Crew's cost: tap other untapped creatures you control with at least this much total
+    /// power, or 0 for none
+    /// ([CR 702.122a](https://yawgatog.com/resources/magic-rules/#R702122a)): "'Crew N' means
+    /// 'Tap any number of other untapped creatures you control with total power N or greater:
+    /// This permanent becomes an artifact creature until end of turn.'"
+    pub crew: u8,
 }
 
 impl Cost {
@@ -408,6 +414,7 @@ impl Cost {
         sacrifice_self: false,
         discard_self: false,
         loyalty: None,
+        crew: 0,
     };
     pub const TAP: Cost = Cost {
         tap: true,
@@ -619,6 +626,19 @@ impl Ability {
                 ..Cost::NONE
             },
             body: crate::effect::draw_a_card,
+            ..Ability::NONE
+        }
+    }
+
+    /// Crew N (CR 702.122a), an activated ability any time its controller has priority.
+    pub const fn crew(n: u8) -> Ability {
+        Ability {
+            kind: AbilityKind::Activated,
+            cost: Cost {
+                crew: n,
+                ..Cost::NONE
+            },
+            body: crate::effect::becomes_artifact_creature,
             ..Ability::NONE
         }
     }

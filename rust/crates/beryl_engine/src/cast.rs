@@ -381,6 +381,35 @@ fn spent_by_cost(slot: u8, a: &Ability) -> Bitboard {
     b
 }
 
+/// The other untapped creatures `player` controls, which may crew the Vehicle in `vehicle`
+/// (CR 702.122a). Summoning sickness doesn't stop them: tapping them is a cost of the
+/// Vehicle's ability, not an ability of theirs with {T} (CR 302.6).
+fn crew_candidates(s: &State, player: u8, vehicle: u8) -> Bitboard {
+    s.battlefield()
+        .iter()
+        .copied()
+        .filter(|&slot| {
+            slot != vehicle
+                && s.controller(slot) == player
+                && Types(s.derived(slot).types).contains(Types::CREATURE)
+                && !s.object(slot).flags.has(ObjectFlags::TAPPED)
+        })
+        .collect()
+}
+
+/// A creature's power counted toward a crew cost; less than 0 counts as 0.
+fn power_of(s: &State, slot: u8) -> u8 {
+    u8::try_from(s.derived(slot).power.max(0)).unwrap_or(0)
+}
+
+/// The total power of the creatures that could crew the Vehicle in `vehicle`.
+fn crew_power(s: &State, player: u8, vehicle: u8) -> u32 {
+    crew_candidates(s, player, vehicle)
+        .iter()
+        .map(|slot| u32::from(power_of(s, slot)))
+        .sum()
+}
+
 /// Whether `player` may activate ability `index` of the object in `slot` now.
 ///
 /// [CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025): "A player can't begin to
@@ -414,6 +443,9 @@ fn activatable(s: &State, t: &GameTable, player: u8, slot: u8, index: usize) -> 
         {
             return Ok(false);
         }
+    }
+    if a.cost.crew > 0 && crew_power(s, player, slot) < u32::from(a.cost.crew) {
+        return Ok(false);
     }
     let sorcery_speed = if let Some(loyalty) = a.cost.loyalty {
         // CR 606.3: "A player may activate a loyalty ability of a permanent they control any
@@ -665,7 +697,7 @@ fn spent_by_entry(t: &GameTable, entry: &StackEntry) -> Bitboard {
 fn advance(s: &mut State, t: &GameTable, sink: &mut Sink, mut c: Casting) -> Result<(), Full> {
     loop {
         match c.step {
-            CastStep::X | CastStep::Plan | CastStep::Manual => break,
+            CastStep::X | CastStep::Plan | CastStep::Manual | CastStep::Crew => break,
             CastStep::TargetCount | CastStep::Target => {
                 let entry = top(s);
                 let specs = specs(t, &entry);
@@ -674,7 +706,13 @@ fn advance(s: &mut State, t: &GameTable, sink: &mut Sink, mut c: Casting) -> Res
                         s.pending = Pending::None;
                         return Ok(());
                     }
-                    return begin_payment(s, t, sink, c);
+                    let crew = entry_ability(t, &entry).map_or(0, |a| a.cost.crew);
+                    if crew == 0 {
+                        return begin_payment(s, t, sink, c);
+                    }
+                    c.step = CastStep::Crew;
+                    c.left = crew;
+                    break;
                 };
                 if c.step == CastStep::TargetCount {
                     // CR 601.2c: "If the spell has a variable number of targets, the player
@@ -896,6 +934,14 @@ pub(crate) fn decision(s: &State, t: &GameTable, c: &Casting) -> Result<Decision
             }
             options(DecisionKind::PaymentPlan, list)
         }
+        CastStep::Crew => Decision {
+            player: c.player,
+            kind: DecisionKind::Crew,
+            candidates: Candidates::Objects(collapse(
+                s,
+                crew_candidates(s, c.player, top(s).object.slot),
+            )),
+        },
         CastStep::Manual => options(
             DecisionKind::ManaPayment,
             mana::manual_options(s, t, c.player, c.remaining, Bitboard::EMPTY)?,
@@ -953,6 +999,17 @@ pub(crate) fn perform(
                 &plans.as_slice()[usize::from(i)],
             )?;
             return finish(s, t, sink, c);
+        }
+        CastStep::Crew => {
+            // CR 702.122b: "A creature 'crews a Vehicle' when it's tapped to pay the cost to
+            // activate a Vehicle's crew ability."
+            let slot = object.expect("a creature to crew with");
+            let power = power_of(s, slot);
+            event::set_tapped(s, t, sink, s.object_ref(slot), true)?;
+            c.left = c.left.saturating_sub(power);
+            if c.left == 0 {
+                return begin_payment(s, t, sink, c);
+            }
         }
         CastStep::Manual => {
             let option = option.expect("a manual payment");
