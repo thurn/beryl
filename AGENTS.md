@@ -111,3 +111,7 @@ counts, `just bench` for timing (it refuses a busy machine).
 - Markdown: agents add none unless explicitly requested. README.md, AGENTS.md
   and `docs/` are all there is; plans, designs and notes go in beads.
 - Never commit logs, screenshots or other evidence of a run.
+- When you fix a bug, including one in your own code from the same session, add
+  an entry to `docs/bugs.md`: a short description of the bug and how a similar
+  class of bug could be prevented in future (e.g. via the type system). Link the
+  fixing commit's hash when the bug was not found and fixed in the same session.
