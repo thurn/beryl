@@ -1,7 +1,8 @@
 // The mockup harness behind `by ui-compare`, `by ui-probe` and `by ui-fonts` (tools/): headless
 // Playwright WebKit renders the replicas (`?replica=<mockup>`, src/replica/) and a blank page's
 // canvas crops and composites, so no image library is needed. docs/ui_mockups/regions.json names
-// each mockup's parts and art windows.
+// each mockup's parts and art windows; `compare` also writes <out-dir>/fingerprints.json, each
+// part's replica fingerprint (kit.sketch) for the verdict ledger (tools/.../verdicts.py).
 //
 //   node scripts/mockups.mjs art <regions.json> <out-dir>
 //   node scripts/mockups.mjs compare <base-url> <regions.json> <out-dir> <zoom> <part>...
@@ -94,6 +95,7 @@ async function compare(base, regionsPath, out, zoom, names) {
     }
     const browser = await launch();
     let failed = false;
+    const fingerprints = {};
     try {
         const kit = await imagePage(browser);
         for (const [mockup, parts] of byMockup) {
@@ -142,6 +144,10 @@ async function compare(base, regionsPath, out, zoom, names) {
             }
             for (const part of parts) {
                 const { rect, masks } = m.parts[part];
+                fingerprints[`${mockup}/${part}`] = await kit.evaluate(
+                    ([r, k]) => window.kit.sketch("replica", r, k),
+                    [rect, masks],
+                );
                 const images = await kit.evaluate(
                     ([r, k, z]) =>
                         window.kit.compare("mockup", "replica", r, k, z),
@@ -170,6 +176,9 @@ async function compare(base, regionsPath, out, zoom, names) {
     } finally {
         await browser.close();
     }
+    const path = join(out, "fingerprints.json");
+    await writeFile(path, JSON.stringify(fingerprints, null, 2) + "\n");
+    console.log(path);
     if (failed) process.exit(1);
 }
 

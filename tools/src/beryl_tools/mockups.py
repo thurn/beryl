@@ -1,9 +1,13 @@
 """The mockup harness: compares what the UI renders with docs/ui_mockups part by part.
 
-- `ui-compare [part-glob...] [--zoom N]` renders the replicas (`?replica=<mockup>`, dev-only, in
-  ui/src/replica/) at each mockup's native size and writes, per part of
+- `ui-compare [part-glob...] [--zoom N] [--review]` renders the replicas (`?replica=<mockup>`,
+  dev-only, in ui/src/replica/) at each mockup's native size and writes, per part of
   docs/ui_mockups/regions.json: both crops, a side by side, a 50% onion skin, a difference image
-  with the masks blacked out and a flip page.
+  with the masks blacked out and a flip page. It then reports the verdict ledger (verdicts.py)
+  over those parts, listing the passed parts whose replica has changed since. `--review` adds a
+  reviewer's prompt.md to each part: hand that packet to a fresh reviewer subagent.
+- `ui-verdict <part-glob...> --bead B (--pass | --differs) [--residual T] [--conflict T]` records
+  a reviewer's verdict on the parts from the last ui-compare run, and lines it accepted.
 - `ui-probe <mockup> <x> <y> [<w> <h>]` prints a point's color, a region's mean color and the
   edges along its middle row and column; `--grid` also writes a zoomed crop with a coordinate grid.
 - `ui-fonts <part> --text T` renders candidate font families over a mockup text sample.
@@ -25,7 +29,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from . import paths, shots
+from . import paths, shots, verdicts
 
 # Open-licensed families bundled for the font sheet (ui/src/replica/fonts.ts) and macOS system
 # families, referenced by name and never bundled.
@@ -104,6 +108,7 @@ def ui_compare(args: argparse.Namespace) -> int:
     out = cache_dir("ui-compare")
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True)
+    commit = verdicts.head()
     try:
         env = shots.webkit_env()
         code = shots.cut_art(env)
@@ -121,7 +126,58 @@ def ui_compare(args: argparse.Namespace) -> int:
     except shots.UiError as e:
         print(f"ui-compare: {e}", file=sys.stderr)
         code = 1
-    return code
+    found = out / verdicts.FINGERPRINTS
+    if code != 0 or not found.exists():
+        return code or 1
+    fingerprints = json.loads(found.read_text())
+    found.write_text(
+        json.dumps({"commit": commit, "parts": fingerprints}, indent=2) + "\n"
+    )
+    ledger = verdicts.parts(verdicts.load())
+    if args.review:
+        for path in verdicts.write_packets(out, ledger, chosen, args.zoom):
+            print(path)
+    print(verdicts.report(ledger, fingerprints))
+    return 0
+
+
+def ui_verdict(args: argparse.Namespace) -> int:
+    raw = verdicts.load()
+    ledger = verdicts.parts(raw)
+    names = [n for n in ledger if any(fnmatch.fnmatchcase(n, g) for g in args.parts)]
+    if not names:
+        print(f"ui-verdict: no part matches {' '.join(args.parts)}", file=sys.stderr)
+        return 2
+    verdict = "pass" if args.pass_ else "differs" if args.differs else None
+    if verdict is None and not (args.residual or args.conflict):
+        print(
+            "ui-verdict: give --pass, --differs, --residual or --conflict",
+            file=sys.stderr,
+        )
+        return 2
+    commit, fingerprints = verdicts.last_run(cache_dir("ui-compare"))
+    missing = [n for n in names if n not in fingerprints]
+    if verdict is not None and missing:
+        print(
+            f"ui-verdict: run `just ui-compare` on {' '.join(missing)} first: a verdict"
+            " records the render it judged",
+            file=sys.stderr,
+        )
+        return 2
+    verdicts.record(
+        raw,
+        names,
+        verdict=verdict,
+        bead=args.bead,
+        commit=commit,
+        fingerprints=fingerprints,
+        residuals=args.residual or [],
+        conflicts=args.conflict or [],
+    )
+    verdicts.save(raw)
+    for name in names:
+        print(f"{name}: {verdict or 'accepted lines'} ({args.bead} at {commit or '?'})")
+    return 0
 
 
 def ui_probe(args: argparse.Namespace) -> int:
@@ -197,7 +253,31 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         "parts", nargs="*", help="globs over mockup/part names (regions.json)"
     )
     p.add_argument("--zoom", type=int, default=1, help="nearest-neighbor zoom")
+    p.add_argument(
+        "--review", action="store_true", help="also write each part's reviewer prompt"
+    )
     p.set_defaults(func=ui_compare)
+
+    p = sub.add_parser(
+        "ui-verdict", help="record pixel verdicts in docs/ui_mockups/regions.json"
+    )
+    p.add_argument("parts", nargs="+", help="globs over mockup/part names")
+    p.add_argument("--bead", required=True, help="the bead whose reviewer judged")
+    verdict = p.add_mutually_exclusive_group()
+    verdict.add_argument(
+        "--pass",
+        dest="pass_",
+        action="store_true",
+        help="indistinguishable at a glance",
+    )
+    verdict.add_argument("--differs", action="store_true", help="distinguishable")
+    p.add_argument(
+        "--residual", action="append", help="an accepted residual (repeatable)"
+    )
+    p.add_argument(
+        "--conflict", action="append", help="an accepted mockup conflict (repeatable)"
+    )
+    p.set_defaults(func=ui_verdict)
 
     p = sub.add_parser("ui-probe", help="colors and edges of a mockup region")
     p.add_argument("mockup", help="a mockup name (scry) or a PNG path")

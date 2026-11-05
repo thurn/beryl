@@ -171,6 +171,30 @@ const KIT = `(() => {
       }
       return { mockup: png(ca), replica: png(cb), side: png(side), onion: png(onion), diff: png(diff) };
     },
+    /** A part's fingerprint: the region with its masks blacked out, as the mean color of each
+     * cell of an 8x8 grid (row by row, RGB bytes), in base64. */
+    sketch(name, [x, y, w, h], masks) {
+      const [, g] = canvas(w, h);
+      g.drawImage(images.get(name), x, y, w, h, 0, 0, w, h);
+      g.fillStyle = "#000";
+      for (const [mx, my, mw, mh] of masks) g.fillRect(mx - x, my - y, mw, mh);
+      const data = g.getImageData(0, 0, w, h).data;
+      const n = 8;
+      const sums = new Float64Array(n * n * 4);
+      for (let py = 0; py < h; py++) {
+        for (let px = 0; px < w; px++) {
+          const cell = (Math.floor((py * n) / h) * n + Math.floor((px * n) / w)) * 4;
+          for (let k = 0; k < 3; k++) sums[cell + k] += data[(py * w + px) * 4 + k];
+          sums[cell + 3]++;
+        }
+      }
+      let text = "";
+      for (let c = 0; c < n * n; c++) {
+        const count = Math.max(1, sums[c * 4 + 3]);
+        for (let k = 0; k < 3; k++) text += String.fromCharCode(Math.round(sums[c * 4 + k] / count));
+      }
+      return btoa(text);
+    },
     /** The whole image with each named rectangle outlined and labeled (cyan, or \`color\`), masks
      * filled red. */
     outline(name, parts) {
