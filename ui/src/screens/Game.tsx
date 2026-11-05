@@ -26,7 +26,7 @@ import { ChoiceOverlay } from "../game/ChoiceOverlay";
 import { choiceOf, type Choice } from "../game/choices";
 import { intended, isOpening, type Intent } from "../game/decisions";
 import { useFace } from "../game/faces";
-import { Brand, Stage } from "./Table";
+import { Brand, Stage } from "../game/Stage";
 
 /** The latest view of the game in progress, from `game-update` events. Session numbers only
  * grow, so a late view from a replaced game is dropped. */

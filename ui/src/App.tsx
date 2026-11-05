@@ -3,7 +3,6 @@ import { MotionConfig } from "motion/react";
 import { appInfo, uiReady } from "./ipc";
 import { Gallery } from "./screens/Gallery";
 import { GameScreen, StartScreen, useGameUpdates } from "./screens/Game";
-import { TableScreen } from "./screens/Table";
 
 // Routes live in the hash so they work from the Tauri asset server and from Vite alike.
 const subscribe = (onChange: () => void) => {
@@ -27,10 +26,6 @@ export function App() {
     <MotionConfig reducedMotion="user">
       {path === "/gallery" ? (
         <Gallery />
-      ) : path === "/table" ? (
-        <TableScreen />
-      ) : path === "/table/scry" ? (
-        <TableScreen overlay="scry" />
       ) : path === "/game" ? (
         <GameScreen update={game} />
       ) : (

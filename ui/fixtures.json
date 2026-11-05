@@ -16,6 +16,13 @@
       "until": "first target decision for seat 0 from turn 9"
     },
     {
+      "name": "late-game",
+      "seed": 1,
+      "decks": ["wu-control", "wu-control"],
+      "agents": ["greedy", "greedy"],
+      "until": "first priority decision for seat 0 from turn 16"
+    },
+    {
       "name": "combat-attack",
       "seed": 2,
       "decks": ["wu-control", "wu-control"],

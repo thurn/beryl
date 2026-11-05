@@ -8,18 +8,6 @@
       "height": 1024
     },
     {
-      "name": "table",
-      "route": "/#/table",
-      "width": 1600,
-      "height": 900
-    },
-    {
-      "name": "table-scry",
-      "route": "/#/table/scry",
-      "width": 1600,
-      "height": 900
-    },
-    {
       "name": "game-first-target",
       "route": "/?fixture=first-target#/game",
       "width": 1600,
@@ -73,6 +61,12 @@
       "route": "/?fixture=greedy-turn-9&at=11#/game",
       "width": 1920,
       "height": 1080
+    },
+    {
+      "name": "game-late",
+      "route": "/?fixture=late-game#/game",
+      "width": 1600,
+      "height": 900
     },
     {
       "name": "game-target",

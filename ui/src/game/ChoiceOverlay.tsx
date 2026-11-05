@@ -20,7 +20,7 @@ import { ASPECT, Card, CardBack, type Highlight } from "../components/Card";
 import { Overlay, type OverlayAction } from "../components/Overlay";
 import { RulesText } from "../components/Mana";
 import type { ObjectView, PlayerView } from "../generated/protocol";
-import { StageScale } from "../screens/Table";
+import { StageScale } from "./Stage";
 import type { Arrange, Ask, Choice, Pick, Source } from "./choices";
 import type { Intent } from "./decisions";
 import { useFace } from "./faces";

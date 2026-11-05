@@ -1,8 +1,8 @@
-// Where every card of a PlayerView lies on the 1600×900 stage, as in docs/ui_mockups/
-// battlefield.png. Each object is placed by its public slot, which it keeps from zone to zone
-// (docs/engine-architecture.md §13), so the game screen draws one element per slot and a card
-// moving zones glides from its old place to its new one rather than jumping. Pure functions of
-// the view: the screen animates between their results.
+// Where every card of a PlayerView lies on the 1600×900 stage, in the table's pseudo-3D
+// perspective (depthScale, lean; no WebGL). Each object is placed by its public slot, which it
+// keeps from zone to zone (docs/engine-architecture.md §13), so the game screen draws one
+// element per slot and a card moving zones glides from its old place to its new one rather than
+// jumping. Pure functions of the view: the screen animates between their results.
 import type {
   ObjectView,
   PassTo,
@@ -12,15 +12,46 @@ import type {
   ZoneName,
 } from "../generated/protocol";
 import type { Phase } from "../components/Controls";
-import {
-  CREATURE_WIDTH,
-  depthScale,
-  HAND,
-  LAND_STEP,
-  LAND_WIDTH,
-  lean,
-  STAGE,
-} from "../screens/Table";
+
+/** The fixed stage the table is drawn on, scaled to fit the window (Stage.tsx). */
+export const STAGE = { width: 1600, height: 900 };
+
+/** The camera's distance from the near edge of the table, in perspective's terms. */
+const CAMERA_DISTANCE = 1400;
+/** Depth grows linearly up the table, from zero at the near edge. */
+const NEAR_Y = 760;
+const DEPTH_PER_PX = 0.6;
+
+/** How much a thing lying at screen height `y` is shrunk by distance: d / (d + z), what
+ * `perspective(d)` does to something `z` behind the screen plane. Things lie at a depth that
+ * grows toward the opponent, so they stay upright rectangles that shrink with distance. */
+export const depthScale = (y: number) =>
+  CAMERA_DISTANCE / (CAMERA_DISTANCE + Math.max(0, NEAR_Y - y) * DEPTH_PER_PX);
+
+/** Where the table's receding edges meet, far above the stage: a card left of center leans
+ * left at its near end, and one right of center leans right. */
+const VANISHING = { x: STAGE.width / 2, y: -4400 };
+
+/** How far a thing lying on the table with its top-center at (x, y) leans, in degrees: its
+ * sides run toward the vanishing point. */
+export const lean = (x: number, y: number) =>
+  (Math.atan((x - VANISHING.x) / (y - VANISHING.y)) * 180) / Math.PI;
+
+export const CREATURE_WIDTH = 232;
+export const LAND_WIDTH = 190;
+/** Each copy beneath a land stack's top card, as a fraction of the card's width. */
+export const LAND_STEP = { x: 0.103, y: 0.022 };
+
+/** The hand's cards: each card's top center lies on an arc over the near edge, and the fan
+ * turns each a little more clockwise than the one on its left. */
+export const HAND = {
+  width: 182,
+  spacing: 172,
+  top: 726.5,
+  sag: 9,
+  turn: 5.9,
+  bias: 0.6,
+};
 
 /** How a placed card is drawn. */
 export type Look =
@@ -55,12 +86,6 @@ export type Layout = Map<number, Placement>;
 /** The hand's full frames, and the width of everything drawn from a full frame. */
 export const FULL_WIDTH = HAND.width;
 const BACK_WIDTH = 105;
-export const PILE_WIDTH = 91;
-/** Where a graveyard's bottom card lies under its top card on the table: straight below, so the
- * pile shows only as thickness (battlefield.png). */
-export const PILE_DEPTH = { x: 0, y: 8 };
-/** How much a graveyard's cards are foreshortened, lying on the far table (battlefield.png). */
-export const PILE_SQUASH = 0.86;
 
 /** Each side's rows, in stage pixels: its land piles from (x, y), filling rightward to
  * `LANDS_END`, and its other permanents' row at `y`, centered on the table. Every row's cards
@@ -88,17 +113,57 @@ const STACK_MARGIN = 25;
 /** How the table is laid out: lines cross it in combat and while something is on the stack. */
 type Mode = keyof typeof PERMANENT_GAP;
 
-/** Where each side's library and graveyard lie (Table.tsx draws the library piles). */
+/** Where each side's library and graveyard lie: their top cards' top-left corners. */
 export const PILES = {
   opponent: {
-    library: { x: 1174, y: 13, width: 93 },
+    library: { x: 1174, y: 13 },
     graveyard: { x: 1327, y: 40 },
   },
   you: {
-    library: { x: 168, y: 731, width: 104 },
+    library: { x: 168, y: 731 },
     graveyard: { x: 300, y: 770 },
   },
 };
+
+/** A pile's top card at full size, before its depth shrinks it. */
+const PILE_WIDTH = 104;
+/** Where a pile's upright sides meet, below the stage. Seen from above the near edge, the cards
+ * beneath a pile's top card show on its side toward this point, and the farther the pile lies
+ * from it the more of its side shows: the camera looks at the far table more nearly level. */
+const NADIR = { x: STAGE.width / 2, y: 1500 };
+/** How far each card beneath a pile's top card lies toward `NADIR`, as a fraction of the way. */
+const CARD_RISE = 0.0008;
+
+/** How a pile of cards looks on the table. */
+export interface PileLook {
+  /** The top card's top-left corner. */
+  x: number;
+  y: number;
+  /** The top card's width, shrunk by depth. */
+  width: number;
+  /** How far the pile leans, in degrees, as everything lying on the table does. */
+  skew: number;
+  /** Where the bottom card lies relative to the top card, in pixels. */
+  depth: { x: number; y: number };
+}
+
+/** How a pile of `count` cards with its top card's top-left corner `at` looks, from where it
+ * lies alone: one rule for both sides' libraries and graveyards. */
+export function pileLook(
+  at: { x: number; y: number },
+  count: number,
+): PileLook {
+  const width = PILE_WIDTH * depthScale(at.y);
+  const center = at.x + width / 2;
+  const rise = Math.max(0, count - 1) * CARD_RISE;
+  return {
+    x: at.x,
+    y: at.y,
+    width,
+    skew: lean(center, at.y),
+    depth: { x: (NADIR.x - center) * rise, y: (NADIR.y - at.y) * rise },
+  };
+}
 
 /** The stack, spells and abilities alike, large at the right of the table as in
  * docs/ui_mockups/trigger_on_stack_with_target.png: the top item in front where the mockup
@@ -162,7 +227,7 @@ const FULL_ASPECT = 63 / 88;
 /** How far the hand sinks under a screen over the table (scry.png). */
 const HAND_TUCK = 67;
 
-/** The hand fan (Table.tsx's Hand): the more cards, the closer they sit. `raised` straightens
+/** The hand fan, held at the near edge: the more cards, the closer they sit. `raised` straightens
  * and lifts one card, as hovering does; `tucked`, the fan sinks out of the way. */
 function handPlacements(
   cards: ObjectView[],
@@ -194,7 +259,7 @@ function handPlacements(
   });
 }
 
-/** The opponent's hand: backs fanned along the top edge (Table.tsx's opponent hand). */
+/** The opponent's hand: backs fanned along the top edge. */
 function backPlacements(cards: ObjectView[]): Placement[] {
   const n = cards.length;
   const mid = (n - 1) / 2;
@@ -288,7 +353,7 @@ function settle(
   return xs;
 }
 
-/** Lands of one name (or tokens of one name), stacked as Table.tsx's LandStack: copies beneath
+/** Lands of one name (or tokens of one name), stacked as Player.tsx's LandStack: copies beneath
  * peek out to the left and below; tapped copies lie on top. */
 function piles(objects: ObjectView[], key: (o: ObjectView) => string) {
   const groups = new Map<string, ObjectView[]>();
@@ -412,9 +477,15 @@ function battlefieldPlacements(
   return out;
 }
 
-/** A pile lying at a fixed place, as Table.tsx's `Lying` draws it: unscaled, leaning. */
-function lying(x: number, y: number, width: number) {
-  return { x, y, scale: 1, rotate: 0, skew: lean(x + width / 2, y) };
+/** A full frame drawn as a pile's top card, `shrink` times smaller. */
+function onPile(look: PileLook, shrink = 1) {
+  return {
+    x: look.x,
+    y: look.y,
+    scale: (look.width / FULL_WIDTH) * shrink,
+    rotate: 0,
+    skew: look.skew,
+  };
 }
 
 /** Every object's placement. `raised` is the hand card the pointer is over; the stack is
@@ -451,7 +522,9 @@ export function layout(
   const yours = field("you", field("opponent"));
   out.push(...yours, ...field("opponent", yours));
   for (const side of ["opponent", "you"] as const) {
-    const { library, graveyard } = PILES[side];
+    const player = view.players[side];
+    const library = pileLook(PILES[side].library, player.library.length);
+    const graveyard = pileLook(PILES[side].graveyard, player.graveyard.length);
     // Library cards wait, unseen, on their library; exiled cards fade out over the graveyard.
     for (const o of owned(side, "library")) {
       out.push({
@@ -461,12 +534,10 @@ export function layout(
         width: FULL_WIDTH,
         opacity: 0,
         z: 1,
-        ...lying(library.x, library.y, library.width),
-        scale: library.width / FULL_WIDTH,
+        ...onPile(library),
       });
     }
-    const pile = view.players[side].graveyard;
-    pile.forEach((slot, i) => {
+    player.graveyard.forEach((slot, i) => {
       const o = bySlot.get(slot);
       if (!o) return;
       out.push({
@@ -476,8 +547,7 @@ export function layout(
         width: FULL_WIDTH,
         opacity: 1,
         z: 20 + i,
-        ...lying(graveyard.x, graveyard.y, PILE_WIDTH),
-        scale: PILE_WIDTH / FULL_WIDTH,
+        ...onPile(graveyard),
       });
     });
     for (const o of owned(side, "exile")) {
@@ -488,8 +558,8 @@ export function layout(
         width: FULL_WIDTH,
         opacity: 0,
         z: 1,
-        ...lying(graveyard.x, graveyard.y - 40, PILE_WIDTH),
-        scale: (PILE_WIDTH / FULL_WIDTH) * 0.6,
+        ...onPile(graveyard, 0.6),
+        y: graveyard.y - 40,
       });
     }
   }

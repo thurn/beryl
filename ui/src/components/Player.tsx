@@ -313,13 +313,10 @@ export function PlayerBadge({ name }: { name: string }) {
 }
 
 /** Where a pile's bottom card lies relative to its top card, in pixels: the edges of the cards
- * between show along that side. Seen in perspective, the bottom card may also look `flare`
- * pixels wider (growing to the right) and turned `twist` degrees. */
+ * between show along that side. */
 export interface PileDepth {
   x: number;
   y: number;
-  flare?: number;
-  twist?: number;
 }
 
 /** A pile of cards: the top one over the edges of those beneath, one edge per few cards. */
@@ -359,9 +356,8 @@ function Pile({
             style={{
               left: left + depth.x * k,
               top: depth.y * k,
-              width: width + (depth.flare ?? 0) * k,
+              width,
               height: width / ASPECT.full,
-              rotate: `${(depth.twist ?? 0) * k}deg`,
             }}
           />
         );

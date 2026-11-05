@@ -18,7 +18,6 @@ import {
 import { Arrows, StackItem, type ArrowSpec } from "../components/Stack";
 import { costless, SAMPLE } from "./samples";
 import { ScryOverlay } from "./Scry";
-import { TableScene } from "./Table";
 
 function Panel({
   n,
@@ -161,7 +160,7 @@ function PlayerAndZones() {
           ]}
           width={98}
           height={138}
-          depth={{ x: -14, y: 18, twist: -3 }}
+          depth={{ x: -14, y: 18 }}
         />
       </At>
       <At x={318} y={192}>
@@ -413,7 +412,7 @@ function ScryPanel() {
       <div className="scry-preview">
         <div className="scry-preview-stage">
           <div className="scry-preview-inner">
-            <TableScene dimmed />
+            <div className="table table-dimmed" />
             <ScryOverlay />
           </div>
         </div>
@@ -424,7 +423,7 @@ function ScryPanel() {
         <Caption>Confirm</Caption>
       </div>
       <div className="centered">
-        <Caption>Dimmed battlefield backdrop</Caption>
+        <Caption>Dimmed table backdrop</Caption>
       </div>
     </Panel>
   );

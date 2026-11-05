@@ -6,6 +6,7 @@
 // step banner; spells and abilities large at the right, a gold line from an ability's source
 // and cyan lines to targets.
 import {
+  Fragment,
   useEffect,
   useMemo,
   useState,
@@ -42,7 +43,6 @@ import type {
   Side,
   StackItem as StackItemView,
 } from "../generated/protocol";
-import { Brand, Gear, Lying, StepBanner } from "../screens/Table";
 import {
   CardLayer,
   cardId,
@@ -65,14 +65,14 @@ import {
   layout,
   passButton,
   phaseOf,
-  PILE_DEPTH,
-  PILE_SQUASH,
-  PILE_WIDTH,
+  pileLook,
   PILES,
   STACK_Z,
   stackPlace,
+  type PileLook,
   type Placement,
 } from "./layout";
+import { Brand } from "./Stage";
 
 export interface BoardProps {
   view: PlayerView;
@@ -276,44 +276,32 @@ export function Board({
         onPointerDown={() => setSettings(false)}
       >
         <div className="far-shade" />
-        <Lying
-          x={PILES.opponent.library.x}
-          y={PILES.opponent.library.y}
-          width={122}
-          squash={0.85}
-        >
-          <Library
-            count={opponent.library.length}
-            width={PILES.opponent.library.width}
-            depth={{ x: -29, y: 37, flare: 32 }}
-          />
-        </Lying>
-        <Lying x={PILES.you.library.x} y={PILES.you.library.y} width={116}>
-          <Library
-            count={you.library.length}
-            width={PILES.you.library.width}
-            depth={{ x: 6, y: 12, twist: 7 }}
-          />
-        </Lying>
         {(["opponent", "you"] as const).map((side) => {
-          const count = view.players[side].graveyard.length;
-          const { x, y } = PILES[side].graveyard;
+          const { library, graveyard } = view.players[side];
+          const libraryPile = pileLook(PILES[side].library, library.length);
+          const graveyardPile = pileLook(
+            PILES[side].graveyard,
+            graveyard.length,
+          );
           return (
-            count > 1 && (
-              <Lying
-                key={side}
-                x={x + PILE_DEPTH.x}
-                y={y}
-                width={PILE_WIDTH}
-                squash={PILE_SQUASH}
-              >
-                <GraveyardEdges
-                  count={count}
-                  width={PILE_WIDTH}
-                  depth={PILE_DEPTH}
+            <Fragment key={side}>
+              <Lying look={libraryPile}>
+                <Library
+                  count={library.length}
+                  width={libraryPile.width}
+                  depth={libraryPile.depth}
                 />
               </Lying>
-            )
+              {graveyard.length > 1 && (
+                <Lying look={graveyardPile}>
+                  <GraveyardEdges
+                    count={graveyard.length}
+                    width={graveyardPile.width}
+                    depth={graveyardPile.depth}
+                  />
+                </Lying>
+              )}
+            </Fragment>
           );
         })}
 
@@ -458,6 +446,52 @@ export function Board({
           (scry.png). */}
       <Brand />
     </>
+  );
+}
+
+/** A pile lying on the table as `look` says: its top card's top-left corner at the look's
+ * corner, the edges beneath on whichever side they show. */
+function Lying({ look, children }: { look: PileLook; children: ReactNode }) {
+  return (
+    <div
+      className="hud"
+      style={{
+        left: look.x - Math.max(0, -look.depth.x),
+        top: look.y,
+        transformOrigin: "0 0",
+        transform: `skewX(${look.skew}deg)`,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** A step announcement over the battlefield, such as "Combat" over "Blockers declared". */
+function StepBanner({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div className="step-banner" role="status">
+      <i className="step-banner-rule step-banner-rule-left" />
+      <i className="step-banner-diamond" />
+      <span className="step-banner-title">{title}</span>
+      <i className="step-banner-dot" />
+      <i className="step-banner-rule step-banner-rule-right" />
+      <i className="step-banner-underline" />
+      <span className="step-banner-detail">{detail}</span>
+      <svg className="step-banner-notch" viewBox="0 0 140 12" aria-hidden>
+        <path d="M0 1.5 H60.5 L70 10.5 L79.5 1.5 H140" />
+      </svg>
+    </div>
+  );
+}
+
+/** The settings gear at the top right. */
+function Gear() {
+  return (
+    <svg className="gear" viewBox="0 0 24 24" aria-label="Settings" role="img">
+      <circle className="gear-hole" cx="12" cy="12" r="4.9" />
+      <path d="M19.67 9.71 L22.34 9.69 L22.34 14.31 L19.67 14.29 L19.04 15.80 L20.95 17.68 L17.68 20.95 L15.80 19.04 L14.29 19.67 L14.31 22.34 L9.69 22.34 L9.71 19.67 L8.20 19.04 L6.32 20.95 L3.05 17.68 L4.96 15.80 L4.33 14.29 L1.66 14.31 L1.66 9.69 L4.33 9.71 L4.96 8.20 L3.05 6.32 L6.32 3.05 L8.20 4.96 L9.71 4.33 L9.69 1.66 L14.31 1.66 L14.29 4.33 L15.80 4.96 L17.68 3.05 L20.95 6.32 L19.04 8.20 Z M16.9 12 A4.9 4.9 0 1 0 7.1 12 A4.9 4.9 0 1 0 16.9 12 Z" />
+    </svg>
   );
 }
 

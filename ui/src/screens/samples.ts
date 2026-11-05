@@ -1,7 +1,5 @@
-// Stand-in cards and the table demo's board, named and placed as in docs/ui_mockups. Art is the
-// placeholder painting until the card data bead supplies real art.
+// Stand-in cards for the component gallery. Art is the placeholder painting.
 import type { CardFace } from "../components/Card";
-import type { TableBoard } from "./Table";
 
 const land = (name: string, typeLine: string): CardFace => ({
   name,
@@ -95,48 +93,3 @@ export const SAMPLE = {
 
 /** A card as the mockups draw it in the hand: without its mana cost. */
 export const costless = ({ manaCost, ...card }: CardFace): CardFace => card;
-
-/** The board of docs/ui_mockups/battlefield.png: the table demo. */
-export const SAMPLE_BOARD: TableBoard = {
-  opponent: {
-    life: 17,
-    library: 33,
-    graveyard: [SAMPLE.counterspell, SAMPLE.doomBlade],
-    hand: 5,
-    lands: [
-      {
-        card: SAMPLE.island,
-        count: 3,
-        x: 159,
-        y: 127,
-      },
-      { card: SAMPLE.swamp, count: 3, x: 367, y: 122 },
-    ],
-    creatures: [
-      { card: SAMPLE.balefulStrix, x: 607, y: 221 },
-      { card: SAMPLE.beast, x: 808, y: 221 },
-    ],
-  },
-  you: {
-    life: 22,
-    active: true,
-    library: 26,
-    graveyard: [],
-    hand: [
-      { card: costless(SAMPLE.bolt) },
-      { card: costless(SAMPLE.swords) },
-      { card: SAMPLE.mountain },
-      { card: SAMPLE.plateau },
-    ],
-    lands: [
-      { card: SAMPLE.mountain, count: 3, x: 105, y: 564 },
-      { card: SAMPLE.plains, count: 3, x: 326, y: 564 },
-    ],
-    creatures: [
-      { card: SAMPLE.goblinGuide, x: 588, y: 418 },
-      { card: SAMPLE.angel, x: 810, y: 419 },
-    ],
-  },
-  phase: "main1",
-  action: { label: "Next", caption: "To Combat" },
-};
