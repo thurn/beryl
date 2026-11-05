@@ -1134,21 +1134,19 @@
     );
   box-shadow: 0 0 4px 1px rgb(245 130 30 / 55%);
 }
-/* Lit, the tab gives way to a hot streak along the rule under the swords. */
+/* Lit, the tab is only the swords' glow pooling on the rule. */
 .phase-tracker-compact .phase-current:nth-child(3)::after {
-  left: -20px;
-  right: -20px;
-  bottom: -2px;
-  height: 2px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgb(240 140 40 / 80%) 25%,
-    rgb(255 214 120) 50%,
-    rgb(240 140 40 / 80%) 75%,
+  left: -10px;
+  right: -10px;
+  bottom: -5px;
+  height: 10px;
+  background: radial-gradient(
+    closest-side,
+    rgb(255 190 80 / 95%),
+    rgb(240 130 30 / 55%) 55%,
     transparent
   );
-  box-shadow: 0 0 6px 1px rgb(240 140 40 / 55%);
+  box-shadow: none;
 }
 /* The combat glyph stands on a low tab that lifts the rule around it. */
 /* Opaque in the table's local tone, so the rule breaks under the tab. */
