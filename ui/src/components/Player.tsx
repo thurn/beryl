@@ -243,6 +243,7 @@ export function LifeOrb({
           )}
           <path
             id={anchor}
+            data-oval
             className="life-orb-core"
             d={cushion(CORE)}
             stroke={`url(#${id("rim")})`}

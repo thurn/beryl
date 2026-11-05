@@ -3,6 +3,14 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { CardArt, frameKey, type CardFace } from "./Card";
 import { RulesText } from "./Mana";
+import {
+  retrace,
+  route,
+  type Box,
+  type Choice,
+  type Leg,
+  type Vector,
+} from "./route";
 
 export interface StackItemProps {
   source: CardFace;
@@ -63,16 +71,20 @@ export type Side =
   | "facing"
   | { x: number; y: number };
 
-type Vector = readonly [number, number];
-
+/** An arrow from the element with id `from` to the one with id `to`. Given no sides, bend or
+ * handles, it is routed (route.ts): out of whichever edge and into whichever edge make the
+ * clearest curve past the cards `Arrows` avoids and the arrows before it, the head square to
+ * the edge it meets. An element marked `data-oval` is met round its inscribed ellipse. */
 export interface ArrowSpec {
   from: string;
   to: string;
   tone: "gold" | "cyan";
+  /** Where it leaves and meets its ends, unrouted: by default the right side of `from` and
+   * the left of `to`. */
   fromSide?: Side;
   toSide?: Side;
   /** How far the curve bows, as a fraction of its length; negative bows the other way. Without
-   * it, the curve bows away from the center of the arrows' parent (`outward`). */
+   * it, an unrouted curve bows away from the center of the arrows' parent (`outward`). */
   bend?: number;
   /** The curve's heading out of its start and into its end, as handle vectors in pixels; given
    * both, they replace `bend`. */
@@ -87,6 +99,9 @@ export interface ArrowSpec {
 
 interface Drawn {
   key: string;
+  /** The ids of the elements it ties, as its spec names them. */
+  from: string;
+  to: string;
   d: string;
   tone: ArrowSpec["tone"];
   start: Vector;
@@ -104,13 +119,6 @@ const SIDES = {
   bottom: { x: 0.5, y: 1 },
   center: { x: 0.5, y: 0.5 },
 } as const;
-
-interface Box {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
 
 /** An element's box in the parent's own coordinates: client rects are in screen pixels, which
  * differ by `scale` inside a scaled stage. */
@@ -197,52 +205,129 @@ function curve(
   };
 }
 
+/** Whether `a` is routed rather than drawn as its sides, bend or handles say. */
+const routed = (a: ArrowSpec) =>
+  a.fromSide === undefined &&
+  a.toSide === undefined &&
+  a.bend === undefined &&
+  a.leave === undefined;
+
 /** Draws arrows between elements (by id) over its parent, which must be positioned. They are
  * measured after layout and again whenever the parent resizes, or, to `follow` elements that
- * move (cards gliding to their places), on every animation frame. `scale` thins lines, heads
- * and dots for small cards. */
+ * move (cards gliding to their places), on every animation frame. Routed arrows keep off the
+ * elements `avoid` selects. `scale` thins lines, heads and dots for small cards. */
 export function Arrows({
   arrows,
   scale = 1,
   follow = false,
+  avoid,
 }: {
   arrows: ArrowSpec[];
   scale?: number;
   follow?: boolean;
+  avoid?: string;
 }) {
   const svg = useRef<SVGSVGElement>(null);
   const [drawn, setDrawn] = useState<Drawn[]>([]);
+  // Each routed arrow's ports and reach, which it keeps while its ends or the cards it avoids
+  // move: routing afresh on every frame of a glide would cost too much and could flicker.
+  const choices = useRef(new Map<string, Choice>());
+  // Where everything was on the last frame, and whether the arrows were routed afresh there:
+  // once nothing moves, they are, once.
+  const seen = useRef({ where: "", searched: false });
 
   // Measured against the svg's own parent: a parent's ref is not attached yet when this runs.
   useLayoutEffect(() => {
     const root = svg.current?.parentElement;
     if (!root) return;
+    seen.current = { where: "", searched: false };
     const measure = () => {
       const origin = root.getBoundingClientRect();
       const scale = root.offsetWidth ? origin.width / root.offsetWidth : 1;
       const size: Vector = [root.offsetWidth, root.offsetHeight];
-      const next = arrows.flatMap((a) => {
+      const obstacles = avoid
+        ? [...document.querySelectorAll(avoid)].map((e) => ({
+            element: e,
+            box: box(e.getBoundingClientRect(), origin, scale),
+          }))
+        : [];
+      const ends = arrows.flatMap((a) => {
         const from = document.getElementById(a.from);
         const to = document.getElementById(a.to);
         if (!from || !to) return [];
         const source = box(from.getBoundingClientRect(), origin, scale);
         const target = box(to.getBoundingClientRect(), origin, scale);
+        return [{ a, from, to, source, target }];
+      });
+      const where = JSON.stringify([
+        size,
+        ...[
+          ...ends.flatMap((e) => [e.source, e.target]),
+          ...obstacles.map((o) => o.box),
+        ].map((b) => [b.x, b.y, b.width, b.height].map(Math.round)),
+      ]);
+      const still = where === seen.current.where;
+      if (still && seen.current.searched) return;
+      // Each routed arrow keeps off every other card, not what holds or lies within its ends.
+      const legs = new Map<ArrowSpec, Leg>(
+        ends
+          .filter(({ a }) => routed(a))
+          .map(({ a, from, to, source, target }) => [
+            a,
+            {
+              from: { box: source, oval: from.hasAttribute("data-oval") },
+              to: { box: target, oval: to.hasAttribute("data-oval") },
+              avoid: obstacles
+                .filter(
+                  ({ element: e }) =>
+                    !e.contains(from) &&
+                    !from.contains(e) &&
+                    !e.contains(to) &&
+                    !to.contains(e),
+                )
+                .map((o) => o.box),
+            },
+          ]),
+      );
+      const keyOf = (a: ArrowSpec) => `${a.from}-${a.to}`;
+      // While anything moves, each follows its ports; standing still, or new, all are routed.
+      const traced = [...legs].map(([a, leg]) => {
+        const choice = choices.current.get(keyOf(a));
+        return still || !choice ? undefined : retrace(leg, choice);
+      });
+      const searched = traced.some((r) => !r);
+      const fresh = searched ? route([...legs.values()], size) : traced;
+      const routes = new Map([...legs.keys()].map((a, i) => [a, fresh[i]!]));
+      seen.current = { where, searched: still || searched };
+      choices.current = new Map(
+        [...routes].map(([a, r]) => [keyOf(a), r.choice]),
+      );
+      const next = ends.map(({ a, source, target }) => {
+        const key = keyOf(a);
+        const marks = {
+          key,
+          from: a.from,
+          to: a.to,
+          tone: a.tone,
+          startMark: a.start ?? "dot",
+          endMark: a.end ?? "head",
+          fine: a.fine ?? false,
+        } as const;
+        const r = routes.get(a);
+        if (r) {
+          return {
+            ...marks,
+            d: r.d,
+            start: r.start,
+            end: r.end,
+            angle: r.angle,
+          };
+        }
         const start = anchor(source, a.fromSide ?? "right", target);
         const end = anchor(target, a.toSide ?? "left", source);
-        return [
-          {
-            key: `${a.from}-${a.to}`,
-            ...curve(a, start, end, size),
-            tone: a.tone,
-            start,
-            end,
-            startMark: a.start ?? "dot",
-            endMark: a.end ?? "head",
-            fine: a.fine ?? false,
-          },
-        ];
+        return { ...marks, ...curve(a, start, end, size), start, end };
       });
-      // Unchanged, as on most frames when following, it keeps the drawn arrows.
+      // Unchanged, it keeps the drawn arrows.
       setDrawn((last) =>
         last.length === next.length &&
         last.every((l, i) => l.key === next[i]!.key && l.d === next[i]!.d)
@@ -263,7 +348,7 @@ export function Arrows({
       observer.disconnect();
       cancelAnimationFrame(frame);
     };
-  }, [arrows, follow]);
+  }, [arrows, follow, avoid]);
 
   return (
     <svg
@@ -283,6 +368,8 @@ export function Arrows({
           <g
             key={a.key}
             className={`arrow arrow-${a.tone}${a.fine ? " arrow-fine" : ""}`}
+            data-from={a.from}
+            data-to={a.to}
           >
             {(["glow", "line", "core"] as const).map((layer) => (
               <g key={layer} className={`arrow-${layer}`}>

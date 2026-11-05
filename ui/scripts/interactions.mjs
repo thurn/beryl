@@ -1608,6 +1608,107 @@ await check(
     { fixture: "choice-pay", at: pay.views.length, ready: ".choice" },
 );
 
+// The stack's arrows (by-l1w.8): a spell aimed at a card beside the stack, an ability aimed at
+// its source's neighbor, and one aimed at a player. Each arrow ties the elements the top of
+// the stack names, starts and ends on their edges apart from every other arrow's ends, is long
+// enough to read, and runs mostly clear of the other cards on the table.
+for (const fixture of ["arrow-spell", "arrow-ability", "arrow-player"]) {
+    const views = await load(fixture);
+    const view = views.at(-1);
+    const top = view.stack.length - 1;
+    const item = view.stack[top];
+    const from = item.kind === "spell" ? `card-${item.slot}` : `stack-${top}`;
+    const expected = [
+        ...(item.kind === "ability" && item.source !== null
+            ? [[`card-${item.source}`, from]]
+            : []),
+        ...item.targets.map((t) => [
+            from,
+            t.kind === "player" ? `${t.player}-life-orb` : `card-${t.slot}`,
+        ]),
+    ];
+    await check(
+        `${fixture}: each arrow's source and target read distinctly`,
+        async (page) => {
+            await page.clock.runFor(3000);
+            const drawn = await page.evaluate(() => {
+                const box = (e) => {
+                    const r = e.getBoundingClientRect();
+                    return { x: r.x, y: r.y, w: r.width, h: r.height };
+                };
+                const cards = [
+                    ...document.querySelectorAll(".card-el .card-slot"),
+                ];
+                return [...document.querySelectorAll(".arrow")].map((g) => {
+                    const path = g.querySelector(".arrow-line path");
+                    const ctm = path.getScreenCTM();
+                    const length = path.getTotalLength();
+                    const points = Array.from({ length: 61 }, (_, i) => {
+                        const p = path.getPointAtLength((length * i) / 60);
+                        const q = new DOMPoint(p.x, p.y).matrixTransform(ctm);
+                        return [q.x, q.y];
+                    });
+                    const ends = [g.dataset.from, g.dataset.to].map((id) =>
+                        document.getElementById(id),
+                    );
+                    const others = cards
+                        .filter(
+                            (c) => !ends.some((e) => c === e || c.contains(e)),
+                        )
+                        .map(box);
+                    return {
+                        ends: [g.dataset.from, g.dataset.to],
+                        boxes: ends.map(box),
+                        points,
+                        others,
+                    };
+                });
+            });
+            assert.deepEqual(
+                drawn.map((a) => a.ends),
+                expected,
+                "an arrow from the source and one to each target",
+            );
+            const within = ([x, y], b, m) =>
+                x > b.x - m &&
+                x < b.x + b.w + m &&
+                y > b.y - m &&
+                y < b.y + b.h + m;
+            const gap = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+            for (const a of drawn) {
+                const [start, end] = [a.points[0], a.points.at(-1)];
+                const name = a.ends.join(" -> ");
+                // On each end's edge: within its box grown a little but not deep inside it.
+                for (const [p, b] of [
+                    [start, a.boxes[0]],
+                    [end, a.boxes[1]],
+                ]) {
+                    assert.ok(within(p, b, 3), `${name} meets its element`);
+                    assert.ok(!within(p, b, -12), `${name} meets its edge`);
+                }
+                const length = a.points
+                    .slice(1)
+                    .reduce((sum, p, i) => sum + gap(p, a.points[i]), 0);
+                assert.ok(length >= 100, `${name} is ${length} px long`);
+                const over = a.points.filter((p) =>
+                    a.others.some((b) => within(p, b, 0)),
+                ).length;
+                assert.ok(
+                    over <= 6,
+                    `${name} runs over other cards at ${over} of 61 points`,
+                );
+            }
+            const ends = drawn.flatMap((a) => [a.points[0], a.points.at(-1)]);
+            for (const [i, p] of ends.entries()) {
+                for (const q of ends.slice(i + 1)) {
+                    assert.ok(gap(p, q) >= 24, "arrows end apart");
+                }
+            }
+        },
+        { fixture, at: views.length, ready: ".arrow" },
+    );
+}
+
 await browser.close();
 if (errors.length) {
     failed = true;

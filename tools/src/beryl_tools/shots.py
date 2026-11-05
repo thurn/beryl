@@ -187,6 +187,9 @@ INTERACTION_FIXTURES = [
     "pay-default",
     "pay-other",
     "exiled-beneath",
+    "arrow-spell",
+    "arrow-ability",
+    "arrow-player",
 ]
 
 

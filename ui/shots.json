@@ -265,6 +265,24 @@
       "height": 900
     },
     {
+      "name": "game-arrow-spell",
+      "route": "/?fixture=arrow-spell#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-arrow-ability",
+      "route": "/?fixture=arrow-ability#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-arrow-player",
+      "route": "/?fixture=arrow-player#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
       "name": "game-choice-scry",
       "route": "/?fixture=choice-scry#/game",
       "width": 1600,

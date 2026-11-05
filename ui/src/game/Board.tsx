@@ -600,7 +600,7 @@ export function Board({
         )}
 
         <div className="board-arrows">
-          <Arrows arrows={arrows} follow />
+          <Arrows arrows={arrows} follow avoid={AVOID} />
         </div>
 
         {/* Under a screen over the table, the turn's controls give way (scry.png). */}
@@ -864,6 +864,10 @@ function AbilityOnStack({
 /** The element id of the stack item at `index`: its card for a spell. */
 const stackId = (index: number) => `stack-${index}`;
 
+/** What the stack's arrows keep off: every card on the screen, the stack's items, the life
+ * orbs and the game log. */
+const AVOID = ".card-el .card-slot, .stack-item, .life-orb, .game-log";
+
 /** The element id of the oval of a player's life orb. */
 const lifeId = (side: Side) => `${side}-life-orb`;
 
@@ -912,20 +916,14 @@ function boardArrows(view: PlayerView): ArrowSpec[] {
       fine: true,
     });
   }
-  // The top of the stack's lines leave and meet each end on the side facing the other, bowing
-  // away from the middle of the table.
+  // The top of the stack's lines are routed round the cards on the table (AVOID): the source's
+  // first, then each target's, kept apart from it.
   const top = view.stack.length - 1;
   const item = view.stack[top];
   if (item) {
     const from = item.kind === "spell" ? cardId(item.slot) : stackId(top);
     if (item.kind === "ability" && item.source !== null) {
-      out.push({
-        from: cardId(item.source),
-        to: from,
-        tone: "gold",
-        fromSide: "facing",
-        toSide: "facing",
-      });
+      out.push({ from: cardId(item.source), to: from, tone: "gold" });
     }
     for (const target of item.targets) {
       out.push({
@@ -935,8 +933,6 @@ function boardArrows(view: PlayerView): ArrowSpec[] {
             ? lifeId(target.player)
             : cardId(target.slot),
         tone: "cyan",
-        fromSide: "facing",
-        toSide: "facing",
       });
     }
   }

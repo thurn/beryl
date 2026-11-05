@@ -7,7 +7,9 @@ use std::sync::mpsc::channel;
 
 use beryl_cards::decks::{WU_CONTROL, fuzz_deck};
 use beryl_session::ipc::{self, Fixture, FixtureMessage};
-use beryl_session::protocol::{Candidate, Combat, Kind, Side, StackItem, Step, ZoneName};
+use beryl_session::protocol::{
+    Candidate, Combat, Kind, Side, StackItem, Step, TargetRef, ZoneName,
+};
 use beryl_session::{PlayerView, Seat, Sessions, StartGame, Status, StopsSetting, agents};
 use serde::Deserialize;
 use serde_json::json;
@@ -123,6 +125,13 @@ enum Condition {
     Blocking,
     /// The top of the stack is a triggered ability with a target.
     TargetedTrigger,
+    /// The top of the stack is a spell that targets a permanent.
+    TargetedSpell,
+    /// The top of the stack targets a player.
+    PlayerTarget,
+    /// The top of the stack is an ability of a permanent that targets another permanent its
+    /// controller controls, which the table sets in the same row.
+    NeighbourTarget,
     /// The top of the stack is a spell the opponent controls.
     OpponentsSpell,
     /// The human may cast a card of this name.
@@ -142,14 +151,18 @@ enum Condition {
 
 impl Condition {
     /// Parses "step <step>" (as the protocol names steps: "declareBlockers"), "attacking",
-    /// "blocking", "targeted trigger on the stack", "opponent's spell on the stack" or
-    /// "castable <card name>", "resolving <card name>", "casting <card name>", "playable
-    /// pair in hand" or "exiled beneath a permanent".
+    /// "blocking", "targeted trigger on the stack", "targeted spell on the stack", "player
+    /// targeted on the stack", "ability targeting beside its source", "opponent's spell on
+    /// the stack", "castable <card name>", "resolving <card name>", "casting <card name>",
+    /// "playable pair in hand" or "exiled beneath a permanent".
     fn parse(text: &str) -> Result<Condition, String> {
         let condition = match text {
             "attacking" => Condition::Attacking,
             "blocking" => Condition::Blocking,
             "targeted trigger on the stack" => Condition::TargetedTrigger,
+            "targeted spell on the stack" => Condition::TargetedSpell,
+            "player targeted on the stack" => Condition::PlayerTarget,
+            "ability targeting beside its source" => Condition::NeighbourTarget,
             "opponent's spell on the stack" => Condition::OpponentsSpell,
             "playable pair in hand" => Condition::PlayablePair,
             "exiled beneath a permanent" => Condition::ExiledBeneath,
@@ -194,6 +207,18 @@ impl Condition {
                 view.stack.last(),
                 Some(StackItem::Ability { triggered: true, targets, .. }) if !targets.is_empty()
             ),
+            Condition::TargetedSpell => matches!(
+                view.stack.last(),
+                Some(StackItem::Spell { targets, .. })
+                    if targets.iter().any(|t| matches!(t, TargetRef::Object { .. }))
+            ),
+            Condition::PlayerTarget => view.stack.last().is_some_and(|item| {
+                let (StackItem::Spell { targets, .. } | StackItem::Ability { targets, .. }) = item;
+                targets
+                    .iter()
+                    .any(|t| matches!(t, TargetRef::Player { .. }))
+            }),
+            Condition::NeighbourTarget => targets_beside_source(view),
             Condition::OpponentsSpell => matches!(
                 view.stack.last(),
                 Some(StackItem::Spell { slot, .. })
@@ -259,6 +284,30 @@ impl Condition {
             }),
         }
     }
+}
+
+/// Whether the top of the stack is an ability of a permanent that targets another permanent
+/// its controller controls.
+fn targets_beside_source(view: &PlayerView) -> bool {
+    let Some(StackItem::Ability {
+        source: Some(source),
+        targets,
+        ..
+    }) = view.stack.last()
+    else {
+        return false;
+    };
+    let permanent = |slot: u8| {
+        view.objects
+            .iter()
+            .find(|o| o.slot == slot && o.zone == ZoneName::Battlefield)
+    };
+    permanent(*source).is_some_and(|s| {
+        targets.iter().any(|t| {
+            matches!(t, TargetRef::Object { slot } if *slot != *source
+                && permanent(*slot).is_some_and(|o| o.controller == s.controller))
+        })
+    })
 }
 
 /// Records the fixtures in `definitions` named in `only`, or all of them, into `out`.
@@ -424,6 +473,10 @@ mod tests {
         assert_eq!(
             Condition::parse("exiled beneath a permanent"),
             Ok(Condition::ExiledBeneath)
+        );
+        assert_eq!(
+            Condition::parse("ability targeting beside its source"),
+            Ok(Condition::NeighbourTarget)
         );
         assert!(Condition::parse("step lunch").is_err());
         assert!(Condition::parse("raining").is_err());
