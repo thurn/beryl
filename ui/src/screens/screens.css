@@ -500,10 +500,11 @@
 /* The mini hand's cards are cut off at their type lines by the panel's edge, under larger, bolder
    names than the table's hand. */
 .mini-hand .card-art {
-  flex-basis: 6.4em;
+  flex-basis: 6.1em;
 }
 .mini-hand .card-name-bar {
   height: 1.22em;
+  padding: 0 0.25em;
 }
 .mini-hand .card-name {
   --name-size: 0.96em;
@@ -583,7 +584,7 @@
   background: rgb(0 0 0 / 18%);
 }
 .scry-zone .card-target {
-  --card-shadow: 12px 10px 26px rgb(0 0 0 / 60%), 0 6px 10px rgb(0 0 0 / 45%);
+  --card-shadow: 6px 8px 14px rgb(0 0 0 / 55%), 0 4px 8px rgb(0 0 0 / 40%);
 }
 .scry-label {
   position: absolute;
@@ -642,9 +643,11 @@
     0 0 16px 5px rgb(235 125 10 / 60%);
   --glow-gold-in:
     inset 0 0 0 1px #fffef8, inset 0 0 0 2px #fbe7a8, inset 0 0 0 3px #f6c959,
-    inset 0 0 4px 4px rgb(215 125 30 / 85%),
-    inset 0 0 0 30px rgb(110 70 20 / 45%);
-  --glow-cyan: 0 0 0 1px #05c8f0, 0 0 6px 6px rgb(0 165 225 / 85%);
+    inset 0 0 3px 4px rgb(220 125 30 / 95%),
+    inset 0 0 8px 4px rgb(160 90 25 / 60%), inset 0 0 0 30px rgb(80 50 15 / 45%);
+  --glow-cyan:
+    0 0 0 1px #05c8f0, 0 0 2px 3px rgb(0 185 235 / 90%),
+    0 0 8px 7px rgb(0 160 225 / 80%);
   --glow-cyan-in:
     inset 0 0 0 1px #00dcf8, inset 0 0 0 2px #01eeff, inset 0 0 0 3px #02c0e4,
     inset 0 0 5px 4px rgb(3 110 155 / 90%), inset 0 0 0 30px rgb(0 60 85 / 80%);
