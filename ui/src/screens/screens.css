@@ -144,7 +144,7 @@
   content: "";
   position: absolute;
   left: 5px;
-  right: 15px;
+  right: 3px;
   bottom: -1px;
   height: 1px;
   background: linear-gradient(
@@ -183,7 +183,8 @@
   font-style: italic;
   -webkit-text-stroke: 0.35px currentColor;
   font-size: 17px;
-  color: var(--text);
+  color: var(--type);
+  text-shadow: 0 1px 1px rgb(0 0 0 / 75%);
   text-align: center;
 }
 .centered {
@@ -220,6 +221,10 @@
   border-radius: 9px;
   border: 1px solid color-mix(in srgb, var(--chip) 35%, #f6efe4);
   background: var(--chip);
+  box-shadow:
+    0 1px 0 #191310,
+    0 0 0 1px rgb(10 8 7 / 50%),
+    0 3px 6px rgb(0 0 0 / 40%);
 }
 .swatch:nth-child(-n + 2) .swatch-chip {
   border: 1.5px solid #e4dccf;
@@ -229,6 +234,8 @@
 }
 .swatch figcaption {
   margin-top: -4px;
+  color: var(--type);
+  text-shadow: 0 1px 1px rgb(0 0 0 / 75%);
   -webkit-text-stroke: 0.4px currentColor;
   text-align: center;
   font-size: 17px;
@@ -254,7 +261,10 @@
   font-weight: 700;
   font-size: 56px;
   line-height: 1;
-  text-shadow: 0 3px 6px rgb(0 0 0 / 70%);
+  color: var(--type);
+  text-shadow:
+    0 3px 6px rgb(0 0 0 / 70%),
+    0 0 14px rgb(255 248 236 / 22%);
 }
 .specimen-sans {
   position: absolute;
@@ -319,13 +329,18 @@
 .tabletop-chip {
   width: 100%;
   height: 60px;
+  margin-top: 1px;
+  height: 59px;
   border-radius: 8px;
-  border: 1.5px solid #e2aa58;
-  border-bottom-color: #f2c47c;
+  border: 1.5px solid #d6ac76;
+  border-top-color: #dfc39d;
+  border-bottom-color: #cd9c60;
   background:
     var(--grain),
     radial-gradient(ellipse at 50% 75%, #67584f, #594c44 60%, #51453f);
-  box-shadow: 0 2px 6px rgb(0 0 0 / 35%);
+  box-shadow:
+    0 0 0 1px rgb(10 8 6 / 55%),
+    0 3px 6px rgb(0 0 0 / 40%);
 }
 .metal-chip {
   width: 100%;
@@ -334,7 +349,7 @@
   flex-direction: column;
   justify-content: center;
   gap: 29px;
-  padding-bottom: 4px;
+  padding-bottom: 2px;
 }
 .metal-chip i {
   position: relative;
@@ -344,16 +359,15 @@
 .metal-gold {
   background: linear-gradient(
     90deg,
-    transparent,
-    #b98f58 5%,
-    #dcae6c 35%,
-    #ffd27a 46%,
+    rgb(232 195 141 / 30%),
+    #e8c38d 5%,
+    #efcf9c 40%,
     #fffbe6 50%,
-    #ffd27a 54%,
-    #dcae6c 65%,
-    #b98f58 95%,
-    transparent
+    #efcf9c 60%,
+    #e8c38d 95%,
+    rgb(232 195 141 / 30%)
   );
+  box-shadow: 0 0 4px 1px rgb(220 130 50 / 45%);
 }
 .metal-gold::after {
   content: "";
@@ -372,10 +386,15 @@
     90deg,
     rgb(190 184 176 / 40%),
     #c6c0b8 3%,
-    #cdc7bf 50%,
+    #e6e1da 50%,
     #c6c0b8 97%,
     rgb(190 184 176 / 40%)
   );
+  box-shadow: 0 1px 0 rgb(0 0 0 / 50%);
+}
+.material-specimens figure:last-child .caption {
+  translate: 3px 0;
+  font-size: 15.5px;
 }
 
 /* 02 Actions & status. */
@@ -392,6 +411,8 @@
 }
 .button-rows .button-secondary {
   top: 118px;
+  left: 70px;
+  width: 239px;
   height: 41px;
   font-size: 24.5px;
 }
@@ -619,33 +640,41 @@
   position: absolute;
   z-index: 30;
   font-family: var(--font-serif);
-  left: 27px;
-  top: 7.5px;
+  left: 29.5px;
+  top: 8.5px;
   display: flex;
   align-items: center;
   gap: 13px;
   font-size: 17.5px;
   line-height: 1;
-  letter-spacing: 0.17em;
+  letter-spacing: 0.15em;
   text-transform: uppercase;
-  color: #b9a283;
+  color: #8f7b5d;
   -webkit-text-stroke: 0.35px currentColor;
 }
 .brand-crest {
   width: 25px;
   height: 40px;
-  color: #b49970;
+  color: #86704f;
 }
 /* The settings gear at the top right: brushed grey metal. */
 .gear {
   position: absolute;
-  right: 18px;
+  right: 15px;
   top: 14px;
-  width: 39px;
-  fill: #7b7774;
+  width: 42px;
+  fill: #737172;
   fill-rule: evenodd;
   filter: drop-shadow(0 1px 0 rgb(255 255 255 / 12%))
     drop-shadow(0 2px 3px rgb(0 0 0 / 45%));
+}
+.gear path {
+  stroke: rgb(24 22 21 / 70%);
+  stroke-width: 0.35;
+}
+/* The hole shows the table in shadow. */
+.gear .gear-hole {
+  fill: rgb(0 0 0 / 30%);
 }
 .opponent-hand {
   position: absolute;
@@ -810,9 +839,11 @@
   right: 42px;
   top: 729px;
   width: 269px;
-  height: 37.5px;
+  height: 39px;
   padding-left: 1.1em;
-  border-color: #6f6560;
+  font-size: 20.2px;
+  border-color: rgb(111 101 96 / 35%);
+  border-top-color: #8a7f78;
   font-size: 20.5px;
 }
 .turn-action {
@@ -830,18 +861,19 @@
 /* Its icon and label sit left of center (battlefield.png, combat.png). */
 .turn-action .button {
   justify-content: flex-start;
-  gap: 0.5em;
-  min-width: 218px;
+  gap: 0.4em;
+  min-width: 220px;
   height: 48px;
   padding: 0 21px 0 1.3em;
   font-size: 29.5px;
 }
 .turn-action .button-icon {
-  width: 25px;
+  width: 28px;
   margin-right: 0;
 }
 .turn-action .button-primary:not(:disabled) {
-  border-color: #ffd36b #f0a03a #ffc95a;
+  border-width: 1.5px;
+  border-color: #f8c35a #eba043 #f7bc56;
   background: linear-gradient(
     180deg,
     #e28322,
@@ -854,33 +886,44 @@
     #f6a83c 100%
   );
   box-shadow:
-    inset 0 1px 2px rgb(255 240 190 / 80%),
-    inset 0 -1px 2px rgb(255 220 140 / 70%),
-    0 0 0 1px rgb(120 60 14 / 85%),
-    0 0 6px 2px rgb(255 170 60 / 55%),
+    inset 0 1px 1px rgb(255 240 190 / 70%),
+    0 0 0 1px rgb(60 25 5 / 85%),
+    0 0 4px 1px rgb(255 170 60 / 40%),
     0 4px 8px rgb(0 0 0 / 35%);
 }
 /* A long label steps down a size so the button keeps its width (combat.png's Resolve Damage). */
 .turn-action .button-long {
-  min-width: 249px;
-  padding-left: 1.55em;
+  min-width: 248px;
+  padding: 0 8px 0 24.5px;
   font-size: 24px;
+}
+.turn-action:has(.button-long) {
+  right: 37px;
 }
 .turn-action .button:disabled {
   justify-content: center;
   min-width: 243px;
-  height: 50px;
+  height: 51.5px;
   padding: 0 21px;
   font-weight: 700;
   font-size: 25px;
   color: #8a8480;
-  background: linear-gradient(180deg, #38322e, #3a3430 50%, #403a36);
+  border-color: #6d6763 #595350 #4e4845;
+  background: linear-gradient(180deg, #342f2b, #3a3430 50%, #433d39);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 8%),
+    0 0 0 1px rgb(14 11 10 / 60%),
+    0 5px 8px rgb(0 0 0 / 55%);
+}
+.turn-action .button:disabled .button-icon {
+  width: 28px;
+  margin-left: -4px;
 }
 .turn-caption {
   margin-top: 8.5px;
-  font-size: 18.2px;
+  font-size: 17.8px;
   line-height: 22px;
-  color: #cfc6ba;
+  color: #b4b2ae;
   -webkit-text-stroke: 0.3px currentColor;
 }
 

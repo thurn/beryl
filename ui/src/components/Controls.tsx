@@ -61,9 +61,7 @@ export function PriorityPill({ children }: { children: ReactNode }) {
 export type Phase = "beginning" | "main1" | "combat" | "main2" | "end";
 
 const DIAMOND = <path d="M12 5 L19 12 L12 19 L5 12 Z" />;
-const CARD = (
-  <path d="M3.4 2 Q12 1.5 20.6 2.2 Q21.2 12 20.8 22 Q12 22.5 3.6 22.1 Q2.9 12 3.4 2 Z" />
-);
+const CARD = <rect x="4.5" y="3" width="15" height="18" rx="2.2" />;
 
 /** Each phase's icon (the full tracker, ui_system.png section 02: cream outlines over dark or
  * stone fills) and glyph (the compact one on the table, as in battlefield.png). */
@@ -85,7 +83,7 @@ const PHASES: {
           width="11"
           height="16.5"
           rx="1.2"
-          transform="rotate(-14 7 13.25)"
+          transform="rotate(-20 7 13.25)"
         />
         <rect
           className="phase-dark"
@@ -94,7 +92,7 @@ const PHASES: {
           width="11"
           height="16.5"
           rx="1.2"
-          transform="rotate(-6 10.5 11.75)"
+          transform="rotate(-8 10.5 11.75)"
         />
         <rect
           className="phase-card"
@@ -103,7 +101,7 @@ const PHASES: {
           width="11.5"
           height="17"
           rx="1.2"
-          transform="rotate(5 15.75 10.5)"
+          transform="rotate(8 15.75 10.5)"
         />
       </>
     ),
@@ -116,12 +114,12 @@ const PHASES: {
       <>
         <path
           className="phase-dark"
-          d="M0.5 21.5 L8.5 9 L10.5 11 L12 2.8 L15.2 9 L17.5 7.5 L23.5 21.5 Z"
+          d="M0.5 21.5 L7 11 L9 12.5 L12 3.5 L15 12.5 L17 11 L23.5 21.5 Z"
         />
         <path
           className="phase-stone"
           strokeWidth="1"
-          d="M4.5 20 L9.3 13.3 L11 14.8 L12.2 10 L14.2 13.8 L16.3 12.3 L19.8 20 Z"
+          d="M4.5 20 L8.8 14 L10.3 15.3 L12 11 L13.7 15.3 L15.2 14 L19.5 20 Z M8.4 13.2 L10 14.6 L12 9.2 L14 14.6 L15.6 13.2"
         />
       </>
     ),
@@ -131,19 +129,20 @@ const PHASES: {
     phase: "combat",
     label: "Combat",
     icon: (
-      <g
-        className="phase-heavy"
-        transform="translate(12 12) scale(1.22) translate(-12 -12)"
-      >
-        <path d="M2.5 2.5 L15 15 M11.5 18.5 L18.5 11.5 M15.5 15.5 L19.5 19.5 M21 21 L21.2 21.2" />
-        <path d="M21.5 2.5 L9 15 M12.5 18.5 L5.5 11.5 M8.5 15.5 L4.5 19.5 M3 21 L2.8 21.2" />
+      <g transform="translate(12 10.5) scale(1.22) translate(-12 -12)">
+        <path d="M1.5 1.5 L5 2.4 L15.2 12.6 L12.6 15.2 L2.4 5 Z M11 18.6 L18.6 11 M15.6 15.6 L19.4 19.4" />
+        <circle cx="20.6" cy="20.6" r="1.1" />
+        <path d="M22.5 1.5 L19 2.4 L8.8 12.6 L11.4 15.2 L21.6 5 Z M13 18.6 L5.4 11 M8.4 15.6 L4.6 19.4" />
+        <circle cx="3.4" cy="20.6" r="1.1" />
       </g>
     ),
     glyph: (
-      <>
-        <path d="M1.5 1.5 L6 2.8 L15.6 12.4 L12.4 15.6 L2.8 6 Z M10 17 L17 10 L19 12 L12 19 Z M15 17.2 L17.2 15 L20 17.8 L17.8 20 Z M18.8 20.5 L20.5 18.8 L22.6 20.9 L20.9 22.6 Z" />
-        <path d="M22.5 1.5 L18 2.8 L8.4 12.4 L11.6 15.6 L21.2 6 Z M14 17 L7 10 L5 12 L12 19 Z M9 17.2 L6.8 15 L4 17.8 L6.2 20 Z M5.2 20.5 L3.5 18.8 L1.4 20.9 L3.1 22.6 Z" />
-      </>
+      <g transform="translate(12 13) scale(1.1) translate(-12 -12)">
+        <path d="M0.5 0.5 L7 2.2 L16.8 12 L12 16.8 L2.2 7 Z M9 17.6 L17.6 9 L19.8 11.2 L11.2 19.8 Z M15 17.4 L17.4 15 L20 17.6 L17.6 20 Z" />
+        <circle cx="20.4" cy="20.4" r="1.9" />
+        <path d="M23.5 0.5 L17 2.2 L7.2 12 L12 16.8 L21.8 7 Z M15 17.6 L6.4 9 L4.2 11.2 L12.8 19.8 Z M9 17.4 L6.6 15 L4 17.6 L6.4 20 Z" />
+        <circle cx="3.6" cy="20.4" r="1.9" />
+      </g>
     ),
   },
   {
@@ -152,11 +151,11 @@ const PHASES: {
     icon: (
       <>
         <path
-          className="phase-dark"
+          className="phase-shield"
           d="M12 3 C15 4.5 18 5 21.4 5 L21.4 11 C21.4 16.5 17 20 12 21.6 C7 20 2.6 16.5 2.6 11 L2.6 5 C6 5 9 4.5 12 3 Z"
         />
         <path
-          className="phase-light"
+          className="phase-shield-dark"
           stroke="none"
           d="M12 4.2 C9.2 5.5 6.5 6 3.8 6.1 L3.8 11 C3.8 15.6 7.4 18.8 12 20.3 Z"
         />
@@ -211,9 +210,11 @@ export function PhaseTracker({
             {compact && phase === current && (
               <radialGradient id="phase-glow">
                 <stop offset="0" stopColor="#fffbe0" />
-                <stop offset="0.45" stopColor="#ffe9a0" />
-                <stop offset="0.62" stopColor="#ffc95e" />
-                <stop offset="1" stopColor="#e9a23e" />
+                <stop offset="0.35" stopColor="#ffe68f" />
+                <stop offset="0.55" stopColor="#f0b040" />
+                <stop offset="0.7" stopColor="#3a2810" />
+                <stop offset="0.85" stopColor="#d99a3a" />
+                <stop offset="1" stopColor="#f2c060" />
               </radialGradient>
             )}
             {compact ? glyph : icon}

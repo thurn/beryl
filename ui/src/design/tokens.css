@@ -8,6 +8,8 @@
   --gold: #e4a242;
   --cyan: #33dcfe;
 
+  /* Type on the dark surfaces renders near-neutral white, cooler than the Text swatch. */
+  --type: #f5f3f0;
   --text-dim: rgb(242 236 225 / 62%);
   --text-faint: rgb(242 236 225 / 38%);
   --surface-raised: #2e2c29;

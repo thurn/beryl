@@ -787,10 +787,11 @@
       #ffbb4a 100%
     );
   box-shadow:
-    inset 0 0 3px rgb(255 226 140 / 85%),
+    inset 0 2px 2px rgb(253 202 87 / 85%),
+    inset 0 0 8px rgb(255 190 80 / 45%),
     0 0 0 1px rgb(178 40 4 / 85%),
-    0 0 10px 4px rgb(255 108 20 / 72%),
-    0 0 24px 8px rgb(226 78 16 / 38%);
+    0 0 4px 1px rgb(255 108 20 / 80%),
+    0 0 10px 2px rgb(226 78 16 / 40%);
 }
 .button-secondary {
   color: #fffdfa;
@@ -857,8 +858,8 @@
   flex: none;
   width: 0.95em;
   color: #fbfeff;
-  filter: drop-shadow(0 0 2px rgb(140 220 255 / 90%))
-    drop-shadow(0 0 5px rgb(56 200 255 / 55%));
+  filter: drop-shadow(0 0 1px rgb(40 140 255))
+    drop-shadow(0 0 3px rgb(56 160 255 / 60%));
 }
 
 /* The phase tracker: five icons between small white arrows in a dark pill with a thin grey
@@ -898,7 +899,13 @@
   fill: #2c2825;
 }
 .phase .phase-card {
-  fill: #5f5952;
+  fill: #4b4037;
+}
+.phase .phase-shield {
+  fill: #746756;
+}
+.phase .phase-shield-dark {
+  fill: #453e38;
 }
 .phase .phase-stone {
   fill: #5d564f;
@@ -958,10 +965,33 @@
   background: linear-gradient(
     90deg,
     transparent,
-    rgb(190 180 166 / 55%) 6%,
-    rgb(190 180 166 / 55%) 94%,
+    rgb(160 150 136 / 50%) 6%,
+    rgb(160 150 136 / 50%) 94%,
     transparent
   );
+}
+/* A dark groove runs behind the glyphs. */
+.phase-tracker-compact::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: -8px;
+  top: 30%;
+  height: 34%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(0 0 0 / 22%) 12%,
+    rgb(0 0 0 / 22%) 88%,
+    transparent
+  );
+  filter: blur(3px);
+}
+.phase-tracker-compact .phase:nth-child(2) .phase-icon {
+  rotate: -4deg;
+}
+.phase-tracker-compact .phase:nth-child(4) .phase-icon {
+  rotate: 3deg;
 }
 .phase-tracker-compact .phase {
   position: relative;
@@ -975,27 +1005,34 @@
   filter: drop-shadow(0 2px 2px rgb(0 0 0 / 45%));
 }
 .phase-tracker-compact .phase-current .phase-icon {
-  stroke: #c9771c;
-  stroke-width: 1.2;
-  filter: drop-shadow(0 0 1.5px rgb(255 200 90))
-    drop-shadow(0 0 3.5px rgb(245 140 30 / 80%));
+  stroke: #b8560e;
+  stroke-width: 1;
+  filter: drop-shadow(0 0 2px rgb(255 200 90))
+    drop-shadow(0 0 5px rgb(245 140 30 / 85%));
 }
 /* The current diamond is smaller than the others: a glowing core in a gold rim. */
 .phase-tracker-compact
   .phase:is(:first-child, :last-child).phase-current
   .phase-icon {
   transform: scale(0.78);
-  stroke: #f2b44a;
-  stroke-width: 1.8;
+  stroke: #2a1c08;
+  stroke-width: 1;
+  filter: drop-shadow(0 0 1.5px rgb(255 190 80 / 80%));
 }
-.phase-tracker-compact .phase-current .phase-icon path {
+.phase-tracker-compact .phase-current .phase-icon :is(path, circle) {
   fill: url(#phase-glow);
+}
+.phase-tracker-compact
+  .phase-current:not(:first-child, :last-child)
+  .phase-icon
+  :is(path, circle, rect) {
+  fill: #ffe7a6;
 }
 .phase-tracker-compact .phase-current::after {
   content: "";
   position: absolute;
-  left: -6px;
-  right: -2px;
+  left: -10px;
+  right: 4px;
   bottom: -4px;
   height: 2px;
   z-index: 1;
@@ -1202,10 +1239,11 @@
   background: linear-gradient(
     90deg,
     transparent,
-    rgb(150 147 144 / 70%) 28%,
-    #fff 52%,
-    rgb(150 147 144 / 70%) 72%,
-    transparent 90%
+    rgb(150 147 144 / 70%) 15%,
+    #fff 30%,
+    #fff 65%,
+    rgb(150 147 144 / 70%) 82%,
+    transparent 95%
   );
 }
 .overlay-title {
@@ -1224,23 +1262,23 @@
 }
 .overlay-instruction {
   position: absolute;
-  inset: 77px 0 auto;
-  translate: -1px 0;
+  inset: 78px 0 auto;
+  translate: 10px 0;
   margin: 0;
   font-family: var(--font-sans);
   font-size: 22.8px;
   line-height: 1.2;
   letter-spacing: 0.012em;
   -webkit-text-stroke: 0.2px currentColor;
-  color: #f4f1ec;
+  color: #fff;
   text-shadow: 0 1px 3px rgb(0 0 0 / 70%);
 }
 .overlay-confirm {
-  margin-top: 50px;
-  translate: -6px 0;
+  margin-top: 52px;
+  translate: -4px 0;
   min-width: 0;
-  width: 283px;
-  height: 64px;
+  width: 279px;
+  height: 61px;
   font-size: 39.5px;
 }
 .overlay-side {
