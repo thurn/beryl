@@ -18,7 +18,7 @@ import {
   useMotionValue,
   useReducedMotion,
 } from "motion/react";
-import { Card, type CardFace, type Highlight } from "../components/Card";
+import { Card, type Highlight } from "../components/Card";
 import {
   Button,
   FastForwardIcon,
@@ -42,7 +42,7 @@ import type {
   Side,
   StackItem as StackItemView,
 } from "../generated/protocol";
-import { Brand, Gear, Lying, StepBanner } from "../screens/Table";
+import { Brand, Gear, Lying, STAGE, StepBanner } from "../screens/Table";
 import {
   CardLayer,
   cardId,
@@ -59,8 +59,9 @@ import {
   type Act,
   type Intent,
 } from "./decisions";
-import { abilityText, frameFace, unknownFace, useFace } from "./faces";
+import { abilityText, useAbilityFace, useFace } from "./faces";
 import {
+  combatBanner,
   layout,
   nextStop,
   phaseOf,
@@ -70,6 +71,7 @@ import {
   PILES,
   STACK_Z,
   stackPlace,
+  type Layout,
   type Placement,
 } from "./layout";
 
@@ -260,7 +262,10 @@ export function Board({
       ? (objects.get(top.slot)?.name ?? undefined)
       : top.name);
   const stop = nextStop(view);
-  const arrows = useMemo(() => boardArrows(view), [view]);
+  const arrows = useMemo(
+    () => boardArrows(view, placements),
+    [view, placements],
+  );
   const banner = combatBanner(view) ?? coinFlipBanner(view);
   // A combat declaration is finished with the turn button, where priority is passed.
   const declaring =
@@ -375,8 +380,13 @@ export function Board({
             : "turn-controls"
         }
       >
-        <PhaseTracker current={phaseOf(view.turn.step)} compact />
-        {waiting && <PriorityPill>Opponent has priority</PriorityPill>}
+        {/* While you wait, the priority pill takes the tracker's place
+            (trigger_on_stack_with_target.png). */}
+        {waiting ? (
+          <PriorityPill>Opponent has priority</PriorityPill>
+        ) : (
+          <PhaseTracker current={phaseOf(view.turn.step)} compact />
+        )}
         {declaring ? (
           <Finish
             view={view}
@@ -522,10 +532,7 @@ function AbilityOnStack({
   item: Extract<StackItemView, { kind: "ability" }>;
   source?: ObjectView;
 }) {
-  const art = useCardArt(item.name);
-  const face: CardFace = art
-    ? frameFace(source ?? BLANK, art)
-    : unknownFace(item.name);
+  const face = useAbilityFace(item.name, source, BLANK);
   const place = stackPlace(index, count, lifted);
   return (
     <motion.div
@@ -552,7 +559,7 @@ const stackId = (index: number) => `stack-${index}`;
 /** The lines over the table (decision D10): each attacker's to what it attacks or to its
  * blockers (combat.png), and for the top of the stack, a gold line from an ability's source
  * and a cyan one to each target (trigger_on_stack_with_target.png). */
-function boardArrows(view: PlayerView): ArrowSpec[] {
+function boardArrows(view: PlayerView, placements: Layout): ArrowSpec[] {
   const objects = new Map(view.objects.map((o) => [o.slot, o]));
   const out: ArrowSpec[] = [];
   for (const slot of view.battlefield) {
@@ -580,19 +587,26 @@ function boardArrows(view: PlayerView): ArrowSpec[] {
     if (o.combat.blocked) continue;
     const walker = o.combat.planeswalker;
     const defender = up ? "opponent" : "you";
+    // Up out of its mark, then swinging in across the near side of the life orb's lower half
+    // (combat.png), or into the planeswalker's near edge.
+    const toLife = walker === null;
+    const at = placements.get(slot);
+    // The life orbs stand at the middle of the stage.
+    const right = !!at && at.x + (at.width * at.scale) / 2 > STAGE.width / 2;
+    const [sx, sy] = [right ? 1 : -1, up ? 1 : -1];
     out.push({
       from: `${cardId(slot)}-mark`,
-      to: walker === null ? `${defender}-life` : cardId(walker),
+      to: toLife ? `${defender}-life` : cardId(walker),
       tone: "gold",
       fromSide: up ? "top" : "bottom",
-      // Into the near edge of the life orb or the planeswalker.
-      toSide:
-        walker === null
-          ? { x: 0.5, y: up ? 0.85 : 0.15 }
-          : up
-            ? "bottom"
-            : "top",
-      bend: 0.15,
+      toSide: toLife
+        ? { x: 0.5 + 0.173 * sx, y: 0.5 + 0.233 * sy }
+        : up
+          ? "bottom"
+          : "top",
+      ...(toLife
+        ? { leave: [-34 * sx, -138 * sy], arrive: [-100 * sx, -85 * sy] }
+        : { bend: 0.15 }),
       start: "none",
       fine: true,
     });
@@ -602,13 +616,15 @@ function boardArrows(view: PlayerView): ArrowSpec[] {
   if (item) {
     const from = item.kind === "spell" ? cardId(item.slot) : stackId(top);
     if (item.kind === "ability" && item.source !== null) {
+      // Down out of the source's right side and up into the stack's lower left corner.
       out.push({
         from: cardId(item.source),
         to: from,
         tone: "gold",
         fromSide: "right",
         toSide: { x: 0.07, y: 0.84 },
-        bow: "down",
+        leave: [30, 150],
+        arrive: [115, -48],
       });
     }
     for (const target of item.targets) {
@@ -619,38 +635,15 @@ function boardArrows(view: PlayerView): ArrowSpec[] {
             ? `${target.player}-life`
             : cardId(target.slot),
         tone: "cyan",
+        // High over the table out of the stack's upper left, then straight down onto it.
         fromSide: { x: 0, y: 0.055 },
         toSide: target.kind === "player" ? "center" : { x: 0.5, y: 0.25 },
-        bow: "up",
+        leave: [-150, -195],
+        arrive: [0, 150],
       });
     }
   }
   return out;
-}
-
-/** The step banner during combat: what is being declared, what has been, or the damage. */
-function combatBanner(
-  view: PlayerView,
-): { title: string; detail: string } | undefined {
-  const step = view.turn.step;
-  const status = view.status;
-  const kind = status.kind === "deciding" ? status.decision.kind : undefined;
-  const fighting = view.objects.some((o) => o.combat?.kind === "attacking");
-  const detail =
-    kind === "attacker" || kind === "attackTarget"
-      ? "Declare attackers"
-      : kind === "blocker" || kind === "blockTarget"
-        ? "Declare blockers"
-        : !fighting
-          ? undefined
-          : step === "declareAttackers"
-            ? "Attackers declared"
-            : step === "declareBlockers"
-              ? "Blockers declared"
-              : step === "firstStrikeDamage" || step === "combatDamage"
-                ? "Combat damage"
-                : undefined;
-  return detail && { title: "Combat", detail };
 }
 
 /** The result of a coin flip (Mana Crypt's, each upkeep), while the view it happened in shows. */

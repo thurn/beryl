@@ -44,9 +44,10 @@ export const unknownFace = (name: string): FrameFace => ({
 });
 
 /** Faces that stand in for the card data's: replica mode (src/replica/) draws a mockup's
- * cards, which the data need not have, with art cut from the mockup. Elsewhere there are none. */
+ * cards, which the data need not have, with art cut from the mockup, which crops an ability's
+ * source apart on the stack (`onStack`). Elsewhere there are none. */
 export const ObjectFaces = createContext<
-  (o: ObjectView) => FrameFace | undefined
+  (o: ObjectView, onStack?: boolean) => FrameFace | undefined
 >(() => undefined);
 
 /** The frame for object `o`, as the game draws it. */
@@ -54,6 +55,19 @@ export function useFace(o: ObjectView): FrameFace {
   const art = useCardArt(o.name ?? "");
   const stand = useContext(ObjectFaces)(o);
   return stand ?? (art ? frameFace(o, art) : unknownFace(o.name ?? ""));
+}
+
+/** The frame an ability named `name` shows on the stack: its source's, from the card data by
+ * name, since the source may have left its zone. */
+export function useAbilityFace(
+  name: string,
+  source: ObjectView | undefined,
+  blank: ObjectView,
+): FrameFace {
+  const art = useCardArt(name);
+  const stands = useContext(ObjectFaces);
+  const stand = source && stands(source, true);
+  return stand ?? (art ? frameFace(source ?? blank, art) : unknownFace(name));
 }
 
 /** The paragraph of a card's rules text that says one of its abilities: the `nth` triggered

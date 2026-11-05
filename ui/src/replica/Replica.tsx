@@ -54,18 +54,19 @@ function Game({
   game: ReplicaGame;
   art(slot: string): string | undefined;
 }) {
-  const face = (o: { slot: number }) => {
+  const face = (o: { slot: number }, onStack = false) => {
     const found = game.faces.get(o.slot);
-    if (!found) return undefined;
-    const url = found.slot && art(found.slot);
-    return url ? { ...found.face, art: url } : found.face;
+    const look = onStack ? found?.stack : found;
+    if (!look) return undefined;
+    const url = look.slot && art(look.slot);
+    return url ? { ...look.face, art: url } : look.face;
   };
   return (
     <ObjectFaces.Provider value={face}>
       <Stage>
         <Board
           view={game.view}
-          waiting={false}
+          waiting={game.waiting ?? false}
           choose={() => {}}
           setFullControl={() => {}}
           onLeave={() => {}}

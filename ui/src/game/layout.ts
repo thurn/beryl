@@ -64,20 +64,61 @@ export const PILE_SQUASH = 0.86;
 /** Each side's rows, in stage pixels (the mockup's divided by 1.045): the land piles from
  * (x, y), `size` times what depth alone makes them (battlefield.png paints the far lands larger),
  * with `gap` between them before depth scaling; the other permanents' row at `y`, centered on
- * `center`, `gap` card widths apart (the far row's closer). */
+ * `center`, `gap` card widths apart (the far row's closer), `size` times what depth makes them,
+ * between `start` and `end`. While lines cross the table, in combat (combat.png) or with
+ * something on the stack (trigger_on_stack_with_target.png), the permanents' rows draw apart
+ * and smaller to make room for them and for the step banner, and spread out. */
 const ROWS = {
   opponent: {
     lands: { x: 158, y: 124, gap: 30, size: 1.045 },
-    permanents: { y: 221, center: 802, gap: 0.044 },
+    permanents: {
+      main: { y: 221, center: 802, gap: 0.044, size: 1, start: 580, end: 1250 },
+      combat: {
+        y: 264,
+        center: 673,
+        gap: 0.25,
+        size: 0.946,
+        start: 400,
+        end: 1250,
+      },
+      stack: {
+        y: 264,
+        center: 673,
+        gap: 0.25,
+        size: 0.946,
+        start: 400,
+        end: 1180,
+      },
+    },
   },
   you: {
     lands: { x: 111, y: 564, gap: 3, size: 1 },
-    permanents: { y: 418, center: 801, gap: 0.08 },
+    permanents: {
+      main: { y: 418, center: 801, gap: 0.08, size: 1, start: 580, end: 1250 },
+      combat: {
+        y: 477,
+        center: 856,
+        gap: 0.22,
+        size: 0.885,
+        start: 580,
+        end: 1250,
+      },
+      stack: {
+        y: 461,
+        center: 802,
+        gap: 0.22,
+        size: 0.875,
+        start: 580,
+        end: 1180,
+      },
+    },
   },
 };
-/** Lands fill from the left up to here; other permanents lie on the table between these. */
+/** Lands fill from the left up to here. */
 const LANDS_END = 600;
-const PERMANENTS = { start: 580, end: 1250 };
+
+/** How the table is laid out: lines cross it in combat and while something is on the stack. */
+type Mode = keyof (typeof ROWS)["you"]["permanents"];
 
 /** Where each side's library and graveyard lie (Table.tsx draws the library piles). */
 export const PILES = {
@@ -113,6 +154,8 @@ export function stackPlace(index: number, count: number, lifted = false) {
 /** How far attackers stand out of their row toward the other side, so an attack reads at a
  * glance; the rows are too close for more. */
 const ADVANCE = 16;
+
+const attacking = (o: ObjectView) => o.combat?.kind === "attacking";
 
 /** Places a thing `width` wide (before its depth scaling) lying on the table at (x, y). */
 function onTable(x: number, y: number, width: number) {
@@ -237,18 +280,23 @@ function row(
 }
 
 /** Moves a row's groups, in order, as near as they can be to the lefts they `want`, spaced at
- * least as `row` would space them and inside `start` to `end`: each pushed right of its left
- * neighbor, then left of the end and its right neighbor, then right of the start again. */
+ * least as `row` would space them and inside `start` to `end`: each group not `pinned` first
+ * gives way leftward to its right neighbor, then each is pushed right of its left neighbor, then
+ * left of the end and its right neighbor, then right of the start again. */
 function settle(
   wants: number[],
   widths: number[],
   gap: number,
   start: number,
   end: number,
+  pinned: boolean[] = [],
 ): number[] {
   const n = wants.length;
   const { steps: step } = steps(widths, gap, end - start);
   const xs = [...wants];
+  for (let i = n - 2; i >= 0; i--) {
+    if (!pinned[i]) xs[i] = Math.min(xs[i]!, xs[i + 1]! - step[i]!);
+  }
   const fromLeft = () => {
     for (let i = 0; i < n; i++) {
       xs[i] = Math.max(xs[i]!, i === 0 ? start : xs[i - 1]! + step[i - 1]!);
@@ -281,13 +329,18 @@ function piles(objects: ObjectView[], key: (o: ObjectView) => string) {
 /** One side's battlefield: land piles on the left, other permanents in the middle. A blocker
  * stands across the table from the attacker it blocks among the other side's placements
  * `across`, as combat.png does, an attacker's blockers side by side about its center, so a
- * block reads as a short line; the rest of the row makes room. */
+ * block reads as a short line; the rest of the row makes room. A row's attackers stand
+ * together, first, so that no other permanent lies hidden between two of them. */
 function battlefieldPlacements(
   side: Side,
   objects: ObjectView[],
+  mode: Mode,
   across: Placement[] = [],
 ): Placement[] {
-  const rows = ROWS[side];
+  const rows = {
+    lands: ROWS[side].lands,
+    permanents: ROWS[side].permanents[mode],
+  };
   const lands = objects.filter((o) => o.types.includes("land"));
   const others = objects.filter((o) => !o.types.includes("land"));
   const out: Placement[] = [];
@@ -326,19 +379,14 @@ function battlefieldPlacements(
     o.token && o.counters.length === 0 && o.damage === 0 && !o.combat;
   const groups = piles(others, (o) =>
     plain(o) ? `${o.name}|${o.tapped}` : `#${o.slot}`,
-  );
-  const scale = depthScale(rows.permanents.y);
+  ).sort((a, b) => Number(!attacking(a[0]!)) - Number(!attacking(b[0]!)));
+  const scale = depthScale(rows.permanents.y) * rows.permanents.size;
   const width = CREATURE_WIDTH * scale;
   const groupWidth = (n: number) => width * (1 + LAND_STEP.x * (n - 1));
   const widths = groups.map((g) => groupWidth(g.length));
   const gap = rows.permanents.gap * CREATURE_WIDTH * scale;
-  const xs = row(
-    widths,
-    gap,
-    PERMANENTS.start,
-    PERMANENTS.end,
-    rows.permanents.center,
-  );
+  const { start, end } = rows.permanents;
+  const xs = row(widths, gap, start, end, rows.permanents.center);
   // Where each blocker wants to stand: its attacker's blockers side by side about its center.
   const attackers = new Map(across.map((p) => [p.slot, p]));
   const blocking = new Map<number, number[]>();
@@ -362,8 +410,9 @@ function battlefieldPlacements(
     order.map((g) => wanted[g]!),
     order.map((g) => widths[g]!),
     gap,
-    PERMANENTS.start,
-    PERMANENTS.end,
+    start,
+    end,
+    order.map((g) => wants.has(groups[g]![0]!.slot)),
   );
   const forward = side === "you" ? -ADVANCE : ADVANCE;
   order.forEach((g, k) => {
@@ -375,6 +424,7 @@ function battlefieldPlacements(
         rows.permanents.y +
         depth * CREATURE_WIDTH * LAND_STEP.y * scale +
         (o.combat?.kind === "attacking" ? forward : 0);
+      const placed = onTable(x, y, CREATURE_WIDTH * rows.permanents.size);
       out.push({
         slot: o.slot,
         zone: o.zone,
@@ -383,7 +433,8 @@ function battlefieldPlacements(
         opacity: 1,
         // Combat's creatures over their neighbors, so their marks show.
         z: 40 + k * 8 + i + (o.combat ? 60 : 0),
-        ...onTable(x, y, CREATURE_WIDTH),
+        ...placed,
+        scale: placed.scale * rows.permanents.size,
       });
     });
   });
@@ -413,10 +464,16 @@ export function layout(
   out.push(...backPlacements(owned("opponent", "hand")));
   // Blockers stand across from their attackers, which stand where they would anyway: only the
   // defending side's row depends on the other's.
+  const mode: Mode = combatBanner(view)
+    ? "combat"
+    : view.stack.length > 0
+      ? "stack"
+      : "main";
   const field = (side: Side, across?: Placement[]) =>
     battlefieldPlacements(
       side,
       permanents.filter((o) => o.controller === side),
+      mode,
       across,
     );
   const yours = field("you", field("opponent"));
@@ -584,4 +641,29 @@ export function nextStop(view: PlayerView): { label: string; caption: string } {
     default:
       return { label: "Next", caption: "To Main 2" };
   }
+}
+
+/** The step banner during combat: what is being declared, what has been, or the damage. */
+export function combatBanner(
+  view: PlayerView,
+): { title: string; detail: string } | undefined {
+  const step = view.turn.step;
+  const status = view.status;
+  const kind = status.kind === "deciding" ? status.decision.kind : undefined;
+  const fighting = view.objects.some((o) => o.combat?.kind === "attacking");
+  const detail =
+    kind === "attacker" || kind === "attackTarget"
+      ? "Declare attackers"
+      : kind === "blocker" || kind === "blockTarget"
+        ? "Declare blockers"
+        : !fighting
+          ? undefined
+          : step === "declareAttackers"
+            ? "Attackers declared"
+            : step === "declareBlockers"
+              ? "Blockers declared"
+              : step === "firstStrikeDamage" || step === "combatDamage"
+                ? "Combat damage"
+                : undefined;
+  return detail && { title: "Combat", detail };
 }
