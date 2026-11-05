@@ -51,7 +51,12 @@ export function StackItem({
   );
 }
 
-export type Side = "left" | "right" | "top" | "bottom" | "center";
+/** Where on an element an arrow meets it: a side's midpoint, the center, or a point given as
+ * fractions of the element's width and height. */
+export type Side =
+  "left" | "right" | "top" | "bottom" | "center" | { x: number; y: number };
+
+type Vector = readonly [number, number];
 
 export interface ArrowSpec {
   from: string;
@@ -61,43 +66,81 @@ export interface ArrowSpec {
   toSide?: Side;
   /** How far the curve bows, as a fraction of its length; negative bows the other way. */
   bend?: number;
-  /** A plain connector with dots at both ends instead of an arrowhead. */
-  link?: boolean;
+  /** The curve's heading out of its start and into its end, as handle vectors in pixels; given
+   * both, they replace `bend`. */
+  leave?: Vector;
+  arrive?: Vector;
+  /** What marks each end: by default a dot at the start and an arrowhead at the end. */
+  start?: "dot" | "none";
+  end?: "head" | "dot" | "none";
+  /** A hairline, as for an attack aimed at a player. */
+  fine?: boolean;
 }
 
 interface Drawn {
   key: string;
   d: string;
   tone: ArrowSpec["tone"];
-  start: [number, number];
-  end: [number, number];
+  start: Vector;
+  end: Vector;
   angle: number;
-  link: boolean;
+  startMark: NonNullable<ArrowSpec["start"]>;
+  endMark: NonNullable<ArrowSpec["end"]>;
+  fine: boolean;
 }
 
-/** A point on `rect`'s side in the parent's own coordinates: client rects are in screen pixels,
- * which differ by `scale` inside a scaled stage. */
+const SIDES = {
+  left: { x: 0, y: 0.5 },
+  right: { x: 1, y: 0.5 },
+  top: { x: 0.5, y: 0 },
+  bottom: { x: 0.5, y: 1 },
+  center: { x: 0.5, y: 0.5 },
+} as const;
+
+/** A point on `rect` in the parent's own coordinates: client rects are in screen pixels, which
+ * differ by `scale` inside a scaled stage. */
 function anchor(
   rect: DOMRect,
   origin: DOMRect,
   scale: number,
   side: Side,
-): [number, number] {
-  const x = (rect.left - origin.left) / scale;
-  const y = (rect.top - origin.top) / scale;
-  const [w, h] = [rect.width / scale, rect.height / scale];
-  switch (side) {
-    case "left":
-      return [x, y + h / 2];
-    case "right":
-      return [x + w, y + h / 2];
-    case "top":
-      return [x + w / 2, y];
-    case "bottom":
-      return [x + w / 2, y + h];
-    case "center":
-      return [x + w / 2, y + h / 2];
+): Vector {
+  const at = typeof side === "string" ? SIDES[side] : side;
+  return [
+    (rect.left - origin.left + rect.width * at.x) / scale,
+    (rect.top - origin.top + rect.height * at.y) / scale,
+  ];
+}
+
+const point = ([x, y]: Vector) => `${x.toFixed(1)} ${y.toFixed(1)}`;
+
+/** The curve from `start` to `end` and the heading it arrives with, in degrees. */
+function curve(
+  a: ArrowSpec,
+  start: Vector,
+  end: Vector,
+): { d: string; angle: number } {
+  const heading = (from: Vector, to: Vector) =>
+    (Math.atan2(to[1] - from[1], to[0] - from[0]) * 180) / Math.PI;
+  if (a.leave && a.arrive) {
+    const c1: Vector = [start[0] + a.leave[0], start[1] + a.leave[1]];
+    const c2: Vector = [end[0] - a.arrive[0], end[1] - a.arrive[1]];
+    return {
+      d: `M${point(start)} C${point(c1)} ${point(c2)} ${point(end)}`,
+      angle: heading(c2, end),
+    };
   }
+  const [dx, dy] = [end[0] - start[0], end[1] - start[1]];
+  const bend = a.bend ?? 0.25;
+  // The control point sits off the chord's midpoint, along its normal.
+  const c: Vector = [
+    (start[0] + end[0]) / 2 + dy * bend,
+    (start[1] + end[1]) / 2 - dx * bend,
+  ];
+  return {
+    d: `M${point(start)} Q${point(c)} ${point(end)}`,
+    angle: heading(c, end),
+  };
 }
 
 /** Draws arrows between elements (by id) over its parent, which must be positioned. They are
@@ -130,22 +173,16 @@ export function Arrows({ arrows }: { arrows: ArrowSpec[] }) {
             scale,
             a.toSide ?? "left",
           );
-          const [dx, dy] = [end[0] - start[0], end[1] - start[1]];
-          const bend = a.bend ?? 0.25;
-          // The control point sits off the chord's midpoint, along its normal.
-          const c: [number, number] = [
-            (start[0] + end[0]) / 2 + dy * bend,
-            (start[1] + end[1]) / 2 - dx * bend,
-          ];
           return [
             {
               key: `${a.from}-${a.to}`,
-              d: `M${start[0]} ${start[1]} Q${c[0]} ${c[1]} ${end[0]} ${end[1]}`,
+              ...curve(a, start, end),
               tone: a.tone,
               start,
               end,
-              angle: (Math.atan2(end[1] - c[1], end[0] - c[0]) * 180) / Math.PI,
-              link: a.link ?? false,
+              startMark: a.start ?? "dot",
+              endMark: a.end ?? "head",
+              fine: a.fine ?? false,
             },
           ];
         }),
@@ -159,23 +196,55 @@ export function Arrows({ arrows }: { arrows: ArrowSpec[] }) {
 
   return (
     <svg ref={svg} className="arrows" aria-hidden>
-      {drawn.map((a) => (
-        <g key={a.key} className={`arrow arrow-${a.tone}`}>
-          <path className="arrow-glow" d={a.d} />
-          <path className="arrow-line" d={a.d} />
-          <path className="arrow-core" d={a.d} />
-          <circle className="arrow-dot" cx={a.start[0]} cy={a.start[1]} r="5" />
-          {a.link ? (
-            <circle className="arrow-dot" cx={a.end[0]} cy={a.end[1]} r="5" />
-          ) : (
-            <path
-              className="arrow-head"
-              d="M0 0 L-13 -7 L-9 0 L-13 7 Z"
-              transform={`translate(${a.end[0]} ${a.end[1]}) rotate(${a.angle})`}
-            />
-          )}
-        </g>
-      ))}
+      <defs>
+        <filter id="arrow-blur" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="3.5" />
+        </filter>
+      </defs>
+      {drawn.map((a) => {
+        const head = `translate(${point(a.end)}) rotate(${a.angle.toFixed(1)})`;
+        return (
+          <g
+            key={a.key}
+            className={`arrow arrow-${a.tone}${a.fine ? " arrow-fine" : ""}`}
+          >
+            {(["glow", "line", "core"] as const).map((layer) => (
+              <g key={layer} className={`arrow-${layer}`}>
+                <path d={a.d} />
+                {a.endMark === "head" && (
+                  <path
+                    className="arrow-head"
+                    d={a.fine ? FINE_HEAD : HEAD}
+                    transform={head}
+                  />
+                )}
+              </g>
+            ))}
+            {a.startMark === "dot" && <Dot at={a.start} />}
+            {a.endMark === "dot" && <Dot at={a.end} />}
+          </g>
+        );
+      })}
     </svg>
   );
 }
+
+/** A bright dot in its own glow, where an arrow leaves or lands. */
+function Dot({ at: [x, y] }: { at: Vector }) {
+  return (
+    <>
+      <circle
+        className="arrow-dot-glow"
+        cx={x}
+        cy={y}
+        r="9"
+        filter="url(#arrow-blur)"
+      />
+      <circle className="arrow-dot" cx={x} cy={y} />
+    </>
+  );
+}
+
+/** An open arrowhead, its tip at the origin, pointing along +x. */
+const HEAD = "M-24 -14 L0 0 L-24 14";
+const FINE_HEAD = "M-9 -5.5 L0 0 L-9 5.5";

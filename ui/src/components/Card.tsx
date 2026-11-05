@@ -208,8 +208,8 @@ export function Card({
       style={{ ...slot, fontSize: unit ?? width / 12, ...style }}
       id={id}
     >
-      {combat === "attacker" && <AttackChevron />}
-      {combat === "blocker" && <BlockArc />}
+      {combat === "attacker" && <AttackChevron id={id} />}
+      {combat === "blocker" && <BlockArc id={id} />}
       <motion.div
         className={classes}
         initial={false}
@@ -263,23 +263,45 @@ export function Card({
   );
 }
 
-function AttackChevron() {
+// The combat marks, as in docs/ui_mockups/combat.png: over an attacker a wide gold chevron with
+// light falling from its apex; under a blocker a gold bowl hugging the card's bottom, cusped
+// where the line from its attacker meets it. Arrows anchor to them by `${card id}-mark`.
+function AttackChevron({ id }: { id?: string }) {
+  const tent = "M0 17 Q35 13 50 0.5 Q65 13 100 17";
   return (
     <svg
+      id={id && `${id}-mark`}
       className="combat-marker attack-chevron"
-      viewBox="0 0 100 18"
+      viewBox="0 0 100 17"
+      preserveAspectRatio="none"
       aria-hidden
     >
-      <path d="M3 16 L50 2 L97 16" />
-      <path d="M22 17 L50 9 L78 17" strokeWidth="1.4" />
+      <defs>
+        <linearGradient id="chevron-light" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffd98a" stopOpacity="0.9" />
+          <stop offset="0.45" stopColor="#f7a53a" stopOpacity="0.4" />
+          <stop offset="1" stopColor="#f0901f" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={`${tent} Z`} fill="url(#chevron-light)" />
+      <path className="combat-line" d={tent} />
     </svg>
   );
 }
 
-function BlockArc() {
+function BlockArc({ id }: { id?: string }) {
   return (
-    <svg className="combat-marker block-arc" viewBox="0 0 100 16" aria-hidden>
-      <path d="M3 2 Q50 26 97 2" />
+    <svg
+      id={id && `${id}-mark`}
+      className="combat-marker block-arc"
+      viewBox="0 0 100 23"
+      preserveAspectRatio="none"
+      aria-hidden
+    >
+      <path
+        className="combat-line"
+        d="M0 0 C0.5 14 14 23 38 23 C44 23 48 21.5 50 19.5 C52 21.5 56 23 62 23 C86 23 99.5 14 100 0"
+      />
     </svg>
   );
 }

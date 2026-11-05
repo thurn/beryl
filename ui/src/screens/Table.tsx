@@ -67,29 +67,72 @@ const DEPTH_PER_PX = 0.6;
 export const depthScale = (y: number) =>
   CAMERA_DISTANCE / (CAMERA_DISTANCE + Math.max(0, NEAR_Y - y) * DEPTH_PER_PX);
 
-/** Places a thing lying on the table with its top-left corner at (x, y), shrunk by its depth.
- * Cards lie parallel to the screen, so perspective only scales them; applying that scale
- * directly renders the same in every WebKit compositing mode, headless captures included. */
-export function onTable(x: number, y: number): CSSProperties {
+/** Where the table's receding edges meet, far above the stage: in the mockups a card left of
+ * center leans left at its near end, and one right of center leans right. */
+const VANISHING = { x: 800, y: -4400 };
+
+/** How far a thing lying on the table with its top-center at (x, y) leans, in degrees: its
+ * sides run toward the vanishing point. */
+export const lean = (x: number, y: number) =>
+  (Math.atan((x - VANISHING.x) / (y - VANISHING.y)) * 180) / Math.PI;
+
+/** Places a thing `width` wide lying on the table with its top-left corner at (x, y), shrunk by
+ * its depth and leaning toward the vanishing point. Cards lie parallel to the screen, so
+ * perspective only scales and shears them; applying those directly renders the same in every
+ * WebKit compositing mode, headless captures included. */
+export function onTable(x: number, y: number, width: number): CSSProperties {
+  const scale = depthScale(y);
   return {
     left: x,
     top: y,
     transformOrigin: "0 0",
-    transform: `scale(${depthScale(y)})`,
+    transform: `scale(${scale}) skewX(${lean(x + (width * scale) / 2, y)}deg)`,
   };
 }
 
 function OnTable({
   x,
   y,
+  width,
   children,
 }: {
   x: number;
   y: number;
+  width: number;
   children: ReactNode;
 }) {
   return (
-    <div className="on-table" style={onTable(x, y)}>
+    <div className="on-table" style={onTable(x, y, width)}>
+      {children}
+    </div>
+  );
+}
+
+/** A zone lying on the table at a fixed place, its top-left corner at (x, y): it leans like
+ * everything on the table and is foreshortened by `squash`. */
+function Lying({
+  x,
+  y,
+  width,
+  squash = 1,
+  children,
+}: {
+  x: number;
+  y: number;
+  width: number;
+  squash?: number;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className="hud"
+      style={{
+        left: x,
+        top: y,
+        transformOrigin: "0 0",
+        transform: `skewX(${lean(x + width / 2, y)}deg) scaleY(${squash})`,
+      }}
+    >
       {children}
     </div>
   );
@@ -158,17 +201,22 @@ export interface TableBoard {
   arrows?: ArrowSpec[];
 }
 
+const CREATURE_WIDTH = 232;
+const LAND_WIDTH = 176;
+/** Each copy beneath a land stack's top card, as a fraction of the card's width. */
+const LAND_STEP = { x: 0.13, y: 0.025 };
+
 function Creature({ permanent }: { permanent: Permanent }) {
   const withArt = useSlotArt();
   const [tapped, setTapped] = useState(permanent.tapped ?? false);
   return (
-    <OnTable x={permanent.x} y={permanent.y}>
+    <OnTable x={permanent.x} y={permanent.y} width={CREATURE_WIDTH}>
       <div onClick={() => setTapped(!tapped)}>
         <Card
           id={permanent.id}
           card={withArt(permanent.card, permanent.slot)}
           variant="field"
-          width={232}
+          width={CREATURE_WIDTH}
           tapped={tapped}
           highlight={permanent.highlight}
           combat={permanent.combat}
@@ -181,45 +229,57 @@ function Creature({ permanent }: { permanent: Permanent }) {
 function Lands({ lands }: { lands: LandPile[] }) {
   const withArt = useSlotArt();
   return lands.map((pile, i) => (
-    <OnTable key={i} x={pile.x} y={pile.y}>
+    <OnTable
+      key={i}
+      x={pile.x}
+      y={pile.y}
+      width={LAND_WIDTH * (1 + LAND_STEP.x * (pile.count - 1))}
+    >
       <LandStack
         card={withArt(pile.card, pile.slot)}
         count={pile.count}
         tapped={pile.tapped}
-        width={192}
+        width={LAND_WIDTH}
+        step={LAND_STEP}
         showCount={false}
       />
     </OnTable>
   ));
 }
 
-/** The hand: a fan held at the near edge, leaning back toward the table; each card overlaps the
- * one on its left. A hovered card straightens and rises. */
+/** The hand's cards: each card's top center lies on an arc over the near edge, and the fan
+ * turns each a little more clockwise than the one on its left, as in the mockups. */
+const HAND = {
+  width: 173,
+  spacing: 172,
+  top: 737,
+  sag: 6.7,
+  turn: 6.3,
+  bias: 0.8,
+};
+
+/** The hand: a fan held at the near edge. A hovered card straightens and rises. */
 function Hand({ cards }: { cards: TableBoard["you"]["hand"] }) {
   const withArt = useSlotArt();
   const mid = (cards.length - 1) / 2;
-  return (
-    <div className="hand">
-      {cards.map(({ card, slot }, i) => (
-        <motion.div
-          key={i}
-          className="hand-card"
-          style={{
-            rotate: (i - mid) * 3.5,
-            y: Math.abs(i - mid) ** 2 * 6,
-            rotateX: 14,
-            transformPerspective: 900,
-            originY: 1,
-            zIndex: i,
-          }}
-          whileHover={{ y: -60, rotateX: 0, scale: 1.05, zIndex: 20 }}
-          transition={{ type: "spring", stiffness: 380, damping: 30 }}
-        >
-          <Card card={withArt(card, slot)} width={182} />
-        </motion.div>
-      ))}
-    </div>
-  );
+  return cards.map(({ card, slot }, i) => (
+    <motion.div
+      key={i}
+      className="hand-card"
+      style={{
+        left: STAGE.width / 2 + (i - mid) * HAND.spacing - HAND.width / 2,
+        top: HAND.top + (i - mid) ** 2 * HAND.sag,
+        rotate: (i - mid) * HAND.turn + HAND.bias,
+        originX: 0.5,
+        originY: 0,
+        zIndex: 10 + i,
+      }}
+      whileHover={{ y: -60, rotate: 0, scale: 1.05, zIndex: 30 }}
+      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+    >
+      <Card card={withArt(card, slot)} width={HAND.width} />
+    </motion.div>
+  ));
 }
 
 /** The battlefield and everything around it, without an overlay; `dimmed` behind one. */
@@ -255,27 +315,36 @@ export function TableScene({
               key={i}
               width={112}
               style={{
-                transform: `perspective(700px) rotateX(-12deg) rotate(${180 + (i - mid) * 3}deg) translateY(${-((i - mid) ** 2) * 4}px)`,
+                transform: `perspective(700px) rotateX(-12deg) rotate(${180 + (i - mid) * 4.1}deg) translateY(${(i - mid) ** 2 * 3.2}px)`,
               }}
             />
           );
         })}
       </div>
-      <div id="opponent-life" className="hud" style={{ left: 670, top: 40 }}>
-        <LifeOrb life={opponent.life} active={opponent.active} />
+      <div id="opponent-life" className="hud" style={{ left: 670, top: 48 }}>
+        <LifeOrb
+          life={opponent.life}
+          active={opponent.active}
+          seat="opponent"
+        />
       </div>
-      <div className="hud" style={{ left: 1195, top: 14 }}>
-        <Library count={opponent.library} width={98} />
-      </div>
+      <Lying x={1181} y={13} width={124} squash={0.814}>
+        <Library
+          count={opponent.library}
+          width={95}
+          depth={{ x: -29, y: 39 }}
+        />
+      </Lying>
       {opponent.graveyard.length > 0 && (
-        <div className="hud" style={{ left: 1330, top: 40 }}>
+        <Lying x={1333} y={40} width={88} squash={0.82}>
           <Graveyard
             cards={opponent.graveyard.map((c, i, all) =>
               i === all.length - 1 ? withArt(c, "opponent-graveyard") : c,
             )}
-            width={96}
+            width={88}
+            depth={{ x: -6, y: 12 }}
           />
-        </div>
+        </Lying>
       )}
       <svg
         className="gear"
@@ -288,8 +357,14 @@ export function TableScene({
 
       {board.banner && (
         <div className="step-banner">
+          <i className="step-banner-rule step-banner-rule-left" />
+          <i className="step-banner-diamond" />
           <span className="step-banner-title">{board.banner.title}</span>
+          <i className="step-banner-dot" />
+          <i className="step-banner-rule step-banner-rule-right" />
+          <i className="step-banner-underline" />
           <span className="step-banner-detail">{board.banner.detail}</span>
+          <i className="step-banner-notch" />
         </div>
       )}
       {board.stack?.map((item, i) => (
@@ -305,14 +380,14 @@ export function TableScene({
         </div>
       ))}
 
-      <div id="you-life" className="hud" style={{ left: 670, top: 612 }}>
+      <div id="you-life" className="hud" style={{ left: 670, top: 618 }}>
         <LifeOrb life={you.life} active={you.active} />
       </div>
       <Hand cards={you.hand} />
-      <div className="hud" style={{ left: 160, top: 730 }}>
-        <Library count={you.library} width={110} />
-      </div>
-      <div className="hud" style={{ left: 18, top: 815 }}>
+      <Lying x={151} y={731} width={129} squash={0.875}>
+        <Library count={you.library} width={116} depth={{ x: -13, y: 19 }} />
+      </Lying>
+      <div className="hud" style={{ left: 18, top: 812 }}>
         <PlayerBadge name="You" />
       </div>
       <div className="hud turn-controls">

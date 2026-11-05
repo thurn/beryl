@@ -130,7 +130,7 @@ function PlayerAndZones() {
           <Caption>Active</Caption>
         </figure>
         <figure>
-          <LifeOrb life={17} />
+          <LifeOrb life={17} seat="opponent" />
           <Caption>Inactive</Caption>
         </figure>
         <div className="specimen-divider" />
@@ -289,7 +289,7 @@ function CombatAndStack() {
         from: "g-attacker",
         to: "g-blocker",
         tone: "gold",
-        link: true,
+        end: "dot",
         bend: 0,
         fromSide: "right",
         toSide: "left",

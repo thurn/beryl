@@ -398,26 +398,32 @@
   border-radius: inherit;
   background: rgb(0 0 0 / 30%);
 }
+/* CSS filters reach an svg element in WebKit, not the shapes inside it. */
 .combat-marker {
   position: absolute;
-  left: 50%;
-  width: 82%;
-  transform: translateX(-50%);
-  fill: none;
-  stroke: var(--gold);
-  stroke-linecap: round;
-  stroke-linejoin: miter;
-  filter: drop-shadow(0 0 3px rgb(255 190 90 / 95%))
-    drop-shadow(0 0 8px rgb(240 122 28 / 70%));
   overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(0 0 2px rgb(255 190 80 / 100%))
+    drop-shadow(0 0 6px rgb(245 130 25 / 95%));
 }
+/* Both drawn at the card's scale: 100 units across 104–108% of a card 12em wide. */
 .attack-chevron {
-  bottom: calc(100% + 0.25em);
-  stroke-width: 2.4;
+  left: -4%;
+  width: 108%;
+  height: 2.2em;
+  bottom: calc(100% + 0.3em);
 }
 .block-arc {
-  top: calc(100% + 0.25em);
-  stroke-width: 2.4;
+  left: -2%;
+  width: 104%;
+  height: 2.87em;
+  top: calc(100% - 1.64em);
+}
+.combat-line {
+  fill: none;
+  stroke: #ffd982;
+  stroke-width: 1.7;
+  stroke-linecap: round;
 }
 
 /* Card backs and piles. The back (after scry.png): the card's black body around tooled leather,
@@ -579,13 +585,15 @@
   position: relative;
   display: inline-block;
 }
+/* The edges of the cards beneath a pile's top card: dark, each lit along its near side. */
 .pile-edge {
   position: absolute;
-  width: 100%;
-  height: 100%;
   border-radius: var(--radius-card);
-  border: 1px solid #4a423a;
-  background: #161412;
+  border: 1px solid #0c0a09;
+  border-bottom-color: #3a332e;
+  background: #1a1715;
+}
+.pile-edge:first-child {
   box-shadow: var(--shadow-card);
 }
 .pile-empty {
@@ -659,38 +667,49 @@
   z-index: 5;
 }
 .arrow-gold {
-  --tone: var(--gold);
-  --tone-soft: var(--gold-soft);
+  --weight: 5px;
+  --tone: #ffb846;
+  --tone-soft: rgb(255 150 40 / 70%);
+  --tone-core: #fff1c2;
 }
 .arrow-cyan {
+  --weight: 9px;
   --tone: var(--cyan);
-  --tone-soft: var(--cyan-soft);
+  --tone-soft: rgb(56 220 255 / 75%);
+  --tone-core: #d2ffff;
 }
-.arrow-glow,
-.arrow-line {
+.arrow path {
   fill: none;
   stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .arrow-glow {
+  filter: url(#arrow-blur);
+}
+.arrow-glow path {
   stroke: var(--tone-soft);
-  stroke-width: 12;
+  stroke-width: calc(var(--weight) * 2.6);
   opacity: 0.7;
-  filter: blur(3px);
 }
-.arrow-line {
+.arrow-line path {
   stroke: var(--tone);
-  stroke-width: 3.6;
+  stroke-width: var(--weight);
 }
-.arrow-core {
-  fill: none;
-  stroke: rgb(255 255 255 / 75%);
-  stroke-width: 1.2;
+.arrow-core path {
+  stroke: var(--tone-core);
+  stroke-width: calc(var(--weight) * 0.42);
 }
-.arrow-dot,
-.arrow-head {
+.arrow-fine {
+  --weight: 2.6px;
+}
+.arrow-dot-glow {
   fill: var(--tone);
-  stroke: rgb(255 255 255 / 70%);
-  stroke-width: 1;
+}
+.arrow-dot {
+  r: 5.5px;
+  fill: var(--tone-core);
+  stroke: var(--tone);
+  stroke-width: 2;
 }
 
 /* Buttons. */
@@ -876,74 +895,115 @@
   box-shadow: 0 0 6px var(--gold);
 }
 
-/* Life orbs and badges. Sized in em: the table sets a larger font size than the gallery. */
+/* Life orbs, drawn in mockup pixels (Player.tsx); --orb scales one to CSS pixels. */
 .life-orb {
+  --orb: 1px;
   position: relative;
-  font-size: 17px;
-  width: 10em;
-  height: 4.4em;
-  display: grid;
-  place-items: center;
+  width: calc(272 * var(--orb));
+  height: calc(116 * var(--orb));
 }
-.life-orb-wings {
+.life-orb-art {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   overflow: visible;
 }
-.life-orb-blades {
-  fill: url(#blade-metal);
-  stroke: rgb(20 18 16 / 70%);
+.life-orb-blade {
+  fill: url(#orb-blade);
+  stroke: rgb(30 26 22 / 70%);
   stroke-width: 0.8;
 }
+.life-orb-blade-dark {
+  fill: #2f2b28;
+  stroke: #151311;
+  stroke-width: 1;
+}
+.life-orb-arch {
+  fill: none;
+  stroke: #24211f;
+  stroke-width: 9;
+}
+.life-orb-ring {
+  fill: none;
+  stroke: #ffd36a;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+.life-orb-ring-glow {
+  stroke: #f08a1c;
+  stroke-width: 7;
+}
 .life-orb-core {
-  position: relative;
-  width: 3.8em;
-  height: 2.95em;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  border: 0.17em solid transparent;
-  background:
-    radial-gradient(ellipse at 50% 30%, #44413d, #161514 72%) padding-box,
-    linear-gradient(180deg, #f6f3ee, #8f8982 55%, #3d3935) border-box;
-  box-shadow:
-    inset 0 0.1em 0.25em rgb(255 255 255 / 14%),
-    0 0.25em 0.6em rgb(0 0 0 / 60%);
+  fill: url(#orb-core);
+  stroke: url(#orb-rim);
+  stroke-width: 3;
+}
+.life-orb-flare {
+  fill: #ff7a14;
+}
+.life-orb-flare ellipse {
+  fill: #ff8f22;
+  opacity: 0.45;
+}
+.life-orb-halo {
+  fill: none;
+  stroke: #ffe28a;
+  stroke-width: 7;
+}
+/* The far orb's ring is dull copper. */
+.life-orb-opponent .life-orb-ring {
+  stroke: #d7883e;
+  stroke-width: 2.2;
+}
+.life-orb-opponent .life-orb-ring-glow {
+  stroke: #a85414;
+  stroke-width: 5;
+}
+.life-orb-total {
+  position: absolute;
+  left: 50%;
+  top: calc(57 * var(--orb));
+  translate: -50% -50%;
   font-family: var(--font-serif);
-  font-weight: 600;
-  color: #fbf8f2;
-}
-.life-orb-core span {
-  font-size: 2em;
+  font-weight: 700;
+  font-size: calc(48 * var(--orb));
   line-height: 1;
-  text-shadow: 0 2px 3px rgb(0 0 0 / 70%);
+  color: #fdfcfa;
+  text-shadow: 0 calc(2 * var(--orb)) calc(3 * var(--orb)) rgb(0 0 0 / 80%);
 }
-.life-orb-active .life-orb-core {
-  background:
-    radial-gradient(ellipse at 50% 30%, #44413d, #161514 72%) padding-box,
-    linear-gradient(180deg, #fff1cc, #e8a849 55%, #7a4512) border-box;
-  box-shadow:
-    inset 0 0.1em 0.25em rgb(255 255 255 / 14%),
-    0 0.3em 0.9em rgb(240 122 28 / 75%);
-}
+/* Sized in em, 1em being the name's size. */
 .player-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.7em;
-  padding: 0.3em 2.4em 0.3em 0.6em;
-  background: linear-gradient(90deg, rgb(20 19 18 / 88%) 60%, transparent);
+  gap: 0.83em;
+  height: 2.09em;
+  padding: 0 4em 0 0.34em;
+  background: linear-gradient(
+    90deg,
+    rgb(24 21 19 / 55%),
+    rgb(30 26 24 / 92%) 0.34em,
+    rgb(30 26 24 / 88%) 55%,
+    transparent
+  );
   font-family: var(--font-serif);
   font-weight: 700;
-  font-size: 22px;
-  color: var(--text);
-  text-shadow: 0 1px 3px rgb(0 0 0 / 70%);
+  font-size: 23px;
+  color: #fff;
+  text-shadow:
+    0 1px 1px rgb(0 0 0 / 90%),
+    0 2px 5px rgb(0 0 0 / 60%);
 }
 .player-badge-emblem {
-  width: 1.6em;
-  height: 1.6em;
-  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 60%));
+  width: 2em;
+  height: 2em;
+  overflow: visible;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 70%));
+}
+.player-badge-ring {
+  fill: #151210;
+  stroke: url(#emblem-brass);
+  stroke-width: 1.5;
 }
 
 /* The overlay shell, on the 1600×900 stage: a 1000px choice column and a 338px side column. */

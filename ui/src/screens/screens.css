@@ -238,10 +238,10 @@
   justify-content: space-between;
 }
 .player-row .life-orb {
-  font-size: 14px;
+  --orb: 0.74px;
 }
 .player-row .player-badge {
-  font-size: 20px;
+  font-size: 20.5px;
   padding-right: 0.8em;
 }
 .zone-row {
@@ -330,7 +330,7 @@
 }
 .scry-label {
   position: absolute;
-  bottom: -50px;
+  bottom: -43px;
   font-family: var(--font-serif);
   font-style: italic;
   font-weight: 600;
@@ -367,7 +367,7 @@
   font-family: var(--font-serif);
 }
 .table-dimmed {
-  filter: blur(2.5px) brightness(0.42) saturate(0.8);
+  filter: blur(3.5px) brightness(0.4) saturate(0.8);
 }
 /* Permanents lying on the table (Table.tsx places them in depth): each card shows a dark slab
    edge below it and casts a soft shadow down and away from the light. The cast shadow is a
@@ -391,8 +391,9 @@
 .hud {
   position: absolute;
 }
+/* Mockup pixels on the 1600-wide stage. */
 .table .life-orb {
-  font-size: 26px;
+  --orb: calc(1px / 1.045);
 }
 .brand {
   position: absolute;
@@ -422,22 +423,15 @@
 .opponent-hand {
   position: absolute;
   left: 50%;
-  top: -105px;
+  top: -95px;
   display: flex;
   translate: -50% 0;
 }
 .opponent-hand .card-back + .card-back {
   margin-left: -6px;
 }
-.hand {
+.hand-card {
   position: absolute;
-  left: 50%;
-  top: 725px;
-  display: flex;
-  translate: -50% 0;
-}
-.hand-card + .hand-card {
-  margin-left: -18px;
 }
 /* Hand cards show more art above their type line than a card read whole, under a taller name
    bar (battlefield.png). */
@@ -450,30 +444,130 @@
 .hand-card .card {
   --name-size: 1.08em;
 }
-/* A step announcement over the battlefield (combat.png's "Combat / Blockers declared"). */
+/* A step announcement over the battlefield (combat.png's "Combat / Blockers declared"): a gold
+   title between ornamented rules over an italic detail, on a smoky shade. Laid out from its
+   center line; the shade's box is the banner. */
 .step-banner {
   position: absolute;
-  left: 50%;
-  top: 150px;
+  left: 802px;
+  top: 137px;
+  width: 400px;
+  height: 100px;
   translate: -50% 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 0 80px;
-  color: var(--text);
-  text-shadow: 0 2px 6px rgb(0 0 0 / 60%);
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 50% 62% at 50% 55%,
+    rgb(14 12 11 / 72%),
+    rgb(14 12 11 / 45%) 55%,
+    transparent
+  );
+}
+.step-banner > * {
+  position: absolute;
+  left: 50%;
 }
 .step-banner-title {
-  font-size: 25px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  top: 18.6px;
+  translate: -50% 0;
+  /* The mockup's title face is narrower than our serif's. */
+  scale: 0.92 1;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
   text-transform: uppercase;
-  color: var(--gold);
+  white-space: nowrap;
+  color: transparent;
+  background: linear-gradient(180deg, #fbe2ab 15%, #e2a75a 60%, #a8692a);
+  background-clip: text;
+  -webkit-background-clip: text;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 85%))
+    drop-shadow(0 2px 5px rgb(0 0 0 / 50%));
 }
 .step-banner-detail {
-  font-size: 20px;
+  top: 53.6px;
+  translate: -50% 0;
+  font-size: 20.2px;
   font-style: italic;
+  line-height: 1;
+  white-space: nowrap;
+  color: #f4efe8;
+  text-shadow:
+    0 1px 1px rgb(0 0 0 / 85%),
+    0 2px 6px rgb(0 0 0 / 55%);
+}
+.step-banner-rule {
+  top: 38.6px;
+  width: 50px;
+  height: 2px;
+  border-radius: 1px;
+  box-shadow: 0 0 5px rgb(245 150 50 / 80%);
+}
+.step-banner-rule-left {
+  margin-left: -169px;
+  background: linear-gradient(90deg, transparent, #f7b95d 70%, #ffe0a0);
+}
+.step-banner-rule-right {
+  margin-left: 119px;
+  background: linear-gradient(270deg, transparent, #f7b95d 70%, #ffe0a0);
+}
+.step-banner-diamond {
+  top: 34.2px;
+  margin-left: -111px;
+  width: 9px;
+  height: 9px;
+  rotate: 45deg;
+  border: 2px solid #f6a64a;
+  background: #ffe4a8;
+  box-shadow: 0 0 6px rgb(245 150 50 / 90%);
+}
+.step-banner-dot {
+  top: 37.4px;
+  margin-left: 100px;
+  width: 4px;
+  height: 4px;
+  rotate: 45deg;
+  background: #ffe0a0;
+  box-shadow: 0 0 4px rgb(245 150 50 / 90%);
+}
+.step-banner-underline {
+  top: 47.8px;
+  margin-left: -100px;
+  width: 190px;
+  height: 1.5px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(240 160 70 / 80%) 25%,
+    #ffcf7a 50%,
+    rgb(240 160 70 / 80%) 75%,
+    transparent
+  );
+  box-shadow: 0 0 4px rgb(245 150 50 / 60%);
+}
+.step-banner-notch {
+  top: 90px;
+  margin-left: -70px;
+  width: 140px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(220 190 150 / 38%) 30%,
+    rgb(220 190 150 / 38%) 70%,
+    transparent
+  );
+}
+.step-banner-notch::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -7px;
+  width: 11px;
+  height: 11px;
+  translate: -50% 0;
+  rotate: 45deg;
+  border-right: 1.5px solid rgb(220 190 150 / 45%);
+  border-bottom: 1.5px solid rgb(220 190 150 / 45%);
 }
 .turn-controls {
   right: 34px;

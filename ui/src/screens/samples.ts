@@ -109,11 +109,11 @@ export const SAMPLE_BOARD: TableBoard = {
       {
         card: SAMPLE.island,
         count: 3,
-        x: 150,
+        x: 156,
         y: 127,
         slot: "opponent-island",
       },
-      { card: SAMPLE.swamp, count: 3, x: 372, y: 122, slot: "opponent-swamp" },
+      { card: SAMPLE.swamp, count: 3, x: 364, y: 122, slot: "opponent-swamp" },
     ],
     creatures: [
       { card: SAMPLE.balefulStrix, x: 607, y: 221, slot: "opponent-strix" },
@@ -132,8 +132,8 @@ export const SAMPLE_BOARD: TableBoard = {
       { card: SAMPLE.plateau, slot: "hand-plateau" },
     ],
     lands: [
-      { card: SAMPLE.mountain, count: 3, x: 104, y: 566, slot: "you-mountain" },
-      { card: SAMPLE.plains, count: 3, x: 338, y: 564, slot: "you-plains" },
+      { card: SAMPLE.mountain, count: 3, x: 108, y: 566, slot: "you-mountain" },
+      { card: SAMPLE.plains, count: 3, x: 323, y: 564, slot: "you-plains" },
     ],
     creatures: [
       { card: SAMPLE.goblinGuide, x: 588, y: 418, slot: "you-goblin-guide" },

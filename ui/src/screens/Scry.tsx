@@ -1,8 +1,24 @@
 // A scry decision in the overlay shell, as in docs/ui_mockups/scry.png. Static for now: the
 // choice overlays bead wires it to decisions and drag ordering.
-import { Card, CardBack, useSlotArt } from "../components/Card";
+import { ASPECT, Card, CardBack, useSlotArt } from "../components/Card";
 import { Overlay } from "../components/Overlay";
 import { SAMPLE } from "./samples";
+
+/** Lays a card `width` wide in the tray with its center at (x, y), turned `turn` degrees. */
+function fanned(
+  x: number,
+  y: number,
+  width: number,
+  turn: number,
+  height = width / ASPECT.full,
+) {
+  return {
+    position: "absolute",
+    left: x - width / 2,
+    top: y - height / 2,
+    rotate: `${turn}deg`,
+  } as const;
+}
 
 export function ScryOverlay({ className }: { className?: string }) {
   const a = useSlotArt();
@@ -14,47 +30,19 @@ export function ScryOverlay({ className }: { className?: string }) {
       aside={<Card card={a(SAMPLE.preordain, "scry-preordain")} width={338} />}
     >
       <div className="scry-zone">
-        <CardBack
-          width={262}
-          style={{
-            position: "absolute",
-            left: 392,
-            top: 6,
-            transform: "rotate(-3deg)",
-          }}
-        />
-        <CardBack
-          width={262}
-          style={{
-            position: "absolute",
-            left: 300,
-            top: 14,
-            transform: "rotate(-8deg)",
-          }}
+        <CardBack width={220} style={fanned(420, 174, 220, -10)} />
+        <CardBack width={220} style={fanned(482, 171, 220, 5)} />
+        <Card
+          card={a(SAMPLE.counterspell, "scry-counterspell")}
+          width={257}
+          style={{ ...fanned(715, 235, 257, 3.2), zIndex: 2 }}
         />
         <Card
           card={a(SAMPLE.fullArtIsland, "scry-island")}
           width={290}
           height={358}
           highlight="target"
-          style={{
-            position: "absolute",
-            left: 140,
-            top: 66,
-            rotate: -9,
-            zIndex: 3,
-          }}
-        />
-        <Card
-          card={a(SAMPLE.counterspell, "scry-counterspell")}
-          width={288}
-          style={{
-            position: "absolute",
-            left: 575,
-            top: 36,
-            rotate: 3,
-            zIndex: 2,
-          }}
+          style={{ ...fanned(321, 272, 290, -8.6, 358), zIndex: 3 }}
         />
         <span className="scry-label scry-bottom">Bottom</span>
         <span className="scry-label scry-top">Top</span>
