@@ -235,7 +235,10 @@ export function Arrows({
               </g>
             ))}
             {a.startMark === "dot" && <Dot at={a.start} scale={scale} />}
-            {a.endMark === "dot" && <Dot at={a.end} scale={scale} />}
+            {(a.endMark === "dot" ||
+              (a.endMark === "head" && a.tone === "gold" && !a.fine)) && (
+              <Dot at={a.end} scale={scale} />
+            )}
           </g>
         );
       })}
@@ -243,18 +246,20 @@ export function Arrows({
   );
 }
 
-/** A bright dot in its own glow, where an arrow leaves or lands. */
+/** A white-hot dot in its tone's bloom where an arrow leaves or lands, scaled less than lines
+ * are so it stays legible on small cards. */
 function Dot({ at: [x, y], scale }: { at: Vector; scale: number }) {
+  const size = Math.sqrt(scale);
   return (
     <>
       <circle
         className="arrow-dot-glow"
         cx={x}
         cy={y}
-        r={13 * scale}
+        r={16 * size}
         filter="url(#arrow-blur)"
       />
-      <circle className="arrow-dot" cx={x} cy={y} r={5 * scale} />
+      <circle className="arrow-dot" cx={x} cy={y} r={7 * size} />
     </>
   );
 }
@@ -262,7 +267,7 @@ function Dot({ at: [x, y], scale }: { at: Vector; scale: number }) {
 /** Arrowheads, each with its tip at the origin, pointing along +x: solid barbed heads, and an
  * open one for hairlines. */
 const HEADS = {
-  gold: "M-17 -10 L2 0 L-17 10 L-12 0 Z",
+  gold: "M-12 -7 L2 0 L-12 7 L-9 0 Z",
   cyan: "M-30 -17 L0 0 L-30 17 L-23 0 Z",
 } as const;
 const FINE_HEAD = "M-9 -5.5 L0 0 L-9 5.5";

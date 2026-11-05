@@ -140,9 +140,9 @@ const trigger: TableBoard = {
       to: "target-strix",
       tone: "cyan",
       fromSide: { x: 0, y: 0.055 },
-      toSide: { x: 0.5, y: 0.2 },
+      toSide: { x: 0.5, y: 0.25 },
       leave: [-150, -195],
-      arrive: [-35, 150],
+      arrive: [0, 150],
     },
   ],
 };

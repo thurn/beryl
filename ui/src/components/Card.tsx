@@ -272,8 +272,13 @@ export function Card({
 // The combat marks, as in docs/ui_mockups/combat.png: over an attacker a wide gold chevron with
 // light falling from its apex; under a blocker a gold crescent hugging the card's bottom,
 // notched where the line from its attacker meets it. Arrows anchor to them by `${card id}-mark`.
+/** Light falling from the chevron's apex: streaks fanning down between its arms. */
+const RAYS = [-34, -22, -12, 0, 12, 22, 34]
+  .map((dx) => `M50 1 L${50 + dx - 1.2} 16.5 L${50 + dx + 1.2} 16.5 Z`)
+  .join(" ");
+
 function AttackChevron({ id }: { id?: string }) {
-  const tent = "M0 17 Q35 13 50 0.5 Q65 13 100 17";
+  const arms = "M0 17 Q30 9 50 0.5 Q70 9 100 17";
   return (
     <svg
       id={id && `${id}-mark`}
@@ -283,21 +288,15 @@ function AttackChevron({ id }: { id?: string }) {
       aria-hidden
     >
       <defs>
-        <radialGradient
-          id="chevron-light"
-          cx="50"
-          cy="0"
-          r="62"
-          gradientUnits="userSpaceOnUse"
-          gradientTransform="translate(50 0) scale(1 0.45) translate(-50 0)"
-        >
-          <stop offset="0" stopColor="#fff2c8" stopOpacity="1" />
-          <stop offset="0.4" stopColor="#ffc060" stopOpacity="0.55" />
+        <linearGradient id="chevron-light" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff2c8" stopOpacity="0.9" />
+          <stop offset="0.6" stopColor="#ffb44a" stopOpacity="0.3" />
           <stop offset="1" stopColor="#e88a20" stopOpacity="0" />
-        </radialGradient>
+        </linearGradient>
       </defs>
-      <path d={`${tent} Z`} fill="url(#chevron-light)" />
-      <path className="combat-line" d={tent} />
+      <path d={`${arms} Z`} fill="url(#chevron-light)" opacity="0.45" />
+      <path d={RAYS} fill="url(#chevron-light)" />
+      <path className="combat-line" d={arms} />
     </svg>
   );
 }
@@ -313,9 +312,9 @@ function BlockArc({ id }: { id?: string }) {
     >
       <defs>
         <linearGradient id="block-gold" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#fff6c4" />
-          <stop offset="0.5" stopColor="#fddf64" />
-          <stop offset="1" stopColor="#f0a830" />
+          <stop offset="0" stopColor="#f8d878" />
+          <stop offset="0.55" stopColor="#fdecb0" />
+          <stop offset="1" stopColor="#fffbe8" />
         </linearGradient>
       </defs>
       <path

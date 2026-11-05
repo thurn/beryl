@@ -322,7 +322,7 @@ function CombatAndStack() {
         tone: "gold",
         fromSide: "right",
         toSide: { x: 0.02, y: 0.64 },
-        leave: [12, 26],
+        leave: [24, 0],
         arrive: [24, 0],
       },
       {
@@ -405,7 +405,7 @@ function CombatAndStack() {
         <CaptionAt x={367} y={422}>
           Cyan: ability → target
         </CaptionAt>
-        <Arrows arrows={arrows} scale={0.5} />
+        <Arrows arrows={arrows} scale={0.65} />
       </div>
     </Panel>
   );
