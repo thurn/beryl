@@ -1,0 +1,13 @@
+[package]
+name = "beryl_cards"
+version = "0.1.0"
+description = "The card definitions, the generated card names and the decklists"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+beryl_engine = { path = "../beryl_engine" }

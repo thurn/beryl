@@ -1,0 +1,10 @@
+[package]
+name = "beryl_engine"
+version = "0.1.0"
+description = "The rules engine: state, turn structure, priority, decisions and the Observation view"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true

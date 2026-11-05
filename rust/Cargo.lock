@@ -142,6 +142,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "beryl_cards"
+version = "0.1.0"
+dependencies = [
+ "beryl_engine",
+]
+
+[[package]]
+name = "beryl_engine"
+version = "0.1.0"
+
+[[package]]
 name = "bincode-next"
 version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
