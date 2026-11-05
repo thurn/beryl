@@ -85,6 +85,13 @@ release `Beryl.app`.
 Benchmarks follow `docs/benchmarking.md`: `just bench-count` for instruction
 counts, `just bench` for timing (it refuses a busy machine).
 
+Tournaments are expensive: a game involving an MCTS agent at
+`--iterations 300 --trees 4` costs about 180 CPU-seconds, so a 100-game pairing
+holds the whole machine for about 20 minutes and a full round robin for over 2
+hours. `just tournament` and `just play` run under `nice -n 10` so other
+sessions' checks keep their CPU. Wardens rerun only the pairings that gate
+acceptance, never reported-only ones.
+
 ## Checks
 
 - `just check` (fast, budget 60 s) runs the lanes whose files changed since the

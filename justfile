@@ -102,17 +102,17 @@ test-rust *args:
 fuzz games="10000":
     cd rust && BERYL_FUZZ_GAMES="$1" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true cargo test --release -p beryl_search --test games
 
-# A seeded WU Control mirror game between two agents, as a transcript (--seed N, --out FILE)
+# A seeded WU Control mirror game between two agents at low priority, as a transcript (--seed N, --out FILE)
 [group('agents')]
 [no-cd]
 play *args:
-    RUSTFLAGS="{{ search_cpu }}" cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- play "$@"
+    RUSTFLAGS="{{ search_cpu }}" nice -n 10 cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- play "$@"
 
-# A round robin between agents, games in parallel (--games N, --seed N, --json FILE, --check)
+# A round robin between agents, games in parallel at low priority (--games N, --seed N, --json FILE, --check)
 [group('agents')]
 [no-cd]
 tournament *args:
-    RUSTFLAGS="{{ search_cpu }}" cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- tournament "$@"
+    RUSTFLAGS="{{ search_cpu }}" nice -n 10 cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- tournament "$@"
 
 # The tools' tests
 [group('test')]

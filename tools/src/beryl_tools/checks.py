@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -211,7 +212,7 @@ def rust_lane() -> Lane:
             ["cargo", "clippy", "--locked", "--all-targets", "--", "-D", "warnings"],
             paths.RUST,
         )
-        .step("tests", ["cargo", "test", "--locked", "--workspace", "-q"], paths.RUST)
+        .step("tests", [sys.executable, "-m", "beryl_tools.checks", "rust-tests"])
     )
 
 
@@ -294,6 +295,49 @@ def pytest_step() -> int:
     return 0 if code == 5 else code  # 5: no tests collected
 
 
+def rust_tests_step() -> int:
+    """The workspace's tests. cargo-nextest runs the test binaries in parallel (cargo test runs
+    them one after another); it cannot list the harness-less `allocations` targets, so cargo
+    test runs those beside it once everything is built. Plain cargo test where cargo-nextest is
+    missing."""
+    cargo = ["cargo", "test", "--locked", "--workspace", "-q"]
+    if shutil.which("cargo-nextest") is None:
+        return subprocess.run(cargo, cwd=paths.RUST, check=False).returncode
+    build = subprocess.run([*cargo, "--no-run"], cwd=paths.RUST, check=False)
+    if build.returncode != 0:
+        return build.returncode
+    nextest = [
+        "cargo",
+        "nextest",
+        "run",
+        "--locked",
+        "--workspace",
+        "--cargo-quiet",
+        "--status-level=fail",
+        "--final-status-level=fail",
+        "-E",
+        "not binary(allocations)",
+    ]
+    jobs = [nextest, [*cargo, "--test", "allocations"]]
+
+    def run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            cmd,
+            cwd=paths.RUST,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            errors="replace",
+            check=False,
+        )
+
+    with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+        runs = list(pool.map(run, jobs))
+    for r in runs:
+        print(r.stdout.rstrip(), flush=True)
+    return next((r.returncode for r in runs if r.returncode != 0), 0)
+
+
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     sub.add_parser("check", help="the fast check (enact push)").set_defaults(func=fast)
     p = sub.add_parser("ci", help="slow CI, or some of its lanes")
@@ -301,5 +345,6 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.set_defaults(func=slow)
 
 
-if __name__ == "__main__" and sys.argv[1:] == ["pytest"]:
-    sys.exit(pytest_step())
+if __name__ == "__main__":
+    steps = {"pytest": pytest_step, "rust-tests": rust_tests_step}
+    sys.exit(steps[sys.argv[1]]())
