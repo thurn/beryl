@@ -276,10 +276,8 @@ impl Runner<'_> {
                         if self.name(slot) == card && f == face && m == costs)
                 })
                 .ok_or_else(|| {
-                    format!(
-                        "casting {card} ({face:?}, {costs:?}) is not offered: {}",
-                        self.describe(&d)
-                    )
+                    let (f, m, offered) = (face.get(), costs.bits(), self.describe(&d));
+                    format!("casting {card} (face {f}, costs {m:#b}) is not offered: {offered}")
                 })?;
                 self.answer(c);
             }

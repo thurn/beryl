@@ -329,6 +329,16 @@ impl ManaColor {
     }
 }
 
+// `ManaColor::index` is the discriminant, so `ManaColor::ALL` lists the kinds in declaration
+// order.
+const _: () = {
+    let mut i = 0;
+    while i < ManaColor::ALL.len() {
+        assert!(ManaColor::ALL[i] as usize == i);
+        i += 1;
+    }
+};
+
 /// What a mana ability can produce: a set of [`ManaColor`]s and how much.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ManaSet {
