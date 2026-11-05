@@ -93,6 +93,18 @@
       "height": 900
     },
     {
+      "name": "game-blockers-1280",
+      "route": "/?fixture=combat-blockers#/game",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "name": "game-trigger-1920",
+      "route": "/?fixture=stack-trigger#/game",
+      "width": 1920,
+      "height": 1080
+    },
+    {
       "name": "game-trigger",
       "route": "/?fixture=stack-trigger#/game",
       "width": 1600,

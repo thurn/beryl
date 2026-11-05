@@ -36,6 +36,14 @@ was not found and fixed in the same session. Newest first.
   route every voluntary draw through one check of the library, as the engine
   routes every draw through one function.
 
+- **Two attackers hid the creature standing between them.** Combat lifts its
+  creatures over their neighbors (z + 60) so their marks show, and a squeezed
+  row kept its entry order, so with Mana Crypt between Adeline and a Human Token
+  both attackers lay over it (fixture `combat-blockers`; found by Warden
+  by-b0q.3.15). A row's attackers now stand together, first. Prevention: when a
+  rule raises some items over their neighbors, order the row so the raised items
+  are contiguous, and check a squeezed row in a shot.
+
 - **A long card name kept its ellipsis instead of shrinking.** `useNameFit`
   compared `scrollWidth` with `clientWidth`, which WebKit rounds to whole
   pixels, so "Swords to Plowshares" overflowing its name bar by under a pixel
