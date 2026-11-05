@@ -1193,31 +1193,22 @@
   height: 100%;
   overflow: visible;
 }
-/* The far orb's blades catch the light along their edges; the near orb's are outlined dark. */
+/* Light blades outlined dark over darker steel struts. */
 .life-orb-blade {
-  stroke: #ece5d8;
+  stroke: #1a1410;
   stroke-width: 1.2;
 }
-.life-orb-you .life-orb-blade {
-  stroke: #1a1410;
-}
-.life-orb-you .life-orb-blade-dark {
-  fill: #34302c;
-}
-/* Steel struts between the blades. */
 .life-orb-blade-dark {
-  fill: #57534e;
+  fill: #34302c;
   stroke: #12100e;
   stroke-width: 1;
-}
-.life-orb-glint {
-  fill: #ff9a2e;
 }
 .life-orb-arch {
   fill: none;
   stroke: #24211f;
   stroke-width: 9;
 }
+/* The ring glows only along the rim, over a shadow. */
 .life-orb-ring {
   fill: none;
   stroke: #ffb444;
@@ -1226,14 +1217,13 @@
 }
 .life-orb-ring-glow {
   stroke: #ff7a10;
-  stroke-width: 6;
-  opacity: 0.75;
-}
-/* A thick bevelled bezel, bright along its top. */
-.life-orb-core {
-  fill: url(#orb-core);
-  stroke: url(#orb-rim);
   stroke-width: 4;
+  opacity: 0.4;
+}
+/* A flat grey face inside a thick bevelled bezel, bright along its top (Player.tsx). */
+.life-orb-core {
+  fill: #2c2926;
+  stroke-width: 5;
 }
 .life-orb-flare {
   fill: #ff6a00;
@@ -1255,29 +1245,6 @@
   stroke: #ffe28a;
   stroke-width: 4;
   stroke-linecap: round;
-}
-.life-orb-opponent .life-orb-core {
-  stroke-width: 5;
-}
-/* The near orb's face is a flatter, lighter grey inside a thick rim. */
-/* Under the near orb the ring glows only along the rim, over a shadow. */
-.life-orb-you .life-orb-ring-glow {
-  stroke-width: 4;
-  opacity: 0.4;
-}
-.life-orb-you .life-orb-core {
-  fill: #2c2926;
-  stroke-width: 5;
-}
-/* The far orb's ring is copper with a dim glow. */
-.life-orb-opponent .life-orb-ring {
-  stroke: #e0974a;
-  stroke-width: 3;
-}
-.life-orb-opponent .life-orb-ring-glow {
-  stroke: #c86a20;
-  stroke-width: 7;
-  opacity: 0.85;
 }
 .life-orb-total {
   position: absolute;

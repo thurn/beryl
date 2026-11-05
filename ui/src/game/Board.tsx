@@ -326,7 +326,7 @@ export function Board({
         <Life
           side="opponent"
           life={opponent.life}
-          active={active === "opponent" && view.turn.priority === "opponent"}
+          active={active === "opponent"}
           style={{ left: 670, top: 48 }}
           target={deciding ? can.players.get("opponent") : undefined}
           onPick={pick}
@@ -334,7 +334,7 @@ export function Board({
         <Life
           side="you"
           life={you.life}
-          active={active === "you" && view.turn.priority === "you"}
+          active={active === "you"}
           style={{ left: 670, top: 618 }}
           target={deciding ? can.players.get("you") : undefined}
           onPick={pick}
@@ -462,7 +462,8 @@ export function Board({
 }
 
 /** A life orb that counts to a new total and pulses as it changes; it glows cyan as a target
- * and is then clicked to pick that player. */
+ * and is then clicked to pick that player. It flares while its player is the active player,
+ * whoever holds priority: the priority pill says who that is. */
 function Life({
   side,
   life,

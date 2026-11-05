@@ -2,100 +2,50 @@
 import type { ReactNode } from "react";
 import { ASPECT, Card, CardBack, type CardFace } from "./Card";
 
-// The life orb, drawn in docs/ui_mockups pixels about the orb's center (battlefield.png: the
-// orbs at (836, 107) and (836, 703)). Two silver blades sweep out from each side of a dark oval,
-// down toward the near edge for you and up toward the far edge for the opponent, over a darker
-// blade and a dark arch; a gold ring underlines the oval. The active player's orb flares.
+// The life orb, drawn in docs/ui_mockups pixels about the orb's center. Two silver blades sweep
+// out from each side of a dark oval toward its player's edge of the table, over darker struts
+// and a dark arch; a gold ring underlines the oval on the same side. The opponent's orb is yours
+// mirrored top to bottom, still lit from the top of the screen. The active player's orb flares.
 
 type Point = readonly [number, number];
 
-/** A curved blade `width` thick at its root, its tip cut square (`tip` = 1) or drawn to a point
- * (`tip` = 0). */
-function blade(
-  root: Point,
-  control: Point,
-  tip: Point,
-  width: number,
-  end = 1,
-) {
+/** A curved blade `width` thick at its root, its tip cut square. */
+function blade(root: Point, control: Point, tip: Point, width: number) {
   const [dx, dy] = [tip[0] - root[0], tip[1] - root[1]];
   const length = Math.hypot(dx, dy);
   const [nx, ny] = [(-dy / length) * (width / 2), (dx / length) * (width / 2)];
   const p = (x: number, y: number) => `${x.toFixed(1)} ${y.toFixed(1)}`;
   return (
     `M${p(root[0] + nx, root[1] + ny)} Q${p(control[0] + nx, control[1] + ny)} ` +
-    `${p(tip[0] + nx * 0.6 * end, tip[1] + ny * 0.6 * end)} ` +
-    `L${p(tip[0] - nx * 0.5 * end, tip[1] - ny * 0.5 * end)} ` +
+    `${p(tip[0] + nx * 0.6, tip[1] + ny * 0.6)} ` +
+    `L${p(tip[0] - nx * 0.5, tip[1] - ny * 0.5)} ` +
     `Q${p(control[0] - nx, control[1] - ny)} ${p(root[0] - nx, root[1] - ny)} Z`
   );
 }
 
-/** How a light blade is shaded, root to tip: the mockups paint the near orb's blades warm tan,
- * the far orb's upper blade grey silver and its lower one a pale wing, each coppery at its root. */
+/** How a light blade is shaded, root to tip, warm tan from its root. */
 const TONES = {
   tan: ["#7a6450", "#958877", "#b3aa9f"],
   pale: ["#8c765c", "#ada290", "#c6bfb3"],
-  silver: ["#8d5b3a", "#77706a", "#4e4a45"],
-  wing: ["#b0703e", "#c3a780", "#d8c8aa"],
 } as const;
-type Tone = keyof typeof TONES;
 
-/** One side's blades (the left; the right is mirrored): steel struts behind light blades, and
- * copper glints where the blades meet the oval. Each blade runs from its root at the oval to its
- * tip; `from` is the corner of its box its root is in, where its tone starts. */
-const BLADES: Record<
-  "you" | "opponent",
-  {
-    light: { d: string; tone: Tone }[];
-    dark: string[];
-    from: [number, number];
-    glints: Point[];
-    arch: string;
-    ring: string;
-  }
-> = {
-  you: {
-    light: [
-      { d: blade([-46, -5], [-96, 1], [-124, 37], 9.5), tone: "tan" },
-      { d: blade([-42, 13], [-78, 14], [-109, 48], 9), tone: "pale" },
-    ],
-    dark: [
-      blade([-45, 8], [-84, 14], [-114, 47], 5),
-      blade([-46, 25], [-71, 33], [-95, 63], 5),
-    ],
-    from: [1, 0],
-    glints: [],
-    arch: "M-98 70 Q-64 30 0 30 Q64 30 98 70",
-    ring: "M-44 16 A49 41 0 0 0 44 16",
-  },
-  opponent: {
-    light: [
-      { d: blade([-46, 19], [-78, 10], [-103, -14], 12, 0.75), tone: "wing" },
-      {
-        d: blade([-48, -8], [-70, -12], [-96, -35], 11, 0.3),
-        tone: "silver",
-      },
-    ],
-    dark: [
-      blade([-50, -6], [-67, -7], [-84, -8], 5),
-      blade([-47, 4], [-60, 2], [-74, -1], 5),
-    ],
-    from: [1, 1],
-    glints: [
-      [-48, -9],
-      [-47, 17],
-    ],
-    arch: "",
-    ring: "M-46 19 A52.5 40.5 0 0 0 46 19",
-  },
-};
+/** One side's blades (the left; the right is mirrored), as they sweep down for you: steel
+ * struts behind light blades. Each blade runs from its root at the oval, the top right of its
+ * box, where its tone starts, to its tip. */
+const LIGHT = [
+  { d: blade([-46, -5], [-96, 1], [-124, 37], 9.5), tone: "tan" },
+  { d: blade([-42, 13], [-78, 14], [-109, 48], 9), tone: "pale" },
+] as const;
+const DARK = [
+  blade([-45, 8], [-84, 14], [-114, 47], 5),
+  blade([-46, 25], [-71, 33], [-95, 63], 5),
+];
+const ARCH = "M-98 70 Q-64 30 0 30 Q64 30 98 70";
+const RING = "M-44 16 A49 41 0 0 0 44 16";
 
-/** The core: a cushion, a rounded oval with flattened sides, `rx` by `ry` about (0, `cy`) to
- * the middle of its rim; the total centers `total` below the orb's center. */
-const CORE = {
-  you: { rx: 49, ry: 37, cy: -3, total: -6 },
-  opponent: { rx: 48.5, ry: 36, cy: 0, total: 0 },
-};
+/** The core: a cushion, a rounded oval with flattened sides, `rx` by `ry` about (0, `cy`), a
+ * little away from the blades' tips; the life total centers on it. */
+const CORE = { rx: 49, ry: 37, cy: -3 };
 
 /** A superellipse (|x/rx|^n + |y/ry|^n = 1) about (0, cy), as a path. */
 function cushion({ rx, ry, cy }: { rx: number; ry: number; cy: number }) {
@@ -141,7 +91,8 @@ export function LifeOrb({
 }: {
   life: number;
   active?: boolean;
-  /** Which way the blades sweep: down toward you, up toward the opponent. */
+  /** Whose orb: the blades sweep toward that player's edge, down for you and up for the
+   * opponent. */
   seat?: "you" | "opponent";
   /** How far the blades reach, as a fraction of their full span: shorter where space is
    * tight. */
@@ -149,66 +100,56 @@ export function LifeOrb({
   /** The element id of the oval, which arrows meet. */
   anchor?: string;
 }) {
-  const blades = BLADES[seat];
-  const core = CORE[seat];
-  const [fx, fy] = blades.from;
+  // The opponent's art is drawn flipped, so the effects that depend on where the light comes
+  // from flip with it, keeping it on top; their ids carry the seat so two orbs can share a page.
+  const down = seat === "you" ? 1 : -1;
+  const id = (name: string) => `orb-${name}-${seat}`;
   const side = (
     <>
-      {blades.dark.map((d) => (
+      {DARK.map((d) => (
         <path key={d} className="life-orb-blade-dark" d={d} />
       ))}
-      {blades.glints.map(([x, y]) => (
-        <ellipse
-          key={`${x} ${y}`}
-          className="life-orb-glint"
-          cx={x}
-          cy={y}
-          rx="7"
-          ry="5"
-          filter="url(#orb-blur)"
-        />
-      ))}
-      {[...blades.light].reverse().map(({ d, tone }) => (
+      {[...LIGHT].reverse().map(({ d, tone }) => (
         <path
           key={d}
           className="life-orb-blade"
           d={d}
-          fill={`url(#orb-blade-${seat}-${tone})`}
-          filter={seat === "you" ? "url(#orb-bevel)" : undefined}
+          fill={`url(#orb-blade-${tone})`}
+          filter={`url(#${id("bevel")})`}
         />
       ))}
     </>
   );
   return (
-    <div
-      className={`life-orb life-orb-${seat}${active ? " life-orb-active" : ""}`}
-    >
+    <div className={`life-orb${active ? " life-orb-active" : ""}`}>
       <svg className="life-orb-art" viewBox="-136 -57 272 116" aria-hidden>
         <defs>
           {Object.entries(TONES).map(([tone, [root, mid, tip]]) => (
             <linearGradient
               key={tone}
-              id={`orb-blade-${seat}-${tone}`}
-              x1={fx}
-              y1={fy}
-              x2={1 - fx}
-              y2={1 - fy}
+              id={`orb-blade-${tone}`}
+              x1="1"
+              y1="0"
+              x2="0"
+              y2="1"
             >
               <stop offset="0" stopColor={root} />
               <stop offset="0.45" stopColor={mid} />
               <stop offset="1" stopColor={tip} />
             </linearGradient>
           ))}
-          <linearGradient id="orb-rim" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient
+            id={id("rim")}
+            x1="0"
+            y1={(1 - down) / 2}
+            x2="0"
+            y2={(1 + down) / 2}
+          >
             <stop offset="0" stopColor="#dcd8d2" />
             <stop offset="0.2" stopColor="#8e8984" />
             <stop offset="0.6" stopColor="#4a4643" />
             <stop offset="1" stopColor="#3a3633" />
           </linearGradient>
-          <radialGradient id="orb-core" cx="0.5" cy="0.32" r="0.7">
-            <stop offset="0" stopColor="#3d3936" />
-            <stop offset="1" stopColor="#1d1a18" />
-          </radialGradient>
           <radialGradient
             id="orb-ray"
             cx="0"
@@ -225,7 +166,7 @@ export function LifeOrb({
             <feGaussianBlur stdDeviation="3" />
           </filter>
           {/* Metal catching the light along its upper edges. */}
-          <filter id="orb-bevel" x="-10%" y="-10%" width="120%" height="120%">
+          <filter id={id("bevel")} x="-10%" y="-10%" width="120%" height="120%">
             <feGaussianBlur in="SourceAlpha" stdDeviation="1.2" result="b" />
             <feSpecularLighting
               in="b"
@@ -235,7 +176,7 @@ export function LifeOrb({
               lightingColor="#ffffff"
               result="s"
             >
-              <feDistantLight azimuth="270" elevation="40" />
+              <feDistantLight azimuth={180 + 90 * down} elevation="40" />
             </feSpecularLighting>
             <feComposite in="s" in2="SourceAlpha" operator="in" result="lit" />
             <feComposite
@@ -246,81 +187,94 @@ export function LifeOrb({
               k3="0.45"
             />
           </filter>
-          <filter id="orb-shadow" x="-20%" y="-20%" width="140%" height="160%">
-            <feDropShadow dx="0" dy="2" stdDeviation="1.5" floodOpacity="0.6" />
+          <filter
+            id={id("shadow")}
+            x="-20%"
+            y="-20%"
+            width="140%"
+            height="160%"
+          >
+            <feDropShadow
+              dx="0"
+              dy={2 * down}
+              stdDeviation="1.5"
+              floodOpacity="0.6"
+            />
           </filter>
         </defs>
-        {active && (
-          <g className="life-orb-flare">
-            <ellipse cx="0" cy="-2" rx="62" ry="50" filter="url(#orb-blur)" />
-            <path d={RAYS} filter="url(#orb-blur)" />
-            <path d={RAYS} fill="url(#orb-ray)" />
-            {/* White-hot flares where the rim meets the blades, in a golden haze. */}
-            {[-1, 1].map((side) => (
-              <g key={side} filter="url(#orb-blur)">
-                <ellipse
-                  cx={side * 66}
-                  cy="-12"
-                  rx="26"
-                  ry="7"
-                  fill="#ffb028"
-                />
-                <ellipse
-                  cx={side * 60}
-                  cy="-12"
-                  rx="16"
-                  ry="2.5"
-                  fill="#fff6d0"
-                />
-              </g>
-            ))}
+        <g transform={`scale(1 ${down})`}>
+          {active && (
+            <g className="life-orb-flare">
+              <ellipse cx="0" cy="-2" rx="62" ry="50" filter="url(#orb-blur)" />
+              <path d={RAYS} filter="url(#orb-blur)" />
+              <path d={RAYS} fill="url(#orb-ray)" />
+              {/* White-hot flares where the rim meets the blades, in a golden haze. */}
+              {[-1, 1].map((side) => (
+                <g key={side} filter="url(#orb-blur)">
+                  <ellipse
+                    cx={side * 66}
+                    cy="-12"
+                    rx="26"
+                    ry="7"
+                    fill="#ffb028"
+                  />
+                  <ellipse
+                    cx={side * 60}
+                    cy="-12"
+                    rx="16"
+                    ry="2.5"
+                    fill="#fff6d0"
+                  />
+                </g>
+              ))}
+            </g>
+          )}
+          <path className="life-orb-arch" d={ARCH} />
+          <g filter={`url(#${id("shadow")})`} transform={`scale(${wings})`}>
+            {side}
+            <g transform="scale(-1 1)">{side}</g>
           </g>
-        )}
-        {blades.arch && <path className="life-orb-arch" d={blades.arch} />}
-        <g filter="url(#orb-shadow)" transform={`scale(${wings})`}>
-          {side}
-          <g transform="scale(-1 1)">{side}</g>
+          {active && (
+            <path
+              className="life-orb-halo"
+              d="M-42 -17 A47 37 0 0 1 42 -17"
+              filter="url(#orb-blur)"
+            />
+          )}
+          <path
+            id={anchor}
+            className="life-orb-core"
+            d={cushion(CORE)}
+            stroke={`url(#${id("rim")})`}
+            filter={`url(#${id("shadow")})`}
+          />
+          <path
+            className="life-orb-ring life-orb-ring-glow"
+            d={RING}
+            filter="url(#orb-blur)"
+          />
+          <path className="life-orb-ring" d={RING} />
+          {active && (
+            <ellipse
+              className="life-orb-bloom"
+              cx="0"
+              cy={CORE.cy - CORE.ry}
+              rx="30"
+              ry="8"
+              filter="url(#orb-blur)"
+            />
+          )}
+          {active && (
+            <path
+              className="life-orb-crescent"
+              d="M-40 -24 A47 37 0 0 1 40 -24"
+            />
+          )}
         </g>
-
-        {active && (
-          <path
-            className="life-orb-halo"
-            d="M-42 -17 A47 37 0 0 1 42 -17"
-            filter="url(#orb-blur)"
-          />
-        )}
-        <path
-          id={anchor}
-          className="life-orb-core"
-          d={cushion(core)}
-          filter="url(#orb-shadow)"
-        />
-        <path
-          className="life-orb-ring life-orb-ring-glow"
-          d={blades.ring}
-          filter="url(#orb-blur)"
-        />
-        <path className="life-orb-ring" d={blades.ring} />
-        {active && (
-          <ellipse
-            className="life-orb-bloom"
-            cx="0"
-            cy={core.cy - core.ry}
-            rx="30"
-            ry="8"
-            filter="url(#orb-blur)"
-          />
-        )}
-        {active && (
-          <path
-            className="life-orb-crescent"
-            d="M-40 -24 A47 37 0 0 1 40 -24"
-          />
-        )}
       </svg>
       <span
         className="life-orb-total"
-        style={{ marginTop: `calc(${core.total} * var(--orb))` }}
+        style={{ marginTop: `calc(${CORE.cy * down} * var(--orb))` }}
       >
         {life}
       </span>
