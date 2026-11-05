@@ -219,6 +219,10 @@ def ui_live(args: argparse.Namespace) -> int:
     binary = (
         paths.RUST / "target" / ("release" if args.release else "debug") / "beryl_cli"
     )
+    # Fixture routes (`?fixture=`) reach rare states; record them as ui-shots does.
+    if record_fixtures() != 0:
+        print("ui-live: recording the fixtures failed", file=sys.stderr)
+        return 1
     game_port, drive_port = free_port(), args.port or free_port()
     children: list[subprocess.Popen[bytes]] = []
     try:
