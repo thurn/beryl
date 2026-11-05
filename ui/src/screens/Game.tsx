@@ -15,11 +15,14 @@ import {
   type TargetRef,
 } from "../ipc";
 
-/** The latest view of the game in progress, from `game-update` events. */
+/** The latest view of the game in progress, from `game-update` events. Session numbers only
+ * grow, so a late view from a replaced game is dropped. */
 export function useGameUpdates(): GameUpdate | null {
   const [update, setUpdate] = useState<GameUpdate | null>(null);
   useEffect(() => {
-    const unlisten = onGameUpdate(setUpdate);
+    const unlisten = onGameUpdate((next) =>
+      setUpdate((last) => (last && next.session < last.session ? last : next)),
+    );
     return () => void unlisten.then((stop) => stop());
   }, []);
   return update;

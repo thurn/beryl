@@ -1,6 +1,9 @@
 //! A game between a human seat and an agent, played synchronously: the core a
 //! [`crate::GameSession`] runs on its thread, and that the CLI drives directly.
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
     CardTable, Choice, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch, State,
@@ -25,6 +28,8 @@ pub struct Game {
     seq: u32,
     stops: StopsSetting,
     replay: ReplayFile,
+    /// Set from another thread to stop the agent at its next decision.
+    stop: Arc<AtomicBool>,
 }
 
 impl Game {
@@ -52,6 +57,7 @@ impl Game {
             seq: 0,
             stops: start.stops,
             replay,
+            stop: Arc::default(),
         })
     }
 
@@ -71,7 +77,9 @@ impl Game {
                 None => match next(&mut game.state, &game.table, &mut game.scratch, &mut Replay) {
                     Step::Decide(d) => {
                         if d.player == game.human {
+                            // Live play emitted a view here, which took the events so far.
                             game.seq += 1;
+                            game.scratch.events.drain();
                         }
                         d
                     }
@@ -155,6 +163,13 @@ impl Game {
         Ok(self.view(seq, Some(&d), None, Vec::new()))
     }
 
+    /// A flag that, once set, stops the game before the agent's next decision: the game in
+    /// progress returns a view with no decision, and no decision opens again. A session sets
+    /// it when it is dropped, so an abandoned game stops thinking.
+    pub fn stop_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.stop)
+    }
+
     /// The record of the game so far.
     pub fn replay(&self) -> &ReplayFile {
         &self.replay
@@ -182,6 +197,9 @@ impl Game {
                     self.open = Some((self.seq, d));
                     let events = self.events();
                     return self.view(self.seq, Some(&d), None, events);
+                }
+                Step::Decide(_) if self.stop.load(Ordering::Relaxed) => {
+                    return self.view(self.seq, None, None, Vec::new());
                 }
                 Step::Decide(d) => {
                     let obs = Observation::new(

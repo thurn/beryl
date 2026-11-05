@@ -86,7 +86,7 @@ fn a_scripted_human_plays_a_whole_game_and_its_replay_reproduces_it() {
     let file = ReplayFile::load(&path).unwrap();
     assert!(file.log.len() > decisions);
     let (_, replayed) = Game::from_replay(&CARDS, &file).unwrap();
-    assert_eq!(without_events(replayed), without_events(last));
+    assert_eq!(replayed, last);
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -98,7 +98,30 @@ fn a_replay_cut_at_a_decision_resumes_there() {
         view = game.choose(view.seq, script(&view)).unwrap();
     }
     let (_, resumed) = Game::from_replay(&CARDS, game.replay()).unwrap();
-    assert_eq!(without_events(resumed), without_events(view));
+    assert_eq!(resumed, view);
+}
+
+#[test]
+fn a_stopped_game_lets_the_agent_decide_no_more() {
+    let mut game = Game::new(&CARDS, &start(7, StopsSetting::Exact)).unwrap();
+    let mut view = game.begin();
+    // Play to a decision whose answer hands the agent the next one, found on a replayed copy.
+    let agent_decides_next = |game: &Game, view: &PlayerView| {
+        let (mut probe, _) = Game::from_replay(&CARDS, game.replay()).unwrap();
+        probe.choose(view.seq, script(view)).unwrap();
+        probe.replay().log.len() > game.replay().log.len() + 1
+    };
+    while !agent_decides_next(&game, &view) {
+        view = game.choose(view.seq, script(&view)).unwrap();
+        assert!(view.outcome.is_none(), "the agent never decided");
+    }
+    let before = game.replay().log.len();
+    game.stop_flag()
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+    let stopped = game.choose(view.seq, script(&view)).unwrap();
+    assert_eq!(game.replay().log.len(), before + 1, "the agent decided");
+    assert!(stopped.decision.is_none() && stopped.outcome.is_none());
+    assert_eq!(game.choose(stopped.seq, 0), Err(SessionError::NotDeciding));
 }
 
 #[test]

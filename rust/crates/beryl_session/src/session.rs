@@ -3,6 +3,7 @@
 //! the callback the session was started with.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -13,11 +14,13 @@ use crate::protocol::{PlayerView, StopsSetting};
 use crate::{SessionError, StartGame};
 
 /// A game against an agent, running on its own thread. Dropping it ends the thread once the
-/// agent has finished its current decision.
+/// agent has finished its current decision, and nothing is emitted after that.
 pub struct GameSession {
     commands: Sender<Command>,
     /// The human's open decision: its number and how many candidates it has.
     open: Arc<Mutex<Option<(u32, usize)>>>,
+    /// The game's stop flag ([`Game::stop_flag`]).
+    stop: Arc<AtomicBool>,
 }
 
 enum Command {
@@ -36,6 +39,7 @@ impl GameSession {
         emit: impl FnMut(PlayerView) + Send + 'static,
     ) -> Result<GameSession, SessionError> {
         let game = Game::new(cards, start)?;
+        let stop = game.stop_flag();
         let (commands, received) = channel();
         let open = Arc::new(Mutex::new(None));
         let shared = Arc::clone(&open);
@@ -43,7 +47,11 @@ impl GameSession {
             .name("game session".to_owned())
             .spawn(move || run(game, &received, &shared, replay.as_deref(), emit))
             .map_err(|e| SessionError::Io(e.to_string()))?;
-        Ok(GameSession { commands, open })
+        Ok(GameSession {
+            commands,
+            open,
+            stop,
+        })
     }
 
     /// Answers the human's open decision `seq` with its candidate `index`. It returns at once;
@@ -74,6 +82,12 @@ impl GameSession {
     }
 }
 
+impl Drop for GameSession {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+    }
+}
+
 /// The session thread: plays, emits, then waits for the human. Commands are taken only while
 /// the human decides, so a stops change lands at a definite point of the choice log.
 fn run(
@@ -83,7 +97,9 @@ fn run(
     replay: Option<&Path>,
     mut emit: impl FnMut(PlayerView),
 ) {
-    // A stops change re-emits the open decision, which may already be answered.
+    let stop = game.stop_flag();
+    // A stops change re-emits the open decision, which may already be answered. Returns
+    // whether the session is over: the game ended, or the session was dropped.
     let mut publish = |game: &Game, view: PlayerView, reopen: bool| {
         if let Some(path) = replay
             && let Err(e) = game.replay().save(path)
@@ -95,6 +111,9 @@ fn run(
                 .decision
                 .as_ref()
                 .map(|d| (view.seq, d.candidates.len()));
+        }
+        if stop.load(Ordering::Relaxed) {
+            return true;
         }
         let over = view.outcome.is_some();
         emit(view);

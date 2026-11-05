@@ -16,7 +16,14 @@ const UPDATE: &str = "game-update";
 /// The game in progress, if any: one at a time (decision D12).
 #[derive(Default)]
 pub struct Games {
-    current: Mutex<Option<(u32, GameSession)>>,
+    current: Mutex<Current>,
+}
+
+#[derive(Default)]
+struct Current {
+    /// The last session number given out; numbers only grow, so the UI can drop a stale view.
+    session: u32,
+    game: Option<GameSession>,
 }
 
 #[tauri::command]
@@ -47,7 +54,10 @@ pub fn start_game(
         stops: StopsSetting::Smart,
     };
     let mut current = games.current.lock().map_err(|e| e.to_string())?;
-    let session = current.as_ref().map_or(1, |(n, _)| n + 1);
+    // Stop the old game before the new one can emit.
+    current.game = None;
+    current.session += 1;
+    let session = current.session;
     let replay = replay_path(&app, seed);
     let emitter = app.clone();
     let game = GameSession::start(&CARDS, &start, replay, move |view| {
@@ -56,7 +66,7 @@ pub fn start_game(
         }
     })
     .map_err(|e| e.to_string())?;
-    *current = Some((session, game));
+    current.game = Some(game);
     Ok(session)
 }
 
@@ -80,8 +90,8 @@ fn with_game(
     f: impl FnOnce(&GameSession) -> Result<(), beryl_session::SessionError>,
 ) -> Result<(), String> {
     let current = games.current.lock().map_err(|e| e.to_string())?;
-    match &*current {
-        Some((n, game)) if *n == session => f(game).map_err(|e| e.to_string()),
+    match &current.game {
+        Some(game) if current.session == session => f(game).map_err(|e| e.to_string()),
         _ => Err(format!("game {session} is not in progress")),
     }
 }
