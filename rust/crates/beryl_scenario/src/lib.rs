@@ -7,13 +7,13 @@
 //! be scripted, so the decision surface itself stays under test. [`to_json`] serializes
 //! scenarios for the oracle exporters (§17.2).
 //!
-//! The actions and assertions are the ones the engine's mechanics support so far; casting,
-//! activation, combat and the layers add theirs.
+//! The actions and assertions are the ones the engine's mechanics support so far.
 
 mod run;
 #[cfg(test)]
 mod tests;
 
+use beryl_engine::state::CounterKind;
 use beryl_engine::{DecisionKind, TurnStep, Zone};
 use serde::{Serialize, Serializer};
 
@@ -91,6 +91,25 @@ impl Permanent {
 pub enum Action {
     /// `player` plays the land card `card` from their hand, at a priority decision.
     PlayLand { player: u8, card: &'static str },
+    /// `player` begins casting the card `card` at a priority decision, with face `face` up
+    /// and the casting options in the bitmask `costs` (over the face's casting list) paid.
+    /// The casting's own questions (X, targets, payment) follow as decisions.
+    Cast {
+        player: u8,
+        card: &'static str,
+        face: u8,
+        costs: u8,
+    },
+    /// `player` begins activating ability `ability` (an index into its face's abilities) of
+    /// the permanent `card` at a priority decision.
+    Activate {
+        player: u8,
+        card: &'static str,
+        ability: u8,
+    },
+    /// Players pass priority until the top of the stack resolves, or until the next decision
+    /// is not a priority decision (a question its resolution asks).
+    Resolve,
     /// `player` answers the open decision, which must be of this kind.
     Answer {
         player: u8,
@@ -116,8 +135,29 @@ pub enum Action {
 pub enum Pick {
     /// Pass priority.
     Pass,
-    /// The candidate object that is a card of this name.
-    Card { card: &'static str },
+    /// The first candidate that names a card of this name: a candidate object, or an option
+    /// naming an object (an attacker, a blocker, a waiting trigger's source, a mana source).
+    Card {
+        card: &'static str,
+    },
+    /// A number: X, or how many targets.
+    Number {
+        n: u8,
+    },
+    Yes,
+    No,
+    /// Finish a declaration or a division.
+    Done,
+    /// A player, as a target.
+    Player {
+        player: u8,
+    },
+    /// The defending player, as what an attacker attacks.
+    DefendingPlayer,
+    /// The `i`th payment plan.
+    Plan {
+        i: u8,
+    },
 }
 
 /// A fact about the current position.
@@ -152,6 +192,44 @@ pub enum Assertion {
     /// Whether and how the game has ended.
     Outcome {
         outcome: Ending,
+    },
+    /// How many permanents named `card` `player` controls.
+    Controls {
+        player: u8,
+        card: &'static str,
+        count: u8,
+    },
+    /// How many of the permanents named `card` that `player` controls are attacking.
+    Attacking {
+        player: u8,
+        card: &'static str,
+        count: u8,
+    },
+    /// The power and toughness of the first permanent named `card` that `player` controls.
+    Pt {
+        player: u8,
+        card: &'static str,
+        power: i8,
+        toughness: i8,
+    },
+    /// Whether the first permanent named `card` that `player` controls is a creature.
+    Creature {
+        player: u8,
+        card: &'static str,
+        creature: bool,
+    },
+    /// How many counters of `kind` the first permanent named `card` that `player` controls
+    /// has.
+    Counters {
+        player: u8,
+        card: &'static str,
+        #[serde(serialize_with = "variant")]
+        kind: CounterKind,
+        count: u8,
+    },
+    /// How many spells and abilities are on the stack.
+    Stack {
+        count: u8,
     },
 }
 

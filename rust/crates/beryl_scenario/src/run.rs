@@ -2,7 +2,8 @@
 
 use std::fmt;
 
-use beryl_engine::state::ObjectFlags;
+use beryl_engine::card::Types;
+use beryl_engine::state::{NONE, ObjectFlags};
 use beryl_engine::{
     Breakpoint, CardTable, Choice, Decision, DecisionKind, GameTable, Opt, Outcome, Profile,
     Replay, Scratch, State, Step, Zone, apply, next,
@@ -184,15 +185,66 @@ impl Runner<'_> {
                 .ok_or_else(|| format!("playing {card} is not offered: {}", self.describe(&d)))?;
                 self.answer(c);
             }
+            Action::Cast {
+                player,
+                card,
+                face,
+                costs,
+            } => {
+                let d = self.expect(i, player, DecisionKind::Priority)?;
+                let c = option_index(&d, |o| {
+                    matches!(o, Opt::Cast { slot, face: f, costs: m }
+                        if self.name(slot) == card && f == face && m == costs)
+                })
+                .ok_or_else(|| {
+                    format!(
+                        "casting {card} (face {face}, costs {costs:#b}) is not offered: {}",
+                        self.describe(&d)
+                    )
+                })?;
+                self.answer(c);
+            }
+            Action::Activate {
+                player,
+                card,
+                ability,
+            } => {
+                let d = self.expect(i, player, DecisionKind::Priority)?;
+                let c = option_index(&d, |o| {
+                    matches!(o, Opt::Activate { slot, ability: a }
+                        if self.name(slot) == card && a == ability)
+                })
+                .ok_or_else(|| {
+                    format!(
+                        "activating {card}'s ability {ability} is not offered: {}",
+                        self.describe(&d)
+                    )
+                })?;
+                self.answer(c);
+            }
+            Action::Resolve => {
+                let depth = self.s.stack().len();
+                let Some(&top) = self.s.stack().last() else {
+                    return Err("nothing on the stack to resolve".to_string());
+                };
+                loop {
+                    let d = self.decision(i)?;
+                    let stack = self.s.stack();
+                    if stack.len() < depth || stack[depth - 1] != top {
+                        return Ok(());
+                    }
+                    if d.kind != DecisionKind::Priority {
+                        return Ok(());
+                    }
+                    let pass = option_index(&d, |o| o == Opt::Pass).expect("passing is offered");
+                    self.answer(pass);
+                }
+            }
             Action::Answer { player, kind, pick } => {
                 let d = self.expect(i, player, kind)?;
-                let c = match pick {
-                    Pick::Pass => option_index(&d, |o| o == Opt::Pass),
-                    Pick::Card { card } => (0..d.len() as u8)
-                        .map(Choice)
-                        .find(|&c| d.candidates.object(c).is_some_and(|o| self.name(o) == card)),
-                }
-                .ok_or_else(|| format!("{pick:?} is not offered: {}", self.describe(&d)))?;
+                let c = self
+                    .pick(&d, pick)
+                    .ok_or_else(|| format!("{pick:?} is not offered: {}", self.describe(&d)))?;
                 self.answer(c);
             }
             Action::AdvanceTo { turn, step } => loop {
@@ -242,6 +294,66 @@ impl Runner<'_> {
         name_of(&self.s, self.t, slot)
     }
 
+    /// The object an option names, if it names one.
+    fn named(&self, o: Opt) -> Option<u8> {
+        match o {
+            Opt::PlayLand(slot)
+            | Opt::Attack(slot)
+            | Opt::Block(slot)
+            | Opt::Lethal(slot)
+            | Opt::Cast { slot, .. }
+            | Opt::Activate { slot, .. }
+            | Opt::Mana { slot, .. } => Some(slot),
+            Opt::Defender(slot) if slot != NONE => Some(slot),
+            Opt::Trigger(i) => self
+                .s
+                .triggers()
+                .get(usize::from(i))
+                .map(|tr| tr.source.slot)
+                .filter(|&slot| slot != NONE),
+            _ => None,
+        }
+    }
+
+    /// The candidate of `d` that `pick` names.
+    fn pick(&self, d: &Decision, pick: Pick) -> Option<Choice> {
+        let wanted = match pick {
+            Pick::Card { card } => {
+                return (0..d.len() as u8).map(Choice).find(|&c| {
+                    d.candidates
+                        .object(c)
+                        .or_else(|| d.candidates.option(c).and_then(|o| self.named(o)))
+                        .is_some_and(|slot| self.name(slot) == card)
+                });
+            }
+            Pick::Pass => Opt::Pass,
+            Pick::Number { n } => Opt::Number(n),
+            Pick::Yes => Opt::Yes,
+            Pick::No => Opt::No,
+            Pick::Done => Opt::Done,
+            Pick::Player { player } => Opt::Player(player),
+            Pick::DefendingPlayer => Opt::Defender(NONE),
+            Pick::Plan { i } => Opt::Plan(i),
+        };
+        option_index(d, |o| o == wanted)
+    }
+
+    /// The permanents named `card` that `player` controls, in the order they entered.
+    fn permanents<'b>(&'b self, player: u8, card: &'b str) -> impl Iterator<Item = u8> + 'b {
+        self.s
+            .battlefield()
+            .iter()
+            .copied()
+            .filter(move |&slot| self.s.controller(slot) == player && self.name(slot) == card)
+    }
+
+    /// The first permanent named `card` that `player` controls.
+    fn permanent(&self, player: u8, card: &str) -> Result<u8, String> {
+        self.permanents(player, card)
+            .next()
+            .ok_or_else(|| format!("player {player} controls no {card}"))
+    }
+
     /// A decision as a scenario author reads it.
     fn describe(&self, d: &Decision) -> String {
         let candidates: Vec<String> = (0..d.len() as u8)
@@ -249,8 +361,10 @@ impl Runner<'_> {
                 let c = Choice(i);
                 match (d.candidates.object(c), d.candidates.option(c)) {
                     (Some(slot), _) => self.name(slot).to_string(),
-                    (_, Some(Opt::PlayLand(slot))) => format!("PlayLand({})", self.name(slot)),
-                    (_, Some(o)) => format!("{o:?}"),
+                    (_, Some(o)) => match self.named(o) {
+                        Some(slot) => format!("{o:?} ({})", self.name(slot)),
+                        None => format!("{o:?}"),
+                    },
                     (None, None) => unreachable!("a choice within the candidates"),
                 }
             })
@@ -264,6 +378,71 @@ impl Runner<'_> {
             turn.step,
             candidates.join(", ")
         )
+    }
+
+    /// The actual and expected values of an assertion about permanents.
+    fn permanent_fact(&self, assertion: Assertion) -> Result<(String, String), String> {
+        let s = &self.s;
+        let tally = |found: usize, expected: u8| (found.to_string(), expected.to_string());
+        Ok(match assertion {
+            Assertion::Tapped {
+                player,
+                card,
+                count,
+            } => tally(
+                self.permanents(player, card)
+                    .filter(|&slot| s.object(slot).flags.has(ObjectFlags::TAPPED))
+                    .count(),
+                count,
+            ),
+            Assertion::Controls {
+                player,
+                card,
+                count,
+            } => tally(self.permanents(player, card).count(), count),
+            Assertion::Attacking {
+                player,
+                card,
+                count,
+            } => tally(
+                self.permanents(player, card)
+                    .filter(|&slot| s.object(slot).flags.has(ObjectFlags::ATTACKING))
+                    .count(),
+                count,
+            ),
+            Assertion::Pt {
+                player,
+                card,
+                power,
+                toughness,
+            } => {
+                let d = s.derived(self.permanent(player, card)?);
+                (
+                    format!("{}/{}", d.power, d.toughness),
+                    format!("{power}/{toughness}"),
+                )
+            }
+            Assertion::Creature {
+                player,
+                card,
+                creature,
+            } => {
+                let d = s.derived(self.permanent(player, card)?);
+                let is = Types(d.types).contains(Types::CREATURE);
+                (is.to_string(), creature.to_string())
+            }
+            Assertion::Counters {
+                player,
+                card,
+                kind,
+                count,
+            } => {
+                let slot = self.permanent(player, card)?;
+                let n = s.object(slot).counters.get(kind);
+                (n.to_string(), count.to_string())
+            }
+            _ => unreachable!("an assertion about permanents"),
+        })
     }
 
     fn check(&self, position: &Step, assertion: Assertion) -> Result<(), String> {
@@ -289,26 +468,20 @@ impl Runner<'_> {
                     .count();
                 (n.to_string(), count.to_string())
             }
-            Assertion::Tapped {
-                player,
-                card,
-                count,
-            } => {
-                // Control is a layer-2 result, up to date only at an open decision.
+            Assertion::Tapped { .. }
+            | Assertion::Controls { .. }
+            | Assertion::Attacking { .. }
+            | Assertion::Pt { .. }
+            | Assertion::Creature { .. }
+            | Assertion::Counters { .. } => {
+                // Control and characteristics are layer results, up to date only at an open
+                // decision.
                 if let Step::Over(o) = position {
                     return Err(format!("no permanents to read: the game is over ({o:?})"));
                 }
-                let n = s
-                    .battlefield()
-                    .iter()
-                    .filter(|&&slot| {
-                        s.controller(slot) == player
-                            && self.name(slot) == card
-                            && s.object(slot).flags.has(ObjectFlags::TAPPED)
-                    })
-                    .count();
-                (n.to_string(), count.to_string())
+                self.permanent_fact(assertion)?
             }
+            Assertion::Stack { count } => (s.stack().len().to_string(), count.to_string()),
             Assertion::Decision {
                 player,
                 kind,

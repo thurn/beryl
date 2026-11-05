@@ -1,6 +1,8 @@
 //! The runner on test cards: what it accepts, and what it refuses.
 
-use beryl_engine::card::{Ability, CardDef, Face, ManaColor, ManaSet, Subtype, Subtypes, Types};
+use beryl_engine::card::{
+    Ability, CardDef, Face, ManaColor, ManaCost, ManaSet, Subtype, Subtypes, Types,
+};
 use beryl_engine::{CardTable, DecisionKind, TurnStep, Zone};
 
 use crate::{Action, Assertion, Ending, P0, P1, Permanent, Pick, Scenario, run, to_json};
@@ -25,7 +27,30 @@ static OTHER: CardDef = CardDef {
     tokens: &[],
 };
 
-static CARDS: CardTable = CardTable::new(&[&LAND, &OTHER]);
+static BEAR: CardDef = CardDef {
+    name: "Test Bear",
+    faces: &[Face {
+        cost: ManaCost::new(1, [1, 0, 0, 0, 0, 0]),
+        types: Types::CREATURE,
+        power: Some(2),
+        toughness: Some(2),
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static CYCLER: CardDef = CardDef {
+    name: "Test Cycler",
+    faces: &[Face {
+        cost: ManaCost::generic(5),
+        types: Types::SORCERY,
+        abilities: &[Ability::cycling(ManaCost::generic(1))],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static CARDS: CardTable = CardTable::new(&[&LAND, &OTHER, &BEAR, &CYCLER]);
 
 const L: &str = "Test Land";
 /// Nine cards: one too many to keep after playing a land, and two kinds to discard.
@@ -82,6 +107,96 @@ fn a_scenario_sets_up_its_position() {
             count(P0, Zone::Library, 2),
             count(P1, Zone::Hand, 2),
             count(P1, Zone::Graveyard, 1),
+        ]);
+    run(&CARDS, &S).unwrap();
+}
+
+#[test]
+fn a_scenario_casts_resolves_activates_and_attacks() {
+    const BEAR: &str = "Test Bear";
+    const S: Scenario = Scenario::new("cast and attack")
+        .hand(P0, &[BEAR, "Test Cycler"])
+        .battlefield(
+            P0,
+            &[Permanent::new(L), Permanent::new(L), Permanent::new(L)],
+        )
+        .library(P0, &[L, L])
+        .library(P1, &[L])
+        .actions(&[
+            Action::Cast {
+                player: P0,
+                card: BEAR,
+                face: 0,
+                costs: 0,
+            },
+            Action::Assert {
+                assertion: Assertion::Stack { count: 1 },
+            },
+            Action::Resolve,
+            Action::Assert {
+                assertion: Assertion::Stack { count: 0 },
+            },
+            Action::Assert {
+                assertion: Assertion::Pt {
+                    player: P0,
+                    card: BEAR,
+                    power: 2,
+                    toughness: 2,
+                },
+            },
+            Action::Assert {
+                assertion: Assertion::Creature {
+                    player: P0,
+                    card: BEAR,
+                    creature: true,
+                },
+            },
+            Action::Activate {
+                player: P0,
+                card: "Test Cycler",
+                ability: 0,
+            },
+            Action::Resolve,
+            count(P0, Zone::Hand, 1),
+            count(P0, Zone::Graveyard, 1),
+            Action::AdvanceTo {
+                turn: 3,
+                step: TurnStep::BeginningOfCombat,
+            },
+            Action::Answer {
+                player: P0,
+                kind: DecisionKind::Priority,
+                pick: Pick::Pass,
+            },
+            Action::Answer {
+                player: P0,
+                kind: DecisionKind::Attacker,
+                pick: Pick::Card { card: BEAR },
+            },
+            Action::Assert {
+                assertion: Assertion::Attacking {
+                    player: P0,
+                    card: BEAR,
+                    count: 1,
+                },
+            },
+            Action::AdvanceTo {
+                turn: 3,
+                step: TurnStep::EndOfCombat,
+            },
+            Action::Assert {
+                assertion: Assertion::Life {
+                    player: P1,
+                    life: 18,
+                },
+            },
+            Action::Assert {
+                assertion: Assertion::Controls {
+                    player: P1,
+                    card: BEAR,
+                    count: 0,
+                },
+            },
         ]);
     run(&CARDS, &S).unwrap();
 }
