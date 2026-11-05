@@ -265,6 +265,8 @@ def export(
     skipped: list[JsonObject] = []
     for entry in entries:
         try:
+            if "failure" in entry:
+                raise Unsupported(f"Beryl fails it: {entry['failure']}")
             steps: list[JsonObject] = []
             unchecked = 0
             for action in cast(list[JsonObject], entry["actions"]):

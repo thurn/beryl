@@ -120,7 +120,7 @@ test-py *args:
 check:
     {{ by }} check
 
-# Slow CI, or some of its lanes: repo, python, rust, ui, app (budget 300 s)
+# Slow CI, or some of its lanes: repo, python, rust, ui, app, shots, oracle (budget 300 s)
 [group('checks')]
 ci *lanes:
     {{ by }} ci "$@"

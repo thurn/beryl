@@ -958,5 +958,417 @@
     "forced": []
    }
   ]
+ },
+ {
+  "card": "Mana Tithe",
+  "name": "Mana Tithe: the controller pays {1}",
+  "setup": {
+   "seed": 0,
+   "turn": 1,
+   "active": 0,
+   "step": "PrecombatMain",
+   "players": [
+    {
+     "life": 20,
+     "hand": [
+      "Mana Crypt"
+     ],
+     "battlefield": [
+      {
+       "card": "Strip Mine",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      }
+     ],
+     "graveyard": [],
+     "exile": [],
+     "library": []
+    },
+    {
+     "life": 20,
+     "hand": [
+      "Mana Tithe"
+     ],
+     "battlefield": [
+      {
+       "card": "Plains",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      }
+     ],
+     "graveyard": [],
+     "exile": [],
+     "library": [
+      "Island"
+     ]
+    }
+   ]
+  },
+  "actions": [
+   {
+    "action": "Cast",
+    "player": 0,
+    "card": "Mana Crypt",
+    "face": 0,
+    "costs": 0
+   },
+   {
+    "action": "Answer",
+    "player": 0,
+    "kind": "Priority",
+    "pick": {
+     "pick": "Pass"
+    }
+   },
+   {
+    "action": "Cast",
+    "player": 1,
+    "card": "Mana Tithe",
+    "face": 0,
+    "costs": 0
+   },
+   {
+    "action": "Answer",
+    "player": 0,
+    "kind": "Priority",
+    "pick": {
+     "pick": "Pass"
+    }
+   },
+   {
+    "action": "Answer",
+    "player": 0,
+    "kind": "YesNo",
+    "pick": {
+     "pick": "Yes"
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 0,
+     "zone": "Battlefield",
+     "card": "Mana Crypt",
+     "count": 1
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Tapped",
+     "player": 0,
+     "card": "Strip Mine",
+     "count": 1
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 1,
+     "zone": "Graveyard",
+     "card": "Mana Tithe",
+     "count": 1
+    }
+   }
+  ],
+  "trace": [
+   {
+    "turn": 1,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 1,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "stack": [
+     {
+      "name": "Mana Crypt",
+      "spell": true,
+      "controller": 0
+     }
+    ],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 1,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 1,
+    "kind": "Priority",
+    "stack": [
+     {
+      "name": "Mana Crypt",
+      "spell": true,
+      "controller": 0
+     }
+    ],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 1,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "stack": [
+     {
+      "name": "Mana Crypt",
+      "spell": true,
+      "controller": 0
+     },
+     {
+      "name": "Mana Tithe",
+      "spell": true,
+      "controller": 1
+     }
+    ],
+    "flips": [],
+    "taps": [
+     "Plains"
+    ],
+    "forced": [
+     {
+      "turn": 1,
+      "step": "PrecombatMain",
+      "action": "Answer",
+      "player": 1,
+      "kind": "Target",
+      "pick": {
+       "pick": "Card",
+       "card": "Mana Crypt"
+      }
+     }
+    ]
+   },
+   {
+    "turn": 1,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "YesNo",
+    "stack": [
+     {
+      "name": "Mana Crypt",
+      "spell": true,
+      "controller": 0
+     },
+     {
+      "name": "Mana Tithe",
+      "spell": true,
+      "controller": 1
+     }
+    ],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 2,
+    "step": "PrecombatMain",
+    "active": 1,
+    "decider": 1,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [
+     "Strip Mine"
+    ],
+    "forced": [
+     {
+      "turn": 1,
+      "step": "PrecombatMain",
+      "action": "Answer",
+      "player": 0,
+      "kind": "PaymentPlan",
+      "pick": {
+       "pick": "Plan",
+       "i": 0
+      }
+     }
+    ]
+   },
+   {
+    "turn": 2,
+    "step": "PrecombatMain",
+    "active": 1,
+    "decider": 1,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 2,
+    "step": "PrecombatMain",
+    "active": 1,
+    "decider": 1,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   }
+  ]
+ },
+ {
+  "card": "Mana Tithe",
+  "name": "Mana Tithe: a controller who can't pay isn't asked",
+  "setup": {
+   "seed": 0,
+   "turn": 1,
+   "active": 0,
+   "step": "PrecombatMain",
+   "players": [
+    {
+     "life": 20,
+     "hand": [
+      "Mana Crypt"
+     ],
+     "battlefield": [],
+     "graveyard": [],
+     "exile": [],
+     "library": []
+    },
+    {
+     "life": 20,
+     "hand": [
+      "Mana Tithe"
+     ],
+     "battlefield": [
+      {
+       "card": "Plains",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      }
+     ],
+     "graveyard": [],
+     "exile": [],
+     "library": [
+      "Island"
+     ]
+    }
+   ]
+  },
+  "actions": [
+   {
+    "action": "Cast",
+    "player": 0,
+    "card": "Mana Crypt",
+    "face": 0,
+    "costs": 0
+   },
+   {
+    "action": "Cast",
+    "player": 1,
+    "card": "Mana Tithe",
+    "face": 0,
+    "costs": 0
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 0,
+     "zone": "Graveyard",
+     "card": "Mana Crypt",
+     "count": 1
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 0,
+     "zone": "Battlefield",
+     "card": null,
+     "count": 0
+    }
+   }
+  ],
+  "trace": [
+   {
+    "turn": 1,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 1,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 1,
+    "kind": "Priority",
+    "stack": [
+     {
+      "name": "Mana Crypt",
+      "spell": true,
+      "controller": 0
+     }
+    ],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 2,
+    "step": "PrecombatMain",
+    "active": 1,
+    "decider": 1,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [
+     "Plains"
+    ],
+    "forced": [
+     {
+      "turn": 1,
+      "step": "PrecombatMain",
+      "action": "Answer",
+      "player": 1,
+      "kind": "Target",
+      "pick": {
+       "pick": "Card",
+       "card": "Mana Crypt"
+      }
+     }
+    ]
+   },
+   {
+    "turn": 2,
+    "step": "PrecombatMain",
+    "active": 1,
+    "decider": 1,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   }
+  ]
  }
 ]

@@ -166,6 +166,11 @@ FORCED_ASKED = ("Target", "TargetCount", "X", "Crew", "Waterbend")
 # Others XMage asks when the one answer stands for several identical cards.
 FORCED_CHOICES = ("Discard", "ChooseObject", "ChooseUpTo")
 
+# Counterspells whose "unless its controller pays" XMage asks even of a controller who cannot
+# pay, where Beryl asks nothing (CR 118.3): XMage's mana costs can always be paid as far as its
+# question is concerned, and the payment fails after a yes. The exporter answers no for them.
+UNLESS_PAYS = ("Mana Tithe", "No More Lies")
+
 # Resolving cards whose choices of cards XMage takes from the target queue instead.
 CHOICES_AS_TARGETS = ("Jace, the Mind Sculptor",)
 
@@ -289,6 +294,9 @@ class Exporter:
         self.may_choose: str | None = None
         # A scry in progress: who scries, the cards for the bottom, and those ordered on top.
         self.scry: tuple[str, list[str], list[str]] | None = None
+        # The `UNLESS_PAYS` counterspells on the stack whose payer Beryl has not asked yet, with
+        # that payer.
+        self.unless_pays: dict[str, str] = {}
 
     def player(self, seat: object) -> str:
         return "playerA" if seat == self.active else "playerB"
@@ -339,6 +347,7 @@ class Exporter:
         self.trace = trace
         for i, (action, p) in enumerate(zip(actions, trace)):
             self.index = i
+            self.unasked(p)
             for answer in p.forced:
                 self.forced(answer, p)
             for flip in p.flips:
@@ -350,6 +359,15 @@ class Exporter:
             self.act(action, p)
         self.end_scry()
         self.stop()
+
+    def unasked(self, p: Position) -> None:
+        """For each `UNLESS_PAYS` counterspell that left the stack without Beryl asking its
+        payer, the no XMage asks for (optional, should it not ask)."""
+        on_stack = {cast(str, item["name"]) for item in p.stack}
+        for card, payer in list(self.unless_pays.items()):
+            if card not in on_stack:
+                del self.unless_pays[card]
+                self.emit(f'setOptionalChoice({payer}, {self.at(p)}, "No");')
 
     def forced(self, answer: Json, p: Position) -> None:
         """A question with one answer that Beryl answered silently: queued like a scripted
@@ -502,6 +520,8 @@ class Exporter:
         for bit, answers in enumerate(questions):
             answer = answers[0] if costs >> bit & 1 else answers[1]
             self.emit(f"setChoice({who}, {java_string(answer)});")
+        if card in UNLESS_PAYS:
+            self.unless_pays[card] = self.target_controller(action["player"], card)
 
     def pay(self, who: str, p: Position, source: str | None) -> None:
         """Before a cast or activation at an empty stack, taps the mana sources Beryl's payment
@@ -519,9 +539,9 @@ class Exporter:
                 text = java_string(MANA_ABILITIES[name])
                 self.emit(f"activateManaAbility({self.at(p)}, {who}, {text});")
 
-    def take_targets(self, seat: object) -> list[str]:
-        """The cards the cast at hand targets, from the Target answers that follow it, or else
-        those Beryl gave without asking; they are taken, not queued again."""
+    def cast_targets(self) -> list[Json]:
+        """The Target answers of the cast at hand: those that follow it, or else those Beryl
+        gave without asking."""
         i = self.index
         answers: list[Json] = []
         for action in self.actions[i + 1 :]:
@@ -536,8 +556,25 @@ class Exporter:
                 if forced["kind"] != "Target":
                     break
                 answers.append(forced)
+        return answers
+
+    def target_controller(self, seat: object, card: str) -> str:
+        """The controller of the spell that `card`, cast at hand by `seat`, targets."""
+        names = {
+            cast(Json, a["pick"]).get("card")
+            for a in self.cast_targets()
+            if a["player"] == seat and a["kind"] == "Target"
+        }
+        for item in self.trace[self.index].stack:
+            if item["name"] in names:
+                return self.player(item["controller"])
+        raise Unsupported(f"{card} without a target spell on the stack")
+
+    def take_targets(self, seat: object) -> list[str]:
+        """The cards the cast at hand targets (`cast_targets`); they are taken, not queued
+        again."""
         names = []
-        for answer in answers:
+        for answer in self.cast_targets():
             pick = cast(Json, answer["pick"])
             if answer["player"] != seat or (
                 answer["kind"] == "Target" and "card" not in pick
@@ -575,6 +612,8 @@ class Exporter:
         who = self.player(action["player"])
         kind = cast(str, action["kind"])
         source = cast(str, p.stack[-1]["name"]) if p.stack else None
+        if kind == "YesNo" and source is not None:
+            self.unless_pays.pop(source, None)
         first = ASKED_FIRST.get((source or "", kind))
         if first is not None and self.last_answer != (source, kind):
             self.emit(f"setChoice({who}, {java_string(first)});")

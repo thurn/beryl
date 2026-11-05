@@ -3,7 +3,9 @@ on the staging tip (budget 300 s, and a run over it fails). Both run lanes in pa
 sequence of timed steps, and print failed lanes last.
 
 The fast check runs the lanes whose files changed since the branch left origin/staging. Slow
-CI runs every lane plus `app`: the debug app built and launched headless until its UI loads.
+CI runs every lane plus `app` (the debug app built and launched headless until its UI loads),
+`shots` (the screens rendered and the game screen played headless) and `oracle` (the card
+scenarios checked against XMage and Forge).
 """
 
 from __future__ import annotations
@@ -235,6 +237,12 @@ def shots_lane() -> Lane:
     )
 
 
+def oracle_lane() -> Lane:
+    """Plays every card scenario in XMage and Forge (`by oracle`): a failure the divergence
+    allowlist does not explain fails it, as does an oracle not built at its pin."""
+    return Lane("oracle", warm=True).step("oracle", [*BY, "oracle"])
+
+
 def fast(args: argparse.Namespace) -> int:
     base = branch_base()
     changed: list[str] | None = changed_paths(base)
@@ -269,6 +277,7 @@ def slow(args: argparse.Namespace) -> int:
         "ui": ui_lane(),
         "app": app_lane(),
         "shots": shots_lane(),
+        "oracle": oracle_lane(),
     }
     chosen = args.lanes or list(lanes)
     unknown = set(chosen) - set(lanes)

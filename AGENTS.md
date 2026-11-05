@@ -91,10 +91,11 @@ counts, `just bench` for timing (it refuses a busy machine).
   branch left `origin/staging`: `repo` (justfile and Markdown formatting),
   `python` (black, pyre, pytest), `rust` (rustfmt, clippy, tests) and `ui`
   (prettier, tsc). It also refuses conflict markers and bad commit subjects.
-- `just ci` (slow, budget 300 s) runs every lane plus `app` (`just smoke`) and
+- `just ci` (slow, budget 300 s) runs every lane plus `app` (`just smoke`),
   `shots` (`just ui-shots`, which fails on any page error, and `just ui-test`,
-  which plays the game screen through a fixture). A run over budget fails: speed
-  up, move or delete the slowest step rather than raise it.
+  which plays the game screen through a fixture) and `oracle` (`just oracle`,
+  which needs `just oracle-setup` once per machine). A run over budget fails:
+  speed up, move or delete the slowest step rather than raise it.
 - A fresh worktree clones the cached `rust/target` and `ui/node_modules` in
   seconds (copy-on-write); removing it saves them back.
 

@@ -43,7 +43,7 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
      * A test player that also takes `passPriority`, `resolveTop` and `setOptionalChoice`. XMage runs a command
      * as soon as its player holds priority, so a command Beryl made after the other player's
      * spell resolved would otherwise run before that spell was cast. An optional choice answers a
-     * question Beryl answered without asking, which XMage may or may not ask: it is used if the
+     * question Beryl answered without asking, or did not ask, which XMage may or may not ask: it is used if the
      * question comes, and dropped at its player's first priority after the step where Beryl
      * answered it if not.
      */
@@ -103,6 +103,12 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
         @Override
         public boolean choose(Outcome outcome, Cards cards, TargetCard target, Ability source, Game game) {
             return withOptional(() -> super.choose(outcome, cards, target, source, game));
+        }
+
+        @Override
+        public boolean chooseUse(Outcome outcome, String message, String secondMessage, String trueText,
+                String falseText, Ability source, Game game) {
+            return withOptional(() -> super.chooseUse(outcome, message, secondMessage, trueText, falseText, source, game));
         }
 
         @Override

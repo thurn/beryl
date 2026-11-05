@@ -908,8 +908,8 @@ trace. Python exporters generate:
 Both oracles are part of Milestone 1. `just oracle-setup` installs Maven with
 Homebrew if it is missing, shallow-clones XMage and Forge at pinned commits into
 `~/Library/Caches/beryl/oracles` and builds them once with JDK 21; agents run it
-unattended. `just oracle` exports the scenarios and runs them on both. The lane
-runs outside `just ci`'s 300-second budget, on demand and nightly.
+unattended. `just oracle` exports the scenarios and runs them on both, in about
+half a minute once built; it is `just ci`'s `oracle` lane.
 
 - A card an oracle does not implement, or a scenario outside its harness's
   vocabulary, is reported as unsupported, not failed.

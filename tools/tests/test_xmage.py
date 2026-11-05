@@ -17,7 +17,9 @@ XMAGE_CARDS = {
     "Island",
     "Mana Crypt",
     "Mana Drain",
+    "Mana Tithe",
     "Plains",
+    "Strip Mine",
     "Teferi, Time Raveler",
     "Timetwister",
 }
@@ -85,6 +87,20 @@ def test_coin_flips_replay_beryls_results() -> None:
     assert "resolveTop(2, PhaseStep.UPKEEP, playerB);" in lines
 
 
+def test_xmages_unless_pays_question_is_answered_no_where_beryl_does_not_ask() -> None:
+    # Player 0 cannot pay for Mana Tithe, so Beryl asks nothing, but XMage asks "Pay {1}?"
+    # anyway: playerA, Mana Crypt's controller, answers no.
+    unpaid = body("Mana Tithe: a controller who can't pay isn't asked")
+    answers = [line for line in unpaid if line.startswith("setOptionalChoice(")]
+    assert len(answers) == 1
+    assert answers[0].startswith("setOptionalChoice(playerA, ")
+    assert answers[0].endswith('"No");')
+    # With Strip Mine to pay with, Beryl asks and the scenario answers yes: no extra answer.
+    paid = body("Mana Tithe: the controller pays {1}")
+    assert "setChoice(playerA, true);" in paid
+    assert not any("setOptionalChoice" in line for line in paid)
+
+
 def test_what_the_exporter_cannot_say_is_unsupported_with_the_reason() -> None:
     adeline = exports()["Adeline's Human attacks a planeswalker"]
     assert adeline.unsupported == (
@@ -105,6 +121,7 @@ def test_write_makes_a_class_per_card_with_a_supported_scenario(tmp_path: Path) 
         "GetLostBerylTest",
         "ManaCryptBerylTest",
         "ManaDrainBerylTest",
+        "ManaTitheBerylTest",
     ]
     files = sorted(p.name for p in tmp_path.iterdir())
     assert files == sorted([f"{c}.java" for c in classes] + ["BerylScenarioTest.java"])
@@ -146,7 +163,7 @@ def test_the_summary_counts_passes_failures_and_allowlisted_divergences(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("BERYL_CACHE", str(tmp_path))
-    dump = json.loads(FIXTURE.read_text())
+    dump = [e for e in json.loads(FIXTURE.read_text()) if e["card"] != "Mana Tithe"]
     found = list(exports().values())
     drain: xmage.Export = next(e for e in found if e.card == "Mana Drain")
     crypt: xmage.Export = next(e for e in found if e.card == "Mana Crypt")
@@ -184,11 +201,11 @@ def test_the_summary_counts_passes_failures_and_allowlisted_divergences(
     assert row["stale_allowlist"] is True
 
 
-def test_the_allowlists_xmage_entries_cite_the_rules() -> None:
-    allowed = oracles.forge.divergences(oracles.DIVERGENCES, "xmage")
-    assert allowed
-    for divergence in allowed.values():
-        assert divergence.cr.startswith("CR ")
+def test_the_allowlists_entries_cite_the_rules() -> None:
+    for oracle in ("xmage", "forge"):
+        allowed = oracles.forge.divergences(oracles.DIVERGENCES, oracle)
+        for divergence in allowed.values():
+            assert divergence.cr.startswith("CR ")
 
 
 def test_oracle_needs_the_oracles_built(
