@@ -119,9 +119,6 @@ export function CardArt({ card }: { card: CardFace }) {
   );
 }
 
-/** Rules text up to this long is centered in its box. */
-const SHORT_TEXT = 30;
-
 /** Shrinks long rules text to fit its box rather than cutting it off mid-line, as the cube's
  * longer cards (planeswalkers, Aang's Iceberg) would be: `--fit` scales the text's size
  * (components.css), stepped down until the text fits, measured again whenever the box resizes.
@@ -194,7 +191,6 @@ export function Card({
     "card",
     `card-${variant}`,
     `frame-${frameKey(card)}`,
-    isLand(card) && "card-land",
     card.colors.length > 1 && `accent-${card.colors[0]?.toLowerCase()}`,
     highlight && `card-${highlight}`,
     combat && `card-${combat}`,
@@ -238,13 +234,7 @@ export function Card({
           {variant === "full" && (
             <>
               <div className="card-type-bar">{card.typeLine}</div>
-              <div
-                className={
-                  (card.text?.length ?? 0) <= SHORT_TEXT
-                    ? "card-rules card-rules-short"
-                    : "card-rules"
-                }
-              >
+              <div className="card-rules">
                 {card.text && (
                   <p ref={rulesRef}>
                     <RulesText text={card.text} />

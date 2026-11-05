@@ -298,8 +298,9 @@
     0 0 0 0.08em var(--rim-lo),
     inset 0 0 0 0.06em color-mix(in srgb, var(--rim-lo) 45%, transparent),
     inset 0 0 0.3em rgb(0 0 0 / 12%);
+  /* One size for every card, the long and the short alike. */
   font-weight: 500;
-  font-size: 0.86em;
+  font-size: 0.7em;
   line-height: 1.2;
 }
 .card-rules p {
@@ -309,16 +310,15 @@
   white-space: pre-line;
   font-size: calc(1em * var(--fit, 1));
 }
-/* Longer rules text runs smaller, from the top left (the mockups' Doom Blade). */
-.card-rules:not(.card-rules-short) {
-  font-size: 0.7em;
+/* A card's rules text sits in its box's middle, from the left, as printed. Auto margins center
+   it but, unlike centering the box's content, never push an overflowing first line out of sight
+   while it is being fitted. */
+.card .card-rules {
+  display: flex;
+  flex-direction: column;
 }
-/* Short rules text sits centered in its box, as on the mockups' Counterspell and Preordain. */
-.card-rules-short {
-  display: grid;
-  place-items: center;
-  padding-bottom: 0.9em;
-  text-align: center;
+.card .card-rules p {
+  margin: auto 0;
 }
 /* Power and toughness in a framed plaque, numerals in a blue-black ink. The full frame draws
    it smaller. */
