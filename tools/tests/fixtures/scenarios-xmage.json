@@ -1,0 +1,962 @@
+[
+ {
+  "card": "Get Lost",
+  "name": "Get Lost on a creature gives two Maps; one explores a land into hand",
+  "setup": {
+   "seed": 0,
+   "turn": 2,
+   "active": 1,
+   "step": "PrecombatMain",
+   "players": [
+    {
+     "life": 20,
+     "hand": [
+      "Get Lost"
+     ],
+     "battlefield": [
+      {
+       "card": "Plains",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      },
+      {
+       "card": "Plains",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      },
+      {
+       "card": "Plains",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      }
+     ],
+     "graveyard": [],
+     "exile": [],
+     "library": [
+      "Plains"
+     ]
+    },
+    {
+     "life": 20,
+     "hand": [
+      "Island"
+     ],
+     "battlefield": [
+      {
+       "card": "Elite Spellbinder",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      },
+      {
+       "card": "Elite Spellbinder",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      },
+      {
+       "card": "Plains",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      }
+     ],
+     "graveyard": [],
+     "exile": [],
+     "library": [
+      "Plains",
+      "Island"
+     ]
+    }
+   ]
+  },
+  "actions": [
+   {
+    "action": "Answer",
+    "player": 1,
+    "kind": "Priority",
+    "pick": {
+     "pick": "Pass"
+    }
+   },
+   {
+    "action": "Cast",
+    "player": 0,
+    "card": "Get Lost",
+    "face": 0,
+    "costs": 0
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 1,
+     "zone": "Graveyard",
+     "card": "Elite Spellbinder",
+     "count": 1
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 1,
+     "zone": "Battlefield",
+     "card": "Map Token",
+     "count": 2
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 0,
+     "zone": "Battlefield",
+     "card": "Map Token",
+     "count": 0
+    }
+   },
+   {
+    "action": "Activate",
+    "player": 1,
+    "card": "Map Token",
+    "ability": {
+     "Own": 0
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 1,
+     "zone": "Battlefield",
+     "card": "Map Token",
+     "count": 1
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 1,
+     "zone": "Hand",
+     "card": "Plains",
+     "count": 1
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Library",
+     "player": 1,
+     "top": [
+      "Island"
+     ]
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Counters",
+     "player": 1,
+     "card": "Elite Spellbinder",
+     "kind": "PlusOne",
+     "count": 0
+    }
+   }
+  ],
+  "trace": [
+   {
+    "turn": 2,
+    "step": "PrecombatMain",
+    "active": 1,
+    "decider": 1,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 2,
+    "step": "PrecombatMain",
+    "active": 1,
+    "decider": 0,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 2,
+    "step": "PrecombatMain",
+    "active": 1,
+    "decider": 1,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [
+     "Plains",
+     "Plains"
+    ],
+    "forced": [
+     {
+      "turn": 2,
+      "step": "PrecombatMain",
+      "action": "Answer",
+      "player": 0,
+      "kind": "Target",
+      "pick": {
+       "pick": "Card",
+       "card": "Elite Spellbinder"
+      }
+     }
+    ]
+   },
+   {
+    "turn": 2,
+    "step": "PrecombatMain",
+    "active": 1,
+    "decider": 1,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 2,
+    "step": "PrecombatMain",
+    "active": 1,
+    "decider": 1,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 2,
+    "step": "PrecombatMain",
+    "active": 1,
+    "decider": 1,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 2,
+    "step": "PrecombatMain",
+    "active": 1,
+    "decider": 1,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [
+     "Get Lost",
+     "Plains"
+    ],
+    "forced": [
+     {
+      "turn": 2,
+      "step": "PrecombatMain",
+      "action": "Answer",
+      "player": 1,
+      "kind": "Target",
+      "pick": {
+       "pick": "Card",
+       "card": "Elite Spellbinder"
+      }
+     }
+    ]
+   },
+   {
+    "turn": 2,
+    "step": "PrecombatMain",
+    "active": 1,
+    "decider": 1,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 2,
+    "step": "PrecombatMain",
+    "active": 1,
+    "decider": 1,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 2,
+    "step": "PrecombatMain",
+    "active": 1,
+    "decider": 1,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   }
+  ]
+ },
+ {
+  "card": "Adeline, Resplendent Cathar",
+  "name": "Adeline's Human attacks a planeswalker",
+  "setup": {
+   "seed": 0,
+   "turn": 1,
+   "active": 0,
+   "step": "PrecombatMain",
+   "players": [
+    {
+     "life": 20,
+     "hand": [],
+     "battlefield": [
+      {
+       "card": "Adeline, Resplendent Cathar",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      }
+     ],
+     "graveyard": [],
+     "exile": [],
+     "library": []
+    },
+    {
+     "life": 20,
+     "hand": [],
+     "battlefield": [
+      {
+       "card": "Teferi, Time Raveler",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      }
+     ],
+     "graveyard": [],
+     "exile": [],
+     "library": []
+    }
+   ]
+  },
+  "actions": [
+   {
+    "action": "AdvanceTo",
+    "turn": 1,
+    "step": "BeginningOfCombat"
+   },
+   {
+    "action": "Answer",
+    "player": 0,
+    "kind": "Priority",
+    "pick": {
+     "pick": "Pass"
+    }
+   },
+   {
+    "action": "Answer",
+    "player": 0,
+    "kind": "Attacker",
+    "pick": {
+     "pick": "Card",
+     "card": "Adeline, Resplendent Cathar"
+    }
+   },
+   {
+    "action": "Answer",
+    "player": 0,
+    "kind": "AttackTarget",
+    "pick": {
+     "pick": "DefendingPlayer"
+    }
+   },
+   {
+    "action": "Answer",
+    "player": 0,
+    "kind": "AttackTarget",
+    "pick": {
+     "pick": "Card",
+     "card": "Teferi, Time Raveler"
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Attacking",
+     "player": 0,
+     "card": "Human Token",
+     "count": 1
+    }
+   },
+   {
+    "action": "AdvanceTo",
+    "turn": 1,
+    "step": "EndOfCombat"
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Life",
+     "player": 1,
+     "life": 18
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Counters",
+     "player": 1,
+     "card": "Teferi, Time Raveler",
+     "kind": "Loyalty",
+     "count": 3
+    }
+   }
+  ],
+  "trace": [
+   {
+    "turn": 1,
+    "step": "BeginningOfCombat",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 1,
+    "step": "BeginningOfCombat",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 1,
+    "step": "DeclareAttackers",
+    "active": 0,
+    "decider": 0,
+    "kind": "Attacker",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 1,
+    "step": "DeclareAttackers",
+    "active": 0,
+    "decider": 0,
+    "kind": "AttackTarget",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 1,
+    "step": "DeclareAttackers",
+    "active": 0,
+    "decider": 0,
+    "kind": "AttackTarget",
+    "stack": [
+     {
+      "name": "Adeline, Resplendent Cathar",
+      "spell": false,
+      "controller": 0
+     }
+    ],
+    "flips": [],
+    "taps": [],
+    "forced": [
+     {
+      "turn": 1,
+      "step": "DeclareAttackers",
+      "action": "Answer",
+      "player": 0,
+      "kind": "Attacker",
+      "pick": {
+       "pick": "Done"
+      }
+     },
+     {
+      "turn": 1,
+      "step": "DeclareAttackers",
+      "action": "Answer",
+      "player": 0,
+      "kind": "TriggerOrder",
+      "pick": {
+       "pick": "Card",
+       "card": "Adeline, Resplendent Cathar"
+      }
+     }
+    ]
+   },
+   {
+    "turn": 1,
+    "step": "EndOfCombat",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 1,
+    "step": "EndOfCombat",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 1,
+    "step": "EndOfCombat",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 1,
+    "step": "EndOfCombat",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   }
+  ]
+ },
+ {
+  "card": "Mana Drain",
+  "name": "Mana Drain: the countered spell's mana value at the caster's next main phase",
+  "setup": {
+   "seed": 0,
+   "turn": 2,
+   "active": 1,
+   "step": "PrecombatMain",
+   "players": [
+    {
+     "life": 20,
+     "hand": [
+      "Mana Drain"
+     ],
+     "battlefield": [
+      {
+       "card": "Island",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      },
+      {
+       "card": "Island",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      }
+     ],
+     "graveyard": [],
+     "exile": [],
+     "library": [
+      "Plains"
+     ]
+    },
+    {
+     "life": 20,
+     "hand": [
+      "Timetwister"
+     ],
+     "battlefield": [
+      {
+       "card": "Island",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      },
+      {
+       "card": "Island",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      },
+      {
+       "card": "Island",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      }
+     ],
+     "graveyard": [],
+     "exile": [],
+     "library": []
+    }
+   ]
+  },
+  "actions": [
+   {
+    "action": "Cast",
+    "player": 1,
+    "card": "Timetwister",
+    "face": 0,
+    "costs": 0
+   },
+   {
+    "action": "Cast",
+    "player": 0,
+    "card": "Mana Drain",
+    "face": 0,
+    "costs": 0
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 1,
+     "zone": "Graveyard",
+     "card": "Timetwister",
+     "count": 1
+    }
+   },
+   {
+    "action": "AdvanceTo",
+    "turn": 2,
+    "step": "PostcombatMain"
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Mana",
+     "player": 0,
+     "color": "Colorless",
+     "amount": 0
+    }
+   },
+   {
+    "action": "AdvanceTo",
+    "turn": 3,
+    "step": "PrecombatMain"
+   },
+   {
+    "action": "Answer",
+    "player": 0,
+    "kind": "Priority",
+    "pick": {
+     "pick": "Pass"
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Mana",
+     "player": 0,
+     "color": "Colorless",
+     "amount": 3
+    }
+   }
+  ],
+  "trace": [
+   {
+    "turn": 2,
+    "step": "PrecombatMain",
+    "active": 1,
+    "decider": 1,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 2,
+    "step": "PrecombatMain",
+    "active": 1,
+    "decider": 0,
+    "kind": "Priority",
+    "stack": [
+     {
+      "name": "Timetwister",
+      "spell": true,
+      "controller": 1
+     }
+    ],
+    "flips": [],
+    "taps": [
+     "Island",
+     "Island",
+     "Island"
+    ],
+    "forced": []
+   },
+   {
+    "turn": 2,
+    "step": "PostcombatMain",
+    "active": 1,
+    "decider": 1,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [
+     "Island",
+     "Island"
+    ],
+    "forced": [
+     {
+      "turn": 2,
+      "step": "PrecombatMain",
+      "action": "Answer",
+      "player": 0,
+      "kind": "Target",
+      "pick": {
+       "pick": "Card",
+       "card": "Timetwister"
+      }
+     }
+    ]
+   },
+   {
+    "turn": 2,
+    "step": "PostcombatMain",
+    "active": 1,
+    "decider": 1,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 2,
+    "step": "PostcombatMain",
+    "active": 1,
+    "decider": 1,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 2,
+    "step": "PostcombatMain",
+    "active": 1,
+    "decider": 1,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "stack": [
+     {
+      "name": "Mana Drain",
+      "spell": false,
+      "controller": 0
+     }
+    ],
+    "flips": [],
+    "taps": [],
+    "forced": [
+     {
+      "turn": 3,
+      "step": "PrecombatMain",
+      "action": "Answer",
+      "player": 0,
+      "kind": "TriggerOrder",
+      "pick": {
+       "pick": "Card",
+       "card": "Mana Drain"
+      }
+     }
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   }
+  ]
+ },
+ {
+  "card": "Mana Crypt",
+  "name": "Mana Crypt's flip lost: 3 damage to its controller",
+  "setup": {
+   "seed": 2,
+   "turn": 2,
+   "active": 1,
+   "step": "PostcombatMain",
+   "players": [
+    {
+     "life": 20,
+     "hand": [],
+     "battlefield": [
+      {
+       "card": "Mana Crypt",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      }
+     ],
+     "graveyard": [],
+     "exile": [],
+     "library": [
+      "Island"
+     ]
+    },
+    {
+     "life": 20,
+     "hand": [],
+     "battlefield": [],
+     "graveyard": [],
+     "exile": [],
+     "library": []
+    }
+   ]
+  },
+  "actions": [
+   {
+    "action": "AdvanceTo",
+    "turn": 3,
+    "step": "Upkeep"
+   },
+   {
+    "action": "Answer",
+    "player": 0,
+    "kind": "Priority",
+    "pick": {
+     "pick": "Pass"
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Life",
+     "player": 0,
+     "life": 17
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Life",
+     "player": 1,
+     "life": 20
+    }
+   }
+  ],
+  "trace": [
+   {
+    "turn": 3,
+    "step": "Upkeep",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "stack": [
+     {
+      "name": "Mana Crypt",
+      "spell": false,
+      "controller": 0
+     }
+    ],
+    "flips": [],
+    "taps": [],
+    "forced": [
+     {
+      "turn": 3,
+      "step": "Upkeep",
+      "action": "Answer",
+      "player": 0,
+      "kind": "TriggerOrder",
+      "pick": {
+       "pick": "Card",
+       "card": "Mana Crypt"
+      }
+     }
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "Upkeep",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "stack": [
+     {
+      "name": "Mana Crypt",
+      "spell": false,
+      "controller": 0
+     }
+    ],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [
+     {
+      "player": 0,
+      "won": false
+     }
+    ],
+    "taps": [],
+    "forced": []
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": []
+   }
+  ]
+ }
+]

@@ -1,1 +1,23 @@
-[]
+[
+  {
+    "oracle": "xmage",
+    "card": "Mana Tithe",
+    "scenario": "Mana Tithe: a controller who can't pay isn't asked",
+    "cr": "CR 118.3 (https://yawgatog.com/resources/magic-rules/#R1183): \"A player can't pay a cost without having the necessary resources to pay it fully.\"",
+    "reason": "XMage's \"unless pays\" asks \"Pay {N}?\" even of a player with no way to pay, where Beryl asks nothing; the exported test has no answer for the question."
+  },
+  {
+    "oracle": "xmage",
+    "card": "No More Lies",
+    "scenario": "No More Lies: a controller who can't pay isn't asked",
+    "cr": "CR 118.3 (https://yawgatog.com/resources/magic-rules/#R1183): \"A player can't pay a cost without having the necessary resources to pay it fully.\"",
+    "reason": "XMage's \"unless pays\" asks \"Pay {N}?\" even of a player with no way to pay, where Beryl asks nothing; the exported test has no answer for the question."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Seachrome Coast",
+    "scenario": "Seachrome Coast's white mana",
+    "cr": "CR 118.3 (https://yawgatog.com/resources/magic-rules/#R1183): \"A player can't pay a cost without having the necessary resources to pay it fully.\"",
+    "reason": "XMage's \"unless pays\" asks \"Pay {N}?\" even of a player with no way to pay, where Beryl asks nothing; the exported test has no answer for the question."
+  }
+]

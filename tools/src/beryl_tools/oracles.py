@@ -10,12 +10,13 @@ no-op. Logs go to oracles/logs; the command prints a JSON summary on stdout.
 `oracle-smoke` runs one existing XMage test class and one Forge `sim` game of the Milestone 1
 deck against itself.
 
-`oracle` dumps every card scenario (`beryl_scenario dump`), plays them in Forge through the
-exporter and harness of `forge.py`, and prints a JSON summary: each scenario passes, fails, is
-on the divergence allowlist (data/oracle-divergences.json: where the oracle is wrong, with the
-Comprehensive Rules citation that says so) or is unsupported (outside the harness's vocabulary).
-It fails on any failure the allowlist does not explain. Logs and the full results go to
-oracles/logs.
+`oracle` dumps every card scenario (`beryl_scenario dump`), plays them in XMage, as the JUnit
+classes `xmage.py` exports into its checkout and runs with Maven, and in Forge, through the
+exporter and harness of `forge.py`, and prints a JSON summary per oracle: each scenario passes,
+fails, is on the divergence allowlist (data/oracle-divergences.json: where the oracle is wrong,
+with the Comprehensive Rules citation that says so) or is unsupported (outside the exporter's
+vocabulary, with the reason). It fails on any failure the allowlist does not explain. Logs and
+the full results go to oracles/logs.
 """
 
 from __future__ import annotations
@@ -29,12 +30,13 @@ import shutil
 import subprocess
 import sys
 import time
+import xml.etree.ElementTree as ET
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import cards, forge, paths
+from . import cards, forge, paths, xmage
 
 FORMULAS = ("maven", "openjdk@21")
 
@@ -111,8 +113,15 @@ class StepFailed(Exception):
     pass
 
 
-def run(argv: Sequence[str], log: Path, cwd: Path | None = None, **env: str) -> str:
-    """Runs a command with its output streaming into `log`, and returns that output."""
+def run(
+    argv: Sequence[str],
+    log: Path,
+    cwd: Path | None = None,
+    check: bool = True,
+    **env: str,
+) -> str:
+    """Runs a command with its output streaming into `log`, and returns that output. A failure
+    raises StepFailed unless `check` is off."""
     started = time.monotonic()
     with log.open("a") as f:
         f.write(f"$ {' '.join(argv)}\n")
@@ -132,7 +141,7 @@ def run(argv: Sequence[str], log: Path, cwd: Path | None = None, **env: str) -> 
         output = f.read()
     with log.open("a") as f:
         f.write(f"exit {code} after {time.monotonic() - started:.0f} s\n\n")
-    if code != 0:
+    if code != 0 and check:
         tail = "\n".join(output.splitlines()[-30:])
         raise StepFailed(f"{' '.join(argv[:3])} failed; see {log}\n{tail}")
     return output
@@ -422,17 +431,113 @@ def check_forge(entries: list[dict[str, object]], work: Path) -> dict[str, objec
     return forge.summarize(results, skipped, forge.divergences(DIVERGENCES, "forge"))
 
 
+def xmage_tests() -> Path:
+    """Where the exported test classes go in the XMage checkout."""
+    return checkout(XMAGE) / "Mage.Tests/src/test/java/org/mage/test/beryl"
+
+
+def reports() -> Path:
+    return checkout(XMAGE) / "Mage.Tests" / "target" / "surefire-reports"
+
+
+def surefire_results(classes: Sequence[str]) -> dict[tuple[str, str], str | None]:
+    """Each test's outcome from Surefire's reports, by class and method: None for a pass, else
+    the failure's message."""
+    outcomes: dict[tuple[str, str], str | None] = {}
+    for name in classes:
+        path = reports() / f"TEST-{xmage.PACKAGE}.{name}.xml"
+        if not path.is_file():
+            continue
+        for case in ET.parse(path).getroot().iter("testcase"):
+            problem = next(
+                (c for c in case if c.tag in ("failure", "error", "skipped")), None
+            )
+            message = None
+            if problem is not None:
+                text = (problem.get("message") or "").strip()
+                message = text.splitlines()[0][:300] if text else problem.tag
+            outcomes[(name, case.get("name", ""))] = message
+    return outcomes
+
+
+def check_xmage(entries: list[dict[str, object]], log: Path) -> dict[str, object]:
+    """Exports the scenarios as XMage tests and runs them with Maven: one status per scenario
+    (pass, fail, allowlisted, unsupported) and their counts, as `forge.summarize` reports.
+    """
+    faces = xmage.Faces.load(cards.OUTPUT)
+    exports = xmage.export_all(entries, faces, xmage.xmage_cards(checkout(XMAGE)))
+    classes = xmage.write(exports, xmage_tests())
+    for old in reports().glob(f"TEST-{xmage.PACKAGE}.*.xml"):
+        old.unlink()
+    if classes:
+        run(
+            mvn(
+                "-pl",
+                "Mage.Tests",
+                f"-Dtest={xmage.PACKAGE}.*BerylTest",
+                "-Dsurefire.failIfNoSpecifiedTests=false",
+                "-Dxmage.dataCollectors.printGameLogs=false",
+                "test",
+            ),
+            log,
+            checkout(XMAGE),
+            check=False,
+            JAVA_HOME=str(java_home()),
+        )
+    outcomes = surefire_results(classes)
+    if classes and not outcomes:
+        errors = [line for line in log.read_text().splitlines() if "[ERROR]" in line]
+        detail = "\n".join(errors[:6])
+        raise StepFailed(f"XMage ran no Beryl tests; see {log}\n{detail}")
+    allowed = forge.divergences(DIVERGENCES, "xmage")
+    scenarios: list[dict[str, object]] = []
+    for export in exports:
+        entry: dict[str, object] = {"card": export.card, "name": export.scenario}
+        divergence = allowed.get(f"{export.card} / {export.scenario}")
+        if export.unsupported is not None:
+            entry["status"] = "unsupported"
+            entry["reason"] = export.unsupported
+        else:
+            key = (xmage.class_name(export.card), export.method)
+            entry["test"] = f"{key[0]}.{key[1]}"
+            failure = outcomes.get(key, "no result: the test did not compile or run")
+            if failure is None:
+                entry["status"] = "pass"
+                if divergence is not None:
+                    entry["stale_allowlist"] = True
+            elif divergence is not None:
+                entry["status"] = "allowlisted"
+                entry["cr"] = divergence.cr
+                entry["reason"] = divergence.reason
+                entry["failure"] = failure
+            else:
+                entry["status"] = "fail"
+                entry["failure"] = failure
+        if export.skipped:
+            entry["skipped"] = export.skipped
+        scenarios.append(entry)
+    counts = {
+        status: sum(1 for e in scenarios if e["status"] == status)
+        for status in ("pass", "fail", "allowlisted", "unsupported")
+    }
+    stale = sum(1 for e in scenarios if e.get("stale_allowlist"))
+    return {**counts, "stale_allowlist": stale, "scenarios": scenarios, "log": str(log)}
+
+
 def oracle(args: argparse.Namespace) -> int:
     work = root() / "run"
     work.mkdir(exist_ok=True)
     try:
         with locked():
-            require_built((FORGE,))
+            require_built()
             entries = dump_scenarios(work / "scenarios.json", log_dir() / "dump.log")
             if args.cards:
                 entries = [e for e in entries if e["card"] in args.cards]
+            xmage_log = log_dir() / "xmage-oracle.log"
+            xmage_log.write_text("")
             results: dict[str, dict[str, object]] = {
-                "forge": check_forge(entries, work)
+                "xmage": check_xmage(entries, xmage_log),
+                "forge": check_forge(entries, work),
             }
             # A few AI-versus-AI games of the deck: Forge knows every card of it.
             sim_log = log_dir() / "forge-sim.log"

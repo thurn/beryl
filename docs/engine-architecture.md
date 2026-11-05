@@ -884,7 +884,12 @@ default, and it keeps the decision surface itself under test.
 
 ### 17.2 Oracles
 
-`beryl_scenario dump` writes every scenario as JSON. Python exporters generate:
+`beryl_scenario dump` writes every scenario as JSON, with a trace of where each
+action began as Beryl played it: the turn, step, open decision and stack, the
+coin flips and taps on the way, and the answers to questions with one answer,
+which `Stops::Forced` stops at so the trace sees them. Oracles script by turn
+and step rather than by decision, so the exporters place each action from the
+trace. Python exporters generate:
 
 - **XMage**, the primary oracle. A JUnit class per card under
   `Mage.Tests/src/test/java`, on `CardTestPlayerBase`: `addCard`, `setLife`,
@@ -910,7 +915,7 @@ runs outside `just ci`'s 300-second budget, on demand and nightly.
   vocabulary, is reported as unsupported, not failed.
 - A disagreement is a bug to investigate, and the Comprehensive Rules decide it.
   When the oracle is wrong, the scenario joins a short allowlist of known
-  divergences, each with its CR citation.
+  divergences, each with its CR citation (`data/oracle-divergences.json`).
 
 ### 17.3 The bar for a supported card
 
