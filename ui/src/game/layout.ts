@@ -38,7 +38,7 @@ export const lean = (x: number, y: number) =>
   (Math.atan((x - VANISHING.x) / (y - VANISHING.y)) * 180) / Math.PI;
 
 export const CREATURE_WIDTH = 232;
-export const LAND_WIDTH = 190;
+export const LAND_WIDTH = 180;
 /** Each copy beneath a land stack's top card, as a fraction of the card's width. */
 export const LAND_STEP = { x: 0.103, y: 0.022 };
 
@@ -52,6 +52,11 @@ export const HAND = {
   turn: 5.9,
   bias: 0.6,
 };
+
+/** How the hand card the pointer is over rises out of the fan: straightened, lifted and a
+ * little enlarged about its top center. CardLayer draws it inside the card's element, which
+ * stays where the fan puts it, so hovering moves nothing else and the pointer keeps the card. */
+export const RAISE = { lift: 70, scale: 1.06 };
 
 /** How a placed card is drawn. */
 export type Look =
@@ -88,26 +93,27 @@ export const FULL_WIDTH = HAND.width;
 const BACK_WIDTH = 105;
 
 /** Each side's rows, in stage pixels: its land piles from (x, y), filling rightward to
- * `LANDS_END`, and its other permanents' row at `y`, centered on the table. Every row's cards
- * are scaled by their depth alone (depthScale), keeping the field frame's shape. */
+ * `LANDS_END`, and its other permanents' row at `y`, centered on the table. The rows lie clear
+ * of one another, so a long row of permanents may pass over the land piles' side of the table.
+ * Every row's cards are scaled by their depth alone (depthScale), keeping the field frame's
+ * shape. */
 const ROWS: Record<
   Side,
   { lands: { x: number; y: number }; permanents: number }
 > = {
-  opponent: { lands: { x: 158, y: 124 }, permanents: 221 },
-  you: { lands: { x: 111, y: 564 }, permanents: 418 },
+  opponent: { lands: { x: 158, y: 112 }, permanents: 235 },
+  you: { lands: { x: 111, y: 570 }, permanents: 408 },
 };
 /** Lands fill from the left up to here, `LAND_GAP` apart before depth scaling. */
 const LANDS_END = 600;
 const LAND_GAP = 12;
-/** The other permanents' rows run from here at the least. */
-const PERMANENTS_START = 580;
 /** How far apart permanents stand, in frame widths: further while lines cross the table, in
  * combat or with something on the stack, to make room for them. */
 const PERMANENT_GAP = { main: 0.06, lines: 0.24 };
-/** A crowded row of permanents may run on to here while the table's right is clear; while the
- * stack or a prompt stands there, only to just left of the stack. */
-const OPEN_END = 1480;
+/** The permanents' rows are centered on the table, between these edges while the table's
+ * right is clear (as far from its middle on either side); while the stack or a prompt stands
+ * there, a row too long to stay centered left of it slides left just enough to clear it. */
+const OPEN = { start: 120, end: 1480 };
 const STACK_MARGIN = 25;
 
 /** How the table is laid out: lines cross it in combat and while something is on the stack. */
@@ -227,34 +233,26 @@ const FULL_ASPECT = 63 / 88;
 /** How far the hand sinks under a screen over the table (scry.png). */
 const HAND_TUCK = 67;
 
-/** The hand fan, held at the near edge: the more cards, the closer they sit. `raised` straightens
- * and lifts one card, as hovering does; `tucked`, the fan sinks out of the way. */
-function handPlacements(
-  cards: ObjectView[],
-  raised: number | undefined,
-  tucked: boolean,
-): Placement[] {
+/** The hand fan, held at the near edge: the more cards, the closer they sit; `tucked`, the fan
+ * sinks out of the way. */
+function handPlacements(cards: ObjectView[], tucked: boolean): Placement[] {
   const n = cards.length;
   const mid = (n - 1) / 2;
   const spacing = n > 1 ? Math.min(HAND.spacing, 760 / (n - 1)) : 0;
   return cards.map((o, i) => {
     const left = STAGE.width / 2 + (i - mid) * spacing - FULL_WIDTH / 2;
     const top = HAND.top + (i - mid) ** 2 * HAND.sag + (tucked ? HAND_TUCK : 0);
-    const lift = o.slot === raised;
-    const place = lift
-      ? { x: left - 5, y: top - 70, scale: 1.06, rotate: 0, skew: 0 }
-      : turned(left, top, (i - mid) * HAND.turn + HAND.bias, [
-          FULL_WIDTH / 2,
-          0,
-        ]);
     return {
       slot: o.slot,
       zone: o.zone,
       look: "hand",
       width: FULL_WIDTH,
       opacity: 1,
-      z: lift ? 300 : 200 + i,
-      ...place,
+      z: 200 + i,
+      ...turned(left, top, (i - mid) * HAND.turn + HAND.bias, [
+        FULL_WIDTH / 2,
+        0,
+      ]),
     };
   });
 }
@@ -421,7 +419,7 @@ function battlefieldPlacements(
   const groupWidth = (n: number) => width * (1 + LAND_STEP.x * (n - 1));
   const widths = groups.map((g) => groupWidth(g.length));
   const gap = PERMANENT_GAP[mode] * width;
-  const start = PERMANENTS_START;
+  const start = OPEN.start;
   const xs = row(widths, gap, start, end, STAGE.width / 2);
   // Where each blocker wants to stand: its attacker's blockers side by side about its center.
   const attackers = new Map(across.map((p) => [p.slot, p]));
@@ -488,11 +486,10 @@ function onPile(look: PileLook, shrink = 1) {
   };
 }
 
-/** Every object's placement. `raised` is the hand card the pointer is over; the stack is
- * `lifted` over a prompt; the hand is `tucked` under a screen over the table. */
+/** Every object's placement. The stack is `lifted` over a prompt; the hand is `tucked` under a
+ * screen over the table. Hovering changes none of it (CardLayer raises a hovered hand card). */
 export function layout(
   view: PlayerView,
-  raised?: number,
   lifted = false,
   tucked = false,
 ): Layout {
@@ -503,14 +500,14 @@ export function layout(
   const bySlot = new Map(objects.map((o) => [o.slot, o]));
   const permanents = view.battlefield.flatMap((s) => bySlot.get(s) ?? []);
 
-  out.push(...handPlacements(owned("you", "hand"), raised, tucked));
+  out.push(...handPlacements(owned("you", "hand"), tucked));
   out.push(...backPlacements(owned("opponent", "hand")));
   // Blockers stand across from their attackers, which stand where they would anyway: only the
   // defending side's row depends on the other's.
   const stacked = view.stack.length > 0;
   const mode: Mode = combatBanner(view) || stacked ? "lines" : "main";
   // The stack and a prompt stand at the table's right.
-  const end = stacked || lifted ? STACK.x - STACK_MARGIN : OPEN_END;
+  const end = stacked || lifted ? STACK.x - STACK_MARGIN : OPEN.end;
   const field = (side: Side, across?: Placement[]) =>
     battlefieldPlacements(
       side,

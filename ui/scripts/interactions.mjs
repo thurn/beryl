@@ -85,10 +85,11 @@ async function check(
         fixture = FIXTURE,
         at = views.length - 1,
         ready = `${card}[data-zone="hand"]`,
+        viewport = { width: 1600, height: 900 },
     } = {},
 ) {
     const context = await browser.newContext({
-        viewport: { width: 1600, height: 900 },
+        viewport,
         deviceScaleFactor: 1,
         reducedMotion: "no-preference",
     });
@@ -124,9 +125,9 @@ await check(
         await page.mouse.move(grab.x, grab.y);
         // Hovered, the card rises under the pointer; then it is picked up there.
         await page.clock.runFor(1000);
-        const held = center(await handle.boundingBox());
-        // From here on time passes only when the test says so.
-        await page.clock.pauseAt(Date.now() + 60_000);
+        // What the card draws: it rises inside its element.
+        const look = await handle.$(":scope > div");
+        const held = center(await look.boundingBox());
         await page.mouse.down();
         const drop = { x: 800, y: 380 };
         for (let i = 1; i <= 10; i++) {
@@ -136,18 +137,20 @@ await check(
             );
         }
         await page.clock.runFor(100);
-        // It follows the pointer rather than sinking back into the fan as it stops being
-        // hovered. (It straightens and shrinks back from its hover scale, hence the slack.)
-        const followed = center(await handle.boundingBox());
+        // It follows the pointer, still raised, rather than sinking back into the fan as it
+        // stops being hovered.
+        const followed = center(await look.boundingBox());
         assert.ok(
             Math.hypot(
                 followed.x - held.x - (drop.x - grab.x),
                 followed.y - held.y - (drop.y - grab.y),
-            ) < 20,
+            ) < 2,
             `the dragged card follows the pointer: moved by ` +
                 `${followed.x - held.x}, ${followed.y - held.y} for a pointer ` +
                 `moved by ${drop.x - grab.x}, ${drop.y - grab.y}`,
         );
+        // From here on time passes only when the test says so.
+        await page.clock.pauseAt(Date.now() + 60_000);
         await page.mouse.up();
         assert.deepEqual(
             await chosen(page),
@@ -232,6 +235,182 @@ await check("hovering a card shows it whole, with its artist", async (page) => {
         .getByText(`Illustrated by ${artist}`)
         .waitFor();
 });
+
+/** Where every card is drawn, by slot: the box of what its element draws (a raised hand card
+ * rises inside its element), and whether a layout animation is moving its frame. */
+const drawn = (page) =>
+    page.evaluate(() =>
+        Object.fromEntries(
+            [...document.querySelectorAll(".card-el")].flatMap((e) => {
+                const look = e.firstElementChild;
+                if (!look) return [];
+                const r = look.getBoundingClientRect();
+                const frame = e.querySelector(".card-slot")?.style.transform;
+                return [
+                    [
+                        e.dataset.slot,
+                        {
+                            box: [r.left, r.top, r.right, r.bottom],
+                            animating: !!frame && frame !== "none",
+                        },
+                    ],
+                ];
+            }),
+        ),
+    );
+
+const fieldCard = `[data-slot="${
+    before.objects.find(
+        (o) => o.zone === "battlefield" && !o.types.includes("land"),
+    ).slot
+}"]`;
+for (const [title, target] of [
+    ["a hand card", card],
+    ["a battlefield card", fieldCard],
+]) {
+    await check(
+        `hovering ${title} moves no other card and starts no layout animation`,
+        async (page) => {
+            await page.clock.runFor(2000);
+            const still = await drawn(page);
+            const slot = await page.$eval(target, (e) => e.dataset.slot);
+            const box = await page.locator(target).boundingBox();
+            const at = { x: box.x + box.width / 2, y: box.y + 40 };
+            await page.mouse.move(at.x, at.y);
+            for (let t = 0; t < 20; t++) {
+                await page.clock.runFor(50);
+                const now = await drawn(page);
+                for (const [other, { box, animating }] of Object.entries(now)) {
+                    assert.ok(!animating, `slot ${other} animates its layout`);
+                    if (other === slot) continue;
+                    const moved = box.map((v, i) =>
+                        Math.abs(v - still[other].box[i]),
+                    );
+                    assert.ok(
+                        Math.max(...moved) <= 1,
+                        `slot ${other} moved by ${moved} at ${t * 50} ms`,
+                    );
+                }
+            }
+            const top = (await drawn(page))[slot].box[1];
+            if (target === card) {
+                assert.ok(
+                    still[slot].box[1] - top > 40,
+                    "the hovered hand card rises",
+                );
+            } else {
+                assert.equal(top, still[slot].box[1], "a field card stays");
+            }
+            // The card is drawn raised inside its element, which stays put: wherever the pointer
+            // found the card, it still finds it, so the hover holds rather than flickering.
+            const held = await page.locator(target).boundingBox();
+            for (const k of ["x", "y", "width", "height"]) {
+                assert.ok(
+                    Math.abs(held[k] - box[k]) <= 1,
+                    `the hovered card's element moved: ${k} ${box[k]} to ${held[k]}`,
+                );
+            }
+            assert.equal(
+                await page.evaluate(
+                    ({ x, y }) =>
+                        document.elementFromPoint(x, y)?.closest("[data-slot]")
+                            ?.dataset.slot,
+                    at,
+                ),
+                slot,
+                "the pointer is still over the hovered card",
+            );
+            assert.ok(await page.$(".inspect"), "the card is inspected");
+        },
+    );
+}
+
+// A quiet table with a row of permanents a side: nothing on the stack, no combat.
+const quietViews = await load("combat-blockers");
+const nonlands = (view, side) =>
+    view.objects.filter(
+        (o) =>
+            o.zone === "battlefield" &&
+            o.controller === side &&
+            !o.types.includes("land"),
+    );
+const quiet = quietViews.findIndex(
+    (v) =>
+        v.status.decision?.kind === "priority" &&
+        v.stack.length === 0 &&
+        !v.objects.some((o) => o.combat) &&
+        nonlands(v, "you").length >= 3 &&
+        nonlands(v, "opponent").length >= 3,
+);
+assert.ok(quiet >= 0, "the blockers fixture has a quiet, crowded table");
+for (const viewport of [
+    { width: 1280, height: 800 },
+    { width: 1600, height: 900 },
+]) {
+    await check(
+        `each battlefield row is centered on the table at ${viewport.width} wide`,
+        async (page) => {
+            await page.clock.runFor(2000);
+            const stage = await page.locator(".stage").boundingBox();
+            const middle = stage.x + stage.width / 2;
+            const boxes = async (objects) =>
+                Promise.all(
+                    objects.map((o) =>
+                        page.locator(`[data-slot="${o.slot}"]`).boundingBox(),
+                    ),
+                );
+            for (const side of ["you", "opponent"]) {
+                const whose = side === "you" ? "your" : "the opponent's";
+                const row = await boxes(nonlands(quietViews[quiet], side));
+                assert.ok(row.length > 0, `${whose} row is empty`);
+                const left = Math.min(...row.map((b) => b.x));
+                const right = Math.max(...row.map((b) => b.x + b.width));
+                assert.ok(
+                    Math.abs((left + right) / 2 - middle) <= 3,
+                    `${whose} row spans ${left} to ${right}, centered on ${middle}`,
+                );
+            }
+            await assertClearOfLands(page);
+        },
+        {
+            fixture: "combat-blockers",
+            at: quiet + 1,
+            ready: `[data-slot="${nonlands(quietViews[quiet], "you")[0].slot}"]`,
+            viewport,
+        },
+    );
+}
+
+/** Asserts that no permanent on the table covers a land: a long row of permanents may pass
+ * over the land piles' side of the table, but in a row of its own. */
+async function assertClearOfLands(page) {
+    const boxes = await page.evaluate(() =>
+        [...document.querySelectorAll('[data-zone="battlefield"]')].map((e) => {
+            const r = e.getBoundingClientRect();
+            return {
+                name: e.dataset.card,
+                land: e.classList.contains("card-el-land"),
+
+                x: r.x,
+                y: r.y,
+                right: r.right,
+                bottom: r.bottom,
+            };
+        }),
+    );
+    for (const land of boxes.filter((b) => b.land)) {
+        for (const b of boxes.filter((b) => !b.land)) {
+            const across =
+                Math.min(land.right, b.right) - Math.max(land.x, b.x);
+            const down =
+                Math.min(land.bottom, b.bottom) - Math.max(land.y, b.y);
+            assert.ok(
+                across <= 1 || down <= 1,
+                `${b.name} covers ${land.name} by ${across} by ${down} px`,
+            );
+        }
+    }
+}
 
 /** Whether view `v` waits for the human: the views of the game playing on without them
  * follow one another unasked. */
@@ -501,6 +680,7 @@ await check(
                 }),
         );
         assert.deepEqual(hidden, [], "power and toughness covered");
+        await assertClearOfLands(page);
     },
     {
         fixture: "combat-blockers",

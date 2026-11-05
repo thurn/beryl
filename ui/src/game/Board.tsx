@@ -146,10 +146,6 @@ export function Board({
     () => new Map(view.objects.map((o) => [o.slot, o])),
     [view],
   );
-  const raised =
-    hovered !== undefined && objects.get(hovered)?.zone === "hand"
-      ? hovered
-      : undefined;
   // A decision other than priority, the opening's and combat's asks in a prompt over the
   // turn controls, under the stack, which rises to clear it.
   const prompting =
@@ -162,8 +158,8 @@ export function Board({
   // The prompt or the cast step sits over the turn controls; the stack rises to clear it.
   const asking = prompting || castingNow !== undefined;
   const placements = useMemo(
-    () => layout(view, raised, asking, dimmed),
-    [view, raised, asking, dimmed],
+    () => layout(view, asking, dimmed),
+    [view, asking, dimmed],
   );
 
   // A new view closes whatever was open on the old one.
@@ -450,6 +446,7 @@ export function Board({
           epoch={view}
           objects={view.objects}
           placements={placements}
+          hovered={hovered}
           states={states}
           onClick={onClick}
           onDrop={onDrop}

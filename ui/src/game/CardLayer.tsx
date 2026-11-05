@@ -18,12 +18,13 @@ import {
   useMotionValue,
   useReducedMotion,
   type MotionValue,
+  type Transition,
 } from "motion/react";
 import { Card, CardBack, type Highlight } from "../components/Card";
 import type { ObjectView, Side } from "../generated/protocol";
 import { StageScale } from "./Stage";
 import { useFace } from "./faces";
-import type { Layout, Placement } from "./layout";
+import { RAISE, type Layout, type Placement } from "./layout";
 
 /** Where on the stage a pointer is, in stage pixels. */
 export interface Point {
@@ -62,6 +63,9 @@ export interface CardLayerProps {
   epoch: unknown;
   objects: ObjectView[];
   placements: Layout;
+  /** The card the pointer is over: a hand card rises out of the fan (RAISE), drawn inside its
+   * element, which keeps its place so that nothing else moves and the pointer keeps the card. */
+  hovered?: number;
   states: Map<number, CardState>;
   /** A card was clicked (or tapped without dragging) at `at`. */
   onClick(slot: number, at: Point): void;
@@ -76,7 +80,11 @@ export interface CardLayerProps {
 /** A drag starts once the pointer has moved this far, in stage pixels; less is a click. */
 const DRAG_THRESHOLD = 6;
 
-const SPRING = { type: "spring", stiffness: 210, damping: 28 } as const;
+const SPRING: Transition = { type: "spring", stiffness: 210, damping: 28 };
+/** A hand card rises and settles back quickly and without bounce. */
+const RAISING: Transition = { type: "tween", duration: 0.14, ease: "easeOut" };
+/** A raised hand card is drawn over the rest of the hand. */
+const RAISED_Z = 300;
 
 export function CardLayer(props: CardLayerProps) {
   const { objects, placements } = props;
@@ -97,6 +105,7 @@ export function CardLayer(props: CardLayerProps) {
                 object={o}
                 place={place}
                 state={props.states.get(o.slot) ?? {}}
+                raised={props.hovered === o.slot}
                 layer={props}
                 appearing={shown.current}
               />
@@ -108,20 +117,26 @@ export function CardLayer(props: CardLayerProps) {
   );
 }
 
-/** Animates `value` to `to` whenever `to` or `restart` changes, unless the pointer is
- * `holding` the value where it is; once let go, the value glides to `to`. */
+/** Animates `value` to `to` (`how`, a spring by default) whenever `to` or `restart` changes,
+ * unless the pointer is `holding` the value where it is; once let go, the value glides to
+ * `to`. */
 function useGlide(
   value: MotionValue<number>,
   to: number,
   instant: boolean,
-  holding = false,
-  restart?: unknown,
+  { holding = false, restart, how = SPRING }: GlideOptions = {},
 ) {
   useEffect(() => {
     if (holding) return;
-    const controls = animate(value, to, instant ? { duration: 0 } : SPRING);
+    const controls = animate(value, to, instant ? { duration: 0 } : how);
     return () => controls.stop();
-  }, [value, to, instant, holding, restart]);
+  }, [value, to, instant, holding, restart, how]);
+}
+
+interface GlideOptions {
+  holding?: boolean;
+  restart?: unknown;
+  how?: Transition;
 }
 
 /** Where the pointer has a card: dragging it, or dropped where it was played until the view
@@ -132,12 +147,14 @@ function CardElement({
   object,
   place,
   state,
+  raised,
   layer,
   appearing,
 }: {
   object: ObjectView;
   place: Placement;
   state: CardState;
+  raised: boolean;
   layer: CardLayerProps;
   appearing: boolean;
 }) {
@@ -152,12 +169,11 @@ function CardElement({
   const opacity = useMotionValue(grow ? 0 : place.opacity);
   const [held, setHeld] = useState<Held>();
   const dragging = held?.dragging === true;
-  // The pointer places the card while it holds it, whatever its placement does meanwhile (it
-  // changes as soon as a raised hand card stops being hovered).
+  // The pointer places the card while it holds it, whatever its placement does meanwhile.
   const holding =
     held !== undefined && (held.dragging || held.epoch === layer.epoch);
-  useGlide(x, place.x, reduce, holding);
-  useGlide(y, place.y, reduce, holding);
+  useGlide(x, place.x, reduce, { holding });
+  useGlide(y, place.y, reduce, { holding });
   // A card changing looks is drawn at another type unit (a back, a full frame, a battlefield
   // frame): before that is painted, its scale makes up the difference, and then glides, so the
   // card's size changes smoothly too.
@@ -168,10 +184,17 @@ function CardElement({
     scale.jump((scale.get() * drawnUnit.current) / unit);
     drawnUnit.current = unit;
   }, [scale, unit]);
-  useGlide(scale, place.scale, reduce, false, unit);
-  useGlide(rotate, dragging ? 0 : place.rotate, reduce);
+  useGlide(scale, place.scale, reduce, { restart: unit });
+  // A hand card is raised while hovered and while the pointer holds it; anything else dragged
+  // straightens.
+  const hand = place.look === "hand";
+  const lifted = hand && (raised || held !== undefined);
+  useGlide(rotate, dragging && !hand ? 0 : place.rotate, reduce);
   useGlide(skewX, place.skew, reduce);
   useGlide(opacity, place.opacity, reduce);
+  // Raised, the card turns back upright about its top center and rises straight up the screen,
+  // inside its element, which stays turned in the fan.
+  const raise = useRaise(lifted ? place.rotate : undefined, reduce);
   const drag = useRef<{ start: Point; from: Point; moved: boolean }>(undefined);
 
   const stagePoint = (e: ReactPointerEvent) => {
@@ -254,7 +277,7 @@ function CardElement({
         opacity,
         originX: 0,
         originY: 0,
-        zIndex: dragging ? 1000 : place.z,
+        zIndex: dragging ? 1000 : lifted ? RAISED_Z : place.z,
       }}
       exit={reduce ? undefined : { opacity: 0, transition: { duration: 0.3 } }}
       onPointerDown={place.look === "hidden" ? undefined : onPointerDown}
@@ -270,9 +293,30 @@ function CardElement({
       }
       onPointerLeave={() => !drag.current && layer.onHover(undefined)}
     >
-      <Look object={object} place={place} state={state} />
+      <motion.div style={raise}>
+        <Look object={object} place={place} state={state} />
+      </motion.div>
     </motion.div>
   );
+}
+
+/** The transform raising a hand card out of a fan that turns it `turn` degrees, or none when
+ * `turn` is undefined: it turns back upright about the card's top center, rises `RAISE.lift`
+ * straight up the screen and grows by `RAISE.scale`. */
+function useRaise(turn: number | undefined, instant: boolean) {
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const rotate = useMotionValue(0);
+  const scale = useMotionValue(1);
+  const a = ((turn ?? 0) * Math.PI) / 180;
+  // Straight up the screen, in the turned card's own axes.
+  const lift = turn === undefined ? 0 : RAISE.lift;
+  const how = { how: RAISING };
+  useGlide(x, -lift * Math.sin(a), instant, how);
+  useGlide(y, -lift * Math.cos(a), instant, how);
+  useGlide(rotate, -(turn ?? 0), instant, how);
+  useGlide(scale, turn === undefined ? 1 : RAISE.scale, instant, how);
+  return { x, y, rotate, scale, originX: 0.5, originY: 0 };
 }
 
 /** What is under the pointer of event `e` besides the dragged element `self`: a card or a
