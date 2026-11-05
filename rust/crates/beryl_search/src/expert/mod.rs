@@ -483,11 +483,37 @@ impl Expert<'_> {
 
     /// A card to take from the opponent's hand, as Elite Spellbinder does: by its value, but
     /// a Mana Crypt is little to a player with lands enough, and a wheel is their way out of
-    /// an emptying library.
+    /// an emptying library. From our own library, as Thundertrap Trainer looks, dying: the
+    /// removal we can cast now.
     fn take_from_hand(&self, d: &Decision) -> Option<Choice> {
         let beryl_engine::Candidates::Objects(b) = d.candidates else {
             return None;
         };
+        // Thundertrap Trainer's look at our library: dying, the answer we can cast now.
+        if self.dying()
+            && b.iter().all(|s| {
+                let o = self.obs().object(s);
+                o.zone == Zone::Library && o.owner == self.me()
+            })
+        {
+            let mana = self.mana(self.me());
+            return Some(best(d, |c| {
+                let slot = c.object()?;
+                let card = self.obs().card(slot)?;
+                let now = i32::from(self.p.t.def(card).front().cost.mana_value()) <= mana;
+                let answer = self.name(slot).is_some_and(|n| {
+                    matches!(
+                        n,
+                        names::OUST
+                            | names::GET_LOST
+                            | names::AANGS_ICEBERG
+                            | names::SWIFT_RECONFIGURATION
+                            | names::SINK_INTO_STUPOR
+                    )
+                });
+                Some(self.value(slot) + 1000 * i32::from(now && answer))
+            }));
+        }
         if !b.iter().all(|s| {
             let o = self.obs().object(s);
             o.zone == Zone::Hand && o.owner == self.opp()
@@ -503,6 +529,34 @@ impl Expert<'_> {
                 _ => self.value(slot),
             })
         }))
+    }
+
+    /// How many of our lands, tapped or not, make white, and how many blue (a dual land
+    /// counts for both).
+    fn sources(&self) -> (i32, i32) {
+        let (mut white, mut blue) = (0, 0);
+        for s in self.permanents(self.me()) {
+            match self.name(s) {
+                Some(names::PLAINS) => white += 1,
+                Some(names::ISLAND | names::SINK_INTO_STUPOR) => blue += 1,
+                Some(names::TUNDRA | names::SEACHROME_COAST | names::SPARAS_HEADQUARTERS) => {
+                    white += 1;
+                    blue += 1;
+                }
+                _ => {}
+            }
+        }
+        (white, blue)
+    }
+
+    /// Whether our lands have the colors the card in `slot` costs.
+    fn colors_for(&self, slot: Slot) -> bool {
+        let Some(card) = self.obs().card(slot) else {
+            return false;
+        };
+        let (white, blue) = self.sources();
+        let cost = self.p.t.def(card).front().cost;
+        i32::from(cost.symbols[0]) <= white && i32::from(cost.symbols[1]) <= blue
     }
 
     /// What a player's permanents other than lands are worth.
@@ -880,18 +934,7 @@ impl Expert<'_> {
 
     /// 1 when we have fewer sources of white (`white`) or blue than of the other.
     fn short_of(&self, white: bool) -> i32 {
-        let (mut w, mut u) = (0, 0);
-        for s in self.permanents(self.me()) {
-            match self.name(s) {
-                Some(names::PLAINS) => w += 1,
-                Some(names::ISLAND | names::SINK_INTO_STUPOR) => u += 1,
-                Some(names::TUNDRA | names::SEACHROME_COAST | names::SPARAS_HEADQUARTERS) => {
-                    w += 1;
-                    u += 1;
-                }
-                _ => {}
-            }
-        }
+        let (w, u) = self.sources();
         i32::from(if white { w < u } else { u <= w })
     }
 
@@ -1123,9 +1166,13 @@ impl Expert<'_> {
                 // we need blockers now, impending leaves mana for another.
                 let full = costs == 0;
                 // Dying, impending's two flying Insects block now, ahead of anything else.
+                // In full only when that does not tap the counter we hold up into a counter
+                // they could have.
+                let safe = !self.opp_can_counter() || self.keeps_counter_mana(7);
                 match (full, self.dying()) {
                     (false, true) => 900,
-                    (true, false) => 650,
+                    (true, false) if safe => 650,
+                    (true, false) => 550,
                     _ => 600,
                 }
             }
@@ -1381,11 +1428,14 @@ impl Expert<'_> {
             + self.obs().graveyard(me).len()
             + self.hand(me).count() as usize;
         let decking = self.obs().library(me).len() <= 1 && pool > 8;
-        // Nor while we hold a real spell the wheel would shuffle away.
-        let holding = self
-            .hand(self.me())
-            .iter()
-            .any(|s| !self.is(s, wheel) && !self.p.is_land(s) && self.value(s) >= COUNTER_SPARE);
+        // Nor while we hold a real spell the wheel would shuffle away, one our lands have the
+        // colors for.
+        let holding = self.hand(self.me()).iter().any(|s| {
+            !self.is(s, wheel)
+                && !self.p.is_land(s)
+                && self.value(s) >= COUNTER_SPARE
+                && self.colors_for(s)
+        });
         // Our hand empty and theirs full, it refuels us more than them, behind or not; so
         // does one that gives them two cards or fewer and us three more than them.
         let empty = (ours == 0 && theirs >= 3) || (theirs >= 5 && gain >= 3);
@@ -1394,7 +1444,16 @@ impl Expert<'_> {
         // attempted to draw a card from a library with no cards in it ... that player loses
         // the game").
         let drawable = pool - usize::from(from_hand) >= 7;
-        drawable && (decking || (!winning && !holding && (empty || (!behind && refill))))
+        // When their next attack kills us through our blockers, it is the way out, while it
+        // leaves mana to cast what it draws: Time Spiral untaps six lands, Timetwister costs
+        // three.
+        let left = if spiral {
+            self.mana(me) - 6 + self.lands(me).min(6) as i32
+        } else {
+            self.mana(me) - 3
+        };
+        let out = self.threat_past(None) >= self.life() && left >= 3;
+        drawable && (decking || out || (!winning && !holding && (empty || (!behind && refill))))
     }
 
     /// The value of the best artifact of the opponent's that Thieving Skydiver could take,
@@ -2172,10 +2231,14 @@ impl Expert<'_> {
         }
     }
 
-    /// Dead on board, or low on life, what removing or returning a creature of theirs is worth
-    /// beyond its value: the creature that would kill us is the one to answer.
+    /// Dead on board, low on life, or at 10 or less facing a swing of half of it, what
+    /// removing or returning a creature of theirs is worth beyond its value: the creature
+    /// that would kill us is the one to answer.
     fn killer_bonus(&self, slot: Slot) -> i32 {
-        if (self.dying() || self.life() <= 6) && self.has_type(slot, Types::CREATURE) {
+        let pressed = self.dying()
+            || self.life() <= 6
+            || (self.life() <= 10 && 2 * self.threat_past(None) >= self.life());
+        if pressed && self.has_type(slot, Types::CREATURE) {
             20 * i32::from(self.obs().derived(slot).power.max(0))
         } else {
             0
