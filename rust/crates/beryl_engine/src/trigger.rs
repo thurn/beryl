@@ -95,8 +95,13 @@ fn fires(s: &State, trigger: Trigger, this: Option<u8>, you: u8, e: &Event) -> O
         lki: Lki::default(),
     };
     match (trigger, *e) {
+        // The amount is the X its spell was cast with
+        // ([CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)): "If an object's
+        // enters-the-battlefield triggered ability ... refers to X, and the spell that became
+        // that object as it resolved had a value of X chosen for any of its costs, the value
+        // of X for that ability is the same as the value of X for that spell".
         (Trigger::Enters, Event::ZoneChange { object, .. }) if is_this(object) => {
-            Some(info(object, you, 0))
+            Some(info(object, you, s.x_of(object.slot)))
         }
         (Trigger::Attacks, Event::Attack { attackers, .. })
             if this.is_some_and(|slot| attackers.contains(slot)) =>
@@ -294,6 +299,8 @@ pub(crate) fn put_on_stack(
     index: u8,
 ) -> Result<(), Full> {
     let tr = s.triggers.remove(usize::from(index));
+    // An enters ability's X is its spell's (CR 107.3m), captured as it triggered.
+    let entering = ability(t, tr.card, tr.face, tr.ability).trigger == Trigger::Enters;
     s.stack.push(StackEntry {
         object: tr.source,
         controller: tr.controller,
@@ -301,6 +308,7 @@ pub(crate) fn put_on_stack(
         card: tr.card,
         face: tr.face,
         info: tr.info,
+        x: if entering { tr.info.amount } else { 0 },
         ..StackEntry::default()
     })?;
     crate::cast::target_trigger(s, t, sink)

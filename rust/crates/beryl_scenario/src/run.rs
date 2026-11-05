@@ -140,7 +140,8 @@ struct Runner<'a> {
 impl Runner<'_> {
     /// The current position: the open decision or the end of the game. When the next action
     /// that answers decisions is an advance, its target is a breakpoint, so the game stops
-    /// there even where the engine would pass silently. Every new position must keep the
+    /// there even where the engine would pass silently; when it is a resolution, the current
+    /// step is, so the game stops as soon as the active player has priority again. Every new position must keep the
     /// state's invariants (§17.4), so a setup or a rules path that breaks one fails here.
     fn position(&mut self, i: usize) -> Result<Step, String> {
         if let Some(step) = self.position {
@@ -151,6 +152,14 @@ impl Runner<'_> {
             .find(|a| !matches!(a, Action::Assert { .. }));
         let breakpoint = match upcoming {
             Some(&Action::AdvanceTo { turn, step }) => Some(Breakpoint { turn, step }),
+            // The active player's next priority in this step, after the resolution.
+            Some(Action::Resolve) => {
+                let now = self.s.turn();
+                Some(Breakpoint {
+                    turn: now.number,
+                    step: now.step,
+                })
+            }
             _ => None,
         };
         self.s.set_profile(Profile {
@@ -226,6 +235,8 @@ impl Runner<'_> {
                 self.answer(c);
             }
             Action::Resolve => {
+                // Waiting triggers go on the stack first.
+                self.decision(i)?;
                 let depth = self.s.stack().len();
                 let Some(&top) = self.s.stack().last() else {
                     return Err("nothing on the stack to resolve".to_string());
@@ -417,10 +428,18 @@ impl Runner<'_> {
             Assertion::Pt {
                 player,
                 card,
+                token,
                 power,
                 toughness,
             } => {
-                let d = s.derived(self.permanent(player, card)?);
+                let slot = self
+                    .permanents(player, card)
+                    .find(|&slot| s.object(slot).flags.has(ObjectFlags::TOKEN) == token)
+                    .ok_or_else(|| {
+                        let what = if token { "token" } else { "card" };
+                        format!("player {player} controls no {card} {what}")
+                    })?;
+                let d = s.derived(slot);
                 (
                     format!("{}/{}", d.power, d.toughness),
                     format!("{power}/{toughness}"),

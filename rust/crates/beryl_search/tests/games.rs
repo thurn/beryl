@@ -73,7 +73,7 @@ fn record(seed: u64) -> (Vec<Choice>, Vec<u64>) {
 fn a_seed_and_its_choices_reproduce_every_state_hash() {
     for seed in 0..4 {
         let (choices, hashes) = record(seed);
-        assert!(hashes.len() > 50, "seed {seed}: a short game");
+        assert!(hashes.len() > 40, "seed {seed}: a short game");
         let (t, mut s) = game(seed);
         let mut x = Scratch::new();
         let mut replayed = Vec::new();

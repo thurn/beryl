@@ -4,9 +4,10 @@ use std::fmt::Write;
 use std::path::Path;
 
 use beryl_engine::card::{AbilityKind, ManaColor, Subtype, Supertypes, Types};
+use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
-    Choice, Decision, DecisionKind, GameTable, Outcome, Profile, Replay, Scratch, State, Step,
-    apply, next,
+    Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome, Profile, Replay, Scratch,
+    State, Step, TurnStep, Zone, apply, next,
 };
 
 use crate::{CARDS, SCENARIOS, decks, names};
@@ -205,4 +206,64 @@ fn the_dump_is_valid_json_with_every_scenario() {
     let total: usize = SCENARIOS.iter().map(|(_, s)| s.len()).sum();
     assert_eq!(json.as_array().unwrap().len(), total);
     assert_eq!(json[0]["card"], names::PLAINS);
+}
+
+/// A paused body's looks stay known (architecture §13): while Elite Spellbinder asks whether
+/// to exile a card, its controller knows the hand it looked at, so a state determinized from
+/// what they know replays to the same choice of cards.
+#[test]
+fn a_question_after_a_look_keeps_the_look() {
+    let p0 = &[(1, names::ELITE_SPELLBINDER), (3, names::PLAINS)];
+    let p1 = &[
+        (1, names::THIEVING_SKYDIVER),
+        (1, names::SPHINX_OF_FALSE_CONCLUSIONS),
+        (1, names::ISLAND),
+    ];
+    let t = GameTable::new(&CARDS, [p0, p1]).unwrap();
+    let mut s = State::new(&t, 1, Profile::EXACT);
+    s.begin_at(1, 0, TurnStep::PrecombatMain);
+    for player in 0..2 {
+        for slot in s.library(player).to_vec() {
+            let land = t
+                .def(s.object(slot).card)
+                .front()
+                .types
+                .contains(Types::LAND);
+            let zone = if player == 0 && land {
+                Zone::Battlefield
+            } else {
+                Zone::Hand
+            };
+            s.place(slot, zone).unwrap();
+        }
+    }
+    let mut x = Scratch::new();
+    let question = loop {
+        match next(&mut s, &t, &mut x, &mut Replay) {
+            Step::Decide(d) if d.kind == DecisionKind::YesNo => break d,
+            Step::Decide(d) => {
+                let cast = (0..d.len() as u8)
+                    .map(Choice)
+                    .find(|&c| matches!(d.candidates.option(c), Some(Opt::Cast { .. })));
+                apply(&mut s, &t, &mut x, &mut Replay, cast.unwrap_or(Choice(0)));
+            }
+            Step::Over(o) => panic!("the game ended: {o:?}"),
+        }
+    };
+    assert_eq!(question.player, 0);
+    for slot in s.zone(1, Zone::Hand).iter() {
+        assert!(s.knows(0, slot), "player 0 forgot the card in slot {slot}");
+    }
+    let choices = |s: &mut State| {
+        let mut x = Scratch::new();
+        apply(s, &t, &mut x, &mut Replay, Choice(0));
+        match next(s, &t, &mut x, &mut Replay) {
+            Step::Decide(d) => d,
+            Step::Over(o) => panic!("the game ended: {o:?}"),
+        }
+    };
+    let mut det = Observation::new(&s, 0).determinize(&t, &mut SplitMix64::new(9));
+    let real = choices(&mut s);
+    assert_eq!(real.kind, DecisionKind::ChooseObject);
+    assert_eq!(choices(&mut det), real);
 }

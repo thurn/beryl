@@ -1,0 +1,169 @@
+//! Thundertrap Trainer. {1}{U} Creature — Otter Wizard, 1/2. "Offspring {4} (You may pay an
+//! additional {4} as you cast this spell. If you do, when this creature enters, create a 1/1
+//! token copy of it.) When this creature enters, look at the top four cards of your library.
+//! You may reveal a noncreature, nonland card from among them and put it into your hand. Put
+//! the rest on the bottom of your library in a random order."
+
+use beryl_engine::card::{
+    Ability, CardDef, CastingOption, Colors, Face, Flow, ManaCost, Subtype, Subtypes, Trigger,
+    Types,
+};
+use beryl_engine::effect::EffectCtx;
+use beryl_engine::event::Reason;
+use beryl_engine::filter::Filter;
+use beryl_engine::{DecisionKind, TurnStep, Zone};
+use beryl_scenario::{Action, Assertion, P0, Permanent, Pick, Scenario};
+
+use crate::names;
+
+const NONCREATURE_NONLAND: Filter = Filter::Not(&Filter::Types(Types::CREATURE.union(Types::LAND)));
+
+/// The look, the optional reveal (CR 701.20a), and the rest to the bottom in a random order
+/// (CR 401.4).
+fn dig(ctx: &mut EffectCtx) -> Flow {
+    let you = ctx.controller();
+    let mut rest = ctx.top_of_library(you, 4);
+    ctx.look_at(you, rest);
+    let spells = NONCREATURE_NONLAND.select(ctx.state(), ctx.table(), rest, you);
+    if let Some(slot) = ctx.may_choose_object(you, spells)? {
+        ctx.reveal(slot);
+        ctx.move_to(ctx.state().object_ref(slot), Zone::Hand, Reason::Effect);
+        rest.remove(slot);
+    }
+    ctx.put_on_bottom_in_random_order(rest);
+    Ok(())
+}
+
+pub static CARD: CardDef = CardDef {
+    name: names::THUNDERTRAP_TRAINER,
+    faces: &[Face {
+        cost: ManaCost::new(1, [0, 1, 0, 0, 0, 0]),
+        types: Types::CREATURE,
+        subtypes: Subtypes::of(&[Subtype::Otter, Subtype::Wizard]),
+        colors: Colors::BLUE,
+        power: Some(1),
+        toughness: Some(2),
+        abilities: &[
+            Ability::offspring(),
+            Ability {
+                may_pause: true,
+                ..Ability::triggered(Trigger::Enters, dig)
+            },
+        ],
+        casting: &[CastingOption::Offspring(ManaCost::generic(4))],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+const TRAINER: &str = names::THUNDERTRAP_TRAINER;
+
+const ISLANDS: &[Permanent] = &[Permanent::new(names::ISLAND); 6];
+
+const fn library(count: u8) -> Action {
+    Action::Assert {
+        assertion: Assertion::Count {
+            player: P0,
+            zone: Zone::Library,
+            card: None,
+            count,
+        },
+    }
+}
+
+const fn hand(count: u8) -> Action {
+    Action::Assert {
+        assertion: Assertion::Count {
+            player: P0,
+            zone: Zone::Hand,
+            card: None,
+            count,
+        },
+    }
+}
+
+/// Eight lands: no card among the top four qualifies, so nothing is asked.
+const LANDS: &[&str] = &[names::PLAINS; 8];
+
+pub const SCENARIOS: &[Scenario] = &[
+    Scenario::new("Thundertrap Trainer finds no spell")
+        .hand(P0, &[TRAINER])
+        .battlefield(P0, ISLANDS.split_at(2).0)
+        .library(P0, LANDS)
+        .actions(&[
+            Action::Cast {
+                player: P0,
+                card: TRAINER,
+                face: 0,
+                costs: 0,
+            },
+            Action::Resolve,
+            Action::Assert {
+                assertion: Assertion::Stack { count: 1 },
+            },
+            Action::Resolve,
+            library(8),
+            hand(0),
+            Action::Assert {
+                assertion: Assertion::Controls {
+                    player: P0,
+                    card: TRAINER,
+                    count: 1,
+                },
+            },
+        ]),
+    // Offspring paid: two enters triggers, ordered by their controller; the 1/1 token copy
+    // has the look of its own, but not offspring's.
+    Scenario::new("Thundertrap Trainer with offspring")
+        .hand(P0, &[TRAINER])
+        .battlefield(P0, ISLANDS)
+        .library(P0, LANDS)
+        .actions(&[
+            Action::Cast {
+                player: P0,
+                card: TRAINER,
+                face: 0,
+                costs: 1,
+            },
+            Action::Resolve,
+            Action::Answer {
+                player: P0,
+                kind: DecisionKind::TriggerOrder,
+                pick: Pick::Card { card: TRAINER },
+            },
+            Action::Assert {
+                assertion: Assertion::Stack { count: 2 },
+            },
+            Action::Resolve,
+            Action::Resolve,
+            // The token's own enters trigger, if offspring's resolved last; otherwise the look.
+            Action::Resolve,
+            Action::Assert {
+                assertion: Assertion::Stack { count: 0 },
+            },
+            Action::Assert {
+                assertion: Assertion::Pt {
+                    player: P0,
+                    card: TRAINER,
+                    token: true,
+                    power: 1,
+                    toughness: 1,
+                },
+            },
+            Action::Assert {
+                assertion: Assertion::Pt {
+                    player: P0,
+                    card: TRAINER,
+                    token: false,
+                    power: 1,
+                    toughness: 2,
+                },
+            },
+            library(8),
+            hand(0),
+            Action::AdvanceTo {
+                turn: 1,
+                step: TurnStep::End,
+            },
+        ]),
+];

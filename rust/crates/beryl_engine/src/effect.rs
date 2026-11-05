@@ -18,7 +18,7 @@ use crate::observation::Observation;
 use crate::profile::Payment;
 use crate::state::{
     CastPermission, Continuous, CounterKind, Duration, FloatingEffect, ObjectFlags, ObjectRef,
-    PendingTrigger, StackEntry, State, Target, TriggerInfo, Zone,
+    PendingTrigger, StackEntry, State, Target, TriggerInfo, Zone, opponent,
 };
 use crate::table::GameTable;
 use crate::zone::{self, Place};
@@ -310,13 +310,49 @@ impl<'a> EffectCtx<'a> {
 
     /// Asks `player` to choose one of `candidates`, which must not be empty.
     pub fn choose_object(&mut self, player: u8, candidates: Bitboard) -> Result<u8, Pause> {
+        self.ask_object(player, DecisionKind::ChooseObject, candidates)
+    }
+
+    fn ask_object(
+        &mut self,
+        player: u8,
+        kind: DecisionKind,
+        candidates: Bitboard,
+    ) -> Result<u8, Pause> {
         let d = Decision {
             player,
-            kind: DecisionKind::ChooseObject,
+            kind,
             candidates: Candidates::Objects(crate::engine::collapse(self.state, candidates)),
         };
         let c = self.ask(&d)?;
         Ok(d.candidates.object(c).expect("an answer among the objects"))
+    }
+
+    /// `player` discards a card of their choice
+    /// ([CR 701.9b](https://yawgatog.com/resources/magic-rules/#R7019b)): "By default, effects
+    /// that cause a player to discard a card allow the affected player to choose which card
+    /// to discard." Returns the card in the graveyard, or `None` from an empty hand.
+    pub fn discard_a_card(&mut self, player: u8) -> Result<Option<ObjectRef>, Pause> {
+        let hand = self.state.zone(player, Zone::Hand);
+        if hand.is_empty() {
+            return Ok(None);
+        }
+        let slot = self.ask_object(player, DecisionKind::Discard, hand)?;
+        self.discard(self.state.object_ref(slot));
+        Ok(Some(self.state.object_ref(slot)))
+    }
+
+    /// Asks `player` to choose one of `candidates`, or none when they may decline: a yes or
+    /// no first, then the object. With no candidates there is nothing to ask.
+    pub fn may_choose_object(
+        &mut self,
+        player: u8,
+        candidates: Bitboard,
+    ) -> Result<Option<u8>, Pause> {
+        if candidates.is_empty() || !self.choose_yes_no(player)? {
+            return Ok(None);
+        }
+        self.choose_object(player, candidates).map(Some)
     }
 
     /// "[Effect] unless [player] pays [cost]"
@@ -603,6 +639,62 @@ impl<'a> EffectCtx<'a> {
         Ok(())
     }
 
+    /// The top `n` cards of a player's library, or all of it if it has fewer.
+    pub fn top_of_library(&self, player: u8, n: u8) -> Bitboard {
+        let library = self.state.library(player);
+        library[library.len().saturating_sub(usize::from(n))..]
+            .iter()
+            .copied()
+            .collect()
+    }
+
+    /// `player` looks at the cards in `cards` and from then on knows them (architecture §13):
+    /// a library and a hand are hidden zones
+    /// ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)), "zones in which not
+    /// all players can be expected to see the cards' faces."
+    pub fn look_at(&mut self, player: u8, cards: Bitboard) {
+        self.state.knowledge[usize::from(player)] |= cards;
+    }
+
+    /// Discards a card from its owner's hand
+    /// ([CR 701.9a](https://yawgatog.com/resources/magic-rules/#R7019a)): "To discard a card,
+    /// move it from its owner's hand to that player's graveyard."
+    pub fn discard(&mut self, card: ObjectRef) {
+        if self.state.is_current(card) && self.state.object(card.slot).zone == Zone::Hand {
+            self.move_to(card, Zone::Graveyard, Reason::Discard);
+        }
+    }
+
+    /// Puts cards on the bottom of their owner's library in a random order. Their identities
+    /// are dealt anew among the slots they land in, so no player knows which is where
+    /// ([CR 401.4](https://yawgatog.com/resources/magic-rules/#R4014)): "That library's owner
+    /// doesn't reveal the order in which the cards go into the library."
+    pub fn put_on_bottom_in_random_order(&mut self, cards: Bitboard) {
+        let r = event::move_batch_to(
+            self.state,
+            self.table,
+            self.sink,
+            cards,
+            Zone::Library,
+            Place::Bottom,
+            Reason::Effect,
+            Entry::default(),
+        );
+        self.check(r);
+        // Rebound within each owner's library, among the slots that went there.
+        for owner in 0..2 {
+            let mut moved: Fixed<u8, 64> = Fixed::new();
+            for &slot in self.state.library(owner) {
+                if cards.contains(slot) && moved.push(slot).is_err() {
+                    self.full = true;
+                }
+            }
+            let mut rng = self.state.rng.other;
+            zone::rebind(self.state, moved.as_slice(), &mut rng);
+            self.state.rng.other = rng;
+        }
+    }
+
     /// Destroys a permanent ([CR 701.8a](https://yawgatog.com/resources/magic-rules/#R7018a)):
     /// "To destroy a permanent, move it from the battlefield to its owner's graveyard."
     pub fn destroy(&mut self, object: ObjectRef) {
@@ -680,6 +772,53 @@ impl<'a> EffectCtx<'a> {
             self.full = true;
             Bitboard::EMPTY
         })
+    }
+
+    /// Creates `count` tokens of a predefined kind under this ability's controller, tapped
+    /// and attacking. As they enter, their controller chooses what they attack
+    /// ([CR 508.4](https://yawgatog.com/resources/magic-rules/#R5084)): "If a creature is put
+    /// onto the battlefield attacking, its controller chooses which defending player,
+    /// planeswalker a defending player controls, or battle a defending player protects it's
+    /// attacking as it enters the battlefield". Only the attacking player's creatures can be
+    /// ([CR 506.3b](https://yawgatog.com/resources/magic-rules/#R5063b)): "If an effect would
+    /// put a creature onto the battlefield attacking under the control of any player except an
+    /// attacking player, that creature does enter the battlefield, but it's never considered to
+    /// be an attacking creature." [CR 506.2](https://yawgatog.com/resources/magic-rules/#R5062):
+    /// "During the combat phase, the active player is the attacking player".
+    pub fn create_attacking_tokens(
+        &mut self,
+        def: &'static CardDef,
+        count: u8,
+    ) -> Result<Bitboard, Pause> {
+        let you = self.entry.controller;
+        let attacking =
+            crate::combat::in_combat(self.state.turn.step) && self.state.turn.active == you;
+        let walker = if attacking {
+            let opts = crate::combat::attack_targets(self.state, opponent(you));
+            match self.ask_options(you, DecisionKind::AttackTarget, opts.as_slice())? {
+                Opt::Defender(slot) => Some(slot),
+                _ => unreachable!("a defender"),
+            }
+        } else {
+            None
+        };
+        let tokens = self.create_tokens(
+            def,
+            count,
+            TokenEntry {
+                tapped: true,
+                attacking: walker.is_some(),
+                ..TokenEntry::default()
+            },
+        );
+        if let Some(walker) = walker.filter(|&w| w != crate::state::NONE) {
+            for slot in tokens.iter() {
+                let o = self.state.object_mut(slot);
+                o.combat = walker;
+                o.flags.set(ObjectFlags::ATTACKS_PLANESWALKER, true);
+            }
+        }
+        Ok(tokens)
     }
 
     /// Starts a floating continuous effect from this ability on one object
@@ -841,5 +980,56 @@ pub fn nothing(_: &mut EffectCtx) -> Flow {
 /// "Draw a card."
 pub fn draw_a_card(ctx: &mut EffectCtx) -> Flow {
     ctx.draw(ctx.controller(), 1);
+    Ok(())
+}
+
+/// Whether the cost a permanent's spell was cast with, marked by `flag`, was paid, for an
+/// intervening "if" of its enters ability (CR 603.4). The mark is set as the permanent enters
+/// and never changes while it stays; once it has left, the answer is what it was as the
+/// ability triggered, and it triggered only if the cost was paid.
+fn entered_with(s: &State, tr: &PendingTrigger, flag: u32) -> bool {
+    !s.is_current(tr.source) || s.object(tr.source.slot).flags.has(flag)
+}
+
+/// "If it was kicked" ([CR 702.33d](https://yawgatog.com/resources/magic-rules/#R70233d)):
+/// "If a spell's controller declares the intention to pay any of that spell's kicker costs,
+/// that spell has been 'kicked.'"
+pub fn kicked(s: &State, _: &GameTable, tr: &PendingTrigger) -> bool {
+    entered_with(s, tr, ObjectFlags::KICKED)
+}
+
+/// Offspring's "if its offspring cost was paid" (CR 702.175a).
+pub fn offspring_paid(s: &State, _: &GameTable, tr: &PendingTrigger) -> bool {
+    entered_with(s, tr, ObjectFlags::OFFSPRING)
+}
+
+/// Offspring's "create a token that's a copy of it, except it's 1/1" (CR 702.175a): the
+/// copiable values are its card's ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)),
+/// with the 1/1 exception of [CR 707.9b](https://yawgatog.com/resources/magic-rules/#R7079b),
+/// whether or not it is still on the battlefield.
+pub fn offspring_copy(ctx: &mut EffectCtx) -> Flow {
+    ctx.create_tokens_of(
+        ctx.entry.card,
+        1,
+        TokenEntry {
+            one_one: true,
+            ..TokenEntry::default()
+        },
+    );
+    Ok(())
+}
+
+/// Impending's "if this permanent's impending cost was paid and it has a time counter on it"
+/// (CR 702.176a), on the permanent itself.
+pub fn impending_counting_down(s: &State, _: &GameTable, tr: &PendingTrigger) -> bool {
+    let o = s.object(tr.source.slot);
+    s.is_current(tr.source)
+        && o.flags.has(ObjectFlags::IMPENDING)
+        && o.counters.get(CounterKind::Time) > 0
+}
+
+/// Impending's "remove a time counter from it" (CR 702.176a).
+pub fn remove_a_time_counter(ctx: &mut EffectCtx) -> Flow {
+    ctx.remove_counters(ctx.source(), CounterKind::Time, 1);
     Ok(())
 }

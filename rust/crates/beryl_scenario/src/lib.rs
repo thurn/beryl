@@ -109,7 +109,8 @@ pub enum Action {
         ability: u8,
     },
     /// Players pass priority until the top of the stack resolves, or until the next decision
-    /// is not a priority decision (a question its resolution asks).
+    /// is not a priority decision (a question its resolution asks). The game then stops at
+    /// the active player's next priority, even where passing is all they can do.
     Resolve,
     /// `player` answers the open decision, which must be of this kind.
     Answer {
@@ -242,10 +243,12 @@ pub enum Assertion {
         card: &'static str,
         count: u8,
     },
-    /// The power and toughness of the first permanent named `card` that `player` controls.
+    /// The power and toughness of the first permanent named `card` that `player` controls
+    /// and that is a token, or a card.
     Pt {
         player: u8,
         card: &'static str,
+        token: bool,
         power: i8,
         toughness: i8,
     },

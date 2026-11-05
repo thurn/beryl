@@ -30,14 +30,23 @@ pub enum Filter {
     Whose(Whose),
     Tapped,
     ManaValueAtMost(u8),
+    /// Mana value X or less, X being the value of the spell or ability whose target this is
+    /// (Thieving Skydiver's "target artifact with mana value X or less").
+    ManaValueAtMostX,
     Not(&'static Filter),
     All(&'static [Filter]),
     AnyOf(&'static [Filter]),
 }
 
 impl Filter {
-    /// Whether the object in `slot` passes, evaluated for player `you`.
+    /// Whether the object in `slot` passes, evaluated for player `you`, where X is 0.
     pub fn matches(&self, s: &State, t: &GameTable, slot: u8, you: u8) -> bool {
+        self.matches_x(s, t, slot, you, 0)
+    }
+
+    /// Whether the object in `slot` passes, evaluated for player `you` and the value `x` of
+    /// X.
+    pub fn matches_x(&self, s: &State, t: &GameTable, slot: u8, you: u8, x: u8) -> bool {
         let o = s.object(slot);
         let face = || &t.def(o.card).faces[usize::from(o.face)];
         let derived = || (o.zone == Zone::Battlefield).then(|| s.derived(slot));
@@ -66,17 +75,23 @@ impl Filter {
             }
             Filter::Tapped => o.flags.has(ObjectFlags::TAPPED),
             Filter::ManaValueAtMost(n) => face().cost.mana_value() <= n,
-            Filter::Not(f) => !f.matches(s, t, slot, you),
-            Filter::All(fs) => fs.iter().all(|f| f.matches(s, t, slot, you)),
-            Filter::AnyOf(fs) => fs.iter().any(|f| f.matches(s, t, slot, you)),
+            Filter::ManaValueAtMostX => face().cost.mana_value() <= x,
+            Filter::Not(f) => !f.matches_x(s, t, slot, you, x),
+            Filter::All(fs) => fs.iter().all(|f| f.matches_x(s, t, slot, you, x)),
+            Filter::AnyOf(fs) => fs.iter().any(|f| f.matches_x(s, t, slot, you, x)),
         }
     }
 
-    /// The members of `within` that pass.
+    /// The members of `within` that pass, where X is 0.
     pub fn select(&self, s: &State, t: &GameTable, within: Bitboard, you: u8) -> Bitboard {
+        self.select_x(s, t, within, you, 0)
+    }
+
+    /// The members of `within` that pass, for the value `x` of X.
+    pub fn select_x(&self, s: &State, t: &GameTable, within: Bitboard, you: u8, x: u8) -> Bitboard {
         within
             .iter()
-            .filter(|&slot| self.matches(s, t, slot, you))
+            .filter(|&slot| self.matches_x(s, t, slot, you, x))
             .collect()
     }
 }

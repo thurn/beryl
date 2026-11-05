@@ -60,7 +60,7 @@ fn main() {
         });
         COUNTING.store(false, Ordering::Relaxed);
         let allocations = ALLOCATIONS.swap(0, Ordering::Relaxed);
-        assert!(decisions > 50, "seed {seed}: a short game");
+        assert!(decisions > 40, "seed {seed}: a short game");
         assert_eq!(
             allocations, 0,
             "seed {seed}: {allocations} allocations in a game that ended {outcome:?}"

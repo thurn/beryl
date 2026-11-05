@@ -1,5 +1,9 @@
 pub mod island;
+pub mod malcolm_alluring_scoundrel;
 pub mod mana_drain;
 pub mod sink_into_stupor;
+pub mod sphinx_of_false_conclusions;
+pub mod thieving_skydiver;
+pub mod thundertrap_trainer;
 pub mod time_spiral;
 pub mod timetwister;

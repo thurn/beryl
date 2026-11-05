@@ -208,8 +208,16 @@ fn in_zone(s: &State, zone: Zone) -> Bitboard {
 /// `you`. `itself` is the spell being cast, which is an illegal target for itself
 /// ([CR 115.5](https://yawgatog.com/resources/magic-rules/#R1155)): "A spell or ability on the
 /// stack is an illegal target for itself." Before it is cast it is not yet on the stack, but
-/// it will have left the zone it is in when its targets are chosen.
-fn candidates(s: &State, t: &GameTable, spec: &TargetSpec, you: u8, itself: u8) -> TargetSet {
+/// it will have left the zone it is in when its targets are chosen. `x` is the value of X of
+/// the spell or ability.
+fn candidates(
+    s: &State,
+    t: &GameTable,
+    spec: &TargetSpec,
+    you: u8,
+    itself: u8,
+    x: u8,
+) -> TargetSet {
     let mut within = match spec.kind {
         TargetKind::Player => {
             let players = (0..2u8)
@@ -225,7 +233,7 @@ fn candidates(s: &State, t: &GameTable, spec: &TargetSpec, you: u8, itself: u8) 
     if itself != NONE {
         within.remove(itself);
     }
-    TargetSet::Objects(spec.filter.select(s, t, within, you))
+    TargetSet::Objects(spec.filter.select_x(s, t, within, you, x))
 }
 
 impl TargetSet {
@@ -240,10 +248,17 @@ impl TargetSet {
 /// Whether every required target can be chosen
 /// ([CR 115.3](https://yawgatog.com/resources/magic-rules/#R1153)): "The same target can't be
 /// chosen multiple times for any one instance of the word "target" on a spell or ability."
-fn targetable(s: &State, t: &GameTable, ability: Option<&Ability>, you: u8, itself: u8) -> bool {
+fn targetable(
+    s: &State,
+    t: &GameTable,
+    ability: Option<&Ability>,
+    you: u8,
+    itself: u8,
+    x: u8,
+) -> bool {
     ability.is_none_or(|a| {
         a.targets.iter().all(|spec| {
-            spec.optional || candidates(s, t, spec, you, itself).count() >= u32::from(spec.count)
+            spec.optional || candidates(s, t, spec, you, itself, x).count() >= u32::from(spec.count)
         })
     })
 }
@@ -275,7 +290,7 @@ pub(crate) fn still_legal(
     } else {
         NONE
     };
-    match candidates(s, t, spec, you, itself) {
+    match candidates(s, t, spec, you, itself, entry.x) {
         TargetSet::Objects(b) => b.contains(r.slot),
         TargetSet::Players(_) => false,
     }
@@ -321,7 +336,7 @@ fn castable(
             (0, free)
         }
     };
-    if !targetable(s, t, face.spell_ability(), player, slot) {
+    if !targetable(s, t, face.spell_ability(), player, slot, 0) {
         return Ok(false);
     }
     let x = x_range_start(face, costs, free).unwrap_or(0);
@@ -471,7 +486,7 @@ fn activatable(s: &State, t: &GameTable, player: u8, slot: u8, index: usize) -> 
     if sorcery_speed && !sorcery_timing(s, player) {
         return Ok(false);
     }
-    if !targetable(s, t, Some(a), player, NONE) {
+    if !targetable(s, t, Some(a), player, NONE, 0) {
         return Ok(false);
     }
     mana::payable(s, t, player, a.cost.mana.with_x(0), spent_by_cost(slot, a))
@@ -634,7 +649,7 @@ pub(crate) fn target_trigger(s: &mut State, t: &GameTable, sink: &mut Sink) -> R
     if ability.targets.is_empty() {
         return Ok(());
     }
-    if !targetable(s, t, Some(ability), entry.controller, NONE) {
+    if !targetable(s, t, Some(ability), entry.controller, NONE, entry.x) {
         s.stack.pop();
         return Ok(());
     }
@@ -866,7 +881,7 @@ fn target_options(s: &State, t: &GameTable, c: &Casting) -> TargetSet {
     } else {
         NONE
     };
-    match candidates(s, t, spec, c.player, itself) {
+    match candidates(s, t, spec, c.player, itself, entry.x) {
         TargetSet::Objects(mut b) => {
             for target in entry.targets.iter().filter(|x| x.spec == c.spec) {
                 if let Some(r) = target.as_object() {

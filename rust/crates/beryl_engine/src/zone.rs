@@ -4,6 +4,7 @@
 
 use crate::bitboard::Bitboard;
 use crate::fixed::{Fixed, Full};
+use crate::rng::SplitMix64;
 use crate::state::{Counters, DECK_SLOTS, Derived, NONE, Object, ObjectFlags, State, Zone};
 
 /// Where in a library an object goes.
@@ -178,22 +179,34 @@ pub(crate) fn draw_n(s: &mut State, player: u8, n: u8) -> Result<(), Full> {
 pub(crate) fn shuffle_library(s: &mut State, player: u8) {
     let p = usize::from(player);
     let library = s.zones.library[p];
+    let mut rng = s.rng.shuffle;
+    rebind(s, library.as_slice(), &mut rng);
+    s.rng.shuffle = rng;
+    s.rng.shuffle.shuffle(s.zones.library[p].as_mut_slice());
+}
+
+/// Deals the identities of the cards in `slots`, all in one library, anew among those slots
+/// with `rng`, and every player forgets them: the slots are public handles (architecture
+/// §13), so this is how cards come to be in an order no player knows. Each becomes a new
+/// object ([CR 701.20d](https://yawgatog.com/resources/magic-rules/#R70120d)): "If cards in a
+/// player's library are shuffled or otherwise reordered, any revealed cards that are
+/// reordered stop being revealed and become new objects."
+pub(crate) fn rebind(s: &mut State, slots: &[u8], rng: &mut SplitMix64) {
     let mut cards: Fixed<u8, DECK_SLOTS> = Fixed::new();
-    for &slot in &library {
+    for &slot in slots {
         // A library never holds more than its owner's deck slots.
         let _ = cards.push(s.object(slot).card);
     }
-    s.rng.shuffle.shuffle(cards.as_mut_slice());
-    let shuffled: Bitboard = library.iter().copied().collect();
-    for (&slot, &card) in library.iter().zip(cards.iter()) {
+    rng.shuffle(cards.as_mut_slice());
+    for (&slot, &card) in slots.iter().zip(cards.iter()) {
         let o = s.object_mut(slot);
         o.card = card;
         o.incarnation = o.incarnation.wrapping_add(1);
     }
+    let rebound: Bitboard = slots.iter().copied().collect();
     for k in &mut s.knowledge {
-        *k &= !shuffled;
+        *k &= !rebound;
     }
-    s.rng.shuffle.shuffle(s.zones.library[p].as_mut_slice());
 }
 
 /// A token in a zone other than the battlefield ceases to exist, and its slot returns to the

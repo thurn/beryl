@@ -3,7 +3,7 @@
 
 use crate::card::{Affected, Modification, StaticCondition, Subtypes, Types};
 use crate::fixed::Fixed;
-use crate::state::{AbilityRef, Continuous, Derived, NONE, ObjectFlags, State, Zone};
+use crate::state::{AbilityRef, Continuous, CounterKind, Derived, NONE, ObjectFlags, State, Zone};
 use crate::table::GameTable;
 use crate::trigger::face;
 
@@ -85,6 +85,9 @@ fn recompute(s: &mut State, t: &GameTable) {
             let applies = match spec.condition {
                 StaticCondition::Always => true,
                 StaticCondition::HasCounter(kind) => o.counters.get(kind) > 0,
+                StaticCondition::Impending => {
+                    o.flags.has(ObjectFlags::IMPENDING) && o.counters.get(CounterKind::Time) > 0
+                }
             };
             let target = match spec.affected {
                 Affected::Itself => Some(i),

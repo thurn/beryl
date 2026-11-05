@@ -53,10 +53,35 @@ pub(crate) fn resolve(
         None => *s = *spare,
         Some(question) => {
             sink.truncate(mark);
+            keep_what_was_seen(s, spare);
+            // While the question is open no one holds priority; the finished resolution gives
+            // it to the active player (CR 117.3b).
+            s.turn.passes = 0;
             s.pending = Pending::Resolving(Resolving { record, question });
         }
     }
     Ok(())
+}
+
+/// What a paused run showed a player stays known in the committed state (architecture
+/// §13): the cards a body looked at, revealed or drew before its question. A player who
+/// looked at the top of their library knows those cards while they decide, so a state
+/// determinized from what they know replays the body to the same question.
+///
+/// A slot keeps its identity through the moves of a run, so a card seen there is the card the
+/// committed state holds in that slot, unless something random dealt identities anew (a
+/// shuffle, a random order); then only a slot that is still the same object counts.
+fn keep_what_was_seen(s: &mut State, run: &State) {
+    let random = run.rng != s.rng;
+    for p in 0..2 {
+        let gained = run.knowledge[p] & !s.knowledge[p];
+        for slot in gained.iter() {
+            let (now, then) = (s.object(slot), run.object(slot));
+            if now.card == then.card && (!random || now.incarnation == then.incarnation) {
+                s.knowledge[p].insert(slot);
+            }
+        }
+    }
 }
 
 /// Replays a paused resolution into the scratch state up to its question, so a viewer sees

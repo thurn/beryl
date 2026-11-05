@@ -325,10 +325,25 @@ pub enum Subtype {
     Aura,
     /// An artifact type (CR 301.7), of the Map tokens Get Lost creates.
     Map,
+    // Creature types ([CR 205.3m](https://yawgatog.com/resources/magic-rules/#R2053m)).
+    Avatar,
+    Cleric,
+    Horror,
+    Human,
+    Illusion,
+    Insect,
+    Knight,
+    Merfolk,
+    Otter,
+    Pirate,
+    Rogue,
+    Siren,
+    Sphinx,
+    Wizard,
 }
 
 impl Subtype {
-    pub const ALL: [Subtype; 8] = [
+    pub const ALL: [Subtype; 22] = [
         Subtype::Plains,
         Subtype::Island,
         Subtype::Swamp,
@@ -337,6 +352,20 @@ impl Subtype {
         Subtype::Vehicle,
         Subtype::Aura,
         Subtype::Map,
+        Subtype::Avatar,
+        Subtype::Cleric,
+        Subtype::Horror,
+        Subtype::Human,
+        Subtype::Illusion,
+        Subtype::Insect,
+        Subtype::Knight,
+        Subtype::Merfolk,
+        Subtype::Otter,
+        Subtype::Pirate,
+        Subtype::Rogue,
+        Subtype::Siren,
+        Subtype::Sphinx,
+        Subtype::Wizard,
     ];
 
     /// The card type this subtype belongs to (CR 205.3).
@@ -349,6 +378,20 @@ impl Subtype {
             | Subtype::Forest => Types::LAND,
             Subtype::Vehicle | Subtype::Map => Types::ARTIFACT,
             Subtype::Aura => Types::ENCHANTMENT,
+            Subtype::Avatar
+            | Subtype::Cleric
+            | Subtype::Horror
+            | Subtype::Human
+            | Subtype::Illusion
+            | Subtype::Insect
+            | Subtype::Knight
+            | Subtype::Merfolk
+            | Subtype::Otter
+            | Subtype::Pirate
+            | Subtype::Rogue
+            | Subtype::Siren
+            | Subtype::Sphinx
+            | Subtype::Wizard => Types::CREATURE,
         }
     }
 }
@@ -670,6 +713,42 @@ impl Ability {
         }
     }
 
+    /// Offspring's triggered ability
+    /// ([CR 702.175a](https://yawgatog.com/resources/magic-rules/#R702175a)): "When this
+    /// permanent enters, if its offspring cost was paid, create a token that's a copy of it,
+    /// except it's 1/1." The face lists [`CastingOption::Offspring`] too.
+    pub const fn offspring() -> Ability {
+        Ability {
+            condition: Some(crate::effect::offspring_paid),
+            ..Ability::triggered(Trigger::Enters, crate::effect::offspring_copy)
+        }
+    }
+
+    /// Impending's static ability (CR 702.176a): "As long as this permanent's impending cost
+    /// was paid and it has a time counter on it, it's not a creature." The face lists
+    /// [`CastingOption::Impending`], whose counters the permanent enters with, and
+    /// [`Ability::impending_countdown`].
+    pub const fn impending() -> Ability {
+        Ability::statik(LayerSpec {
+            affected: Affected::Itself,
+            condition: StaticCondition::Impending,
+            modification: Modification::RemoveTypes(Types::CREATURE),
+        })
+    }
+
+    /// Impending's triggered ability (CR 702.176a): "At the beginning of your end step, if
+    /// this permanent's impending cost was paid and it has a time counter on it, remove a
+    /// time counter from it."
+    pub const fn impending_countdown() -> Ability {
+        Ability {
+            condition: Some(crate::effect::impending_counting_down),
+            ..Ability::triggered(
+                Trigger::Step(TurnStep::End, Whose::You),
+                crate::effect::remove_a_time_counter,
+            )
+        }
+    }
+
     /// Whether this is a loyalty ability
     /// ([CR 606.1](https://yawgatog.com/resources/magic-rules/#R6061)).
     pub fn is_loyalty(&self) -> bool {
@@ -782,8 +861,11 @@ pub enum Affected {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StaticCondition {
     Always,
-    /// "As long as it has a [kind] counter on it" (impending's "isn't a creature").
+    /// "As long as it has a [kind] counter on it".
     HasCounter(CounterKind),
+    /// Impending's "As long as this permanent's impending cost was paid and it has a time
+    /// counter on it" (CR 702.176a).
+    Impending,
 }
 
 /// What a continuous effect does to a permanent. The layer it applies in follows from the

@@ -112,14 +112,7 @@ pub(crate) fn attack_decision(s: &State, attacker: u8) -> Result<Decision, Full>
         }
         (s.turn.active, DecisionKind::Attacker)
     } else {
-        list.push(Opt::Defender(NONE))?;
-        for &slot in s.battlefield() {
-            if s.controller(slot) == defender(s)
-                && Types(s.derived(slot).types).contains(Types::PLANESWALKER)
-            {
-                list.push(Opt::Defender(slot))?;
-            }
-        }
+        list = attack_targets(s, defender(s));
         (s.turn.active, DecisionKind::AttackTarget)
     };
     Ok(Decision {
@@ -127,6 +120,21 @@ pub(crate) fn attack_decision(s: &State, attacker: u8) -> Result<Decision, Full>
         kind,
         candidates: Candidates::Options(list),
     })
+}
+
+/// What a creature can attack: the defending player, then each planeswalker they control.
+pub(crate) fn attack_targets(s: &State, defending: u8) -> Fixed<Opt, 64> {
+    let mut list = Fixed::new();
+    // No player controls 63 planeswalkers.
+    let _ = list.push(Opt::Defender(NONE));
+    for &slot in s.battlefield() {
+        if s.controller(slot) == defending
+            && Types(s.derived(slot).types).contains(Types::PLANESWALKER)
+        {
+            let _ = list.push(Opt::Defender(slot));
+        }
+    }
+    list
 }
 
 /// Applies one pick of the attack declaration.

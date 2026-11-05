@@ -140,6 +140,7 @@ fn a_scenario_casts_resolves_activates_and_attacks() {
                 assertion: Assertion::Pt {
                     player: P0,
                     card: BEAR,
+                    token: false,
                     power: 2,
                     toughness: 2,
                 },
