@@ -797,25 +797,28 @@
   top: 706px;
 }
 .turn-controls .priority-pill {
-  right: 40px;
+  right: 48px;
   top: 729px;
+  width: 263px;
   height: 41px;
+  padding-left: 1.3em;
   font-size: 20.5px;
 }
 .turn-action {
-  right: 42px;
-  top: 765px;
+  right: 39px;
+  top: 762px;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 .turn-controls-wait .turn-action {
-  top: 788px;
+  right: 48px;
+  top: 784px;
 }
 /* The turn button: deep amber in the middle, under a gold rim (battlefield.png's Next). */
 .turn-action .button {
-  min-width: 214px;
-  height: 50px;
+  min-width: 218px;
+  height: 51px;
   padding: 0 21px;
   font-size: 31px;
 }
@@ -842,6 +845,7 @@
 }
 /* A long label steps down a size so the button keeps its width (combat.png's Resolve Damage). */
 .turn-action .button-long {
+  min-width: 249px;
   font-size: 24px;
 }
 .turn-action .button:disabled {
