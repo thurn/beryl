@@ -1,7 +1,7 @@
 // The component library on one page, laid out as docs/ui_mockups/ui_system.png. `just ui-shots`
 // captures it; it is also the place to look at a component while changing it.
 import { useMemo, type ReactNode } from "react";
-import { Card, Crest } from "../components/Card";
+import { Card, Crest, useSlotArt } from "../components/Card";
 import {
   Button,
   FastForwardIcon,
@@ -121,6 +121,7 @@ function ActionsAndStatus() {
 }
 
 function PlayerAndZones() {
+  const a = useSlotArt();
   return (
     <Panel n="03" title="Player & zones">
       <div className="player-row">
@@ -143,13 +144,17 @@ function PlayerAndZones() {
         </figure>
         <figure>
           <Graveyard
-            cards={[SAMPLE.counterspell, SAMPLE.doomBlade]}
+            cards={[SAMPLE.counterspell, a(SAMPLE.doomBlade, "03-graveyard")]}
             width={100}
           />
           <Caption>Graveyard</Caption>
         </figure>
         <figure>
-          <LandStack card={SAMPLE.island} count={3} width={130} />
+          <LandStack
+            card={a(SAMPLE.island, "03-island")}
+            count={3}
+            width={130}
+          />
           <Caption>Lands (stacked)</Caption>
         </figure>
       </div>
@@ -158,23 +163,37 @@ function PlayerAndZones() {
 }
 
 function CardsAndStates() {
+  const a = useSlotArt();
   return (
     <Panel n="04" title="Cards & states" className="panel-cards">
       <div className="states-grid">
-        <Card card={SAMPLE.infernoTitan} variant="field" width={150} />
+        <Card
+          card={a(SAMPLE.infernoTitan, "04-titan")}
+          variant="field"
+          width={150}
+        />
         <figure>
-          <Card card={SAMPLE.mountain} variant="field" width={100} tapped />
+          <Card
+            card={a(SAMPLE.mountain, "04-tapped")}
+            variant="field"
+            width={100}
+            tapped
+          />
           <Caption>Tapped</Caption>
         </figure>
         <figure>
-          <Card card={SAMPLE.plains} variant="field" width={100} />
+          <Card
+            card={a(SAMPLE.plains, "04-untapped")}
+            variant="field"
+            width={100}
+          />
           <Caption>Untapped</Caption>
         </figure>
       </div>
       <div className="states-grid states-glow">
         <figure>
           <Card
-            card={SAMPLE.balefulStrix}
+            card={a(SAMPLE.balefulStrix, "04-source")}
             variant="field"
             width={140}
             highlight="source"
@@ -183,7 +202,7 @@ function CardsAndStates() {
         </figure>
         <figure>
           <Card
-            card={SAMPLE.balefulStrix}
+            card={a(SAMPLE.balefulStrix, "04-target")}
             variant="field"
             width={140}
             highlight="target"
@@ -192,15 +211,24 @@ function CardsAndStates() {
         </figure>
       </div>
       <div className="mini-hand">
-        <Card card={SAMPLE.swords} width={120} style={{ rotate: -5 }} />
-        <Card card={SAMPLE.mountain} width={120} />
-        <Card card={SAMPLE.plateau} width={120} style={{ rotate: 5, y: 6 }} />
+        <Card
+          card={a(SAMPLE.swords, "04-hand-swords")}
+          width={120}
+          style={{ rotate: -5 }}
+        />
+        <Card card={a(SAMPLE.mountain, "04-hand-mountain")} width={120} />
+        <Card
+          card={a(SAMPLE.plateau, "04-hand-plateau")}
+          width={120}
+          style={{ rotate: 5, y: 6 }}
+        />
       </div>
     </Panel>
   );
 }
 
 function CombatAndStack() {
+  const a = useSlotArt();
   const arrows = useMemo<ArrowSpec[]>(
     () => [
       {
@@ -238,7 +266,7 @@ function CombatAndStack() {
           <figure>
             <Card
               id="g-attacker"
-              card={SAMPLE.beast}
+              card={a(SAMPLE.beast, "05-attacker")}
               variant="field"
               width={125}
               combat="attacker"
@@ -248,7 +276,7 @@ function CombatAndStack() {
           <figure>
             <Card
               id="g-blocker"
-              card={SAMPLE.angel}
+              card={a(SAMPLE.angel, "05-blocker")}
               variant="field"
               width={125}
               combat="blocker"
@@ -260,7 +288,7 @@ function CombatAndStack() {
         <div className="stack-row">
           <Card
             id="g-titan"
-            card={SAMPLE.infernoTitan}
+            card={a(SAMPLE.infernoTitan, "05-source")}
             variant="field"
             width={112}
           />
@@ -270,7 +298,12 @@ function CombatAndStack() {
             text="When Inferno Titan enters the battlefield, it deals 3 damage divided as you choose among one, two, or three targets."
             width={142}
           />
-          <Card id="g-beast" card={SAMPLE.beast} variant="field" width={104} />
+          <Card
+            id="g-beast"
+            card={a(SAMPLE.beast, "05-target")}
+            variant="field"
+            width={104}
+          />
         </div>
         <div className="stack-captions">
           <Caption>Gold: source → ability</Caption>

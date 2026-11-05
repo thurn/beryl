@@ -1,6 +1,7 @@
-// Stand-in cards for the gallery and the table demo, named as in docs/ui_mockups. Art is the
+// Stand-in cards and the table demo's board, named and placed as in docs/ui_mockups. Art is the
 // placeholder painting until the card data bead supplies real art.
 import type { CardFace } from "../components/Card";
+import type { TableBoard } from "./Table";
 
 const land = (name: string, typeLine: string): CardFace => ({
   name,
@@ -92,3 +93,50 @@ export const SAMPLE = {
   mountain: land("Mountain", "Basic Land — Mountain"),
   plateau: land("Plateau", "Land — Mountain Plains"),
 } satisfies Record<string, CardFace>;
+
+/** The board of docs/ui_mockups/battlefield.png: the table demo, and the base of the replicas
+ * (src/replica/). Slots name each card's art in replica mode. */
+export const SAMPLE_BOARD: TableBoard = {
+  opponent: {
+    life: 17,
+    library: 33,
+    graveyard: [SAMPLE.counterspell, SAMPLE.doomBlade],
+    hand: 5,
+    lands: [
+      {
+        card: SAMPLE.island,
+        count: 3,
+        x: 150,
+        y: 127,
+        slot: "opponent-island",
+      },
+      { card: SAMPLE.swamp, count: 3, x: 372, y: 122, slot: "opponent-swamp" },
+    ],
+    creatures: [
+      { card: SAMPLE.balefulStrix, x: 608, y: 223, slot: "opponent-strix" },
+      { card: SAMPLE.beast, x: 810, y: 223, slot: "opponent-beast" },
+    ],
+  },
+  you: {
+    life: 22,
+    active: true,
+    library: 26,
+    graveyard: [],
+    hand: [
+      { card: SAMPLE.bolt, slot: "hand-bolt" },
+      { card: SAMPLE.swords, slot: "hand-swords" },
+      { card: SAMPLE.mountain, slot: "hand-mountain" },
+      { card: SAMPLE.plateau, slot: "hand-plateau" },
+    ],
+    lands: [
+      { card: SAMPLE.mountain, count: 3, x: 104, y: 566, slot: "you-mountain" },
+      { card: SAMPLE.plains, count: 3, x: 338, y: 564, slot: "you-plains" },
+    ],
+    creatures: [
+      { card: SAMPLE.goblinGuide, x: 589, y: 421, slot: "you-goblin-guide" },
+      { card: SAMPLE.angel, x: 813, y: 421, slot: "you-angel" },
+    ],
+  },
+  phase: "main1",
+  action: { label: "Next", caption: "To Combat" },
+};

@@ -3,7 +3,8 @@ captures the routes listed in ui/shots.json with headless Playwright WebKit (ui/
 and prints the paths. Pages run in a plain browser on the fixture transport (ui/src/ipc.ts).
 
 Screenshots go to the cache (`ui-shots/<checkout>/`), never into the tree; WebKit is installed
-there on first use.
+there on first use. The serving and the replica art are shared with the mockup harness
+(mockups.py).
 """
 
 from __future__ import annotations
@@ -18,12 +19,22 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from . import paths, warm
 
 SERVER_TIMEOUT = 60.0
 NPM_BIN: Path = paths.UI / "node_modules" / ".bin"
+# The mockups' parts and art windows, and where the art windows are cut to: gitignored, served by
+# Vite in development only (src/replica/).
+REGIONS: Path = paths.REPO / "docs" / "ui_mockups" / "regions.json"
+REPLICA_ART: Path = paths.UI / "replica-art"
+
+
+class UiError(Exception):
+    """Serving the UI or installing WebKit failed; the message says why."""
 
 
 def out_dir() -> Path:
@@ -49,7 +60,8 @@ def wait_for_server(url: str, server: subprocess.Popen[bytes]) -> bool:
     return False
 
 
-def ui_shots(args: argparse.Namespace) -> int:
+def webkit_env() -> dict[str, str]:
+    """The environment for the capture scripts, with Playwright WebKit installed in the cache."""
     warm.ensure()
     env = {
         **os.environ,
@@ -66,15 +78,29 @@ def ui_shots(args: argparse.Namespace) -> int:
         check=False,
     )
     if install.returncode != 0:
-        print(install.stdout + install.stderr, file=sys.stderr)
-        print("ui-shots: installing Playwright WebKit failed", file=sys.stderr)
-        return install.returncode
+        raise UiError(
+            install.stdout + install.stderr + "installing Playwright WebKit failed"
+        )
+    return env
 
+
+def cut_art(env: dict[str, str]) -> int:
+    """Cuts each card's art window out of the mockups into REPLICA_ART, for the replicas."""
+    shutil.rmtree(REPLICA_ART, ignore_errors=True)
+    return subprocess.run(
+        ["node", "scripts/mockups.mjs", "art", str(REGIONS), str(REPLICA_ART)],
+        cwd=paths.UI,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    ).returncode
+
+
+@contextmanager
+def served_ui(env: dict[str, str]) -> Iterator[str]:
+    """Serves ui/ with Vite on a free port for the duration; yields its base URL."""
     port = free_port()
     url = f"http://127.0.0.1:{port}/"
-    out = out_dir()
-    shutil.rmtree(out, ignore_errors=True)
-    out.mkdir(parents=True)
     with tempfile.TemporaryFile() as log:
         server = subprocess.Popen(
             [str(NPM_BIN / "vite"), "--host", "127.0.0.1", "--port", str(port)],
@@ -87,22 +113,39 @@ def ui_shots(args: argparse.Namespace) -> int:
         try:
             if not wait_for_server(url, server):
                 log.seek(0)
-                sys.stderr.write(log.read().decode(errors="replace"))
-                print(f"ui-shots: Vite did not serve {url}", file=sys.stderr)
-                return 1
-            code = subprocess.run(
-                ["node", "scripts/shots.mjs", url, str(out), "shots.json", *args.only],
-                cwd=paths.UI,
-                env=env,
-                stdin=subprocess.DEVNULL,
-                check=False,
-            ).returncode
+                raise UiError(
+                    log.read().decode(errors="replace") + f"Vite did not serve {url}"
+                )
+            yield url
         finally:
             server.terminate()
             try:
                 server.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 server.kill()
+
+
+def ui_shots(args: argparse.Namespace) -> int:
+    out = out_dir()
+    shutil.rmtree(out, ignore_errors=True)
+    out.mkdir(parents=True)
+    try:
+        env = webkit_env()
+        # The replica shots draw the art windows cut from the mockups.
+        code = cut_art(env)
+        if code == 0:
+            with served_ui(env) as url:
+                code = subprocess.run(
+                    ["node", "scripts/shots.mjs", url, str(out), "shots.json"]
+                    + list(args.only),
+                    cwd=paths.UI,
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                    check=False,
+                ).returncode
+    except UiError as e:
+        print(f"ui-shots: {e}", file=sys.stderr)
+        code = 1
     if code != 0:
         print("ui-shots: FAILED", file=sys.stderr)
     return code

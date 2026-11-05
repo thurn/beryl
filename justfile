@@ -23,6 +23,21 @@ smoke *args:
 ui-shots *args:
     {{ by }} ui-shots "$@"
 
+# Compare replicas with docs/ui_mockups part by part (globs over regions.json parts; --zoom N)
+[group('app')]
+ui-compare *args:
+    {{ by }} ui-compare "$@"
+
+# A mockup's color at a point, a region's mean color and its edges (--grid for a zoomed crop)
+[group('app')]
+ui-probe *args:
+    {{ by }} ui-probe "$@"
+
+# Candidate fonts over a mockup text sample (a part or mockup:x,y,w,h; --text required)
+[group('app')]
+ui-fonts *args:
+    {{ by }} ui-fonts "$@"
+
 # The release Beryl.app, under rust/target/tauri/release/bundle/macos
 [group('app')]
 bundle:

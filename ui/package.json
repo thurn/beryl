@@ -21,6 +21,14 @@
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
+    "@fontsource-variable/cinzel": "^5.3.0",
+    "@fontsource-variable/cormorant-garamond": "^5.3.0",
+    "@fontsource-variable/crimson-pro": "^5.3.0",
+    "@fontsource-variable/libre-baskerville": "^5.3.0",
+    "@fontsource-variable/noto-sans": "^5.3.0",
+    "@fontsource-variable/open-sans": "^5.3.0",
+    "@fontsource-variable/source-sans-3": "^5.3.1",
+    "@fontsource-variable/source-serif-4": "^5.3.1",
     "@tauri-apps/cli": "^2.12.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",
