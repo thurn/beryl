@@ -1,5 +1,5 @@
 {
-  "$comment": "UI fixtures `just ui-shots` records with `beryl_cli record-fixture` into ui/public/fixtures before capturing: a seeded game between named agents (`wu-control` or `fuzz:<seed>` decks), stopped at the human seat's first decision of a kind (`first <kind> decision for seat <n>`, kinds as ui/src/generated/protocol.ts names them, optionally `from turn <t>`) or at `game over`, where every condition in `where` also holds of the view (`step <step>`, `attacking`, `blocking`, `targeted trigger on the stack`, `opponent's spell on the stack`, `castable <card>`, `resolving <card>`: the decision is asked by that card's spell or ability as it resolves). Shots replay one with `?fixture=<name>`, from its nth view with `&at=<n>`.",
+  "$comment": "UI fixtures `just ui-shots` records with `beryl_cli record-fixture` into ui/public/fixtures before capturing: a seeded game between named agents (`wu-control` or `fuzz:<seed>` decks), stopped at the human seat's first decision of a kind (`first <kind> decision for seat <n>`, kinds as ui/src/generated/protocol.ts names them, optionally `from turn <t>`) or at `game over`, where every condition in `where` also holds of the view (`step <step>`, `attacking`, `blocking`, `targeted trigger on the stack`, `opponent's spell on the stack`, `castable <card>`, `resolving <card>`: the decision is asked by that card's spell or ability as it resolves, `casting <card>`: by that spell as it is cast, `playable pair in hand`: a card the human may play has a twin in their hand), recording `after` more views past it if given. Shots replay one with `?fixture=<name>`, from its nth view with `&at=<n>`.",
   "fixtures": [
     {
       "name": "first-target",
@@ -98,6 +98,38 @@
       "agents": ["greedy", "greedy"],
       "until": "first yesNo decision for seat 0",
       "where": ["resolving Mana Tithe"]
+    },
+    {
+      "name": "hand-pair",
+      "seed": 1,
+      "decks": ["wu-control", "wu-control"],
+      "agents": ["greedy", "greedy"],
+      "until": "first priority decision for seat 0",
+      "where": ["playable pair in hand"]
+    },
+    {
+      "name": "cast-kicker",
+      "seed": 2,
+      "decks": ["wu-control", "wu-control"],
+      "agents": ["random", "random"],
+      "until": "first x decision for seat 0",
+      "where": ["casting Thieving Skydiver"]
+    },
+    {
+      "name": "pay-default",
+      "seed": 11,
+      "decks": ["wu-control", "wu-control"],
+      "agents": ["greedy", "greedy"],
+      "until": "first paymentPlan decision for seat 0",
+      "after": 1
+    },
+    {
+      "name": "pay-other",
+      "seed": 1,
+      "decks": ["wu-control", "wu-control"],
+      "agents": ["random", "random"],
+      "until": "first paymentPlan decision for seat 0",
+      "after": 1
     }
   ]
 }

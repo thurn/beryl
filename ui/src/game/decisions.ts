@@ -5,15 +5,18 @@ import type {
   CandidateIndex,
   DecisionView,
   Kind,
+  Payment,
   PlayerView,
   Side,
 } from "../generated/protocol";
 
-/** One thing a card offers: the candidate's index and its label. */
+/** One thing a card offers: the candidate's index and its label, and for a cast or an
+ * activation, the ways it can be paid. */
 export interface Act {
   index: CandidateIndex;
   label: string;
   option: Candidate;
+  payments: Payment[];
 }
 
 export interface Interactions {
@@ -35,11 +38,14 @@ export interface Interactions {
 /** A pick a later decision should get: one of its kind, the candidate `wants` names or,
  * failing that, one `alike` names (a card the engine offers in place of an interchangeable
  * one, architecture §7.2). A drag says the block target after the blocker it declares; an
- * overlay says a whole scry. */
+ * overlay says a whole scry. A pick that `waits` stays planned while the player answers other
+ * decisions before it (a cast's payment, after the targets they pick on the board), until
+ * priority returns. */
 export interface Intent {
   kind: Kind;
   wants(option: Candidate): boolean;
   alike?(option: Candidate): boolean;
+  waits?: boolean;
 }
 
 /** The candidate of `decision` that `intent` names, if it is of the intent's kind. */
@@ -89,10 +95,11 @@ export function interactions(view: PlayerView): Interactions {
   const decision = status.decision;
   let pass: CandidateIndex | undefined;
   let done: CandidateIndex | undefined;
-  decision.candidates.forEach(({ label, option }, index) => {
+  decision.candidates.forEach(({ label, option, payments }, index) => {
     const slot = slotOf(option);
     if (slot !== undefined) {
-      bySlot.set(slot, [...(bySlot.get(slot) ?? []), { index, label, option }]);
+      const act = { index, label, option, payments };
+      bySlot.set(slot, [...(bySlot.get(slot) ?? []), act]);
     } else if (option.kind === "player") {
       players.set(option.player, index);
     } else if (option.kind === "defender") {
@@ -104,6 +111,16 @@ export function interactions(view: PlayerView): Interactions {
       done = index;
     }
   });
+  // Interchangeable cards collapse to one candidate (architecture §7.2): of two basic lands
+  // of a name in your hand the engine offers one. Either card offers it.
+  const offered = view.objects.filter(
+    (o) => o.zone === "hand" && o.owner === "you" && bySlot.has(o.slot),
+  );
+  for (const o of view.objects) {
+    if (o.zone !== "hand" || o.owner !== "you" || bySlot.has(o.slot)) continue;
+    const twin = offered.find((t) => o.name !== null && t.name === o.name);
+    if (twin) bySlot.set(o.slot, bySlot.get(twin.slot)!);
+  }
   return {
     bySlot,
     players,

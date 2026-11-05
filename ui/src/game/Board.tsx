@@ -61,6 +61,17 @@ import {
 } from "./decisions";
 import { abilityText, useAbilityFace, useFace } from "./faces";
 import {
+  asksCastStep,
+  castActs,
+  castPlan,
+  firstChoice,
+  plansOf,
+  tapList,
+  tapsOf,
+  type CastChoice,
+} from "./casting";
+import { CastStep } from "./CastStep";
+import {
   combatBanner,
   layout,
   passButton,
@@ -102,6 +113,13 @@ interface Menu {
   acts: Act[];
 }
 
+/** A card's cast being set up in the cast step. */
+interface Casting {
+  slot: number;
+  casts: Act[];
+  choice: CastChoice;
+}
+
 export function Board({
   view,
   waiting,
@@ -113,6 +131,9 @@ export function Board({
 }: BoardProps) {
   const [hovered, setHovered] = useState<number>();
   const [menu, setMenu] = useState<Menu>();
+  const [casting, setCasting] = useState<Casting>();
+  // The card being dragged.
+  const [lifted, setLifted] = useState<number>();
   const [settings, setSettings] = useState(false);
   const can = useMemo(() => interactions(view), [view]);
   // Under a screen over the table (the opening hand, a choice, the game's end), the table only
@@ -137,17 +158,40 @@ export function Board({
     decision.kind !== "priority" &&
     !isCombat(decision.kind) &&
     !isOpening(decision.kind);
+  const castingNow = deciding ? casting : undefined;
+  // The prompt or the cast step sits over the turn controls; the stack rises to clear it.
+  const asking = prompting || castingNow !== undefined;
   const placements = useMemo(
-    () => layout(view, raised, prompting, dimmed),
-    [view, raised, prompting, dimmed],
+    () => layout(view, raised, asking, dimmed),
+    [view, raised, asking, dimmed],
   );
 
   // A new view closes whatever was open on the old one.
-  useEffect(() => setMenu(undefined), [view]);
+  useEffect(() => {
+    setMenu(undefined);
+    setCasting(undefined);
+  }, [view]);
 
   const pick = (index: CandidateIndex, then?: Intent[]) => {
     setMenu(undefined);
+    setCasting(undefined);
     choose(index, then);
+  };
+  /** Casts with `choice`: the cast, then its X and payment as each is asked. */
+  const cast = (choice: CastChoice) => pick(choice.act.index, castPlan(choice));
+  /** Plays an act of a card's: a cast with its least X and the default payment. */
+  const play = (act: Act) =>
+    act.option.kind === "cast" ? cast(firstChoice(act)) : pick(act.index);
+  /** Opens the cast step for the card in `slot` with its casts. */
+  const setUp = (slot: number, casts: Act[]) => {
+    setMenu(undefined);
+    setCasting({ slot, casts, choice: firstChoice(casts[0]!) });
+  };
+  /** A menu's pick: a cast goes to the cast step, with all of the card's casts. */
+  const pickAct = (slot: number, act: Act) => {
+    const casts = castActs(can.bySlot.get(slot) ?? []);
+    if (act.option.kind === "cast") setUp(slot, casts);
+    else pick(act.index);
   };
 
   const states = new Map<number, CardState>();
@@ -187,29 +231,83 @@ export function Board({
       highlight: "source",
     });
   }
+  // The permanents the payment taps glow as it is set up, or while the card is dragged, its
+  // first cast's (the one a drop makes when it asks nothing more). In the cast step, the ones
+  // only another payment taps can be clicked to pay that way.
+  const liftedCast =
+    deciding && lifted !== undefined
+      ? castActs(can.bySlot.get(lifted) ?? [])[0]
+      : undefined;
+  const paying = castingNow
+    ? castingNow.choice
+    : liftedCast && firstChoice(liftedCast);
+  const taps = new Set(paying ? tapsOf(paying) : []);
+  const others = castingNow
+    ? plansOf(castingNow.choice).flatMap((p) =>
+        p.taps.filter((slot) => !taps.has(slot)),
+      )
+    : [];
+  for (const slot of others) {
+    states.set(slot, { ...states.get(slot), playable: true });
+  }
+  for (const slot of taps) {
+    states.set(slot, { ...states.get(slot), paying: true, playable: false });
+  }
 
   const onClick = (slot: number, at: Point) => {
+    if (castingNow) {
+      // A permanent another payment taps pays that way.
+      const plan = plansOf(castingNow.choice).find((p) =>
+        p.taps.includes(slot),
+      );
+      if (plan && !taps.has(slot)) {
+        setCasting({
+          ...castingNow,
+          choice: { ...castingNow.choice, plan: plan.plan ?? undefined },
+        });
+        return;
+      }
+      if (slot === castingNow.slot) return;
+      setCasting(undefined);
+    }
     const acts = deciding ? can.bySlot.get(slot) : undefined;
     if (!acts) {
       setMenu(undefined);
       return;
     }
+    const casts = castActs(acts);
     if (can.picking && acts.length === 1) {
       pick(acts[0]!.index);
+    } else if (casts.length > 0 && casts.length === acts.length) {
+      // A card that can only be cast goes straight to the cast step.
+      setUp(slot, casts);
     } else {
-      setMenu({ slot, at, acts });
+      // One entry for all of a card's casts, which the cast step tells apart.
+      const listed = acts.filter(
+        (a) => a.option.kind !== "cast" || a === casts[0],
+      );
+      setMenu({ slot, at, acts: listed });
     }
   };
   const onDrop = (slot: number, { start, at, onto }: Drop) => {
     const acts = deciding ? (can.bySlot.get(slot) ?? []) : [];
     if (objects.get(slot)?.zone === "hand") {
       const plays = at.y < BATTLEFIELD_EDGE ? playActs(acts) : [];
+      const casts = castActs(plays);
+      if (casts.length === plays.length && asksCastStep(casts)) {
+        // The cast asks for more (which cast, X): the cast step, with the card back in hand.
+        setUp(slot, casts);
+        return false;
+      }
       if (plays.length === 1) {
-        pick(plays[0]!.index);
+        play(plays[0]!);
         return true;
       }
       if (plays.length > 1) {
-        setMenu({ slot, at, acts: plays });
+        const listed = plays.filter(
+          (a) => a.option.kind !== "cast" || a === casts[0],
+        );
+        setMenu({ slot, at, acts: listed });
       }
       return false;
     }
@@ -254,6 +352,7 @@ export function Board({
     return true;
   };
 
+  const nameOf = (slot: number) => objects.get(slot)?.name ?? "a card";
   const { you, opponent } = view.players;
   const active = view.turn.active;
   const sourceName =
@@ -338,7 +437,7 @@ export function Board({
                 key={`${i}-${item.name}`}
                 index={i}
                 count={view.stack.length}
-                lifted={prompting}
+                lifted={asking}
                 item={item}
                 source={
                   item.source === null ? undefined : objects.get(item.source)
@@ -355,6 +454,7 @@ export function Board({
           onClick={onClick}
           onDrop={onDrop}
           onHover={setHovered}
+          onLift={setLifted}
         />
 
         <div className="board-arrows">
@@ -396,19 +496,36 @@ export function Board({
         )}
 
         {prompting && decision && (
-          <Prompt decision={decision} source={sourceName} onPick={pick} />
+          <Prompt
+            decision={decision}
+            source={sourceName}
+            nameOf={nameOf}
+            onPick={pick}
+          />
+        )}
+
+        {castingNow && !prompting && (
+          <CastStep
+            name={objects.get(castingNow.slot)?.name ?? "a card"}
+            casts={castingNow.casts}
+            choice={castingNow.choice}
+            nameOf={nameOf}
+            onChoose={(choice) => setCasting({ ...castingNow, choice })}
+            onCast={() => cast(castingNow.choice)}
+            onCancel={() => setCasting(undefined)}
+          />
         )}
 
         {menu && (
           <ActionMenu
             menu={menu}
             title={objects.get(menu.slot)?.name ?? undefined}
-            onPick={pick}
+            onPick={(act) => pickAct(menu.slot, act)}
             onClose={() => setMenu(undefined)}
           />
         )}
 
-        {hovered !== undefined && !menu && !dimmed && (
+        {hovered !== undefined && !menu && !castingNow && !dimmed && (
           <Inspect
             object={objects.get(hovered)}
             place={placements.get(hovered)}
@@ -746,12 +863,20 @@ const BLANK: ObjectView = {
 function Prompt({
   decision,
   source,
+  nameOf,
   onPick,
 }: {
   decision: DecisionView;
   source?: string;
+  nameOf(slot: number): string;
   onPick(index: CandidateIndex): void;
 }) {
+  // A payment plan reads as what it taps, never as a number.
+  const label = (c: DecisionView["candidates"][number]) => {
+    const taps = c.payments[0]?.taps;
+    if (c.option.kind !== "plan" || !taps) return c.label;
+    return taps.length > 0 ? `Tap ${tapList(taps.map(nameOf))}` : "Tap nothing";
+  };
   return (
     <div className="prompt" role="dialog" aria-label={prompt(decision, source)}>
       <h2 className="prompt-title">{prompt(decision, source)}</h2>
@@ -763,7 +888,7 @@ function Prompt({
             variant="secondary"
             onClick={() => onPick(i)}
           >
-            {c.label}
+            {label(c)}
           </Button>
         ))}
       </div>
@@ -780,7 +905,7 @@ function ActionMenu({
 }: {
   menu: Menu;
   title?: string;
-  onPick(index: CandidateIndex): void;
+  onPick(act: Act): void;
   onClose(): void;
 }) {
   useEffect(() => {
@@ -810,7 +935,7 @@ function ActionMenu({
             type="button"
             role="menuitem"
             className="action-menu-item"
-            onClick={() => onPick(a.index)}
+            onClick={() => onPick(a)}
           >
             {menuLabel(a, title)}
           </button>

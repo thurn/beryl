@@ -7,7 +7,7 @@ use std::sync::mpsc::channel;
 
 use beryl_cards::decks::{WU_CONTROL, fuzz_deck};
 use beryl_session::ipc::{self, Fixture, FixtureMessage};
-use beryl_session::protocol::{Candidate, Combat, Kind, Side, StackItem, Step};
+use beryl_session::protocol::{Candidate, Combat, Kind, Side, StackItem, Step, ZoneName};
 use beryl_session::{PlayerView, Seat, Sessions, StartGame, Status, StopsSetting, agents};
 use serde::Deserialize;
 use serde_json::json;
@@ -33,6 +33,10 @@ struct Definition {
     /// What else must hold of the view the recording stops at (see [`Condition::parse`]).
     #[serde(default, rename = "where")]
     conditions: Vec<String>,
+    /// How many more of the human's decisions to record past the stop, as the stand-in plays
+    /// on: what the decision there led to.
+    #[serde(default)]
+    after: usize,
 }
 
 /// Where a recording stops: the human's first decision of a kind, or first halt
@@ -126,18 +130,26 @@ enum Condition {
     /// The open decision is asked by the resolution of a spell of this name or an ability of
     /// a card of this name.
     Resolving(String),
+    /// The open decision is asked by the casting of a spell of this name: its X, a target or
+    /// its payment.
+    Casting(String),
+    /// The human may play or cast a card from their hand of which they hold another just like
+    /// it, which the engine offers as one candidate for both (architecture §7.2).
+    PlayablePair,
 }
 
 impl Condition {
     /// Parses "step <step>" (as the protocol names steps: "declareBlockers"), "attacking",
     /// "blocking", "targeted trigger on the stack", "opponent's spell on the stack" or
-    /// "castable <card name>" or "resolving <card name>".
+    /// "castable <card name>", "resolving <card name>", "casting <card name>" or "playable
+    /// pair in hand".
     fn parse(text: &str) -> Result<Condition, String> {
         let condition = match text {
             "attacking" => Condition::Attacking,
             "blocking" => Condition::Blocking,
             "targeted trigger on the stack" => Condition::TargetedTrigger,
             "opponent's spell on the stack" => Condition::OpponentsSpell,
+            "playable pair in hand" => Condition::PlayablePair,
             _ => {
                 if let Some(step) = text.strip_prefix("step ") {
                     Condition::Step(
@@ -148,6 +160,8 @@ impl Condition {
                     Condition::Castable(name.to_owned())
                 } else if let Some(name) = text.strip_prefix("resolving ") {
                     Condition::Resolving(name.to_owned())
+                } else if let Some(name) = text.strip_prefix("casting ") {
+                    Condition::Casting(name.to_owned())
                 } else {
                     return Err(format!("{text:?}: no such condition"));
                 }
@@ -195,6 +209,41 @@ impl Condition {
                     Some(StackItem::Ability { name, .. }) => name == card,
                     None => false,
                 },
+                _ => false,
+            },
+            Condition::Casting(card) => match &view.status {
+                Status::Deciding { decision } => {
+                    decision.resolving.is_none()
+                        && decision.source.is_some_and(|slot| {
+                            name(slot) == Some(card.as_str())
+                                && view
+                                    .objects
+                                    .iter()
+                                    .any(|o| o.slot == slot && o.zone == ZoneName::Stack)
+                        })
+                }
+                _ => false,
+            },
+            Condition::PlayablePair => match &view.status {
+                Status::Deciding { decision } => decision.candidates.iter().any(|c| {
+                    let (Candidate::Cast { slot, .. } | Candidate::PlayLand { slot }) = c.option
+                    else {
+                        return false;
+                    };
+                    let held = |s: u8| {
+                        view.objects
+                            .iter()
+                            .any(|o| o.slot == s && o.zone == ZoneName::Hand)
+                    };
+                    held(slot)
+                        && view.objects.iter().any(|o| {
+                            o.slot != slot
+                                && o.zone == ZoneName::Hand
+                                && o.owner == Side::You
+                                && o.name.is_some()
+                                && o.name.as_deref() == name(slot)
+                        })
+                }),
                 _ => false,
             },
         }
@@ -254,12 +303,15 @@ fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
         FixtureMessage::response(ipc::LIST_AGENTS, &agents()),
         FixtureMessage::response(ipc::START_GAME, &session),
     ];
+    // The human's decisions still to record once the stop is reached.
+    let mut left = None;
     loop {
         let update = updates
             .recv()
             .map_err(|_| "the session ended without a view".to_owned())?;
-        let reached =
-            until.reached(&update.view) && conditions.iter().all(|c| c.holds(&update.view));
+        let reached = left.is_none()
+            && until.reached(&update.view)
+            && conditions.iter().all(|c| c.holds(&update.view));
         let status = &update.view.status;
         let (deciding, ended) = (
             matches!(status, Status::Deciding { .. }),
@@ -267,6 +319,11 @@ fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
         );
         messages.push(FixtureMessage::game_update(&update));
         if reached {
+            left = Some(def.after);
+        } else if let Some(n) = left.filter(|_| deciding) {
+            left = Some(n - 1);
+        }
+        if left == Some(0) || (ended && left.is_some()) {
             return Ok(messages);
         }
         if ended {
@@ -345,6 +402,14 @@ mod tests {
             Condition::parse("resolving Mana Tithe"),
             Ok(Condition::Resolving("Mana Tithe".to_owned()))
         );
+        assert_eq!(
+            Condition::parse("casting Thieving Skydiver"),
+            Ok(Condition::Casting("Thieving Skydiver".to_owned()))
+        );
+        assert_eq!(
+            Condition::parse("playable pair in hand"),
+            Ok(Condition::PlayablePair)
+        );
         assert!(Condition::parse("step lunch").is_err());
         assert!(Condition::parse("raining").is_err());
     }
@@ -359,6 +424,7 @@ mod tests {
             stops: None,
             until: "first target decision for seat 1".to_owned(),
             conditions: vec![],
+            after: 0,
         };
         let messages = record(&def).unwrap();
         let Some(FixtureMessage::Event { payload, .. }) = messages.last() else {

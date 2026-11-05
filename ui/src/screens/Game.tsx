@@ -184,18 +184,24 @@ function Playing({ update }: { update: GameUpdate }) {
     if (!decision || waiting) return;
     setError(undefined);
     setAnswered(view);
-    planned.current = then;
+    // Picks still waiting for their decision come after the new ones.
+    planned.current = [...then, ...planned.current];
     choose(decision.id, index).catch(fail);
   };
 
   // Each new decision takes the next planned pick, if it asks for it; otherwise the plan is
-  // over and the player decides. The views of the game playing on in between keep the plan.
+  // over (but for a pick that waits) and the player decides. The views of the game playing on
+  // in between keep the plan.
   useEffect(() => {
     if (status.kind === "thinking" || status.kind === "playing") return;
     const [next, ...rest] = planned.current;
     planned.current = [];
     const index = next && decision ? intended(decision, next) : undefined;
     if (index === undefined) {
+      // A pick that waits stays planned while the player answers the decisions before it.
+      if (next?.waits && decision && decision.kind !== "priority") {
+        planned.current = [next, ...rest];
+      }
       setHeld(undefined);
       return;
     }

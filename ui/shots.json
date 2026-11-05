@@ -38,11 +38,31 @@
       "height": 900
     },
     {
-      "name": "game-cast-menu",
+      "name": "game-cast-step",
       "route": "/?fixture=greedy-turn-9&at=48#/game",
       "width": 1600,
       "height": 900,
       "click": "[data-zone=hand][data-card='Thieving Skydiver']"
+    },
+    {
+      "name": "game-hand-pair",
+      "route": "/?fixture=hand-pair#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-cast-kicker",
+      "route": "/?fixture=cast-kicker&at=443#/game",
+      "width": 1600,
+      "height": 900,
+      "click": "[data-zone=hand][data-card='Thieving Skydiver']"
+    },
+    {
+      "name": "game-pay-plans",
+      "route": "/?fixture=pay-other&at=210#/game",
+      "width": 1600,
+      "height": 900,
+      "click": "[data-zone=hand][data-card='Get Lost']"
     },
     {
       "name": "game-main",

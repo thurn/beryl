@@ -208,11 +208,11 @@ await check(
     },
 );
 
-await check("clicking a hand card lists what it can do", async (page) => {
+await check("clicking a hand card opens its cast step", async (page) => {
     await page.clock.runFor(2000);
     await page.click(card);
-    const item = page.getByRole("menuitem", { name: castLabel, exact: true });
-    await item.click();
+    const step = page.getByRole("dialog", { name: `Cast ${name}` });
+    await step.getByRole("button", { name: "Cast", exact: true }).click();
     assert.deepEqual(await chosen(page), [castIndex], `chose "${castLabel}"`);
     await page.waitForSelector(`${card}[data-zone="stack"]`);
 });
@@ -506,6 +506,271 @@ await check(
         fixture: "combat-blockers",
         at: blockersViews.length,
         ready: `[data-slot="${standing[0].slot}"]`,
+    },
+);
+
+/** Drags a hand card by `by`: hovered first, so it rises clear of its neighbors in the fan,
+ * then picked up there. */
+async function dragFromHand(page, selector, by) {
+    const box = await page.locator(selector).boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + 40);
+    await page.clock.runFor(1000);
+    const raised = await page.locator(selector).boundingBox();
+    const grab = { x: raised.x + raised.width / 2, y: raised.y + 40 };
+    await page.mouse.move(grab.x, grab.y);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i++) {
+        await page.mouse.move(
+            grab.x + (by.x * i) / 10,
+            grab.y + (by.y * i) / 10,
+        );
+    }
+}
+
+/** The slots of the permanents lit as the payment's, ascending. */
+const lit = (page) =>
+    page.$$eval(".card-paying", (els) =>
+        els.map((e) => Number(e.closest("[data-slot]").dataset.slot)).sort(),
+    );
+const ascending = (slots) => [...slots].sort();
+
+/** Your permanents tapped in `after` and not in `before`, ascending. */
+function newlyTapped(before, after) {
+    const was = new Set(
+        before.objects.filter((o) => o.tapped).map((o) => o.slot),
+    );
+    return ascending(
+        after.objects
+            .filter(
+                (o) =>
+                    o.zone === "battlefield" &&
+                    o.controller === "you" &&
+                    o.tapped &&
+                    !was.has(o.slot),
+            )
+            .map((o) => o.slot),
+    );
+}
+
+// Two cards alike in hand are one candidate to the engine (architecture §7.2): both glow, and
+// either plays.
+const pairViews = await load("hand-pair");
+const pairView = pairViews.at(-1);
+const nameAt = (v, slot) => v.objects.find((o) => o.slot === slot)?.name;
+const hand = pairView.objects.filter(
+    (o) => o.zone === "hand" && o.owner === "you",
+);
+const playable = new Map(
+    pairView.status.decision.candidates.flatMap((c, i) =>
+        ["cast", "playLand", "activate"].includes(c.option.kind) &&
+        hand.some((o) => o.slot === c.option.slot)
+            ? [[nameAt(pairView, c.option.slot), { index: i, ...c }]]
+            : [],
+    ),
+);
+const twin = hand.find(
+    (o) =>
+        playable.get(o.name)?.option.kind === "playLand" &&
+        playable.get(o.name).option.slot !== o.slot,
+);
+assert.ok(twin, "the pair fixture holds a land twice");
+
+await check(
+    "every hand card with something to play glows, twins included",
+    async (page) => {
+        await page.clock.runFor(2000);
+        for (const o of hand) {
+            const glows = await page.$(
+                `[data-slot="${o.slot}"] .card-playable`,
+            );
+            assert.equal(
+                glows !== null,
+                playable.has(o.name),
+                `${o.name} in slot ${o.slot} glows as playable`,
+            );
+        }
+        // The twin the engine did not name plays the land too.
+        await dragFromHand(page, `[data-slot="${twin.slot}"]`, {
+            x: 0,
+            y: -320,
+        });
+        await page.mouse.up();
+        assert.deepEqual(await settled(page, 1), [
+            playable.get(twin.name).index,
+        ]);
+    },
+    {
+        fixture: "hand-pair",
+        at: pairViews.length,
+        ready: `[data-slot="${twin.slot}"][data-zone="hand"]`,
+    },
+);
+
+// Thieving Skydiver kicked: the cast with kicker and its X in one step, where the engine asks
+// the cast and then X.
+const kickViews = await load("cast-kicker");
+const [kickBefore, kickAt] = kickViews.slice(-2);
+const kickCasts = kickBefore.status.decision.candidates;
+const kicked = kickCasts.findIndex(
+    (c) => c.option.kind === "cast" && c.option.costs.length > 0,
+);
+assert.ok(kicked >= 0, "the kicker fixture offers the kicked cast");
+const skydiver = `[data-slot="${kickCasts[kicked].option.slot}"]`;
+const xs = kickAt.status.decision.candidates;
+// One more than the least X, as far as the mana goes.
+const wantX = xs[Math.min(1, xs.length - 1)].option.n;
+
+await check(
+    "Thieving Skydiver is cast with kicker and X in one step",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await dragFromHand(page, skydiver, { x: 0, y: -320 });
+        await page.mouse.up();
+        const step = page.getByRole("dialog", {
+            name: "Cast Thieving Skydiver",
+        });
+        await step.waitFor();
+        assert.deepEqual(await chosen(page), [], "the drop asks first");
+        await step.getByRole("radio", { name: /^Kicker/ }).click();
+        for (let x = xs[0].option.n; x < wantX; x++) {
+            await step.getByRole("button", { name: "Increase X" }).click();
+        }
+        assert.equal(
+            await step.locator(".cast-x-value").textContent(),
+            String(wantX),
+        );
+        const taps = kickCasts[kicked].payments.find((p) => p.x === wantX).taps;
+        assert.deepEqual(await lit(page), ascending(taps), "lit to pay");
+        await step.getByRole("button", { name: "Cast", exact: true }).click();
+        assert.deepEqual(
+            await settled(page, 2),
+            [kicked, xs.findIndex((c) => c.option.n === wantX)],
+            "cast with kicker, then X",
+        );
+        assert.equal(
+            await page.getByText("Choose X").count(),
+            0,
+            "X is not asked again",
+        );
+    },
+    { fixture: "cast-kicker", at: kickViews.length - 1, ready: skydiver },
+);
+
+/** A fixture stopped at a payment plan and the view after: the cast before it, the plan the
+ * stand-in chose and the permanents that tapped for it. */
+async function payment(name) {
+    const views = await load(name);
+    const at = views.findIndex(
+        (v) => v.status.decision?.kind === "paymentPlan",
+    );
+    const [plans, after] = [views[at], views[at + 1]];
+    let castAt = at - 1;
+    while (views[castAt].status.decision?.kind !== "priority") castAt--;
+    const before = views[castAt];
+    const spell = plans.stack.at(-1);
+    const castIndex = before.status.decision.candidates.findIndex(
+        (c) => c.option.kind === "cast" && c.option.slot === spell.slot,
+    );
+    const tapped = newlyTapped(plans, after);
+    const chosenPlan = plans.status.decision.candidates.findIndex(
+        (c) =>
+            JSON.stringify(ascending(c.payments[0].taps)) ===
+            JSON.stringify(tapped),
+    );
+    assert.ok(chosenPlan >= 0, `${name}: the tapped lands are a plan's`);
+    return {
+        views,
+        castAt,
+        spell: `[data-slot="${spell.slot}"]`,
+        cast: before.status.decision.candidates[castIndex],
+        castIndex,
+        between: views
+            .slice(castAt + 1, at)
+            .filter((v) => v.status.kind === "deciding"),
+        chosenPlan,
+        tapped,
+    };
+}
+
+const byDefault = await payment("pay-default");
+assert.equal(byDefault.chosenPlan, 0, "the stand-in paid the default way");
+assert.equal(byDefault.between.length, 0, "nothing asked before payment");
+await check(
+    "dragging a card lights the lands it will tap, then taps them unasked",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await dragFromHand(page, byDefault.spell, { x: 0, y: -320 });
+        assert.deepEqual(
+            await lit(page),
+            byDefault.tapped,
+            "lit while dragged: the lands that tap",
+        );
+        await page.mouse.up();
+        assert.deepEqual(
+            await settled(page, 2),
+            [byDefault.castIndex, 0],
+            "cast, then paid the default way",
+        );
+        assert.equal(
+            await page.getByText(/Payment \d/).count(),
+            0,
+            "no payment prompt",
+        );
+    },
+    {
+        fixture: "pay-default",
+        at: byDefault.castAt + 1,
+        ready: byDefault.spell,
+    },
+);
+
+const byChoice = await payment("pay-other");
+assert.notEqual(byChoice.chosenPlan, 0, "the stand-in paid another way");
+const otherTaps = byChoice.cast.payments.find(
+    (p) => p.plan === byChoice.chosenPlan,
+).taps;
+const clicked = otherTaps.find(
+    (slot) => !byChoice.cast.payments[0].taps.includes(slot),
+);
+await check(
+    "the cast step pays with a permanent clicked on the board",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.click(byChoice.spell);
+        const step = page.getByRole("dialog", { name: /^Cast / });
+        await step.waitFor();
+        assert.deepEqual(
+            await lit(page),
+            ascending(byChoice.cast.payments[0].taps),
+            "the default payment lit first",
+        );
+        await page.click(`[data-slot="${clicked}"]`);
+        assert.deepEqual(await lit(page), byChoice.tapped, "the clicked way");
+        await step.getByRole("button", { name: "Cast", exact: true }).click();
+        // The decisions before the payment (its targets) are the player's, on the board.
+        const picks = [byChoice.castIndex];
+        for (const v of byChoice.between) {
+            const next = byChoice.views[byChoice.views.indexOf(v) + 1];
+            const target = next.stack.at(-1).targets.at(-1);
+            const index = v.status.decision.candidates.findIndex(
+                (c) => c.option.slot === target.slot,
+            );
+            assert.deepEqual(await settled(page, picks.length), picks);
+            await page.clock.runFor(2000);
+            await page.click(`[data-slot="${target.slot}"]`);
+            picks.push(index);
+        }
+        assert.deepEqual(
+            await settled(page, picks.length + 1),
+            [...picks, byChoice.chosenPlan],
+            "paid the clicked way when asked",
+        );
+        assert.equal(await page.getByText(/Payment \d/).count(), 0);
+    },
+    {
+        fixture: "pay-other",
+        at: byChoice.castAt + 1,
+        ready: byChoice.spell,
     },
 );
 

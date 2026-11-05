@@ -164,6 +164,10 @@ INTERACTION_FIXTURES = [
     "choice-scry",
     "choice-jace",
     "choice-pay",
+    "hand-pair",
+    "cast-kicker",
+    "pay-default",
+    "pay-other",
 ]
 
 

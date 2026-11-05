@@ -52,6 +52,8 @@ export interface CardState {
   playable?: boolean;
   /** It can be dragged: onto the battlefield, forward to attack, onto an attacker to block. */
   draggable?: boolean;
+  /** The payment of the cast being dragged or set up taps it. */
+  paying?: boolean;
 }
 
 export interface CardLayerProps {
@@ -67,6 +69,8 @@ export interface CardLayerProps {
    * it was dropped until the next view moves it, rather than flying back to its place. */
   onDrop(slot: number, drop: Drop): boolean;
   onHover(slot: number | undefined): void;
+  /** A card was picked up to drag, or put down again (`undefined`). */
+  onLift?(slot: number | undefined): void;
 }
 
 /** A drag starts once the pointer has moved this far, in stage pixels; less is a click. */
@@ -200,6 +204,7 @@ function CardElement({
       y.stop();
       setHeld({ dragging: true });
       layer.onHover(undefined);
+      layer.onLift?.(object.slot);
     }
     x.set(d.from.x + dx);
     y.set(d.from.y + dy);
@@ -213,6 +218,7 @@ function CardElement({
       layer.onClick(object.slot, at);
       return;
     }
+    layer.onLift?.(undefined);
     // A played card stays where it was dropped until the next view moves it on; any other
     // goes back to its place.
     const played = layer.onDrop(object.slot, {
@@ -255,6 +261,7 @@ function CardElement({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={() => {
+        if (drag.current?.moved) layer.onLift?.(undefined);
         drag.current = undefined;
         setHeld(undefined);
       }}
@@ -315,7 +322,12 @@ function Look({
       highlight={state.highlight}
       // A gold or cyan glow says more than the playable edge, which would hide it.
       className={
-        state.playable && !state.highlight ? "card-playable" : undefined
+        [
+          state.playable && !state.highlight && "card-playable",
+          state.paying && "card-paying",
+        ]
+          .filter(Boolean)
+          .join(" ") || undefined
       }
     />
   );

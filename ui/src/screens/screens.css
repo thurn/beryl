@@ -1172,6 +1172,87 @@
   background: rgb(233 173 74 / 18%);
   outline: none;
 }
+/* A permanent the payment being set up taps: an ember ring, apart from a source's gold and a
+   target's cyan. */
+.card-paying {
+  box-shadow:
+    0 0 0 2px rgb(255 168 92 / 95%),
+    0 0 10px 3px rgb(240 122 28 / 70%),
+    0 0 24px 6px rgb(240 122 28 / 30%),
+    var(--card-shadow, var(--shadow-card));
+}
+/* The cast step: in the prompt's place, its rows of choices over the Cast button. */
+.cast-step {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cast-step .prompt-title {
+  margin: 0;
+}
+.cast-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.cast-pill {
+  padding: 6px 12px;
+  border: 1px solid var(--metal);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 4%);
+  color: var(--type);
+  font: 15px var(--font-sans);
+  cursor: pointer;
+}
+.cast-pill:hover,
+.cast-pill:focus-visible {
+  border-color: var(--metal-bright);
+  outline: none;
+}
+.cast-pill[aria-checked="true"] {
+  border-color: var(--gold);
+  background: rgb(233 173 74 / 22%);
+  color: var(--type);
+}
+.cast-x {
+  gap: 10px;
+}
+.cast-x-label {
+  font: italic 600 18px var(--font-serif);
+  color: var(--text-dim);
+}
+.cast-x-value {
+  min-width: 2ch;
+  font: 600 22px var(--font-serif);
+  text-align: center;
+  color: var(--type);
+}
+.cast-plans {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.cast-caption {
+  margin: 0;
+  font: 14px/1.35 var(--font-sans);
+  color: var(--text-dim);
+}
+.cast-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+.cast-buttons .button {
+  flex: 1;
+  font-size: 20px;
+}
+.cast-x .button {
+  width: 1.6em;
+  padding: 0;
+  font-size: 20px;
+}
 /* The hovered card's full scan, with the artist credit under it. */
 .inspect {
   position: absolute;
