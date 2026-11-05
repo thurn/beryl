@@ -225,6 +225,11 @@ def app_lane() -> Lane:
     return Lane("app", warm=True).step("smoke", [*BY, "smoke"])
 
 
+def shots_lane() -> Lane:
+    """Renders every screen in ui/shots.json headless; a page error or crash fails it."""
+    return Lane("shots", warm=True).step("ui-shots", [*BY, "ui-shots"])
+
+
 def fast(args: argparse.Namespace) -> int:
     base = branch_base()
     changed: list[str] | None = changed_paths(base)
@@ -258,6 +263,7 @@ def slow(args: argparse.Namespace) -> int:
         "rust": rust_lane(),
         "ui": ui_lane(),
         "app": app_lane(),
+        "shots": shots_lane(),
     }
     chosen = args.lanes or list(lanes)
     unknown = set(chosen) - set(lanes)
