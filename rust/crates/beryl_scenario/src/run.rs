@@ -141,8 +141,9 @@ impl Runner<'_> {
     /// The current position: the open decision or the end of the game. When the next action
     /// that answers decisions is an advance, its target is a breakpoint, so the game stops
     /// there even where the engine would pass silently; when it is a resolution, the current
-    /// step is, so the game stops as soon as the active player has priority again. Every new position must keep the
-    /// state's invariants (§17.4), so a setup or a rules path that breaks one fails here.
+    /// step is, so the game stops as soon as the active player has priority again. Every new
+    /// position must keep the state's invariants (§17.4), so a setup or a rules path that
+    /// breaks one fails here.
     fn position(&mut self, i: usize) -> Result<Step, String> {
         if let Some(step) = self.position {
             return Ok(step);

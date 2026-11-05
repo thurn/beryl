@@ -11,7 +11,7 @@ use beryl_engine::effect::{self, EffectCtx};
 use beryl_engine::filter::Filter;
 use beryl_engine::state::Duration;
 use beryl_engine::{DecisionKind, TurnStep, Zone};
-use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
+use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
 
@@ -57,7 +57,103 @@ const SKYDIVER: &str = names::THIEVING_SKYDIVER;
 
 const ISLANDS: &[Permanent] = &[Permanent::new(names::ISLAND); 4];
 
+const CRYPT: &str = names::MANA_CRYPT;
+
 pub const SCENARIOS: &[Scenario] = &[
+    // Get Lost gives the opponent two Maps; kicked for 1, the Skydiver can take a Map or
+    // Mana Crypt, each of mana value 0, and takes the Crypt for good.
+    Scenario::new("Thieving Skydiver kicked steals Mana Crypt over a Map")
+        .hand(P0, &[names::GET_LOST, SKYDIVER])
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(names::PLAINS),
+                Permanent::new(names::PLAINS),
+                Permanent::new(names::PLAINS),
+                Permanent::new(names::ISLAND),
+                Permanent::new(names::ISLAND),
+                Permanent::new(names::ISLAND),
+            ],
+        )
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(CRYPT),
+                Permanent::new(names::ADELINE_RESPLENDENT_CATHAR),
+            ],
+        )
+        .library(P0, &[names::ISLAND])
+        .library(P1, &[names::PLAINS])
+        .actions(&[
+            Action::Cast {
+                player: P0,
+                card: names::GET_LOST,
+                face: 0,
+                costs: 0,
+            },
+            Action::Resolve,
+            Action::Assert {
+                assertion: Assertion::Controls {
+                    player: P1,
+                    card: "Map",
+                    count: 2,
+                },
+            },
+            Action::Assert {
+                assertion: Assertion::Tapped {
+                    player: P0,
+                    card: names::PLAINS,
+                    count: 3,
+                },
+            },
+            Action::Cast {
+                player: P0,
+                card: SKYDIVER,
+                face: 0,
+                costs: 1,
+            },
+            Action::Resolve,
+            // Two Maps and the Crypt: the Maps are one candidate.
+            Action::Assert {
+                assertion: Assertion::Decision {
+                    player: P0,
+                    kind: DecisionKind::Target,
+                    candidates: 2,
+                },
+            },
+            Action::Answer {
+                player: P0,
+                kind: DecisionKind::Target,
+                pick: Pick::Card { card: CRYPT },
+            },
+            Action::Resolve,
+            Action::Assert {
+                assertion: Assertion::Controls {
+                    player: P0,
+                    card: CRYPT,
+                    count: 1,
+                },
+            },
+            Action::AdvanceTo {
+                turn: 3,
+                step: TurnStep::PrecombatMain,
+            },
+            // Still P0's after a turn, and its upkeep trigger is P0's now.
+            Action::Assert {
+                assertion: Assertion::Controls {
+                    player: P0,
+                    card: CRYPT,
+                    count: 1,
+                },
+            },
+            Action::Assert {
+                assertion: Assertion::Controls {
+                    player: P1,
+                    card: "Map",
+                    count: 2,
+                },
+            },
+        ]),
     // Unkicked, two mana, and no trigger.
     Scenario::new("Thieving Skydiver unkicked")
         .hand(P0, &[SKYDIVER])
@@ -104,7 +200,7 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Answer {
                 player: P0,
                 kind: DecisionKind::X,
-                pick: beryl_scenario::Pick::Number { n: 2 },
+                pick: Pick::Number { n: 2 },
             },
             Action::Resolve,
             Action::Assert {

@@ -6,14 +6,15 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, Affected, CardDef, Cost, Delayed, Face, Keywords, LayerSpec, ManaColor,
-    Modification, Replacement, StaticCondition, Subtype, Subtypes, Trigger, Types,
+    Ability, AbilityKind, Affected, CardDef, CastingOption, Cost, Delayed, Face, Keywords,
+    LayerSpec, ManaColor, ManaCost, Modification, Replacement, StaticCondition, Subtype, Subtypes,
+    TargetKind, TargetSpec, Trigger, Types,
 };
 use crate::effect::EffectCtx;
 use crate::event::{self, Event, Reason, Recipient, TokenEntry};
-use crate::filter::Whose;
+use crate::filter::{Filter, Whose};
 use crate::state::{
-    Continuous, CounterKind, Duration, ObjectFlags, PendingTrigger, TurnStep, Zone, opponent,
+    Continuous, CounterKind, Duration, NONE, ObjectFlags, PendingTrigger, TurnStep, Zone, opponent,
 };
 use crate::{
     CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Outcome, Profile, Replay,
@@ -1335,5 +1336,206 @@ fn random_games_with_triggers_never_read_derived_dirty() {
             matches!(outcome, Outcome::Win(_) | Outcome::Draw),
             "{outcome:?}"
         );
+    }
+}
+
+fn cathar_human(ctx: &mut EffectCtx) -> crate::card::Flow {
+    ctx.create_attacking_tokens(&HUMAN, 1)?;
+    Ok(())
+}
+
+/// Adeline's trigger as the card has it: the Human attacks what its controller chooses.
+static CATHAR: CardDef = CardDef {
+    name: "Test Cathar",
+    faces: &[Face {
+        types: Types::CREATURE,
+        power: Some(1),
+        toughness: Some(1),
+        abilities: &[Ability {
+            may_pause: true,
+            ..Ability::triggered(Trigger::YouAttack, cathar_human)
+        }],
+        ..Face::EMPTY
+    }],
+    tokens: &[&HUMAN],
+};
+
+static CATHAR_CARDS: CardTable = CardTable::new(&[&LAND, &WALKER, &CATHAR]);
+
+/// [CR 508.4](https://yawgatog.com/resources/magic-rules/#R5084): a creature put onto the
+/// battlefield attacking attacks what its controller chooses, here the planeswalker the
+/// declared attacker left alone.
+#[test]
+fn a_token_created_attacking_may_attack_a_planeswalker() {
+    let t = GameTable::new(
+        &CATHAR_CARDS,
+        [
+            &[(1, "Test Cathar"), (5, "Test Land")],
+            &[(1, "Test Walker"), (5, "Test Land")],
+        ],
+    )
+    .unwrap();
+    let mut s = State::new(&t, 1, Profile::EXACT);
+    s.begin_at(1, 0, TurnStep::PrecombatMain);
+    let mut x = Scratch::new();
+    let cathar = find(&s, &t, 0, "Test Cathar");
+    s.place(cathar, Zone::Battlefield).unwrap();
+    let walker = put(&t, &mut s, &mut x, 1, "Test Walker");
+    let mut declared = false;
+    let human = loop {
+        let human = s
+            .battlefield()
+            .iter()
+            .copied()
+            .find(|&slot| t.def(s.object(slot).card).name == "Test Human");
+        if let Some(human) = human {
+            break human;
+        }
+        let d = decide_with(&t, &mut s, &mut x);
+        let pick = |o: Opt| {
+            let i = (0..d.len() as u8)
+                .find(|&i| d.candidates.option(Choice(i)) == Some(o))
+                .unwrap_or_else(|| panic!("{o:?} not among {d:?}"));
+            Choice(i)
+        };
+        let choice = match d.kind {
+            DecisionKind::Attacker if !declared => {
+                declared = true;
+                pick(Opt::Attack(cathar))
+            }
+            DecisionKind::Attacker => pick(Opt::Done),
+            // The declared attacker attacks the player; the Human, as it is created, the
+            // planeswalker.
+            DecisionKind::AttackTarget if s.stack().is_empty() => pick(Opt::Defender(NONE)),
+            DecisionKind::AttackTarget => pick(Opt::Defender(walker)),
+            _ => Choice(0),
+        };
+        apply(&mut s, &t, &mut x, &mut Replay, choice);
+    };
+    let o = s.object(human);
+    assert!(o.flags.has(ObjectFlags::ATTACKING) && o.flags.has(ObjectFlags::TAPPED));
+    assert!(o.flags.has(ObjectFlags::ATTACKS_PLANESWALKER));
+    assert_eq!(o.combat, walker);
+    assert_eq!(s.object(cathar).combat, NONE);
+}
+
+fn steal_target(ctx: &mut EffectCtx) -> crate::card::Flow {
+    if let Some(artifact) = ctx.target_object(0) {
+        ctx.gain_control(artifact, Duration::Indefinite);
+    }
+    Ok(())
+}
+
+/// Thieving Skydiver: kicker {X}, X can't be 0; "When this creature enters, if it was
+/// kicked, gain control of target artifact with mana value X or less."
+static THIEF: CardDef = CardDef {
+    name: "Test Thief",
+    faces: &[Face {
+        cost: ManaCost::generic(1),
+        types: Types::CREATURE,
+        power: Some(2),
+        toughness: Some(1),
+        abilities: &[Ability {
+            targets: &[TargetSpec::one(
+                TargetKind::Permanent,
+                Filter::All(&[Filter::Types(Types::ARTIFACT), Filter::ManaValueAtMostX]),
+            )],
+            condition: Some(crate::effect::kicked),
+            ..Ability::triggered(Trigger::Enters, steal_target)
+        }],
+        casting: &[CastingOption::Kicker {
+            cost: ManaCost::X,
+            min_x: 1,
+        }],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static ROCK_1: CardDef = CardDef {
+    name: "Test Rock 1",
+    faces: &[Face {
+        cost: ManaCost::generic(1),
+        types: Types::ARTIFACT,
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static ROCK_3: CardDef = CardDef {
+    name: "Test Rock 3",
+    faces: &[Face {
+        cost: ManaCost::generic(3),
+        types: Types::ARTIFACT,
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static THIEF_CARDS: CardTable = CardTable::new(&[&LAND, &THIEF, &ROCK_1, &ROCK_3]);
+
+/// The enters ability's X is the kicker's (CR 107.3m): kicked for 1 it can take only the
+/// artifact of mana value 1, so that is chosen silently; kicked for 3, either, and it takes
+/// the bigger.
+#[test]
+fn an_enters_ability_targets_by_the_x_its_spell_was_cast_with() {
+    for (x, stolen) in [(1u8, "Test Rock 1"), (3, "Test Rock 3")] {
+        let t = GameTable::new(
+            &THIEF_CARDS,
+            [
+                &[(1, "Test Thief"), (6, "Test Land")],
+                &[(1, "Test Rock 1"), (1, "Test Rock 3"), (4, "Test Land")],
+            ],
+        )
+        .unwrap();
+        let mut s = State::new(&t, 1, Profile::EXACT);
+        s.begin_at(1, 0, TurnStep::PrecombatMain);
+        let mut scratch = Scratch::new();
+        let thief = find(&s, &t, 0, "Test Thief");
+        s.place(thief, Zone::Hand).unwrap();
+        for _ in 0..4 {
+            let land = find(&s, &t, 0, "Test Land");
+            s.place(land, Zone::Battlefield).unwrap();
+        }
+        let rocks = ["Test Rock 1", "Test Rock 3"].map(|name| {
+            let rock = find(&s, &t, 1, name);
+            s.place(rock, Zone::Battlefield).unwrap();
+            rock
+        });
+        let mut cast = false;
+        while !cast || !s.stack().is_empty() || !s.triggers().is_empty() {
+            let d = decide_with(&t, &mut s, &mut scratch);
+            let option = |o: Opt| {
+                (0..d.len() as u8)
+                    .map(Choice)
+                    .find(|&c| d.candidates.option(c) == Some(o))
+            };
+            let choice = match d.kind {
+                DecisionKind::Priority if !cast => {
+                    cast = true;
+                    option(Opt::Cast {
+                        slot: thief,
+                        face: 0,
+                        costs: 1,
+                    })
+                    .unwrap()
+                }
+                DecisionKind::X => option(Opt::Number(x)).unwrap(),
+                DecisionKind::Target => {
+                    assert_eq!(d.len(), 2, "kicked for {x}");
+                    let i = (0..d.len() as u8)
+                        .find(|&i| d.candidates.object(Choice(i)) == Some(rocks[1]))
+                        .unwrap();
+                    Choice(i)
+                }
+                _ => Choice(0),
+            };
+            apply(&mut s, &t, &mut scratch, &mut Replay, choice);
+        }
+        for rock in rocks {
+            let name = t.def(s.object(rock).card).name;
+            let expected = u8::from(name != stolen);
+            assert_eq!(s.controller(rock), expected, "{name}, kicked for {x}");
+        }
     }
 }

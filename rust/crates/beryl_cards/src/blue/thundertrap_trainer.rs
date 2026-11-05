@@ -12,7 +12,7 @@ use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::Filter;
 use beryl_engine::{DecisionKind, TurnStep, Zone};
-use beryl_scenario::{Action, Assertion, P0, Permanent, Pick, Scenario};
+use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
 
@@ -86,6 +86,70 @@ const fn hand(count: u8) -> Action {
 const LANDS: &[&str] = &[names::PLAINS; 8];
 
 pub const SCENARIOS: &[Scenario] = &[
+    // Mana Drain and Oust qualify among the top four; the Trainer takes Oust.
+    Scenario::new("Thundertrap Trainer takes a spell")
+        .hand(P0, &[TRAINER])
+        .battlefield(P0, ISLANDS.split_at(2).0)
+        .library(
+            P0,
+            &[
+                names::PLAINS,
+                names::MANA_DRAIN,
+                names::THIEVING_SKYDIVER,
+                names::OUST,
+                names::ISLAND,
+            ],
+        )
+        .library(P1, &[names::PLAINS])
+        .actions(&[
+            Action::Cast {
+                player: P0,
+                card: TRAINER,
+                face: 0,
+                costs: 0,
+            },
+            Action::Resolve,
+            Action::Resolve,
+            Action::Answer {
+                player: P0,
+                kind: DecisionKind::YesNo,
+                pick: Pick::Yes,
+            },
+            Action::Assert {
+                assertion: Assertion::Decision {
+                    player: P0,
+                    kind: DecisionKind::ChooseObject,
+                    candidates: 2,
+                },
+            },
+            Action::Answer {
+                player: P0,
+                kind: DecisionKind::ChooseObject,
+                pick: Pick::Card { card: names::OUST },
+            },
+            Action::Assert {
+                assertion: Assertion::Count {
+                    player: P0,
+                    zone: Zone::Hand,
+                    card: Some(names::OUST),
+                    count: 1,
+                },
+            },
+            library(4),
+            // The fifth card, below the four, is on top now.
+            Action::AdvanceTo {
+                turn: 3,
+                step: TurnStep::PrecombatMain,
+            },
+            Action::Assert {
+                assertion: Assertion::Count {
+                    player: P0,
+                    zone: Zone::Hand,
+                    card: Some(names::ISLAND),
+                    count: 1,
+                },
+            },
+        ]),
     Scenario::new("Thundertrap Trainer finds no spell")
         .hand(P0, &[TRAINER])
         .battlefield(P0, ISLANDS.split_at(2).0)
