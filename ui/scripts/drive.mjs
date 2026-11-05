@@ -5,7 +5,7 @@
 // scope, whose return value comes back as JSON:
 //   page, context   the Playwright page (opened at <app-url>) and its context
 //   shot(name)      screenshots the page to <out-dir>/<n>-<name>.png and returns the path
-//   probe           the measuring helpers below
+//   probe           the measuring helpers below (`act` and `compare` first)
 //   errors          the page's errors and console errors so far
 // Restart `by ui-live` to load a change to this file; changes under src/ reload in the page.
 // Motion is not reduced, unlike ui-shots: animation and layout shift are what a player sees.
@@ -343,6 +343,100 @@ const probe = {
                           .join(" | ")}`
                     : status.kind,
         };
+    },
+
+    /** One player action, observed the way the review loop asks: a screenshot before, the
+     * action, screenshots at each of `samples` ms after it began, then (unless `wait` is
+     * false) a wait for the next decision and a screenshot of it. Returns the screenshot
+     * paths, what moved meanwhile, the decision waited for, and the game events that arrived
+     * (`probe.timeline` from the start of the action). */
+    async act(name, action, { samples = [100, 500, 2000], wait = true } = {}) {
+        const since = await page.evaluate(() => performance.now());
+        const shots = { before: await shot(`${name}-before`) };
+        const stop = await probe.motion();
+        const start = Date.now();
+        const acted = action();
+        for (const ms of samples) {
+            await page.waitForTimeout(Math.max(0, ms - (Date.now() - start)));
+            shots[`${ms}ms`] = await shot(`${name}-${ms}ms`);
+        }
+        await acted;
+        const motion = await stop(0);
+        let decision;
+        if (wait) {
+            decision = await probe
+                .decision(null, 60000)
+                .catch((e) => ({ timeout: String(e).split("\n")[0] }));
+            shots.after = await shot(`${name}-after`);
+        }
+        return {
+            shots,
+            motion,
+            decision,
+            timeline: await probe.timeline({ since }),
+        };
+    },
+
+    /** Crops each element (a locator, or a selector) out of the page at its size on screen,
+     * with `pad` px around it, and lays the crops side by side, labelled, in one image: for
+     * judging whether two states, or two things that should look alike, can be told apart at
+     * a glance. Returns the image's path. */
+    async compare(name, targets, { pad = 12 } = {}) {
+        const crops = [];
+        for (const target of targets) {
+            const locator =
+                typeof target === "string"
+                    ? page.locator(target).first()
+                    : target;
+            const box = await locator.boundingBox();
+            if (!box) {
+                crops.push({ label: String(target), missing: true });
+                continue;
+            }
+            const view = page.viewportSize();
+            const x = Math.max(0, box.x - pad);
+            const y = Math.max(0, box.y - pad);
+            const clip = {
+                x,
+                y,
+                width: Math.min(view.width, box.x + box.width + pad) - x,
+                height: Math.min(view.height, box.y + box.height + pad) - y,
+            };
+            const png = await page.screenshot({ clip });
+            crops.push({
+                label:
+                    typeof target === "string"
+                        ? target
+                        : await locator.evaluate(
+                              (e) =>
+                                  e.getAttribute("data-card") ??
+                                  e.getAttribute("aria-label") ??
+                                  e.tagName.toLowerCase(),
+                          ),
+                src: `data:image/png;base64,${png.toString("base64")}`,
+            });
+        }
+        const sheet = await context.newPage();
+        await sheet.setContent(
+            `<body style="margin:0;padding:12px;background:#777;display:flex;gap:16px;align-items:flex-start;font:13px sans-serif">${crops
+                .map(
+                    (c) =>
+                        `<figure style="margin:0"><figcaption style="color:#fff;margin-bottom:4px">${c.label.replace(/</g, "&lt;")}</figcaption>${
+                            c.missing
+                                ? "(not on screen)"
+                                : `<img src="${c.src}">`
+                        }</figure>`,
+                )
+                .join("")}</body>`,
+        );
+        shots += 1;
+        const path = join(
+            out,
+            `${String(shots).padStart(3, "0")}-${name}-compare.png`,
+        );
+        await sheet.screenshot({ path, fullPage: true });
+        await sheet.close();
+        return path;
     },
 };
 

@@ -49,6 +49,14 @@ scope, and returns JSON:
 curl -s "$DRIVE" -d 'await page.getByRole("button", {name: "Start", exact: true}).click(); return await shot("started")'
 ```
 
+- `probe.act(name, action, {samples?, wait?})` is how to take every action. It
+  takes a screenshot before, runs `action` (an async function), takes
+  screenshots at 100 ms, 500 ms and 2 s, waits for the next decision and takes
+  one more. It returns the screenshot paths, what moved, the decision, and the
+  game events that arrived meanwhile. Read the screenshots it returns.
+- `probe.compare(name, [locators or selectors])` crops each element and lays
+  the crops side by side in one labelled image. Use it to judge whether states
+  can be told apart, or whether things that should look alike do.
 - `shot(name)` saves a screenshot and returns its path. Read the PNG to see it.
   Take one before and after every action, and more during waits.
 - `probe.pointAt(locator)` moves the mouse onto the visible part of an element
@@ -93,7 +101,13 @@ Keep a ledger as you go and do not stop until it is full:
   fixture), answer it at least two different ways, and note how it was asked.
 - **Every piece of state.** `ObjectView`, `PlayerView` and `StackItem` in the
   same file list what the engine tells the UI. For every field of those types,
-  find how the screen shows it. If you cannot find it, that is a finding.
+  find how the screen shows it. If you cannot find it, that is a finding. Being
+  drawn is not enough: record for each field whether a player could read it at
+  a glance, citing a `probe.compare` image of objects that differ in it. Give a
+  verdict, not "shown".
+- **Every multi-pick.** Meet each decision that takes several picks with at
+  least three eligible choices. Set the state up in play, or use a fixture from
+  `ui/fixtures.json` that names it.
 - **Every opponent.** The start screen lists agents. Play at least one full game
   against the default and one against the slowest, searching agent. Waiting on
   the AI is part of the experience.
@@ -121,10 +135,10 @@ At every step, do this:
    gestures the UI seems to invite (drag for cards, click for buttons). If the
    way to do something is not obvious, record that before you read the code to
    find it.
-4. **Watch what happens next.** Wrap the action in `probe.decision` and a
-   motion probe, and take screenshots at about 100 ms, 500 ms, 2 s and then
-   every few seconds until the next decision. Note what the screen showed
-   between them.
+4. **Watch what happens next.** Take the action through `probe.act`, including
+   the first click on the start screen and clicks that open menus (pass
+   `{wait: false}` when no decision will follow). Look at every screenshot it
+   returns, and note what the screen showed between them.
 5. **Judge.** Did it do what you predicted? How long until the screen first
    responded, and until you could act again? Did anything move, appear or vanish
    that you did not cause?
@@ -195,7 +209,8 @@ everywhere it could occur, not just at the first place you think of.
 
 ## Report
 
-Write the report as Markdown in your final message. Lead with a one-line verdict
+Write the report as Markdown in your final message. Subagents may not be able
+to write files, so the message is the report. Lead with a one-line verdict
 and the seeds you played. Then list findings, most severe first, grouped by
 severity:
 
