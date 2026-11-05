@@ -3,6 +3,7 @@
 
 use beryl_cards::CARDS;
 use beryl_cards::decks::WU_CONTROL;
+use beryl_engine::event::Event;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{GameTable, Observation, Outcome, Profile, Replay, Scratch, State, Step};
 use beryl_engine::{apply, next, view};
@@ -52,7 +53,12 @@ pub fn play(
 ) -> Result<Played, String> {
     let mut agents = agents(t, names, seed)?;
     let mut s = State::new(t, seed, Profile::SMART);
-    let mut x = Scratch::new();
+    // A transcript tells what happened between decisions, from the engine's events.
+    let mut x = if transcript.is_some() {
+        Scratch::recording()
+    } else {
+        Scratch::new()
+    };
     let mut decisions = 0;
     let violation = |s: &State, at: &str| {
         s.check_invariants(t)
@@ -66,11 +72,12 @@ pub fn play(
                 if check {
                     violation(&s, &format!("at decision {decisions}"))?;
                 }
+                let happened: Vec<Event> = x.events.drain().collect();
                 // A paused resolution is seen where its body stopped (§7.3).
                 let shown = view(&s, t, &mut x);
                 let c = agents[d.player.index()].choose(Observation::new(shown, d.player), &d);
                 if let Some(tr) = transcript.as_deref_mut() {
-                    tr.decision(t, shown, &d, c);
+                    tr.decision(t, shown, &d, c, &happened);
                 }
                 apply(&mut s, t, &mut x, &mut Replay, c);
             }
@@ -78,7 +85,8 @@ pub fn play(
     };
     violation(&s, "at the end")?;
     if let Some(tr) = transcript {
-        tr.end(&s, outcome);
+        let happened: Vec<Event> = x.events.drain().collect();
+        tr.end(t, &s, outcome, &happened);
     }
     Ok(Played {
         outcome,

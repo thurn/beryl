@@ -1,20 +1,28 @@
 //! A game's transcript: omniscient text for a human reader. Each turn opens with both
 //! players' life, library size, hand and board (power and toughness, counters, tapped); every
 //! decision the engine asked follows on one line, with who decided, its kind, the candidates
-//! in short labels and the choice.
+//! in short labels and the choice. What happened in between, as the engine's events tell it
+//! (spells resolving or countered, creatures dying, damage, life gained), comes before the
+//! decision it led to, on lines that start with `*`.
 
+use std::collections::HashMap;
 use std::fmt::Write;
 
 use beryl_engine::card::{AbilityIx, CastingOption, Types};
-use beryl_engine::state::{CounterKind, ObjectFlags};
+use beryl_engine::event::{Event, Reason, Recipient};
+use beryl_engine::state::{CounterKind, ObjectFlags, ObjectRef};
 use beryl_engine::{
-    Candidates, Choice, Decision, GameTable, Opt, Outcome, Seat, Slot, State, Zone,
+    Candidates, Choice, Decision, GameTable, Opt, Outcome, Seat, Slot, State, TurnStep, Zone,
 };
 
 pub struct Transcript {
     names: [String; 2],
     text: String,
     turn: Option<u16>,
+    /// The name of each object seen at a decision, by slot, with its incarnation: events
+    /// name objects by slot, and a token that has left the battlefield is gone by the time
+    /// its events are written.
+    seen: HashMap<Slot, (u16, String, Seat)>,
 }
 
 impl Transcript {
@@ -24,6 +32,7 @@ impl Transcript {
             names: names.map(str::to_owned),
             text: String::new(),
             turn: None,
+            seen: HashMap::new(),
         }
     }
 
@@ -35,15 +44,39 @@ impl Transcript {
         format!("P{} {}", p.get(), self.names[p.index()])
     }
 
-    /// Records decision `d` and its answer `c`, opening a new turn first if one began.
-    pub fn decision(&mut self, t: &GameTable, s: &State, d: &Decision, c: Choice) {
+    /// Records decision `d` and its answer `c`, after what `happened` since the previous
+    /// decision, opening a new turn first if one began.
+    pub fn decision(
+        &mut self,
+        t: &GameTable,
+        s: &State,
+        d: &Decision,
+        c: Choice,
+        happened: &[Event],
+    ) {
+        // What happened before a new turn's untap step belongs to the turn before.
+        let split = happened
+            .iter()
+            .position(|e| {
+                matches!(
+                    e,
+                    Event::StepBegins {
+                        step: TurnStep::Untap,
+                        ..
+                    }
+                )
+            })
+            .unwrap_or(happened.len());
+        self.events(t, s, &happened[..split]);
         let turn = s.turn();
         if self.turn != Some(turn.number) {
             self.turn = Some(turn.number);
             self.board(t, s);
         }
+        self.events(t, s, &happened[split..]);
+        self.remember(t, s);
         let labels: Vec<String> = match &d.candidates {
-            Candidates::Objects(b) => b.iter().map(|slot| name(t, s, slot)).collect(),
+            Candidates::Objects(b) => b.iter().map(|slot| candidate(t, s, slot)).collect(),
             Candidates::Options(o) => o.iter().map(|&o| option(t, s, o)).collect(),
         };
         let _ = writeln!(
@@ -92,8 +125,113 @@ impl Transcript {
         }
     }
 
+    /// Remembers the name and owner of every object on the battlefield or the stack.
+    fn remember(&mut self, t: &GameTable, s: &State) {
+        let stack = s.stack().iter().filter_map(|e| e.spell().map(|r| r.slot));
+        for slot in s.battlefield().iter().copied().chain(stack) {
+            let o = s.object(slot);
+            self.seen
+                .insert(slot, (o.incarnation, name(t, s, slot), o.owner));
+        }
+    }
+
+    /// The name of an object an event refers to: as it is now if it is still that object,
+    /// else as it was last seen, for one that has since changed zones or ceased to exist.
+    fn called(&self, t: &GameTable, s: &State, r: ObjectRef) -> String {
+        let o = s.object(r.slot);
+        if o.zone != Zone::Nowhere && o.incarnation == r.incarnation {
+            return name(t, s, r.slot);
+        }
+        match self.last_seen(r) {
+            Some((n, _)) => n.clone(),
+            None => name(t, s, r.slot),
+        }
+    }
+
+    /// The owner of an object an event refers to, as for [`Transcript::called`]: a token
+    /// that has ceased to exist has none now.
+    fn owner(&self, s: &State, r: ObjectRef) -> Seat {
+        let o = s.object(r.slot);
+        if o.zone != Zone::Nowhere && o.incarnation == r.incarnation {
+            return o.owner;
+        }
+        self.last_seen(r).map_or(o.owner, |(_, &owner)| owner)
+    }
+
+    /// How the object was last seen at a decision, if it was that object or the one it
+    /// became by changing zones.
+    fn last_seen(&self, r: ObjectRef) -> Option<(&String, &Seat)> {
+        self.seen
+            .get(&r.slot)
+            .filter(|(incarnation, _, _)| {
+                *incarnation == r.incarnation || incarnation.wrapping_add(1) == r.incarnation
+            })
+            .map(|(_, n, owner)| (n, owner))
+    }
+
+    /// One line for each event a reader needs to follow the game.
+    fn events(&mut self, t: &GameTable, s: &State, happened: &[Event]) {
+        for e in happened {
+            let line = match *e {
+                Event::ZoneChange {
+                    object,
+                    from,
+                    to,
+                    reason,
+                } => zone_change(
+                    &self.called(t, s, object),
+                    self.owner(s, object),
+                    from,
+                    to,
+                    reason,
+                ),
+                Event::Damage {
+                    source, to, amount, ..
+                } => {
+                    let to = match to {
+                        Recipient::Player(p) => format!("P{}", p.get()),
+                        Recipient::Permanent(r) => self.called(t, s, r),
+                    };
+                    Some(format!(
+                        "{} deals {amount} damage to {to}",
+                        self.called(t, s, source)
+                    ))
+                }
+                Event::LifeGain { player, amount } => {
+                    Some(format!("P{} gains {amount} life", player.get()))
+                }
+                Event::Attack { player, attackers } => {
+                    let names: Vec<String> = attackers
+                        .iter()
+                        .map(|a| self.called(t, s, s.object_ref(a)))
+                        .collect();
+                    Some(format!(
+                        "P{} attacks with {}",
+                        player.get(),
+                        names.join(", ")
+                    ))
+                }
+                Event::GainControl { object, player } => Some(format!(
+                    "P{} gains control of {}",
+                    player.get(),
+                    self.called(t, s, object)
+                )),
+                Event::CoinFlip { player, won } => Some(format!(
+                    "P{} {} a coin flip",
+                    player.get(),
+                    if won { "wins" } else { "loses" }
+                )),
+                _ => None,
+            };
+            if let Some(line) = line {
+                let _ = writeln!(self.text, "    * {line}");
+            }
+        }
+    }
+
     /// Records how the game ended.
-    pub fn end(&mut self, s: &State, outcome: Outcome) {
+    pub fn end(&mut self, t: &GameTable, s: &State, outcome: Outcome, happened: &[Event]) {
+        self.events(t, s, happened);
         let result = match outcome {
             Outcome::Win(p) => format!("{} wins", self.who(p)),
             Outcome::Draw => "a draw".to_owned(),
@@ -109,6 +247,32 @@ impl Transcript {
     }
 }
 
+/// A zone change worth a line: spells resolving or countered, permanents leaving the
+/// battlefield, tokens created, cards discarded or exiled. Draws, shuffles and lands played
+/// are left out; the decisions and each turn's hands show them.
+fn zone_change(n: &str, owner: Seat, from: Zone, to: Zone, reason: Reason) -> Option<String> {
+    let owner = owner.get();
+    Some(match (from, to, reason) {
+        (_, _, Reason::Counter) => format!("{n} is countered"),
+        (Zone::Stack, Zone::Battlefield, _) | (Zone::Stack, _, Reason::Resolve) => {
+            format!("{n} resolves")
+        }
+        (Zone::Stack | Zone::Battlefield, Zone::Hand, _) => {
+            format!("{n} is returned to P{owner}'s hand")
+        }
+        (_, Zone::Battlefield, Reason::Created) => format!("{n} is created"),
+        (_, Zone::Battlefield, Reason::Return) => format!("{n} returns to the battlefield"),
+        (Zone::Battlefield, Zone::Graveyard, Reason::Destroy) => format!("{n} is destroyed"),
+        (Zone::Battlefield, Zone::Graveyard, Reason::Sacrifice) => format!("{n} is sacrificed"),
+        (Zone::Battlefield, Zone::Graveyard, _) => format!("{n} dies"),
+        (Zone::Battlefield, Zone::Library, _) => format!("{n} is put into P{owner}'s library"),
+        (Zone::Battlefield, Zone::Exile, _) => format!("{n} is exiled"),
+        (Zone::Hand, Zone::Graveyard, Reason::Discard) => format!("P{owner} discards {n}"),
+        (Zone::Hand, Zone::Exile, _) => format!("{n} is exiled from P{owner}'s hand"),
+        _ => return None,
+    })
+}
+
 fn list(items: &[String]) -> String {
     if items.is_empty() {
         "-".to_owned()
@@ -122,6 +286,16 @@ fn name(t: &GameTable, s: &State, slot: Slot) -> String {
     t.def(s.card(slot))
         .face_name(s.object(slot).face)
         .to_owned()
+}
+
+/// An object among a decision's candidates: a permanent or a spell with its controller, so
+/// that a reader can tell whose it is.
+fn candidate(t: &GameTable, s: &State, slot: Slot) -> String {
+    let n = name(t, s, slot);
+    match s.object(slot).zone {
+        Zone::Battlefield | Zone::Stack => format!("{n} (P{})", s.controller(slot).get()),
+        _ => n,
+    }
 }
 
 /// A permanent with its power and toughness, counters and status.
