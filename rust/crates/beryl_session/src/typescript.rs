@@ -4,7 +4,7 @@
 
 use ts_rs::{Config, TS};
 
-use crate::ipc::{AppInfo, Fixture, FixtureMessage};
+use crate::ipc::{AppInfo, ChooseRequest, Fixture, FixtureMessage, SetStopsRequest};
 use crate::protocol::{
     Candidate, CandidateIndex, CandidateView, CardType, Combat, Counter, CounterView, DecisionId,
     DecisionView, GameEvent, Kind, Mana, ManaPool, ObjectView, OutcomeView, PlayerState,
@@ -24,6 +24,8 @@ pub fn typescript() -> String {
         Fixture::decl(&cfg),
         FixtureMessage::decl(&cfg),
         StartRequest::decl(&cfg),
+        ChooseRequest::decl(&cfg),
+        SetStopsRequest::decl(&cfg),
         SessionError::decl(&cfg),
         GameUpdate::decl(&cfg),
         AgentView::decl(&cfg),

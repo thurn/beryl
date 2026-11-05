@@ -6,7 +6,7 @@ mod games;
 
 use std::time::Duration;
 
-use beryl_session::ipc::AppInfo;
+use beryl_session::ipc::{self, AppInfo};
 use tauri::Manager;
 use tauri::http::{Response, StatusCode};
 
@@ -15,8 +15,6 @@ use crate::art::ArtCache;
 /// Set by `just smoke`: run without a visible window or Dock icon and exit once the UI reports
 /// that it loaded, or with an error after this many seconds.
 const SMOKE_ENV: &str = "BERYL_SMOKE";
-
-// The commands' names are `beryl_session::ipc`'s, which `ui/src/ipc.ts` calls them by.
 
 #[tauri::command]
 fn app_info() -> AppInfo {
@@ -42,15 +40,44 @@ fn smoke_seconds() -> Option<u64> {
         .map(|v| v.parse().unwrap_or(20))
 }
 
+/// The Tauri handler for the commands, each `function = name`: Tauri names a command for its
+/// function, so each must be named as `beryl_session::ipc` (and so `ui/src/ipc.ts`) calls it.
+macro_rules! handlers {
+    ($($function:path = $name:expr),* $(,)?) => {{
+        $(const _: () = assert!(
+            names(stringify!($function), $name),
+            "a command's function is named as beryl_session::ipc names the command"
+        );)*
+        tauri::generate_handler![$($function),*]
+    }};
+}
+
+/// Whether the function at `path` is named `name`: its last segment.
+const fn names(path: &str, name: &str) -> bool {
+    let (path, name) = (path.as_bytes(), name.as_bytes());
+    if name.len() > path.len() {
+        return false;
+    }
+    let start = path.len() - name.len();
+    let mut i = 0;
+    while i < name.len() {
+        if path[start + i] != name[i] {
+            return false;
+        }
+        i += 1;
+    }
+    start == 0 || path[start - 1] == b':' || path[start - 1] == b' '
+}
+
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![
-            app_info,
-            ui_ready,
-            games::list_agents,
-            games::start_game,
-            games::choose,
-            games::set_stops,
+        .invoke_handler(handlers![
+            app_info = ipc::APP_INFO,
+            ui_ready = ipc::UI_READY,
+            games::list_agents = ipc::LIST_AGENTS,
+            games::start_game = ipc::START_GAME,
+            games::choose = ipc::CHOOSE,
+            games::set_stops = ipc::SET_STOPS,
         ])
         .register_asynchronous_uri_scheme_protocol(art::SCHEME, |ctx, request, responder| {
             let app = ctx.app_handle().clone();

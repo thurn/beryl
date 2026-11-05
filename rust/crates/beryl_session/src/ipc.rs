@@ -1,7 +1,8 @@
-//! The app's IPC surface: each command's name, arguments, result and error, the events, and
+//! The app's IPC surface: each command's name, request, result and error, the events, and
 //! the messages a UI fixture records. `beryl_app` registers a Tauri command under each name
-//! here, `beryl_cli` records fixtures with them, and [`crate::typescript`] writes the `Commands`
-//! and `Events` maps `ui/src/ipc.ts` types its transport with.
+//! here (checked when it compiles), each taking its request as one argument named `request`;
+//! `beryl_cli` records fixtures with them, and [`crate::typescript`] writes the `Commands` and
+//! `Events` maps `ui/src/ipc.ts` types its transport with.
 
 use std::fmt::Write;
 
@@ -24,6 +25,23 @@ pub const SET_STOPS: &str = "set_stops";
 
 /// The event every view arrives on, carrying a [`GameUpdate`].
 pub const GAME_UPDATE: &str = "game-update";
+
+/// The [`CHOOSE`] command's request.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ChooseRequest {
+    /// The decision the UI received.
+    pub decision: DecisionId,
+    pub index: CandidateIndex,
+}
+
+/// The [`SET_STOPS`] command's request.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SetStopsRequest {
+    pub session: SessionId,
+    pub stops: StopsSetting,
+}
 
 /// What the app is.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -81,10 +99,7 @@ pub(crate) fn typescript(cfg: &Config) -> String {
         T::name(cfg)
     }
     let none = "Record<string, never>".to_owned();
-    let args = |fields: &[(&str, String)]| {
-        let fields: Vec<String> = fields.iter().map(|(n, ty)| format!("{n}: {ty}")).collect();
-        format!("{{ {} }}", fields.join("; "))
-    };
+    let request = |ty: String| format!("{{ request: {ty} }}");
     let error = name::<SessionError>(cfg);
     let never = "never".to_owned();
     let commands = [
@@ -98,25 +113,19 @@ pub(crate) fn typescript(cfg: &Config) -> String {
         ),
         (
             START_GAME,
-            args(&[("request", name::<StartRequest>(cfg))]),
+            request(name::<StartRequest>(cfg)),
             name::<SessionId>(cfg),
             error.clone(),
         ),
         (
             CHOOSE,
-            args(&[
-                ("decision", name::<DecisionId>(cfg)),
-                ("index", name::<CandidateIndex>(cfg)),
-            ]),
+            request(name::<ChooseRequest>(cfg)),
             name::<()>(cfg),
             error.clone(),
         ),
         (
             SET_STOPS,
-            args(&[
-                ("session", name::<SessionId>(cfg)),
-                ("stops", name::<StopsSetting>(cfg)),
-            ]),
+            request(name::<SetStopsRequest>(cfg)),
             name::<()>(cfg),
             error,
         ),

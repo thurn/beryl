@@ -151,10 +151,10 @@ export const startGame = (agent: string, seed?: number) =>
 
 /** Answers the human's decision `decision` with its candidate `index`. */
 export const choose = (decision: DecisionId, index: CandidateIndex) =>
-  call("choose", { decision, index });
+  call("choose", { request: { decision, index } });
 
 export const setStops = (session: SessionId, stops: StopsSetting) =>
-  call("set_stops", { session, stops });
+  call("set_stops", { request: { session, stops } });
 
 export const onGameUpdate = async (
   handler: (update: Events["game-update"]) => void,

@@ -873,8 +873,9 @@ fn outcome_view(obs: Observation<'_>, o: Outcome) -> OutcomeView {
     }
 }
 
-/// An engine event as the viewer of `obs` is told it. Events name objects by public slot, so
-/// none carries an identity; one that did would have to come from `obs`.
+/// An engine event as the viewer of `obs` is told it. Engine events name objects by slot and
+/// carry no identity, and this takes no table: anything an event says about a card must come
+/// from `obs`, which the information independence test redeals.
 fn game_event(obs: Observation<'_>, e: &Event) -> GameEvent {
     let side = |p| side(obs, p);
     match *e {

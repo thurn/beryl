@@ -204,8 +204,11 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
             }
             // A state with every unknown card dealt anew, consistent with what the human
             // knows, gives the same view, events included: nothing in it depends on a hidden
-            // identity. A paused resolution replays its body under the redealt state's own
-            // random streams, so those positions are left to the check above.
+            // identity. The redealt view converts the same engine events, so this covers what
+            // a conversion reads through the observation; engine events name objects by slot
+            // only, so that is all an identity could come from. A paused resolution replays
+            // its body under the redealt state's own random streams, so those positions are
+            // left to the check above.
             if matches!(s.pending(), Pending::Resolving(_)) {
                 view = play(&mut game, &view);
                 continue;

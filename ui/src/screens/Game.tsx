@@ -124,6 +124,7 @@ export function GameScreen({ update }: { update: GameUpdate | null }) {
           <input
             type="checkbox"
             checked={view.stops === "exact"}
+            disabled={status.kind !== "deciding"}
             onChange={(e) =>
               setStops(session, e.target.checked ? "exact" : "smart").catch(
                 fail,

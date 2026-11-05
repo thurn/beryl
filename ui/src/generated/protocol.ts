@@ -17,6 +17,14 @@ export type StartRequest = { agent: string,
  */
 seed: number | null, };
 
+export type ChooseRequest = { 
+/**
+ * The decision the UI received.
+ */
+decision: DecisionId, index: CandidateIndex, };
+
+export type SetStopsRequest = { session: SessionId, stops: StopsSetting, };
+
 export type SessionError = { "kind": "unknownAgent", name: string, } | { "kind": "unknownCard", name: string, } | { "kind": "deck", reason: string, } | { "kind": "staleSession", session: SessionId, } | { "kind": "notDeciding" } | { "kind": "staleDecision", decision: DecisionId, open: DecisionId, } | { "kind": "noSuchCandidate", index: CandidateIndex, candidates: number, } | { "kind": "ended" } | { "kind": "badReplay", reason: string, } | { "kind": "io", reason: string, };
 
 export type GameUpdate = { 
@@ -175,8 +183,8 @@ export type Commands = {
   ui_ready: { args: Record<string, never>; result: null; error: never };
   list_agents: { args: Record<string, never>; result: Array<AgentView>; error: never };
   start_game: { args: { request: StartRequest }; result: SessionId; error: SessionError };
-  choose: { args: { decision: DecisionId; index: CandidateIndex }; result: null; error: SessionError };
-  set_stops: { args: { session: SessionId; stops: StopsSetting }; result: null; error: SessionError };
+  choose: { args: { request: ChooseRequest }; result: null; error: SessionError };
+  set_stops: { args: { request: SetStopsRequest }; result: null; error: SessionError };
 };
 
 /** Each event's payload. */
