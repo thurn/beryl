@@ -5,6 +5,14 @@ bugs in future (e.g. via the type system). Each entry gives a short description
 of the bug, how a similar bug could be prevented, and the fixing commit when it
 was not found and fixed in the same session. Newest first.
 
+- **The expert aimed removal by a different rule than the one that cast it.**
+  Get Lost was cast because the attacker about to kill us ranked first, then
+  aimed by the generic policy at a more valuable Teferi; Swift Reconfiguration
+  and Aang's Iceberg's trigger had their own aiming too. Every removal is now
+  aimed by the ranking that chose to cast it. Prevention: decide a spell and its
+  target in one place, or have the target step call the same function the
+  decision used.
+
 - **The expert's bonuses were discounted with the base value.** Returning a
   blocker that opened lethal was worth +500, but the quarter-value discount for
   creatures whose enters-the-battlefield effect is spent applied after it, so

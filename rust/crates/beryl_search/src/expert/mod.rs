@@ -580,15 +580,22 @@ impl Expert<'_> {
             .filter(|&s| self.counter_cost(s).is_some())
     }
 
-    /// The mana each counterspell in hand worth holding up costs: Mana Tithe, which a player
-    /// with a mana to spare pays, only when it is the only one.
+    /// The mana each counterspell in hand worth holding up costs: one our untapped sources
+    /// have the colors for (they stay as they are through the opponent's turn), and Mana
+    /// Tithe, which a player with a mana to spare pays, only when it is the only one.
     fn counter_mana(&self) -> impl Iterator<Item = i32> + '_ {
+        let (white, blue) = self.colors_up(self.me());
+        let castable = move |s: Slot| {
+            self.obs().card(s).is_some_and(|c| {
+                let cost = self.p.t.def(c).front().cost;
+                i32::from(cost.symbols[0]) <= white && i32::from(cost.symbols[1]) <= blue
+            })
+        };
         let others = self
             .counters_in_hand()
-            .any(|s| !self.is(s, names::MANA_TITHE));
+            .any(|s| castable(s) && !self.is(s, names::MANA_TITHE));
         self.counters_in_hand()
-            .filter(move |&s| !others || !self.is(s, names::MANA_TITHE))
-            .filter(|&s| self.colors_for(s))
+            .filter(move |&s| castable(s) && (!others || !self.is(s, names::MANA_TITHE)))
             .filter_map(|s| self.counter_cost(s))
     }
 
@@ -1064,11 +1071,10 @@ impl Expert<'_> {
             return 950;
         }
         // Sphinx and Malcolm wait for the opponent's turn, unless the opponent is tapped out
-        // and can answer nothing now, or one is cast into an empty hand; instants always wait.
-        // Dying too, a flash blocker comes in during their attack, past their sorcery-speed
-        // removal.
+        // and can answer nothing now; instants always wait.
+        // A blocker we will need, or one cast into an empty hand, is worth casting now too.
         let instant = f.types.intersects(Types::INSTANT);
-        let now = !self.opp_can_counter() || self.hand(self.opp()).count() <= 1;
+        let now = !self.opp_can_counter() || self.dying() || self.hand(self.opp()).count() <= 1;
         if flash && !sorcery_only && (instant || !now) {
             return 0;
         }
@@ -2243,8 +2249,9 @@ impl Expert<'_> {
     }
 
     /// Our spell or ability's target, where the rollout policy's would be wrong: a bounce
-    /// by [`Expert::bounce_value`]; while the opponent's attackers are declared, an attacker,
-    /// the one dealing most when the attack is lethal, else the most valuable.
+    /// by [`Expert::bounce_value`]; removal by the ranking that chose to cast it; while the
+    /// opponent's attackers are declared, an attacker, the one dealing most when the attack
+    /// is lethal, else the most valuable.
     fn target(&self, d: &Decision) -> Option<Choice> {
         // A Mana Crypt about to kill us goes, to our own Aang's Iceberg or Teferi.
         if let Some(crypt) = self.deadly_crypt()
@@ -2292,16 +2299,18 @@ impl Expert<'_> {
             && self.p.t.def(e.card).name == names::SWIFT_RECONFIGURATION
             && matches!(d.candidates, beryl_engine::Candidates::Objects(_))
         {
-            // In their combat, ranked as removal there: an attacker is removed from combat as
-            // it stops being a creature. Before ours, a blocker whose removal opens lethal.
+            // In their combat, an attacker ranked as removal there: it is removed from combat
+            // as it stops being a creature. Otherwise as the ranking that chose to cast it.
             return Some(best(d, |c| {
                 let slot = c.object()?;
                 Some(if self.obs().controller(slot) != self.opp() {
                     -self.value(slot)
                 } else if self.is(slot, names::JACE_VRYNS_PRODIGY) {
                     0
+                } else if self.attacking(slot) {
+                    self.their_attack_rank(slot)
                 } else {
-                    self.their_attack_rank(slot) + 1000 * i32::from(self.lethal_blocker(slot))
+                    self.removal_rank(names::SWIFT_RECONFIGURATION, slot)
                 })
             }));
         }
@@ -2348,14 +2357,15 @@ impl Expert<'_> {
         }))
     }
 
-    /// Our removal spell's target outside their combat: by the ranking that chose to cast
-    /// it ([`Expert::removal_rank`]).
+    /// Our removal spell's target, or our Aang's Iceberg's enters trigger's, outside their
+    /// declare attackers step: by the ranking that chose to cast it
+    /// ([`Expert::removal_rank`]).
     fn removal_target(&self, d: &Decision) -> Option<Choice> {
         let turn = self.obs().turn();
         let e = self.obs().stack().last()?;
         let name = self.p.t.def(e.card).name;
         if e.controller != self.me()
-            || !e.is_spell()
+            || !(e.is_spell() || name == names::AANGS_ICEBERG)
             || !REMOVAL.contains(&name)
             || (turn.active != self.me() && turn.step == TurnStep::DeclareAttackers)
             || !matches!(d.candidates, beryl_engine::Candidates::Objects(_))

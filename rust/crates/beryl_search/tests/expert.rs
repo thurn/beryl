@@ -514,6 +514,33 @@ fn removal_but_not_oust_opens_lethal() {
     assert_eq!(play_turn(&t, &mut s, 7), Some(Outcome::Win(P0)));
 }
 
+/// Removal is aimed as it was weighed: low on life, Swift Reconfiguration goes on the Sphinx,
+/// the biggest attacker, not on the most valuable card.
+#[test]
+fn removal_aims_at_the_creature_that_kills_us() {
+    const LOW: Scenario = Scenario::new("low")
+        .at(7, P0, TurnStep::PrecombatMain)
+        .life(P0, 6)
+        .hand(P0, &[names::SWIFT_RECONFIGURATION])
+        .battlefield(P0, &[Permanent::new(PLAINS)])
+        .library(P0, LIBRARY)
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(names::ADELINE_RESPLENDENT_CATHAR),
+                Permanent::new(names::SPHINX_OF_FALSE_CONCLUSIONS),
+                Permanent::new(names::THUNDERTRAP_TRAINER),
+            ],
+        )
+        .library(P1, LIBRARY);
+    let (t, mut s) = arrange(&LOW);
+    let (d, c) = expert_at(&t, &mut s, casts(""), |s, d| {
+        d.kind == DecisionKind::Target && !s.stack().is_empty()
+    });
+    let target = d.candidates.object(c).expect("a creature");
+    assert_eq!(name(&t, &s, target), names::SPHINX_OF_FALSE_CONCLUSIONS);
+}
+
 /// Expert against random, seats alternated. The CLI's 200-game tournament measures the gate
 /// (at least 90%); this pins a smaller seeded sample.
 #[test]
