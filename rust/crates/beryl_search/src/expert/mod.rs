@@ -647,8 +647,14 @@ impl Expert<'_> {
             (Some(names::NO_MORE_LIES), _) if theirs < 3 && threat >= min => 290,
             (Some(names::MANA_DRAIN), _) if threat >= min => 280,
             // Sink into Stupor returns the spell to its owner's hand: a counter for tempo,
-            // for a major threat when no counterspell can answer it.
-            (Some(names::SINK_INTO_STUPOR), 0) if threat >= MAJOR => 150,
+            // for a major threat when no counterspell can answer it, and only when its
+            // controller has not the mana to cast it again this turn.
+            (Some(names::SINK_INTO_STUPOR), 0)
+                if threat >= MAJOR
+                    && theirs < i32::from(self.p.t.def(top.card).front().cost.mana_value()) =>
+            {
+                150
+            }
             _ => 0,
         }
     }
@@ -725,6 +731,21 @@ impl Expert<'_> {
                 let v = self.main_cast(slot, face, costs, precombat);
                 if v > 0 && self.spoils_tax_room(slot, face, costs) {
                     v.min(50)
+                } else if v > 0 && !self.opp_can_counter() {
+                    // A window the opponent cannot counter in is for our best threat first,
+                    // ahead of removal that could wait.
+                    let worth = self
+                        .obs()
+                        .card(slot)
+                        .map_or(0, |c| i32::from(self.p.values.get(c).value));
+                    let removal = self
+                        .name(slot)
+                        .is_some_and(|n| self.removal_score(slot, n, face, -1).is_some());
+                    if worth >= MAJOR && !removal {
+                        v.max(850 + worth)
+                    } else {
+                        v
+                    }
                 } else {
                     v
                 }
@@ -737,20 +758,22 @@ impl Expert<'_> {
             Opt::Activate {
                 slot,
                 ability: AbilityIx::Granted(_),
-            } if precombat && self.crew_lethal(slot) => 950,
+            } if precombat && self.crew_lethal(slot, 0) => 950,
             _ => 0,
         }
     }
 
     /// Whether crewing our Vehicle in `vehicle` (crew 5, as Swift Reconfiguration makes one),
-    /// with summoning-sick creatures first, makes an attack that gets enough damage past the
-    /// opponent's untapped creatures to kill.
-    fn crew_lethal(&self, vehicle: Slot) -> bool {
+    /// with summoning-sick creatures first and `extra` more power from a creature cast first,
+    /// makes an attack that gets enough damage past the opponent's untapped creatures to
+    /// kill.
+    fn crew_lethal(&self, vehicle: Slot, extra: i32) -> bool {
         // Crewed already, it is a creature until end of turn.
         if self.has_type(vehicle, Types::CREATURE) {
             return false;
         }
         let power = |s: Slot| i32::from(self.obs().derived(s).power.max(0));
+        let flies = |s: Slot| self.obs().derived(s).keywords.intersects(Keywords::FLYING);
         let sick = |s: Slot| self.obs().object(s).flags.has(ObjectFlags::SUMMONING_SICK);
         let mut crew: Vec<Slot> = self
             .creatures(self.me())
@@ -758,26 +781,32 @@ impl Expert<'_> {
             .collect();
         // Summoning-sick creatures may crew; they could not attack anyway.
         crew.sort_by_key(|&s| (!sick(s), power(s)));
-        let mut crewed = 0;
+        let mut crewed = extra;
         let mut attackers = Vec::new();
         for s in crew {
             if crewed < 5 {
                 crewed += power(s);
             } else if !sick(s) {
-                attackers.push(power(s));
+                attackers.push((power(s), flies(s)));
             }
         }
         if crewed < 5 {
             return false;
         }
-        attackers.push(power(vehicle));
-        attackers.sort_unstable_by(|a, b| b.cmp(a));
-        let blockers = self
-            .creatures(self.opp())
-            .filter(|&s| !self.tapped(s))
-            .count();
-        attackers.iter().skip(blockers).sum::<i32>()
-            >= i32::from(self.obs().player(self.opp()).life)
+        attackers.push((power(vehicle), flies(vehicle)));
+        self.through(attackers, &[]) >= i32::from(self.obs().player(self.opp()).life)
+    }
+
+    /// Our uncrewed Vehicle, if any: a creature of ours the opponent's Swift Reconfiguration
+    /// made one.
+    fn vehicle(&self) -> Option<Slot> {
+        self.permanents(self.me()).find(|&s| {
+            !self.has_type(s, Types::CREATURE)
+                && self.obs().battlefield().iter().any(|&a| {
+                    self.obs().object(a).attached_to == Some(s)
+                        && self.is(a, names::SWIFT_RECONFIGURATION)
+                })
+        })
     }
 
     /// Which land to play: one that enters untapped and makes the color we have less of,
@@ -975,6 +1004,16 @@ impl Expert<'_> {
         {
             return 0;
         }
+        let creature = f.types.intersects(Types::CREATURE);
+        // A creature that crews our Vehicle for a lethal attack comes down before combat.
+        if precombat
+            && creature
+            && self
+                .vehicle()
+                .is_some_and(|v| self.crew_lethal(v, i32::from(f.power.unwrap_or(0))))
+        {
+            return 950;
+        }
         // Sphinx and Malcolm wait for the opponent's turn, unless the opponent is tapped out
         // and can answer nothing now; instants always wait.
         // A blocker we will need, or one cast into an empty hand, is worth casting now too.
@@ -990,7 +1029,6 @@ impl Expert<'_> {
         {
             return 700;
         }
-        let creature = f.types.intersects(Types::CREATURE);
         if precombat && creature && name != names::ADELINE_RESPLENDENT_CATHAR && self.can_attack() {
             // Creatures come down after combat, giving nothing away before it.
             return 0;
@@ -1087,9 +1125,7 @@ impl Expert<'_> {
                 // Flash: she waits for the opponent's turn, unless her +1 on an attacker
                 // makes our attack lethal, there is a tapped creature to exile now, or the
                 // opponent is tapped out.
-                let life = i32::from(self.obs().player(self.opp()).life);
-                let power = self.attack_power(&[]);
-                if power > 0 && power < life && power + 1 >= life {
+                if self.emperor_lethal().is_some() {
                     1500
                 } else if self.counter_known(self.mana(self.me()) - 4) {
                     // A counterspell we have seen waits for her.
@@ -1171,6 +1207,10 @@ impl Expert<'_> {
             return v;
         };
         let worth = i32::from(self.p.values.get(card).value);
+        // Under their Teferi our counters wait for our own turn.
+        if self.sorcery_only() {
+            return v;
+        }
         // Against a hand of three or more, any spell short of a major threat waits.
         let minor = if self.hand(self.opp()).count() >= 3 {
             MAJOR
@@ -1218,7 +1258,11 @@ impl Expert<'_> {
                 names::MALCOLM_ALLURING_SCOUNDREL => Some(2),
                 _ => None,
             });
-        // Only what our mana could cast at all is worth keeping it for.
+        // Only what our mana could cast at all is worth keeping it for, and nothing under
+        // their Teferi, which keeps us from casting it on their turn.
+        if self.sorcery_only() {
+            return true;
+        }
         let mana = self.mana(self.me());
         self.counter_mana()
             .chain(flash)
@@ -1388,8 +1432,14 @@ impl Expert<'_> {
     /// worth it: a target must be worth the card's own threshold, or `min` when that is not
     /// negative.
     fn removal_score(&self, slot: Slot, name: &str, face: u8, min: i32) -> Option<(i32, bool)> {
-        // Oust's 3 life can be the 3 that keeps a low opponent alive.
-        if name == names::OUST && self.obs().player(self.opp()).life <= 6 && !self.dying() {
+        // Oust's 3 life can be the 3 that keeps a low opponent alive, or that our attack this
+        // turn falls short by; and the card it puts into their library is one to draw from a
+        // library that would otherwise run out.
+        let life = i32::from(self.obs().player(self.opp()).life);
+        if name == names::OUST
+            && ((!self.dying() && (life <= 6 || self.attack_power(&[], None) + 3 >= life))
+                || self.obs().library(self.opp()).len() <= 1)
+        {
             return None;
         }
         let threshold = match name {
@@ -1444,7 +1494,7 @@ impl Expert<'_> {
         // A planeswalker our attack can kill this turn needs no removal.
         if walker
             && ours
-            && self.attack_power(&[]) >= i32::from(self.obs().object(target).counters.loyalty)
+            && self.attack_power(&[], None) >= i32::from(self.obs().object(target).counters.loyalty)
         {
             return None;
         }
@@ -1500,7 +1550,7 @@ impl Expert<'_> {
                                 .map(|i| blockers[i])
                                 .collect::<Vec<Slot>>()
                         })
-                        .find(|removed| self.attack_power(removed) >= life);
+                        .find(|removed| self.attack_power(removed, None) >= life);
                     if found.is_some() {
                         return found;
                     }
@@ -1577,27 +1627,36 @@ impl Expert<'_> {
 
     /// The damage our creatures able to attack would deal past the opponent's untapped
     /// creatures but those `removed`, as before combat: each blocker blocks the strongest
-    /// attacker it can, fliers only by fliers
+    /// attacker it can, `pumped` with one more power, fliers only by fliers
     /// ([CR 702.9b](https://yawgatog.com/resources/magic-rules/#R7029b): "A creature with
     /// flying can't be blocked except by creatures with flying and/or reach"), a ground
     /// attacker by a blocker that could not block a flier when there is one.
-    fn attack_power(&self, removed: &[Slot]) -> i32 {
+    fn attack_power(&self, removed: &[Slot], pumped: Option<Slot>) -> i32 {
         if self.obs().turn().step != TurnStep::PrecombatMain {
             return 0;
         }
         let flies = |s: Slot, k: Keywords| self.obs().derived(s).keywords.intersects(k);
-        let mut attackers: Vec<(i32, bool)> = self
+        let attackers: Vec<(i32, bool)> = self
             .creatures(self.me())
             .filter(|&s| {
                 let o = self.obs().object(s);
                 !o.flags.has(ObjectFlags::TAPPED) && !o.flags.has(ObjectFlags::SUMMONING_SICK)
             })
             .map(|s| {
-                let power = i32::from(self.obs().derived(s).power.max(0));
+                let power =
+                    i32::from(self.obs().derived(s).power.max(0)) + i32::from(pumped == Some(s));
                 (power, flies(s, Keywords::FLYING))
             })
             .collect();
+        self.through(attackers, removed)
+    }
+
+    /// The damage `attackers`, by power and whether they fly, would deal past the opponent's
+    /// untapped creatures but those `removed`, each blocker blocking the strongest attacker
+    /// it can, as in [`Expert::attack_power`].
+    fn through(&self, mut attackers: Vec<(i32, bool)>, removed: &[Slot]) -> i32 {
         attackers.sort_unstable_by(|a, b| b.cmp(a));
+        let flies = |s: Slot, k: Keywords| self.obs().derived(s).keywords.intersects(k);
         let mut reach: Vec<bool> = self
             .creatures(self.opp())
             .filter(|&s| !self.tapped(s) && !removed.contains(&s))
@@ -1621,6 +1680,18 @@ impl Expert<'_> {
             }
         }
         through
+    }
+
+    /// The creature of ours whose +1/+1 counter from The Wandering Emperor's +1 ("Put a +1/+1
+    /// counter on up to one target creature. It gains first strike until end of turn.") makes
+    /// our attack lethal when it is not without it: one that gets past the blockers.
+    fn emperor_lethal(&self) -> Option<Slot> {
+        let life = i32::from(self.obs().player(self.opp()).life);
+        if self.attack_power(&[], None) >= life {
+            return None;
+        }
+        self.creatures(self.me())
+            .find(|&c| self.attack_power(&[], Some(c)) >= life)
     }
 
     /// The first targeted ability of a card's front face, such as Aang's Iceberg's "When
@@ -1719,51 +1790,7 @@ impl Expert<'_> {
         let threatened = self.threat_past(None);
         let face_name = def.face_name(o.face);
         match face_name {
-            names::JACE_THE_MIND_SCULPTOR => {
-                if loyalty >= 12 {
-                    return by_cost(-12);
-                }
-                // Returning a blocker opens lethal.
-                if self.opens_lethal() {
-                    return by_cost(-1);
-                }
-                // +2 leaves him at loyalty + 2; the opponent's swing back decides the rest.
-                if threatened >= loyalty + 2 {
-                    // −1 returns the creature best returned: worth it if that saves him.
-                    // Otherwise he is lost anyway: draw three.
-                    let bounced = self
-                        .creatures(self.opp())
-                        .max_by_key(|&s| self.bounce_value(s));
-                    if let Some(b) = bounced
-                        && self.threat_past(Some(b)) < loyalty - 1
-                    {
-                        return by_cost(-1);
-                    }
-                    return if self.draw_safe(3) {
-                        by_cost(0)
-                    } else {
-                        by_cost(2)
-                    };
-                }
-                // Dead on board ourselves, or low on life, he returns the biggest attacker.
-                let low = self.life() <= 6 || self.dying();
-                if low && loyalty >= 2 && self.creatures(self.opp()).next().is_some() {
-                    return by_cost(-1);
-                }
-                // A big threat is worth returning even while he is safe, and a token worth it
-                // is gone for good.
-                let big = self.creatures(self.opp()).any(|s| {
-                    let token = self.obs().object(s).flags.has(ObjectFlags::TOKEN);
-                    self.bounce_value(s) >= if token { 40 } else { 80 }
-                });
-                if big && loyalty >= 2 {
-                    return by_cost(-1);
-                }
-                if self.hand(self.me()).count() <= 2 && threatened < loyalty && self.draw_safe(3) {
-                    return by_cost(0);
-                }
-                by_cost(2)
-            }
+            names::JACE_THE_MIND_SCULPTOR => by_cost(self.mind_sculptor(loyalty, threatened)),
             names::TEFERI_TIME_RAVELER => {
                 let target = self
                     .permanents(self.opp())
@@ -1786,9 +1813,7 @@ impl Expert<'_> {
             }
             names::THE_WANDERING_EMPEROR => {
                 // +1 on an attacker when one more power is lethal.
-                let life = i32::from(self.obs().player(self.opp()).life);
-                let power = self.attack_power(&[]);
-                if power > 0 && power < life && power + 1 >= life {
+                if self.emperor_lethal().is_some() {
                     return by_cost(1);
                 }
                 if loyalty >= 2 && self.tapped_target(25).is_some() {
@@ -1814,6 +1839,50 @@ impl Expert<'_> {
                 .position(|a| a.cost.loyalty.is_some_and(|l| l >= 0))
                 .map(|i| i as u8),
         }
+    }
+
+    /// The loyalty cost of the ability our Jace, the Mind Sculptor should activate, with
+    /// `loyalty` and facing `threatened` damage from the opponent's swing back.
+    fn mind_sculptor(&self, loyalty: i32, threatened: i32) -> i8 {
+        if loyalty >= 12 {
+            return -12;
+        }
+        // Returning a blocker opens lethal.
+        if self.opens_lethal() {
+            return -1;
+        }
+        // A token worth returning is gone for good.
+        let token = self.creatures(self.opp()).any(|s| {
+            self.obs().object(s).flags.has(ObjectFlags::TOKEN) && self.bounce_value(s) >= 40
+        });
+        // +2 leaves him at loyalty + 2; the opponent's swing back decides the rest.
+        if threatened >= loyalty + 2 {
+            // −1 returns the creature best returned: worth it if that saves him, or on a token
+            // worth it. Otherwise he is lost anyway: draw three.
+            let bounced = self
+                .creatures(self.opp())
+                .max_by_key(|&s| self.bounce_value(s));
+            if token || bounced.is_some_and(|b| self.threat_past(Some(b)) < loyalty - 1) {
+                return -1;
+            }
+            return if self.draw_safe(3) { 0 } else { 2 };
+        }
+        // Dead on board ourselves, or low on life, he returns the biggest attacker.
+        let low = self.life() <= 6 || self.dying();
+        if low && loyalty >= 2 && self.creatures(self.opp()).next().is_some() {
+            return -1;
+        }
+        // A big threat is worth returning even while he is safe.
+        let big = self
+            .creatures(self.opp())
+            .any(|s| self.bounce_value(s) >= 80);
+        if (big || token) && loyalty >= 2 {
+            return -1;
+        }
+        if self.hand(self.me()).count() <= 2 && threatened < loyalty && self.draw_safe(3) {
+            return 0;
+        }
+        2
     }
 
     /// The power the opponent's creatures, but `except`, could swing at us or a planeswalker
@@ -2144,6 +2213,16 @@ impl Expert<'_> {
             && b.contains(crypt)
         {
             return Some(best(d, |c| Some(i32::from(c.object()? == crypt))));
+        }
+        // The Wandering Emperor's +1 for lethal: on the attacker that gets past the blockers.
+        if let Some(e) = self.obs().stack().last()
+            && e.controller == self.me()
+            && self.p.t.def(e.card).name == names::THE_WANDERING_EMPEROR
+            && let Some(pump) = self.emperor_lethal()
+            && let beryl_engine::Candidates::Objects(b) = d.candidates
+            && b.contains(pump)
+        {
+            return Some(best(d, |c| Some(i32::from(c.object()? == pump))));
         }
         // Jace, Telepath Unbound's −3: the card worth casting again.
         if let Some(e) = self.obs().stack().last()
