@@ -312,13 +312,13 @@ function BlockArc({ id }: { id?: string }) {
     >
       <defs>
         <linearGradient id="block-gold" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#f8d878" />
-          <stop offset="0.55" stopColor="#fdecb0" />
-          <stop offset="1" stopColor="#fffbe8" />
+          <stop offset="0" stopColor="#f6c450" />
+          <stop offset="0.55" stopColor="#fde49a" />
+          <stop offset="1" stopColor="#fff6d6" />
         </linearGradient>
       </defs>
       <path
-        d="M0 0 C1.5 12 22 19.5 50 19.5 C78 19.5 98.5 12 100 0 C97.5 10 78 15 53.5 15 L50 11.5 L46.5 15 C22 15 2.5 10 0 0 Z"
+        d="M0 0 C1.5 12 22 19.5 50 19.5 C78 19.5 98.5 12 100 0 C97.5 10 78 15 53.5 15 L50 11.5 L46.5 15 C22 15 2.5 10 0 0 Z M47.5 19 L50 24 L52.5 19 Z"
         fill="url(#block-gold)"
       />
     </svg>

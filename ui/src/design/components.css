@@ -766,6 +766,8 @@
 /* A white-hot dot in its tone's bloom. */
 .arrow-dot {
   fill: #fffdf6;
+  stroke: var(--tone);
+  stroke-width: 1.5;
 }
 
 /* Buttons (ui_system.png section 02), sized in em so each place sets one font size: a pill with
