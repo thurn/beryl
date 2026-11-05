@@ -941,7 +941,11 @@ impl Expert<'_> {
             };
             // Sink into Stupor's bounce goes after the removal that answers for good, which
             // then takes the target both want.
-            let bounce = if name == names::SINK_INTO_STUPOR { 40 } else { 0 };
+            let bounce = if name == names::SINK_INTO_STUPOR {
+                40
+            } else {
+                0
+            };
             return if (!flash || sorcery_only || urgent) && keeps {
                 700 + removal.0 - bounce
             } else {
@@ -1457,7 +1461,13 @@ impl Expert<'_> {
     fn removals_now(&self) -> usize {
         let walkers = self
             .permanents(self.me())
-            .filter(|&s| !self.obs().object(s).flags.has(ObjectFlags::LOYALTY_ACTIVATED))
+            .filter(|&s| {
+                !self
+                    .obs()
+                    .object(s)
+                    .flags
+                    .has(ObjectFlags::LOYALTY_ACTIVATED)
+            })
             .filter(|&s| {
                 let loyalty = self.obs().object(s).counters.loyalty;
                 match self.name(s) {

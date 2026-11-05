@@ -338,6 +338,49 @@ fn attacks_with_everything_for_lethal() {
     assert_eq!(attackers, 3);
 }
 
+/// Lethal through two bounces: the opponent's two fliers are all that can block our Sphinx,
+/// so Jace's −1 and Teferi's −3 return them before combat and the Sphinx attacks for the
+/// last 4 life. The ground blocker left behind cannot block a flier.
+#[test]
+fn bounces_both_flying_blockers_for_lethal() {
+    const TWO_BOUNCES: Scenario = Scenario::new("two bounces")
+        .at(7, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(names::SPHINX_OF_FALSE_CONCLUSIONS),
+                Permanent::new(names::JACE_THE_MIND_SCULPTOR),
+                Permanent::new(names::TEFERI_TIME_RAVELER),
+            ],
+        )
+        .library(P0, LIBRARY)
+        .life(P1, 4)
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(names::ELITE_SPELLBINDER),
+                Permanent::new(names::MALCOLM_ALLURING_SCOUNDREL),
+                Permanent::new(names::THUNDERTRAP_TRAINER),
+            ],
+        )
+        .library(P1, LIBRARY);
+    let (t, mut s) = arrange(&TWO_BOUNCES);
+    // The opponent blocks as the expert would.
+    let mut experts = [ExpertAgent::new(&t, 7), ExpertAgent::new(&t, 8)];
+    let mut x = Scratch::new();
+    let outcome = loop {
+        let d = match next(&mut s, &t, &mut x, &mut Replay) {
+            Step::Over(outcome) => break Some(outcome),
+            Step::Decide(_) if s.turn().number > 7 => break None,
+            Step::Decide(d) => d,
+        };
+        let shown = *view(&s, &t, &mut x);
+        let c = experts[usize::from(d.player == P1)].choose(Observation::new(&shown, d.player), &d);
+        apply(&mut s, &t, &mut x, &mut Replay, c);
+    };
+    assert_eq!(outcome, Some(Outcome::Win(P0)));
+}
+
 /// Expert against random, seats alternated. The CLI's 200-game tournament measures the gate
 /// (at least 90%); this pins a smaller seeded sample.
 #[test]
