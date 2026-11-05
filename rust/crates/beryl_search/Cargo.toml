@@ -13,6 +13,9 @@ workspace = true
 beryl_cards = { path = "../beryl_cards" }
 beryl_engine = { path = "../beryl_engine" }
 
+[dev-dependencies]
+beryl_scenario = { path = "../beryl_scenario" }
+
 [[test]]
 name = "allocations"
 harness = false

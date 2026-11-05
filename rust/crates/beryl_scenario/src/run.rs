@@ -54,10 +54,7 @@ pub fn trace(cards: &'static CardTable, scenario: &Scenario) -> Result<Vec<Posit
         action,
         message,
     };
-    let decks = decks(scenario);
-    let t = GameTable::new(cards, [decks[0].as_slice(), decks[1].as_slice()])
-        .map_err(|e| fail(None, format!("{e:?}")))?;
-    let s = arrange(&t, scenario).map_err(|m| fail(None, m))?;
+    let (t, s) = position(cards, scenario)?;
     let mut runner = Runner {
         t: &t,
         s,
@@ -74,6 +71,25 @@ pub fn trace(cards: &'static CardTable, scenario: &Scenario) -> Result<Vec<Posit
         runner.act(i).map_err(|m| fail(Some(i), m))?;
     }
     Ok(positions)
+}
+
+/// A scenario's starting position and the table it is played on, for tests that drive the
+/// engine themselves from a hand-built position, such as the agents'. Its actions are not
+/// run.
+pub fn position(
+    cards: &'static CardTable,
+    scenario: &Scenario,
+) -> Result<(GameTable, State), Failure> {
+    let fail = |message: String| Failure {
+        scenario: scenario.name,
+        action: None,
+        message,
+    };
+    let decks = decks(scenario);
+    let t = GameTable::new(cards, [decks[0].as_slice(), decks[1].as_slice()])
+        .map_err(|e| fail(format!("{e:?}")))?;
+    let s = arrange(&t, scenario).map_err(fail)?;
+    Ok((t, s))
 }
 
 /// Every card the setup names, by owner: the decks the game is built from.

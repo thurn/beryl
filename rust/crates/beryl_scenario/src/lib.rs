@@ -19,7 +19,7 @@ use beryl_engine::state::CounterKind;
 use beryl_engine::{CardTable, DecisionKind, Seat, TurnStep, Zone};
 use serde::{Serialize, Serializer};
 
-pub use run::{Failure, run, trace};
+pub use run::{Failure, position, run, trace};
 
 /// The players, in seat order.
 pub const P0: Seat = Seat::P0;

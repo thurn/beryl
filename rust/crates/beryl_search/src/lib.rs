@@ -2,12 +2,14 @@
 //! seeded [`RandomAgent`] fuzzes; the [`GreedyAgent`] is the [`RolloutPolicy`] search plays
 //! rollouts with. [`AGENTS`] names every agent a game can be played against.
 
+mod expert;
 mod rollout;
 mod values;
 
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{Choice, Decision, GameTable, Observation};
 
+pub use expert::ExpertAgent;
 pub use rollout::{COUNTER_MIN, Inline, REMOVAL_MIN, RolloutPolicy, rollout};
 pub use values::{CardInfo, CardValues};
 
@@ -91,6 +93,11 @@ pub static AGENTS: &[AgentInfo] = &[
         description: "Plays its most valuable card, attacks when safe, never looks ahead",
         new: greedy,
     },
+    AgentInfo {
+        name: "expert",
+        description: "Plays by a strong player's rules for this deck, and works out combat",
+        new: expert,
+    },
 ];
 
 fn random(_t: &GameTable, seed: u64) -> Box<dyn Agent + Send> {
@@ -99,6 +106,10 @@ fn random(_t: &GameTable, seed: u64) -> Box<dyn Agent + Send> {
 
 fn greedy(t: &GameTable, _seed: u64) -> Box<dyn Agent + Send> {
     Box::new(GreedyAgent::new(t))
+}
+
+fn expert(t: &GameTable, seed: u64) -> Box<dyn Agent + Send> {
+    Box::new(ExpertAgent::new(t, seed))
 }
 
 /// The agent registered under `name`.

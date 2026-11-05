@@ -53,20 +53,20 @@ pub struct RolloutPolicy {
 
 /// One candidate of a decision, objects and options alike.
 #[derive(Clone, Copy)]
-enum Candidate {
+pub(crate) enum Candidate {
     Object(Slot),
     Option(Opt),
 }
 
 impl Candidate {
-    fn option(self) -> Option<Opt> {
+    pub(crate) fn option(self) -> Option<Opt> {
         match self {
             Candidate::Option(o) => Some(o),
             Candidate::Object(_) => None,
         }
     }
 
-    fn object(self) -> Option<Slot> {
+    pub(crate) fn object(self) -> Option<Slot> {
         match self {
             Candidate::Object(slot) | Candidate::Option(Opt::Object(slot)) => Some(slot),
             Candidate::Option(_) => None,
@@ -81,14 +81,38 @@ impl RolloutPolicy {
         }
     }
 
-    /// The policy's answer to `d`, seen by `d.player` in `obs`.
-    pub fn choose(&self, t: &GameTable, obs: Observation<'_>, d: &Decision) -> Choice {
-        let p = Policy {
+    /// The rules' view of one decision of `me`'s, for agents that build on them: with
+    /// `expert`, valuing permanents as the expert does.
+    pub(crate) fn view<'a>(
+        &'a self,
+        t: &'a GameTable,
+        obs: Observation<'a>,
+        me: Seat,
+        expert: bool,
+    ) -> Policy<'a> {
+        Policy {
             values: &self.values,
             t,
             obs,
-            me: d.player,
-        };
+            me,
+            expert,
+        }
+    }
+
+    /// The policy's answer to `d`, seen by `d.player` in `obs`.
+    pub fn choose(&self, t: &GameTable, obs: Observation<'_>, d: &Decision) -> Choice {
+        self.decide(t, obs, d, false)
+    }
+
+    /// The policy's answer to `d`, with `expert`, valuing permanents as the expert does.
+    pub(crate) fn decide(
+        &self,
+        t: &GameTable,
+        obs: Observation<'_>,
+        d: &Decision,
+        expert: bool,
+    ) -> Choice {
+        let p = self.view(t, obs, d.player, expert);
         match d.kind {
             DecisionKind::Priority | DecisionKind::CastOffer => {
                 best(d, |c| c.option().map(|o| p.action(o)))
@@ -186,7 +210,7 @@ impl RolloutPolicy {
 
 /// The candidate with the highest score, the first of equals. A candidate scored `None` is
 /// never chosen over one with a score; when none has one, the first is.
-fn best(d: &Decision, mut score: impl FnMut(Candidate) -> Option<i32>) -> Choice {
+pub(crate) fn best(d: &Decision, mut score: impl FnMut(Candidate) -> Option<i32>) -> Choice {
     let mut top = (0, i32::MIN);
     let mut consider = |i: usize, c: Candidate| {
         if let Some(s) = score(c)
@@ -209,28 +233,35 @@ fn best(d: &Decision, mut score: impl FnMut(Candidate) -> Option<i32>) -> Choice
 }
 
 /// One decision's view, for the rules above.
-struct Policy<'a> {
-    values: &'a CardValues,
-    t: &'a GameTable,
-    obs: Observation<'a>,
-    me: Seat,
+pub(crate) struct Policy<'a> {
+    pub(crate) values: &'a CardValues,
+    pub(crate) t: &'a GameTable,
+    pub(crate) obs: Observation<'a>,
+    pub(crate) me: Seat,
+    /// Whether permanents are valued as the expert values them ([`crate::expert`]).
+    pub(crate) expert: bool,
 }
 
 impl Policy<'_> {
-    fn info(&self, slot: Slot) -> Option<CardInfo> {
+    pub(crate) fn info(&self, slot: Slot) -> Option<CardInfo> {
         self.obs.card(slot).map(|card| self.values.get(card))
     }
 
     /// What an object is worth: its card's value, plus a creature's power and a
     /// planeswalker's loyalty as they stand on the battlefield, where a land is worth at most
     /// [`LAND_MAX`]. An unknown card is worth 0.
-    fn value(&self, slot: Slot) -> i32 {
+    pub(crate) fn value(&self, slot: Slot) -> i32 {
         let Some(info) = self.info(slot) else {
             return 0;
         };
         let mut v = i32::from(info.value);
         let o = self.obs.object(slot);
         if o.zone == Zone::Battlefield {
+            if self.expert
+                && let Some(v) = crate::expert::appraise(self, slot, v)
+            {
+                return v;
+            }
             let d = self.obs.derived(slot);
             // A modal double-faced card played as its land face is worth a land.
             if d.types.intersects(Types::LAND) {
@@ -246,7 +277,7 @@ impl Policy<'_> {
         v
     }
 
-    fn is_land(&self, slot: Slot) -> bool {
+    pub(crate) fn is_land(&self, slot: Slot) -> bool {
         self.obs.card(slot).is_some_and(|card| {
             self.t
                 .def(card)
@@ -258,27 +289,39 @@ impl Policy<'_> {
 
     /// What a card in hand is worth keeping: a land is worth much while lands are short and
     /// little once there are six.
-    fn in_hand(&self, slot: Slot) -> i32 {
+    pub(crate) fn in_hand(&self, slot: Slot) -> i32 {
         if !self.is_land(slot) {
             return self.value(slot);
         }
+        // To the expert, a modal double-faced card with a spell in front is worth the spell
+        // at least.
+        let spell = self.expert
+            && self
+                .obs
+                .card(slot)
+                .is_some_and(|c| !self.t.def(c).front().types.intersects(Types::LAND));
         let mine = |zone| self.obs.zone(self.me, zone);
         let lands = (mine(Zone::Hand) | mine(Zone::Battlefield))
             .iter()
             .filter(|&s| self.is_land(s))
             .count();
-        if lands > 5 { 5 } else { 80 }
+        let land = if lands > 5 { 5 } else { 80 };
+        if spell {
+            land.max(self.value(slot))
+        } else {
+            land
+        }
     }
 
     /// Keep a hand of two to five lands, and any hand of five cards or fewer.
-    fn keep(&self) -> bool {
+    pub(crate) fn keep(&self) -> bool {
         let hand = self.obs.zone(self.me, Zone::Hand);
         let lands = hand.iter().filter(|&slot| self.is_land(slot)).count();
         hand.count() <= 5 || (2..=5).contains(&lands)
     }
 
     /// The score of a priority action or a cast offer; 0 is passing.
-    fn action(&self, o: Opt) -> i32 {
+    pub(crate) fn action(&self, o: Opt) -> i32 {
         match o {
             Opt::PlayLand(slot) => 1000 - self.value(slot),
             Opt::Cast { slot, face, costs } => self.cast(slot, face, costs),
@@ -290,7 +333,7 @@ impl Policy<'_> {
         }
     }
 
-    fn cast(&self, slot: Slot, face: u8, costs: u8) -> i32 {
+    pub(crate) fn cast(&self, slot: Slot, face: u8, costs: u8) -> i32 {
         let Some(card) = self.obs.card(slot) else {
             return 0;
         };
@@ -314,7 +357,7 @@ impl Policy<'_> {
         }
     }
 
-    fn activate(&self, slot: Slot, i: u8) -> i32 {
+    pub(crate) fn activate(&self, slot: Slot, i: u8) -> i32 {
         let Some(card) = self.obs.card(slot) else {
             return 0;
         };
@@ -337,7 +380,7 @@ impl Policy<'_> {
     /// `v`, or 0 when the ability's first target is not worth it: a harmful one needs an
     /// opponent's object worth the removal or counter threshold, unless it may target
     /// nothing; a helpful one needs one of ours.
-    fn worth_targeting(&self, a: &Ability, friendly: bool, v: i32) -> i32 {
+    pub(crate) fn worth_targeting(&self, a: &Ability, friendly: bool, v: i32) -> i32 {
         let Some(spec) = a.targets.first() else {
             return v;
         };
@@ -357,7 +400,7 @@ impl Policy<'_> {
 
     /// The most valuable object a spec could target on the side it should: the opponent's
     /// for a harmful effect, ours for a helpful one. Players count as 0.
-    fn best_target(&self, spec: &TargetSpec, friendly: bool) -> Option<i32> {
+    pub(crate) fn best_target(&self, spec: &TargetSpec, friendly: bool) -> Option<i32> {
         let side = if friendly {
             self.me
         } else {
@@ -406,7 +449,7 @@ impl Policy<'_> {
     /// The spec being targeted for and whether its effect helps its controller: the first
     /// spec of the spell or ability on top of the stack, which a casting or a triggered
     /// ability being put on the stack puts there first (CR 601.2a).
-    fn targeting(&self) -> Option<(&'static TargetSpec, bool)> {
+    pub(crate) fn targeting(&self) -> Option<(&'static TargetSpec, bool)> {
         let e: &StackEntry = self.obs.stack().last()?;
         let def: &'static CardDef = self.t.def(e.card);
         let face: &'static Face = &def.faces[usize::from(e.face)];
@@ -427,7 +470,7 @@ impl Policy<'_> {
 
     /// A target's score: a candidate on the right side by its value, far above the wrong
     /// side; choosing none in between.
-    fn target(&self, c: Candidate, friendly: bool) -> i32 {
+    pub(crate) fn target(&self, c: Candidate, friendly: bool) -> i32 {
         let side = if friendly {
             self.me
         } else {
@@ -452,24 +495,24 @@ impl Policy<'_> {
         if controller == side { 1000 + v } else { -v }
     }
 
-    fn creature(&self, slot: Slot) -> bool {
+    pub(crate) fn creature(&self, slot: Slot) -> bool {
         self.obs.derived(slot).types.intersects(Types::CREATURE)
     }
 
-    fn flags(&self, slot: Slot) -> ObjectFlags {
+    pub(crate) fn flags(&self, slot: Slot) -> ObjectFlags {
         self.obs.object(slot).flags
     }
 
     /// Whether `blocker` could block `attacker`, by evasion
     /// ([CR 702.9b](https://yawgatog.com/resources/magic-rules/#R7029b)): "A creature with
     /// flying can't be blocked except by creatures with flying and/or reach."
-    fn evades(&self, attacker: Slot, blocker: Slot) -> bool {
+    pub(crate) fn evades(&self, attacker: Slot, blocker: Slot) -> bool {
         let has = |slot: Slot, k: Keywords| self.obs.derived(slot).keywords.intersects(k);
         has(attacker, Keywords::FLYING) && !has(blocker, Keywords::FLYING.union(Keywords::REACH))
     }
 
     /// Whether `by`'s power is at least the damage left to kill `slot`.
-    fn kills(&self, by: Slot, slot: Slot) -> bool {
+    pub(crate) fn kills(&self, by: Slot, slot: Slot) -> bool {
         let left =
             i16::from(self.obs.derived(slot).toughness) - i16::from(self.obs.object(slot).damage);
         i16::from(self.obs.derived(by).power) >= left
@@ -477,7 +520,7 @@ impl Policy<'_> {
 
     /// No untapped creature of the opponent that could block `attacker` would kill it, and
     /// it deals damage.
-    fn safe_attack(&self, attacker: Slot) -> bool {
+    pub(crate) fn safe_attack(&self, attacker: Slot) -> bool {
         self.obs.derived(attacker).power > 0
             && !self.obs.battlefield().iter().any(|&b| {
                 self.obs.controller(b) != self.me
@@ -488,11 +531,11 @@ impl Policy<'_> {
             })
     }
 
-    fn attacking(&self, slot: Slot) -> bool {
+    pub(crate) fn attacking(&self, slot: Slot) -> bool {
         self.obs.controller(slot) != self.me && self.flags(slot).has(ObjectFlags::ATTACKING)
     }
 
-    fn blocked(&self, attacker: Slot) -> bool {
+    pub(crate) fn blocked(&self, attacker: Slot) -> bool {
         self.obs.battlefield().iter().any(|&b| {
             let o = self.obs.object(b);
             o.flags.has(ObjectFlags::BLOCKING) && o.combat == Some(attacker)
@@ -500,7 +543,7 @@ impl Policy<'_> {
     }
 
     /// The damage the attackers not yet blocked would deal us.
-    fn unblocked_damage(&self) -> i32 {
+    pub(crate) fn unblocked_damage(&self) -> i32 {
         self.obs
             .battlefield()
             .iter()
@@ -515,7 +558,7 @@ impl Policy<'_> {
 
     /// The score of `blocker` blocking `attacker`, if it is a block worth making: killing it
     /// and surviving, trading up, surviving, or chumping when the damage would be lethal.
-    fn block(&self, blocker: Slot, attacker: Slot) -> Option<i32> {
+    pub(crate) fn block(&self, blocker: Slot, attacker: Slot) -> Option<i32> {
         if !self.attacking(attacker) || self.blocked(attacker) || self.evades(attacker, blocker) {
             return None;
         }
@@ -536,7 +579,7 @@ impl Policy<'_> {
         }
     }
 
-    fn best_block(&self, blocker: Slot) -> Option<i32> {
+    pub(crate) fn best_block(&self, blocker: Slot) -> Option<i32> {
         self.obs
             .battlefield()
             .iter()
@@ -546,7 +589,7 @@ impl Policy<'_> {
 
     /// The creature just declared as a blocker, whose attacker is being chosen: ours,
     /// blocking, and blocking nothing yet (CR 509.1a).
-    fn declaring_blocker(&self) -> Option<Slot> {
+    pub(crate) fn declaring_blocker(&self) -> Option<Slot> {
         self.obs.battlefield().iter().copied().find(|&b| {
             let o = self.obs.object(b);
             self.obs.controller(b) == self.me
@@ -557,7 +600,7 @@ impl Policy<'_> {
 }
 
 /// Whose objects a filter requires, if it says.
-fn whose(f: &Filter) -> Option<Whose> {
+pub(crate) fn whose(f: &Filter) -> Option<Whose> {
     match f {
         Filter::Whose(w) => Some(*w),
         Filter::All(fs) => fs.iter().find_map(whose),
@@ -566,7 +609,7 @@ fn whose(f: &Filter) -> Option<Whose> {
 }
 
 /// The index of one of a face's abilities.
-fn index_of(face: &Face, a: &Ability) -> u8 {
+pub(crate) fn index_of(face: &Face, a: &Ability) -> u8 {
     face.abilities
         .iter()
         .position(|b| std::ptr::eq(a, b))
