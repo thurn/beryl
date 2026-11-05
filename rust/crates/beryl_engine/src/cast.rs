@@ -959,6 +959,7 @@ fn pay_mana(s: &mut State, t: &GameTable, sink: &mut Sink, mut c: Casting) -> Re
             let plans = mana::plans(
                 s,
                 t,
+                sink,
                 c.player,
                 cost,
                 Bitboard::EMPTY,
@@ -1053,7 +1054,12 @@ fn target_options(s: &State, t: &GameTable, c: &Casting) -> TargetSet {
 }
 
 /// The open question of the machine.
-pub(crate) fn decision(s: &State, t: &GameTable, c: &Casting) -> Result<Decision, Full> {
+pub(crate) fn decision(
+    s: &State,
+    t: &GameTable,
+    sink: &mut Sink,
+    c: &Casting,
+) -> Result<Decision, Full> {
     let options = |kind: DecisionKind, list: Fixed<Opt, 64>| Decision {
         player: c.player,
         kind,
@@ -1090,6 +1096,7 @@ pub(crate) fn decision(s: &State, t: &GameTable, c: &Casting) -> Result<Decision
             let plans = mana::plans(
                 s,
                 t,
+                sink,
                 c.player,
                 total_cost(t, &entry, c),
                 Bitboard::EMPTY,
@@ -1156,7 +1163,7 @@ pub(crate) fn perform(
             };
             let entry = top(s);
             let cost = total_cost(t, &entry, &c);
-            let plans = mana::plans(s, t, c.player, cost, Bitboard::EMPTY, false)?;
+            let plans = mana::plans(s, t, sink, c.player, cost, Bitboard::EMPTY, false)?;
             mana::pay(
                 s,
                 t,

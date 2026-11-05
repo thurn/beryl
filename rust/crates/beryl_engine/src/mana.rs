@@ -16,7 +16,6 @@ use crate::bitboard::Bitboard;
 use crate::card::{Ability, AbilityKind, Cost, ManaColor, ManaCost, Types};
 use crate::decision::Opt;
 use crate::effect::EffectCtx;
-use crate::engine::Tally;
 use crate::event::{self, Sink};
 use crate::fixed::{Fixed, Full};
 use crate::ids::{Seat, Slot};
@@ -529,12 +528,13 @@ fn still_payable(sources: &Sources, plan: &Plan, later: &[Later]) -> usize {
 pub(crate) fn plans(
     s: &State,
     t: &GameTable,
+    sink: &mut Sink,
     player: Seat,
     cost: ManaCost,
     exclude: Bitboard,
     greedy: bool,
 ) -> Result<Fixed<Plan, 64>, Full> {
-    Tally::solver_run();
+    sink.work.solver_runs += 1;
     let sources = Sources::of(s, t, player, exclude)?;
     let pool = s.player(player).mana;
     let mut out: Fixed<Plan, 64> = Fixed::new();

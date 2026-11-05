@@ -241,7 +241,7 @@ fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
             pool[k] = rng.below(2) as u8;
         }
         g.s.player_mut(g.me).mana = pool;
-        crate::layers::refresh(&mut g.s, &g.t);
+        crate::layers::refresh(&mut g.s, &g.t, &mut Sink::default());
         let cost = ManaCost::new(
             rng.below(4) as u8,
             [rng.below(3) as u8, rng.below(3) as u8, 0, 0, 0, 0],
@@ -251,7 +251,16 @@ fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
         let payable = mana::payable(&g.s, &g.t, g.me, cost, Bitboard::EMPTY).unwrap();
         assert_eq!(payable, expected, "{context}");
         for greedy in [false, true] {
-            let plans = mana::plans(&g.s, &g.t, g.me, cost, Bitboard::EMPTY, greedy).unwrap();
+            let plans = mana::plans(
+                &g.s,
+                &g.t,
+                &mut Sink::default(),
+                g.me,
+                cost,
+                Bitboard::EMPTY,
+                greedy,
+            )
+            .unwrap();
             assert_eq!(!plans.is_empty(), payable, "{context}");
             for (i, plan) in plans.iter().enumerate() {
                 assert!(

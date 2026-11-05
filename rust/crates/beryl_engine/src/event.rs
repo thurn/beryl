@@ -179,8 +179,19 @@ impl Event {
 pub struct Sink {
     events: Vec<Event>,
     on: bool,
-    /// Events executed since the scratch last took the count, kept or not.
-    executed: u64,
+    /// The work done since the scratch last took the counts: the sink goes everywhere the
+    /// engine does it.
+    pub(crate) work: Work,
+}
+
+/// Counts of the engine's work below `next` and `apply`, moved into the scratch's
+/// [`crate::Counts`] when they return.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct Work {
+    /// Events executed, kept or not.
+    pub(crate) events: u64,
+    pub(crate) layer_recomputes: u64,
+    pub(crate) solver_runs: u64,
 }
 
 impl Sink {
@@ -220,13 +231,8 @@ impl Sink {
         self.events.truncate(len);
     }
 
-    /// The number of events executed since the last call, for the scratch's counts.
-    pub(crate) fn take_executed(&mut self) -> u64 {
-        std::mem::take(&mut self.executed)
-    }
-
     pub(crate) fn push(&mut self, e: Event) {
-        self.executed += 1;
+        self.work.events += 1;
         if self.on {
             self.events.push(e);
         }
@@ -262,7 +268,7 @@ pub(crate) struct Entry {
 /// a layer refresh so nothing reads `derived` dirty, trigger matching (§8.2, step 5), and
 /// the sink.
 pub(crate) fn settle(s: &mut State, t: &GameTable, sink: &mut Sink, e: Event) -> Result<(), Full> {
-    layers::refresh(s, t);
+    layers::refresh(s, t, sink);
     trigger::match_event(s, t, &e)?;
     sink.push(e);
     Ok(())
@@ -330,7 +336,7 @@ pub(crate) fn move_batch_to(
     reason: Reason,
     entry: Entry,
 ) -> Result<(), Full> {
-    layers::refresh(s, t);
+    layers::refresh(s, t, sink);
     let mut moves: Fixed<(Slot, Zone, Zone, Entry), 128> = Fixed::new();
     let mut returning = Bitboard::EMPTY;
     for slot in objects.iter() {
@@ -393,7 +399,7 @@ pub(crate) fn move_batch_to(
             reason,
         });
     }
-    layers::refresh(s, t);
+    layers::refresh(s, t, sink);
     for &(slot, from, dest, _) in &moves {
         if dest == Zone::Battlefield {
             let e = Event::ZoneChange {

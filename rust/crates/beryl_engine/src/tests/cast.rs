@@ -658,8 +658,8 @@ impl Game {
 
     /// The open decision as it stands, without advancing past a silent pass.
     pub fn current(&mut self) -> Decision {
-        crate::layers::refresh(&mut self.s, &self.t);
-        crate::engine::decision(&self.s, &self.t).unwrap()
+        crate::layers::refresh(&mut self.s, &self.t, &mut self.x.events);
+        crate::engine::decision(&self.s, &self.t, &mut self.x.events).unwrap()
     }
 
     /// Whether the open priority decision offers casting the card in `slot`.

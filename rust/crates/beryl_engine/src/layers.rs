@@ -2,7 +2,7 @@
 //! dirty (architecture §9, decision D5, CR 613).
 
 use crate::card::{Affected, Colors, Modification, StaticCondition, Subtypes, Types};
-use crate::engine::Tally;
+use crate::event::Sink;
 use crate::fixed::Fixed;
 use crate::ids::CardIx;
 use crate::state::{Continuous, CounterKind, Derived, GrantRef, ObjectFlags, State, Zone};
@@ -27,9 +27,9 @@ struct Apply {
 /// Recomputes `derived` if anything changed since the last recompute. Every chokepoint that
 /// mutates a layer input sets `derived_dirty`, and every path that reads `derived` after one
 /// calls this first, so reads never see stale values and never recompute.
-pub(crate) fn refresh(s: &mut State, t: &GameTable) {
+pub(crate) fn refresh(s: &mut State, t: &GameTable, sink: &mut Sink) {
     if s.flags.derived_dirty {
-        Tally::layer_recompute();
+        sink.work.layer_recomputes += 1;
         recompute(s, t);
         s.flags.derived_dirty = false;
     }

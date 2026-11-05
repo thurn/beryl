@@ -1063,7 +1063,7 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     let aura = put(&t, &mut s, &mut x, p, "Test Reconfiguration");
     s.object_mut(aura).attached_to = Some(bear);
     s.flags.derived_dirty = true;
-    crate::layers::refresh(&mut s, &t);
+    crate::layers::refresh(&mut s, &t, &mut x.events);
     let d = s.derived(bear);
     assert_eq!(d.types, Types::ARTIFACT);
     assert!(d.subtypes.contains(Subtype::Vehicle));
@@ -1075,13 +1075,13 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     let land = put(&t, &mut s, &mut x, p, "Test Land");
     s.object_mut(aura).attached_to = Some(land);
     s.flags.derived_dirty = true;
-    crate::layers::refresh(&mut s, &t);
+    crate::layers::refresh(&mut s, &t, &mut x.events);
     let subtypes = s.derived(land).subtypes;
     assert_eq!(subtypes.iter().collect::<Vec<_>>(), vec![Subtype::Vehicle]);
     assert_eq!(types(&s, bear), Types::CREATURE, "no longer enchanted");
     s.object_mut(aura).attached_to = Some(bear);
     s.flags.derived_dirty = true;
-    crate::layers::refresh(&mut s, &t);
+    crate::layers::refresh(&mut s, &t, &mut x.events);
     // Crewed: an artifact creature until end of turn, by a later timestamp.
     let r = s.object_ref(bear);
     with_ctx(&t, &mut s, &mut x, bear, |ctx| {
@@ -1106,7 +1106,7 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
     let aura = put(&t, &mut s, &mut x, p, "Test Reconfiguration");
     s.object_mut(aura).attached_to = Some(bear);
     s.flags.derived_dirty = true;
-    crate::layers::refresh(&mut s, &t);
+    crate::layers::refresh(&mut s, &t, &mut x.events);
     let r = s.object_ref(bear);
     with_ctx(&t, &mut s, &mut x, aura, |ctx| {
         ctx.destroy(r);
@@ -1129,7 +1129,7 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
     let token = token.first().unwrap();
     s.object_mut(aura).attached_to = Some(token);
     s.flags.derived_dirty = true;
-    crate::layers::refresh(&mut s, &t);
+    crate::layers::refresh(&mut s, &t, &mut x.events);
     let r = s.object_ref(token);
     with_ctx(&t, &mut s, &mut x, aura, |ctx| ctx.destroy(r));
     decide_with(&t, &mut s, &mut x);

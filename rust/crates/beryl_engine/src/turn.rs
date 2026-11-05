@@ -53,7 +53,7 @@ pub(crate) fn begin_turn(s: &mut State, t: &GameTable, sink: &mut Sink) -> Resul
     if s.effects.len() != before {
         s.flags.derived_dirty = true;
     }
-    layers::refresh(s, t);
+    layers::refresh(s, t, sink);
     // CR 302.6: the active player's permanents have now been under their control since their
     // most recent turn began. Nothing has entered, and no loyalty ability has been
     // activated (CR 606.3), this turn.
@@ -158,7 +158,7 @@ pub(crate) fn end_step(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<
         }
         TurnStep::DeclareAttackers | TurnStep::CombatDamage => TurnStep::EndOfCombat,
         TurnStep::DeclareBlockers => {
-            layers::refresh(s, t);
+            layers::refresh(s, t, sink);
             if combat::first_strike_step(s) {
                 TurnStep::FirstStrikeDamage
             } else {

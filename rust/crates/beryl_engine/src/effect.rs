@@ -102,7 +102,7 @@ impl<'a> EffectCtx<'a> {
 
     /// Ends the body: a stall if a capacity ran out, and a layer refresh for what follows.
     pub(crate) fn finish(self) -> Result<(), Full> {
-        layers::refresh(self.state, self.table);
+        layers::refresh(self.state, self.table, self.sink);
         if self.full { Err(Full) } else { Ok(()) }
     }
 
@@ -421,6 +421,7 @@ impl<'a> EffectCtx<'a> {
         let r = mana::plans(
             self.state,
             self.table,
+            self.sink,
             player,
             cost,
             Bitboard::EMPTY,
@@ -963,7 +964,7 @@ impl<'a> EffectCtx<'a> {
         });
         s.flags.derived_dirty = true;
         self.check(pushed);
-        layers::refresh(self.state, self.table);
+        layers::refresh(self.state, self.table, self.sink);
     }
 
     /// This ability's controller gains control of a permanent

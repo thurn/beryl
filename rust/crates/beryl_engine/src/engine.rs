@@ -1,8 +1,6 @@
 //! The engine loop: `next` advances to the next decision, `apply` consumes one answer
 //! (architecture §3, §7).
 
-use std::cell::Cell;
-
 use crate::bitboard::Bitboard;
 use crate::card::{ManaColor, Types};
 use crate::decision::{
@@ -111,48 +109,13 @@ impl Counts {
     }
 }
 
-/// The counts of work done where no [`Scratch`] reaches: per thread, moved into the
-/// scratch's counts each time `next` or `apply` returns, so they land on the game that did
-/// the work (a `view` in between lands on the next of them). Layer recomputes and solver
-/// runs are heavy enough that the tally costs nothing measurable.
-#[derive(Clone, Copy)]
-pub(crate) struct Tally {
-    layer_recomputes: u64,
-    solver_runs: u64,
-}
-
-thread_local! {
-    static TALLY: Cell<Tally> = const { Cell::new(Tally::ZERO) };
-}
-
-impl Tally {
-    const ZERO: Tally = Tally {
-        layer_recomputes: 0,
-        solver_runs: 0,
-    };
-
-    fn update(f: impl FnOnce(&mut Tally)) {
-        let mut tally = TALLY.get();
-        f(&mut tally);
-        TALLY.set(tally);
-    }
-
-    pub(crate) fn layer_recompute() {
-        Self::update(|t| t.layer_recomputes += 1);
-    }
-
-    pub(crate) fn solver_run() {
-        Self::update(|t| t.solver_runs += 1);
-    }
-}
-
 impl Scratch {
-    /// Moves this thread's tally and the sink's event count into the counts.
+    /// Moves the work the sink counted into the counts.
     fn settle_counts(&mut self) {
-        let tally = TALLY.replace(Tally::ZERO);
-        self.counts.layer_recomputes += tally.layer_recomputes;
-        self.counts.solver_runs += tally.solver_runs;
-        self.counts.events += self.events.take_executed();
+        let work = std::mem::take(&mut self.events.work);
+        self.counts.events += work.events;
+        self.counts.layer_recomputes += work.layer_recomputes;
+        self.counts.solver_runs += work.solver_runs;
     }
 }
 
@@ -178,7 +141,7 @@ fn advance(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers) -
         if let Some(outcome) = s.outcome {
             return Step::Over(outcome);
         }
-        layers::refresh(s, t);
+        layers::refresh(s, t, &mut x.events);
         if combat::in_combat(s.turn.step) {
             combat::prune(s);
         }
@@ -209,7 +172,7 @@ fn advance(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers) -
                 }
             }
         }
-        let Ok(d) = decision(s, t) else {
+        let Ok(d) = decision(s, t, &mut x.events) else {
             stall(s, StallReason::Capacity);
             continue;
         };
@@ -236,8 +199,8 @@ fn advance(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers) -
 /// Applies an answer to the decision `next` returned for this state.
 pub fn apply(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers, c: Choice) {
     debug_assert!(s.outcome.is_none(), "apply after the game ended");
-    layers::refresh(s, t);
-    match decision(s, t) {
+    layers::refresh(s, t, &mut x.events);
+    match decision(s, t, &mut x.events) {
         Ok(d) => {
             debug_assert!(usize::from(c.0) < d.len(), "choice out of range");
             perform_or_stall(s, t, x, a, &d, c);
@@ -266,8 +229,8 @@ fn perform_or_stall(
 }
 
 /// The open decision, a pure function of the state, so `apply` recomputes rather than
-/// remembers it.
-pub(crate) fn decision(s: &State, t: &GameTable) -> Result<Decision, Full> {
+/// remembers it. The sink only counts the payment solver's runs.
+pub(crate) fn decision(s: &State, t: &GameTable, sink: &mut Sink) -> Result<Decision, Full> {
     Ok(match s.pending {
         Pending::None => match trigger::next_to_stack(s) {
             Some((player, triggers)) => {
@@ -307,7 +270,7 @@ pub(crate) fn decision(s: &State, t: &GameTable) -> Result<Decision, Full> {
         Pending::DeclareAttackers { attacker } => combat::attack_decision(s, attacker)?,
         Pending::DeclareBlockers { blocker } => combat::block_decision(s, blocker)?,
         Pending::CombatDamage { done, lethal } => combat::division_decision(s, done, lethal)?,
-        Pending::Casting(c) => cast::decision(s, t, &c)?,
+        Pending::Casting(c) => cast::decision(s, t, sink, &c)?,
         Pending::Resolving(r) => r.question,
         Pending::CastOffer {
             object,

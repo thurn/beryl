@@ -31,7 +31,7 @@ pub(crate) fn check(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<boo
     if check_losses(s, sink) {
         return Ok(true);
     }
-    layers::refresh(s, t);
+    layers::refresh(s, t, sink);
     let (graveyard, tokens) = doomed(s);
     let legends = unresolved_legends(s, t, Bitboard::EMPTY).is_some();
     if graveyard.is_empty() && tokens.is_empty() && !legends {
