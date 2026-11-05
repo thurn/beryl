@@ -485,8 +485,10 @@ The exact profile offers a choice only across **distinct consequences**:
   decisions. Search profiles cut them with smart stops (§15).
 - Interchangeable objects collapse to one candidate: two untapped basic Forests,
   two identical tokens with the same counters and nothing attached. The
-  signature compared is card, zone, controller, counters, damage, flags and
-  attachment, with no pending reference to the object.
+  signature compared is every field of the object but its incarnation and
+  timestamp (card, face, zone, owner, controller, counters, damage, flags,
+  attachment, link, copy, chosen value), with no pending reference to the
+  object.
 - Triggers from the same source card and ability with the same targets are
   equivalent and ordered silently; non-equivalent simultaneous triggers are
   ordered by their controller under APNAP.

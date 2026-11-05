@@ -216,24 +216,19 @@ fn pass(s: &mut State) -> Result<(), Full> {
 }
 
 /// Collapses interchangeable objects to one candidate each, the lowest slot (§7.2): objects
-/// with the same card, zone, controller, counters, damage, flags and attachment lead to the
-/// same game.
+/// that differ only in their incarnation and timestamp lead to the same game. Everything
+/// else counts: the face up, the owner (a stolen Mana Crypt goes to another graveyard than
+/// your own), copy, link and chosen value as much as card, counters and flags.
 fn collapse(s: &State, candidates: Bitboard) -> Bitboard {
-    let signature = |o: &Object| {
-        (
-            o.card,
-            o.zone,
-            o.controller,
-            o.counters,
-            o.damage,
-            o.flags,
-            o.attached_to,
-        )
+    let signature = |slot: u8| Object {
+        incarnation: 0,
+        timestamp: 0,
+        ..*s.object(slot)
     };
     let mut kept = Bitboard::EMPTY;
     for slot in candidates.iter() {
-        let sig = signature(s.object(slot));
-        if !kept.iter().any(|k| signature(s.object(k)) == sig) {
+        let sig = signature(slot);
+        if !kept.iter().any(|k| signature(k) == sig) {
             kept.insert(slot);
         }
     }

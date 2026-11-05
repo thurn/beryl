@@ -76,6 +76,11 @@ fn move_to_place(s: &mut State, slot: u8, to: Zone, place: Place) -> Result<(), 
             k.insert(slot);
         }
     }
+    // [CR 402.3](https://yawgatog.com/resources/magic-rules/#R4023): "A player may arrange their hand in any convenient fashion and look at it
+    // as much as they want." Whatever put the card there: a draw, or a return from a library.
+    if to == Zone::Hand {
+        s.knowledge[owner].insert(slot);
+    }
     Ok(())
 }
 
@@ -118,10 +123,7 @@ pub(crate) fn draw(s: &mut State, player: u8) -> Result<(), Full> {
         s.player_mut(player).drew_from_empty = true;
         return Ok(());
     };
-    move_to(s, slot, Zone::Hand)?;
-    // The drawer looks at what they drew.
-    s.knowledge[usize::from(player)].insert(slot);
-    Ok(())
+    move_to(s, slot, Zone::Hand)
 }
 
 /// Draws `n` cards, one at a time ([CR 121.2](https://yawgatog.com/resources/magic-rules/#R1212)):

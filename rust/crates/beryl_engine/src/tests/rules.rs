@@ -59,6 +59,43 @@ fn the_legend_rule_keeps_one_of_two_interchangeable_legends_silently() {
 }
 
 #[test]
+fn the_legend_rule_tells_apart_legends_with_different_owners() {
+    let t = table([LEGENDS, LEGENDS]);
+    let mut s = State::new(&t, 1, Profile::EXACT);
+    begin(&t, &mut s);
+    let p = s.turn().starting_player;
+    let mine = s.library(p)[0];
+    let stolen = s.library(opponent(p))[0];
+    zone::move_to(&mut s, mine, Zone::Battlefield).unwrap();
+    zone::move_to(&mut s, stolen, Zone::Battlefield).unwrap();
+    s.object_mut(stolen).controller = p;
+    // The one put into the graveyard goes to its owner's: a different game.
+    let d = decide(&t, &mut s);
+    assert_eq!(
+        (d.kind, d.player, d.len()),
+        (DecisionKind::LegendRule, p, 2)
+    );
+}
+
+#[test]
+fn a_card_put_into_a_hand_is_known_to_its_owner_alone() {
+    let t = table([MIXED, MIXED]);
+    let mut s = State::new(&t, 3, Profile::EXACT);
+    begin(&t, &mut s);
+    let p = s.turn().starting_player;
+    let q = opponent(p);
+    let from_library = s.library(p)[0];
+    assert!(!s.knows(p, from_library));
+    zone::move_to(&mut s, from_library, Zone::Hand).unwrap();
+    assert!(s.knows(p, from_library) && !s.knows(q, from_library));
+    // A card returned from the battlefield was seen by everyone on its way.
+    let from_battlefield = s.library(p)[0];
+    zone::move_to(&mut s, from_battlefield, Zone::Battlefield).unwrap();
+    zone::move_to(&mut s, from_battlefield, Zone::Hand).unwrap();
+    assert!(s.knows(p, from_battlefield) && s.knows(q, from_battlefield));
+}
+
+#[test]
 fn a_player_at_zero_life_loses_and_two_at_once_draw() {
     let t = table([LANDS, LANDS]);
     for (lives, outcome) in [
