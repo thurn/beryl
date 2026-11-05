@@ -1,8 +1,8 @@
-// The bundled fonts: the app runs offline. EB Garamond (OFL) for titles and actions, Inter (OFL)
-// for instructions, and the Mana font (OFL, github.com/andrewgioia/mana) for mana symbols.
-import "@fontsource-variable/eb-garamond/wght.css";
-import "@fontsource-variable/eb-garamond/wght-italic.css";
-import "@fontsource-variable/inter/wght.css";
+// The fonts, chosen per role against docs/ui_mockups with `just ui-fonts`: Times New Roman (a macOS
+// system font, referenced by name) for titles, actions and captions; Open Sans (OFL, bundled: the
+// app runs offline) for instructions; the Mana font (OFL, github.com/andrewgioia/mana) for mana
+// symbols.
+import "@fontsource-variable/open-sans/wght.css";
 import mana from "mana-font/fonts/mana.woff2";
 
 // Registered here rather than by mana-font's stylesheet, which also bundles a proprietary text font.

@@ -35,8 +35,9 @@
     transparent
   );
 
-  --font-serif: "EB Garamond Variable", "Iowan Old Style", Georgia, serif;
-  --font-sans: "Inter Variable", -apple-system, "Helvetica Neue", sans-serif;
+  --font-serif: "Times New Roman", Times, serif;
+  --font-sans:
+    "Open Sans Variable", -apple-system, "Helvetica Neue", sans-serif;
 
   --radius-card: 7px;
   --shadow-card: 0 2px 3px rgb(0 0 0 / 45%), 0 10px 18px rgb(0 0 0 / 35%);
