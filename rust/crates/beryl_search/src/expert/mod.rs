@@ -1034,7 +1034,8 @@ impl Expert<'_> {
                     .any(|s| s != slot && !self.p.is_land(s));
                 let late = lands >= 7
                     || (lands >= 5 && (!spells || self.obs().player(self.me()).life <= 12));
-                if late { 0 } else { 2000 }
+                // After the land drop, which leaves a mana to pay for Mana Tithe.
+                if late { 0 } else { 990 }
             }
             names::TEFERI_TIME_RAVELER if self.counter_known(self.mana(self.me()) - 3) => 0,
             names::TEFERI_TIME_RAVELER => {
@@ -1176,7 +1177,11 @@ impl Expert<'_> {
         } else {
             COUNTER_SPARE
         };
-        if worth >= minor || self.hand(self.opp()).is_empty() || self.dying() {
+        if worth >= minor
+            || self.hand(self.opp()).is_empty()
+            || self.dying()
+            || !self.opp_major_next()
+        {
             return v;
         }
         let Some(keep) = self.counter_mana().min() else {
@@ -1188,6 +1193,18 @@ impl Expert<'_> {
         } else {
             0
         }
+    }
+
+    /// Whether the opponent could cast a major threat on their next turn, worth the counter
+    /// held up for it: the cheapest cost three (Teferi, Adeline), with their lands, a land
+    /// drop and Mana Crypt's two.
+    fn opp_major_next(&self) -> bool {
+        let opp = self.opp();
+        let crypts = self
+            .permanents(opp)
+            .filter(|&s| self.is(s, names::MANA_CRYPT))
+            .count();
+        self.lands(opp) + 1 + 2 * crypts >= 3
     }
 
     /// Whether spending `cost` leaves the mana for the cheapest counterspell or flash threat
@@ -1242,9 +1259,23 @@ impl Expert<'_> {
         })
     }
 
+    /// Whether `draws` draws by choice now leave a card for our next draw step, the draw from
+    /// an empty library losing the game
+    /// ([CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b)); with five cards
+    /// or fewer left, only while we hold a wheel to shuffle our graveyard back in.
+    fn draw_safe(&self, draws: usize) -> bool {
+        let library = self.obs().library(self.me()).len();
+        let wheel = self.hand(self.me()).iter().any(|s| {
+            self.obs()
+                .card(s)
+                .is_some_and(|c| self.p.values.get(c).wheel)
+        });
+        library > draws && (library > 5 || wheel)
+    }
+
     /// Whether our Jace, Vryn's Prodigy could loot now: "{T}: Draw a card, then discard a card."
     fn can_loot(&self) -> bool {
-        !self.obs().library(self.me()).is_empty()
+        self.draw_safe(1)
             && self.creatures(self.me()).any(|s| {
                 let o = self.obs().object(s);
                 self.is(s, names::JACE_VRYNS_PRODIGY)
@@ -1311,7 +1342,15 @@ impl Expert<'_> {
         // attempted to draw a card from a library with no cards in it ... that player loses
         // the game").
         let drawable = pool - usize::from(from_hand) >= 7;
-        drawable && (decking || (!winning && !holding && (empty || (!behind && refill))))
+        // Dead on board, it is the way out when it leaves mana to cast what it draws: Time
+        // Spiral untaps six lands, Timetwister costs three.
+        let left = if spiral {
+            self.mana(me) - 6 + self.lands(me).min(6) as i32
+        } else {
+            self.mana(me) - 3
+        };
+        let out = self.dying() && left >= 3;
+        drawable && (decking || out || (!winning && !holding && (empty || (!behind && refill))))
     }
 
     /// The value of the best artifact of the opponent's that Thieving Skydiver could take,
@@ -1627,8 +1666,7 @@ impl Expert<'_> {
             }
             // An explore is worth a mana only while the counterspell in hand stays castable.
             MAP_TOKEN if !precombat && self.keeps_counter_mana(1) => 40,
-            // Drawing from an empty library loses the game.
-            names::JACE_VRYNS_PRODIGY if self.obs().library(self.me()).is_empty() => 0,
+            names::JACE_VRYNS_PRODIGY | names::STAFF_OF_THE_STORYTELLER if !self.draw_safe(1) => 0,
             // A loot that flips him makes a planeswalker this turn, before combat too.
             names::JACE_VRYNS_PRODIGY if self.obs().graveyard(self.me()).len() >= 4 => 60,
             // Looting taps Jace through the opponent's turn: only when he isn't needed to block.
@@ -1701,21 +1739,27 @@ impl Expert<'_> {
                     {
                         return by_cost(-1);
                     }
-                    return by_cost(0);
+                    return if self.draw_safe(3) {
+                        by_cost(0)
+                    } else {
+                        by_cost(2)
+                    };
                 }
                 // Dead on board ourselves, or low on life, he returns the biggest attacker.
                 let low = self.life() <= 6 || self.dying();
                 if low && loyalty >= 2 && self.creatures(self.opp()).next().is_some() {
                     return by_cost(-1);
                 }
-                // A big threat is worth returning even while he is safe.
-                let big = self
-                    .creatures(self.opp())
-                    .any(|s| self.bounce_value(s) >= 80);
+                // A big threat is worth returning even while he is safe, and a token worth it
+                // is gone for good.
+                let big = self.creatures(self.opp()).any(|s| {
+                    let token = self.obs().object(s).flags.has(ObjectFlags::TOKEN);
+                    self.bounce_value(s) >= if token { 40 } else { 80 }
+                });
                 if big && loyalty >= 2 {
                     return by_cost(-1);
                 }
-                if self.hand(self.me()).count() <= 2 && threatened < loyalty {
+                if self.hand(self.me()).count() <= 2 && threatened < loyalty && self.draw_safe(3) {
                     return by_cost(0);
                 }
                 by_cost(2)
@@ -1946,7 +1990,7 @@ impl Expert<'_> {
                 }
                 match self.name(slot) {
                     Some(names::STAFF_OF_THE_STORYTELLER | names::JACE_VRYNS_PRODIGY)
-                        if !self.obs().library(self.me()).is_empty() =>
+                        if self.draw_safe(1) =>
                     {
                         100
                     }
@@ -2011,6 +2055,16 @@ impl Expert<'_> {
         v += self.killer_bonus(slot);
         if self.obs().object(slot).flags.has(ObjectFlags::TOKEN) {
             return v + 15;
+        }
+        // A planeswalker comes back with its printed loyalty: returning it takes the loyalty
+        // it gained and the mana to cast it again.
+        if self.has_type(slot, Types::PLANESWALKER)
+            && let Some(card) = self.obs().card(slot)
+        {
+            let f = &self.p.t.def(card).faces[usize::from(self.obs().object(slot).face)];
+            let gained = i32::from(self.obs().object(slot).counters.loyalty)
+                - i32::from(f.loyalty.unwrap_or(0));
+            return 6 * gained.max(0) + 4 * i32::from(f.cost.mana_value());
         }
         // Their Swift Reconfiguration on our creature: returning it frees the creature, but it
         // has flash and costs {W}, so with a white mana up they put it straight back.
