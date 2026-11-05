@@ -51,10 +51,17 @@ export function StackItem({
   );
 }
 
-/** Where on an element an arrow meets it: a side's midpoint, the center, or a point given as
- * fractions of the element's width and height. */
+/** Where on an element an arrow meets it: a side's midpoint, the center, a point given as
+ * fractions of the element's width and height, or, `facing`, the point of the ellipse inscribed
+ * in it that faces the center of the element at the arrow's other end. */
 export type Side =
-  "left" | "right" | "top" | "bottom" | "center" | { x: number; y: number };
+  | "left"
+  | "right"
+  | "top"
+  | "bottom"
+  | "center"
+  | "facing"
+  | { x: number; y: number };
 
 type Vector = readonly [number, number];
 
@@ -64,10 +71,9 @@ export interface ArrowSpec {
   tone: "gold" | "cyan";
   fromSide?: Side;
   toSide?: Side;
-  /** How far the curve bows, as a fraction of its length; negative bows the other way. */
+  /** How far the curve bows, as a fraction of its length; negative bows the other way. Without
+   * it, the curve bows away from the center of the arrows' parent (`outward`). */
   bend?: number;
-  /** Without `bend`: which way on the screen the curve bows, whichever way it runs. */
-  bow?: "up" | "down";
   /** The curve's heading out of its start and into its end, as handle vectors in pixels; given
    * both, they replace `bend`. */
   leave?: Vector;
@@ -99,48 +105,92 @@ const SIDES = {
   center: { x: 0.5, y: 0.5 },
 } as const;
 
-/** A point on `rect` in the parent's own coordinates: client rects are in screen pixels, which
+interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** An element's box in the parent's own coordinates: client rects are in screen pixels, which
  * differ by `scale` inside a scaled stage. */
-function anchor(
-  rect: DOMRect,
-  origin: DOMRect,
-  scale: number,
-  side: Side,
-): Vector {
+function box(rect: DOMRect, origin: DOMRect, scale: number): Box {
+  return {
+    x: (rect.left - origin.left) / scale,
+    y: (rect.top - origin.top) / scale,
+    width: rect.width / scale,
+    height: rect.height / scale,
+  };
+}
+
+const middle = (b: Box): Vector => [b.x + b.width / 2, b.y + b.height / 2];
+
+/** The point `side` names on `b`, where a `facing` side looks toward `other`. */
+function anchor(b: Box, side: Side, other: Box): Vector {
+  if (side === "facing") {
+    const [cx, cy] = middle(b);
+    const [ox, oy] = middle(other);
+    const [dx, dy] = [ox - cx, oy - cy];
+    // How many times the ray from the center to `other` reaches past the ellipse.
+    const reach = Math.hypot((2 * dx) / b.width, (2 * dy) / b.height);
+    return reach > 0 && Number.isFinite(reach)
+      ? [cx + dx / reach, cy + dy / reach]
+      : [cx, cy];
+  }
   const at = typeof side === "string" ? SIDES[side] : side;
-  return [
-    (rect.left - origin.left + rect.width * at.x) / scale,
-    (rect.top - origin.top + rect.height * at.y) / scale,
-  ];
+  return [b.x + b.width * at.x, b.y + b.height * at.y];
 }
 
 const point = ([x, y]: Vector) => `${x.toFixed(1)} ${y.toFixed(1)}`;
 
-/** The curve from `start` to `end` and the heading it arrives with, in degrees. */
+/** How far a curve bows, as a fraction of its length, when not given. */
+const BOW = 0.3;
+
+/** Which way and how fully a curve from `start` to `end` bows to stay clear of the middle of a
+ * `size` parent: along its normal away from the center, fully once the chord's midpoint lies an
+ * eighth of its length off the line through the center, less nearer, so that a chord through
+ * the center runs straight rather than flipping from one side to the other. */
+function outward(start: Vector, end: Vector, [w, h]: Vector): number {
+  const [dx, dy] = [end[0] - start[0], end[1] - start[1]];
+  const length = Math.hypot(dx, dy);
+  if (length === 0) return 0;
+  // The midpoint's offset from the center along the normal (dy, -dx), times `length`.
+  const off =
+    ((start[0] + end[0]) / 2 - w / 2) * dy -
+    ((start[1] + end[1]) / 2 - h / 2) * dx;
+  return Math.max(-1, Math.min(1, (8 * off) / length ** 2));
+}
+
+/** The curve from `start` to `end` in a `size` parent and the heading it arrives with, in
+ * degrees. Its control points stay inside the parent, and so then does the curve. */
 function curve(
   a: ArrowSpec,
   start: Vector,
   end: Vector,
+  size: Vector,
 ): { d: string; angle: number } {
+  const [w, h] = size;
+  const inside = ([x, y]: Vector): Vector =>
+    w > 0 && h > 0
+      ? [Math.max(0, Math.min(w, x)), Math.max(0, Math.min(h, y))]
+      : [x, y];
   const heading = (from: Vector, to: Vector) =>
     (Math.atan2(to[1] - from[1], to[0] - from[0]) * 180) / Math.PI;
   if (a.leave && a.arrive) {
-    const c1: Vector = [start[0] + a.leave[0], start[1] + a.leave[1]];
-    const c2: Vector = [end[0] - a.arrive[0], end[1] - a.arrive[1]];
+    const c1 = inside([start[0] + a.leave[0], start[1] + a.leave[1]]);
+    const c2 = inside([end[0] - a.arrive[0], end[1] - a.arrive[1]]);
     return {
       d: `M${point(start)} C${point(c1)} ${point(c2)} ${point(end)}`,
       angle: heading(c2, end),
     };
   }
   const [dx, dy] = [end[0] - start[0], end[1] - start[1]];
-  const bend =
-    a.bend ??
-    (a.bow ? (a.bow === "up" ? 0.25 : -0.25) * (dx < 0 ? -1 : 1) : 0.25);
+  const bend = a.bend ?? BOW * outward(start, end, size);
   // The control point sits off the chord's midpoint, along its normal.
-  const c: Vector = [
+  const c = inside([
     (start[0] + end[0]) / 2 + dy * bend,
     (start[1] + end[1]) / 2 - dx * bend,
-  ];
+  ]);
   return {
     d: `M${point(start)} Q${point(c)} ${point(end)}`,
     angle: heading(c, end),
@@ -170,26 +220,19 @@ export function Arrows({
     const measure = () => {
       const origin = root.getBoundingClientRect();
       const scale = root.offsetWidth ? origin.width / root.offsetWidth : 1;
+      const size: Vector = [root.offsetWidth, root.offsetHeight];
       const next = arrows.flatMap((a) => {
         const from = document.getElementById(a.from);
         const to = document.getElementById(a.to);
         if (!from || !to) return [];
-        const start = anchor(
-          from.getBoundingClientRect(),
-          origin,
-          scale,
-          a.fromSide ?? "right",
-        );
-        const end = anchor(
-          to.getBoundingClientRect(),
-          origin,
-          scale,
-          a.toSide ?? "left",
-        );
+        const source = box(from.getBoundingClientRect(), origin, scale);
+        const target = box(to.getBoundingClientRect(), origin, scale);
+        const start = anchor(source, a.fromSide ?? "right", target);
+        const end = anchor(target, a.toSide ?? "left", source);
         return [
           {
             key: `${a.from}-${a.to}`,
-            ...curve(a, start, end),
+            ...curve(a, start, end, size),
             tone: a.tone,
             start,
             end,

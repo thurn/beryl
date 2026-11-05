@@ -42,7 +42,7 @@ import type {
   Side,
   StackItem as StackItemView,
 } from "../generated/protocol";
-import { Brand, Gear, Lying, STAGE, StepBanner } from "../screens/Table";
+import { Brand, Gear, Lying, StepBanner } from "../screens/Table";
 import {
   CardLayer,
   cardId,
@@ -71,7 +71,6 @@ import {
   PILES,
   STACK_Z,
   stackPlace,
-  type Layout,
   type Placement,
 } from "./layout";
 
@@ -264,10 +263,7 @@ export function Board({
   const stop = decision?.passTo
     ? passButton(view, decision.passTo)
     : { label: "Pass", caption: "" };
-  const arrows = useMemo(
-    () => boardArrows(view, placements),
-    [view, placements],
-  );
+  const arrows = useMemo(() => boardArrows(view), [view]);
   const banner = combatBanner(view) ?? coinFlipBanner(view);
   // A combat declaration is finished with the turn button, where priority is passed.
   const declaring =
@@ -504,7 +500,6 @@ function Life({
   const targetable = target !== undefined;
   return (
     <motion.div
-      id={`${side}-life`}
       className={targetable ? "hud life life-target" : "hud life"}
       data-life={side}
       style={{ ...style, scale: pulse }}
@@ -514,6 +509,7 @@ function Life({
         life={shown}
         active={active}
         seat={side === "opponent" ? "opponent" : "you"}
+        anchor={lifeId(side)}
       />
     </motion.div>
   );
@@ -559,10 +555,13 @@ function AbilityOnStack({
 /** The element id of the stack item at `index`: its card for a spell. */
 const stackId = (index: number) => `stack-${index}`;
 
+/** The element id of the oval of a player's life orb. */
+const lifeId = (side: Side) => `${side}-life-orb`;
+
 /** The lines over the table (decision D10): each attacker's to what it attacks or to its
  * blockers (combat.png), and for the top of the stack, a gold line from an ability's source
  * and a cyan one to each target (trigger_on_stack_with_target.png). */
-function boardArrows(view: PlayerView, placements: Layout): ArrowSpec[] {
+function boardArrows(view: PlayerView): ArrowSpec[] {
   const objects = new Map(view.objects.map((o) => [o.slot, o]));
   const out: ArrowSpec[] = [];
   for (const slot of view.battlefield) {
@@ -588,46 +587,32 @@ function boardArrows(view: PlayerView, placements: Layout): ArrowSpec[] {
       });
     }
     if (o.combat.blocked) continue;
+    // Out of its chevron's apex and into the oval of the life orb or the planeswalker it
+    // attacks, wherever that stands.
     const walker = o.combat.planeswalker;
-    const defender = up ? "opponent" : "you";
-    // Up out of its mark, then swinging in across the near side of the life orb's lower half
-    // (combat.png), or into the planeswalker's near edge.
-    const toLife = walker === null;
-    const at = placements.get(slot);
-    // The life orbs stand at the middle of the stage.
-    const right = !!at && at.x + (at.width * at.scale) / 2 > STAGE.width / 2;
-    const [sx, sy] = [right ? 1 : -1, up ? 1 : -1];
     out.push({
       from: `${cardId(slot)}-mark`,
-      to: toLife ? `${defender}-life` : cardId(walker),
+      to: walker === null ? lifeId(up ? "opponent" : "you") : cardId(walker),
       tone: "gold",
       fromSide: up ? "top" : "bottom",
-      toSide: toLife
-        ? { x: 0.5 + 0.173 * sx, y: 0.5 + 0.233 * sy }
-        : up
-          ? "bottom"
-          : "top",
-      ...(toLife
-        ? { leave: [-34 * sx, -138 * sy], arrive: [-100 * sx, -85 * sy] }
-        : { bend: 0.15 }),
+      toSide: "facing",
       start: "none",
       fine: true,
     });
   }
+  // The top of the stack's lines leave and meet each end on the side facing the other, bowing
+  // away from the middle of the table.
   const top = view.stack.length - 1;
   const item = view.stack[top];
   if (item) {
     const from = item.kind === "spell" ? cardId(item.slot) : stackId(top);
     if (item.kind === "ability" && item.source !== null) {
-      // Down out of the source's right side and up into the stack's lower left corner.
       out.push({
         from: cardId(item.source),
         to: from,
         tone: "gold",
-        fromSide: "right",
-        toSide: { x: 0.07, y: 0.84 },
-        leave: [30, 175],
-        arrive: [130, -55],
+        fromSide: "facing",
+        toSide: "facing",
       });
     }
     for (const target of item.targets) {
@@ -635,14 +620,11 @@ function boardArrows(view: PlayerView, placements: Layout): ArrowSpec[] {
         from,
         to:
           target.kind === "player"
-            ? `${target.player}-life`
+            ? lifeId(target.player)
             : cardId(target.slot),
         tone: "cyan",
-        // High over the table out of the stack's upper left, then straight down onto it.
-        fromSide: { x: 0, y: 0.055 },
-        toSide: target.kind === "player" ? "center" : { x: 0.5, y: 0.32 },
-        leave: [-150, -195],
-        arrive: [0, 150],
+        fromSide: "facing",
+        toSide: "facing",
       });
     }
   }

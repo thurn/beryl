@@ -137,6 +137,7 @@ export function LifeOrb({
   active = false,
   seat = "you",
   wings = 1,
+  anchor,
 }: {
   life: number;
   active?: boolean;
@@ -145,6 +146,8 @@ export function LifeOrb({
   /** How far the blades reach, as a fraction of their full span: shorter where space is
    * tight. */
   wings?: number;
+  /** The element id of the oval, which arrows meet. */
+  anchor?: string;
 }) {
   const blades = BLADES[seat];
   const core = CORE[seat];
@@ -287,6 +290,7 @@ export function LifeOrb({
           />
         )}
         <path
+          id={anchor}
           className="life-orb-core"
           d={cushion(core)}
           filter="url(#orb-shadow)"
