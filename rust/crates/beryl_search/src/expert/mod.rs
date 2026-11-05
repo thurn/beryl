@@ -381,7 +381,8 @@ impl Expert<'_> {
 
     /// Our own Mana Crypt, when its next lost flip (3 damage, half the time) would kill us.
     fn deadly_crypt(&self) -> Option<Slot> {
-        if self.life() > 3 {
+        // The attack that kills us for certain comes first.
+        if self.life() > 3 || self.dying() {
             return None;
         }
         self.permanents(self.me())
@@ -648,6 +649,10 @@ impl Expert<'_> {
     /// with summoning-sick creatures first, makes an attack that gets enough damage past the
     /// opponent's untapped creatures to kill.
     fn crew_lethal(&self, vehicle: Slot) -> bool {
+        // Crewed already, it is a creature until end of turn.
+        if self.has_type(vehicle, Types::CREATURE) {
+            return false;
+        }
         let power = |s: Slot| i32::from(self.obs().derived(s).power.max(0));
         let sick = |s: Slot| self.obs().object(s).flags.has(ObjectFlags::SUMMONING_SICK);
         let mut crew: Vec<Slot> = self
@@ -843,8 +848,14 @@ impl Expert<'_> {
         if i32::from(self.p.values.get(card).value) >= MAJOR && self.counter_known() {
             return 0;
         }
-        // Dead on board, blockers come first.
-        let v = if creature && self.dying() {
+        // Dead on board, blockers come first: ones that can block what is coming.
+        let fliers = self
+            .creatures(self.opp())
+            .any(|s| self.obs().derived(s).keywords.intersects(Keywords::FLYING));
+        let blocks = !fliers
+            || f.keywords
+                .intersects(Keywords::FLYING.union(Keywords::REACH));
+        let v = if creature && blocks && self.dying() {
             900 + v
         } else if walker {
             500 + v
@@ -901,9 +912,14 @@ impl Expert<'_> {
                 }
             }
             names::THE_WANDERING_EMPEROR if !sorcery_only => {
-                // Flash: she waits for the opponent's turn, unless there is a tapped
-                // creature to exile now or the opponent is tapped out.
-                if !self.opp_can_counter() {
+                // Flash: she waits for the opponent's turn, unless her +1 on an attacker
+                // makes our attack lethal, there is a tapped creature to exile now, or the
+                // opponent is tapped out.
+                let life = i32::from(self.obs().player(self.opp()).life);
+                let power = self.attack_power(0);
+                if power > 0 && power < life && power + 1 >= life {
+                    1500
+                } else if !self.opp_can_counter() {
                     // A safe window for the best threat in hand, before any removal.
                     750
                 } else if self.tapped_target(25).is_some() {
