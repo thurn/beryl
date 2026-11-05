@@ -271,6 +271,8 @@
   left: 244px;
   top: 10px;
   font-family: var(--font-sans);
+  font-weight: 500;
+  color: #fff;
   font-size: 20px;
   line-height: 30px;
   white-space: nowrap;
@@ -359,20 +361,18 @@
 .metal-gold {
   background: linear-gradient(
     90deg,
-    rgb(232 195 141 / 30%),
-    #e8c38d 5%,
-    #efcf9c 40%,
+    #e2bb84,
+    #ecc995 42%,
     #fffbe6 50%,
-    #efcf9c 60%,
-    #e8c38d 95%,
-    rgb(232 195 141 / 30%)
+    #ecc995 58%,
+    #e2bb84
   );
-  box-shadow: 0 0 4px 1px rgb(220 130 50 / 45%);
+  box-shadow: 0 1px 0 rgb(0 0 0 / 45%);
 }
 .metal-gold::after {
   content: "";
   position: absolute;
-  inset: -3px 28%;
+  inset: -3px 41%;
   background: radial-gradient(
     closest-side,
     rgb(255 246 214),

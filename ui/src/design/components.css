@@ -899,7 +899,7 @@
   fill: #2c2825;
 }
 .phase .phase-card {
-  fill: #4b4037;
+  fill: #3e342a;
 }
 .phase .phase-shield {
   fill: #746756;
@@ -908,7 +908,7 @@
   fill: #453e38;
 }
 .phase .phase-stone {
-  fill: #5d564f;
+  fill: #5f564b;
 }
 .phase .phase-light {
   fill: #8a8178;
@@ -921,7 +921,7 @@
   stroke-width: 1.6;
   filter: drop-shadow(0 0 1.5px rgb(255 170 50))
     drop-shadow(0 0 3px rgb(255 130 20))
-    drop-shadow(0 0 7px rgb(230 100 10 / 80%));
+    drop-shadow(0 0 5px rgb(230 100 10 / 65%));
 }
 .phase-current .phase-icon path {
   fill: none;

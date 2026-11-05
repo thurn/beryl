@@ -118,7 +118,7 @@ const PHASES: {
         />
         <path
           className="phase-stone"
-          strokeWidth="1"
+          stroke="none"
           d="M4.5 20 L8.8 14 L10.3 15.3 L12 11 L13.7 15.3 L15.2 14 L19.5 20 Z M8.4 13.2 L10 14.6 L12 9.2 L14 14.6 L15.6 13.2"
         />
       </>
@@ -129,11 +129,9 @@ const PHASES: {
     phase: "combat",
     label: "Combat",
     icon: (
-      <g transform="translate(12 10.5) scale(1.22) translate(-12 -12)">
+      <g transform="translate(12 11) scale(1.1) translate(-12 -12)">
         <path d="M1.5 1.5 L5 2.4 L15.2 12.6 L12.6 15.2 L2.4 5 Z M11 18.6 L18.6 11 M15.6 15.6 L19.4 19.4" />
-        <circle cx="20.6" cy="20.6" r="1.1" />
         <path d="M22.5 1.5 L19 2.4 L8.8 12.6 L11.4 15.2 L21.6 5 Z M13 18.6 L5.4 11 M8.4 15.6 L4.6 19.4" />
-        <circle cx="3.4" cy="20.6" r="1.1" />
       </g>
     ),
     glyph: (
