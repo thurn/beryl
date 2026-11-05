@@ -121,6 +121,4 @@ pub static SCENARIOS: &[(&str, &[Scenario])] = &[
 ];
 
 #[cfg(test)]
-mod stand_ins;
-#[cfg(test)]
 mod tests;

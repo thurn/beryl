@@ -11,8 +11,9 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::TokenEntry;
 use beryl_engine::filter::{Filter, Whose};
-use beryl_engine::{DecisionKind, TurnStep};
-use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
+use beryl_engine::state::CounterKind;
+use beryl_engine::{DecisionKind, TurnStep, Zone};
+use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
 
@@ -99,29 +100,145 @@ fn explore(ctx: &mut EffectCtx) -> Flow {
     ctx.explore(creature)
 }
 
-/// With no legal target it can't be cast
-/// ([CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c)): P1's Mana Crypt is an
-/// artifact, so passing is P0's only option.
-pub const SCENARIOS: &[Scenario] = &[Scenario::new("Get Lost can't be cast without a target")
-    .battlefield(
-        P0,
-        &[
-            Permanent::new(names::PLAINS),
-            Permanent::new(names::PLAINS),
-            Permanent::new(names::PLAINS),
-        ],
+const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
+const JACE: &str = names::JACE_THE_MIND_SCULPTOR;
+const MAP_NAME: &str = MAP.name;
+
+const THREE_PLAINS: &[Permanent] = &[
+    Permanent::new(names::PLAINS),
+    Permanent::new(names::PLAINS),
+    Permanent::new(names::PLAINS),
+];
+
+const fn count(player: u8, zone: Zone, card: &'static str, count: u8) -> Action {
+    Action::assert(Assertion::Count {
+        player,
+        zone,
+        card: Some(card),
+        count,
+    })
+}
+
+const fn library(top: &'static [&'static str]) -> Action {
+    Action::assert(Assertion::Library { player: P1, top })
+}
+
+/// In P1's turn 2, P0 destroys one of P1's two Elite Spellbinders with Get Lost at instant
+/// speed; P1 then sacrifices a Map, paying {1} with their Plains, and their other Spellbinder
+/// explores the top of `top`. The Island in P1's hand keeps their priority a decision.
+const fn exploring(name: &'static str, top: &'static [&'static str]) -> Scenario {
+    const SPELLBINDERS_AND_PLAINS: &[Permanent] = &[
+        Permanent::new(SPELLBINDER),
+        Permanent::new(SPELLBINDER),
+        Permanent::new(names::PLAINS),
+    ];
+    Scenario::new(name)
+        .at(2, P1, TurnStep::PrecombatMain)
+        .battlefield(P0, THREE_PLAINS)
+        .hand(P0, &[names::GET_LOST])
+        .library(P0, &[names::PLAINS])
+        .battlefield(P1, SPELLBINDERS_AND_PLAINS)
+        .hand(P1, &[names::ISLAND])
+        .library(P1, top)
+}
+
+const LET_P0_ACT: Action = Action::pass(P1);
+const GET_LOST: Action = Action::cast(P0, names::GET_LOST);
+const SACRIFICE_A_MAP: Action = Action::activate(P1, MAP_NAME, 0);
+
+/// Explore ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)): "...that
+/// permanent's controller reveals the top card of their library. If a land card is revealed
+/// this way, that player puts that card into their hand. Otherwise, that player puts a +1/+1
+/// counter on that permanent and may put the revealed card into their graveyard." With
+/// nothing to reveal, no land is revealed, so the creature gets the counter.
+const fn counters(count: u8) -> Action {
+    Action::assert(Assertion::Counters {
+        player: P1,
+        card: SPELLBINDER,
+        kind: CounterKind::PlusOne,
+        count,
+    })
+}
+
+pub const SCENARIOS: &[Scenario] = &[
+    // With no legal target it can't be cast
+    // ([CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c)): P1's Mana Crypt is
+    // an artifact, so passing is P0's only option.
+    Scenario::new("Get Lost can't be cast without a target")
+        .battlefield(P0, THREE_PLAINS)
+        .hand(P0, &[names::GET_LOST])
+        .battlefield(P1, &[Permanent::new(names::MANA_CRYPT)])
+        .library(P1, &[names::ISLAND])
+        .actions(&[
+            Action::AdvanceTo {
+                turn: 1,
+                step: TurnStep::PrecombatMain,
+            },
+            Action::assert(Assertion::Decision {
+                player: P0,
+                kind: DecisionKind::Priority,
+                candidates: 1,
+            }),
+        ]),
+    // The Island left in P0's hand keeps the game in P0's main phase once Get Lost has
+    // resolved.
+    Scenario::new("Get Lost on a planeswalker gives its controller two Maps")
+        .battlefield(P0, THREE_PLAINS)
+        .hand(P0, &[names::GET_LOST, names::ISLAND])
+        .battlefield(P1, &[Permanent::new(JACE)])
+        .library(P1, &[names::ISLAND])
+        .actions(&[
+            Action::cast(P0, names::GET_LOST),
+            count(P1, Zone::Graveyard, JACE, 1),
+            count(P1, Zone::Battlefield, MAP_NAME, 2),
+            count(P0, Zone::Battlefield, MAP_NAME, 0),
+        ]),
+    exploring(
+        "Get Lost on a creature gives two Maps; one explores a land into hand",
+        &[names::PLAINS, names::ISLAND],
     )
-    .hand(P0, &[names::GET_LOST])
-    .battlefield(P1, &[Permanent::new(names::MANA_CRYPT)])
-    .library(P1, &[names::ISLAND])
     .actions(&[
-        Action::AdvanceTo {
-            turn: 1,
-            step: TurnStep::PrecombatMain,
-        },
-        Action::assert(Assertion::Decision {
-            player: P0,
-            kind: DecisionKind::Priority,
-            candidates: 1,
-        }),
-    ])];
+        LET_P0_ACT,
+        GET_LOST,
+        count(P1, Zone::Graveyard, SPELLBINDER, 1),
+        count(P1, Zone::Battlefield, MAP_NAME, 2),
+        count(P0, Zone::Battlefield, MAP_NAME, 0),
+        SACRIFICE_A_MAP,
+        count(P1, Zone::Battlefield, MAP_NAME, 1),
+        count(P1, Zone::Hand, names::PLAINS, 1),
+        library(&[names::ISLAND]),
+        counters(0),
+    ]),
+    exploring(
+        "A Map explores a nonland into a counter and the graveyard",
+        &[names::OUST, names::ISLAND],
+    )
+    .actions(&[
+        LET_P0_ACT,
+        GET_LOST,
+        SACRIFICE_A_MAP,
+        Action::answer(P1, DecisionKind::YesNo, Pick::Yes),
+        counters(1),
+        count(P1, Zone::Graveyard, names::OUST, 1),
+        library(&[names::ISLAND]),
+    ]),
+    exploring(
+        "A Map explores a nonland into a counter, left on top",
+        &[names::OUST, names::ISLAND],
+    )
+    .actions(&[
+        LET_P0_ACT,
+        GET_LOST,
+        SACRIFICE_A_MAP,
+        Action::answer(P1, DecisionKind::YesNo, Pick::No),
+        counters(1),
+        count(P1, Zone::Graveyard, names::OUST, 0),
+        library(&[names::OUST, names::ISLAND]),
+    ]),
+    exploring("A Map explores an empty library into a counter", &[]).actions(&[
+        LET_P0_ACT,
+        GET_LOST,
+        SACRIFICE_A_MAP,
+        counters(1),
+    ]),
+];
