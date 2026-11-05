@@ -1108,13 +1108,6 @@
 .phase-tracker-compact .phase:nth-child(3).phase-current .phase-icon {
   scale: 1.1;
 }
-/* The combat glyph's plinth catches the glow when combat is current. */
-.phase-tracker-compact .phase.phase-current:nth-child(3)::before {
-  background: linear-gradient(
-    rgb(232 160 64 / 70%) 0 2px,
-    rgb(60 30 10 / 30%) 2px
-  );
-}
 .phase-tracker-compact .phase-current::after {
   content: "";
   position: absolute;
@@ -1147,19 +1140,15 @@
   );
   box-shadow: 0 0 8px 2px rgb(240 150 40 / 50%);
 }
-/* The combat glyph stands on a low plinth that lifts the rule around it. */
-.phase-tracker-compact .phase:nth-child(3)::before {
-  content: "";
-  position: absolute;
-  left: -6px;
-  right: -6px;
-  bottom: -2px;
-  height: 10px;
-  clip-path: polygon(0 100%, 18% 0, 82% 0, 100% 100%);
-  background: linear-gradient(
-    rgb(160 150 136 / 50%) 0 2px,
-    rgb(20 16 14 / 30%) 2px
-  );
+/* The combat glyph stands on a low tab that lifts the rule around it. */
+.phase-tracker-compact .phase .phase-icon path.phase-tab {
+  fill: rgb(20 16 14 / 25%);
+  stroke: rgb(160 150 136 / 50%);
+  stroke-width: 1;
+}
+.phase-tracker-compact .phase.phase-current .phase-icon path.phase-tab {
+  fill: rgb(60 30 10 / 30%);
+  stroke: rgb(232 160 64 / 70%);
 }
 
 /* Life orbs, drawn in mockup pixels (Player.tsx); --orb scales one to CSS pixels. */
