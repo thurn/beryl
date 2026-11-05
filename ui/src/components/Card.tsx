@@ -1,6 +1,11 @@
 // The card frame: a name bar colored by the card's colors, art, a P/T badge and, on the full
 // frame, the type line and rules box. Battlefield permanents use the compact `field` frame.
-import { createContext, useContext, type CSSProperties } from "react";
+import {
+  createContext,
+  useContext,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { motion, type MotionStyle } from "motion/react";
 import { AbilityBadge, type AbilityIcon, ManaCost, RulesText } from "./Mana";
 
@@ -17,6 +22,8 @@ export interface CardFace {
   loyalty?: string;
   /** Art URL; a placeholder painting is drawn until there is one. */
   art?: string;
+  /** Art fills the frame below the name bar, without a type line (full-art basic lands). */
+  fullArt?: boolean;
   ability?: AbilityIcon;
 }
 
@@ -43,6 +50,10 @@ export interface CardProps {
   variant?: "full" | "field";
   /** The card's width in pixels; everything else scales with it. */
   width?: number;
+  /** The card's height in pixels, when it is not the frame's usual aspect. */
+  height?: number;
+  /** The frame's unit in pixels (bars, borders and type scale with it), when not width / 12. */
+  unit?: number;
   tapped?: boolean;
   highlight?: Highlight;
   combat?: CombatRole;
@@ -53,7 +64,7 @@ export interface CardProps {
 }
 
 /** Width over height of each frame. */
-export const ASPECT = { full: 63 / 88, field: 1.27 } as const;
+export const ASPECT = { full: 63 / 88, field: 1.3 } as const;
 
 const BASIC_TYPES: [string, Color][] = [
   ["Plains", "W"],
@@ -124,25 +135,37 @@ export function CardArt({ card }: { card: CardFace }) {
 /** Rules text up to this long is centered in its box. */
 const SHORT_TEXT = 40;
 
-/** Shrinks a long name to fit its bar rather than cutting it off. */
-function nameFit(name: string): CSSProperties | undefined {
-  const fits = 16;
+/** Shrinks a long name to fit its bar rather than cutting it off (`--fit` scales the name's
+ * size in components.css). `units` is the card's width in frame units: 12 unless overridden. */
+function nameFit(name: string, units: number): CSSProperties | undefined {
+  const fits = (22 * units) / 12;
   return name.length > fits
-    ? { fontSize: `${(0.98 * fits) / name.length}em` }
+    ? ({ "--fit": fits / name.length } as CSSProperties)
     : undefined;
 }
 
-function stats(card: CardFace): string | undefined {
+/** Power and toughness (or loyalty), numerals inked blue and the slash black as on the mockups. */
+function stats(card: CardFace): ReactNode {
   if (card.power !== undefined && card.toughness !== undefined) {
-    return `${card.power}/${card.toughness}`;
+    return (
+      <span>
+        <b>{card.power}</b>/<b>{card.toughness}</b>
+      </span>
+    );
   }
-  return card.loyalty;
+  return card.loyalty !== undefined ? (
+    <span>
+      <b>{card.loyalty}</b>
+    </span>
+  ) : undefined;
 }
 
 export function Card({
   card,
   variant = "full",
   width = 160,
+  height: givenHeight,
+  unit,
   tapped = false,
   highlight,
   combat,
@@ -150,13 +173,14 @@ export function Card({
   style,
   id,
 }: CardProps) {
-  const height = width / ASPECT[variant];
+  const height = givenHeight ?? width / ASPECT[variant];
   const pt = stats(card);
   const classes = [
     "card",
     `card-${variant}`,
-    variant === "full" && !card.text && "card-textless",
+    variant === "full" && card.fullArt && "card-full-art",
     `frame-${frameKey(card)}`,
+    card.colors.length > 1 && `accent-${card.colors[0]?.toLowerCase()}`,
     highlight && `card-${highlight}`,
     combat && `card-${combat}`,
     className,
@@ -175,7 +199,7 @@ export function Card({
     <motion.div
       layout
       className="card-slot"
-      style={{ ...slot, fontSize: width / 12, ...style }}
+      style={{ ...slot, fontSize: unit ?? width / 12, ...style }}
       id={id}
     >
       {combat === "attacker" && <AttackChevron />}
@@ -188,7 +212,10 @@ export function Card({
       >
         <div className="card-rim">
           <div className="card-name-bar">
-            <span className="card-name" style={nameFit(card.name)}>
+            <span
+              className="card-name"
+              style={nameFit(card.name, width / (unit ?? width / 12))}
+            >
               {card.name}
             </span>
             {variant === "full" && card.manaCost && (
@@ -196,22 +223,22 @@ export function Card({
             )}
           </div>
           <CardArt card={card} />
-          {variant === "full" && (
+          {variant === "full" && !card.fullArt && (
             <>
               <div className="card-type-bar">{card.typeLine}</div>
-              {card.text && (
-                <div
-                  className={
-                    card.text.length <= SHORT_TEXT
-                      ? "card-rules card-rules-short"
-                      : "card-rules"
-                  }
-                >
+              <div
+                className={
+                  (card.text?.length ?? 0) <= SHORT_TEXT
+                    ? "card-rules card-rules-short"
+                    : "card-rules"
+                }
+              >
+                {card.text && (
                   <p>
                     <RulesText text={card.text} />
                   </p>
-                </div>
-              )}
+                )}
+              </div>
             </>
           )}
         </div>
@@ -245,7 +272,8 @@ function BlockArc() {
   );
 }
 
-/** The back of a card, for hidden cards and libraries. */
+/** The back of a card, for hidden cards and libraries: the Project Beryl back of scry.png, tooled
+ * leather with corner studs around an oval panel bearing the crest, the wordmark and five dots. */
 export function CardBack({
   width = 160,
   style,
@@ -263,14 +291,19 @@ export function CardBack({
         ...style,
       }}
     >
-      <div className="card-back-oval">
-        <Crest className="card-back-crest" />
-        <span className="card-back-title">Project Beryl</span>
-        <span className="card-back-dots">
-          {["w", "u", "b", "r", "g"].map((c) => (
-            <i key={c} className={`dot-${c}`} />
-          ))}
-        </span>
+      <div className="card-back-field">
+        {["r", "w", "g", "u"].map((c) => (
+          <i key={c} className={`card-back-stud dot-${c}`} />
+        ))}
+        <div className="card-back-oval">
+          <Crest className="card-back-crest" />
+          <span className="card-back-title">Project Beryl</span>
+          <span className="card-back-dots">
+            {["w", "r", "g", "b", "u"].map((c) => (
+              <i key={c} className={`dot-${c}`} />
+            ))}
+          </span>
+        </div>
       </div>
     </div>
   );

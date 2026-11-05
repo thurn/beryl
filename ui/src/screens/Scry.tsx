@@ -33,7 +33,7 @@ export function ScryOverlay({ className }: { className?: string }) {
           }}
         />
         <Card
-          card={a(SAMPLE.island, "scry-island")}
+          card={a(SAMPLE.fullArtIsland, "scry-island")}
           width={300}
           highlight="target"
           style={{

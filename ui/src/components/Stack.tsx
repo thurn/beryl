@@ -11,6 +11,10 @@ export interface StackItemProps {
   text: string;
   showArt?: boolean;
   width?: number;
+  /** The item's height, when it is not the frame's usual aspect (as without art). */
+  height?: number;
+  /** The frame's unit in pixels, when not width / 12. */
+  unit?: number;
   id?: string;
 }
 
@@ -21,13 +25,15 @@ export function StackItem({
   text,
   showArt = false,
   width = 170,
+  height,
+  unit,
   id,
 }: StackItemProps) {
   return (
     <div
       id={id}
       className={`stack-item frame-${frameKey(source)}`}
-      style={{ width, fontSize: width / 12 }}
+      style={{ width, height, fontSize: unit ?? width / 12 }}
     >
       <div className="card-rim">
         <div className="card-name-bar">

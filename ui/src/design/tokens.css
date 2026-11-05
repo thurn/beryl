@@ -36,6 +36,8 @@
   );
 
   --font-serif: "Times New Roman", Times, serif;
+  /* Card names, type lines, rules text and P/T. */
+  --font-card: "Crimson Pro Variable", "Iowan Old Style", Georgia, serif;
   --font-sans:
     "Open Sans Variable", -apple-system, "Helvetica Neue", sans-serif;
 

@@ -113,7 +113,7 @@ const trigger: TableBoard = {
       source: SAMPLE.infernoTitan,
       label: "Triggered Ability",
       text: titanText,
-      x: 1208,
+      x: 1205,
       y: 222,
       width: 295,
       id: "stack-trigger",

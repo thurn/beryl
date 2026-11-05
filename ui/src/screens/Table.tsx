@@ -168,7 +168,7 @@ function Creature({ permanent }: { permanent: Permanent }) {
           id={permanent.id}
           card={withArt(permanent.card, permanent.slot)}
           variant="field"
-          width={227}
+          width={232}
           tapped={tapped}
           highlight={permanent.highlight}
           combat={permanent.combat}

@@ -22,8 +22,7 @@ const CODES: Record<string, number> = {
 
 export type AbilityIcon = "flying" | "first-strike" | "vigilance";
 
-const ABILITY_CODES: Record<AbilityIcon, number> = {
-  flying: 0xe952,
+const ABILITY_CODES: Record<Exclude<AbilityIcon, "flying">, number> = {
   "first-strike": 0xe950,
   vigilance: 0xe968,
 };
@@ -71,10 +70,22 @@ export function RulesText({ text }: { text: string }) {
   return <>{parts}</>;
 }
 
+/** Flying, drawn as on the mockups' badges: an eagle, wings raised. */
+const EAGLE =
+  "M4 4 L9 3.5 L16 13 L23.5 2.5 L28.5 3.5 L25 10 L29.5 9.5 L24.5 15.5 L28 16.5 L20 20.5 L20.5 26.5 L17 30.5 L13 27.5 L13.5 23.5 L8.5 23.5 L3 25.5 L7.5 20.5 L12.5 18 L6 10 Z";
+
 export function AbilityBadge({ ability }: { ability: AbilityIcon }) {
   return (
     <span className="ability-badge" role="img" aria-label={ability}>
-      {String.fromCharCode(ABILITY_CODES[ability])}
+      {ability === "flying" ? (
+        <svg viewBox="0 0 32 32" aria-hidden>
+          <path d={EAGLE} />
+        </svg>
+      ) : (
+        <span className="ability-glyph">
+          {String.fromCharCode(ABILITY_CODES[ability])}
+        </span>
+      )}
     </span>
   );
 }

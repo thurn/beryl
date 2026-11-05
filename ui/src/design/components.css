@@ -1,48 +1,82 @@
 /* The component library (docs/ui_mockups/ui_system.png). Cards size everything in em: a card's
    font size is a twelfth of its width. */
 
-/* Frame palettes: rim, name bar and rules box per color. */
+/* Frame palettes, sampled from the mockups: the colored rim (with its highlight and the dark
+   line that edges it), the name and type bars, and the rules box. */
 .frame-w {
-  --rim: #d8d0bb;
-  --bar-hi: #fbf7ec;
-  --bar-lo: #ddd3bc;
-  --box: #f4efe3;
+  --rim: #d6cab0;
+  --rim-hi: #fcf9f4;
+  --rim-lo: #2e2b30;
+  --bar: #e2d8cc;
+  --bar-hi: #f4eee5;
+  --box: #eee8df;
 }
 .frame-u {
-  --rim: #2a7dd0;
-  --bar-hi: #dcecfa;
-  --bar-lo: #9fc8ec;
-  --box: #e1eef9;
+  --rim: #1a84d4;
+  --rim-hi: #47b4f4;
+  --rim-lo: #06275a;
+  --bar: #b9d3ea;
+  --bar-hi: #dcf0fb;
+  --box: #cedeef;
 }
 .frame-b {
-  --rim: #4b4744;
-  --bar-hi: #dcd8d4;
-  --bar-lo: #a9a39e;
-  --box: #dedad6;
+  --rim: #a8a19b;
+  --rim-hi: #ddd6d0;
+  --rim-lo: #36302d;
+  --bar: #b0a49f;
+  --bar-hi: #cfc6c1;
+  --box: #d8d2ce;
 }
 .frame-r {
-  --rim: #d4442b;
-  --bar-hi: #fbdccf;
-  --bar-lo: #eba28b;
-  --box: #f8e4da;
+  --rim: #da3517;
+  --rim-hi: #f7743e;
+  --rim-lo: #6d0806;
+  --bar: #efb79c;
+  --bar-hi: #fad7c4;
+  --box: #f6dacb;
 }
 .frame-g {
-  --rim: #2e8a4e;
-  --bar-hi: #d9eedc;
-  --bar-lo: #9fcca9;
-  --box: #e0eee0;
+  --rim: #2a7e51;
+  --rim-hi: #63ae80;
+  --rim-lo: #0d2f19;
+  --bar: #abb6a3;
+  --bar-hi: #cdd5c3;
+  --box: #dde4d4;
 }
 .frame-m {
-  --rim: #d0a23d;
-  --bar-hi: #faecc4;
-  --bar-lo: #e2c57c;
-  --box: #f6eed5;
+  --rim: #d9b46a;
+  --rim-hi: #f3da9b;
+  --rim-lo: #6f5422;
+  --bar: #dab872;
+  --bar-hi: #ecd197;
+  --box: #f1e4c2;
+}
+/* A multicolored card's gold rim is edged in its first color, as on the mockups' Baleful Strix. */
+[class*="accent-"] {
+  --edge: 0.16em;
+}
+.accent-w {
+  --rim-lo: #8a8070;
+}
+.accent-u {
+  --rim-lo: #0f5fa8;
+}
+.accent-b {
+  --rim-lo: #2a2624;
+}
+.accent-r {
+  --rim-lo: #a5200c;
+}
+.accent-g {
+  --rim-lo: #1d6a40;
 }
 .frame-c {
-  --rim: #9b958d;
-  --bar-hi: #ebe7e1;
-  --bar-lo: #c4bdb4;
-  --box: #ece9e4;
+  --rim: #c6c1ba;
+  --rim-hi: #f2efea;
+  --rim-lo: #2e2b2a;
+  --bar: #dcd7d0;
+  --bar-hi: #f1eee9;
+  --box: #ebe8e3;
 }
 
 /* Mana symbols. */
@@ -88,21 +122,32 @@
 }
 .ability-badge {
   position: absolute;
-  left: 0.55em;
-  bottom: 0.55em;
-  width: 1.9em;
+  left: 0.37em;
+  bottom: 0.6em;
+  width: 2em;
   height: 1.9em;
-  border-radius: 0.35em;
+  border-radius: 0.38em;
   display: grid;
   place-items: center;
+  color: #0f0e0d;
+  background: linear-gradient(180deg, #e4e4ec, #c8c8d2 55%, #b0b0ba);
+  border: 0.1em solid #1c1a19;
+  box-shadow:
+    inset 0 0.05em 0 rgb(255 255 255 / 80%),
+    0 0.08em 0.2em rgb(0 0 0 / 55%);
+}
+.ability-badge svg {
+  width: 1.5em;
+  fill: currentColor;
+}
+.ability-glyph {
   font: normal 1.3em/1 Mana;
-  color: #141312;
-  background: linear-gradient(180deg, #f3efe8, #b9b2a8);
-  border: 0.1em solid #2a2826;
-  box-shadow: 0 0.1em 0.3em rgb(0 0 0 / 50%);
 }
 
-/* The card frame. */
+/* The card frame, measured on the mockups' cards (in em, a twelfth of the card's width): a black
+   body, deepest at the bottom; a colored rim inset in it; name and type bars spanning the rim;
+   the art and rules box inset in the rim, each edged by the rim's dark line. Battlefield cards
+   (`card-field`) have a thinner top and a slimmer name bar. */
 .card-slot {
   position: relative;
   display: flex;
@@ -113,53 +158,85 @@
 .card {
   position: relative;
   flex: none;
-  /* The black body, a little deeper at the bottom, with the colored frame inset in it. */
-  padding: 0.34em 0.34em 0.46em;
-  border-radius: var(--radius-card);
-  background: linear-gradient(160deg, #2c2a28, #0d0c0b);
-  box-shadow: var(--card-shadow, var(--shadow-card));
-  font-family: var(--font-serif);
-  color: #191715;
+  padding: 0.44em 0.44em 0.84em;
+  border-radius: 0.6em;
+  background: linear-gradient(180deg, #201f1e, #161615);
+  box-shadow:
+    inset 0 0 0 0.05em rgb(255 255 255 / 9%),
+    var(--card-shadow, var(--shadow-card));
+  font-family: var(--font-card);
+  color: #141210;
   transition: box-shadow 0.25s;
+}
+.card-field {
+  padding: 0.3em 0.46em var(--card-foot, 0.95em);
 }
 .card-rim {
   height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 0.18em;
-  padding: 0.28em;
-  border-radius: calc(var(--radius-card) - 2px);
-  background: linear-gradient(
-    160deg,
-    color-mix(in srgb, var(--rim) 75%, white),
-    var(--rim) 45%,
-    color-mix(in srgb, var(--rim) 70%, black)
-  );
+  gap: 0.2em;
+  padding: 0.3em 0.44em 0.23em;
+  border-radius: 0.3em;
+  background:
+    repeating-linear-gradient(
+      172deg,
+      transparent 0 0.5em,
+      rgb(255 255 255 / 10%) 0.65em,
+      transparent 0.8em 1.3em
+    ),
+    linear-gradient(
+      90deg,
+      var(--rim) 0.08em,
+      var(--rim-hi) 0.16em,
+      var(--rim) 0.28em calc(100% - 0.28em),
+      var(--rim-hi) calc(100% - 0.16em),
+      var(--rim) calc(100% - 0.08em)
+    );
+  box-shadow: inset 0 0 0 0.05em var(--rim-lo);
+}
+.card-field .card-rim {
+  padding: 0.24em 0.48em 0.1em;
 }
 .card-name-bar,
 .card-type-bar {
   flex: none;
   display: flex;
   align-items: center;
-  min-height: 1.45em;
-  padding: 0 0.45em;
-  border-radius: 0.45em;
-  background: linear-gradient(180deg, var(--bar-hi), var(--bar-lo));
+  height: 1.07em;
+  margin: 0 -0.36em;
+  padding: 0 0.42em;
+  border-radius: 0.5em / 50%;
+  background: linear-gradient(
+    180deg,
+    var(--bar-hi),
+    var(--bar) 40%,
+    var(--bar) 80%,
+    color-mix(in srgb, var(--bar) 85%, black)
+  );
   box-shadow:
-    inset 0 0.06em 0 rgb(255 255 255 / 70%),
-    0 0.06em 0.12em rgb(0 0 0 / 55%);
+    0 0 0 var(--edge, 0.05em) var(--rim-lo),
+    inset 0 0.05em 0 rgb(255 255 255 / 55%);
+}
+.card-field .card-name-bar {
+  height: 0.9em;
+  margin: 0 -0.4em;
+  padding: 0 0.3em;
 }
 .card-name {
   overflow: hidden;
-  font-weight: 700;
-  font-size: 0.98em;
+  font-weight: 750;
+  font-size: calc(0.9em * var(--fit, 1));
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+.card-field .card-name {
+  font-size: calc(0.86em * var(--fit, 1));
+}
 .card-type-bar {
+  height: 0.94em;
   font-weight: 600;
-  font-size: 0.86em;
-  min-height: 1.45em;
+  font-size: 0.8em;
 }
 .card-art {
   display: block;
@@ -167,27 +244,30 @@
   min-height: 0;
   width: 100%;
   object-fit: cover;
-  border-radius: 0.15em;
   background-size: cover;
-  box-shadow:
-    inset 0 0 0 0.06em rgb(0 0 0 / 55%),
-    0 0 0 0.06em rgb(0 0 0 / 35%);
+  box-shadow: 0 0 0 var(--edge, 0.06em) var(--rim-lo);
 }
 .card-full .card-art {
-  flex: 0 0 44%;
+  flex: 0 0 7.3em;
 }
-.card-full.card-textless .card-art {
+.card-full.card-full-art .card-art {
   flex: 1 1 0;
 }
 .card-rules {
   flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
-  padding: 0.35em 0.5em;
-  border-radius: 0.2em;
-  background: var(--box);
-  box-shadow: inset 0 0 0.3em rgb(0 0 0 / 22%);
-  font-size: 0.82em;
+  padding: 0.35em 0.45em;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--box) 92%, white),
+    var(--box)
+  );
+  box-shadow:
+    0 0 0 0.06em var(--rim-lo),
+    inset 0 0 0.3em rgb(0 0 0 / 12%);
+  font-weight: 500;
+  font-size: 0.75em;
   line-height: 1.2;
 }
 .card-rules p {
@@ -199,24 +279,41 @@
   place-items: center;
   text-align: center;
 }
+/* Power and toughness in a framed plaque, numerals in blue ink. */
 .card-pt {
   position: absolute;
-  right: 0.45em;
-  bottom: 0.4em;
-  min-width: 2.6em;
-  padding: 0.05em 0.45em;
-  border-radius: 0.4em;
-  text-align: center;
+  right: 0.37em;
+  bottom: 0.3em;
+  width: 4.2em;
+  height: 1.9em;
+  display: grid;
+  place-items: center;
+  border-radius: 0.5em;
   font-weight: 700;
-  font-size: 1.35em;
-  line-height: 1.2;
-  color: #1d1b19;
-  background: linear-gradient(180deg, var(--bar-hi), var(--bar-lo));
-  border: 0.08em solid #2a2724;
-  box-shadow: 0 0.08em 0.25em rgb(0 0 0 / 55%);
+  font-size: 1em;
+  line-height: 1;
+  color: #141210;
+  background: linear-gradient(
+    180deg,
+    var(--bar-hi),
+    var(--bar) 45%,
+    color-mix(in srgb, var(--bar) 88%, black)
+  );
+  border: 0.06em solid #14110f;
+  box-shadow:
+    inset 0 0 0 0.1em color-mix(in srgb, var(--bar-hi) 70%, white),
+    inset 0 0 0 0.16em rgb(0 0 0 / 40%),
+    0 0.06em 0.2em rgb(0 0 0 / 55%);
+}
+.card-pt span {
+  font-size: 1.45em;
+}
+.card-pt b {
+  font-weight: inherit;
+  color: var(--pt-ink, #1a4e9a);
 }
 .card-full .card-pt {
-  font-size: 1.1em;
+  font-size: 0.8em;
 }
 
 /* States: tapped turns the card (Card.tsx), source glows gold, target glows cyan, an attacker
@@ -258,75 +355,152 @@
   stroke-width: 2.4;
 }
 
-/* Card backs and piles. */
+/* Card backs and piles. The back (after scry.png): the card's black body around tooled leather,
+   a gem stud in each corner, and a blue-edged oval of smooth leather holding the gold crest, the
+   wordmark and five dots in a ring. */
 .card-back {
   position: relative;
   flex: none;
+  padding: 0.42em;
+  border-radius: 0.6em;
+  background: linear-gradient(180deg, #201f1e, #161615);
+  box-shadow:
+    inset 0 0 0 0.05em rgb(255 255 255 / 9%),
+    var(--shadow-card);
+}
+/* Tooled leather: dark, mottled veins from low-frequency turbulence. */
+.card-back {
+  --tooling: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='t'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.09' numOctaves='2' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0.16 0 0 0 0 0.09 0 0 0 0 0.03 0 0 7 0 -3.3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23t)'/%3E%3C/svg%3E");
+}
+.card-back-field {
+  position: relative;
+  height: 100%;
   display: grid;
   place-items: center;
-  padding: 0.5em;
-  border-radius: var(--radius-card);
-  border: 0.25em solid #141210;
+  border-radius: 0.3em;
   background:
+    var(--grain), var(--tooling),
     radial-gradient(
-      ellipse at 40% 30%,
-      rgb(255 220 170 / 18%),
+      ellipse at 30% 20%,
+      rgb(255 220 170 / 12%),
       transparent 60%
     ),
-    linear-gradient(150deg, #8a4a2c, #5c2c18 60%, #43200f);
-  box-shadow: var(--shadow-card);
+    linear-gradient(160deg, #66401d, #573519 60%, #482b14);
+  box-shadow:
+    inset 0 0 0 0.06em rgb(0 0 0 / 55%),
+    inset 0 0 0 0.3em rgb(0 0 0 / 14%),
+    inset 0 0 0.6em rgb(0 0 0 / 40%);
+}
+.card-back-stud {
+  position: absolute;
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 -0.06em 0.08em rgb(0 0 0 / 45%),
+    inset 0 0.06em 0.06em rgb(255 255 255 / 55%),
+    0 0.04em 0.08em rgb(0 0 0 / 60%);
+}
+.card-back-stud:nth-child(1) {
+  left: 0.45em;
+  top: 0.45em;
+}
+.card-back-stud:nth-child(2) {
+  right: 0.45em;
+  top: 0.45em;
+}
+.card-back-stud:nth-child(3) {
+  left: 0.45em;
+  bottom: 0.45em;
+}
+.card-back-stud:nth-child(4) {
+  right: 0.45em;
+  bottom: 0.45em;
 }
 .card-back-oval {
   width: 82%;
-  height: 86%;
+  height: 84%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.4em;
-  border-radius: 50%;
-  border: 0.12em solid rgb(46 84 170 / 85%);
-  background: radial-gradient(ellipse, #a85a34, #7a3a1e 75%);
-  box-shadow: inset 0 0 0.8em rgb(0 0 0 / 45%);
+  border-radius: 50% / 30%;
+  border: 0.1em solid #2a5ec4;
+  background:
+    var(--grain),
+    radial-gradient(ellipse 70% 60% at 50% 42%, #7d4526, #723f23 55%, #603824);
+  box-shadow:
+    0 0 0 0.05em rgb(0 0 0 / 50%),
+    inset 0 0 0.6em rgb(0 0 0 / 35%);
 }
 .card-back-crest {
-  width: 2.4em;
-  color: #e7b764;
-  filter: drop-shadow(0 0.05em 0.1em rgb(0 0 0 / 60%));
+  width: 2.8em;
+  margin-top: 0.4em;
+  color: #d9ad70;
+  filter: drop-shadow(0 0.05em 0.05em rgb(0 0 0 / 50%));
 }
 .card-back-title {
+  margin-top: 0.5em;
   font-family: var(--font-serif);
-  font-size: 0.8em;
-  letter-spacing: 0.14em;
+  font-size: 1.15em;
+  letter-spacing: 0.12em;
+  line-height: 1.15;
   text-transform: uppercase;
   text-align: center;
-  color: #ebc98f;
-  width: 6em;
-  line-height: 1.1;
+  color: #dcb47c;
+  width: 5em;
+  text-shadow: 0 0.04em 0.05em rgb(0 0 0 / 45%);
 }
+/* The five dots sit in a ring: one above, two beside, two below. */
 .card-back-dots {
-  display: flex;
-  gap: 0.25em;
+  position: relative;
+  width: 2.4em;
+  height: 2em;
+  margin-top: 0.9em;
 }
 .card-back-dots i {
-  width: 0.38em;
-  height: 0.38em;
+  position: absolute;
+  width: 0.42em;
+  height: 0.42em;
   border-radius: 50%;
+  box-shadow:
+    inset 0 -0.05em 0.06em rgb(0 0 0 / 45%),
+    0 0.03em 0.05em rgb(0 0 0 / 50%);
+}
+.card-back-dots i:nth-child(1) {
+  left: 0.99em;
+  top: 0;
+}
+.card-back-dots i:nth-child(2) {
+  left: 0.1em;
+  top: 0.6em;
+}
+.card-back-dots i:nth-child(3) {
+  right: 0.1em;
+  top: 0.6em;
+}
+.card-back-dots i:nth-child(4) {
+  left: 0.45em;
+  bottom: 0.1em;
+}
+.card-back-dots i:nth-child(5) {
+  right: 0.45em;
+  bottom: 0.1em;
 }
 .dot-w {
-  background: #f5edc9;
+  background: #e3a34a;
 }
 .dot-u {
-  background: #5aa5e6;
+  background: #4f86d6;
 }
 .dot-b {
-  background: #3a3532;
+  background: #b96a86;
 }
 .dot-r {
-  background: #e4583a;
+  background: #cf4a3c;
 }
 .dot-g {
-  background: #4fae63;
+  background: #63a24c;
 }
 .pile {
   position: relative;
@@ -367,30 +541,39 @@
 
 /* Stack items: the source's frame over a shield-shaped rules box. */
 .stack-item {
-  padding: 0.3em 0.3em 0.4em;
-  border-radius: 0.9em 0.9em 50% 50% / 0.9em 0.9em 26% 26%;
-  background: linear-gradient(160deg, #2c2a28, #0d0c0b);
-  box-shadow: var(--shadow-lifted);
-  font-family: var(--font-serif);
-  color: #191715;
+  display: flex;
+  flex-direction: column;
+  aspect-ratio: 309 / 458;
+  padding: 0.28em 0.32em 0.85em;
+  border-radius: 0.6em 0.6em 50% 50% / 0.6em 0.6em 22% 22%;
+  background: linear-gradient(180deg, #201f1e, #161615);
+  box-shadow:
+    inset 0 0 0 0.05em rgb(255 255 255 / 9%),
+    var(--shadow-lifted);
+  font-family: var(--font-card);
+  color: #141210;
 }
 .stack-item .card-rim {
-  padding: 0.35em;
-  border-radius: 0.7em 0.7em 50% 50% / 0.7em 0.7em 25% 25%;
+  flex: 1;
+  padding: 0.3em 0.46em 0.36em;
+  border-radius: 0.3em 0.3em 50% 50% / 0.3em 0.3em 20% 20%;
 }
-.stack-item .card-name {
-  font-size: 1.15em;
+.stack-item .card-name-bar {
+  height: 1.16em;
 }
 .stack-item .card-art {
-  flex: 0 0 9em;
+  flex: 0 0 6.06em;
+}
+.stack-item .card-type-bar {
+  height: 1.05em;
+  font-size: 0.86em;
 }
 .stack-item .card-rules {
-  flex: none;
-  border-radius: 0.2em 0.2em 50% 50% / 0.2em 0.2em 22% 22%;
-  padding: 0.5em 0.55em 2em;
-  font-size: 1.08em;
-  line-height: 1.22;
-  text-align: center;
+  border-radius: 0 0 50% 50% / 0 0 34% 34%;
+  padding: 0.5em 0.5em;
+  font-weight: 600;
+  font-size: 0.76em;
+  line-height: 1.08;
 }
 /* Arrows. */
 .arrows {

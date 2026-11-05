@@ -16,7 +16,7 @@ import {
   PlayerBadge,
 } from "../components/Player";
 import { Arrows, StackItem, type ArrowSpec } from "../components/Stack";
-import { SAMPLE } from "./samples";
+import { costless, SAMPLE } from "./samples";
 import { ScryOverlay } from "./Scry";
 import { TableScene } from "./Table";
 
@@ -162,67 +162,119 @@ function PlayerAndZones() {
   );
 }
 
+/** Places a part at (x, y) in its panel's padding box, where the mockup puts it. */
+function At({ x, y, children }: { x: number; y: number; children: ReactNode }) {
+  return (
+    <div className="at" style={{ left: x, top: y }}>
+      {children}
+    </div>
+  );
+}
+
+/** A caption centered on `x`. */
+function CaptionAt({
+  x,
+  y,
+  children,
+}: {
+  x: number;
+  y: number;
+  children: ReactNode;
+}) {
+  return (
+    <div className="at caption-at" style={{ left: x - 120, top: y }}>
+      <Caption>{children}</Caption>
+    </div>
+  );
+}
+
 function CardsAndStates() {
   const a = useSlotArt();
   return (
-    <Panel n="04" title="Cards & states" className="panel-cards">
-      <div className="states-grid">
+    <Panel n="04" title="Cards & states">
+      <At x={24} y={55}>
         <Card
           card={a(SAMPLE.infernoTitan, "04-titan")}
           variant="field"
-          width={150}
+          width={152}
+          height={135}
+          unit={14.6}
         />
-        <figure>
-          <Card
-            card={a(SAMPLE.mountain, "04-tapped")}
-            variant="field"
-            width={100}
-            tapped
-          />
-          <Caption>Tapped</Caption>
-        </figure>
-        <figure>
-          <Card
-            card={a(SAMPLE.plains, "04-untapped")}
-            variant="field"
-            width={100}
-          />
-          <Caption>Untapped</Caption>
-        </figure>
-      </div>
-      <div className="states-grid states-glow">
-        <figure>
-          <Card
-            card={a(SAMPLE.balefulStrix, "04-source")}
-            variant="field"
-            width={140}
-            highlight="source"
-          />
-          <Caption>Source (gold)</Caption>
-        </figure>
-        <figure>
-          <Card
-            card={a(SAMPLE.balefulStrix, "04-target")}
-            variant="field"
-            width={140}
-            highlight="target"
-          />
-          <Caption>Target (cyan)</Caption>
-        </figure>
-      </div>
-      <div className="mini-hand">
+      </At>
+      <At x={194} y={80}>
         <Card
-          card={a(SAMPLE.swords, "04-hand-swords")}
-          width={120}
+          card={a(SAMPLE.mountain, "04-tapped")}
+          variant="field"
+          width={126}
+          height={92}
+          unit={13}
+          tapped
+        />
+      </At>
+      <At x={337} y={61}>
+        <Card
+          card={a(SAMPLE.plains, "04-untapped")}
+          variant="field"
+          width={101}
+          height={109}
+          unit={12}
+        />
+      </At>
+      <CaptionAt x={263} y={176}>
+        Tapped
+      </CaptionAt>
+      <CaptionAt x={389} y={176}>
+        Untapped
+      </CaptionAt>
+      <At x={64} y={215}>
+        <Card
+          card={a(SAMPLE.balefulStrix, "04-source")}
+          variant="field"
+          width={148}
+          height={100}
+          unit={13.6}
+          highlight="source"
+        />
+      </At>
+      <At x={266} y={215}>
+        <Card
+          card={a(SAMPLE.balefulStrix, "04-target")}
+          variant="field"
+          width={146}
+          height={100}
+          unit={13.6}
+          highlight="target"
+        />
+      </At>
+      <CaptionAt x={139} y={322}>
+        Source (gold)
+      </CaptionAt>
+      <CaptionAt x={344} y={322}>
+        Target (cyan)
+      </CaptionAt>
+      <At x={50} y={370}>
+        <Card
+          card={a(costless(SAMPLE.swords), "04-hand-swords")}
+          width={118}
+          unit={13}
           style={{ rotate: -5 }}
         />
-        <Card card={a(SAMPLE.mountain, "04-hand-mountain")} width={120} />
+      </At>
+      <At x={284} y={367}>
         <Card
           card={a(SAMPLE.plateau, "04-hand-plateau")}
-          width={120}
-          style={{ rotate: 5, y: 6 }}
+          width={118}
+          unit={13}
+          style={{ rotate: 5 }}
         />
-      </div>
+      </At>
+      <At x={172} y={356}>
+        <Card
+          card={a(SAMPLE.mountain, "04-hand-mountain")}
+          width={116}
+          unit={13}
+        />
+      </At>
     </Panel>
   );
 }
@@ -262,53 +314,71 @@ function CombatAndStack() {
   return (
     <Panel n="05" title="Combat & stack">
       <div className="combat-stack">
-        <div className="combat-row">
-          <figure>
-            <Card
-              id="g-attacker"
-              card={a(SAMPLE.beast, "05-attacker")}
-              variant="field"
-              width={125}
-              combat="attacker"
-            />
-            <Caption>Attacker · angular</Caption>
-          </figure>
-          <figure>
-            <Card
-              id="g-blocker"
-              card={a(SAMPLE.angel, "05-blocker")}
-              variant="field"
-              width={125}
-              combat="blocker"
-            />
-            <Caption>Blocker · rounded</Caption>
-          </figure>
-        </div>
+        <At x={57} y={74}>
+          <Card
+            id="g-attacker"
+            card={a(SAMPLE.beast, "05-attacker")}
+            variant="field"
+            width={129}
+            height={100}
+            unit={12.6}
+            combat="attacker"
+          />
+        </At>
+        <At x={307} y={72}>
+          <Card
+            id="g-blocker"
+            card={a(SAMPLE.angel, "05-blocker")}
+            variant="field"
+            width={126}
+            height={101}
+            unit={12.6}
+            combat="blocker"
+          />
+        </At>
+        <CaptionAt x={122} y={192}>
+          Attacker · angular
+        </CaptionAt>
+        <CaptionAt x={370} y={192}>
+          Blocker · rounded
+        </CaptionAt>
         <div className="panel-rule" />
-        <div className="stack-row">
+        <At x={20} y={268}>
           <Card
             id="g-titan"
             card={a(SAMPLE.infernoTitan, "05-source")}
             variant="field"
-            width={112}
+            width={119}
+            height={104}
+            unit={12.6}
           />
+        </At>
+        <At x={182} y={241}>
           <StackItem
             id="g-trigger"
             source={SAMPLE.infernoTitan}
             text="When Inferno Titan enters the battlefield, it deals 3 damage divided as you choose among one, two, or three targets."
-            width={142}
+            width={130}
+            height={172}
+            unit={15}
           />
+        </At>
+        <At x={356} y={267}>
           <Card
             id="g-beast"
             card={a(SAMPLE.beast, "05-target")}
             variant="field"
-            width={104}
+            width={116}
+            height={105}
+            unit={12.6}
           />
-        </div>
-        <div className="stack-captions">
-          <Caption>Gold: source → ability</Caption>
-          <Caption>Cyan: ability → target</Caption>
-        </div>
+        </At>
+        <CaptionAt x={121} y={422}>
+          Gold: source → ability
+        </CaptionAt>
+        <CaptionAt x={367} y={422}>
+          Cyan: ability → target
+        </CaptionAt>
         <Arrows arrows={arrows} />
       </div>
     </Panel>

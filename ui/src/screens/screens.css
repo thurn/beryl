@@ -251,47 +251,28 @@
   gap: 12px;
 }
 
-/* 04 Cards & states. */
-.states-grid {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
+/* 04 Cards & states and 05 Combat & stack: parts placed in the panel as on the mockup (At). */
+.at {
+  position: absolute;
 }
-.states-glow {
-  justify-content: space-around;
-  margin-top: 22px;
+/* The library draws cards flat, off the table: a slimmer foot, P/T in black ink. */
+.at {
+  --card-foot: 0.5em;
+  --pt-ink: #141210;
 }
-.mini-hand {
-  display: flex;
-  justify-content: center;
-  margin-top: 22px;
+.caption-at {
+  width: 240px;
 }
-.mini-hand .card-slot + .card-slot {
-  margin-left: -14px;
-}
-
-/* 05 Combat & stack. */
 .combat-stack {
-  position: relative;
+  position: absolute;
+  inset: 0;
 }
-.combat-row {
-  display: flex;
-  justify-content: space-around;
-  padding-top: 22px;
-}
-.combat-row figure {
-  gap: 20px;
-}
-.stack-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.stack-captions {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 12px;
+.combat-stack .panel-rule {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 226px;
+  margin: 0;
 }
 
 /* 06 Scry overlay: the real overlay on the table, at 44%. */
@@ -454,6 +435,10 @@
 }
 .hand-card + .hand-card {
   margin-left: -18px;
+}
+/* Hand cards show more art above their type line than a card read whole (battlefield.png). */
+.hand-card .card-art {
+  flex-basis: 8.4em;
 }
 /* A step announcement over the battlefield (combat.png's "Combat / Blockers declared"). */
 .step-banner {
