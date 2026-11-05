@@ -1,6 +1,6 @@
 // The card frame: a name bar colored by the card's colors, art, a P/T badge and, on the full
-// frame, the type line and rules box. Battlefield permanents use the compact `field` frame,
-// which tapping turns without changing.
+// frame, the type line and rules box. Battlefield permanents use the compact `field` frame.
+// Tapping turns either frame whole, never reshaping it.
 import {
   useLayoutEffect,
   useRef,
@@ -43,6 +43,9 @@ export interface CardProps {
   style?: MotionStyle;
   id?: string;
 }
+
+/** How a card turns as it taps or untaps, and its slot with it. */
+const TURN = { type: "spring", stiffness: 260, damping: 26 } as const;
 
 /** Width over height of each frame. */
 export const ASPECT = { full: 63 / 88, field: 1.3 } as const;
@@ -192,28 +195,28 @@ export function Card({
   ]
     .filter(Boolean)
     .join(" ");
-  // Turned a quarter left when tapped. A battlefield card keeps its footprint, as in the mockups:
-  // its frame turns portrait as it rotates, so the name bar runs up the left side. A full card's
-  // slot takes its turned footprint instead, so neighbors make room.
-  const keep = variant === "field";
-  const slot =
-    tapped && !keep ? { width: height, height: width } : { width, height };
-  const frame =
-    tapped && keep ? { width: height, height: width } : { width, height };
+  // Tapped, the whole frame turns a quarter clockwise, as a player turns a card, keeping its
+  // shape: its slot takes the turned footprint, so neighbors make room for it. (On the table,
+  // layout.ts also draws a tapped frame smaller, to stand as tall as its row.)
+  const frame = { width, height };
+  const slot = tapped ? { width: height, height: width } : frame;
   return (
     <motion.div
-      layout
       className="card-slot"
-      style={{ ...slot, fontSize: width / 12, ...style }}
+      style={{ fontSize: width / 12, ...style }}
       id={id}
+      initial={false}
+      animate={slot}
+      transition={TURN}
     >
       {combat === "attacker" && <AttackChevron id={id} />}
       {combat === "blocker" && <BlockArc id={id} />}
       <motion.div
         className={classes}
+        style={frame}
         initial={false}
-        animate={{ rotate: tapped ? -90 : 0, ...frame }}
-        transition={{ type: "spring", stiffness: 260, damping: 26 }}
+        animate={{ rotate: tapped ? 90 : 0 }}
+        transition={TURN}
       >
         <div className="card-rim">
           <div className="card-name-bar">

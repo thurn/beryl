@@ -169,6 +169,7 @@ INTERACTION_FIXTURES = [
     "cast-kicker",
     "pay-default",
     "pay-other",
+    "exiled-beneath",
 ]
 
 

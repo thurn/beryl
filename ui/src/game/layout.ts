@@ -11,6 +11,7 @@ import type {
   Step,
   ZoneName,
 } from "../generated/protocol";
+import { ASPECT } from "../components/Card";
 import type { Phase } from "../components/Controls";
 
 /** The fixed stage the table is drawn on, scaled to fit the window (Stage.tsx). */
@@ -41,6 +42,10 @@ export const CREATURE_WIDTH = 232;
 export const LAND_WIDTH = 180;
 /** Each copy beneath a land stack's top card, as a fraction of the card's width. */
 export const LAND_STEP = { x: 0.103, y: 0.022 };
+/** How far each card exiled by a permanent until it leaves (CR 610.3) peeks out from beneath
+ * it, up and to the left, as a fraction of the permanent's untapped width and height: its whole
+ * name bar shows, where a copy beneath a pile's top card peeks out down and to the left. */
+export const BENEATH_STEP = { x: 0.3, y: 0.17 };
 
 /** The hand's cards: each card's top center lies on an arc over the near edge, and the fan
  * turns each a little more clockwise than the one on its left. */
@@ -64,6 +69,7 @@ export type Look =
   | "back" // a card back: the opponent's hand
   | "field" // a battlefield frame: nonland permanents
   | "land" // a battlefield frame in a land pile
+  | "beneath" // a battlefield frame tucked beneath the permanent that exiled it
   | "stack" // a full frame on the stack
   | "pile" // a full frame on a graveyard
   | "hidden"; // nothing drawn: libraries and exile
@@ -76,6 +82,8 @@ export interface Placement {
   look: Look;
   /** The frame's width before scaling. */
   width: number;
+  /** The width it takes on the table before scaling: a tapped frame's turned height. */
+  span: number;
   x: number;
   y: number;
   scale: number;
@@ -199,10 +207,17 @@ const ACROSS_LEAN = 0.16;
 
 const attacking = (o: ObjectView) => o.combat?.kind === "attacking";
 
-/** Places a thing `width` wide (before its depth scaling) lying on the table at (x, y). */
-function onTable(x: number, y: number, width: number) {
+/** Places a thing `width` wide (before its depth scaling) lying on the table at (x, y), or
+ * reaching `rise` above it (before scaling) while scaled and leaning as if it lay there. */
+function onTable(x: number, y: number, width: number, rise = 0) {
   const scale = depthScale(y);
-  return { x, y, scale, rotate: 0, skew: lean(x + (width * scale) / 2, y) };
+  return {
+    x,
+    y: y - rise * scale,
+    scale,
+    rotate: 0,
+    skew: lean(x + (width * scale) / 2, y),
+  };
 }
 
 /** Places an upright element `width`×`height` whose top-left corner would be (left, top),
@@ -247,6 +262,7 @@ function handPlacements(cards: ObjectView[], tucked: boolean): Placement[] {
       zone: o.zone,
       look: "hand",
       width: FULL_WIDTH,
+      span: FULL_WIDTH,
       opacity: 1,
       z: 200 + i,
       ...turned(left, top, (i - mid) * HAND.turn + HAND.bias, [
@@ -268,6 +284,7 @@ function backPlacements(cards: ObjectView[]): Placement[] {
     zone: o.zone,
     look: "back",
     width: BACK_WIDTH,
+    span: BACK_WIDTH,
     opacity: 1,
     z: 100 + i,
     ...turned(
@@ -352,72 +369,121 @@ function settle(
 }
 
 /** Lands of one name (or tokens of one name), stacked as Player.tsx's LandStack: copies beneath
- * peek out to the left and below; tapped copies lie on top. */
+ * peek out to the left and below. Callers key tapped and untapped copies apart. */
 function piles(objects: ObjectView[], key: (o: ObjectView) => string) {
   const groups = new Map<string, ObjectView[]>();
   for (const o of objects) {
     const k = key(o);
     groups.set(k, [...(groups.get(k) ?? []), o]);
   }
-  return [...groups.values()].map((g) =>
-    [...g].sort((a, b) => Number(a.tapped) - Number(b.tapped)),
-  );
+  return [...groups.values()];
+}
+
+/** How a battlefield frame `width` wide lies on the table, before depth scaling: its frame's
+ * width, and the width it takes. Tapped, it turns a quarter (Card.tsx) whole, shrunk to stand
+ * as tall as it otherwise would, so that its row keeps its height and never reaches into the
+ * next; it takes its turned width. */
+function lying(width: number, tapped: boolean) {
+  const height = width / ASPECT.field;
+  return tapped
+    ? { frame: height, span: height / ASPECT.field }
+    : { frame: width, span: width };
 }
 
 /** One side's battlefield: land piles on the left, other permanents in the middle. A blocker
  * stands across the table from the attacker it blocks among the other side's placements
  * `across`, as combat.png does, an attacker's blockers side by side about its center, so a
  * block reads as a short line; the rest of the row makes room. A row's attackers stand
- * together, first, so that no other permanent lies hidden between two of them. */
+ * together, first, so that no other permanent lies hidden between two of them. The cards each
+ * permanent exiled until it leaves (`beneath`, by its slot) lie tucked under it, and its row
+ * makes room for them to peek out. Each tapped card takes its turned width (`lying`). */
 function battlefieldPlacements(
   side: Side,
   objects: ObjectView[],
   mode: Mode,
   end: number,
   across: Placement[] = [],
+  beneath: Map<number, ObjectView[]> = new Map(),
 ): Placement[] {
   const rows = ROWS[side];
   const lands = objects.filter((o) => o.types.includes("land"));
   const others = objects.filter((o) => !o.types.includes("land"));
   const out: Placement[] = [];
 
-  const landPiles = piles(lands, (o) => o.name ?? `#${o.slot}`);
+  // Each name's untapped lands, then its tapped ones beside them.
+  const name = (o: ObjectView) => o.name ?? `#${o.slot}`;
+  const names = [...new Set(lands.map(name))];
+  const landPiles = piles(
+    [...lands].sort(
+      (a, b) =>
+        names.indexOf(name(a)) - names.indexOf(name(b)) ||
+        Number(a.tapped) - Number(b.tapped),
+    ),
+    (o) => `${name(o)}|${o.tapped}`,
+  );
   const landScale = depthScale(rows.lands.y);
-  const pileWidth = (n: number) =>
-    LAND_WIDTH * (1 + LAND_STEP.x * (n - 1)) * landScale;
+  // Each copy beneath a pile's top card peeks out by a step of its frame's size.
+  const pileWidth = (pile: ObjectView[]) => {
+    const { frame, span } = lying(LAND_WIDTH, pile[0]!.tapped);
+    return (span + frame * LAND_STEP.x * (pile.length - 1)) * landScale;
+  };
   const landXs = row(
-    landPiles.map((p) => pileWidth(p.length)),
+    landPiles.map(pileWidth),
     LAND_GAP * landScale,
     rows.lands.x,
     LANDS_END,
   );
   landPiles.forEach((pile, p) => {
+    const { frame, span } = lying(LAND_WIDTH, pile[0]!.tapped);
     pile.forEach((o, i) => {
       const depth = pile.length - 1 - i;
-      const x = landXs[p]! + i * LAND_WIDTH * LAND_STEP.x * landScale;
-      const y = rows.lands.y + depth * LAND_WIDTH * LAND_STEP.y * landScale;
+      const x = landXs[p]! + i * frame * LAND_STEP.x * landScale;
+      const y = rows.lands.y + depth * frame * LAND_STEP.y * landScale;
       out.push({
         slot: o.slot,
         zone: o.zone,
         look: "land",
-        width: LAND_WIDTH,
+        width: frame,
+        span,
         opacity: 1,
         z: 10 + p * 8 + i,
-        ...onTable(x, y, LAND_WIDTH),
+        ...onTable(x, y, span),
       });
     });
   });
 
   // Identical untouched tokens share a pile, as lands do; everything else stands alone.
   const plain = (o: ObjectView) =>
-    o.token && o.counters.length === 0 && o.damage === 0 && !o.combat;
+    o.token &&
+    o.counters.length === 0 &&
+    o.damage === 0 &&
+    !o.combat &&
+    !beneath.has(o.slot);
   const groups = piles(others, (o) =>
     plain(o) ? `${o.name}|${o.tapped}` : `#${o.slot}`,
   ).sort((a, b) => Number(!attacking(a[0]!)) - Number(!attacking(b[0]!)));
   const scale = depthScale(rows.permanents);
   const width = CREATURE_WIDTH * scale;
-  const groupWidth = (n: number) => width * (1 + LAND_STEP.x * (n - 1));
-  const widths = groups.map((g) => groupWidth(g.length));
+  const height = CREATURE_WIDTH / ASPECT.field;
+  const lies = (o: ObjectView) => lying(CREATURE_WIDTH, o.tapped);
+  // Each copy beneath a token pile's top card peeks out by a step of its frame's size.
+  const step = (o: ObjectView) => {
+    const unit = lies(o).frame * scale;
+    return { x: unit * LAND_STEP.x, y: unit * LAND_STEP.y };
+  };
+  // How far what lies beneath a group's top card peeks out to its left (see below).
+  const tucked = (g: ObjectView[]) => {
+    const top = g[g.length - 1]!;
+    const n = beneath.get(top.slot)?.length ?? 0;
+    const narrower = (CREATURE_WIDTH - lies(top).span) / 2;
+    return n === 0
+      ? 0
+      : (n * CREATURE_WIDTH * BENEATH_STEP.x + narrower) * scale;
+  };
+  const widths = groups.map(
+    (g) =>
+      lies(g[0]!).span * scale + step(g[0]!).x * (g.length - 1) + tucked(g),
+  );
   const gap = PERMANENT_GAP[mode] * width;
   const start = OPEN.start;
   const xs = row(widths, gap, start, end, STAGE.width / 2);
@@ -433,7 +499,7 @@ function battlefieldPlacements(
   for (const [attacker, blockers] of blocking) {
     const a = attackers.get(attacker)!;
     // Across the table, a little toward its middle, as combat.png's perspective draws it.
-    const below = a.x + (a.width * a.scale) / 2;
+    const below = a.x + (a.span * a.scale) / 2;
     const center = below + (STAGE.width / 2 - below) * ACROSS_LEAN;
     blockers.forEach((slot, i) => {
       const offset = (i - (blockers.length - 1) / 2) * width * 1.04;
@@ -453,22 +519,48 @@ function battlefieldPlacements(
   const forward = side === "you" ? -ADVANCE : ADVANCE;
   order.forEach((g, k) => {
     const group = groups[g]!;
+    const left = lefts[k]! + tucked(group);
     group.forEach((o, i) => {
       const depth = group.length - 1 - i;
-      const x = lefts[k]! + i * width * LAND_STEP.x;
+      const x = left + i * step(o).x;
       const y =
         rows.permanents +
-        depth * width * LAND_STEP.y +
+        depth * step(o).y +
         (o.combat?.kind === "attacking" ? forward : 0);
+      // Combat's creatures over their neighbors, so their marks show.
+      const z = 40 + k * 8 + i + (o.combat ? 60 : 0);
+      const { frame, span } = lies(o);
       out.push({
         slot: o.slot,
         zone: o.zone,
         look: "field",
-        width: CREATURE_WIDTH,
+        width: frame,
+        span,
         opacity: 1,
-        // Combat's creatures over their neighbors, so their marks show.
-        z: 40 + k * 8 + i + (o.combat ? 60 : 0),
-        ...onTable(x, y, CREATURE_WIDTH),
+        z,
+        ...onTable(x, y, span),
+      });
+      // Untapped, each a step further up and to the left, centered on the permanent.
+      const center = x + (span * scale) / 2;
+      beneath.get(o.slot)?.forEach((e, j) => {
+        const n = j + 1;
+        out.push({
+          slot: e.slot,
+          zone: e.zone,
+          look: "beneath",
+          width: CREATURE_WIDTH,
+          span: CREATURE_WIDTH,
+          opacity: 1,
+          z: z - n,
+          ...onTable(
+            center -
+              (CREATURE_WIDTH / 2 + n * CREATURE_WIDTH * BENEATH_STEP.x) *
+                scale,
+            y,
+            CREATURE_WIDTH,
+            n * height * BENEATH_STEP.y,
+          ),
+        });
       });
     });
   });
@@ -499,6 +591,12 @@ export function layout(
     objects.filter((o) => o.owner === side && o.zone === zone);
   const bySlot = new Map(objects.map((o) => [o.slot, o]));
   const permanents = view.battlefield.flatMap((s) => bySlot.get(s) ?? []);
+  // The cards each permanent exiled until it leaves (CR 610.3), by the permanent's slot.
+  const beneath = new Map<number, ObjectView[]>();
+  for (const o of objects) {
+    if (o.zone !== "exile" || o.exiledBy === null) continue;
+    beneath.set(o.exiledBy, [...(beneath.get(o.exiledBy) ?? []), o]);
+  }
 
   out.push(...handPlacements(owned("you", "hand"), tucked));
   out.push(...backPlacements(owned("opponent", "hand")));
@@ -515,20 +613,26 @@ export function layout(
       mode,
       end,
       across,
+      beneath,
     );
   const yours = field("you", field("opponent"));
   out.push(...yours, ...field("opponent", yours));
+  const placedBeneath = new Set(
+    out.filter((p) => p.look === "beneath").map((p) => p.slot),
+  );
   for (const side of ["opponent", "you"] as const) {
     const player = view.players[side];
     const library = pileLook(PILES[side].library, player.library.length);
     const graveyard = pileLook(PILES[side].graveyard, player.graveyard.length);
-    // Library cards wait, unseen, on their library; exiled cards fade out over the graveyard.
+    // Library cards wait, unseen, on their library; exiled cards not beneath a permanent fade
+    // out over the graveyard.
     for (const o of owned(side, "library")) {
       out.push({
         slot: o.slot,
         zone: o.zone,
         look: "hidden",
         width: FULL_WIDTH,
+        span: FULL_WIDTH,
         opacity: 0,
         z: 1,
         ...onPile(library),
@@ -542,17 +646,20 @@ export function layout(
         zone: o.zone,
         look: "pile",
         width: FULL_WIDTH,
+        span: FULL_WIDTH,
         opacity: 1,
         z: 20 + i,
         ...onPile(graveyard),
       });
     });
     for (const o of owned(side, "exile")) {
+      if (placedBeneath.has(o.slot)) continue;
       out.push({
         slot: o.slot,
         zone: o.zone,
         look: "hidden",
         width: FULL_WIDTH,
+        span: FULL_WIDTH,
         opacity: 0,
         z: 1,
         ...onPile(graveyard, 0.6),
@@ -570,6 +677,7 @@ export function layout(
       zone: o.zone,
       look: "stack",
       width: FULL_WIDTH,
+      span: FULL_WIDTH,
       opacity: 1,
       z: STACK_Z + i,
       x: place.x,

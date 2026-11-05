@@ -15,7 +15,7 @@ export function useTextFit(text: string) {
       el.style.removeProperty("--fit");
       // scrollWidth and clientWidth round to whole pixels, so a text overflowing by less than
       // one would not shrink: also compare the unrounded on-screen lengths of the text
-      // and its box, along whichever screen axis the text runs (a tapped card's runs up).
+      // and its box, along whichever screen axis the text runs (a tapped card's runs down).
       const text = document.createRange();
       text.selectNodeContents(el);
       const [t, n] = [text.getBoundingClientRect(), el.getBoundingClientRect()];

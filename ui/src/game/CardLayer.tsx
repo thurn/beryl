@@ -347,7 +347,8 @@ function Look({
   if (place.look === "back" || object.name === null) {
     return <CardBack width={place.width} />;
   }
-  const field = place.look === "field" || place.look === "land";
+  const field =
+    place.look === "field" || place.look === "land" || place.look === "beneath";
   const combat = field ? object.combat?.kind : undefined;
   const card_ = (
     <Card
@@ -369,6 +370,7 @@ function Look({
         [
           state.playable && !state.highlight && "card-playable",
           state.paying && "card-paying",
+          place.look === "beneath" && "card-under",
         ]
           .filter(Boolean)
           .join(" ") || undefined

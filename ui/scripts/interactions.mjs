@@ -823,6 +823,107 @@ await check(
     },
 );
 
+// A table with tapped and untapped lands and creatures, and a card Aang's Iceberg exiled.
+const beneathViews = await load("exiled-beneath");
+const beneathView = beneathViews.at(-1);
+const onField = beneathView.objects.filter((o) => o.zone === "battlefield");
+const exiled = beneathView.objects.find(
+    (o) => o.zone === "exile" && o.exiledBy !== null,
+);
+assert.ok(exiled, "the exiled-beneath fixture has a card exiled beneath");
+for (const [kind, tapped] of [
+    ["land", true],
+    ["land", false],
+    ["creature", true],
+]) {
+    assert.ok(
+        onField.some((o) => o.types.includes(kind) && o.tapped === tapped),
+        `the exiled-beneath fixture has ${tapped ? "a tapped" : "an untapped"} ${kind}`,
+    );
+}
+const beneathRun = {
+    fixture: "exiled-beneath",
+    at: beneathViews.length,
+    ready: `[data-slot="${exiled.slot}"]`,
+};
+
+await check(
+    "a tapped card turns whole, keeping its frame's shape",
+    async (page) => {
+        await page.clock.runFor(2000);
+        for (const o of onField) {
+            const { frame, turn, slot } = await page
+                .locator(`[data-slot="${o.slot}"] .card`)
+                .evaluate((card) => {
+                    // Unrounded, untransformed sizes.
+                    const aspect = (e) => {
+                        const style = getComputedStyle(e);
+                        return (
+                            parseFloat(style.width) / parseFloat(style.height)
+                        );
+                    };
+                    const m = new DOMMatrix(getComputedStyle(card).transform);
+                    return {
+                        frame: aspect(card),
+                        turn: (Math.atan2(m.b, m.a) * 180) / Math.PI,
+                        slot: aspect(card.parentElement),
+                    };
+                });
+            const what = `${o.name} (${o.tapped ? "tapped" : "untapped"})`;
+            assert.ok(
+                Math.abs(frame - 1.3) < 0.01,
+                `${what}'s frame is ${frame} wide for its height`,
+            );
+            assert.ok(
+                Math.abs(turn - (o.tapped ? 90 : 0)) < 0.5,
+                `${what} is turned ${turn}°`,
+            );
+            assert.ok(
+                Math.abs(slot - (o.tapped ? 1 / 1.3 : 1.3)) < 0.01,
+                `${what} takes a footprint ${slot} wide for its height`,
+            );
+        }
+        await assertClearOfLands(page);
+    },
+    beneathRun,
+);
+
+await check(
+    "a card exiled by a permanent peeks out from beneath it, previewed on hover",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const under = page.locator(`[data-slot="${exiled.slot}"]`);
+        const host = page.locator(`[data-slot="${exiled.exiledBy}"]`);
+        const [mine, theirs] = [
+            await under.boundingBox(),
+            await host.boundingBox(),
+        ];
+        assert.ok(
+            mine.x < theirs.x && mine.y < theirs.y,
+            `${exiled.name} peeks out up and to the left of what exiled it`,
+        );
+        const z = (l) => l.evaluate((e) => Number(getComputedStyle(e).zIndex));
+        assert.ok((await z(under)) < (await z(host)), "it lies beneath");
+        // Its peeking strip, left of what exiled it.
+        const at = { x: (mine.x + theirs.x) / 2, y: mine.y + mine.height / 2 };
+        assert.equal(
+            await page.evaluate(
+                ({ x, y }) =>
+                    document.elementFromPoint(x, y)?.closest("[data-slot]")
+                        ?.dataset.slot,
+                at,
+            ),
+            String(exiled.slot),
+            "its strip shows",
+        );
+        await page.mouse.move(at.x, at.y);
+        await page.waitForSelector(
+            `.inspect[aria-label="${exiled.name}, inspected"]`,
+        );
+    },
+    beneathRun,
+);
+
 /** Drags a hand card by `by`: hovered first, so it rises clear of its neighbors in the fan,
  * then picked up there. */
 async function dragFromHand(page, selector, by) {

@@ -136,13 +136,15 @@ enum Condition {
     /// The human may play or cast a card from their hand of which they hold another just like
     /// it, which the engine offers as one candidate for both (architecture §7.2).
     PlayablePair,
+    /// A card lies in exile beneath the permanent that exiled it until it leaves (CR 610.3).
+    ExiledBeneath,
 }
 
 impl Condition {
     /// Parses "step <step>" (as the protocol names steps: "declareBlockers"), "attacking",
     /// "blocking", "targeted trigger on the stack", "opponent's spell on the stack" or
-    /// "castable <card name>", "resolving <card name>", "casting <card name>" or "playable
-    /// pair in hand".
+    /// "castable <card name>", "resolving <card name>", "casting <card name>", "playable
+    /// pair in hand" or "exiled beneath a permanent".
     fn parse(text: &str) -> Result<Condition, String> {
         let condition = match text {
             "attacking" => Condition::Attacking,
@@ -150,6 +152,7 @@ impl Condition {
             "targeted trigger on the stack" => Condition::TargetedTrigger,
             "opponent's spell on the stack" => Condition::OpponentsSpell,
             "playable pair in hand" => Condition::PlayablePair,
+            "exiled beneath a permanent" => Condition::ExiledBeneath,
             _ => {
                 if let Some(step) = text.strip_prefix("step ") {
                     Condition::Step(
@@ -246,6 +249,14 @@ impl Condition {
                 }),
                 _ => false,
             },
+            Condition::ExiledBeneath => view.objects.iter().any(|o| {
+                o.zone == ZoneName::Exile
+                    && o.exiled_by.is_some_and(|host| {
+                        view.objects
+                            .iter()
+                            .any(|h| h.slot == host && h.zone == ZoneName::Battlefield)
+                    })
+            }),
         }
     }
 }
@@ -409,6 +420,10 @@ mod tests {
         assert_eq!(
             Condition::parse("playable pair in hand"),
             Ok(Condition::PlayablePair)
+        );
+        assert_eq!(
+            Condition::parse("exiled beneath a permanent"),
+            Ok(Condition::ExiledBeneath)
         );
         assert!(Condition::parse("step lunch").is_err());
         assert!(Condition::parse("raining").is_err());

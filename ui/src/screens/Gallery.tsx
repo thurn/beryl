@@ -217,8 +217,9 @@ function CardsAndStates() {
       <At x={24} y={55}>
         <Card card={SAMPLE.infernoTitan} variant="field" width={152} />
       </At>
-      <At x={194} y={80}>
-        <Card card={SAMPLE.mountain} variant="field" width={126} tapped />
+      {/* Shrunk as the table shrinks a tapped card, to stand as tall as it lay untapped. */}
+      <At x={226} y={70}>
+        <Card card={SAMPLE.mountain} variant="field" width={97} tapped />
       </At>
       <At x={337} y={61}>
         <Card card={SAMPLE.plains} variant="field" width={101} />

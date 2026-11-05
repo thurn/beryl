@@ -132,6 +132,12 @@
       "height": 1080
     },
     {
+      "name": "game-tapped-beneath",
+      "route": "/?fixture=exiled-beneath#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
       "name": "game-late",
       "route": "/?fixture=late-game#/game",
       "width": 1600,
