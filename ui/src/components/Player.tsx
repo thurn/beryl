@@ -138,8 +138,8 @@ export function LifeOrb({
             <stop offset="1" stopColor="#4f453c" />
           </linearGradient>
           <linearGradient id="orb-rim" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#ebe7e1" />
-            <stop offset="0.5" stopColor="#8c8780" />
+            <stop offset="0" stopColor="#b9b4ae" />
+            <stop offset="0.5" stopColor="#77726c" />
             <stop offset="1" stopColor="#3a3633" />
           </linearGradient>
           <radialGradient id="orb-core" cx="0.5" cy="0.32" r="0.7">
@@ -153,8 +153,9 @@ export function LifeOrb({
             r="100"
             gradientUnits="userSpaceOnUse"
           >
-            <stop offset="0.35" stopColor="#ffe08a" />
-            <stop offset="0.5" stopColor="#ff8410" />
+            <stop offset="0.35" stopColor="#fff8d8" />
+            <stop offset="0.48" stopColor="#ffd060" />
+            <stop offset="0.62" stopColor="#ff8410" />
             <stop offset="1" stopColor="#f2560c" stopOpacity="0" />
           </radialGradient>
           <filter id="orb-blur" x="-50%" y="-50%" width="200%" height="200%">
@@ -198,6 +199,16 @@ export function LifeOrb({
           filter="url(#orb-blur)"
         />
         <path className="life-orb-ring" d={blades.ring} />
+        {active && (
+          <ellipse
+            className="life-orb-bloom"
+            cx="0"
+            cy={core.cy - core.ry}
+            rx="18"
+            ry="7"
+            filter="url(#orb-blur)"
+          />
+        )}
         {active && (
           <path
             className="life-orb-crescent"

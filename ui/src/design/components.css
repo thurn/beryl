@@ -641,8 +641,8 @@
 }
 .land-count {
   position: absolute;
-  right: 0.35em;
-  bottom: -0.3em;
+  right: 0;
+  bottom: 0.38em;
   padding: 0.05em 0.4em;
   border-radius: 0.3em;
   font-family: var(--font-serif);
@@ -1183,6 +1183,9 @@
   stroke: #ff9a20;
   stroke-width: 12;
 }
+.life-orb-bloom {
+  fill: #fff6dc;
+}
 .life-orb-crescent {
   fill: none;
   stroke: #ffe28a;
@@ -1191,8 +1194,8 @@
 }
 /* The far orb's ring is dull copper. */
 .life-orb-opponent .life-orb-ring {
-  stroke: #ff9f3e;
-  stroke-width: 4;
+  stroke: #f59a42;
+  stroke-width: 2.5;
 }
 .life-orb-opponent .life-orb-ring-glow {
   stroke: #d8651a;

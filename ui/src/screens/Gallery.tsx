@@ -156,7 +156,7 @@ function PlayerAndZones() {
         <Graveyard
           cards={[SAMPLE.counterspell, a(SAMPLE.doomBlade, "03-graveyard")]}
           width={98}
-          height={123}
+          height={138}
           depth={{ x: -12, y: 15, twist: -4 }}
         />
       </At>
