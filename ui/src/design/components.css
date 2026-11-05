@@ -926,6 +926,12 @@
 .phase-current .phase-icon path {
   fill: none;
 }
+.phase .phase-blade {
+  fill: #2c2825;
+}
+.phase-current .phase-icon .phase-blade {
+  fill: #ffe9b8;
+}
 /* Spaced as in the mockup, which is not quite even. */
 .phase-arrow {
   width: 9px;
@@ -997,6 +1003,7 @@
   position: relative;
 }
 .phase-tracker-compact .phase-icon {
+  position: relative;
   width: 34.5px;
   height: 34.5px;
   fill: #1b1713;
@@ -1020,8 +1027,7 @@
   .phase-icon {
   stroke: #f2c060;
   stroke-width: 1.4;
-  filter: drop-shadow(0 0 1.5px rgb(255 190 80 / 80%))
-    drop-shadow(0 0 4px rgb(245 140 30 / 60%));
+  filter: drop-shadow(0 0 2px rgb(255 180 60 / 70%));
 }
 .phase-tracker-compact .phase-current .phase-icon :is(path, circle) {
   fill: url(#phase-glow);
@@ -1029,13 +1035,14 @@
 .phase-tracker-compact
   .phase-current:not(:first-child, :last-child)
   .phase-icon {
-  stroke: #9a6a1c;
+  stroke: #b35e14;
+  stroke-width: 1.2;
 }
 .phase-tracker-compact
   .phase-current:not(:first-child, :last-child)
   .phase-icon
   :is(path, circle, rect) {
-  fill: #fbd877;
+  fill: #f6c04a;
 }
 /* The combat glyph's plinth catches the glow when combat is current. */
 .phase-tracker-compact .phase-current:nth-child(3)::before {
@@ -1071,7 +1078,7 @@
   bottom: -2px;
   height: 10px;
   clip-path: polygon(0 100%, 18% 0, 82% 0, 100% 100%);
-  background: rgb(190 180 166 / 22%);
+  background: rgb(190 180 166 / 32%);
 }
 
 /* Life orbs, drawn in mockup pixels (Player.tsx); --orb scales one to CSS pixels. */
@@ -1289,17 +1296,19 @@
 }
 .overlay-confirm {
   margin-top: 52px;
-  translate: -4px 0;
+  translate: -6.5px 0;
   min-width: 0;
-  width: 275px;
+  width: 280px;
   height: 61px;
   padding-bottom: 3px;
+  border-width: 3px;
+  border-color: #fffbe8 #ffe6a0 #fffbe8;
   box-shadow:
     inset 0 2px 2px rgb(253 202 87 / 85%),
     inset 0 0 8px rgb(255 190 80 / 45%),
     0 0 0 1px rgb(178 40 4 / 85%),
-    0 0 6px 3px rgb(255 100 20 / 85%),
-    0 0 14px 5px rgb(226 70 16 / 45%);
+    0 0 10px 5px rgb(255 100 20 / 85%),
+    0 0 22px 9px rgb(226 70 16 / 50%);
   font-size: 39.5px;
 }
 .overlay-side {

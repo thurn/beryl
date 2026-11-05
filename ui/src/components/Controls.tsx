@@ -129,15 +129,25 @@ const PHASES: {
     phase: "combat",
     label: "Combat",
     icon: (
-      <g transform="translate(12 11) scale(1.1) translate(-12 -12)">
-        <path d="M1.5 1.5 L5 2.4 L15.2 12.6 L12.6 15.2 L2.4 5 Z M11 18.6 L18.6 11 M15.6 15.6 L19.4 19.4" />
-        <path d="M22.5 1.5 L19 2.4 L8.8 12.6 L11.4 15.2 L21.6 5 Z M13 18.6 L5.4 11 M8.4 15.6 L4.6 19.4" />
+      <g transform="translate(12 12) scale(1.1) translate(-12 -12)">
+        <path
+          className="phase-blade"
+          d="M2.5 2.5 L4.9 3.3 L16.3 14.7 L14.7 16.3 L3.3 4.9 Z"
+        />
+        <path d="M13 19 L19 13 M16.5 16.5 L19.6 19.6" />
+        <circle className="phase-blade" cx="20.6" cy="20.6" r="0.9" />
+        <path
+          className="phase-blade"
+          d="M21.5 2.5 L19.1 3.3 L7.7 14.7 L9.3 16.3 L20.7 4.9 Z"
+        />
+        <path d="M11 19 L5 13 M7.5 16.5 L4.4 19.6" />
+        <circle className="phase-blade" cx="3.4" cy="20.6" r="0.9" />
       </g>
     ),
     glyph: (
-      <g transform="translate(12 12.5) scale(1.08) translate(-12 -12)">
-        <path d="M2 2 L8.6 3.6 L16.4 11.4 L11.4 16.4 L3.6 8.6 Z M9.4 17.6 L17.6 9.4 L19.8 11.6 L11.6 19.8 Z M15.2 17.6 L17.6 15.2 L20.4 18 L18 20.4 Z M19 21.4 L21.4 19 L22.8 20.4 L20.4 22.8 Z" />
-        <path d="M22 2 L15.4 3.6 L7.6 11.4 L12.6 16.4 L20.4 8.6 Z M14.6 17.6 L6.4 9.4 L4.2 11.6 L12.4 19.8 Z M8.8 17.6 L6.4 15.2 L3.6 18 L6 20.4 Z M5 21.4 L2.6 19 L1.2 20.4 L3.6 22.8 Z" />
+      <g transform="translate(12 12) scale(1.08) translate(-12 -12)">
+        <path d="M2 2 L7.2 3.2 L16 12 L12 16 L3.2 7.2 Z M9.4 17.6 L17.6 9.4 L19.8 11.6 L11.6 19.8 Z M15.2 17.6 L17.6 15.2 L20.4 18 L18 20.4 Z M19 21.4 L21.4 19 L22.8 20.4 L20.4 22.8 Z" />
+        <path d="M22 2 L16.8 3.2 L8 12 L12 16 L20.8 7.2 Z M14.6 17.6 L6.4 9.4 L4.2 11.6 L12.4 19.8 Z M8.8 17.6 L6.4 15.2 L3.6 18 L6 20.4 Z M5 21.4 L2.6 19 L1.2 20.4 L3.6 22.8 Z" />
       </g>
     ),
   },

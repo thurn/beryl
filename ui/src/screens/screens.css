@@ -357,29 +357,19 @@
   position: relative;
   height: 2px;
 }
-/* Gold catches the light in the middle: a hot core and an ember glow around it. */
+/* Gold catches the light: amber at the ends, white-hot through the middle, in a faint warm haze. */
 .metal-gold {
   background: linear-gradient(
     90deg,
-    #e2bb84,
-    #ecc995 42%,
+    #d2a364,
+    #e6b878 25%,
+    #fff2cf 40%,
     #fffbe6 50%,
-    #ecc995 58%,
-    #e2bb84
+    #fff2cf 60%,
+    #e6b878 75%,
+    #d2a364
   );
-  box-shadow: 0 1px 0 rgb(0 0 0 / 45%);
-}
-.metal-gold::after {
-  content: "";
-  position: absolute;
-  inset: -3px 41%;
-  background: radial-gradient(
-    closest-side,
-    rgb(255 246 214),
-    rgb(255 170 70 / 85%) 30%,
-    rgb(220 110 30 / 35%) 65%,
-    transparent
-  );
+  box-shadow: 0 0 5px 2px rgb(150 85 30 / 35%);
 }
 .metal-silver {
   background: linear-gradient(
