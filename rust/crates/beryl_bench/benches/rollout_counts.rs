@@ -7,6 +7,7 @@
 use {
     beryl_bench::rollout::{self, Workload},
     gungraun::prelude::*,
+    gungraun::{Callgrind, EntryPoint},
     std::hint::black_box,
 };
 
@@ -40,8 +41,17 @@ fn policy(w: Workload) -> u64 {
     black_box(rollout::decide(&w.table, black_box(&w.samples), &w.policy))
 }
 
+// Counted from `rollout` itself, not this function: the setup's own rollouts leave Callgrind's
+// call stack thinking a `rollout` is still running, so entering one here would unwind past
+// this function and stop collection. The copies left out are `copy`'s.
 #[cfg(target_os = "linux")]
-#[library_benchmark]
+#[library_benchmark(
+    config = LibraryBenchmarkConfig::default().tool(
+        Callgrind::default().entry_point(EntryPoint::Custom(
+            "beryl_search::rollout::rollout".to_owned()
+        ))
+    )
+)]
 #[bench::corpus(Workload::new())]
 fn rollouts(w: Workload) -> u64 {
     let (mut x, mut s) = w.memory();

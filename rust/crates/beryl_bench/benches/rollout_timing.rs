@@ -14,10 +14,12 @@ fn cube_rollout(c: &mut Criterion) {
     let w = Workload::new();
     let summary = w.summary;
     println!(
-        "cube rollout: {} positions, {} rollouts; {:.1} decisions per rollout, {:.2} per turn, \
-         and {:.2} inline questions per decision",
+        "cube rollout: {} positions, {} rollouts, {} decisions ({} sampled for the policy); \
+         {:.1} decisions per rollout, {:.2} per turn, {:.2} inline questions per decision",
         w.starts.len() as u64 / rollout::ROLLOUTS,
         summary.rollouts,
+        summary.decisions,
+        w.samples.len(),
         summary.decisions_per_rollout(),
         summary.decisions_per_turn(),
         summary.inline as f64 / summary.decisions as f64,
