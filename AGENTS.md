@@ -125,6 +125,8 @@ acceptance, never reported-only ones.
 ## Workflow
 
 - When launching more than one subagent at a time, please always use Sonnet.
+- When designing a UI, reduce the amount of words you put on screen by at least
+  50%.
 
 ## Conventions
 
