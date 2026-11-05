@@ -1084,14 +1084,20 @@ Observation, so each event is in exactly one view. Under the smart stops the
 session also halts the human at the start of their precombat main phase and of
 the opponent's end step when the engine would pass their priority for them: a
 priority decision whose only candidate is to pass, which neither the engine's
-profile nor the agent sees, and which the replay records. At the human's
-decision the session waits for one `choose(decision, index)` command, naming the
-decision id it received; the session's record of the open decision is the one
-place an answer is checked. AI decisions run on the session thread, and a search
-may use a pool, so IPC never blocks. The webview never sees a `State`. Every
-session records seed, decklists and the choice log as a replay file. The
-protocol's TypeScript types are generated from the Rust types, and
-`ui/src/ipc.ts` keeps the typed wrappers for the commands and events.
+profile nor the agent sees, and which the replay records. It also answers two
+kinds of the human's decisions for them under the smart stops, and the replay
+records each answer: it passes their priority while their own spell or ability
+is on top and only their own entries came onto the stack or left it since their
+last answer in the step, and it orders their simultaneous triggers so that plain
+effects resolve first, then triggers with targets, then those that ask a
+question as they resolve. The exact stops ask both. At the human's decision the
+session waits for one `choose(decision, index)` command, naming the decision id
+it received; the session's record of the open decision is the one place an
+answer is checked. AI decisions run on the session thread, and a search may use
+a pool, so IPC never blocks. The webview never sees a `State`. Every session
+records seed, decklists and the choice log as a replay file. The protocol's
+TypeScript types are generated from the Rust types, and `ui/src/ipc.ts` keeps
+the typed wrappers for the commands and events.
 
 The human plays under the smart stops of §15 by default. A setting switches to
 the exact profile, which offers every priority. Milestone 1 offers a game

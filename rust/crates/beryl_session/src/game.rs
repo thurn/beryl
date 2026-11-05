@@ -1,17 +1,19 @@
 //! A game between a human seat and an agent, played synchronously: the core a session runs on
 //! its thread, and that tests drive directly. It plays on view by view ([`Game::next_view`]):
 //! as each step of the turn begins, before each of the agent's decisions, at each of the
-//! human's, and at the end, so the human sees the agent's turn as it is played.
+//! human's, and at the end, so the human sees the agent's turn as it is played. Under the
+//! smart stops the session also answers two kinds of the human's decisions for them
+//! ([`Game::auto_answer`]).
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use beryl_engine::event::Event;
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::state::Pending;
+use beryl_engine::state::{Pending, StackEntry};
 use beryl_engine::{
-    CardTable, Choice, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch, Seat,
-    State, Step, TurnStep, apply, next_in_step, observe, view,
+    Candidates, CardTable, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome,
+    Profile, Replay, Scratch, Seat, State, Step, TurnStep, apply, next_in_step, observe, view,
 };
 use beryl_search::{Agent, Budget};
 
@@ -114,6 +116,9 @@ pub struct Game {
     at: At,
     /// The turn and step the latest view began, or the game's first.
     seen: (u16, TurnStep),
+    /// The stack as it was once the human's latest answer was applied, if they answered in
+    /// this step: what they know of it ([`Game::own_top`]).
+    answered: Option<Vec<StackEntry>>,
     seq: u32,
     stops: StopsSetting,
     replay: ReplayFile,
@@ -148,6 +153,7 @@ impl Game {
         let turn = state.turn();
         Ok(Game {
             seen: (turn.number, turn.step),
+            answered: None,
             table,
             state,
             scratch: Scratch::recording(),
@@ -189,7 +195,12 @@ impl Game {
         let bad = |what: &str| SessionError::BadReplay {
             reason: what.to_owned(),
         };
-        let mut log = file.log.iter().copied();
+        // The session's own answers are found again as it plays on.
+        let mut log = file
+            .log
+            .iter()
+            .copied()
+            .filter(|e| !matches!(e, Entry::Auto(_)));
         loop {
             if matches!(game.at, At::Playing) {
                 game.play_on();
@@ -206,7 +217,7 @@ impl Game {
             game.scratch.events.drain();
             match (game.at, entry) {
                 (At::Agent(d), Entry::Choice(c)) if usize::from(c) < d.len() => {
-                    game.apply(Choice(c));
+                    game.apply(entry);
                     game.at = At::Playing;
                 }
                 (At::Human(..), Entry::Stops(stops)) => game.change_stops(stops),
@@ -224,6 +235,9 @@ impl Game {
                 }
             }
         }
+        if game.replay.log != file.log {
+            return Err(bad("the session's own answers differ from the record's"));
+        }
         let view = game.view();
         Ok((game, view))
     }
@@ -240,7 +254,7 @@ impl Game {
             At::Agent(d) => {
                 let obs = observe(&self.state, &self.table, &mut self.scratch, d.player);
                 let c = self.agent.choose(obs, &d);
-                self.apply(c);
+                self.apply(Entry::Choice(c.0));
                 self.at = At::Playing;
                 self.play_on();
             }
@@ -271,9 +285,10 @@ impl Game {
         };
         debug_assert_eq!(id, answer.id, "an answer names the open decision");
         match open {
-            Open::Decision(_) => self.apply(answer.choice),
+            Open::Decision(_) => self.apply(Entry::Choice(answer.choice.0)),
             Open::Halt => self.replay.log.push(Entry::Halt),
         }
+        self.answered = Some(self.state.stack().to_vec());
         self.at = At::Playing;
     }
 
@@ -341,31 +356,82 @@ impl Game {
     /// the human may be halted, a decision, or the end.
     fn play_on(&mut self) {
         debug_assert!(matches!(self.at, At::Playing));
-        let step = next_in_step(
-            &mut self.state,
-            &self.table,
-            &mut self.scratch,
-            &mut Replay,
-            self.seen,
-        );
-        self.at = match step {
-            None => {
-                let turn = self.state.turn();
-                self.seen = (turn.number, turn.step);
-                if self.halts() {
-                    self.seq += 1;
-                    At::Human(self.decision_id(), Open::Halt)
-                } else {
-                    At::Playing
+        loop {
+            let step = next_in_step(
+                &mut self.state,
+                &self.table,
+                &mut self.scratch,
+                &mut Replay,
+                self.seen,
+            );
+            self.at = match step {
+                None => {
+                    let turn = self.state.turn();
+                    self.seen = (turn.number, turn.step);
+                    self.answered = None;
+                    if self.halts() {
+                        self.seq += 1;
+                        At::Human(self.decision_id(), Open::Halt)
+                    } else {
+                        At::Playing
+                    }
                 }
+                Some(Step::Over(outcome)) => At::Over(outcome),
+                Some(Step::Decide(d)) if d.player == self.human => {
+                    if let Some(c) = self.auto_answer(&d) {
+                        self.apply(Entry::Auto(c.0));
+                        self.answered = Some(self.state.stack().to_vec());
+                        continue;
+                    }
+                    self.seq += 1;
+                    At::Human(self.decision_id(), Open::Decision(d))
+                }
+                Some(Step::Decide(d)) => At::Agent(d),
+            };
+            return;
+        }
+    }
+
+    /// The session's own answer to the human's decision `d`, if it gives one: under the
+    /// smart stops, it passes their priority while only their own doings sit on the stack
+    /// ([`Game::own_top`]), and orders their simultaneous triggers ([`trigger_to_stack`]).
+    /// Like halts, these are the session's alone: the engine's smart stops, which the agent's
+    /// search shares, are unchanged, and exact stops ask every one. A function of the position,
+    /// the stops and the human's answers, so a replay finds each again; the replay records
+    /// each as an [`Entry::Auto`].
+    fn auto_answer(&self, d: &Decision) -> Option<Choice> {
+        if self.stops != StopsSetting::Smart {
+            return None;
+        }
+        match d.kind {
+            DecisionKind::Priority if self.own_top() => {
+                debug_assert_eq!(d.candidates.option(Choice(0)), Some(Opt::Pass));
+                Some(Choice(0))
             }
-            Some(Step::Over(outcome)) => At::Over(outcome),
-            Some(Step::Decide(d)) if d.player == self.human => {
-                self.seq += 1;
-                At::Human(self.decision_id(), Open::Decision(d))
-            }
-            Some(Step::Decide(d)) => At::Agent(d),
+            DecisionKind::TriggerOrder => Some(trigger_to_stack(&self.state, &self.table, d)),
+            _ => None,
+        }
+    }
+
+    /// Whether the top of the stack is the human's own spell or ability and, since their
+    /// latest answer in this step, nothing but their own entries came onto the stack or left
+    /// it: what they cast, its triggers, and its resolution, but not an opponent's response
+    /// or its resolution, which they get priority to see and answer. Their priority then
+    /// would only let them respond to themselves, as an Arena player auto-passes.
+    fn own_top(&self) -> bool {
+        let Some(answered) = &self.answered else {
+            return false;
         };
+        let now = self.state.stack();
+        let own = |e: &StackEntry| e.controller == self.human;
+        let kept = answered
+            .iter()
+            .zip(now)
+            .take_while(|(then, now)| then == now)
+            .count();
+        now.last().is_some_and(own)
+            && answered[kept..].iter().all(own)
+            && now[kept..].iter().all(own)
     }
 
     /// Whether the human is halted as the step that just began, a session-level stop the
@@ -414,14 +480,18 @@ impl Game {
         }
     }
 
-    fn apply(&mut self, c: Choice) {
-        self.replay.log.push(Entry::Choice(c.0));
+    /// Records `entry`, an answer, and applies it.
+    fn apply(&mut self, entry: Entry) {
+        let (Entry::Choice(c) | Entry::Auto(c)) = entry else {
+            unreachable!("only an answer is applied");
+        };
+        self.replay.log.push(entry);
         apply(
             &mut self.state,
             &self.table,
             &mut self.scratch,
             &mut Replay,
-            c,
+            Choice(c),
         );
     }
 
@@ -464,6 +534,46 @@ fn new_agent(name: &str, t: &GameTable, seed: u64) -> Result<Box<dyn Agent + Sen
         name: name.to_owned(),
     })?;
     Ok((agent.new)(t, seed, Budget::DEFAULT))
+}
+
+/// Which of the human's waiting triggers to put on the stack next, under the smart stops. Each
+/// pick goes on the stack above the ones before, so the first picked resolves last
+/// ([CR 603.3b](https://yawgatog.com/resources/magic-rules/#R6033b): "each player, in APNAP
+/// order, puts each triggered ability they control with a trigger condition that has been
+/// met on the stack in any order they choose").
+///
+/// The heuristic, by what the engine knows of each ability, resolves:
+///
+/// 1. first, the triggers with neither targets nor a question as they resolve: plain effects
+///    (cards, tokens, counters, life, a sacrifice), whose results the others may act on;
+/// 2. then the ones with targets, which were chosen as they went on the stack (CR 603.3d);
+/// 3. last, the ones that ask their controller something as they resolve, so the answer is
+///    made seeing everything the others did;
+///
+/// and, within each group, in the order they triggered.
+fn trigger_to_stack(s: &State, t: &GameTable, d: &Decision) -> Choice {
+    let resolves_late = |opt: Opt| {
+        let Opt::Trigger(i) = opt else {
+            unreachable!("a trigger-order decision offers only triggers");
+        };
+        let tr = &s.triggers()[usize::from(i)];
+        let ability = &t.def(tr.card).face(tr.face).abilities[usize::from(tr.ability)];
+        let group = if ability.may_pause {
+            2
+        } else {
+            u8::from(!ability.targets.is_empty())
+        };
+        (group, i)
+    };
+    let Candidates::Options(triggers) = &d.candidates else {
+        unreachable!("a trigger-order decision offers options");
+    };
+    let (last, _) = triggers
+        .iter()
+        .enumerate()
+        .max_by_key(|&(_, &opt)| resolves_late(opt))
+        .expect("a decision has a candidate");
+    Choice(u8::try_from(last).expect("at most 64 candidates"))
 }
 
 pub(crate) fn with_stops(profile: Profile, stops: StopsSetting) -> Profile {

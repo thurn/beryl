@@ -174,7 +174,7 @@ fn events_of(begin: &StartGame, log: &[Entry]) -> Vec<Event> {
     let mut s = State::new(&t, begin.seed, profile);
     let mut x = Scratch::recording();
     let mut choices = log.iter().filter_map(|e| match e {
-        Entry::Choice(c) => Some(Choice(*c)),
+        Entry::Choice(c) | Entry::Auto(c) => Some(Choice(*c)),
         _ => None,
     });
     while let Step::Decide(_) = next(&mut s, &t, &mut x, &mut Replay) {
