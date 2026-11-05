@@ -92,21 +92,17 @@ function ShownCard({
   object,
   name,
   width,
-  height,
   highlight,
 }: {
   object?: ObjectView;
   name?: string;
   width: number;
-  height?: number;
   highlight?: Highlight;
 }) {
   const shown = object?.name ?? name;
   const face = useFace(object ?? { ...NOWHERE, name: shown ?? null });
   if (!shown) return <CardBack width={width} />;
-  return (
-    <Card card={face} width={width} height={height} highlight={highlight} />
-  );
+  return <Card card={face} width={width} highlight={highlight} />;
 }
 
 /** A card known only by name, for frameFace. */
@@ -151,13 +147,14 @@ const GHOST = -2;
 
 /** An arrangement's geometry in the tray, as scry.png draws it: faces larger than the
  * library's backs, which sit fanned and higher; neighbors `STEP` apart, closer when many;
- * the held card lifted, tilted and larger, its slot in the row opened only `HELD_STEP`. */
+ * the held card lifted, tilted and scaled up in the frame's aspect, its slot in the row
+ * opened only `HELD_STEP`. */
 const FACE = { width: 282, y: 237, turn: 3.2 };
 const BACKS = [
   { dx: -31, y: 174, turn: -10 },
   { dx: 31, y: 171, turn: 5 },
 ];
-const HELD = { width: 297, height: 358, turn: -8.6 };
+const HELD = { width: 297, turn: -8.6 };
 const STEP = 264;
 const HELD_STEP = 166;
 
@@ -380,7 +377,7 @@ function DraggableCard({
     y: e.clientY / stageScale,
   });
   const width = dragging ? HELD.width : FACE.width;
-  const height = dragging ? HELD.height : FACE.width / ASPECT.full;
+  const height = width / ASPECT.full;
   const release = () => {
     drag.current = undefined;
     setDragging(false);
@@ -441,7 +438,6 @@ function DraggableCard({
       <ShownCard
         object={object}
         width={width}
-        height={height}
         highlight={dragging ? "target" : undefined}
       />
     </motion.div>
