@@ -66,8 +66,7 @@ const CARD = (
 );
 
 /** Each phase's icon (the full tracker, ui_system.png section 02: cream outlines over dark or
- * stone fills) and glyph (the compact one on the
- * table, as in battlefield.png). */
+ * stone fills) and glyph (the compact one on the table, as in battlefield.png). */
 const PHASES: {
   phase: Phase;
   label: string;
