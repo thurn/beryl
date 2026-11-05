@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -52,6 +53,18 @@ def free_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return int(s.getsockname()[1])
+
+
+def port_free(port: int) -> bool:
+    """Whether nothing listens on `port`. Like Node's servers, it may reuse a port a closed
+    connection still holds."""
+    with socket.socket() as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            s.bind(("127.0.0.1", port))
+        except OSError:
+            return False
+        return True
 
 
 def wait_for_server(url: str, server: subprocess.Popen[bytes]) -> bool:
@@ -223,8 +236,13 @@ def ui_live(args: argparse.Namespace) -> int:
     if record_fixtures() != 0:
         print("ui-live: recording the fixtures failed", file=sys.stderr)
         return 1
+    if args.port and not port_free(args.port):
+        print(f"ui-live: port {args.port} is in use", file=sys.stderr)
+        return 1
     game_port, drive_port = free_port(), args.port or free_port()
     children: list[subprocess.Popen[bytes]] = []
+    # A plain SIGTERM would end Python without the cleanup below, orphaning the children.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     try:
         env = webkit_env()
         children.append(

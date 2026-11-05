@@ -24,6 +24,13 @@ if (!port || !url || !out) {
 await mkdir(out, { recursive: true });
 
 const browser = await launch();
+// Playwright closes the browser on a signal, but the server below would keep Node running:
+// exit, so `by ui-live` stopping leaves no driver holding its port.
+for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"]) {
+    process.on(signal, () => {
+        browser.close().finally(() => process.exit(0));
+    });
+}
 const context = await browser.newContext({
     viewport: { width: Number(width), height: Number(height) },
 });
@@ -302,11 +309,11 @@ const probe = {
     /** Runs `action` (an async function, e.g. a click), then waits up to `timeout` ms for the
      * next view that asks the human a decision or ends the game. Says how long that took, how
      * many views arrived meanwhile, and what the decision is. Without an action, waits for
-     * the next such view from now. */
-    async decision(action, timeout = 60000) {
-        const before = await page.evaluate(
-            () => window.berylLive?.log.length ?? 0,
-        );
+     * the next such view from now, or from log entry `from`. */
+    async decision(action, timeout = 60000, from = undefined) {
+        const before =
+            from ??
+            (await page.evaluate(() => window.berylLive?.log.length ?? 0));
         const start = Date.now();
         if (action) await action();
         const found = await page.waitForFunction(
@@ -348,10 +355,14 @@ const probe = {
     /** One player action, observed the way the review loop asks: a screenshot before, the
      * action, screenshots at each of `samples` ms after it began, then (unless `wait` is
      * false) a wait for the next decision and a screenshot of it. Returns the screenshot
-     * paths, what moved meanwhile, the decision waited for, and the game events that arrived
+     * paths, how long after the action the first view and the next decision arrived, what
+     * moved meanwhile, the decision waited for, and the game events that arrived
      * (`probe.timeline` from the start of the action). */
     async act(name, action, { samples = [100, 500, 2000], wait = true } = {}) {
-        const since = await page.evaluate(() => performance.now());
+        const [since, from] = await page.evaluate(() => [
+            performance.now(),
+            window.berylLive?.log.length ?? 0,
+        ]);
         const shots = { before: await shot(`${name}-before`) };
         const stop = await probe.motion();
         const start = Date.now();
@@ -365,11 +376,25 @@ const probe = {
         let decision;
         if (wait) {
             decision = await probe
-                .decision(null, 60000)
+                .decision(null, 60000, from)
                 .catch((e) => ({ timeout: String(e).split("\n")[0] }));
             shots.after = await shot(`${name}-after`);
         }
+        // Latencies from the action, on the page's clock: the first view, and the decision.
+        const views = await page.evaluate(
+            ([since, from]) =>
+                (window.berylLive?.log ?? [])
+                    .slice(from)
+                    .filter((m) => m.kind === "event")
+                    .map((m) => ({
+                        ms: Math.round(m.at - since),
+                        deciding: m.payload.view.status.kind !== "stopped",
+                    })),
+            [since, from],
+        );
         return {
+            firstViewMs: views[0]?.ms ?? null,
+            decisionMs: views.find((v) => v.deciding)?.ms ?? null,
             shots,
             motion,
             decision,
@@ -418,7 +443,7 @@ const probe = {
         }
         const sheet = await context.newPage();
         await sheet.setContent(
-            `<body style="margin:0;padding:12px;background:#777;display:flex;gap:16px;align-items:flex-start;font:13px sans-serif">${crops
+            `<body style="margin:0;padding:12px;background:#777;display:inline-flex;gap:16px;align-items:flex-start;font:13px sans-serif">${crops
                 .map(
                     (c) =>
                         `<figure style="margin:0"><figcaption style="color:#fff;margin-bottom:4px">${c.label.replace(/</g, "&lt;")}</figcaption>${
@@ -434,7 +459,7 @@ const probe = {
             out,
             `${String(shots).padStart(3, "0")}-${name}-compare.png`,
         );
-        await sheet.screenshot({ path, fullPage: true });
+        await sheet.locator("body").screenshot({ path });
         await sheet.close();
         return path;
     },
