@@ -5,6 +5,20 @@ bugs in future (e.g. via the type system). Each entry gives a short description
 of the bug, how a similar bug could be prevented, and the fixing commit when it
 was not found and fixed in the same session. Newest first.
 
+- **The expert's bonuses were discounted with the base value.** Returning a
+  blocker that opened lethal was worth +500, but the quarter-value discount for
+  creatures whose enters-the-battlefield effect is spent applied after it, so
+  Jace bounced a tapped Overlord instead of the last Thundertrap Trainer
+  blocking lethal. The intrinsic worth of a return is now its own function, and
+  the situational bonuses are added to its result. Prevention: keep a value and
+  the bonuses on it in separate terms, so that a scaling meant for one cannot
+  reach the other.
+- **An attack won on a block the defender need not make.** Weighing an attack
+  as the worse of blocked and unblocked plus a quarter of the difference turned
+  a lethal unblocked line (a win score) into a huge bonus, so the expert
+  attacked into a block that lost it the game. When either line decides the
+  game, the worse alone counts. Prevention: never take a fraction of a win or
+  loss sentinel; compare such scores before doing arithmetic on them.
 - **The expert's lethal checks ignored flying.** Its pre-combat damage estimate
   let any untapped creature block any attacker, so it missed lethals where only
   fliers could block (two bounces on the two flying blockers) and counted ground
@@ -14,8 +28,8 @@ was not found and fixed in the same session. Newest first.
   a count of blockers in each.
 - **The expert decked itself by choice.** Timetwister was cast with fewer than
   seven cards to shuffle in and draw, and Staff of the Storyteller drew the last
-  cards of the library at the opponent's end step. Wheels now need seven cards
-  to draw, and optional draws keep a card for the draw step. Prevention: route
+  cards of the library at the opponent's end step. Wheels now leave a card for the
+  draw step after their seven draws, as other optional draws do. Prevention: route
   every voluntary draw through one check of the library, as the engine routes
   every draw through one function.
 - **A long card name kept its ellipsis instead of shrinking.** `useNameFit`

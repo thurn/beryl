@@ -334,7 +334,7 @@ impl Sim<'_> {
     /// planned and not blocking at all, so that an attack is not made on a block the
     /// defender need not make (one that leaves us dead on board if it does not come), and a
     /// quarter of what the better one adds, so that of two lines alike when blocked, the one
-    /// that gains more unblocked is taken.
+    /// that gains more unblocked is taken; when either decides the game, the worse alone.
     fn weigh(
         &mut self,
         start: &State,
@@ -349,7 +349,11 @@ impl Sim<'_> {
         }
         let free = self.run(start, plan, pending, false);
         let (lo, hi) = (planned.min(free), planned.max(free));
-        lo + (hi - lo) / 4
+        if hi >= DECIDED || lo <= -DECIDED {
+            lo
+        } else {
+            lo + (hi - lo) / 4
+        }
     }
 
     /// Plays combat on from `start` with our next declarations `plan`, then stopping, and

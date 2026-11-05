@@ -365,24 +365,13 @@ fn bounces_both_flying_blockers_for_lethal() {
         )
         .library(P1, LIBRARY);
     let (t, mut s) = arrange(&TWO_BOUNCES);
-    // The opponent blocks as the expert would.
-    let mut experts = [ExpertAgent::new(&t, 7), ExpertAgent::new(&t, 8)];
-    let mut x = Scratch::new();
-    let outcome = loop {
-        let d = match next(&mut s, &t, &mut x, &mut Replay) {
-            Step::Over(outcome) => break Some(outcome),
-            Step::Decide(_) if s.turn().number > 7 => break None,
-            Step::Decide(d) => d,
-        };
-        let shown = *view(&s, &t, &mut x);
-        let c = experts[usize::from(d.player == P1)].choose(Observation::new(&shown, d.player), &d);
-        apply(&mut s, &t, &mut x, &mut Replay, c);
-    };
+    let outcome = play_turn(&t, &mut s, 7);
     assert_eq!(outcome, Some(Outcome::Win(P0)));
 }
 
 /// No wheel that would deck us: from an empty hand against a full one Timetwister refuels,
-/// but with a library of one and three cards in the graveyard there are not seven to draw.
+/// but with a library of three and four cards in the graveyard its seven draws would leave
+/// none for our next draw step.
 #[test]
 fn no_wheel_without_seven_cards_to_draw() {
     const THIN: Scenario = Scenario::new("thin library")
@@ -396,8 +385,8 @@ fn no_wheel_without_seven_cards_to_draw() {
                 Permanent::new(ISLAND),
             ],
         )
-        .library(P0, &[ISLAND])
-        .graveyard(P0, &[PLAINS, PLAINS, ISLAND])
+        .library(P0, &[ISLAND, PLAINS, ISLAND])
+        .graveyard(P0, &[PLAINS, PLAINS, ISLAND, PLAINS])
         .hand(P1, &[PLAINS, ISLAND, PLAINS, ISLAND, PLAINS])
         .library(P1, LIBRARY);
     let (t, mut s) = arrange(&THIN);
@@ -445,6 +434,84 @@ fn flash_removal_answers_teferi_before_it_locks_us_out() {
         facing_a_spell,
     );
     assert_eq!(cast_name(&t, &s, chosen(&d, c)), Some(names::AANGS_ICEBERG));
+}
+
+/// Plays the expert against itself from `s` until the turn after `turn` begins, or the game
+/// ends.
+fn play_turn(t: &GameTable, s: &mut State, turn: u16) -> Option<Outcome> {
+    let mut experts = [ExpertAgent::new(t, 7), ExpertAgent::new(t, 8)];
+    let mut x = Scratch::new();
+    loop {
+        let d = match next(s, t, &mut x, &mut Replay) {
+            Step::Over(outcome) => return Some(outcome),
+            Step::Decide(_) if s.turn().number > turn => return None,
+            Step::Decide(d) => d,
+        };
+        let shown = *view(s, t, &mut x);
+        let c = experts[usize::from(d.player == P1)].choose(Observation::new(&shown, d.player), &d);
+        apply(s, t, &mut x, &mut Replay, c);
+    }
+}
+
+/// No attack that wins only if the defender does not block: Elite Spellbinder trades with
+/// Malcolm, and the Overlord then kills us.
+#[test]
+fn no_attack_that_wins_only_unblocked() {
+    const TRADE: Scenario = Scenario::new("trade")
+        .at(7, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[Permanent::new(names::MALCOLM_ALLURING_SCOUNDREL)])
+        .library(P0, LIBRARY)
+        .life(P0, 6)
+        .life(P1, 2)
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(names::ELITE_SPELLBINDER),
+                Permanent::new(names::OVERLORD_OF_THE_MISTMOORS).tapped(),
+            ],
+        )
+        .library(P1, LIBRARY);
+    let (t, mut s) = arrange(&TRADE);
+    let (d, c) = expert_at(&t, &mut s, casts(""), |_, d| {
+        d.kind == DecisionKind::Attacker
+    });
+    assert_eq!(chosen(&d, c), Opt::Done);
+}
+
+/// Lethal through removal: Get Lost and Jace's −1 take the two blockers. Oust, whose 3 life
+/// would be the 3 they survive at, stays in hand.
+#[test]
+fn removal_but_not_oust_opens_lethal() {
+    const OPEN: Scenario = Scenario::new("open")
+        .at(7, P0, TurnStep::PrecombatMain)
+        .hand(P0, &[names::OUST, names::GET_LOST])
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(PLAINS),
+                Permanent::new(PLAINS),
+                Permanent::new(PLAINS),
+                Permanent::new(PLAINS),
+                Permanent::new(names::OVERLORD_OF_THE_MISTMOORS),
+                Permanent::new(names::SPHINX_OF_FALSE_CONCLUSIONS),
+                Permanent::new(names::MALCOLM_ALLURING_SCOUNDREL),
+                Permanent::new(names::JACE_THE_MIND_SCULPTOR),
+            ],
+        )
+        .library(P0, LIBRARY)
+        .life(P0, 5)
+        .life(P1, 10)
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(names::THUNDERTRAP_TRAINER),
+                Permanent::new(names::THUNDERTRAP_TRAINER),
+                Permanent::new(names::OVERLORD_OF_THE_MISTMOORS).tapped(),
+            ],
+        )
+        .library(P1, LIBRARY);
+    let (t, mut s) = arrange(&OPEN);
+    assert_eq!(play_turn(&t, &mut s, 7), Some(Outcome::Win(P0)));
 }
 
 /// Expert against random, seats alternated. The CLI's 200-game tournament measures the gate

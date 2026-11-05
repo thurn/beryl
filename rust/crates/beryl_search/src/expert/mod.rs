@@ -61,6 +61,15 @@ const TITHE_MIN: i32 = 35;
 /// The least a card on top of a library must be worth in hand to be kept there.
 const DRAW_MIN: i32 = 30;
 
+/// The removal spells: Oust, and those that take a permanent without giving life back.
+const REMOVAL: &[&str] = &[
+    names::OUST,
+    names::GET_LOST,
+    names::AANGS_ICEBERG,
+    names::SWIFT_RECONFIGURATION,
+    names::SINK_INTO_STUPOR,
+];
+
 /// The Map tokens Get Lost creates, and the back face of Jace, Vryn's Prodigy.
 const MAP_TOKEN: &str = "Map Token";
 const JACE_TELEPATH_UNBOUND: &str = "Jace, Telepath Unbound";
@@ -396,17 +405,24 @@ impl Expert<'_> {
         let pool = self.obs().player(who).mana;
         let (mut white, mut blue) = (i32::from(pool[0]), i32::from(pool[1]));
         for s in self.permanents(who).filter(|&s| !self.tapped(s)) {
-            match self.name(s) {
-                Some(names::PLAINS) => white += 1,
-                Some(names::ISLAND | names::SINK_INTO_STUPOR) => blue += 1,
-                Some(names::TUNDRA | names::SEACHROME_COAST | names::SPARAS_HEADQUARTERS) => {
-                    white += 1;
-                    blue += 1;
-                }
-                _ => {}
-            }
+            let (w, u) = self.makes(s);
+            white += i32::from(w);
+            blue += i32::from(u);
         }
         (white, blue)
+    }
+
+    /// Whether the land in `slot` makes white, and whether blue: Soporific Springs is Sink
+    /// into Stupor's back face.
+    fn makes(&self, slot: Slot) -> (bool, bool) {
+        match self.name(slot) {
+            Some(names::PLAINS) => (true, false),
+            Some(names::ISLAND | names::SINK_INTO_STUPOR) => (false, true),
+            Some(names::TUNDRA | names::SEACHROME_COAST | names::SPARAS_HEADQUARTERS) => {
+                (true, true)
+            }
+            _ => (false, false),
+        }
     }
 
     /// Whether the opponent's creatures could kill us next turn past our blockers.
@@ -501,16 +517,7 @@ impl Expert<'_> {
                 let slot = c.object()?;
                 let card = self.obs().card(slot)?;
                 let now = i32::from(self.p.t.def(card).front().cost.mana_value()) <= mana;
-                let answer = self.name(slot).is_some_and(|n| {
-                    matches!(
-                        n,
-                        names::OUST
-                            | names::GET_LOST
-                            | names::AANGS_ICEBERG
-                            | names::SWIFT_RECONFIGURATION
-                            | names::SINK_INTO_STUPOR
-                    )
-                });
+                let answer = self.name(slot).is_some_and(|n| REMOVAL.contains(&n));
                 Some(self.value(slot) + 1000 * i32::from(now && answer))
             }));
         }
@@ -536,15 +543,9 @@ impl Expert<'_> {
     fn sources(&self) -> (i32, i32) {
         let (mut white, mut blue) = (0, 0);
         for s in self.permanents(self.me()) {
-            match self.name(s) {
-                Some(names::PLAINS) => white += 1,
-                Some(names::ISLAND | names::SINK_INTO_STUPOR) => blue += 1,
-                Some(names::TUNDRA | names::SEACHROME_COAST | names::SPARAS_HEADQUARTERS) => {
-                    white += 1;
-                    blue += 1;
-                }
-                _ => {}
-            }
+            let (w, u) = self.makes(s);
+            white += i32::from(w);
+            blue += i32::from(u);
         }
         (white, blue)
     }
@@ -855,7 +856,12 @@ impl Expert<'_> {
             return false;
         }
         attackers.push((power(vehicle), flies(vehicle)));
-        self.through(attackers, &[]) >= i32::from(self.obs().player(self.opp()).life)
+        let blockers: Vec<bool> = self
+            .creatures(self.opp())
+            .filter(|&s| !self.tapped(s))
+            .map(|s| self.reaches(s))
+            .collect();
+        through(attackers, blockers) >= i32::from(self.obs().player(self.opp()).life)
     }
 
     /// Our uncrewed Vehicle, if any: a creature of ours the opponent's Swift Reconfiguration
@@ -1043,15 +1049,7 @@ impl Expert<'_> {
             };
         }
         // Removal with nothing worth it waits.
-        if matches!(
-            name,
-            names::OUST
-                | names::GET_LOST
-                | names::AANGS_ICEBERG
-                | names::SWIFT_RECONFIGURATION
-                | names::SINK_INTO_STUPOR
-        ) || v <= 0
-        {
+        if REMOVAL.contains(&name) || v <= 0 {
             return 0;
         }
         let creature = f.types.intersects(Types::CREATURE);
@@ -1222,17 +1220,7 @@ impl Expert<'_> {
     fn tithe_risk(&self, card: beryl_engine::CardIx) -> bool {
         let cost = i32::from(self.p.t.def(card).front().cost.mana_value());
         let opp = self.opp();
-        let white = |s: Slot| {
-            matches!(
-                self.name(s),
-                Some(
-                    names::PLAINS
-                        | names::TUNDRA
-                        | names::SEACHROME_COAST
-                        | names::SPARAS_HEADQUARTERS
-                )
-            )
-        };
+        let white = |s: Slot| self.makes(s).0;
         self.mana(self.me()) - cost <= 0
             && !self.hand(opp).is_empty()
             && (self.obs().player(opp).mana[0] > 0
@@ -1405,6 +1393,13 @@ impl Expert<'_> {
             names::TIMETWISTER
         };
         let from_hand = self.hand(self.me()).iter().any(|s| self.is(s, wheel));
+        // Cast from the graveyard (Jace, Telepath Unbound's −3), it is not shuffled in either.
+        let own = from_hand
+            || self
+                .obs()
+                .graveyard(self.me())
+                .iter()
+                .any(|&s| self.is(s, wheel));
         let ours = self.hand(self.me()).count() as i32 - i32::from(from_hand);
         let theirs = self.hand(self.opp()).count() as i32;
         let gain = theirs - ours;
@@ -1414,8 +1409,8 @@ impl Expert<'_> {
             .map(|s| i32::from(self.obs().derived(s).power.max(0)))
             .sum();
         let winning = power >= i32::from(self.obs().player(self.opp()).life);
-        // Nor when far behind, facing a swing for half our life or low on it, a wheel refills the hand
-        // that wins the game for them.
+        // Nor when far behind, facing a swing for half our life or low on it: a wheel refills
+        // the hand that wins the game for them.
         let behind = 2 * self.threat_past(None) >= self.life()
             || self.life() <= 7
             || (self.board(self.opp()) - self.board(self.me()) >= 100
@@ -1424,10 +1419,12 @@ impl Expert<'_> {
         let refill = gain >= 2 || (gain >= 0 && ours <= 1);
         // A wheel shuffles our graveyard back in: the way out of drawing from an empty library.
         let me = self.me();
+        // The cards it shuffles into our library, to draw seven from.
         let pool = self.obs().library(me).len()
             + self.obs().graveyard(me).len()
-            + self.hand(me).count() as usize;
-        let decking = self.obs().library(me).len() <= 1 && pool > 8;
+            + self.hand(me).count() as usize
+            - usize::from(own);
+        let decking = self.obs().library(me).len() <= 1 && pool >= 8;
         // Nor while we hold a real spell the wheel would shuffle away, one our lands have the
         // colors for.
         let holding = self.hand(self.me()).iter().any(|s| {
@@ -1439,11 +1436,12 @@ impl Expert<'_> {
         // Our hand empty and theirs full, it refuels us more than them, behind or not; so
         // does one that gives them two cards or fewer and us three more than them.
         let empty = (ours == 0 && theirs >= 3) || (theirs >= 5 && gain >= 3);
-        // Never with fewer than seven cards to shuffle into the library and draw
+        // Never with fewer than seven cards to draw, nor by choice with too few to leave one for
+        // our next draw step
         // ([CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b): "If a player
         // attempted to draw a card from a library with no cards in it ... that player loses
         // the game").
-        let drawable = pool - usize::from(from_hand) >= 7;
+        let (survives, drawable) = (pool >= 7, pool >= 8);
         // When their next attack kills us through our blockers, it is the way out, while it
         // leaves mana to cast what it draws: Time Spiral untaps six lands, Timetwister costs
         // three.
@@ -1453,7 +1451,10 @@ impl Expert<'_> {
             self.mana(me) - 3
         };
         let out = self.threat_past(None) >= self.life() && left >= 3;
-        drawable && (decking || out || (!winning && !holding && (empty || (!behind && refill))))
+        survives
+            && (decking
+                || out
+                || (drawable && !winning && !holding && (empty || (!behind && refill))))
     }
 
     /// The value of the best artifact of the opponent's that Thieving Skydiver could take,
@@ -1492,11 +1493,12 @@ impl Expert<'_> {
     /// negative.
     fn removal_score(&self, slot: Slot, name: &str, face: u8, min: i32) -> Option<(i32, bool)> {
         // Oust's 3 life can be the 3 that keeps a low opponent alive, or that our attack this
-        // turn falls short by; and the card it puts into their library is one to draw from a
-        // library that would otherwise run out.
+        // turn falls short by, with the removal we have; and the card it puts into their
+        // library is one to draw from a library that would otherwise run out.
         let life = i32::from(self.obs().player(self.opp()).life);
         if name == names::OUST
             && ((!self.dying() && (life <= 6 || self.attack_power(&[], None) + 3 >= life))
+                || self.lethal_blockers().is_some()
                 || self.obs().library(self.opp()).len() <= 1)
         {
             return None;
@@ -1542,8 +1544,9 @@ impl Expert<'_> {
             }
         };
         // Before combat, a blocker whose removal opens lethal comes first; not for Oust, whose
-        // 3 life can be the 3 they survive at.
-        let opens = |s: Slot| name != names::OUST && self.lethal_blocker(s);
+        // 3 life can be the 3 they survive at, nor one it would not remove (a Sphinx Get Lost
+        // trades for its token copy).
+        let opens = |s: Slot| name != names::OUST && worth(s) > 0 && self.lethal_blocker(s);
         let rank = |s: Slot| worth(s) + if opens(s) { 1000 } else { 0 };
         let target = self
             .permanents(self.opp())
@@ -1647,15 +1650,8 @@ impl Expert<'_> {
             .hand(self.me())
             .iter()
             .filter(|&s| {
-                matches!(
-                    self.name(s),
-                    Some(
-                        names::GET_LOST
-                            | names::AANGS_ICEBERG
-                            | names::SWIFT_RECONFIGURATION
-                            | names::SINK_INTO_STUPOR
-                    )
-                )
+                self.name(s)
+                    .is_some_and(|n| n != names::OUST && REMOVAL.contains(&n))
             })
             .filter_map(|s| self.obs().card(s))
             .map(|c| i32::from(self.p.t.def(c).front().cost.mana_value()))
@@ -1669,28 +1665,29 @@ impl Expert<'_> {
                 mana >= 0
             })
             .count();
-        // One of them being aimed now, already paid for.
+        // One of them being aimed now, already paid for: a removal spell, or a walker's
+        // bounce (a minus ability).
         let aiming = self.obs().stack().last().is_some_and(|e| {
+            let def = self.p.t.def(e.card);
+            let bounce = matches!(
+                def.name,
+                names::JACE_THE_MIND_SCULPTOR | names::TEFERI_TIME_RAVELER
+            ) && e.ability.is_some_and(|a| {
+                def.faces[usize::from(e.face)]
+                    .ability(a)
+                    .cost
+                    .loyalty
+                    .is_some_and(|l| l < 0)
+            });
             e.controller == self.me()
-                && matches!(
-                    self.p.t.def(e.card).name,
-                    names::JACE_THE_MIND_SCULPTOR
-                        | names::TEFERI_TIME_RAVELER
-                        | names::GET_LOST
-                        | names::AANGS_ICEBERG
-                        | names::SWIFT_RECONFIGURATION
-                        | names::SINK_INTO_STUPOR
-                )
+                && (bounce || (def.name != names::OUST && REMOVAL.contains(&def.name)))
         });
         walkers + spells + usize::from(aiming)
     }
 
     /// The damage our creatures able to attack would deal past the opponent's untapped
-    /// creatures but those `removed`, as before combat: each blocker blocks the strongest
-    /// attacker it can, `pumped` with one more power, fliers only by fliers
-    /// ([CR 702.9b](https://yawgatog.com/resources/magic-rules/#R7029b): "A creature with
-    /// flying can't be blocked except by creatures with flying and/or reach"), a ground
-    /// attacker by a blocker that could not block a flier when there is one.
+    /// creatures but those `removed`, `pumped` with one more power, as before combat; blocked
+    /// as [`through`] has it.
     fn attack_power(&self, removed: &[Slot], pumped: Option<Slot>) -> i32 {
         if self.obs().turn().step != TurnStep::PrecombatMain {
             return 0;
@@ -1708,38 +1705,20 @@ impl Expert<'_> {
                 (power, flies(s, Keywords::FLYING))
             })
             .collect();
-        self.through(attackers, removed)
-    }
-
-    /// The damage `attackers`, by power and whether they fly, would deal past the opponent's
-    /// untapped creatures but those `removed`, each blocker blocking the strongest attacker
-    /// it can, as in [`Expert::attack_power`].
-    fn through(&self, mut attackers: Vec<(i32, bool)>, removed: &[Slot]) -> i32 {
-        attackers.sort_unstable_by(|a, b| b.cmp(a));
-        let flies = |s: Slot, k: Keywords| self.obs().derived(s).keywords.intersects(k);
-        let mut reach: Vec<bool> = self
+        let blockers: Vec<bool> = self
             .creatures(self.opp())
             .filter(|&s| !self.tapped(s) && !removed.contains(&s))
-            .map(|s| flies(s, Keywords::FLYING.union(Keywords::REACH)))
+            .map(|s| self.reaches(s))
             .collect();
-        let mut through = 0;
-        for (power, flying) in attackers {
-            let blocker = if flying {
-                reach.iter().position(|&r| r)
-            } else {
-                reach
-                    .iter()
-                    .position(|&r| !r)
-                    .or_else(|| reach.iter().position(|&r| r))
-            };
-            match blocker {
-                Some(i) => {
-                    reach.swap_remove(i);
-                }
-                None => through += power,
-            }
-        }
-        through
+        through(attackers, blockers)
+    }
+
+    /// Whether a creature could block a flier: it has flying or reach.
+    fn reaches(&self, slot: Slot) -> bool {
+        self.obs()
+            .derived(slot)
+            .keywords
+            .intersects(Keywords::FLYING.union(Keywords::REACH))
     }
 
     /// The creature of ours whose +1/+1 counter from The Wandering Emperor's +1 ("Put a +1/+1
@@ -1815,9 +1794,13 @@ impl Expert<'_> {
         let card = self.obs().card(slot)?;
         let face = &self.p.t.def(card).faces[usize::from(o.face)];
         let loyalty = i32::from(o.counters.loyalty);
-        // An ability that would leave no loyalty is no option, short of an ultimate or one
+        // An ability that would leave no loyalty is no option, short of an ultimate or a bounce
         // that opens lethal; the walker then grows instead.
-        let lethal = self.opens_lethal();
+        let lethal = self.opens_lethal()
+            && matches!(
+                self.name(slot),
+                Some(names::JACE_THE_MIND_SCULPTOR | names::TEFERI_TIME_RAVELER)
+            );
         let keeps = |i: u8| {
             face.abilities[usize::from(i)]
                 .cost
@@ -1953,37 +1936,25 @@ impl Expert<'_> {
 
     /// [`Expert::threat_past`] with `fewer` of our blockers gone first, the best of them.
     fn threat_past_fewer(&self, except: Option<Slot>, fewer: usize) -> i32 {
-        let has = |s: Slot, k: Keywords| self.obs().derived(s).keywords.intersects(k);
-        let mut attackers: Vec<(i32, bool)> = self
+        let attackers: Vec<(i32, bool)> = self
             .creatures(self.opp())
             .filter(|&s| Some(s) != except)
             .map(|s| {
                 let power = i32::from(self.obs().derived(s).power.max(0));
-                (power, has(s, Keywords::FLYING))
+                (
+                    power,
+                    self.obs().derived(s).keywords.intersects(Keywords::FLYING),
+                )
             })
             .filter(|&(p, _)| p > 0)
             .collect();
-        attackers.sort_unstable_by(|a, b| b.cmp(a));
-        // Each of our creatures blocks the strongest attacker it can: fliers only by fliers
-        // (CR 702.9b).
-        let mut reach: Vec<bool> = self
-            .creatures(self.me())
-            .map(|s| has(s, Keywords::FLYING.union(Keywords::REACH)))
-            .collect();
-        for _ in 0..fewer.min(reach.len()) {
-            let i = reach.iter().position(|&r| r).unwrap_or(0);
-            reach.swap_remove(i);
+        let mut blockers: Vec<bool> = self.creatures(self.me()).map(|s| self.reaches(s)).collect();
+        // The best of them go first: those that block fliers too.
+        for _ in 0..fewer.min(blockers.len()) {
+            let i = blockers.iter().position(|&r| r).unwrap_or(0);
+            blockers.swap_remove(i);
         }
-        let mut through = 0;
-        for (power, flying) in attackers {
-            match reach.iter().position(|&r| r || !flying) {
-                Some(i) => {
-                    reach.swap_remove(i);
-                }
-                None => through += power,
-            }
-        }
-        through
+        through(attackers, blockers)
     }
 
     /// Whether Jace, Telepath Unbound's −3 has a spell worth casting again in our graveyard.
@@ -2151,14 +2122,12 @@ impl Expert<'_> {
         let (mut w, mut u, mut both, mut c) = (i32::from(pool[0]), i32::from(pool[1]), 0, 0);
         c += i32::from(pool[5]);
         for s in self.permanents(me).filter(|&s| !self.tapped(s)) {
-            match self.name(s) {
-                Some(names::PLAINS) => w += 1,
-                Some(names::ISLAND | names::SINK_INTO_STUPOR) => u += 1,
-                Some(names::TUNDRA | names::SEACHROME_COAST | names::SPARAS_HEADQUARTERS) => {
-                    both += 1;
-                }
-                Some(names::STRIP_MINE) => c += 1,
-                Some(names::MANA_CRYPT) => c += 2,
+            match (self.makes(s), self.name(s)) {
+                ((true, true), _) => both += 1,
+                ((true, false), _) => w += 1,
+                ((false, true), _) => u += 1,
+                (_, Some(names::STRIP_MINE)) => c += 1,
+                (_, Some(names::MANA_CRYPT)) => c += 2,
                 _ => {}
             }
         }
@@ -2181,16 +2150,21 @@ impl Expert<'_> {
         v
     }
 
-    /// What returning a permanent of the opponent's to its owner's hand is worth: a token
-    /// ceases to exist, but Mana Crypt comes back for free and a creature with an
-    /// enters-the-battlefield ability comes back with it again.
+    /// What returning a permanent of the opponent's to its owner's hand is worth: what it
+    /// takes from them, and more for a blocker whose return opens lethal, the creature that
+    /// would kill us, or an Aang's Iceberg holding a permanent of ours.
     fn bounce_value(&self, slot: Slot) -> i32 {
-        let mut v = self.value(slot);
-        // Before combat, returning a blocker may open lethal.
-        if self.lethal_blocker(slot) {
-            v += 500;
-        }
-        v += self.killer_bonus(slot) + self.released(slot);
+        // Before combat, returning a blocker may open lethal; dead on board, the creature
+        // that would kill us is the one to return.
+        let lethal = if self.lethal_blocker(slot) { 500 } else { 0 };
+        self.returned(slot) + lethal + self.killer_bonus(slot) + self.released(slot)
+    }
+
+    /// What returning the permanent in `slot` to its owner's hand takes from them, by itself:
+    /// a token ceases to exist, but Mana Crypt comes back for free and a creature with an
+    /// enters-the-battlefield ability comes back with it again.
+    fn returned(&self, slot: Slot) -> i32 {
+        let v = self.value(slot);
         if self.obs().object(slot).flags.has(ObjectFlags::TOKEN) {
             return v + 15;
         }
@@ -2204,20 +2178,20 @@ impl Expert<'_> {
                 - i32::from(f.loyalty.unwrap_or(0));
             return 6 * gained.max(0) + 4 * i32::from(f.cost.mana_value());
         }
-        // Their Swift Reconfiguration on our creature: returning it frees the creature, but it
-        // has flash and costs {W}, so with a white mana up they put it straight back.
-        if self.is(slot, names::SWIFT_RECONFIGURATION) {
-            if self.colors_up(self.opp()).0 >= 1 {
-                return 0;
-            }
-            if let Some(host) = self.obs().object(slot).attached_to
-                && self.obs().controller(host) == self.me()
-                && let Some(card) = self.obs().card(host)
-            {
-                v += i32::from(self.p.values.get(card).value);
-            }
-        }
         match self.name(slot) {
+            // Their Swift Reconfiguration on our creature: returning it frees the creature,
+            // but it has flash and costs {W}, so with a white mana up they put it straight
+            // back.
+            Some(names::SWIFT_RECONFIGURATION) if self.colors_up(self.opp()).0 >= 1 => 0,
+            Some(names::SWIFT_RECONFIGURATION) => {
+                let host = self
+                    .obs()
+                    .object(slot)
+                    .attached_to
+                    .filter(|&h| self.obs().controller(h) == self.me())
+                    .and_then(|h| self.obs().card(h));
+                v + host.map_or(0, |c| i32::from(self.p.values.get(c).value))
+            }
             Some(names::MANA_CRYPT) => 0,
             Some(
                 names::ELITE_SPELLBINDER
@@ -2321,7 +2295,7 @@ impl Expert<'_> {
             && matches!(d.candidates, beryl_engine::Candidates::Objects(_))
         {
             // In their combat, ranked as removal there: an attacker is removed from combat as
-            // it stops being a creature.
+            // it stops being a creature. Before ours, a blocker whose removal opens lethal.
             return Some(best(d, |c| {
                 let slot = c.object()?;
                 Some(if self.obs().controller(slot) != self.opp() {
@@ -2329,7 +2303,7 @@ impl Expert<'_> {
                 } else if self.is(slot, names::JACE_VRYNS_PRODIGY) {
                     0
                 } else {
-                    self.their_attack_rank(slot)
+                    self.their_attack_rank(slot) + 1000 * i32::from(self.lethal_blocker(slot))
                 })
             }));
         }
@@ -2412,7 +2386,13 @@ impl Expert<'_> {
     /// those blockers.
     fn blocker_target(&self, d: &Decision) -> Option<Choice> {
         let (_, friendly) = self.p.targeting()?;
-        if friendly || !matches!(d.candidates, beryl_engine::Candidates::Objects(_)) {
+        // Not Oust: its 3 life can be the 3 they survive at.
+        let oust = self
+            .obs()
+            .stack()
+            .last()
+            .is_some_and(|e| self.p.t.def(e.card).name == names::OUST);
+        if friendly || oust || !matches!(d.candidates, beryl_engine::Candidates::Objects(_)) {
             return None;
         }
         Some(best(d, |c| {
@@ -2513,4 +2493,31 @@ impl Expert<'_> {
             _ => None,
         }))
     }
+}
+
+/// The damage `attackers`, by power and whether they fly, deal past `blockers`, by whether
+/// each could block a flier: each blocker blocks the strongest attacker it can, fliers only
+/// by fliers ([CR 702.9b](https://yawgatog.com/resources/magic-rules/#R7029b): "A creature
+/// with flying can't be blocked except by creatures with flying and/or reach"), a ground
+/// attacker by a blocker that could not block a flier when there is one.
+fn through(mut attackers: Vec<(i32, bool)>, mut blockers: Vec<bool>) -> i32 {
+    attackers.sort_unstable_by(|a, b| b.cmp(a));
+    let mut through = 0;
+    for (power, flying) in attackers {
+        let blocker = if flying {
+            blockers.iter().position(|&r| r)
+        } else {
+            blockers
+                .iter()
+                .position(|&r| !r)
+                .or_else(|| blockers.iter().position(|&r| r))
+        };
+        match blocker {
+            Some(i) => {
+                blockers.swap_remove(i);
+            }
+            None => through += power,
+        }
+    }
+    through
 }
