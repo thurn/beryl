@@ -5,9 +5,15 @@ evidence in [rules-engine-research.md](rules-engine-research.md); measured the
 way [benchmarking.md](benchmarking.md) describes.*
 
 This is the design of the Rust rules engine and of the boundaries that search,
-the desktop UI and drafting build on. It is not the Phase 1 implementation plan;
-that plan is written against this document. The twenty-two decisions it rests on
-are marked **D1** to **D22** where they apply and listed again in the appendix.
+the desktop UI and drafting build on. It is not an implementation plan:
+milestone plans are Enact epics in beads, written against this document.
+Milestone 1 builds the engine, the game UI and the first AI opponents for 29
+cards, a mirror match of the deck in
+`docs/sample-decks/2026-10-17-PrinceJools-wu-control.txt`. It builds the
+structures described here, but only the mechanics those cards use. Drafting and
+the rest of the cube come in later milestones. The twenty-two decisions it rests
+on are marked **D1** to **D22** where they apply and listed again in the
+appendix.
 
 ## 1. Goals
 
@@ -746,7 +752,7 @@ makes unlimited mana, and Walking Ballista turns it into damage one activation
 at a time. Under per-decision budgets a search undervalues such lines. The fix
 is a later profile meta-action that proposes a loop and a count as one decision
 in the spirit of the rules on shortcuts, executed as that many real activations;
-it is noted in §20 and not part of Phase 1.
+it is noted in §20 and not part of Milestone 1.
 
 ## 13. Hidden information (D9, D19)
 
@@ -832,15 +838,17 @@ searcher optimistic, which is tuned, not fixed.
 
 ## 16. Crate map (D12)
 
-| Crate            | Holds                                                                                                                                    | Depends on                    |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| `beryl_engine`   | `State`, events, layers, mana, combat, turn structure, decisions, the Observation view, the `CardDef` types, `GameTable` and `EffectCtx` | nothing in the workspace      |
-| `beryl_cards`    | 540 card files under color directories, the generated `names` module, the static table, per-card scenarios                               | `beryl_engine`                |
-| `beryl_scenario` | Scenario value types, the strict runner, the JSON dump                                                                                   | `beryl_engine`                |
-| `beryl_search`   | The `Agent` trait, `RandomAgent`, the heuristic baseline, the rollout policy, later MCTS, determinization, evaluation                    | `beryl_engine`                |
-| `beryl_draft`    | Pack generation, draft state, the draft bot, deckbuilding                                                                                | `beryl_cards`                 |
-| `beryl_bench`    | Benchmark support, as today, plus the engine's `_counts`, `_abba` and `_timing` targets and the cube rollout benchmark                   | the above as dev-dependencies |
-| `beryl_app`      | The Tauri shell: sessions, IPC commands, events                                                                                          | all of the above              |
+| Crate            | Holds                                                                                                                                    | Depends on                                     |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `beryl_engine`   | `State`, events, layers, mana, combat, turn structure, decisions, the Observation view, the `CardDef` types, `GameTable` and `EffectCtx` | nothing in the workspace                       |
+| `beryl_cards`    | 540 card files under color directories, the generated `names` module, the static table, per-card scenarios                               | `beryl_engine`                                 |
+| `beryl_scenario` | Scenario value types, the strict runner, the JSON dump                                                                                   | `beryl_engine`                                 |
+| `beryl_search`   | The `Agent` trait, `RandomAgent`, the greedy agent that is also the rollout policy, the expert system, MCTS, determinization, evaluation | `beryl_engine`                                 |
+| `beryl_session`  | `GameSession` and its thread, the `PlayerView` protocol with generated TypeScript types, replay files                                    | `beryl_engine`, `beryl_search`                 |
+| `beryl_cli`      | Headless games between agents, tournaments, transcripts, UI fixtures recorded from sessions                                              | `beryl_cards`, `beryl_search`, `beryl_session` |
+| `beryl_draft`    | Pack generation, draft state, the draft bot, deckbuilding (a later milestone)                                                            | `beryl_cards`                                  |
+| `beryl_bench`    | Benchmark support, as today, plus the engine's `_counts`, `_abba` and `_timing` targets and the cube rollout benchmark                   | the above as dev-dependencies                  |
+| `beryl_app`      | The Tauri shell: IPC commands and events around `beryl_session`, the card-art cache                                                      | all of the above                               |
 
 The engine knows no card and no card knows the engine's internals: cards use
 `EffectCtx` and the table types only. One card edit recompiles `beryl_cards`,
@@ -885,14 +893,24 @@ default, and it keeps the decision surface itself under test.
   Forge's headless `sim` command plays AI-versus-AI matches from decklists with
   logs, which serves statistical differential testing later.
 
-The oracle lane runs outside `just ci`'s 300-second budget, on demand and
-nightly.
+Both oracles are part of Milestone 1. `just oracle-setup` installs Maven with
+Homebrew if it is missing, shallow-clones XMage and Forge at pinned commits into
+`~/Library/Caches/beryl/oracles` and builds them once with JDK 21; agents run it
+unattended. `just oracle` exports the scenarios and runs them on both. The lane
+runs outside `just ci`'s 300-second budget, on demand and nightly.
+
+- A card an oracle does not implement, or a scenario outside its harness's
+  vocabulary, is reported as unsupported, not failed.
+- A disagreement is a bug to investigate, and the Comprehensive Rules decide it.
+  When the oracle is wrong, the scenario joins a short allowlist of known
+  divergences, each with its CR citation.
 
 ### 17.3 The bar for a supported card
 
 A card is supported when every one of its abilities is exercised by at least one
-scenario, its scenarios pass on Beryl and on XMage where exportable, and fuzz
-play including the card raises no invariant. dirac's lockstep bar is the model.
+scenario, its scenarios pass on Beryl and, where exportable, on XMage and Forge
+or appear on the divergence allowlist, and fuzz play including the card raises
+no invariant. dirac's lockstep bar is the model.
 
 ### 17.4 Other checks
 
@@ -914,17 +932,20 @@ play including the card raises no invariant. dirac's lockstep bar is the model.
 ## 18. Performance discipline (D16, D22)
 
 Every target in §1 gets a `_counts` Gungraun benchmark and a `_timing` Criterion
-baseline in Phase 1, following `docs/benchmarking.md`: deterministic inputs
+baseline in Milestone 1, following `docs/benchmarking.md`: deterministic inputs
 pinned by a test, instruction counts first, ABBA timing to confirm on a quiet
-machine, single-threaded on a Super core. Gates come once baselines exist.
+machine, single-threaded on a Super core. Milestone 1 gates only what is
+deterministic: the size assertion, zero hot-path allocations, the stall rate and
+the perf-counter bands. The time targets are reported from counts, and timing
+waits for a human on a quiet machine, which an unattended run never has.
 
 **The cube rollout benchmark** is the workload the targets are measured on: a
 pinned corpus of mid-game positions between real cube decks, cut from
-heuristic-agent games, rolled out under the rollout policy and the search
-profile to the horizon Phase 2 chooses. It reports decisions per turn and per
-rollout, nanoseconds per decision for the engine and for the policy, and
-rollouts per core-second. Until the Phase 1 heuristic agent exists, random games
-stand in.
+expert-system and greedy games, rolled out under the rollout policy and the
+search profile to the end of the game, Milestone 1's horizon (§19.1). In
+Milestone 1 the decks are the WU Control mirror. It reports decisions per turn
+and per rollout, nanoseconds per decision for the engine and for the policy, and
+rollouts per core-second.
 
 **Builds.** A `search` Cargo profile builds the benchmark and headless research
 binaries: fat LTO, `panic = "abort"` and `codegen-units = 1`, with
@@ -961,10 +982,13 @@ Rules for the hot path:
 
 ### 19.1 Search
 
-Phase 1 ships a baseline (**D15**); the real search is Phase 2. The engine
-already provides what that search needs: cheap copies, factored decisions inside
-the state, the `Observation` view and determinization, profiles, budgets, the
-state hash, per-thread `Scratch`, inline answers, and the inlined rollout loop.
+Milestone 1 ships four agents behind one trait: a random agent, a greedy agent
+that is also the rollout policy, an expert system (**D15**), and a basic MCTS in
+an omniscient and a hidden-information variant. Stronger search comes in later
+milestones. The engine already provides what search needs: cheap copies,
+factored decisions inside the state, the `Observation` view and determinization,
+profiles, budgets, the state hash, per-thread `Scratch`, inline answers, and the
+inlined rollout loop.
 
 ```rust
 pub trait Agent {
@@ -972,13 +996,14 @@ pub trait Agent {
 }
 ```
 
-The baseline is a scripted heuristic with a static evaluation: play a land, cast
-the most expensive castable spell with sensible targets, attack when the simple
-combat math says safe, block to avoid lethal or trade up, pass otherwise. It
-ships beside a `RandomAgent` used for fuzzing, and its games supply the
-positions of the cube rollout benchmark (§18).
+**The expert system** is the scripted baseline: a prioritized rule set with
+card-specific knowledge (when to hold a counterspell, when to cast a wheel,
+which land to Strip Mine), using engine copies only for combat math and lethal
+checks. It ships beside a `RandomAgent` used for fuzzing, and its games and the
+greedy agent's supply the positions of the cube rollout benchmark (§18).
 
-**The rollout policy** (**D21**) is separate from the baseline, and cheaper:
+**The rollout policy** (**D21**) is separate from the expert system, and
+cheaper. Wrapped as an `Agent`, it is also the greedy opponent:
 
 - It reads per-card scores that the search crate precomputes per game, indexed
   by game-table index (§6.4), plus simple combat rules: attack when no untapped
@@ -995,59 +1020,76 @@ expert player's by about 10 percentage points.
 
 The intended search, from the research: ensemble determinized MCTS at the root,
 many shallow determinizations rather than few deep ones, each factored decision
-a node, rollouts under the rollout policy to a horizon Phase 2 chooses (full
-games, or a few turns scored by the static evaluation), common random numbers
-across candidates, and root parallelization across determinizations on all 18
-cores with no shared mutable state. Then a learned value function at the leaves,
-and EPIMC-style deferred evaluation for bluff-sensitive spots. ISMCTS is an
+a node, rollouts under the rollout policy, common random numbers across
+candidates, and root parallelization across determinizations on all 18 cores
+with no shared mutable state. Then a learned value function at the leaves, and
+EPIMC-style deferred evaluation for bluff-sensitive spots. ISMCTS is an
 experiment, not the default.
 
-**Node storage** is a Phase 2 decision. At about 10,000 new nodes per second per
-thread, a 20 KiB state in every node would be 3.6 GB/s across 18 threads, or 36
-GB for a 10-second search, and restoring one from DRAM takes about 630 ns.
-Search can replay choices from the root, or keep states only in nodes visited at
-least twice; a state is a pure function of the root and the choices (§2), so
-either is exact.
+**Milestone 1's MCTS** is the basic form of that search:
+
+- UCT over the engine's factored decisions, with full-game rollouts under the
+  rollout policy. A stall scores 0.5.
+- Nodes store choices only, and each iteration copies the root and replays its
+  path.
+- Budgets are iteration counts, so a seed reproduces a move.
+- Independent trees run root-parallel on threads, and their root visit counts
+  are summed in a fixed order.
+- The hidden-information variant samples K determinizations from the searcher's
+  Observation, one tree each. The omniscient variant runs the same search on the
+  true state and is labeled as cheating wherever a human meets it.
+
+**Node storage** beyond replay from the root is a later decision. At about
+10,000 new nodes per second per thread, a 20 KiB state in every node would be
+3.6 GB/s across 18 threads, or 36 GB for a 10-second search, and restoring one
+from DRAM takes about 630 ns. Search can replay choices from the root, or keep
+states only in nodes visited at least twice; a state is a pure function of the
+root and the choices (§2), so either is exact.
 
 ### 19.2 Sessions and IPC (D14)
 
-`beryl_app` owns a `GameSession` per game on a dedicated thread running the
-step/apply loop. When the pending decision belongs to the human, the session
-emits a Tauri event with an owned masked copy of the human's Observation (§13),
-the Decision with its candidates described by public slot, and the engine events
-since the last view for animation, then waits for one
+`beryl_session` owns a `GameSession` per game on a dedicated thread running the
+step/apply loop, and `beryl_app` wraps it in Tauri commands and events. When the
+pending decision belongs to the human, the session emits a `PlayerView`: a
+reduced, owned view built from the human's Observation (§13), holding only what
+the UI draws, rather than the 17 KiB masked state. With it go the Decision, its
+candidates described by public slot, and the engine events since the last view
+for animation. The session then waits for one
 `choose(session, decision_seq, index)` command. AI decisions run on the session
 thread, and a search may use a pool, so IPC never blocks. The webview never sees
 a `State`. Every session records seed, decklists and the choice log as a replay
-file, and `ui/src/ipc.ts` keeps the typed wrappers for the commands and events.
+file. The protocol's TypeScript types are generated from the Rust types, and
+`ui/src/ipc.ts` keeps the typed wrappers for the commands and events.
+
+The human plays under the smart stops of §15 by default. A setting switches to
+the exact profile, which offers every priority. Milestone 1 offers a game
+against any one agent; the human and the AI both play the WU Control mirror.
 
 ### 19.3 Draft
 
 `beryl_draft` generates eight seats of three 15-card packs from the 540-card
 list, tracks picks and pass direction, and exposes a `DraftAgent` with the same
-shape as `Agent`. The Phase 1 bot is a pick-order rating with color commitment,
-the Forge and XMage baseline, and the deckbuilder picks a two-color 23 with 17
-lands including basics. A human drafts and builds in the UI. Learned card
-representations and simulation-based evaluation are later work, and the latter
-is one more reason the engine must be fast. Simulation plays a new deck for
-every candidate pick, so it runs on the generic engine with per-game tables
-(§6.4), never on builds compiled per matchup.
+shape as `Agent`. Drafting is a later milestone than Milestone 1. Its first bot
+is a pick-order rating with color commitment, the Forge and XMage baseline, and
+the deckbuilder picks a two-color 23 with 17 lands including basics. A human
+drafts and builds in the UI. Learned card representations and simulation-based
+evaluation are later work, and the latter is one more reason the engine must be
+fast. Simulation plays a new deck for every candidate pick, so it runs on the
+generic engine with per-game tables (§6.4), never on builds compiled per
+matchup.
 
 ## 20. Open questions
 
 - **Companions.** Lurrus, Lutri and Zirda can be companions in cube. Supporting
   the mechanic costs a sideboard slot per player and a special action; whether
-  the cube experience wants it is a Phase 1 plan decision.
+  the cube experience wants it is a decision for the drafting milestone.
 - **Loop shortcuts.** The "repeat N times" meta-action of §12.3, and how search
   should propose counts.
 - **613.8 corpus.** Which cube interactions, if any, exercise same-layer
   dependencies; the scenario suite should contain the candidates.
-- **Observation size over IPC.** The owned masked copy is about 17 KiB; the
-  webview may want a reduced `PlayerView` instead, derived from the view.
-- **Forge's reach as an oracle**, given its scripted harness's limits, versus
-  investing in XMage only.
-- **Rollout horizon and node storage** (§19.1): full games, or a few turns and
-  an evaluation; replay from the root, or states in nodes visited twice.
+- **Rollout horizon and node storage beyond Milestone 1** (§19.1): whether a few
+  turns and an evaluation beat full games, and whether states in nodes visited
+  twice beat replay from the root.
 - **Per-matchup builds** (§6.4): the experiment, once the cube rollout benchmark
   exists, adopted at 10% or more.
 - **To measure once the engine runs:** how often layers recompute with equipment
@@ -1069,10 +1111,10 @@ every candidate pick, so it runs on the generic engine with per-game tables
 | D9  | Engine-tracked knowledge over public slots; shuffles rebind identities; Observation as a borrowed view                                                     | The chokepoints are in the engine; every engine that tracked knowledge elsewhere leaked; a masked copy per decision would cost over 10% of the budget                                |
 | D10 | Typed `Event` enum for about 30 kinds, per-kind indexes, set-carrying events                                                                               | One replacement and trigger protocol; everything-is-an-event is slow; per-primitive hooks drift                                                                                      |
 | D11 | Distinct `Stalled(reason)` terminal scored as a draw                                                                                                       | Budgets are unavoidable; a stall must be distinguishable from a rules draw in tests and statistics                                                                                   |
-| D12 | Crates: engine, cards, scenario, search, draft, bench, app                                                                                                 | The engine knows no card; card edits do not rebuild rules tests; the AI cannot reach engine internals                                                                                |
+| D12 | Crates: engine, cards, scenario, search, session, cli, draft, bench, app                                                                                   | The engine knows no card; card edits do not rebuild rules tests; the AI cannot reach engine internals                                                                                |
 | D13 | Scenarios as Rust-built serde values, strict runner, exported to XMage and Forge                                                                           | Typo-safe authoring with the compiler's help; one scenario, three engines                                                                                                            |
 | D14 | Rust `GameSession` on its own thread; Observations over IPC; replay files                                                                                  | AI thinking never blocks the window; hidden identities never reach the webview                                                                                                       |
-| D15 | Scripted heuristic baseline behind an `Agent` trait over Observations                                                                                      | Plays sanely in Phase 1 and supplies the benchmark's positions; no API change for MCTS                                                                                               |
+| D15 | A scripted expert system behind an `Agent` trait over Observations                                                                                         | Plays sanely in Milestone 1 and supplies the benchmark's positions; no API change for MCTS                                                                                           |
 | D16 | Per-core budgets measured on cube rollouts as MCTS runs them; metrics first-class                                                                          | The per-decision budget drives the layout; random games undercount the decisions search pays for; machine-wide numbers reward degenerate games                                       |
 | D17 | This document at `docs/engine-architecture.md`, engine plus boundaries                                                                                     | Reference material every session reads; the interfaces the UI and AI consume are written down                                                                                        |
 | D18 | Search profiles give priority only at smart stops                                                                                                          | A held fetchland or instant makes most of a turn's 16 to 20 priority passes into decisions; smart stops cut decisions 2.5 to 3 times, which no codegen recovers                      |
