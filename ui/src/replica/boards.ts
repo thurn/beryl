@@ -150,16 +150,6 @@ const trigger: TableBoard = {
   ],
 };
 
-/** scry.png: Preordain's scry over the dimmed battlefield (the overlay is Scry.tsx). */
-const scry: TableBoard = {
-  ...SAMPLE_BOARD,
-  you: {
-    ...you,
-    hand: you.hand.slice(1),
-    lands: [{ ...you.lands[0]!, tapped: 1 }, ...you.lands.slice(1)],
-  },
-};
-
 /** battlefield.png lights the tracker's first glyph while offering "To Combat". */
 const battlefield: TableBoard = { ...SAMPLE_BOARD, phase: "beginning" };
 
@@ -167,5 +157,4 @@ export const BOARDS: Record<string, TableBoard> = {
   battlefield,
   combat,
   trigger_on_stack_with_target: trigger,
-  scry,
 };

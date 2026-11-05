@@ -123,9 +123,10 @@
 .mana-w {
   background: #f6f2c8;
 }
+/* A black drop on pale cyan, as the mockups' Counterspell and Preordain draw it. */
 .mana-u {
-  color: #0f3d6e;
-  background: radial-gradient(circle at 35% 30%, #eef9ff, #b8def3 60%, #93c6e6);
+  color: #020405;
+  background: radial-gradient(circle at 40% 35%, #e2faff, #c4ecfb 55%, #a3d3ea);
 }
 .mana-b {
   background: #b3a8a3;
@@ -1501,16 +1502,17 @@
 .overlay-title {
   position: absolute;
   inset: -6px 0 auto;
-  translate: -35px 0;
+  translate: -32.5px 0;
   margin: 0;
   font-family: var(--font-serif);
   font-weight: 700;
-  font-size: 66px;
-  line-height: 1.05;
-  color: #fbf8f4;
+  font-size: 64.5px;
+  line-height: 1.08;
+  color: #fefdfb;
   text-shadow:
     1px 3px 2px rgb(0 0 0 / 80%),
-    0 4px 10px rgb(0 0 0 / 60%);
+    0 4px 10px rgb(0 0 0 / 60%),
+    0 0 14px rgb(255 255 255 / 22%);
 }
 .overlay-instruction {
   position: absolute;
@@ -1547,10 +1549,12 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 100px;
+  gap: 94px;
   padding-top: 10px;
 }
+/* Near black inside, as scry.png draws it over the dimmed table. */
 .overlay-view {
+  background: #141211;
   min-width: 0;
   width: 255px;
   height: 53px;

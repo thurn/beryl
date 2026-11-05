@@ -123,6 +123,18 @@
       "height": 900
     },
     {
+      "name": "game-choice-scry-1280",
+      "route": "/?fixture=choice-scry#/game",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "name": "game-choice-scry-1920",
+      "route": "/?fixture=choice-scry#/game",
+      "width": 1920,
+      "height": 1080
+    },
+    {
       "name": "game-choice-jace",
       "route": "/?fixture=choice-jace#/game",
       "width": 1600,

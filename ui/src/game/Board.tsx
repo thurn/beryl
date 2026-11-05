@@ -138,8 +138,8 @@ export function Board({
     !isCombat(decision.kind) &&
     !isOpening(decision.kind);
   const placements = useMemo(
-    () => layout(view, raised, prompting),
-    [view, raised, prompting],
+    () => layout(view, raised, prompting, dimmed),
+    [view, raised, prompting, dimmed],
   );
 
   // A new view closes whatever was open on the old one.
@@ -272,193 +272,207 @@ export function Board({
     deciding && decision && isCombat(decision.kind) ? decision : undefined;
 
   return (
-    <div
-      className={dimmed ? "table table-dimmed" : "table"}
-      onPointerDown={() => setSettings(false)}
-    >
-      <div className="far-shade" />
-      <Lying
-        x={PILES.opponent.library.x}
-        y={PILES.opponent.library.y}
-        width={122}
-        squash={0.85}
-      >
-        <Library
-          count={opponent.library.length}
-          width={PILES.opponent.library.width}
-          depth={{ x: -29, y: 37, flare: 32 }}
-        />
-      </Lying>
-      <Lying x={PILES.you.library.x} y={PILES.you.library.y} width={116}>
-        <Library
-          count={you.library.length}
-          width={PILES.you.library.width}
-          depth={{ x: 6, y: 12, twist: 7 }}
-        />
-      </Lying>
-      {(["opponent", "you"] as const).map((side) => {
-        const count = view.players[side].graveyard.length;
-        const { x, y } = PILES[side].graveyard;
-        return (
-          count > 1 && (
-            <Lying
-              key={side}
-              x={x + PILE_DEPTH.x}
-              y={y}
-              width={PILE_WIDTH}
-              squash={PILE_SQUASH}
-            >
-              <GraveyardEdges
-                count={count}
-                width={PILE_WIDTH}
-                depth={PILE_DEPTH}
-              />
-            </Lying>
-          )
-        );
-      })}
-
-      <div className="hud" style={{ left: 18, top: 62 }}>
-        <PlayerBadge name="Opponent" />
-      </div>
-      <div className="hud" style={{ left: 18, top: 814 }}>
-        <PlayerBadge name="You" />
-      </div>
-      <Life
-        side="opponent"
-        life={opponent.life}
-        active={active === "opponent" && view.turn.priority === "opponent"}
-        style={{ left: 670, top: 48 }}
-        target={deciding ? can.players.get("opponent") : undefined}
-        onPick={pick}
-      />
-      <Life
-        side="you"
-        life={you.life}
-        active={active === "you" && view.turn.priority === "you"}
-        style={{ left: 670, top: 618 }}
-        target={deciding ? can.players.get("you") : undefined}
-        onPick={pick}
-      />
-
-      {banner && <StepBanner {...banner} />}
-
-      {view.stack.map(
-        (item, i) =>
-          item.kind === "ability" && (
-            <AbilityOnStack
-              key={`${i}-${item.name}`}
-              index={i}
-              count={view.stack.length}
-              lifted={prompting}
-              item={item}
-              source={
-                item.source === null ? undefined : objects.get(item.source)
-              }
-            />
-          ),
-      )}
-
-      <CardLayer
-        epoch={view}
-        objects={view.objects}
-        placements={placements}
-        states={states}
-        onClick={onClick}
-        onDrop={onDrop}
-        onHover={setHovered}
-      />
-
-      <div className="board-arrows">
-        <Arrows arrows={arrows} follow />
-      </div>
-
+    <>
       <div
-        className={
-          waiting || !decision || (decision.kind !== "priority" && !declaring)
-            ? "turn-controls turn-controls-wait"
-            : "turn-controls"
-        }
+        className={dimmed ? "table table-dimmed" : "table"}
+        onPointerDown={() => setSettings(false)}
       >
-        {/* While you wait, the priority pill takes the tracker's place
-            (trigger_on_stack_with_target.png). */}
-        {waiting ? (
-          <PriorityPill>Opponent has priority</PriorityPill>
-        ) : (
-          <PhaseTracker current={phaseOf(view.turn.step)} compact />
-        )}
-        {declaring ? (
-          <Finish
-            view={view}
-            decision={declaring}
-            done={can.done}
-            onPick={pick}
+        <div className="far-shade" />
+        <Lying
+          x={PILES.opponent.library.x}
+          y={PILES.opponent.library.y}
+          width={122}
+          squash={0.85}
+        >
+          <Library
+            count={opponent.library.length}
+            width={PILES.opponent.library.width}
+            depth={{ x: -29, y: 37, flare: 32 }}
           />
-        ) : decision?.kind === "priority" || waiting ? (
-          <div className="turn-action">
-            <Button
-              icon={<FastForwardIcon />}
-              disabled={waiting || can.pass === undefined}
-              className={stop.label.length > 8 ? "button-long" : undefined}
-              onClick={() => can.pass !== undefined && pick(can.pass)}
-            >
-              {waiting ? "Pass" : stop.label}
-            </Button>
-            {!waiting && <span className="turn-caption">{stop.caption}</span>}
-          </div>
-        ) : null}
-      </div>
+        </Lying>
+        <Lying x={PILES.you.library.x} y={PILES.you.library.y} width={116}>
+          <Library
+            count={you.library.length}
+            width={PILES.you.library.width}
+            depth={{ x: 6, y: 12, twist: 7 }}
+          />
+        </Lying>
+        {(["opponent", "you"] as const).map((side) => {
+          const count = view.players[side].graveyard.length;
+          const { x, y } = PILES[side].graveyard;
+          return (
+            count > 1 && (
+              <Lying
+                key={side}
+                x={x + PILE_DEPTH.x}
+                y={y}
+                width={PILE_WIDTH}
+                squash={PILE_SQUASH}
+              >
+                <GraveyardEdges
+                  count={count}
+                  width={PILE_WIDTH}
+                  depth={PILE_DEPTH}
+                />
+              </Lying>
+            )
+          );
+        })}
 
-      {prompting && decision && (
-        <Prompt decision={decision} source={sourceName} onPick={pick} />
-      )}
-
-      {menu && (
-        <ActionMenu
-          menu={menu}
-          title={objects.get(menu.slot)?.name ?? undefined}
-          onPick={pick}
-          onClose={() => setMenu(undefined)}
-        />
-      )}
-
-      {hovered !== undefined && !menu && !dimmed && (
-        <Inspect
-          object={objects.get(hovered)}
-          place={placements.get(hovered)}
-        />
-      )}
-
-      <button
-        type="button"
-        className="gear-button"
-        aria-label="Settings"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={() => setSettings(!settings)}
-      >
-        <Gear />
-      </button>
-      {settings && (
-        <div className="settings" onPointerDown={(e) => e.stopPropagation()}>
-          <label className="settings-toggle">
-            <input
-              type="checkbox"
-              checked={view.stops === "exact"}
-              disabled={!deciding}
-              onChange={(e) => setFullControl(e.target.checked)}
-            />
-            <span>
-              Full control
-              <small>Stop at every priority</small>
-            </span>
-          </label>
-          <Button variant="secondary" size="small" onClick={onLeave}>
-            Leave game
-          </Button>
+        <div className="hud" style={{ left: 18, top: 62 }}>
+          <PlayerBadge name="Opponent" />
         </div>
-      )}
+        <div className="hud" style={{ left: 18, top: 814 }}>
+          <PlayerBadge name="You" />
+        </div>
+        <Life
+          side="opponent"
+          life={opponent.life}
+          active={active === "opponent" && view.turn.priority === "opponent"}
+          style={{ left: 670, top: 48 }}
+          target={deciding ? can.players.get("opponent") : undefined}
+          onPick={pick}
+        />
+        <Life
+          side="you"
+          life={you.life}
+          active={active === "you" && view.turn.priority === "you"}
+          style={{ left: 670, top: 618 }}
+          target={deciding ? can.players.get("you") : undefined}
+          onPick={pick}
+        />
+
+        {banner && <StepBanner {...banner} />}
+
+        {view.stack.map(
+          (item, i) =>
+            item.kind === "ability" && (
+              <AbilityOnStack
+                key={`${i}-${item.name}`}
+                index={i}
+                count={view.stack.length}
+                lifted={prompting}
+                item={item}
+                source={
+                  item.source === null ? undefined : objects.get(item.source)
+                }
+              />
+            ),
+        )}
+
+        <CardLayer
+          epoch={view}
+          objects={view.objects}
+          placements={placements}
+          states={states}
+          onClick={onClick}
+          onDrop={onDrop}
+          onHover={setHovered}
+        />
+
+        <div className="board-arrows">
+          <Arrows arrows={arrows} follow />
+        </div>
+
+        {/* Under a screen over the table, the turn's controls give way (scry.png). */}
+        {!inert && (
+          <div
+            className={
+              waiting ||
+              !decision ||
+              (decision.kind !== "priority" && !declaring)
+                ? "turn-controls turn-controls-wait"
+                : "turn-controls"
+            }
+          >
+            {/* While you wait, the priority pill takes the tracker's place
+            (trigger_on_stack_with_target.png). */}
+            {waiting ? (
+              <PriorityPill>Opponent has priority</PriorityPill>
+            ) : (
+              <PhaseTracker current={phaseOf(view.turn.step)} compact />
+            )}
+            {declaring ? (
+              <Finish
+                view={view}
+                decision={declaring}
+                done={can.done}
+                onPick={pick}
+              />
+            ) : decision?.kind === "priority" || waiting ? (
+              <div className="turn-action">
+                <Button
+                  icon={<FastForwardIcon />}
+                  disabled={waiting || can.pass === undefined}
+                  className={stop.label.length > 8 ? "button-long" : undefined}
+                  onClick={() => can.pass !== undefined && pick(can.pass)}
+                >
+                  {waiting ? "Pass" : stop.label}
+                </Button>
+                {!waiting && (
+                  <span className="turn-caption">{stop.caption}</span>
+                )}
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {prompting && decision && (
+          <Prompt decision={decision} source={sourceName} onPick={pick} />
+        )}
+
+        {menu && (
+          <ActionMenu
+            menu={menu}
+            title={objects.get(menu.slot)?.name ?? undefined}
+            onPick={pick}
+            onClose={() => setMenu(undefined)}
+          />
+        )}
+
+        {hovered !== undefined && !menu && !dimmed && (
+          <Inspect
+            object={objects.get(hovered)}
+            place={placements.get(hovered)}
+          />
+        )}
+
+        {/* Like the turn's controls, the gear gives way to a screen over the table. */}
+        {!inert && (
+          <button
+            type="button"
+            className="gear-button"
+            aria-label="Settings"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => setSettings(!settings)}
+          >
+            <Gear />
+          </button>
+        )}
+        {settings && !inert && (
+          <div className="settings" onPointerDown={(e) => e.stopPropagation()}>
+            <label className="settings-toggle">
+              <input
+                type="checkbox"
+                checked={view.stops === "exact"}
+                disabled={!deciding}
+                onChange={(e) => setFullControl(e.target.checked)}
+              />
+              <span>
+                Full control
+                <small>Stop at every priority</small>
+              </span>
+            </label>
+            <Button variant="secondary" size="small" onClick={onLeave}>
+              Leave game
+            </Button>
+          </div>
+        )}
+      </div>
+      {/* Outside the table, so it stays crisp over the dimmed table and any screen on it
+          (scry.png). */}
       <Brand />
-    </div>
+    </>
   );
 }
 

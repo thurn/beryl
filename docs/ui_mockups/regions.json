@@ -814,114 +814,152 @@
         "scry-preordain": [1283, 273, 311, 226]
       },
       "parts": {
-        "screen": [0, 0, 1672, 941],
+        "screen": {
+          "rect": [0, 0, 1672, 941],
+          "verdict": "differs",
+          "bead": "by-b0q.3.19",
+          "commit": "01b9f32+",
+          "accepted": [
+            "by-b0q.3.19 residual: card frames: the mockup's art windows a little taller and black borders thinner than the shared Card frame's",
+            "by-b0q.3.19 residual: the backdrop's '22' orb keeps its active glow under the overlay"
+          ]
+        },
         "backdrop": {
           "rect": [16, 500, 330, 240],
           "verdict": "differs",
-          "bead": "by-b0q.3.17",
-          "commit": "7b525db+"
+          "bead": "by-b0q.3.19",
+          "commit": "01b9f32+",
+          "accepted": [
+            "by-b0q.3.19 residual: the blurred land stack at left reads slightly crisper than the mockup's; the mockup blurs its top harder than its hand"
+          ]
         },
         "brand": {
           "rect": [26, 6, 224, 44],
-          "verdict": "pass",
-          "bead": "by-b0q.1.26",
-          "commit": "2f7cf8a",
-          "fingerprint": "EA4OEQ8PExAQFBEQFBIRFhMSFhMTFxQTExEQERAPExAQFBERFRISFhMSFhMTFxQTIBwXFBIQExEQFBIRFRISFhMTFxQTFxQTNy8kLSYfNy8mLykiODAnMiskOjIpKSQeaFc/LCUfOTIoMSojKiQfNy8nMywkKiUgPjQnGxcVLSchKyUfKCMeLCYgLCYgKyYgHxoWFBEQFRISFhMSFhMTFxQTFxUUFxUUFBERFBIRFRISFhMTFxQTFxQTFxUUGBUU",
+          "verdict": "differs",
+          "bead": "by-b0q.3.19",
+          "commit": "01b9f32",
           "accepted": [
-            "by-b0q.1.26 residual: swash and garbled glyphs in the mockup's brand"
+            "by-b0q.1.26 residual: swash and garbled glyphs in the mockup's brand",
+            "by-b0q.3.19 conflict: wordmark and crest brightness: by-b0q.1.26 passed it; a by-b0q.3.19 reviewer called the replica brighter and more golden with no visible change to the brand"
           ]
         },
         "title": {
           "rect": [186, 44, 1004, 86],
           "verdict": "differs",
-          "bead": "by-b0q.3.17",
-          "commit": "7b525db+"
+          "bead": "by-b0q.3.19",
+          "commit": "01b9f32+",
+          "accepted": [
+            "by-b0q.3.19 residual: the blurred 17 orb's wings brighter than the mockup's"
+          ]
         },
         "instruction": {
           "rect": [326, 130, 698, 34],
-          "verdict": "differs",
-          "bead": "by-b0q.3.17",
-          "commit": "7b525db+"
+          "verdict": "pass",
+          "bead": "by-b0q.3.19",
+          "commit": "01b9f32",
+          "fingerprint": "IyEhKCQjKSYkLyknLygmJx8aLyYhLyknKSksOzg2PTo4MSspMiwqKiEcNi0oNi8uQ0JDUE1MVlNSQDo4QDo4QTcxQDcyQj07Z2hpe3l4hoWDdXJxbmppgXp1cWxpbWpoWltdYV9ea2lpYFtaWVVUY1xWYFtZYFxbZ2hqaGdmaWhoYV1bZGBfbWhlZGBfZmJgLS4xIiAhJCIjLSclMi0qLiclNC4sNC4sJyksIR8gKCYnMSooMiwqMispNC0rMy0r",
+          "accepted": [
+            "by-b0q.3.19 residual: sub-pixel glyph edge offsets"
+          ]
         },
         "lower-rule": {
           "rect": [266, 178, 836, 16],
           "verdict": "pass",
-          "bead": "by-b0q.1.26",
-          "commit": "2f7cf8a",
-          "fingerprint": "JDE2Ih0sKCE1JiEgJiEgJyIgJiEgJiEgIzE1IhwrJR4yJiEgJiEgJyIgJiEgJiEgIjA0IRsrIhwvJiEgJiEgJyIgJiEgJiEgIC4yIBsqHxorJiEgJyIgJyIgJyIgJiEgIy0vLys3LSo1NDEwNTEwNjIwNTEwKiUlZmlpwsHCxMTFxcXFxcXFxcXFxMTEcG5tFh4gGBQfExEaHxsaIBwbIBwbHxsaHxsaGSMkHBclFRMdJiEgJyIhKCIhJyIhJiEg"
+          "bead": "by-b0q.3.19",
+          "commit": "01b9f32",
+          "fingerprint": "MDpDIh8eMzEyMSsoMisqMiwqMisqMSspMjtEIh8fMjAyMSsoMisqMiwqMisqMispMzxEIiAfMjAxMSspMisqMiwqMisqMispNDxEIyAgMS8wMSspMiwqMiwqMiwqMispNDk+MzEwPDo7PTg2Pjk3Pjk3PTk3My0rbG5vwsLCxcXFxcXFxcXFxcXFxcTEc3FvLDA1HhwcJSMlKCIhKSQiKSQiKCMiKCMhNjxBJSMjLSwtMispMywqNC0qMywqMisp",
+          "accepted": [
+            "by-b0q.3.19 residual: the rule's bright line a touch crisper, the band under it a little deeper"
+          ]
         },
         "view-battlefield-button": {
           "rect": [1346, 56, 276, 66],
           "verdict": "differs",
-          "bead": "by-b0q.3.17",
-          "commit": "7b525db+"
+          "bead": "by-b0q.3.19",
+          "commit": "01b9f32+",
+          "accepted": [
+            "by-b0q.3.19 residual: label stroke and border a touch brighter than the mockup's"
+          ]
         },
         "tray": {
           "rect": [138, 206, 1052, 492],
           "verdict": "differs",
-          "bead": "by-b0q.3.17",
-          "commit": "7b525db+",
+          "bead": "by-b0q.3.19",
+          "commit": "01b9f32+",
           "accepted": [
-            "by-b0q.1.28 residual: the mockup paints its middle back taller than a card"
+            "by-b0q.1.28 residual: the mockup paints its middle back taller than a card",
+            "by-b0q.3.19 residual: Counterspell's type bar and text box ~5 px high: the mockup's art window is taller than the shared full frame's"
           ]
         },
         "tray-island": {
           "rect": [288, 280, 366, 424],
           "verdict": "differs",
-          "bead": "by-b0q.3.17",
-          "commit": "7b525db+",
+          "bead": "by-b0q.3.19",
+          "commit": "01b9f32+",
           "accepted": [
-            "by-b0q.1.31 residual: rim warmth and streaks; the mockup's halo slightly brighter and wider"
+            "by-b0q.1.31 residual: rim warmth and streaks; the mockup's halo slightly brighter and wider",
+            "by-b0q.3.19 residual: black rim heavier and silver bevel flatter than the mockup's full-art Island; glow slightly dimmer at the bottom"
           ]
         },
         "tray-backs": {
           "rect": [448, 214, 316, 394],
           "verdict": "differs",
-          "bead": "by-b0q.3.17",
-          "commit": "7b525db+",
+          "bead": "by-b0q.3.19",
+          "commit": "01b9f32+",
           "accepted": [
-            "by-b0q.1.31 residual: leather tooling vs scuffs; the Island covers more of the back (tray placement)"
+            "by-b0q.1.31 residual: leather tooling vs scuffs; the Island covers more of the back (tray placement)",
+            "by-b0q.3.19 residual: the card back's oval, wordmark and gems sit higher and tighter: the mockup paints its middle back taller"
           ]
         },
         "tray-counterspell": {
           "rect": [742, 242, 302, 408],
           "verdict": "differs",
-          "bead": "by-b0q.3.17",
-          "commit": "7b525db+",
+          "bead": "by-b0q.3.19",
+          "commit": "01b9f32+",
           "accepted": [
-            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.3.19 residual: type bar and text box ~5 px high; title, type and rules text slightly lighter than the mockup's",
+            "by-b0q.3.19 conflict: vertical position: by-b0q.3.19 round 1 called the card 8 px low, round 2 (after it moved down 8 px to match the measured blue frame, now within 1 px) called it 5 px high"
           ]
         },
         "bottom-label": {
           "rect": [164, 700, 148, 40],
           "verdict": "differs",
-          "bead": "by-b0q.3.17",
-          "commit": "7b525db+"
+          "bead": "by-b0q.3.19",
+          "commit": "01b9f32+",
+          "accepted": [
+            "by-b0q.3.19 residual: the mockup's BOTTOM strokes slightly heavier and more compact"
+          ]
         },
         "top-label": {
           "rect": [1088, 700, 74, 40],
           "verdict": "pass",
-          "bead": "by-b0q.1.28",
-          "commit": "e915538",
-          "fingerprint": "KCIhVFBPVFBPLSgnVlJRMi4sVFBOLyopODIxl5WVd3V1end3aGVkPjo5i4qJgoB/KSQjeHZ1MS4sdnRzVFBPa2loZ2VkfHp5JyIgeXd2VlJRVFFQcW5tcnBwa2lpKCMjJiEfenh3TEhHV1RTfHp5eXd2Ih4dJiEgMy4ta2loJB8eb21sPTo5bmxrLSgnJiEgJSAfIx8eJiEgIx4dJSAfIx4eJSEgJiEgJiEgJiEgJiEgJiEgJiEgJiEgJiEfJiEf"
+          "bead": "by-b0q.3.19",
+          "commit": "01b9f32",
+          "fingerprint": "NC0rXVhWXVhWODIwXllYPDc1W1dWOTMyQjw5mpiXfHl5f3x7bWppRkJBj42MiIWENC0sfXp5OTUze3h3W1dWcm5tbWppgn5+Miwqfnx7XVlYXFhXeHRzeHV0cW5tMSwqMSspf3x8VE9OX1pagn5+fnt6LCYkMSspPTc2cW1tLigndXJxRUA/dHFwODEvMispMSopLignMSspLiclMCkoLigmMSooMSspMispMispMispMispMSspMSsoMSsoMSso",
+          "accepted": [
+            "by-b0q.3.19 residual: a pixel or two off horizontally, strokes marginally heavier"
+          ]
         },
         "done-button": {
           "rect": [508, 746, 300, 74],
-          "verdict": "differs",
-          "bead": "by-b0q.3.17",
-          "commit": "7b525db+",
+          "verdict": "pass",
+          "bead": "by-b0q.3.19",
+          "commit": "01b9f32",
+          "fingerprint": "nF0x2Y5G2o5G2o5G2o5G2Y5G2I1Fmlsv2ncs/Xsb/XgY/XcX/XcX/Xsb/X8f2How7nUj/XMY+34u83ow/WkQ/XAW/XYd7Xgm9XMg/XMb/IA15ZVn7ZJe+nQl/XIb9HQi9Xkk/X0i/Ic54p515aeB9XEg/XQb9HYj7YUt/o4q+Iot5YEy54Y4+IIj/oYj7YEr1Yg7/qc8/qU5/qM2/qM2/qM3/qM41IY6lVcu1YtJ1YtJ1YtJ1YtJ1YtJ1YtJlFYu",
           "accepted": [
-            "by-b0q.1.26 residual: the cloudy fill, warmer rim glow and halo strength"
+            "by-b0q.1.26 residual: the cloudy fill, warmer rim glow and halo strength",
+            "by-b0q.3.19 residual: rim a slightly thinner, paler line; fill a touch lighter toward the edges"
           ]
         },
         "source-card": {
           "rect": [1256, 210, 364, 496],
-          "verdict": "pass",
-          "bead": "by-b0q.1.27",
-          "commit": "44861e7",
-          "fingerprint": "P0hRWmt7WGh2ZXiJaX2PaX2PY3iKQExXJkFbJj9qLEt/OGqsP22sQmypLU2AJD9aJUFdVnWkQ22rXpPSWYrLVYjHRmidKkdlKUdnQWKXb4KkhrDceaLSd4qtOlR/JUFdMUxkQ198W32kT3aiWn+oXHWUSmqPNE9pTWJ2qr/Tr8TZssjes8jes8jessjeUmh9U2l9xtTjxNPiw9Hgwc/extTkxdTjVm2CPk9ei5uri5uri5uri5urjJysi5urQFFh",
+          "verdict": "differs",
+          "bead": "by-b0q.3.19",
+          "commit": "01b9f32+",
           "accepted": [
-            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.3.19 residual: the shared full frame's black border ~4 px thicker, so the blue frame sits ~4 px inside the mockup's; type bar and rules text a few px low"
           ]
         }
       }
@@ -1342,10 +1380,9 @@
         },
         "06-island": {
           "rect": [1030, 675, 163, 180],
-          "verdict": "pass",
-          "bead": "by-b0q.1.31",
-          "commit": "636900b",
-          "fingerprint": "HhoZJzU+SoSyVZTJVZTIUpbSRmqFfU8rHhoZHyw2W424f6zWZZG1VIWwYYijaUMoHhoZHSMoao2mYImjZY+aMXB8NG+ESDw3IBoZIRwcLXKIHpqvEXOKLGp2R4+jGScwLiUdKR8ZJU1hC2h/DnCDEVpsEUZfJzZAMCwrLCclGSQrFyUuGCQrGhwgKSMiKiQhHRYTGxcWHxsaIBwbJB0bIRIKDAUCrmUwJRoTFxQTHBgXHRoZLR8dDwkJAwICPC0f",
+          "verdict": "differs",
+          "bead": "by-b0q.3.19",
+          "commit": "01b9f32+",
           "accepted": [
             "by-b0q.1.31 residual: the 06 layout and scale",
             "by-b0q.1.29 conflict: the sheet's 06 sketch is not a uniform scale of the screen's overlay; the gallery shows the live overlay scaled down (by-b0q.1.31's decision)"
@@ -1353,10 +1390,9 @@
         },
         "06-backs": {
           "rect": [1105, 652, 133, 173],
-          "verdict": "pass",
-          "bead": "by-b0q.1.31",
-          "commit": "636900b",
-          "fingerprint": "O05aYHB4YHuMUFZZbkIjYTolTj4zRWWHX6HXVpTHT5PQRmd+glUvbD4gQz9CQFVyhrLZPm+ZcqHLXISeakctYjcfP0FGVl9sUXuYWn+CKGV8O22ER0E+UzIgSEpPhaG8LZaoJ3uILnKBT5msJDE6IRUOSFVjy9rqCYOaC2+BDGR9CUdfLEFOHhoaLzdAZXB7GS89GigxHis0JjE5JSYoJyIhKyUiJSAbGhcWKh0WFgwJGhALekQjsV4qs10keEMh",
+          "verdict": "differs",
+          "bead": "by-b0q.3.19",
+          "commit": "01b9f32+",
           "accepted": [
             "by-b0q.1.31 residual: leather tooling vs scuffs; the Island covers more of the back (tray placement)",
             "by-b0q.1.31 residual: the 06 layout and scale",
@@ -1377,12 +1413,12 @@
         },
         "06-source-card": {
           "rect": [1378, 655, 130, 178],
-          "verdict": "pass",
-          "bead": "by-b0q.1.27",
-          "commit": "44861e7",
-          "fingerprint": "JzdGFzhnG0R9JGu1L3C5MmmvHkqDIjlOJzdGUHGeP3CyU5HWWpXXTpDXO2SdKEBWJzhIN2CZZ3mRdq3eb6PVcIipMk97JDxRLzxIV3WSaYmqZoy1dpvCb42sZYmvNklbKztJzNrqy9rpx9Xkx9Xly9nozNrqPlJjKjpJzdzsy9rqy9rqy9vrzNvrzNzsPVFjHx8hKi81KS41KS40KS40KC0zJy0zGx0gHBgYGxcXGRYVGhYUJR0VGxcTGhUSGRUT",
+          "verdict": "differs",
+          "bead": "by-b0q.3.19",
+          "commit": "01b9f32+",
           "accepted": [
-            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.3.19 residual: blue pips now a black drop on pale cyan, as scry.png and real mana symbols draw them"
           ]
         },
         "06-labels": {

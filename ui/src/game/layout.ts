@@ -226,18 +226,22 @@ function turned(
 
 const FULL_ASPECT = 63 / 88;
 
+/** How far the hand sinks under a screen over the table (scry.png). */
+const HAND_TUCK = 67;
+
 /** The hand fan (Table.tsx's Hand): the more cards, the closer they sit. `raised` straightens
- * and lifts one card, as hovering does. */
+ * and lifts one card, as hovering does; `tucked`, the fan sinks out of the way. */
 function handPlacements(
   cards: ObjectView[],
   raised: number | undefined,
+  tucked: boolean,
 ): Placement[] {
   const n = cards.length;
   const mid = (n - 1) / 2;
   const spacing = n > 1 ? Math.min(HAND.spacing, 760 / (n - 1)) : 0;
   return cards.map((o, i) => {
     const left = STAGE.width / 2 + (i - mid) * spacing - FULL_WIDTH / 2;
-    const top = HAND.top + (i - mid) ** 2 * HAND.sag;
+    const top = HAND.top + (i - mid) ** 2 * HAND.sag + (tucked ? HAND_TUCK : 0);
     const lift = o.slot === raised;
     const place = lift
       ? { x: left - 5, y: top - 70, scale: 1.06, rotate: 0, skew: 0 }
@@ -489,11 +493,12 @@ function lying(x: number, y: number, width: number) {
 }
 
 /** Every object's placement. `raised` is the hand card the pointer is over; the stack is
- * `lifted` over a prompt. */
+ * `lifted` over a prompt; the hand is `tucked` under a screen over the table. */
 export function layout(
   view: PlayerView,
   raised?: number,
   lifted = false,
+  tucked = false,
 ): Layout {
   const out: Placement[] = [];
   const objects = view.objects;
@@ -502,7 +507,7 @@ export function layout(
   const bySlot = new Map(objects.map((o) => [o.slot, o]));
   const permanents = view.battlefield.flatMap((s) => bySlot.get(s) ?? []);
 
-  out.push(...handPlacements(owned("you", "hand"), raised));
+  out.push(...handPlacements(owned("you", "hand"), raised, tucked));
   out.push(...backPlacements(owned("opponent", "hand")));
   // Blockers stand across from their attackers, which stand where they would anyway: only the
   // defending side's row depends on the other's.

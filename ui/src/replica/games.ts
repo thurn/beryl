@@ -19,12 +19,21 @@ interface Look {
   slot?: string;
 }
 
+/** A tray card held mid-drag, its center at (x, y) in the tray (game/ChoiceOverlay.tsx). */
+export interface Holding {
+  slot: number;
+  x: number;
+  y: number;
+}
+
 /** A mockup's game: the view, each named object's look (and its look as an ability's source
- * on the stack, which the mockup crops apart), and whether you wait on the opponent. */
+ * on the stack, which the mockup crops apart), whether you wait on the opponent, and the
+ * card a choice overlay's drag holds. */
 export interface ReplicaGame {
   view: PlayerView;
   faces: Map<number, Look & { stack?: Look }>;
   waiting?: boolean;
+  holding?: Holding;
 }
 
 /** One object of a replica: where it is, whose it is and how it looks; `id` names it to the
@@ -56,7 +65,13 @@ const types = (face: CardFace): CardType[] =>
 function game(
   things: Thing[],
   rest: Rest | ((slotOf: (id: string) => number) => Rest),
-  waiting = false,
+  {
+    waiting = false,
+    holding,
+  }: {
+    waiting?: boolean;
+    holding?: Omit<Holding, "slot"> & { id: string };
+  } = {},
 ): ReplicaGame {
   const slotOf = (id: string) => {
     const i = things.findIndex((t) => t.id === id);
@@ -113,6 +128,7 @@ function game(
   });
   return {
     waiting,
+    holding: holding && { ...holding, slot: slotOf(holding.id) },
     view: {
       ...view,
       players: { you: player("you"), opponent: player("opponent") },
@@ -321,11 +337,80 @@ const trigger = game(
     stops: "smart",
     events: [],
   }),
-  true,
+  { waiting: true },
+);
+
+/** scry.png: Preordain resolves, its scry 2 shows Island and Counterspell, and Island is
+ * being dragged from the top toward the bottom of your library. */
+const scry = game(
+  [
+    ...opponentSide,
+    ...hidden(24, "you", "library"),
+    {
+      zone: "library",
+      owner: "you",
+      face: SAMPLE.fullArtIsland,
+      slot: "scry-island",
+      id: "island",
+    },
+    {
+      zone: "library",
+      owner: "you",
+      face: SAMPLE.counterspell,
+      slot: "scry-counterspell",
+      id: "counterspell",
+    },
+    ...copies(3, field("you", SAMPLE.mountain, "you-mountain")),
+    ...plains,
+    field("opponent", SAMPLE.balefulStrix, "opponent-strix"),
+    field("opponent", SAMPLE.beast, "opponent-beast"),
+    field("you", SAMPLE.goblinGuide, "you-goblin-guide"),
+    field("you", SAMPLE.angel, "you-angel"),
+    {
+      zone: "stack",
+      owner: "you",
+      face: SAMPLE.preordain,
+      slot: "scry-preordain",
+      id: "preordain",
+    },
+    hand.swords,
+    hand.mountain,
+    hand.plateau,
+  ],
+  (slot) => ({
+    life: { you: 22, opponent: 17 },
+    status: {
+      kind: "deciding",
+      decision: {
+        id: { session: 1, seq: 1 },
+        kind: "chooseUpTo",
+        candidates: [
+          { label: "Island", option: { kind: "object", slot: slot("island") } },
+          {
+            label: "Counterspell",
+            option: { kind: "object", slot: slot("counterspell") },
+          },
+          { label: "Done", option: { kind: "done" } },
+        ],
+        resolving: {
+          kind: "spell",
+          slot: slot("preordain"),
+          targets: [],
+          x: 0,
+        },
+      },
+    },
+    turn: { number: 7, active: "you", step: "precombatMain", priority: "you" },
+    stack: [],
+    stops: "smart",
+    events: [],
+  }),
+  { holding: { id: "island", x: 312, y: 266 } },
 );
 
 export const GAMES: Record<string, ReplicaGame> = {
   battlefield,
   combat,
   trigger_on_stack_with_target: trigger,
+  scry,
 };
