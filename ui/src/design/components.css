@@ -1149,7 +1149,7 @@
   stroke-width: 1;
 }
 .life-orb-glint {
-  fill: #e98a2c;
+  fill: #ff9a3a;
 }
 .life-orb-arch {
   fill: none;
@@ -1172,7 +1172,7 @@
   stroke-width: 2.5;
 }
 .life-orb-flare {
-  fill: #ff7a14;
+  fill: #ff6a00;
 }
 .life-orb-flare ellipse {
   fill: #ff8f22;
@@ -1185,18 +1185,18 @@
 }
 .life-orb-crescent {
   fill: none;
-  stroke: #ffe58a;
-  stroke-width: 3.5;
+  stroke: #ffe27a;
+  stroke-width: 5;
   stroke-linecap: round;
 }
 /* The far orb's ring is dull copper. */
 .life-orb-opponent .life-orb-ring {
-  stroke: #d7883e;
-  stroke-width: 2.2;
+  stroke: #ffae4a;
+  stroke-width: 2.6;
 }
 .life-orb-opponent .life-orb-ring-glow {
-  stroke: #a85414;
-  stroke-width: 5;
+  stroke: #d8651a;
+  stroke-width: 8;
 }
 .life-orb-total {
   position: absolute;

@@ -35,8 +35,8 @@ function blade(
 const BLADES = {
   you: {
     light: [
-      blade([-44, -3], [-86, 3], [-125, 41], 11, 0.3),
-      blade([-46, 14], [-80, 19], [-107, 54], 11, 0.3),
+      blade([-46, -3], [-86, 3], [-125, 41], 9.5, 0.3),
+      blade([-48, 14], [-80, 19], [-107, 54], 9.5, 0.3),
     ],
     dark: [
       blade([-45, 6], [-84, 11], [-117, 47], 10),
@@ -48,7 +48,7 @@ const BLADES = {
   opponent: {
     light: [
       blade([-47, 18], [-90, 14], [-104, -17], 9, 0),
-      blade([-50, -9], [-92, -12], [-106, -48], 8, 0),
+      blade([-50, -9], [-92, -14], [-104, -57], 8, 0),
     ],
     dark: [blade([-48, 5], [-82, 0], [-99, -26], 8)],
     glints: [
@@ -57,6 +57,12 @@ const BLADES = {
     ] as Point[],
     arch: "",
   },
+};
+
+/** The oval, a little larger on the near side of the table. */
+const CORE = {
+  you: { rx: 50, ry: 41, cy: -2 },
+  opponent: { rx: 48, ry: 38, cy: 0 },
 };
 
 /** The active player's rays, by angle from straight up and length from the center. */
@@ -89,6 +95,7 @@ export function LifeOrb({
   seat?: "you" | "opponent";
 }) {
   const blades = BLADES[seat];
+  const core = CORE[seat];
   const side = (
     <>
       {blades.dark.map((d) => (
@@ -100,8 +107,8 @@ export function LifeOrb({
           className="life-orb-glint"
           cx={x}
           cy={y}
-          rx="5"
-          ry="3.5"
+          rx="6"
+          ry="4"
           filter="url(#orb-blur)"
         />
       ))}
@@ -117,10 +124,10 @@ export function LifeOrb({
       <svg className="life-orb-art" viewBox="-136 -57 272 116" aria-hidden>
         <defs>
           <linearGradient id="orb-blade" x1="0" y1="0" x2="0.3" y2="1">
-            <stop offset="0" stopColor="#fbf6ee" />
-            <stop offset="0.3" stopColor="#ddd2c3" />
-            <stop offset="0.7" stopColor="#a99b8a" />
-            <stop offset="1" stopColor="#5e544a" />
+            <stop offset="0" stopColor="#f6f0e6" />
+            <stop offset="0.35" stopColor="#c2b6a8" />
+            <stop offset="0.75" stopColor="#82766a" />
+            <stop offset="1" stopColor="#4a423b" />
           </linearGradient>
           <linearGradient id="orb-rim" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor="#c9c5bf" />
@@ -138,8 +145,8 @@ export function LifeOrb({
             r="100"
             gradientUnits="userSpaceOnUse"
           >
-            <stop offset="0.35" stopColor="#fff4c8" />
-            <stop offset="0.6" stopColor="#ffa22e" />
+            <stop offset="0.35" stopColor="#fff0b0" />
+            <stop offset="0.55" stopColor="#ff8c1a" />
             <stop offset="1" stopColor="#f2560c" stopOpacity="0" />
           </radialGradient>
           <filter id="orb-blur" x="-50%" y="-50%" width="200%" height="200%">
@@ -177,19 +184,24 @@ export function LifeOrb({
         <ellipse
           className="life-orb-core"
           cx="0"
-          cy="0"
-          rx="48"
-          ry="38"
+          cy={core.cy}
+          rx={core.rx}
+          ry={core.ry}
           filter="url(#orb-shadow)"
         />
         {active && (
           <path
             className="life-orb-crescent"
-            d="M-40 -22 A48 38 0 0 1 40 -22"
+            d="M-42 -22 A50 41 0 0 1 42 -22"
           />
         )}
       </svg>
-      <span className="life-orb-total">{life}</span>
+      <span
+        className="life-orb-total"
+        style={{ marginTop: `calc(${core.cy} * var(--orb))` }}
+      >
+        {life}
+      </span>
     </div>
   );
 }

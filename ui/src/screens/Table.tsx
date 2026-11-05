@@ -332,13 +332,13 @@ export function TableScene({
         />
       </Lying>
       {opponent.graveyard.length > 0 && (
-        <Lying x={1322} y={36.5} width={88} squash={0.86}>
+        <Lying x={1330} y={36.5} width={88} squash={0.92}>
           <Graveyard
             cards={opponent.graveyard.map((c, i, all) =>
               i === all.length - 1 ? withArt(c, "opponent-graveyard") : c,
             )}
             width={88}
-            depth={{ x: 0, y: 6 }}
+            depth={{ x: -5, y: 6 }}
           />
         </Lying>
       )}
@@ -381,16 +381,16 @@ export function TableScene({
         <LifeOrb life={you.life} active={you.active} />
       </div>
       <Hand cards={you.hand} />
+      <div className="hud" style={{ left: 18, top: 814 }}>
+        <PlayerBadge name="You" />
+      </div>
       <Lying x={168} y={731} width={116}>
         <Library
           count={you.library}
           width={104}
-          depth={{ x: 3, y: 19, twist: 5 }}
+          depth={{ x: 6, y: 12, twist: 7 }}
         />
       </Lying>
-      <div className="hud" style={{ left: 18, top: 814 }}>
-        <PlayerBadge name="You" />
-      </div>
       <div
         className={
           board.priority ? "turn-controls turn-controls-wait" : "turn-controls"
