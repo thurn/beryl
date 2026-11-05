@@ -1075,8 +1075,12 @@
     drop-shadow(0 0 5px rgb(245 140 30 / 85%));
 }
 .phase-tracker-compact .phase:nth-child(3):not(.phase-current) .phase-icon {
-  stroke: #b5a080;
-  stroke-width: 1;
+  stroke: #8f7d5c;
+  stroke-width: 0.8;
+}
+/* The combat glyph's tab sits over the rule, so the rule steps up into it. */
+.phase-tracker-compact .phase:nth-child(3) {
+  z-index: 1;
 }
 /* The current diamond: a bright core in a dark ring and a gold rim. */
 .phase-tracker-compact
