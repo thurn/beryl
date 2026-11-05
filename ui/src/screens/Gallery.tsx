@@ -259,27 +259,27 @@ function CardsAndStates() {
         Target (cyan)
       </CaptionAt>
       <div className="mini-hand">
-        <At x={48} y={368}>
+        <At x={44} y={372}>
           <Card
             card={a(costless(SAMPLE.swords), "04-hand-swords")}
-            width={124}
-            unit={13}
-            style={{ rotate: -5 }}
+            width={128}
+            unit={13.5}
+            style={{ rotate: -7 }}
           />
         </At>
-        <At x={170} y={356}>
+        <At x={168} y={360}>
           <Card
             card={a(SAMPLE.mountain, "04-hand-mountain")}
-            width={120}
-            unit={13}
+            width={124}
+            unit={13.5}
           />
         </At>
-        <At x={280} y={358}>
+        <At x={282} y={364}>
           <Card
             card={a(SAMPLE.plateau, "04-hand-plateau")}
-            width={124}
-            unit={13}
-            style={{ rotate: 5 }}
+            width={128}
+            unit={13.5}
+            style={{ rotate: 7 }}
           />
         </At>
       </div>
@@ -368,7 +368,7 @@ function CombatAndStack() {
             text="When Inferno Titan enters the battlefield, it deals 3 damage divided as you choose among one, two, or three targets."
             width={130}
             height={172}
-            unit={16}
+            unit={16.5}
           />
         </At>
         <At x={356} y={267}>

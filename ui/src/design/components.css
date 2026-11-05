@@ -133,6 +133,7 @@
 }
 .ability-badge {
   position: absolute;
+  --ink: #2b2b30;
   left: 0.37em;
   bottom: 0.6em;
   width: 2em;
@@ -140,7 +141,7 @@
   border-radius: 0.38em;
   display: grid;
   place-items: center;
-  color: #0f0e0d;
+  color: var(--ink);
   background: linear-gradient(180deg, #d9d9e1, #bdbdc7 55%, #9e9ea9);
   border: 0.12em solid #151413;
   box-shadow:
@@ -298,10 +299,10 @@
 /* ...and its rim carries the accent along the left and bottom. */
 .card[class*="accent-"] .card-rim {
   background:
-    linear-gradient(90deg, var(--accent) 0.1em, transparent 0.1em) 0.12em 0 /
+    linear-gradient(90deg, var(--accent) 0.2em, transparent 0.2em) 0.06em 0 /
       100% 100% no-repeat,
-    linear-gradient(0deg, var(--accent) 0.08em, transparent 0.08em) 0 -0.04em /
-      60% 100% no-repeat,
+    linear-gradient(0deg, var(--accent) 0.14em, transparent 0.14em) 0 0 / 55%
+      100% no-repeat,
     linear-gradient(
       90deg,
       var(--rim) 0.08em,
@@ -322,8 +323,15 @@
 }
 /* A full-art land wears a silver rim edged in its color (scry.png's Island). */
 .card-full-art {
-  --rim: #8d8e92;
-  --rim-hi: #c9cace;
+  --rim: #a3a4a8;
+  --rim-hi: #e2e3e6;
+  --rim-streaks: repeating-linear-gradient(
+    160deg,
+    transparent 0 0.3em,
+    rgb(255 255 255 / 35%) 0.4em,
+    rgb(40 40 48 / 25%) 0.55em,
+    transparent 0.7em 1em
+  );
   --rim-lo: #0f4e9c;
 }
 .card-full.card-full-art .card-art {
@@ -403,19 +411,19 @@
 
 /* States: tapped turns the card (Card.tsx), source glows gold, target glows cyan, an attacker
    wears an angular chevron above and a blocker a rounded arc below. */
-/* A glowing card's light fills its black frame up to a hairline at the rim, so the glow wraps
-   the colored rim (ui_system.png section 04). */
+/* A glowing card: a bright line at its edge, its light bleeding a little into the black frame,
+   and a wide halo (--glow-gold and --glow-cyan). */
 .card-source {
   box-shadow:
-    inset 0 0 0 0.12em #fff0c8,
-    inset 0 0 0 0.44em #f5a536,
+    inset 0 0 0 0.1em #f7ae45,
+    inset 0 0 0.25em 0.12em rgb(247 165 54 / 70%),
     var(--card-shadow, var(--shadow-card)),
     var(--glow-gold);
 }
 .card-target {
   box-shadow:
-    inset 0 0 0 0.12em #e6fcff,
-    inset 0 0 0 0.44em #18b2ff,
+    inset 0 0 0 0.1em #2ccbff,
+    inset 0 0 0.25em 0.12em rgb(44 203 255 / 70%),
     var(--card-shadow, var(--shadow-card)),
     var(--glow-cyan);
 }
@@ -489,7 +497,7 @@
       rgb(255 220 170 / 12%),
       transparent 60%
     ),
-    linear-gradient(160deg, #7a4a21, #66401c 55%, #553317);
+    linear-gradient(160deg, #8c5a2b, #7a4c23 55%, #66401d);
   box-shadow:
     inset 0 0 0 0.06em rgb(0 0 0 / 55%),
     inset 0 0 0 0.3em rgb(0 0 0 / 14%),
@@ -537,9 +545,9 @@
   border: 0.1em solid #2a5ec4;
   background: radial-gradient(
     ellipse 70% 60% at 50% 42%,
-    #87502c,
-    #774426 55%,
-    #613720
+    #7a4126,
+    #6c3922 55%,
+    #57301d
   );
   box-shadow:
     0 0 0 0.05em rgb(0 0 0 / 50%),
@@ -684,10 +692,10 @@
 }
 .stack-item .card-rules {
   border-radius: 0 0 50% 50% / 0 0 34% 34%;
-  padding: 0.5em 0.45em;
+  padding: 0.4em 0.36em;
   font-weight: 600;
   font-size: 0.76em;
-  line-height: 1.06;
+  line-height: 1.04;
 }
 /* Arrows. */
 .arrows {

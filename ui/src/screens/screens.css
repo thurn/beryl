@@ -500,7 +500,7 @@
 }
 /* The mini hand shows less art above each type line than the table's hand. */
 .mini-hand .card-art {
-  flex-basis: 5.2em;
+  flex-basis: 5.8em;
 }
 .caption-at {
   width: 240px;
