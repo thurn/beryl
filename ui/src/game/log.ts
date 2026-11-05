@@ -1,6 +1,7 @@
 // The game log: what each view's events say happened, as short sentences naming cards in
-// full ("Opponent cast <card> targeting <card>", "<card> was countered"). The routine (steps beginning, the draw step's draw, tapping for mana) is left
-// out; each turn opens with a heading.
+// full ("Opponent cast <card> targeting <card>", "<card> was countered"). The routine (steps
+// beginning, the draw step's draw, tapping for mana) is left out; each turn opens with a
+// heading.
 import type {
   Counter,
   GameEvent,
