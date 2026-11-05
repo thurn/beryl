@@ -6,7 +6,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
-use beryl_engine::{DecisionKind, Seat, Zone};
+use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -52,6 +52,16 @@ const P0_LANDS: &[Permanent] = &[
     Permanent::new(names::PLAINS),
     Permanent::new(names::ISLAND),
     Permanent::new(names::STRIP_MINE),
+];
+/// Seven lands: four for an impending Overlord, three for the tax.
+const SEVEN_LANDS: &[Permanent] = &[
+    Permanent::new(names::ISLAND),
+    Permanent::new(names::SPARAS_HEADQUARTERS),
+    Permanent::new(names::SEACHROME_COAST),
+    Permanent::new(names::PLAINS),
+    Permanent::new(names::ISLAND),
+    Permanent::new(names::PLAINS),
+    Permanent::new(names::TUNDRA),
 ];
 const P1_LANDS: &[Permanent] = &[Permanent::new(names::PLAINS), Permanent::new(names::ISLAND)];
 
@@ -105,6 +115,39 @@ pub const SCENARIOS: &[Scenario] = &[
                 player: P0,
                 card: names::STRIP_MINE,
                 count: 0,
+            }),
+        ]),
+    // Overlord cast for impending ({2}{W}{W}) taps four of P0's seven lands, and the three
+    // left pay {3}.
+    Scenario::new("No More Lies: lands left after paying for the spell pay {3}")
+        .battlefield(P0, SEVEN_LANDS)
+        .hand(P0, &[names::OVERLORD_OF_THE_MISTMOORS])
+        .battlefield(P1, P1_LANDS)
+        .hand(P1, &[names::NO_MORE_LIES])
+        .library(P1, &[names::ISLAND])
+        .actions(&[
+            Action::Cast {
+                player: P0,
+                card: names::OVERLORD_OF_THE_MISTMOORS,
+                face: 0,
+                costs: 1,
+            },
+            Action::cast(P1, names::NO_MORE_LIES),
+            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+            Action::AdvanceTo {
+                turn: 1,
+                step: TurnStep::End,
+            },
+            Action::assert(Assertion::Controls {
+                player: P0,
+                card: names::OVERLORD_OF_THE_MISTMOORS,
+                count: 1,
+            }),
+            Action::assert(Assertion::Count {
+                player: P1,
+                zone: Zone::Graveyard,
+                card: Some(names::NO_MORE_LIES),
+                count: 1,
             }),
         ]),
     Scenario::new("No More Lies: a controller who can't pay isn't asked")

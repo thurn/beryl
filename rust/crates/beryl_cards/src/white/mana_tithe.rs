@@ -5,7 +5,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
-use beryl_engine::{DecisionKind, Zone};
+use beryl_engine::{DecisionKind, TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -44,6 +44,16 @@ fn counter_unless_pays_one(ctx: &mut EffectCtx) -> Flow {
     Ok(())
 }
 
+/// Four lands for an impending Overlord, two to pay with.
+const SIX_LANDS: &[Permanent] = &[
+    Permanent::new(names::ISLAND),
+    Permanent::new(names::SPARAS_HEADQUARTERS),
+    Permanent::new(names::SEACHROME_COAST),
+    Permanent::new(names::PLAINS),
+    Permanent::new(names::ISLAND),
+    Permanent::new(names::PLAINS),
+];
+
 /// P1 has a card to draw, so the game waits in their turn 2 once the stack is empty. Mana
 /// Crypt is the spell to counter: it costs nothing, so its controller's lands stay free
 /// to pay the tithe. Strip Mine's activation keeps P0's priority a decision.
@@ -69,6 +79,40 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::assert(Assertion::Tapped {
                 player: P0,
                 card: names::STRIP_MINE,
+                count: 1,
+            }),
+            Action::assert(Assertion::Count {
+                player: P1,
+                zone: Zone::Graveyard,
+                card: Some(names::MANA_TITHE),
+                count: 1,
+            }),
+        ]),
+    // Overlord cast for impending ({2}{W}{W}) taps four of P0's six lands, and the two left
+    // pay the tithe. (A game once showed it countered unasked from six lands: Elite
+    // Spellbinder's {2} tax had tapped them all.)
+    Scenario::new("Mana Tithe: lands left after paying for the spell pay {1}")
+        .battlefield(P0, SIX_LANDS)
+        .hand(P0, &[names::OVERLORD_OF_THE_MISTMOORS])
+        .battlefield(P1, &[Permanent::new(names::PLAINS)])
+        .hand(P1, &[names::MANA_TITHE])
+        .library(P1, &[names::ISLAND])
+        .actions(&[
+            Action::Cast {
+                player: P0,
+                card: names::OVERLORD_OF_THE_MISTMOORS,
+                face: 0,
+                costs: 1,
+            },
+            Action::cast(P1, names::MANA_TITHE),
+            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+            Action::AdvanceTo {
+                turn: 1,
+                step: TurnStep::End,
+            },
+            Action::assert(Assertion::Controls {
+                player: P0,
+                card: names::OVERLORD_OF_THE_MISTMOORS,
                 count: 1,
             }),
             Action::assert(Assertion::Count {
