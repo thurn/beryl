@@ -5,6 +5,11 @@ draft, which can draft cards and play the game at the level of a strong human
 player. It is a Tauri 2 desktop app for Apple silicon Macs: a Rust workspace
 behind a React and TypeScript UI. The repository is public.
 
+V1 targets exclusively the 540 cards of the MTGO Vintage Cube as of October 7,
+2026, listed in `data/vintage-cube-2026-10-07.csv` (from
+<https://www.mtgo.com/vintage-cube-cardlist>). Rules support, drafting and AI
+need only handle these cards.
+
 ## Layout
 
 - `rust/`: the Cargo workspace. `crates/beryl_app` is the Tauri shell (window,
@@ -13,6 +18,7 @@ behind a React and TypeScript UI. The repository is public.
   which build and test without Tauri.
 - `ui/`: the frontend, Vite + React + TypeScript (strict). `src/ipc.ts` holds
   typed wrappers for the Rust commands; call Rust only through it.
+- `data/`: the V1 cube cardlist (`color,name` CSV).
 - `tools/`: `by`, the Python CLI behind the justfile. `just` lists the commands.
 - Outside the tree: `~/Library/Caches/beryl` (`$BERYL_CACHE`: warm `rust/target`
   and `ui/node_modules` shared by worktrees). Never crawl `~` or `/` with
