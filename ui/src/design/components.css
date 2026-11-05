@@ -1027,8 +1027,8 @@
   background: linear-gradient(
     90deg,
     transparent,
-    rgb(160 150 136 / 50%) 6%,
-    rgb(160 150 136 / 50%) 94%,
+    rgb(160 150 136 / 40%) 6%,
+    rgb(160 150 136 / 40%) 94%,
     transparent
   );
 }
@@ -1075,7 +1075,7 @@
     drop-shadow(0 0 5px rgb(245 140 30 / 85%));
 }
 .phase-tracker-compact .phase:nth-child(3):not(.phase-current) .phase-icon {
-  stroke: #8f7d5c;
+  stroke: #5e5040;
   stroke-width: 0.8;
 }
 /* The combat glyph's tab sits over the rule, so the rule steps up into it. */
@@ -1149,8 +1149,8 @@
 /* The combat glyph stands on a low tab that lifts the rule around it. */
 /* Opaque in the table's local tone, so the rule breaks under the tab. */
 .phase-tracker-compact .phase .phase-icon path.phase-tab {
-  fill: #5f524b;
-  stroke: rgb(160 150 136 / 55%);
+  fill: #5a4d46;
+  stroke: rgb(150 140 126 / 38%);
   stroke-width: 1;
 }
 .phase-tracker-compact .phase.phase-current .phase-icon path.phase-tab {
