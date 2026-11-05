@@ -27,15 +27,6 @@ const KINDS: usize = 6;
 /// Classes of interchangeable sources one solve considers.
 const CLASSES: usize = 16;
 
-const COLORS: [ManaColor; KINDS] = [
-    ManaColor::White,
-    ManaColor::Blue,
-    ManaColor::Black,
-    ManaColor::Red,
-    ManaColor::Green,
-    ManaColor::Colorless,
-];
-
 /// Mana available to pay with, counted by the set of kinds each unit can be: a floating
 /// {W} is one unit of `{W}`, an untapped Tundra one unit of `{W, U}`, a Mana Crypt two units
 /// of `{C}`.
@@ -153,7 +144,7 @@ impl Sources {
             {
                 continue;
             }
-            let face = &t.def(o.card).faces[usize::from(o.face)];
+            let face = t.def(o.card).face(o.face);
             // CR 302.6: a creature's {T} abilities need it under its controller's control
             // since their most recent turn began.
             if s.derived(slot).types.intersects(Types::CREATURE)
@@ -240,7 +231,7 @@ pub(crate) fn available(
     exclude: Bitboard,
 ) -> Result<Units, Full> {
     let sources = Sources::of(s, t, player, exclude)?;
-    Ok(sources.units(s.player(player).mana, &[0; CLASSES]))
+    Ok(sources.units(s.player(player).mana.amounts(), &[0; CLASSES]))
 }
 
 /// The untapped mana sources `player` controls, but those in `exclude`.
@@ -486,7 +477,7 @@ fn later_costs(s: &State, t: &GameTable, player: Seat) -> Fixed<Later, 32> {
         if s.controller(slot) != player || o.flags.has(ObjectFlags::TAPPED) {
             continue;
         }
-        for a in t.def(o.card).faces[usize::from(o.face)].abilities {
+        for a in t.def(o.card).face(o.face).abilities {
             if a.kind == AbilityKind::Activated && !a.is_loyalty() {
                 add(Later {
                     cost: a.cost.mana.with_x(0),
@@ -536,7 +527,7 @@ pub(crate) fn plans(
 ) -> Result<Fixed<Plan, 64>, Full> {
     sink.work.solver_runs += 1;
     let sources = Sources::of(s, t, player, exclude)?;
-    let pool = s.player(player).mana;
+    let pool = s.player(player).mana.amounts();
     let mut out: Fixed<Plan, 64> = Fixed::new();
     if greedy {
         each_plan(cost, pool, &sources, &mut |p| {
@@ -637,13 +628,13 @@ pub(crate) fn pay(
     for (&(unit_kinds, source, n), &kind) in units.iter().zip(kinds.iter()) {
         let kind = kind.unwrap_or_else(|| lowest_kind(unit_kinds));
         if let Some(slot) = source {
-            activate(s, t, sink, slot, COLORS[kind])?;
+            activate(s, t, sink, slot, ManaColor::ALL[kind])?;
         }
-        let pool = &mut s.player_mut(player).mana[kind];
+        let pool = &mut s.player_mut(player).mana[ManaColor::ALL[kind]];
         debug_assert!(*pool >= n);
         *pool -= n;
     }
-    debug_assert_eq!(s.player(player).mana, plan.left);
+    debug_assert_eq!(s.player(player).mana.amounts(), plan.left);
     Ok(())
 }
 
@@ -731,7 +722,7 @@ pub(crate) fn activate(
     color: ManaColor,
 ) -> Result<(), Full> {
     let o = *s.object(slot);
-    let face = &t.def(o.card).faces[usize::from(o.face)];
+    let face = t.def(o.card).face(o.face);
     let (index, ability) = face
         .abilities
         .iter()
@@ -781,7 +772,7 @@ pub(crate) fn manual_options(
     exclude: Bitboard,
 ) -> Result<Fixed<Opt, 64>, Full> {
     let sources = Sources::of(s, t, player, exclude)?;
-    let pool = s.player(player).mana;
+    let pool = s.player(player).mana.amounts();
     let mut out = Fixed::new();
     for kind in 0..KINDS {
         if pool[kind] == 0 || !helps(remaining, kind) {
@@ -792,7 +783,7 @@ pub(crate) fn manual_options(
         let mut after = pool;
         after[kind] -= 1;
         if sources.units(after, &[0; CLASSES]).pays(rest) {
-            out.push(Opt::Pool(kind as u8))?;
+            out.push(Opt::Pool(ManaColor::ALL[kind]))?;
         }
     }
     for (i, c) in sources.classes().iter().enumerate() {
@@ -810,7 +801,7 @@ pub(crate) fn manual_options(
             if sources.units(after, &taps).pays(rest) {
                 out.push(Opt::Mana {
                     slot,
-                    color: kind as u8,
+                    color: ManaColor::ALL[kind],
                 })?;
             }
         }
@@ -827,16 +818,16 @@ pub(crate) fn manual_pay(
     mut remaining: ManaCost,
     option: Opt,
 ) -> Result<ManaCost, Full> {
-    let kind = match option {
-        Opt::Pool(kind) => usize::from(kind),
+    let color = match option {
+        Opt::Pool(color) => color,
         Opt::Mana { slot, color } => {
-            activate(s, t, sink, slot, COLORS[usize::from(color)])?;
-            usize::from(color)
+            activate(s, t, sink, slot, color)?;
+            color
         }
         _ => unreachable!("a manual payment option"),
     };
-    s.player_mut(player).mana[kind] -= 1;
-    pay_unit(&mut remaining, kind);
+    s.player_mut(player).mana[color] -= 1;
+    pay_unit(&mut remaining, color.index());
     Ok(remaining)
 }
 
@@ -856,7 +847,7 @@ pub(crate) fn standalone_options(
         for kind in (0..KINDS).filter(|&k| c.kinds & (1 << k) != 0) {
             out.push(Opt::Mana {
                 slot,
-                color: kind as u8,
+                color: ManaColor::ALL[kind],
             })?;
         }
     }

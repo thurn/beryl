@@ -1,7 +1,8 @@
 //! The runner on test cards: what it accepts, and what it refuses.
 
 use beryl_engine::card::{
-    Ability, AbilityIx, CardDef, Face, ManaColor, ManaCost, ManaSet, Subtype, Subtypes, Types,
+    Ability, AbilityIx, CardDef, Castings, Face, FaceIx, ManaColor, ManaCost, ManaSet, Subtype,
+    Subtypes, Types,
 };
 use beryl_engine::{CardTable, DecisionKind, Seat, TurnStep, Zone};
 
@@ -126,8 +127,8 @@ fn a_scenario_casts_resolves_activates_and_attacks() {
             Action::Cast {
                 player: P0,
                 card: BEAR,
-                face: 0,
-                costs: 0,
+                face: FaceIx::FRONT,
+                costs: Castings::NONE,
             },
             Action::Assert {
                 assertion: Assertion::Stack { count: 1 },

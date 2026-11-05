@@ -3,7 +3,8 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Colors, Delayed, FaceAbility, Keywords, ManaCost, Modification, Subtypes, Supertypes, Types,
+    Castings, Colors, Delayed, FaceAbility, FaceIx, Keywords, ManaColor, ManaCost, Modification,
+    Subtypes, Supertypes, Types,
 };
 use crate::decision::{Decision, Outcome};
 use crate::fixed::Fixed;
@@ -212,7 +213,7 @@ pub struct Object {
     /// Battlefield entry order, for layers.
     pub timestamp: u16,
     /// Which face is up.
-    pub face: u8,
+    pub face: FaceIx,
     /// In combat: the planeswalker an attacker attacks, or the attacker a blocker blocks;
     /// `None` for an attacker attacking a player, or once that object has left the
     /// battlefield.
@@ -239,7 +240,7 @@ impl Object {
         linked: None,
         copy_of: None,
         timestamp: 0,
-        face: 0,
+        face: FaceIx::FRONT,
         combat: None,
     };
 }
@@ -306,12 +307,38 @@ pub enum MulliganStatus {
     Kept,
 }
 
+/// Unspent mana, an amount of each [`ManaColor`]
+/// ([CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064)): "When an effect instructs
+/// a player to add mana, that mana goes into a mana pool."
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct ManaPool([u8; 6]);
+
+impl ManaPool {
+    /// The amounts, indexed as [`ManaColor::ALL`].
+    pub fn amounts(self) -> [u8; 6] {
+        self.0
+    }
+}
+
+impl std::ops::Index<ManaColor> for ManaPool {
+    type Output = u8;
+    fn index(&self, color: ManaColor) -> &u8 {
+        &self.0[color.index()]
+    }
+}
+
+impl std::ops::IndexMut<ManaColor> for ManaPool {
+    fn index_mut(&mut self, color: ManaColor) -> &mut u8 {
+        &mut self.0[color.index()]
+    }
+}
+
 /// One player (architecture §4.4).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Player {
     pub life: i16,
-    /// Unspent mana by `ManaColor` index.
-    pub mana: [u8; 6],
+    /// Unspent mana.
+    pub mana: ManaPool,
     pub lands_played: u8,
     /// Attempted to draw from an empty library since state-based actions were last checked
     /// (CR 704.5b).
@@ -439,14 +466,14 @@ pub struct StackEntry {
     /// "Once activated or triggered, an ability exists on the stack independently of its
     /// source."
     pub card: CardIx,
-    pub face: u8,
+    pub face: FaceIx,
     /// For a triggered ability: what it triggered on.
     pub info: TriggerInfo,
     pub targets: Fixed<Target, TARGETS>,
     /// The announced value of X ([CR 107.3a](https://yawgatog.com/resources/magic-rules/#R1073a)).
     pub x: u8,
-    /// The face's casting options paid, a bit per [`crate::card::Face::casting`] entry.
-    pub costs: u8,
+    /// The face's casting options paid.
+    pub costs: Castings,
     /// If the spell would be put into its owner's graveyard, it is exiled instead.
     pub exile: bool,
 }
@@ -511,7 +538,7 @@ pub struct PendingTrigger {
     /// The object with the ability; an emblem's trigger has none.
     pub source: Option<ObjectRef>,
     pub card: CardIx,
-    pub face: u8,
+    pub face: FaceIx,
     /// The index of the ability among the face's own.
     pub ability: u8,
     /// The player who controlled the source when it triggered

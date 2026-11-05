@@ -4,8 +4,8 @@
 //! to cast."
 
 use beryl_engine::card::{
-    Ability, CardDef, Colors, Face, Flow, Keywords, ManaCost, Subtype, Subtypes, TargetKind,
-    TargetSpec, Trigger, Types,
+    Ability, CardDef, Castings, Colors, Face, FaceIx, Flow, Keywords, ManaCost, Subtype, Subtypes,
+    TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
@@ -90,8 +90,8 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Cast {
                 player: P0,
                 card: SPELLBINDER,
-                face: 0,
-                costs: 0,
+                face: FaceIx::FRONT,
+                costs: Castings::NONE,
             },
             Action::Resolve,
             // The enters trigger, which targets the one opponent, resolves up to its question.
@@ -135,8 +135,8 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Cast {
                 player: P1,
                 card: SKYDIVER,
-                face: 0,
-                costs: 0,
+                face: FaceIx::FRONT,
+                costs: Castings::NONE,
             },
             Action::Assert {
                 assertion: Assertion::Tapped {
@@ -163,8 +163,8 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Cast {
                 player: P0,
                 card: SPELLBINDER,
-                face: 0,
-                costs: 0,
+                face: FaceIx::FRONT,
+                costs: Castings::NONE,
             },
             Action::AdvanceTo {
                 turn: 1,

@@ -1,7 +1,8 @@
 //! Mana Tithe. {W} Instant. "Counter target spell unless its controller pays {1}."
 
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, TargetKind, TargetSpec, Types,
+    Ability, AbilityKind, CardDef, Castings, Colors, Face, FaceIx, Flow, ManaCost, TargetKind,
+    TargetSpec, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
@@ -101,8 +102,8 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Cast {
                 player: P0,
                 card: names::OVERLORD_OF_THE_MISTMOORS,
-                face: 0,
-                costs: 1,
+                face: FaceIx::FRONT,
+                costs: Castings::only(0),
             },
             Action::cast(P1, names::MANA_TITHE),
             Action::answer(P0, DecisionKind::YesNo, Pick::Yes),

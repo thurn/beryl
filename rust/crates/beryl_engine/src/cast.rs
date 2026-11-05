@@ -12,8 +12,8 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityIx, AbilityKind, CastingOption, Face, FaceAbility, Keywords, ManaCost, Rule,
-    TargetKind, TargetSpec, Timing, Types,
+    Ability, AbilityIx, AbilityKind, CastingOption, Castings, Face, FaceAbility, FaceIx, Keywords,
+    ManaCost, Rule, TargetKind, TargetSpec, Timing, Types,
 };
 use crate::decision::{Candidates, Decision, DecisionKind, Opt};
 use crate::engine::collapse;
@@ -32,13 +32,13 @@ use crate::table::GameTable;
 /// The face of an object as it is now.
 fn face_of(s: &State, t: &GameTable, slot: Slot) -> &'static Face {
     let o = s.object(slot);
-    &t.def(o.card).faces[usize::from(o.face)]
+    t.def(o.card).face(o.face)
 }
 
 /// The ability a stack entry resolves: an ability of its card's face, or a spell's spell
 /// ability. A permanent spell with no targets has none.
 pub(crate) fn entry_ability(t: &GameTable, entry: &StackEntry) -> Option<&'static Ability> {
-    let face = &t.def(entry.card).faces[usize::from(entry.face)];
+    let face = t.def(entry.card).face(entry.face);
     match entry.ability {
         None => face.spell_ability(),
         Some(ability) => Some(face.ability(ability)),
@@ -53,7 +53,7 @@ fn entry_ability_of(t: &GameTable, entry: &StackEntry) -> &'static Ability {
 /// The card, face and ability a stack entry records for activating ability `ability` of the
 /// permanent in `slot`: one of its own, or one granted to it, which is printed on the
 /// granting card's front face (§9).
-fn activated(s: &State, slot: Slot, ability: AbilityIx) -> Option<(CardIx, u8, FaceAbility)> {
+fn activated(s: &State, slot: Slot, ability: AbilityIx) -> Option<(CardIx, FaceIx, FaceAbility)> {
     let o = s.object(slot);
     match ability {
         AbilityIx::Own(i) => Some((o.card, o.face, FaceAbility::Own(i))),
@@ -62,7 +62,7 @@ fn activated(s: &State, slot: Slot, ability: AbilityIx) -> Option<(CardIx, u8, F
                 return None;
             }
             let grant = s.derived(slot).granted[usize::from(k)]?;
-            Some((grant.card, 0, FaceAbility::Grant(grant.grant)))
+            Some((grant.card, FaceIx::FRONT, FaceAbility::Grant(grant.grant)))
         }
     }
 }
@@ -127,32 +127,16 @@ enum From {
     Resolution { free: bool },
 }
 
-/// The bitmasks over a face's casting options that may be chosen together: any of the
-/// additional costs, and at most one alternative cost
+/// The sets of a face's casting options that may be chosen together: any of the additional
+/// costs, and at most one alternative cost
 /// ([CR 118.9a](https://yawgatog.com/resources/magic-rules/#R1189a)): "Only one alternative
 /// cost can be applied to any one spell as it's being cast." Casting without paying the mana
 /// cost is itself an alternative cost, so `free` excludes the face's own.
-fn option_masks(face: &Face, free: bool) -> impl Iterator<Item = u8> + '_ {
-    let n = face.casting.len();
-    debug_assert!(n <= 8);
-    (0..(1u16 << n)).map(|m| m as u8).filter(move |&m| {
-        let alternatives = face
-            .casting
-            .iter()
-            .enumerate()
-            .filter(|&(i, o)| m & (1 << i) != 0 && o.is_alternative())
-            .count();
+fn option_sets(face: &Face, free: bool) -> impl Iterator<Item = Castings> + '_ {
+    Castings::subsets(face).filter(move |&costs| {
+        let alternatives = costs.paid(face).filter(|o| o.is_alternative()).count();
         alternatives <= usize::from(!free)
     })
-}
-
-/// The chosen casting options of a mask.
-fn chosen(face: &Face, costs: u8) -> impl Iterator<Item = CastingOption> + '_ {
-    face.casting
-        .iter()
-        .enumerate()
-        .filter(move |&(i, _)| costs & (1 << i) != 0)
-        .map(|(_, &o)| o)
 }
 
 /// Whether X is announced for this cast, and the least value it may take.
@@ -160,11 +144,11 @@ fn chosen(face: &Face, costs: u8) -> impl Iterator<Item = CastingOption> + '_ {
 /// [CR 107.3b](https://yawgatog.com/resources/magic-rules/#R1073b): an effect that lets a
 /// player cast a spell "while paying neither its mana cost nor an alternative cost that
 /// includes X, then the only legal choice for X is 0."
-fn x_range_start(face: &Face, costs: u8, free: bool) -> Option<u8> {
-    let alternative = chosen(face, costs).any(CastingOption::is_alternative);
+fn x_range_start(face: &Face, costs: Castings, free: bool) -> Option<u8> {
+    let alternative = costs.paid(face).any(CastingOption::is_alternative);
     let in_mana_cost = face.cost.x > 0 && !free && !alternative;
     let mut min = None;
-    for o in chosen(face, costs) {
+    for o in costs.paid(face) {
         if o.cost().x > 0 {
             let least = match o {
                 CastingOption::Kicker { min_x, .. } => min_x,
@@ -183,14 +167,14 @@ fn x_range_start(face: &Face, costs: u8, free: bool) -> Option<u8> {
 /// "The total cost is the mana cost or alternative cost (as determined in rule 601.2b), plus
 /// all additional costs and cost increases, and minus all cost reductions." A permission's
 /// increase, such as Elite Spellbinder's {2}, is the engine's cost-modifier hook (§6.3).
-fn spell_cost(face: &Face, costs: u8, x: u8, extra: u8, free: bool) -> ManaCost {
+fn spell_cost(face: &Face, costs: Castings, x: u8, extra: u8, free: bool) -> ManaCost {
     let mut cost = if free { ManaCost::NONE } else { face.cost };
-    for o in chosen(face, costs) {
+    for o in costs.paid(face) {
         if o.is_alternative() {
             cost = o.cost();
         }
     }
-    for o in chosen(face, costs).filter(|o| !o.is_alternative()) {
+    for o in costs.paid(face).filter(|o| !o.is_alternative()) {
         cost = cost.plus(o.cost());
     }
     cost.plus(ManaCost::generic(extra)).with_x(x)
@@ -337,11 +321,11 @@ fn castable(
     t: &GameTable,
     player: Seat,
     slot: Slot,
-    face_index: u8,
-    costs: u8,
+    face_index: FaceIx,
+    costs: Castings,
     from: From,
 ) -> Result<bool, Full> {
-    let face = &t.def(s.object(slot).card).faces[usize::from(face_index)];
+    let face = t.def(s.object(slot).card).face(face_index);
     // CR 305.9: "If an object is both a land and another card type, it can be played only as
     // a land. It can't be cast as a spell." CR 712.11c: "Only the face that will be face up
     // on the stack is evaluated to determine if it can be cast."
@@ -403,15 +387,16 @@ fn cast_options(
     let free = matches!(from, From::Resolution { free: true });
     for slot in collapse(s, cards).iter() {
         let def = t.def(s.object(slot).card);
-        for (f, face) in def.faces.iter().enumerate() {
+        for f in def.face_ixs() {
+            let face = def.face(f);
             if face.transformed {
                 continue;
             }
-            for costs in option_masks(face, free) {
-                if castable(s, t, player, slot, f as u8, costs, from)? {
+            for costs in option_sets(face, free) {
+                if castable(s, t, player, slot, f, costs, from)? {
                     out.push(Opt::Cast {
                         slot,
-                        face: f as u8,
+                        face: f,
                         costs,
                     })?;
                 }
@@ -475,7 +460,7 @@ fn activatable(
     let Some((card, face, index)) = activated(s, slot, ability) else {
         return Ok(false);
     };
-    let a = t.def(card).faces[usize::from(face)].ability(index);
+    let a = t.def(card).face(face).ability(index);
     if a.kind != AbilityKind::Activated {
         return Ok(false);
     }
@@ -664,7 +649,7 @@ pub(crate) fn begin_cast(
         ..StackEntry::default()
     })?;
     let free = resolving.unwrap_or(false);
-    let def_face = &t.def(card).faces[usize::from(face)];
+    let def_face = t.def(card).face(face);
     let c = Casting {
         player,
         step: if x_range_start(def_face, costs, free).is_some() {
@@ -698,7 +683,7 @@ pub(crate) fn begin_activate(
     ability: AbilityIx,
 ) -> Result<(), Full> {
     let (card, face, index) = activated(s, slot, ability).expect("an ability offered");
-    let a = t.def(card).faces[usize::from(face)].ability(index);
+    let a = t.def(card).face(face).ability(index);
     if a.is_loyalty() {
         s.object_mut(slot)
             .flags
@@ -794,7 +779,7 @@ fn specs(t: &GameTable, entry: &StackEntry) -> &'static [TargetSpec] {
 
 /// The total mana cost of the spell or ability being cast, once X is announced.
 fn total_cost(t: &GameTable, entry: &StackEntry, c: &Casting) -> ManaCost {
-    let face = &t.def(entry.card).faces[usize::from(entry.face)];
+    let face = t.def(entry.card).face(entry.face);
     match entry.ability {
         None => spell_cost(face, entry.costs, entry.x, c.extra, c.free),
         Some(ability) => {
@@ -1008,7 +993,7 @@ fn finish(s: &mut State, t: &GameTable, sink: &mut Sink, c: Casting) -> Result<(
 /// The X values the payment can still cover, from the least allowed.
 fn x_options(s: &State, t: &GameTable, c: &Casting) -> Result<Fixed<Opt, 64>, Full> {
     let entry = top(s);
-    let face = &t.def(entry.card).faces[usize::from(entry.face)];
+    let face = t.def(entry.card).face(entry.face);
     let least = if entry.is_spell() {
         x_range_start(face, entry.costs, c.free).unwrap_or(0)
     } else {

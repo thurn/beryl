@@ -141,7 +141,7 @@ fn every_face_token_and_emblem_name_is_in_the_card_data() {
     }
     let mut missing: Vec<&str> = defs
         .iter()
-        .flat_map(|d| (0..d.faces.len()).map(|f| d.face_name(f as u8)))
+        .flat_map(|d| d.face_ixs().map(|f| d.face_name(f)))
         .filter(|name| !known.contains(name))
         .collect();
     missing.dedup();

@@ -7,7 +7,8 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, CardDef, Delayed, FaceAbility, Flow, ManaColor, ManaCost, Modification, Pause, Types,
+    Ability, CardDef, Delayed, FaceAbility, FaceIx, Flow, ManaColor, ManaCost, Modification, Pause,
+    Types,
 };
 use crate::cast;
 use crate::decision::{Answers, Candidates, Choice, Decision, DecisionKind, Opt, StallReason};
@@ -147,7 +148,7 @@ impl<'a> EffectCtx<'a> {
 
     /// Whether the casting option at `index` in the face's list was paid.
     pub fn paid(&self, index: u8) -> bool {
-        self.entry.costs & (1 << index) != 0
+        self.entry.costs.contains(usize::from(index))
     }
 
     /// The `i`th chosen target if it is still legal, `None` if it was not chosen or is
@@ -217,7 +218,7 @@ impl<'a> EffectCtx<'a> {
     /// number chosen for it while the object is on the stack."
     pub fn spell_mana_value(&self, spell: ObjectRef) -> Option<u8> {
         let e = self.spell_entry(spell)?;
-        let cost = self.table.def(e.card).faces[usize::from(e.face)].cost;
+        let cost = self.table.def(e.card).face(e.face).cost;
         Some(cost.mana_value().saturating_add(cost.x.saturating_mul(e.x)))
     }
 
@@ -490,7 +491,7 @@ impl<'a> EffectCtx<'a> {
     /// ([CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064)): "When an effect
     /// instructs a player to add mana, that mana goes into a player's mana pool."
     pub fn add_mana(&mut self, player: Seat, color: ManaColor, amount: u8) {
-        let pool = &mut self.state.player_mut(player).mana[color as usize];
+        let pool = &mut self.state.player_mut(player).mana[color];
         *pool = pool.saturating_add(amount);
     }
 
@@ -802,7 +803,7 @@ impl<'a> EffectCtx<'a> {
             Reason::Effect,
             Entry {
                 controller: Some(o.owner),
-                face: 1,
+                face: FaceIx::BACK,
                 ..Entry::default()
             },
         );
@@ -1050,7 +1051,7 @@ impl<'a> EffectCtx<'a> {
     pub fn put_onto_battlefield(
         &mut self,
         object: ObjectRef,
-        face: u8,
+        face: FaceIx,
         counters: Option<(CounterKind, u8)>,
     ) {
         if !self.state.is_current(object) {

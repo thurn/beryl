@@ -172,7 +172,7 @@ fn run(
     ability: Option<&'static Ability>,
 ) -> Result<Option<Decision>, Full> {
     s.stack.pop();
-    let face = &t.def(entry.card).faces[usize::from(entry.face)];
+    let face = t.def(entry.card).face(entry.face);
     if fizzles(s, t, &entry, ability) {
         if entry.is_spell() {
             cast::leave_stack(s, t, sink, &entry, false, Reason::Resolve)?;
@@ -238,7 +238,7 @@ fn enter_battlefield(
     entry: &StackEntry,
 ) -> Result<(), Full> {
     let slot = entry.object.expect("a spell's card").slot;
-    let face = &t.def(entry.card).faces[usize::from(entry.face)];
+    let face = t.def(entry.card).face(entry.face);
     let mut how = Entry {
         controller: Some(entry.controller),
         face: entry.face,
@@ -251,11 +251,8 @@ fn enter_battlefield(
             .map(|r| r.slot),
         ..Entry::default()
     };
-    for (i, option) in face.casting.iter().enumerate() {
-        if entry.costs & (1 << i) == 0 {
-            continue;
-        }
-        match *option {
+    for option in entry.costs.paid(face) {
+        match option {
             CastingOption::Kicker { .. } => how.flags |= ObjectFlags::KICKED,
             CastingOption::Offspring(_) => how.flags |= ObjectFlags::OFFSPRING,
             CastingOption::Impending { counters, .. } => {

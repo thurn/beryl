@@ -2,7 +2,7 @@
 //! (§12.2).
 
 use crate::bitboard::Bitboard;
-use crate::card::AbilityIx;
+use crate::card::{AbilityIx, Castings, FaceIx, ManaColor};
 use crate::fixed::Fixed;
 use crate::ids::{Seat, Slot};
 use crate::observation::Observation;
@@ -163,25 +163,24 @@ pub enum Opt {
     Block(Slot),
     /// Assign lethal damage to the blocker in this slot.
     Lethal(Slot),
-    /// Cast the card in `slot` with face `face` up, paying the casting options in the bitmask
-    /// `costs` over the face's [`crate::card::Face::casting`] list.
+    /// Cast the card in `slot` with face `face` up, paying the casting options `costs`.
     Cast {
         slot: Slot,
-        face: u8,
-        costs: u8,
+        face: FaceIx,
+        costs: Castings,
     },
     /// Activate an ability of the object in `slot`.
     Activate {
         slot: Slot,
         ability: AbilityIx,
     },
-    /// Tap the mana source in `slot` for one mana of the [`crate::card::ManaColor`] `color`.
+    /// Tap the mana source in `slot` for one mana of `color`.
     Mana {
         slot: Slot,
-        color: u8,
+        color: ManaColor,
     },
-    /// Spend floating mana of the [`crate::card::ManaColor`] index.
-    Pool(u8),
+    /// Spend floating mana of `color`.
+    Pool(ManaColor),
     /// A number: X, or how many targets.
     Number(u8),
     /// The `i`th payment plan.

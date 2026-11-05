@@ -2,9 +2,9 @@
 //! `apply` on positions set up with the cards of [`super::cast`].
 
 use super::cast::{Game, cast, index_of};
-use crate::card::{AbilityIx, ManaColor};
+use crate::card::{AbilityIx, Castings, FaceIx, ManaColor};
 use crate::ids::Slot;
-use crate::state::{CounterKind, ObjectFlags, Pending, TurnStep, Zone};
+use crate::state::{CounterKind, ManaPool, ObjectFlags, Pending, TurnStep, Zone};
 use crate::{Choice, DecisionKind, Opt, Profile};
 
 #[test]
@@ -43,7 +43,7 @@ fn a_creature_spell_goes_on_the_stack_then_resolves_onto_the_battlefield() {
     for land in lands {
         assert!(g.s.object(land).flags.has(ObjectFlags::TAPPED));
     }
-    assert_eq!(g.s.player(g.me).mana, [0; 6]);
+    assert_eq!(g.s.player(g.me).mana, ManaPool::default());
     assert_eq!(g.s.turn().priority, g.me);
     g.pass_both();
     assert_eq!(g.s.object(bear).zone, Zone::Battlefield);
@@ -185,8 +185,8 @@ fn kicker_x_announces_an_x_of_at_least_one_and_marks_the_permanent() {
     }
     let kicked = Opt::Cast {
         slot: diver,
-        face: 0,
-        costs: 1,
+        face: FaceIx::FRONT,
+        costs: Castings::only(0),
     };
     let d = g.current();
     assert!(index_of(&d, cast(diver)).is_some() && index_of(&d, kicked).is_some());
@@ -214,8 +214,8 @@ fn offspring_is_an_additional_cost_offered_only_when_payable() {
     g.give(g.me, "Test Island", Zone::Battlefield);
     let with_offspring = Opt::Cast {
         slot: trainer,
-        face: 0,
-        costs: 1,
+        face: FaceIx::FRONT,
+        costs: Castings::only(0),
     };
     let d = g.current();
     assert!(index_of(&d, cast(trainer)).is_some());
@@ -234,8 +234,8 @@ fn impending_is_an_alternative_cost_that_enters_with_time_counters() {
     g.give(g.me, "Test Land", Zone::Battlefield);
     let impending = Opt::Cast {
         slot: overlord,
-        face: 0,
-        costs: 1,
+        face: FaceIx::FRONT,
+        costs: Castings::only(0),
     };
     let d = g.current();
     assert!(
@@ -268,8 +268,8 @@ fn a_modal_double_faced_card_is_cast_by_its_spell_face_or_played_by_its_land_fac
             &d,
             Opt::Cast {
                 slot: stupor,
-                face: 1,
-                costs: 0
+                face: FaceIx::BACK,
+                costs: Castings::NONE
             }
         )
         .is_none(),
@@ -277,7 +277,7 @@ fn a_modal_double_faced_card_is_cast_by_its_spell_face_or_played_by_its_land_fac
     );
     g.pick(Opt::PlayLand(stupor));
     assert_eq!(g.s.object(stupor).zone, Zone::Battlefield);
-    assert_eq!(g.s.object(stupor).face, 1);
+    assert_eq!(g.s.object(stupor).face, FaceIx::BACK);
     // Its land face is a source of blue: with the two Islands, {U}{U}{U}.
     let uuu = crate::card::ManaCost::new(0, [0, 3, 0, 0, 0, 0]);
     assert!(crate::mana::payable(&g.s, &g.t, g.me, uuu, crate::Bitboard::EMPTY).unwrap());
@@ -527,9 +527,9 @@ fn a_mana_ability_taps_for_the_color_chosen() {
     let island = g.give(g.me, "Test Island", Zone::Battlefield);
     g.pick(Opt::Mana {
         slot: island,
-        color: ManaColor::Blue as u8,
+        color: ManaColor::Blue,
     });
-    assert_eq!(g.s.player(g.me).mana, [0, 1, 0, 0, 0, 0]);
+    assert_eq!(g.s.player(g.me).mana.amounts(), [0, 1, 0, 0, 0, 0]);
     assert!(g.s.object(island).flags.has(ObjectFlags::TAPPED));
 }
 

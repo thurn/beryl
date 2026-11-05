@@ -1,7 +1,7 @@
 //! Triggered abilities: matching events, putting them on the stack in APNAP order, delayed
 //! triggers, and resolving them (architecture §8.3, CR 603).
 
-use crate::card::{Ability, Delayed, Face, FaceAbility, Trigger, Types};
+use crate::card::{Ability, Delayed, Face, FaceAbility, FaceIx, Trigger, Types};
 use crate::event::{Event, Recipient, Sink, kind};
 use crate::filter::Whose;
 use crate::fixed::{Fixed, Full};
@@ -15,12 +15,12 @@ use crate::turn::apnap;
 /// The printed face of a permanent, or of the card a token copies.
 pub(crate) fn face(s: &State, t: &GameTable, slot: Slot) -> &'static Face {
     let o = s.object(slot);
-    &t.def(o.card).faces[usize::from(o.face)]
+    t.def(o.card).face(o.face)
 }
 
 /// The ability a pending trigger or stack entry names.
-pub(crate) fn ability(t: &GameTable, card: CardIx, face: u8, ability: u8) -> &'static Ability {
-    &t.def(card).faces[usize::from(face)].abilities[usize::from(ability)]
+pub(crate) fn ability(t: &GameTable, card: CardIx, face: FaceIx, ability: u8) -> &'static Ability {
+    &t.def(card).face(face).abilities[usize::from(ability)]
 }
 
 /// Matches an executed event against every triggered ability that could listen to it: the
@@ -58,9 +58,9 @@ pub(crate) fn match_event(s: &mut State, t: &GameTable, e: &Event) -> Result<(),
                 if t.listens(card) & k == 0 {
                     continue;
                 }
-                for (a, ability) in face_abilities(t, card, 0) {
+                for (a, ability) in face_abilities(t, card, FaceIx::FRONT) {
                     if let Some(info) = fires(s, ability.trigger, None, player, e) {
-                        enqueue(s, t, None, card, 0, a, player, info)?;
+                        enqueue(s, t, None, card, FaceIx::FRONT, a, player, info)?;
                     }
                 }
             }
@@ -75,9 +75,10 @@ pub(crate) fn match_event(s: &mut State, t: &GameTable, e: &Event) -> Result<(),
 fn face_abilities(
     t: &GameTable,
     card: CardIx,
-    face: u8,
+    face: FaceIx,
 ) -> impl Iterator<Item = (u8, &'static Ability)> {
-    t.def(card).faces[usize::from(face)]
+    t.def(card)
+        .face(face)
         .abilities
         .iter()
         .enumerate()
@@ -217,7 +218,7 @@ fn enqueue(
     t: &GameTable,
     source: Option<ObjectRef>,
     card: CardIx,
-    face: u8,
+    face: FaceIx,
     ability: u8,
     controller: Seat,
     info: TriggerInfo,

@@ -20,8 +20,8 @@
 //!   the bottom only the cards not worth drawing.
 
 use beryl_engine::card::{
-    Ability, AbilityIx, CardDef, CastingOption, Face, FaceAbility, Keywords, TargetKind,
-    TargetSpec, Types,
+    Ability, AbilityIx, CardDef, CastingOption, Castings, Face, FaceAbility, FaceIx, Keywords,
+    TargetKind, TargetSpec, Types,
 };
 use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::state::{ObjectFlags, StackEntry};
@@ -333,23 +333,21 @@ impl Policy<'_> {
         }
     }
 
-    pub(crate) fn cast(&self, slot: Slot, face: u8, costs: u8) -> i32 {
+    pub(crate) fn cast(&self, slot: Slot, face: FaceIx, costs: Castings) -> i32 {
         let Some(card) = self.obs.card(slot) else {
             return 0;
         };
         let info = self.values.get(card);
-        let f = &self.t.def(card).faces[usize::from(face)];
+        let f = self.t.def(card).face(face);
         if info.wheel && self.obs.zone(self.me, Zone::Hand).count() > 3 {
             return 0;
         }
         let mut v = i32::from(info.value);
-        for (i, option) in f.casting.iter().enumerate() {
-            if costs & (1 << i) != 0 {
-                v += match option {
-                    CastingOption::Kicker { .. } | CastingOption::Offspring(_) => 10,
-                    CastingOption::Impending { .. } => -10,
-                };
-            }
+        for option in costs.paid(f) {
+            v += match option {
+                CastingOption::Kicker { .. } | CastingOption::Offspring(_) => 10,
+                CastingOption::Impending { .. } => -10,
+            };
         }
         match f.spell_ability() {
             Some(a) => self.worth_targeting(a, info.friendly(index_of(f, a)), v),
@@ -366,7 +364,7 @@ impl Policy<'_> {
             return 0;
         }
         let o = self.obs.object(slot);
-        let a = &self.t.def(card).faces[usize::from(o.face)].abilities[usize::from(i)];
+        let a = &self.t.def(card).face(o.face).abilities[usize::from(i)];
         let v = match a.cost.loyalty {
             Some(l) if l >= 0 => 20,
             Some(l) if l <= -8 => 200,
@@ -452,7 +450,7 @@ impl Policy<'_> {
     pub(crate) fn targeting(&self) -> Option<(&'static TargetSpec, bool)> {
         let e: &StackEntry = self.obs.stack().last()?;
         let def: &'static CardDef = self.t.def(e.card);
-        let face: &'static Face = &def.faces[usize::from(e.face)];
+        let face: &'static Face = def.face(e.face);
         let a = match e.ability {
             Some(ability) => face.ability(ability),
             None => face.spell_ability()?,

@@ -6,8 +6,9 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, CardDef, CastingOption, Cost, Face, Flow, Keywords, ManaColor, ManaCost,
-    ManaSet, Rule, Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Trigger, Types,
+    Ability, AbilityKind, CardDef, CastingOption, Castings, Cost, Face, FaceIx, Flow, Keywords,
+    ManaColor, ManaCost, ManaSet, Rule, Subtype, Subtypes, Supertypes, TargetKind, TargetSpec,
+    Trigger, Types,
 };
 use crate::effect::EffectCtx;
 use crate::event::Reason;
@@ -692,7 +693,7 @@ pub(crate) fn object_index(d: &Decision, slot: Slot) -> Option<Choice> {
 pub(crate) fn cast(slot: Slot) -> Opt {
     Opt::Cast {
         slot,
-        face: 0,
-        costs: 0,
+        face: FaceIx::FRONT,
+        costs: Castings::NONE,
     }
 }

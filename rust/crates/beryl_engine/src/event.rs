@@ -8,7 +8,7 @@
 //! draws) arrive with the cards that create them; none of the Milestone 1 cards does.
 
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityKind, Replacement, Types};
+use crate::card::{AbilityKind, FaceIx, Replacement, Types};
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot};
 use crate::layers;
@@ -250,7 +250,7 @@ pub(crate) struct Entry {
     /// Under this player's control rather than its owner's.
     pub controller: Option<Seat>,
     /// The face up.
-    pub face: u8,
+    pub face: FaceIx,
     /// Counters it enters with ("enters with N time counters").
     pub counters: Option<(CounterKind, u8)>,
     /// Its controller chose to pay the life an "unless you pay N life" replacement asks.
@@ -460,7 +460,7 @@ fn exiled_until(s: &State, slot: Slot) -> Bitboard {
 /// its printed loyalty number.'"
 fn enter_replacements(s: &State, t: &GameTable, slot: Slot, mut entry: Entry) -> Entry {
     let o = s.object(slot);
-    let face = &t.def(o.card).faces[usize::from(entry.face)];
+    let face = t.def(o.card).face(entry.face);
     let controller = entry.controller.unwrap_or(o.owner);
     for ability in face.abilities {
         if ability.kind != AbilityKind::Replacement {
@@ -508,7 +508,7 @@ fn pay_life_to_enter(
     entry: Entry,
 ) -> Result<(), Full> {
     let o = s.object(slot);
-    let face = &t.def(o.card).faces[usize::from(entry.face)];
+    let face = t.def(o.card).face(entry.face);
     let player = entry.controller.unwrap_or(o.owner);
     for ability in face.abilities {
         if let Replacement::EntersTappedUnlessPayLife(n) = ability.replacement {
@@ -519,8 +519,9 @@ fn pay_life_to_enter(
 }
 
 /// The life an entering replacement of the face asks for, if any.
-pub(crate) fn life_to_enter(t: &GameTable, card: CardIx, face: u8) -> Option<u8> {
-    t.def(card).faces[usize::from(face)]
+pub(crate) fn life_to_enter(t: &GameTable, card: CardIx, face: FaceIx) -> Option<u8> {
+    t.def(card)
+        .face(face)
         .abilities
         .iter()
         .find_map(|a| match a.replacement {

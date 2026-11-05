@@ -365,14 +365,12 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
         Opt::Cast { slot, face, costs } => {
             let def = t.def(s.card(slot));
             let mut text = format!("cast {}", def.face_name(face));
-            for (i, option) in def.faces[usize::from(face)].casting.iter().enumerate() {
-                if costs & (1 << i) != 0 {
-                    text.push_str(match option {
-                        CastingOption::Kicker { .. } => " kicked",
-                        CastingOption::Offspring(_) => " with offspring",
-                        CastingOption::Impending { .. } => " for impending",
-                    });
-                }
+            for option in costs.paid(def.face(face)) {
+                text.push_str(match option {
+                    CastingOption::Kicker { .. } => " kicked",
+                    CastingOption::Offspring(_) => " with offspring",
+                    CastingOption::Impending { .. } => " for impending",
+                });
             }
             text
         }
@@ -380,7 +378,7 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
             let def = t.def(s.card(slot));
             match ability {
                 AbilityIx::Own(i) => {
-                    let face = &def.faces[usize::from(s.object(slot).face)];
+                    let face = def.face(s.object(slot).face);
                     let a = &face.abilities[usize::from(i)];
                     match a.cost.loyalty {
                         Some(l) => format!("{} {l:+}", named(slot)),
@@ -390,8 +388,8 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
                 AbilityIx::Granted(k) => format!("activate {} granted #{k}", named(slot)),
             }
         }
-        Opt::Mana { slot, color } => format!("tap {} for {color}", named(slot)),
-        Opt::Pool(color) => format!("spend pool {color}"),
+        Opt::Mana { slot, color } => format!("tap {} for {}", named(slot), color.index()),
+        Opt::Pool(color) => format!("spend pool {}", color.index()),
         Opt::Number(n) => n.to_string(),
         Opt::Plan(i) => format!("plan {}", i + 1),
         Opt::Player(p) => format!("P{}", p.get()),

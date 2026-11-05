@@ -37,7 +37,10 @@ mod combat;
 use std::cell::OnceCell;
 
 use beryl_cards::names;
-use beryl_engine::card::{Ability, AbilityIx, FaceAbility, Keywords, Types};
+use beryl_engine::card::{
+    Ability, AbilityIx, CastingOption, Castings, Face, FaceAbility, FaceIx, Keywords, ManaColor,
+    Types,
+};
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{ObjectFlags, StackEntry};
 use beryl_engine::{
@@ -200,7 +203,8 @@ pub(crate) fn appraise(p: &Policy<'_>, slot: Slot, base: i32) -> Option<i32> {
         let loyalty = i32::from(o.counters.loyalty);
         // One within three of its ultimate is about to win the game.
         let ultimate = obs.card(slot).and_then(|c| {
-            p.t.def(c).faces[usize::from(o.face)]
+            p.t.def(c)
+                .face(o.face)
                 .abilities
                 .iter()
                 .filter_map(|a| a.cost.loyalty)
@@ -236,7 +240,7 @@ pub(crate) fn appraise(p: &Policy<'_>, slot: Slot, base: i32) -> Option<i32> {
         return Some(base / 2 + 3 * i32::from(obs.derived(slot).power.max(0)));
     }
     // Jace, Vryn's Prodigy loots every turn and becomes a planeswalker.
-    if name(slot) == Some(names::JACE_VRYNS_PRODIGY) && o.face == 0 {
+    if name(slot) == Some(names::JACE_VRYNS_PRODIGY) && o.face == FaceIx::FRONT {
         return Some(base + 20);
     }
     if name(slot) == Some(names::MANA_CRYPT) {
@@ -372,6 +376,7 @@ impl Expert<'_> {
             .obs()
             .player(who)
             .mana
+            .amounts()
             .iter()
             .map(|&m| i32::from(m))
             .sum();
@@ -403,7 +408,10 @@ impl Expert<'_> {
     /// counts for both); floating mana counts too.
     fn colors_up(&self, who: Seat) -> (i32, i32) {
         let pool = self.obs().player(who).mana;
-        let (mut white, mut blue) = (i32::from(pool[0]), i32::from(pool[1]));
+        let (mut white, mut blue) = (
+            i32::from(pool[ManaColor::White]),
+            i32::from(pool[ManaColor::Blue]),
+        );
         for s in self.permanents(who).filter(|&s| !self.tapped(s)) {
             let (w, u) = self.makes(s);
             white += i32::from(w);
@@ -648,7 +656,7 @@ impl Expert<'_> {
             && !self.dying()
             && self.mana(self.opp()) >= 1
             && self.colors_up(self.opp()).0 >= 1
-            && self.mana_after(&self.p.t.def(card).faces[usize::from(face)], costs) < 1
+            && self.mana_after(self.p.t.def(card).face(face), costs) < 1
         {
             return 0;
         }
@@ -680,7 +688,7 @@ impl Expert<'_> {
         let countered = self.hand(self.me()).iter().any(|s| {
             self.obs().card(s).is_some_and(|c| {
                 i32::from(self.p.t.def(c).front().cost.mana_value()) <= self.mana(self.me())
-            }) && self.counter_score(&top, s, 0) > 0
+            }) && self.counter_score(&top, s, FaceIx::FRONT) > 0
         });
         if counter == 0 && !countered && (self.p.values.get(top.card).wheel || teferi) {
             return self.instant_speed(o, if teferi { -1 } else { 0 });
@@ -690,7 +698,7 @@ impl Expert<'_> {
 
     /// The score of countering the opponent's spell `top` with the card in `slot`, cast as
     /// face `face`, by counterspell discipline; 0 when it is no counter or not worth it.
-    fn counter_score(&self, top: &StackEntry, slot: Slot, face: u8) -> i32 {
+    fn counter_score(&self, top: &StackEntry, slot: Slot, face: FaceIx) -> i32 {
         let threat = self.threat(top);
         let spare = self.counters_in_hand().count() >= 2;
         let last_card = self.hand(self.opp()).count() <= 1;
@@ -719,7 +727,7 @@ impl Expert<'_> {
             // Sink into Stupor returns the spell to its owner's hand: a counter for tempo,
             // for a major threat when no counterspell can answer it, and only when its
             // controller has not the mana to cast it again this turn.
-            (Some(names::SINK_INTO_STUPOR), 0)
+            (Some(names::SINK_INTO_STUPOR), FaceIx::FRONT)
                 if threat >= MAJOR
                     && theirs < i32::from(self.p.t.def(top.card).front().cost.mana_value()) =>
             {
@@ -771,7 +779,7 @@ impl Expert<'_> {
                 v = v.max(self.value(r.slot) + self.released(r.slot));
             }
         }
-        if e.costs != 0 && def.name == names::THIEVING_SKYDIVER {
+        if !e.costs.is_empty() && def.name == names::THIEVING_SKYDIVER {
             v += 20;
         }
         // Mana Crypt is little to a player with lands enough.
@@ -975,7 +983,7 @@ impl Expert<'_> {
     /// Whether casting the card in `slot` first would leave a major threat in hand too little
     /// to pay for No More Lies ("Counter target spell unless its controller pays {3}") that
     /// it could pay for now, while the opponent has the mana for No More Lies up.
-    fn spoils_tax_room(&self, slot: Slot, face: u8, costs: u8) -> bool {
+    fn spoils_tax_room(&self, slot: Slot, face: FaceIx, costs: Castings) -> bool {
         let (white, blue) = self.colors_up(self.opp());
         if self.sorcery_only_for_them()
             || white < 1
@@ -992,7 +1000,7 @@ impl Expert<'_> {
             return false;
         }
         let mana = self.mana(self.me());
-        let left = self.mana_after(&self.p.t.def(card).faces[usize::from(face)], costs);
+        let left = self.mana_after(self.p.t.def(card).face(face), costs);
         self.hand(self.me()).iter().any(|s| {
             s != slot
                 && self.obs().card(s).is_some_and(|c| {
@@ -1013,13 +1021,13 @@ impl Expert<'_> {
             .any(|s| self.is(s, names::TEFERI_TIME_RAVELER))
     }
 
-    fn main_cast(&self, slot: Slot, face: u8, costs: u8, precombat: bool) -> i32 {
+    fn main_cast(&self, slot: Slot, face: FaceIx, costs: Castings, precombat: bool) -> i32 {
         let Some(name) = self.name(slot) else {
             return 0;
         };
         let v = self.p.action(Opt::Cast { slot, face, costs });
         let card = self.obs().card(slot).expect("a known card");
-        let f = &self.p.t.def(card).faces[usize::from(face)];
+        let f = self.p.t.def(card).face(face);
         let flash = f.keywords.intersects(Keywords::FLASH) || f.types.intersects(Types::INSTANT);
         let sorcery_only = self.sorcery_only();
         if name == names::AANGS_ICEBERG && self.deadly_crypt().is_some() {
@@ -1116,7 +1124,7 @@ impl Expert<'_> {
 
     /// The score of casting one of the cards with rules of their own in our main phase, or
     /// `None` for any other.
-    fn card_cast(&self, slot: Slot, name: &str, costs: u8) -> Option<i32> {
+    fn card_cast(&self, slot: Slot, name: &str, costs: Castings) -> Option<i32> {
         let sorcery_only = self.sorcery_only();
         Some(match name {
             // Free mana, until there are lands enough and the coin flips cost too much life.
@@ -1163,14 +1171,14 @@ impl Expert<'_> {
                 }
             }
             names::THIEVING_SKYDIVER => match self.stealable() {
-                Some(worth) if costs != 0 => 400 + worth,
-                _ if costs != 0 => 0,
+                Some(worth) if !costs.is_empty() => 400 + worth,
+                _ if !costs.is_empty() => 0,
                 _ => self.hold_for_counter(slot, 20),
             },
             names::OVERLORD_OF_THE_MISTMOORS => {
                 // In full when it can be: the impending option is the one with a cost bit. When
                 // we need blockers now, impending leaves mana for another.
-                let full = costs == 0;
+                let full = costs.is_empty();
                 // Dying, impending's two flying Insects block now, ahead of anything else.
                 // In full only when that does not tap the counter we hold up into a counter
                 // they could have.
@@ -1205,19 +1213,16 @@ impl Expert<'_> {
     }
 
     /// The mana we would have left after casting face `f` with the casting options `costs`.
-    fn mana_after(&self, f: &beryl_engine::card::Face, costs: u8) -> i32 {
-        use beryl_engine::card::CastingOption;
+    fn mana_after(&self, f: &Face, costs: Castings) -> i32 {
         let mut cost = i32::from(f.cost.mana_value());
-        for (i, option) in f.casting.iter().enumerate() {
-            if costs & (1 << i) != 0 {
-                match option {
-                    CastingOption::Kicker { cost: c, min_x } => {
-                        cost += i32::from(c.mana_value() + min_x);
-                    }
-                    CastingOption::Offspring(c) => cost += i32::from(c.mana_value()),
-                    // An alternative cost, instead of the mana cost.
-                    CastingOption::Impending { cost: c, .. } => cost = i32::from(c.mana_value()),
+        for option in costs.paid(f) {
+            match option {
+                CastingOption::Kicker { cost: c, min_x } => {
+                    cost += i32::from(c.mana_value() + min_x);
                 }
+                CastingOption::Offspring(c) => cost += i32::from(c.mana_value()),
+                // An alternative cost, instead of the mana cost.
+                CastingOption::Impending { cost: c, .. } => cost = i32::from(c.mana_value()),
             }
         }
         self.mana(self.me()) - cost
@@ -1231,7 +1236,7 @@ impl Expert<'_> {
         let white = |s: Slot| self.makes(s).0;
         self.mana(self.me()) - cost <= 0
             && !self.hand(opp).is_empty()
-            && (self.obs().player(opp).mana[0] > 0
+            && (self.obs().player(opp).mana[ManaColor::White] > 0
                 || self.permanents(opp).any(|s| !self.tapped(s) && white(s)))
             && !self.seen(names::MANA_TITHE)
     }
@@ -1374,7 +1379,7 @@ impl Expert<'_> {
             && self.creatures(self.me()).any(|s| {
                 let o = self.obs().object(s);
                 self.is(s, names::JACE_VRYNS_PRODIGY)
-                    && o.face == 0
+                    && o.face == FaceIx::FRONT
                     && !o.flags.has(ObjectFlags::TAPPED)
                     && !o.flags.has(ObjectFlags::SUMMONING_SICK)
             })
@@ -1480,9 +1485,7 @@ impl Expert<'_> {
         self.permanents(controller).filter(|&s| {
             self.obs().card(s).is_some_and(|c| {
                 let face = self.obs().object(s).face;
-                self.p.t.def(c).faces[usize::from(face)]
-                    .types
-                    .intersects(Types::ARTIFACT)
+                self.p.t.def(c).face(face).types.intersects(Types::ARTIFACT)
             })
         })
     }
@@ -1499,7 +1502,7 @@ impl Expert<'_> {
     /// target is a planeswalker. `None` for any other card, or a removal spell with nothing
     /// worth it: a target must be worth the card's own threshold, or `min` when that is not
     /// negative.
-    fn removal_score(&self, slot: Slot, name: &str, face: u8, min: i32) -> Option<(i32, bool)> {
+    fn removal_score(&self, slot: Slot, name: &str, face: FaceIx, min: i32) -> Option<(i32, bool)> {
         // Oust's 3 life can be the 3 that keeps a low opponent alive, or that our attack this
         // turn falls short by, with the removal we have; and the card it puts into their
         // library is one to draw from a library that would otherwise run out.
@@ -1512,7 +1515,7 @@ impl Expert<'_> {
             return None;
         }
         let threshold = match name {
-            names::SINK_INTO_STUPOR if face == 0 => 50,
+            names::SINK_INTO_STUPOR if face == FaceIx::FRONT => 50,
             names::OUST => 35,
             names::GET_LOST => 50,
             names::AANGS_ICEBERG => 45,
@@ -1528,7 +1531,11 @@ impl Expert<'_> {
             threshold
         };
         let card = self.obs().card(slot)?;
-        let a: &Ability = self.p.t.def(card).faces[usize::from(face)]
+        let a: &Ability = self
+            .p
+            .t
+            .def(card)
+            .face(face)
             .spell_ability()
             .or_else(|| self.etb_targets(card))?;
         let spec = a.targets.first()?;
@@ -1677,7 +1684,7 @@ impl Expert<'_> {
                 def.name,
                 names::JACE_THE_MIND_SCULPTOR | names::TEFERI_TIME_RAVELER
             ) && e.ability.is_some_and(|a| {
-                def.faces[usize::from(e.face)]
+                def.face(e.face)
                     .ability(a)
                     .cost
                     .loyalty
@@ -1768,7 +1775,7 @@ impl Expert<'_> {
                 0
             };
         }
-        let a = &def.faces[usize::from(o.face)].abilities[usize::from(i)];
+        let a = &def.face(o.face).abilities[usize::from(i)];
         match def.name {
             // "{T}, Sacrifice Strip Mine: Destroy target land."
             names::STRIP_MINE if !a.targets.is_empty() => {
@@ -1796,7 +1803,7 @@ impl Expert<'_> {
     fn walker_ability(&self, slot: Slot) -> Option<u8> {
         let o = self.obs().object(slot);
         let card = self.obs().card(slot)?;
-        let face = &self.p.t.def(card).faces[usize::from(o.face)];
+        let face = self.p.t.def(card).face(o.face);
         let loyalty = i32::from(o.counters.loyalty);
         // An ability that would leave no loyalty is no option, short of an ultimate or a bounce
         // that opens lethal; the walker then grows instead.
@@ -1826,7 +1833,7 @@ impl Expert<'_> {
         let o = self.obs().object(slot);
         let card = self.obs().card(slot)?;
         let def = self.p.t.def(card);
-        let face = &def.faces[usize::from(o.face)];
+        let face = def.face(o.face);
         let loyalty = i32::from(o.counters.loyalty);
         let by_cost = |cost: i8| {
             face.abilities
@@ -1980,7 +1987,9 @@ impl Expert<'_> {
         });
         affordable
             && match name {
-                names::GET_LOST | names::OUST => self.removal_score(s, name, 0, -1).is_some(),
+                names::GET_LOST | names::OUST => {
+                    self.removal_score(s, name, FaceIx::FRONT, -1).is_some()
+                }
                 names::TIMETWISTER => self.wheel_worth(false),
                 _ => false,
             }
@@ -2123,8 +2132,13 @@ impl Expert<'_> {
         let me = self.me();
         let pool = self.obs().player(me).mana;
         // White only, blue only, either, and colorless sources.
-        let (mut w, mut u, mut both, mut c) = (i32::from(pool[0]), i32::from(pool[1]), 0, 0);
-        c += i32::from(pool[5]);
+        let (mut w, mut u, mut both, mut c) = (
+            i32::from(pool[ManaColor::White]),
+            i32::from(pool[ManaColor::Blue]),
+            0,
+            0,
+        );
+        c += i32::from(pool[ManaColor::Colorless]);
         for s in self.permanents(me).filter(|&s| !self.tapped(s)) {
             match (self.makes(s), self.name(s)) {
                 ((true, true), _) => both += 1,
@@ -2177,7 +2191,7 @@ impl Expert<'_> {
         if self.has_type(slot, Types::PLANESWALKER)
             && let Some(card) = self.obs().card(slot)
         {
-            let f = &self.p.t.def(card).faces[usize::from(self.obs().object(slot).face)];
+            let f = self.p.t.def(card).face(self.obs().object(slot).face);
             let gained = i32::from(self.obs().object(slot).counters.loyalty)
                 - i32::from(f.loyalty.unwrap_or(0));
             return 6 * gained.max(0) + 4 * i32::from(f.cost.mana_value());
@@ -2226,7 +2240,7 @@ impl Expert<'_> {
     /// The target spec of the bounce being cast or activated.
     fn bounce_spec(&self) -> Option<&'static beryl_engine::card::TargetSpec> {
         let e = self.obs().stack().last()?;
-        let face = &self.p.t.def(e.card).faces[usize::from(e.face)];
+        let face = self.p.t.def(e.card).face(e.face);
         let a = match e.ability {
             Some(ability) => face.ability(ability),
             None => face.spell_ability()?,
@@ -2281,7 +2295,11 @@ impl Expert<'_> {
             && e.controller == self.me()
             && self.p.t.def(e.card).face_name(e.face) == JACE_TELEPATH_UNBOUND
             && let Some(ability) = e.ability
-            && self.p.t.def(e.card).faces[usize::from(e.face)]
+            && self
+                .p
+                .t
+                .def(e.card)
+                .face(e.face)
                 .ability(ability)
                 .cost
                 .loyalty

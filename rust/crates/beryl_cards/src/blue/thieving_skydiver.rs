@@ -4,8 +4,8 @@
 //! is an Equipment, attach it to this creature."
 
 use beryl_engine::card::{
-    Ability, CardDef, CastingOption, Colors, Face, Flow, Keywords, ManaCost, Subtype, Subtypes,
-    TargetKind, TargetSpec, Trigger, Types,
+    Ability, CardDef, CastingOption, Castings, Colors, Face, FaceIx, Flow, Keywords, ManaCost,
+    Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::effect::{self, EffectCtx};
 use beryl_engine::filter::Filter;
@@ -88,8 +88,8 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Cast {
                 player: P0,
                 card: names::GET_LOST,
-                face: 0,
-                costs: 0,
+                face: FaceIx::FRONT,
+                costs: Castings::NONE,
             },
             Action::Resolve,
             Action::Assert {
@@ -110,8 +110,8 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Cast {
                 player: P0,
                 card: SKYDIVER,
-                face: 0,
-                costs: 1,
+                face: FaceIx::FRONT,
+                costs: Castings::only(0),
             },
             Action::Answer {
                 player: P0,
@@ -168,8 +168,8 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Cast {
                 player: P0,
                 card: SKYDIVER,
-                face: 0,
-                costs: 0,
+                face: FaceIx::FRONT,
+                costs: Castings::NONE,
             },
             Action::Resolve,
             Action::Assert {
@@ -193,8 +193,8 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Cast {
                 player: P0,
                 card: SKYDIVER,
-                face: 0,
-                costs: 1,
+                face: FaceIx::FRONT,
+                costs: Castings::only(0),
             },
             Action::Assert {
                 assertion: Assertion::Decision {

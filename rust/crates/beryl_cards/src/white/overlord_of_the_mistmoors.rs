@@ -5,8 +5,8 @@
 //! 2/1 white Insect creature tokens with flying."
 
 use beryl_engine::card::{
-    Ability, CardDef, CastingOption, Colors, Face, Flow, Keywords, ManaCost, Subtype, Subtypes,
-    Trigger, Types,
+    Ability, CardDef, CastingOption, Castings, Colors, Face, FaceIx, Flow, Keywords, ManaCost,
+    Subtype, Subtypes, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::TokenEntry;
@@ -141,8 +141,8 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Cast {
                 player: P0,
                 card: OVERLORD,
-                face: 0,
-                costs: 1,
+                face: FaceIx::FRONT,
+                costs: Castings::only(0),
             },
             Action::Resolve,
             is_creature(false),
@@ -202,8 +202,8 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Cast {
                 player: P0,
                 card: OVERLORD,
-                face: 0,
-                costs: 0,
+                face: FaceIx::FRONT,
+                costs: Castings::NONE,
             },
             Action::Resolve,
             is_creature(true),

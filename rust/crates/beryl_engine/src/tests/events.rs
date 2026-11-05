@@ -6,16 +6,16 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, Affected, CardDef, CastingOption, Cost, Delayed, Face, Keywords,
-    LayerSpec, ManaColor, ManaCost, Modification, Replacement, StaticCondition, Subtype, Subtypes,
-    TargetKind, TargetSpec, Trigger, Types,
+    Ability, AbilityKind, Affected, CardDef, CastingOption, Castings, Cost, Delayed, Face, FaceIx,
+    Keywords, LayerSpec, ManaColor, ManaCost, Modification, Replacement, StaticCondition, Subtype,
+    Subtypes, TargetKind, TargetSpec, Trigger, Types,
 };
 use crate::effect::EffectCtx;
 use crate::event::{self, Event, Reason, Recipient, TokenEntry};
 use crate::filter::{Filter, Whose};
 use crate::ids::{Seat, Slot};
 use crate::state::{
-    Continuous, CounterKind, Duration, ObjectFlags, PendingTrigger, TurnStep, Zone,
+    Continuous, CounterKind, Duration, ManaPool, ObjectFlags, PendingTrigger, TurnStep, Zone,
 };
 use crate::{
     CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Outcome, Profile, Replay,
@@ -902,9 +902,13 @@ fn a_delayed_trigger_fires_once_at_your_next_main_phase() {
     // Created in the precombat main phase: the next main phase is the postcombat one.
     advance_to(&t, &mut s, &mut x, p, TurnStep::PostcombatMain);
     assert!(s.delayed.is_empty());
-    assert_eq!(s.player(p).mana[ManaColor::Colorless as usize], 2);
+    assert_eq!(s.player(p).mana[ManaColor::Colorless], 2);
     advance_to(&t, &mut s, &mut x, p, TurnStep::PrecombatMain);
-    assert_eq!(s.player(p).mana, [0; 6], "it triggered only once");
+    assert_eq!(
+        s.player(p).mana,
+        ManaPool::default(),
+        "it triggered only once"
+    );
 }
 
 #[test]
@@ -1041,7 +1045,7 @@ fn impending_counters_and_type_changes_apply_in_layer_four() {
     let r = s.object_ref(overlord);
     let land = put(&t, &mut s, &mut x, p, "Test Land");
     with_ctx(&t, &mut s, &mut x, land, |ctx| {
-        ctx.put_onto_battlefield(r, 0, Some((CounterKind::Time, 4)));
+        ctx.put_onto_battlefield(r, FaceIx::FRONT, Some((CounterKind::Time, 4)));
     });
     assert_eq!(s.object(overlord).counters.get(CounterKind::Time), 4);
     assert_eq!(types(&s, overlord), Types::ENCHANTMENT, "not a creature");
@@ -1111,7 +1115,7 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
     with_ctx(&t, &mut s, &mut x, aura, |ctx| {
         ctx.destroy(r);
         let r = ctx.state().object_ref(bear);
-        ctx.put_onto_battlefield(r, 0, None);
+        ctx.put_onto_battlefield(r, FaceIx::FRONT, None);
     });
     assert_eq!(s.object(aura).attached_to, None);
     assert_eq!(types(&s, bear), Types::CREATURE);
@@ -1515,8 +1519,8 @@ fn an_enters_ability_targets_by_the_x_its_spell_was_cast_with() {
                     cast = true;
                     option(Opt::Cast {
                         slot: thief,
-                        face: 0,
-                        costs: 1,
+                        face: FaceIx::FRONT,
+                        costs: Castings::only(0),
                     })
                     .unwrap()
                 }
@@ -1580,7 +1584,7 @@ fn a_transformed_permanent_has_its_front_faces_mana_value() {
     s.begin_at(1, Seat::P0, TurnStep::PrecombatMain);
     let prodigy = find(&s, &t, Seat::P0, "Test Prodigy");
     s.place(prodigy, Zone::Battlefield).unwrap();
-    s.set_face(prodigy, 1);
+    s.set_face(prodigy, FaceIx::BACK);
     assert!(!Filter::ManaValueAtMost(1).matches(&s, &t, prodigy, Seat::P0));
     assert!(Filter::ManaValueAtMost(2).matches(&s, &t, prodigy, Seat::P0));
 }

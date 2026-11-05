@@ -125,7 +125,7 @@ fn arrange(t: &GameTable, scenario: &Scenario) -> Result<State, String> {
             s.set_face(slot, b.face);
             // CR 306.5b: a planeswalker "enters with a number of loyalty counters on it equal
             // to its printed loyalty number."
-            let printed = t.def(s.card(slot)).faces[usize::from(b.face)].loyalty;
+            let printed = t.def(s.card(slot)).face(b.face).loyalty;
             let counters = b
                 .counters
                 .map(|c| (c.kind, c.count))
@@ -277,7 +277,7 @@ impl Runner<'_> {
                 })
                 .ok_or_else(|| {
                     format!(
-                        "casting {card} (face {face}, costs {costs:#b}) is not offered: {}",
+                        "casting {card} ({face:?}, {costs:?}) is not offered: {}",
                         self.describe(&d)
                     )
                 })?;
@@ -649,10 +649,7 @@ impl Runner<'_> {
                 player,
                 color,
                 amount,
-            } => (
-                s.player(player).mana[color as usize].to_string(),
-                amount.to_string(),
-            ),
+            } => (s.player(player).mana[color].to_string(), amount.to_string()),
             Assertion::Decision {
                 player,
                 kind,

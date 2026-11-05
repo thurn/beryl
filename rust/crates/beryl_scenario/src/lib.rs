@@ -13,8 +13,7 @@ mod run;
 #[cfg(test)]
 mod tests;
 
-use beryl_engine::card::AbilityIx;
-use beryl_engine::card::ManaColor;
+use beryl_engine::card::{AbilityIx, Castings, FaceIx, ManaColor};
 use beryl_engine::state::CounterKind;
 use beryl_engine::{CardTable, DecisionKind, Seat, TurnStep, Zone};
 use serde::{Serialize, Serializer};
@@ -70,8 +69,9 @@ pub struct PlayerSetup {
 pub struct Permanent {
     pub card: &'static str,
     pub tapped: bool,
-    /// The face up: 1 for a double-faced card that entered transformed.
-    pub face: u8,
+    /// The face up: the back face for a double-faced card that entered transformed.
+    #[serde(serialize_with = "face_ix")]
+    pub face: FaceIx,
     pub counters: Option<Counters>,
 }
 
@@ -88,7 +88,7 @@ impl Permanent {
         Permanent {
             card,
             tapped: false,
-            face: 0,
+            face: FaceIx::FRONT,
             counters: None,
         }
     }
@@ -96,7 +96,10 @@ impl Permanent {
     /// With its back face up, as a double-faced card put onto the battlefield transformed.
     #[must_use]
     pub const fn transformed(self) -> Permanent {
-        Permanent { face: 1, ..self }
+        Permanent {
+            face: FaceIx::BACK,
+            ..self
+        }
     }
 
     /// With `count` counters of `kind`.
@@ -128,14 +131,16 @@ pub enum Action {
         card: &'static str,
     },
     /// `player` begins casting the card `card` at a priority decision, with face `face` up
-    /// and the casting options in the bitmask `costs` (over the face's casting list) paid.
+    /// and the casting options `costs` paid.
     /// The casting's own questions (X, targets, payment) follow as decisions.
     Cast {
         #[serde(serialize_with = "seat")]
         player: Seat,
         card: &'static str,
-        face: u8,
-        costs: u8,
+        #[serde(serialize_with = "face_ix")]
+        face: FaceIx,
+        #[serde(serialize_with = "castings")]
+        costs: Castings,
     },
     /// `player` begins activating the ability `ability` of the permanent `card` at a priority
     /// decision.
@@ -187,8 +192,8 @@ impl Action {
         Action::Cast {
             player,
             card,
-            face: 0,
-            costs: 0,
+            face: FaceIx::FRONT,
+            costs: Castings::NONE,
         }
     }
 
@@ -373,6 +378,18 @@ fn ability_ix<S: Serializer>(ability: &AbilityIx, s: S) -> Result<S::Ok, S::Erro
         AbilityIx::Own(i) => s.serialize_newtype_variant("AbilityIx", 0, "Own", &i),
         AbilityIx::Granted(k) => s.serialize_newtype_variant("AbilityIx", 1, "Granted", &k),
     }
+}
+
+/// A face, as its index among the card's faces.
+#[allow(clippy::trivially_copy_pass_by_ref)] // the signature `serialize_with` calls
+fn face_ix<S: Serializer>(face: &FaceIx, s: S) -> Result<S::Ok, S::Error> {
+    s.serialize_u8(face.get())
+}
+
+/// Casting options, as a bitmask over the face's list.
+#[allow(clippy::trivially_copy_pass_by_ref)] // the signature `serialize_with` calls
+fn castings<S: Serializer>(costs: &Castings, s: S) -> Result<S::Ok, S::Error> {
+    s.serialize_u8(costs.bits())
 }
 
 /// A player, as their seat number.

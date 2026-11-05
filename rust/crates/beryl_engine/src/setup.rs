@@ -3,6 +3,7 @@
 //! action, and no player decides anything; the moves still go through the zone chokepoints,
 //! so identities, knowledge and zone membership stay in agreement.
 
+use crate::card::FaceIx;
 use crate::fixed::Full;
 use crate::ids::{Seat, Slot};
 use crate::state::{CounterKind, MulliganStatus, ObjectFlags, Pending, State, TurnStep, Zone};
@@ -71,7 +72,7 @@ impl State {
     /// Turns a double-faced permanent so that the face at `face` is up, as one that entered
     /// transformed has its back face up
     /// ([CR 712.14a](https://yawgatog.com/resources/magic-rules/#R71214a)).
-    pub fn set_face(&mut self, slot: Slot, face: u8) {
+    pub fn set_face(&mut self, slot: Slot, face: FaceIx) {
         debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
         self.object_mut(slot).face = face;
         self.flags.derived_dirty = true;

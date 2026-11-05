@@ -24,7 +24,17 @@ impl CardDef {
     /// The face a card has in every zone but the battlefield and the stack, where it may have
     /// another one up.
     pub fn front(&self) -> &'static Face {
-        &self.faces[0]
+        self.face(FaceIx::FRONT)
+    }
+
+    /// The face at `face`.
+    pub fn face(&self, face: FaceIx) -> &'static Face {
+        &self.faces[usize::from(face.0)]
+    }
+
+    /// Each of its faces' indices, front first.
+    pub fn face_ixs(&self) -> impl Iterator<Item = FaceIx> {
+        (0..self.faces.len()).map(|i| FaceIx(u8::try_from(i).expect("a few faces")))
     }
 
     /// The name of the face at `face`, the name a spell or permanent with that face up has
@@ -34,12 +44,78 @@ impl CardDef {
     /// a nonmodal one ([CR 712.8e](https://yawgatog.com/resources/magic-rules/#R7128e)):
     /// "While a nonmodal double-faced permanent has its back face up, it has only the
     /// characteristics of its back face."
-    pub fn face_name(&self, face: u8) -> &'static str {
-        if face == 0 {
+    pub fn face_name(&self, face: FaceIx) -> &'static str {
+        if face == FaceIx::FRONT {
             self.name
         } else {
-            self.faces[usize::from(face)].name
+            self.face(face).name
         }
+    }
+}
+
+/// Which of a card's faces: an index into [`CardDef::faces`], read with [`CardDef::face`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct FaceIx(u8);
+
+impl FaceIx {
+    /// The front face, a card's only face unless it has two.
+    pub const FRONT: FaceIx = FaceIx(0);
+    /// The back face of a double-faced card.
+    pub const BACK: FaceIx = FaceIx(1);
+
+    /// The index in [`CardDef::faces`], as wire formats write it.
+    pub fn get(self) -> u8 {
+        self.0
+    }
+}
+
+/// A set of a face's casting options ([`Face::casting`]): those chosen for one cast, as its
+/// decision option and stack entry record them.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Castings(u8);
+
+impl Castings {
+    pub const NONE: Castings = Castings(0);
+
+    /// The option at index `i` in [`Face::casting`] alone.
+    pub const fn only(i: u8) -> Castings {
+        assert!(i < 8, "eight options at most");
+        Castings(1 << i)
+    }
+
+    /// Every set of `face`'s options, the empty one first.
+    pub fn subsets(face: &Face) -> impl Iterator<Item = Castings> {
+        let n = face.casting.len();
+        debug_assert!(n <= 8);
+        (0..(1u16 << n)).map(|m| Castings(u8::try_from(m).expect("eight options at most")))
+    }
+
+    /// Whether it has the option at index `i` in [`Face::casting`].
+    pub fn contains(self, i: usize) -> bool {
+        i < 8 && self.0 & (1 << i) != 0
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    /// The set as a bitmask over [`Face::casting`], the form scenario files are exported in.
+    pub fn bits(self) -> u8 {
+        self.0
+    }
+
+    /// The indices in [`Face::casting`] of its options, in order.
+    pub fn indices(self) -> impl Iterator<Item = u8> {
+        (0..8).filter(move |&i| self.0 & (1 << i) != 0)
+    }
+
+    /// The options of `face` it has, in the face's order.
+    pub fn paid(self, face: &Face) -> impl Iterator<Item = CastingOption> + '_ {
+        face.casting
+            .iter()
+            .enumerate()
+            .filter(move |&(i, _)| self.contains(i))
+            .map(|(_, &o)| o)
     }
 }
 
@@ -63,7 +139,7 @@ pub struct Face {
     pub keywords: Keywords,
     pub abilities: &'static [Ability],
     /// The alternative and additional costs it may be cast with, in the order its text lists
-    /// them. A stack entry records the ones paid as a bitmask over this list.
+    /// them. A stack entry records the ones paid as a [`Castings`] set over this list.
     pub casting: &'static [CastingOption],
     /// The back face of a transforming double-faced card, which is never cast: "A
     /// double-faced spell is cast with its front face up by default"
@@ -234,6 +310,23 @@ pub enum ManaColor {
     Red,
     Green,
     Colorless,
+}
+
+impl ManaColor {
+    /// Every kind, in the order W, U, B, R, G, C that indexes [`ManaCost::symbols`].
+    pub const ALL: [ManaColor; 6] = [
+        ManaColor::White,
+        ManaColor::Blue,
+        ManaColor::Black,
+        ManaColor::Red,
+        ManaColor::Green,
+        ManaColor::Colorless,
+    ];
+
+    /// Its index in [`ManaColor::ALL`].
+    pub fn index(self) -> usize {
+        self as usize
+    }
 }
 
 /// What a mana ability can produce: a set of [`ManaColor`]s and how much.

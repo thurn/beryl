@@ -2,6 +2,7 @@
 //! (architecture §13, decision D9).
 
 use crate::bitboard::Bitboard;
+use crate::card::FaceIx;
 use crate::filter::Filter;
 use crate::fixed::Fixed;
 use crate::ids::{CardIx, Seat, Slot};
@@ -67,7 +68,7 @@ impl<'a> Observation<'a> {
         if !self.knows(slot) {
             o.card = CardIx::default();
             o.copy_of = None;
-            o.face = 0;
+            o.face = FaceIx::FRONT;
         }
         o
     }

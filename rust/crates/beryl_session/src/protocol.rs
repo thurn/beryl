@@ -4,7 +4,8 @@
 //! ([`crate::typescript`]).
 
 use beryl_engine::card::{
-    Ability, AbilityIx, AbilityKind, CastingOption, Cost, FaceAbility, ManaColor, ManaCost, Types,
+    Ability, AbilityIx, AbilityKind, CastingOption, Castings, Cost, FaceAbility, FaceIx, ManaColor,
+    ManaCost, Types,
 };
 use beryl_engine::event::{Event, Reason, Recipient};
 use beryl_engine::state::{CounterKind, ObjectFlags, StackEntry, TurnStep};
@@ -538,7 +539,7 @@ pub fn player_view(
     let mut objects = Vec::new();
     let mut player_state = |p: Seat| {
         let player = obs.player(p);
-        let [white, blue, black, red, green, colorless] = player.mana;
+        let [white, blue, black, red, green, colorless] = player.mana.amounts();
         let state = PlayerState {
             life: player.life,
             mana: ManaPool {
@@ -646,7 +647,12 @@ fn name(t: &GameTable, obs: Observation<'_>, slot: Slot) -> Option<&'static str>
 
 /// The name of face `face` of the object in `slot`, if the viewer knows it: a copy's is the
 /// copied card's (CR 707.2).
-fn face_name(t: &GameTable, obs: Observation<'_>, slot: Slot, face: u8) -> Option<&'static str> {
+fn face_name(
+    t: &GameTable,
+    obs: Observation<'_>,
+    slot: Slot,
+    face: FaceIx,
+) -> Option<&'static str> {
     let card = obs.object(slot).copy_of.or(obs.card(slot))?;
     Some(t.def(card).face_name(face))
 }
@@ -741,7 +747,7 @@ fn stack_item(t: &GameTable, obs: Observation<'_>, e: &StackEntry) -> StackItem 
             x: e.x,
         },
         Some(ability) => {
-            let face = &t.def(e.card).faces[usize::from(e.face)];
+            let face = t.def(e.card).face(e.face);
             let (list, index) = match ability {
                 FaceAbility::Own(i) => (face.abilities, i),
                 FaceAbility::Grant(i) => (face.grants, i),
@@ -804,7 +810,7 @@ fn candidate(t: &GameTable, obs: Observation<'_>, o: Opt) -> CandidateView {
         Side::You => "you",
         Side::Opponent => "your opponent",
     };
-    let mana = |color: u8| (mana_color(color), MANA_SYMBOLS[usize::from(color)]);
+    let mana = |color: ManaColor| (Mana::from(color), MANA_SYMBOLS[color.index()]);
     let (label, option) = match o {
         Opt::Pass => ("Pass".to_owned(), Candidate::Pass),
         Opt::PlayLand(slot) => (
@@ -847,8 +853,8 @@ fn candidate(t: &GameTable, obs: Observation<'_>, o: Opt) -> CandidateView {
                 format!("Cast {spell}{}", casting_options(t, obs, slot, face, costs)),
                 Candidate::Cast {
                     slot: slot.get(),
-                    face,
-                    costs: (0..8).filter(|i| costs & (1 << i) != 0).collect(),
+                    face: face.get(),
+                    costs: costs.indices().collect(),
                 },
             )
         }
@@ -898,16 +904,19 @@ fn candidate(t: &GameTable, obs: Observation<'_>, o: Opt) -> CandidateView {
 /// ([CR 601.2b](https://yawgatog.com/resources/magic-rules/#R6012b): "If the spell has
 /// alternative or additional costs that will be paid as it's being cast ... the player
 /// announces their intentions to pay any or all of those costs").
-fn casting_options(t: &GameTable, obs: Observation<'_>, slot: Slot, face: u8, costs: u8) -> String {
+fn casting_options(
+    t: &GameTable,
+    obs: Observation<'_>,
+    slot: Slot,
+    face: FaceIx,
+    costs: Castings,
+) -> String {
     let Some(card) = obs.card(slot) else {
         return String::new();
     };
-    t.def(card).faces[usize::from(face)]
-        .casting
-        .iter()
-        .enumerate()
-        .filter(|&(i, _)| costs & (1 << i) != 0)
-        .map(|(_, option)| match *option {
+    costs
+        .paid(t.def(card).face(face))
+        .map(|option| match option {
             CastingOption::Kicker { cost, .. } => format!(" with kicker {}", mana_text(cost)),
             CastingOption::Offspring(cost) => format!(" with offspring {}", mana_text(cost)),
             CastingOption::Impending { cost, counters } => {
@@ -932,12 +941,10 @@ fn activated_cost(
         AbilityIx::Own(i) => (obs.card(slot)?, obs.object(slot).face, FaceAbility::Own(i)),
         AbilityIx::Granted(k) => {
             let grant = obs.derived(slot).granted[usize::from(k)]?;
-            (grant.card, 0, FaceAbility::Grant(grant.grant))
+            (grant.card, FaceIx::FRONT, FaceAbility::Grant(grant.grant))
         }
     };
-    Some(cost_text(
-        &t.def(card).faces[usize::from(face)].ability(ability).cost,
-    ))
+    Some(cost_text(&t.def(card).face(face).ability(ability).cost))
 }
 
 /// An activation cost as Oracle text writes it: "{W}, {T}, Remove a story counter".
@@ -1034,18 +1041,6 @@ fn trigger(t: &GameTable, obs: Observation<'_>, index: u8) -> (String, Candidate
 
 /// Mana symbols by [`ManaColor`] index.
 const MANA_SYMBOLS: [&str; 6] = ["{W}", "{U}", "{B}", "{R}", "{G}", "{C}"];
-
-fn mana_color(index: u8) -> Mana {
-    [
-        ManaColor::White,
-        ManaColor::Blue,
-        ManaColor::Black,
-        ManaColor::Red,
-        ManaColor::Green,
-        ManaColor::Colorless,
-    ][usize::from(index)]
-    .into()
-}
 
 fn outcome_view(obs: Observation<'_>, o: Outcome) -> OutcomeView {
     match o {

@@ -7,8 +7,8 @@ use crate::ids::{CardIx, Seat, Slot};
 use crate::profile::Profile;
 use crate::rng::Rng;
 use crate::state::{
-    BATTLEFIELD, Budgets, DECK_SLOTS, Derived, Flags, MulliganStatus, Object, Pending, Player,
-    SLOTS, State, Turn, TurnStep, Zone, Zones, deck_slot,
+    BATTLEFIELD, Budgets, DECK_SLOTS, Derived, Flags, ManaPool, MulliganStatus, Object, Pending,
+    Player, SLOTS, State, Turn, TurnStep, Zone, Zones, deck_slot,
 };
 use crate::table::GameTable;
 use crate::{turn, zone};
@@ -22,7 +22,7 @@ const STARTING_HAND: u8 = 7;
 fn new_player() -> Player {
     Player {
         life: 20,
-        mana: [0; 6],
+        mana: ManaPool::default(),
         lands_played: 0,
         drew_from_empty: false,
         mulligans: 0,

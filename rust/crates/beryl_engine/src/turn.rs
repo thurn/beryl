@@ -5,7 +5,7 @@ use crate::event::{self, Event, Reason, Sink};
 use crate::fixed::Full;
 use crate::ids::{Seat, Slot};
 use crate::layers;
-use crate::state::{Duration, ObjectFlags, Pending, State, TurnStep, Zone};
+use crate::state::{Duration, ManaPool, ObjectFlags, Pending, State, TurnStep, Zone};
 use crate::table::GameTable;
 use crate::{combat, zone};
 
@@ -143,7 +143,7 @@ fn untap(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<(), Full> {
 /// any unspent mana left in a player's mana pool empties."
 pub(crate) fn end_step(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<(), Full> {
     for p in &mut s.players {
-        p.mana = [0; 6];
+        p.mana = ManaPool::default();
     }
     let next = match s.turn.step {
         TurnStep::Untap => TurnStep::Upkeep,

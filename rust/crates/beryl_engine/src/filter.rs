@@ -49,7 +49,7 @@ impl Filter {
     /// X.
     pub fn matches_x(&self, s: &State, t: &GameTable, slot: Slot, you: Seat, x: u8) -> bool {
         let o = s.object(slot);
-        let face = || &t.def(o.card).faces[usize::from(o.face)];
+        let face = || t.def(o.card).face(o.face);
         let derived = || (o.zone == Zone::Battlefield).then(|| s.derived(slot));
         // [CR 712.8e](https://yawgatog.com/resources/magic-rules/#R7128e): a transforming
         // double-faced permanent with its back face up "has only the characteristics of its

@@ -8,7 +8,7 @@ use crate::event::Sink;
 use crate::ids::Slot;
 use crate::mana::{self, Units};
 use crate::rng::SplitMix64;
-use crate::state::{ObjectFlags, Zone};
+use crate::state::{ManaPool, ObjectFlags, Zone};
 use crate::{DecisionKind, Opt, Payment, Profile};
 
 fn tapped(g: &Game, slot: Slot) -> bool {
@@ -70,7 +70,7 @@ fn plans_that_leave_different_mana_floating_are_a_decision() {
     assert_eq!(d.len(), 2);
     g.pick(Opt::Plan(1));
     assert!(tapped(&g, crypt));
-    assert_eq!(g.s.player(g.me).mana, [0, 0, 0, 0, 0, 1]);
+    assert_eq!(g.s.player(g.me).mana.amounts(), [0, 0, 0, 0, 0, 1]);
     assert_eq!(g.s.object(bear).zone, Zone::Stack);
 }
 
@@ -119,7 +119,7 @@ fn manual_payment_makes_every_tap_a_decision() {
     assert_eq!(d.len(), 2);
     g.pick(Opt::Mana {
         slot: island,
-        color: ManaColor::Blue as u8,
+        color: ManaColor::Blue,
     });
     // Only the Plains can pay the {W} left: no question.
     assert!(tapped(&g, land));
@@ -173,7 +173,7 @@ fn a_payment_never_taps_a_source_it_could_leave_untapped() {
             2,
             "{payment:?}"
         );
-        assert_eq!(g.s.player(g.me).mana, [0; 6], "{payment:?}");
+        assert_eq!(g.s.player(g.me).mana, ManaPool::default(), "{payment:?}");
     }
 }
 
@@ -236,11 +236,12 @@ fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
                 names.push(name);
             }
         }
-        let mut pool = [0; 6];
-        for k in [0, 1, 5] {
-            pool[k] = rng.below(2) as u8;
+        let mut pool = ManaPool::default();
+        for color in [ManaColor::White, ManaColor::Blue, ManaColor::Colorless] {
+            pool[color] = rng.below(2) as u8;
         }
         g.s.player_mut(g.me).mana = pool;
+        let pool = pool.amounts();
         crate::layers::refresh(&mut g.s, &g.t, &mut Sink::default());
         let cost = ManaCost::new(
             rng.below(4) as u8,
@@ -288,9 +289,15 @@ fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
                     .map(|(_, name)| u32::from(makes(name).1))
                     .sum();
                 let before: u32 = pool.iter().map(|&n| u32::from(n)).sum();
-                let after: u32 = paid.player(g.me).mana.iter().map(|&n| u32::from(n)).sum();
+                let after: u32 = paid
+                    .player(g.me)
+                    .mana
+                    .amounts()
+                    .iter()
+                    .map(|&n| u32::from(n))
+                    .sum();
                 assert_eq!(made + before - after, cost.total(0), "{context}");
-                assert_eq!(paid.player(g.me).mana, plan.left, "{context}");
+                assert_eq!(paid.player(g.me).mana.amounts(), plan.left, "{context}");
             }
         }
         payable_positions += usize::from(payable);

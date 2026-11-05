@@ -3,6 +3,7 @@
 //! §5, §13).
 
 use crate::bitboard::Bitboard;
+use crate::card::FaceIx;
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot};
 use crate::rng::SplitMix64;
@@ -52,7 +53,7 @@ pub(crate) fn move_to_place(s: &mut State, slot: Slot, to: Zone, place: Place) -
     o.attached_to = None;
     o.linked = None;
     o.copy_of = None;
-    o.face = 0;
+    o.face = FaceIx::FRONT;
     o.combat = None;
     let owner = o.owner.index();
     match to {

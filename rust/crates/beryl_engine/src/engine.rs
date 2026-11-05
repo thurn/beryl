@@ -2,7 +2,7 @@
 //! (architecture §3, §7).
 
 use crate::bitboard::Bitboard;
-use crate::card::{ManaColor, Types};
+use crate::card::{FaceIx, Types};
 use crate::decision::{
     Answers, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, StallReason, Step,
 };
@@ -333,22 +333,11 @@ fn priority_decision(s: &State, t: &GameTable) -> Result<Decision, Full> {
 /// ([CR 712.12](https://yawgatog.com/resources/magic-rules/#R71212)): "A player playing a
 /// modal double-faced card ... as a land chooses one of its faces that's a land before putting
 /// it onto the battlefield." The cube's modal double-faced cards have one land face at most.
-fn land_face(s: &State, t: &GameTable, slot: Slot) -> Option<u8> {
-    t.def(s.object(slot).card)
-        .faces
-        .iter()
-        .position(|f| f.types.intersects(Types::LAND))
-        .map(|i| i as u8)
+fn land_face(s: &State, t: &GameTable, slot: Slot) -> Option<FaceIx> {
+    let def = t.def(s.object(slot).card);
+    def.face_ixs()
+        .find(|&f| def.face(f).types.intersects(Types::LAND))
 }
-
-const COLORS: [ManaColor; 6] = [
-    ManaColor::White,
-    ManaColor::Blue,
-    ManaColor::Black,
-    ManaColor::Red,
-    ManaColor::Green,
-    ManaColor::Colorless,
-];
 
 /// Answers a question of the casting machine, a paused resolution or a resolution's offer
 /// to cast, if one is open.
@@ -404,7 +393,7 @@ fn perform_priority(
             cast::begin_activate(s, t, &mut x.events, player, slot, ability)
         }
         Opt::Mana { slot, color } => {
-            mana::activate(s, t, &mut x.events, slot, COLORS[usize::from(color)])?;
+            mana::activate(s, t, &mut x.events, slot, color)?;
             // CR 117.3c: "If a player has priority when they ... activate an ability ...,
             // that player receives priority afterward."
             s.turn.passes = 0;

@@ -6,8 +6,8 @@
 //! (It's not a creature unless it's crewed.)"
 
 use beryl_engine::card::{
-    Ability, AbilityKind, Affected, CardDef, Colors, Face, Keywords, LayerSpec, ManaCost,
-    Modification, StaticCondition, Subtype, Subtypes, TargetKind, TargetSpec, Types,
+    Ability, AbilityKind, Affected, CardDef, Castings, Colors, Face, FaceIx, Keywords, LayerSpec,
+    ManaCost, Modification, StaticCondition, Subtype, Subtypes, TargetKind, TargetSpec, Types,
 };
 use beryl_engine::filter::Filter;
 use beryl_engine::{DecisionKind, TurnStep};
@@ -189,8 +189,8 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Cast {
                 player: P0,
                 card: SKYDIVER,
-                face: 0,
-                costs: 1,
+                face: FaceIx::FRONT,
+                costs: Castings::only(0),
             },
             Action::answer(P0, DecisionKind::X, Pick::Number { n: 1 }),
             Action::Resolve,
@@ -214,8 +214,8 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Cast {
                 player: P0,
                 card: SKYDIVER,
-                face: 0,
-                costs: 1,
+                face: FaceIx::FRONT,
+                costs: Castings::only(0),
             },
             Action::answer(P0, DecisionKind::X, Pick::Number { n: 2 }),
             Action::Resolve,

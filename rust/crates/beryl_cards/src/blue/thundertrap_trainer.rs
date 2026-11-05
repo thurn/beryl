@@ -5,8 +5,8 @@
 //! the rest on the bottom of your library in a random order."
 
 use beryl_engine::card::{
-    Ability, CardDef, CastingOption, Colors, Face, Flow, ManaCost, Subtype, Subtypes, Trigger,
-    Types,
+    Ability, CardDef, CastingOption, Castings, Colors, Face, FaceIx, Flow, ManaCost, Subtype,
+    Subtypes, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
@@ -108,8 +108,8 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Cast {
                 player: P0,
                 card: TRAINER,
-                face: 0,
-                costs: 0,
+                face: FaceIx::FRONT,
+                costs: Castings::NONE,
             },
             Action::Resolve,
             Action::Resolve,
@@ -161,8 +161,8 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Cast {
                 player: P0,
                 card: TRAINER,
-                face: 0,
-                costs: 0,
+                face: FaceIx::FRONT,
+                costs: Castings::NONE,
             },
             Action::Resolve,
             Action::Assert {
@@ -189,8 +189,8 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::Cast {
                 player: P0,
                 card: TRAINER,
-                face: 0,
-                costs: 1,
+                face: FaceIx::FRONT,
+                costs: Castings::only(0),
             },
             Action::Resolve,
             Action::Answer {
