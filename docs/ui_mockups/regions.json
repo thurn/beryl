@@ -24,13 +24,14 @@
           "rect": [0, 0, 1672, 941],
           "verdict": "differs",
           "bead": "by-b0q.3.17",
-          "commit": "41f4f01+",
+          "commit": "ac50b42",
           "accepted": [
             "by-b0q.3.17 conflict: the lit phase glyph: as battlefield/phase-tracker's by-b0q.3.17 conflict",
             "by-b0q.3.17 conflict: the opponent library's footprint and layers: as battlefield/opponent-library's conflict",
             "by-b0q.3.17 conflict: the Swamp stack's size: as battlefield/opponent-swamp-stack's by-b0q.1.29 conflict",
             "by-b0q.3.17 conflict: the name bands' opacity and fade: the badge parts pass across two rounds",
-            "by-b0q.3.17 conflict: the far orb's wing tone and curve: as battlefield/opponent-life-orb's conflicts"
+            "by-b0q.3.17 conflict: the far orb's wing tone and curve: as battlefield/opponent-life-orb's conflicts",
+            "by-b0q.3.17 conflict: the red hand frames' tone and width: as battlefield/hand's conflict"
           ]
         },
         "tabletop": {
@@ -97,7 +98,7 @@
           "rect": [728, 60, 216, 96],
           "verdict": "differs",
           "bead": "by-b0q.3.17",
-          "commit": "41f4f01+",
+          "commit": "ac50b42",
           "accepted": [
             "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the wings: tapered blades thick at the root (round 1) against thin 3 px arcs (round 2); 9 px measured at x 765",
             "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the under-glow: brighter and lower than painted (round 1) against too thin (round 2)"
@@ -120,31 +121,33 @@
           "rect": [1384, 40, 114, 124],
           "verdict": "differs",
           "bead": "by-b0q.3.17",
-          "commit": "41f4f01+",
+          "commit": "ac50b42",
           "accepted": [
             "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
             "by-b0q.1.29 residual: the tilt: replica and mockup lean the same (a reviewer's 'missing tilt' was checked and wrong)",
             "by-b0q.3.17 conflict: the rules text sits at the top of its box as ui_system.png's Doom Blade does; battlefield.png sets it lower with a second painted line",
-            "by-b0q.3.17 conflict: the type line's set symbol: the game's frames draw no set symbols"
+            "by-b0q.3.17 conflict: the type line's set symbol: the game's frames draw no set symbols",
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the pile's bottom: a thick black border wanted (round 1) against no slab at all (round 3)",
+            "by-b0q.3.17 conflict: the full frame's name size at this width: the frame's type scale is shared"
           ]
         },
         "opponent-island-stack": {
           "rect": [146, 128, 210, 144],
           "verdict": "differs",
           "bead": "by-b0q.3.17",
-          "commit": "41f4f01+",
+          "commit": "ac50b42",
           "accepted": [
             "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
             "by-b0q.1.28 residual: the copies step down 1-4 px differently (onion only)",
-            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the copper strips beside the art and near-black card bodies"
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the copper strips beside the art and near-black card bodies",
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on battlefield cards' name bars: lower and further in under a thicker top border (round 2's creatures and Mountain) against higher and further out (round 3's Island)"
           ]
         },
         "opponent-swamp-stack": {
           "rect": [366, 124, 226, 146],
-          "verdict": "pass",
+          "verdict": "differs",
           "bead": "by-b0q.3.17",
-          "commit": "41f4f01+",
-          "fingerprint": "VEhCT0VAZl1YaWBbamFca2Jda2FcX1JMUklEUUxJaWRgcm5rjYmIiYSDfnh1WExHV01HRD45NzU2TUxTe3qCZmZtQ0FCXFBLVUtGRkE8PDw/aGdviISJZGRqRUNEYVNOUEdDR0E8NTQ3S0pPSEhNQEBEPzw7ZVdRTkVBRUA7JiUjNDMxUU9QQkA+Ojc0a1xVR0A8Mi4rMC0rODQyOjc1NDEvLywqcmJbRDs4KyYkJyIfJB8dJiEfMSsoVElEdmVf",
+          "commit": "ac50b42",
           "accepted": [
             "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
             "by-b0q.1.29 conflict: the cards are about 7% smaller than painted: the size is shared with the Island stack, which passes",
@@ -157,31 +160,33 @@
           "rect": [98, 586, 234, 156],
           "verdict": "differs",
           "bead": "by-b0q.3.17",
-          "commit": "41f4f01+",
+          "commit": "ac50b42",
           "accepted": [
             "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
-            "by-b0q.1.28 residual: the copies step down 1-4 px differently (onion only)"
+            "by-b0q.1.28 residual: the copies step down 1-4 px differently (onion only)",
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the lean of the land cards' sides: a few px more than painted accepted (round 2), much more (round 3)",
+            "by-b0q.3.17 conflict: the name's weight: the card name weight is shared and passes on the other stacks"
           ]
         },
         "you-plains-stack": {
           "rect": [332, 584, 226, 158],
-          "verdict": "pass",
+          "verdict": "differs",
           "bead": "by-b0q.3.17",
-          "commit": "41f4f01+",
-          "fingerprint": "YVRPXVNPhH56jYaDjoeEj4iEj4iEeXJuXFdTY2Bdf42XkqGrn623qrG1sLGvhYSEW1ZTb2pmjJOYoqurobC0y7egsqWcfnp4VVBOc2xonI2FtJ+PzLSZvaqYuKuchHtyVE1JdWxlj3ZdpodnrYxmrYxln4FfdWtiSEI8Zl9VTkEubFQ0m3M6qHg2e10ucGVaREA7S0dCPTMlXkUmYkgnUkAnNjMpUUtGHBsaFRQTFBMSExIRExIRFBIRHBoYRj05",
+          "commit": "ac50b42",
           "accepted": [
             "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
             "by-b0q.1.28 residual: the copies step down 1-4 px differently (onion only)",
             "by-b0q.3.17 conflict: the front card is about 4% wider and shorter than painted: the land size is shared with the stacks that pass",
             "by-b0q.3.17 residual: the name in a serif where the mockup paints a heavier, sans-like face",
-            "by-b0q.3.17 residual: the back copies' bottom edges show 2-4 px below the front card"
+            "by-b0q.3.17 residual: the back copies' bottom edges show 2-4 px below the front card",
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the white frame band beside the art: passed in round 2, too pale and wide in round 3"
           ]
         },
         "you-life-orb": {
           "rect": [700, 646, 272, 116],
           "verdict": "differs",
           "bead": "by-b0q.3.17",
-          "commit": "41f4f01+",
+          "commit": "ac50b42",
           "accepted": [
             "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the vertical ray above the orb: soften it (round 1) against add it (round 2)",
             "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the dark band under the blades: show it (round 1) against no third dark arc (round 2)",
@@ -217,84 +222,99 @@
           "rect": [630, 228, 206, 162],
           "verdict": "differs",
           "bead": "by-b0q.3.17",
-          "commit": "41f4f01+",
+          "commit": "ac50b42",
           "accepted": [
             "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
             "by-b0q.1.27 conflict: P/T ink is one blue-black: battlefield.png paints it blue, the other mockups near black",
-            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the multicolor frame: blue left half and gold right half, rail width, ability badge size"
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the multicolor frame: blue left half and gold right half, rail width, ability badge size",
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the name's height and inset: lower and further in (round 2) against higher and further out (round 3)",
+            "by-b0q.3.17 conflict: the flying glyph's drawing: as by-b0q.1.31's accepted residual"
           ]
         },
         "opponent-beast": {
           "rect": [842, 228, 206, 162],
           "verdict": "differs",
           "bead": "by-b0q.3.17",
-          "commit": "41f4f01+",
+          "commit": "ac50b42",
           "accepted": [
             "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
             "by-b0q.1.27 conflict: P/T ink is one blue-black: battlefield.png paints it blue, the other mockups near black",
-            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the name's size and inset and the green rims' tint"
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the name's size and inset and the green rims' tint",
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the name bar's height: start it lower (round 2, Angel and creatures) against higher (round 3)",
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the P/T plaque's inset: move it in (round 2) against out (round 3)"
           ]
         },
         "you-goblin-guide": {
           "rect": [610, 436, 218, 168],
           "verdict": "pass",
           "bead": "by-b0q.3.17",
-          "commit": "41f4f01+",
-          "fingerprint": "bU9HlF5QmGFTlmBSrHFgrHFgrHFge1JHaEE5cFFRfmFldFpgiWhrhmRngV9ia0M9XDs0T2eAWGyEZ2tuYV1aVFhfUmmFVEFFWzw2ZHqQiZSeeHdzST82fn6BcIaeZU5PWz02TV1ogIV+h4B0VlZQZWVjT2FxVz49XjwyTEg+TUpEUlNLaXFoWFtZXGVlVDcxWTIpRi4rRSwoVT04UTw3yKGQvJmJnoBwLSgmHRsZHRoZHRoZHhsZZlFHYk5FW0pC",
+          "commit": "ac50b42",
+          "fingerprint": "ZEhAflZNflZMf1dNhl1Th11Th11TZUM7ckU6fFhUhGJifFxelXBum3NwmHBtdkY+YzoxRVtxV2yGZGx1YGFjT1ZhTGN/VDw+XToyY3iOf42bbm5rTEM6eXyDboagYkdHXDs0S1togoeDjod8UlFKamloUmN0Wj06XTsxTktBTkxEVFVNanJqVFlYV2JkVTUtWTIpRi0qRi0pVT04Zk5Hw6SYspaLeWBWLSgmHRsZHRoZHRoZKiUiWktFWktFSD04",
           "accepted": [
             "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
             "by-b0q.1.27 conflict: P/T ink is one blue-black: battlefield.png paints it blue, the other mockups near black",
             "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the name's tracking, the name bar's peach fill and the top rail's thickness",
             "by-b0q.3.17 residual: the P/T badge about 2-3 px lower and slightly further right",
-            "by-b0q.3.17 residual: the art window and red frame about 2 px further right"
+            "by-b0q.3.17 residual: the art window and red frame about 2 px further right",
+            "by-b0q.3.17 residual: the red rail's top corners square where the mockup's curve round the name bar",
+            "by-b0q.3.17 residual: the name about 5 px right and 3 px low"
           ]
         },
         "you-angel": {
           "rect": [844, 436, 218, 170],
           "verdict": "differs",
           "bead": "by-b0q.3.17",
-          "commit": "41f4f01+",
+          "commit": "ac50b42",
           "accepted": [
             "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
             "by-b0q.1.27 conflict: P/T ink is one blue-black: battlefield.png paints it blue, the other mockups near black",
-            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the art window's cream bevel and the name bar's warmth"
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the art window's cream bevel and the name bar's warmth",
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the P/T numerals' size: larger (round 2, Beast) against smaller (round 3)"
           ]
         },
         "hand": {
           "rect": [466, 758, 744, 183],
-          "verdict": "differs",
+          "verdict": "pass",
           "bead": "by-b0q.3.17",
-          "commit": "41f4f01+",
+          "commit": "ac50b42",
+          "fingerprint": "aFlUX05JdG5rfXp3hldMckxEYlZQaFlUck9Hr3ZmmpqakpKUqGFVrnZqsqyic2lihFRJk0U3jpWki4iJxWlZjlFRp5SgraOdTCgkeTguioyQf35+zG9Ph05LtJieaUtNYjErgjwwj4uHi31uqFlEbUlHx5uHZUNBbjUsmEY4hHZnfm5Pc0A3XkdDt3tdXEJChUo6s2NLbGxjcF46UTcwVEVCpWNNdVNFcEc1s25VnZqTsaijjmBWfFtTnnBOZ1BA",
           "accepted": [
-            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the red frames: darker than painted (by-b0q.1.27's accepted residual) against more crimson than the mockup's warmer, lighter red"
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the red frames: darker than painted (by-b0q.1.27's accepted residual) against more crimson than the mockup's warmer, lighter red",
+            "by-b0q.3.17 residual: the names about 2-5 px right of the mockup's",
+            "by-b0q.3.17 residual: Swords to Plowshares' art window top about 5 px lower",
+            "by-b0q.3.17 residual: Plateau's frame smooth cream where the mockup's is mottled tan"
           ]
         },
         "hand-bolt": {
           "rect": [468, 766, 194, 175],
           "verdict": "differs",
           "bead": "by-b0q.3.17",
-          "commit": "41f4f01+",
+          "commit": "ac50b42",
           "accepted": [
-            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
+            "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the hand names' size: larger than painted (round 1, Swords) against smaller (round 3, Bolt)",
+            "by-b0q.3.17 conflict: reviewers contradicted each other across rounds on the hand name bar's height: taller (round 1) against shorter (round 3)"
           ]
         },
         "hand-swords": {
           "rect": [648, 760, 190, 181],
           "verdict": "pass",
           "bead": "by-b0q.3.17",
-          "commit": "41f4f01+",
-          "fingerprint": "ZF1ag316hoF+iISBhoOBi4iFkY+MdXJweXFvnZyemJmgp6WmnZ2in5qdmpuheHd3fXBwl56skZuxpa2/qrDCnJqkg3FdYVpXdGtsm6q4h4SFlJCOpbLDmaWzgm1ZRTQtb2ZkqrGydm9tpKGcyLmptbGthHdjUTUoamBfkI+Ne1YwsaCK0sOvoY1cZVIwVzclal9diYqJb1xIenVul4tohHA4bF05XjcnZFZRfoByhIt+kYt1o5d5oZiGpZ2LfFtT",
+          "commit": "ac50b42",
+          "fingerprint": "W1VSgHt4g398iISBgn99iYaDjYuIa2lnbmtqmpuelpedqaipoKCloJuflpecenl2b2Nhkp2skZquoqi6qbDCmZqkgm1VZGZmcF5cnqu4i4yQkIqFqrTAmaSvdGFORT47Y1VTpquqfHBnqqafy7urs6mZbVtEQjMrXVJQkJeZf1Yul4VwxrqpkX1CXU8vSDUmX1JPd4OAZmJTcm9fh3ZCeWg6bmJBVDowaFhTn52Uqamkwby0wr63xMG8xcK/eF5X",
           "accepted": [
             "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
             "by-b0q.3.17 conflict: battlefield.png paints Swords to Plowshares' art window about 10 px shorter than Mountain's in the same hand, and its name smaller; the hand frame is shared",
-            "by-b0q.3.17 residual: the frame and name bar a touch whiter and flatter"
+            "by-b0q.3.17 residual: the frame and name bar a touch whiter and flatter",
+            "by-b0q.3.17 residual: the left frame edge and name bar about 3 px further right",
+            "by-b0q.3.17 residual: the art window's bottom about 3-4 px higher"
           ]
         },
         "hand-mountain": {
           "rect": [826, 758, 194, 183],
           "verdict": "differs",
           "bead": "by-b0q.3.17",
-          "commit": "41f4f01+",
+          "commit": "ac50b42",
           "accepted": [
             "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint",
             "by-b0q.3.17 residual: the name bar fill about 20 levels brighter, same hue",
@@ -306,7 +326,7 @@
           "rect": [990, 762, 218, 179],
           "verdict": "differs",
           "bead": "by-b0q.3.17",
-          "commit": "41f4f01+",
+          "commit": "ac50b42",
           "accepted": [
             "by-b0q.1.27 residual: the mockups' slightly darker red rims and P/T badge tint"
           ]

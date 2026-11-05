@@ -150,12 +150,18 @@ function useNameFit(text: string) {
     if (!name || !bar) return;
     const fit = () => {
       name.style.removeProperty("--fit");
-      // Unrounded widths: scrollWidth and clientWidth round to whole pixels, so a name that
-      // overflows by less than one would keep its ellipsis.
+      // scrollWidth and clientWidth round to whole pixels, so a name overflowing by less than
+      // one would keep its ellipsis: also compare the unrounded on-screen lengths of the text
+      // and its box, along whichever screen axis the name runs (a tapped card's runs up).
       const text = document.createRange();
       text.selectNodeContents(name);
-      const over =
-        text.getBoundingClientRect().width / name.getBoundingClientRect().width;
+      const [t, n] = [
+        text.getBoundingClientRect(),
+        name.getBoundingClientRect(),
+      ];
+      const along =
+        n.width >= n.height ? t.width / n.width : t.height / n.height;
+      const over = Math.max(name.scrollWidth / name.clientWidth, along);
       if (over > 1) name.style.setProperty("--fit", String(0.98 / over));
     };
     fit();
@@ -172,7 +178,9 @@ function stats(card: CardFace): ReactNode {
   if (card.power !== undefined && card.toughness !== undefined) {
     return (
       <span>
-        <b>{card.power}</b>/<b>{card.toughness}</b>
+        <b>{card.power}</b>
+        <i>/</i>
+        <b>{card.toughness}</b>
       </span>
     );
   }

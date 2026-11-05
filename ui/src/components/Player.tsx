@@ -33,9 +33,9 @@ function blade(
 /** How a light blade is shaded, root to tip: the mockups paint the near orb's blades warm tan,
  * the far orb's upper blade grey silver and its lower one a pale wing, each coppery at its root. */
 const TONES = {
-  tan: ["#8a7158", "#a89e92", "#cfc9c1"],
-  pale: ["#9c8466", "#c4bcae", "#dedad3"],
-  silver: ["#8d5b3a", "#77706a", "#8a867e"],
+  tan: ["#7a6450", "#958877", "#b3aa9f"],
+  pale: ["#8c765c", "#ada290", "#c6bfb3"],
+  silver: ["#8d5b3a", "#77706a", "#4e4a45"],
   wing: ["#b0703e", "#c3a780", "#d8c8aa"],
 } as const;
 type Tone = keyof typeof TONES;
@@ -72,7 +72,7 @@ const BLADES: Record<
     light: [
       { d: blade([-46, 19], [-78, 10], [-103, -14], 12, 0.75), tone: "wing" },
       {
-        d: blade([-48, -8], [-74, -12], [-103, -37], 11, 0.3),
+        d: blade([-48, -8], [-70, -12], [-96, -35], 11, 0.3),
         tone: "silver",
       },
     ],
@@ -240,7 +240,7 @@ export function LifeOrb({
               in2="lit"
               operator="arithmetic"
               k2="1"
-              k3="0.9"
+              k3="0.45"
             />
           </filter>
           <filter id="orb-shadow" x="-20%" y="-20%" width="140%" height="160%">
@@ -252,6 +252,25 @@ export function LifeOrb({
             <ellipse cx="0" cy="-2" rx="62" ry="50" filter="url(#orb-blur)" />
             <path d={RAYS} filter="url(#orb-blur)" />
             <path d={RAYS} fill="url(#orb-ray)" />
+            {/* White-hot flares where the rim meets the blades, in a golden haze. */}
+            {[-1, 1].map((side) => (
+              <g key={side} filter="url(#orb-blur)">
+                <ellipse
+                  cx={side * 66}
+                  cy="-12"
+                  rx="26"
+                  ry="7"
+                  fill="#ffb028"
+                />
+                <ellipse
+                  cx={side * 60}
+                  cy="-12"
+                  rx="16"
+                  ry="2.5"
+                  fill="#fff6d0"
+                />
+              </g>
+            ))}
           </g>
         )}
         {blades.arch && <path className="life-orb-arch" d={blades.arch} />}

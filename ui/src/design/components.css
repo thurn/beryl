@@ -77,12 +77,13 @@
 .accent-g {
   --accent: #1d6a40;
 }
+/* A colorless land's rim is tan and gold, its name bar a cool grey (battlefield.png's Plateau). */
 .frame-c {
-  --rim: #ddd4c2;
-  --rim-hi: #f7f2e8;
+  --rim: #c3ab80;
+  --rim-hi: #e2cf9f;
   --rim-lo: #6e5536;
-  --bar: #e3ded5;
-  --bar-hi: #f4f1ec;
+  --bar: #c9c0b8;
+  --bar-hi: #e2dcd5;
   --box: #ece8e1;
 }
 
@@ -135,8 +136,8 @@
 .ability-badge {
   position: absolute;
   --ink: #2b2b30;
-  left: 0.74em;
-  bottom: 0.6em;
+  left: 0.62em;
+  bottom: 0.28em;
   width: 2.2em;
   height: 2.1em;
   border-radius: 0.38em;
@@ -175,7 +176,7 @@
   border-radius: 0.6em;
   background: linear-gradient(180deg, #252321, #1a1918);
   box-shadow:
-    inset 0 0 0 0.06em #4a4643,
+    inset 0 0 0 0.06em #2e2b29,
     inset 0 0.1em 0.04em rgb(255 255 255 / 7%),
     var(--card-shadow, var(--shadow-card));
   font-family: var(--font-card);
@@ -257,6 +258,15 @@
   height: 1em;
   margin: 0 -0.12em;
   padding: 0 0.44em;
+}
+/* A land's name bar starts further out under a thinner top border, so the first letter of each
+   copy's name peeks out of its pile (battlefield.png). */
+.card-field.card-land {
+  padding-top: 0.3em;
+}
+.card-field.card-land .card-name-bar {
+  margin: 0 -0.3em;
+  padding: 0 0.26em;
 }
 .card-name {
   overflow: hidden;
@@ -404,9 +414,9 @@
     var(--bar) 45%,
     color-mix(in srgb, var(--bar) 88%, black)
   );
-  border: 0.1em solid #14110f;
+  border: 0.12em solid #14110f;
   box-shadow:
-    inset 0 0 0 0.12em color-mix(in srgb, var(--bar) 55%, #4a3a28),
+    inset 0 0 0 0.2em color-mix(in srgb, var(--bar) 55%, #4a3a28),
     inset 0 0 0 0.18em rgb(0 0 0 / 35%),
     inset 0 0.25em 0.1em rgb(255 255 255 / 30%),
     0 0.06em 0.2em rgb(0 0 0 / 55%);
@@ -420,6 +430,11 @@
 }
 .card-field .card-pt span {
   font-size: 1.7em;
+}
+/* The slash no taller than the numerals. */
+.card-pt i {
+  font-style: normal;
+  font-size: 0.8em;
 }
 .card-pt b {
   font-weight: inherit;

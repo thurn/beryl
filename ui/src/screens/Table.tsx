@@ -260,7 +260,7 @@ function Lands({ lands }: { lands: LandPile[] }) {
  * turns each a little more clockwise than the one on its left, as in the mockups. */
 export const HAND = {
   width: 182,
-  spacing: 176,
+  spacing: 172,
   top: 726.5,
   sag: 9,
   turn: 5.9,

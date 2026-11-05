@@ -63,6 +63,18 @@
       "height": 900
     },
     {
+      "name": "game-main-1280",
+      "route": "/?fixture=greedy-turn-9&at=11#/game",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "name": "game-main-1920",
+      "route": "/?fixture=greedy-turn-9&at=11#/game",
+      "width": 1920,
+      "height": 1080
+    },
+    {
       "name": "game-target",
       "route": "/?fixture=greedy-turn-9#/game",
       "width": 1600,
