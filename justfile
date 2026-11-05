@@ -43,6 +43,16 @@ bench-count *args:
 cards *args:
     {{ by }} cards "$@"
 
+# Install Maven and JDK 21, fetch XMage and Forge at their pins and build them, in the cache
+[group('oracles')]
+oracle-setup:
+    {{ by }} oracle-setup
+
+# Run one XMage test class and one Forge sim game (xmage or forge for just one)
+[group('oracles')]
+oracle-smoke *args:
+    {{ by }} oracle-smoke "$@"
+
 # The Rust tests (cargo test flags, e.g. -p beryl_app)
 [group('test')]
 test-rust *args:

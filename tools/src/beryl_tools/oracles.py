@@ -1,0 +1,371 @@
+"""`by oracle-setup` and `by oracle-smoke`: XMage and Forge, the rules oracles that scenarios
+are checked against (docs/engine-architecture.md, section 17.2).
+
+`oracle-setup` installs Maven and openjdk@21 with Homebrew when they are missing, fetches each
+oracle at the commit pinned below into ~/Library/Caches/beryl/oracles, and builds only the
+modules the harnesses need, with JAVA_HOME on JDK 21 and a Maven repository of its own in the
+cache. A checkout at its pin whose build stamp matches is left alone, so a second run is a quick
+no-op. Logs go to oracles/logs; the command prints a JSON summary on stdout.
+
+`oracle-smoke` runs one existing XMage test class and one Forge `sim` game of the Milestone 1
+deck against itself.
+"""
+
+from __future__ import annotations
+
+import argparse
+import fcntl
+import itertools
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
+from dataclasses import dataclass
+from pathlib import Path
+
+from . import cards, paths
+
+FORMULAS = ("maven", "openjdk@21")
+
+
+@dataclass(frozen=True)
+class Oracle:
+    name: str
+    repo: str
+    commit: str
+    # Maven arguments that build what the harnesses need and install it into the cache's
+    # Maven repository, so a harness can then run one module on its own.
+    build: tuple[str, ...]
+
+
+XMAGE = Oracle(
+    name="xmage",
+    repo="https://github.com/magefree/mage",
+    commit="987fd4e9c73e9f113e235f8d8f98628f2d391667",
+    # Mage.Tests and the modules it depends on: the engine, every card set, the server, the
+    # two-player duel and the AI players.
+    build=("-pl", "Mage.Tests", "-am", "install", "-DskipTests"),
+)
+FORGE = Oracle(
+    name="forge",
+    repo="https://github.com/Card-Forge/forge",
+    commit="61e9442c433711a82258daca3236f936a1d6f70e",
+    # The desktop module carries `sim` (forge.view.SimulateMatch) and the test harness; it
+    # depends on forge-core, forge-game, forge-ai and forge-gui.
+    build=("-pl", "forge-gui-desktop", "-am", "install", "-DskipTests"),
+)
+ORACLES: tuple[Oracle, ...] = (XMAGE, FORGE)
+
+# The smoke's XMage test class, for a card in the Milestone 1 deck.
+XMAGE_SMOKE_TEST = "EliteSpellbinderTest"
+
+
+def root() -> Path:
+    path = paths.cache_root() / "oracles"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def checkout(oracle: Oracle) -> Path:
+    return root() / oracle.name
+
+
+def log_dir() -> Path:
+    path = root() / "logs"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def stamp_path(oracle: Oracle) -> Path:
+    return root() / f"{oracle.name}.built"
+
+
+def stamp(oracle: Oracle) -> str:
+    """What a finished build records: the commit and the build's arguments."""
+    return " ".join((oracle.commit, *oracle.build))
+
+
+@contextmanager
+def locked() -> Iterator[None]:
+    """One setup or smoke at a time: concurrent Maven builds would share one repository."""
+    with open(root() / "oracles.lock", "w") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+class StepFailed(Exception):
+    pass
+
+
+def run(argv: Sequence[str], log: Path, cwd: Path | None = None, **env: str) -> str:
+    """Runs a command with its output streaming into `log`, and returns that output."""
+    started = time.monotonic()
+    with log.open("a") as f:
+        f.write(f"$ {' '.join(argv)}\n")
+        f.flush()
+        offset = f.tell()
+        code = subprocess.run(
+            list(argv),
+            cwd=cwd,
+            env={**os.environ, **env},
+            stdin=subprocess.DEVNULL,
+            stdout=f,
+            stderr=subprocess.STDOUT,
+            check=False,
+        ).returncode
+    with log.open() as f:
+        f.seek(offset)
+        output = f.read()
+    with log.open("a") as f:
+        f.write(f"exit {code} after {time.monotonic() - started:.0f} s\n\n")
+    if code != 0:
+        tail = "\n".join(output.splitlines()[-30:])
+        raise StepFailed(f"{' '.join(argv[:3])} failed; see {log}\n{tail}")
+    return output
+
+
+def brew_prefix(formula: str) -> Path | None:
+    result = subprocess.run(
+        ["brew", "--prefix", "--installed", formula],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return Path(result.stdout.strip()) if result.returncode == 0 else None
+
+
+def ensure_formulas(log: Path) -> list[str]:
+    """Installs the missing formulas; returns the ones it installed."""
+    if shutil.which("brew") is None:
+        raise StepFailed("Homebrew is missing: https://brew.sh")
+    missing = [f for f in FORMULAS if brew_prefix(f) is None]
+    if missing:
+        run(["brew", "install", *missing], log, HOMEBREW_NO_AUTO_UPDATE="1")
+    return missing
+
+
+def java_home() -> Path:
+    prefix = brew_prefix("openjdk@21")
+    if prefix is None:
+        raise StepFailed("openjdk@21 is not installed; run `just oracle-setup`")
+    return prefix / "libexec" / "openjdk.jdk" / "Contents" / "Home"
+
+
+def mvn(*args: str) -> list[str]:
+    """A Maven command line on the cache's repository, batch mode, no transfer progress."""
+    return [
+        "mvn",
+        "-B",
+        "--no-transfer-progress",
+        f"-Dmaven.repo.local={root() / 'm2'}",
+        *args,
+    ]
+
+
+def head(path: Path) -> str | None:
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def fetch(oracle: Oracle, log: Path) -> bool:
+    """Puts the checkout at its pinned commit with a depth-one fetch. Returns whether it had
+    to fetch."""
+    path = checkout(oracle)
+    if (path / ".git").is_dir() and head(path) == oracle.commit:
+        return False
+    if not (path / ".git").is_dir():
+        if path.exists():
+            shutil.rmtree(path)
+        run(["git", "init", "--quiet", str(path)], log)
+    run(
+        ["git", "fetch", "--quiet", "--depth", "1", oracle.repo, oracle.commit],
+        log,
+        path,
+    )
+    run(["git", "checkout", "--quiet", "--force", "--detach", oracle.commit], log, path)
+    stamp_path(oracle).unlink(missing_ok=True)
+    return True
+
+
+def built(oracle: Oracle) -> bool:
+    marker = stamp_path(oracle)
+    return marker.is_file() and marker.read_text().strip() == stamp(oracle)
+
+
+def build(oracle: Oracle, log: Path) -> bool:
+    """Builds the oracle unless its stamp matches. Returns whether it built."""
+    if built(oracle):
+        return False
+    run(mvn(*oracle.build), log, checkout(oracle), JAVA_HOME=str(java_home()))
+    stamp_path(oracle).write_text(stamp(oracle) + "\n")
+    return True
+
+
+def configure_forge() -> None:
+    """Points Forge's user and cache directories (preferences, decks, logs, downloaded data)
+    into the cache instead of ~/Library/Application Support/Forge. Forge reads this file from
+    its assets directory: the working directory for a build without "git" in its version, so
+    `sim` runs in forge-gui (GuiDesktop.getAssetsDir)."""
+    profile = checkout(FORGE) / "forge-gui" / "forge.profile.properties"
+    user = root() / "forge-user"
+    profile.write_text(f"userDir={user / 'data'}/\ncacheDir={user / 'cache'}/\n")
+
+
+def setup(_args: argparse.Namespace) -> int:
+    started = time.monotonic()
+    summary: dict[str, object] = {"root": str(root())}
+    try:
+        with locked():
+            summary["installed"] = ensure_formulas(log_dir() / "brew.log")
+            summary["java_home"] = str(java_home())
+            for oracle in ORACLES:
+                log = log_dir() / f"{oracle.name}-setup.log"
+                log.write_text("")
+                step_started = time.monotonic()
+                fetched = fetch(oracle, log)
+                built = build(oracle, log)
+                summary[oracle.name] = {
+                    "commit": oracle.commit,
+                    "path": str(checkout(oracle)),
+                    "fetched": fetched,
+                    "built": built,
+                    "seconds": round(time.monotonic() - step_started),
+                    "log": str(log),
+                }
+            configure_forge()
+    except StepFailed as e:
+        print(f"oracle-setup: {e}", file=sys.stderr)
+        summary["error"] = str(e).splitlines()[0]
+        print(json.dumps(summary, indent=2))
+        return 1
+    summary["seconds"] = round(time.monotonic() - started)
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
+def require_built() -> None:
+    stale = [o.name for o in ORACLES if not built(o)]
+    if stale:
+        raise StepFailed(
+            f"{', '.join(stale)} not built at its pin; run `just oracle-setup`"
+        )
+
+
+def smoke_xmage(log: Path) -> str:
+    run(
+        mvn(
+            "-pl",
+            "Mage.Tests",
+            f"-Dtest={XMAGE_SMOKE_TEST}",
+            "-Dxmage.dataCollectors.printGameLogs=false",
+            "test",
+        ),
+        log,
+        checkout(XMAGE),
+        JAVA_HOME=str(java_home()),
+    )
+    return XMAGE_SMOKE_TEST
+
+
+def forge_deck(path: Path) -> Path:
+    """The Milestone 1 main deck as a Forge .dck file: its `<count> <name>` lines up to the
+    blank line before the sideboard, which is .dck's own line format."""
+    lines = cards.DECK.read_text().splitlines()
+    main = list(itertools.takewhile(str.strip, lines))
+    header = ["[metadata]", "Name=Beryl M1 WU Control", "[Main]"]
+    path.write_text("\n".join(header + main) + "\n")
+    return path
+
+
+def forge_jar() -> Path:
+    target = checkout(FORGE) / "forge-gui-desktop" / "target"
+    jars = sorted(target.glob("forge-gui-desktop-*-jar-with-dependencies.jar"))
+    if not jars:
+        raise StepFailed(f"no Forge desktop jar in {target}; run `just oracle-setup`")
+    return jars[-1]
+
+
+def smoke_forge(log: Path) -> str:
+    deck = forge_deck(root() / "beryl-m1.dck")
+    output = run(
+        [
+            str(java_home() / "bin" / "java"),
+            "-Djava.awt.headless=true",
+            "-jar",
+            str(forge_jar()),
+            "sim",
+            # `sim` looks decks up by file name in the -D directory.
+            "-D",
+            str(deck.parent),
+            "-d",
+            deck.name,
+            deck.name,
+            "-n",
+            "1",
+            "-s",
+            "1",
+            "-q",
+        ],
+        log,
+        checkout(FORGE) / "forge-gui",
+    )
+    # SimulateMatch prints "Game Result: Game 1 ended in ... ms. <player> has won!" or
+    # "Game Result: Game 1 ended in a Draw! ...", and exits 0 even when a deck fails to load.
+    results = [line for line in output.splitlines() if line.startswith("Game Result:")]
+    if not results:
+        raise StepFailed(f"Forge sim finished without a result; see {log}")
+    return results[-1].strip()
+
+
+def smoke(args: argparse.Namespace) -> int:
+    summary: dict[str, object] = {}
+    failed = False
+    with locked():
+        try:
+            require_built()
+        except StepFailed as e:
+            print(f"oracle-smoke: {e}", file=sys.stderr)
+            return 1
+        for name, step in (("xmage", smoke_xmage), ("forge", smoke_forge)):
+            if args.only and name != args.only:
+                continue
+            log = log_dir() / f"{name}-smoke.log"
+            log.write_text("")
+            started = time.monotonic()
+            result: dict[str, object] = {"ok": True}
+            try:
+                result["result"] = step(log)
+            except StepFailed as e:
+                print(f"oracle-smoke: {e}", file=sys.stderr)
+                result["ok"] = False
+                failed = True
+            result["seconds"] = round(time.monotonic() - started)
+            result["log"] = str(log)
+            summary[name] = result
+    print(json.dumps(summary, indent=2))
+    return 1 if failed else 0
+
+
+def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    p = sub.add_parser(
+        "oracle-setup", help="install, fetch and build XMage and Forge in the cache"
+    )
+    p.set_defaults(func=setup)
+    p = sub.add_parser(
+        "oracle-smoke", help="run one XMage test class and one Forge sim game"
+    )
+    p.add_argument("only", nargs="?", choices=[o.name for o in ORACLES])
+    p.set_defaults(func=smoke)

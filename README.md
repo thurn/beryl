@@ -13,13 +13,14 @@ open source, under the Apache License 2.0.
 
 On an Apple silicon Mac:
 
-| Tool                     | Install                                                                 |
-| ------------------------ | ----------------------------------------------------------------------- |
-| Xcode Command Line Tools | `xcode-select --install`                                                |
-| Rust                     | [rustup](https://rustup.rs); `rust/rust-toolchain.toml` pins it         |
-| Node.js 24               | `brew install node`                                                     |
-| uv, just                 | `brew install uv just`                                                  |
-| Enact, Beads, Dolt       | [Enact](https://github.com/thurn/enact)'s setup, for delivering changes |
+| Tool                     | Install                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------ |
+| Xcode Command Line Tools | `xcode-select --install`                                                       |
+| Rust                     | [rustup](https://rustup.rs); `rust/rust-toolchain.toml` pins it                |
+| Node.js 24               | `brew install node`                                                            |
+| uv, just                 | `brew install uv just`                                                         |
+| Enact, Beads, Dolt       | [Enact](https://github.com/thurn/enact)'s setup, for delivering changes        |
+| Maven, JDK 21            | `just oracle-setup`, with Homebrew; it also builds the XMage and Forge oracles |
 
 Then `just` lists the commands. `just dev` opens the app with hot reload;
 `just smoke` builds it and checks that it starts, headless; `just ci` runs every
