@@ -5,6 +5,19 @@ bugs in future (e.g. via the type system). Each entry gives a short description
 of the bug, how a similar bug could be prevented, and the fixing commit when it
 was not found and fixed in the same session. Newest first.
 
+- **The expert's lethal checks ignored flying.** Its pre-combat damage estimate
+  let any untapped creature block any attacker, so it missed lethals where only
+  fliers could block (two bounces on the two flying blockers) and counted ground
+  blockers against fliers. Its estimates now block fliers only with flying or
+  reach (CR 702.9b). Prevention: one damage estimate shared by every lethal
+  check, built on the same blocking rule the combat simulation uses, rather than
+  a count of blockers in each.
+- **The expert decked itself by choice.** Timetwister was cast with fewer than
+  seven cards to shuffle in and draw, and Staff of the Storyteller drew the last
+  cards of the library at the opponent's end step. Wheels now need seven cards
+  to draw, and optional draws keep a card for the draw step. Prevention: route
+  every voluntary draw through one check of the library, as the engine routes
+  every draw through one function.
 - **A long card name kept its ellipsis instead of shrinking.** `useNameFit`
   compared `scrollWidth` with `clientWidth`, which WebKit rounds to whole
   pixels, so "Swords to Plowshares" overflowing its name bar by under a pixel
