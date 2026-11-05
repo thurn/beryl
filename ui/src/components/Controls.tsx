@@ -97,7 +97,7 @@ const PHASES: {
           transform="rotate(-6 10.5 11.75)"
         />
         <rect
-          className="phase-dark"
+          className="phase-card"
           x="10"
           y="2"
           width="11.5"
@@ -116,12 +116,12 @@ const PHASES: {
       <>
         <path
           className="phase-dark"
-          d="M1.5 21.5 L8.5 9.5 L10.5 11.5 L12 2.8 L15 9 L17.5 7.5 L22.5 21.5 Z"
+          d="M0.5 21.5 L8.5 9 L10.5 11 L12 2.8 L15.2 9 L17.5 7.5 L23.5 21.5 Z"
         />
         <path
           className="phase-stone"
-          stroke="none"
-          d="M5 20 L9.5 13.5 L11 14.5 L12.2 10.5 L14 14 L16 12.5 L19.5 20 Z"
+          strokeWidth="1"
+          d="M4.5 20 L9.3 13.3 L11 14.8 L12.2 10 L14.2 13.8 L16.3 12.3 L19.8 20 Z"
         />
       </>
     ),
@@ -131,9 +131,12 @@ const PHASES: {
     phase: "combat",
     label: "Combat",
     icon: (
-      <g transform="translate(12 12) scale(1.22) translate(-12 -12)">
-        <path d="M2 2 L4.5 2 L15.5 13 L13 15.5 L2 4.5 Z M12 17.5 L17.5 12 M15.5 16 L20.5 21 M20.5 18.5 L18.5 20.5" />
-        <path d="M22 2 L19.5 2 L8.5 13 L11 15.5 L22 4.5 Z M12 17.5 L6.5 12 M8.5 16 L3.5 21 M3.5 18.5 L5.5 20.5" />
+      <g
+        className="phase-heavy"
+        transform="translate(12 12) scale(1.22) translate(-12 -12)"
+      >
+        <path d="M2.5 2.5 L15 15 M11.5 18.5 L18.5 11.5 M15.5 15.5 L19.5 19.5 M21 21 L21.2 21.2" />
+        <path d="M21.5 2.5 L9 15 M12.5 18.5 L5.5 11.5 M8.5 15.5 L4.5 19.5 M3 21 L2.8 21.2" />
       </g>
     ),
     glyph: (
@@ -149,7 +152,7 @@ const PHASES: {
     icon: (
       <>
         <path
-          className="phase-stone"
+          className="phase-dark"
           d="M12 3 C15 4.5 18 5 21.4 5 L21.4 11 C21.4 16.5 17 20 12 21.6 C7 20 2.6 16.5 2.6 11 L2.6 5 C6 5 9 4.5 12 3 Z"
         />
         <path
@@ -164,7 +167,12 @@ const PHASES: {
   {
     phase: "end",
     label: "End",
-    icon: <path d="M9.8 5.5 A8 8 0 1 1 5 15.7 M13 2.5 L9.6 5.5 L13 8.5" />,
+    icon: (
+      <path
+        className="phase-heavy"
+        d="M9.8 5.5 A8 8 0 1 1 5 15.7 M13 2.5 L9.6 5.5 L13 8.5"
+      />
+    ),
     glyph: DIAMOND,
   },
 ];

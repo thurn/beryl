@@ -763,7 +763,7 @@
   text-shadow:
     1px 1px 0 rgb(90 30 6 / 85%),
     1px 2px 2px rgb(60 18 4 / 60%);
-  border-color: #fde6b6 #fbd99a #fbf1cf;
+  border-color: #ffe7a8 #ffd27a #fff0c0;
   background:
     radial-gradient(
       ellipse 22% 60% at 18% 62%,
@@ -788,8 +788,8 @@
     );
   box-shadow:
     0 0 0 1px rgb(178 40 4 / 85%),
-    0 0 8px 2px rgb(240 98 20 / 60%),
-    0 0 18px 4px rgb(200 70 16 / 28%);
+    0 0 8px 3px rgb(250 104 20 / 75%),
+    0 0 20px 6px rgb(220 76 16 / 40%);
 }
 .button-secondary {
   color: #fffdfa;
@@ -801,14 +801,15 @@
 }
 .button:disabled {
   cursor: default;
-  color: #87827e;
+  color: #98938f;
   font-weight: 400;
-  border-width: 1.5px;
-  border-color: #b9b5b1 #a19d99 #878581;
+  border-width: 2px;
+  border-color: #c4c0bc #a5a19d #858380;
   background: linear-gradient(180deg, #36322f, #393532 50%, #423d39);
   box-shadow:
-    0 0 0 1px rgb(14 11 10 / 55%),
-    0 3px 5px rgb(0 0 0 / 45%);
+    inset 0 1px 0 rgb(255 255 255 / 10%),
+    0 0 0 1px rgb(14 11 10 / 60%),
+    0 4px 6px rgb(0 0 0 / 55%);
   text-shadow: none;
 }
 .button-icon {
@@ -818,7 +819,9 @@
   margin-right: 0.15em;
 }
 .button:disabled .button-icon {
-  color: #77726e;
+  width: 0.9em;
+  margin-left: -0.1em;
+  color: #88837f;
 }
 .button-icon svg {
   width: 100%;
@@ -844,7 +847,7 @@
   font-size: 21px;
   line-height: 1;
   white-space: nowrap;
-  color: var(--text);
+  color: #f7f4ef;
 }
 .sparkle {
   flex: none;
@@ -861,7 +864,7 @@
   align-items: center;
   margin: 0;
   height: 54px;
-  padding: 0 0 0 20px;
+  padding: 0 0 0 19px;
   list-style: none;
   border-radius: 999px;
   border: 1px solid #8a837c;
@@ -890,11 +893,17 @@
 .phase .phase-dark {
   fill: #2c2825;
 }
+.phase .phase-card {
+  fill: #5f5952;
+}
 .phase .phase-stone {
   fill: #5d564f;
 }
 .phase .phase-light {
-  fill: #736b63;
+  fill: #8a8178;
+}
+.phase .phase-heavy {
+  stroke-width: 2;
 }
 .phase-current .phase-icon {
   stroke: #fff0c8;
@@ -906,13 +915,22 @@
 .phase-current .phase-icon path {
   fill: none;
 }
+/* Spaced as in the mockup, which is not quite even. */
 .phase-arrow {
   width: 9px;
   height: 11px;
-  margin: 0 21px 0 22px;
+  margin: 0 21.5px 0 22.5px;
   fill: #ece6de;
   filter: drop-shadow(0 1px 1px rgb(0 0 0 / 70%));
 }
+.phase:nth-child(3) .phase-arrow {
+  margin: 0 26.5px 0 20.5px;
+}
+.phase:nth-child(4) .phase-arrow,
+.phase:nth-child(5) .phase-arrow {
+  margin: 0 19.5px 0 22.5px;
+}
+
 /* The compact tracker on the table (battlefield.png, combat.png), in stage pixels: dark glyphs
    in a beige outline over a thin rule; the current one is filled gold and glows, and the rule
    under it turns gold. */

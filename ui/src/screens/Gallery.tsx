@@ -1,6 +1,6 @@
 // The component library on one page, laid out as docs/ui_mockups/ui_system.png. `just ui-shots`
 // captures it; it is also the place to look at a component while changing it.
-import { useMemo, type ReactNode } from "react";
+import { useMemo, type CSSProperties, type ReactNode } from "react";
 import { Card, Crest, useSlotArt } from "../components/Card";
 import {
   Button,
@@ -62,7 +62,10 @@ function Foundations() {
       <div className="swatches">
         {SWATCHES.map(([name, hex, color]) => (
           <figure key={name} className="swatch">
-            <div className="swatch-chip" style={{ background: color }} />
+            <div
+              className="swatch-chip"
+              style={{ "--chip": color } as CSSProperties}
+            />
             <figcaption>
               {name}
               <small>{hex}</small>
