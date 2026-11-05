@@ -292,8 +292,8 @@ fn walk(
     let classes = sources.classes();
     if position == KINDS + classes.len() {
         return match complete(cost, total, pool, sources, plan) {
-            Some(p) => f(&p),
-            None => true,
+            Some(p) if !wasteful(cost, total, pool, sources, plan) => f(&p),
+            _ => true,
         };
     }
     if position < KINDS {
@@ -407,6 +407,21 @@ fn complete(
         }
     }
     Some(Plan { left, ..*plan })
+}
+
+/// Whether a paying plan taps a source it could leave untapped, spending the same floating
+/// mana: three Plains and a Mana Crypt for {3}{W}, when the Crypt and two Plains pay it. The
+/// extra source only turns into floating mana, which tapping it later would make as well, so
+/// the plan is dominated (§10) and never offered or taken. The cube has no {C} symbol in a
+/// cost, so colorless mana left floating is never worth more than the source's own mana.
+fn wasteful(cost: ManaCost, total: u32, pool: [u8; KINDS], sources: &Sources, plan: &Plan) -> bool {
+    (0..sources.classes().len()).any(|i| {
+        plan.taps[i] > 0 && {
+            let mut fewer = *plan;
+            fewer.taps[i] -= 1;
+            complete(cost, total, pool, sources, &fewer).is_some()
+        }
+    })
 }
 
 fn lowest_kind(kinds: u8) -> usize {

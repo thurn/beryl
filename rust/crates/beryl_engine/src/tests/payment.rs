@@ -2,8 +2,11 @@
 //! decisions.
 
 use super::cast::{Game, cast};
+use crate::bitboard::Bitboard;
 use crate::card::{ManaColor, ManaCost};
-use crate::mana::Units;
+use crate::event::Sink;
+use crate::mana::{self, Units};
+use crate::rng::SplitMix64;
 use crate::state::{ObjectFlags, Zone};
 use crate::{DecisionKind, Opt, Payment, Profile};
 
@@ -143,4 +146,144 @@ fn manual_payment_offers_no_tap_that_strands_the_rest() {
         })
         .count();
     assert_eq!(dual_options, 2);
+}
+
+#[test]
+fn a_payment_never_taps_a_source_it_could_leave_untapped() {
+    for payment in [Payment::KeepMostPayable, Payment::Greedy] {
+        let mut g = Game::new(Profile {
+            payment,
+            ..Profile::EXACT
+        });
+        let overlord = g.give(g.me, "Test Overlord", Zone::Hand);
+        let lands = [
+            g.give(g.me, "Test Land", Zone::Battlefield),
+            g.give(g.me, "Test Land", Zone::Battlefield),
+            g.give(g.me, "Test Land", Zone::Battlefield),
+        ];
+        let crypt = g.give(g.me, "Test Crypt", Zone::Battlefield);
+        // {3}{W}: the Crypt and two Plains pay it. Tapping the third Plains as well would
+        // only float {C}, so it is no plan of its own.
+        g.pick(cast(overlord));
+        assert_eq!(g.s.object(overlord).zone, Zone::Stack, "{payment:?}");
+        assert!(tapped(&g, crypt), "{payment:?}");
+        assert_eq!(
+            lands.iter().filter(|&&l| tapped(&g, l)).count(),
+            2,
+            "{payment:?}"
+        );
+        assert_eq!(g.s.player(g.me).mana, [0; 6], "{payment:?}");
+    }
+}
+
+/// The mana each test source can make: its kinds, and how many it makes.
+fn makes(name: &str) -> (&'static [usize], u8) {
+    const W: usize = ManaColor::White as usize;
+    const U: usize = ManaColor::Blue as usize;
+    const C: usize = ManaColor::Colorless as usize;
+    match name {
+        "Test Land" | "Test HQ" => (&[W], 1),
+        "Test Island" => (&[U], 1),
+        "Test Dual" => (&[W, U], 1),
+        "Test Crypt" => (&[C], 2),
+        "Test Strip" => (&[C], 1),
+        _ => unreachable!("{name} is no source"),
+    }
+}
+
+/// Whether `cost` can be paid from `pool` and some of `sources`, each tapped for one of its
+/// kinds: every way of tapping them, tried.
+fn brute_force_pays(cost: ManaCost, pool: [u8; 6], sources: &[&str]) -> bool {
+    let Some((first, rest)) = sources.split_first() else {
+        let symbols_covered = (0..6).all(|k| pool[k] >= cost.symbols[k]);
+        let total: u32 = pool.iter().map(|&n| u32::from(n)).sum();
+        return symbols_covered && total >= cost.total(0);
+    };
+    let (kinds, amount) = makes(first);
+    brute_force_pays(cost, pool, rest)
+        || kinds.iter().any(|&k| {
+            let mut more = pool;
+            more[k] += amount;
+            brute_force_pays(cost, more, rest)
+        })
+}
+
+#[test]
+fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
+    const SOURCES: [&str; 6] = [
+        "Test Land",
+        "Test Island",
+        "Test Dual",
+        "Test Crypt",
+        "Test Strip",
+        "Test HQ",
+    ];
+    let mut rng = SplitMix64::new(17);
+    let mut payable_positions = 0;
+    for _ in 0..300 {
+        let mut g = Game::new(Profile::EXACT);
+        let mut names = Vec::new();
+        let mut slots = Vec::new();
+        for _ in 0..rng.below(6) {
+            let name = SOURCES[rng.below(SOURCES.len() as u64) as usize];
+            if g.s
+                .library(g.me)
+                .iter()
+                .any(|&slot| g.t.def(g.s.object(slot).card).name == name)
+            {
+                slots.push(g.give(g.me, name, Zone::Battlefield));
+                names.push(name);
+            }
+        }
+        let mut pool = [0; 6];
+        for k in [0, 1, 5] {
+            pool[k] = rng.below(2) as u8;
+        }
+        g.s.player_mut(g.me).mana = pool;
+        crate::layers::refresh(&mut g.s, &g.t);
+        let cost = ManaCost::new(
+            rng.below(4) as u8,
+            [rng.below(3) as u8, rng.below(3) as u8, 0, 0, 0, 0],
+        );
+        let expected = brute_force_pays(cost, pool, &names);
+        let context = format!("{cost:?} from {pool:?} and {names:?}");
+        let payable = mana::payable(&g.s, &g.t, g.me, cost, Bitboard::EMPTY).unwrap();
+        assert_eq!(payable, expected, "{context}");
+        for greedy in [false, true] {
+            let plans = mana::plans(&g.s, &g.t, g.me, cost, Bitboard::EMPTY, greedy).unwrap();
+            assert_eq!(!plans.is_empty(), payable, "{context}");
+            for (i, plan) in plans.iter().enumerate() {
+                assert!(
+                    plans.as_slice()[..i].iter().all(|p| p.left != plan.left),
+                    "two plans leave {:?}: {context}",
+                    plan.left
+                );
+                let mut paid = g.s;
+                mana::pay(
+                    &mut paid,
+                    &g.t,
+                    &mut Sink::default(),
+                    g.me,
+                    cost,
+                    Bitboard::EMPTY,
+                    plan,
+                )
+                .unwrap();
+                // CR 601.2h: the cost is paid in full, and only from the mana the tapped
+                // sources made and the pool held.
+                let made: u32 = slots
+                    .iter()
+                    .zip(&names)
+                    .filter(|&(&slot, _)| paid.object(slot).flags.has(ObjectFlags::TAPPED))
+                    .map(|(_, name)| u32::from(makes(name).1))
+                    .sum();
+                let before: u32 = pool.iter().map(|&n| u32::from(n)).sum();
+                let after: u32 = paid.player(g.me).mana.iter().map(|&n| u32::from(n)).sum();
+                assert_eq!(made + before - after, cost.total(0), "{context}");
+                assert_eq!(paid.player(g.me).mana, plan.left, "{context}");
+            }
+        }
+        payable_positions += usize::from(payable);
+    }
+    assert!(payable_positions > 50, "only {payable_positions} payable");
 }
