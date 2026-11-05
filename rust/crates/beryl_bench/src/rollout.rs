@@ -12,7 +12,7 @@
 //! - [`decide`]: the rollout policy alone, on decisions sampled from the rollouts;
 //! - [`roll`]: whole rollouts, a copy, the engine and the policy together.
 //!
-//! [`Summary`] gives the counts to divide by: decisions per rollout and per turn.
+//! [`Summary`] gives the counts to divide by: rollouts, decisions and turns.
 
 use std::hash::{Hash, Hasher};
 
@@ -30,8 +30,8 @@ pub const SEED: u64 = 0x00C0_FFEE;
 /// Games per agent the corpus is cut from.
 pub const GAMES: u64 = 4;
 
-/// The turns positions are cut at: each game gives the first decision of each turn it
-/// reaches.
+/// The turns positions are cut at: each game gives its first decision on or after each of
+/// them, while it lasts.
 pub const CUTS: [u16; 3] = [5, 8, 11];
 
 /// Rollouts per position, each from a copy reseeded so they diverge (§14).
@@ -138,8 +138,8 @@ impl Default for Workload {
     }
 }
 
-/// Plays one seeded game under smart stops, keeping the state at the first decision of each
-/// turn in [`CUTS`], until the last cut or the end of the game.
+/// Plays one seeded game under smart stops, keeping the state at its first decision on or
+/// after each turn in [`CUTS`], until the last cut or the end of the game.
 fn cut(t: &GameTable, seed: u64, agents: &mut [Box<dyn Agent>; 2], out: &mut Vec<State>) {
     let mut s = State::new(t, seed, Profile::SMART);
     let mut x = Scratch::new();
