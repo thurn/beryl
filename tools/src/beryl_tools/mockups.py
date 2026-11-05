@@ -128,6 +128,8 @@ def ui_compare(args: argparse.Namespace) -> int:
         code = 1
     found = out / verdicts.FINGERPRINTS
     if code != 0 or not found.exists():
+        # A page error makes the render suspect: no verdict may be recorded against it.
+        found.unlink(missing_ok=True)
         return code or 1
     fingerprints = json.loads(found.read_text())
     found.write_text(
