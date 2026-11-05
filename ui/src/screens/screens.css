@@ -41,10 +41,11 @@
   left: 627px;
   top: 13px;
   margin: 0;
-  font-weight: 700;
+  font-weight: 400;
+  -webkit-text-stroke: 0.7px currentColor;
   font-size: 37px;
   line-height: 44px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.17em;
   text-transform: uppercase;
   color: #efc68c;
   text-shadow: 0 1px 2px rgb(0 0 0 / 45%);
@@ -609,21 +610,21 @@
    gold, in stage pixels. */
 .brand {
   position: absolute;
-  left: 30px;
-  top: 14px;
+  left: 28px;
+  top: 10px;
   display: flex;
   align-items: center;
   gap: 13px;
   font-size: 18.5px;
   line-height: 1;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #b9a283;
-  -webkit-text-stroke: 0.2px currentColor;
+  -webkit-text-stroke: 0.35px currentColor;
 }
 .brand-crest {
-  width: 24px;
-  height: 33px;
+  width: 25px;
+  height: 35px;
   color: #b49970;
 }
 /* The settings gear at the top right: brushed grey metal. */
