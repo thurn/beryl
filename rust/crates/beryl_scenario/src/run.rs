@@ -136,10 +136,11 @@ struct Runner<'a> {
 impl Runner<'_> {
     /// The current position: the open decision or the end of the game. When the next action
     /// that answers decisions is an advance, its target is a breakpoint, so the game stops
-    /// there even where the engine would pass silently.
-    fn position(&mut self, i: usize) -> Step {
+    /// there even where the engine would pass silently. Every new position must keep the
+    /// state's invariants (§17.4), so a setup or a rules path that breaks one fails here.
+    fn position(&mut self, i: usize) -> Result<Step, String> {
         if let Some(step) = self.position {
-            return step;
+            return Ok(step);
         }
         let upcoming = self.actions[i..]
             .iter()
@@ -153,12 +154,15 @@ impl Runner<'_> {
             ..Profile::EXACT
         });
         let step = next(&mut self.s, self.t, &mut self.x, &mut Replay);
+        self.s
+            .check_invariants(self.t)
+            .map_err(|v| format!("an engine invariant broke: {v:?}"))?;
         self.position = Some(step);
-        step
+        Ok(step)
     }
 
     fn decision(&mut self, i: usize) -> Result<Decision, String> {
-        match self.position(i) {
+        match self.position(i)? {
             Step::Decide(d) => Ok(d),
             Step::Over(o) => Err(format!("the game is over ({o:?})")),
         }
@@ -205,15 +209,16 @@ impl Runner<'_> {
                 if d.kind != DecisionKind::Priority {
                     return Err(format!("unscripted decision: {}", self.describe(&d)));
                 }
-                if here == target {
+                if here == target && d.player == now.active {
                     // Stopped: keep the decision, and stop no more.
                     self.s.set_profile(Profile::EXACT);
                     return Ok(());
                 }
-                self.answer(Choice(0));
+                let pass = option_index(&d, |o| o == Opt::Pass).expect("passing is offered");
+                self.answer(pass);
             },
             Action::Assert { assertion } => {
-                let position = self.position(i);
+                let position = self.position(i)?;
                 self.check(position, assertion)?;
             }
         }
@@ -288,14 +293,17 @@ impl Runner<'_> {
                 card,
                 count,
             } => {
+                // Control is a layer-2 result, up to date only at an open decision.
+                if let Step::Over(o) = position {
+                    return Err(format!("no permanents to read: the game is over ({o:?})"));
+                }
                 let n = s
                     .battlefield()
                     .iter()
                     .filter(|&&slot| {
-                        let o = s.object(slot);
-                        o.controller == player
+                        s.controller(slot) == player
                             && self.name(slot) == card
-                            && o.flags.has(ObjectFlags::TAPPED)
+                            && s.object(slot).flags.has(ObjectFlags::TAPPED)
                     })
                     .count();
                 (n.to_string(), count.to_string())

@@ -16,8 +16,19 @@ impl State {
     /// Turns alternate from the starting player
     /// ([CR 103.8](https://yawgatog.com/resources/magic-rules/#R1038)), so `active` takes the
     /// odd-numbered turns.
+    ///
+    /// The step must be one where players get priority:
+    /// [CR 502.4](https://yawgatog.com/resources/magic-rules/#R5024): "No player receives
+    /// priority during the untap step", and
+    /// [CR 514.3](https://yawgatog.com/resources/magic-rules/#R5143): "Normally, no player
+    /// receives priority during the cleanup step".
     pub fn begin_at(&mut self, turn: u16, active: u8, step: TurnStep) {
         assert!(turn >= 1, "turns are numbered from 1");
+        assert!(active < 2, "no such player");
+        assert!(
+            !matches!(step, TurnStep::Untap | TurnStep::Cleanup),
+            "no priority in the {step:?} step"
+        );
         assert!(
             matches!(self.pending, Pending::PlayOrDraw { .. }),
             "begin_at on a game already begun"
