@@ -1154,8 +1154,8 @@
   stroke-width: 1;
 }
 .phase-tracker-compact .phase.phase-current .phase-icon path.phase-tab {
-  fill: #6a4a30;
-  stroke: rgb(255 170 70 / 80%);
+  fill: #6c4c30;
+  stroke: rgb(255 170 70 / 22%);
   stroke-width: 1;
 }
 
