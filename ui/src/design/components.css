@@ -4,28 +4,34 @@
 /* Frame palettes, sampled from the mockups: the colored rim (with its highlight and the dark
    line that edges it), the name and type bars, and the rules box. */
 .frame-w {
-  --rim: #d6cab0;
-  --rim-hi: #fcf9f4;
+  --rim: #d3d1cd;
+  --rim-hi: #f8f8f7;
   --rim-lo: #2e2b30;
-  --bar: #e2d8cc;
-  --bar-hi: #f4eee5;
+  --bar: #e2dfda;
+  --bar-hi: #f5f3f0;
   --box: #eee8df;
 }
 .frame-u {
-  --rim: #1a84d4;
-  --rim-hi: #47b4f4;
+  --rim: #2a7fc4;
+  --rim-hi: #63b3e8;
   --rim-lo: #06275a;
   --bar: #b9d3ea;
   --bar-hi: #dcf0fb;
   --box: #cedeef;
 }
 .frame-b {
+  --rim: #2e2b29;
+  --rim-hi: #5a5551;
+  --rim-lo: #0c0b0a;
+  --bar: #b4ada8;
+  --bar-hi: #d3cdc8;
+  --box: #dcd7d3;
+}
+/* A Swamp keeps the silver rim of the mockups' basic lands. */
+.frame-b.card-land {
   --rim: #a8a19b;
   --rim-hi: #ddd6d0;
   --rim-lo: #36302d;
-  --bar: #b0a49f;
-  --bar-hi: #cfc6c1;
-  --box: #d8d2ce;
 }
 .frame-r {
   --rim: #da3517;
@@ -33,14 +39,14 @@
   --rim-lo: #6d0806;
   --bar: #efb79c;
   --bar-hi: #fad7c4;
-  --box: #f6dacb;
+  --box: #efcbb0;
 }
 .frame-g {
   --rim: #2a7e51;
   --rim-hi: #63ae80;
   --rim-lo: #0d2f19;
-  --bar: #abb6a3;
-  --bar-hi: #cdd5c3;
+  --bar: #b6bcb0;
+  --bar-hi: #d6dbd0;
   --box: #dde4d4;
 }
 .frame-m {
@@ -52,31 +58,31 @@
   --box: #f1e4c2;
 }
 /* A multicolored card's gold rim is edged in its first color, as on the mockups' Baleful Strix. */
-[class*="accent-"] {
-  --edge: 0.16em;
+[class*="accent-"] .card-name-bar {
+  --edge: 0.14em;
 }
 .accent-w {
-  --rim-lo: #8a8070;
+  --accent: #8a8070;
 }
 .accent-u {
-  --rim-lo: #0f5fa8;
+  --accent: #0f5fa8;
 }
 .accent-b {
-  --rim-lo: #2a2624;
+  --accent: #2a2624;
 }
 .accent-r {
-  --rim-lo: #a5200c;
+  --accent: #a5200c;
 }
 .accent-g {
-  --rim-lo: #1d6a40;
+  --accent: #1d6a40;
 }
 .frame-c {
-  --rim: #c6c1ba;
-  --rim-hi: #f2efea;
-  --rim-lo: #2e2b2a;
-  --bar: #dcd7d0;
-  --bar-hi: #f1eee9;
-  --box: #ebe8e3;
+  --rim: #ddd4c2;
+  --rim-hi: #f7f2e8;
+  --rim-lo: #6e5536;
+  --bar: #e3ded5;
+  --bar-hi: #f4f1ec;
+  --box: #ece8e1;
 }
 
 /* Mana symbols. */
@@ -102,14 +108,14 @@
 .mana-cost .mana-symbol {
   font-size: 0.66em;
   box-shadow:
-    0 0 0 0.09em #10161c,
-    -0.04em 0.08em 0.06em rgb(0 0 0 / 55%);
+    0 0 0 0.05em #10161c,
+    -0.04em 0.08em 0.06em rgb(0 0 0 / 45%);
 }
 .mana-w {
   background: #f6f2c8;
 }
 .mana-u {
-  background: #b7d6f2;
+  background: #c6e6f5;
 }
 .mana-b {
   background: #b3a8a3;
@@ -162,18 +168,19 @@
 .card {
   position: relative;
   flex: none;
-  padding: 0.44em 0.44em 0.84em;
+  padding: 0.48em 0.48em 0.84em;
   border-radius: 0.6em;
-  background: linear-gradient(180deg, #201f1e, #161615);
+  background: linear-gradient(180deg, #252321, #1a1918);
   box-shadow:
-    inset 0 0 0 0.05em rgb(255 255 255 / 9%),
+    inset 0 0 0 0.06em #4a4643,
+    inset 0 0.1em 0.04em rgb(255 255 255 / 7%),
     var(--card-shadow, var(--shadow-card));
   font-family: var(--font-card);
   color: #141210;
   transition: box-shadow 0.25s;
 }
 .card-field {
-  padding: 0.3em 0.46em var(--card-foot, 0.95em);
+  padding: 0.3em 0.56em var(--card-foot, 0.95em);
 }
 .card-rim {
   height: 100%;
@@ -183,18 +190,7 @@
   padding: 0.3em 0.44em 0.23em;
   border-radius: 0.3em;
   background:
-    repeating-linear-gradient(
-      172deg,
-      transparent 0 0.5em,
-      rgb(255 255 255 / 20%) 0.65em,
-      transparent 0.8em 1.3em
-    ),
-    repeating-linear-gradient(
-      8deg,
-      transparent 0 0.9em,
-      rgb(0 0 0 / 10%) 1.05em,
-      transparent 1.2em 1.9em
-    ),
+    var(--rim-streaks, none),
     linear-gradient(
       90deg,
       var(--rim) 0.08em,
@@ -203,49 +199,91 @@
       var(--rim-hi) calc(100% - 0.16em),
       var(--rim) calc(100% - 0.08em)
     );
-  box-shadow: inset 0 0 0 0.05em var(--rim-lo);
+  box-shadow:
+    inset 0 0 0 0.05em var(--rim-lo),
+    inset 0 0 0 0.1em rgb(0 0 0 / 22%);
+}
+/* A whole card's rim carries faint water-like streaks (scry.png); a battlefield card's is smooth
+   and thinner, so more of the black body shows. */
+.card-full {
+  --rim-streaks: repeating-linear-gradient(
+    172deg,
+    transparent 0 0.5em,
+    rgb(255 255 255 / 16%) 0.65em,
+    transparent 0.8em 1.3em
+  );
 }
 .card-field .card-rim {
-  padding: 0.24em 0.48em 0.1em;
+  padding: 0.24em 0.36em 0.1em;
 }
+/* Lands' rims show a copper bevel at their outer edge (battlefield.png's Island and Swamp). */
+.card-land .card-rim {
+  box-shadow:
+    inset 0 0 0 0.05em var(--rim-lo),
+    inset 0.1em 0 0 #8c6444,
+    inset -0.1em 0 0 #8c6444;
+}
+/* The bars' outline is the rim's dark line; a multicolored card's runs in its accent color over
+   the left part (the mockups' Baleful Strix). */
 .card-name-bar,
 .card-type-bar {
   flex: none;
   display: flex;
   align-items: center;
-  height: 1.07em;
-  margin: 0 -0.36em;
-  padding: 0 0.42em;
+  height: 1.12em;
+  margin: 0 -0.38em;
+  padding: 0 0.4em;
+  border: var(--edge, 0.07em) solid transparent;
   border-radius: 0.5em / 50%;
-  background: linear-gradient(
-    180deg,
-    var(--bar-hi),
-    var(--bar) 40%,
-    var(--bar) 80%,
-    color-mix(in srgb, var(--bar) 85%, black)
-  );
+  background:
+    linear-gradient(
+        180deg,
+        var(--bar-hi),
+        var(--bar) 40%,
+        var(--bar) 80%,
+        color-mix(in srgb, var(--bar) 85%, black)
+      )
+      padding-box,
+    linear-gradient(90deg, var(--accent, var(--rim-lo)) 45%, var(--rim-lo) 55%)
+      border-box;
   box-shadow:
-    0 0 0 var(--edge, 0.05em) var(--rim-lo),
-    inset 0 0.05em 0 rgb(255 255 255 / 55%);
+    inset 0 0.05em 0 rgb(255 255 255 / 55%),
+    0 0.05em 0.08em rgb(0 0 0 / 45%);
 }
 .card-field .card-name-bar {
-  height: 0.9em;
-  margin: 0 -0.4em;
-  padding: 0 0.3em;
+  height: 1em;
+  margin: 0 -0.3em;
+  padding: 0 0.26em;
 }
 .card-name {
   overflow: hidden;
-  font-weight: 750;
-  font-size: calc(0.9em * var(--fit, 1));
+  font-weight: 800;
+  /* A name is about 0.47 of its size wide per letter. */
+  font-size: min(
+    var(--name-size, 0.92em),
+    var(--room, 99) / var(--chars, 1) * 2.1em
+  );
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.card-field .card-name {
-  font-size: calc(0.86em * var(--fit, 1));
+.card-field {
+  --name-size: 0.96em;
 }
+/* A tapped battlefield card's name bar runs up its left side, wider, its ends inset. */
+.card-field.card-tapped .card-name-bar {
+  height: 1.3em;
+  margin: 0 0.1em;
+}
+.card-field.card-tapped {
+  --name-size: 1.08em;
+}
+/* Sizes below are in the type bar's own em (0.8 of the card's). */
 .card-type-bar {
-  height: 0.94em;
-  font-weight: 600;
+  height: 1.32em;
+  margin: 0 -0.5em;
+  padding: 0 0.5em;
+  border-width: 0.12em;
+  font-weight: 650;
   font-size: 0.8em;
 }
 .card-art {
@@ -255,16 +293,22 @@
   width: 100%;
   object-fit: cover;
   background-size: cover;
-  box-shadow: 0 0 0 var(--edge, 0.06em) var(--rim-lo);
+  box-shadow: 0 0 0 0.06em var(--rim-lo);
+}
+.card[class*="accent-"] .card-art {
+  box-shadow:
+    -0.16em 0 0 var(--accent),
+    0 0.12em 0 var(--accent),
+    0 0 0 0.06em var(--rim-lo);
 }
 .card-full .card-art {
   flex: 0 0 7.3em;
 }
 /* A full-art land wears a silver rim edged in its color (scry.png's Island). */
 .card-full-art {
-  --rim: #a9a8a6;
-  --rim-hi: #eeedeb;
-  --rim-lo: #1677d2;
+  --rim: #8d8e92;
+  --rim-hi: #c9cace;
+  --rim-lo: #0f4e9c;
 }
 .card-full.card-full-art .card-art {
   flex: 1 1 0;
@@ -280,10 +324,11 @@
     var(--box)
   );
   box-shadow:
-    0 0 0 0.06em var(--rim-lo),
+    0 0 0 0.08em var(--rim-lo),
+    inset 0 0 0 0.06em color-mix(in srgb, var(--rim-lo) 45%, transparent),
     inset 0 0 0.3em rgb(0 0 0 / 12%);
   font-weight: 500;
-  font-size: 0.82em;
+  font-size: 0.86em;
   line-height: 1.2;
 }
 .card-rules p {
@@ -293,9 +338,11 @@
 .card-rules-short {
   display: grid;
   place-items: center;
+  padding-bottom: 0.9em;
   text-align: center;
 }
-/* Power and toughness in a framed plaque, numerals in blue ink. */
+/* Power and toughness in a framed plaque, numerals in navy ink (blue on battlefield.png, near
+   black elsewhere). */
 .card-pt {
   position: absolute;
   right: 0.37em;
@@ -304,6 +351,7 @@
   height: 1.9em;
   display: grid;
   place-items: center;
+  padding-bottom: 0.18em;
   border-radius: 0.5em;
   font-weight: 700;
   font-size: 1em;
@@ -315,18 +363,19 @@
     var(--bar) 45%,
     color-mix(in srgb, var(--bar) 88%, black)
   );
-  border: 0.06em solid #14110f;
+  border: 0.1em solid #14110f;
   box-shadow:
-    inset 0 0 0 0.1em color-mix(in srgb, var(--bar-hi) 70%, white),
-    inset 0 0 0 0.16em rgb(0 0 0 / 40%),
+    inset 0 0 0 0.12em color-mix(in srgb, var(--bar) 55%, #4a3a28),
+    inset 0 0 0 0.18em rgb(0 0 0 / 35%),
+    inset 0 0.25em 0.1em rgb(255 255 255 / 30%),
     0 0.06em 0.2em rgb(0 0 0 / 55%);
 }
 .card-pt span {
-  font-size: 1.45em;
+  font-size: 1.55em;
 }
 .card-pt b {
   font-weight: inherit;
-  color: var(--pt-ink, #1a4e9a);
+  color: var(--pt-ink, #1d3463);
 }
 .card-full .card-pt {
   font-size: 0.8em;
@@ -386,7 +435,7 @@
 }
 /* Tooled leather: dark, mottled veins from low-frequency turbulence. */
 .card-back {
-  --tooling: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='t'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.09' numOctaves='2' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0.12 0 0 0 0 0.07 0 0 0 0 0.03 0 0 4 0 -1.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23t)'/%3E%3C/svg%3E");
+  --tooling: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='t'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.05' numOctaves='2' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0.14 0 0 0 0 0.07 0 0 0 0 0.02 0 0 -9 0 1.1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23t)'/%3E%3C/svg%3E");
 }
 .card-back-field {
   position: relative;
@@ -401,17 +450,22 @@
       rgb(255 220 170 / 12%),
       transparent 60%
     ),
-    linear-gradient(160deg, #66401d, #573519 60%, #482b14);
+    linear-gradient(160deg, #94582a, #7f4a22 55%, #6a3c1b);
   box-shadow:
     inset 0 0 0 0.06em rgb(0 0 0 / 55%),
     inset 0 0 0 0.3em rgb(0 0 0 / 14%),
-    inset 0 0 0.6em rgb(0 0 0 / 40%);
+    inset 0 0 0.9em rgb(0 0 0 / 55%);
 }
 .card-back-stud {
   position: absolute;
   width: 0.5em;
   height: 0.5em;
   border-radius: 50%;
+  background-image: radial-gradient(
+    circle at 35% 30%,
+    rgb(255 255 255 / 75%),
+    transparent 45%
+  );
   box-shadow:
     inset 0 -0.06em 0.08em rgb(0 0 0 / 45%),
     inset 0 0.06em 0.06em rgb(255 255 255 / 55%),
@@ -442,9 +496,12 @@
   justify-content: center;
   border-radius: 50% / 30%;
   border: 0.1em solid #2a5ec4;
-  background:
-    var(--grain),
-    radial-gradient(ellipse 70% 60% at 50% 42%, #7d4526, #723f23 55%, #603824);
+  background: radial-gradient(
+    ellipse 70% 60% at 50% 42%,
+    #9a5a31,
+    #87502c 55%,
+    #6f4124
+  );
   box-shadow:
     0 0 0 0.05em rgb(0 0 0 / 50%),
     inset 0 0 0.6em rgb(0 0 0 / 35%);
@@ -467,7 +524,7 @@
   width: 5em;
   text-shadow: 0 0.04em 0.05em rgb(0 0 0 / 45%);
 }
-/* The five dots sit in a ring: one above, two beside, two below. */
+/* The five dots sit in a diamond around a center dot. */
 .card-back-dots {
   position: relative;
   width: 2.4em;
@@ -488,20 +545,20 @@
   top: 0;
 }
 .card-back-dots i:nth-child(2) {
-  left: 0.1em;
-  top: 0.6em;
+  left: 0.2em;
+  top: 0.75em;
 }
 .card-back-dots i:nth-child(3) {
-  right: 0.1em;
-  top: 0.6em;
+  right: 0.2em;
+  top: 0.75em;
 }
 .card-back-dots i:nth-child(4) {
-  left: 0.45em;
-  bottom: 0.1em;
+  left: 0.99em;
+  bottom: 0;
 }
 .card-back-dots i:nth-child(5) {
-  right: 0.45em;
-  bottom: 0.1em;
+  left: 0.99em;
+  top: 0.75em;
 }
 .dot-w {
   background: #e3a34a;
@@ -560,7 +617,7 @@
   display: flex;
   flex-direction: column;
   aspect-ratio: 309 / 458;
-  padding: 0.28em 0.32em 0.85em;
+  padding: 0.28em 0.32em 0.5em;
   border-radius: 0.6em 0.6em 50% 50% / 0.6em 0.6em 22% 22%;
   background: linear-gradient(180deg, #201f1e, #161615);
   box-shadow:

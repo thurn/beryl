@@ -255,10 +255,13 @@
 .at {
   position: absolute;
 }
-/* The library draws cards flat, off the table: a slimmer foot, P/T in black ink. */
+/* The library draws cards flat, off the table: a slimmer foot. */
 .at {
   --card-foot: 0.5em;
-  --pt-ink: #141210;
+}
+/* The mini hand shows less art above each type line than the table's hand. */
+.mini-hand .card-art {
+  flex-basis: 5.2em;
 }
 .caption-at {
   width: 240px;
@@ -436,9 +439,16 @@
 .hand-card + .hand-card {
   margin-left: -18px;
 }
-/* Hand cards show more art above their type line than a card read whole (battlefield.png). */
+/* Hand cards show more art above their type line than a card read whole, under a taller name
+   bar (battlefield.png). */
 .hand-card .card-art {
   flex-basis: 8.4em;
+}
+.hand-card .card-name-bar {
+  height: 1.3em;
+}
+.hand-card .card {
+  --name-size: 1.08em;
 }
 /* A step announcement over the battlefield (combat.png's "Combat / Blockers declared"). */
 .step-banner {

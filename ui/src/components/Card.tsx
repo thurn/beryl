@@ -75,11 +75,11 @@ const BASIC_TYPES: [string, Color][] = [
 ];
 
 /** The frame's palette key: a color, `m` for multicolored, `c` for colorless. A colorless land
- * with one basic land type takes that type's color; a dual land keeps the silver land frame, as
- * on the mockups' Plateau. */
+ * with one basic land type takes that type's color; a dual land keeps the pale land frame, as on
+ * the mockups' Plateau. */
 export function frameKey(card: CardFace): string {
   let colors = card.colors;
-  if (colors.length === 0 && card.typeLine.includes("Land")) {
+  if (colors.length === 0 && isLand(card)) {
     const basics = BASIC_TYPES.filter(([type]) => card.typeLine.includes(type));
     colors = basics.length === 1 ? basics.map(([, c]) => c) : [];
   }
@@ -87,6 +87,8 @@ export function frameKey(card: CardFace): string {
   if (colors.length > 1) return "m";
   return (colors[0] as Color).toLowerCase();
 }
+
+const isLand = (card: CardFace) => card.typeLine.includes("Land");
 
 const HUES: Record<string, number> = {
   w: 42,
@@ -133,15 +135,17 @@ export function CardArt({ card }: { card: CardFace }) {
 }
 
 /** Rules text up to this long is centered in its box. */
-const SHORT_TEXT = 40;
+const SHORT_TEXT = 30;
 
-/** Shrinks a long name to fit its bar rather than cutting it off (`--fit` scales the name's
- * size in components.css). `units` is the card's width in frame units: 12 unless overridden. */
-function nameFit(name: string, units: number): CSSProperties | undefined {
-  const fits = (22 * units) / 12;
-  return name.length > fits
-    ? ({ "--fit": fits / name.length } as CSSProperties)
-    : undefined;
+/** Shrinks a long name to fit its bar rather than cutting it off: components.css caps the name's
+ * size by the bar's `--room` (frame units inside the frame's borders, beside the cost) over its
+ * `--chars`. `units` is
+ * the frame's width in frame units: 12 unless overridden or turned. */
+function nameFit(name: string, units: number, cost = 0): CSSProperties {
+  return {
+    "--chars": name.length,
+    "--room": units - 2.4 - 0.85 * cost,
+  } as CSSProperties;
 }
 
 /** Power and toughness (or loyalty), numerals inked blue and the slash black as on the mockups. */
@@ -180,6 +184,8 @@ export function Card({
     `card-${variant}`,
     variant === "full" && card.fullArt && "card-full-art",
     `frame-${frameKey(card)}`,
+    isLand(card) && "card-land",
+    tapped && "card-tapped",
     card.colors.length > 1 && `accent-${card.colors[0]?.toLowerCase()}`,
     highlight && `card-${highlight}`,
     combat && `card-${combat}`,
@@ -214,7 +220,13 @@ export function Card({
           <div className="card-name-bar">
             <span
               className="card-name"
-              style={nameFit(card.name, width / (unit ?? width / 12))}
+              style={nameFit(
+                card.name,
+                frame.width / (unit ?? width / 12),
+                variant === "full"
+                  ? (card.manaCost?.split("{").length ?? 1) - 1
+                  : 0,
+              )}
             >
               {card.name}
             </span>

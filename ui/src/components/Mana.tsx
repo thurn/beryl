@@ -70,9 +70,10 @@ export function RulesText({ text }: { text: string }) {
   return <>{parts}</>;
 }
 
-/** Flying, drawn as on the mockups' badges: an eagle, wings raised. */
+/** Flying, drawn as on the mockups' badges: an eagle facing left, wings raised, the right one
+ * feathered. */
 const EAGLE =
-  "M4 4 L9 3.5 L16 13 L23.5 2.5 L28.5 3.5 L25 10 L29.5 9.5 L24.5 15.5 L28 16.5 L20 20.5 L20.5 26.5 L17 30.5 L13 27.5 L13.5 23.5 L8.5 23.5 L3 25.5 L7.5 20.5 L12.5 18 L6 10 Z";
+  "M2.7 3.2 L5.5 3.9 L13.9 15.1 L30 2.6 L28.6 7.6 L23.7 10.1 L27.9 10.8 L21.6 15.1 L25.8 16.4 L16.7 20.1 L16 24.5 L14.6 29.5 L11.1 29.5 L10.4 23.9 L2.7 23.9 L3.4 22 L9.7 19.5 L11.1 17.6 Z";
 
 export function AbilityBadge({ ability }: { ability: AbilityIcon }) {
   return (
