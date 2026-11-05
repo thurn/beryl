@@ -1136,14 +1136,14 @@
 }
 /* Lit, the tab is only the swords' glow pooling on the rule. */
 .phase-tracker-compact .phase-current:nth-child(3)::after {
-  left: -8px;
-  right: -8px;
-  bottom: -3px;
-  height: 7px;
+  left: -10px;
+  right: -10px;
+  bottom: -5px;
+  height: 10px;
   background: radial-gradient(
     closest-side,
-    rgb(255 170 60 / 75%),
-    rgb(240 130 30 / 35%) 60%,
+    rgb(255 190 80 / 95%),
+    rgb(240 130 30 / 55%) 55%,
     transparent
   );
   box-shadow: none;
