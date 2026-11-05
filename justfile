@@ -1,0 +1,59 @@
+# Beryl's commands; `just` lists them. Most wrap `by` (tools/), and extra arguments pass
+# straight through: `just smoke --seconds 30`.
+
+set positional-arguments := true
+
+by := "uv run --quiet --project tools by"
+
+default:
+    @just --list --unsorted
+
+# The app with hot reload, in a window (humans; agents use `smoke`)
+[group('app')]
+dev *args:
+    {{ by }} dev "$@"
+
+# Build the debug app and launch it headless until its UI loads (--seconds N, --no-build)
+[group('app')]
+smoke *args:
+    {{ by }} smoke "$@"
+
+# The release Beryl.app, under rust/target/tauri/release/bundle/macos
+[group('app')]
+bundle:
+    {{ by }} bundle
+
+# Restore rust/target and ui/node_modules from the cache (every command does this too)
+[group('app')]
+warm *args:
+    {{ by }} warm "$@"
+
+# The Rust tests (cargo test flags, e.g. -p beryl_app)
+[group('test')]
+test-rust *args:
+    cd rust && cargo test "$@"
+
+# The tools' tests
+[group('test')]
+test-py *args:
+    cd tools && uv run --quiet pytest "$@"
+
+# The fast check `enact push` runs (lanes for what changed, budget 60 s)
+[group('checks')]
+check:
+    {{ by }} check
+
+# Slow CI, or some of its lanes: repo, python, rust, ui, app (budget 300 s)
+[group('checks')]
+ci *lanes:
+    {{ by }} ci "$@"
+
+# Format everything: black, rustfmt, prettier, mdformat (80 columns), the justfile
+[group('checks')]
+fmt:
+    uv run --quiet --project tools black --quiet tools
+    cd rust && cargo fmt --all
+    {{ by }} warm
+    cd ui && node_modules/.bin/prettier --write --log-level warn .
+    just --fmt --unstable
+    git ls-files -co --exclude-standard '*.md' | grep -v -e '^.beads/' -e '^.agents/' | xargs uv run --quiet --project tools mdformat

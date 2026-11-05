@@ -1,8 +1,101 @@
 # Working on Project Beryl
 
-Project Beryl is a research project to create a Magic the Gathering AI for cube
+Project Beryl is a research project to create a Magic: The Gathering AI for cube
 draft, which can draft cards and play the game at the level of a strong human
-player.
+player. It is a Tauri 2 desktop app for Apple silicon Macs: a Rust workspace
+behind a React and TypeScript UI. The repository is public.
 
-It uses the Tauri framework for Rust and targets Mac OSX under ARM.
+## Layout
 
+- `rust/`: the Cargo workspace. `crates/beryl_app` is the Tauri shell (window,
+  IPC commands, `tauri.conf.json`, capabilities, icons). Keep it thin: game
+  rules, drafting and AI go in their own library crates under `rust/crates/`,
+  which build and test without Tauri.
+- `ui/`: the frontend, Vite + React + TypeScript (strict). `src/ipc.ts` holds
+  typed wrappers for the Rust commands; call Rust only through it.
+- `tools/`: `by`, the Python CLI behind the justfile. `just` lists the commands.
+- Outside the tree: `~/Library/Caches/beryl` (`$BERYL_CACHE`: warm `rust/target`
+  and `ui/node_modules` shared by worktrees). Never crawl `~` or `/` with
+  `find`.
+
+## Enact
+
+`enact` below means `python3 ~/enact/scripts/enact.py`.
+
+- **Every change goes through a worktree and CI**, whether a human, an ad hoc
+  agent session or an Enact run makes it:
+  1. From the main checkout, `enact worktree create <short-name>`. Work only in
+     the printed path; never edit or commit in the main checkout.
+  2. Commit there (see Conventions).
+  3. Run `enact push` in the worktree. It rebases onto `origin/staging` (merging
+     `master` if someone bypassed staging), runs the fast check, pushes to
+     `staging`, starts slow CI in the background and removes the worktree. On
+     exit code 2, fix the reported conflict or failing check in the same
+     worktree and run it again.
+  4. If its output has `watch_ci`, no Enact run is around to repair a slow-CI
+     failure: follow it (`enact ci --wait <sha>` until it passes; on failure,
+     claim and fix the Steward bead) before finishing.
+- **Session titles show status.** Any agent session making a change here titles
+  itself `⚒️ <short summary>` when it starts (Claude Desktop:
+  `set_session_title` on `self`; Codex: `set_thread_title`), 🔮 while it waits on
+  slow CI, 🚒 while it fixes a Steward bead, and `✅ <same summary>` as its last
+  step when done, or `⛔` if it stops without finishing.
+- Never commit to, or push directly to, `master` or `staging`. `master` advances
+  only when slow CI passes on `staging`; a slow-CI failure files a P0 Steward
+  bead. `enact ci --status` shows the runner and its log. Keep the main checkout
+  clean: Enact fast-forwards its `staging` and `master`.
+- The checks are `.enact.toml`'s: `just check` (fast) and `just ci` (slow).
+- Beads live in this repo (`bd`, prefix `by`); publish bead changes with
+  `enact sync`. Plans, designs and decisions go in beads, not markdown: a bead's
+  history is the record.
+- File beads freely, in parallel. Merge conflicts are cheap: `enact push`
+  rebases, you fix and push again. A filed bead may start within minutes, so put
+  what it builds on in `staging` first or hold it back with a dependency.
+- `/enact <bead|epic|task>` runs work inline in one session;
+  `/enact-plan <bead|plan|task>` runs it unattended across sessions. Most work
+  uses neither.
+- **Runs are light**: treat every `/enact` and `/enact-plan` invocation as if it
+  carried the keyword **light** (Executor, Warden and Steward only; at most one
+  final Warden), unless it says **full**.
+
+## Testing your work
+
+Cheapest first. Agents never open a window: `just dev` refuses to for them.
+
+1. Logic: `just test-rust` runs the workspace's tests. Engine, draft and AI
+   behavior is tested here, not through the app.
+2. UI: `cd ui && npm run typecheck`.
+3. The app: `just smoke` builds the debug app and launches it with no window and
+   no Dock icon until the UI reports over IPC that it loaded (about a second
+   once built). It fails on a build error or a UI that never loads.
+
+A human runs `just dev` for the app with hot reload, or `just bundle` for a
+release `Beryl.app`.
+
+## Checks
+
+- `just check` (fast, budget 60 s) runs the lanes whose files changed since the
+  branch left `origin/staging`: `repo` (justfile and Markdown formatting),
+  `python` (black, pyre, pytest), `rust` (rustfmt, clippy, tests) and `ui`
+  (prettier, tsc). It also refuses conflict markers and bad commit subjects.
+- `just ci` (slow, budget 300 s) runs every lane plus `app` (`just smoke`). A
+  run over budget fails: speed up, move or delete the slowest step rather than
+  raise it.
+- A fresh worktree clones the cached `rust/target` and `ui/node_modules` in
+  seconds (copy-on-write); removing it saves them back.
+
+## Conventions
+
+- Commits: short Conventional Commits, e.g. `feat: mulligan decisions`; subjects
+  of 60 characters at most, a body only when the why isn't obvious. The fast
+  check enforces it.
+- `just fmt` formats everything: black, rustfmt, prettier, mdformat (80
+  columns), the justfile. Python is typed (pyre, strict); Rust passes clippy
+  (pedantic) with `-D warnings`; TypeScript is strict.
+- Scripts are Python in `tools/`, standard library unless a dependency earns its
+  place.
+- Markdown: agents add none unless explicitly requested. README.md, AGENTS.md
+  and `docs/` are all there is; plans, designs and notes go in beads.
+- Never commit logs, screenshots or other evidence of a run.
+- Keep things lightweight: the simplest version that answers the question, no
+  speculative infrastructure.

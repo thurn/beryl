@@ -1,0 +1,8 @@
+{
+  "source_directories": [
+    {"import_root": "src", "source": "beryl_tools"},
+    {"import_root": ".", "source": "tests"}
+  ],
+  "site_package_search_strategy": "pep561",
+  "strict": true
+}

@@ -1,0 +1,26 @@
+# Build output: Rust, Tauri's generated schemas, the UI, Python.
+/rust/target/
+/rust/crates/*/gen/
+/ui/node_modules/
+/ui/dist/
+/ui/*.tsbuildinfo
+/tools/.venv/
+/tools/.pyre/
+/tools/.pytest_cache/
+__pycache__/
+*.egg-info/
+
+# Logs and run output live in ~/Library/Caches/beryl, never here.
+/out/
+.DS_Store
+
+# Enact worktrees.
+/.worktrees/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
+*.gate.lock*
+/.beads/interactions.jsonl
