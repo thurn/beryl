@@ -250,9 +250,9 @@ function Lands({ lands }: { lands: LandPile[] }) {
 /** The hand's cards: each card's top center lies on an arc over the near edge, and the fan
  * turns each a little more clockwise than the one on its left, as in the mockups. */
 const HAND = {
-  width: 173,
-  spacing: 172,
-  top: 737,
+  width: 182,
+  spacing: 180,
+  top: 726.5,
   sag: 6.7,
   turn: 6.3,
   bias: 0.8,
