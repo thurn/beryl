@@ -119,7 +119,7 @@
     },
     {
       "name": "cast-kicker",
-      "seed": 2,
+      "seed": 3,
       "decks": ["wu-control", "wu-control"],
       "agents": ["random", "random"],
       "until": "first x decision for seat 0",

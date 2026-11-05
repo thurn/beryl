@@ -89,7 +89,7 @@
     },
     {
       "name": "game-cast-kicker",
-      "route": "/?fixture=cast-kicker&at=443#/game",
+      "route": "/?fixture=cast-kicker&at=427#/game",
       "width": 1600,
       "height": 900,
       "click": "[data-zone=hand][data-card='Thieving Skydiver']"
