@@ -26,7 +26,9 @@ def test_regions_lie_inside_their_mockups() -> None:
         rects = {f"mask {i}": r for i, r in enumerate(m["masks"])}
         for part, spec in m["parts"].items():
             rects[part] = spec if isinstance(spec, list) else spec["rect"]
-            for i, r in enumerate([] if isinstance(spec, list) else spec["masks"]):
+            for i, r in enumerate(
+                [] if isinstance(spec, list) else spec.get("masks", [])
+            ):
                 rects[f"{part} mask {i}"] = r
         for slot, spec in m["art"].items():
             rects[f"art {slot}"] = spec if isinstance(spec, list) else spec["rect"]

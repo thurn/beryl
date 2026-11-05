@@ -302,8 +302,9 @@ async function fonts(base, out, specPath) {
             ([r]) => window.kit.cut("mockup", r, 0),
             [spec.rect],
         );
+        // Wide enough for the three boxes of a row: the crop, the overlay and the text alone.
         const { context, page, errors } = await openPage(browser, {
-            width: 1200,
+            width: Math.max(1200, 3 * spec.rect[2] * spec.zoom + 48),
             height: 800,
         });
         await page.addInitScript((s) => {

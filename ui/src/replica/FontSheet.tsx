@@ -95,8 +95,10 @@ export function FontSheet() {
     return <p style={{ color: "#ddd" }}>No font sheet spec.</p>;
   }
   const [, , w, h] = spec.rect;
+  // Fixed boxes: a wide sample must not shrink to fit the row (`by ui-fonts` sizes the page).
   const box: CSSProperties = {
     position: "relative",
+    flexShrink: 0,
     width: w * spec.zoom,
     height: h * spec.zoom,
     overflow: "hidden",
