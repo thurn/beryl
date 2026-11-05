@@ -457,8 +457,8 @@
   width: 102%;
   height: 2.5em;
   top: calc(100% - 1.6em);
-  filter: drop-shadow(0 0 2px rgb(255 205 110 / 100%))
-    drop-shadow(0 0 8px rgb(245 130 25 / 90%));
+  filter: drop-shadow(0 0 2px rgb(255 200 90 / 100%))
+    drop-shadow(0 4px 9px rgb(232 159 32 / 95%));
 }
 .combat-line {
   fill: none;
@@ -761,11 +761,9 @@
   fill: var(--tone-core);
   stroke: none;
 }
+/* A white-hot dot in its tone's bloom. */
 .arrow-dot {
-  r: 7px;
-  fill: var(--tone-core);
-  stroke: var(--tone);
-  stroke-width: 2;
+  fill: #fffdf6;
 }
 
 /* Buttons (ui_system.png section 02), sized in em so each place sets one font size: a pill with
