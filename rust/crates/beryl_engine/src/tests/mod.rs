@@ -1,6 +1,7 @@
 //! Engine tests, driven through `next` and `apply` with test-only cards.
 
 mod banned;
+mod combat;
 mod events;
 mod game;
 mod invariants;

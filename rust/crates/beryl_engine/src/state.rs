@@ -58,6 +58,9 @@ impl ObjectFlags {
     /// Not under its controller's control continuously since their most recent turn began
     /// ([CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026)).
     pub const SUMMONING_SICK: u32 = 1 << 1;
+    /// An attacking creature
+    /// ([CR 506.3](https://yawgatog.com/resources/magic-rules/#R5063)): "Only a creature can
+    /// attack or block." What it attacks is in `combat`.
     pub const ATTACKING: u32 = 1 << 2;
     /// A token ([CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111)): "a marker
     /// used to represent any permanent that isn't represented by a card."
@@ -69,6 +72,27 @@ impl ObjectFlags {
     pub const ONE_ONE: u32 = 1 << 4;
     /// Exiled until the permanent in `linked` leaves the battlefield (CR 610.3).
     pub const EXILED_UNTIL: u32 = 1 << 5;
+    /// A blocking creature ([CR 509.1g](https://yawgatog.com/resources/magic-rules/#R5091g)).
+    /// The attacker it blocks is in `combat`.
+    pub const BLOCKING: u32 = 1 << 8;
+    /// An attacking creature that has been blocked
+    /// ([CR 509.1h](https://yawgatog.com/resources/magic-rules/#R5091h)): "An attacking
+    /// creature with one or more creatures declared as blockers for it becomes a blocked
+    /// creature ... A creature remains blocked even if all the creatures blocking it are
+    /// removed from combat."
+    pub const BLOCKED: u32 = 1 << 9;
+    /// An attacker attacking a planeswalker rather than a player. If that planeswalker has
+    /// left the battlefield, `combat` is [`NONE`] and the creature attacks nothing.
+    pub const ATTACKS_PLANESWALKER: u32 = 1 << 10;
+    /// Had first strike as the first-strike combat damage step began, so it deals no damage
+    /// in the second ([CR 510.4](https://yawgatog.com/resources/magic-rules/#R5104)).
+    pub const STRUCK_FIRST: u32 = 1 << 11;
+    /// Every flag that combat sets, cleared as combat ends.
+    pub const COMBAT: u32 = Self::ATTACKING
+        | Self::BLOCKING
+        | Self::BLOCKED
+        | Self::ATTACKS_PLANESWALKER
+        | Self::STRUCK_FIRST;
 
     pub fn has(self, flag: u32) -> bool {
         self.0 & flag != 0
@@ -164,6 +188,10 @@ pub struct Object {
     pub chosen: u8,
     /// Which face is up.
     pub face: u8,
+    /// In combat: the planeswalker an attacker attacks, or the attacker a blocker blocks;
+    /// [`NONE`] for an attacker attacking a player, or once that object has left the
+    /// battlefield.
+    pub combat: u8,
 }
 
 impl Object {
@@ -188,6 +216,7 @@ impl Object {
         timestamp: 0,
         chosen: NONE,
         face: 0,
+        combat: NONE,
     };
 }
 
@@ -282,6 +311,9 @@ pub enum TurnStep {
     BeginningOfCombat,
     DeclareAttackers,
     DeclareBlockers,
+    /// The first of two combat damage steps, which exists only when a creature in combat has
+    /// first strike ([CR 510.4](https://yawgatog.com/resources/magic-rules/#R5104)).
+    FirstStrikeDamage,
     CombatDamage,
     EndOfCombat,
     PostcombatMain,
@@ -439,6 +471,15 @@ pub enum Pending {
     /// A land being played asks whether its controller pays life so that it doesn't enter
     /// tapped ([`crate::card::Replacement::EntersTappedUnlessPayLife`]).
     EnterPayingLife { slot: u8, life: u8 },
+    /// The active player declares attackers (CR 508.1), one creature at a time: `attacker`
+    /// is the creature just chosen, whose defender is still to choose, or [`NONE`].
+    DeclareAttackers { attacker: u8 },
+    /// The defending player declares blockers (CR 509.1), one creature at a time: `blocker`
+    /// is the creature just chosen, whose attacker is still to choose, or [`NONE`].
+    DeclareBlockers { blocker: u8 },
+    /// The active player divides blocked attackers' combat damage (CR 510.1c): `done` holds
+    /// the attackers divided so far, `lethal` the blockers chosen to be dealt lethal damage.
+    CombatDamage { done: Bitboard, lethal: Bitboard },
 }
 
 /// Counters toward the budgets of the profile (architecture §12.3).

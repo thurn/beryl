@@ -53,6 +53,19 @@ pub enum DecisionKind {
     TriggerOrder,
     /// Whether to pay the life an entering permanent asks so that it doesn't enter tapped.
     PayLife,
+    /// A creature to attack with, or [`Opt::Done`] (CR 508.1a).
+    Attacker,
+    /// What the creature just declared as an attacker attacks: the defending player or a
+    /// planeswalker they control (CR 508.1b).
+    AttackTarget,
+    /// A creature to block with, or [`Opt::Done`] (CR 509.1a).
+    Blocker,
+    /// The attacker the creature just declared as a blocker blocks (CR 509.1a).
+    BlockTarget,
+    /// A blocker to assign lethal damage from the attacker it blocks, or [`Opt::Done`]: the
+    /// division of a blocked attacker's damage, by which of its blockers it destroys
+    /// (CR 510.1c).
+    DamageDivision,
 }
 
 /// The candidates of a decision. A `Choice(i)` names the `i`th object in ascending slot order,
@@ -110,6 +123,17 @@ pub enum Opt {
     Trigger(u8),
     Yes,
     No,
+    /// Finish a declaration or a division.
+    Done,
+    /// Declare the creature in this slot as an attacker.
+    Attack(u8),
+    /// Attack the planeswalker in this slot, or, for [`crate::state::NONE`], the defending
+    /// player.
+    Defender(u8),
+    /// Declare the creature in this slot as a blocker.
+    Block(u8),
+    /// Assign lethal damage to the blocker in this slot.
+    Lethal(u8),
 }
 
 /// How a game ended.

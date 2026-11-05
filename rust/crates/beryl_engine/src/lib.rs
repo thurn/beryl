@@ -10,6 +10,7 @@
 
 pub mod bitboard;
 pub mod card;
+mod combat;
 pub mod decision;
 pub mod effect;
 mod engine;

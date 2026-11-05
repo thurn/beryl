@@ -49,6 +49,7 @@ pub(crate) fn move_to_place(s: &mut State, slot: u8, to: Zone, place: Place) -> 
     o.copy_of = NONE;
     o.chosen = NONE;
     o.face = 0;
+    o.combat = NONE;
     let owner = usize::from(o.owner);
     match to {
         Zone::Library => match place {
@@ -97,6 +98,16 @@ fn leave(s: &mut State, slot: u8) {
                 s.battlefield.remove(i);
             }
             s.flags.derived_dirty = true;
+            // [CR 506.4](https://yawgatog.com/resources/magic-rules/#R5064): "A permanent is
+            // removed from combat if it leaves the battlefield". The creatures attacking it or
+            // blocked by it stay in combat, related to nothing; the slot may soon hold
+            // another object.
+            for i in 0..s.battlefield.len() {
+                let other = s.battlefield.as_slice()[i];
+                if s.object(other).combat == slot {
+                    s.object_mut(other).combat = NONE;
+                }
+            }
         }
         Zone::Stack => s.zones.stack.remove(slot),
         Zone::Hand | Zone::Exile | Zone::Nowhere => {}

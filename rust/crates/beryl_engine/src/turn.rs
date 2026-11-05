@@ -6,7 +6,7 @@ use crate::fixed::Full;
 use crate::layers;
 use crate::state::{Duration, ObjectFlags, Pending, State, TurnStep, Zone, opponent};
 use crate::table::GameTable;
-use crate::zone;
+use crate::{combat, zone};
 
 /// The maximum hand size ([CR 514.1](https://yawgatog.com/resources/magic-rules/#R5141)),
 /// "normally seven".
@@ -100,6 +100,11 @@ pub(crate) fn begin_step(
                 event::draw(s, t, sink, active, 1)?;
             }
         }
+        TurnStep::DeclareAttackers => combat::begin_attackers(s),
+        TurnStep::DeclareBlockers => combat::begin_blockers(s),
+        TurnStep::FirstStrikeDamage | TurnStep::CombatDamage => {
+            combat::begin_damage(s, t, sink)?;
+        }
         TurnStep::Cleanup => cleanup(s),
         _ => {}
     }
@@ -144,8 +149,19 @@ pub(crate) fn end_step(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<
         // attacking, skip the declare blockers and combat damage steps."
         TurnStep::DeclareAttackers if any_attacking(s) => TurnStep::DeclareBlockers,
         TurnStep::DeclareAttackers | TurnStep::CombatDamage => TurnStep::EndOfCombat,
-        TurnStep::DeclareBlockers => TurnStep::CombatDamage,
-        TurnStep::EndOfCombat => TurnStep::PostcombatMain,
+        TurnStep::DeclareBlockers => {
+            layers::refresh(s, t);
+            if combat::first_strike_step(s) {
+                TurnStep::FirstStrikeDamage
+            } else {
+                TurnStep::CombatDamage
+            }
+        }
+        TurnStep::FirstStrikeDamage => TurnStep::CombatDamage,
+        TurnStep::EndOfCombat => {
+            combat::end_combat(s);
+            TurnStep::PostcombatMain
+        }
         TurnStep::PostcombatMain => TurnStep::End,
         // CR 514.3a: once players pass with an empty stack in a cleanup step where they
         // received priority, "another cleanup step begins."

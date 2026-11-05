@@ -11,7 +11,7 @@ use crate::filter::Filter;
 use crate::fixed::{Fixed, Full};
 use crate::state::{Pending, State, Zone, opponent};
 use crate::table::GameTable;
-use crate::{layers, sba, start, trigger, turn, zone};
+use crate::{combat, layers, sba, start, trigger, turn, zone};
 
 /// Per-thread working memory, never copied with the state: the event sink. Candidate
 /// buffers, the mana solver's arrays and the spare state for transactional replay arrive
@@ -69,6 +69,9 @@ pub fn next(s: &mut State, t: &GameTable, x: &mut Scratch, _a: &mut dyn Answers)
             return Step::Over(outcome);
         }
         layers::refresh(s, t);
+        if combat::in_combat(s.turn.step) {
+            combat::prune(s);
+        }
         if s.pending == Pending::None {
             // CR 117.5: "Each time a player would get priority, the game first performs all
             // applicable state-based actions as a single event".
@@ -182,6 +185,9 @@ fn decision(s: &State, t: &GameTable) -> Result<Decision, Full> {
             DecisionKind::PayLife,
             &[Opt::Yes, Opt::No],
         )?,
+        Pending::DeclareAttackers { attacker } => combat::attack_decision(s, attacker)?,
+        Pending::DeclareBlockers { blocker } => combat::block_decision(s, blocker)?,
+        Pending::CombatDamage { done, lethal } => combat::division_decision(s, done, lethal)?,
     })
 }
 
@@ -250,6 +256,24 @@ fn perform(
             };
             s.pending = Pending::None;
             enter_from_hand(s, t, sink, slot, option() == Opt::Yes)
+        }
+        DecisionKind::Attacker | DecisionKind::AttackTarget => combat::attack(s, t, sink, option()),
+        DecisionKind::Blocker => {
+            match option() {
+                Opt::Block(slot) => combat::block_with(s, slot),
+                _ => combat::finish_blocks(s),
+            }
+            Ok(())
+        }
+        DecisionKind::BlockTarget => {
+            combat::block_attacker(s, object());
+            Ok(())
+        }
+        DecisionKind::DamageDivision => {
+            let Pending::CombatDamage { done, lethal } = s.pending else {
+                unreachable!("a damage division without its pending state");
+            };
+            combat::divide(s, t, sink, done, lethal, option())
         }
         DecisionKind::PlayOrDraw => {
             let starting = if option() == Opt::Play {
@@ -364,7 +388,7 @@ fn enter_from_hand(
 /// that differ only in their incarnation and timestamp lead to the same game. Everything
 /// else counts: the face up, the owner (a stolen Mana Crypt goes to another graveyard than
 /// your own), copy, link and chosen value as much as card, counters and flags.
-fn collapse(s: &State, candidates: Bitboard) -> Bitboard {
+pub(crate) fn collapse(s: &State, candidates: Bitboard) -> Bitboard {
     let signature = |slot: u8| zone::signature(s, slot);
     let mut kept = Bitboard::EMPTY;
     for slot in candidates.iter() {

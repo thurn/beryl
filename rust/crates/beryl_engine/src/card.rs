@@ -186,6 +186,15 @@ bitset! {
         /// [CR 702.7a](https://yawgatog.com/resources/magic-rules/#R7027a): "First strike is
         /// a static ability that modifies the rules for the combat damage step."
         FIRST_STRIKE = 0,
+        /// [CR 702.9b](https://yawgatog.com/resources/magic-rules/#R7029b): "A creature with
+        /// flying can't be blocked except by creatures with flying and/or reach."
+        FLYING = 8,
+        /// [CR 702.17b](https://yawgatog.com/resources/magic-rules/#R70217b): "A creature
+        /// with flying can't be blocked except by creatures with flying and/or reach."
+        REACH = 9,
+        /// [CR 702.20b](https://yawgatog.com/resources/magic-rules/#R70220b): "Attacking
+        /// doesn't cause creatures with vigilance to tap."
+        VIGILANCE = 10,
     }
 }
 

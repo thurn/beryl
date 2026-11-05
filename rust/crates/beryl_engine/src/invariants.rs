@@ -73,7 +73,7 @@ impl State {
             }
             check(o.controller < 2, "no such controller", Some(slot))?;
             check(usize::from(o.card) < t.len(), "no such card", Some(slot))?;
-            for link in [o.attached_to, o.linked] {
+            for link in [o.attached_to, o.linked, o.combat] {
                 check(
                     link == NONE || self.object(link).zone != Zone::Nowhere,
                     "a link to an empty slot",
@@ -101,6 +101,15 @@ impl State {
                     Some(slot),
                 )?;
             }
+            // A blocker blocks an attacker, or nothing once that attacker left combat
+            // (CR 506.4).
+            check(
+                !o.flags.has(ObjectFlags::BLOCKING)
+                    || o.combat == NONE
+                    || self.object(o.combat).flags.has(ObjectFlags::ATTACKING),
+                "a blocker blocking a nonattacker",
+                Some(slot),
+            )?;
             // CR 400.2: public zones are seen by everyone; CR 402.3: a hand by its owner.
             let known_by = |p: u8| self.knows(p, slot);
             if o.zone.is_public() {
