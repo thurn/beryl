@@ -453,7 +453,7 @@ impl Game {
         );
         let mut view = player_view(&self.table, obs, moment, self.stops, &self.events);
         if let At::Human(_, Open::Decision(d)) = &self.at {
-            preview::add_payments(&mut view, &self.state, &self.table, d);
+            preview::add_previews(&mut view, &self.state, &self.table, d);
         }
         view
     }

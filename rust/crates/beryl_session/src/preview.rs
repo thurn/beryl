@@ -1,25 +1,83 @@
-//! What a cast or an activation would tap: each candidate that starts or continues one is played
-//! out on a copy of the game, so the UI can light the permanents a payment taps before the
-//! player commits to it, and tell payment plans apart by what they tap rather than by number.
+//! What a candidate would lead to, played out on a copy of the game: what a cast or an
+//! activation would tap, so the UI can light the permanents a payment taps before the player
+//! commits to it and tell payment plans apart by what they tap rather than by number; and which
+//! attackers a blocker may block, so the UI can take a whole block declaration in any order
+//! before it sends the engine's picks.
 
 use beryl_engine::state::{ObjectFlags, Pending};
 use beryl_engine::{
-    Candidates, Choice, Decision, DecisionKind, GameTable, Opt, Profile, Replay, Scratch, State,
-    Step, Stops, Zone, apply, next,
+    Candidates, Choice, Decision, DecisionKind, GameTable, Opt, Profile, Replay, Scratch, Slot,
+    State, Step, Stops, Zone, apply, next,
 };
 
 use crate::Status;
 use crate::protocol::{Payment, PlayerView};
 
 /// Adds to `view`, at the open decision `d` in `s`, the ways each candidate is paid
-/// ([`payments`]). The payments read the whole state, not the viewer's observation, but only
-/// the costs and the viewer's own permanents decide them.
-pub fn add_payments(view: &mut PlayerView, s: &State, t: &GameTable, d: &Decision) {
+/// ([`payments`]) and the attackers each blocker may block ([`blocks`]). They read the whole
+/// state, not the viewer's observation, but only the costs, the viewer's own permanents and
+/// the attackers' public characteristics decide them.
+pub fn add_previews(view: &mut PlayerView, s: &State, t: &GameTable, d: &Decision) {
     if let Status::Deciding { decision } = &mut view.status {
-        for (c, p) in decision.candidates.iter_mut().zip(payments(s, t, d)) {
+        for ((c, p), b) in decision
+            .candidates
+            .iter_mut()
+            .zip(payments(s, t, d))
+            .zip(blocks(s, t, d))
+        {
             c.payments = p;
+            c.blocks = b;
         }
     }
+}
+
+/// A copy of `s` in which every question comes back as a decision, even one with a single
+/// answer, so a walk sees each pick the engine would otherwise make silently (§7.2).
+fn forced(s: &State) -> State {
+    let mut copy = *s;
+    copy.set_profile(Profile {
+        stops: Stops::Forced,
+        ..s.profile()
+    });
+    copy
+}
+
+/// The candidate at `i` as a choice.
+fn choice(i: usize) -> Choice {
+    Choice(u8::try_from(i).expect("at most 64 candidates"))
+}
+
+/// The attackers each candidate of `d`, the open decision in `s`, may block, by slot, in
+/// candidate order: none but for a blocker of the block declaration.
+///
+/// [CR 509.1a](https://yawgatog.com/resources/magic-rules/#R5091a): "For each of the chosen
+/// creatures, the defending player chooses one creature for it to block that's attacking that
+/// player, a planeswalker they control, or a battle they protect." The engine asks it as the
+/// pick after the blocker, with evasion pruning the attackers (architecture §11); identical
+/// attackers are one candidate (§7.2).
+fn blocks(s: &State, t: &GameTable, d: &Decision) -> Vec<Vec<u8>> {
+    let Candidates::Options(opts) = &d.candidates else {
+        return vec![Vec::new(); d.len()];
+    };
+    opts.iter()
+        .enumerate()
+        .map(|(i, &o)| {
+            if d.kind != DecisionKind::Blocker || !matches!(o, Opt::Block(_)) {
+                return Vec::new();
+            }
+            let mut copy = forced(s);
+            let mut scratch = Scratch::new();
+            apply(&mut copy, t, &mut scratch, &mut Replay, choice(i));
+            match next(&mut copy, t, &mut scratch, &mut Replay) {
+                Step::Decide(Decision {
+                    kind: DecisionKind::BlockTarget,
+                    candidates: Candidates::Objects(attackers),
+                    ..
+                }) => attackers.iter().map(Slot::get).collect(),
+                _ => Vec::new(),
+            }
+        })
+        .collect()
 }
 
 /// The ways each candidate of `d`, the open decision in `s`, can be paid, in candidate order:
@@ -51,16 +109,10 @@ fn payments(s: &State, t: &GameTable, d: &Decision) -> Vec<Vec<Payment>> {
                 },
                 _ => return Vec::new(),
             };
-            let mut copy = *s;
-            // Every question the cast asks comes back as a decision, even one with a single
-            // answer, so the walk sees where the cast ends.
-            copy.set_profile(Profile {
-                stops: Stops::Forced,
-                ..s.profile()
-            });
+            // The walk sees where the cast ends.
+            let mut copy = forced(s);
             let mut scratch = Scratch::new();
-            let choice = Choice(u8::try_from(i).expect("at most 64 candidates"));
-            apply(&mut copy, t, &mut scratch, &mut Replay, choice);
+            apply(&mut copy, t, &mut scratch, &mut Replay, choice(i));
             let mut out = Vec::new();
             walk(s, copy, t, &mut scratch, &at, &mut out);
             out
@@ -105,8 +157,7 @@ fn walk(
         {
             for (i, &o) in opts.iter().enumerate() {
                 let mut copy = s;
-                let choice = Choice(u8::try_from(i).expect("at most 64 candidates"));
-                apply(&mut copy, t, scratch, &mut Replay, choice);
+                apply(&mut copy, t, scratch, &mut Replay, choice(i));
                 walk(before, copy, t, scratch, &branch(o).expect("one kind"), out);
             }
             return;
@@ -137,9 +188,9 @@ fn tapped(before: &State, after: &State) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use beryl_cards::{CARDS, names};
-    use beryl_engine::Slot;
+    use beryl_engine::TurnStep;
     use beryl_engine::card::Castings;
-    use beryl_scenario::{P0, Permanent, Scenario};
+    use beryl_scenario::{P0, P1, Permanent, Scenario};
 
     use super::*;
 
@@ -247,6 +298,73 @@ mod tests {
             [
                 (None, Some(0), vec![names::ISLAND, names::ISLAND]),
                 (None, Some(1), vec![names::ISLAND, names::MANA_CRYPT]),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_blocker_may_block_the_attackers_its_evasion_allows() {
+        const ATTACKERS: &[Permanent] = &[
+            Permanent::new(names::THUNDERTRAP_TRAINER),
+            Permanent::new(names::THIEVING_SKYDIVER),
+        ];
+        const BLOCKERS: &[Permanent] = &[
+            Permanent::new(names::ELITE_SPELLBINDER),
+            Permanent::new(names::OVERLORD_OF_THE_MISTMOORS),
+        ];
+        let scenario = Scenario::new("blocks")
+            .at(2, P0, TurnStep::BeginningOfCombat)
+            .battlefield(P0, ATTACKERS)
+            .battlefield(P1, BLOCKERS);
+        let (t, mut s) = beryl_scenario::position(&CARDS, &scenario).unwrap();
+        let named = |s: &State, slot: Slot| t.def(s.card(slot)).name;
+        let mut scratch = Scratch::new();
+        // Pass to combat and attack with both; the defending player's block declaration opens.
+        let d = loop {
+            let Step::Decide(d) = next(&mut s, &t, &mut scratch, &mut Replay) else {
+                panic!("a decision");
+            };
+            let Candidates::Options(opts) = &d.candidates else {
+                panic!("options");
+            };
+            let pick = match d.kind {
+                DecisionKind::Blocker => break d,
+                DecisionKind::Attacker => opts
+                    .iter()
+                    .position(|o| matches!(o, Opt::Attack(_)))
+                    .unwrap_or(0),
+                _ => opts.iter().position(|o| *o == Opt::Pass).unwrap_or(0),
+            };
+            apply(&mut s, &t, &mut scratch, &mut Replay, choice(pick));
+        };
+        let Candidates::Options(opts) = &d.candidates else {
+            panic!("options");
+        };
+        let blocks: Vec<_> = opts
+            .iter()
+            .zip(blocks(&s, &t, &d))
+            .filter_map(|(o, b)| {
+                let Opt::Block(blocker) = *o else {
+                    assert!(b.is_empty(), "only a blocker blocks");
+                    return None;
+                };
+                let attackers = b.into_iter().map(|a| named(&s, Slot::new(a)));
+                Some((named(&s, blocker), attackers.collect::<Vec<_>>()))
+            })
+            .collect();
+        // A flyer blocks either attacker; a creature without flying or reach only the one
+        // without flying (CR 702.9b).
+        assert_eq!(
+            blocks,
+            [
+                (
+                    names::ELITE_SPELLBINDER,
+                    vec![names::THUNDERTRAP_TRAINER, names::THIEVING_SKYDIVER]
+                ),
+                (
+                    names::OVERLORD_OF_THE_MISTMOORS,
+                    vec![names::THUNDERTRAP_TRAINER]
+                ),
             ]
         );
     }

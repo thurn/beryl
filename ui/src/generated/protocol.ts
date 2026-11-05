@@ -199,7 +199,12 @@ label: string, option: Candidate,
  * For a candidate that casts a spell or activates an ability, or answers its X or its
  * payment plan: each way the cast can then be paid, with what it taps. None otherwise.
  */
-payments: Array<Payment>, };
+payments: Array<Payment>, 
+/**
+ * For a candidate that declares a blocker: the attackers it may block, by slot, one of
+ * each set of interchangeable attackers (architecture §7.2). None otherwise.
+ */
+blocks: Array<number>, };
 
 export type Payment = { x: number | null, 
 /**

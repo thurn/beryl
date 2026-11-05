@@ -10,7 +10,7 @@ use beryl_engine::state::Pending;
 use beryl_engine::{
     Decision, GameTable, Observation, Replay, Scratch, Seat, Slot, State, Step, next,
 };
-use beryl_session::preview::add_payments;
+use beryl_session::preview::add_previews;
 use beryl_session::protocol::{DecisionView, Moment, player_view};
 use beryl_session::{
     CandidateIndex, DecisionId, Game, PlayerView, ReplayFile, SessionError, SessionId, Sessions,
@@ -252,9 +252,9 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
                     view.stops,
                     game.events(),
                 );
-                // What a cast taps, played out on the redealt state.
+                // What a cast taps and whom a blocker may block, played out on the redealt state.
                 if let Some(d) = &d {
-                    add_payments(&mut theirs, &det, t, d);
+                    add_previews(&mut theirs, &det, t, d);
                 }
                 assert_eq!(theirs, view, "seed {seed}");
                 events += view.events.len();

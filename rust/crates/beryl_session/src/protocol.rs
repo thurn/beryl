@@ -321,6 +321,9 @@ pub struct CandidateView {
     /// For a candidate that casts a spell or activates an ability, or answers its X or its
     /// payment plan: each way the cast can then be paid, with what it taps. None otherwise.
     pub payments: Vec<Payment>,
+    /// For a candidate that declares a blocker: the attackers it may block, by slot, one of
+    /// each set of interchangeable attackers (architecture §7.2). None otherwise.
+    pub blocks: Vec<u8>,
 }
 
 /// One way a cast or activation is paid, found by playing it out on a copy of the game: the
@@ -892,6 +895,7 @@ fn decision_view(
                 label: name(t, obs, slot).unwrap_or("a hidden card").to_owned(),
                 option: Candidate::Object { slot: slot.get() },
                 payments: Vec::new(),
+                blocks: Vec::new(),
             })
             .collect(),
         Candidates::Options(opts) => opts.iter().map(|&o| candidate(t, obs, o)).collect(),
@@ -917,6 +921,7 @@ fn halt_view(obs: Observation<'_>, id: DecisionId, stops: StopsSetting) -> Decis
             label: "Pass".to_owned(),
             option: Candidate::Pass,
             payments: Vec::new(),
+            blocks: Vec::new(),
         }],
         resolving: None,
         ask: AskView::Plain,
@@ -1096,6 +1101,7 @@ fn candidate(t: &GameTable, obs: Observation<'_>, o: Opt) -> CandidateView {
         label,
         option,
         payments: Vec::new(),
+        blocks: Vec::new(),
     }
 }
 
