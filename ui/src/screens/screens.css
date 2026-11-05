@@ -361,24 +361,26 @@
 .metal-gold {
   background: linear-gradient(
     90deg,
-    #d2a364,
-    #e6b878 25%,
-    #fff2cf 40%,
+    #9e7546,
+    #d2a364 20%,
+    #e6b878 40%,
+    #fff2cf 47%,
     #fffbe6 50%,
-    #fff2cf 60%,
-    #e6b878 75%,
-    #d2a364
+    #fff2cf 53%,
+    #e6b878 60%,
+    #d2a364 80%,
+    #9e7546
   );
-  box-shadow: 0 0 5px 2px rgb(150 85 30 / 35%);
 }
 .metal-gold::after {
   content: "";
   position: absolute;
-  inset: -4px 36%;
+  inset: -4px 37%;
   background: radial-gradient(
     closest-side,
-    rgb(255 190 110 / 75%),
-    rgb(230 120 40 / 30%) 60%,
+    rgb(255 236 200 / 90%),
+    rgb(225 130 46 / 75%) 35%,
+    rgb(200 100 30 / 25%) 70%,
     transparent
   );
 }

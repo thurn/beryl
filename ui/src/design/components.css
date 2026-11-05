@@ -934,8 +934,8 @@
   height: 32px;
   overflow: visible;
   fill: none;
-  stroke: #efe4d2;
-  stroke-width: 1.5;
+  stroke: #f0e2c4;
+  stroke-width: 1.7;
   stroke-linejoin: round;
   stroke-linecap: round;
   filter: drop-shadow(0 1px 1px rgb(0 0 0 / 70%));
@@ -975,7 +975,17 @@
   fill: #2c2825;
 }
 .phase-current .phase-icon .phase-blade {
-  fill: #ffe9b8;
+  fill: rgb(255 214 140 / 35%);
+}
+/* Amber haze on the pill behind the current phase. */
+.phase-tracker:not(.phase-tracker-compact) .phase-current {
+  position: relative;
+}
+.phase-tracker:not(.phase-tracker-compact) .phase-current::before {
+  content: "";
+  position: absolute;
+  inset: -12px -14px -12px 18px;
+  background: radial-gradient(closest-side, rgb(210 120 40 / 28%), transparent);
 }
 /* Spaced as in the mockup, which is not quite even. */
 .phase-arrow {
@@ -1063,31 +1073,36 @@
     drop-shadow(0 0 5px rgb(245 140 30 / 85%));
 }
 .phase-tracker-compact .phase:nth-child(3):not(.phase-current) .phase-icon {
-  stroke: #8a7a5e;
-  stroke-width: 0.8;
+  stroke: #b5a080;
+  stroke-width: 1;
 }
-/* The current diamond: a glowing core in a double gold rim. */
+/* The current diamond: a bright core in a dark ring and a gold rim. */
 .phase-tracker-compact
   .phase:is(:first-child, :last-child).phase-current
   .phase-icon {
-  stroke: #f2c060;
-  stroke-width: 1.4;
-  filter: drop-shadow(0 0 2px rgb(255 180 60 / 70%));
+  stroke: none;
+  filter: drop-shadow(0 0 2px rgb(255 180 60 / 75%));
 }
-.phase-tracker-compact .phase-current .phase-icon :is(path, circle) {
-  fill: url(#phase-glow);
+.phase-tracker-compact .phase-icon .lit-rim {
+  fill: #f2c060;
+}
+.phase-tracker-compact .phase-icon .lit-ring {
+  fill: #3a2810;
+}
+.phase-tracker-compact .phase-icon .lit-core {
+  fill: #fff6c8;
 }
 .phase-tracker-compact
   .phase-current:not(:first-child, :last-child)
   .phase-icon {
-  stroke: #b35e14;
-  stroke-width: 1.2;
+  stroke: #9a4a10;
+  stroke-width: 1.4;
 }
 .phase-tracker-compact
   .phase-current:not(:first-child, :last-child)
   .phase-icon
   :is(path, circle, rect) {
-  fill: #f6c04a;
+  fill: #ffe39a;
 }
 /* The combat glyph's plinth catches the glow when combat is current. */
 .phase-tracker-compact .phase-current:nth-child(3)::before {
@@ -1096,8 +1111,8 @@
 .phase-tracker-compact .phase-current::after {
   content: "";
   position: absolute;
-  left: 2px;
-  right: 2px;
+  left: -8px;
+  right: -8px;
   bottom: -2px;
   height: 2px;
   z-index: 1;
@@ -1107,12 +1122,16 @@
     linear-gradient(
       90deg,
       transparent,
-      rgb(255 200 100 / 90%) 30%,
-      rgb(255 236 170) 50%,
-      rgb(255 200 100 / 90%) 70%,
+      rgb(255 200 100 / 70%) 35%,
+      #fff4c8 50%,
+      rgb(255 200 100 / 70%) 65%,
       transparent
     );
-  box-shadow: 0 0 5px 1px rgb(240 150 40 / 65%);
+}
+.phase-tracker-compact .phase-current:nth-child(3)::after {
+  left: -14px;
+  right: -14px;
+  box-shadow: 0 0 8px 2px rgb(240 150 40 / 65%);
 }
 /* The combat glyph stands on a low plinth that lifts the rule around it. */
 .phase-tracker-compact .phase:nth-child(3)::before {
@@ -1347,20 +1366,20 @@
   text-shadow: 0 1px 3px rgb(0 0 0 / 70%);
 }
 .overlay-confirm {
-  margin-top: 52px;
+  margin-top: 47px;
   translate: -6.5px 0;
   min-width: 0;
   width: 280px;
   height: 61px;
   padding-bottom: 3px;
-  border-width: 3px;
-  border-color: #fffbe8 #ffe6a0 #fffbe8;
+  border-width: 2px;
+  border-color: #ffefb8 #ffd98a #fff2c4;
   box-shadow:
     inset 0 2px 2px rgb(253 202 87 / 85%),
     inset 0 0 8px rgb(255 190 80 / 45%),
     0 0 0 1px rgb(178 40 4 / 85%),
-    0 0 10px 5px rgb(255 100 20 / 85%),
-    0 0 22px 9px rgb(226 70 16 / 50%);
+    0 0 12px 6px rgb(255 96 16 / 90%),
+    0 0 26px 12px rgb(226 70 16 / 55%);
   font-size: 39.5px;
 }
 .overlay-side {

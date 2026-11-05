@@ -61,6 +61,14 @@ export function PriorityPill({ children }: { children: ReactNode }) {
 export type Phase = "beginning" | "main1" | "combat" | "main2" | "end";
 
 const DIAMOND = <path d="M12 5 L19 12 L12 19 L5 12 Z" />;
+/** The current diamond on the compact tracker: a gold rim, a dark ring and a bright core. */
+const DIAMOND_LIT = (
+  <>
+    <path className="lit-rim" d="M12 4.6 L19.4 12 L12 19.4 L4.6 12 Z" />
+    <path className="lit-ring" d="M12 7.3 L16.7 12 L12 16.7 L7.3 12 Z" />
+    <path className="lit-core" d="M12 8.8 L15.2 12 L12 15.2 L8.8 12 Z" />
+  </>
+);
 const CARD = <rect x="4.5" y="3" width="15" height="18" rx="2.2" />;
 
 /** Each phase's icon (the full tracker, ui_system.png section 02: cream outlines over dark or
@@ -119,7 +127,11 @@ const PHASES: {
         <path
           className="phase-stone"
           stroke="none"
-          d="M4.5 20 L8.8 14 L10.3 15.3 L12 11 L13.7 15.3 L15.2 14 L19.5 20 Z M8.4 13.2 L10 14.6 L12 9.2 L14 14.6 L15.6 13.2"
+          d="M4.5 20 L8.8 14 L10.3 15.3 L12 11 L13.7 15.3 L15.2 14 L19.5 20 Z"
+        />
+        <path
+          strokeWidth="1"
+          d="M7.6 13.4 L9.6 15.2 L12 9.6 L14.4 15.2 L16.4 13.4"
         />
       </>
     ),
@@ -129,26 +141,24 @@ const PHASES: {
     phase: "combat",
     label: "Combat",
     icon: (
-      <g transform="translate(12 12) scale(1.1) translate(-12 -12)">
+      <>
         <path
           className="phase-blade"
-          d="M2.5 2.5 L4.9 3.3 L16.3 14.7 L14.7 16.3 L3.3 4.9 Z"
+          d="M3.30 1.46 L16.03 14.19 L15.82 14.40 L19.21 17.80 L19.64 17.37 L21.19 18.93 L18.93 21.19 L17.37 19.64 L17.80 19.21 L14.40 15.82 L14.19 16.03 L1.46 3.30 Z"
         />
-        <path d="M13 19 L19 13 M16.5 16.5 L19.6 19.6" />
-        <circle className="phase-blade" cx="20.6" cy="20.6" r="0.9" />
+        <path d="M4.22 4.22 L13.77 13.77 M18.08 12.14 L12.14 18.08" />
         <path
           className="phase-blade"
-          d="M21.5 2.5 L19.1 3.3 L7.7 14.7 L9.3 16.3 L20.7 4.9 Z"
+          d="M20.70 1.46 L7.97 14.19 L8.18 14.40 L4.79 17.80 L4.36 17.37 L2.81 18.93 L5.07 21.19 L6.63 19.64 L6.20 19.21 L9.60 15.82 L9.81 16.03 L22.54 3.30 Z"
         />
-        <path d="M11 19 L5 13 M7.5 16.5 L4.4 19.6" />
-        <circle className="phase-blade" cx="3.4" cy="20.6" r="0.9" />
-      </g>
+        <path d="M19.78 4.22 L10.23 13.77 M5.92 12.14 L11.86 18.08" />
+      </>
     ),
     glyph: (
-      <g transform="translate(12 12) scale(1.08) translate(-12 -12)">
-        <path d="M2 2 L7.2 3.2 L16 12 L12 16 L3.2 7.2 Z M9.4 17.6 L17.6 9.4 L19.8 11.6 L11.6 19.8 Z M15.2 17.6 L17.6 15.2 L20.4 18 L18 20.4 Z M19 21.4 L21.4 19 L22.8 20.4 L20.4 22.8 Z" />
-        <path d="M22 2 L16.8 3.2 L8 12 L12 16 L20.8 7.2 Z M14.6 17.6 L6.4 9.4 L4.2 11.6 L12.4 19.8 Z M8.8 17.6 L6.4 15.2 L3.6 18 L6 20.4 Z M5 21.4 L2.6 19 L1.2 20.4 L3.6 22.8 Z" />
-      </g>
+      <>
+        <path d="M3.23 -1.01 L16.53 12.28 L18.51 10.30 L20.63 12.42 L17.66 15.39 L21.05 18.79 L21.69 18.15 L23.81 20.27 L20.27 23.81 L18.15 21.69 L18.79 21.05 L15.39 17.66 L12.42 20.63 L10.30 18.51 L12.28 16.53 L-1.01 3.23 Z" />
+        <path d="M20.77 -1.01 L7.47 12.28 L5.49 10.30 L3.37 12.42 L6.34 15.39 L2.95 18.79 L2.31 18.15 L0.19 20.27 L3.73 23.81 L5.85 21.69 L5.21 21.05 L8.61 17.66 L11.58 20.63 L13.70 18.51 L11.72 16.53 L25.01 3.23 Z" />
+      </>
     ),
   },
   {
@@ -213,17 +223,11 @@ export function PhaseTracker({
             role="img"
             aria-label={label}
           >
-            {compact && phase === current && (
-              <radialGradient id="phase-glow">
-                <stop offset="0" stopColor="#fffbe0" />
-                <stop offset="0.35" stopColor="#ffe68f" />
-                <stop offset="0.55" stopColor="#f0b040" />
-                <stop offset="0.7" stopColor="#3a2810" />
-                <stop offset="0.85" stopColor="#d99a3a" />
-                <stop offset="1" stopColor="#f2c060" />
-              </radialGradient>
-            )}
-            {compact ? glyph : icon}
+            {!compact
+              ? icon
+              : glyph === DIAMOND && phase === current
+                ? DIAMOND_LIT
+                : glyph}
           </svg>
         </li>
       ))}
