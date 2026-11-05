@@ -130,7 +130,7 @@
 /* The title, its number in gold, over an engraved rule that fades out at both ends. */
 .panel-title {
   position: relative;
-  margin: 0 -16px;
+  margin: 0 -16px 14px;
   padding: 3px 16px 0;
   height: 42px;
   font-weight: 700;
@@ -252,10 +252,10 @@
 }
 .specimen-sans {
   position: absolute;
-  left: 242px;
-  top: 9px;
+  left: 244px;
+  top: 10px;
   font-family: var(--font-sans);
-  font-size: 22px;
+  font-size: 20px;
   line-height: 30px;
   white-space: nowrap;
 }
