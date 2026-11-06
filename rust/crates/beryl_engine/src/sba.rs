@@ -32,8 +32,8 @@ pub(crate) fn check(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<boo
         return Ok(true);
     }
     layers::refresh(s, t, sink);
-    let (graveyard, tokens) = doomed(s);
-    let legends = unresolved_legends(s, t, Bitboard::EMPTY).is_some();
+    let (graveyard, tokens, legendary) = doomed(s);
+    let legends = legend_group_in(s, t, &legendary, Bitboard::EMPTY).is_some();
     if graveyard.is_empty() && tokens.is_empty() && !legends {
         s.budgets.state_based_iterations = 0;
         return Ok(false);
@@ -86,10 +86,17 @@ pub(crate) fn check(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<boo
 /// into its owner's graveyard." The cube's one Aura, Swift Reconfiguration, makes what it
 /// enchants a Vehicle, which its "enchant creature or Vehicle" allows, so only the second
 /// case arises: what it enchanted left the battlefield (`zone::leave` detaches it).
-fn doomed(s: &State) -> (Bitboard, Bitboard) {
+///
+/// With them, in the same pass, the legendary permanents each player controls, for the legend
+/// rule.
+fn doomed(s: &State) -> (Bitboard, Bitboard, [Bitboard; 2]) {
     let mut graveyard = Bitboard::EMPTY;
+    let mut legendary = [Bitboard::EMPTY; 2];
     debug_assert!(!s.flags.derived_dirty, "derived read while dirty");
     for (&slot, d) in s.battlefield.iter().zip(s.derived.iter()) {
+        if d.supertypes.contains(Supertypes::LEGENDARY) {
+            legendary[d.controller.index()].insert(slot);
+        }
         let o = s.object(slot);
         let types = d.types;
         let dies = types.contains(Types::CREATURE)
@@ -112,7 +119,7 @@ fn doomed(s: &State) -> (Bitboard, Bitboard) {
         .iter()
         .filter(|&slot| s.object(slot).flags.has(ObjectFlags::TOKEN))
         .collect();
-    (graveyard, tokens)
+    (graveyard, tokens, legendary)
 }
 
 /// Ends the game if a player has lost.
@@ -222,10 +229,19 @@ pub(crate) fn unresolved_legends(
     t: &GameTable,
     kept: Bitboard,
 ) -> Option<(Seat, Bitboard)> {
-    let legendary = legendary(s);
+    legend_group_in(s, t, &legendary(s), kept)
+}
+
+/// [`unresolved_legends`], of `legendary`, the legendary permanents each player controls.
+fn legend_group_in(
+    s: &State,
+    t: &GameTable,
+    legendary: &[Bitboard; 2],
+    kept: Bitboard,
+) -> Option<(Seat, Bitboard)> {
     // A group needs two legendary permanents of one controller with one name, which most
     // checks lack.
-    if legendary.iter().all(|b| b.count() < 2) || !any_group(s, t, &legendary) {
+    if legendary.iter().all(|b| b.count() < 2) || !any_group(s, t, legendary) {
         return None;
     }
     for player in apnap(s) {
@@ -234,7 +250,7 @@ pub(crate) fn unresolved_legends(
             if !legendary[player.index()].contains(slot) || seen.contains(slot) {
                 continue;
             }
-            let group = legend_group(s, t, &legendary, slot);
+            let group = legend_group(s, t, legendary, slot);
             if group.count() >= 2 && (group & kept).is_empty() {
                 return Some((player, group));
             }

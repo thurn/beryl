@@ -21,7 +21,7 @@ use crate::effect::EffectCtx;
 use crate::event::{self, Sink};
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot};
-use crate::state::{ObjectFlags, PendingTrigger, State, Zone};
+use crate::state::{Derived, ObjectFlags, PendingTrigger, State, Zone};
 use crate::table::GameTable;
 
 /// The kinds of mana, W U B R G and C, as [`ManaColor`] indices.
@@ -274,29 +274,34 @@ fn has_other_ability(face: &Face) -> bool {
 
 /// The permanents `player` controls, in battlefield order: read from their derived
 /// characteristics, which are at their places in the battlefield list.
-fn controlled(s: &State, player: Seat) -> impl Iterator<Item = Slot> + '_ {
+fn controlled(s: &State, player: Seat) -> impl Iterator<Item = (Slot, &Derived)> + '_ {
     debug_assert!(!s.flags.derived_dirty, "derived read while dirty");
     s.battlefield
         .iter()
         .zip(s.derived.iter())
         .filter(move |(_, d)| d.controller == player)
-        .map(|(&slot, _)| slot)
+        .map(|(&slot, d)| (slot, d))
 }
 
-/// What an untapped source `player` controls makes, if the permanent in `slot` is one: the
-/// kinds of mana, how much, whether it has another ability, and whether making it sacrifices
-/// the source.
+/// What an untapped source `player` controls makes, if the permanent in `slot`, whose derived
+/// characteristics are `d`, is one: the kinds of mana, how much, whether it has another
+/// ability, and whether making it sacrifices the source.
 #[inline]
-fn source(s: &State, t: &GameTable, player: Seat, slot: Slot) -> Option<(u8, u8, bool, bool)> {
+fn source(
+    s: &State,
+    t: &GameTable,
+    player: Seat,
+    slot: Slot,
+    d: &Derived,
+) -> Option<(u8, u8, bool, bool)> {
     let o = s.object(slot);
     let mana = t.facts(o.card, o.face).mana;
-    if mana == ManaFace::Not || s.controller(slot) != player || o.flags.has(ObjectFlags::TAPPED) {
+    if mana == ManaFace::Not || d.controller != player || o.flags.has(ObjectFlags::TAPPED) {
         return None;
     }
     // CR 302.6: a creature's {T} abilities need it under its controller's control since their
     // most recent turn began.
-    if s.derived(slot).types.intersects(Types::CREATURE) && o.flags.has(ObjectFlags::SUMMONING_SICK)
-    {
+    if d.types.intersects(Types::CREATURE) && o.flags.has(ObjectFlags::SUMMONING_SICK) {
         return None;
     }
     if let ManaFace::Plain {
@@ -351,11 +356,11 @@ impl Sources {
         exclude: Bitboard,
     ) -> Result<Self, Full> {
         let mut classes: Fixed<Class, CLASSES> = Fixed::new();
-        for slot in controlled(s, player) {
+        for (slot, d) in controlled(s, player) {
             if exclude.contains(slot) {
                 continue;
             }
-            let Some((kinds, amount, other, consumed)) = source(s, t, player, slot) else {
+            let Some((kinds, amount, other, consumed)) = source(s, t, player, slot, d) else {
                 continue;
             };
             if consumed {
@@ -480,8 +485,8 @@ impl Funds {
         // The classes [`Sources::of`] would form, so that more than it holds is `Full` here
         // too.
         let mut classes: Fixed<(u8, u8, bool, Option<CardIx>), CLASSES> = Fixed::new();
-        for slot in controlled(s, player) {
-            if let Some((kinds, amount, other, consumed)) = source(s, t, player, slot) {
+        for (slot, d) in controlled(s, player) {
+            if let Some((kinds, amount, other, consumed)) = source(s, t, player, slot, d) {
                 count += 1;
                 if count > MAX_SOURCES {
                     return Err(Full);
@@ -513,7 +518,8 @@ impl Funds {
         }
         let mut u = self.units;
         for slot in excluded.iter() {
-            let (kinds, amount, _, _) = source(s, t, self.player, slot).expect("a source");
+            let (kinds, amount, _, _) =
+                source(s, t, self.player, slot, s.derived(slot)).expect("a source");
             u.take(kinds, u16::from(amount));
         }
         u.pays(cost)
