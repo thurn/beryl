@@ -14,8 +14,8 @@ use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{ObjectFlags, Pending, StackEntry};
 use beryl_engine::{
     Ask, Candidates, CardTable, Choice, Decision, DecisionKind, GameTable, Observation, Opt,
-    Outcome, Profile, Replay, Scratch, Seat, State, Step, StepStops, TurnStep, apply,
-    next_in_step, observe, paused_events, view,
+    Outcome, Profile, Replay, Scratch, Seat, State, Step, StepStops, TurnStep, apply, next_in_step,
+    observe, paused_events, view,
 };
 use beryl_search::{Agent, Budget};
 
