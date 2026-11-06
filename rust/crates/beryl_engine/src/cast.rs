@@ -406,6 +406,25 @@ impl Situation {
     }
 }
 
+/// Whether a face may be cast now, as far as its card types and the timing rules say: what
+/// [`castable`] checks first, which depends only on the face, so on the card.
+fn in_time(s: &State, now: &Situation, face: &Face, from: From) -> bool {
+    // CR 305.9: "If an object is both a land and another card type, it can be played only as
+    // a land. It can't be cast as a spell." CR 712.11c: "Only the face that will be face up
+    // on the stack is evaluated to determine if it can be cast."
+    if face.types.intersects(Types::LAND) {
+        return false;
+    }
+    match from {
+        From::Priority => {
+            (instant_speed(s, face, now.player) && !now.sorcery_speed_only)
+                || sorcery_timing(s, now.player)
+        }
+        // During a resolution the stack is never empty, so a sorcery-speed limit forbids it.
+        From::Resolution { .. } => !now.sorcery_speed_only,
+    }
+}
+
 fn castable(
     s: &State,
     t: &GameTable,
@@ -417,30 +436,12 @@ fn castable(
 ) -> bool {
     let player = now.player;
     let face = t.def(s.object(slot).card).face(face_index);
-    // CR 305.9: "If an object is both a land and another card type, it can be played only as
-    // a land. It can't be cast as a spell." CR 712.11c: "Only the face that will be face up
-    // on the stack is evaluated to determine if it can be cast."
-    if face.types.intersects(Types::LAND) {
+    if !in_time(s, now, face, from) {
         return false;
     }
     let (extra, free) = match from {
-        From::Priority => {
-            let extra = permission(s, player, slot).map_or(0, |p| p.extra);
-            if (!instant_speed(s, face, player) || now.sorcery_speed_only)
-                && !sorcery_timing(s, player)
-            {
-                return false;
-            }
-            (extra, false)
-        }
-        From::Resolution { free } => {
-            // During a resolution the stack is never empty, so a sorcery-speed limit forbids
-            // it.
-            if now.sorcery_speed_only {
-                return false;
-            }
-            (0, free)
-        }
+        From::Priority => (permission(s, player, slot).map_or(0, |p| p.extra), false),
+        From::Resolution { free } => (0, free),
     };
     // The checks are pure, so their order changes nothing but their cost: the mana, found
     // once for the decision, first, and the targets, which read the battlefield, last.
@@ -490,6 +491,19 @@ fn cast_options(
 ) -> Result<(), Full> {
     let player = now.player;
     let free = matches!(from, From::Resolution { free: true });
+    // Cards no face of which may be cast now are left out before collapsing, which saves
+    // comparing them: whether one may depends only on its card, which interchangeable cards
+    // share, so the cards kept are the same.
+    let cards: Bitboard = cards
+        .iter()
+        .filter(|&slot| {
+            let def = t.def(s.object(slot).card);
+            def.face_ixs().any(|f| {
+                let face = def.face(f);
+                !face.transformed && in_time(s, now, face, from)
+            })
+        })
+        .collect();
     for slot in collapse(s, cards).iter() {
         let def = t.def(s.object(slot).card);
         let flashback =
