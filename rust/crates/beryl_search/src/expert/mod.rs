@@ -764,7 +764,7 @@ impl Expert<'_> {
             // tempo when its controller has not the mana to cast it again this turn, and a
             // card either way.
             (Some(names::REPRIEVE), _)
-                if threat >= min
+                if threat >= COUNTER_SPARE.min(min)
                     && theirs < i32::from(self.p.t.def(top.card).front().cost.mana_value())
                     && self.draw_safe(1) =>
             {
