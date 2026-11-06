@@ -8,20 +8,23 @@
 //!
 //! - Play a land first (the least valuable one), then cast or activate the most valuable
 //!   option, or pass when nothing is worth anything.
+//! - Stop drawing by choice once the library runs low ([`LIBRARY_LOW`]), unless an empty
+//!   library wins instead.
 //! - Aim harmful effects at the opponent's most valuable permanent or spell, and helpful ones
 //!   at your own. A removal spell waits for a target worth [`REMOVAL_MIN`], a counterspell for
-//!   a spell worth [`COUNTER_MIN`].
+//!   a spell worth [`COUNTER_MIN`]; an overloaded one, for the opponent's permanents it hits
+//!   to outweigh yours by as much.
 //! - Attack with a creature when no untapped creature that could block it would kill it,
-//!   at the opponent's most valuable planeswalker, or at the player once they are at 6 life
-//!   or less.
+//!   at the opponent's most valuable planeswalker that the attackers declared so far leave
+//!   alive, or at the player once they are at 6 life or less.
 //! - Block when the blocker kills the attacker and survives, trades up, or survives; chump
 //!   only when the unblocked damage would be lethal.
 //! - Say yes to every "may" and every "unless pays"; keep the cards worth most, and scry to
 //!   the bottom only the cards not worth drawing.
 
 use beryl_engine::card::{
-    Ability, AbilityIx, CardDef, CastingOption, Castings, Face, FaceAbility, FaceIx, Keywords,
-    TargetKind, TargetSpec, Types,
+    Ability, AbilityIx, AbilityKind, CardDef, CastingOption, Castings, Face, FaceAbility, FaceIx,
+    Keywords, Replacement, TargetKind, TargetSpec, Types,
 };
 use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::state::{ObjectFlags, StackEntry};
@@ -40,6 +43,9 @@ pub const COUNTER_MIN: i32 = 40;
 
 /// The least a card on top of the library must be worth in hand to stay there.
 const DRAW_MIN: i32 = 30;
+
+/// The most cards a library may hold for its owner to stop drawing by choice.
+const LIBRARY_LOW: usize = 10;
 
 /// The most a land on the battlefield is worth.
 const LAND_MAX: i32 = 15;
@@ -166,7 +172,7 @@ impl RolloutPolicy {
                 } else {
                     0
                 }),
-                Some(Opt::Defender(Some(walker))) => Some(p.value(walker)),
+                Some(Opt::Defender(Some(walker))) => Some(p.walker_target(walker)),
                 _ => None,
             }),
             DecisionKind::Blocker => best(d, |c| match c.option() {
@@ -342,6 +348,17 @@ impl Policy<'_> {
         if info.wheel && self.obs.zone(self.me, Zone::Hand).count() > 3 {
             return 0;
         }
+        if info.never_cast {
+            return 0;
+        }
+        let drains = f
+            .abilities
+            .iter()
+            .enumerate()
+            .any(|(i, a)| a.kind == AbilityKind::Triggered && info.draws(i as u8));
+        if face == FaceIx::FRONT && drains && !self.may_draw() {
+            return 0;
+        }
         let mut v = i32::from(info.value);
         for option in costs.paid(f) {
             v += match option {
@@ -351,7 +368,20 @@ impl Policy<'_> {
                 CastingOption::Evoke { .. } => -30,
             };
         }
+        // Overloaded, a spell hits each permanent its first target's filter accepts
+        // ([CR 702.96a](https://yawgatog.com/resources/magic-rules/#R70296a)): "change its
+        // text by replacing all instances of the word 'target' with the word 'each.'"
+        let overloaded = costs
+            .paid(f)
+            .any(|o| matches!(o, CastingOption::Overload { .. }));
+        if overloaded
+            && let Some(spec) = f.spell_ability().and_then(|a| a.targets.first())
+            && self.sweep(spec) < REMOVAL_MIN
+        {
+            return 0;
+        }
         match f.spell_ability_with(costs) {
+            Some(a) if face == FaceIx::FRONT && info.draws(index_of(f, a)) && !self.may_draw() => 0,
             Some(a) => self.worth_targeting(a, info.friendly(index_of(f, a)), v),
             None => v,
         }
@@ -366,6 +396,16 @@ impl Policy<'_> {
             return 0;
         }
         let o = self.obs.object(slot);
+        if o.face == FaceIx::FRONT && info.draws(i) && !self.may_draw() {
+            return 0;
+        }
+        if o.face == FaceIx::FRONT && info.empties(i) {
+            return if self.obs.library(self.me).len() <= 7 {
+                1000
+            } else {
+                0
+            };
+        }
         let a = &self.t.def(card).face(o.face).abilities[usize::from(i)];
         let v = match a.cost.loyalty {
             Some(l) if l >= 0 => 20,
@@ -375,6 +415,34 @@ impl Policy<'_> {
             None => 15,
         };
         self.worth_targeting(a, info.friendly(i), v)
+    }
+
+    /// Whether drawing by choice is safe: our library holds more than [`LIBRARY_LOW`] cards,
+    /// we hold a wheel to refill it, or a permanent of ours wins us the game instead of the
+    /// draw from an empty library that would lose it
+    /// ([CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b)): "If a player
+    /// attempted to draw a card from a library with no cards in it since the last time
+    /// state-based actions were checked, that player loses the game."
+    pub(crate) fn may_draw(&self) -> bool {
+        self.obs.library(self.me).len() > LIBRARY_LOW
+            || self
+                .obs
+                .zone(self.me, Zone::Hand)
+                .iter()
+                .any(|s| self.info(s).is_some_and(|info| info.wheel))
+            || self.obs.battlefield().iter().any(|&slot| {
+                self.obs.controller(slot) == self.me
+                    && self.obs.card(slot).is_some_and(|card| {
+                        self.t
+                            .def(card)
+                            .face(self.obs.object(slot).face)
+                            .abilities
+                            .iter()
+                            .any(|a| {
+                                a.replacement == Replacement::WinInsteadOfDrawingFromEmptyLibrary
+                            })
+                    })
+            })
     }
 
     /// `v`, or 0 when the ability's first target is not worth it: a harmful one needs an
@@ -444,6 +512,23 @@ impl Policy<'_> {
             _ => {}
         }
         top
+    }
+
+    /// What hitting each permanent `spec`'s filter accepts gains a harmful effect: the value of
+    /// the opponent's, less that of ours.
+    pub(crate) fn sweep(&self, spec: &TargetSpec) -> i32 {
+        self.obs
+            .battlefield()
+            .iter()
+            .filter(|&&slot| self.obs.matches(self.t, &spec.filter, slot))
+            .map(|&slot| {
+                if self.obs.controller(slot) == self.me {
+                    -self.value(slot)
+                } else {
+                    self.value(slot)
+                }
+            })
+            .sum()
     }
 
     /// The spec being targeted for and whether its effect helps its controller: the first
@@ -529,6 +614,32 @@ impl Policy<'_> {
                     && !self.evades(attacker, b)
                     && self.kills(b, attacker)
             })
+    }
+
+    /// The score of attacking `walker`, against 0 for the player: its value, unless the
+    /// attackers already declared at it deal all its loyalty. Damage dealt to a planeswalker
+    /// removes that much loyalty
+    /// ([CR 120.3c](https://yawgatog.com/resources/magic-rules/#R1203c)): "Damage dealt to
+    /// a planeswalker causes that many loyalty counters to be removed from that
+    /// planeswalker."
+    pub(crate) fn walker_target(&self, walker: Slot) -> i32 {
+        let sent: i32 = self
+            .obs
+            .battlefield()
+            .iter()
+            .filter(|&&a| {
+                let o = self.obs.object(a);
+                self.obs.controller(a) == self.me
+                    && o.flags.has(ObjectFlags::ATTACKING)
+                    && o.combat == Some(walker)
+            })
+            .map(|&a| i32::from(self.obs.derived(a).power.max(0)))
+            .sum();
+        if sent < i32::from(self.obs.object(walker).counters.loyalty) {
+            self.value(walker)
+        } else {
+            -1
+        }
     }
 
     pub(crate) fn attacking(&self, slot: Slot) -> bool {
