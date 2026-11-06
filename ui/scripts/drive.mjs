@@ -360,7 +360,7 @@ const probe = {
     },
 
     /** One player action, observed the way the review loop asks: a screenshot before, the
-     * action, screenshots at each of `samples` ms after it began, then (unless `wait` is
+     * action, screenshots at each of `samples` ms after it ended, then (unless `wait` is
      * false) a wait for the next decision and a screenshot of it. Returns the screenshot
      * paths, how long after the action the first view and the next decision arrived, what
      * moved meanwhile, the decision waited for, and the game events that arrived
@@ -372,20 +372,24 @@ const probe = {
         ]);
         const shots = { before: await shot(`${name}-before`) };
         const stop = await probe.motion();
-        const start = Date.now();
-        // A failing action must not reject unwatched while the samples run: that would end
-        // the driver. It fails the call once the motion probe is stopped.
-        const acted = Promise.resolve()
+        // The gesture runs whole before any sample: a screenshot taken in the middle of a
+        // drag can drop its pointer events. A failure ends the call once the motion probe
+        // is stopped.
+        const failed = await Promise.resolve()
             .then(action)
             .then(
                 () => undefined,
                 (e) => e ?? new Error("the action failed"),
             );
-        for (const ms of samples) {
-            await page.waitForTimeout(Math.max(0, ms - (Date.now() - start)));
-            shots[`${ms}ms`] = await shot(`${name}-${ms}ms`);
+        const start = Date.now();
+        if (!failed) {
+            for (const ms of samples) {
+                await page.waitForTimeout(
+                    Math.max(0, ms - (Date.now() - start)),
+                );
+                shots[`${ms}ms`] = await shot(`${name}-${ms}ms`);
+            }
         }
-        const failed = await acted;
         const motion = await stop(0);
         if (failed) throw failed;
         let decision;

@@ -88,7 +88,7 @@ curl -s "$DRIVE" -d 'await page.getByRole("button", {name: "Start", exact: true}
 
 - `probe.act(name, action, {samples?, wait?})` is how to take every action. It
   takes a screenshot before, runs `action` (an async function), takes
-  screenshots at 100 ms, 500 ms and 2 s, waits for the next decision and takes
+  screenshots 100 ms, 500 ms and 2 s after it ends, waits for the next decision and takes
   one more. It returns the screenshot paths, what moved, the decision, and the
   game events that arrived meanwhile. Read the screenshots it returns.
 - `probe.compare(name, [locators or selectors])` crops each element and lays
