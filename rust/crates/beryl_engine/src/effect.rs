@@ -367,11 +367,22 @@ impl<'a> EffectCtx<'a> {
     /// that cause a player to discard a card allow the affected player to choose which card
     /// to discard." Returns the card in the graveyard, or `None` from an empty hand.
     pub fn discard_a_card(&mut self, player: Seat) -> Result<Option<ObjectRef>, Pause> {
-        let hand = self.state.zone(player, Zone::Hand);
-        if hand.is_empty() {
+        self.discard_one_of(player, self.state.zone(player, Zone::Hand))
+    }
+
+    /// `player` discards one of `cards`, cards in their hand, of their choice, as Thirst for
+    /// Discovery's "discard a basic land card" (CR 701.9b). Returns the card in the
+    /// graveyard, or `None` when there is none to discard.
+    pub fn discard_one_of(
+        &mut self,
+        player: Seat,
+        cards: Bitboard,
+    ) -> Result<Option<ObjectRef>, Pause> {
+        debug_assert!((cards & !self.state.zone(player, Zone::Hand)).is_empty());
+        if cards.is_empty() {
             return Ok(None);
         }
-        let slot = self.ask_object(player, DecisionKind::Discard, hand, Ask::Plain)?;
+        let slot = self.ask_object(player, DecisionKind::Discard, cards, Ask::Plain)?;
         self.discard(self.state.object_ref(slot));
         Ok(Some(self.state.object_ref(slot)))
     }

@@ -820,6 +820,10 @@ pub struct Ability {
     pub layer: Option<LayerSpec>,
     /// Static abilities: the rule they change.
     pub rule: Rule,
+    /// Mana abilities: "Activate only if you control a [permanent this filter accepts]"
+    /// ([CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025)): "A player can't begin
+    /// to activate an ability that's prohibited from being activated."
+    pub only_if_you_control: Option<Filter>,
 }
 
 impl Ability {
@@ -837,6 +841,7 @@ impl Ability {
         replacement: Replacement::None,
         layer: None,
         rule: Rule::None,
+        only_if_you_control: None,
     };
 
     /// A triggered ability.

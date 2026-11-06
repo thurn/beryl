@@ -130,6 +130,17 @@ pub enum Ask {
     PutBack { count: u8 },
     /// Whether to put the top card of `player`'s library on the bottom.
     Fateseal { player: Seat },
+    /// A card to put into the hand from the top `count` cards of the library, which the
+    /// player has looked at, `take` of them still to put, as Stock Up's "Put two of them into
+    /// your hand".
+    Take { count: u8, take: u8 },
+    /// The next of the top `count` cards of the library, which the player has looked at, to
+    /// put on the bottom, under the ones before: Stock Up's "the rest on the bottom of your
+    /// library in any order". The last goes unasked.
+    Bottom { count: u8 },
+    /// Whether to discard a basic land card rather than `count` cards, as Thirst for
+    /// Discovery's "discard two cards unless you discard a basic land card".
+    DiscardBasicLand { count: u8 },
     /// Whether the card an explore revealed goes to the graveyard
     /// ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)): the controller
     /// "may put the revealed card into their graveyard."

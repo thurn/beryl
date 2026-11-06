@@ -285,6 +285,14 @@ pub enum AskView {
     PutBack { count: u8 },
     /// Whether to put the top card of `player`'s library on the bottom.
     Fateseal { player: Side },
+    /// A `chooseObject` for a card to put into the hand from the top `count` of the
+    /// viewer's library, which they have looked at, `take` of them still to put.
+    Take { count: u8, take: u8 },
+    /// A `chooseObject` for the next of the top `count` cards of the viewer's library, which
+    /// they have looked at, to put on the bottom, under the ones before.
+    Bottom { count: u8 },
+    /// Whether to discard a basic land card rather than `count` cards.
+    DiscardBasicLand { count: u8 },
     /// Whether the card an explore revealed goes to the graveyard.
     Explore,
     /// Permanents to untap, up to `max`.
@@ -952,6 +960,9 @@ fn ask_view(obs: Observation<'_>, ask: Ask) -> AskView {
         Ask::Fateseal { player } => AskView::Fateseal {
             player: side(obs, player),
         },
+        Ask::Take { count, take } => AskView::Take { count, take },
+        Ask::Bottom { count } => AskView::Bottom { count },
+        Ask::DiscardBasicLand { count } => AskView::DiscardBasicLand { count },
         Ask::Explore => AskView::Explore,
         Ask::Untap { max } => AskView::Untap { max },
         Ask::UnlessPays { cost } => AskView::UnlessPays {

@@ -86,6 +86,12 @@ export function choiceOf(view: PlayerView): Choice | undefined {
       return putBack(at, ask);
     case "fateseal":
       return fateseal(at, ask);
+    case "take":
+      return takeAndBottom(at, ask.count, ask.take);
+    case "bottom":
+      return takeAndBottom(at, ask.count, 0);
+    case "discardBasicLand":
+      return discardBasicLand(at, ask);
     case "explore":
       return yesNo(at);
     case "untap":
@@ -317,6 +323,61 @@ function putBack(at: Situation, { count }: AskOf<"putBack">): Arrange {
     rightCount: need,
     plan: (_left, right) =>
       right.map((slot) => at.pickCard("chooseObject", slot)),
+  };
+}
+
+/** A look at the top of your library that puts `take` of the cards into your hand and the rest
+ * on the bottom in any order. The engine takes the cards for the hand one at a time, then those
+ * for the bottom, each under the one before, the last unasked. Asked for the bottom alone
+ * (`take` 0), the hand is settled. */
+function takeAndBottom(at: Situation, count: number, take: number): Arrange {
+  const cards = at.offeredAmong(at.looked(count));
+  const shown = cards.length > 0 ? cards : at.offered;
+  const need = Math.min(take, shown.length);
+  return {
+    kind: "arrange",
+    key: at.key,
+    title: `Top ${capitalized(inWords(count))}`,
+    instruction:
+      need > 0
+        ? `Drag ${need === 1 ? "a card" : `${inWords(need)} cards`} to your hand. Order the rest for the bottom.`
+        : "Drag cards to order them on the bottom of your library.",
+    source: at.source,
+    labels: ["Bottom", "Hand"],
+    left: [...shown].reverse(),
+    right: [],
+    rightCount: need,
+    plan(left, right) {
+      const hand = right.map((slot) => at.pickCard("chooseObject", slot));
+      // The bottom pile from the library out, all but the outermost.
+      const bottom = [...left]
+        .reverse()
+        .slice(0, -1)
+        .map((slot) => at.pickCard("chooseObject", slot));
+      return [...hand, ...bottom];
+    },
+  };
+}
+
+/** "Discard two cards unless you discard a basic land card": which, then the discards. */
+function discardBasicLand(
+  at: Situation,
+  { count }: AskOf<"discardBasicLand">,
+): Ask {
+  return {
+    kind: "ask",
+    key: at.key,
+    title: "Discard",
+    instruction: `Discard a basic land, or ${inWords(count)} cards.`,
+    source: at.source,
+    cards: [],
+    answers: [
+      { label: "Basic Land", plan: [yes("yesNo")] },
+      {
+        label: `${capitalized(inWords(count))} Cards`,
+        plan: [no("yesNo")],
+      },
+    ],
   };
 }
 

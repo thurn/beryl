@@ -127,6 +127,18 @@ fn is_simple(a: &Ability) -> bool {
     a.kind == AbilityKind::Mana && a.cost == Cost::TAP
 }
 
+/// Whether `player` may activate a mana ability now: one restricted to "Activate only if you
+/// control" a kind of permanent needs one on the battlefield
+/// ([CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025)): "A player can't begin to
+/// activate an ability that's prohibited from being activated."
+fn allowed(s: &State, t: &GameTable, a: &Ability, player: Seat) -> bool {
+    a.only_if_you_control.is_none_or(|f| {
+        s.battlefield()
+            .iter()
+            .any(|&slot| s.controller(slot) == player && f.matches(s, t, slot, player))
+    })
+}
+
 impl Sources {
     /// The untapped sources `player` controls, but those in `exclude`.
     pub(crate) fn of(
@@ -154,7 +166,15 @@ impl Sources {
             }
             let mut kinds = 0;
             let mut amount = 0;
+            // A source whose mana depends on other permanents, as Floodfarm Verge's {U}, is a
+            // class of its own: tapping it rather than another making the same mana now can
+            // leave different mana for later.
+            let mut conditional = false;
             for a in face.abilities.iter().filter(|a| is_simple(a)) {
+                conditional |= a.only_if_you_control.is_some();
+                if !allowed(s, t, a, player) {
+                    continue;
+                }
                 kinds |= a.produces.colors;
                 debug_assert!(amount == 0 || amount == a.produces.amount);
                 amount = a.produces.amount;
@@ -167,11 +187,12 @@ impl Sources {
                 "a source of several mana makes one kind"
             );
             // Abilities that work only from a hand, such as cycling, don't count.
-            let other = face.abilities.iter().any(|a| {
-                matches!(a.kind, AbilityKind::Activated | AbilityKind::Mana)
-                    && !is_simple(a)
-                    && !a.cost.discard_self
-            });
+            let other = conditional
+                || face.abilities.iter().any(|a| {
+                    matches!(a.kind, AbilityKind::Activated | AbilityKind::Mana)
+                        && !is_simple(a)
+                        && !a.cost.discard_self
+                });
             let rank = (kinds.count_ones() as u8) * 2 + u8::from(other);
             // A source with another ability is a class of its own: tapping it for mana
             // costs that ability, so it is never interchangeable.
@@ -727,7 +748,9 @@ pub(crate) fn activate(
         .abilities
         .iter()
         .enumerate()
-        .find(|(_, a)| is_simple(a) && a.produces.includes(color))
+        .find(|(_, a)| {
+            is_simple(a) && a.produces.includes(color) && allowed(s, t, a, s.controller(slot))
+        })
         .expect("a mana ability that makes the chosen mana");
     let source = s.object_ref(slot);
     event::set_tapped(s, t, sink, source, true)?;
