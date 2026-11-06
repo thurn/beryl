@@ -277,8 +277,7 @@ pub struct DecisionView {
     pub source: Option<u8>,
     /// The session halts the viewer here: a priority where passing is all they can do,
     /// which the engine would pass for them, offered under the smart stops at the start of
-    /// their own precombat main phase (an end-turn button) and of the opponent's end step (a
-    /// continue button), so the turn never moves on unseen.
+    /// their own precombat main phase (an end-turn button), so their turn never ends unseen.
     pub halt: bool,
     /// The decision is part of a spell the viewer is casting or an ability they are
     /// activating from their priority, whose costs are not yet paid: the `cancel` command
@@ -510,8 +509,9 @@ pub enum LossReason {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum StopsSetting {
-    /// The smart stops: main phases, combat after declarations, the opponent's end step, and
-    /// whenever the stack is non-empty.
+    /// The smart stops: the viewer's own main phases, the opponent's attack, blocks, the
+    /// opponent's end step, and an opponent's doings on the stack, wherever the viewer can
+    /// act; and their own precombat main phase in any case.
     Smart,
     /// Full control: every priority the viewer receives, even where passing is all they can
     /// do.

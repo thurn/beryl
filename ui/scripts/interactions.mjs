@@ -5,7 +5,7 @@
 // from their hand; the page starts one view earlier, at the priority decision, and the fixture
 // transport plays the recorded views up to the next decision once the page calls `choose`
 // (src/ipc.ts), which the page plays back paced (src/game/playback.ts) on Playwright's clock.
-// `opponent-turn` plays out an opponent's turn to the session's halts. The combat fixtures
+// `opponent-turn` plays out an opponent's turn to the session's halt in the human's. The combat fixtures
 // `combat-declare` and `combat-double-block` end past the human's attack and block
 // declarations, which the page makes whole and sends one pick at a time. Animation is
 // measured on Playwright's clock, so the checks do not depend on the machine's speed, nor on
@@ -790,26 +790,29 @@ async function settled(page, count) {
 }
 
 // The opponent's turn played back: `opponent-turn` ends on the session's halt at the human's
-// precombat main (End Turn), after one at the opponent's end step (Continue) that closes a turn
-// in which the opponent plays a land and casts spells. The page starts at the human's last
-// decision before that turn, a look at the top of their library.
+// precombat main (End Turn), the first since a turn in which the opponent plays a land and casts
+// spells, and which stops the human nowhere: they hold nothing to cast there. The page starts at
+// the human's last decision before that turn, a look at the top of their library.
 const turnViews = await load("opponent-turn");
-const halts = turnViews.flatMap((v, i) => (v.status.decision?.halt ? [i] : []));
 const mainHalt = turnViews.length - 1;
-const endHalt = halts.at(-2);
-assert.deepEqual(
-    [halts.at(-1), turnViews[endHalt]?.turn.active],
-    [mainHalt, "opponent"],
-    "the fixture ends on a halt at the human's main, after one in the opponent's turn",
+const lookAt = turnViews.findLastIndex((v, i) => i < mainHalt && awaits(v));
+assert.ok(
+    turnViews[mainHalt].status.decision?.halt,
+    "the fixture ends on a halt",
 );
-const lookAt = turnViews.findLastIndex((v, i) => i < endHalt && awaits(v));
 assert.equal(
     turnViews[lookAt].status.decision?.ask.kind,
     "look",
     "the human looks at their library before the opponent's turn",
 );
+assert.ok(
+    turnViews
+        .slice(lookAt + 1, mainHalt)
+        .some((v) => v.turn.active === "opponent"),
+    "the opponent's turn comes between the look and the halt",
+);
 const opponentLand = turnViews
-    .slice(lookAt + 1, endHalt + 1)
+    .slice(lookAt + 1, mainHalt + 1)
     .flatMap((v) =>
         v.events.filter(
             (e) =>
@@ -819,12 +822,12 @@ const opponentLand = turnViews
         ),
     )[0];
 assert.ok(opponentLand, "the opponent plays a land that turn");
-const landName = turnViews[endHalt].objects.find(
+const landName = turnViews[mainHalt].objects.find(
     (o) => o.slot === opponentLand.slot,
 ).name;
 // The spells that resolve into a graveyard that turn, which would otherwise vanish unseen.
 const vanished = turnViews
-    .slice(lookAt + 1, endHalt + 1)
+    .slice(lookAt + 1, mainHalt + 1)
     .flatMap((v) =>
         v.events.flatMap((e) =>
             e.kind === "zoneChange" &&
@@ -858,8 +861,8 @@ await check(
         const announced = new Set();
         let took = 0;
         const land = `[data-slot="${opponentLand.slot}"][data-zone="battlefield"]`;
-        const halt = page.getByRole("button", { name: "Continue" });
-        while (!(await halt.isVisible())) {
+        const halt = page.getByRole("button", { name: "End Turn" });
+        while (!((await halt.isVisible()) && (await halt.isEnabled()))) {
             assert.ok(took < 60_000, "the opponent's turn ends");
             const pill = await page.$(".priority-pill");
             if (pill) pills.add(await pill.textContent());
@@ -897,15 +900,18 @@ await check(
             `the log says the land was played: ${log}`,
         );
 
-        // Continue goes on to the human's turn, which halts at their main: End Turn.
-        assert.ok(await halt.isEnabled(), "Continue is the turn button");
+        // The opponent's turn went on to the human's, which halts at their main: End Turn.
+        assert.equal(
+            await page.getByRole("button", { name: "Continue" }).count(),
+            0,
+            "no halt at the opponent's end step",
+        );
         await halt.click();
-        await until(page, "button:has-text('End Turn'):not([disabled])");
-        await page.getByRole("button", { name: "End Turn" }).click();
+        // The human's hand holds no instant: the turn cycle took them one pass.
         assert.deepEqual(
             (await chosen(page)).slice(1),
-            [0, 0],
-            "continued, then ended the turn",
+            [0],
+            "one pass from the opponent's turn to the end of the human's",
         );
     },
     { fixture: "opponent-turn", at: lookAt + 1, ready: ".choice" },

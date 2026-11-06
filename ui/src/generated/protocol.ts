@@ -216,8 +216,7 @@ source: number | null,
 /**
  * The session halts the viewer here: a priority where passing is all they can do,
  * which the engine would pass for them, offered under the smart stops at the start of
- * their own precombat main phase (an end-turn button) and of the opponent's end step (a
- * continue button), so the turn never moves on unseen.
+ * their own precombat main phase (an end-turn button), so their turn never ends unseen.
  */
 halt: boolean, 
 /**

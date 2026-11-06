@@ -1095,23 +1095,26 @@ candidates described by public slot, the opponent thinking, a step playing on, a
 stop, or the outcome; the engine events since the last view, for animation, also
 pass through the Observation, so each event is in exactly one view. Under the
 smart stops the session also halts the human at the start of their precombat
-main phase and of the opponent's end step when the engine would pass their
-priority for them: a priority decision whose only candidate is to pass, which
-neither the engine's profile nor the agent sees, and which the replay records.
-It also answers three kinds of the human's decisions for them under the smart
-stops, and the replay records each answer: it passes their priority while their
-own spell or ability is on top and only their own entries came onto the stack or
-left it since their last answer in the step; it orders their simultaneous
-triggers so that plain effects resolve first, then triggers with targets, then
-those that ask a question as they resolve; and it pays a waterbend cost with
-mana whenever mana can pay it. The exact stops ask all three. At the human's
-decision the session waits for one `choose(decision, index)` command, naming the
-decision id it received; the session's record of the open decision is the one
-place an answer is checked. AI decisions run on the session thread, and a search
-may use a pool, so IPC never blocks. The webview never sees a `State`. Every
-session records seed, decklists and the choice log as a replay file. The
-protocol's TypeScript types are generated from the Rust types, and
-`ui/src/ipc.ts` keeps the typed wrappers for the commands and events.
+main phase when the engine would pass their priority for them: a priority
+decision whose only candidate is to pass, which neither the engine's profile nor
+the agent sees, and which the replay records. The opponent's turn plays on to
+the human's unhalted. The session also answers three kinds of the human's
+decisions for them under the smart stops, and the replay records each answer: it
+passes their priority while their own spell or ability is on top and only their
+own entries came onto the stack or left it since their last answer in the step
+(or its start), and in combat with an empty stack after their own attack or a
+declaration of no blockers, as Arena stops a player only after the opponent's
+attack and after blocks; it orders their simultaneous triggers so that plain
+effects resolve first, then triggers with targets, then those that ask a
+question as they resolve; and it pays a waterbend cost with mana whenever mana
+can pay it. The exact stops ask all three. At the human's decision the session
+waits for one `choose(decision, index)` command, naming the decision id it
+received; the session's record of the open decision is the one place an answer
+is checked. AI decisions run on the session thread, and a search may use a pool,
+so IPC never blocks. The webview never sees a `State`. Every session records
+seed, decklists and the choice log as a replay file. The protocol's TypeScript
+types are generated from the Rust types, and `ui/src/ipc.ts` keeps the typed
+wrappers for the commands and events.
 
 The human plays under the smart stops of §15 by default. A setting switches to
 the exact profile, which offers every priority. Milestone 1 offers a game

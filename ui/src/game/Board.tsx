@@ -693,7 +693,7 @@ export function Board({
       ? (objects.get(top.slot)?.name ?? undefined)
       : top.name);
   const stop = decision?.halt
-    ? haltButton(view)
+    ? HALT_BUTTON
     : decision?.passTo
       ? passButton(view, decision.passTo)
       : { label: "Pass", caption: "" };
@@ -1055,13 +1055,8 @@ export function Board({
 }
 
 /** The turn button at a halt of the session's (`DecisionView.halt`), where passing is all the
- * player can do: ending their own turn from its first main phase, or going on from the
- * opponent's end step. */
-function haltButton(view: PlayerView): { label: string; caption: string } {
-  return view.turn.active === "you"
-    ? { label: "End Turn", caption: "Nothing to play" }
-    : { label: "Continue", caption: "To Your Turn" };
-}
+ * player can do: ending their own turn from its first main phase. */
+const HALT_BUTTON = { label: "End Turn", caption: "Nothing to play" };
 
 /** How long a card takes to glide to a new place (CardLayer's spring), near enough, in ms. */
 const GLIDE_MS = 700;

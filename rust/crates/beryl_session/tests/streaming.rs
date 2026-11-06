@@ -60,11 +60,7 @@ fn halt(view: &PlayerView) -> bool {
 
 /// A step the human is halted at, when the engine offers them nothing there.
 fn halting_step(view: &PlayerView) -> bool {
-    match view.turn.step {
-        TurnStep::PrecombatMain => view.turn.active == Side::You,
-        TurnStep::End => view.turn.active == Side::Opponent,
-        _ => false,
-    }
+    view.turn.step == TurnStep::PrecombatMain && view.turn.active == Side::You
 }
 
 #[test]
@@ -227,7 +223,7 @@ fn events_of(begin: &StartGame, log: &[Entry]) -> Vec<Event> {
 }
 
 #[test]
-fn smart_stops_halt_a_human_with_no_plays_at_their_main_phase_and_the_opponents_end_step() {
+fn smart_stops_halt_a_human_with_no_plays_at_their_main_phase_only() {
     let decks = [no_plays(), owned(WU_CONTROL)];
     let game_start = start(3, decks, Seat::P0, StopsSetting::Smart);
     let mut game = Game::new(&CARDS, &game_start, SESSION).unwrap();
@@ -243,16 +239,8 @@ fn smart_stops_halt_a_human_with_no_plays_at_their_main_phase_and_the_opponents_
         answer(&mut game, &view);
         views.push(view);
     }
-    let (mains, ends) = views
-        .iter()
-        .filter(|v| halt(v))
-        .partition::<Vec<_>, _>(|v| v.turn.step == TurnStep::PrecombatMain);
-    assert!(
-        mains.len() >= 3 && ends.len() >= 3,
-        "{} and {} halts",
-        mains.len(),
-        ends.len()
-    );
+    let mains = views.iter().filter(|v| halt(v)).count();
+    assert!(mains >= 3, "{mains} halts");
     for view in &views {
         let began = view.status == Status::Playing || halt(view);
         assert_eq!(
@@ -281,7 +269,7 @@ fn exact_stops_halt_nowhere() {
 }
 
 #[test]
-fn a_human_who_can_play_stops_at_their_main_phase_and_the_opponents_end_step() {
+fn a_human_who_can_play_stops_at_their_main_phase() {
     for seed in 0..3 {
         let decks = [owned(WU_CONTROL), owned(WU_CONTROL)];
         let mut game = Game::new(

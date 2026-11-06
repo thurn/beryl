@@ -3,15 +3,15 @@
 //! as each step of the turn begins, before each of the agent's decisions, at each of the
 //! human's, and at the end, so the human sees the agent's turn as it is played. Under the
 //! smart stops the session also halts the human where the engine would pass them by, and
-//! answers some of their decisions for them: passing to their own spell, and ordering their
-//! triggers.
+//! answers some of their decisions for them: passing to their own spell or trigger and in
+//! combat after their own attack or no blocks, and ordering their triggers.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use beryl_engine::event::Event;
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::state::{Pending, StackEntry};
+use beryl_engine::state::{ObjectFlags, Pending, StackEntry};
 use beryl_engine::{
     Candidates, CardTable, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome,
     Profile, Replay, Scratch, Seat, State, Step, TurnStep, apply, next_in_step, observe,
@@ -151,7 +151,11 @@ pub struct Game {
     /// The turn and step the latest view began, or the game's first.
     seen: (u16, TurnStep),
     /// The stack as it was once the human's latest answer was applied, if they answered in
-    /// this step: what they know of it ([`Game::own_top`]).
+    /// this step: what they know of it ([`Game::own_top`]). With no answer yet in this step,
+    /// they knew it empty, as every step begins
+    /// ([CR 500.2](https://yawgatog.com/resources/magic-rules/#R5002): "A phase or step in
+    /// which players receive priority ends when the stack is empty and all players pass in
+    /// succession").
     answered: Option<Vec<StackEntry>>,
     seq: u32,
     stops: StopsSetting,
@@ -587,7 +591,8 @@ impl Game {
 
     /// The session's own answer to the human's decision `d`, if it gives one: under the
     /// smart stops, it passes their priority while only their own doings sit on the stack
-    /// ([`Game::own_top`]), orders their simultaneous triggers ([`trigger_to_stack`]), and
+    /// ([`Game::own_top`]) or in combat with nothing new to answer ([`Game::quiet_combat`]),
+    /// orders their simultaneous triggers ([`trigger_to_stack`]), and
     /// pays a waterbend cost with mana whenever mana can pay it, tapping no artifact or
     /// creature ([CR 701.67a](https://yawgatog.com/resources/magic-rules/#R70167a): "you may
     /// tap an untapped artifact or creature you control rather than pay that mana").
@@ -600,7 +605,7 @@ impl Game {
             return None;
         }
         match d.kind {
-            DecisionKind::Priority if self.own_top() => {
+            DecisionKind::Priority if self.own_top() || self.quiet_combat() => {
                 debug_assert_eq!(d.candidates.option(Choice(0)), Some(Opt::Pass));
                 Some(Choice(0))
             }
@@ -618,9 +623,7 @@ impl Game {
     /// or its resolution, which they get priority to see and answer. Their priority then
     /// would only let them respond to themselves, as an Arena player auto-passes.
     fn own_top(&self) -> bool {
-        let Some(answered) = &self.answered else {
-            return false;
-        };
+        let answered = self.answered.as_deref().unwrap_or_default();
         let now = self.state.stack();
         let own = |e: &StackEntry| e.controller == self.human;
         let kept = answered
@@ -633,21 +636,47 @@ impl Game {
             && now[kept..].iter().all(own)
     }
 
+    /// Whether the human's priority, with the stack empty, comes in a combat step where they
+    /// have nothing new to answer: after declaring their own attackers, which they chose
+    /// knowing all a response could use, or after a declaration of no blockers, which leaves
+    /// no block for a trick to change. Players get priority in each of those steps once its
+    /// declaration is made
+    /// ([CR 117.3a](https://yawgatog.com/resources/magic-rules/#R1173a): "The active player
+    /// receives priority at the beginning of most steps and phases, after any turn-based
+    /// actions ... have been dealt with"), and the engine's smart stops, which the agent's
+    /// search shares, give it to both players whenever creatures attack. Like Arena, the
+    /// session stops the human after the opponent's attack, and after blocks.
+    fn quiet_combat(&self) -> bool {
+        if !self.state.stack().is_empty() {
+            return false;
+        }
+        let turn = self.state.turn();
+        let attacker = turn.active == self.human;
+        match turn.step {
+            TurnStep::DeclareAttackers => attacker,
+            TurnStep::DeclareBlockers => !self.any_blocking(),
+            _ => false,
+        }
+    }
+
+    fn any_blocking(&self) -> bool {
+        self.state
+            .battlefield()
+            .iter()
+            .any(|&slot| self.state.object(slot).flags.has(ObjectFlags::BLOCKING))
+    }
+
     /// Whether the human is halted as the step that just began, a session-level stop the
-    /// engine knows nothing of: under the smart stops, at their own precombat main phase and
-    /// at the opponent's end step, unless the engine offers them a decision there before
-    /// anything else is decided. The game would otherwise pass through those steps unseen
-    /// whenever the human can do nothing but pass, and their turn would end, or the
-    /// opponent's turn would turn into theirs, without them. Halts are a function of the
-    /// position and the stops, so a replay finds them again; the agent never sees them.
+    /// engine knows nothing of: under the smart stops, at their own precombat main phase,
+    /// unless the engine offers them a decision there before anything else is decided. The
+    /// game would otherwise pass through it unseen whenever the human can do nothing but
+    /// pass, and their turn would end without them. The opponent's turn plays on to theirs
+    /// unhalted, as on Arena: the engine stops the human at its end step only when they can
+    /// act there. Halts are a function of the position and the stops, so a replay finds them
+    /// again; the agent never sees them.
     fn halts(&mut self) -> bool {
         let turn = self.state.turn();
-        let own = turn.active == self.human;
-        let halting_step = match turn.step {
-            TurnStep::PrecombatMain => own,
-            TurnStep::End => !own,
-            _ => false,
-        };
+        let halting_step = turn.step == TurnStep::PrecombatMain && turn.active == self.human;
         if self.stops != StopsSetting::Smart || !halting_step {
             return false;
         }
