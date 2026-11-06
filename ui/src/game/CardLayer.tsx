@@ -178,7 +178,9 @@ function CardElement({
   const opacity = useMotionValue(grow ? 0 : place.opacity);
   const [held, setHeld] = useState<Held>();
   const dragging = held?.dragging === true;
-  // The pointer places the card while it holds it, whatever its placement does meanwhile.
+  // The pointer places the card while it holds it, whatever its placement does meanwhile. A
+  // dropped card is let go with the view it was played on, whatever the engine did with it (a
+  // twin of it may be the card played), and from then on is drawn as if never held.
   const holding =
     held !== undefined && (held.dragging || held.epoch === layer.epoch);
   useGlide(x, place.x, reduce, { holding });
@@ -197,7 +199,7 @@ function CardElement({
   // A hand card is raised while hovered and while the pointer holds it; anything else dragged
   // straightens.
   const hand = place.look === "hand";
-  const lifted = hand && (raised || held !== undefined);
+  const lifted = hand && (raised || holding);
   useGlide(rotate, dragging && !hand ? 0 : place.rotate, reduce);
   useGlide(skewX, place.skew, reduce);
   useGlide(opacity, place.opacity, reduce);
@@ -208,7 +210,7 @@ function CardElement({
   // passes through (Ghost), while its element keeps the fan's order: each card's visible part
   // in the fan is what the pointer hits, the raised card included, and above the fan the raised
   // card's top, which its element reaches up to.
-  const ghosted = hand && raised && held === undefined;
+  const ghosted = hand && raised && !holding;
   const shake = useMotionValue(0);
   const drag = useRef<{ start: Point; from: Point; moved: boolean }>(undefined);
   // A card in a library is unseen, and one on a graveyard or exile pile is the pile's: the

@@ -1690,6 +1690,133 @@ await check(
     },
 );
 
+// The pair's land played by dragging the twin the engine did not name: the named one goes to
+// the battlefield, then (the opponent's Oust, say) the dragged one goes into the library and
+// is drawn again. Each view after the drop is the recorded one changed so.
+const pairLand = playable.get(twin.name).option.slot;
+const zoned = (v, moves) => ({
+    ...v,
+    events: [],
+    objects: v.objects.map((o) =>
+        o.slot in moves ? { ...o, zone: moves[o.slot] } : o,
+    ),
+});
+const landPlayed = {
+    ...zoned(pairView, { [pairLand]: "battlefield" }),
+    battlefield: [pairLand],
+    status: {
+        kind: "deciding",
+        decision: {
+            ...pairView.status.decision,
+            candidates: pairView.status.decision.candidates.filter(
+                (c) => c.option.kind !== "playLand",
+            ),
+        },
+    },
+};
+const you = pairView.players.you;
+const twinMoved = (from, to, reason) => [
+    { kind: "zoneChange", slot: twin.slot, from, to, reason },
+];
+const playedOn = [
+    landPlayed,
+    {
+        ...zoned(landPlayed, { [twin.slot]: "library" }),
+        players: {
+            ...pairView.players,
+            you: { ...you, library: [twin.slot, ...you.library] },
+        },
+        status: { kind: "playing" },
+        events: twinMoved("hand", "library", "effect"),
+    },
+    { ...landPlayed, events: twinMoved("library", "hand", "draw") },
+];
+{
+    const fixture = JSON.parse(
+        await readFile(join(fixtures, "hand-pair.json"), "utf8"),
+    );
+    const event = fixture.messages.findLast((m) => m.kind === "event");
+    // The land played, then the pass.
+    for (let i = 0; i < 2; i++) {
+        fixture.messages.push({
+            kind: "response",
+            command: "choose",
+            value: null,
+        });
+    }
+    for (const view of playedOn) {
+        fixture.messages.push({
+            ...event,
+            payload: { ...event.payload, view },
+        });
+    }
+    await writeFile(
+        join(fixtures, "hand-pair-played.json"),
+        JSON.stringify(fixture),
+    );
+}
+
+/** Where each of your hand cards is drawn, by slot, once the page has settled. */
+async function fan(page) {
+    await page.clock.runFor(2000);
+    return page.$$eval(
+        '.card-el-hand[data-zone="hand"]:not(.card-ghost)',
+        (cards) =>
+            Object.fromEntries(
+                cards.map((e) => {
+                    const r = e
+                        .querySelector(".hand-card")
+                        .getBoundingClientRect();
+                    return [e.dataset.slot, [r.x, r.y]];
+                }),
+            ),
+    );
+}
+
+/** Asserts that every hand card in `seen` is at its place in `rest`, within 2 pixels. */
+function inFan(seen, rest, when) {
+    assert.deepEqual(Object.keys(seen).sort(), Object.keys(rest).sort(), when);
+    for (const [slot, [x, y]] of Object.entries(seen)) {
+        const off = Math.hypot(x - rest[slot][0], y - rest[slot][1]);
+        assert.ok(off <= 2, `${when}: slot ${slot} is ${off} px off its place`);
+    }
+}
+
+await check(
+    "a dragged twin goes back to its place in the fan, also once drawn again",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await dragFromHand(page, `[data-slot="${twin.slot}"]`, {
+            x: 0,
+            y: -320,
+        });
+        await page.mouse.up();
+        await until(page, `[data-slot="${pairLand}"][data-zone="battlefield"]`);
+        // The pointer stays over the battlefield, off the hand.
+        const played = await fan(page);
+        await page.keyboard.press("Space");
+        await until(page, `[data-slot="${twin.slot}"][data-zone="library"]`);
+        await until(page, `[data-slot="${twin.slot}"][data-zone="hand"]`);
+        const drawn = await fan(page);
+        // Each table's hand at rest, never touched.
+        const rest = async (at) => {
+            await page.goto(
+                new URL(`/?fixture=hand-pair-played&at=${at}#/game`, base).href,
+                { waitUntil: "load" },
+            );
+            await page.waitForSelector('[data-zone="hand"]');
+            return fan(page);
+        };
+        inFan(played, await rest(pairViews.length + 1), "the land played");
+        inFan(drawn, await rest(pairViews.length + 3), "the twin drawn again");
+    },
+    {
+        fixture: "hand-pair-played",
+        at: pairViews.length,
+        ready: `[data-slot="${twin.slot}"][data-zone="hand"]`,
+    },
+);
+
 // Thieving Skydiver kicked: the cast with kicker and its X in one step, where the engine asks
 // the cast and then X.
 const kickViews = await load("cast-kicker");
