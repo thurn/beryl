@@ -23,15 +23,23 @@ import {
   Button,
   PhaseTracker,
   PriorityPill,
+  Tip,
   TurnButton,
 } from "../components/Controls";
 import {
   FaceUpEdges,
+  floating,
   Library,
   LifeOrb,
+  ManaPool,
   PlayerBadge,
 } from "../components/Player";
-import { Arrows, StackItem, type ArrowSpec } from "../components/Stack";
+import {
+  Arrows,
+  StackItem,
+  StackMarks,
+  type ArrowSpec,
+} from "../components/Stack";
 import type {
   CandidateIndex,
   DecisionView,
@@ -89,6 +97,7 @@ import {
   PILES,
   STACK_Z,
   stackPlace,
+  STEP_NAMES,
   zonePiles,
   type ZonePile,
 } from "./layout";
@@ -99,7 +108,14 @@ import {
   GameLog,
   opponentActivity,
 } from "./Narration";
-import { Inspect, Lying, pileMark, PileButton, ZoneViewer } from "./Piles";
+import {
+  Inspect,
+  Lying,
+  pileMark,
+  PileButton,
+  pileTip,
+  ZoneViewer,
+} from "./Piles";
 import { Brand } from "./Stage";
 
 export interface BoardProps {
@@ -122,6 +138,13 @@ export interface BoardProps {
   /** A screen over it answers the decision: the table only shows. */
   inert?: boolean;
 }
+
+/** Where each player's unspent mana shows: right of their life orb's blades, level with its
+ * oval. */
+const POOLS: Record<Side, CSSProperties> = {
+  opponent: { left: 936, top: 92 },
+  you: { left: 936, top: 659 },
+};
 
 /** Dropped above this line, a hand card is on the battlefield rather than back in the hand. */
 const BATTLEFIELD_EDGE = 690;
@@ -161,6 +184,8 @@ export function Board({
   // The card being dragged.
   const [lifted, setLifted] = useState<number>();
   const [settings, setSettings] = useState(false);
+  /** How many times the player passed with mana unspent: each pulses their pool. */
+  const [lost, setLost] = useState(0);
   // The graveyard or exile pile open in the zone viewer, which stays open as views go by.
   const [viewing, setViewing] = useState<Pick<ZonePile, "side" | "zone">>();
   const can = useMemo(() => interactions(view), [view]);
@@ -256,6 +281,11 @@ export function Board({
             (a) => a.option.kind === "attack" || a.option.kind === "block",
           ),
       });
+    }
+  }
+  for (const item of view.stack) {
+    if (item.kind === "spell") {
+      states.set(item.slot, { ...states.get(item.slot), x: item.x });
     }
   }
   // The top of the stack's source glows gold and its targets cyan, whoever has priority
@@ -508,7 +538,15 @@ export function Board({
           const { library } = view.players[side];
           const pile = pileLook(side, PILES[side].library, library.length);
           return (
-            <Lying key={side} look={pile}>
+            <Lying
+              key={side}
+              look={pile}
+              tip={
+                <Tip side={side === "you" ? "above" : "below"}>
+                  {pileTip("library", library.length)}
+                </Tip>
+              }
+            >
               <Library
                 count={library.length}
                 width={pile.width}
@@ -555,6 +593,12 @@ export function Board({
           target={deciding ? can.players.get("you") : undefined}
           onPick={pick}
         />
+        <div className="hud" style={POOLS.opponent}>
+          <ManaPool pool={opponent.mana} />
+        </div>
+        <div className="hud" style={POOLS.you}>
+          <ManaPool pool={you.mana} pulse={lost} />
+        </div>
 
         {banner && <StepBanner {...banner} />}
 
@@ -612,7 +656,11 @@ export function Board({
         {/* Under a screen over the table, the turn's controls give way (scry.png). */}
         {!inert && (
           <div className="turn-controls">
-            <PhaseTracker current={phaseOf(view.turn.step)} compact />
+            <PhaseTracker
+              current={phaseOf(view.turn.step)}
+              compact
+              now={`Turn ${view.turn.number} · ${STEP_NAMES[view.turn.step]}`}
+            />
             {drafting ? (
               <Declare
                 kind={drafting}
@@ -634,7 +682,15 @@ export function Board({
                 <TurnButton
                   label={waiting ? "Pass" : stop.label}
                   disabled={waiting || can.pass === undefined}
-                  onClick={() => can.pass !== undefined && pick(can.pass)}
+                  onClick={() => {
+                    if (can.pass === undefined) return;
+                    // Mana left unspent empties as the step ends (CR 500.4): passing on to a
+                    // step, rather than to the top of the stack resolving, pulses the pool
+                    // rather than asking.
+                    const resolves = decision?.passTo?.kind === "resolve";
+                    if (floating(you.mana) && !resolves) setLost((n) => n + 1);
+                    pick(can.pass);
+                  }}
                 />
                 {/* While you wait, the priority pill takes the caption's place under the
                 button, leaving the tracker showing the phase. */}
@@ -867,6 +923,7 @@ function AbilityOnStack({
         width={place.width}
         showArt
       />
+      <StackMarks controller={item.controller} x={item.x} />
     </motion.div>
   );
 }

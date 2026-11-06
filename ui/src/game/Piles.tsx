@@ -2,7 +2,7 @@
 // where layout.ts puts it, a graveyard or exile pile is one button that opens it, never a card
 // to point at alone, and the zone viewer lists every card in the pile, each shown whole on
 // hover. A card the open decision offers something for (a target, a cast) is picked there.
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import {
   ASPECT,
   Card,
@@ -10,6 +10,7 @@ import {
   toneClass,
   type MarkIcon,
 } from "../components/Card";
+import { Tip } from "../components/Controls";
 import { cardEntry, useCardArt, type CardFace } from "../cards";
 import type { CardType, ObjectView } from "../generated/protocol";
 import type { CardState } from "./CardLayer";
@@ -17,27 +18,41 @@ import { BLANK, printedFace, tone, useFace } from "./faces";
 import type { PileLook, ZonePile } from "./layout";
 
 /** A pile lying on the table as `look` says: its top card's top-left corner at the look's
- * corner, the edges beneath on whichever side they show. */
+ * corner, the edges beneath on whichever side they show. Its `tip` (Controls.tsx' Tip), shown
+ * on hover, stands upright beside the leaning pile: from its top edge, which stays put, or
+ * from its foot, which the lean moves sideways by `--drop`. */
 export function Lying({
   look,
   className = "hud",
+  tip,
   children,
 }: {
   look: PileLook;
   className?: string;
+  tip?: ReactNode;
   children: ReactNode;
 }) {
+  const at = { left: look.x - Math.max(0, -look.depth.x), top: look.y };
+  const lean = {
+    transformOrigin: "0 0",
+    transform: `skewX(${look.skew}deg)`,
+  };
+  if (!tip) {
+    return (
+      <div className={className} style={{ ...at, ...lean }}>
+        {children}
+      </div>
+    );
+  }
+  const height = look.width / ASPECT.full + Math.max(0, look.depth.y);
+  const drop = height * Math.tan((look.skew * Math.PI) / 180);
   return (
     <div
-      className={className}
-      style={{
-        left: look.x - Math.max(0, -look.depth.x),
-        top: look.y,
-        transformOrigin: "0 0",
-        transform: `skewX(${look.skew}deg)`,
-      }}
+      className={`${className} has-tip`}
+      style={{ ...at, "--drop": `${drop}px` } as CSSProperties}
     >
-      {children}
+      <div style={lean}>{children}</div>
+      {tip}
     </div>
   );
 }
@@ -61,8 +76,13 @@ export function pileMark(
   return undefined;
 }
 
-/** A pile's button, over its top card, with its zone's name over it and its count: it opens
- * the zone viewer. It glows as its cards are marked (pileMark). */
+/** What a pile's tip says on hover: its zone and how many cards, "Graveyard · 5". */
+export const pileTip = (zone: string, count: number) =>
+  `${zone[0]!.toUpperCase()}${zone.slice(1)} · ${count}`;
+
+/** A pile's button, over its top card: it opens the zone viewer. Its thickness shows its size
+ * at a glance; hovering it names its zone and count. It glows as its cards are marked
+ * (pileMark). */
 export function PileButton({
   pile,
   mark,
@@ -74,7 +94,15 @@ export function PileButton({
 }) {
   const { look, cards } = pile;
   return (
-    <Lying look={look} className="pile-at">
+    <Lying
+      look={look}
+      className="pile-at"
+      tip={
+        <Tip side={pile.side === "you" ? "above" : "below"}>
+          {pileTip(pile.zone, cards.length)}
+        </Tip>
+      }
+    >
       <button
         type="button"
         className={["pile-button", mark && `pile-button-${mark}`]
@@ -89,12 +117,7 @@ export function PileButton({
         data-pile={pile.zone}
         data-side={pile.side}
         onClick={onOpen}
-      >
-        <span className="pile-label" aria-hidden>
-          {pile.zone}
-        </span>
-        <span className="pile-count">{cards.length}</span>
-      </button>
+      />
     </Lying>
   );
 }

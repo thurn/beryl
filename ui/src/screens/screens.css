@@ -1208,6 +1208,41 @@
 .stack-ability {
   transform-origin: 0 0;
 }
+/* A stack item's marks (Stack.tsx' StackMarks): whose it is, a diamond on its top left corner
+   in the game log's colour for that player, and its X, a dark tab on its top right corner. */
+.on-stack {
+  position: relative;
+}
+.stack-controller {
+  position: absolute;
+  left: -8px;
+  top: -8px;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  rotate: 45deg;
+  border: 2px solid #15120f;
+  border-radius: 3px;
+  background: var(--cyan);
+  box-shadow: 0 0 8px 2px rgb(51 220 254 / 55%);
+}
+.stack-controller-opponent {
+  background: var(--ember);
+  box-shadow: 0 0 8px 2px rgb(240 122 28 / 60%);
+}
+.stack-x {
+  position: absolute;
+  right: -10px;
+  top: -12px;
+  z-index: 1;
+  padding: 2px 9px;
+  border: 1px solid var(--metal-bright);
+  border-radius: 12px;
+  background: rgb(24 21 19);
+  box-shadow: 0 2px 5px rgb(0 0 0 / 60%);
+  font: 700 17px/1.2 var(--font-sans);
+  color: var(--type);
+}
 /* Combat and stack lines over the cards on the table and the stack's items, whose edges their
    dots and heads overlap (trigger_on_stack_with_target.png), under menus. */
 .board-arrows {
@@ -1447,8 +1482,8 @@
 }
 /* The hovered card's full scan, with the artist credit under it. */
 /* A graveyard or exile pile's button, over its top card: it rims in gold under the pointer,
-   glows as a card would when the decision offers something in it, and carries the zone's name
-   over the pile and its count at its bottom right. Under the hand. */
+   where its tip names it, and glows as a card would when the decision offers something in it.
+   Under the hand. */
 .pile-at {
   position: absolute;
   z-index: 195;
@@ -1478,38 +1513,6 @@
 }
 .pile-button-target {
   box-shadow: var(--glow-cyan);
-}
-.pile-label {
-  position: absolute;
-  left: -10px;
-  right: -10px;
-  bottom: calc(100% + 3px);
-  font: 600 10.5px/1 var(--font-sans);
-  letter-spacing: 0.1em;
-  text-align: center;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  text-shadow: 0 1px 2px rgb(0 0 0 / 80%);
-}
-.pile-button:hover .pile-label,
-.pile-button:focus-visible .pile-label {
-  color: var(--gold);
-}
-.pile-count {
-  position: absolute;
-  right: -7px;
-  bottom: -7px;
-  min-width: 26px;
-  height: 26px;
-  padding: 0 7px;
-  border: 1px solid var(--metal);
-  border-top-color: var(--metal-bright);
-  border-radius: 13px;
-  background: rgb(24 21 19);
-  box-shadow: 0 2px 5px rgb(0 0 0 / 60%);
-  font: 600 14px/24px var(--font-sans);
-  color: var(--type);
-  text-align: center;
 }
 /* The zone viewer: every card in a pile on a panel over the dimmed table, which a click beside
    it closes; under the hovered card's scan. */

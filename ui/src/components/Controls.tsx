@@ -1,4 +1,4 @@
-// Actions and status: buttons, the priority pill and the phase tracker.
+// Actions and status: buttons, the priority pill, the phase tracker and hover tips.
 import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 import { useTextFit } from "./fit";
 
@@ -188,9 +188,12 @@ const PHASES: { phase: Phase; label: string; icon: ReactNode }[] = [
 export function PhaseTracker({
   current,
   compact = false,
+  now,
 }: {
   current: Phase;
   compact?: boolean;
+  /** What the current phase's tip says, such as "Turn 9 · Blockers"; its label otherwise. */
+  now?: string;
 }) {
   return (
     <ol
@@ -201,8 +204,11 @@ export function PhaseTracker({
       {PHASES.map(({ phase, label, icon }, i) => (
         <li
           key={phase}
-          className={phase === current ? "phase phase-current" : "phase"}
+          className={
+            phase === current ? "phase phase-current has-tip" : "phase has-tip"
+          }
         >
+          <Tip side="above">{(phase === current && now) || label}</Tip>
           {i > 0 && !compact && (
             <svg className="phase-arrow" viewBox="0 0 9 11" aria-hidden>
               <path d="M0.5 0.5 L8.5 5.5 L0.5 10.5 Z" />
@@ -219,5 +225,22 @@ export function PhaseTracker({
         </li>
       ))}
     </ol>
+  );
+}
+
+/** A few words on hover or focus of its parent, which must be `.has-tip`: what the table shows
+ * without words, such as a pile's size, said only when asked. */
+export function Tip({
+  side,
+  children,
+}: {
+  /** Where it opens: toward the middle of the table from the parent's edge of it. */
+  side: "above" | "below";
+  children: ReactNode;
+}) {
+  return (
+    <span className={`tip tip-${side}`} role="tooltip">
+      {children}
+    </span>
   );
 }

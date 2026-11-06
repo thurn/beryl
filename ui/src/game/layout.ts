@@ -220,8 +220,7 @@ export const STACK = { x: 1205, y: 222, width: 295, step: 46, reach: 200 };
 const STACK_LIFT = 90;
 
 /** How high the stack may reach: below the opponent's piles at the far right of the table,
- * whose top cards and count badges end by y 160, with room for a pile of about 20 cards'
- * thickness beneath. */
+ * whose top cards end by y 160, with room for a pile of about 20 cards' thickness beneath. */
 const STACK_TOP = 175;
 
 /** Where the stack item at `index` (bottom first) of `count` is drawn, `lifted` or not. The top

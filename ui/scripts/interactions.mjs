@@ -2397,6 +2397,206 @@ await check(
     },
 );
 
+// `mana-floating` stops at the human's priority in their main phase with Mana Crypt's {C}
+// unspent, then plays on past their pass, which ends the step and empties the pool.
+const floatingViews = await load("mana-floating");
+const floatingAt =
+    floatingViews.findIndex(
+        (v) =>
+            v.status.kind === "deciding" &&
+            Object.values(v.players.you.mana).some((n) => n > 0),
+    ) + 1;
+
+/** The words standing on the table, outside cards, stack items, open prompts and panels and
+ * the game log (the record a player reads back, which grows with the game): what a player
+ * must read past to see the board. Text hidden or transparent, such as a closed tip, does not
+ * count. */
+const tableWords = (page) =>
+    page.evaluate(() => {
+        const SKIP = [
+            ".card-el",
+            ".card-slot",
+            ".card-back",
+            ".stack-item",
+            ".prompt",
+            ".action-menu",
+            ".choice",
+            ".zone-viewer",
+            ".inspect",
+            ".settings",
+            ".announcements",
+            ".game-log",
+        ].join(", ");
+        const shown = (el) => {
+            if (getComputedStyle(el).visibility !== "visible") return false;
+            for (let a = el; a; a = a.parentElement) {
+                if (parseFloat(getComputedStyle(a).opacity) === 0) return false;
+            }
+            return el.getClientRects().length > 0;
+        };
+        const words = [];
+        const table = document.querySelector(".table");
+        const walk = document.createTreeWalker(table, NodeFilter.SHOW_TEXT);
+        for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+            const el = n.parentElement;
+            if (!el || el.closest(SKIP) || !shown(el)) continue;
+            words.push(...(n.textContent.match(/[\p{L}\p{N}]+/gu) ?? []));
+        }
+        return words;
+    });
+
+// The table's standing words in states that show its piles, mana and the stack: the badges,
+// the life totals and the turn button. Moving the piles' names and counts into their tips took
+// these from 15, 13, 11 and 8; no change adds standing words to the table.
+const WORD_BUDGETS = [
+    { fixture: "choice-scry", at: 520, budget: 7 },
+    { fixture: FIXTURE, at: 119, budget: 7 },
+    { fixture: "stack-x", budget: 7 },
+    { fixture: "mana-floating", at: floatingAt, budget: 8 },
+];
+for (const { fixture, at, budget } of WORD_BUDGETS) {
+    await check(
+        `${fixture}: the table stands no more words than before`,
+        async (page) => {
+            await page.clock.runFor(3000);
+            const words = await tableWords(page);
+            assert.ok(
+                words.length <= budget,
+                `${words.length} words, over ${budget}: ${words.join(" ")}`,
+            );
+        },
+        {
+            fixture,
+            at: at ?? (await load(fixture)).length,
+            ready: ".card-el:is(.card-el-hand, .card-el-land, .card-el-field)",
+            reducedMotion: "reduce",
+        },
+    );
+}
+
+await check(
+    "hovering the tracker, a pile or a library says what the table shows",
+    async (page) => {
+        await page.clock.runFor(3000);
+        const view = (await load("choice-scry"))[519];
+        assert.equal(
+            view.turn.step,
+            "precombatMain",
+            "the fixture is at Main 1",
+        );
+        /** The one tip showing with the pointer on the first match of `selector`. */
+        const tip = async (selector) => {
+            await page.hover(selector);
+            return page.locator(".tip").filter({ visible: true }).innerText();
+        };
+        assert.equal(
+            await tip(".turn-controls .phase-current"),
+            `Turn ${view.turn.number} · Main 1`,
+        );
+        assert.equal(
+            await tip("[data-pile=graveyard][data-side=you]"),
+            `Graveyard · ${view.players.you.graveyard.length}`,
+        );
+        assert.equal(
+            await tip('[aria-label^="Library"]'),
+            `Library · ${view.players.opponent.library.length}`,
+        );
+    },
+    {
+        fixture: "choice-scry",
+        at: 520,
+        ready: ".card-el:is(.card-el-hand, .card-el-land, .card-el-field)",
+        reducedMotion: "reduce",
+    },
+);
+
+await check(
+    "unspent mana shows by the life orb and pulses on a pass, unasked",
+    async (page) => {
+        await page.clock.runFor(3000);
+        await page.clock.pauseAt(Date.now() + 60_000);
+        const decision = floatingViews[floatingAt - 1].status.decision;
+        assert.equal(decision.passTo.kind, "step", "the pass ends the step");
+        const pool = page.locator(".mana-pool");
+        assert.equal(
+            await pool.getAttribute("aria-label"),
+            "Unspent mana: {C}",
+        );
+        await page.getByRole("button", { name: /^Next/ }).click();
+        assert.equal(await page.locator(".mana-pool-pulse").count(), 1);
+        assert.equal(
+            await page.getByRole("dialog").count(),
+            0,
+            "passing asks nothing",
+        );
+        assert.deepEqual(await chosen(page), [
+            decision.candidates.findIndex((c) => c.option.kind === "pass"),
+        ]);
+        // The step ends and the pool empties; it goes once the pulse is over.
+        await page.clock.runFor(5000);
+        assert.equal(await pool.count(), 0, "the emptied pool goes");
+    },
+    {
+        fixture: "mana-floating",
+        at: floatingAt,
+        ready: ".card-el:is(.card-el-hand, .card-el-land, .card-el-field)",
+    },
+);
+
+await check(
+    "each stack item shows whose it is and any X announced",
+    async (page) => {
+        await page.clock.runFor(3000);
+        const view = (await load("stack-x")).at(-1);
+        const abilities = page.locator(".stack-ability");
+        let ability = 0;
+        for (const item of view.stack) {
+            const [el, controller] =
+                item.kind === "spell"
+                    ? [
+                          page.locator(
+                              `.card-el-stack[data-slot="${item.slot}"]`,
+                          ),
+                          view.objects.find((o) => o.slot === item.slot)
+                              .controller,
+                      ]
+                    : [abilities.nth(ability++), item.controller];
+            assert.equal(
+                await el
+                    .locator("[data-controller]")
+                    .getAttribute("data-controller"),
+                controller,
+            );
+            const x = el.locator(".stack-x");
+            if (item.x > 0) {
+                assert.equal(await x.innerText(), `X=${item.x}`);
+            } else {
+                assert.equal(await x.count(), 0, "no X, no badge");
+            }
+        }
+        const controllers = view.stack.map((i) =>
+            i.kind === "spell"
+                ? view.objects.find((o) => o.slot === i.slot).controller
+                : i.controller,
+        );
+        assert.deepEqual(
+            new Set(controllers),
+            new Set(["you", "opponent"]),
+            "the fixture's stack holds both players' items",
+        );
+        assert.ok(
+            view.stack.some((i) => i.x > 0),
+            "the fixture's stack holds an X",
+        );
+    },
+    {
+        fixture: "stack-x",
+        at: (await load("stack-x")).length,
+        ready: ".card-el-stack",
+        reducedMotion: "reduce",
+    },
+);
+
 await browser.close();
 if (errors.length) {
     failed = true;

@@ -21,6 +21,7 @@ import {
   type Transition,
 } from "motion/react";
 import { Card, CardBack, type Highlight } from "../components/Card";
+import { StackMarks } from "../components/Stack";
 import type { ObjectView, Side } from "../generated/protocol";
 import { StageScale } from "./Stage";
 import { marksOf, useFace } from "./faces";
@@ -57,6 +58,8 @@ export interface CardState {
   paying?: boolean;
   /** It is attached to the card the pointer is over, or that card is attached to it. */
   linked?: boolean;
+  /** On the stack, the X its spell was announced with. */
+  x?: number;
 }
 
 export interface CardLayerProps {
@@ -388,6 +391,14 @@ function Look({
       }
     />
   );
+  if (place.look === "stack") {
+    return (
+      <div className="on-stack">
+        {card_}
+        <StackMarks controller={object.controller} x={state.x ?? 0} />
+      </div>
+    );
+  }
   return field ? (
     <div className="on-table">{card_}</div>
   ) : place.look === "hand" ? (

@@ -63,6 +63,33 @@ export function StackItem({
   );
 }
 
+/** What a stack item's frame cannot say, on its corners: whose it is, as a diamond in that
+ * player's colour (the game log's), and the X it was announced with, spell or ability alike.
+ * An X of 0 goes unmarked, as for an item without X. */
+export function StackMarks({
+  controller,
+  x,
+}: {
+  controller: "you" | "opponent";
+  x: number;
+}) {
+  return (
+    <>
+      <span
+        className={`stack-controller stack-controller-${controller}`}
+        data-controller={controller}
+        role="img"
+        aria-label={controller === "you" ? "Yours" : "Opponent's"}
+      />
+      {x > 0 && (
+        <span className="stack-x" aria-label={`X is ${x}`}>
+          X={x}
+        </span>
+      )}
+    </>
+  );
+}
+
 /** Where on an element an arrow meets it: a side's midpoint, the center, a point given as
  * fractions of the element's width and height, or, `facing`, the point of the ellipse inscribed
  * in it that faces the center of the element at the arrow's other end. */

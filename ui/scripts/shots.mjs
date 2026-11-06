@@ -44,6 +44,11 @@ try {
             await page.mouse.move(0, 0);
             await settle(page);
         }
+        // Then the pointer rests on what `hover` selects, as a player's would to see its tip.
+        if (shot.hover) {
+            await page.hover(shot.hover);
+            await settle(page);
+        }
         const path = join(out, `${shot.name}.png`);
         await page.screenshot({ path, fullPage: true });
         for (const cut of await clippedText(page))

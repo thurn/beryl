@@ -1,5 +1,5 @@
 {
-  "$comment": "What `just ui-shots` captures: a route (hash route, optionally ?fixture=<name>[&at=<n>] for a fixture ui/fixtures.json defines, from its nth view) at a viewport size, after clicking the element `click` selects, if given, or each element of a list of them in turn.",
+  "$comment": "What `just ui-shots` captures: a route (hash route, optionally ?fixture=<name>[&at=<n>] for a fixture ui/fixtures.json defines, from its nth view) at a viewport size, after clicking the element `click` selects, if given, or each element of a list of them in turn, and then with the pointer over the element `hover` selects, if given.",
   "shots": [
     {
       "name": "gallery",
@@ -108,6 +108,13 @@
       "height": 900
     },
     {
+      "name": "game-tracker-tip",
+      "route": "/?fixture=greedy-turn-9&at=119#/game",
+      "width": 1600,
+      "height": 900,
+      "hover": ".turn-controls .phase-current"
+    },
+    {
       "name": "game-main-1280",
       "route": "/?fixture=greedy-turn-9&at=119#/game",
       "width": 1280,
@@ -193,6 +200,20 @@
       "height": 800
     },
     {
+      "name": "game-pile-tip",
+      "route": "/?fixture=choice-scry&at=520#/game",
+      "width": 1600,
+      "height": 900,
+      "hover": "[data-pile=graveyard][data-side=you]"
+    },
+    {
+      "name": "game-library-tip",
+      "route": "/?fixture=choice-scry&at=520#/game",
+      "width": 1600,
+      "height": 900,
+      "hover": "[aria-label^=\"Library\"]"
+    },
+    {
       "name": "game-graveyard-viewer",
       "route": "/?fixture=choice-scry&at=520#/game",
       "width": 1600,
@@ -215,6 +236,18 @@
     {
       "name": "game-stack-tall",
       "route": "/?fixture=stack-tall#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-stack-x",
+      "route": "/?fixture=stack-x#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-mana-floating",
+      "route": "/?fixture=mana-floating&at=32#/game",
       "width": 1600,
       "height": 900
     },

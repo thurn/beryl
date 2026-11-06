@@ -1,6 +1,8 @@
-// Player and zones: life orbs, player badges, the library, the graveyard and stacked lands.
-import type { ReactNode } from "react";
+// Player and zones: life orbs, mana pools, player badges, the library, the graveyard and stacked
+// lands.
+import { useEffect, useState, type ReactNode } from "react";
 import { ASPECT, Card, CardBack, type CardFace } from "./Card";
+import { ManaSymbol } from "./Mana";
 
 // The life orb, drawn in docs/ui_mockups pixels about the orb's center. Two silver blades sweep
 // out from each side of a dark oval toward its player's edge of the table, over darker struts
@@ -279,6 +281,67 @@ export function LifeOrb({
       >
         {life}
       </span>
+    </div>
+  );
+}
+
+/** Unspent mana by type, as the protocol's ManaPool counts it. */
+export interface Pool {
+  white: number;
+  blue: number;
+  black: number;
+  red: number;
+  green: number;
+  colorless: number;
+}
+
+const POOL_SYMBOLS: [keyof Pool, string][] = [
+  ["white", "W"],
+  ["blue", "U"],
+  ["black", "B"],
+  ["red", "R"],
+  ["green", "G"],
+  ["colorless", "C"],
+];
+
+/** Whether any mana is unspent. */
+export const floating = (pool: Pool) => POOL_SYMBOLS.some(([k]) => pool[k] > 0);
+
+/** How long a pulse holds the pool on screen, in milliseconds, though it has emptied. */
+const PULSE_MS = 900;
+
+/** A player's unspent mana beside their life orb, one symbol per type with its amount when
+ * more than one, shown only while there is any (CR 106.4). Each change of `pulse` (a pass that
+ * ends the step and so loses it) makes it pulse, held on screen a moment though it empties. */
+export function ManaPool({ pool, pulse = 0 }: { pool: Pool; pulse?: number }) {
+  const [held, setHeld] = useState<{ pool: Pool; pulse: number }>();
+  useEffect(() => {
+    if (pulse === 0) return;
+    // The pool as the pulse begins, which passing may empty as the step ends (CR 500.4). Only
+    // a new pulse starts one, so the pool is read but not watched.
+    setHeld({ pool, pulse });
+    const timer = setTimeout(() => setHeld(undefined), PULSE_MS);
+    return () => clearTimeout(timer);
+  }, [pulse]);
+  const shown = floating(pool) ? pool : held?.pool;
+  if (!shown || !floating(shown)) return null;
+  const symbols = POOL_SYMBOLS.filter(([k]) => shown[k] > 0);
+  return (
+    <div
+      key={held?.pulse}
+      className={held ? "mana-pool mana-pool-pulse" : "mana-pool"}
+      role="img"
+      aria-label={`Unspent mana: ${symbols
+        .map(([k, s]) => `{${s}}`.repeat(shown[k]))
+        .join("")}`}
+      data-pool
+    >
+      {symbols.map(([k, s]) => (
+        <span key={k} className="mana-pool-entry">
+          <ManaSymbol symbol={s} />
+          {shown[k] > 1 && <b>{shown[k]}</b>}
+        </span>
+      ))}
     </div>
   );
 }
