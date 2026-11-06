@@ -541,20 +541,14 @@ fn removal_aims_at_the_creature_that_kills_us() {
     assert_eq!(name(&t, &s, target), names::SPHINX_OF_FALSE_CONCLUSIONS);
 }
 
-const THREE_ISLANDS: &[Permanent] = &[
-    Permanent::new(ISLAND),
-    Permanent::new(ISLAND),
-    Permanent::new(ISLAND),
-];
-
-/// Subtlety's evoke is two cards for an enters ability that answers only a spell: with mana
-/// for the evoke alone, it stays in hand through our turn and theirs while nothing is cast.
+/// Subtlety's evoke ("Exile a blue card from your hand") is two cards for an enters ability
+/// that answers only a spell: it stays in hand through our turn and theirs while nothing is
+/// cast.
 #[test]
 fn subtlety_is_not_evoked_on_an_empty_stack() {
     const IDLE: Scenario = Scenario::new("idle")
         .at(5, P0, TurnStep::PrecombatMain)
-        .hand(P0, &[names::SUBTLETY])
-        .battlefield(P0, THREE_ISLANDS)
+        .hand(P0, &[names::SUBTLETY, names::COUNTERSPELL])
         .library(P0, LIBRARY)
         .library(P1, LIBRARY);
     let (t, mut s) = arrange(&IDLE);
