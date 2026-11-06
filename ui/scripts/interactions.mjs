@@ -3680,18 +3680,14 @@ for (const [fixture, at] of [
     );
 }
 
-// In a target step, a hand card shows whole clear of every target it might cover (by-isv.17):
+// In a target step, a card shows whole clear of every target it might cover (by-isv.17):
 // Fractured Identity's in greedy-turn-9, whose targets fill the table's middle, and Swift
-// Reconfiguration's in attached-across.
-for (const fixture of ["greedy-turn-9", "attached-across"]) {
+// Reconfiguration's in attached-across and in crew, whose targets lie on both sides.
+for (const fixture of ["greedy-turn-9", "attached-across", "crew"]) {
     const views = await load(fixture);
-    const at = views.findIndex(
-        (v) =>
-            v.status.decision?.kind === "target" &&
-            v.objects.some((o) => o.zone === "hand" && o.owner === "you"),
-    );
+    const at = views.findIndex((v) => v.status.decision?.kind === "target");
     await check(
-        `hovering a hand card in ${fixture}'s target step covers no target`,
+        `hovering a card in ${fixture}'s target step covers no target`,
         async (page) => {
             await page.clock.runFor(2000);
             const targets = await page.$$eval(
@@ -3709,19 +3705,16 @@ for (const fixture of ["greedy-turn-9", "attached-across"]) {
                     }),
             );
             assert.ok(targets.length > 0, "the targets glow");
-            const hand = await page.$$eval(".card-el-hand", (cards) =>
-                cards.map((e) => {
-                    const r = e.getBoundingClientRect();
-                    return {
-                        name: e.dataset.card,
-                        x: r.x + r.width / 2,
-                        y: r.y + 30,
-                    };
-                }),
-            );
-            assert.ok(hand.length > 0, "the hand is drawn");
-            for (const { name, x, y } of hand) {
-                await page.mouse.move(x, y);
+            const cards = '.card-el-hand, .card-el[data-zone="battlefield"]';
+            const count = await page.locator(cards).count();
+            for (let i = 0; i < count; i++) {
+                const name = await page
+                    .locator(cards)
+                    .nth(i)
+                    .getAttribute("data-card");
+                const point = name && (await visiblePoint(page, cards, i));
+                if (!point) continue;
+                await page.mouse.move(point.x, point.y);
                 await page.clock.runFor(400);
                 const shown = await inspectorOf(page, name);
                 for (const t of targets) {
@@ -3735,7 +3728,7 @@ for (const fixture of ["greedy-turn-9", "attached-across"]) {
         {
             fixture,
             at: at + 1,
-            ready: ".card-el-hand",
+            ready: '[data-zone="battlefield"]',
             reducedMotion: "reduce",
         },
     );

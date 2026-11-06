@@ -98,7 +98,6 @@ import {
   layout,
   linked,
   overLog,
-  overlaps,
   passButton,
   phaseOf,
   pileLook,
@@ -1106,26 +1105,46 @@ function StepBanner({
  * life orb, which lies between the two sides. While the stack or a prompt holds the table's
  * right (`taken`), it is shown smaller in the column between the life orbs and the stack
  * instead. It never covers a card glowing as a target (`targets`, their boxes), which the
- * player may be about to pick: where the side it prefers would, it takes the other. */
+ * player may be about to pick: where its side would, it takes the other, and where both would,
+ * it shrinks toward a side's outer edge until it clears them. Failing that, it covers as little
+ * of them as it can. */
 function inspectorPlace(
   x: number,
   taken: boolean,
   targets: Box[],
 ): InspectPlace {
-  const right = taken
+  const right: InspectPlace = taken
     ? BETWEEN_ORBS_AND_STACK
     : { left: STAGE.width - INSPECT_WIDTH - 24 };
   const sides = x >= STAGE.width / 2 ? [LEFT, right] : [right, LEFT];
-  return (
-    sides.find((side) => {
-      const box = inspectorBox(side);
-      return !targets.some((t) => overlaps(box, t));
-    }) ?? sides[0]!
-  );
+  const covered = (place: InspectPlace) => {
+    const box = inspectorBox(place);
+    return targets.reduce((sum, t) => {
+      const w = Math.min(box.right, t.right) - Math.max(box.left, t.left);
+      const h = Math.min(box.bottom, t.bottom) - Math.max(box.top, t.top);
+      return sum + (w > 0 && h > 0 ? w * h : 0);
+    }, 0);
+  };
+  for (const side of sides) {
+    const full = side.width ?? INSPECT_WIDTH;
+    for (let width = full; width >= INSPECT_MIN_WIDTH; width -= 10) {
+      // The left side keeps its left edge; the others their right one, by the stack or the
+      // stage's edge.
+      const place = {
+        ...side,
+        left: side === LEFT ? side.left : side.left + full - width,
+        width,
+      };
+      if (covered(place) === 0) return place;
+    }
+  }
+  return sides.reduce((a, b) => (covered(b) < covered(a) ? b : a));
 }
 
 /** The table's left, under the badges. */
-const LEFT = { left: 24 };
+const LEFT: InspectPlace = { left: 24 };
+/** How narrow the inspector gets to clear a target: a scan's rules text still reads. */
+const INSPECT_MIN_WIDTH = 230;
 
 /** Right of the life orbs (x 670 to 930), left of the stack (STACK.x), and below the
  * opponent's orb and above yours (y 159 and 618), with room for the artist's line. */

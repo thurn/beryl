@@ -110,31 +110,28 @@ export interface Box {
   bottom: number;
 }
 
-/** Whether two boxes share any area. */
-export function overlaps(a: Box, b: Box): boolean {
-  return (
-    a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
-  );
-}
-
-/** The box a placed card covers, its lean and turn aside: a battlefield frame as wide as it
- * takes (`span`) and, tapped, as tall as its frame is wide (lying); any other a full card. */
+/** The box a placed card covers, its turn aside: a battlefield frame as wide as it takes
+ * (`span`) and, tapped, as tall as its frame is wide (lying); any other a full card. Its lean
+ * shears its near end sideways (Motion's skewX about its top-left corner). */
 export function footprint(p: Placement): Box {
   const field =
     p.look === "field" ||
     p.look === "land" ||
     p.look === "beneath" ||
     p.look === "attached";
-  const height = !field
-    ? p.width / FULL_ASPECT
-    : p.span < p.width
-      ? p.width
-      : p.width / ASPECT.field;
+  const height =
+    (!field
+      ? p.width / FULL_ASPECT
+      : p.span < p.width
+        ? p.width
+        : p.width / ASPECT.field) * p.scale;
+  const shear = Math.tan((p.skew * Math.PI) / 180) * height;
+  const right = p.x + p.span * p.scale;
   return {
-    left: p.x,
+    left: Math.min(p.x, p.x + shear),
     top: p.y,
-    right: p.x + p.span * p.scale,
-    bottom: p.y + height * p.scale,
+    right: Math.max(right, right + shear),
+    bottom: p.y + height,
   };
 }
 
