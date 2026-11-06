@@ -374,6 +374,16 @@ pub const BOARDS: &[Scenario] = &[
         )
         .library(P1, LANDS)
         .actions(&[cast_with_option(P0, THIEVING_SKYDIVER)]),
+    // Subtlety cast with evoke, the blue card to exile from the hand yet to choose; it could be
+    // cast for its mana too.
+    Scenario::new("cast-evoke")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[ISLAND_, ISLAND_, PLAINS_, PLAINS_])
+        .hand(P0, &[SUBTLETY, COUNTERSPELL, JACE_VRYNS_PRODIGY, PLAINS])
+        .library(P0, LANDS)
+        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[cast_with_option(P0, SUBTLETY)]),
     // Portable Hole takes the opponent's Snapcaster Mage, beside a tapped land, an untapped
     // one and a tapped creature.
     Scenario::new("exiled-beneath")

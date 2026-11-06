@@ -123,6 +123,12 @@
       "where": ["casting Thieving Skydiver"]
     },
     {
+      "name": "cast-evoke",
+      "board": "cast-evoke",
+      "until": "first exileCost decision for seat 0",
+      "where": ["casting Subtlety"]
+    },
+    {
       "name": "exiled-beneath",
       "board": "exiled-beneath",
       "until": "first priority decision for seat 0",

@@ -281,6 +281,24 @@ await check(
     },
 );
 
+await check(
+    "the spell being cast, dragged back to the hand, is taken back",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.click(card);
+        const onStack = `${card}[data-zone="stack"]`;
+        await page.waitForSelector(onStack);
+        await page
+            .getByRole("dialog", { name: `Choose a target for ${name}` })
+            .waitFor();
+        await page.clock.runFor(1000);
+        const from = center(await page.locator(onStack).boundingBox());
+        await drag(page, onStack, { by: { x: 700 - from.x, y: 870 - from.y } });
+        await page.waitForSelector(`${card}[data-zone="hand"]`);
+        assert.equal(await cancels(page), 1, "cancelled");
+    },
+);
+
 await check("Space passes priority", async (page) => {
     await page.clock.runFor(2000);
     await page.keyboard.press("Space");
@@ -1720,6 +1738,120 @@ await check(
         );
     },
     { fixture: "cast-kicker", at: kickViews.length - 1, ready: skydiver },
+);
+
+// Subtlety, cast for its mana or with evoke, whose exile from the hand is asked as a cost while
+// the cast can still be taken back.
+const evokeViews = await load("cast-evoke");
+const evokeCasts = evokeViews.at(-2).status.decision.candidates;
+const evoked = evokeCasts.findIndex(
+    (c) => c.option.kind === "cast" && c.option.costs.length > 0,
+);
+assert.ok(evoked >= 0, "the evoke fixture offers the evoked cast");
+const exiling = evokeViews.at(-1).status.decision;
+assert.equal(exiling.kind, "exileCost");
+assert.ok(exiling.cancellable, "the exile is asked while the cast is unpaid");
+const subtlety = `[data-slot="${evokeCasts[evoked].option.slot}"]`;
+const evokeFixture = {
+    fixture: "cast-evoke",
+    at: evokeViews.length - 1,
+    ready: `${subtlety}[data-zone="hand"]`,
+};
+
+/** Picks up the hand card `selector` matches, raised, and lets it go at `to`. */
+async function dragHandCardTo(page, selector, to) {
+    const box = await page.locator(selector).boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + 40);
+    await page.clock.runFor(1000);
+    const raised = await page.locator(selector).boundingBox();
+    const grab = { x: raised.x + raised.width / 2, y: raised.y + 40 };
+    await page.mouse.move(grab.x, grab.y);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i++) {
+        await page.mouse.move(
+            grab.x + ((to.x - grab.x) * i) / 10,
+            grab.y + ((to.y - grab.y) * i) / 10,
+        );
+    }
+    await page.mouse.up();
+}
+
+/** The enabled primary buttons on screen. */
+const primaries = (page) =>
+    page.$$eval(
+        ".button-primary",
+        (els) =>
+            els.filter((b) => !b.disabled && b.getClientRects().length > 0)
+                .length,
+    );
+
+await check(
+    "the cast step is the one primary, and its card dragged back takes it back",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.click(subtlety);
+        const step = page.getByRole("dialog", { name: "Cast Subtlety" });
+        await step.waitFor();
+        assert.equal(await primaries(page), 1, "the cast step's Cast alone");
+        assert.ok(
+            await page.locator(".turn-action button").isDisabled(),
+            "the turn button waits for the cast",
+        );
+        // Let go in the hand, the card goes back and the step closes, casting nothing.
+        await dragHandCardTo(page, subtlety, { x: 700, y: 870 });
+        assert.equal(await step.count(), 0, "the cast step closed");
+        assert.deepEqual(await chosen(page), [], "nothing cast");
+        assert.ok(
+            await page.locator(".turn-action button").isEnabled(),
+            "the turn button passes again",
+        );
+        // Let go on the battlefield, it is cast as the step had it.
+        await page.click(subtlety);
+        await step.getByRole("radio", { name: /^Evoke/ }).click();
+        await dragHandCardTo(page, subtlety, { x: 800, y: 380 });
+        assert.deepEqual(await settled(page, 1), [evoked], "cast with evoke");
+    },
+    evokeFixture,
+);
+
+await check(
+    "an evoke's exile is taken back by Escape, a right-click and Cancel",
+    async (page) => {
+        const overlay = page.locator(".overlay.choice");
+        const evoke = async () => {
+            await page.clock.runFor(2000);
+            await page.click(subtlety);
+            const step = page.getByRole("dialog", { name: "Cast Subtlety" });
+            await step.getByRole("radio", { name: /^Evoke/ }).click();
+            await step
+                .getByRole("button", { name: "Cast", exact: true })
+                .click();
+            await overlay.waitFor();
+        };
+        const takenBack = async (n) => {
+            await page.waitForSelector(`${subtlety}[data-zone="hand"]`);
+            assert.equal(await cancels(page), n, `cancelled ${n}`);
+            assert.equal(await overlay.count(), 0, "the exile is not asked");
+        };
+        await evoke();
+        // The card whose cost it is stands beside the choice.
+        assert.equal(
+            await overlay.locator(".overlay-aside .card-name").textContent(),
+            "Subtlety",
+        );
+        await page.keyboard.press("Escape");
+        await takenBack(1);
+        await evoke();
+        await page.mouse.click(800, 450, { button: "right" });
+        await takenBack(2);
+        await evoke();
+        await overlay
+            .getByRole("button", { name: "Cancel", exact: true })
+            .click();
+        await takenBack(3);
+        assert.deepEqual(await chosen(page), [evoked, evoked, evoked]);
+    },
+    evokeFixture,
 );
 
 /** A fixture stopped at a payment plan and the view after: the cast before it, the plan the

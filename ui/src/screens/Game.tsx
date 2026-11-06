@@ -431,6 +431,7 @@ function Playing({ playback }: { playback: Playback }) {
           busy={waiting || held !== undefined}
           onPlan={plan}
           onViewBattlefield={() => setPeek(choice.key)}
+          onCancel={decision?.cancellable ? cancelCast : undefined}
         />
       )}
       {choice && peeking && (

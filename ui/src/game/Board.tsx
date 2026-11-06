@@ -357,6 +357,17 @@ export function Board({
   // The top of the stack's source glows gold and its targets cyan, whoever has priority
   // (trigger_on_stack_with_target.png).
   const top = view.stack[view.stack.length - 1];
+  // The spell being cast, on top of the stack from the start of its casting (CR 601.2a), can be
+  // dragged back to the hand while it can still be taken back.
+  const unpaid =
+    cancellable &&
+    top?.kind === "spell" &&
+    objects.get(top.slot)?.controller === "you"
+      ? top.slot
+      : undefined;
+  if (unpaid !== undefined) {
+    states.set(unpaid, { ...states.get(unpaid), draggable: true });
+  }
   const marks: [number | null | undefined, Highlight][] = [
     [top?.kind === "ability" ? top.source : undefined, "source"],
   ];
@@ -512,9 +523,24 @@ export function Board({
     return true;
   };
   const onDrop = (slot: number, { start, at, onto }: Drop) => {
+    // The card being cast let go in the hand goes back: the cast step closes, or the spell not
+    // yet paid for is taken back. The cast step's card let go on the battlefield is cast as set.
+    const inHand = at.y >= BATTLEFIELD_EDGE;
+    if (castingNow?.slot === slot) {
+      if (inHand) {
+        setCasting(undefined);
+        return false;
+      }
+      cast(castingNow.choice);
+      return true;
+    }
+    if (slot === unpaid) {
+      if (inHand) cancel?.();
+      return inHand;
+    }
     const acts = deciding ? (can.bySlot.get(slot) ?? []) : [];
     if (objects.get(slot)?.zone === "hand") {
-      const plays = at.y < BATTLEFIELD_EDGE ? playActs(acts) : [];
+      const plays = inHand ? [] : playActs(acts);
       const casts = castActs(plays);
       if (casts.length === plays.length && asksCastStep(casts)) {
         // The cast asks for more (which cast, X): the cast step, with the card back in hand.
@@ -843,11 +869,16 @@ export function Board({
               <Finish decision={declaring} done={finish} onPick={pick} />
             ) : decision?.kind === "priority" || waiting ? (
               <div className="turn-action">
+                {/* In the cast step, its Cast is the one primary action. */}
                 <TurnButton
                   label={waiting ? "Pass" : stop.label}
-                  disabled={waiting || can.pass === undefined}
+                  disabled={
+                    waiting ||
+                    can.pass === undefined ||
+                    castingNow !== undefined
+                  }
                   onClick={() => {
-                    if (can.pass === undefined) return;
+                    if (can.pass === undefined || castingNow) return;
                     // Mana left unspent empties as the step ends (CR 500.4): passing on to a
                     // step, rather than to the top of the stack resolving, pulses the pool
                     // rather than asking.

@@ -188,6 +188,7 @@ INTERACTION_FIXTURES = [
     "choice-trigger-order",
     "hand-pair",
     "cast-kicker",
+    "cast-evoke",
     "pay-default",
     "pay-other",
     "exiled-beneath",

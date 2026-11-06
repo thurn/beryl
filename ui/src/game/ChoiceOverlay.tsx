@@ -35,6 +35,9 @@ export interface ChoiceOverlayProps {
   busy: boolean;
   onPlan(plan: Intent[]): void;
   onViewBattlefield(): void;
+  /** Takes back the cast the choice is part of, while it is unpaid (an evoke's exile): a Cancel
+   * button, Escape or a right-click. */
+  onCancel?(): void;
 }
 
 export function ChoiceOverlay(props: ChoiceOverlayProps) {
@@ -70,16 +73,36 @@ function Shell({
   view,
   choice,
   actions,
+  busy,
   onViewBattlefield,
+  onCancel,
   children,
 }: {
   view: PlayerView;
   choice: Choice;
   actions: OverlayAction[];
+  busy: boolean;
   onViewBattlefield(): void;
+  onCancel?(): void;
   children?: ReactNode;
 }) {
   const source = choice.source;
+  useEffect(() => {
+    if (!onCancel || busy) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !e.defaultPrevented) onCancel();
+    };
+    const onMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      onCancel();
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("contextmenu", onMenu);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("contextmenu", onMenu);
+    };
+  }, [onCancel, busy]);
   return (
     <Overlay
       className={`choice choice-${choice.kind}`}
@@ -88,7 +111,11 @@ function Shell({
         choice.instruction && <RulesText text={choice.instruction} />
       }
       aside={source && <SourceCard view={view} source={source} />}
-      actions={actions}
+      actions={
+        onCancel
+          ? [...actions, { label: "Cancel", disabled: busy, onClick: onCancel }]
+          : actions
+      }
       onViewBattlefield={onViewBattlefield}
     >
       {children}
@@ -199,6 +226,7 @@ function ArrangeChoice({
   busy,
   onPlan,
   onViewBattlefield,
+  onCancel,
 }: ChoiceOverlayProps & { choice: Arrange }) {
   const [piles, setPiles] = useState({
     left: choice.left,
@@ -254,7 +282,9 @@ function ArrangeChoice({
     <Shell
       view={view}
       choice={choice}
+      busy={busy}
       onViewBattlefield={onViewBattlefield}
+      onCancel={onCancel}
       actions={[
         {
           label: "Done",
@@ -466,6 +496,7 @@ function PickChoice({
   busy,
   onPlan,
   onViewBattlefield,
+  onCancel,
 }: ChoiceOverlayProps & { choice: Pick }) {
   const [picked, setPicked] = useState<number[]>(choice.picked ?? []);
   const toggle = (slot: number) =>
@@ -487,7 +518,9 @@ function PickChoice({
     <Shell
       view={view}
       choice={choice}
+      busy={busy}
       onViewBattlefield={onViewBattlefield}
+      onCancel={onCancel}
       actions={[
         ...(choice.pickable.length > 0 || !choice.decline
           ? [
@@ -550,6 +583,7 @@ function AskChoice({
   busy,
   onPlan,
   onViewBattlefield,
+  onCancel,
 }: ChoiceOverlayProps & { choice: Ask }) {
   const objects = new Map(view.objects.map((o) => [o.slot, o]));
   const width = rowWidth(choice.cards.length);
@@ -558,7 +592,9 @@ function AskChoice({
     <Shell
       view={view}
       choice={choice}
+      busy={busy}
       onViewBattlefield={onViewBattlefield}
+      onCancel={onCancel}
       actions={choice.answers.map((a) => ({
         label: <RulesText text={a.label} />,
         disabled: busy,
