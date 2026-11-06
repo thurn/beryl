@@ -66,6 +66,10 @@ const DRAW_MIN: i32 = 30;
 /// The library a Jace, Wielder of Mysteries wins from, near enough: at most this many cards.
 const JACE_LIBRARY: usize = 12;
 
+/// The library a Jace, Wielder of Mysteries mills its controller's opponent out of, near
+/// enough.
+const JACE_MILLS: usize = 15;
+
 /// What a Jace, Wielder of Mysteries about to win is worth, before its loyalty.
 const JACE_WINS: i32 = 150;
 
@@ -271,10 +275,11 @@ pub(crate) fn appraise(p: &Policy<'_>, slot: Slot, base: i32) -> Option<i32> {
     None
 }
 
-/// Whether `who`'s library is short enough that their Jace, Wielder of Mysteries would win
-/// within a few turns: its +1 draws one a turn, its −8 seven, and their draw step one.
+/// Whether a library is short enough that `who`'s Jace, Wielder of Mysteries would win within
+/// a few turns: their own, which its +1 draws from one a turn, its −8 seven and their draw
+/// step one; or their opponent's, which its +1 mills two a turn.
 fn wins_by_decking(p: &Policy<'_>, who: Seat) -> bool {
-    p.obs.library(who).len() <= JACE_LIBRARY
+    p.obs.library(who).len() <= JACE_LIBRARY || p.obs.library(who.opponent()).len() <= JACE_MILLS
 }
 
 /// Whether a permanent dying comes back as a token copy of itself: a Sphinx of False
