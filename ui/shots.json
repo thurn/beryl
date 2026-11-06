@@ -503,6 +503,19 @@
       "height": 900
     },
     {
+      "name": "game-emblems",
+      "route": "/?fixture=emblems#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-emblems-hover",
+      "route": "/?fixture=emblems#/game",
+      "width": 1600,
+      "height": 900,
+      "hover": "[data-emblem='Teferi, Hero of Dominaria Emblem']"
+    },
+    {
       "name": "game-target-graveyard",
       "route": "/?fixture=target-graveyard#/game",
       "width": 1600,

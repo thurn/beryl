@@ -26,6 +26,8 @@ use beryl_search::Agent;
 /// The tokens the boards name, as the cards that make them name them.
 const INSECT_TOKEN: &str = "Insect Token";
 const MAP_TOKEN: &str = "Map Token";
+/// Jace, Vryn's Prodigy's back face.
+const JACE_TELEPATH_UNBOUND: &str = "Jace, Telepath Unbound";
 
 /// Every board, by name.
 pub const BOARDS: &[Scenario] = &[
@@ -967,6 +969,34 @@ pub const BOARDS: &[Scenario] = &[
         .battlefield(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[Action::activate(P0, TEFERI_HERO_OF_DOMINARIA, 0)]),
+    // Each player has an emblem: the human's Teferi, Hero of Dominaria −8 in their turn, then
+    // the opponent's Jace, Telepath Unbound −9 in theirs, both left on the battlefield.
+    Scenario::new("emblems")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(TEFERI_HERO_OF_DOMINARIA).counters(CounterKind::Loyalty, 9),
+                ISLAND_,
+                PLAINS_,
+            ],
+        )
+        .library(P0, LANDS)
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(JACE_VRYNS_PRODIGY)
+                    .transformed()
+                    .counters(CounterKind::Loyalty, 10),
+                ISLAND_,
+                PLAINS_,
+            ],
+        )
+        .library(P1, LANDS)
+        .actions(&[
+            Action::activate(P0, TEFERI_HERO_OF_DOMINARIA, 2),
+            Action::activate(P1, JACE_TELEPATH_UNBOUND, 2),
+        ]),
     // Snapcaster Mage's trigger targets an instant or sorcery card in the human's graveyard,
     // of three beside a creature card it can't target.
     Scenario::new("target-graveyard")

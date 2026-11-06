@@ -35,6 +35,7 @@ import {
   RulesText,
 } from "../components/Mana";
 import {
+  Emblems,
   FaceUpEdges,
   floating,
   Library,
@@ -188,6 +189,13 @@ const POOLS: Record<Side, CSSProperties> = {
   you: { left: 936, top: 659 },
 };
 
+/** Where each player's emblems lie: in their corner of the table, under the opponent's badge
+ * and left of their land piles; above your library and left of yours. */
+const EMBLEMS: Record<Side, CSSProperties> = {
+  opponent: { left: 20, top: 110 },
+  you: { left: 20, top: 712 },
+};
+
 /** Dropped above this line, a hand card is on the battlefield rather than back in the hand. */
 const BATTLEFIELD_EDGE = 690;
 /** Dragged forward at least this far, a creature attacks. */
@@ -256,6 +264,8 @@ export function Board({
   const [lifted, setLifted] = useState<number>();
   // The card off the table the pointer is on in the prompt, shown whole.
   const [pointedOff, setPointedOff] = useState<number>();
+  // The emblem the pointer is on, shown whole.
+  const [pointedEmblem, setPointedEmblem] = useState<string>();
   const [settings, setSettings] = useState(false);
   /** How many times the player passed with mana unspent: each pulses their pool. */
   const [lost, setLost] = useState(0);
@@ -957,6 +967,14 @@ export function Board({
           target={deciding ? can.players.get("you") : undefined}
           onPick={(act) => pick(act.index, act.then)}
         />
+        {(["opponent", "you"] as const).map((side) => (
+          <div key={side} className="hud" style={EMBLEMS[side]}>
+            <Emblems
+              names={view.players[side].emblems}
+              onPoint={setPointedEmblem}
+            />
+          </div>
+        ))}
         <div className="hud" style={POOLS.opponent}>
           <ManaPool pool={opponent.mana} />
         </div>
@@ -1190,6 +1208,13 @@ export function Board({
             )}
             lit={menu?.pointed && litParagraph(menu.pointed, objects)}
             refusal={menu ? undefined : refusal}
+          />
+        )}
+
+        {pointedEmblem !== undefined && !menu && !dimmed && (
+          <Inspect
+            object={{ ...BLANK, name: pointedEmblem }}
+            place={inspectorPlace(0, view.stack.length > 0 || asking, targets)}
           />
         )}
 

@@ -1,7 +1,8 @@
-// Player and zones: life orbs, mana pools, player badges, the library, the graveyard and stacked
-// lands.
+// Player and zones: life orbs, mana pools, player badges, emblems, the library, the graveyard
+// and stacked lands.
 import { useEffect, useState, type ReactNode } from "react";
-import { CARD_ASPECT, Card, CardBack, type CardFace } from "./Card";
+import { useCardArt } from "../cards";
+import { CARD_ASPECT, Card, CardArt, CardBack, type CardFace } from "./Card";
 import { Tip } from "./Controls";
 import { ManaSymbol } from "./Mana";
 
@@ -457,6 +458,61 @@ export function PlayerBadge({
         </span>
       )}
     </div>
+  );
+}
+
+/** A player's emblems ([CR 114.1](https://yawgatog.com/resources/magic-rules/#R1141): "An
+ * emblem is a marker used to represent an object that has one or more abilities"), each a
+ * round medallion of its art; pointing at one shows it whole. */
+export function Emblems({
+  names,
+  onPoint,
+}: {
+  names: string[];
+  /** The emblem pointed at, or none once the pointer leaves it. */
+  onPoint(name: string | undefined): void;
+}) {
+  if (names.length === 0) return null;
+  return (
+    <div className="emblems" aria-label="Emblems">
+      {names.map((name, i) => (
+        <Emblem key={`${i}-${name}`} name={name} onPoint={onPoint} />
+      ))}
+    </div>
+  );
+}
+
+function Emblem({
+  name,
+  onPoint,
+}: {
+  name: string;
+  onPoint(name: string | undefined): void;
+}) {
+  const art = useCardArt(name);
+  const on = () => onPoint(name);
+  const off = () => onPoint(undefined);
+  return (
+    <span
+      className="emblem"
+      tabIndex={0}
+      role="img"
+      aria-label={name}
+      data-emblem={name}
+      onPointerEnter={on}
+      onPointerLeave={off}
+      onFocus={on}
+      onBlur={off}
+    >
+      <CardArt
+        card={{
+          name,
+          typeLine: art?.face.type_line ?? "",
+          colors: [],
+          art: art?.src,
+        }}
+      />
+    </span>
   );
 }
 

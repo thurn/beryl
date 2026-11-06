@@ -199,6 +199,8 @@ enum Condition {
     Crowded(usize),
     /// The top of the stack is a spell.
     SpellOnStack,
+    /// Each player has an emblem.
+    Emblems,
 }
 
 /// What the table draws on a permanent beyond its frame.
@@ -257,8 +259,8 @@ impl Condition {
     /// "attached across the table", "castable from exile", "castable from the graveyard",
     /// "known card in the opponent's hand", "token twins", "changed token", "token beside its
     /// card", "stolen permanent", "mana floating", "X on the stack", "spell on the stack",
-    /// "<n> nonland permanents a side", or "<mark> beside a twin" with the mark "+1/+1
-    /// counters", "damage", "summoning sickness" or "story or time counters".
+    /// "emblems a side", "<n> nonland permanents a side", or "<mark> beside a twin" with the
+    /// mark "+1/+1 counters", "damage", "summoning sickness" or "story or time counters".
     fn parse(text: &str) -> Result<Condition, String> {
         let condition = match text {
             "attacking" => Condition::Attacking,
@@ -287,6 +289,7 @@ impl Condition {
             "X on the stack" => Condition::XOnStack,
             "namesake candidates" => Condition::NamesakeCandidates,
             "spell on the stack" => Condition::SpellOnStack,
+            "emblems a side" => Condition::Emblems,
             _ => {
                 if let Some(step) = text.strip_prefix("step ") {
                     Condition::Step(
@@ -385,22 +388,8 @@ impl Condition {
                 _ => false,
             },
             Condition::PlayablePair => playable_pair(view),
-            Condition::ExiledBeneath => view.objects.iter().any(|o| {
-                o.zone == ZoneName::Exile
-                    && o.exiled_by.is_some_and(|host| {
-                        view.objects
-                            .iter()
-                            .any(|h| h.slot == host && h.zone == ZoneName::Battlefield)
-                    })
-            }),
-            Condition::ExiledWith => view.objects.iter().any(|o| {
-                o.zone == ZoneName::Exile
-                    && o.exiled_with.is_some_and(|host| {
-                        view.objects
-                            .iter()
-                            .any(|h| h.slot == host && h.zone == ZoneName::Battlefield)
-                    })
-            }),
+            Condition::ExiledBeneath => exiled_by_permanent(view, |o| o.exiled_by),
+            Condition::ExiledWith => exiled_by_permanent(view, |o| o.exiled_with),
             Condition::AttachedAcross => attached_across(view),
             Condition::Marked(mark) => marked_beside_twin(view, *mark),
             Condition::CastableFrom(zone) => castable_from(view, *zone),
@@ -413,6 +402,7 @@ impl Condition {
             Condition::XOnStack => x_on_stack(view),
             Condition::Crowded(n) => crowded(view, *n),
             Condition::SpellOnStack => matches!(view.stack.last(), Some(StackItem::Spell { .. })),
+            Condition::Emblems => emblems_a_side(view),
         }
     }
 }
@@ -486,6 +476,23 @@ fn playable_pair(view: &PlayerView) -> bool {
             })
         })
     })
+}
+
+/// Whether a card in exile links, by `host`, to a permanent on the battlefield.
+fn exiled_by_permanent(view: &PlayerView, host: impl Fn(&ObjectView) -> Option<u8>) -> bool {
+    view.objects.iter().any(|o| {
+        o.zone == ZoneName::Exile
+            && host(o).is_some_and(|host| {
+                view.objects
+                    .iter()
+                    .any(|h| h.slot == host && h.zone == ZoneName::Battlefield)
+            })
+    })
+}
+
+/// Whether each player has an emblem (CR 114.1).
+fn emblems_a_side(view: &PlayerView) -> bool {
+    !view.players.you.emblems.is_empty() && !view.players.opponent.emblems.is_empty()
 }
 
 /// Whether the human has unspent mana (CR 106.4).
@@ -921,6 +928,7 @@ mod tests {
             Ok(Condition::NeighbourTarget)
         );
         assert_eq!(Condition::parse("token twins"), Ok(Condition::TokenTwins));
+        assert_eq!(Condition::parse("emblems a side"), Ok(Condition::Emblems));
         assert_eq!(
             Condition::parse("changed token"),
             Ok(Condition::ChangedToken)
