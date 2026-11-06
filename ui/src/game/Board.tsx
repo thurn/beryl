@@ -111,6 +111,7 @@ import { stoppedPhases, togglePhase } from "./stops";
 import { tablePick } from "./tablePick";
 import {
   combatBanner,
+  exiledWith,
   footprint,
   layout,
   linked,
@@ -208,6 +209,8 @@ interface Menu {
   acts: Act[];
   unaffordable?: number[];
   pointed?: Act;
+  /** How many cards in exile are linked to the card, for an entry that shows them. */
+  exiled?: number;
 }
 
 /** A card's cast being set up in the cast step. */
@@ -256,8 +259,11 @@ export function Board({
   const [settings, setSettings] = useState(false);
   /** How many times the player passed with mana unspent: each pulses their pool. */
   const [lost, setLost] = useState(0);
-  // The graveyard or exile pile open in the zone viewer, which stays open as views go by.
-  const [viewing, setViewing] = useState<Pick<ZonePile, "side" | "zone">>();
+  // The graveyard or exile pile open in the zone viewer, which stays open as views go by; or
+  // the cards exiled with the permanent in `linked`.
+  const [viewing, setViewing] = useState<
+    Pick<ZonePile, "side" | "zone"> & { linked?: number }
+  >();
   const can = useMemo(() => interactions(view), [view]);
   // Under a screen over the table (the opening hand, a choice, the game's end), the table only
   // shows.
@@ -366,9 +372,13 @@ export function Board({
   }, [hoveredPlace]);
   useEffect(() => () => clearTimeout(recheck.current), []);
   const piles = useMemo(() => zonePiles(shown), [shown]);
-  const viewed = piles.find(
+  const pile = piles.find(
     (p) => p.side === viewing?.side && p.zone === viewing.zone,
   );
+  const viewed =
+    pile && viewing?.linked !== undefined
+      ? { ...pile, cards: exiledWith(shown, viewing.linked) }
+      : pile;
 
   // A new view closes whatever was open on the old one, and starts any declaration afresh.
   useEffect(() => {
@@ -586,6 +596,13 @@ export function Board({
     if (index !== undefined) pick(index, rest);
   };
 
+  /** Opens the viewer on the cards exiled with the permanent in `slot`. */
+  const viewExiled = (slot: number) => {
+    const o = objects.get(slot);
+    setMenu(undefined);
+    if (o) setViewing({ side: o.owner, zone: "exile", linked: slot });
+  };
+
   /** A click on the card in `slot`: what it offers, or nothing (false). */
   const onClick = (slot: number, at: Point): boolean => {
     if (castingNow) {
@@ -615,21 +632,42 @@ export function Board({
       return true;
     }
     const acts = deciding ? can.bySlot.get(slot) : undefined;
+    // The cards exiled with a permanent are a click away: shown at once when the permanent
+    // has nothing else to do, listed with what it does at a priority.
+    const exiled =
+      objects.get(slot)?.zone === "battlefield"
+        ? exiledWith(view, slot).length
+        : 0;
     if (!acts) {
+      if (exiled > 0) {
+        viewExiled(slot);
+        return true;
+      }
       setMenu(undefined);
       setRefused(slot);
       return false;
     }
+    const listsExiled = exiled > 0 && decision?.kind === "priority";
     const casts = castActs(acts);
     const walker = loyaltyMenu(objects.get(slot), acts);
     if (walker) {
       // A loyalty ability, which cannot be taken back once its cost is paid, is chosen from
       // all of them, even when only one can be activated.
-      setMenu({ slot, at, acts, unaffordable: walker });
-    } else if (casts.length > 0 && casts.length === acts.length) {
+      setMenu({
+        slot,
+        at,
+        acts,
+        unaffordable: walker,
+        exiled: listsExiled ? exiled : undefined,
+      });
+    } else if (
+      !listsExiled &&
+      casts.length > 0 &&
+      casts.length === acts.length
+    ) {
       // A card that can only be cast is cast, or set up in the cast step.
       castOrSetUp(slot, casts);
-    } else if (acts.length === 1) {
+    } else if (!listsExiled && acts.length === 1) {
       // One use acts on the click: a land is played, an ability activated, a target picked.
       pick(acts[0]!.index, acts[0]!.then);
     } else {
@@ -637,7 +675,12 @@ export function Board({
       const listed = acts.filter(
         (a) => a.option.kind !== "cast" || a === casts[0],
       );
-      setMenu({ slot, at, acts: listed });
+      setMenu({
+        slot,
+        at,
+        acts: listed,
+        exiled: listsExiled ? exiled : undefined,
+      });
     }
     return true;
   };
@@ -1117,6 +1160,7 @@ export function Board({
             objects={objects}
             onPick={(act) => pickAct(menu.slot, act)}
             onPoint={(act) => setMenu({ ...menu, pointed: act })}
+            onView={() => viewExiled(menu.slot)}
             onClose={() => setMenu(undefined)}
           />
         )}
@@ -1151,6 +1195,11 @@ export function Board({
         {viewed && !dimmed && (
           <ZoneViewer
             pile={viewed}
+            title={
+              viewing?.linked === undefined
+                ? undefined
+                : (objects.get(viewing.linked)?.name ?? undefined)
+            }
             states={states}
             offers={(slot) => deciding && can.bySlot.has(slot)}
             onPick={(slot) => {
@@ -1747,10 +1796,14 @@ function Prompt({
     skip === undefined
       ? offered
       : [{ c: decision.candidates[skip]!, index: skip, label: "No Target" }];
-  const faces = listed.flatMap(({ c, index }) => {
-    const o = c.option.kind === "object" && objects.get(c.option.slot);
-    return o ? [{ object: o, index }] : [];
-  });
+  const faces: { object: ObjectView; index?: CandidateIndex }[] =
+    listed.flatMap(({ c, index }) => {
+      const o = c.option.kind === "object" && objects.get(c.option.slot);
+      return o ? [{ object: o, index }] : [];
+    });
+  // The card a "you may" would move, shown as the question's subject.
+  const subject = ask.kind === "mayMove" ? objects.get(ask.card) : undefined;
+  if (subject) faces.unshift({ object: subject });
   const buttons = listed.filter(({ c }) => c.option.kind !== "object");
   const ordering = decision.kind === "triggerOrder";
   const [order, setOrder] = useState<CandidateIndex[]>([]);
@@ -1799,9 +1852,9 @@ function Prompt({
             <div className="prompt-cards">
               {faces.map(({ object, index }) => (
                 <PromptCard
-                  key={index}
+                  key={index ?? `subject-${object.slot}`}
                   object={object}
-                  onPick={() => onPick(index)}
+                  onPick={index === undefined ? undefined : () => onPick(index)}
                   onPoint={(on) => onPoint(on ? object.slot : undefined)}
                 />
               ))}
@@ -1852,27 +1905,42 @@ function PromptCard({
   onPoint,
 }: {
   object: ObjectView;
-  onPick(): void;
+  /** Picks the card; none for a card the question is about, shown but not picked. */
+  onPick?(): void;
   onPoint(on: boolean): void;
 }) {
   const face = useFace(object);
-  return (
+  const hover = {
+    onPointerEnter: () => onPoint(true),
+    onPointerLeave: () => onPoint(false),
+  };
+  const card = (
+    <Card
+      card={face}
+      variant="field"
+      width={PROMPT_CARD_WIDTH}
+      highlight={onPick ? "target" : undefined}
+    />
+  );
+  return onPick ? (
     <button
       type="button"
       className="prompt-card"
       data-option={object.slot}
       aria-label={object.name ?? "A card"}
       onClick={onPick}
-      onPointerEnter={() => onPoint(true)}
-      onPointerLeave={() => onPoint(false)}
+      {...hover}
     >
-      <Card
-        card={face}
-        variant="field"
-        width={PROMPT_CARD_WIDTH}
-        highlight="target"
-      />
+      {card}
     </button>
+  ) : (
+    <span
+      className="prompt-card prompt-subject"
+      aria-label={object.name ?? "A card"}
+      {...hover}
+    >
+      {card}
+    </span>
   );
 }
 
@@ -2153,6 +2221,7 @@ function ActionMenu({
   objects,
   onPick,
   onPoint,
+  onView,
   onClose,
 }: {
   menu: Menu;
@@ -2160,6 +2229,8 @@ function ActionMenu({
   objects: Map<number, ObjectView>;
   onPick(act: Act): void;
   onPoint(act: Act | undefined): void;
+  /** Shows the cards exiled with the card. */
+  onView(): void;
   onClose(): void;
 }) {
   useEffect(() => {
@@ -2240,6 +2311,13 @@ function ActionMenu({
               )}
             </button>
           ),
+        )}
+        {menu.exiled !== undefined && (
+          <button type="button" className="action-menu-item" onClick={onView}>
+            <span className="action-menu-effect action-menu-label">
+              View exiled ({menu.exiled})
+            </span>
+          </button>
         )}
       </div>
     </>

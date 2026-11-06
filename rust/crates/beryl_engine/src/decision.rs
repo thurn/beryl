@@ -148,6 +148,12 @@ pub enum Ask {
     /// Whether the card in `card` goes on top of its owner's library (yes) or the bottom
     /// (no), as Subtlety's "Its owner puts it on the top or bottom of their library."
     TopOrBottom { card: Slot },
+    /// Whether to move the card in `card` to `to`, as Currency Converter's "you may exile
+    /// that card from your graveyard"
+    /// ([CR 608.2d](https://yawgatog.com/resources/magic-rules/#R6082d)): "If an effect of a
+    /// spell or ability offers any choices ..., the player announces these while applying the
+    /// effect."
+    MayMove { card: Slot, to: Zone },
     /// Whether the card an explore revealed goes to the graveyard
     /// ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)): the controller
     /// "may put the revealed card into their graveyard."

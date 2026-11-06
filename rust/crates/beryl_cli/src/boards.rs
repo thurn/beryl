@@ -643,6 +643,37 @@ pub const BOARDS: &[Scenario] = &[
         .library(P0, LANDS)
         .battlefield(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS),
+    // Currency Converter is asked whether to exile Thirst for Discovery's first discard; has
+    // exiled both; and puts one of the two back.
+    converter(
+        "converter-may-exile",
+        &[
+            Action::cast(P0, THIRST_FOR_DISCOVERY),
+            choose(P0, DecisionKind::Discard, TUNDRA),
+            choose(P0, DecisionKind::Discard, COUNTERSPELL),
+        ],
+    ),
+    converter(
+        "converter-exiled",
+        &[
+            Action::cast(P0, THIRST_FOR_DISCOVERY),
+            choose(P0, DecisionKind::Discard, TUNDRA),
+            choose(P0, DecisionKind::Discard, COUNTERSPELL),
+            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+        ],
+    ),
+    converter(
+        "converter-choose",
+        &[
+            Action::cast(P0, THIRST_FOR_DISCOVERY),
+            choose(P0, DecisionKind::Discard, TUNDRA),
+            choose(P0, DecisionKind::Discard, COUNTERSPELL),
+            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+            Action::activate(P0, CURRENCY_CONVERTER, 2),
+        ],
+    ),
     // Counterspell over a Thieving Skydiver kicked for X=1: a stack of both players' items,
     // one with an X.
     Scenario::new("stack-x")
@@ -1070,6 +1101,26 @@ const fn play_land(player: Seat, card: &'static str) -> Action {
 const fn choose(player: Seat, kind: DecisionKind, card: &'static str) -> Action {
     Action::choose(player, kind, card)
 }
+
+/// Currency Converter, untapped, beside the mana for Thirst for Discovery, which draws Tundra,
+/// Mana Crypt and Counterspell: `actions` play on from there.
+const fn converter(name: &'static str, actions: &'static [Action]) -> Scenario {
+    Scenario::new(name)
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, CONVERTER_TABLE)
+        .hand(P0, &[THIRST_FOR_DISCOVERY])
+        .library(P0, &[TUNDRA, MANA_CRYPT, COUNTERSPELL, ISLAND, PLAINS])
+        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(actions)
+}
+
+const CONVERTER_TABLE: &[Permanent] = &[
+    Permanent::new(CURRENCY_CONVERTER),
+    ISLAND_,
+    ISLAND_,
+    ISLAND_,
+];
 
 /// `player` casts `card` with its first casting option: Overlord of the Mistmoors' impending
 /// cost, Thieving Skydiver's kicker, Damn's overload, Thundertrap Trainer's offspring.

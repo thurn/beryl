@@ -852,6 +852,14 @@ export interface ZonePile {
   look: PileLook;
 }
 
+/** The cards in exile linked to the permanent in `slot`: those it exiled until it leaves
+ * (CR 610.3) and those its abilities find "exiled with" it (CR 607.2a). */
+export function exiledWith(view: PlayerView, slot: number): ObjectView[] {
+  return view.objects.filter(
+    (o) => o.zone === "exile" && (o.exiledBy === slot || o.exiledWith === slot),
+  );
+}
+
 /** Each side's graveyard and exile piles. */
 export function zonePiles(view: PlayerView): ZonePile[] {
   const bySlot = new Map(view.objects.map((o) => [o.slot, o]));

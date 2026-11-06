@@ -625,3 +625,81 @@ fn turning_face_up_asks_for_a_payment_plan() {
         ]);
     beryl_scenario::run(&CARDS, &PLAN).unwrap_or_else(|e| panic!("{e}"));
 }
+
+/// The slot of the permanent named `name`.
+fn permanent_named(t: &GameTable, s: &State, name: &str) -> beryl_engine::Slot {
+    s.battlefield()
+        .iter()
+        .copied()
+        .find(|&slot| t.def(s.card(slot)).name == name)
+        .unwrap()
+}
+
+/// Currency Converter's "{T}: Put a card exiled with this artifact into its owner's
+/// graveyard" does nothing until a card is exiled with it (CR 607.2a), and then does.
+#[test]
+fn currency_converters_return_is_pointless_until_it_exiles_a_card() {
+    use crate::colorless::currency_converter::SCENARIOS as CONVERTER;
+    use beryl_engine::card::AbilityIx;
+    let scenario = CONVERTER
+        .iter()
+        .find(|s| s.name == "Currency Converter chooses among its exiled cards")
+        .unwrap();
+    let mut seen = Vec::new();
+    beryl_scenario::visit(&CARDS, scenario, |t, s, d| {
+        if d.kind == DecisionKind::Priority && d.player == Seat::P0 {
+            let converter = permanent_named(t, s, names::CURRENCY_CONVERTER);
+            seen.push((
+                beryl_engine::pointless(s, t, converter, AbilityIx::Own(2)),
+                s.exiled_with(converter).count(),
+            ));
+        }
+    })
+    .unwrap();
+    assert_eq!(seen.first(), Some(&(true, 0)));
+    assert_eq!(seen.last(), Some(&(false, 2)));
+    // Its loot is never pointless.
+    assert!(
+        seen.iter()
+            .all(|&(pointless, exiled)| pointless == (exiled == 0))
+    );
+}
+
+/// A profile that hides activations that would do nothing from a player leaves this one out
+/// for them; every other profile offers it, as the rules do (CR 602.2).
+#[test]
+fn a_hidden_pointless_activation_is_left_out() {
+    use beryl_engine::card::AbilityIx;
+    use beryl_scenario::{P0, Permanent, Scenario};
+    const SETUP: Scenario = Scenario::new("Currency Converter with nothing exiled")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[Permanent::new(names::CURRENCY_CONVERTER)])
+        .hand(P0, &[names::ISLAND])
+        .library(P0, &[names::PLAINS])
+        .library(beryl_scenario::P1, &[names::PLAINS]);
+    let offers_return = |profile: Profile| {
+        let (t, mut s) = beryl_scenario::position(&CARDS, &SETUP).unwrap();
+        s.set_profile(profile);
+        let converter = permanent_named(&t, &s, names::CURRENCY_CONVERTER);
+        let Step::Decide(d) = next(&mut s, &t, &mut Scratch::new(), &mut Replay) else {
+            panic!("a decision");
+        };
+        assert_eq!(d.kind, DecisionKind::Priority);
+        (0..d.len() as u8).any(|i| {
+            d.candidates.option(Choice(i))
+                == Some(Opt::Activate {
+                    slot: converter,
+                    ability: AbilityIx::Own(2),
+                })
+        })
+    };
+    assert!(!offers_return(Profile {
+        hides_pointless: Some(Seat::P0),
+        ..Profile::SMART
+    }));
+    assert!(offers_return(Profile::SMART));
+    assert!(offers_return(Profile {
+        hides_pointless: Some(Seat::P1),
+        ..Profile::SMART
+    }));
+}

@@ -169,6 +169,9 @@ enum Condition {
     PlayablePair,
     /// A card lies in exile beneath the permanent that exiled it until it leaves (CR 610.3).
     ExiledBeneath,
+    /// A card lies in exile "exiled with" a permanent whose abilities may find it
+    /// (CR 607.2a).
+    ExiledWith,
     /// An Aura or Equipment one player controls is attached to a permanent the other
     /// controls.
     AttachedAcross,
@@ -250,7 +253,8 @@ impl Condition {
     /// targeted on the stack", "ability targeting beside its source", "opponent's spell on
     /// the stack", "castable <card name>", "playable <card name>", "abilities of <card name>",
     /// "namesake candidates", "resolving <card name>", "casting <card name>",
-    /// "playable pair in hand", "exiled beneath a permanent", "attached across the table",
+    /// "playable pair in hand", "exiled beneath a permanent", "exiled with a permanent",
+    /// "attached across the table",
     /// "castable from exile", "known card in the opponent's hand", "token twins", "changed
     /// token", "token beside its card", "stolen permanent", "mana floating", "X on the stack",
     /// "spell on the stack", "<n> nonland permanents a side", or "<mark> beside a twin" with the
@@ -266,6 +270,7 @@ impl Condition {
             "opponent's spell on the stack" => Condition::OpponentsSpell,
             "playable pair in hand" => Condition::PlayablePair,
             "exiled beneath a permanent" => Condition::ExiledBeneath,
+            "exiled with a permanent" => Condition::ExiledWith,
             "attached across the table" => Condition::AttachedAcross,
             "+1/+1 counters beside a twin" => Condition::Marked(Mark::PlusOne),
             "damage beside a twin" => Condition::Marked(Mark::Damage),
@@ -382,6 +387,14 @@ impl Condition {
             Condition::ExiledBeneath => view.objects.iter().any(|o| {
                 o.zone == ZoneName::Exile
                     && o.exiled_by.is_some_and(|host| {
+                        view.objects
+                            .iter()
+                            .any(|h| h.slot == host && h.zone == ZoneName::Battlefield)
+                    })
+            }),
+            Condition::ExiledWith => view.objects.iter().any(|o| {
+                o.zone == ZoneName::Exile
+                    && o.exiled_with.is_some_and(|host| {
                         view.objects
                             .iter()
                             .any(|h| h.slot == host && h.zone == ZoneName::Battlefield)
@@ -881,6 +894,10 @@ mod tests {
         assert_eq!(
             Condition::parse("exiled beneath a permanent"),
             Ok(Condition::ExiledBeneath)
+        );
+        assert_eq!(
+            Condition::parse("exiled with a permanent"),
+            Ok(Condition::ExiledWith)
         );
         assert_eq!(
             Condition::parse("attached across the table"),

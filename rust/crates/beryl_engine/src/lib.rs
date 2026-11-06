@@ -39,7 +39,7 @@ mod turn;
 mod zone;
 
 pub use bitboard::Bitboard;
-pub use cast::cost_being_cast;
+pub use cast::{cost_being_cast, pointless};
 pub use decision::{
     Answers, Ask, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, Refusal, Replay,
     StallReason, Step,

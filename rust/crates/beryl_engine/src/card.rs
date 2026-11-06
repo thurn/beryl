@@ -935,6 +935,33 @@ pub struct Ability {
     /// ([CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025)): "A player can't begin
     /// to activate an ability that's prohibited from being activated."
     pub only_if_you_control: Option<Filter>,
+    /// Activated abilities: what the effect needs to do anything, so that a human isn't
+    /// offered an activation that would do nothing ([`Needs`]).
+    pub needs: Needs,
+}
+
+/// What an activated ability's effect needs to do anything. Ability bodies are code, which
+/// nothing can read, so a card says it as data: one variant for each way an effect can be
+/// empty, shared by every card whose effect is empty that way.
+///
+/// Activating such an ability is legal whatever it would do
+/// ([CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022): "To activate an ability is
+/// to put it onto the stack and pay its costs"), and paying its cost (tapping, say) still
+/// changes the game, so full control offers it. A human under the smart stops isn't offered
+/// it ([`crate::Profile::hides_pointless`]): every line stays legal, since a player may always
+/// pass instead ([CR 117.3d](https://yawgatog.com/resources/magic-rules/#R1173d)).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Needs {
+    /// Nothing: the effect may do something whatever the game.
+    #[default]
+    Nothing,
+    /// A card exiled with the ability's source, which the effect chooses among
+    /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second ability
+    /// refers only to cards in the exile zone that were put there as a result of an
+    /// instruction to exile them in the first ability." With none, it does nothing, as
+    /// Currency Converter's "{T}: Put a card exiled with this artifact into its owner's
+    /// graveyard. ..."
+    ExiledWithSource,
 }
 
 impl Ability {
@@ -953,6 +980,7 @@ impl Ability {
         layer: None,
         rule: Rule::None,
         only_if_you_control: None,
+        needs: Needs::Nothing,
     };
 
     /// A triggered ability.

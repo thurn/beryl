@@ -142,12 +142,16 @@ const VIEWER_COLUMNS = 5;
  * close button or a click beside it closes it. */
 export function ZoneViewer({
   pile,
+  title,
   states,
   offers,
   onPick,
   onClose,
 }: {
   pile: ZonePile;
+  /** What the viewer is called, if not the pile's name: the permanent whose exiled cards it
+   * shows. */
+  title?: string;
   states: Map<number, CardState>;
   offers(slot: number): boolean;
   onPick(slot: number): void;
@@ -161,7 +165,7 @@ export function ZoneViewer({
   }, [onClose]);
   const cards = [...pile.cards].reverse();
   const columns = Math.min(VIEWER_COLUMNS, Math.max(1, cards.length));
-  const name = pileName(pile);
+  const name = title ?? pileName(pile);
   const [list, more, onScroll] = useScrollEdges();
   return (
     <>
@@ -177,7 +181,7 @@ export function ZoneViewer({
           <h2 className="zone-viewer-title">{name}</h2>
           <span className="zone-viewer-count">
             {cardCount(cards.length)}
-            {cards.length > 1 && " · top first"}
+            {cards.length > 1 && title === undefined && " · top first"}
           </span>
           <button
             type="button"

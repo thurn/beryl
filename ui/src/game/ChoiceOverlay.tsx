@@ -183,6 +183,7 @@ const NOWHERE: ObjectView = {
   pt: null,
   attachedTo: null,
   exiledBy: null,
+  exiledWith: null,
   combat: null,
 };
 

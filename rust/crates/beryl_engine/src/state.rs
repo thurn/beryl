@@ -904,6 +904,21 @@ impl State {
         self.zones.members[owner.index()][zone as usize]
     }
 
+    /// The cards exiled with the object in `source` by an ability linked to another of its
+    /// abilities ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second
+    /// ability refers only to cards in the exile zone that were put there as a result of an
+    /// instruction to exile them in the first ability." Kept while that object has left its
+    /// zone, until a new object arrives in the slot (CR 400.7).
+    pub fn exiled_with(&self, source: Slot) -> Bitboard {
+        (self.zone(Seat::P0, Zone::Exile) | self.zone(Seat::P1, Zone::Exile))
+            .iter()
+            .filter(|&x| {
+                let o = self.object(x);
+                o.flags.has(ObjectFlags::EXILED_WITH) && o.linked == Some(source)
+            })
+            .collect()
+    }
+
     /// A player's library as slots, bottom first.
     pub fn library(&self, player: Seat) -> &[Slot] {
         self.zones.library[player.index()].as_slice()

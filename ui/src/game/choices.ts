@@ -100,6 +100,9 @@ export function choiceOf(view: PlayerView): Choice | undefined {
       return topOrBottom(at, ask);
     case "explore":
       return explore(at);
+    // Whether to move one card: a small question, asked on the board.
+    case "mayMove":
+      return undefined;
     case "search":
       return search(at, ask);
     case "maySearch":
@@ -135,13 +138,13 @@ function assertNever(ask: never): never {
 function plain(at: Situation): Choice | undefined {
   switch (at.decision.kind) {
     case "chooseObject":
-      return chooseObject(at);
+      return small(at) ? undefined : chooseObject(at);
     case "yesNo":
       return yesNo(at);
     case "discard":
       return discard(at);
     case "legendRule":
-      return legendRule(at);
+      return small(at) ? undefined : legendRule(at);
     case "castOffer":
       return castOffer(at);
     case "x":
@@ -149,6 +152,29 @@ function plain(at: Situation): Choice | undefined {
     default:
       return undefined;
   }
+}
+
+/** The most cards a choice picked on the board offers: its prompt's one row. */
+export const SMALL_CHOICE = 5;
+
+/** Whether a choice among cards is small enough to make on the board rather than over it:
+ * a few cards, each in a zone every player sees (CR 400.2), which the board's prompt shows as
+ * they lie or by their faces, as a few cards exiled with a permanent. */
+function small(at: Situation): boolean {
+  const offered = at.decision.candidates;
+  return (
+    offered.length <= SMALL_CHOICE &&
+    offered.every((c) => {
+      if (c.option.kind !== "object") return false;
+      const zone = at.objects.get(c.option.slot)?.zone;
+      return (
+        zone === "battlefield" ||
+        zone === "graveyard" ||
+        zone === "exile" ||
+        zone === "stack"
+      );
+    })
+  );
 }
 
 /** One kind of ask's fields. */

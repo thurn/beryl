@@ -10,6 +10,7 @@ import type {
   PlayerView,
   Side,
   StackItem,
+  ZoneName,
 } from "../generated/protocol";
 
 /** One thing a card or a player offers: the candidate's index and its label; for a cast or an
@@ -306,6 +307,15 @@ const PROMPTS: Partial<Record<Kind, string>> = {
   exileCost: "Exile a card",
 };
 
+/** A move to a zone, as a "you may" asks it. */
+const MOVES: Partial<Record<ZoneName, string>> = {
+  exile: "Exile",
+  graveyard: "Put into graveyard",
+  hand: "Put into hand",
+  library: "Put into library",
+  battlefield: "Put onto battlefield",
+};
+
 /** The prompt's title: what the decision asks, and for whom when there is a source. */
 export function prompt(decision: DecisionView, source?: string): string {
   const { ask } = decision;
@@ -316,6 +326,8 @@ export function prompt(decision: DecisionView, source?: string): string {
       return `Pay ${ask.cost}?`;
     case "discardBasicLand":
       return `Discard a basic land or ${ask.count} cards`;
+    case "mayMove":
+      return `${MOVES[ask.to] ?? "Move"}?`;
   }
   const asked = PROMPTS[decision.kind] ?? "Choose";
   return source && decision.kind === "target"

@@ -15,7 +15,7 @@ use std::cell::{Cell, OnceCell};
 use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityIx, AbilityKind, CastingOption, Castings, Colors, Face, FaceAbility, FaceIx,
-    Keywords, ManaCost, Rule, TargetKind, TargetSpec, Timing, Types,
+    Keywords, ManaCost, Needs, Rule, TargetKind, TargetSpec, Timing, Types,
 };
 use crate::decision::{Ask, Candidates, Decision, DecisionKind, Opt, Refusal};
 use crate::engine::{collapse, collapse_in_order};
@@ -831,6 +831,21 @@ fn benders(s: &State, player: Seat) -> Bitboard {
         .collect()
 }
 
+/// Whether activating `ability` of the object in `slot` now would do nothing, as its card
+/// declares ([`Needs`]): its cost would be paid and its effect find nothing to act on. The
+/// activation is still legal (CR 602.2); [`Profile::hides_pointless`](crate::Profile) says
+/// who isn't offered it.
+pub fn pointless(s: &State, t: &GameTable, slot: Slot, ability: AbilityIx) -> bool {
+    let Some((card, face, index)) = activated(s, slot, ability) else {
+        return false;
+    };
+    match t.def(card).face(face).ability(index).needs {
+        Needs::Nothing => false,
+        // CR 607.2a: a linked ability finds only the cards exiled with its own source.
+        Needs::ExiledWithSource => s.exiled_with(slot).is_empty(),
+    }
+}
+
 /// Appends the abilities `player` can activate now. CR 117.1b: "A player may activate an
 /// activated ability any time they have priority."
 fn activation_options(
@@ -840,6 +855,9 @@ fn activation_options(
     out: &mut Fixed<Opt, 64>,
 ) -> Result<(), Full> {
     let player = now.player;
+    // Activations that would do nothing, left out for the player the profile hides them from,
+    // where a card of the game has one.
+    let prunes = s.profile.hides_pointless == Some(player) && t.needy();
     let mine = s.zone(Seat::P0, Zone::Battlefield) | s.zone(Seat::P1, Zone::Battlefield);
     let objects = mine.iter().filter(|&slot| s.controller(slot) == player);
     let objects: Bitboard = objects.collect::<Bitboard>() | s.zone(player, Zone::Hand);
@@ -878,7 +896,8 @@ fn activation_options(
             .map(AbilityIx::Own)
             .chain((0..granted).map(AbilityIx::Granted));
         for ability in abilities {
-            if activatable(s, t, now, slot, ability) {
+            if activatable(s, t, now, slot, ability) && !(prunes && pointless(s, t, slot, ability))
+            {
                 out.push(Opt::Activate { slot, ability })?;
             }
         }

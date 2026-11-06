@@ -1039,14 +1039,7 @@ impl<'a> EffectCtx<'a> {
     ///
     /// For an emblem's ability, which has no source.
     pub fn exiled_with_source(&self) -> Bitboard {
-        let source = self.source().slot;
-        (self.state.zone(Seat::P0, Zone::Exile) | self.state.zone(Seat::P1, Zone::Exile))
-            .iter()
-            .filter(|&x| {
-                let o = self.state.object(x);
-                o.flags.has(ObjectFlags::EXILED_WITH) && o.linked == Some(source)
-            })
-            .collect()
+        self.state.exiled_with(self.source().slot)
     }
 
     /// `player` searches their library for a card that passes `filter`, and finds one of the

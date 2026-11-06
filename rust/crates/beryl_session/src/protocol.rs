@@ -182,6 +182,10 @@ pub struct ObjectView {
     pub attached_to: Option<u8>,
     /// The permanent that exiled it until it leaves (CR 610.3).
     pub exiled_by: Option<u8>,
+    /// The object whose linked ability exiled it, if that object's other abilities may still
+    /// find it among the cards "exiled with" it
+    /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)).
+    pub exiled_with: Option<u8>,
     pub combat: Option<Combat>,
 }
 
@@ -372,6 +376,8 @@ pub enum AskView {
     /// Whether the card in `card` goes on top of its owner's library (yes) or the bottom
     /// (no).
     TopOrBottom { card: u8 },
+    /// Whether to move the card in `card` to `to`, as "you may exile that card".
+    MayMove { card: u8, to: ZoneName },
     /// Whether the card an explore revealed goes to the graveyard.
     Explore,
     /// A `chooseObject` for which of the top two cards of the viewer's library, which they
@@ -1086,6 +1092,11 @@ fn object_view(t: &GameTable, obs: Observation<'_>, slot: Slot) -> ObjectView {
         } else {
             None
         },
+        exiled_with: if flags.has(ObjectFlags::EXILED_WITH) {
+            some(o.linked)
+        } else {
+            None
+        },
         combat: if flags.has(ObjectFlags::ATTACKING) {
             Some(Combat::Attacking {
                 planeswalker: if flags.has(ObjectFlags::ATTACKS_PLANESWALKER) {
@@ -1304,6 +1315,10 @@ fn ask_view(obs: Observation<'_>, ask: Ask) -> AskView {
         Ask::Take { count, take } => AskView::Take { count, take },
         Ask::Bottom { count } => AskView::Bottom { count },
         Ask::DiscardBasicLand { count } => AskView::DiscardBasicLand { count },
+        Ask::MayMove { card, to } => AskView::MayMove {
+            card: card.get(),
+            to: to.into(),
+        },
         Ask::Explore => AskView::Explore,
         Ask::ManifestDread => AskView::ManifestDread,
         Ask::ExileCards { zone, count } => AskView::ExileCards {

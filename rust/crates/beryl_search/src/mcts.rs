@@ -693,6 +693,7 @@ pub(crate) fn smart(s: &mut State) {
         full_control: None,
         asks_targets: None,
         taps_mana: None,
+        hides_pointless: None,
         ..s.profile()
     });
 }

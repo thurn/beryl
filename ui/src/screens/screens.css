@@ -1511,6 +1511,10 @@
   background: none;
   cursor: pointer;
 }
+/* The card a question is about, shown but not picked. */
+.prompt-subject {
+  cursor: default;
+}
 /* Simultaneous triggers, each by its source and what it does, numbered in resolve order as
    they are picked. */
 .prompt-triggers {

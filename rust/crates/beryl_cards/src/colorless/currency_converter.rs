@@ -4,8 +4,8 @@
 //! token. If it's a nonland card, create a 2/2 black Rogue creature token."
 
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Colors, Cost, Face, Flow, ManaCost, Subtype, Subtypes, Trigger,
-    Types,
+    Ability, AbilityKind, CardDef, Colors, Cost, Face, Flow, ManaCost, Needs, Subtype, Subtypes,
+    Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::{Reason, TokenEntry};
@@ -47,7 +47,11 @@ fn exile_discarded(ctx: &mut EffectCtx) -> Flow {
     if !s.is_current(card) || s.object(card.slot).zone != Zone::Graveyard {
         return Ok(());
     }
-    if ctx.choose_yes_no(ctx.controller(), Ask::Plain)? {
+    let ask = Ask::MayMove {
+        card: card.slot,
+        to: Zone::Exile,
+    };
+    if ctx.choose_yes_no(ctx.controller(), ask)? {
         ctx.exile_linked(card);
     }
     Ok(())
@@ -110,6 +114,7 @@ pub static CARD: CardDef = CardDef {
                 cost: Cost::TAP,
                 may_pause: true,
                 body: convert,
+                needs: Needs::ExiledWithSource,
                 ..Ability::NONE
             },
         ],

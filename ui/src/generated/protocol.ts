@@ -154,7 +154,13 @@ pt: PowerToughness | null, attachedTo: number | null,
 /**
  * The permanent that exiled it until it leaves (CR 610.3).
  */
-exiledBy: number | null, combat: Combat | null, };
+exiledBy: number | null, 
+/**
+ * The object whose linked ability exiled it, if that object's other abilities may still
+ * find it among the cards "exiled with" it
+ * ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)).
+ */
+exiledWith: number | null, combat: Combat | null, };
 
 export type Facing = "up" | "down";
 
@@ -239,7 +245,7 @@ cancellable: boolean,
  */
 refused: Array<Refused>, };
 
-export type AskView = { "kind": "plain" } | { "kind": "scry", count: number, } | { "kind": "look", player: Side, zone: ZoneName, count: number, to: ZoneName, eligible: Array<number>, } | { "kind": "putBack", count: number, } | { "kind": "fateseal", player: Side, } | { "kind": "take", count: number, take: number, } | { "kind": "bottom", count: number, } | { "kind": "discardBasicLand", count: number, } | { "kind": "topOrBottom", card: number, } | { "kind": "explore" } | { "kind": "manifestDread" } | { "kind": "exileCards", zone: ZoneName, count: number, } | { "kind": "search", max: number, } | { "kind": "maySearch" } | { "kind": "untap", max: number, } | { "kind": "crew", crew: number, left: number, } | { "kind": "waterbend", cost: string, } | { "kind": "unlessPays", cost: string, } | { "kind": "payLife", life: number, } | { "kind": "cleanup", count: number, };
+export type AskView = { "kind": "plain" } | { "kind": "scry", count: number, } | { "kind": "look", player: Side, zone: ZoneName, count: number, to: ZoneName, eligible: Array<number>, } | { "kind": "putBack", count: number, } | { "kind": "fateseal", player: Side, } | { "kind": "take", count: number, take: number, } | { "kind": "bottom", count: number, } | { "kind": "discardBasicLand", count: number, } | { "kind": "topOrBottom", card: number, } | { "kind": "mayMove", card: number, to: ZoneName, } | { "kind": "explore" } | { "kind": "manifestDread" } | { "kind": "exileCards", zone: ZoneName, count: number, } | { "kind": "search", max: number, } | { "kind": "maySearch" } | { "kind": "untap", max: number, } | { "kind": "crew", crew: number, left: number, } | { "kind": "waterbend", cost: string, } | { "kind": "unlessPays", cost: string, } | { "kind": "payLife", life: number, } | { "kind": "cleanup", count: number, };
 
 export type PassTo = { "kind": "resolve" } | { "kind": "combatDamage" } | { "kind": "step", step: Step, } | { "kind": "nextTurn" };
 

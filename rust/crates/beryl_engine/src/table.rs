@@ -1,7 +1,9 @@
 //! The static card table and the per-game table built from two decklists (architecture §6.4,
 //! decision D20).
 
-use crate::card::{AbilityKind, CardDef, FACE_DOWN, FACE_DOWN_COPY, Face, FaceIx, Rule, Trigger};
+use crate::card::{
+    AbilityKind, CardDef, FACE_DOWN, FACE_DOWN_COPY, Face, FaceIx, Needs, Rule, Trigger,
+};
 use crate::event::kind;
 use crate::ids::{CardIx, Seat};
 use crate::mana::ManaFace;
@@ -59,6 +61,9 @@ pub struct GameTable {
     rules: Vec<u8>,
     /// The game index of [`FACE_DOWN_COPY`].
     face_down_copy: CardIx,
+    /// Whether a card of the game has an activated ability that may do nothing
+    /// ([`crate::card::Needs`]), so that no other game pays to check.
+    needy: bool,
 }
 
 impl GameTable {
@@ -108,6 +113,12 @@ impl GameTable {
         let face_down_copy = CardIx::new((defs.len() - 1) as u8);
         let listens: Vec<u16> = defs.iter().map(|d| listens(d)).collect();
         let listens_any = listens.iter().fold(0, |a, &b| a | b);
+        let needy = defs.iter().any(|d| {
+            d.faces
+                .iter()
+                .flat_map(|f| f.abilities)
+                .any(|a| a.needs != Needs::Nothing)
+        });
         let faces = defs
             .iter()
             .map(|d| {
@@ -129,6 +140,7 @@ impl GameTable {
             faces,
             rules,
             face_down_copy,
+            needy,
         })
     }
 
@@ -168,6 +180,11 @@ impl GameTable {
     /// The event kinds any card of this game listens to.
     pub(crate) fn listens_any(&self) -> u16 {
         self.listens_any
+    }
+
+    /// Whether a card of the game has an activated ability that may do nothing.
+    pub(crate) fn needy(&self) -> bool {
+        self.needy
     }
 
     pub fn cards(&self) -> &'static CardTable {
