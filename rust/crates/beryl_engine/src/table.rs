@@ -164,6 +164,7 @@ fn listens(def: &CardDef) -> u16 {
                 Trigger::Step(..) => kind::STEP,
                 Trigger::YouCreateTokens(_) => kind::TOKENS,
                 Trigger::YouCast => kind::CAST,
+                Trigger::YouDiscard => kind::DISCARD,
             };
         }
     }

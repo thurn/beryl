@@ -85,6 +85,8 @@ COSTS: Mapping[str, str] = {
 # grant) as text that picks the ability out of Forge's description of it.
 ABILITIES: Mapping[tuple[str, str, int], str] = {
     ("Aang's Iceberg", "Own", 1): "Waterbend",
+    ("Currency Converter", "Own", 1): "Draw a card",
+    ("Currency Converter", "Own", 2): "Put a card exiled",
     ("Jace, Telepath Unbound", "Own", 0): "+1",
     ("Jace, Telepath Unbound", "Own", 1): "-3",
     ("Jace, Telepath Unbound", "Own", 2): "-9",
@@ -233,6 +235,8 @@ def step(action: JsonObject) -> JsonObject | None:
         pick = cast(JsonObject, action["pick"])
         if pick["pick"] == "Plan":
             raise Unsupported("a chosen payment plan")
+        if action["kind"] == "Priority" and pick["pick"] == "Card":
+            raise Unsupported("a mana ability activated at priority")
         return {
             "op": "answer",
             "player": action["player"],

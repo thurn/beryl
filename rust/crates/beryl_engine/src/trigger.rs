@@ -2,7 +2,7 @@
 //! triggers, and resolving them (architecture §8.3, CR 603).
 
 use crate::card::{Ability, Delayed, Face, FaceAbility, FaceIx, Trigger, Types};
-use crate::event::{Event, Recipient, Sink, kind};
+use crate::event::{Event, Reason, Recipient, Sink, kind};
 use crate::filter::Whose;
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot};
@@ -146,6 +146,14 @@ fn fires(
         (Trigger::YouCast, Event::Cast { spell, controller }) if controller == you => {
             Some(info(Some(spell), you, 0))
         }
+        (
+            Trigger::YouDiscard,
+            Event::ZoneChange {
+                object,
+                reason: Reason::Discard,
+                ..
+            },
+        ) if s.object(object.slot).owner == you => Some(info(Some(object), you, 0)),
         _ => None,
     }
 }

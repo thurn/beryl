@@ -10,6 +10,7 @@ pub mod colorless;
 pub mod decks;
 pub mod multicolor;
 pub mod names;
+pub mod tokens;
 pub mod white;
 
 use beryl_engine::CardTable;
@@ -52,6 +53,9 @@ pub static CARDS: CardTable = CardTable::new(&[
     &blue::thirst_for_discovery::CARD,
     &azorius::floodfarm_verge::CARD,
     &white::portable_hole::CARD,
+    &blue::trinket_mage::CARD,
+    &white::beza_the_bounding_spring::CARD,
+    &colorless::currency_converter::CARD,
 ]);
 
 /// Every card's scenarios (architecture §17.1), by card name.
@@ -133,6 +137,15 @@ pub static SCENARIOS: &[(&str, &[Scenario])] = &[
     ),
     (names::FLOODFARM_VERGE, azorius::floodfarm_verge::SCENARIOS),
     (names::PORTABLE_HOLE, white::portable_hole::SCENARIOS),
+    (names::TRINKET_MAGE, blue::trinket_mage::SCENARIOS),
+    (
+        names::BEZA_THE_BOUNDING_SPRING,
+        white::beza_the_bounding_spring::SCENARIOS,
+    ),
+    (
+        names::CURRENCY_CONVERTER,
+        colorless::currency_converter::SCENARIOS,
+    ),
 ];
 
 #[cfg(test)]

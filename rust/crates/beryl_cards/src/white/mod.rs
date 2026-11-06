@@ -1,5 +1,6 @@
 pub mod aangs_iceberg;
 pub mod adeline_resplendent_cathar;
+pub mod beza_the_bounding_spring;
 pub mod elite_spellbinder;
 pub mod get_lost;
 pub mod mana_tithe;

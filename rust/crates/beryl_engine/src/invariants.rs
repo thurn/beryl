@@ -92,9 +92,15 @@ impl State {
             )?;
             if !matches!(o.zone, Zone::Battlefield | Zone::Stack) {
                 // What may stay off the battlefield: being a token, and a link to the
-                // permanent that exiled it "until" it leaves (CR 610.3).
-                let kept = ObjectFlags::TOKEN | ObjectFlags::ONE_ONE | ObjectFlags::EXILED_UNTIL;
-                let until = o.flags.has(ObjectFlags::EXILED_UNTIL);
+                // permanent that exiled it "until" it leaves (CR 610.3) or whose ability
+                // refers to the cards exiled with it (CR 607.2a).
+                let kept = ObjectFlags::TOKEN
+                    | ObjectFlags::ONE_ONE
+                    | ObjectFlags::EXILED_UNTIL
+                    | ObjectFlags::EXILED_WITH;
+                let exiled_by = o
+                    .flags
+                    .has(ObjectFlags::EXILED_UNTIL | ObjectFlags::EXILED_WITH);
                 check(
                     *o == Object {
                         card: o.card,
@@ -104,9 +110,9 @@ impl State {
                         base_controller: o.owner,
                         timestamp: o.timestamp,
                         flags: ObjectFlags(o.flags.0 & kept),
-                        linked: if until { o.linked } else { None },
+                        linked: if exiled_by { o.linked } else { None },
                         ..Object::EMPTY
-                    } && (!until || o.zone == Zone::Exile),
+                    } && (!exiled_by || o.zone == Zone::Exile),
                     "permanent status off the battlefield",
                     at,
                 )?;

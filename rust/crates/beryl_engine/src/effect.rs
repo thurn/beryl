@@ -13,6 +13,7 @@ use crate::card::{
 use crate::cast;
 use crate::decision::{Answers, Ask, Candidates, Choice, Decision, DecisionKind, Opt, StallReason};
 use crate::event::{self, Entry, Reason, Recipient, Sink, TokenEntry};
+use crate::filter::Filter;
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot};
 use crate::mana;
@@ -892,6 +893,66 @@ impl<'a> EffectCtx<'a> {
             o.flags.set(ObjectFlags::EXILED_UNTIL, true);
             o.linked = Some(source.slot);
         }
+    }
+
+    /// Exiles a card, linked to this ability's source so that the source's other abilities
+    /// can find it among the cards "exiled with" it
+    /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "If an object has an
+    /// activated or triggered ability printed on it that instructs a player to exile one or
+    /// more cards and an ability printed on it that refers either to "the exiled cards" or to
+    /// cards "exiled with [this object]," these abilities are linked." A source that has left
+    /// its zone since is gone, and so is the link: nothing can refer to it any more.
+    ///
+    /// # Panics
+    ///
+    /// For an emblem's ability, which has no source.
+    pub fn exile_linked(&mut self, object: ObjectRef) {
+        if !self.state.is_current(object) {
+            return;
+        }
+        let source = self.source();
+        self.move_to(object, Zone::Exile, Reason::Exile);
+        if self.state.is_current(source) && self.state.object(object.slot).zone == Zone::Exile {
+            let o = self.state.object_mut(object.slot);
+            o.flags.set(ObjectFlags::EXILED_WITH, true);
+            o.linked = Some(source.slot);
+        }
+    }
+
+    /// The cards exiled with this ability's source by [`Self::exile_linked`] (CR 607.2a),
+    /// whether or not the source is still there: an ability of an object that has left the
+    /// battlefield still refers to the cards that object exiled.
+    ///
+    /// # Panics
+    ///
+    /// For an emblem's ability, which has no source.
+    pub fn exiled_with_source(&self) -> Bitboard {
+        let source = self.source().slot;
+        (self.state.zone(Seat::P0, Zone::Exile) | self.state.zone(Seat::P1, Zone::Exile))
+            .iter()
+            .filter(|&x| {
+                let o = self.state.object(x);
+                o.flags.has(ObjectFlags::EXILED_WITH) && o.linked == Some(source)
+            })
+            .collect()
+    }
+
+    /// `player` searches their library for a card that passes `filter`, and finds one of the
+    /// cards that do, or none ([CR 701.23a](https://yawgatog.com/resources/magic-rules/#R70123a)):
+    /// "To search for a card in a zone, look at all cards in that zone (even if it's a hidden
+    /// zone) and find a card that matches the given description."
+    /// [CR 701.23b](https://yawgatog.com/resources/magic-rules/#R70123b): "If a player is
+    /// searching a hidden zone for cards with a stated quality ... that player isn't required
+    /// to find some or all of those cards even if they're present in that zone." Returns the
+    /// card found, still in the library: the body says where it goes, whether it is revealed
+    /// ([CR 701.23e](https://yawgatog.com/resources/magic-rules/#R70123e)), and shuffles.
+    /// The question is a [`DecisionKind::ChooseUpTo`] whose [`Opt::Done`] finds nothing.
+    pub fn search_library(&mut self, player: Seat, filter: Filter) -> Result<Option<Slot>, Pause> {
+        let library = self.state.zone(player, Zone::Library);
+        self.look_at(player, library);
+        let matching = filter.select(self.state, self.table, library, player);
+        let found = self.choose_up_to(player, matching, 1, Ask::Plain)?;
+        Ok(found.iter().next())
     }
 
     /// Creates `count` tokens of a predefined kind under this ability's controller

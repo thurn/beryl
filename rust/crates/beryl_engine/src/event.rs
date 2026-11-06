@@ -154,6 +154,7 @@ pub(crate) mod kind {
     pub const TOKENS: u16 = 1 << 4;
     pub const CAST: u16 = 1 << 5;
     pub const DIES: u16 = 1 << 6;
+    pub const DISCARD: u16 = 1 << 7;
 }
 
 impl Event {
@@ -164,6 +165,10 @@ impl Event {
                 to: Zone::Battlefield,
                 ..
             } => kind::ENTERS,
+            Event::ZoneChange {
+                reason: Reason::Discard,
+                ..
+            } => kind::DISCARD,
             Event::Attack { .. } => kind::ATTACK,
             Event::Damage { .. } => kind::DAMAGE,
             Event::StepBegins { .. } => kind::STEP,
@@ -303,7 +308,7 @@ pub(crate) fn move_one(
 ///    information captured for their bodies.
 /// 3. The moves execute.
 /// 4. Layers are recomputed, then enters abilities are matched against the objects as they
-///    are on the battlefield
+///    are on the battlefield, and discard abilities against each card discarded
 ///    ([CR 603.6a](https://yawgatog.com/resources/magic-rules/#R6036a)): "Each time an event
 ///    puts one or more permanents onto the battlefield, all permanents on the battlefield
 ///    (including the newcomers) are checked for any enters-the-battlefield triggers that
@@ -401,15 +406,13 @@ pub(crate) fn move_batch_to(
     }
     layers::refresh(s, t, sink);
     for &(slot, from, dest, _) in &moves {
-        if dest == Zone::Battlefield {
-            let e = Event::ZoneChange {
-                object: s.object_ref(slot),
-                from,
-                to: dest,
-                reason,
-            };
-            trigger::match_event(s, t, &e)?;
-        }
+        let e = Event::ZoneChange {
+            object: s.object_ref(slot),
+            from,
+            to: dest,
+            reason,
+        };
+        trigger::match_event(s, t, &e)?;
     }
     if !returning.is_empty() {
         // CR 610.3c: "An object returned to the battlefield this way returns under its

@@ -13,7 +13,7 @@
 //! Plans that leave different mana floating are a decision.
 
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, AbilityKind, Cost, ManaColor, ManaCost, Types};
+use crate::card::{Ability, AbilityKind, Cost, ManaColor, ManaCost, ManaSet, Types};
 use crate::decision::Opt;
 use crate::effect::EffectCtx;
 use crate::event::{self, Sink};
@@ -137,6 +137,54 @@ fn allowed(s: &State, t: &GameTable, a: &Ability, player: Seat) -> bool {
             .iter()
             .any(|&slot| s.controller(slot) == player && f.matches(s, t, slot, player))
     })
+}
+
+/// Whether an ability is a mana ability whose whole cost is {T} and sacrificing its source,
+/// as a Treasure's ([CR 111.10a](https://yawgatog.com/resources/magic-rules/#R11110a)):
+/// "{T}, Sacrifice this token: Add one mana of any color." Spending the permanent is a
+/// resource a plan consumes (§10), so the solver never does it on its own: the player
+/// activates it, at priority or while paying.
+fn is_sacrificed(a: &Ability) -> bool {
+    a.kind == AbilityKind::Mana
+        && a.cost
+            == Cost {
+                sacrifice_self: true,
+                ..Cost::TAP
+            }
+}
+
+/// The untapped permanents `player` controls, but those in `exclude`, that a mana ability
+/// sacrifices, one of each interchangeable group (§7.2), with the mana that ability makes.
+fn sacrificed_sources(
+    s: &State,
+    t: &GameTable,
+    player: Seat,
+    exclude: Bitboard,
+) -> Result<Fixed<(Slot, ManaSet), 64>, Full> {
+    let candidates: Bitboard = s
+        .battlefield()
+        .iter()
+        .copied()
+        .filter(|&slot| {
+            let o = s.object(slot);
+            // CR 302.6, as for the solver's sources.
+            let sick = s.derived(slot).types.intersects(Types::CREATURE)
+                && o.flags.has(ObjectFlags::SUMMONING_SICK);
+            s.controller(slot) == player
+                && !o.flags.has(ObjectFlags::TAPPED)
+                && !exclude.contains(slot)
+                && !sick
+        })
+        .collect();
+    let mut out = Fixed::new();
+    for slot in crate::engine::collapse(s, candidates).iter() {
+        let o = s.object(slot);
+        let face = t.def(o.card).face(o.face);
+        if let Some(a) = face.abilities.iter().find(|a| is_sacrificed(a)) {
+            out.push((slot, a.produces))?;
+        }
+    }
+    Ok(out)
 }
 
 impl Sources {
@@ -749,14 +797,24 @@ pub(crate) fn activate(
         .iter()
         .enumerate()
         .find(|(_, a)| {
-            is_simple(a) && a.produces.includes(color) && allowed(s, t, a, s.controller(slot))
+            (is_simple(a) || is_sacrificed(a))
+                && a.produces.includes(color)
+                && allowed(s, t, a, s.controller(slot))
         })
         .expect("a mana ability that makes the chosen mana");
     let source = s.object_ref(slot);
+    let controller = s.controller(slot);
+    // The costs come first ([CR 602.2b](https://yawgatog.com/resources/magic-rules/#R6022b)):
+    // activating follows casting's steps, among them
+    // [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the
+    // total cost."
     event::set_tapped(s, t, sink, source, true)?;
+    if ability.cost.sacrifice_self {
+        event::move_one(s, t, sink, slot, Zone::Graveyard, event::Reason::Sacrifice)?;
+    }
     let activation = PendingTrigger {
         source: Some(source),
-        controller: s.controller(slot),
+        controller,
         ability: index as u8,
         card: o.card,
         face: o.face,
@@ -829,6 +887,23 @@ pub(crate) fn manual_options(
             }
         }
     }
+    for &(slot, produces) in &sacrificed_sources(s, t, player, exclude)? {
+        for kind in (0..KINDS).filter(|&k| produces.colors & (1 << k) != 0) {
+            if !helps(remaining, kind) {
+                continue;
+            }
+            let mut rest = remaining;
+            pay_unit(&mut rest, kind);
+            let mut after = pool;
+            after[kind] += produces.amount - 1;
+            if sources.units(after, &[0; CLASSES]).pays(rest) {
+                out.push(Opt::Mana {
+                    slot,
+                    color: ManaColor::ALL[kind],
+                })?;
+            }
+        }
+    }
     Ok(out)
 }
 
@@ -852,6 +927,28 @@ pub(crate) fn manual_pay(
     s.player_mut(player).mana[color] -= 1;
     pay_unit(&mut remaining, color.index());
     Ok(remaining)
+}
+
+/// The activations of mana abilities that sacrifice their source, offered at priority under
+/// any payment profile: one for each kind of mana each can make
+/// ([CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a)): "A player may activate
+/// an activated mana ability whenever they have priority". The solver never spends them
+/// (§10), so mana a payment needs from one floats first.
+pub(crate) fn sacrifice_options(
+    s: &State,
+    t: &GameTable,
+    player: Seat,
+    out: &mut Fixed<Opt, 64>,
+) -> Result<(), Full> {
+    for &(slot, produces) in &sacrificed_sources(s, t, player, Bitboard::EMPTY)? {
+        for kind in (0..KINDS).filter(|&k| produces.colors & (1 << k) != 0) {
+            out.push(Opt::Mana {
+                slot,
+                color: ManaColor::ALL[kind],
+            })?;
+        }
+    }
+    Ok(())
 }
 
 /// The standalone mana activations offered at priority under manual payment

@@ -12,3 +12,4 @@ pub mod thirst_for_discovery;
 pub mod thundertrap_trainer;
 pub mod time_spiral;
 pub mod timetwister;
+pub mod trinket_mage;

@@ -85,6 +85,9 @@ impl ObjectFlags {
     pub const ONE_ONE: u32 = 1 << 4;
     /// Exiled until the permanent in `linked` leaves the battlefield (CR 610.3).
     pub const EXILED_UNTIL: u32 = 1 << 5;
+    /// Exiled by an ability of the object in `linked`, whose linked ability refers to the
+    /// cards "exiled with" it ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)).
+    pub const EXILED_WITH: u32 = 1 << 6;
     /// A blocking creature ([CR 509.1g](https://yawgatog.com/resources/magic-rules/#R5091g)).
     /// The attacker it blocks is in `combat`.
     pub const BLOCKING: u32 = 1 << 8;

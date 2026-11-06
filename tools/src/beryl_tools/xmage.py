@@ -112,6 +112,8 @@ ABILITIES: dict[tuple[str, str], str] = {
     ("Staff of the Storyteller", "Own 2"): "{W}, {T}, Remove a story counter",
     ("Map Token", "Own 0"): "{1}, {T}, ",
     ("Aang's Iceberg", "Own 1"): "waterbend {3}",
+    ("Currency Converter", "Own 1"): "{2}, {T}: Draw a card",
+    ("Currency Converter", "Own 2"): "{T}: Put a card exiled",
 }
 
 # Mana sources with one mana ability, by its text in XMage. Beryl pays from the sources its
@@ -173,7 +175,12 @@ FORCED_CHOICES = ("Discard", "ChooseObject", "ChooseUpTo")
 UNLESS_PAYS = ("Mana Tithe", "No More Lies")
 
 # Resolving cards whose choices of cards XMage takes from the target queue instead.
-CHOICES_AS_TARGETS = ("Jace, the Mind Sculptor",)
+CHOICES_AS_TARGETS = ("Jace, the Mind Sculptor", "Trinket Mage")
+
+# Resolving cards that may search a library, a yes or no and then the search, which XMage asks
+# as a target from the library (CHOICES_AS_TARGETS) even with no card to find, where Beryl,
+# with nothing to choose, asks nothing.
+SEARCHES = ("Trinket Mage",)
 
 # Resolving cards that scry. Beryl chooses the cards for the bottom one at a time until done
 # (ChooseUpTo), then the rest from the top down (ChooseObject). XMage takes the bottom ones as
@@ -667,6 +674,10 @@ class Exporter:
             elif not asks:
                 skip = "CHOICE_SKIP" if command == "setChoice" else "TARGET_SKIP"
                 self.emit(f"{command}({who}, TestPlayer.{skip});")
+        elif source in SEARCHES and kind == "YesNo":
+            self.emit(f"setChoice({who}, {'true' if what == 'Yes' else 'false'});")
+            if what == "Yes" and self.next_answer_kind() != "ChooseUpTo":
+                self.emit(f"addTarget({who}, TestPlayer.TARGET_SKIP);")
         elif kind == "Priority" and what == "Pass":
             if p.stack:
                 self.prepare(who, p)
@@ -725,6 +736,13 @@ class Exporter:
         if len(taking) == TAKES[source]:
             self.emit(f"addTarget({who}, {java_string('^'.join(taking))});")
             self.taking = None
+
+    def next_answer_kind(self) -> str | None:
+        """The decision kind of the next action that is not an assertion, if it answers one."""
+        for action in self.actions[self.index + 1 :]:
+            if action["action"] != "Assert":
+                return cast("str | None", action.get("kind"))
+        return None
 
     @staticmethod
     def choice_command(source: str | None, kind: str) -> str:

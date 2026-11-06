@@ -319,3 +319,43 @@ fn a_question_after_a_look_keeps_the_look() {
     assert_eq!(real.kind, DecisionKind::ChooseObject);
     assert_eq!(choices(&mut det), real);
 }
+
+/// Trinket Mage's search shows its controller the whole library
+/// ([CR 701.23a](https://yawgatog.com/resources/magic-rules/#R70123a)), and the shuffle after
+/// it, though nothing is found, leaves none of it known
+/// ([CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a)): what the oracles,
+/// shuffling on their own, cannot check.
+#[test]
+fn a_search_that_finds_nothing_still_shuffles() {
+    use beryl_scenario::{Action, P0, P1, Permanent, Pick, Scenario};
+    const ISLANDS: &[Permanent] = &[Permanent::new(names::ISLAND); 3];
+    const SEARCH: Scenario = Scenario::new("Trinket Mage finds nothing")
+        .hand(P0, &[names::TRINKET_MAGE])
+        .battlefield(P0, ISLANDS)
+        .library(P0, &[names::MANA_CRYPT, names::OUST, names::PLAINS])
+        .library(P1, &[names::PLAINS])
+        .actions(&[
+            Action::cast(P0, names::TRINKET_MAGE),
+            Action::Resolve,
+            Action::Resolve,
+            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+            Action::answer(P0, DecisionKind::ChooseUpTo, Pick::Done),
+            // Player 0 has nothing more to do: the next decision is player 1's turn.
+            Action::pass(P1),
+        ]);
+    let mut known = Vec::new();
+    beryl_scenario::visit(&CARDS, &SEARCH, |_, s, d| {
+        let library = s.zone(Seat::P0, Zone::Library);
+        let count = library
+            .iter()
+            .filter(|&slot| s.knows(Seat::P0, slot))
+            .count();
+        known.push((d.kind, count));
+    })
+    .unwrap();
+    let searching = known
+        .iter()
+        .find(|&&(kind, _)| kind == DecisionKind::ChooseUpTo);
+    assert_eq!(searching, Some(&(DecisionKind::ChooseUpTo, 3)));
+    assert_eq!(known.last(), Some(&(DecisionKind::Priority, 0)));
+}

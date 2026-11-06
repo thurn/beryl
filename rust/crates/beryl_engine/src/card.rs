@@ -340,7 +340,7 @@ const _: () = {
 };
 
 /// What a mana ability can produce: a set of [`ManaColor`]s and how much.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct ManaSet {
     /// A bit per [`ManaColor`].
     pub colors: u8,
@@ -473,9 +473,15 @@ pub enum Subtype {
     Aura,
     /// An artifact type (CR 301.7), of the Map tokens Get Lost creates.
     Map,
+    /// An artifact type (CR 301.7), of Treasure tokens
+    /// ([CR 111.10a](https://yawgatog.com/resources/magic-rules/#R11110a)).
+    Treasure,
     // Creature types ([CR 205.3m](https://yawgatog.com/resources/magic-rules/#R2053m)).
     Avatar,
     Cleric,
+    Elemental,
+    Elk,
+    Fish,
     Horror,
     Human,
     Illusion,
@@ -496,7 +502,7 @@ pub enum Subtype {
 }
 
 impl Subtype {
-    pub const ALL: [Subtype; 26] = [
+    pub const ALL: [Subtype; 30] = [
         Subtype::Plains,
         Subtype::Island,
         Subtype::Swamp,
@@ -505,8 +511,12 @@ impl Subtype {
         Subtype::Vehicle,
         Subtype::Aura,
         Subtype::Map,
+        Subtype::Treasure,
         Subtype::Avatar,
         Subtype::Cleric,
+        Subtype::Elemental,
+        Subtype::Elk,
+        Subtype::Fish,
         Subtype::Horror,
         Subtype::Human,
         Subtype::Illusion,
@@ -533,10 +543,13 @@ impl Subtype {
             | Subtype::Swamp
             | Subtype::Mountain
             | Subtype::Forest => Types::LAND,
-            Subtype::Vehicle | Subtype::Map => Types::ARTIFACT,
+            Subtype::Vehicle | Subtype::Map | Subtype::Treasure => Types::ARTIFACT,
             Subtype::Aura => Types::ENCHANTMENT,
             Subtype::Avatar
             | Subtype::Cleric
+            | Subtype::Elemental
+            | Subtype::Elk
+            | Subtype::Fish
             | Subtype::Horror
             | Subtype::Human
             | Subtype::Illusion
@@ -990,6 +1003,13 @@ pub enum Trigger {
     YouCreateTokens(Types),
     /// "Whenever you cast a spell".
     YouCast,
+    /// "Whenever you discard a card": once for each card discarded
+    /// ([CR 603.2c](https://yawgatog.com/resources/magic-rules/#R6032c)): "An ability triggers
+    /// only once each time its trigger event occurs. However, it can trigger repeatedly if one
+    /// event contains multiple occurrences." The discarding player is the card's owner
+    /// ([CR 701.9a](https://yawgatog.com/resources/magic-rules/#R7019a)): "To discard a card,
+    /// move it from its owner's hand to that player's graveyard."
+    YouDiscard,
     /// A delayed triggered ability (CR 603.7): never matched against events, but created by
     /// a body with the moment it waits for.
     Delayed,

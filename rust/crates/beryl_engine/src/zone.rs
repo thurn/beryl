@@ -83,6 +83,9 @@ pub(crate) fn move_to_place(s: &mut State, slot: Slot, to: Zone, place: Place) -
     if (to as usize) < Zone::OWNED {
         s.zones.members[owner][to as usize].insert(slot);
     }
+    if matches!(to, Zone::Battlefield | Zone::Nowhere) {
+        forget_exiled_with(s, slot);
+    }
     // CR 400.2: cards in public zones are seen by every player.
     if to.is_public() {
         for k in &mut s.knowledge {
@@ -95,6 +98,24 @@ pub(crate) fn move_to_place(s: &mut State, slot: Slot, to: Zone, place: Place) -
         s.knowledge[owner].insert(slot);
     }
     Ok(())
+}
+
+/// Unlinks the cards exiled with an earlier object in `slot`, as a new object arrives there
+/// (or a token's slot is freed). The cards stay "exiled with" the object that exiled them
+/// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second ability
+/// refers only to cards in the exile zone that were put there as a result of an instruction
+/// to exile them in the first ability." An ability of that object still on the stack after it
+/// left finds them; the new object is not that object
+/// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)) and does not.
+fn forget_exiled_with(s: &mut State, slot: Slot) {
+    let exile = s.zones.members[0][Zone::Exile as usize] | s.zones.members[1][Zone::Exile as usize];
+    for x in exile.iter() {
+        let o = s.object_mut(x);
+        if o.flags.has(ObjectFlags::EXILED_WITH) && o.linked == Some(slot) {
+            o.flags.set(ObjectFlags::EXILED_WITH, false);
+            o.linked = None;
+        }
+    }
 }
 
 fn leave(s: &mut State, slot: Slot) {
