@@ -436,24 +436,31 @@ impl Expert<'_> {
         // Counterspell is {U}{U}, Reprieve {1}{W}.
         blue >= 2
             || (blue >= 1 && white >= 1 && mana >= 2)
-            || (white >= 1 && mana >= 2 && self.in_game(names::REPRIEVE))
-            || (white >= 1 && self.in_game(names::MANA_TITHE) && !self.seen(names::MANA_TITHE))
+            || (white >= 1 && mana >= 2 && self.in_their_deck(names::REPRIEVE))
+            || (white >= 1
+                && self.in_their_deck(names::MANA_TITHE)
+                && !self.seen(names::MANA_TITHE))
     }
 
-    /// Whether a card named `name` is in either deck of this game.
-    fn in_game(&self, name: &str) -> bool {
-        (0..self.p.t.len()).any(|i| self.p.t.def(beryl_engine::CardIx::new(i as u8)).name == name)
+    /// Whether the opponent's deck holds a card named `name`.
+    fn in_their_deck(&self, name: &str) -> bool {
+        self.p
+            .t
+            .deck(self.opp())
+            .iter()
+            .any(|&c| self.p.t.def(c).name == name)
     }
 
     /// Whether the opponent could win by drawing from an empty library: they control a Jace,
-    /// Wielder of Mysteries, or theirs is in the game and not yet in their graveyard or exile,
+    /// Wielder of Mysteries, or one is in their deck and not yet in their graveyard or exile,
     /// so that milling them may hand them the game.
     fn their_jace_live(&self) -> bool {
         let opp = self.opp();
         let gone = (self.obs().zone(opp, Zone::Graveyard) | self.obs().zone(opp, Zone::Exile))
             .iter()
             .any(|s| self.is(s, names::JACE_WIELDER_OF_MYSTERIES));
-        self.p.wins_from_empty(opp) || (self.in_game(names::JACE_WIELDER_OF_MYSTERIES) && !gone)
+        self.p.wins_from_empty(opp)
+            || (self.in_their_deck(names::JACE_WIELDER_OF_MYSTERIES) && !gone)
     }
 
     /// How many of a player's untapped sources make white, and how many blue (a dual land
@@ -1349,7 +1356,7 @@ impl Expert<'_> {
             && !self.hand(opp).is_empty()
             && (self.obs().player(opp).mana[ManaColor::White] > 0
                 || self.permanents(opp).any(|s| !self.tapped(s) && white(s)))
-            && self.in_game(names::MANA_TITHE)
+            && self.in_their_deck(names::MANA_TITHE)
             && !self.seen(names::MANA_TITHE)
     }
 

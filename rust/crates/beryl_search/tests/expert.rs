@@ -541,6 +541,119 @@ fn removal_aims_at_the_creature_that_kills_us() {
     assert_eq!(name(&t, &s, target), names::SPHINX_OF_FALSE_CONCLUSIONS);
 }
 
+const THREE_ISLANDS: &[Permanent] = &[
+    Permanent::new(ISLAND),
+    Permanent::new(ISLAND),
+    Permanent::new(ISLAND),
+];
+
+/// Subtlety's evoke is two cards for an enters ability that answers only a spell: with mana
+/// for the evoke alone, it stays in hand through our turn and theirs while nothing is cast.
+#[test]
+fn subtlety_is_not_evoked_on_an_empty_stack() {
+    const IDLE: Scenario = Scenario::new("idle")
+        .at(5, P0, TurnStep::PrecombatMain)
+        .hand(P0, &[names::SUBTLETY])
+        .battlefield(P0, THREE_ISLANDS)
+        .library(P0, LIBRARY)
+        .library(P1, LIBRARY);
+    let (t, mut s) = arrange(&IDLE);
+    let mut expert = ExpertAgent::new(&t, 7);
+    let mut x = Scratch::new();
+    while s.turn().number <= 6 {
+        let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) else {
+            panic!("the game ended");
+        };
+        let shown = *view(&s, &t, &mut x);
+        let c = if d.player == P1 {
+            casts("")(&t, &shown, &d)
+        } else {
+            let c = expert.choose(Observation::new(&shown, P0), &d);
+            if let Some(o) = d.candidates.option(c) {
+                assert_ne!(cast_name(&t, &shown, o), Some(names::SUBTLETY));
+            }
+            c
+        };
+        apply(&mut s, &t, &mut x, &mut Replay, c);
+    }
+}
+
+/// Jace, Wielder of Mysteries' +1, "Target player mills two cards": the opponent, unless
+/// their own Jace, Wielder could still come down and win from the empty library; then
+/// ourselves, toward our own Jace's win. Ours alone does not make theirs a danger.
+#[test]
+fn jace_wielder_mills_the_opponent_unless_their_jace_is_live() {
+    const JACE: &[Permanent] = &[
+        Permanent::new(names::JACE_WIELDER_OF_MYSTERIES),
+        Permanent::new(ISLAND),
+    ];
+    const RIVAL: &[&str] = &[
+        PLAINS,
+        ISLAND,
+        names::JACE_WIELDER_OF_MYSTERIES,
+        PLAINS,
+        ISLAND,
+    ];
+    const fn scenario(their_library: &'static [&'static str]) -> Scenario {
+        Scenario::new("jace mills")
+            .at(5, P0, TurnStep::PrecombatMain)
+            .battlefield(P0, JACE)
+            .library(P0, LIBRARY)
+            .library(P1, their_library)
+    }
+    const LIVE: Scenario = scenario(RIVAL);
+    const NONE: Scenario = scenario(LIBRARY);
+    const BURIED: Scenario = scenario(LIBRARY).graveyard(P1, &[names::JACE_WIELDER_OF_MYSTERIES]);
+    let milled = |scenario: &Scenario| {
+        let (t, mut s) = arrange(scenario);
+        let (d, c) = expert_at(&t, &mut s, casts(""), |s, d| {
+            s.stack()
+                .last()
+                .is_some_and(|e| t.def(e.card).name == names::JACE_WIELDER_OF_MYSTERIES)
+                && matches!(&d.candidates, Candidates::Options(o)
+                    if o.iter().any(|o| matches!(o, Opt::Player(_))))
+        });
+        chosen(&d, c)
+    };
+    assert_eq!(milled(&LIVE), Opt::Player(P0));
+    assert_eq!(milled(&NONE), Opt::Player(P1));
+    assert_eq!(milled(&BURIED), Opt::Player(P1));
+}
+
+/// Teferi, Hero of Dominaria's +1 draws a card: taken on a deep library, not on one whose
+/// draws could deck us ([CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b)).
+#[test]
+fn teferi_hero_does_not_draw_from_a_thin_library() {
+    const TEFERI: &[Permanent] = &[
+        Permanent::new(names::TEFERI_HERO_OF_DOMINARIA),
+        Permanent::new(ISLAND),
+    ];
+    const DEEP: &[&str] = &[
+        PLAINS, ISLAND, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS,
+        ISLAND,
+    ];
+    const fn scenario(library: &'static [&'static str]) -> Scenario {
+        Scenario::new("teferi draws")
+            .at(5, P0, TurnStep::PrecombatMain)
+            .battlefield(P0, TEFERI)
+            .library(P0, library)
+            .library(P1, LIBRARY)
+    }
+    let plus_one = |scenario: &Scenario| {
+        let (t, mut s) = arrange(scenario);
+        let (d, c) = expert_at(&t, &mut s, casts(""), |_, d| {
+            d.kind == DecisionKind::Priority
+        });
+        matches!(
+            chosen(&d, c),
+            Opt::Activate { slot, ability: AbilityIx::Own(i) }
+                if t.def(s.card(slot)).front().abilities[usize::from(i)].cost.loyalty == Some(1)
+        )
+    };
+    assert!(plus_one(&scenario(DEEP)));
+    assert!(!plus_one(&scenario(&[PLAINS, ISLAND, PLAINS])));
+}
+
 /// Expert against random, seats alternated. The CLI's 400-game tournament measures the gate
 /// (at least 97% in the cb8d5d5f mirror); this pins a smaller seeded sample, with room for its
 /// luck: 40 of 40, at 98.8% over 400, once retuned for the mirror's cards.
