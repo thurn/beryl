@@ -9,8 +9,10 @@ V1 targets exclusively the 540 cards of the MTG Arena Powered Cube run that
 began October 30, 2025, listed in `data/arena-powered-cube-2025-10-30.csv` (the
 card columns of that run's 17lands public data). Six carry their Arena names
 from Through the Omenpaths (Ademi of the Silkchutes is Scryfall's Spectacular
-Spider-Man). Rules support, drafting and AI need only handle these cards. The
-mirror match target is
+Spider-Man). Rules support, drafting and AI need only handle these cards. Three
+implemented cards are outside it (Aang's Iceberg, Swift Reconfiguration and
+Sphinx of False Conclusions, played by `decks::VINTAGE_WU_CONTROL`); never
+delete a card implementation. The mirror match target is
 `docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt`, a mythic
 drafter's deck from that run.
 

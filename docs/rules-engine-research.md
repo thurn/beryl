@@ -1130,7 +1130,7 @@ ______________________________________________________________________
 | Magarena                      | GPL-3.0                                                       | Ideas only.                                                                                           |
 | Ironsmith                     | BSL 1.1 (non-commercial; MIT after 4 yrs) / AGPL in manifests | Ideas only.                                                                                           |
 | DeepScry                      | Closed (card mirror GPL-3.0)                                  | Ideas from the published docs only.                                                                   |
-| 17lands data (via XMage CSVs) | CC BY 4.0                                                     | Usable with attribution. 17lands has no cube data.                                                    |
+| 17lands data (via XMage CSVs) | CC BY 4.0                                                     | Usable with attribution, as is 17lands' public data for Beryl's cube.                                 |
 
 ______________________________________________________________________
 

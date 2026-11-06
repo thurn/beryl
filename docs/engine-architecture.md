@@ -66,21 +66,21 @@ WebAssembly, parsing Oracle text, and any mode that plays a different game from
 the real one.
 
 **The rules surface the cube needs.** From the card list: the full stack with
-APNAP trigger ordering, replacement and prevention effects, layers including
-type-changing lands (Urborg, Yavimaya), copy effects (Phyrexian Metamorph,
-Phantasmal Image, Thespian's Stage, Shifting Woodland, Lutri), control change
-(Oko, Dack Fayden, Wishclaw Talisman, Coveted Jewel), the monarch (Palace
-Jailer), energy (Galvanic Discharge), poison and infect (Blightsteel Colossus),
-phasing, level up (Hexdrinker), sagas (Urza's Saga, Fable of the
+APNAP trigger ordering, replacement and prevention effects, layers including a
+type-changing land (Yavimaya), copy effects (Phyrexian Metamorph, Phantasmal
+Image, Thespian's Stage, Shifting Woodland, Lutri, Fractured Identity), control
+change (Oko, Dack Fayden, Wishclaw Talisman, Coveted Jewel), energy (Galvanic
+Discharge), poison (Etali, Primal Conqueror), sagas (Urza's Saga, Fable of the
 Mirror-Breaker), vehicles and crew, equipment and reconfigure, transforming
 double-faced cards, modal double-faced cards, split and adventure cards, extra
 turns (Time Walk, Emrakul), emblems, storm (Brain Freeze, Tendrils of Agony),
-delve, improvise, Phyrexian mana, votes (Council's Judgment), opponent choices
-during resolution (Karn, Scion of Urza; Palantír of Orthanc), piles (Liliana of
-the Veil), face-down exile (Memory Jar, Shelldock Isle), coin flips (Mana
-Crypt), and alternative win and loss conditions (Thassa's Oracle, Jace, Wielder
-of Mysteries). Absent, and so not designed for: controlling another player, game
-restarts, dungeons, wishes, day and night, dredge, morph and manifest.
+delve, improvise, overload, evoke, flashback, Phyrexian mana, day and night
+(Outland Liberator), opponent choices during resolution (Karn, Scion of Urza),
+piles (Liliana of the Veil), face-down exile (Memory Jar, Shelldock Isle),
+manifest dread (Abhorrent Oculus), coin flips (Mana Crypt), and an alternative
+win condition (Jace, Wielder of Mysteries). Absent, and so not designed for:
+controlling another player, game restarts, the monarch, votes, phasing, infect,
+dungeons, wishes, dredge and morph.
 
 ## 2. Principles
 
@@ -258,40 +258,39 @@ About 21 bytes, so the table is under 6 KiB.
   | Choice record per process     | 32       |
 
   The heaviest known users: Brain Freeze and Tendrils of Agony at storm 10 to 20
-  for the stack, Sheoldred or Orcish Bowmasters against a Wheel of Fortune for
-  triggers, and Thopter Foundry with Sword of the Meek, Myr Battlesphere,
-  Lingering Souls and Elspeth's doubling for tokens.
+  for the stack, Sheoldred, the Apocalypse against a Wheel of Fortune for
+  triggers, and Myr Battlesphere, Lingering Souls and Elspeth, Storm Slayer's
+  doubling for tokens.
 
 ### 4.3 Zones
 
 - **Membership** is a bitboard per zone per player: library, hand, battlefield,
   graveyard, exile, command, plus the shared stack. Each object also carries its
   zone, and a debug invariant keeps the two in agreement.
-- **Order** is kept only where the rules read it: `library` and `graveyard` as
-  `Fixed<u8, 60>` per player (Corpse Dance and Shallow Grave read the top of a
-  graveyard), and the stack. Hand, battlefield and exile are unordered.
+- **Order** is kept for `library` and `graveyard`, as `Fixed<u8, 60>` per
+  player, and for the stack. Hand, battlefield and exile are unordered.
 - **Linked information** rides on the object: `linked` points at the object that
   exiled, imprinted or hid it, so Skyclave Apparition, Chrome Mox, Memory Jar,
   Shelldock Isle and Agatha's Soul Cauldron need no side tables. Dauthi
   Voidwalker's void counters are ordinary counters on exiled objects.
-- **Companions.** Lurrus, Lutri and Zirda can serve as companions when a drafted
-  deck qualifies, and Lutri's condition is trivially met in singleton. Whether
-  to support the mechanic is open (§20); if so, a per-player companion slot is
-  the whole cost.
+- **Companions.** Lurrus and Lutri can serve as companions when a drafted deck
+  qualifies, and Lutri's condition is trivially met in singleton. Whether to
+  support the mechanic is open (§20); if so, a per-player companion slot is the
+  whole cost.
 
 ### 4.4 Players and turn
 
-`Player` holds life, poison, energy, the mana pool, monarch, land drops this
-turn, the emblem mask, and the per-turn history counters that rules read: spells
-cast this turn by each player for storm, cards drawn this turn for Narset and
-Sheoldred, life gained and lost, creatures that died, lands that entered.
-**Every history fact a rule reads is a counter maintained at the mutation
-chokepoint.** None is derived from a log, which is the trap DeepScry fell into
-when its rollouts ran with the log off.
+`Player` holds life, poison, energy, the mana pool, land drops this turn, the
+emblem mask, and the per-turn history counters that rules read: spells cast this
+turn by each player for storm, cards drawn this turn for Narset and Sheoldred,
+life gained and lost, creatures that died, lands that entered. **Every history
+fact a rule reads is a counter maintained at the mutation chokepoint.** None is
+derived from a log, which is the trap DeepScry fell into when its rollouts ran
+with the log off.
 
 The mana pool is six `u8` color counts plus a short list of restricted mana
-entries, each tagged with its restriction: Mishra's Workshop's artifact-only
-mana, Relic of Sauron's, Delighted Halfling's legendary-only mana.
+entries, each tagged with its restriction: the artifact-only mana of Mishra's
+Workshop and The Mightstone and Weakstone.
 
 `Turn` holds the turn number, active player, step, the priority holder and pass
 count, the queue of extra turns, and any inserted combat phase.
@@ -305,7 +304,7 @@ count, the queue of extra turns, and any inserted combat phase.
 - `triggers`: abilities that have triggered and wait to be put on the stack,
   with their source, event payload and LKI.
 - `delayed`: delayed triggered abilities with their duration and source (Mana
-  Drain, Sneak Attack, Through the Breach, Memory Jar, Fable's Reflection).
+  Drain, Sneak Attack, Memory Jar, Fable's Reflection).
 - `effects`: continuous effects from resolved spells and abilities, with source,
   timestamp, duration, layer, affected-set filter and modification
   (until-end-of-turn pumps, Oko's Elk, control changes, protection from Giver of
@@ -425,9 +424,9 @@ recorded answer or, when the record has none, returns `Err(Pending)` through
 primitives (`deal_damage`, `draw`, `move_to`, `create_token`, `add_counters`,
 `gain_control`, `search_library`, `each_player`, `reveal`, `shuffle`, ...) are
 the only way a body touches the state, and each builds the event that flows
-through §8. Painter's Servant's color change on cards in every zone, and the
-cost modifiers of Elite Spellbinder, Zirda and Leyline Binding, are reached
-through explicit engine hooks rather than the battlefield layer pass.
+through §8. The cost modifiers of Elite Spellbinder, Thalia and Leyline Binding
+are reached through explicit engine hooks rather than the battlefield layer
+pass.
 
 ### 6.4 The per-game table (D20)
 
@@ -473,8 +472,8 @@ play a land, a special action such as ninjutsu), one target, one mode, X, a
 payment plan, one attacker, an attack target, one blocker, the attacker it
 blocks, a damage division, the next trigger to put on the stack, the next
 replacement to apply, one card from a set, the next card in an ordering, yes or
-no, a number, a color, a player, a vote, a pile assignment, keep or mulligan.
-Every answer is `Choice(u8)`: an index into the candidates.
+no, a number, a color, a player, a pile assignment, keep or mulligan. Every
+answer is `Choice(u8)`: an index into the candidates.
 
 The kind says the shape of an answer; `Ask` says what a question is for where
 the kind alone does not: a scry, a look that may take a card, a fateseal, an
@@ -545,13 +544,13 @@ work for no measurable speed.
 **Rollouts never pause.** Their answer source is the rollout policy, called
 inline, so a `may_pause` body runs once on the committed state, with no scratch
 copy and no re-run. This cube is full of such bodies: twelve fetch-style lands,
-tutors, Thoughtseize, Brainstorm, Ponder, Preordain, Sensei's Divining Top and
-Fact or Fiction. At 10 to 20 resolutions a game, replaying them would cost about
-2 to 3% of rollout time. Both paths must reach the same state for the same
-answers, so a differential test records a rollout's inline answers, replays them
-through `Replay`, and compares state hashes at every decision (§17.4). An undo
-log that rolls back on pause was considered and rejected: exact undo for every
-primitive is the bug class that broke DeepScry's rewind.
+tutors, Thoughtseize, Brainstorm, Ponder, Preordain, Stock Up and Dig Through
+Time. At 10 to 20 resolutions a game, replaying them would cost about 2 to 3% of
+rollout time. Both paths must reach the same state for the same answers, so a
+differential test records a rollout's inline answers, replays them through
+`Replay`, and compares state hashes at every decision (§17.4). An undo log that
+rolls back on pause was considered and rejected: exact undo for every primitive
+is the bug class that broke DeepScry's rewind.
 
 ### 7.4 Casting
 
@@ -605,8 +604,7 @@ resolution. Reflexive triggers ("when you do") are enqueued by the body that
 created the condition. Delayed triggers carry their duration and fire from
 step-boundary events. State triggers (Dark Depths) are checked with state-based
 actions and enqueued once until they resolve. Triggers from outside the
-battlefield are indexed too: Sword of the Meek in a graveyard, Emrakul's cast
-trigger from the stack.
+battlefield are indexed too: Emrakul's cast trigger from the stack.
 
 ### 8.4 State-based actions
 
@@ -723,8 +721,8 @@ Combat is factored into single picks with legality-aware candidates:
 - **Special actions.** Ninjutsu is offered to the attacking player in the
   declare blockers step while an unblocked attacker exists. Crew taps creatures
   one pick at a time until the power requirement is met. Exalted, attack
-  triggers (Adeline, Ragavan), combat-damage triggers (Coveted Jewel, Palace
-  Jailer's monarch) and planeswalker damage fall out of the event pipeline.
+  triggers (Adeline, Ragavan), combat-damage triggers (Coveted Jewel, Etali's
+  poison) and planeswalker damage fall out of the event pipeline.
 
 ## 12. Turn structure, budgets and outcomes (D11)
 
@@ -760,12 +758,12 @@ capacities of §4.2. Running out is `Stalled`. Search scores it as 0.5 unless an
 evaluation says otherwise; every test treats a stall as a failure; benchmarks
 report stall rates.
 
-The cube has real unbounded loops: Devoted Druid under Swift Reconfiguration
-makes unlimited mana, and Walking Ballista turns it into damage one activation
-at a time. Under per-decision budgets a search undervalues such lines. The fix
-is a later profile meta-action that proposes a loop and a count as one decision
-in the spirit of the rules on shortcuts, executed as that many real activations;
-it is noted in §20 and not part of Milestone 1.
+The cube has long loops: Underworld Breach recasts Lion's Eye Diamond and Brain
+Freeze from the graveyard until a library is empty, one cast at a time. Under
+per-decision budgets a search undervalues such lines. The fix is a later profile
+meta-action that proposes a loop and a count as one decision in the spirit of
+the rules on shortcuts, executed as that many real activations; it is noted in
+§20 and not part of Milestone 1.
 
 ## 13. Hidden information (D9, D19)
 
@@ -780,9 +778,9 @@ slot.
 - `knowledge[p]` is a bitboard: player p knows the identity in slot s. It is
   updated only at chokepoints: draw, look at, reveal, cast, play, face-down
   exile, and the search and tutor primitives. Thoughtseize sets the caster's
-  bits for a whole hand; Sensei's Divining Top sets its owner's for the top
-  three; Gitaxian Probe and Elite Spellbinder look at a hand, Collective
-  Brutality reveals one, and all three set bits the same way.
+  bits for a whole hand; Jace, the Mind Sculptor's +2 sets its controller's for
+  a library's top card; Gitaxian Probe and Elite Spellbinder look at a hand,
+  Collective Brutality reveals one, and all three set bits the same way.
 - **Shuffling rebinds identities among the shuffled slots** and clears their
   knowledge bits, in addition to reordering. Without the rebinding, the owner of
   a Brainstormed-back Ponder would know where it went.
@@ -839,8 +837,8 @@ and in rollouts, shrink it:
   silently. A turn has 8 to 10 steps in which both players get priority, and a
   player holding a fetchland or an instant turns most of those 16 to 20 passes
   into decisions; smart stops bring a turn from about 20 to 25 decisions to
-  about 8. Lines that need another stop, such as an upkeep activation of
-  Sensei's Divining Top, are lost unless the stop set adds them.
+  about 8. Lines that need another stop, such as a Brainstorm in the upkeep
+  before a draw, are lost unless the stop set adds them.
 - The default damage division, all triggers ordered by rule, X capped, and
   attacks on the player only.
 - In rollouts only, greedy mana taps (§10) and mid-resolution choices answered
@@ -1122,9 +1120,9 @@ matchup.
 
 ## 20. Open questions
 
-- **Companions.** Lurrus, Lutri and Zirda can be companions in cube. Supporting
-  the mechanic costs a sideboard slot per player and a special action; whether
-  the cube experience wants it is a decision for the drafting milestone.
+- **Companions.** Lurrus and Lutri can be companions in cube. Supporting the
+  mechanic costs a sideboard slot per player and a special action; whether the
+  cube experience wants it is a decision for the drafting milestone.
 - **Loop shortcuts.** The "repeat N times" meta-action of §12.3, and how search
   should propose counts.
 - **613.8 corpus.** Which cube interactions, if any, exercise same-layer

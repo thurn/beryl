@@ -19,8 +19,9 @@ A **general** AI: no per-card code, able to play any deck drafted from the
 
 ## 2. Where we are
 
-From the Milestone 1 round robins on epic by-b0q (100 games per pairing, seats
-alternated, MCTS at 300 iterations and 4 trees):
+From the Milestone 1 round robins on epic by-b0q, in the earlier MTGO mirror
+(`decks::VINTAGE_WU_CONTROL`, whose 29 cards the expert knows; 100 games per
+pairing, seats alternated, MCTS at 300 iterations and 4 trees):
 
 | Pairing                       | Seed 2026 | Fresh seeds    |
 | ----------------------------- | --------- | -------------- |
