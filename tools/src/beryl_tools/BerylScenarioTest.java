@@ -1,12 +1,17 @@
 package org.mage.test.beryl;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import mage.MageItem;
+import mage.MageObject;
 import mage.abilities.Ability;
 import mage.cards.Card;
 import mage.cards.Cards;
@@ -17,6 +22,7 @@ import mage.counters.CounterType;
 import mage.game.Game;
 import mage.game.permanent.Permanent;
 import mage.game.permanent.PermanentToken;
+import mage.player.ai.PossibleTargetsSelector;
 import mage.players.Player;
 import mage.target.Target;
 import mage.target.TargetCard;
@@ -63,24 +69,62 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
         }
 
         /**
-         * Asks `question` with an optional choice at the head of the queue made an ordinary one,
-         * and makes it optional again if the question did not use it, as when XMage settles a
-         * choice of one card itself. An optional choice reads
+         * Asks `question` with the optional choices in the queue made ordinary ones, and makes
+         * those it did not use optional again, as when XMage settles a choice of one card
+         * itself. The leading optional choices that `fits` says this question cannot take wait
+         * outside the queue while it is asked: their questions were settled unasked, as a
+         * discard of the only card in a hand before a yes or no. An optional choice reads
          * `beryl:optional:<turn>:<step>:<choice>`, with the turn and step where Beryl answered it.
          */
-        private boolean withOptional(BooleanSupplier question) {
+        private boolean withOptional(Predicate<String> fits, BooleanSupplier question) {
             List<String> choices = getChoices();
-            if (choices.isEmpty() || !choices.get(0).startsWith(OPTIONAL)) {
-                return question.getAsBoolean();
+            List<String> bypassed = new ArrayList<>();
+            while (!choices.isEmpty() && choices.get(0).startsWith(OPTIONAL)
+                    && !fits.test(optionalValue(choices.get(0)))) {
+                bypassed.add(choices.remove(0));
             }
-            String optional = choices.get(0);
+            // The question takes choices from the front, so each optional one is kept by its
+            // distance from the end of the queue.
+            Map<Integer, String> optional = new HashMap<>();
             int size = choices.size();
-            choices.set(0, optional.split(":", 5)[4]);
-            boolean result = question.getAsBoolean();
-            if (choices.size() == size) {
-                choices.set(0, optional);
+            for (int i = 0; i < size; i++) {
+                String choice = choices.get(i);
+                if (choice.startsWith(OPTIONAL)) {
+                    optional.put(size - i, choice);
+                    choices.set(i, optionalValue(choice));
+                }
             }
-            return result;
+            try {
+                return question.getAsBoolean();
+            } finally {
+                int left = choices.size();
+                for (Map.Entry<Integer, String> entry : optional.entrySet()) {
+                    if (entry.getKey() <= left) {
+                        choices.set(left - entry.getKey(), entry.getValue());
+                    }
+                }
+                choices.addAll(0, bypassed);
+            }
+        }
+
+        private static String optionalValue(String choice) {
+            return choice.split(":", 5)[4];
+        }
+
+        /** Whether `name` names one of the objects or players `target` can choose. */
+        private boolean selectable(String name, Outcome outcome, Target target, Ability source, Game game, Cards cards) {
+            PossibleTargetsSelector selector = new PossibleTargetsSelector(
+                    outcome, target, target.getAffectedAbilityControllerId(getId()), source, game);
+            selector.findNewTargets(cards);
+            for (MageItem item : selector.getAny()) {
+                if (item instanceof MageObject && ((MageObject) item).getName().equals(name)) {
+                    return true;
+                }
+                if (item instanceof Player && ((Player) item).getName().equals(name)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         /** Whether an optional choice's question would have come by now. */
@@ -97,18 +141,24 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
 
         @Override
         public boolean choose(Outcome outcome, Target target, Ability source, Game game, Map<String, Serializable> options) {
-            return withOptional(() -> super.choose(outcome, target, source, game, options));
+            return withOptional(
+                    name -> selectable(name, outcome, target, source, game, null),
+                    () -> super.choose(outcome, target, source, game, options));
         }
 
         @Override
         public boolean choose(Outcome outcome, Cards cards, TargetCard target, Ability source, Game game) {
-            return withOptional(() -> super.choose(outcome, cards, target, source, game));
+            return withOptional(
+                    name -> selectable(name, outcome, target, source, game, cards),
+                    () -> super.choose(outcome, cards, target, source, game));
         }
 
         @Override
         public boolean chooseUse(Outcome outcome, String message, String secondMessage, String trueText,
                 String falseText, Ability source, Game game) {
-            return withOptional(() -> super.chooseUse(outcome, message, secondMessage, trueText, falseText, source, game));
+            return withOptional(
+                    answer -> answer.equals("Yes") || answer.equals("No"),
+                    () -> super.chooseUse(outcome, message, secondMessage, trueText, falseText, source, game));
         }
 
         @Override

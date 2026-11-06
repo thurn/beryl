@@ -1103,7 +1103,31 @@ public final class BerylForgeHarness {
                 }
                 pick = run.takeFollowing(player, OBJECTS);
             }
+            // The picks short of `min` that Beryl made unasked, its choice settled: as many
+            // options left as picks, or all of them alike, as the second of Thirst for
+            // Discovery's two discards from a hand of identical basic lands.
+            int missing = min - picked.size();
+            if (pick == null && missing > 0 && (remaining.size() == missing || alike(remaining))) {
+                List<T> settled = remaining.subList(0, Math.min(missing, remaining.size()));
+                picked.addAll(settled);
+                lastPicks.addAll(settled);
+            }
             return picked;
+        }
+
+        /** Whether `options` are all cards of one name, which Beryl does not tell apart. */
+        static boolean alike(List<?> options) {
+            String name = null;
+            for (Object option : options) {
+                if (!(option instanceof Card card)) {
+                    return false;
+                }
+                if (name != null && !card.getName().equals(name)) {
+                    return false;
+                }
+                name = card.getName();
+            }
+            return name != null;
         }
 
         @Override

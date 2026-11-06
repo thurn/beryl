@@ -400,27 +400,7 @@ GENERATED = 100
 # rules, by oracle and scenario, with the gap: reported as unsupported. An entry whose scenario
 # passes, or no longer fails, is stale and fails the run, so the list stays current; a change
 # to the generator renames what it covers.
-EXPORTER_GAPS: dict[tuple[str, str], str] = {
-    ("xmage", "Generated 9"): (
-        "Currency Converter's may-exile after a discard: XMage asks a choice the exporter "
-        "does not script"
-    ),
-    ("xmage", "Generated 14"): (
-        "Currency Converter's may-exile after a discard: XMage asks a choice the exporter "
-        "does not script"
-    ),
-    ("xmage", "Generated 55"): (
-        "Thirst for Discovery's two discards after declining the basic land, one of them a "
-        "basic land: the exporter scripts it as the basic land alone"
-    ),
-    ("forge", "Generated 55"): (
-        "Thirst for Discovery's two discards after declining the basic land, one of them a "
-        "basic land: the harness takes it as the basic land alone"
-    ),
-    ("xmage", "Generated 46"): (
-        "Elite Spellbinder's may-exile declined: the exporter scripts no answer XMage takes"
-    ),
-}
+EXPORTER_GAPS: dict[tuple[str, str], str] = {}
 
 
 def apply_gaps(oracle: str, result: dict[str, object]) -> list[str]:
