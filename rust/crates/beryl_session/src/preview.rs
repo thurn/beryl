@@ -8,8 +8,8 @@
 use beryl_engine::card::AbilityKind;
 use beryl_engine::state::{ObjectFlags, Pending};
 use beryl_engine::{
-    Ask, Candidates, Choice, Decision, DecisionKind, GameTable, Opt, Profile, Replay, Scratch,
-    Seat, Slot, State, Step, Stops, Zone, apply, cost_being_cast, next,
+    Ask, Candidates, Choice, Decision, DecisionKind, GameTable, Layout, Opt, Profile, Replay,
+    Scratch, Seat, Slot, State, Step, Stops, Zone, apply, cost_being_cast, next,
 };
 
 use crate::Status;
@@ -19,7 +19,7 @@ use crate::protocol::{Payment, PlayerView, Side, TargetRef, mana_text};
 /// ([`payments`]) and the attackers each blocker may block ([`blocks`]). They read the whole
 /// state, not the viewer's observation, but only the costs, the viewer's own permanents and
 /// the attackers' public characteristics decide them.
-pub fn add_previews(view: &mut PlayerView, s: &State, t: &GameTable, d: &Decision) {
+pub fn add_previews<L: Layout>(view: &mut PlayerView, s: &State<L>, t: &GameTable, d: &Decision) {
     if let Status::Deciding { decision } = &mut view.status {
         for (((c, p), b), targets) in decision
             .candidates
@@ -37,8 +37,8 @@ pub fn add_previews(view: &mut PlayerView, s: &State, t: &GameTable, d: &Decisio
 
 /// A copy of `s` in which every question comes back as a decision, even one with a single
 /// answer, so a walk sees each pick the engine would otherwise make silently (§7.2).
-fn forced(s: &State) -> State {
-    let mut copy = *s;
+fn forced<L: Layout>(s: &State<L>) -> State<L> {
+    let mut copy = s.clone();
     copy.set_profile(Profile {
         stops: Stops::Forced,
         ..s.profile()
@@ -59,7 +59,7 @@ fn choice(i: usize) -> Choice {
 /// player, a planeswalker they control, or a battle they protect." The engine asks it as the
 /// pick after the blocker, with evasion pruning the attackers (architecture §11); identical
 /// attackers are one candidate (§7.2).
-fn blocks(s: &State, t: &GameTable, d: &Decision) -> Vec<Vec<u8>> {
+fn blocks<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision) -> Vec<Vec<u8>> {
     let Candidates::Options(opts) = &d.candidates else {
         return vec![Vec::new(); d.len()];
     };
@@ -91,7 +91,7 @@ fn blocks(s: &State, t: &GameTable, d: &Decision) -> Vec<Vec<u8>> {
 /// variable number of targets, the player announces how many targets they will choose before
 /// they announce those targets." The engine asks the targets as the picks after the count;
 /// identical objects are one candidate (§7.2).
-fn targets(s: &State, t: &GameTable, d: &Decision) -> Vec<Vec<TargetRef>> {
+fn targets<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision) -> Vec<Vec<TargetRef>> {
     let Candidates::Options(opts) = &d.candidates else {
         return vec![Vec::new(); d.len()];
     };
@@ -145,7 +145,7 @@ fn targets(s: &State, t: &GameTable, d: &Decision) -> Vec<Vec<TargetRef>> {
 /// "If the total cost includes a mana payment, the player then has a chance to activate mana
 /// abilities"; the engine settles which sources among plans with the same consequences
 /// (architecture §10), so a payment per plan it offers.
-fn payments(s: &State, t: &GameTable, d: &Decision) -> Vec<Vec<Payment>> {
+fn payments<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision) -> Vec<Vec<Payment>> {
     let Candidates::Options(opts) = &d.candidates else {
         return vec![Vec::new(); d.len()];
     };
@@ -186,7 +186,7 @@ fn payments(s: &State, t: &GameTable, d: &Decision) -> Vec<Vec<Payment>> {
 /// ([CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a): "This means the same
 /// thing as '[A player may do something else]. If [that player doesn't], [do something].'"),
 /// so the UI can light the permanents that would pay.
-fn unless_paid(s: &State, t: &GameTable, d: &Decision, i: usize) -> Payment {
+fn unless_paid<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision, i: usize) -> Payment {
     let mut copy = forced(s);
     let mut scratch = Scratch::new();
     apply(&mut copy, t, &mut scratch, &mut Replay, choice(i));
@@ -208,11 +208,11 @@ fn unless_paid(s: &State, t: &GameTable, d: &Decision, i: usize) -> Payment {
 /// Answers the rest of the cast in `s`: every value of X and every payment plan, each on a
 /// copy, and the first answer to anything else (targets cost the same whichever is chosen).
 /// Pushes what each finished cast tapped, from `before` on.
-fn walk(
-    before: &State,
-    mut s: State,
+fn walk<L: Layout>(
+    before: &State<L>,
+    mut s: State<L>,
     t: &GameTable,
-    scratch: &mut Scratch,
+    scratch: &mut Scratch<L>,
     at: &Payment,
     out: &mut Vec<Payment>,
 ) {
@@ -245,7 +245,7 @@ fn walk(
         {
             for (i, &o) in opts.iter().enumerate() {
                 let at = priced(branch(o).expect("one kind"), &s, t);
-                let mut copy = s;
+                let mut copy = s.clone();
                 apply(&mut copy, t, scratch, &mut Replay, choice(i));
                 walk(before, copy, t, scratch, &at, out);
             }
@@ -263,7 +263,7 @@ fn walk(
 /// ([CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f): "The total cost is the
 /// mana cost or alternative cost (as determined in rule 601.2b), plus all additional costs and
 /// cost increases, and minus all cost reductions").
-fn priced(at: Payment, s: &State, t: &GameTable) -> Payment {
+fn priced<L: Layout>(at: Payment, s: &State<L>, t: &GameTable) -> Payment {
     match at.x {
         Some(x) if at.cost.is_none() => Payment {
             cost: cost_being_cast(s, t, x).map(mana_text),
@@ -278,8 +278,8 @@ fn priced(at: Payment, s: &State, t: &GameTable) -> Payment {
 /// ([CR 111.10a](https://yawgatog.com/resources/magic-rules/#R11110a)): "{T}, Sacrifice this
 /// token: Add one mana of any color." A permanent sacrificed otherwise, as Strip Mine for its
 /// own ability, paid no mana.
-fn tapped(before: &State, after: &State, t: &GameTable) -> Vec<u8> {
-    let untapped = |s: &State, slot| {
+fn tapped<L: Layout>(before: &State<L>, after: &State<L>, t: &GameTable) -> Vec<u8> {
+    let untapped = |s: &State<L>, slot| {
         let o = s.object(slot);
         o.zone == Zone::Battlefield && !o.flags.has(ObjectFlags::TAPPED)
     };

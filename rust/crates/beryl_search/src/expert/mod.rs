@@ -40,7 +40,7 @@
 
 mod combat;
 
-use beryl_engine::{Layout, Small};
+use beryl_engine::{Large, Layout, Small};
 use std::cell::OnceCell;
 
 use beryl_cards::names;
@@ -54,8 +54,8 @@ use beryl_engine::{
     Slot, Step, TurnStep, Zone, apply, next,
 };
 
-use crate::Agent;
 use crate::rollout::{Candidate, Inline, Policy, RolloutPolicy, best};
+use crate::{Agent, Widen};
 
 /// The most lands we cast Mana Crypt with.
 const CRYPT_LANDS: i32 = 3;
@@ -118,6 +118,32 @@ impl<L: Layout> ExpertAgent<L> {
             rng: SplitMix64::new(seed),
             x: Scratch::new(),
             plan: combat::Plan::default(),
+        }
+    }
+}
+
+impl ExpertAgent<Large> {
+    /// The expert in [`Large`], drawing on from `rng`: how an agent with no `Large` copy of its
+    /// own plays on there ([`crate::FrozenExpertAgent`]).
+    pub(crate) fn drawing_from(t: &GameTable, rng: SplitMix64) -> ExpertAgent<Large> {
+        ExpertAgent {
+            rng,
+            ..ExpertAgent::new(t, 0)
+        }
+    }
+}
+
+/// The same expert in [`Large`]: its stream and combat plan go on where they were.
+impl Widen for ExpertAgent<Small> {
+    type Large = ExpertAgent<Large>;
+
+    fn widen(&self) -> ExpertAgent<Large> {
+        ExpertAgent {
+            table: self.table.clone(),
+            policy: self.policy.clone(),
+            rng: self.rng,
+            x: Scratch::new(),
+            plan: self.plan.clone(),
         }
     }
 }

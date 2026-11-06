@@ -9,7 +9,7 @@ use std::sync::mpsc::channel;
 
 use beryl_cards::CARDS;
 use beryl_cards::decks::{WU_CONTROL, fuzz_deck};
-use beryl_search::Agent;
+use beryl_search::GameAgent;
 use beryl_session::ipc::{self, Fixture, FixtureMessage};
 use beryl_session::protocol::{
     Candidate, CandidateView, CardType, Combat, Counter, Kind, ObjectView, Side, StackItem, Step,
@@ -795,7 +795,7 @@ fn start(
                     beryl_scenario::position(&CARDS, board).map_err(|e| e.to_string())?;
                 let agent = |seat: Seat| {
                     Scripted::new(board, seat, &table, Arc::clone(progress))
-                        .map(|a| Box::new(a) as Box<dyn Agent + Send>)
+                        .map(|a| Box::new(a) as Box<dyn GameAgent + Send>)
                 };
                 sessions.start_prepared(Prepared {
                     opponent: agent(human.opponent())?,

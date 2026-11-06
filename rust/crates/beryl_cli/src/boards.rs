@@ -19,7 +19,9 @@ use beryl_cards::names::{
 };
 use beryl_engine::card::{Castings, FaceIx};
 use beryl_engine::state::CounterKind;
-use beryl_engine::{Choice, Decision, DecisionKind, GameTable, Observation, Seat, TurnStep};
+use beryl_engine::{
+    Choice, Decision, DecisionKind, GameTable, Layout, Observation, Seat, TurnStep,
+};
 use beryl_scenario::{Action, P0, P1, Permanent, Pick, Scenario};
 use beryl_search::Agent;
 
@@ -1240,8 +1242,8 @@ impl Scripted {
     }
 }
 
-impl Agent for Scripted {
-    fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice {
+impl<L: Layout> Agent<L> for Scripted {
+    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision) -> Choice {
         let s = obs.unmasked_root();
         let next = self.script.front().copied();
         if let Some(action) = next {

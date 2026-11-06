@@ -259,8 +259,9 @@ impl Sink {
         self.events.drain(len..)
     }
 
-    /// Drops the events after the first `len`, those of a body run discarded (§7.3).
-    pub(crate) fn truncate(&mut self, len: usize) {
+    /// Drops the events after the first `len`: those of a body run discarded (§7.3), or of a
+    /// game run on until a capacity of its layout ran out, to be run again in a wider one.
+    pub fn truncate(&mut self, len: usize) {
         self.events.truncate(len);
     }
 

@@ -11,13 +11,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use beryl_engine::event::Event;
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::state::{ObjectFlags, Pending, StackEntry};
+use beryl_engine::state::{Object, ObjectFlags, Pending, StackEntry, Turn};
 use beryl_engine::{
-    Ask, Candidates, CardTable, Choice, Decision, DecisionKind, GameTable, Observation, Opt,
-    Outcome, Profile, Replay, Scratch, Seat, State, Step, StepStops, TurnStep, apply, next_in_step,
-    observe, paused_events, view,
+    Ask, Candidates, CardTable, Choice, Decision, DecisionKind, GameTable, Large, Layout,
+    Observation, Opt, Outcome, Profile, Replay, Scratch, Seat, Slot, Small, StallReason, State,
+    Step, StepStops, TurnStep, apply, next_in_step, observe, paused_events, view,
 };
-use beryl_search::{Agent, Budget};
+use beryl_search::{Budget, GameAgent};
 
 use crate::preview;
 use crate::protocol::{
@@ -123,11 +123,188 @@ enum At {
     Stopped,
 }
 
+/// The game's state and the engine's working memory for it, in one layout.
+struct Board<L: Layout> {
+    state: State<L>,
+    scratch: Scratch<L>,
+    /// Working memory for looking ahead in a copy of the state, whose events are dropped.
+    peek: Scratch<L>,
+}
+
+/// The game in the layout it is in (architecture §4.1): [`Small`], the layout search runs on,
+/// until a capacity of it runs out, then [`Large`] for good. The game is widened as it stood
+/// before the engine call that ran out, and that call is made again in `Large`, so no player
+/// game ends stalled for a capacity of `Small` and no player sees the difference.
+enum Boards {
+    Small(Box<Board<Small>>),
+    Large(Box<Board<Large>>),
+}
+
+/// Evaluates `$body` with `$b` bound to the board, whichever layout it is in.
+macro_rules! on_board {
+    ($boards:expr, $b:ident => $body:expr) => {
+        match $boards {
+            Boards::Small($b) => $body,
+            Boards::Large($b) => $body,
+        }
+    };
+}
+
+/// Whether the engine stalled the game because a capacity of its layout ran out.
+fn ran_out<L: Layout>(s: &State<L>) -> bool {
+    s.outcome() == Some(Outcome::Stalled(StallReason::Capacity))
+}
+
+/// A copy of the game's state, in the layout it was in.
+enum Snapshot {
+    Small(Box<State<Small>>),
+    Large(Box<State<Large>>),
+}
+
+impl Boards {
+    fn new(state: &State<Small>) -> Boards {
+        Boards::Small(Box::new(Board {
+            state: *state,
+            scratch: Scratch::recording(),
+            peek: Scratch::new(),
+        }))
+    }
+
+    /// Goes on in [`Large`] from `before`, the state before the engine call that ran out of
+    /// capacity, keeping the events the scratch had recorded by then: the first `events`.
+    fn widen(&mut self, before: &State<Small>, events: usize) {
+        let Boards::Small(b) = self else {
+            unreachable!("only a Small game is widened");
+        };
+        let mut scratch = Scratch::new();
+        scratch.events = std::mem::take(&mut b.scratch.events);
+        scratch.events.truncate(events);
+        *self = Boards::Large(Box::new(Board {
+            state: before.widen(),
+            scratch,
+            peek: Scratch::new(),
+        }));
+    }
+
+    /// Applies `c` to the open decision, widening the game if it runs out of capacity.
+    fn apply(&mut self, t: &GameTable, c: Choice) {
+        if let Boards::Small(b) = self {
+            let (before, events) = (b.state, b.scratch.events.len());
+            apply(&mut b.state, t, &mut b.scratch, &mut Replay, c);
+            if !ran_out(&b.state) {
+                return;
+            }
+            self.widen(&before, events);
+        }
+        let Boards::Large(b) = self else {
+            unreachable!("a game widened")
+        };
+        apply(&mut b.state, t, &mut b.scratch, &mut Replay, c);
+    }
+
+    /// Plays on as [`next_in_step`] does, widening the game if it runs out of capacity.
+    fn next_in_step(&mut self, t: &GameTable, seen: (u16, TurnStep)) -> Option<Step> {
+        if let Boards::Small(b) = self {
+            let (before, events) = (b.state, b.scratch.events.len());
+            let step = next_in_step(&mut b.state, t, &mut b.scratch, &mut Replay, seen);
+            if !ran_out(&b.state) {
+                return step;
+            }
+            self.widen(&before, events);
+        }
+        let Boards::Large(b) = self else {
+            unreachable!("a game widened")
+        };
+        next_in_step(&mut b.state, t, &mut b.scratch, &mut Replay, seen)
+    }
+
+    /// What [`Boards::next_in_step`] would return, played on a copy.
+    fn ahead(&mut self, t: &GameTable, seen: (u16, TurnStep)) -> Option<Step> {
+        match self {
+            Boards::Small(b) => {
+                let mut ahead = b.state;
+                let step = next_in_step(&mut ahead, t, &mut b.peek, &mut Replay, seen);
+                if !ran_out(&ahead) {
+                    return step;
+                }
+                let mut wide = b.state.widen();
+                next_in_step(&mut wide, t, &mut Scratch::new(), &mut Replay, seen)
+            }
+            Boards::Large(b) => {
+                let mut ahead = b.state.clone();
+                next_in_step(&mut ahead, t, &mut b.peek, &mut Replay, seen)
+            }
+        }
+    }
+
+    fn snapshot(&self) -> Snapshot {
+        match self {
+            Boards::Small(b) => Snapshot::Small(Box::new(b.state)),
+            Boards::Large(b) => Snapshot::Large(Box::new(b.state.clone())),
+        }
+    }
+
+    /// Puts the game back as `snapshot` holds it, in the layout the game is in now: a game
+    /// widened since keeps its layout.
+    fn restore(&mut self, snapshot: Snapshot) {
+        match (self, snapshot) {
+            (Boards::Small(b), Snapshot::Small(s)) => b.state = *s,
+            (Boards::Large(b), Snapshot::Small(s)) => b.state = s.widen(),
+            (Boards::Large(b), Snapshot::Large(s)) => b.state = *s,
+            (Boards::Small(_), Snapshot::Large(_)) => unreachable!("a game is never narrowed"),
+        }
+    }
+
+    /// The events the engine recorded since the last drain.
+    fn drain_events(&mut self) -> Vec<Event> {
+        on_board!(self, b => b.scratch.events.drain().collect())
+    }
+
+    fn pending(&self) -> &Pending {
+        on_board!(self, b => b.state.pending())
+    }
+
+    fn stack(&self) -> &[StackEntry] {
+        on_board!(self, b => b.state.stack())
+    }
+
+    fn turn(&self) -> &Turn {
+        on_board!(self, b => b.state.turn())
+    }
+
+    fn battlefield(&self) -> &[Slot] {
+        on_board!(self, b => b.state.battlefield())
+    }
+
+    fn object(&self, slot: Slot) -> &Object {
+        on_board!(self, b => b.state.object(slot))
+    }
+
+    fn library(&self, player: Seat) -> &[Slot] {
+        on_board!(self, b => b.state.library(player))
+    }
+
+    fn knows(&self, player: Seat, slot: Slot) -> bool {
+        on_board!(self, b => b.state.knows(player, slot))
+    }
+
+    fn outcome(&self) -> Option<Outcome> {
+        on_board!(self, b => b.state.outcome())
+    }
+
+    fn profile(&self) -> Profile {
+        on_board!(self, b => b.state.profile())
+    }
+
+    fn set_profile(&mut self, profile: Profile) {
+        on_board!(self, b => b.state.set_profile(profile));
+    }
+}
+
 /// The game as it stood at the human's priority before they began to cast a spell or activate
 /// an ability, kept until its costs are paid so that they can take it back ([`Game::cancel`]).
-#[derive(Clone, Debug)]
 struct BeforeCast {
-    state: State,
+    state: Snapshot,
     at: At,
     answered: Option<Vec<StackEntry>>,
     /// The length of the choice log then.
@@ -138,15 +315,12 @@ struct BeforeCast {
 /// A game in progress.
 pub struct Game {
     table: GameTable,
-    state: State,
-    scratch: Scratch,
-    /// Working memory for looking ahead in a copy of the state, whose events are dropped.
-    peek: Scratch,
+    board: Boards,
     human: Seat,
     session: SessionId,
-    agent: Box<dyn Agent + Send>,
+    agent: Box<dyn GameAgent + Send>,
     /// An agent answering the human's decisions in their place, if any.
-    stand_in: Option<Box<dyn Agent + Send>>,
+    stand_in: Option<Box<dyn GameAgent + Send>>,
     at: At,
     /// The turn and step the latest view began, or the game's first.
     seen: (u16, TurnStep),
@@ -237,7 +411,7 @@ impl Game {
         replay: ReplayFile,
         human: Seat,
         session: SessionId,
-        agent: Box<dyn Agent + Send>,
+        agent: Box<dyn GameAgent + Send>,
     ) -> Game {
         let turn = state.turn();
         let flip_winner = match state.pending() {
@@ -249,9 +423,7 @@ impl Game {
             answered: None,
             stops: replay.stops,
             table,
-            state: *state,
-            scratch: Scratch::recording(),
-            peek: Scratch::new(),
+            board: Boards::new(state),
             human,
             session,
             agent,
@@ -302,7 +474,7 @@ impl Game {
                 game.play_on();
                 if matches!(game.at, At::Playing) {
                     // A step began, and live play went on after its view.
-                    game.scratch.events.drain();
+                    game.board.drain_events();
                     continue;
                 }
             }
@@ -310,7 +482,7 @@ impl Game {
                 break;
             };
             // Live play's view here took the events so far.
-            game.scratch.events.drain();
+            game.board.drain_events();
             match (game.at, entry) {
                 (At::Agent(d), Entry::Choice(c)) if usize::from(c) < d.len() => {
                     game.apply(entry);
@@ -351,8 +523,10 @@ impl Game {
             At::Human(..) | At::Over { .. } | At::Stopped => return None,
             At::Agent(_) if self.stop.load(Ordering::Relaxed) => self.at = At::Stopped,
             At::Agent(d) => {
-                let obs = observe(&self.state, &self.table, &mut self.scratch, d.player);
-                let c = self.agent.choose(obs, &d);
+                let c = on_board!(&mut self.board, b => {
+                    let obs = observe(&b.state, &self.table, &mut b.scratch, d.player);
+                    self.agent.choose(obs, &d)
+                });
                 self.apply(Entry::Choice(c.0));
                 self.at = At::Playing;
                 self.play_on();
@@ -385,7 +559,7 @@ impl Game {
     /// "The remainder of the process for putting a triggered ability on the stack is
     /// identical to the process for casting a spell").
     fn casting(&self) -> bool {
-        matches!(self.state.pending(), Pending::Casting(c) if !c.triggered)
+        matches!(self.board.pending(), Pending::Casting(c) if !c.triggered)
     }
 
     /// Takes back the spell the human is casting or the ability they are activating, before
@@ -406,7 +580,7 @@ impl Game {
             .before_cast
             .take()
             .expect("a cancellable cast began somewhere");
-        self.state = before.state;
+        self.board.restore(before.state);
         self.answered = before.answered;
         self.replay.log.truncate(before.log);
         // Stops changed during the cast stay changed, recorded again at the priority.
@@ -419,7 +593,7 @@ impl Game {
         };
         self.seq += 1;
         self.at = At::Human(self.decision_id(), open);
-        self.scratch.events.drain();
+        self.board.drain_events();
         // The view says nothing happened: the cast never was.
         self.events.clear();
         Ok(self.draw())
@@ -442,7 +616,7 @@ impl Game {
             Open::Decision(d) => {
                 // A cast or an activation from priority can be taken back until it is paid for.
                 let before = (d.kind == DecisionKind::Priority).then(|| BeforeCast {
-                    state: self.state,
+                    state: self.board.snapshot(),
                     at: self.at,
                     answered: self.answered.clone(),
                     log: self.replay.log.len(),
@@ -455,7 +629,7 @@ impl Game {
             }
             Open::Halt => self.replay.log.push(Entry::Halt),
         }
-        self.answered = Some(self.state.stack().to_vec());
+        self.answered = Some(self.board.stack().to_vec());
         self.at = At::Playing;
     }
 
@@ -467,10 +641,10 @@ impl Game {
             return false;
         };
         let c = match open {
-            Open::Decision(d) => {
-                let obs = observe(&self.state, &self.table, &mut self.scratch, self.human);
+            Open::Decision(d) => on_board!(&mut self.board, b => {
+                let obs = observe(&b.state, &self.table, &mut b.scratch, self.human);
                 stand_in.choose(obs, &without_floating(d)).0
-            }
+            }),
             Open::Halt => 0,
         };
         let answer = OpenDecision::new(id, &open, false)
@@ -506,9 +680,9 @@ impl Game {
             self.cancel().expect("a cancellable cast can be taken back");
         }
         self.before_cast = None;
-        beryl_engine::concede(&mut self.state, &mut self.scratch, self.human);
+        on_board!(&mut self.board, b => beryl_engine::concede(&mut b.state, &mut b.scratch, self.human));
         self.replay.log.push(Entry::Concede);
-        let outcome = self.state.outcome().expect("a concession ends the game");
+        let outcome = self.board.outcome().expect("a concession ends the game");
         self.at = At::Over {
             outcome,
             conceded: true,
@@ -528,9 +702,24 @@ impl Game {
         &self.replay
     }
 
-    /// The game itself, for tests.
+    /// The game itself, for tests, while it is in [`Small`].
+    ///
+    /// # Panics
+    ///
+    /// If the game has been widened ([`Game::large`]).
     pub fn state(&self) -> &State {
-        &self.state
+        match &self.board {
+            Boards::Small(b) => &b.state,
+            Boards::Large(_) => panic!("the game has been widened into Large"),
+        }
+    }
+
+    /// The game itself, for tests, once it has been widened into [`Large`].
+    pub fn large(&self) -> Option<&State<Large>> {
+        match &self.board {
+            Boards::Small(_) => None,
+            Boards::Large(b) => Some(&b.state),
+        }
     }
 
     pub fn table(&self) -> &GameTable {
@@ -547,20 +736,14 @@ impl Game {
     fn play_on(&mut self) {
         debug_assert!(matches!(self.at, At::Playing));
         loop {
-            let step = next_in_step(
-                &mut self.state,
-                &self.table,
-                &mut self.scratch,
-                &mut Replay,
-                self.seen,
-            );
+            let step = self.board.next_in_step(&self.table, self.seen);
             // Once a cast is complete, or another player decides, it can no longer be taken back.
             if !matches!(step, Some(Step::Decide(d)) if d.player == self.human && self.casting()) {
                 self.before_cast = None;
             }
             self.at = match step {
                 None => {
-                    let turn = self.state.turn();
+                    let turn = self.board.turn();
                     self.seen = (turn.number, turn.step);
                     self.answered = None;
                     if self.halts() {
@@ -577,7 +760,7 @@ impl Game {
                 Some(Step::Decide(d)) if d.player == self.human => {
                     if let Some(c) = self.auto_answer(&d) {
                         self.apply(Entry::Auto(c.0));
-                        self.answered = Some(self.state.stack().to_vec());
+                        self.answered = Some(self.board.stack().to_vec());
                         continue;
                     }
                     self.seq += 1;
@@ -610,7 +793,9 @@ impl Game {
                 debug_assert_eq!(d.candidates.option(Choice(0)), Some(Opt::Pass));
                 Some(Choice(0))
             }
-            DecisionKind::TriggerOrder => Some(trigger_to_stack(&self.state, &self.table, d)),
+            DecisionKind::TriggerOrder => Some(on_board!(&self.board, b => {
+                trigger_to_stack(&b.state, &self.table, d)
+            })),
             DecisionKind::YesNo if self.searches_unasked(d) => (0..d.len() as u8)
                 .map(Choice)
                 .find(|&c| d.candidates.option(c) == Some(Opt::Yes)),
@@ -635,10 +820,10 @@ impl Game {
     fn searches_unasked(&self, d: &Decision) -> bool {
         d.ask == Ask::MaySearch
             && !self
-                .state
+                .board
                 .library(self.human)
                 .last()
-                .is_some_and(|&slot| self.state.knows(self.human, slot))
+                .is_some_and(|&slot| self.board.knows(self.human, slot))
     }
 
     /// Whether the top of the stack is the human's own spell or ability and, since their
@@ -648,7 +833,7 @@ impl Game {
     /// would only let them respond to themselves, as an Arena player auto-passes.
     fn own_top(&self) -> bool {
         let answered = self.answered.as_deref().unwrap_or_default();
-        let now = self.state.stack();
+        let now = self.board.stack();
         let own = |e: &StackEntry| e.controller == self.human;
         let kept = answered
             .iter()
@@ -671,10 +856,10 @@ impl Game {
     /// search shares, give it to both players whenever creatures attack. Like Arena, the
     /// session stops the human after the opponent's attack, and after blocks.
     fn quiet_combat(&self) -> bool {
-        if !self.state.stack().is_empty() {
+        if !self.board.stack().is_empty() {
             return false;
         }
-        let turn = self.state.turn();
+        let turn = self.board.turn();
         let attacker = turn.active == self.human;
         match turn.step {
             TurnStep::DeclareAttackers => attacker,
@@ -684,10 +869,10 @@ impl Game {
     }
 
     fn any_blocking(&self) -> bool {
-        self.state
+        self.board
             .battlefield()
             .iter()
-            .any(|&slot| self.state.object(slot).flags.has(ObjectFlags::BLOCKING))
+            .any(|&slot| self.board.object(slot).flags.has(ObjectFlags::BLOCKING))
     }
 
     /// Whether the human is halted as the step that just began, a session-level stop the
@@ -699,21 +884,14 @@ impl Game {
     /// act there. Halts are a function of the position and the stops, so a replay finds them
     /// again; the agent never sees them.
     fn halts(&mut self) -> bool {
-        let turn = self.state.turn();
+        let turn = self.board.turn();
         let halting_step = turn.step == TurnStep::PrecombatMain
             && turn.active == self.human
             && self.stops.yours.has(TurnStep::PrecombatMain);
         if self.stops.full_control || !halting_step {
             return false;
         }
-        let mut ahead = self.state;
-        match next_in_step(
-            &mut ahead,
-            &self.table,
-            &mut self.peek,
-            &mut Replay,
-            self.seen,
-        ) {
+        match self.board.ahead(&self.table, self.seen) {
             Some(Step::Decide(d)) => d.player != self.human,
             Some(Step::Over(_)) => false,
             None => true,
@@ -722,8 +900,8 @@ impl Game {
 
     fn change_stops(&mut self, stops: StopsSetting) {
         self.stops = stops;
-        self.state
-            .set_profile(with_stops(self.state.profile(), stops, self.human));
+        self.board
+            .set_profile(with_stops(self.board.profile(), stops, self.human));
         self.replay.log.push(Entry::Stops(stops));
     }
 
@@ -740,13 +918,7 @@ impl Game {
             unreachable!("only an answer is applied");
         };
         self.replay.log.push(entry);
-        apply(
-            &mut self.state,
-            &self.table,
-            &mut self.scratch,
-            &mut Replay,
-            Choice(c),
-        );
+        self.board.apply(&self.table, Choice(c));
     }
 
     /// The human's view now, with the engine's events since the previous view. A view in a
@@ -755,14 +927,15 @@ impl Game {
     /// asked, not after. The body executes them again whenever it runs on, after an answer,
     /// and those repeats go unreported.
     fn view(&mut self) -> PlayerView {
-        let mut fresh: Vec<Event> = self.scratch.events.drain().collect();
+        let mut fresh = self.board.drain_events();
         let seen = self.paused.len();
         if seen > 0
             && let Some(at) = fresh.windows(seen).position(|w| w == self.paused)
         {
             fresh.drain(at..at + seen);
         }
-        let paused = paused_events(&self.state, &self.table, &mut self.scratch);
+        let paused =
+            on_board!(&mut self.board, b => paused_events(&b.state, &self.table, &mut b.scratch));
         fresh.extend_from_slice(
             paused
                 .strip_prefix(self.paused.as_slice())
@@ -777,13 +950,13 @@ impl Game {
     fn draw(&mut self) -> PlayerView {
         // A paused resolution's entry is still on top of the committed stack; the position
         // replayed to its question has taken it off.
-        let resolving = matches!(self.state.pending(), Pending::Resolving(_))
-            .then(|| self.state.stack().last())
+        let resolving = matches!(self.board.pending(), Pending::Resolving(_))
+            .then(|| self.board.stack().last().copied())
             .flatten();
         let moment = match &self.at {
             At::Playing => Moment::Playing,
             At::Agent(_) => Moment::Thinking,
-            At::Human(id, Open::Decision(d)) => Moment::Deciding(*id, d, resolving),
+            At::Human(id, Open::Decision(d)) => Moment::Deciding(*id, d, resolving.as_ref()),
             At::Human(id, Open::Halt) => Moment::Halted(*id),
             At::Over { outcome, conceded } => Moment::Over {
                 outcome: *outcome,
@@ -791,11 +964,14 @@ impl Game {
             },
             At::Stopped => Moment::Stopped,
         };
-        let obs = Observation::new(
-            view(&self.state, &self.table, &mut self.scratch),
-            self.human,
-        );
-        let mut view = player_view(&self.table, obs, moment, self.stops, &self.events);
+        let mut view = on_board!(&mut self.board, b => {
+            let obs = Observation::new(view(&b.state, &self.table, &mut b.scratch), self.human);
+            let mut view = player_view(&self.table, obs, moment, self.stops, &self.events);
+            if let At::Human(_, Open::Decision(d)) = &self.at {
+                preview::add_previews(&mut view, &b.state, &self.table, d);
+            }
+            view
+        });
         view.turn.flip_winner = self.flip_winner.map(|p| {
             if p == self.human {
                 Side::You
@@ -803,9 +979,6 @@ impl Game {
                 Side::Opponent
             }
         });
-        if let At::Human(_, Open::Decision(d)) = &self.at {
-            preview::add_previews(&mut view, &self.state, &self.table, d);
-        }
         if let Status::Deciding { decision } = &mut view.status {
             decision.cancellable = self.cancellable();
         }
@@ -813,7 +986,11 @@ impl Game {
     }
 }
 
-fn new_agent(name: &str, t: &GameTable, seed: u64) -> Result<Box<dyn Agent + Send>, SessionError> {
+fn new_agent(
+    name: &str,
+    t: &GameTable,
+    seed: u64,
+) -> Result<Box<dyn GameAgent + Send>, SessionError> {
     let agent = beryl_search::agent(name).ok_or_else(|| SessionError::UnknownAgent {
         name: name.to_owned(),
     })?;
@@ -835,7 +1012,7 @@ fn new_agent(name: &str, t: &GameTable, seed: u64) -> Result<Box<dyn Agent + Sen
 ///    made seeing everything the others did;
 ///
 /// and, within each group, in the order they triggered.
-fn trigger_to_stack(s: &State, t: &GameTable, d: &Decision) -> Choice {
+fn trigger_to_stack<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision) -> Choice {
     let resolves_late = |opt: Opt| {
         let Opt::Trigger(i) = opt else {
             unreachable!("a trigger-order decision offers only triggers");

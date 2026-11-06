@@ -6,8 +6,8 @@ use beryl_engine::card::{AbilityKind, FaceIx, Types};
 use beryl_engine::event::Event;
 use beryl_engine::state::{CounterKind, ObjectFlags, ObjectRef};
 use beryl_engine::{
-    Breakpoint, CardTable, Choice, Decision, DecisionKind, GameTable, Opt, Outcome, Profile,
-    Replay, Scratch, Seat, Slot, State, Step, Stops, Zone, apply, next,
+    Breakpoint, CardTable, Choice, Decision, DecisionKind, GameTable, Layout, Opt, Outcome,
+    Profile, Replay, Scratch, Seat, Slot, State, Step, Stops, Zone, apply, next,
 };
 
 use crate::{Action, Assertion, CoinFlip, Ending, Forced, Pick, Position, Scenario, StackItem};
@@ -196,7 +196,7 @@ fn library_slot(s: &State, t: &GameTable, player: Seat, name: &str) -> Slot {
 /// The name of the object in `slot`: its face up's, which is the card's own name everywhere
 /// but on the stack and the battlefield (CR 712.8a, 712.8f). A face-down permanent, which has
 /// no name, goes by its card's.
-fn name_of(s: &State, t: &GameTable, slot: Slot) -> &'static str {
+fn name_of<L: Layout>(s: &State<L>, t: &GameTable, slot: Slot) -> &'static str {
     let def = t.def(s.card(slot));
     match s.object(slot).face {
         FaceIx::DOWN => def.name,
@@ -1025,7 +1025,12 @@ fn option_index(d: &Decision, mut pick: impl FnMut(Opt) -> bool) -> Option<Choic
 /// action that answers one decision: playing a land, casting, activating, turning face up or
 /// an answer. Whose decision it is and of what kind is the caller's to check. For scripts
 /// that drive agents in place of the runner, such as the UI fixtures' boards.
-pub fn answer(t: &GameTable, s: &State, d: &Decision, action: &Action) -> Option<Choice> {
+pub fn answer<L: Layout>(
+    t: &GameTable,
+    s: &State<L>,
+    d: &Decision,
+    action: &Action,
+) -> Option<Choice> {
     match *action {
         Action::Answer { pick, .. } => pick_in(t, s, d, pick),
         _ => option_index(d, |o| takes(t, s, action, o)),
@@ -1034,7 +1039,7 @@ pub fn answer(t: &GameTable, s: &State, d: &Decision, action: &Action) -> Option
 
 /// Whether `o` is the priority option `action` takes: playing, casting, activating or turning
 /// face up its card.
-fn takes(t: &GameTable, s: &State, action: &Action, o: Opt) -> bool {
+fn takes<L: Layout>(t: &GameTable, s: &State<L>, action: &Action, o: Opt) -> bool {
     let name = |slot| name_of(s, t, slot);
     match *action {
         Action::PlayLand { card, .. } => matches!(o, Opt::PlayLand(slot) if name(slot) == card),
@@ -1071,7 +1076,7 @@ fn taking(action: &Action) -> String {
 }
 
 /// The option of `d` that `pick` names.
-fn pick_in(t: &GameTable, s: &State, d: &Decision, pick: Pick) -> Option<Choice> {
+fn pick_in<L: Layout>(t: &GameTable, s: &State<L>, d: &Decision, pick: Pick) -> Option<Choice> {
     let wanted = match pick {
         Pick::Card { card } => {
             return (0..d.len() as u8).map(Choice).find(|&c| {
@@ -1094,7 +1099,7 @@ fn pick_in(t: &GameTable, s: &State, d: &Decision, pick: Pick) -> Option<Choice>
 }
 
 /// The object an option names, if it names one.
-fn named(s: &State, o: Opt) -> Option<Slot> {
+fn named<L: Layout>(s: &State<L>, o: Opt) -> Option<Slot> {
     match o {
         Opt::PlayLand(slot)
         | Opt::Attack(slot)
@@ -1116,7 +1121,7 @@ fn named(s: &State, o: Opt) -> Option<Slot> {
 }
 
 /// A decision as a scenario author reads it.
-pub fn describe(t: &GameTable, s: &State, d: &Decision) -> String {
+pub fn describe<L: Layout>(t: &GameTable, s: &State<L>, d: &Decision) -> String {
     let candidates: Vec<String> = (0..d.len() as u8)
         .map(|i| {
             let c = Choice(i);

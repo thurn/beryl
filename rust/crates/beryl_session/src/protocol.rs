@@ -10,9 +10,9 @@ use beryl_engine::card::{
 use beryl_engine::event::{Event, Reason, Recipient};
 use beryl_engine::state::{CounterKind, MulliganStatus, ObjectFlags, StackEntry, TurnStep};
 use beryl_engine::{
-    Ask, Candidates, Decision, DecisionKind, GameTable, NextStop, Observation, Opt, Outcome,
-    Refusal, Seat, Slot, StallReason, StepStops, Stops, Zone, can_declare_blockers, next_step_stop,
-    next_stop, refusal,
+    Ask, Candidates, Decision, DecisionKind, GameTable, Layout, NextStop, Observation, Opt,
+    Outcome, Refusal, Seat, Slot, StallReason, StepStops, Stops, Zone, can_declare_blockers,
+    next_step_stop, next_stop, refusal,
 };
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -898,9 +898,9 @@ pub enum Moment<'a> {
 /// Builds the viewer's view of `obs`'s position (the position the open decision is made in,
 /// `beryl_engine::view`) at `moment`, with `events`, the engine's events since the previous view.
 /// Everything in it, events included, comes through `obs`.
-pub fn player_view(
+pub fn player_view<L: Layout>(
     t: &GameTable,
-    obs: Observation<'_>,
+    obs: Observation<'_, L>,
     moment: Moment<'_>,
     stops: StopsSetting,
     events: &[Event],
@@ -1002,7 +1002,7 @@ pub fn player_view(
 }
 
 /// Player `p` as the viewer of `obs` sees them.
-fn side(obs: Observation<'_>, p: Seat) -> Side {
+fn side<L: Layout>(obs: Observation<'_, L>, p: Seat) -> Side {
     if p == obs.viewer() {
         Side::You
     } else {
@@ -1017,7 +1017,7 @@ fn slots(slots: impl IntoIterator<Item = Slot>) -> Vec<u8> {
 
 /// The name of the face up of the object in `slot`, if the viewer knows it; for a face-down
 /// permanent, the name of its card, which it turns face up with (CR 712.15a).
-fn name(t: &GameTable, obs: Observation<'_>, slot: Slot) -> Option<&'static str> {
+fn name<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: Slot) -> Option<&'static str> {
     let face = match obs.object(slot).face {
         FaceIx::DOWN => FaceIx::FRONT,
         face => face,
@@ -1027,16 +1027,16 @@ fn name(t: &GameTable, obs: Observation<'_>, slot: Slot) -> Option<&'static str>
 
 /// The name of face `face` of the object in `slot`, if the viewer knows it: a copy's is the
 /// copied card's (CR 707.2), since a token copy is a token of that card.
-fn face_name(
+fn face_name<L: Layout>(
     t: &GameTable,
-    obs: Observation<'_>,
+    obs: Observation<'_, L>,
     slot: Slot,
     face: FaceIx,
 ) -> Option<&'static str> {
     Some(t.def(obs.card(slot)?).face_name(face))
 }
 
-fn object_view(t: &GameTable, obs: Observation<'_>, slot: Slot) -> ObjectView {
+fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: Slot) -> ObjectView {
     let o = obs.object(slot);
     let flags = o.flags;
     let on_battlefield = o.zone == Zone::Battlefield;
@@ -1158,7 +1158,7 @@ fn paid_costs(t: &GameTable, e: &StackEntry) -> Vec<PaidCost> {
         .collect()
 }
 
-fn stack_item(t: &GameTable, obs: Observation<'_>, e: &StackEntry) -> StackItem {
+fn stack_item<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &StackEntry) -> StackItem {
     let targets = e
         .targets
         .iter()
@@ -1200,9 +1200,9 @@ fn stack_item(t: &GameTable, obs: Observation<'_>, e: &StackEntry) -> StackItem 
     }
 }
 
-fn decision_view(
+fn decision_view<L: Layout>(
     t: &GameTable,
-    obs: Observation<'_>,
+    obs: Observation<'_, L>,
     id: DecisionId,
     d: &Decision,
     resolving: Option<&StackEntry>,
@@ -1242,7 +1242,7 @@ fn decision_view(
 
 /// The cards in the viewer's hand they may neither cast nor play as a land at their priority
 /// ([`DecisionView::refused`]).
-fn refused(t: &GameTable, obs: Observation<'_>) -> Vec<Refused> {
+fn refused<L: Layout>(t: &GameTable, obs: Observation<'_, L>) -> Vec<Refused> {
     obs.zone(obs.viewer(), Zone::Hand)
         .iter()
         .filter_map(|slot| {
@@ -1264,9 +1264,9 @@ fn refused(t: &GameTable, obs: Observation<'_>) -> Vec<Refused> {
 }
 
 /// A halt ([`DecisionView::halt`]): priority with passing its one candidate.
-fn halt_view(
+fn halt_view<L: Layout>(
     t: &GameTable,
-    obs: Observation<'_>,
+    obs: Observation<'_, L>,
     id: DecisionId,
     stops: StopsSetting,
 ) -> DecisionView {
@@ -1291,7 +1291,7 @@ fn halt_view(
     }
 }
 
-fn ask_view(obs: Observation<'_>, ask: Ask) -> AskView {
+fn ask_view<L: Layout>(obs: Observation<'_, L>, ask: Ask) -> AskView {
     match ask {
         Ask::Plain => AskView::Plain,
         Ask::Scry { count } => AskView::Scry { count },
@@ -1345,7 +1345,7 @@ fn ask_view(obs: Observation<'_>, ask: Ask) -> AskView {
 /// defender with nothing to block with under the smart stops. The session passes them through
 /// it, as no creature blocks ([`crate::Game`]), on to their next stop after it: by default the
 /// end step, as the postcombat main phase is the active player's.
-fn pass_to(obs: Observation<'_>, stops: StopsSetting) -> PassTo {
+fn pass_to<L: Layout>(obs: Observation<'_, L>, stops: StopsSetting) -> PassTo {
     let step_stops = stops.step_stops();
     let next = match next_stop(obs, stops.stops(), step_stops) {
         NextStop::Step(TurnStep::DeclareBlockers)
@@ -1366,8 +1366,8 @@ fn pass_to(obs: Observation<'_>, stops: StopsSetting) -> PassTo {
 }
 
 /// [`DecisionView::source`].
-fn decision_source(
-    obs: Observation<'_>,
+fn decision_source<L: Layout>(
+    obs: Observation<'_, L>,
     d: &Decision,
     resolving: Option<&StackEntry>,
 ) -> Option<u8> {
@@ -1399,7 +1399,7 @@ fn decision_source(
     slot.map(Slot::get)
 }
 
-fn candidate(t: &GameTable, obs: Observation<'_>, o: Opt) -> CandidateView {
+fn candidate<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt) -> CandidateView {
     let named = |slot: Slot| name(t, obs, slot).unwrap_or("a hidden card");
     let player = |p: Seat| match side(obs, p) {
         Side::You => "you",
@@ -1499,7 +1499,7 @@ fn candidate(t: &GameTable, obs: Observation<'_>, o: Opt) -> CandidateView {
 }
 
 /// [`CandidateView::nth`].
-fn ability_nth(t: &GameTable, obs: Observation<'_>, o: Opt) -> Option<u8> {
+fn ability_nth<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt) -> Option<u8> {
     let (face, i) = match o {
         Opt::Activate {
             slot,
@@ -1519,7 +1519,11 @@ fn ability_nth(t: &GameTable, obs: Observation<'_>, o: Opt) -> Option<u8> {
 /// "A player playing a modal double-faced card ... as a land chooses one of its faces that's a
 /// land before putting it onto the battlefield"), as Sink into Stupor plays as Soporific
 /// Springs.
-fn land_face_name(t: &GameTable, obs: Observation<'_>, slot: Slot) -> Option<&'static str> {
+fn land_face_name<L: Layout>(
+    t: &GameTable,
+    obs: Observation<'_, L>,
+    slot: Slot,
+) -> Option<&'static str> {
     let def = t.def(obs.card(slot)?);
     let face = def
         .face_ixs()
@@ -1528,9 +1532,9 @@ fn land_face_name(t: &GameTable, obs: Observation<'_>, slot: Slot) -> Option<&'s
 }
 
 /// A candidate that casts face `face` of the card in `slot` paying the options in `costs`.
-fn cast_candidate(
+fn cast_candidate<L: Layout>(
     t: &GameTable,
-    obs: Observation<'_>,
+    obs: Observation<'_, L>,
     slot: Slot,
     face: FaceIx,
     costs: Castings,
@@ -1551,9 +1555,9 @@ fn cast_candidate(
 /// ([CR 601.2b](https://yawgatog.com/resources/magic-rules/#R6012b): "If the spell has
 /// alternative or additional costs that will be paid as it's being cast ... the player
 /// announces their intentions to pay any or all of those costs").
-fn casting_options(
+fn casting_options<L: Layout>(
     t: &GameTable,
-    obs: Observation<'_>,
+    obs: Observation<'_, L>,
     slot: Slot,
     face: FaceIx,
     costs: Castings,
@@ -1617,9 +1621,9 @@ fn color_words(colors: Colors) -> String {
 /// have a cost and an effect. They are written as '[Cost]: [Effect.] [Activation
 /// instructions (if any).]'"), if the viewer knows the card. A loyalty ability's cost is its
 /// loyalty symbol ([CR 606.4](https://yawgatog.com/resources/magic-rules/#R6064)).
-fn activated_cost(
+fn activated_cost<L: Layout>(
     t: &GameTable,
-    obs: Observation<'_>,
+    obs: Observation<'_, L>,
     slot: Slot,
     ability: AbilityIx,
 ) -> Option<String> {
@@ -1711,7 +1715,7 @@ fn activate(slot: Slot, ability: AbilityIx) -> Candidate {
 }
 
 /// Putting the waiting trigger at `index` on the stack.
-fn trigger(t: &GameTable, obs: Observation<'_>, index: u8) -> (String, Candidate) {
+fn trigger<L: Layout>(t: &GameTable, obs: Observation<'_, L>, index: u8) -> (String, Candidate) {
     let trigger = obs.triggers()[usize::from(index)];
     (
         format!(
@@ -1729,7 +1733,7 @@ fn trigger(t: &GameTable, obs: Observation<'_>, index: u8) -> (String, Candidate
 /// Mana symbols by [`ManaColor`] index.
 const MANA_SYMBOLS: [&str; 6] = ["{W}", "{U}", "{B}", "{R}", "{G}", "{C}"];
 
-fn outcome_view(obs: Observation<'_>, o: Outcome, conceded: bool) -> OutcomeView {
+fn outcome_view<L: Layout>(obs: Observation<'_, L>, o: Outcome, conceded: bool) -> OutcomeView {
     match o {
         Outcome::Win(player) => OutcomeView::Win {
             winner: side(obs, player),
@@ -1755,7 +1759,7 @@ fn outcome_view(obs: Observation<'_>, o: Outcome, conceded: bool) -> OutcomeView
 }
 
 /// What damage was dealt to, as the viewer names it.
-fn recipient(obs: Observation<'_>, to: Recipient) -> TargetRef {
+fn recipient<L: Layout>(obs: Observation<'_, L>, to: Recipient) -> TargetRef {
     match to {
         Recipient::Player(player) => TargetRef::Player {
             player: side(obs, player),
@@ -1765,7 +1769,7 @@ fn recipient(obs: Observation<'_>, to: Recipient) -> TargetRef {
 }
 
 /// An [`Event::Ability`] as the viewer of `obs` is told it: as the stack showed it.
-fn ability_event(t: &GameTable, obs: Observation<'_>, e: &Event) -> GameEvent {
+fn ability_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event) -> GameEvent {
     let Event::Ability {
         source,
         controller,
@@ -1798,7 +1802,7 @@ fn ability_event(t: &GameTable, obs: Observation<'_>, e: &Event) -> GameEvent {
 /// carry no identity: anything an event says about a card must come from `obs`, which the
 /// information independence test redeals. The table names only an ability's card, public as
 /// the stack shows it.
-fn game_event(t: &GameTable, obs: Observation<'_>, e: &Event) -> GameEvent {
+fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event) -> GameEvent {
     let side = |p| side(obs, p);
     match *e {
         Event::ZoneChange {

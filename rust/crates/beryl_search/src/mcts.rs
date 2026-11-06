@@ -29,7 +29,7 @@
 //! Every rollout bumps a process-wide counter ([`rollouts_run`]) for a progress display. The
 //! search only ever adds to it, relaxed, so it orders nothing and decides nothing.
 
-use beryl_engine::{Layout, Small};
+use beryl_engine::{Large, Layout, Small};
 use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Barrier, Mutex};
@@ -42,7 +42,7 @@ use beryl_engine::{
 };
 
 use crate::rollout::{RolloutPolicy, rollout};
-use crate::{Agent, AgentDecision};
+use crate::{Agent, AgentDecision, Widen};
 
 /// What a search may spend on one decision. Iterations, not time, so a seed reproduces a move
 /// on any machine.
@@ -299,6 +299,26 @@ impl<L: Layout> Mcts<L> {
     fn passes(obs: Observation<'_, L>, d: &Decision) -> bool {
         d.kind == DecisionKind::Priority
             && obs.stack().last().is_some_and(|e| e.controller == d.player)
+    }
+}
+
+/// The same search in [`Large`], at the same place among its decisions, so it plays on as it
+/// would have: only the kept trees, of `Small` states, are dropped, as a search that keeps
+/// none plays the same (§19.1).
+impl Widen for Mcts<Small> {
+    type Large = Mcts<Large>;
+
+    fn widen(&self) -> Mcts<Large> {
+        Mcts {
+            table: self.table.clone(),
+            policy: self.policy.clone(),
+            sight: self.sight,
+            budget: self.budget,
+            seed: self.seed,
+            decision: self.decision,
+            kept: None,
+            last: self.last.clone(),
+        }
     }
 }
 

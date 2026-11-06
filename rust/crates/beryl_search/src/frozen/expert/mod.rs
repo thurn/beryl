@@ -57,7 +57,7 @@ use beryl_engine::{
 };
 
 use super::rollout::{Candidate, Inline, Policy, RolloutPolicy, best};
-use crate::Agent;
+use crate::{Agent, Widen};
 
 /// The most lands we cast Mana Crypt with.
 const CRYPT_LANDS: i32 = 3;
@@ -121,6 +121,17 @@ impl ExpertAgent {
             x: Scratch::new(),
             plan: combat::Plan::default(),
         }
+    }
+}
+
+/// The frozen expert has no [`Large`](beryl_engine::Large) copy, the engine being generic
+/// only since it froze: in a game widened into `Large`, the current expert plays on, drawing
+/// from the frozen one's stream.
+impl Widen for ExpertAgent {
+    type Large = crate::ExpertAgent<beryl_engine::Large>;
+
+    fn widen(&self) -> Self::Large {
+        crate::ExpertAgent::drawing_from(&self.table, self.rng)
     }
 }
 

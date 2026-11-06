@@ -22,7 +22,7 @@ use ts_rs::TS;
 
 pub use beryl_engine::Seat;
 use beryl_engine::{GameTable, State};
-use beryl_search::Agent;
+use beryl_search::GameAgent;
 pub use game::{Answer, Game, OpenDecision, with_stops};
 pub use protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status, StopsSetting};
 pub use replay::ReplayFile;
@@ -50,9 +50,9 @@ pub struct Prepared {
     pub human: Seat,
     pub stops: StopsSetting,
     /// The agent in the other seat.
-    pub opponent: Box<dyn Agent + Send>,
+    pub opponent: Box<dyn GameAgent + Send>,
     /// The agent answering the human's decisions in their place.
-    pub stand_in: Box<dyn Agent + Send>,
+    pub stand_in: Box<dyn GameAgent + Send>,
 }
 
 /// An agent a human can play against.

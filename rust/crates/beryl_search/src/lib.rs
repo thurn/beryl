@@ -14,7 +14,7 @@ mod values;
 
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{Choice, Decision, GameTable, Observation};
-use beryl_engine::{Layout, Small};
+use beryl_engine::{Large, Layout, Small};
 use serde::{Deserialize, Serialize};
 
 pub use eval::{FEATURES, Features, NAMES, WEIGHTS, evaluate, features, logit, sigmoid};
@@ -75,6 +75,67 @@ impl<L: Layout, T: Agent<L> + ?Sized> Agent<L> for Box<T> {
     }
 }
 
+/// An agent for a player game, which plays in [`Small`] and, should the game outgrow it, goes
+/// on in [`Large`]: an agent of both layouts.
+pub trait GameAgent: Agent<Small> + Agent<Large> {}
+
+impl<T: Agent<Small> + Agent<Large> + ?Sized> GameAgent for T {}
+
+/// A [`Small`] agent that can play on in [`Large`] as it would have in `Small`: the same
+/// streams, and the same place among its own decisions.
+pub trait Widen: Agent<Small> {
+    type Large: Agent<Large>;
+
+    fn widen(&self) -> Self::Large;
+}
+
+/// A [`GameAgent`] made of a [`Small`] agent: once its game is widened into [`Large`], it
+/// plays there as that agent widened ([`Widen`]), made the first time it is asked.
+pub struct Widening<A: Widen> {
+    small: A,
+    large: Option<A::Large>,
+}
+
+impl<A: Widen> Widening<A> {
+    pub fn new(small: A) -> Self {
+        Self { small, large: None }
+    }
+}
+
+impl<A: Widen> Agent<Small> for Widening<A> {
+    fn choose(&mut self, obs: Observation<'_, Small>, d: &Decision) -> Choice {
+        self.small.choose(obs, d)
+    }
+
+    fn last_search(&self) -> Option<&Search> {
+        self.small.last_search()
+    }
+
+    fn resume_point(&self) -> Option<AgentDecision> {
+        self.small.resume_point()
+    }
+}
+
+impl<A: Widen> Agent<Large> for Widening<A> {
+    fn choose(&mut self, obs: Observation<'_, Large>, d: &Decision) -> Choice {
+        let small = &self.small;
+        self.large
+            .get_or_insert_with(|| small.widen())
+            .choose(obs, d)
+    }
+
+    fn last_search(&self) -> Option<&Search> {
+        self.large.as_ref().and_then(Agent::last_search)
+    }
+
+    fn resume_point(&self) -> Option<AgentDecision> {
+        match &self.large {
+            Some(large) => large.resume_point(),
+            None => self.small.resume_point(),
+        }
+    }
+}
+
 /// Picks uniformly among the candidates, from its own seeded stream, so a seed reproduces its
 /// games.
 #[derive(Clone, Debug)]
@@ -131,7 +192,7 @@ pub struct AgentInfo {
     pub description: &'static str,
     /// Builds the agent for a game from a seed, so a seed reproduces its games, and the
     /// budget a searching agent may spend on a decision; the others ignore it.
-    pub new: fn(t: &GameTable, seed: u64, budget: Budget) -> Box<dyn Agent + Send>,
+    pub new: fn(t: &GameTable, seed: u64, budget: Budget) -> Box<dyn GameAgent + Send>,
 }
 
 /// Every agent, in the order a human is offered them.
@@ -174,28 +235,38 @@ pub static AGENTS: &[AgentInfo] = &[
     },
 ];
 
-fn random(_t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn Agent + Send> {
+fn random(_t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
     Box::new(RandomAgent::new(seed))
 }
 
-fn greedy(t: &GameTable, _seed: u64, _budget: Budget) -> Box<dyn Agent + Send> {
+fn greedy(t: &GameTable, _seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
     Box::new(GreedyAgent::new(t))
 }
 
-fn expert(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn Agent + Send> {
-    Box::new(ExpertAgent::new(t, seed))
+fn expert(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
+    Box::new(Widening::new(ExpertAgent::<Small>::new(t, seed)))
 }
 
-fn expert_frozen(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn Agent + Send> {
-    Box::new(FrozenExpertAgent::new(t, seed))
+fn expert_frozen(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
+    Box::new(Widening::new(FrozenExpertAgent::new(t, seed)))
 }
 
-fn mcts_omniscient(t: &GameTable, seed: u64, budget: Budget) -> Box<dyn Agent + Send> {
-    Box::new(Mcts::new(t, Sight::Omniscient, budget, seed))
+fn mcts_omniscient(t: &GameTable, seed: u64, budget: Budget) -> Box<dyn GameAgent + Send> {
+    Box::new(Widening::new(Mcts::<Small>::new(
+        t,
+        Sight::Omniscient,
+        budget,
+        seed,
+    )))
 }
 
-fn mcts_hidden(t: &GameTable, seed: u64, budget: Budget) -> Box<dyn Agent + Send> {
-    Box::new(Mcts::new(t, Sight::Hidden, budget, seed))
+fn mcts_hidden(t: &GameTable, seed: u64, budget: Budget) -> Box<dyn GameAgent + Send> {
+    Box::new(Widening::new(Mcts::<Small>::new(
+        t,
+        Sight::Hidden,
+        budget,
+        seed,
+    )))
 }
 
 /// The agent registered under `name`.
