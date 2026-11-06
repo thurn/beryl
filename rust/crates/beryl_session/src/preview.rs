@@ -4,6 +4,7 @@
 //! attackers a blocker may block, so the UI can take a whole block declaration in any order
 //! before it sends the engine's picks.
 
+use beryl_engine::card::AbilityKind;
 use beryl_engine::state::{ObjectFlags, Pending};
 use beryl_engine::{
     Candidates, Choice, Decision, DecisionKind, GameTable, Opt, Profile, Replay, Scratch, Slot,
@@ -170,22 +171,38 @@ fn walk(
         apply(&mut s, t, scratch, &mut Replay, Choice(0));
     }
     out.push(Payment {
-        taps: tapped(before, &s),
+        taps: tapped(before, &s, t),
         ..at.clone()
     });
 }
 
-/// The permanents untapped in `before` and tapped in `after`, by slot.
-fn tapped(before: &State, after: &State) -> Vec<u8> {
+/// The permanents untapped in `before` and tapped in `after`, by slot, with those the payment
+/// sacrificed for mana, as a Treasure
+/// ([CR 111.10a](https://yawgatog.com/resources/magic-rules/#R11110a)): "{T}, Sacrifice this
+/// token: Add one mana of any color." A permanent sacrificed otherwise, as Strip Mine for its
+/// own ability, paid no mana.
+fn tapped(before: &State, after: &State, t: &GameTable) -> Vec<u8> {
     let untapped = |s: &State, slot| {
         let o = s.object(slot);
         o.zone == Zone::Battlefield && !o.flags.has(ObjectFlags::TAPPED)
     };
+    let sacrifices_for_mana = |slot: Slot| {
+        let face = t.def(before.card(slot)).face(before.object(slot).face);
+        face.abilities
+            .iter()
+            .any(|a| a.kind == AbilityKind::Mana && a.cost.sacrifice_self)
+    };
     before
         .battlefield()
         .iter()
-        .filter(|&&slot| untapped(before, slot) && after.object(slot).zone == Zone::Battlefield)
-        .filter(|&&slot| !untapped(after, slot))
+        .filter(|&&slot| untapped(before, slot))
+        .filter(|&&slot| {
+            if after.is_current(before.object_ref(slot)) {
+                !untapped(after, slot)
+            } else {
+                sacrifices_for_mana(slot)
+            }
+        })
         .map(|slot| slot.get())
         .collect()
 }
@@ -287,6 +304,50 @@ mod tests {
                 .filter(|(c, _)| c.is_none())
                 .all(|(_, p)| p.is_empty())
         );
+    }
+
+    #[test]
+    fn a_payment_shows_the_treasure_it_sacrifices() {
+        use beryl_cards::tokens::TREASURE_TOKEN;
+        use beryl_scenario::Action;
+        const SIX_PLAINS: &[Permanent] = &[Permanent::new(names::PLAINS); 6];
+        // Beza taps four of five Plains and makes a Treasure (P1 has six lands to five), then
+        // the last Plains and the Treasure cast the Skydiver.
+        const SCENARIO: Scenario = Scenario::new("payments")
+            .hand(
+                P0,
+                &[names::BEZA_THE_BOUNDING_SPRING, names::THIEVING_SKYDIVER],
+            )
+            .battlefield(P0, &[Permanent::new(names::PLAINS); 5])
+            .library(P0, &[names::ISLAND])
+            .battlefield(P1, SIX_PLAINS)
+            .actions(&[
+                Action::cast(P0, names::BEZA_THE_BOUNDING_SPRING),
+                Action::Resolve,
+                Action::Resolve,
+                Action::cast(P0, names::THIEVING_SKYDIVER),
+            ]);
+        let mut taps = Vec::new();
+        beryl_scenario::visit(&CARDS, &SCENARIO, |t, s, d| {
+            let named = |slot: u8| t.def(s.card(Slot::new(slot))).name;
+            taps = payments(s, t, d)
+                .into_iter()
+                .zip((0..d.len()).map(|i| d.candidates.option(choice(i))))
+                .filter(|(_, o)| {
+                    matches!(
+                        o,
+                        Some(Opt::Cast {
+                            costs: Castings::NONE,
+                            ..
+                        })
+                    )
+                })
+                .flat_map(|(p, _)| p)
+                .map(|p| p.taps.iter().map(|&t| named(t)).collect::<Vec<_>>())
+                .collect();
+        })
+        .unwrap();
+        assert_eq!(taps, [vec![names::PLAINS, TREASURE_TOKEN]]);
     }
 
     #[test]

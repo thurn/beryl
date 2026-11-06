@@ -210,6 +210,52 @@ fn brute_force_pays(cost: ManaCost, pool: [u8; 6], sources: &[&str]) -> bool {
         })
 }
 
+/// Pays `cost` by `plan` on a copy of `g`, whose sources `slots` are the cards `names`, and
+/// checks the payment: the floating mana and how many sources it sacrificed afterwards.
+fn pay_and_check(
+    g: &Game,
+    slots: &[Slot],
+    names: &[&str],
+    cost: ManaCost,
+    plan: &mana::Plan,
+    context: &str,
+) -> ([u8; 6], usize) {
+    let pool = g.s.player(g.me).mana.amounts();
+    let mut paid = g.s;
+    mana::pay(
+        &mut paid,
+        &g.t,
+        &mut Sink::default(),
+        g.me,
+        cost,
+        Bitboard::EMPTY,
+        plan,
+    )
+    .unwrap();
+    // CR 601.2h: the cost is paid in full, and only from the mana the tapped and sacrificed
+    // sources made and the pool held.
+    let sacrificed = |slot: Slot| paid.object(slot).zone == Zone::Graveyard;
+    let used = |slot: Slot| paid.object(slot).flags.has(ObjectFlags::TAPPED) || sacrificed(slot);
+    let made: u32 = slots
+        .iter()
+        .zip(names)
+        .filter(|&(&slot, _)| used(slot))
+        .map(|(_, name)| u32::from(makes(name).1))
+        .sum();
+    let total = |amounts: [u8; 6]| amounts.iter().map(|&n| u32::from(n)).sum::<u32>();
+    let after = paid.player(g.me).mana.amounts();
+    assert_eq!(
+        made + total(pool) - total(after),
+        cost.total(0),
+        "{context}"
+    );
+    assert_eq!(after, plan.left, "{context}");
+    (
+        after,
+        slots.iter().filter(|&&slot| sacrificed(slot)).count(),
+    )
+}
+
 #[test]
 fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
     const SOURCES: [&str; 7] = [
@@ -267,49 +313,14 @@ fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
             assert_eq!(!plans.is_empty(), payable, "{context}");
             let mut outcomes = Vec::new();
             for plan in &plans {
-                let mut paid = g.s;
-                mana::pay(
-                    &mut paid,
-                    &g.t,
-                    &mut Sink::default(),
-                    g.me,
-                    cost,
-                    Bitboard::EMPTY,
-                    plan,
-                )
-                .unwrap();
-                // CR 601.2h: the cost is paid in full, and only from the mana the tapped and
-                // sacrificed sources made and the pool held.
-                let used = |slot: Slot| {
-                    paid.object(slot).flags.has(ObjectFlags::TAPPED)
-                        || paid.object(slot).zone == Zone::Graveyard
-                };
-                let made: u32 = slots
-                    .iter()
-                    .zip(&names)
-                    .filter(|&(&slot, _)| used(slot))
-                    .map(|(_, name)| u32::from(makes(name).1))
-                    .sum();
-                let sacrificed = slots
-                    .iter()
-                    .filter(|&&slot| paid.object(slot).zone == Zone::Graveyard)
-                    .count();
+                let outcome = pay_and_check(&g, &slots, &names, cost, plan, &context);
                 assert!(
-                    !outcomes.contains(&(plan.left, sacrificed)),
-                    "two plans leave {:?} and sacrifice {sacrificed}: {context}",
-                    plan.left
+                    !outcomes.contains(&outcome),
+                    "two plans leave {:?} and sacrifice {}: {context}",
+                    outcome.0,
+                    outcome.1
                 );
-                outcomes.push((plan.left, sacrificed));
-                let before: u32 = pool.iter().map(|&n| u32::from(n)).sum();
-                let after: u32 = paid
-                    .player(g.me)
-                    .mana
-                    .amounts()
-                    .iter()
-                    .map(|&n| u32::from(n))
-                    .sum();
-                assert_eq!(made + before - after, cost.total(0), "{context}");
-                assert_eq!(paid.player(g.me).mana.amounts(), plan.left, "{context}");
+                outcomes.push(outcome);
             }
         }
         payable_positions += usize::from(payable);

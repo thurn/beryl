@@ -6,6 +6,15 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- The payment solver ignored Treasures, so under auto and greedy payment a
+  spell, ability or "unless pays" cost payable only with one was not offered;
+  the Treasure was instead offered as five standalone activations at every
+  priority, to float mana first (CR 111.10a, 605.3a, 601.2g). Prevention: feed
+  every mana ability into one source list the solver, the prefilter and manual
+  payment all read, marking a source's cost (sacrifice, life) as an attribute of
+  the plan rather than keeping a second, parallel path for the abilities that
+  cost more than {T}.
+
 - Taking back an unpaid cast (`beryl_session`'s `Game::cancel`) judged "still
   casting" by `Pending::Casting`, which the engine also uses to choose a
   triggered ability's targets once a cast is complete (CR 603.3d), so a cast
