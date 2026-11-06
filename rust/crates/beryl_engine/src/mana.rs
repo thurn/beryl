@@ -59,6 +59,17 @@ impl Units {
         }
     }
 
+    /// Takes back `n` units that [`Units::add`] added. Units never reach the cap that adding
+    /// saturates at: a player holds far fewer sources and floating mana.
+    fn take(&mut self, kinds: u8, n: u16) {
+        let k = &mut self.by_kinds[usize::from(kinds)];
+        debug_assert!(*k >= n && *k < u16::MAX, "units taken that were added");
+        *k -= n;
+        if *k == 0 {
+            self.some &= !(1 << kinds);
+        }
+    }
+
     /// The sets of kinds with units, and how many each has, in order of the sets.
     fn nonempty(&self) -> impl Iterator<Item = (u8, u16)> + '_ {
         let mut some = self.some;
@@ -441,29 +452,42 @@ pub(crate) fn available(
 }
 
 /// Everything a player could pay mana with now, found once for the many payability checks of
-/// one decision: their pool, and each untapped source with the mana it makes. What a source
-/// makes doesn't depend on which others a check excludes, so [`Funds::pays`] answers as
-/// [`payable`] does.
+/// one decision: their pool and untapped sources, as units. What a source makes doesn't
+/// depend on which others a check excludes, so [`Funds::pays`] answers as [`payable`] does,
+/// taking an excluded source's units back out of the whole.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Funds {
-    pool: [u8; KINDS],
-    /// Each source's slot, kinds of mana and amount.
-    sources: Fixed<(Slot, u8, u8), 128>,
+    player: Seat,
     /// The sources' slots.
     slots: Bitboard,
-    /// What all of them and the pool can pay, for the checks that exclude none.
+    /// What the pool and all the sources make.
+    units: Units,
+    /// The same, grouped, for the checks that exclude none.
     all: Groups,
 }
 
+/// The most sources [`Funds`] holds, as many as a payment's [`Sources`] can.
+const MAX_SOURCES: usize = 128;
+
 impl Funds {
     pub(crate) fn of(s: &State, t: &GameTable, player: Seat) -> Result<Funds, Full> {
-        let mut sources = Fixed::new();
+        let mut units = Units::NONE;
+        for (k, &n) in s.player(player).mana.amounts().iter().enumerate() {
+            units.add(1 << k, u16::from(n));
+        }
+        let mut slots = Bitboard::EMPTY;
+        let mut count = 0;
         // The classes [`Sources::of`] would form, so that more than it holds is `Full` here
         // too.
         let mut classes: Fixed<(u8, u8, bool, Option<CardIx>), CLASSES> = Fixed::new();
         for slot in controlled(s, player) {
             if let Some((kinds, amount, other, consumed)) = source(s, t, player, slot) {
-                sources.push((slot, kinds, amount))?;
+                count += 1;
+                if count > MAX_SOURCES {
+                    return Err(Full);
+                }
+                slots.insert(slot);
+                units.add(kinds, u16::from(amount));
                 // Sources a plan consumes are a class per card.
                 let class = (kinds, amount, other, consumed.then(|| s.card(slot)));
                 if other || !classes.iter().any(|&c| c == class) {
@@ -471,47 +495,33 @@ impl Funds {
                 }
             }
         }
-        let mut funds = Funds {
-            pool: s.player(player).mana.amounts(),
-            sources,
-            slots: sources.iter().map(|&(slot, _, _)| slot).collect(),
-            all: Units::NONE.groups(),
-        };
-        funds.all = funds.units(Bitboard::EMPTY).groups();
-        Ok(funds)
+        Ok(Funds {
+            player,
+            slots,
+            units,
+            all: units.groups(),
+        })
     }
 
-    /// The units the pool and the sources but those in `exclude` make, as [`available`].
-    fn units(&self, exclude: Bitboard) -> Units {
-        let mut u = Units::NONE;
-        for (k, &n) in self.pool.iter().enumerate() {
-            u.add(1 << k, u16::from(n));
-        }
-        for &(slot, kinds, amount) in &self.sources {
-            if !exclude.contains(slot) {
-                u.add(kinds, u16::from(amount));
-            }
-        }
-        u
-    }
-
-    /// Whether the player can pay `cost` with none of `exclude`, as [`payable`].
-    pub(crate) fn pays(&self, cost: ManaCost, exclude: Bitboard) -> bool {
+    /// Whether the player can pay `cost` with none of `exclude`, as [`payable`]. `s` is the
+    /// state the funds were found in.
+    pub(crate) fn pays(&self, s: &State, t: &GameTable, cost: ManaCost, exclude: Bitboard) -> bool {
         debug_assert_eq!(cost.x, 0, "X is announced before payment");
-        if (exclude & self.slots).is_empty() {
-            self.all.pays(cost)
-        } else {
-            self.units(exclude).pays(cost)
+        let excluded = exclude & self.slots;
+        if excluded.is_empty() {
+            return self.all.pays(cost);
         }
+        let mut u = self.units;
+        for slot in excluded.iter() {
+            let (kinds, amount, _, _) = source(s, t, self.player, slot).expect("a source");
+            u.take(kinds, u16::from(amount));
+        }
+        u.pays(cost)
     }
 
     /// The untapped sources but those in `exclude`.
     pub(crate) fn sources(&self, exclude: Bitboard) -> Bitboard {
-        self.sources
-            .iter()
-            .map(|&(slot, _, _)| slot)
-            .filter(|&slot| !exclude.contains(slot))
-            .collect()
+        self.slots & !exclude
     }
 }
 

@@ -448,10 +448,12 @@ fn castable(
     // [CR 118.3](https://yawgatog.com/resources/magic-rules/#R1183): "A player can't pay a
     // cost without having the necessary resources to pay it fully."
     let x = x_range_start(face, costs, free).unwrap_or(0);
-    if !now
-        .funds
-        .pays(spell_cost(face, costs, x, extra, free), Bitboard::EMPTY)
-    {
+    if !now.funds.pays(
+        s,
+        t,
+        spell_cost(face, costs, x, extra, free),
+        Bitboard::EMPTY,
+    ) {
         return false;
     }
     // CR 601.2h: the player pays the total cost, so the cards to exile must be there.
@@ -638,9 +640,9 @@ fn activatable(s: &State, t: &GameTable, now: &Situation, slot: Slot, ability: A
     let cost = a.cost.mana.with_x(0);
     let spent = spent_by_cost(slot, a);
     let paid = if a.cost.waterbend > 0 {
-        waterbend_payable(s, &now.funds, player, cost, a.cost.waterbend, spent)
+        waterbend_payable(s, t, &now.funds, player, cost, a.cost.waterbend, spent)
     } else {
-        now.funds.pays(cost, spent)
+        now.funds.pays(s, t, cost, spent)
     };
     paid && targetable(s, t, Some(a), player, None, 0, Some(slot))
 }
@@ -651,6 +653,7 @@ fn activatable(s: &State, t: &GameTable, now: &Situation, slot: Slot, ability: A
 /// tapped for mana, so it never needs to.
 fn waterbend_payable(
     s: &State,
+    t: &GameTable,
     funds: &Funds,
     player: Seat,
     mut cost: ManaCost,
@@ -662,7 +665,7 @@ fn waterbend_payable(
         cost.generic -= 1;
         exclude.insert(slot);
     }
-    funds.pays(cost, exclude)
+    funds.pays(s, t, cost, exclude)
 }
 
 /// The untapped artifacts and creatures `player` controls, which may each pay for one
@@ -1063,7 +1066,7 @@ fn waterbend_options(s: &State, t: &GameTable, c: &Casting) -> Result<Fixed<Opt,
         let funds = Funds::of(s, t, c.player)?;
         for slot in collapse(s, benders(s, c.player)).iter() {
             let rest = Bitboard::single(slot);
-            if waterbend_payable(s, &funds, c.player, fewer, c.left - 1, rest) {
+            if waterbend_payable(s, t, &funds, c.player, fewer, c.left - 1, rest) {
                 objects.push(Opt::Object(slot))?;
             }
         }
