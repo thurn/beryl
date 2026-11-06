@@ -1,0 +1,162 @@
+//! Thirst for Discovery. {2}{U} Instant. "Draw three cards. Then discard two cards unless you
+//! discard a basic land card."
+
+use beryl_engine::card::{
+    Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, Supertypes, Types,
+};
+use beryl_engine::effect::EffectCtx;
+use beryl_engine::filter::Filter;
+use beryl_engine::{Ask, DecisionKind, Seat, Zone};
+use beryl_scenario::{Action, Assertion, Ending, P0, P1, Permanent, Pick, Scenario};
+
+use crate::names;
+
+pub static CARD: CardDef = CardDef {
+    name: names::THIRST_FOR_DISCOVERY,
+    faces: &[Face {
+        cost: ManaCost::new(2, [0, 1, 0, 0, 0, 0]),
+        types: Types::INSTANT,
+        colors: Colors::BLUE,
+        abilities: &[Ability {
+            kind: AbilityKind::Spell,
+            may_pause: true,
+            body: draw_three_discard,
+            ..Ability::NONE
+        }],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+const BASIC_LAND: Filter = Filter::All(&[
+    Filter::Types(Types::LAND),
+    Filter::Supertypes(Supertypes::BASIC),
+]);
+
+/// "Discard two cards unless you discard a basic land card"
+/// ([CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a)): "This means the same
+/// thing as '[A player may do something else]. If [that player doesn't], [do something].'"
+/// So the player may discard a basic land card; if they don't, they discard two cards, basic
+/// lands among them or not, or as many as they have
+/// ([CR 101.3](https://yawgatog.com/resources/magic-rules/#R1013)): "Any part of an
+/// instruction that's impossible to perform is ignored." With a basic land and nothing else
+/// in hand, both ways discard it, so nothing is asked. A Tundra is not one, its land types
+/// notwithstanding ([CR 205.4c](https://yawgatog.com/resources/magic-rules/#R2054c)): "Any
+/// land that doesn't have this supertype is a nonbasic land, even if it has a basic land
+/// type."
+fn draw_three_discard(ctx: &mut EffectCtx) -> Flow {
+    let you = ctx.controller();
+    ctx.draw(you, 3);
+    let hand = ctx.state().zone(you, Zone::Hand);
+    let basics = BASIC_LAND.select(ctx.state(), ctx.table(), hand, you);
+    if !basics.is_empty()
+        && hand.count() >= 2
+        && ctx.choose_yes_no(you, Ask::DiscardBasicLand { count: 2 })?
+    {
+        ctx.discard_one_of(you, basics)?;
+        return Ok(());
+    }
+    for _ in 0..2 {
+        ctx.discard_a_card(you)?;
+    }
+    Ok(())
+}
+
+const ISLANDS: &[Permanent] = &[Permanent::new(names::ISLAND); 3];
+const THIRST: &str = names::THIRST_FOR_DISCOVERY;
+
+const fn count(zone: Zone, card: Option<&'static str>, count: u8) -> Action {
+    Action::assert(Assertion::Count {
+        player: P0,
+        zone,
+        card,
+        count,
+    })
+}
+
+const fn discard(card: &'static str) -> Action {
+    Action::choose(P0, DecisionKind::Discard, card)
+}
+
+const fn yes_no(player: Seat, pick: Pick) -> Action {
+    Action::answer(player, DecisionKind::YesNo, pick)
+}
+
+/// P0's library, top first: three to draw, then one more so P0 doesn't lose by drawing from
+/// an empty library.
+const DRAWS: &[&str] = &[
+    names::PLAINS,
+    names::MANA_CRYPT,
+    names::COUNTERSPELL,
+    names::ISLAND,
+];
+
+pub const SCENARIOS: &[Scenario] = &[
+    Scenario::new("Thirst for Discovery: discarding a basic land instead")
+        .battlefield(P0, ISLANDS)
+        .hand(P0, &[THIRST])
+        .library(P0, DRAWS)
+        .library(P1, &[names::ISLAND])
+        .actions(&[
+            Action::cast(P0, THIRST),
+            Action::Resolve,
+            yes_no(P0, Pick::Yes),
+            count(Zone::Graveyard, Some(names::PLAINS), 1),
+            count(Zone::Hand, None, 2),
+        ]),
+    // Declining, P0 discards two cards, and the Plains may be one of them.
+    Scenario::new("Thirst for Discovery: discarding two cards with a basic land in hand")
+        .battlefield(P0, ISLANDS)
+        .hand(P0, &[THIRST])
+        .library(P0, DRAWS)
+        .library(P1, &[names::ISLAND])
+        .actions(&[
+            Action::cast(P0, THIRST),
+            Action::Resolve,
+            yes_no(P0, Pick::No),
+            discard(names::MANA_CRYPT),
+            discard(names::PLAINS),
+            count(Zone::Graveyard, Some(names::MANA_CRYPT), 1),
+            count(Zone::Graveyard, Some(names::PLAINS), 1),
+            count(Zone::Hand, Some(names::COUNTERSPELL), 1),
+        ]),
+    // Tundra is a Plains Island but not basic: no choice, two discards.
+    Scenario::new("Thirst for Discovery: two nonbasic cards with no basic land")
+        .battlefield(P0, ISLANDS)
+        .hand(P0, &[THIRST])
+        .library(
+            P0,
+            &[
+                names::TUNDRA,
+                names::MANA_CRYPT,
+                names::COUNTERSPELL,
+                names::ISLAND,
+            ],
+        )
+        .library(P1, &[names::ISLAND])
+        .actions(&[
+            Action::cast(P0, THIRST),
+            Action::Resolve,
+            discard(names::TUNDRA),
+            discard(names::COUNTERSPELL),
+            count(Zone::Hand, Some(names::MANA_CRYPT), 1),
+            count(Zone::Graveyard, None, 3),
+        ]),
+    // One card to draw: P0 draws it, discards it, the only card in hand, and then loses for
+    // having drawn from an empty library
+    // ([CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b)).
+    Scenario::new("Thirst for Discovery with fewer than two cards to discard")
+        .battlefield(P0, ISLANDS)
+        .hand(P0, &[THIRST])
+        .library(P0, &[names::MANA_CRYPT])
+        .library(P1, &[names::ISLAND])
+        .actions(&[
+            // P0 has nothing else to do, so Thirst resolves at once.
+            Action::cast(P0, THIRST),
+            count(Zone::Graveyard, Some(names::MANA_CRYPT), 1),
+            count(Zone::Hand, None, 0),
+            Action::assert(Assertion::Outcome {
+                outcome: Ending::Win { player: P1 },
+            }),
+        ]),
+];

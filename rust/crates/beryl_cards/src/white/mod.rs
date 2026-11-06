@@ -6,6 +6,8 @@ pub mod mana_tithe;
 pub mod oust;
 pub mod overlord_of_the_mistmoors;
 pub mod plains;
+pub mod portable_hole;
+pub mod reprieve;
 pub mod staff_of_the_storyteller;
 pub mod swift_reconfiguration;
 pub mod the_wandering_emperor;

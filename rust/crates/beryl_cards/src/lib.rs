@@ -46,6 +46,12 @@ pub static CARDS: CardTable = CardTable::new(&[
     &white::staff_of_the_storyteller::CARD,
     &white::swift_reconfiguration::CARD,
     &white::aangs_iceberg::CARD,
+    &blue::counterspell::CARD,
+    &white::reprieve::CARD,
+    &blue::stock_up::CARD,
+    &blue::thirst_for_discovery::CARD,
+    &azorius::floodfarm_verge::CARD,
+    &white::portable_hole::CARD,
 ]);
 
 /// Every card's scenarios (architecture §17.1), by card name.
@@ -118,6 +124,15 @@ pub static SCENARIOS: &[(&str, &[Scenario])] = &[
         white::swift_reconfiguration::SCENARIOS,
     ),
     (names::AANGS_ICEBERG, white::aangs_iceberg::SCENARIOS),
+    (names::COUNTERSPELL, blue::counterspell::SCENARIOS),
+    (names::REPRIEVE, white::reprieve::SCENARIOS),
+    (names::STOCK_UP, blue::stock_up::SCENARIOS),
+    (
+        names::THIRST_FOR_DISCOVERY,
+        blue::thirst_for_discovery::SCENARIOS,
+    ),
+    (names::FLOODFARM_VERGE, azorius::floodfarm_verge::SCENARIOS),
+    (names::PORTABLE_HOLE, white::portable_hole::SCENARIOS),
 ];
 
 #[cfg(test)]
