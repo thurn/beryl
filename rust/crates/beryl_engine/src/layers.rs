@@ -35,6 +35,19 @@ pub(crate) fn refresh(s: &mut State, t: &GameTable, sink: &mut Sink) {
     }
 }
 
+/// The kinds of event the permanents on the battlefield have triggered abilities for. A
+/// face-down permanent has none, whichever card it is
+/// ([CR 708.2a](https://yawgatog.com/resources/magic-rules/#R7082a)): it has "no text, no
+/// name, no subtypes, and no mana cost". So it counts for nothing, and masking or
+/// determinizing its hidden identity leaves this unchanged.
+pub(crate) fn listening(s: &State, t: &GameTable) -> u16 {
+    s.battlefield
+        .iter()
+        .map(|&slot| s.object(slot))
+        .filter(|o| o.face != FaceIx::DOWN)
+        .fold(0, |k, o| k | t.listens(o.card))
+}
+
 /// Whether a change in the number of `kind` counters on the object in `slot` can change its
 /// derived characteristics, so that the layers must run again. Only +1/+1 and -1/-1 counters
 /// modify power and toughness
@@ -75,10 +88,7 @@ fn recompute(s: &mut State, t: &GameTable) {
     s.effects
         .retain(|e| objects[e.affected.slot.index()].incarnation == e.affected.incarnation);
 
-    s.listening = s
-        .battlefield
-        .iter()
-        .fold(0, |k, &slot| k | t.listens(s.object(slot).card));
+    s.listening = listening(s, t);
 
     // Made at the first effect that applies: most recomputes have none, and the list is big.
     let mut list: Option<Fixed<Apply, 192>> = None;

@@ -6,6 +6,16 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- The battlefield's cached trigger listeners (`State::listening`, found by the
+  layer recompute) counted face-down permanents by their hidden card, so masking
+  or determinizing that identity for a viewer left the cache describing cards no
+  longer there while the layer results stayed clean. A face-down permanent has
+  no abilities (CR 708.2a), so no trigger was lost, but the cache was wrong; its
+  debug assertion caught it in the expert's combat simulation. Prevention: cache
+  only what the layer results themselves depend on, so any change that leaves
+  them clean leaves the cache right too, and check every cache against a fresh
+  computation in debug builds.
+
 - After a mulligan the engine asked for the cards to put on the bottom before
   the keep decision, so a player chose what to bottom from a hand they might
   then shuffle away, and "keep" described a bottom already done (CR 103.5).

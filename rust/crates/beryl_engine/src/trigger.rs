@@ -6,6 +6,7 @@ use crate::event::{Event, Reason, Recipient, Sink, kind};
 use crate::filter::Whose;
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot};
+use crate::layers;
 use crate::state::{
     Lki, ObjectFlags, ObjectRef, PendingTrigger, StackEntry, State, TriggerInfo, TurnStep, Zone,
 };
@@ -43,9 +44,7 @@ pub(crate) fn match_event(s: &mut State, t: &GameTable, e: &Event) -> Result<(),
         } else {
             debug_assert_eq!(
                 s.listening,
-                s.battlefield
-                    .iter()
-                    .fold(0, |k, &slot| k | t.listens(s.object(slot).card)),
+                layers::listening(s, t),
                 "the battlefield's listeners, as the layer results found them"
             );
             s.listening

@@ -212,12 +212,12 @@ fn perf_counts_stay_in_their_bands() {
     // (greedy, seed): decisions, silent, state-based checks, state copies, layer recomputes,
     // solver runs, events.
     let pinned: [(bool, u64, [u64; 7]); 6] = [
-        (false, 0, [104, 482, 551, 46, 38, 28, 524]),
-        (false, 1, [251, 682, 829, 198, 91, 90, 892]),
-        (false, 2, [218, 672, 803, 84, 102, 74, 837]),
-        (true, 0, [116, 443, 527, 62, 57, 41, 555]),
-        (true, 1, [237, 671, 813, 116, 102, 67, 922]),
-        (true, 2, [237, 730, 867, 158, 108, 81, 1074]),
+        (false, 0, [104, 482, 551, 46, 32, 28, 524]),
+        (false, 1, [251, 682, 829, 198, 64, 90, 892]),
+        (false, 2, [218, 672, 803, 84, 74, 74, 837]),
+        (true, 0, [116, 443, 527, 62, 39, 41, 555]),
+        (true, 1, [237, 671, 813, 116, 83, 67, 922]),
+        (true, 2, [237, 730, 867, 158, 77, 81, 1074]),
     ];
     let t = mirror();
     let mut outside = Vec::new();
