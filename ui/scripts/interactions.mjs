@@ -2444,7 +2444,6 @@ const exileCast = exileView.status.decision.candidates.findIndex(
 );
 assert.ok(exileCast >= 0, "exile-cast offers a cast from exile");
 const exiledSlot = exileView.status.decision.candidates[exileCast].option.slot;
-const exiledName = nameIn(exileView, exiledSlot);
 const yourExile = '[data-pile="exile"][data-side="you"]';
 const exileRun = {
     fixture: "exile-cast",
@@ -2462,10 +2461,7 @@ await check(
             .getByRole("dialog", { name: "Your exile" })
             .locator(`[data-viewer-slot="${exiledSlot}"]`)
             .click();
-        await page
-            .getByRole("dialog", { name: `Cast ${exiledName}` })
-            .getByRole("button", { name: "Cast", exact: true })
-            .click();
+        // With nothing to choose, the pick casts it at once.
         assert.deepEqual(
             await chosen(page),
             [exileCast],
@@ -2601,8 +2597,8 @@ await check(
             at,
         );
         assert.equal(Number(hit), top, "the counted card is on top");
+        // The token's one use acts on the click.
         await page.mouse.click(at.x, at.y);
-        await page.getByRole("menuitem").first().click();
         assert.deepEqual(await settled(page, 1), [mapAct], "the ability");
     },
     tokenRun,
