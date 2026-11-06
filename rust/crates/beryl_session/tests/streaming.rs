@@ -9,7 +9,7 @@ use beryl_engine::{Choice, GameTable, Profile, Replay, Scratch, State, Step, app
 use beryl_session::protocol::{Side, Step as TurnStep};
 use beryl_session::replay::Entry;
 use beryl_session::{
-    CandidateIndex, Game, PlayerView, Seat, SessionId, StartGame, Status, StopsSetting,
+    CandidateIndex, Game, PlayerView, Seat, SessionId, StartGame, Status, StopsSetting, with_stops,
 };
 
 const SESSION: SessionId = SessionId(1);
@@ -167,12 +167,7 @@ fn events_of(begin: &StartGame, log: &[Entry]) -> Vec<Event> {
             .collect::<Vec<_>>()
     });
     let t = GameTable::new(&CARDS, [decks[0].as_slice(), decks[1].as_slice()]).unwrap();
-    // The session's profile: full control asks the human even their passes.
-    let profile = Profile {
-        stops: begin.stops.stops(),
-        full_control: (begin.stops == StopsSetting::Exact).then_some(begin.human),
-        ..Profile::SMART
-    };
+    let profile = with_stops(Profile::SMART, begin.stops, begin.human);
     let mut s = State::new(&t, begin.seed, profile);
     let mut x = Scratch::recording();
     let mut choices = log.iter().filter_map(|e| match e {

@@ -558,11 +558,12 @@ fn later_costs(s: &State, t: &GameTable, player: Seat) -> Fixed<Later, 32> {
     later
 }
 
-/// What `plan` keeps payable of `later`: how many of the costs, and then how many colored and
-/// colorless symbols those costs have. Of two plans that keep as many costs payable, the one
-/// keeping the hungrier for colors wins, as an auto-tapper keeps {U}{U} open for Mana Drain
-/// rather than {1}{W} for Get Lost: a generic cost is the easier to pay from what is left.
-fn still_payable(sources: &Sources, plan: &Plan, later: &[Later]) -> (usize, u32) {
+/// What `plan` keeps payable of `later`, best first: the most colored and colorless symbols
+/// of any one payable cost, then how many costs stay payable, then their symbols in all. An
+/// auto-tapper keeps colors open: {U}{U} for Mana Drain rather than {1}{W} for Get Lost and
+/// {W} for Oust, of which the two lands left would cast only one anyway. A cost hungry for
+/// colors is the one a careless payment strands; a generic one is paid from whatever is left.
+fn still_payable(sources: &Sources, plan: &Plan, later: &[Later]) -> (u32, usize, u32) {
     let units = sources.units(plan.left, &plan.taps);
     let payable = later.iter().filter(|l| match l.taps {
         None => units.pays(l.cost),
@@ -580,9 +581,9 @@ fn still_payable(sources: &Sources, plan: &Plan, later: &[Later]) -> (usize, u32
             sources.units(plan.left, &without.taps).pays(l.cost)
         }
     });
-    payable.fold((0, 0), |(n, symbols), l| {
-        let colored: u32 = l.cost.symbols.iter().map(|&k| u32::from(k)).sum();
-        (n + 1, symbols + colored)
+    payable.fold((0, 0, 0), |(most, n, all), l| {
+        let symbols: u32 = l.cost.symbols.iter().map(|&k| u32::from(k)).sum();
+        (most.max(symbols), n + 1, all + symbols)
     })
 }
 
@@ -610,7 +611,7 @@ pub(crate) fn plans(
         return Ok(out);
     }
     let later = later_costs(s, t, player);
-    let mut scores: Fixed<(usize, u32), 64> = Fixed::new();
+    let mut scores: Fixed<(u32, usize, u32), 64> = Fixed::new();
     let mut full = false;
     each_plan(cost, pool, &sources, &mut |p| {
         let score = still_payable(&sources, p, later.as_slice());

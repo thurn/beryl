@@ -246,8 +246,8 @@ impl<'a> Tree<'a> {
             apply(&mut s, self.t, &mut self.x, &mut Replay, choice);
             if node == 0 {
                 // The root decision was offered under the game's profile; below it the tree
-                // plays under the smart stops, with no player's passes asked. The payment profile stays, so a payment in
-                // progress is never asked under another.
+                // plays under the smart stops, with no player's passes asked. The payment
+                // profile stays, so a payment in progress is never asked under another.
                 s.set_profile(Profile {
                     stops: Stops::Smart,
                     breakpoint: None,

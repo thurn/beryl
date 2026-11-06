@@ -310,8 +310,8 @@ mod tests {
     #[test]
     fn a_payment_keeps_open_the_colours_the_hand_needs() {
         // {1}{U} from three Islands and a Plains: the Plains pays {1}, so the two Islands
-        // left still cast Mana Drain ({U}{U}). With Get Lost ({1}{W}) in hand too, either
-        // payment keeps one card castable; it keeps the one hungrier for colors.
+        // left still cast Mana Drain ({U}{U}), even with cards in hand that want {W}, of
+        // which the two lands left could cast only one.
         const LANDS: &[Permanent] = &[
             Permanent::new(names::ISLAND),
             Permanent::new(names::ISLAND),
@@ -323,6 +323,7 @@ mod tests {
             &[jace, names::MANA_DRAIN][..],
             &[jace, names::MANA_DRAIN, names::GET_LOST],
             &[jace, names::GET_LOST, names::MANA_DRAIN],
+            &[jace, names::MANA_DRAIN, names::GET_LOST, names::OUST],
         ] {
             let paid = priority(hand.to_vec().leak(), LANDS);
             assert_eq!(
@@ -331,13 +332,6 @@ mod tests {
                 "with {hand:?}"
             );
         }
-        // Two cards that want {W} outnumber the one that wants {U}{U}.
-        let hand = [jace, names::MANA_DRAIN, names::GET_LOST, names::OUST];
-        let paid = priority(hand.to_vec().leak(), LANDS);
-        assert_eq!(
-            paid.cast(jace, true),
-            [(None, None, vec![names::ISLAND, names::ISLAND])]
-        );
     }
 
     #[test]

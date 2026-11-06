@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 pub use beryl_engine::Seat;
-pub use game::{Answer, Game, OpenDecision};
+pub use game::{Answer, Game, OpenDecision, with_stops};
 pub use protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status, StopsSetting};
 pub use replay::ReplayFile;
 pub use sessions::{Sessions, StartRequest};

@@ -48,8 +48,22 @@ struct Seen {
 
 /// Plays into turn [`TURNS`]: the human plays a land, else casts what they can, else passes.
 fn play(game: &mut Game) -> Seen {
+    play_switching(game, None)
+}
+
+/// As [`play`], changing the stops to `switch` mid-game, as the settings toggle does: at the
+/// human's first decision in their own turn from turn 3 on.
+fn play_switching(game: &mut Game, mut switch: Option<StopsSetting>) -> Seen {
     let mut seen = Seen::default();
-    while let Some(view) = game.next_view() {
+    while let Some(mut view) = game.next_view() {
+        let turn = game.state().turn();
+        if matches!(view.status, Status::Deciding { .. })
+            && turn.number >= 3
+            && turn.active == HUMAN
+            && let Some(stops) = switch.take()
+        {
+            view = game.set_stops(stops).unwrap();
+        }
         // A spell being cast is on the stack before its targets are chosen (CR 601.2a).
         let cast = matches!(game.state().pending(), Pending::None);
         for e in game.state().stack().iter().filter(|_| cast) {
@@ -88,6 +102,7 @@ fn play(game: &mut Game) -> Seen {
         let answer = game.answer(decision.id, CandidateIndex(index as u8));
         game.choose(answer.unwrap());
     }
+    assert_eq!(switch, None, "the stops never changed");
     seen
 }
 
@@ -115,7 +130,17 @@ fn full_control_gives_priority_over_every_opponent_spell_in_either_turn() {
 
 #[test]
 fn full_control_stops_in_every_step_of_the_opponents_turn() {
-    let seen = play(&mut new_game(0, StopsSetting::Exact));
+    assert_every_step(&play(&mut new_game(0, StopsSetting::Exact)));
+}
+
+#[test]
+fn switching_to_full_control_mid_game_stops_in_every_step() {
+    let mut game = new_game(0, StopsSetting::Smart);
+    assert_every_step(&play_switching(&mut game, Some(StopsSetting::Exact)));
+}
+
+/// The human had priority in each step of each of the opponent's turns that has one.
+fn assert_every_step(seen: &Seen) {
     let mut turns: Vec<u16> = seen.their_steps.iter().map(|&(n, _)| n).collect();
     turns.dedup();
     assert!(turns.len() > 4, "only {} opponent turns", turns.len());
