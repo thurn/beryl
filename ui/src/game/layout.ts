@@ -150,29 +150,33 @@ const BACK_WIDTH = 105;
  * its top at `back`, in front of its library and graveyard: its land piles from `lands`, filling
  * rightward to `LANDS_END`, and its other permanents (artifacts, enchantments, planeswalkers that
  * are not creatures), `others.width` wide, smaller than a creature, right of its life orb from
- * `others.x` to `others.end`. Each permanent's row follows its types after continuous effects, so
+ * `others.x` to `others.end`; those that overflow it stand left of the orb, past the lands, up to
+ * `others.overflowEnd`. Each permanent's row follows its types after continuous effects, so
  * an animated land or a crewed Vehicle stands with the creatures. The rows lie clear of one
  * another, so a long row of creatures may pass over the land piles' side of the table. Every
  * row's cards are scaled by their depth (depthScale); a row too long for its room shrinks, all
  * its cards alike, so that none covers another's marks. */
+/** Where each side's life orb begins (Board.tsx's Life, with its wings): your back row's other
+ * permanents that overflow the room right of it stand left of it, right of the lands. */
+const ORB_LEFT = 664;
 const ROWS: Record<
   Side,
   {
     back: number;
     lands: number;
     permanents: number;
-    others: { x: number; end: number; width: number };
+    others: { x: number; end: number; overflowEnd: number; width: number };
   }
 > = {
-  // Just under the opponent's hand; their other permanents right of the orb and the step
-  // banner's detail (screens.css .step-banner), and well left of their library, which lies
-  // behind the row in the far corner. As wide as keeps a planeswalker's loyalty readable at
-  // that depth.
+  // Just under the opponent's hand; their other permanents clear of the step banner
+  // (screens.css .step-banner, 602 to 1002 across), whose detail text would lie over them, and well
+  // left of their library, which lies behind the row in the far corner. As wide as keeps a
+  // planeswalker's loyalty readable at that depth.
   opponent: {
     back: 112,
     lands: 158,
     permanents: 235,
-    others: { x: 948, end: 1160, width: 110 },
+    others: { x: 998, end: 1180, overflowEnd: 598, width: 110 },
   },
   // Right of your orb, left of the stack's column and the prompt; your library and graveyard
   // lie behind the row, in the near left corner.
@@ -180,12 +184,9 @@ const ROWS: Record<
     back: 570,
     lands: 111,
     permanents: 408,
-    others: { x: 940, end: 1196, width: 92 },
+    others: { x: 940, end: 1196, overflowEnd: ORB_LEFT, width: 92 },
   },
 };
-/** Where each side's life orb begins (Board.tsx's Life, with its wings): the back row's other
- * permanents that overflow the room right of it stand left of it, right of the lands. */
-const ORB_LEFT = 664;
 /** How narrow, on the stage, the back row's other permanents may shrink to fit their room before
  * they crowd one another instead: as narrow as keeps their loyalty and counters readable. */
 const OTHERS_LEAST = 84;
@@ -195,6 +196,8 @@ const LANDS_SQUEEZE = 0.6;
 /** Lands fill from the left up to here, `LAND_GAP` apart before depth scaling. */
 const LANDS_END = 600;
 const LAND_GAP = 12;
+/** How far a length may overrun the room it is measured against and still fit, in stage pixels. */
+const SLACK = 0.01;
 /** How far apart permanents stand, in frame widths. */
 const PERMANENT_GAP = 0.1;
 /** Where the permanents' rows may lie: centered on the table while they fit left of the
@@ -760,7 +763,7 @@ function battlefieldPlacements(
       LANDS_END,
       Math.max(
         rows.lands + landsLength * LANDS_SQUEEZE,
-        ORB_LEFT - 2 * landGap - deficit,
+        rows.others.overflowEnd - 2 * landGap - deficit,
       ),
     ),
   );
@@ -813,7 +816,7 @@ function battlefieldPlacements(
       // Toward the stack's column, clear of the hand's middle.
       center: Infinity,
       least: othersLeast,
-      overflow: { start: landsEnd + 2 * landGap, end: ORB_LEFT },
+      overflow: { start: landsEnd + 2 * landGap, end: rows.others.overflowEnd },
     },
     [],
     beneath,
@@ -894,9 +897,13 @@ function permanentRow(
   // least scale; past that, `row` crowds its groups together.
   const full = depthScale(spec.y);
   const least = Math.min(full, spec.least);
+  // The land piles crowd together to leave the overflow exactly the room it needs, which
+  // rounding may shave by a hair: within `SLACK`, it fits.
+  const overflowRoom = spec.overflow
+    ? spec.overflow.end - spec.overflow.start + SLACK
+    : 0;
   const overflow =
-    spec.overflow &&
-    spec.overflow.end - spec.overflow.start > frameWidth * least
+    spec.overflow && overflowRoom >= frameWidth * least
       ? spec.overflow
       : undefined;
   // Without an overflow, as large as fits its room; with one, the largest scale, in steps, at
@@ -911,8 +918,7 @@ function permanentRow(
         unitWidths.map((w) => w * at),
         unitGap * at,
         spec.end - spec.start,
-      ).overflow <=
-      overflow.end - overflow.start;
+      ).overflow <= overflowRoom;
     scale = full;
     for (let k = 1; k <= 20 && !fits(scale); k++) {
       scale = full - ((full - least) * k) / 20;
