@@ -5,6 +5,7 @@ use beryl_cards::CARDS;
 use beryl_cards::decks::WU_CONTROL;
 use beryl_engine::Seat;
 use beryl_session::protocol::{Candidate, Kind};
+use beryl_session::replay::Entry;
 use beryl_session::{
     CandidateIndex, Game, PlayerView, SessionError, SessionId, StartGame, Status, StopsSetting,
 };
@@ -112,6 +113,19 @@ fn a_cast_taken_back_at_its_target_returns_to_priority_as_it_was() {
     assert_eq!(game.cancel(), Err(SessionError::NotCancellable));
     // The old decision's answers are stale.
     assert!(game.answer(asked.id, CandidateIndex(0)).is_err());
+
+    // Cast again, and switch to full control while choosing its target: taking the cast back
+    // keeps the new stops, recorded at the priority.
+    let targeting = answer(&mut game, &again, cast);
+    assert!(deciding(&targeting).unwrap().cancellable);
+    game.set_stops(StopsSetting::Exact).unwrap();
+    let again = game.cancel().unwrap();
+    assert_eq!(again.stops, StopsSetting::Exact);
+    assert_eq!(game.replay().log[..log.len()], log[..]);
+    assert_eq!(
+        game.replay().log[log.len()..],
+        [Entry::Stops(StopsSetting::Exact)]
+    );
 
     // Cast again and see it through: once its costs are paid, it stays cast.
     let mut view = answer(&mut game, &again, cast);

@@ -311,7 +311,16 @@ impl Game {
     fn cancellable(&self) -> bool {
         self.before_cast.is_some()
             && matches!(self.at, At::Human(_, Open::Decision(_)))
-            && matches!(self.state.pending(), Pending::Casting(_))
+            && self.casting()
+    }
+
+    /// Whether a spell is being cast or an ability activated, short of being paid for: not a
+    /// triggered ability's targets being chosen, which the engine asks the same way once a
+    /// cast is complete ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d):
+    /// "The remainder of the process for putting a triggered ability on the stack is
+    /// identical to the process for casting a spell").
+    fn casting(&self) -> bool {
+        matches!(self.state.pending(), Pending::Casting(c) if !c.triggered)
     }
 
     /// Takes back the spell the human is casting or the ability they are activating, before
@@ -335,7 +344,10 @@ impl Game {
         self.state = before.state;
         self.answered = before.answered;
         self.replay.log.truncate(before.log);
-        self.stops = before.stops;
+        // Stops changed during the cast stay changed, recorded again at the priority.
+        if self.stops != before.stops {
+            self.change_stops(self.stops);
+        }
         // The priority asked again is a new decision: an answer sent to the cast's is stale.
         let At::Human(_, open) = before.at else {
             unreachable!("a cast begins at the human's decision");
@@ -373,8 +385,7 @@ impl Game {
                 });
                 self.apply(Entry::Choice(answer.choice.0));
                 if let Some(before) = before {
-                    let casting = matches!(self.state.pending(), Pending::Casting(_));
-                    self.before_cast = casting.then_some(before);
+                    self.before_cast = self.casting().then_some(before);
                 }
             }
             Open::Halt => self.replay.log.push(Entry::Halt),
@@ -456,9 +467,7 @@ impl Game {
                 self.seen,
             );
             // Once a cast is complete, or another player decides, it can no longer be taken back.
-            if !matches!(step, Some(Step::Decide(d)) if d.player == self.human
-                && matches!(self.state.pending(), Pending::Casting(_)))
-            {
+            if !matches!(step, Some(Step::Decide(d)) if d.player == self.human && self.casting()) {
                 self.before_cast = None;
             }
             self.at = match step {

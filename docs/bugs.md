@@ -6,6 +6,13 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- Taking back an unpaid cast (`beryl_session`'s `Game::cancel`) judged "still
+  casting" by `Pending::Casting`, which the engine also uses to choose a
+  triggered ability's targets once a cast is complete (CR 603.3d), so a cast
+  trigger's target prompt would have offered to rewind a paid spell. Found in
+  review. Prevention: give a trigger's targeting its own pending variant, or a
+  query such as "a cast awaits payment", so no caller has to know the flag.
+
 - A token copying a face-down permanent still held the original's hidden card,
   masked only by knowledge, so `Observation::determinize`, which redeals unknown
   deck slots alone, handed it to the searching agent unchanged, and every
