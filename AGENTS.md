@@ -5,10 +5,15 @@ draft, which can draft cards and play the game at the level of a strong human
 player. It is a Tauri 2 desktop app for Apple silicon Macs: a Rust workspace
 behind a React and TypeScript UI. The repository is public.
 
-V1 targets exclusively the 540 cards of the MTGO Vintage Cube as of October 7,
-2026, listed in `data/vintage-cube-2026-10-07.csv` (from
-<https://www.mtgo.com/vintage-cube-cardlist>). Rules support, drafting and AI
-need only handle these cards.
+V1 targets exclusively the 540 cards of the MTG Arena Powered Cube run that
+began October 30, 2025, listed in `data/arena-powered-cube-2025-10-30.csv` (the
+card columns of that run's 17lands public data). Six carry their Arena names
+from Through the Omenpaths (Ademi of the Silkchutes is Scryfall's Spectacular
+Spider-Man). Rules support, drafting and AI need only handle these cards. The
+mirror match target is
+`docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt`, a mythic
+drafter's deck from that run. The MTGO Vintage Cube list it replaced
+(`data/vintage-cube-2026-10-07.csv`) stays until the code moves over.
 
 All rules engine code must contain comments referencing the relevant portion of
 the Comprehensive Rules which they are implementing, linking to
@@ -40,8 +45,10 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
   Forge exporters and their Java harnesses. `just` lists the commands.
 - Outside the tree: `~/Library/Caches/beryl` (`$BERYL_CACHE`: warm `rust/target`
   and `ui/node_modules` shared by worktrees, the oracle builds and their last
-  report in `oracles/logs/oracle.json`, and the screenshots). Never crawl `~` or
-  `/` with `find`.
+  report in `oracles/logs/oracle.json`, and the screenshots), and
+  `~/17lands/Cube_-_Powered` (17lands' draft, game and replay data for the cube,
+  PremierDraft and TradDraft, as gzipped CSVs). Never crawl `~` or `/` with
+  `find`.
 
 ## Enact
 
