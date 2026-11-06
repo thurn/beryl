@@ -462,12 +462,16 @@ impl Policy<'_> {
         self.obs.battlefield().iter().any(|&slot| {
             self.obs.controller(slot) == who
                 && self.obs.card(slot).is_some_and(|card| {
-                    self.t
-                        .def(card)
-                        .face(self.obs.object(slot).face)
-                        .abilities
-                        .iter()
-                        .any(|a| a.replacement == Replacement::WinInsteadOfDrawingFromEmptyLibrary)
+                    self.values.get(card).wins_instead
+                        && self
+                            .t
+                            .def(card)
+                            .face(self.obs.object(slot).face)
+                            .abilities
+                            .iter()
+                            .any(|a| {
+                                a.replacement == Replacement::WinInsteadOfDrawingFromEmptyLibrary
+                            })
                 })
         })
     }

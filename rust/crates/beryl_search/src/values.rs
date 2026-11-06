@@ -5,7 +5,7 @@
 //! decision reads it with one load.
 
 use beryl_cards::names;
-use beryl_engine::card::{Face, Keywords, Types};
+use beryl_engine::card::{Face, Keywords, Replacement, Types};
 use beryl_engine::{CardIx, GameTable};
 
 /// Hand-tuned values: roughly how much a strong player would rather have the card than not,
@@ -113,6 +113,9 @@ pub struct CardInfo {
     pub draws: u8,
     /// Bit `i`: ability `i` of the front face wins by drawing the library empty.
     pub empties: u8,
+    /// Whether a face of it wins instead of losing by drawing from an empty library, as
+    /// Jace, Wielder of Mysteries does.
+    pub wins_instead: bool,
 }
 
 impl CardInfo {
@@ -160,6 +163,11 @@ impl CardValues {
                 never: bits(NEVER),
                 draws: bits(DRAWS),
                 empties: bits(EMPTIES),
+                wins_instead: def.faces.iter().any(|f| {
+                    f.abilities
+                        .iter()
+                        .any(|a| a.replacement == Replacement::WinInsteadOfDrawingFromEmptyLibrary)
+                }),
             };
         }
         CardValues { cards }
