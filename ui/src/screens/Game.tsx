@@ -321,12 +321,14 @@ function Playing({ playback }: { playback: Playback }) {
     planned.current = [...then, ...planned.current];
     choose(decision.id, index).catch(fail);
   };
-  /** Takes back the cast in progress, and any picks planned for it. */
+  /** Takes back the cast in progress, and any picks planned for it. The choice it was asking,
+   * if put aside, is done with: asked again, it is shown. */
   const cancelCast = () => {
     if (!decision?.cancellable || waiting) return;
     setError(undefined);
     setAnswered(view);
     planned.current = [];
+    setPeek(undefined);
     cancel(decision.id).catch(fail);
   };
 

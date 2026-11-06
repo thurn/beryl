@@ -242,8 +242,10 @@ export function Board({
     !isCombat(decision.kind) &&
     !isOpening(decision.kind);
   const castingNow = deciding ? casting : undefined;
-  // The cast under way, which the engine is asking about, can still be taken back.
-  const cancellable = deciding && decision?.cancellable === true;
+  // The cast under way, which the engine is asking about, can still be taken back: on the
+  // table, or from it while a screen asking about the cast is put aside to see the table
+  // (inert, but not dimmed).
+  const cancellable = !waiting && !dimmed && decision?.cancellable === true;
   // The prompt or the cast step sits over the turn controls; the stack rises to clear it.
   const asking = prompting || castingNow !== undefined;
   const placements = useMemo(
@@ -629,12 +631,13 @@ export function Board({
   // Escape themselves; a focused button takes its own Space and Enter.
   const onKey = useRef<(e: KeyboardEvent) => void>(undefined);
   onKey.current = (e) => {
-    if (inert || e.defaultPrevented) return;
+    if (e.defaultPrevented) return;
     if (e.key === "Escape") {
-      if (settings) setSettings(false);
+      if (settings && !inert) setSettings(false);
       else if (cancellable && !menu && !castingNow && !viewed) cancel?.();
       return;
     }
+    if (inert) return;
     if ((e.key !== " " && e.key !== "Enter") || e.repeat || menu || viewed) {
       return;
     }
@@ -704,7 +707,7 @@ export function Board({
         // A right-click takes back what was begun, as Escape does.
         onContextMenu={(e) => {
           e.preventDefault();
-          if (menu || inert) return;
+          if (menu) return;
           if (castingNow) setCasting(undefined);
           else if (cancellable) cancel?.();
         }}

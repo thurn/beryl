@@ -1815,7 +1815,7 @@ await check(
 );
 
 await check(
-    "an evoke's exile is taken back by Escape, a right-click and Cancel",
+    "an evoke's exile is taken back by Escape, a right-click, Cancel and a drag",
     async (page) => {
         const overlay = page.locator(".overlay.choice");
         const evoke = async () => {
@@ -1849,7 +1849,25 @@ await check(
             .getByRole("button", { name: "Cancel", exact: true })
             .click();
         await takenBack(3);
-        assert.deepEqual(await chosen(page), [evoked, evoked, evoked]);
+        // Put aside to see the table, the cast is taken back from there: Escape, or the
+        // spell dragged from the stack to the hand.
+        const peek = async () => {
+            await evoke();
+            await overlay
+                .getByRole("button", { name: "View Battlefield" })
+                .click();
+            await overlay.waitFor({ state: "detached" });
+            await page.clock.runFor(1000);
+        };
+        await peek();
+        await page.keyboard.press("Escape");
+        await takenBack(4);
+        await peek();
+        const onStack = `${subtlety}[data-zone="stack"]`;
+        const from = center(await page.locator(onStack).boundingBox());
+        await drag(page, onStack, { by: { x: 700 - from.x, y: 870 - from.y } });
+        await takenBack(5);
+        assert.deepEqual(await chosen(page), Array(5).fill(evoked));
     },
     evokeFixture,
 );
