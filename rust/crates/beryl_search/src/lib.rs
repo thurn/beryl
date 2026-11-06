@@ -21,7 +21,10 @@ pub use expert::ExpertAgent;
 pub use frozen::FrozenExpertAgent;
 pub use long::{EVAL_STEPS, Family, Leaf, LongSearch, Method, Settings, WORLD_STEPS};
 pub use mcts::{Budget, Mcts, Search, Sight, rollouts_run};
-pub use rollout::{COUNTER_MIN, Inline, REMOVAL_MIN, RolloutPolicy, rollout, rollout_to};
+pub use rollout::{
+    COUNTER_MIN, Inline, REMOVAL_MIN, RolloutPolicy, Softmax, rollout, rollout_to, soft_rollout,
+    soft_rollout_to,
+};
 pub use values::{CardInfo, CardValues, Knowledge};
 
 /// A decision's index among one agent's own, from 0, unsearched ones included: not its index

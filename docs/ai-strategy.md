@@ -129,9 +129,14 @@ the cb8d5d5f mirror:
 
 - **A family** varies one axis of `beryl_search::LongSearch` at a time. The
   method is PIMC with N fixed worlds or ISMCTS with a fresh world every
-  iteration. Sight is hidden, the hands or everything. A leaf is a full greedy
-  rollout, one cut off after k turns and evaluated, or the evaluation alone.
-  Card values are an estimate, 17lands' games-in-hand win rate or hand-tuned.
+  iteration. Sight is hidden, the hands or everything. A leaf is a full rollout,
+  one cut off after k turns and evaluated, or the evaluation alone. Card values
+  are an estimate, 17lands' games-in-hand win rate or hand-tuned.
+- **Rollouts draw their moves** by a softmax over the greedy policy's scores, at
+  a temperature as strong as greedy. A greedy rollout always plays the same game
+  from a position, so in a world the search knows it would exploit one line of
+  play. Equal UCB bounds are broken at random and equal visits by mean, not
+  toward passing, the first candidate.
 - **Budgets are engine steps** a decision: every decision `next` returns or
   settles, plus a world dealt and an evaluation in steps' time. A mid-game
   rollout is about 360 steps and an evaluation one, so every leaf compares at

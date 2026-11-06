@@ -10,9 +10,11 @@
 //!   learns the order of its own library.
 //! - **Sight.** What a world may keep of the truth: nothing hidden ([`Sight::Hidden`]),
 //!   every hand ([`Sight::Hands`]) or everything ([`Sight::Omniscient`]).
-//! - **Leaf.** A new node is scored by a greedy rollout to the end of the game
+//! - **Leaf.** A new node is scored by a rollout to the end of the game
 //!   ([`Leaf::Rollout`]), one cut off after some turns and evaluated ([`Leaf::Cutoff`]), or
-//!   the board evaluation alone ([`Leaf::Eval`]).
+//!   the board evaluation alone ([`Leaf::Eval`]). Rollouts draw each move by a softmax over
+//!   the greedy policy's scores ([`ROLLOUT_TEMPERATURE`]), so that a world the search knows
+//!   still offers more than one game.
 //! - **Knowledge.** The card values the rollout policy and the evaluation read
 //!   ([`Knowledge`]).
 //! - **Work.** A budget is engine steps, not iterations: every decision `next` returns or
@@ -49,12 +51,12 @@ use beryl_engine::card::FaceIx;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
     Bitboard, Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome,
-    Replay, Scratch, Seat, Slot, State, Step, apply, next, observe,
+    Replay, Scratch, Seat, Slot, State, Step, Zone, apply, next, observe,
 };
 
 use crate::eval::evaluate;
 use crate::mcts::{shows_the_same, smart};
-use crate::rollout::{RolloutPolicy, rollout, rollout_to};
+use crate::rollout::{RolloutPolicy, Softmax, soft_rollout, soft_rollout_to};
 use crate::values::Knowledge;
 use crate::{Agent, AgentDecision, Search, Sight};
 
@@ -70,9 +72,9 @@ pub enum Method {
 /// How a new node is scored.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Leaf {
-    /// A greedy rollout to the end of the game.
+    /// A softmax rollout to the end of the game.
     Rollout,
-    /// A greedy rollout to the first decision `turns` turns on, then the evaluation.
+    /// A softmax rollout to the first decision `turns` turns on, then the evaluation.
     Cutoff { turns: u8 },
     /// The evaluation of the position.
     Eval,
@@ -108,6 +110,12 @@ pub const EVAL_STEPS: u64 = 1;
 /// Engine steps charged for an iteration's copy of the root, so that none costs nothing: an
 /// action that ends the game at once counts no step of the engine's.
 pub const ITERATION_STEPS: u64 = 1;
+
+/// The softmax temperature of the search's rollouts, in the rollout policy's score points
+/// ([`Softmax`]). Measured 2026-11-06 over 600 WU mirror games against greedy: at 10 the
+/// softmax policy wins 50%, as strong as greedy, while 16 rollouts from a known position all
+/// end alike in 44% of positions, against 75% for greedy rollouts; at 20 it wins 45%.
+pub const ROLLOUT_TEMPERATURE: f64 = 10.0;
 
 /// The UCT exploration constant, as `Mcts`'s.
 const EXPLORATION: f64 = 0.7;
@@ -363,8 +371,8 @@ fn grow_parallel(
 
 /// Whether the candidate visited most is settled: no other could overtake it if every
 /// iteration the remaining work buys, at what this decision's iterations have cost each
-/// tree, went its way. The first of equals wins, so one before the leader must stay strictly
-/// behind.
+/// tree, went its way. Equals are told apart by their mean, so every other must stay
+/// strictly behind.
 fn settled(trees: &[Tree], shares: &[u64], credit: &[u64], start: &[(u64, u64)]) -> bool {
     let mut left = 0u64;
     for ((tree, &share), (&credit, &(w0, i0))) in
@@ -380,18 +388,28 @@ fn settled(trees: &[Tree], shares: &[u64], credit: &[u64], start: &[(u64, u64)])
         };
         left += remaining.div_ceil(cost);
     }
-    let (visits, _) = totals(trees);
-    let best = leader(&visits);
-    visits.iter().enumerate().all(|(i, &n)| {
-        i == best || u64::from(visits[best]) >= u64::from(n) + left + u64::from(i < best)
-    })
+    let (visits, rewards) = totals(trees);
+    let best = leader(&visits, &rewards);
+    visits
+        .iter()
+        .enumerate()
+        .all(|(i, &n)| i == best || u64::from(visits[best]) > u64::from(n) + left)
 }
 
-/// The candidate visited most, the first of equals.
-fn leader(visits: &[u32]) -> usize {
+/// The candidate visited most; of equals, the one with the best mean reward, then the first.
+/// Not the first alone: that is passing, in a priority decision, and visits tie most often
+/// where the search cannot tell its candidates apart.
+fn leader(visits: &[u32], rewards: &[f64]) -> usize {
+    let mean = |i: usize| {
+        if visits[i] == 0 {
+            f64::NEG_INFINITY
+        } else {
+            rewards[i] / f64::from(visits[i])
+        }
+    };
     let mut best = 0;
     for (i, &n) in visits.iter().enumerate() {
-        if n > visits[best] {
+        if n > visits[best] || (n == visits[best] && mean(i) > mean(best)) {
             best = i;
         }
     }
@@ -430,7 +448,7 @@ fn names(d: &Decision, c: Choice) -> Option<Slot> {
 }
 
 impl Agent for LongSearch {
-    /// The candidate visited most across the trees, the first of equals. A decision with one
+    /// The candidate visited most across the trees, of equals the best by mean. A decision with one
     /// candidate is never searched, nor is passing with one's own object on top of the stack.
     fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice {
         let decision = self.decision;
@@ -453,7 +471,7 @@ impl Agent for LongSearch {
         let inherited = trees.iter().map(Tree::visits).sum();
         let (iterations, work) = self.grow(&mut trees);
         let (visits, rewards) = totals(&trees);
-        let choice = Choice(leader(&visits) as u8);
+        let choice = Choice(leader(&visits, &rewards) as u8);
         self.last = Some(Search {
             decision,
             chain,
@@ -662,7 +680,9 @@ impl Tree {
             if next(&mut s, t, &mut self.x, &mut Replay) != Step::Decide(*d) {
                 return false;
             }
-            if !shows_the_same(observe(&s, t, &mut self.x, d.player), obs) {
+            if !shows_the_same(observe(&s, t, &mut self.x, d.player), obs)
+                || !self.keeps_to(&s, obs.unmasked_root())
+            {
                 return false;
             }
             self.state = s;
@@ -672,6 +692,24 @@ impl Tree {
         self.root_keys = self.root_keys(t, d);
         self.work = self.spent();
         true
+    }
+
+    /// Whether fixed world `s`, played on to the truth's decision, still holds what the sight
+    /// takes from the truth: the order of each library, which is public, and the cards the
+    /// sight shows, every one for an omniscient world and those in hand for one that sees
+    /// hands. The viewer's own view does not tell: a library shuffled on the way
+    /// ([CR 701.20a](https://yawgatog.com/resources/magic-rules/#R70120a): "To shuffle a
+    /// library or a face-down pile of cards, randomize the cards within it so that no player
+    /// knows their order") is shuffled by the world's random streams, not the game's, and a
+    /// card the viewer does not know may land anywhere.
+    fn keeps_to(&self, s: &State, truth: &State) -> bool {
+        let shown = |slot: Slot| match self.family.sight {
+            Sight::Hidden => false,
+            Sight::Hands => truth.object(slot).zone == Zone::Hand,
+            Sight::Omniscient => true,
+        };
+        Seat::BOTH.iter().all(|&p| s.library(p) == truth.library(p))
+            && Slot::all().all(|slot| !shown(slot) || s.card(slot) == truth.card(slot))
     }
 
     /// The keys of root decision `d`'s candidates, read in a world: the fixed one, or one
@@ -755,7 +793,7 @@ impl Tree {
 
     /// The child of `node` to play next among the actions `keys` names, adding any it lacks
     /// and counting each as available: one not yet played, at random, else the one with the
-    /// highest UCB1 bound for `mover` over its availability, the first of equals.
+    /// highest UCB1 bound for `mover` over its availability, one of equals at random.
     fn select(&mut self, node: u32, keys: &[u64], mover: Seat) -> (u32, Choice) {
         let mut children = Vec::with_capacity(keys.len());
         for &k in keys {
@@ -786,13 +824,27 @@ impl Tree {
                 .expect("a fresh child");
             return (c, Choice(i as u8));
         }
+        // Equal bounds are broken at random: by index, the first candidate (passing, in a
+        // priority decision) would take every tie, and with flat rewards the root's visits
+        // would fall away from it candidate by candidate.
         let mut best = (0, f64::NEG_INFINITY);
+        let mut equal = 0;
         for (i, &c) in children.iter().enumerate() {
             let n = &self.nodes[c as usize];
             let visits = f64::from(n.visits);
             let bound = n.reward / visits + EXPLORATION * (f64::from(n.avail).ln() / visits).sqrt();
-            if bound > best.1 {
-                best = (i, bound);
+            match bound.total_cmp(&best.1) {
+                std::cmp::Ordering::Greater => {
+                    best = (i, bound);
+                    equal = 1;
+                }
+                std::cmp::Ordering::Equal => {
+                    equal += 1;
+                    if self.rng.below(equal) == 0 {
+                        best.0 = i;
+                    }
+                }
+                std::cmp::Ordering::Less => {}
             }
         }
         (children[best.0], Choice(best.0 as u8))
@@ -800,11 +852,15 @@ impl Tree {
 
     /// A new node's score for the first seat, from `s` just after its action.
     fn leaf(&mut self, s: &mut State, t: &GameTable, policy: &RolloutPolicy) -> f64 {
+        let mut soft = Softmax {
+            rng: &mut self.rng,
+            temperature: ROLLOUT_TEMPERATURE,
+        };
         match self.family.leaf {
-            Leaf::Rollout => value(rollout(s, t, &mut self.x, policy)),
+            Leaf::Rollout => value(soft_rollout(s, t, &mut self.x, policy, &mut soft)),
             Leaf::Cutoff { turns } => {
                 let turn = s.turn().number.saturating_add(u16::from(turns));
-                if let Some(outcome) = rollout_to(s, t, &mut self.x, policy, turn) {
+                if let Some(outcome) = soft_rollout_to(s, t, &mut self.x, policy, &mut soft, turn) {
                     value(outcome)
                 } else {
                     self.extra += EVAL_STEPS;
@@ -980,6 +1036,15 @@ mod tests {
             unseen > 0,
             "no choice named a card its player could not see"
         );
+    }
+
+    /// The candidate visited most leads; of equals, the better mean, not the first.
+    #[test]
+    fn equal_visits_go_to_the_better_mean() {
+        assert_eq!(leader(&[5, 9, 3], &[4.0, 1.0, 3.0]), 1);
+        assert_eq!(leader(&[6, 6, 2], &[1.0, 4.0, 2.0]), 1);
+        assert_eq!(leader(&[6, 6], &[3.0, 3.0]), 0);
+        assert_eq!(leader(&[0, 0], &[0.0, 0.0]), 0);
     }
 
     /// A family reads back as it prints.

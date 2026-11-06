@@ -35,6 +35,8 @@ use beryl_engine::{
     Scratch, Seat, Slot, State, Step, Zone, apply_decided, next,
 };
 
+use beryl_engine::rng::SplitMix64;
+
 use crate::values::{CardInfo, CardValues, Knowledge};
 
 /// The least value of a permanent worth a removal spell or ability.
@@ -131,10 +133,37 @@ impl RolloutPolicy {
         d: &Decision,
         expert: bool,
     ) -> Choice {
+        self.decide_by(t, obs, d, expert, &mut Pick::Best)
+    }
+
+    /// The policy's answer to `d` as a search's rollout plays it: each candidate drawn with
+    /// a weight of exp(score / temperature) ([`Softmax`]) wherever the rules score candidates
+    /// by value, so that two rollouts from one position need not play the same game.
+    pub fn choose_soft(
+        &self,
+        t: &GameTable,
+        obs: Observation<'_>,
+        d: &Decision,
+        soft: &mut Softmax<'_>,
+    ) -> Choice {
+        self.decide_by(t, obs, d, false, &mut Pick::Soft(soft))
+    }
+
+    /// The rules' answer to `d`, its scores made a choice by `pick`. The decisions scored
+    /// yes or no (mulligans, play or draw, a "may") and the numbers chosen are always the
+    /// best: their scores are flags, not values a temperature could weigh.
+    fn decide_by(
+        &self,
+        t: &GameTable,
+        obs: Observation<'_>,
+        d: &Decision,
+        expert: bool,
+        pick: &mut Pick<'_, '_>,
+    ) -> Choice {
         let p = self.view(t, obs, d.player, expert);
         match d.kind {
             DecisionKind::Priority | DecisionKind::CastOffer => {
-                best(d, |c| c.option().map(|o| p.action(o)))
+                pick.choose(d, |c| c.option().map(|o| p.action(o)))
             }
             DecisionKind::PlayOrDraw => best(d, |c| Some(i32::from(c.option() == Some(Opt::Play)))),
             DecisionKind::KeepOrMulligan => {
@@ -150,9 +179,9 @@ impl RolloutPolicy {
                 })
             }
             DecisionKind::PutOnBottom | DecisionKind::Discard | DecisionKind::ExileCost => {
-                best(d, |c| c.object().map(|slot| -p.in_hand(slot)))
+                pick.choose(d, |c| c.object().map(|slot| -p.in_hand(slot)))
             }
-            DecisionKind::ChooseObject => best(d, |c| {
+            DecisionKind::ChooseObject => pick.choose(d, |c| {
                 c.object().map(|slot| {
                     let o = obs.object(slot);
                     if o.zone == Zone::Hand && o.owner == p.me {
@@ -165,21 +194,21 @@ impl RolloutPolicy {
             // Cards on top of a library are being chosen for the bottom, as a scry asks: only
             // those not worth drawing go. Anything else, such as lands to untap, is worth
             // taking by its value.
-            DecisionKind::ChooseUpTo => best(d, |c| match c.object() {
+            DecisionKind::ChooseUpTo => pick.choose(d, |c| match c.object() {
                 Some(slot) if obs.object(slot).zone == Zone::Library => {
                     Some(DRAW_MIN - p.in_hand(slot))
                 }
                 Some(slot) => Some(p.value(slot)),
                 None => Some(0),
             }),
-            DecisionKind::LegendRule => best(d, |c| c.object().map(|slot| p.value(slot))),
-            DecisionKind::Crew => best(d, |c| c.object().map(|slot| -p.value(slot))),
+            DecisionKind::LegendRule => pick.choose(d, |c| c.object().map(|slot| p.value(slot))),
+            DecisionKind::Crew => pick.choose(d, |c| c.object().map(|slot| -p.value(slot))),
             DecisionKind::Waterbend => best(d, |c| Some(i32::from(c.option() == Some(Opt::Done)))),
-            DecisionKind::Attacker => best(d, |c| match c.option() {
+            DecisionKind::Attacker => pick.choose(d, |c| match c.option() {
                 Some(Opt::Attack(slot)) => p.safe_attack(slot).then(|| 1 + p.value(slot)),
                 _ => Some(0),
             }),
-            DecisionKind::AttackTarget => best(d, |c| match c.option() {
+            DecisionKind::AttackTarget => pick.choose(d, |c| match c.option() {
                 Some(Opt::Defender(None)) => Some(if obs.player(p.me.opponent()).life <= 6 {
                     1000
                 } else {
@@ -188,24 +217,24 @@ impl RolloutPolicy {
                 Some(Opt::Defender(Some(walker))) => Some(p.walker_target(walker)),
                 _ => None,
             }),
-            DecisionKind::Blocker => best(d, |c| match c.option() {
+            DecisionKind::Blocker => pick.choose(d, |c| match c.option() {
                 Some(Opt::Block(blocker)) => p.best_block(blocker),
                 _ => Some(0),
             }),
             DecisionKind::BlockTarget => {
                 let blocker = p.declaring_blocker();
-                best(d, |c| {
+                pick.choose(d, |c| {
                     let attacker = c.object()?;
                     Some(blocker.and_then(|b| p.block(b, attacker)).unwrap_or(0))
                 })
             }
-            DecisionKind::DamageDivision => best(d, |c| match c.option() {
+            DecisionKind::DamageDivision => pick.choose(d, |c| match c.option() {
                 Some(Opt::Lethal(blocker)) => Some(1 + p.value(blocker)),
                 _ => Some(0),
             }),
             DecisionKind::Target => {
                 let friendly = p.targeting().is_some_and(|(_, friendly)| friendly);
-                best(d, |c| Some(p.target(c, friendly)))
+                pick.choose(d, |c| Some(p.target(c, friendly)))
             }
             DecisionKind::TargetCount => {
                 let worth = p
@@ -249,6 +278,97 @@ pub(crate) fn best(d: &Decision, mut score: impl FnMut(Candidate) -> Option<i32>
             .for_each(|(i, &opt)| consider(i, Candidate::Option(opt))),
     }
     Choice(top.0 as u8)
+}
+
+/// How a decision's scores become a choice.
+enum Pick<'s, 'r> {
+    /// The highest score, the first of equals ([`best`]).
+    Best,
+    /// A draw by the scores ([`Softmax`]).
+    Soft(&'s mut Softmax<'r>),
+}
+
+impl Pick<'_, '_> {
+    fn choose(&mut self, d: &Decision, score: impl FnMut(Candidate) -> Option<i32>) -> Choice {
+        match self {
+            Pick::Best => best(d, score),
+            Pick::Soft(soft) => soft.choose(d, score),
+        }
+    }
+}
+
+/// Softmax rollouts for search: a candidate is drawn with a weight of exp((score − best
+/// score) / temperature), so the greedy answer stays the likeliest and one a few points behind
+/// it is played now and then. A greedy rollout is a fixed function of the position, so in a
+/// world the search fully knows every rollout from a node replays one game and the tree
+/// learns to exploit that one line; a drawn rollout is a distribution over games, as a world
+/// it does not know is. A candidate scored `None` is never drawn while one has a score, nor
+/// is one that ties an earlier candidate.
+#[derive(Debug)]
+pub struct Softmax<'r> {
+    pub rng: &'r mut SplitMix64,
+    /// In score points: a candidate this far behind the best is drawn 1/e as often.
+    pub temperature: f64,
+}
+
+impl Softmax<'_> {
+    fn choose(&mut self, d: &Decision, mut score: impl FnMut(Candidate) -> Option<i32>) -> Choice {
+        let mut scores = [None; 256];
+        let mut n = 0;
+        let mut top = i32::MIN;
+        let mut consider = |i: usize, c: Candidate| {
+            let s = score(c);
+            if let Some(s) = s {
+                top = top.max(s);
+            }
+            scores[i] = s;
+            n = i + 1;
+        };
+        for_each(d, &mut consider);
+        if top == i32::MIN {
+            return Choice(0);
+        }
+        // Equals are drawn as one, as the first of them: greedy plays the first of equals, and
+        // the options it scores 0 (passing, a mana ability, a card it never casts) are not
+        // alternatives to passing.
+        let scores = &scores[..n];
+        let weight = |i: usize| match scores[i] {
+            Some(s) if !scores[..i].contains(&Some(s)) => {
+                (f64::from(s - top) / self.temperature).exp()
+            }
+            _ => 0.0,
+        };
+        let total: f64 = (0..n).map(weight).sum();
+        // A uniform draw in [0, total), from the top 53 bits.
+        let mut u = (self.rng.next_u64() >> 11) as f64 / (1u64 << 53) as f64 * total;
+        let mut last = 0;
+        for i in 0..n {
+            let w = weight(i);
+            if w > 0.0 {
+                last = i;
+                if u < w {
+                    return Choice(i as u8);
+                }
+                u -= w;
+            }
+        }
+        // Rounding left the draw past the last weight.
+        Choice(last as u8)
+    }
+}
+
+/// Calls `f` with each candidate of `d` and its index.
+fn for_each(d: &Decision, mut f: impl FnMut(usize, Candidate)) {
+    match &d.candidates {
+        Candidates::Objects(b) => b
+            .iter()
+            .enumerate()
+            .for_each(|(i, slot)| f(i, Candidate::Object(slot))),
+        Candidates::Options(o) => o
+            .iter()
+            .enumerate()
+            .for_each(|(i, &opt)| f(i, Candidate::Option(opt))),
+    }
 }
 
 /// One decision's view, for the rules above.
@@ -811,14 +931,157 @@ pub fn rollout_to(
     turn: u16,
 ) -> Option<Outcome> {
     let mut inline = Inline { policy, t };
+    play_out(s, t, x, &mut inline, turn, |_, obs, d| {
+        policy.choose(t, obs, d)
+    })
+}
+
+/// [`rollout_to`] with every decision, inline ones too, drawn by `soft`
+/// ([`RolloutPolicy::choose_soft`]).
+pub fn soft_rollout_to(
+    s: &mut State,
+    t: &GameTable,
+    x: &mut Scratch,
+    policy: &RolloutPolicy,
+    soft: &mut Softmax<'_>,
+    turn: u16,
+) -> Option<Outcome> {
+    let mut inline = SoftInline { policy, t, soft };
+    play_out(s, t, x, &mut inline, turn, |inline, obs, d| {
+        inline.policy.choose_soft(inline.t, obs, d, inline.soft)
+    })
+}
+
+/// [`soft_rollout_to`] to the end of the game.
+pub fn soft_rollout(
+    s: &mut State,
+    t: &GameTable,
+    x: &mut Scratch,
+    policy: &RolloutPolicy,
+    soft: &mut Softmax<'_>,
+) -> Outcome {
+    soft_rollout_to(s, t, x, policy, soft, u16::MAX).expect("a game ends before turn 65535")
+}
+
+/// The rollout loop: `answers` answers inline, `choose` every decision `next` returns.
+fn play_out<A: Answers>(
+    s: &mut State,
+    t: &GameTable,
+    x: &mut Scratch,
+    answers: &mut A,
+    turn: u16,
+    mut choose: impl FnMut(&mut A, Observation<'_>, &Decision) -> Choice,
+) -> Option<Outcome> {
     loop {
-        match next(s, t, x, &mut inline) {
+        match next(s, t, x, answers) {
             Step::Over(outcome) => return Some(outcome),
             Step::Decide(_) if s.turn().number >= turn => return None,
             Step::Decide(d) => {
-                let c = policy.choose(t, Observation::new(s, d.player), &d);
-                apply_decided(s, t, x, &mut inline, &d, c);
+                let c = choose(answers, Observation::new(s, d.player), &d);
+                apply_decided(s, t, x, answers, &d, c);
             }
+        }
+    }
+}
+
+/// [`Inline`] for a softmax rollout.
+struct SoftInline<'a, 'r> {
+    policy: &'a RolloutPolicy,
+    t: &'a GameTable,
+    soft: &'a mut Softmax<'r>,
+}
+
+impl Answers for SoftInline<'_, '_> {
+    fn inline(&self) -> bool {
+        true
+    }
+
+    fn answer(&mut self, obs: Observation<'_>, d: &Decision) -> Option<Choice> {
+        Some(self.policy.choose_soft(self.t, obs, d, self.soft))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use beryl_cards::CARDS;
+    use beryl_cards::decks::WU_CONTROL;
+    use beryl_engine::{Profile, Replay, apply, observe};
+
+    use super::*;
+
+    /// A decision of a greedy mirror game with at least `n` candidates.
+    fn decision(n: usize) -> Decision {
+        let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
+        let policy = RolloutPolicy::new(&t);
+        let mut s = State::new(&t, 0, Profile::SMART);
+        let mut x = Scratch::new();
+        loop {
+            let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) else {
+                panic!("no decision with {n} candidates");
+            };
+            if d.len() >= n {
+                return d;
+            }
+            let c = policy.choose(&t, observe(&s, &t, &mut x, d.player), &d);
+            apply(&mut s, &t, &mut x, &mut Replay, c);
+        }
+    }
+
+    /// Each candidate is drawn by exp(score / temperature); one scored `None`, or tied with
+    /// an earlier one, never is.
+    #[test]
+    fn softmax_draws_by_score_and_counts_equals_once() {
+        let d = decision(4);
+        let scores = [Some(0), Some(0), None, Some(10)];
+        let mut rng = SplitMix64::new(1);
+        let mut drawn = [0u32; 4];
+        for _ in 0..20_000 {
+            let mut k = 0;
+            let c = Softmax {
+                rng: &mut rng,
+                temperature: 10.0,
+            }
+            .choose(&d, |_| {
+                k += 1;
+                scores.get(k - 1).copied().flatten()
+            });
+            drawn[usize::from(c.0)] += 1;
+        }
+        assert_eq!((drawn[1], drawn[2]), (0, 0), "{drawn:?}");
+        // The best is e times as likely as the one 10 points behind: 73% of draws.
+        let best = f64::from(drawn[3]) / 20_000.0;
+        assert!((best - 0.731).abs() < 0.015, "{drawn:?}");
+    }
+
+    /// With no candidate scored, the first is chosen, as greedy chooses it.
+    #[test]
+    fn softmax_falls_back_to_the_first() {
+        let d = decision(2);
+        let mut rng = SplitMix64::new(2);
+        let c = Softmax {
+            rng: &mut rng,
+            temperature: 10.0,
+        }
+        .choose(&d, |_| None);
+        assert_eq!(c, Choice(0));
+    }
+
+    /// At a temperature near zero the softmax policy plays greedy's game.
+    #[test]
+    fn a_cold_softmax_is_greedy() {
+        let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
+        let policy = RolloutPolicy::new(&t);
+        let mut rng = SplitMix64::new(3);
+        for seed in 0..4 {
+            let start = State::new(&t, seed, Profile::SMART);
+            let mut x = Scratch::new();
+            let greedy = rollout(&mut start.clone(), &t, &mut x, &policy);
+            let mut soft = Softmax {
+                rng: &mut rng,
+                temperature: 1e-9,
+            };
+            let cold = soft_rollout(&mut start.clone(), &t, &mut x, &policy, &mut soft);
+            assert_eq!(greedy, cold, "seed {seed}");
         }
     }
 }
