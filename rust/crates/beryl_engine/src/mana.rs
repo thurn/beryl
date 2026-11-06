@@ -1129,6 +1129,7 @@ pub(crate) fn activate(
     };
     let mut ctx = EffectCtx::new(s, t, sink, &activation, ability);
     ctx.mana = color;
+    crate::coverage::hit(ability);
     // A mana ability never asks a question.
     let _ = (ability.body)(&mut ctx);
     ctx.finish()

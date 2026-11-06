@@ -182,6 +182,10 @@ fn run(
             cast::leave_stack(s, t, sink, &entry, false, Reason::Resolve)?;
         }
     } else if entry.is_spell() && !face.is_instant_or_sorcery() {
+        // An Aura's spell ability, which says what it targets, does its work by entering.
+        if let Some(ability) = ability {
+            crate::coverage::hit(ability);
+        }
         enter_battlefield(s, t, sink, &entry)?;
     } else if ability.is_some_and(|b| condition_fails(s, t, &entry, b)) {
         // Removed from the stack; it does nothing.
@@ -191,6 +195,7 @@ fn run(
         if let Some(ability) = ability {
             let answers = answers.as_mut().map(|a| &mut **a as &mut dyn Answers);
             let mut ctx = EffectCtx::resolving(s, t, sink, answers, record, entry, ability);
+            crate::coverage::hit(ability);
             let flow = (ability.body)(&mut ctx);
             let question = ctx.question;
             offer = ctx.offer;

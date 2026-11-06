@@ -8,3 +8,7 @@ publish = false
 
 [lints]
 workspace = true
+
+[features]
+# Records which abilities a game exercised (`coverage`), for the card tests.
+coverage = []

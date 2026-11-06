@@ -934,12 +934,23 @@ scenario, its scenarios pass on Beryl and, where exportable, on XMage and Forge
 or appear on the divergence allowlist, and fuzz play including the card raises
 no invariant. dirac's lockstep bar is the model.
 
+`beryl_engine`'s `coverage` feature, which only tests enable, records each
+ability whose body runs, mana ability that makes mana, static ability whose
+effect applies or rule bites, replacement that modifies an event, and casting
+option a spell is cast with. A `beryl_cards` test fails on any no scenario
+exercises, and `just fuzz` reports those random play never reaches.
+
 ### 17.4 Other checks
 
 - **Fuzzing:** random-agent games in debug builds with invariants after every
   decision: zone bitboards agree with object zones, every stack reference names
   a live incarnation, no object is in two zones, `derived` is clean when read,
   counters and life are in range.
+- **References:** slow reference implementations of the fast paths, checked at
+  every fuzz decision and scenario position: the layer results, listeners and
+  knowledge against a recompute from scratch, and the prefilter, funds and
+  solver against payability matched symbol by symbol from mana abilities read
+  off the cards.
 - **Determinism:** the same decks, seed and choices reproduce the same state
   hash at every decision.
 - **Inline and replayed answers agree:** a rollout's inline answers, replayed

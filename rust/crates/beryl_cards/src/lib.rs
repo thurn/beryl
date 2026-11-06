@@ -178,3 +178,38 @@ pub static SCENARIOS: &[(&str, &[Scenario])] = &[
 
 #[cfg(test)]
 mod tests;
+
+/// Every ability, granted ability and casting option of the cards and their tokens, each
+/// named for a report and with the address `beryl_engine::coverage` records it by: what a
+/// game can exercise (architecture §17.3).
+pub fn parts() -> Vec<(String, usize)> {
+    use beryl_engine::card::CardDef;
+    use beryl_engine::coverage::address;
+
+    let mut defs: Vec<&'static CardDef> = Vec::new();
+    for &def in CARDS.cards() {
+        for &d in std::iter::once(&def).chain(def.tokens) {
+            if !defs.iter().any(|&known| std::ptr::eq(known, d)) {
+                defs.push(d);
+            }
+        }
+    }
+    let mut parts = Vec::new();
+    for def in defs {
+        for (f, face) in def.faces.iter().enumerate() {
+            let name = if f == 0 { def.name } else { face.name };
+            for (i, a) in face.abilities.iter().enumerate() {
+                parts.push((format!("{name}: ability {i} ({:?})", a.kind), address(a)));
+            }
+            for (i, a) in face.grants.iter().enumerate() {
+                let what = format!("{name}: granted ability {i} ({:?})", a.kind);
+                parts.push((what, address(a)));
+            }
+            for (i, option) in face.casting.iter().enumerate() {
+                let what = format!("{name}: casting option {i} ({option:?})");
+                parts.push((what, address(option)));
+            }
+        }
+    }
+    parts
+}

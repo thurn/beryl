@@ -253,6 +253,9 @@ impl Runner<'_> {
             self.s
                 .check_invariants(self.t)
                 .map_err(|v| format!("an engine invariant broke: {v:?}"))?;
+            self.s
+                .check_references(self.t)
+                .map_err(|v| format!("the engine disagrees with a reference: {v:?}"))?;
             match step {
                 // A question with one answer, which the exact profile answers silently.
                 Step::Decide(d) if d.len() == 1 && d.kind != DecisionKind::Priority => {

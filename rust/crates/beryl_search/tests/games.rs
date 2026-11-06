@@ -1,12 +1,14 @@
 //! Random games over the cards implemented so far (architecture §17.4): fuzzing with the
 //! invariants after every decision, determinism, information independence and the perf
-//! counts. `BERYL_FUZZ_GAMES=<n>` plays more games; `just fuzz <n>` does that in an optimized
-//! build that keeps the debug assertions.
+//! counts. `BERYL_FUZZ_GAMES=<n>` plays more games and reports what they never reached; `just
+//! fuzz <n>` does that in an optimized build that keeps the debug assertions.
 
 mod common;
 
+use std::collections::{HashMap, HashSet};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
+use beryl_engine::coverage;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
     CardIx, Choice, Counts, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch,
@@ -19,6 +21,8 @@ use common::{agents, fingerprint, game, games, mirror, play};
 fn random_games_keep_the_invariants() {
     let n = games(40);
     let mut stalls = 0;
+    let mut kinds: HashMap<String, u64> = HashMap::new();
+    coverage::start();
     for seed in 0..n {
         let (t, mut s) = game(seed);
         let mut decisions = 0;
@@ -29,9 +33,13 @@ fn random_games_keep_the_invariants() {
             &mut agents(seed),
             |s, d| {
                 decisions += 1;
+                *kinds.entry(format!("{:?}", d.kind)).or_default() += 1;
                 assert!(!d.is_empty(), "seed {seed}: {d:?}");
                 if let Err(v) = s.check_invariants(&t) {
                     panic!("seed {seed}, decision {decisions}: {v:?}");
+                }
+                if let Err(v) = s.check_references(&t) {
+                    panic!("seed {seed}, decision {decisions}, a reference: {v:?}");
                 }
             },
         );
@@ -46,6 +54,33 @@ fn random_games_keep_the_invariants() {
     }
     // The stall-rate target (architecture §1): below 0.5% of random games.
     assert!(stalls * 200 < n, "{stalls} of {n} games stalled");
+    let hits = coverage::take();
+    if std::env::var_os("BERYL_FUZZ_GAMES").is_some() {
+        report(n, &kinds, &hits);
+    }
+}
+
+/// What a long run reached: how often each kind of decision came up, and the abilities and
+/// casting options it never exercised, which random play needs help to find.
+fn report(games: u64, kinds: &HashMap<String, u64>, hits: &HashSet<usize>) {
+    let mut kinds: Vec<_> = kinds.iter().collect();
+    kinds.sort_by_key(|&(k, n)| (std::cmp::Reverse(*n), k.clone()));
+    println!("fuzz: {games} games; decisions by kind:");
+    for (kind, n) in kinds {
+        println!("  {kind}: {n}");
+    }
+    let never: Vec<String> = beryl_cards::parts()
+        .into_iter()
+        .filter(|(_, address)| !hits.contains(address))
+        .map(|(what, _)| what)
+        .collect();
+    println!(
+        "fuzz: {} abilities and casting options never exercised:",
+        never.len()
+    );
+    for what in never {
+        println!("  {what}");
+    }
 }
 
 /// Plays a game with random agents, recording every choice and the state hash at every

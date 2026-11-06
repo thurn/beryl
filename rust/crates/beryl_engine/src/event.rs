@@ -498,7 +498,7 @@ fn enter_replacements(s: &State, t: &GameTable, slot: Slot, mut entry: Entry) ->
         }
         match ability.replacement {
             // Not about entering: the draw machinery reads it.
-            Replacement::None | Replacement::WinInsteadOfDrawingFromEmptyLibrary => {}
+            Replacement::None | Replacement::WinInsteadOfDrawingFromEmptyLibrary => continue,
             Replacement::EntersTapped => entry.tapped = true,
             Replacement::EntersTappedUnlessFewLands(n) => {
                 // Not yet on the battlefield, so every land counted is another land.
@@ -520,6 +520,7 @@ fn enter_replacements(s: &State, t: &GameTable, slot: Slot, mut entry: Entry) ->
                 }
             }
         }
+        crate::coverage::hit(ability);
     }
     if let Some(loyalty) = face.loyalty {
         entry.counters = Some((CounterKind::Loyalty, loyalty));
@@ -638,13 +639,17 @@ pub(crate) fn draw(
 /// Whether `player` controls a permanent whose replacement effect has them win rather than
 /// draw from an empty library.
 fn wins_instead_of_drawing(s: &State, t: &GameTable, player: Seat) -> bool {
-    s.battlefield().iter().any(|&slot| {
-        s.controller(slot) == player
-            && trigger::face(s, t, slot)
+    let replacing = s
+        .battlefield()
+        .iter()
+        .filter(|&&slot| s.controller(slot) == player)
+        .find_map(|&slot| {
+            trigger::face(s, t, slot)
                 .abilities
                 .iter()
-                .any(|a| a.replacement == Replacement::WinInsteadOfDrawingFromEmptyLibrary)
-    })
+                .find(|a| a.replacement == Replacement::WinInsteadOfDrawingFromEmptyLibrary)
+        });
+    replacing.inspect(|&a| crate::coverage::hit(a)).is_some()
 }
 
 /// Deals damage ([CR 120.3](https://yawgatog.com/resources/magic-rules/#R1203)).

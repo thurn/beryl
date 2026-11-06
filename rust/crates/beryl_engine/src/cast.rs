@@ -81,7 +81,17 @@ pub(crate) fn sorcery_timing(s: &State, player: Seat) -> bool {
 #[inline]
 fn has_rule(s: &State, t: &GameTable, slot: Slot, rule: Rule) -> bool {
     let o = s.object(slot);
-    t.may_have_rule(o.card, rule) && t.facts(o.card, o.face).has_rule(rule)
+    let has = t.may_have_rule(o.card, rule) && t.facts(o.card, o.face).has_rule(rule);
+    #[cfg(feature = "coverage")]
+    if has
+        && let Some(a) = crate::trigger::face(s, t, slot)
+            .abilities
+            .iter()
+            .find(|a| a.rule == rule)
+    {
+        crate::coverage::hit(a);
+    }
+    has
 }
 
 /// The first of an opponent's permanents that limits `player` to casting spells at sorcery
@@ -1284,6 +1294,12 @@ fn finish(s: &mut State, t: &GameTable, sink: &mut Sink, c: Casting) -> Result<(
     s.turn.passes = 0;
     let entry = top(s);
     if let Some(spell) = entry.spell() {
+        let face = t.def(entry.card).face(entry.face);
+        for (i, option) in face.casting.iter().enumerate() {
+            if entry.costs.contains(i) {
+                crate::coverage::hit(option);
+            }
+        }
         event::settle(
             s,
             t,

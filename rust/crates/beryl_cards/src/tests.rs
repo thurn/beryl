@@ -290,6 +290,50 @@ fn every_card_has_scenarios_and_they_pass() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
+/// The bar for a supported card (architecture §17.3): "every one of its abilities is exercised
+/// by at least one scenario", and so is every way to cast it. Any card's scenarios may
+/// exercise another's: the basic lands' mana abilities pay for everything.
+#[test]
+fn every_ability_and_casting_option_is_exercised_by_a_scenario() {
+    use beryl_engine::coverage;
+
+    coverage::start();
+    for &(_, scenarios) in SCENARIOS {
+        for scenario in scenarios {
+            // `every_card_has_scenarios_and_they_pass` reports failures.
+            let _ = beryl_scenario::run(&CARDS, scenario);
+        }
+    }
+    let hits = coverage::take();
+    // What no scenario can exercise yet, and why. An entry a scenario exercises fails too, so
+    // the list stays current.
+    let unreachable = [(
+        "Spara's Headquarters: ability 0 (Mana)",
+        "no implemented card asks for {G}, and automatic payment spends a unit that may be \
+         several kinds as the lowest of them, {W}",
+    )];
+    let mut missed = Vec::new();
+    let mut reached = Vec::new();
+    for (what, address) in crate::parts() {
+        let known = unreachable.iter().any(|&(u, _)| u == what);
+        match (hits.contains(&address), known) {
+            (false, false) => missed.push(what),
+            (true, true) => reached.push(what),
+            _ => {}
+        }
+    }
+    assert!(
+        missed.is_empty(),
+        "no scenario exercises:\n{}",
+        missed.join("\n")
+    );
+    assert!(
+        reached.is_empty(),
+        "a scenario now exercises, so drop it from `unreachable`:\n{}",
+        reached.join("\n")
+    );
+}
+
 #[test]
 fn the_dump_is_valid_json_with_every_scenario() {
     let json: serde_json::Value =

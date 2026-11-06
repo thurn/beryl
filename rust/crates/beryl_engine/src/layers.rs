@@ -129,6 +129,7 @@ fn recompute(s: &mut State, t: &GameTable) {
                 Affected::Enchanted => o.attached_to.and_then(|a| s.battlefield_position(a)),
             };
             if let (true, Some(target)) = (applies, target) {
+                crate::coverage::hit(ability);
                 // A list longer than its capacity would need more effects than the cards
                 // can create at once.
                 let _ = list.get_or_insert_with(Fixed::new).push(Apply {
