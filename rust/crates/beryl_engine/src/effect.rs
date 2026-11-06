@@ -1112,7 +1112,11 @@ impl<'a> EffectCtx<'a> {
     /// 1/1 exception ([CR 707.9b](https://yawgatog.com/resources/magic-rules/#R7079b)): "The
     /// final set of values for that characteristic becomes part of the copiable values of the
     /// copy." A double-faced permanent's copy has both faces, the same one up
-    /// ([CR 707.8a](https://yawgatog.com/resources/magic-rules/#R7078a)).
+    /// ([CR 707.8a](https://yawgatog.com/resources/magic-rules/#R7078a)). A face-down
+    /// permanent's are the 2/2 with no text
+    /// ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)): "Any listed
+    /// characteristics are the copiable values of that object's characteristics." Its copy has
+    /// [`FaceIx::DOWN`] up for them, its card known to no one ([`event::create_tokens`]).
     pub fn copiable_values(&self, object: ObjectRef) -> (CardIx, TokenEntry) {
         let o = self.state.object(object.slot);
         let how = TokenEntry {

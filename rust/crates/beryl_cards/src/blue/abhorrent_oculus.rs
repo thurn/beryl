@@ -318,4 +318,48 @@ pub const SCENARIOS: &[Scenario] = &[
             // On to combat: the tests read what each player knows here.
             Action::pass(P1),
         ]),
+    // CR 708.2: the copy Fractured Identity makes of the face-down Snapcaster Mage is a 2/2
+    // with no text, for player 1, the one player other than its controller.
+    Scenario::new("Fractured Identity copies a face-down permanent as a 2/2")
+        .at(1, P0, TurnStep::PostcombatMain)
+        .battlefield(P0, &[Permanent::new(OCULUS)])
+        .library(P0, &[SNAPCASTER, names::ISLAND, names::ISLAND])
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(names::PLAINS),
+                Permanent::new(names::PLAINS),
+                Permanent::new(names::PLAINS),
+                Permanent::new(names::ISLAND),
+                Permanent::new(names::ISLAND),
+            ],
+        )
+        .hand(P1, &[names::FRACTURED_IDENTITY])
+        .library(P1, &[names::PLAINS])
+        .actions(&[
+            TO_THEIR_UPKEEP,
+            Action::Resolve,
+            Action::choose(P0, DecisionKind::ChooseObject, SNAPCASTER),
+            Action::AdvanceTo {
+                turn: 2,
+                step: TurnStep::PrecombatMain,
+            },
+            Action::cast(P1, names::FRACTURED_IDENTITY),
+            Action::answer(P1, DecisionKind::Target, Pick::Card { card: SNAPCASTER }),
+            Action::Resolve,
+            Action::assert(Assertion::Count {
+                player: P0,
+                zone: Zone::Exile,
+                card: Some(SNAPCASTER),
+                count: 1,
+            }),
+            Action::assert(Assertion::Count {
+                player: P1,
+                zone: Zone::Battlefield,
+                card: None,
+                count: 6,
+            }),
+            // On to combat: the tests read the copy here.
+            Action::pass(P1),
+        ]),
 ];

@@ -132,7 +132,7 @@ impl State {
             let known_by = |p: Seat| self.knows(p, slot);
             if o.face == FaceIx::DOWN {
                 check(
-                    o.zone == Zone::Battlefield && known_by(self.controller(slot)),
+                    o.zone == Zone::Battlefield && (token || known_by(self.controller(slot))),
                     "a face-down permanent its controller doesn't know",
                     at,
                 )?;

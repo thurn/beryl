@@ -450,3 +450,35 @@ fn a_face_down_card_is_hidden_until_it_leaves() {
     assert!(face_down.iter().all(|&(_, p0, p1)| p0 && !p1), "{known:?}");
     assert_eq!(known.last(), Some(&(DecisionKind::Priority, true, true)));
 }
+
+/// A token copying a face-down permanent is a 2/2 with no text that copies no card
+/// ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)): neither player learns the
+/// card behind the original from it, and it can't be turned face up (CR 701.40b).
+#[test]
+fn a_copy_of_a_face_down_permanent_hides_its_card() {
+    let scenario = blue::abhorrent_oculus::SCENARIOS
+        .iter()
+        .find(|s| s.name == "Fractured Identity copies a face-down permanent as a 2/2")
+        .expect("the scenario");
+    let mut last = None;
+    beryl_scenario::visit(&CARDS, scenario, |_, s, d| {
+        last = Some((*s, *d));
+    })
+    .unwrap();
+    let (s, d) = last.expect("a decision");
+    let copy = s
+        .battlefield()
+        .iter()
+        .copied()
+        .find(|&slot| s.object(slot).face == FaceIx::DOWN)
+        .expect("the copy");
+    assert_eq!(s.controller(copy), Seat::P1);
+    assert!(!s.knows(Seat::P0, copy) && !s.knows(Seat::P1, copy));
+    let derived = s.derived(copy);
+    assert_eq!((derived.power, derived.toughness), (2, 2));
+    assert!(
+        !(0..d.len() as u8)
+            .any(|i| matches!(d.candidates.option(Choice(i)), Some(Opt::TurnFaceUp(_)))),
+        "{d:?}"
+    );
+}

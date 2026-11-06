@@ -6,6 +6,13 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- Fractured Identity's copy of a face-down permanent kept the original's card
+  and face down, so the copy's controller knew the hidden card, could turn the
+  copy face up for that card's cost, and both players saw it as the copy left
+  (CR 708.2, 701.40b, 708.9). Prevention: treat "the card behind a permanent" as
+  its own query that tokens answer with none, rather than reading `card` and
+  `face` directly wherever a face-down rule applies.
+
 - A token copy of a transformed double-faced permanent (Fractured Identity on
   Jace, Telepath Unbound) took its front face's mana value, as the original
   does, where CR 712.8e makes a copy of a back face 0, so mana value filters

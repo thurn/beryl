@@ -16,7 +16,7 @@ use crate::fixed::{Fixed, Full};
 use crate::ids::{Seat, Slot};
 use crate::mana;
 use crate::profile::Payment;
-use crate::state::{Pending, State, Zone};
+use crate::state::{ObjectFlags, Pending, State, Zone};
 use crate::table::GameTable;
 
 /// Manifests the card in `slot` for `player`
@@ -74,8 +74,12 @@ pub(crate) fn manifest(
 /// ([CR 712.8a](https://yawgatog.com/resources/magic-rules/#R7128a)), which is the face it
 /// turns up ([CR 712.15a](https://yawgatog.com/resources/magic-rules/#R71215a)): "If it's
 /// turned face up, it will have its front face up." No creature card in the cube costs {0},
-/// so a cost of nothing is no mana cost.
+/// so a cost of nothing is no mana cost. A token copying a face-down permanent is no
+/// manifested permanent, and no card represents it.
 fn face_up_cost(s: &State, t: &GameTable, slot: Slot) -> Option<ManaCost> {
+    if s.object(slot).flags.has(ObjectFlags::TOKEN) {
+        return None;
+    }
     let front = t.def(s.card(slot)).front();
     (front.types.contains(Types::CREATURE) && !front.cost.is_zero()).then(|| front.cost.with_x(0))
 }

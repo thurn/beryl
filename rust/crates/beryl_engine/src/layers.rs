@@ -147,10 +147,11 @@ fn recompute(s: &mut State, t: &GameTable) {
     }
     // [CR 708.5](https://yawgatog.com/resources/magic-rules/#R7085): "At any time, you may
     // look at ... a face-down permanent you control". Control is settled here, so a player who
-    // gains control of one sees it from then on.
+    // gains control of one sees it from then on. A token copying one has no card to see.
     for i in 0..len {
         let slot = s.battlefield.as_slice()[i];
-        if s.object(slot).face == FaceIx::DOWN {
+        let o = s.object(slot);
+        if o.face == FaceIx::DOWN && !o.flags.has(ObjectFlags::TOKEN) {
             s.knowledge[s.derived[i].controller.index()].insert(slot);
         }
     }
