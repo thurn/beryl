@@ -5,6 +5,7 @@
 import type {
   Counter,
   GameEvent,
+  LossReason,
   PlayerView,
   Side,
   TargetRef,
@@ -53,6 +54,14 @@ const COUNTERS: Record<Counter, string> = {
   time: "time",
   story: "story",
   chorus: "chorus",
+};
+
+/** How a player lost, after "lost the game". */
+const LOSSES: Record<LossReason, (life: number) => string> = {
+  life: (life) => ` at ${life} life`,
+  library: () => " drawing from an empty library",
+  effect: () => " to a card's effect",
+  concede: () => " by conceding",
 };
 
 const counters = (n: number, kind: Counter) =>
@@ -156,9 +165,16 @@ export function logLines(view: PlayerView, names: Names): LogLine[] {
           `${who(e.player)} ${e.won ? "won" : "lost"} ${name(e.source)}'s coin flip`,
         );
         return;
-      case "lose":
-        say(e.player, `${who(e.player)} lost the game`);
+      case "lose": {
+        const outcome =
+          view.status.kind === "over" ? view.status.outcome : undefined;
+        const how =
+          outcome?.kind === "win"
+            ? LOSSES[outcome.reason](view.players[e.player].life)
+            : "";
+        say(e.player, `${who(e.player)} lost the game${how}`);
         return;
+      }
       case "win":
         say(e.player, `${who(e.player)} won the game`);
         return;

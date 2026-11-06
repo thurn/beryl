@@ -33,6 +33,19 @@
       "height": 900
     },
     {
+      "name": "game-over",
+      "route": "/?fixture=game-over#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-over-battlefield",
+      "route": "/?fixture=game-over#/game",
+      "width": 1600,
+      "height": 900,
+      "click": ".game-over .button-secondary"
+    },
+    {
       "name": "game-opponent-thinking",
       "route": "/?fixture=opponent-turn&at=12#/game",
       "width": 1600,

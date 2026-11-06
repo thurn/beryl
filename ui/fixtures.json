@@ -43,6 +43,12 @@
       "until": "first blocker decision for seat 0"
     },
     {
+      "name": "game-over",
+      "board": "game-over",
+      "stops": "exact",
+      "until": "game over"
+    },
+    {
       "name": "combat-blockers",
       "board": "combat-blockers",
       "until": "first priority decision for seat 0",

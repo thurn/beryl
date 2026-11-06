@@ -1,7 +1,7 @@
 // A game against an agent: the start screen, then the battlefield (game/Board.tsx) with the
 // mulligan, choice (game/ChoiceOverlay.tsx) and game-over screens over it. Views arrive as
 // `game-update` events and play back at a readable pace (game/playback.ts); the screen answers
-// the open decision through `choose`.
+// the open decision through `choose`. A reloaded page takes up the game in progress.
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../components/Controls";
 import { Card, CardBack } from "../components/Card";
@@ -11,14 +11,17 @@ import {
   cancel,
   choose,
   CommandError,
+  concede,
   listAgents,
   setStops,
   type AgentView,
   type CandidateIndex,
   type DecisionView,
+  type LossReason,
   type ObjectView,
   type OutcomeView,
   type PlayerView,
+  type SessionId,
   type Stall,
 } from "../ipc";
 import { Board } from "../game/Board";
@@ -27,7 +30,7 @@ import { choiceOf, type Choice } from "../game/choices";
 import { follow, isOpening, twins, type Intent } from "../game/decisions";
 import { useFace } from "../game/faces";
 import { useHoverInspect, type HoverHandlers } from "../game/Piles";
-import type { Playback } from "../game/playback";
+import { eventsHold, type Playback } from "../game/playback";
 import { Brand, Stage } from "../game/Stage";
 
 /** The agent that plays on the true state, hidden cards included. */
@@ -61,12 +64,13 @@ function rememberGame(agent: string, seed: string) {
 }
 
 /** Picks the opponent and an optional seed, and starts the game; or returns to the game in
- * progress. Enter does what the primary button does. */
+ * progress, `inProgress`, which a new game concedes once the player confirms it. Enter does
+ * what the primary button does. */
 export function StartScreen({
   inProgress,
   onStart,
 }: {
-  inProgress: boolean;
+  inProgress?: SessionId;
   onStart(agent: string, seed?: number): Promise<void>;
 }) {
   const [agents, setAgents] = useState<AgentView[]>([]);
@@ -74,6 +78,8 @@ export function StartScreen({
   const [seed, setSeed] = useState(() => lastGame().seed ?? "");
   const [error, setError] = useState<string>();
   const [pending, setPending] = useState(false);
+  // A new game was asked for with one in progress: the next click concedes it.
+  const [confirming, setConfirming] = useState(false);
   useEffect(() => {
     listAgents().then((list) => {
       setAgents(list);
@@ -96,18 +102,29 @@ export function StartScreen({
   const starting = useRef(false);
   const start = () => {
     if (!agent || !startable || starting.current) return;
+    if (inProgress !== undefined && !confirming) {
+      setConfirming(true);
+      return;
+    }
     starting.current = true;
     rememberGame(agent, seed.trim());
     setPending(true);
     setError(undefined);
-    onStart(agent, seedValue).then(
-      () => (window.location.hash = "#/game"),
-      (e: unknown) => {
-        starting.current = false;
-        setPending(false);
-        setError(String(e));
-      },
-    );
+    // The new game replaces the old one whether or not the concession lands first.
+    const conceded =
+      inProgress === undefined
+        ? Promise.resolve()
+        : concede(inProgress).catch(() => undefined);
+    void conceded
+      .then(() => onStart(agent, seedValue))
+      .then(
+        () => (window.location.hash = "#/game"),
+        (e: unknown) => {
+          starting.current = false;
+          setPending(false);
+          setError(String(e));
+        },
+      );
   };
   // Enter takes the primary button from anywhere on the screen but a button, which Enter
   // presses: back to the game in progress, else a new one.
@@ -116,7 +133,7 @@ export function StartScreen({
     if (e.key !== "Enter" || e.repeat) return;
     if (e.target instanceof Element && e.target.closest("button")) return;
     e.preventDefault();
-    if (inProgress) window.location.hash = "#/game";
+    if (inProgress !== undefined) window.location.hash = "#/game";
     else start();
   };
   useEffect(() => {
@@ -164,17 +181,23 @@ export function StartScreen({
           </label>
           {/* With a game in progress, going back to it comes first. */}
           <div className="start-buttons">
-            {inProgress && (
+            {inProgress !== undefined && (
               <Button onClick={() => (window.location.hash = "#/game")}>
                 Return to Game
               </Button>
             )}
             <Button
-              variant={inProgress ? "secondary" : "primary"}
+              variant={inProgress !== undefined ? "secondary" : "primary"}
               disabled={!startable}
               onClick={start}
             >
-              {pending ? "Starting…" : inProgress ? "New Game" : "Start"}
+              {pending
+                ? "Starting…"
+                : inProgress === undefined
+                  ? "Start"
+                  : confirming
+                    ? "Concede & Start"
+                    : "New Game"}
             </Button>
           </div>
           {error && <p className="game-error">{error}</p>}
@@ -209,10 +232,22 @@ function failure(e: unknown): string | undefined {
 export function GameScreen({
   playback,
   starting,
+  resuming,
 }: {
   playback?: Playback;
   starting: boolean;
+  /** The game in progress is still being asked for. */
+  resuming: boolean;
 }) {
+  if (resuming && !playback) {
+    return (
+      <Stage>
+        <div className="table start-screen">
+          <Brand />
+        </div>
+      </Stage>
+    );
+  }
   if (starting || !playback) {
     return (
       <Stage>
@@ -244,7 +279,8 @@ export function GameScreen({
       </Stage>
     );
   }
-  return <Playing playback={playback} />;
+  // Each game starts with a clean screen.
+  return <Playing key={playback.update.session} playback={playback} />;
 }
 
 /** A game in progress: the board, and over it the opening, a choice or the game's end. */
@@ -252,7 +288,6 @@ function Playing({ playback }: { playback: Playback }) {
   const [error, setError] = useState<string>();
   // The view an answer was sent from: until another arrives, the opponent is acting.
   const [answered, setAnswered] = useState<PlayerView>();
-  const [showOver, setShowOver] = useState(true);
   // The picks still to send for a choice already made (a drag's follow-up, an overlay's
   // whole scry), one per decision as each arrives; and the overlay that made them, shown
   // until they are sent.
@@ -348,8 +383,9 @@ function Playing({ playback }: { playback: Playback }) {
     planned.current.length === 0
       ? decision
       : undefined;
-  const over =
-    (status.kind === "over" || status.kind === "stopped") && showOver;
+  const ended = status.kind === "over" || status.kind === "stopped";
+  const result = useResult(ended, live, view);
+  const over = result.state === "shown";
   return (
     <Stage>
       <Board
@@ -363,6 +399,7 @@ function Playing({ playback }: { playback: Playback }) {
           setStops(session, on ? "exact" : "smart").catch(fail)
         }
         onLeave={() => (window.location.hash = "#/")}
+        onConcede={ended ? undefined : () => void concede(session).catch(fail)}
         dimmed={opening || over || (choice !== undefined && !peeking)}
         inert={choice !== undefined}
       />
@@ -393,11 +430,21 @@ function Playing({ playback }: { playback: Playback }) {
           Back to <RulesText text={choice.title} />
         </Button>
       )}
-      {status.kind === "over" && showOver && (
-        <GameOver outcome={status.outcome} onClose={() => setShowOver(false)} />
+      {over && (
+        <GameOver
+          outcome={status.kind === "over" ? status.outcome : undefined}
+          onClose={result.putAside}
+        />
       )}
-      {status.kind === "stopped" && showOver && (
-        <GameOver onClose={() => setShowOver(false)} />
+      {result.state === "aside" && (
+        <Button
+          variant="secondary"
+          className="overlay-return"
+          onClick={result.show}
+        >
+          Back to{" "}
+          {resultTitle(status.kind === "over" ? status.outcome : undefined)}
+        </Button>
       )}
       {error && (
         <p className="game-error game-toast" role="alert">
@@ -624,7 +671,50 @@ function OpeningCard({
   );
 }
 
-/** The end of the game: who won, or why there is no winner. */
+/** The result over the table once the game has ended and its final events have played: shown
+ * until the player puts it aside to see the battlefield, and back on asking. */
+function useResult(ended: boolean, live: boolean, view: PlayerView) {
+  // A game that ended in the past (a reloaded page, a recording) shows its result at once.
+  const [state, setState] = useState<"waiting" | "shown" | "aside">(() =>
+    ended && !live ? "shown" : "waiting",
+  );
+  useEffect(() => {
+    if (!ended) return;
+    const timer = setTimeout(
+      () => setState((s) => (s === "waiting" ? "shown" : s)),
+      live ? eventsHold(view) : 0,
+    );
+    return () => clearTimeout(timer);
+    // Only a new view ends the game.
+  }, [view]);
+  return {
+    state,
+    putAside: () => setState("aside"),
+    show: () => setState("shown"),
+  };
+}
+
+function resultTitle(outcome?: OutcomeView): string {
+  if (!outcome) return "Game stopped";
+  switch (outcome.kind) {
+    case "win":
+      return outcome.winner === "you" ? "Victory" : "Defeat";
+    case "draw":
+      return "Draw";
+    case "stalled":
+      return "Stalled";
+  }
+}
+
+/** Why the game ended, in a word beside its icon. */
+const LOSSES: Record<LossReason, string> = {
+  life: "Life",
+  library: "Library",
+  effect: "Card effect",
+  concede: "Conceded",
+};
+
+/** The end of the game: who won, and why. */
 function GameOver({
   outcome,
   onClose,
@@ -632,20 +722,23 @@ function GameOver({
   outcome?: OutcomeView;
   onClose(): void;
 }) {
-  const [title, detail] = !outcome
-    ? ["Game stopped", "This game was replaced or closed."]
-    : outcome.kind === "win"
-      ? outcome.winner === "you"
-        ? ["Victory", "You won the game."]
-        : ["Defeat", "Your opponent won the game."]
-      : outcome.kind === "draw"
-        ? ["Draw", "The game is a draw."]
-        : ["Stalled", `The engine gave up: ${STALLS[outcome.reason]}.`];
+  const title = resultTitle(outcome);
+  const reason =
+    outcome?.kind === "win"
+      ? { icon: outcome.reason, text: LOSSES[outcome.reason] }
+      : outcome?.kind === "stalled"
+        ? { icon: "stall" as const, text: STALLS[outcome.reason] }
+        : undefined;
   return (
     <div className="game-over" role="dialog" aria-label={title}>
       <div className="overlay-backdrop" />
       <h2 className="game-over-title">{title}</h2>
-      <p className="opening-instruction">{detail}</p>
+      {reason && (
+        <p className="game-over-reason" data-reason={reason.icon}>
+          <ReasonIcon reason={reason.icon} />
+          {reason.text}
+        </p>
+      )}
       <div className="opening-buttons">
         <Button onClick={() => (window.location.hash = "#/")}>New game</Button>
         <Button variant="secondary" onClick={onClose}>
@@ -653,5 +746,27 @@ function GameOver({
         </Button>
       </div>
     </div>
+  );
+}
+
+/** A small line icon for why the game ended. */
+function ReasonIcon({ reason }: { reason: LossReason | "stall" }) {
+  const paths: Record<LossReason | "stall", string> = {
+    // A heart: life.
+    life: "M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z",
+    // A stack of cards: the library.
+    library: "M7 4h10v16H7z M5 6v14h10 M3 8v14h10",
+    // A spark: a card's effect.
+    effect: "M12 3l2 7 7 2-7 2-2 7-2-7-7-2 7-2z",
+    // A flag: a concession.
+    concede: "M6 21V4 M6 4h11l-2 4 2 4H6",
+    // An hourglass: the engine gave up.
+    stall:
+      "M7 3h10 M7 21h10 M8 3c0 5 8 5 8 9s-8 4-8 9 M16 3c0 5-8 5-8 9s8 4 8 9",
+  };
+  return (
+    <svg className="game-over-icon" viewBox="0 0 24 24" aria-hidden>
+      <path d={paths[reason]} />
+    </svg>
   );
 }

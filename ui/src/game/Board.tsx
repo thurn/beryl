@@ -146,6 +146,8 @@ export interface BoardProps {
   /** Full control: stop at every priority (decision D13). */
   setFullControl(on: boolean): void;
   onLeave(): void;
+  /** Concedes the game; none once it is over. */
+  onConcede?: () => void;
   /** Blurred and darkened behind a screen over it. */
   dimmed?: boolean;
   /** A screen over it answers the decision: the table only shows. */
@@ -189,6 +191,7 @@ export function Board({
   cancel,
   setFullControl,
   onLeave,
+  onConcede,
   dimmed = false,
   inert = false,
 }: BoardProps) {
@@ -969,6 +972,18 @@ export function Board({
                 <small>Stop at every priority</small>
               </span>
             </label>
+            {onConcede && (
+              <Button
+                variant="secondary"
+                size="small"
+                onClick={() => {
+                  setSettings(false);
+                  onConcede();
+                }}
+              >
+                Concede
+              </Button>
+            )}
             <Button variant="secondary" size="small" onClick={onLeave}>
               Leave game
             </Button>

@@ -3891,6 +3891,138 @@ await check(
     { at: 0, hash: "#/", ready: ".start-agent input:checked" },
 );
 
+// The end of a game (`game-over`, under full control): Beza, the Bounding Spring attacks a
+// human at 3 life with nothing to block, and its damage ends the game once they pass. The page
+// starts at that last pass.
+const overFixture = JSON.parse(
+    await readFile(join(fixtures, "game-over.json"), "utf8"),
+);
+const overViews = await load("game-over");
+const overEvents = overFixture.messages.filter((m) => m.kind === "event");
+const lastPass = overViews.findLastIndex((v) => v.status.kind === "deciding");
+const overAt = { fixture: "game-over", at: lastPass + 1, ready: "[data-life]" };
+const lifeShown = async (page) =>
+    Number(
+        (
+            await page
+                .locator('[data-life="you"] .life-orb-total')
+                .textContent()
+        ).replace("\u2212", "-"),
+    );
+await check(
+    "the result waits for the killing blow, says why, and can be put aside",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.keyboard.press(" ");
+        const result = page.getByRole("dialog", { name: "Defeat" });
+        // When the damage shows, and when the view of the end does (its log line).
+        let [lost, ended] = [undefined, undefined];
+        let t = 0;
+        for (; t < 60 && !(await result.count()); t++) {
+            lost ??= (await lifeShown(page)) < 0 ? t : undefined;
+            const log = await page.locator(".game-log-entry").allTextContents();
+            ended ??= log.some((e) => e.includes("lost the game"))
+                ? t
+                : undefined;
+            await page.clock.runFor(100);
+        }
+        assert.ok(await result.count(), "the result shows");
+        assert.ok(lost !== undefined && lost < t, "the damage shows first");
+        // The end's events (the loss) hold it as long as an action (playback.ts' HOLD).
+        assert.ok(
+            ended !== undefined && (t - ended) * 100 >= 800,
+            `the end plays first: ${ended}, then ${t}`,
+        );
+        assert.equal(
+            await result.locator(".game-over-reason").textContent(),
+            "Life",
+        );
+        const entries = await page.locator(".game-log-entry").allTextContents();
+        assert.ok(
+            entries.some((e) => /You lost the game at -1 life/.test(e)),
+            "the log says how",
+        );
+        await result.getByRole("button", { name: "View battlefield" }).click();
+        assert.equal(await result.count(), 0, "the battlefield shows");
+        await page.getByRole("button", { name: "Back to Defeat" }).click();
+        await result.getByRole("button", { name: "New game" }).waitFor();
+    },
+    overAt,
+);
+
+await check(
+    "the settings concede the game",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.getByRole("button", { name: "Settings" }).click();
+        await page
+            .getByRole("button", { name: "Concede", exact: true })
+            .click();
+        const calls = await page.evaluate(() =>
+            window.berylFixture.calls.filter((c) => c.command === "concede"),
+        );
+        assert.deepEqual(
+            calls.map((c) => c.args.request.session),
+            [overEvents[0].payload.session],
+        );
+        assert.equal(await page.locator(".settings").count(), 0, "closed");
+    },
+    overAt,
+);
+
+await check(
+    "a new game with one in progress asks first, then concedes it",
+    async (page) => {
+        await page.evaluate(() => (window.location.hash = "#/"));
+        const button = page.locator(".start-buttons button", {
+            hasText: "New Game",
+        });
+        await button.click();
+        const commands = () =>
+            page.evaluate(() =>
+                window.berylFixture.calls
+                    .map((c) => c.command)
+                    .filter((c) => c === "concede" || c === "start_game"),
+            );
+        assert.deepEqual(await commands(), [], "nothing yet");
+        await page
+            .getByRole("button", { name: "Concede & Start", exact: true })
+            .click();
+        for (let i = 0; i < 20 && (await commands()).length < 2; i++) {
+            await page.clock.runFor(100);
+        }
+        assert.deepEqual(await commands(), ["concede", "start_game"]);
+    },
+    overAt,
+);
+
+// A reloaded page asks for the game in progress (`current_game`) and takes it up: here the
+// fixture records no views, only that answer, the human's last pass in `game-over`.
+await writeFile(
+    join(fixtures, "game-over-resumed.json"),
+    JSON.stringify({
+        messages: [
+            ...overFixture.messages.filter((m) => m.kind === "response"),
+            {
+                kind: "response",
+                command: "current_game",
+                value: overEvents[lastPass].payload,
+            },
+        ],
+    }),
+);
+await check(
+    "a reloaded page takes up the game in progress",
+    async (page) => {
+        assert.equal(await lifeShown(page), 3);
+        assert.equal(await page.locator(".start-panel").count(), 0);
+        await page.keyboard.press(" ");
+        const chosen = await settled(page, 1);
+        assert.deepEqual(chosen, [0], "the open decision is answered");
+    },
+    { fixture: "game-over-resumed", at: 0, ready: "[data-life]" },
+);
+
 await queue.drain();
 await browser.close();
 if (errors.length) {

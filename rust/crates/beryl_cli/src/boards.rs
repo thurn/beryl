@@ -107,6 +107,22 @@ pub const BOARDS: &[Scenario] = &[
         .library(P0, LANDS)
         .hand(P1, &[ISLAND, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS])
         .library(P1, LANDS),
+    // The opponent attacks with Beza, the Bounding Spring into a human at 3 life with nothing
+    // to block it, and the game ends on its damage.
+    Scenario::new("game-over")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .life(P0, 3)
+        .battlefield(P0, &[PLAINS_, ISLAND_])
+        .library(P0, LANDS)
+        .battlefield(
+            P1,
+            &[Permanent::new(BEZA_THE_BOUNDING_SPRING), PLAINS_, ISLAND_],
+        )
+        .library(P1, LANDS)
+        .actions(&[
+            // The one creature that may attack ends the declaration.
+            choose(P1, DecisionKind::Attacker, BEZA_THE_BOUNDING_SPRING),
+        ]),
     // Six permanents a side, the last face down (the human's tapped): the human's quiet turn,
     // then Trinket Mage, second in its row, blocks Beza, first in hers.
     Scenario::new("combat-blockers")

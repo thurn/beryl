@@ -6,6 +6,7 @@
 // recorded past) show at once.
 import { useEffect, useReducer } from "react";
 import {
+  currentGame,
   onGameUpdate,
   startGame,
   type GameEvent,
@@ -27,6 +28,11 @@ const LOG_LENGTH = 200;
 export function holdFor(view: PlayerView): number {
   const { kind } = view.status;
   if (kind !== "thinking" && kind !== "playing") return 0;
+  return eventsHold(view);
+}
+
+/** How long `view`'s events take to play out, in milliseconds. */
+export function eventsHold(view: PlayerView): number {
   return Math.max(0, ...view.events.map(eventHold));
 }
 
@@ -66,12 +72,15 @@ interface State {
   names: Names;
   /** A game was asked to start and its first view has not arrived. */
   starting: boolean;
+  /** The game in progress has not been asked for yet (`currentGame`). */
+  resuming: boolean;
 }
 
 type Action =
   | { kind: "arrive"; update: GameUpdate; past: boolean; now: number }
   | { kind: "advance"; now: number }
-  | { kind: "starting"; on: boolean };
+  | { kind: "starting"; on: boolean }
+  | { kind: "resume"; update?: GameUpdate; now: number };
 
 const INITIAL: State = {
   live: false,
@@ -80,6 +89,7 @@ const INITIAL: State = {
   log: [],
   names: new Map(),
   starting: false,
+  resuming: true,
 };
 
 /** `state` showing `updates` (the first ones views that held no time), shown at `now`. */
@@ -121,13 +131,24 @@ function reduce(state: State, action: Action): State {
   switch (action.kind) {
     case "starting":
       return { ...state, starting: action.on };
+    case "resume": {
+      // A view that arrived meanwhile is as new as the game's latest, or newer.
+      const { update, now } = action;
+      if (!update || state.shown) return { ...state, resuming: false };
+      return show({ ...state, resuming: false }, [update], false, now);
+    }
     case "arrive": {
       const { update, past, now } = action;
       const shown = state.shown;
       if (shown && update.session < shown.session) return state;
       if (!shown || update.session > shown.session) {
         // A new game: its first view shows at once, whatever was queued from the last.
-        return show({ ...INITIAL, starting: false }, [update], !past, now);
+        return show(
+          { ...INITIAL, starting: false, resuming: false },
+          [update],
+          !past,
+          now,
+        );
       }
       if (state.queue.length === 0 && (past || now >= state.until)) {
         return show(state, [update], !past, now);
@@ -151,21 +172,30 @@ export function usePlayback(): {
   playback?: Playback;
   /** A game is starting: its first view has not arrived. */
   starting: boolean;
+  /** The game in progress, if any, is still being asked for, as the page loads. */
+  resuming: boolean;
   /** Starts a game against `agent`, replacing any in progress. */
   start(agent: string, seed?: number): Promise<void>;
 } {
   const [state, dispatch] = useReducer(reduce, INITIAL);
   useEffect(() => {
-    // Stopping waits for the listener to start, and updates can reach it first (a fixture's
-    // history, or a live update meanwhile): once cleaned up, it drops them, or a remount
-    // (StrictMode's) would log every one twice.
-    let listening = true;
-    const unlisten = onGameUpdate((update, past) => {
-      if (listening)
-        dispatch({ kind: "arrive", update, past, now: Date.now() });
-    });
+    // Stopping a listener takes a moment, in which it may still hear views (StrictMode's
+    // second mount hears them too): only the effect still mounted acts on them.
+    let mounted = true;
+    const act = (action: Action) => mounted && dispatch(action);
+    const unlisten = onGameUpdate((update, past) =>
+      act({ kind: "arrive", update, past, now: Date.now() }),
+    );
+    // Once listening, so no view falls between: a reloaded page takes up the game where it is.
+    void unlisten
+      .then(() => currentGame())
+      .then(
+        (update) =>
+          act({ kind: "resume", update: update ?? undefined, now: Date.now() }),
+        () => act({ kind: "resume", now: Date.now() }),
+      );
     return () => {
-      listening = false;
+      mounted = false;
       void unlisten.then((stop) => stop());
     };
   }, []);
@@ -197,6 +227,7 @@ export function usePlayback(): {
       log: state.log,
     },
     starting: state.starting,
+    resuming: state.resuming,
     start,
   };
 }

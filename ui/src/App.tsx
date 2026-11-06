@@ -15,9 +15,12 @@ const route = () => window.location.hash.replace(/^#/, "") || "/";
 export function App() {
   const path = useSyncExternalStore(subscribe, route);
   // Listening from the start, so a game's first view is never missed.
-  const { playback, starting, start } = usePlayback();
+  const { playback, starting, resuming, start } = usePlayback();
   const status = playback?.update.view.status.kind;
-  const inProgress = playback && status !== "over" && status !== "stopped";
+  const inProgress =
+    playback && status !== "over" && status !== "stopped"
+      ? playback.update.session
+      : undefined;
 
   // The app hears the UI has loaded once it has answered a first command.
   useEffect(() => {
@@ -30,9 +33,13 @@ export function App() {
       {path === "/gallery" ? (
         <Gallery />
       ) : path === "/game" ? (
-        <GameScreen playback={playback} starting={starting} />
+        <GameScreen
+          playback={playback}
+          starting={starting}
+          resuming={resuming}
+        />
       ) : (
-        <StartScreen inProgress={!!inProgress} onStart={start} />
+        <StartScreen inProgress={inProgress} onStart={start} />
       )}
     </MotionConfig>
   );

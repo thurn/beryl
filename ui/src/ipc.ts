@@ -252,6 +252,8 @@ const browserFixture: Fixture = {
     },
     { kind: "response", command: "ui_ready", value: null },
     { kind: "response", command: "list_agents", value: [] },
+    { kind: "response", command: "current_game", value: null },
+    { kind: "response", command: "concede", value: null },
   ],
 };
 
@@ -329,6 +331,13 @@ export const setStops = (session: SessionId, stops: StopsSetting) =>
  * (`DecisionView.cancellable`); the view of the priority it began at arrives again. */
 export const cancel = (decision: DecisionId) =>
   call("cancel", { request: { decision } });
+
+/** The human concedes game `session`; the view of its end arrives at the next decision. */
+export const concede = (session: SessionId) =>
+  call("concede", { request: { session } });
+
+/** The latest view of the game in progress, if any: where a reloaded page takes it up. */
+export const currentGame = () => call("current_game", {});
 
 export const onGameUpdate = async (
   handler: (update: Events["game-update"], past: boolean) => void,

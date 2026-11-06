@@ -213,6 +213,7 @@ INTERACTION_FIXTURES = [
     "attack-token",
     "crew",
     "waterbend-tap",
+    "game-over",
 ]
 
 
