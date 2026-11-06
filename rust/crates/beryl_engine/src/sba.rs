@@ -192,9 +192,19 @@ pub(crate) fn unresolved_legends(
     t: &GameTable,
     kept: Bitboard,
 ) -> Option<(Seat, Bitboard)> {
+    // A group needs two legendary permanents of one controller, which most checks lack.
+    let mut legendary = [Bitboard::EMPTY; 2];
+    for &slot in &s.battlefield {
+        if is_legendary(s, slot) {
+            legendary[s.controller(slot).index()].insert(slot);
+        }
+    }
+    if legendary.iter().all(|b| b.count() < 2) {
+        return None;
+    }
     for player in apnap(s) {
         for &slot in &s.battlefield {
-            if s.controller(slot) != player || !is_legendary(s, slot) {
+            if !legendary[player.index()].contains(slot) {
                 continue;
             }
             let group = legend_group(s, t, slot);
