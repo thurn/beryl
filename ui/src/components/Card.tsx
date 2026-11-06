@@ -1,8 +1,9 @@
 // The card frame: a name bar colored by the card's colors, art, a P/T badge and, on the full
 // frame, the type line and rules box. Battlefield permanents use the compact `field` frame,
 // with their marks: a badge per kind of counter, P/T inked up or down against the printed
-// values, and summoning sickness as faded art. Tapping turns either frame whole, never
-// reshaping it.
+// values, summoning sickness as faded art, a token's silver frame and a stolen permanent's
+// violet edge; the top card of a pile of identical ones wears their count. Tapping turns
+// either frame whole, never reshaping it.
 import {
   useLayoutEffect,
   useRef,
@@ -43,6 +44,10 @@ export interface CardMarks {
   counters: { kind: CounterMark; count: number }[];
   /** Its controller can't attack or tap with it yet (CR 302.6). */
   sick: boolean;
+  /** It is a token, not a card (CR 111.1). */
+  token?: boolean;
+  /** Its controller is not its owner. */
+  stolen?: boolean;
 }
 
 export type Highlight = "source" | "target";
@@ -57,6 +62,8 @@ export interface CardProps {
   highlight?: Highlight;
   combat?: CombatRole;
   marks?: CardMarks;
+  /** On the top card of a pile of identical permanents, how many it holds. */
+  count?: number;
   className?: string;
   /** Placement on the slot: Motion style, so `rotate` and `y` compose with layout animation. */
   style?: MotionStyle;
@@ -243,6 +250,7 @@ export function Card({
   highlight,
   combat,
   marks,
+  count,
   className,
   style,
   id,
@@ -260,6 +268,7 @@ export function Card({
     pt && "card-with-pt",
     card.ability && variant === "field" && "card-with-ability",
     marks?.sick && "card-sick",
+    marks?.token && "card-token",
     highlight && `card-${highlight}`,
     combat && `card-${combat}`,
     className,
@@ -331,7 +340,11 @@ export function Card({
             ))}
           </span>
         )}
+        {marks?.stolen && <span className="card-stolen-edge" />}
         {pt && <span className="card-pt">{pt}</span>}
+        {count !== undefined && count > 1 && (
+          <span className="card-count">×{count}</span>
+        )}
       </motion.div>
     </motion.div>
   );

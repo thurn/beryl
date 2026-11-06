@@ -433,6 +433,36 @@
 .card-sick .card-art {
   filter: saturate(0.25) brightness(0.72);
 }
+/* A token is framed in pewter where a card is framed in black, as no card is. */
+.card-token {
+  background: linear-gradient(180deg, #b4b0aa, #74706b);
+}
+/* A permanent its owner doesn't control: a violet line inside its black frame, apart from the
+   glows outside it; the inspector names its owner beside the same violet. */
+.card-stolen-edge {
+  position: absolute;
+  inset: 0.12em;
+  border: 0.17em solid var(--stolen);
+  border-radius: 0.48em;
+  box-shadow: inset 0 0 0.3em rgb(180 140 255 / 55%);
+  pointer-events: none;
+}
+/* The top card of a pile of identical permanents: their count, over its art's top right. */
+.card-count {
+  position: absolute;
+  top: 1.45em;
+  right: 0.62em;
+  padding: 0 0.3em;
+  border-radius: 0.3em;
+  font: 700 1.15em/1.25 var(--font-serif);
+  color: #1d1b19;
+  background: linear-gradient(180deg, #fbf0d8, #dcc49a);
+  border: 0.06em solid #b8924e;
+  box-shadow:
+    0 0 0 0.05em rgb(30 24 18 / 70%),
+    0 0.12em 0.3em rgb(0 0 0 / 65%);
+  pointer-events: none;
+}
 
 /* States: tapped turns the card (Card.tsx), source glows gold, target glows cyan, an attacker
    wears an angular chevron above and a blocker a rounded arc below. */

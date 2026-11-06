@@ -370,6 +370,7 @@ function Look({
       }
       variant={field ? "field" : "full"}
       marks={field ? marksOf(object) : undefined}
+      count={place.count}
       width={place.width}
       tapped={field && object.tapped}
       highlight={state.highlight}

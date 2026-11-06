@@ -68,6 +68,8 @@ const isBadged = (c: CounterView): c is { kind: CounterMark; count: number } =>
 export const marksOf = (o: ObjectView): CardMarks => ({
   counters: o.counters.filter(isBadged),
   sick: o.summoningSick,
+  token: o.token,
+  stolen: o.owner !== o.controller,
 });
 
 /** A card the data does not name (it should not happen): its name on a blank frame. */

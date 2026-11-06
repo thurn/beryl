@@ -159,6 +159,13 @@ enum Condition {
     CastableFromExile,
     /// The human knows a card in the opponent's hand.
     KnownOpponentsHand,
+    /// Two tokens one player controls are alike in all the table shows, so it piles them.
+    TokenTwins,
+    /// A token differs from another of its name its controller controls by its types or an
+    /// attachment, so the table must not pile them.
+    ChangedToken,
+    /// A permanent is controlled by the player who doesn't own it.
+    Stolen,
 }
 
 /// What the table draws on a permanent beyond its frame.
@@ -213,9 +220,9 @@ impl Condition {
     /// targeted on the stack", "ability targeting beside its source", "opponent's spell on
     /// the stack", "castable <card name>", "resolving <card name>", "casting <card name>",
     /// "playable pair in hand", "exiled beneath a permanent", "attached across the table",
-    /// "castable from exile", "known card in the opponent's hand", or "<mark> beside a twin"
-    /// with the mark "+1/+1 counters", "damage", "summoning sickness" or "story or time
-    /// counters".
+    /// "castable from exile", "known card in the opponent's hand", "token twins", "changed
+    /// token", "stolen permanent", or "<mark> beside a twin" with the mark "+1/+1 counters",
+    /// "damage", "summoning sickness" or "story or time counters".
     fn parse(text: &str) -> Result<Condition, String> {
         let condition = match text {
             "attacking" => Condition::Attacking,
@@ -234,6 +241,9 @@ impl Condition {
             "story or time counters beside a twin" => Condition::Marked(Mark::StoryOrTime),
             "castable from exile" => Condition::CastableFromExile,
             "known card in the opponent's hand" => Condition::KnownOpponentsHand,
+            "token twins" => Condition::TokenTwins,
+            "changed token" => Condition::ChangedToken,
+            "stolen permanent" => Condition::Stolen,
             _ => {
                 if let Some(step) = text.strip_prefix("step ") {
                     Condition::Step(
@@ -320,28 +330,7 @@ impl Condition {
                 }
                 _ => false,
             },
-            Condition::PlayablePair => match &view.status {
-                Status::Deciding { decision } => decision.candidates.iter().any(|c| {
-                    let (Candidate::Cast { slot, .. } | Candidate::PlayLand { slot }) = c.option
-                    else {
-                        return false;
-                    };
-                    let held = |s: u8| {
-                        view.objects
-                            .iter()
-                            .any(|o| o.slot == s && o.zone == ZoneName::Hand)
-                    };
-                    held(slot)
-                        && view.objects.iter().any(|o| {
-                            o.slot != slot
-                                && o.zone == ZoneName::Hand
-                                && o.owner == Side::You
-                                && o.name.is_some()
-                                && o.name.as_deref() == name(slot)
-                        })
-                }),
-                _ => false,
-            },
+            Condition::PlayablePair => playable_pair(view),
             Condition::ExiledBeneath => view.objects.iter().any(|o| {
                 o.zone == ZoneName::Exile
                     && o.exiled_by.is_some_and(|host| {
@@ -354,8 +343,38 @@ impl Condition {
             Condition::Marked(mark) => marked_beside_twin(view, *mark),
             Condition::CastableFromExile => castable_from_exile(view),
             Condition::KnownOpponentsHand => knows_opponents_hand(view),
+            Condition::TokenTwins => token_pairs(view).any(|(a, b)| plain_twins(view, a, b)),
+            Condition::ChangedToken => changed_token(view),
+            Condition::Stolen => stolen(view),
         }
     }
+}
+
+/// Whether the human may play or cast a card from their hand of which they hold another just
+/// like it.
+fn playable_pair(view: &PlayerView) -> bool {
+    let Status::Deciding { decision } = &view.status else {
+        return false;
+    };
+    let in_hand = |slot: u8| {
+        view.objects
+            .iter()
+            .find(|o| o.slot == slot && o.zone == ZoneName::Hand)
+    };
+    decision.candidates.iter().any(|c| {
+        let (Candidate::Cast { slot, .. } | Candidate::PlayLand { slot }) = c.option else {
+            return false;
+        };
+        in_hand(slot).is_some_and(|card| {
+            view.objects.iter().any(|o| {
+                o.slot != slot
+                    && o.zone == ZoneName::Hand
+                    && o.owner == Side::You
+                    && o.name.is_some()
+                    && o.name == card.name
+            })
+        })
+    })
 }
 
 /// Whether a permanent one player controls is attached to a permanent the other controls.
@@ -390,6 +409,63 @@ fn marked_beside_twin(view: &PlayerView, mark: Mark) -> bool {
                     && Mark::only(None, t)
             })
     })
+}
+
+/// Every pair of distinct tokens of one name that one player controls on the battlefield.
+fn token_pairs(view: &PlayerView) -> impl Iterator<Item = (&ObjectView, &ObjectView)> {
+    let tokens = || {
+        view.objects
+            .iter()
+            .filter(|o| o.zone == ZoneName::Battlefield && o.token && o.name.is_some())
+    };
+    tokens().flat_map(move |a| {
+        tokens()
+            .filter(move |b| a.slot < b.slot && a.name == b.name && a.controller == b.controller)
+            .map(move |b| (a, b))
+    })
+}
+
+/// Whether anything on the battlefield is attached to `o`.
+fn bears_attachment(view: &PlayerView, o: &ObjectView) -> bool {
+    view.objects
+        .iter()
+        .any(|a| a.zone == ZoneName::Battlefield && a.attached_to == Some(o.slot))
+}
+
+/// Whether two tokens are alike in all the table shows and bear nothing: no counter, damage,
+/// combat or attachment.
+fn plain_twins(view: &PlayerView, a: &ObjectView, b: &ObjectView) -> bool {
+    let plain = |o: &ObjectView| {
+        o.counters.is_empty()
+            && o.damage == 0
+            && o.combat.is_none()
+            && o.attached_to.is_none()
+            && !bears_attachment(view, o)
+    };
+    plain(a)
+        && plain(b)
+        && a.tapped == b.tapped
+        && a.summoning_sick == b.summoning_sick
+        && a.types == b.types
+        && a.pt == b.pt
+}
+
+/// Whether a token differs from another of its name its controller controls by its types or
+/// an attachment.
+fn changed_token(view: &PlayerView) -> bool {
+    token_pairs(view).any(|(a, b)| {
+        a.types != b.types
+            || [a, b]
+                .iter()
+                .any(|o| o.attached_to.is_some() || bears_attachment(view, o))
+    })
+}
+
+/// Whether a permanent is controlled by the player who doesn't own it.
+fn stolen(view: &PlayerView) -> bool {
+    view.objects
+        .iter()
+        .any(|o| o.zone == ZoneName::Battlefield && o.controller != o.owner)
 }
 
 /// Whether the human may cast a card from exile.
@@ -624,6 +700,12 @@ mod tests {
             Condition::parse("ability targeting beside its source"),
             Ok(Condition::NeighbourTarget)
         );
+        assert_eq!(Condition::parse("token twins"), Ok(Condition::TokenTwins));
+        assert_eq!(
+            Condition::parse("changed token"),
+            Ok(Condition::ChangedToken)
+        );
+        assert_eq!(Condition::parse("stolen permanent"), Ok(Condition::Stolen));
         assert!(Condition::parse("step lunch").is_err());
         assert!(Condition::parse("raining").is_err());
     }

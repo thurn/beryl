@@ -94,6 +94,8 @@ export interface Placement {
   skew: number;
   opacity: number;
   z: number;
+  /** On the top card of a pile of identical permanents, how many it holds. */
+  count?: number;
 }
 
 /** A whole board: every object's placement, by slot. */
@@ -408,8 +410,8 @@ function settle(
   return xs;
 }
 
-/** Lands of one name (or tokens of one name), stacked as Player.tsx's LandStack: copies beneath
- * peek out to the left and below. Callers key tapped and untapped copies apart. */
+/** Lands of one name (or identical permanents), stacked as Player.tsx's LandStack: copies
+ * beneath peek out to the left and below. Callers key tapped and untapped copies apart. */
 function piles(objects: ObjectView[], key: (o: ObjectView) => string) {
   const groups = new Map<string, ObjectView[]>();
   for (const o of objects) {
@@ -495,26 +497,38 @@ function battlefieldPlacements(
     });
   });
 
-  // Identical untouched tokens share a pile, as lands do; everything else stands alone. A sick
-  // token and a ready one, or a pumped one and a plain one, look different (Card.tsx's marks),
-  // so they never share one.
+  // Identical permanents with nothing on them share a pile, as lands do, the top card wearing
+  // their count, as Arena stacks them; everything else stands alone. They must be alike in all
+  // the table shows (Card.tsx's marks) and the inspector tells: a sick token and a ready one, a
+  // stolen one and its owner's, one an effect has made a Vehicle and a creature, never share
+  // one, nor do two face-down permanents, which may be different cards.
   const plain = (o: ObjectView) =>
-    o.token &&
+    o.name !== null &&
+    o.facing === "up" &&
     o.counters.length === 0 &&
     o.damage === 0 &&
     !o.combat &&
+    o.attachedTo === null &&
     !beneath.has(o.slot) &&
     !attached.has(o.slot);
   const groups = piles(others, (o) =>
     plain(o)
-      ? `${o.name}|${o.tapped}|${o.summoningSick}|${o.pt?.power}/${o.pt?.toughness}`
+      ? JSON.stringify([
+          o.name,
+          o.token,
+          o.owner,
+          o.tapped,
+          o.summoningSick,
+          o.types,
+          o.pt,
+        ])
       : `#${o.slot}`,
   ).sort((a, b) => Number(!attacking(a[0]!)) - Number(!attacking(b[0]!)));
   const scale = depthScale(rows.permanents);
   const width = CREATURE_WIDTH * scale;
   const height = CREATURE_WIDTH / ASPECT.field;
   const lies = (o: ObjectView) => lying(CREATURE_WIDTH, o.tapped);
-  // Each copy beneath a token pile's top card peeks out by a step of its frame's size.
+  // Each copy beneath a pile's top card peeks out by a step of its frame's size.
   const step = (o: ObjectView) => {
     const unit = lies(o).frame * scale;
     return { x: unit * LAND_STEP.x, y: unit * LAND_STEP.y };
@@ -592,6 +606,7 @@ function battlefieldPlacements(
         span,
         opacity: 1,
         z,
+        count: depth === 0 && group.length > 1 ? group.length : undefined,
         ...onTable(x, y, span),
       });
       // Untapped, each a step further up and to the left, or for what is attached to it to

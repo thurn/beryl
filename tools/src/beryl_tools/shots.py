@@ -195,6 +195,7 @@ INTERACTION_FIXTURES = [
     "arrow-player",
     "marks",
     "marks-damage",
+    "tokens",
 ]
 
 

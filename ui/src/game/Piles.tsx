@@ -327,8 +327,9 @@ const MARK_NAMES: Record<MarkIcon, string> = {
   sick: "Summoning sick",
 };
 
-/** A permanent's marks, which the scan does not show: its power and toughness against the
- * printed ones when they differ, each kind of counter, marked damage and summoning sickness. */
+/** A permanent's marks, which the scan does not show: its owner when another player controls
+ * it, its power and toughness against the printed ones when they differ, each kind of counter,
+ * marked damage and summoning sickness. */
 function InspectMarks({
   object,
   printed,
@@ -348,9 +349,15 @@ function InspectMarks({
     ...(summoningSick ? [{ icon: "sick" as const }] : []),
   ];
   const changed = pt && printed && tones.some(Boolean);
-  if (!changed && marks.length === 0) return null;
+  const stolen = object.owner !== object.controller;
+  if (!changed && !stolen && marks.length === 0) return null;
   return (
     <ul className="inspect-marks">
+      {stolen && (
+        <li className="inspect-owner">
+          Owner: {object.owner === "you" ? "You" : "Opponent"}
+        </li>
+      )}
       {changed && (
         <li className="inspect-pt">
           <s>

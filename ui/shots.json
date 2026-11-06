@@ -169,6 +169,12 @@
       "height": 900
     },
     {
+      "name": "game-tokens",
+      "route": "/?fixture=tokens#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
       "name": "game-marks-damage",
       "route": "/?fixture=marks-damage#/game",
       "width": 1600,

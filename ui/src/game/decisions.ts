@@ -89,7 +89,8 @@ export function follow(
 }
 
 /** Whether two objects are interchangeable, as the engine offers one candidate for both
- * (architecture §7.2): the same card, or token, in the same zone and state. */
+ * (architecture §7.2): the same card, or token, in the same zone and state, with the same
+ * owner and types. */
 export function twins(a: ObjectView, b: ObjectView): boolean {
   return (
     a.slot !== b.slot &&
@@ -97,14 +98,15 @@ export function twins(a: ObjectView, b: ObjectView): boolean {
     a.name === b.name &&
     a.facing === b.facing &&
     a.zone === b.zone &&
+    a.owner === b.owner &&
     a.controller === b.controller &&
     a.token === b.token &&
     a.tapped === b.tapped &&
     a.summoningSick === b.summoningSick &&
     a.damage === b.damage &&
     a.attachedTo === b.attachedTo &&
-    JSON.stringify([a.pt, a.counters, a.combat]) ===
-      JSON.stringify([b.pt, b.counters, b.combat])
+    JSON.stringify([a.types, a.pt, a.counters, a.combat]) ===
+      JSON.stringify([b.types, b.pt, b.counters, b.combat])
   );
 }
 

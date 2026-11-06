@@ -2096,6 +2096,108 @@ await check(
     exileRun,
 );
 
+// Tokens, piles of identical permanents and stolen permanents: the `tokens` fixture holds two
+// identical Map tokens of yours, whose ability the engine offers through one of them only
+// (architecture §7.2), a token changed by an Aura, and a permanent its owner doesn't control.
+const tokenViews = await load("tokens");
+const tokenView = tokenViews.at(-1);
+const tokenField = tokenView.objects.filter((o) => o.zone === "battlefield");
+const mapAct = tokenView.status.decision.candidates.findIndex(
+    (c) =>
+        c.option.kind === "activate" &&
+        tokenField.find((o) => o.slot === c.option.slot)?.token,
+);
+assert.ok(mapAct >= 0, "tokens: a token's ability is offered");
+const offeredToken = tokenField.find(
+    (o) => o.slot === tokenView.status.decision.candidates[mapAct].option.slot,
+);
+const tokenPile = [
+    offeredToken,
+    ...tokenField.filter((o) => twins(offeredToken, o)),
+];
+assert.ok(tokenPile.length > 1, "tokens: the offered token has a twin");
+const stolen = tokenField.filter((o) => o.owner !== o.controller);
+assert.ok(stolen.length > 0, "tokens: a permanent is stolen");
+assert.ok(
+    tokenField.some(
+        (o) =>
+            o.token &&
+            o.name !== offeredToken.name &&
+            tokenField.some((a) => a.attachedTo === o.slot),
+    ),
+    "tokens: a token wears an Aura",
+);
+const tokenRun = {
+    fixture: "tokens",
+    at: tokenViews.length,
+    ready: slotOf(offeredToken.slot),
+};
+
+await check(
+    "tokens wear their frame and stolen permanents their edge",
+    async (page) => {
+        await page.clock.runFor(2000);
+        for (const o of tokenField) {
+            if (o.types.includes("land")) continue;
+            const marks = await page
+                .locator(`${slotOf(o.slot)} .card`)
+                .evaluate((e) => [
+                    e.classList.contains("card-token"),
+                    !!e.querySelector(".card-stolen-edge"),
+                ]);
+            assert.deepEqual(
+                marks,
+                [o.token, o.owner !== o.controller],
+                `${o.name} in slot ${o.slot}: [token, stolen]`,
+            );
+        }
+        // The inspector names the owner.
+        const thief = stolen[0];
+        await page.hover(slotOf(thief.slot));
+        await page
+            .getByLabel(`${thief.name}, inspected`)
+            .getByText(`Owner: ${thief.owner === "you" ? "You" : "Opponent"}`)
+            .waitFor();
+    },
+    tokenRun,
+);
+
+await check(
+    "clicking a pile's top card acts on the one the engine offers",
+    async (page) => {
+        await page.clock.runFor(2000);
+        // One card of the pile wears its count, and it is the one on top.
+        const counted = [];
+        for (const o of tokenPile) {
+            const badge = await page.$(`${slotOf(o.slot)} .card-count`);
+            if (badge) {
+                assert.equal(
+                    await badge.textContent(),
+                    `×${tokenPile.length}`,
+                    "the count",
+                );
+                counted.push(o.slot);
+            }
+        }
+        assert.equal(counted.length, 1, "one card of the pile is counted");
+        const top = counted[0];
+        assert.notEqual(top, offeredToken.slot, "the offered token is beneath");
+        const box = await page.locator(slotOf(top)).boundingBox();
+        const at = center(box);
+        const hit = await page.evaluate(
+            ({ x, y }) =>
+                document.elementFromPoint(x, y)?.closest("[data-slot]")?.dataset
+                    .slot,
+            at,
+        );
+        assert.equal(Number(hit), top, "the counted card is on top");
+        await page.mouse.click(at.x, at.y);
+        await page.getByRole("menuitem").first().click();
+        assert.deepEqual(await settled(page, 1), [mapAct], "the ability");
+    },
+    tokenRun,
+);
+
 // Every object an open decision offers something for has an element a player can see and point
 // at: the card on the table or in a choice's tray, a twin the engine offers it through, or the
 // button of the pile it lies in. Every exiled card can be seen the same way, if not pointed at

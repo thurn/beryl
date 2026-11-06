@@ -1651,6 +1651,14 @@
 .inspect-pt {
   font-size: 18px;
 }
+/* Its owner, beside the violet that edges a stolen permanent on the table. */
+.inspect-owner::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 2px solid var(--stolen);
+}
 .inspect-pt s {
   color: var(--text-dim);
 }
