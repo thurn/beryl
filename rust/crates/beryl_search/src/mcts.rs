@@ -302,9 +302,8 @@ impl<L: Layout> Mcts<L> {
     }
 }
 
-/// The same search in [`Large`], at the same place among its decisions, so it plays on as it
-/// would have: only the kept trees, of `Small` states, are dropped, as a search that keeps
-/// none plays the same (§19.1).
+/// The same search in [`Large`], at the same place among its own decisions. The trees it kept
+/// hold `Small` states, so they are dropped: its next search plants fresh ones.
 impl Widen for Mcts<Small> {
     type Large = Mcts<Large>;
 
@@ -317,7 +316,7 @@ impl Widen for Mcts<Small> {
             seed: self.seed,
             decision: self.decision,
             kept: None,
-            last: self.last.clone(),
+            last: None,
         }
     }
 }

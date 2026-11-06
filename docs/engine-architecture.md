@@ -205,6 +205,17 @@ const _: () = assert!(size_of::<State>() <= 20 * 1024);
   change what bounds tree memory, the search's node-storage policy (§19.1). So
   the layout stays generous.
 
+The engine is generic over the storage layout, `State<L: Layout>`, resolved at
+compile time. The struct above is `Small`, the layout search and rollouts run
+on. `Large` stores the same fields with `Vec` queues whose push never fails and
+tables with an entry per slot; it is `Clone`, not `Copy`. A player game starts
+in `Small`. When an engine call stalls it for a capacity, the session widens the
+state as it stood before the call (`State::widen`, which keeps every slot, queue
+order and knowledge bit) and makes the call again in `Large`, where the game
+stays. Card bodies are generic functions, instantiated once per layout
+(`bodies!`). Slots, bitboards and the queues nested in other values (targets,
+emblems, a decision's options) are still `Small`'s in `Large`.
+
 ### 4.2 Objects and slots
 
 Every card, token and spell copy occupies one of 255 slots, addressed by a
@@ -766,7 +777,8 @@ Defaults, overridable per profile: 500 decisions and 2,000 trigger resolutions
 per turn, 200 turns per game, 32 state-based iterations per check, and the
 capacities of §4.2. Running out is `Stalled`. Search scores it as 0.5 unless an
 evaluation says otherwise; every test treats a stall as a failure; benchmarks
-report stall rates.
+report stall rates. A player game that runs out of a `Small` queue goes on in
+`Large` instead (§4.1).
 
 The cube has long loops: Underworld Breach recasts Lion's Eye Diamond and Brain
 Freeze from the graveyard until a library is empty, one cast at a time. Under
