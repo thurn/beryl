@@ -229,8 +229,19 @@ fn crashed(spec: &Spec, logged: &[Line], at: usize) -> GameRecord {
         decisions: logged.len() as u32,
         searched: searches().count() as u32,
         rollouts: searches().map(|s| u64::from(s.rollouts)).sum(),
+        budget: budget(spec, logged),
         crashed_at: Some(at),
     }
+}
+
+/// What the budgets of the searched decisions of `lines` allowed.
+fn budget(spec: &Spec, lines: &[Line]) -> u64 {
+    lines
+        .iter()
+        .filter(|l| l.search.is_some())
+        .filter_map(|l| spec.entrants[usize::from(l.seat)].budget)
+        .map(|b| u64::from(b.iterations))
+        .sum()
 }
 
 /// Writes a finished game's transcript, searched decisions and wall time, and returns the
@@ -297,6 +308,7 @@ fn commit(dir: &Path, spec: &Spec, played: &Played) -> Result<GameRecord, String
         decisions: played.lines.len() as u32,
         searched,
         rollouts,
+        budget: budget(spec, &played.lines),
         crashed_at: None,
     })
 }

@@ -513,6 +513,7 @@ mod tests {
             decisions: 200,
             searched: 90,
             rollouts: 0,
+            budget: 0,
             crashed_at: None,
         }
     }

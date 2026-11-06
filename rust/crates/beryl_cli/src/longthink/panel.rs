@@ -535,6 +535,7 @@ mod tests {
                 decisions: 300,
                 searched: 130,
                 rollouts: 1,
+                budget: 0,
                 crashed_at: None,
             });
         }

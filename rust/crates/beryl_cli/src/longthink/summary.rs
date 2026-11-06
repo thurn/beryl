@@ -30,6 +30,7 @@ struct Row {
     losses: u32,
     crashed: u32,
     rollouts: u64,
+    budget: u64,
     searched: u64,
     seconds: f64,
 }
@@ -46,9 +47,34 @@ impl Row {
     fn elo(&self) -> Option<f64> {
         (self.scored() > 0).then(|| elo(self.score(), self.scored()))
     }
+
+    /// The row's line of the summary, under `label`.
+    fn line(&self, label: &str) -> String {
+        let n = self.scored();
+        let [lo, hi] = wilson(self.score(), n);
+        let per_game = |total: f64| total / f64::from(self.games.max(1));
+        format!(
+            "{:<30} {:>5} {:>13}  {:>5.1}% [{:>4.1}, {:>5.1}] {:>6} {:>8.0} {:>8} {:>6} {:>7.1}",
+            label,
+            self.games,
+            format!("{}-{}-{}", self.wins, self.draws, self.losses),
+            100.0 * self.score() / f64::from(n.max(1)),
+            100.0 * lo,
+            100.0 * hi,
+            self.elo().map_or("-".to_owned(), |e| format!("{e:+.0}")),
+            per_game(self.searched as f64),
+            rollouts(self.rollouts as f64 / self.searched.max(1) as f64),
+            (self.budget > 0)
+                .then_some(1.0 - self.rollouts as f64 / self.budget as f64)
+                .map_or("-".to_owned(), |s| format!("{:.0}%", 100.0 * s)),
+            per_game(self.seconds) / 60.0,
+        )
+    }
 }
 
-/// The summary of run `name`'s games, with each game's wall seconds.
+/// The summary of run `name`'s games, with each game's wall seconds: per matchup its score,
+/// searched decisions a game, fresh rollouts a searched decision, the share of their budgets
+/// the exact stop and subtree reuse saved, and minutes a game.
 pub fn text(
     name: &str,
     c: &Config,
@@ -66,6 +92,7 @@ pub fn text(
             Verdict::Crashed => row.crashed += 1,
         }
         row.rollouts += g.rollouts;
+        row.budget += g.budget;
         row.searched += u64::from(g.searched);
         row.seconds += seconds.get(&g.game).copied().unwrap_or(0.0);
     }
@@ -77,27 +104,11 @@ pub fn text(
     );
     let _ = writeln!(
         out,
-        "{:<30} {:>5} {:>13}  {:<20} {:>6} {:>9} {:>8} {:>7}",
-        "matchup", "games", "w-d-l", "score (95%)", "elo", "rollouts", "searched", "min"
+        "{:<30} {:>5} {:>13}  {:<20} {:>6} {:>8} {:>8} {:>6} {:>7}",
+        "matchup", "games", "w-d-l", "score (95%)", "elo", "searched", "rollouts", "saved", "min"
     );
     for (&(rung, against), row) in &rows {
-        let n = row.scored();
-        let [lo, hi] = wilson(row.score(), n);
-        let per_game = |total: f64| total / f64::from(row.games.max(1));
-        let _ = writeln!(
-            out,
-            "{:<30} {:>5} {:>13}  {:>5.1}% [{:>4.1}, {:>5.1}] {:>6} {:>9} {:>8.0} {:>7.1}",
-            matchup_label(c, rung, against),
-            row.games,
-            format!("{}-{}-{}", row.wins, row.draws, row.losses),
-            100.0 * row.score() / f64::from(n.max(1)),
-            100.0 * lo,
-            100.0 * hi,
-            row.elo().map_or("-".to_owned(), |e| format!("{e:+.0}")),
-            rollouts(per_game(row.rollouts as f64)),
-            per_game(row.searched as f64),
-            per_game(row.seconds) / 60.0,
-        );
+        let _ = writeln!(out, "{}", row.line(&matchup_label(c, rung, against)));
     }
     let against = |rung, a| rows.get(&(rung, a)).and_then(Row::elo);
     let mut climb = Vec::new();
@@ -161,8 +172,10 @@ pub fn text(
 fn rollouts(n: f64) -> String {
     if n >= 1e6 {
         format!("{:.1}M", n / 1e6)
-    } else if n >= 1e3 {
+    } else if n >= 1e4 {
         format!("{:.0}k", n / 1e3)
+    } else if n >= 1e3 {
+        format!("{:.1}k", n / 1e3)
     } else {
         format!("{n:.0}")
     }
@@ -186,6 +199,45 @@ mod tests {
         assert!(close(elo(0.0, 60), -830.218_8));
         assert!(close(per_tripling(elo(45.0, 60), 3_000, 10_000), 174.147_2));
         assert!(close(per_tripling(100.0, 1_000, 3_000), 100.0));
+    }
+
+    /// Two 3k games of 100 searched decisions each, 300k of budget a game, that spent 180k
+    /// and 120k fresh rollouts: 1.5k a decision, and half the budget saved.
+    #[test]
+    fn rows_show_rollouts_a_decision_and_the_saving() {
+        let c = Config::default();
+        let game = |seat: u8, outcome, rollouts| GameRecord {
+            game: format!("g{seat}"),
+            rung: 0,
+            iterations: 3_000,
+            against: Against::Opponent,
+            pair: 0,
+            seed: 0,
+            seat,
+            outcome,
+            turns: 20,
+            decisions: 300,
+            searched: 100,
+            rollouts,
+            budget: 300_000,
+            crashed_at: None,
+        };
+        let games = [
+            game(0, Verdict::Win, 180_000),
+            game(1, Verdict::Loss, 120_000),
+        ];
+        let text = text("run-001", &c, &games, &HashMap::new());
+        let row = text
+            .lines()
+            .find(|l| l.starts_with("3k v expert-frozen"))
+            .expect(&text);
+        let cells: Vec<&str> = row.split_whitespace().collect();
+        assert_eq!(cells[3..6], ["2", "1-0-1", "50.0%"], "{text}");
+        assert_eq!(
+            cells[cells.len() - 4..],
+            ["100", "1.5k", "50%", "0.0"],
+            "{text}"
+        );
     }
 
     /// Hand-computed with z = 1.96: 45 of 60 is [0.6277, 0.8422], and a draw counts half.

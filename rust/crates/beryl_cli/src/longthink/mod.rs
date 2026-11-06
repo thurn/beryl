@@ -78,6 +78,10 @@ pub struct GameRecord {
     /// Decisions searched, by either seat, and the rollouts they spent.
     pub searched: u32,
     pub rollouts: u64,
+    /// What the searched decisions' budgets allowed, the rollouts they would have spent
+    /// with no exact stop and no subtree reuse.
+    #[serde(default)]
+    pub budget: u64,
     /// The decision a crashed game crashed at.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub crashed_at: Option<usize>,
