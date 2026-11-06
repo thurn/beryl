@@ -21,7 +21,7 @@ use crate::event::{self, Event, Reason, Sink};
 use crate::filter::{Filter, Whose};
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot};
-use crate::mana;
+use crate::mana::{self, Funds};
 use crate::profile::Payment;
 use crate::state::{
     CastPermission, CastStep, Casting, CounterKind, ObjectFlags, ObjectRef, Pending, StackEntry,
@@ -391,37 +391,56 @@ pub(crate) fn still_legal(
 /// [CR 601.3](https://yawgatog.com/resources/magic-rules/#R6013): "A player can begin to cast
 /// a spell only if a rule or effect allows that player to cast it and no rule or effect
 /// prohibits that player from casting it."
+/// What every check of one player's options reads, found once for all of them: the mana they
+/// could pay with, and whether an opponent limits them to sorcery speed.
+struct Situation {
+    player: Seat,
+    funds: Funds,
+    sorcery_speed_only: bool,
+}
+
+impl Situation {
+    fn of(s: &State, t: &GameTable, player: Seat) -> Result<Situation, Full> {
+        Ok(Situation {
+            player,
+            funds: Funds::of(s, t, player)?,
+            sorcery_speed_only: limited_to_sorcery_speed(s, t, player),
+        })
+    }
+}
+
 fn castable(
     s: &State,
     t: &GameTable,
-    player: Seat,
+    now: &Situation,
     slot: Slot,
     face_index: FaceIx,
     costs: Castings,
     from: From,
-) -> Result<bool, Full> {
+) -> bool {
+    let player = now.player;
     let face = t.def(s.object(slot).card).face(face_index);
     // CR 305.9: "If an object is both a land and another card type, it can be played only as
     // a land. It can't be cast as a spell." CR 712.11c: "Only the face that will be face up
     // on the stack is evaluated to determine if it can be cast."
     if face.types.intersects(Types::LAND) {
-        return Ok(false);
+        return false;
     }
     let (extra, free) = match from {
         From::Priority => {
             let extra = permission(s, player, slot).map_or(0, |p| p.extra);
-            if (!instant_speed(s, face, player) || limited_to_sorcery_speed(s, t, player))
+            if (!instant_speed(s, face, player) || now.sorcery_speed_only)
                 && !sorcery_timing(s, player)
             {
-                return Ok(false);
+                return false;
             }
             (extra, false)
         }
         From::Resolution { free } => {
             // During a resolution the stack is never empty, so a sorcery-speed limit forbids
             // it.
-            if limited_to_sorcery_speed(s, t, player) {
-                return Ok(false);
+            if now.sorcery_speed_only {
+                return false;
             }
             (0, free)
         }
@@ -435,22 +454,17 @@ fn castable(
         0,
         None,
     ) {
-        return Ok(false);
+        return false;
     }
     // CR 601.2h: the player pays the total cost, so the cards to exile must be there.
     // [CR 118.3](https://yawgatog.com/resources/magic-rules/#R1183): "A player can't pay a
     // cost without having the necessary resources to pay it fully."
     if ExileCost::of(face, costs).is_some_and(|cost| !cost.payable(s, t, player, slot)) {
-        return Ok(false);
+        return false;
     }
     let x = x_range_start(face, costs, free).unwrap_or(0);
-    mana::payable(
-        s,
-        t,
-        player,
-        spell_cost(face, costs, x, extra, free),
-        Bitboard::EMPTY,
-    )
+    now.funds
+        .pays(spell_cost(face, costs, x, extra, free), Bitboard::EMPTY)
 }
 
 /// The cards `player` can cast at priority: their hand and the cards a permission names.
@@ -474,6 +488,7 @@ fn cast_options(
     out: &mut Fixed<Opt, 64>,
 ) -> Result<(), Full> {
     let free = matches!(from, From::Resolution { free: true });
+    let now = Situation::of(s, t, player)?;
     for slot in collapse(s, cards).iter() {
         let def = t.def(s.object(slot).card);
         let flashback =
@@ -484,7 +499,7 @@ fn cast_options(
                 continue;
             }
             for costs in option_sets(face, free || flashback) {
-                if castable(s, t, player, slot, f, costs, from)? {
+                if castable(s, t, &now, slot, f, costs, from) {
                     out.push(Opt::Cast {
                         slot,
                         face: f,
@@ -540,20 +555,15 @@ fn crew_power(s: &State, player: Seat, vehicle: Slot) -> u32 {
 ///
 /// [CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025): "A player can't begin to
 /// activate an ability that's prohibited from being activated."
-fn activatable(
-    s: &State,
-    t: &GameTable,
-    player: Seat,
-    slot: Slot,
-    ability: AbilityIx,
-) -> Result<bool, Full> {
+fn activatable(s: &State, t: &GameTable, now: &Situation, slot: Slot, ability: AbilityIx) -> bool {
+    let player = now.player;
     let o = s.object(slot);
     let Some((card, face, index)) = activated(s, slot, ability) else {
-        return Ok(false);
+        return false;
     };
     let a = t.def(card).face(face).ability(index);
     if a.kind != AbilityKind::Activated {
-        return Ok(false);
+        return false;
     }
     // CR 602.2: "Only an object's controller (or its owner, if it doesn't have a controller)
     // can activate its activated ability". CR 702.29a: cycling "functions only while the card
@@ -564,7 +574,7 @@ fn activatable(
         o.zone == Zone::Battlefield && s.controller(slot) == player
     };
     if !in_place {
-        return Ok(false);
+        return false;
     }
     if a.cost.tap {
         // CR 118.3: "a permanent that's already tapped can't be tapped to pay a cost". CR
@@ -575,16 +585,16 @@ fn activatable(
             || (s.derived(slot).types.intersects(Types::CREATURE)
                 && o.flags.has(ObjectFlags::SUMMONING_SICK))
         {
-            return Ok(false);
+            return false;
         }
     }
     if a.cost.crew > 0 && crew_power(s, player, slot) < u32::from(a.cost.crew) {
-        return Ok(false);
+        return false;
     }
     // CR 118.3: "A player can't pay a cost without having the necessary resources to pay it
     // fully."
     if a.cost.remove.is_some_and(|kind| o.counters.get(kind) == 0) {
-        return Ok(false);
+        return false;
     }
     let sorcery_speed = if let Some(loyalty) = a.cost.loyalty {
         // CR 606.3: "A player may activate a loyalty ability of a permanent they control any
@@ -592,12 +602,12 @@ fn activatable(
         // but only if no player has previously activated a loyalty ability of that permanent
         // that turn."
         if o.flags.has(ObjectFlags::LOYALTY_ACTIVATED) {
-            return Ok(false);
+            return false;
         }
         // CR 606.6: "A loyalty ability with a negative loyalty cost ... can't be activated
         // unless the permanent has at least that many loyalty counters on it."
         if i16::from(o.counters.loyalty) + i16::from(loyalty) < 0 {
-            return Ok(false);
+            return false;
         }
         !(o.flags.has(ObjectFlags::ENTERED_THIS_TURN)
             && has_rule(s, t, slot, Rule::InstantLoyaltyTheTurnItEntered))
@@ -607,17 +617,17 @@ fn activatable(
         a.timing == Timing::Sorcery
     };
     if sorcery_speed && !sorcery_timing(s, player) {
-        return Ok(false);
+        return false;
     }
     if !targetable(s, t, Some(a), player, None, 0, Some(slot)) {
-        return Ok(false);
+        return false;
     }
     let cost = a.cost.mana.with_x(0);
     let spent = spent_by_cost(slot, a);
     if a.cost.waterbend > 0 {
-        return waterbend_payable(s, t, player, cost, a.cost.waterbend, spent);
+        return waterbend_payable(s, &now.funds, player, cost, a.cost.waterbend, spent);
     }
-    mana::payable(s, t, player, cost, spent)
+    now.funds.pays(cost, spent)
 }
 
 /// Whether `player` can pay `cost`, tapping artifacts and creatures for up to `bendable` of
@@ -626,18 +636,18 @@ fn activatable(
 /// tapped for mana, so it never needs to.
 fn waterbend_payable(
     s: &State,
-    t: &GameTable,
+    funds: &Funds,
     player: Seat,
     mut cost: ManaCost,
     bendable: u8,
     mut exclude: Bitboard,
-) -> Result<bool, Full> {
-    let free = benders(s, player) & !exclude & !mana::sources(s, t, player, exclude)?;
+) -> bool {
+    let free = benders(s, player) & !exclude & !funds.sources(exclude);
     for slot in free.iter().take(usize::from(bendable.min(cost.generic))) {
         cost.generic -= 1;
         exclude.insert(slot);
     }
-    mana::payable(s, t, player, cost, exclude)
+    funds.pays(cost, exclude)
 }
 
 /// The untapped artifacts and creatures `player` controls, which may each pay for one
@@ -682,6 +692,7 @@ fn activation_options(
                     && s.derived(slot).granted.iter().any(Option::is_some))
         })
         .collect();
+    let now = Situation::of(s, t, player)?;
     for slot in collapse(s, objects).iter() {
         let own = face_of(s, t, slot).abilities.len() as u8;
         let granted = if s.object(slot).zone == Zone::Battlefield {
@@ -693,7 +704,7 @@ fn activation_options(
             .map(AbilityIx::Own)
             .chain((0..granted).map(AbilityIx::Granted));
         for ability in abilities {
-            if activatable(s, t, player, slot, ability)? {
+            if activatable(s, t, &now, slot, ability) {
                 out.push(Opt::Activate { slot, ability })?;
             }
         }
@@ -1024,9 +1035,10 @@ fn waterbend_options(s: &State, t: &GameTable, c: &Casting) -> Result<Fixed<Opt,
     if c.left > 0 {
         let mut fewer = cost;
         fewer.generic -= 1;
+        let funds = Funds::of(s, t, c.player)?;
         for slot in collapse(s, benders(s, c.player)).iter() {
-            let rest = waterbend_payable(s, t, c.player, fewer, c.left - 1, Bitboard::single(slot));
-            if rest? {
+            let rest = Bitboard::single(slot);
+            if waterbend_payable(s, &funds, c.player, fewer, c.left - 1, rest) {
                 objects.push(Opt::Object(slot))?;
             }
         }

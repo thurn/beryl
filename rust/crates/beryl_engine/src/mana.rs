@@ -196,6 +196,52 @@ fn sacrificed_sources(
     Ok(out)
 }
 
+/// What an untapped source `player` controls makes, if the permanent in `slot` is one: the
+/// kinds of mana, how much, and whether it has another ability.
+fn source(s: &State, t: &GameTable, player: Seat, slot: Slot) -> Option<(u8, u8, bool)> {
+    let o = s.object(slot);
+    if s.controller(slot) != player || o.flags.has(ObjectFlags::TAPPED) {
+        return None;
+    }
+    let face = t.def(o.card).face(o.face);
+    // CR 302.6: a creature's {T} abilities need it under its controller's control since their
+    // most recent turn began.
+    if s.derived(slot).types.intersects(Types::CREATURE) && o.flags.has(ObjectFlags::SUMMONING_SICK)
+    {
+        return None;
+    }
+    let mut kinds = 0;
+    let mut amount = 0;
+    // A source whose mana depends on other permanents, as Floodfarm Verge's {U}, is a class
+    // of its own: tapping it rather than another making the same mana now can leave
+    // different mana for later.
+    let mut conditional = false;
+    for a in face.abilities.iter().filter(|a| is_simple(a)) {
+        conditional |= a.only_if_you_control.is_some();
+        if !allowed(s, t, a, player) {
+            continue;
+        }
+        kinds |= a.produces.colors;
+        debug_assert!(amount == 0 || amount == a.produces.amount);
+        amount = a.produces.amount;
+    }
+    if kinds == 0 {
+        return None;
+    }
+    debug_assert!(
+        amount == 1 || kinds.is_power_of_two(),
+        "a source of several mana makes one kind"
+    );
+    // Abilities that work only from a hand, such as cycling, don't count.
+    let other = conditional
+        || face.abilities.iter().any(|a| {
+            matches!(a.kind, AbilityKind::Activated | AbilityKind::Mana)
+                && !is_simple(a)
+                && !a.cost.discard_self
+        });
+    Some((kinds, amount, other))
+}
+
 impl Sources {
     /// The untapped sources `player` controls, but those in `exclude`.
     pub(crate) fn of(
@@ -206,50 +252,12 @@ impl Sources {
     ) -> Result<Self, Full> {
         let mut classes: Fixed<Class, CLASSES> = Fixed::new();
         for &slot in s.battlefield() {
-            let o = s.object(slot);
-            if s.controller(slot) != player
-                || o.flags.has(ObjectFlags::TAPPED)
-                || exclude.contains(slot)
-            {
+            if exclude.contains(slot) {
                 continue;
             }
-            let face = t.def(o.card).face(o.face);
-            // CR 302.6: a creature's {T} abilities need it under its controller's control
-            // since their most recent turn began.
-            if s.derived(slot).types.intersects(Types::CREATURE)
-                && o.flags.has(ObjectFlags::SUMMONING_SICK)
-            {
+            let Some((kinds, amount, other)) = source(s, t, player, slot) else {
                 continue;
-            }
-            let mut kinds = 0;
-            let mut amount = 0;
-            // A source whose mana depends on other permanents, as Floodfarm Verge's {U}, is a
-            // class of its own: tapping it rather than another making the same mana now can
-            // leave different mana for later.
-            let mut conditional = false;
-            for a in face.abilities.iter().filter(|a| is_simple(a)) {
-                conditional |= a.only_if_you_control.is_some();
-                if !allowed(s, t, a, player) {
-                    continue;
-                }
-                kinds |= a.produces.colors;
-                debug_assert!(amount == 0 || amount == a.produces.amount);
-                amount = a.produces.amount;
-            }
-            if kinds == 0 {
-                continue;
-            }
-            debug_assert!(
-                amount == 1 || kinds.is_power_of_two(),
-                "a source of several mana makes one kind"
-            );
-            // Abilities that work only from a hand, such as cycling, don't count.
-            let other = conditional
-                || face.abilities.iter().any(|a| {
-                    matches!(a.kind, AbilityKind::Activated | AbilityKind::Mana)
-                        && !is_simple(a)
-                        && !a.cost.discard_self
-                });
+            };
             let rank = (kinds.count_ones() as u8) * 2 + u8::from(other);
             // A source with another ability is a class of its own: tapping it for mana
             // costs that ability, so it is never interchangeable.
@@ -312,18 +320,64 @@ pub(crate) fn available(
     Ok(sources.units(s.player(player).mana.amounts(), &[0; CLASSES]))
 }
 
-/// The untapped mana sources `player` controls, but those in `exclude`.
-pub(crate) fn sources(
-    s: &State,
-    t: &GameTable,
-    player: Seat,
-    exclude: Bitboard,
-) -> Result<Bitboard, Full> {
-    let sources = Sources::of(s, t, player, exclude)?;
-    Ok(sources
-        .classes()
-        .iter()
-        .fold(Bitboard::EMPTY, |b, c| b | c.members))
+/// Everything a player could pay mana with now, found once for the many payability checks of
+/// one decision: their pool, and each untapped source with the mana it makes. What a source
+/// makes doesn't depend on which others a check excludes, so [`Funds::pays`] answers as
+/// [`payable`] does.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Funds {
+    pool: [u8; KINDS],
+    /// Each source's slot, kinds of mana and amount.
+    sources: Fixed<(Slot, u8, u8), 128>,
+}
+
+impl Funds {
+    pub(crate) fn of(s: &State, t: &GameTable, player: Seat) -> Result<Funds, Full> {
+        let mut sources = Fixed::new();
+        // The classes [`Sources::of`] would form, so that more than it holds is `Full` here
+        // too.
+        let mut classes: Fixed<(u8, u8, bool), CLASSES> = Fixed::new();
+        for &slot in s.battlefield() {
+            if let Some((kinds, amount, other)) = source(s, t, player, slot) {
+                sources.push((slot, kinds, amount))?;
+                if other || !classes.iter().any(|&c| c == (kinds, amount, false)) {
+                    classes.push((kinds, amount, other))?;
+                }
+            }
+        }
+        Ok(Funds {
+            pool: s.player(player).mana.amounts(),
+            sources,
+        })
+    }
+
+    /// The units the pool and the sources but those in `exclude` make, as [`available`].
+    fn units(&self, exclude: Bitboard) -> Units {
+        let mut u = Units::NONE;
+        for (k, &n) in self.pool.iter().enumerate() {
+            u.add(1 << k, u16::from(n));
+        }
+        for &(slot, kinds, amount) in &self.sources {
+            if !exclude.contains(slot) {
+                u.add(kinds, u16::from(amount));
+            }
+        }
+        u
+    }
+
+    /// Whether the player can pay `cost` with none of `exclude`, as [`payable`].
+    pub(crate) fn pays(&self, cost: ManaCost, exclude: Bitboard) -> bool {
+        self.units(exclude).pays(cost)
+    }
+
+    /// The untapped sources but those in `exclude`.
+    pub(crate) fn sources(&self, exclude: Bitboard) -> Bitboard {
+        self.sources
+            .iter()
+            .map(|&(slot, _, _)| slot)
+            .filter(|&slot| !exclude.contains(slot))
+            .collect()
+    }
 }
 
 /// The payability prefilter: whether `player` can pay `cost` at all.
