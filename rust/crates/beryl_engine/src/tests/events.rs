@@ -1596,7 +1596,8 @@ static PRODIGY: CardDef = CardDef {
 static PRODIGY_CARDS: CardTable = CardTable::new(&[&LAND, &PRODIGY]);
 
 /// [CR 712.8e](https://yawgatog.com/resources/magic-rules/#R7128e): with its back face up, a
-/// transforming permanent's mana value is still its front face's.
+/// transforming permanent's mana value is still its front face's, but a token copying it
+/// with its back face up has mana value 0.
 #[test]
 fn a_transformed_permanent_has_its_front_faces_mana_value() {
     let t = GameTable::new(
@@ -1614,4 +1615,17 @@ fn a_transformed_permanent_has_its_front_faces_mana_value() {
     s.set_face(prodigy, FaceIx::BACK);
     assert!(!Filter::ManaValueAtMost(1).matches(&s, &t, prodigy, Seat::P0));
     assert!(Filter::ManaValueAtMost(2).matches(&s, &t, prodigy, Seat::P0));
+    let mut x = Scratch::new();
+    crate::layers::refresh(&mut s, &t, &mut x.events);
+    let mut copy = None;
+    with_ctx(&t, &mut s, &mut x, prodigy, |ctx| {
+        let (card, how) = ctx.copiable_values(ctx.state().object_ref(prodigy));
+        copy = ctx
+            .create_tokens_of_for(Seat::P1, card, 1, how)
+            .iter()
+            .next();
+    });
+    let copy = copy.expect("a token copy");
+    assert_eq!(s.object(copy).face, FaceIx::BACK);
+    assert!(Filter::ManaValueAtMost(0).matches(&s, &t, copy, Seat::P1));
 }

@@ -54,15 +54,19 @@ impl Filter {
         // [CR 712.8e](https://yawgatog.com/resources/magic-rules/#R7128e): a transforming
         // double-faced permanent with its back face up "has only the characteristics of its
         // back face. However, its mana value is calculated using the mana cost of its front
-        // face."
+        // face. If a permanent is copying the back face of a nonmodal double-faced permanent
+        // (even if the object representing that copy is itself a double-faced permanent), the
+        // mana value of that permanent is 0." A token with a double-faced card's faces is
+        // always such a copy (CR 707.8a): Fractured Identity on a transformed Jace.
         let mana_value = || {
             let up = face();
-            let cost = if up.transformed {
-                t.def(o.card).front().cost
+            if !up.transformed {
+                up.cost.mana_value()
+            } else if o.flags.has(ObjectFlags::TOKEN) {
+                0
             } else {
-                up.cost
-            };
-            cost.mana_value()
+                t.def(o.card).front().cost.mana_value()
+            }
         };
         match *self {
             Filter::Any => true,
