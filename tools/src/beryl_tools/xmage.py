@@ -11,7 +11,9 @@ trace is what places each Beryl action as XMage commands:
   draws line up. Libraries are exactly the setup's (`removeAllCardsFromLibrary`).
 - A command at a position with an empty stack first waits for the stack to resolve
   (`waitStackResolved`); one at a position with a spell on the stack waits for that spell
-  (`spellOnStack`). `Resolve`, and passing priority over a non-empty stack, let one object
+  (`spellOnStack`), and one answering an ability with no spell on the stack waits for no
+  spell to be there (`!spellOnStack`), or it would answer the spell that made the ability, such
+  as Portable Hole's trigger. `Resolve`, and passing priority over a non-empty stack, let one object
   resolve (`resolveTop`). A command after the other player put something on an empty stack
   first passes priority (`passPriority`), or it would run before that.
 - Answers go to the answer queues in Beryl's order, with the questions of one answer that Beryl
@@ -524,7 +526,13 @@ class Exporter:
         targets = "TestPlayer.NO_TARGET"
         if card in TARGETS_IN_CAST:
             targets = java_string("^".join(self.take_targets(action["player"])))
-        if spell is None and targets == "TestPlayer.NO_TARGET":
+        if p.stack and not any(cast(bool, item["spell"]) for item in p.stack):
+            # XMage's spell abilities are named "Cast <card>"; an ability's text is its rule.
+            self.emit(
+                f"castSpell({self.at(p)}, {who}, {java_string(card)}, {targets}, "
+                f'"Cast ", StackClause.WHILE_NOT_ON_STACK);'
+            )
+        elif spell is None and targets == "TestPlayer.NO_TARGET":
             self.emit(f"castSpell({self.at(p)}, {who}, {java_string(card)});")
         elif spell is None:
             self.emit(

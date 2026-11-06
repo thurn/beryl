@@ -273,7 +273,18 @@ def export(
                 raise Unsupported(f"Beryl fails it: {entry['failure']}")
             steps: list[JsonObject] = []
             unchecked = 0
-            for action in cast(list[JsonObject], entry["actions"]):
+            actions = cast(list[JsonObject], entry["actions"])
+            trace = cast(list[JsonObject], entry.get("trace", []))
+            for i, action in enumerate(actions):
+                # A target Beryl chose silently, the only legal one, before this action: the
+                # harness takes it where Forge offers more, such as Sink into Stupor's
+                # "target spell" offering a triggered ability too.
+                if i < len(trace):
+                    steps.extend(
+                        cast(JsonObject, step(forced))
+                        for forced in cast(list[JsonObject], trace[i].get("forced", []))
+                        if forced["kind"] == "Target"
+                    )
                 converted = step(action)
                 if converted is None:
                     unchecked += 1
