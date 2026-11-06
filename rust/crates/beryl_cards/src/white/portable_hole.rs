@@ -144,4 +144,34 @@ pub const SCENARIOS: &[Scenario] = &[
             count(P1, Zone::Exile, JACE, 0),
             controls(P0, HOLE, 1),
         ]),
+    // P1 answers the trigger by returning the Hole to P0's hand with Sink into Stupor: the
+    // event the exile lasts until has happened, so Jace never leaves (CR 610.3b).
+    Scenario::new("Portable Hole gone before its trigger resolves")
+        .battlefield(P0, &[Permanent::new(names::PLAINS)])
+        .hand(P0, &[HOLE])
+        .library(P0, &[names::ISLAND])
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(JACE),
+                Permanent::new(names::ISLAND),
+                Permanent::new(names::ISLAND),
+                Permanent::new(names::ISLAND),
+            ],
+        )
+        .hand(P1, &[names::SINK_INTO_STUPOR])
+        .library(P1, &[names::ISLAND])
+        .actions(&[
+            Action::cast(P0, HOLE),
+            Action::Resolve,
+            Action::assert(Assertion::Stack { count: 1 }),
+            Action::pass(P0),
+            Action::cast(P1, names::SINK_INTO_STUPOR),
+            Action::Resolve,
+            Action::Resolve,
+            Action::assert(Assertion::Stack { count: 0 }),
+            count(P0, Zone::Hand, HOLE, 1),
+            count(P1, Zone::Exile, JACE, 0),
+            controls(P1, JACE, 1),
+        ]),
 ];
