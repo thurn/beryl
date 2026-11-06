@@ -106,7 +106,9 @@ fn assert_clean_exit(p: &Pressed, played: usize) {
     assert_eq!(logged, played, "{screen:#?}");
 }
 
-const TINY: [&str; 10] = [
+const TINY: [&str; 12] = [
+    "--power",
+    "light",
     "--families",
     "ismcts1/hidden/rollout/tuned",
     "--fixed",

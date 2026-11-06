@@ -62,14 +62,14 @@ pub const FAMILIES: [&str; 11] = [
 ];
 
 impl Default for Config {
-    /// The long-think arena: [`FAMILIES`] from 1M engine steps a decision (about 2,800
-    /// mid-game rollouts) up, the frozen expert and greedy, 18 threads.
+    /// The long-think arena: [`FAMILIES`] at 1M to 30M engine steps a decision (about
+    /// 2,800 to 80,000 mid-game rollouts) and up, the frozen expert and greedy, 18 threads.
     fn default() -> Self {
         Config {
             families: FAMILIES.map(str::to_owned).to_vec(),
             fixed: vec!["expert-frozen".to_owned(), "greedy".to_owned()],
             anchor: "expert-frozen".to_owned(),
-            budgets: vec![1_000_000, 3_000_000, 10_000_000],
+            budgets: vec![1_000_000, 3_000_000, 10_000_000, 30_000_000],
             threads: 18,
             seed: 0,
         }
@@ -213,13 +213,21 @@ pub fn parse_work(s: &str) -> Option<u64> {
     digits.parse::<u64>().ok()?.checked_mul(scale)
 }
 
-/// The matchup whose next game the arena plays, after `games` (whose ratings `r` are).
-pub fn next(c: &Config, r: &Ratings, games: usize) -> Matchup {
-    // A matchup finishes the pair it began.
+/// The matchup whose next game the arena plays, after `games` (whose ratings `r` are) and
+/// while the games of `busy` play.
+pub fn next(c: &Config, r: &Ratings, games: usize, busy: &[Matchup]) -> Matchup {
+    // A matchup finishes the pair it began, counting the games being played.
+    let odd = |a: &str, b: &str| {
+        let playing = busy.iter().filter(|m| m.a == a && m.b == b).count() as u32;
+        (r.played(a, b) + playing) % 2 == 1
+    };
+    if let Some(m) = busy.iter().find(|m| odd(&m.a, &m.b)) {
+        return m.clone();
+    }
     let names = r.names();
     for a in names {
         for b in names {
-            if a < b && r.played(a, b) % 2 == 1 {
+            if a < b && odd(a, b) {
                 return Matchup::new(a, b);
             }
         }
@@ -289,7 +297,7 @@ mod tests {
         let mut played = Vec::new();
         for _ in 0..n {
             let r = Ratings::new(c, &games, &HashMap::new(), &[]);
-            let m = next(c, &r, games.len());
+            let m = next(c, &r, games.len(), &[]);
             let g = r.played(&m.a, &m.b);
             games.push(GameRecord::example(&m, g, outcome(&m, g)));
             played.push(m);
@@ -326,6 +334,18 @@ mod tests {
                 .all(|m| m.a.contains('@') || m.b.contains('@')),
             "fixed agents never play each other alone: {played:?}"
         );
+    }
+
+    /// A game being played counts toward its pair, so the next game finishes it.
+    #[test]
+    fn games_being_played_count_toward_their_pair() {
+        let c = config();
+        let r = Ratings::new(&c, &[], &HashMap::new(), &[]);
+        let first = next(&c, &r, 0, &[]);
+        let other = Matchup::new("expert", "ismcts2/hidden/rollout/tuned@3k");
+        assert_ne!(first, other);
+        let busy = [other.clone(), first.clone(), other.clone()];
+        assert_eq!(next(&c, &r, 0, &busy), first);
     }
 
     /// A family's next budget opens once the last has its games; past the configured ones,

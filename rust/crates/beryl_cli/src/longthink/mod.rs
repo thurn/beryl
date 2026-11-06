@@ -9,8 +9,9 @@
 //! run's agents. A runner that crashes is restarted and resumes. `--games N` stops once the
 //! run holds N games, however many sessions it took; `--status` prints the summary;
 //! `--upgrade` adopts the current code if it plays identically ([`upgrade`]); `--add FAMILY`
-//! adds a family to a run; `--new` and `--run DIR` start a new run, or resume any. Its
-//! files:
+//! adds a family to a run; `--new` and `--run DIR` start a new run, or resume any;
+//! `--power light` leaves the machine room for other work, `--power full` takes it all,
+//! even while it plays ([`run::Power`]). Its files:
 //!
 //! - `config.json`, the run's settings ([`Config`]), and `code.json`, the git tree ids of the
 //!   crates that decide how the run plays, when the binary was built;
@@ -22,6 +23,7 @@
 //! - `logs/<game>.jsonl`, every decision's answer as it was made ([`game::Line`]), which a
 //!   resumed game replays through, and `transcripts/<game>.txt`;
 //! - `crashes.jsonl`, where the runner was when it panicked;
+//! - `power`, how much of the machine the runner takes;
 //! - `summary.txt`, rewritten after every game and rebuilt when missing.
 //!
 //! The runner shows the run on a live panel ([`term`]), which `--status` prints once.
@@ -183,13 +185,29 @@ impl Spec {
         let (a, b) = (entrant(c, &m.a)?, entrant(c, &m.b)?);
         let (pair, seat) = (g / 2, (g % 2) as u8);
         Ok(Spec {
-            key: format!("{}-p{pair:04}-s{seat}", m.key()),
+            key: Spec::key(m, g),
             matchup: m.clone(),
             pair,
             seed: crate::tournament::game_seed(c.seed, 0, pair),
             seat,
             entrants: if seat == 0 { [a, b] } else { [b, a] },
         })
+    }
+
+    /// The key of game `g` of matchup `m`: `a~b-pPPPP-sS`.
+    pub fn key(m: &Matchup, g: u32) -> String {
+        format!("{}-p{:04}-s{}", m.key(), g / 2, g % 2)
+    }
+
+    /// The game whose key is `key`, if a run with `c` could play it.
+    pub fn parse(c: &Config, key: &str) -> Option<Spec> {
+        let (rest, seat) = key.rsplit_once("-s")?;
+        let (names, pair) = rest.rsplit_once("-p")?;
+        let (a, b) = names.split_once('~')?;
+        let m = Matchup::new(&a.replace('.', "/"), &b.replace('.', "/"));
+        let g = pair.parse::<u32>().ok()?.checked_mul(2)?
+            + seat.parse::<u32>().ok().filter(|&s| s < 2)?;
+        Spec::new(c, &m, g).ok().filter(|s| s.key == key)
     }
 
     /// The seat of side `side`: 0 for the matchup's first, 1 for its second.
@@ -223,7 +241,7 @@ impl GameRecord {
 
 const USAGE: &str =
     "usage: beryl_cli longthink [--status | --upgrade | --add FAMILY] [--new | --run DIR]
-      [--games N]
+      [--games N] [--power full|light]
   a new run also takes: [--families F,F,...] [--fixed NAME,NAME,...] [--anchor NAME]
       [--budgets N,N,...] [--threads K] [--seed N]";
 
@@ -235,6 +253,7 @@ pub fn main(args: &[String]) -> Result<(), String> {
     let mut add: Vec<String> = Vec::new();
     let mut at: Option<PathBuf> = None;
     let mut games: Option<u32> = None;
+    let mut power: Option<run::Power> = None;
     let mut c = Config::default();
     let mut configured = false;
     let list = |v: String| -> Vec<String> { v.split(',').map(str::to_owned).collect() };
@@ -252,6 +271,7 @@ pub fn main(args: &[String]) -> Result<(), String> {
             "--add" => add.push(value()?),
             "--run" => at = Some(PathBuf::from(value()?)),
             "--games" => games = Some(crate::number(arg, &value()?)?),
+            "--power" => power = Some(value()?.parse()?),
             flag => {
                 configured = true;
                 match flag {
@@ -295,25 +315,7 @@ pub fn main(args: &[String]) -> Result<(), String> {
     }
     let code = code_ids(&repo());
     if started {
-        if configured {
-            return Err(format!(
-                "{} has its settings; they apply to a new run (--new)",
-                dir.display()
-            ));
-        }
-        let games = files::read::<GameRecord>(&dir.join("games.jsonl"))?.len();
-        println!("resuming {} ({games} games)", dir.display());
-        let theirs: Option<BTreeMap<String, String>> = fs::read_to_string(dir.join("code.json"))
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok());
-        let differ = changed(theirs.as_ref(), code.as_ref());
-        if !differ.is_empty() {
-            println!(
-                "the code differs from the run's in {}: it plays on with its own binary \
-                 (--upgrade adopts the code if it plays identically, --new starts a new run)",
-                differ.join(", ")
-            );
-        }
+        resume(&dir, configured, code.as_ref())?;
     } else {
         start(&dir, &c, code.as_ref())?;
         println!("new run {}", dir.display());
@@ -324,7 +326,54 @@ pub fn main(args: &[String]) -> Result<(), String> {
     if upgrade {
         return upgrade::adopt(&dir, code.as_ref());
     }
+    if let Some(p) = power
+        && powered(&dir, p)?
+    {
+        return Ok(());
+    }
     supervise(&dir, games)
+}
+
+/// Resumes run `dir`, which must not be given settings, saying if `code` differs from its.
+fn resume(
+    dir: &Path,
+    configured: bool,
+    code: Option<&BTreeMap<String, String>>,
+) -> Result<(), String> {
+    if configured {
+        return Err(format!(
+            "{} has its settings; they apply to a new run (--new)",
+            dir.display()
+        ));
+    }
+    let games = files::read::<GameRecord>(&dir.join("games.jsonl"))?.len();
+    println!("resuming {} ({games} games)", dir.display());
+    let theirs: Option<BTreeMap<String, String>> = fs::read_to_string(dir.join("code.json"))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok());
+    let differ = changed(theirs.as_ref(), code);
+    if !differ.is_empty() {
+        println!(
+            "the code differs from the run's in {}: it plays on with its own binary \
+             (--upgrade adopts the code if it plays identically, --new starts a new run)",
+            differ.join(", ")
+        );
+    }
+    Ok(())
+}
+
+/// Sets run `dir`'s power, and whether a runner already playing it takes that up, from its
+/// next game, so there is none to start.
+fn powered(dir: &Path, p: run::Power) -> Result<bool, String> {
+    run::set_power(dir, p)?;
+    let playing = files::lock(dir).is_err();
+    if playing {
+        println!(
+            "{} plays at {p} power from its next game",
+            run::run_name(dir)
+        );
+    }
+    Ok(playing)
 }
 
 /// Whether `c` names agents and families that exist, and positive budgets and threads.
@@ -575,6 +624,33 @@ mod tests {
         assert_ne!(Spec::new(&c, &m, 2).unwrap().seed, a.seed);
         assert_eq!(b.seat_of(0), 1);
         assert!(entrant(&c, "nobody").is_err() && entrant(&c, "pimc0/x@1M").is_err());
+    }
+
+    /// A game's key names it: parsed, it is the same game, and a key no run plays is none.
+    #[test]
+    fn keys_parse_back() {
+        let c = Config::default();
+        for (m, g) in [
+            (
+                Matchup::new("expert-frozen", "pimc72/hidden/rollout/tuned@30M"),
+                7,
+            ),
+            (Matchup::new("greedy", "ismcts18/hidden/cut2/17l@1500"), 0),
+        ] {
+            let spec = Spec::new(&c, &m, g).unwrap();
+            let parsed = Spec::parse(&c, &spec.key).unwrap();
+            assert_eq!(
+                (parsed.key, parsed.matchup, parsed.pair, parsed.seat),
+                (spec.key, m, g / 2, (g % 2) as u8)
+            );
+        }
+        for key in [
+            "expert-frozen~greedy-p0000-s2",
+            "nobody~greedy-p0000-s0",
+            "expert-frozen~greedy",
+        ] {
+            assert!(Spec::parse(&c, key).is_none(), "{key}");
+        }
     }
 
     #[test]

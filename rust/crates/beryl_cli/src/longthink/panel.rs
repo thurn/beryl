@@ -6,7 +6,7 @@
 //! - the board: a row per entrant, best first, with its Elo and 95% margin, games, its chance
 //!   of being the best, its mean minutes a game and `◀` on the sides of the game being
 //!   played; then the last 10 results;
-//! - now: the game being played and the decision being searched.
+//! - now: each game being played and the decision it is asking.
 
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -30,7 +30,8 @@ pub struct Frame {
     pub rows: Vec<Row>,
     /// The last results, of the first sides, oldest first.
     pub last: Vec<Verdict>,
-    pub now: Option<Now>,
+    /// The games being played.
+    pub now: Vec<Now>,
 }
 
 /// A row of the board: an entrant.
@@ -47,7 +48,7 @@ pub struct Row {
     pub playing: bool,
 }
 
-/// The game being played.
+/// A game being played.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Now {
     pub matchup: String,
@@ -59,8 +60,9 @@ pub struct Now {
     pub life: [i16; 2],
     pub hand: [u32; 2],
     pub decision: GameDecision,
-    /// When a search is deciding: the iterations it has run and its budget in steps.
-    pub search: Option<(u64, u64)>,
+    /// When a search is deciding: the iterations it has run, when it is the only one
+    /// counting, and its budget in steps.
+    pub search: Option<(Option<u64>, u64)>,
     /// Seconds spent on the decision so far.
     pub seconds: f64,
     /// The share of this game's searched budgets the stop left unspent.
@@ -69,13 +71,13 @@ pub struct Now {
     pub prev: Option<String>,
 }
 
-/// The board's rows for these games, with the matchup being played, if any: every entrant
+/// The board's rows for these games, with the matchups being played: every entrant
 /// played, best first, then those open but not yet played.
 pub fn board(
     c: &Config,
     games: &[GameRecord],
     seconds: &HashMap<String, f64>,
-    playing: Option<&Matchup>,
+    playing: &[Matchup],
 ) -> Vec<Row> {
     let r = Ratings::new(c, games, seconds, &[]);
     let all = ranked(c, &r);
@@ -91,7 +93,7 @@ pub fn board(
                 games: t.games,
                 best: overall,
                 seconds: t.mean_seconds(),
-                playing: playing.is_some_and(|p| p.a == *e || p.b == *e),
+                playing: playing.iter().any(|p| p.a == *e || p.b == *e),
             }
         })
         .collect()
@@ -126,8 +128,8 @@ pub fn render(f: &Frame, width: usize, height: usize, color: bool) -> Vec<String
         let dots: String = f.last.iter().map(|&v| dot(v, color)).collect();
         tail.push(format!("last {}  {dots}", f.last.len()));
     }
-    if let Some(now) = &f.now {
-        tail.push(rule);
+    for now in &f.now {
+        tail.push(rule.clone());
         tail.extend(now_lines(now, color));
     }
     let max = height.saturating_sub(1);
@@ -215,13 +217,10 @@ fn now_lines(n: &Now, color: bool) -> Vec<String> {
     )];
     let mut search = format!("  decision {}", n.decision);
     if let Some((iterations, budget)) = n.search {
-        let _ = write!(
-            search,
-            "  {} it / {} steps  {:.1}s",
-            paint(color, GREEN, &thousands(iterations)),
-            rung_name(budget),
-            n.seconds
-        );
+        if let Some(i) = iterations {
+            let _ = write!(search, "  {} it /", paint(color, GREEN, &thousands(i)));
+        }
+        let _ = write!(search, " {} steps  {:.1}s", rung_name(budget), n.seconds);
     }
     if let Some(saved) = n.saved {
         let _ = write!(search, "  stop −{:.0}%", 100.0 * saved);
@@ -387,7 +386,7 @@ mod tests {
         games(&mut g, &mut s, LOW, 40, 30, 21.0);
         games(&mut g, &mut s, HIGH, 20, 6, 65.0);
         let playing = Matchup::new("expert", HIGH);
-        let rows = board(&c, &g, &s, Some(&playing));
+        let rows = board(&c, &g, &s, std::slice::from_ref(&playing));
         Frame {
             run: "run-001".to_owned(),
             up: Some(6.0 * 3600.0 + 12.0 * 60.0 + 5.0),
@@ -396,7 +395,7 @@ mod tests {
             stopping: true,
             rows,
             last: vec![Win, Win, Loss, Win, Win, Win, Loss, Win, Win, Draw],
-            now: Some(Now {
+            now: vec![Now {
                 matchup: playing.label(),
                 pair: 10,
                 seat: 1,
@@ -404,11 +403,11 @@ mod tests {
                 life: [14, 9],
                 hand: [4, 3],
                 decision: GameDecision(64),
-                search: Some((58_120, 3_000)),
+                search: Some((Some(58_120), 3_000)),
                 seconds: 3.1,
                 saved: Some(0.31),
                 prev: Some("cast Counterspell".to_owned()),
-            }),
+            }],
         }
     }
 

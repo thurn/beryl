@@ -147,9 +147,13 @@ the cb8d5d5f mirror:
   open entrants it weighs the drop in each search's rating variance by its
   chance of being the best overall and in its family, over what the two cost.
   Fixed agents are references, never targets.
-- **A family grows** from 1M, 3M and 10M steps by ×3 while its last step up
-  gained rating with 80% confidence. Same seeds in every matchup, so entrants
-  compare pair by pair.
+- **A family grows** from 1M, 3M, 10M and 30M steps by ×3 while its last step up
+  gained rating with 80% confidence. 30M is about 80,000 mid-game rollouts a
+  decision. Same seeds in every matchup, so entrants compare pair by pair.
+- **Two games play at a time**, since one alone leaves cores idle.
+  `just longthink --power light` plays one at a time on half the threads, to
+  leave room for other work, and `--power full` goes back, even mid-run. A seed
+  plays the same game either way.
 - Every searched decision's root visits and mean rewards go to
   `decisions.jsonl`, as training data. `--add FAMILY` adds a family to a running
   arena. It has no end and no pre-registered bar: the summary streams, and we

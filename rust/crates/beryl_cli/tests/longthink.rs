@@ -12,8 +12,10 @@ use std::time::Duration;
 mod exe;
 
 /// An arena small enough for a test: one search at a few rollouts a decision, one tree,
-/// against the expert.
-const TINY: [&str; 10] = [
+/// against the expert, a game at a time so that every run commits in one order.
+const TINY: [&str; 12] = [
+    "--power",
+    "light",
     "--families",
     "ismcts1/hidden/rollout/tuned",
     "--fixed",
@@ -121,6 +123,41 @@ fn assert_same(a: &Path, b: &Path) {
 fn kill(mut child: Child) {
     child.kill().unwrap();
     child.wait().unwrap();
+}
+
+/// A runner at full power plays two games at a time: the same games as one at a time,
+/// committed in whichever order they finish.
+#[test]
+fn full_power_plays_the_same_games() {
+    let sorted = |dir: &Path, name: &str| {
+        let text = fs::read_to_string(dir.join(name)).unwrap();
+        let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
+        lines.sort();
+        lines
+    };
+    let [light, full] = ["light", "full"].map(|p| {
+        let dir = scratch(&format!("power-{p}"));
+        tiny(&dir);
+        let o = longthink(
+            &dir,
+            &["--run", dir.to_str().unwrap(), "--power", p, "--games", "6"],
+        );
+        assert!(o.status.success(), "{}", text(&o));
+        dir
+    });
+    assert_eq!(fs::read_to_string(full.join("power")).unwrap(), "full\n");
+    for name in ["games.jsonl", "decisions.jsonl"] {
+        assert_eq!(sorted(&light, name), sorted(&full, name), "{name}");
+    }
+    assert_eq!(sorted(&full, "games.jsonl").len(), 6);
+    for t in fs::read_dir(light.join("transcripts")).unwrap() {
+        let t = t.unwrap();
+        let other = full.join("transcripts").join(t.file_name());
+        assert!(
+            fs::read(t.path()).unwrap() == fs::read(other).unwrap(),
+            "{t:?} differs"
+        );
+    }
 }
 
 /// Killed at random moments, mid-search and mid-write among them, and resumed each time,

@@ -138,14 +138,15 @@ pub struct Board {
     games: Vec<GameRecord>,
     seconds: HashMap<String, f64>,
     started: Instant,
-    playing: Option<Playing>,
+    playing: Vec<Playing>,
     stopping: bool,
     /// Log lines not yet printed.
     logs: Vec<String>,
 }
 
-/// The game being played.
+/// A game being played.
 struct Playing {
+    key: String,
     matchup: Matchup,
     label: String,
     pair: u32,
@@ -175,13 +176,11 @@ struct Asked {
 
 impl Board {
     fn frame(&self, at: Instant, rollouts: u64) -> Frame {
-        let rows = panel::board(
-            &self.config,
-            &self.games,
-            &self.seconds,
-            self.playing.as_ref().map(|p| &p.matchup),
-        );
-        let now = self.playing.as_ref().and_then(|p| {
+        let matchups: Vec<Matchup> = self.playing.iter().map(|p| p.matchup.clone()).collect();
+        let rows = panel::board(&self.config, &self.games, &self.seconds, &matchups);
+        // The rollout counter is the process's: a game's share of it is known only alone.
+        let alone = self.playing.len() == 1;
+        let now = self.playing.iter().filter_map(|p| {
             let a = p.asked.as_ref()?;
             Some(Now {
                 matchup: p.label.clone(),
@@ -191,12 +190,15 @@ impl Board {
                 life: a.life,
                 hand: a.hand,
                 decision: a.decision,
-                search: a.budget.map(|b| (rollouts.saturating_sub(a.rollouts), b)),
+                search: a
+                    .budget
+                    .map(|b| (alone.then(|| rollouts.saturating_sub(a.rollouts)), b)),
                 seconds: at.saturating_duration_since(a.at).as_secs_f64(),
                 saved: (p.planned > 0).then(|| p.unspent as f64 / p.planned as f64),
                 prev: p.prev.clone(),
             })
         });
+        let now = now.collect();
         status_frame(
             self,
             Some(at.duration_since(self.started).as_secs_f64()),
@@ -206,7 +208,7 @@ impl Board {
     }
 }
 
-fn status_frame(b: &Board, up: Option<f64>, rows: Vec<panel::Row>, now: Option<Now>) -> Frame {
+fn status_frame(b: &Board, up: Option<f64>, rows: Vec<panel::Row>, now: Vec<Now>) -> Frame {
     let tail = b.games.len().saturating_sub(10);
     Frame {
         run: b.run.clone(),
@@ -244,12 +246,12 @@ pub fn status(run: &str, config: Config, games: Vec<GameRecord>, seconds: HashMa
         games,
         seconds,
         started: Instant::now(),
-        playing: None,
+        playing: Vec::new(),
         stopping: false,
         logs: Vec::new(),
     };
-    let rows = panel::board(&b.config, &b.games, &b.seconds, None);
-    let frame = status_frame(&b, None, rows, None);
+    let rows = panel::board(&b.config, &b.games, &b.seconds, &[]);
+    let frame = status_frame(&b, None, rows, Vec::new());
     let (live, color) = modes();
     let (width, _) = if live { size() } else { (usize::MAX, 0) };
     for line in panel::render(&frame, width, usize::MAX, live && color) {
@@ -337,7 +339,7 @@ impl Display {
                 games: games.to_vec(),
                 seconds,
                 started: Instant::now(),
-                playing: None,
+                playing: Vec::new(),
                 stopping: false,
                 logs: Vec::new(),
             }),
@@ -394,7 +396,8 @@ impl Display {
                 spec.pair
             ));
         }
-        b.playing = Some(Playing {
+        b.playing.push(Playing {
+            key: spec.key.clone(),
             matchup,
             label,
             pair: spec.pair,
@@ -411,11 +414,13 @@ impl Display {
         }
     }
 
-    /// Decision `decision`, `d`, is about to be asked in position `s`.
-    pub fn asking(&self, decision: GameDecision, s: &State, d: &Decision) {
+    /// Decision `decision`, `d`, of game `key` is about to be asked in position `s`.
+    pub fn asking(&self, key: &str, decision: GameDecision, s: &State, d: &Decision) {
         let rollouts = beryl_search::rollouts_run();
         let mut b = self.shared.board();
-        let Some(p) = b.playing.as_mut() else { return };
+        let Some(p) = b.playing.iter_mut().find(|p| p.key == key) else {
+            return;
+        };
         let you = beryl_engine::Seat::new(p.seat);
         let seats = [you, you.opponent()];
         p.asked = Some(Asked {
@@ -429,10 +434,13 @@ impl Display {
         });
     }
 
-    /// A decision was answered with `line`, which the transcript calls `label`.
-    pub fn answered(&self, line: &Line, label: &str) {
+    /// A decision of game `key` was answered with `line`, which the transcript calls
+    /// `label`.
+    pub fn answered(&self, key: &str, line: &Line, label: &str) {
         let mut b = self.shared.board();
-        let Some(p) = b.playing.as_mut() else { return };
+        let Some(p) = b.playing.iter_mut().find(|p| p.key == key) else {
+            return;
+        };
         if let (Some(s), Some(budget)) = (&line.search, p.budgets[usize::from(line.seat)]) {
             p.planned += budget;
             p.unspent += budget.saturating_sub(s.work);
@@ -448,12 +456,12 @@ impl Display {
             b.seconds.insert(g.game.clone(), s);
         }
         b.games.push(g.clone());
-        b.playing = None;
+        b.playing.retain(|p| p.key != g.game);
         // Plain output has no panel: a table every 10 games stands for it.
         let table = (!self.shared.live && b.games.len().is_multiple_of(10)).then(|| {
-            let rows = panel::board(&b.config, &b.games, &b.seconds, None);
+            let rows = panel::board(&b.config, &b.games, &b.seconds, &[]);
             panel::render(
-                &status_frame(&b, None, rows, None),
+                &status_frame(&b, None, rows, Vec::new()),
                 usize::MAX,
                 usize::MAX,
                 false,
@@ -487,7 +495,7 @@ impl Drop for Display {
     }
 }
 
-/// Ctrl-C: once, a stop after this game; twice, a stop now.
+/// Ctrl-C: once, a stop after the games being played; twice, a stop now.
 fn interrupted(shared: &Shared) {
     if INTERRUPTS.fetch_add(1, Ordering::Relaxed) == 0 {
         shared.board().stopping = true;
@@ -540,7 +548,7 @@ mod tests {
                 games: Vec::new(),
                 seconds: HashMap::new(),
                 started: Instant::now(),
-                playing: None,
+                playing: Vec::new(),
                 stopping: false,
                 logs: Vec::new(),
             };
@@ -548,7 +556,8 @@ mod tests {
             let mut expected = Vec::new();
             for k in 0..13u32 {
                 if k % 3 == 0 {
-                    b.playing = Some(Playing {
+                    b.playing = vec![Playing {
+                        key: format!("game {k}"),
                         matchup: matchup((k / 6) as usize),
                         label: matchup((k / 6) as usize).label(),
                         pair: k / 2,
@@ -566,9 +575,9 @@ mod tests {
                         planned: 0,
                         unspent: 0,
                         prev: (k % 2 == 0).then(|| "cast Counterspell".to_owned()),
-                    });
+                    }];
                 } else if k % 3 == 2 {
-                    b.playing = None;
+                    b.playing.clear();
                 }
                 let mut logs = Vec::new();
                 if k % 4 == 1 {
@@ -591,7 +600,7 @@ mod tests {
             let g = game(2, 13, Verdict::Loss);
             let logs = vec![panel::fit(&panel::game_line(&g, None, true), width)];
             b.games.push(g);
-            b.playing = None;
+            b.playing.clear();
             let frame = panel::render(&b.frame(b.started, 1_234), width, 30, true);
             screen.draw(&logs, &frame).unwrap();
             expected.extend(logs);

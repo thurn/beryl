@@ -118,7 +118,8 @@ sessions' checks keep their CPU. Wardens rerun only the pairings that gate
 acceptance, never reported-only ones. `just longthink`, the long-think arena
 (`docs/ai-strategy.md` §5), holds the machine for days: with no arguments it
 starts or resumes the run in `$BERYL_CACHE/longthink`, any stop costs at most
-the decision being searched, and `--status` prints where it stands.
+the decisions being searched, `--status` prints where it stands, and
+`--power light` leaves room for other work until `--power full`.
 
 ## Checks
 

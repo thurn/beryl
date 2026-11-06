@@ -4,7 +4,7 @@
 //! logged, and a sample of the cheapest entrant's searches, searched again at their budgets
 //! and seeds, must choose as they did.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
@@ -12,8 +12,7 @@ use beryl_engine::GameTable;
 
 use super::files;
 use super::game::{self, Build, Game, GameDecision, Line, Played, Resume, Stop};
-use super::ratings::Ratings;
-use super::schedule::{self, Config, budget_of};
+use super::schedule::{Config, budget_of};
 use super::{GameRecord, Spec, Verdict};
 use crate::game::mirror;
 
@@ -55,12 +54,11 @@ pub fn verify(t: &GameTable, dir: &Path, c: &Config, build: &Build<'_>) -> Resul
             ));
         }
     }
-    // The game being played, as far as it has gone.
-    let ratings = Ratings::new(c, &games, &HashMap::new(), &[]);
-    let m = schedule::next(c, &ratings, games.len());
-    let next = Spec::new(c, &m, ratings.played(&m.a, &m.b))?;
-    let lines = check.log(&next.key)?;
-    if !lines.is_empty() {
+    // The games being played, as far as they have gone.
+    let unfinished = super::run::unfinished(dir, &games)?;
+    for key in &unfinished {
+        let next = Spec::parse(c, key).ok_or_else(|| format!("{key}: no such game"))?;
+        let lines = check.log(&next.key)?;
         check.replay(
             &next,
             &lines,
@@ -101,10 +99,10 @@ pub fn verify(t: &GameTable, dir: &Path, c: &Config, build: &Build<'_>) -> Resul
     Ok(format!(
         "{} games replayed{}, {repeated} searches repeated",
         scored().count(),
-        if lines.is_empty() {
-            ""
-        } else {
-            " and the one in progress"
+        match unfinished.len() {
+            0 => String::new(),
+            1 => " and the one in progress".to_owned(),
+            n => format!(" and the {n} in progress"),
         }
     ))
 }
