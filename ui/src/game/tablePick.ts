@@ -1,5 +1,6 @@
 // Choices of cards made on the table rather than in an overlay, with the table in view: an
-// untap's lands, and Thirst for Discovery's discard from the hand. Pure functions of the view.
+// untap's lands, and a discard of a basic land or cards from the hand. Pure functions of the
+// view.
 import { faceEntry } from "../cards";
 import type { ObjectView, PlayerView } from "../generated/protocol";
 import {

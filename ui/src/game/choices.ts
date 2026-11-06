@@ -104,8 +104,8 @@ export function choiceOf(view: PlayerView): Choice | undefined {
       return search(at, ask);
     case "maySearch":
       return maySearch(at);
-    // Untaps and Thirst for Discovery's discard (picked on the board), crews, waterbends and
-    // payments (the board lights what pays) are decided on the board.
+    // Untaps and a discard of a basic land or cards (picked on the board), crews, waterbends
+    // and payments (the board lights what pays) are decided on the board.
     case "untap":
     case "discardBasicLand":
     case "crew":
