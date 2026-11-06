@@ -30,6 +30,10 @@ const DEPTH_PER_PX = 0.6;
 export const depthScale = (y: number) =>
   CAMERA_DISTANCE / (CAMERA_DISTANCE + Math.max(0, NEAR_Y - y) * DEPTH_PER_PX);
 
+/** How far the camera is from a thing lying on the table at screen height `y`, in stage
+ * pixels: what `perspective` would need to grow it as it rises toward the lens. */
+export const cameraDistance = (y: number) => CAMERA_DISTANCE / depthScale(y);
+
 /** Where the table's receding edges meet, far above the stage: a card left of center leans
  * left at its near end, and one right of center leans right. */
 const VANISHING = { x: STAGE.width / 2, y: -4400 };

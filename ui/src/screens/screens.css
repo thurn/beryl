@@ -750,6 +750,8 @@
 }
 .on-table .card::before {
   content: "";
+  /* Fades as the card leaves the felt (game/physics.ts). */
+  opacity: var(--contact, 1);
   position: absolute;
   inset: 12% -7% -16% -3%;
   z-index: -1;
@@ -1305,7 +1307,54 @@
 }
 .card-el-dragging {
   cursor: grabbing;
-  filter: drop-shadow(0 18px 18px rgb(0 0 0 / 45%));
+}
+/* Held up, a hand card's resting shadow gives way to the one it casts on the felt. */
+.card-el-dragging .hand-card .card {
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 45%);
+}
+/* A card over the felt (game/physics.ts): what tilts and grows, the light on its face, and the
+   shadow it casts. Only their transforms, opacities and the shadow's penumbra change as it
+   moves; at rest none is drawn. */
+.card-body {
+  position: relative;
+}
+.card-shade,
+.card-cast {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  border-radius: 4.8% / 3.4%;
+}
+.card-shade {
+  inset: 0;
+}
+/* The shadow of a card under a rectangular lamp: its edges blur over the penumbra in a straight
+   ramp each way, the card's outline swept across the lamp. */
+.card-cast {
+  --pen-x: 1%;
+  --pen-y: 1%;
+  left: 0;
+  top: 0;
+  z-index: -1;
+  background: #000;
+  --ramp-x: linear-gradient(
+    to right,
+    transparent,
+    #000 var(--pen-x),
+    #000 calc(100% - var(--pen-x)),
+    transparent
+  );
+  --ramp-y: linear-gradient(
+    to bottom,
+    transparent,
+    #000 var(--pen-y),
+    #000 calc(100% - var(--pen-y)),
+    transparent
+  );
+  -webkit-mask-image: var(--ramp-x), var(--ramp-y);
+  mask-image: var(--ramp-x), var(--ramp-y);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
 }
 /* A hand card is hit where the fan shows it, never where its raised look covers its neighbors
    (CardLayer.tsx): its look lets the pointer through to its hit box, and the copy drawn raised

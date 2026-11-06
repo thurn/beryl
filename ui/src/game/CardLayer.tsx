@@ -31,6 +31,7 @@ import type { ObjectView, PaidCost, Side } from "../generated/protocol";
 import { StageScale } from "./Stage";
 import { faceDownFace, marksOf, useFace } from "./faces";
 import { RAISE, type Layout, type Placement } from "./layout";
+import { useCardPhysics } from "./physics";
 
 /** Where on the stage a pointer is, in stage pixels. */
 export interface Point {
@@ -222,6 +223,36 @@ function CardElement({
   // in the fan is what the pointer hits, the raised card included, and above the fan the raised
   // card's top, which its element reaches up to.
   const ghosted = hand && raised && !holding;
+  // Over the felt, the card is a physical thing (physics.ts): held up while dragged, falling
+  // where it is dropped, carried while it glides.
+  const body = useRef<HTMLDivElement>(null);
+  const shadow = useRef<HTMLSpanElement>(null);
+  const shade = useRef<HTMLSpanElement>(null);
+  const grip = useRef<[number, number]>([0.5, 0.5]);
+  const lying =
+    object.tapped &&
+    ["field", "land", "beneath", "attached"].includes(place.look);
+  const size: [number, number] = lying
+    ? [width / CARD_ASPECT, width]
+    : [width, width / CARD_ASPECT];
+  useCardPhysics({
+    motion: {
+      x,
+      y,
+      scale,
+      rotate,
+      raiseScale: raise.scale,
+      raiseRotate: raise.rotate,
+    },
+    handling: dragging ? "held" : holding ? "dropped" : "free",
+    size,
+    enabled: place.look !== "hidden",
+    reduce,
+    body,
+    shadow,
+    shade,
+    grip,
+  });
   const shake = useMotionValue(0);
   const drag = useRef<{ start: Point; from: Point; moved: boolean }>(undefined);
   // A card in a library is unseen, and one on a graveyard or exile pile is the pile's: the
@@ -240,6 +271,14 @@ function CardElement({
   const onPointerDown = (e: ReactPointerEvent) => {
     if (e.button !== 0) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    // Where on the card the pointer took it: lifted, it pivots and grows about that point.
+    const box = body.current?.getBoundingClientRect();
+    if (box && box.width > 0 && box.height > 0) {
+      grip.current = [
+        Math.min(1, Math.max(0, (e.clientX - box.left) / box.width)),
+        Math.min(1, Math.max(0, (e.clientY - box.top) / box.height)),
+      ];
+    }
     drag.current = {
       start: stagePoint(e),
       from: { x: x.get(), y: y.get() },
@@ -328,7 +367,15 @@ function CardElement({
           style={{ ...raise, opacity: ghosted ? 0 : 1 }}
         >
           <motion.div style={{ x: shake }}>
-            <Look object={object} place={place} state={state} />
+            <div className="card-body" ref={body}>
+              <Look object={object} place={place} state={state} />
+              <span className="card-shade" ref={shade} />
+            </div>
+            <span
+              className="card-cast"
+              ref={shadow}
+              style={{ width: size[0], height: size[1] }}
+            />
           </motion.div>
         </motion.div>
         {hand && (
