@@ -3588,33 +3588,63 @@ await check(
     { fixture: "choice-loot", at: lootAt + 1, ready: slotOf(jaceVp) },
 );
 
-// Time Spiral's untap (`choice-untap`) offers the lands the engine may untap, the tapped ones,
-// and no others; picks of twins the engine offers one of go as that one.
+// Time Spiral's untap (`choice-untap`) is picked on the board: the tapped lands it may untap
+// glow, wherever they sit and whoever controls them, and no others; each pick turns gold, its
+// count on the confirm button; picks of twins the engine offers one of go as that one.
 const untapping = await lastDecision("choice-untap");
 const untapView = untapping.views.at(-1);
-const tappedLands = untapView.objects
-    .filter(
-        (o) => o.zone === "battlefield" && o.types.includes("land") && o.tapped,
-    )
-    .map((o) => o.slot);
-assert.ok(
-    untapView.objects.some(
-        (o) =>
-            o.zone === "battlefield" && o.types.includes("land") && !o.tapped,
-    ),
-    "the fixture has untapped lands",
-);
+const landsOf = (tapped) =>
+    untapView.objects
+        .filter(
+            (o) =>
+                o.zone === "battlefield" &&
+                o.types.includes("land") &&
+                o.tapped === tapped,
+        )
+        .map((o) => o.slot);
+const tappedLands = landsOf(true);
+const untappedLands = landsOf(false);
+assert.ok(untappedLands.length > 0, "the fixture has untapped lands");
+/** The slots of the permanents glowing `highlight`, in order. */
+const glowing = (page, highlight) =>
+    page.$$eval(`[data-zone="battlefield"] .card-${highlight}`, (els) =>
+        [
+            ...new Set(
+                els.map((e) => Number(e.closest("[data-slot]").dataset.slot)),
+            ),
+        ].sort((a, b) => a - b),
+    );
+/** The first of `slots` whose card is on top where it sits, not covered by another in its
+ * pile, so a click lands on it. */
+const uncovered = (page, slots) =>
+    page.evaluate(
+        (slots) =>
+            slots.find((slot) => {
+                const el = document.querySelector(`[data-slot="${slot}"]`);
+                const r = el.getBoundingClientRect();
+                const top = document.elementFromPoint(
+                    r.left + r.width / 2,
+                    r.top + r.height / 2,
+                );
+                return top?.closest("[data-slot]") === el;
+            }),
+        slots,
+    );
 await check(
-    "an untap offers only the permanents it may untap",
+    "an untap is picked on the board with only eligible permanents lit",
     async (page) => {
-        const shown = await page.$$eval(".choice-zone [data-slot]", (els) =>
-            els.map((e) => Number(e.dataset.slot)),
-        );
+        await page.clock.runFor(2000);
+        assert.equal(await page.$(".choice"), null, "no overlay opens");
         assert.deepEqual(
-            [...shown].sort((a, b) => a - b),
+            await glowing(page, "target"),
             [...tappedLands].sort((a, b) => a - b),
         );
-        await page.click(tray(shown[0]));
+        // An untapped land can't be picked.
+        await page.click(slotOf(await uncovered(page, untappedLands)));
+        await page.getByRole("button", { name: "Untap None" }).waitFor();
+        const land = await uncovered(page, tappedLands);
+        await page.click(slotOf(land));
+        assert.deepEqual(await glowing(page, "source"), [land]);
         await page
             .getByRole("button", {
                 name: `Untap 1/${untapping.decision.ask.max}`,
@@ -3624,9 +3654,151 @@ await check(
         const o = untapping.decision.candidates[first].option;
         const named = (slot) =>
             untapView.objects.find((x) => x.slot === slot).name;
-        assert.equal(named(o.slot), named(shown[0]), "the land picked");
+        assert.equal(named(o.slot), named(land), "the land picked");
     },
-    { fixture: "choice-untap", at: untapping.views.length, ready: ".choice" },
+    {
+        fixture: "choice-untap",
+        at: untapping.views.length,
+        ready: ".prompt",
+    },
+);
+
+// Adeline's trigger (`attack-token`) asks what its Human attacks with the Human on the table,
+// attacking the player; the turn button keeps that, and clicking The Wandering Emperor turns
+// it on her.
+const tokenAim = await lastDecision("attack-token");
+const human = named(tokenAim.views.at(-1), "Human Token")[0];
+const emperor = named(tokenAim.views.at(-1), "The Wandering Emperor")[0];
+assert.ok(
+    human !== undefined,
+    "the Human is on the table as it is asked about",
+);
+const defending = (walker) =>
+    tokenAim.decision.candidates.findIndex(
+        (c) => c.option.kind === "defender" && c.option.planeswalker === walker,
+    );
+const adelineRun = {
+    fixture: "attack-token",
+    at: tokenAim.views.length,
+    ready: slotOf(human),
+};
+await check(
+    "Adeline's Human is in view as what it attacks is asked",
+    async (page) => {
+        await page.clock.runFor(2000);
+        assert.ok(
+            await page.$(`${slotOf(emperor)} .card-target`),
+            "the planeswalker glows",
+        );
+        await page.click(slotOf(emperor));
+        assert.deepEqual(await settled(page, 1), [defending(emperor)]);
+    },
+    adelineRun,
+);
+await check(
+    "Adeline's Human attacks the player from the turn button",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.getByRole("button", { name: "Attack", exact: true }).click();
+        assert.deepEqual(await settled(page, 1), [defending(null)]);
+    },
+    adelineRun,
+);
+
+// Crewing (`crew`: Swift Reconfiguration's crew 5) is picked on the board, a meter of pips
+// showing the power tapped against the cost, and what the creature pointed at would add.
+const crewViews = await load("crew");
+const crewAt = crewViews.findIndex((v) => v.status.decision?.kind === "crew");
+const crewing = crewViews[crewAt].status.decision;
+const crewer = (name) =>
+    crewing.candidates.find((c) => c.label === name).option.slot;
+const crewMeter = (page) => page.getByRole("meter", { name: "Crew" });
+await check(
+    "crewing shows the power picked against the crew cost without text",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const meter = crewMeter(page);
+        assert.deepEqual(
+            [
+                await meter.getAttribute("aria-valuenow"),
+                await meter.getAttribute("aria-valuemax"),
+                (await meter.innerText()).trim(),
+            ],
+            ["0", "5", ""],
+        );
+        await page.hover(slotOf(crewer("Elite Spellbinder")));
+        assert.equal(await page.locator(".crew-pip-next").count(), 3);
+        const snapcaster = crewer("Snapcaster Mage");
+        await page.click(slotOf(snapcaster));
+        assert.deepEqual(await settled(page, 1), [
+            crewing.candidates.findIndex(
+                (c) =>
+                    c.option.kind === "object" && c.option.slot === snapcaster,
+            ),
+        ]);
+    },
+    { fixture: "crew", at: crewAt + 1, ready: ".crew-meter" },
+);
+await check(
+    "the crew meter fills with the power tapped",
+    async (page) => {
+        await page.clock.runFor(2000);
+        assert.equal(await crewMeter(page).getAttribute("aria-valuenow"), "2");
+        assert.equal(await page.locator(".crew-pip-on").count(), 2);
+    },
+    { fixture: "crew", at: crewAt + 2, ready: ".crew-meter" },
+);
+
+// A waterbend lands alone can pay (`choice-scry`: Aang's Iceberg's {3}, three Plains and a
+// Snapcaster Mage) asks nothing: the activation goes straight on to the scry.
+const scryViews = await load("choice-scry");
+assert.ok(
+    scryViews.every((v) => v.status.decision?.kind !== "waterbend"),
+    "no waterbend is asked",
+);
+const bendAt = scryViews.findLastIndex(
+    (v) => v.status.decision?.kind === "priority",
+);
+const bending = scryViews[bendAt].status.decision;
+const bend = bending.candidates.findIndex(
+    (c) => c.option.kind === "activate" && c.label.includes("Waterbend"),
+);
+const iceberg = bending.candidates[bend].option.slot;
+await check(
+    "a waterbend payable by lands alone asks nothing",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.click(slotOf(iceberg));
+        assert.deepEqual(await settled(page, 1), [bend]);
+        await page.waitForSelector(".choice");
+        assert.equal(await page.$(".prompt"), null, "nothing is asked first");
+    },
+    { fixture: "choice-scry", at: bendAt + 1, ready: slotOf(iceberg) },
+);
+
+// A waterbend mana can't pay (`waterbend-tap`: one Plains for {3}) shows its cost in symbols
+// and lights the artifact and creature that may tap for it.
+const tapBend = await lastDecision("waterbend-tap");
+await check(
+    "a waterbend shows its cost in symbols with its tappers lit",
+    async (page) => {
+        await page.clock.runFor(2000);
+        assert.deepEqual(
+            await page
+                .locator(".prompt-cost .mana-symbol")
+                .evaluateAll((els) => els.map((e) => e.ariaLabel)),
+            ["{3}"],
+        );
+        assert.deepEqual(
+            await glowing(page, "target"),
+            [...tapBend.bySlot.keys()].sort((a, b) => a - b),
+        );
+    },
+    {
+        fixture: "waterbend-tap",
+        at: tapBend.views.length,
+        ready: ".prompt-cost",
+    },
 );
 
 await queue.drain();

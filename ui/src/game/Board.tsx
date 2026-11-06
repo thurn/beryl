@@ -67,6 +67,7 @@ import {
   isOpening,
   playActs,
   prompt,
+  untapPlan,
   type Act,
   type Intent,
 } from "./decisions";
@@ -195,6 +196,8 @@ export function Board({
   const [casting, setCasting] = useState<Casting>();
   // The combat declaration being made, shown as if declared until it is confirmed.
   const [draft, setDraft] = useState<Draft>(emptyDraft);
+  // The permanents picked on the table to untap, until the pick is confirmed.
+  const [untaps, setUntaps] = useState<ReadonlySet<number>>(new Set());
   // The card being dragged.
   const [lifted, setLifted] = useState<number>();
   const [settings, setSettings] = useState(false);
@@ -218,6 +221,9 @@ export function Board({
     deciding && (decision?.kind === "attacker" || decision?.kind === "blocker")
       ? decision.kind
       : undefined;
+  // Untapping up to a number of permanents: they are picked on the table, eligible ones lit.
+  const untapping =
+    deciding && decision?.ask.kind === "untap" ? decision.ask : undefined;
   // The table as the declaration would leave it.
   const shown = useMemo(
     () => (drafting ? declared(view, draft) : view),
@@ -289,6 +295,7 @@ export function Board({
     setMenu(undefined);
     setCasting(undefined);
     setDraft(emptyDraft());
+    setUntaps(new Set());
   }, [view]);
 
   const pick = (index: CandidateIndex, then?: Intent[]) => {
@@ -432,6 +439,25 @@ export function Board({
     }
   }
 
+  // An untap's permanents: those still to pick glow cyan while more may be, those picked gold.
+  if (untapping) {
+    for (const [slot, state] of states) {
+      if (!can.bySlot.has(slot)) continue;
+      const room = untaps.size < untapping.max;
+      states.set(slot, {
+        ...state,
+        highlight: untaps.has(slot) ? "source" : room ? "target" : undefined,
+        playable: false,
+      });
+    }
+  }
+  /** Confirms the untap: the picks that make it, as the engine asks them. */
+  const untap = () => {
+    if (!decision) return;
+    const { index, rest } = follow(decision, untapPlan(untaps, objects));
+    if (index !== undefined) pick(index, rest);
+  };
+
   /** A click on the card in `slot`: what it offers, or nothing (false). */
   const onClick = (slot: number, at: Point): boolean => {
     if (castingNow) {
@@ -451,6 +477,13 @@ export function Board({
     }
     if (drafting) {
       setDraft(drafted(draft, slot));
+      return true;
+    }
+    if (untapping) {
+      if (!can.bySlot.has(slot)) return false;
+      const next = new Set(untaps);
+      if (!next.delete(slot) && next.size < untapping.max) next.add(slot);
+      setUntaps(next);
       return true;
     }
     const acts = deciding ? can.bySlot.get(slot) : undefined;
@@ -577,12 +610,13 @@ export function Board({
     }
     const target = e.target instanceof Element ? e.target : null;
     if (target?.closest("button, input, select, textarea, a")) return;
-    const { done, pass } = can;
+    const { pass } = can;
     let primary: (() => void) | undefined;
     if (castingNow) primary = () => cast(castingNow.choice);
     else if (drafting) primary = declare;
+    else if (untapping) primary = untap;
     else if (declaring)
-      primary = done === undefined ? undefined : () => pick(done);
+      primary = finish === undefined ? undefined : () => pick(finish);
     else if (deciding && decision?.kind === "priority" && pass !== undefined) {
       primary = () => pick(pass);
     }
@@ -623,6 +657,12 @@ export function Board({
   // A combat declaration is finished with the turn button, where priority is passed.
   const declaring =
     deciding && decision && isCombat(decision.kind) ? decision : undefined;
+  // What finishes it: what a creature put onto the battlefield attacking (Adeline's Human,
+  // shown attacking the player as it is asked) attacks defaults to the player (CR 508.4).
+  const finish =
+    declaring?.kind === "attackTarget"
+      ? can.players.get("opponent")?.index
+      : can.done;
 
   return (
     <>
@@ -790,7 +830,7 @@ export function Board({
                 onClear={() => setDraft(emptyDraft())}
               />
             ) : declaring ? (
-              <Finish decision={declaring} done={can.done} onPick={pick} />
+              <Finish decision={declaring} done={finish} onPick={pick} />
             ) : decision?.kind === "priority" || waiting ? (
               <div className="turn-action">
                 <TurnButton
@@ -831,6 +871,16 @@ export function Board({
             }}
             onPick={pick}
             onCancel={cancellable ? cancel : undefined}
+            confirm={
+              untapping && {
+                label:
+                  untaps.size > 0
+                    ? `Untap ${untaps.size}/${untapping.max}`
+                    : "Untap None",
+                onClick: untap,
+              }
+            }
+            hovered={hovered}
           />
         )}
 
@@ -1308,6 +1358,8 @@ function Prompt({
   onTable,
   onPick,
   onCancel,
+  confirm,
+  hovered,
 }: {
   decision: DecisionView;
   /** Choosing no target, where the target is picked on the board with its count. */
@@ -1320,6 +1372,10 @@ function Prompt({
   onPick(index: CandidateIndex): void;
   /** Takes back the cast the decision is part of. */
   onCancel?(): void;
+  /** Confirms the cards picked on the table. */
+  confirm?: { label: string; onClick(): void } | false;
+  /** The card the pointer is on, which a crew meter previews. */
+  hovered?: number;
 }) {
   // A payment plan reads as what it taps, never as a number; a trigger as its source, since
   // the title says what happens to it.
@@ -1331,9 +1387,11 @@ function Prompt({
     if (c.option.kind !== "plan" || !taps) return c.label;
     return taps.length > 0 ? `Tap ${tapList(taps.map(nameOf))}` : "Tap nothing";
   };
+  // Cards picked on the table and confirmed from the prompt leave it no done to offer.
   const offered = decision.candidates
     .map((c, index) => ({ c, index, label: label(c) }))
-    .filter(({ c }) => c.option.kind !== "object" || !onTable(c.option.slot));
+    .filter(({ c }) => c.option.kind !== "object" || !onTable(c.option.slot))
+    .filter(({ c }) => !confirm || c.option.kind !== "done");
   // Up to one target asks for the target, which the board takes with its count; the prompt
   // offers none.
   const buttons =
@@ -1354,7 +1412,27 @@ function Prompt({
   };
   return (
     <div className="prompt" role="dialog" aria-label={title}>
-      <h2 className="prompt-title">{title}</h2>
+      <h2 className="prompt-title">
+        {title}
+        {decision.ask.kind === "waterbend" && (
+          <span className="prompt-cost">
+            <CostText text={decision.ask.cost} />
+          </span>
+        )}
+      </h2>
+      {decision.ask.kind === "crew" && (
+        <CrewMeter
+          ask={decision.ask}
+          adding={
+            hovered !== undefined &&
+            decision.candidates.some(
+              (c) => c.option.kind === "object" && c.option.slot === hovered,
+            )
+              ? (objects.get(hovered)?.pt?.power ?? 0)
+              : 0
+          }
+        />
+      )}
       {buttons.length > 0 && (
         <div className="prompt-choices">
           {buttons.map((b) => (
@@ -1369,13 +1447,55 @@ function Prompt({
           ))}
         </div>
       )}
-      {onCancel && (
+      {(onCancel || confirm) && (
         <div className="cast-buttons">
-          <Button size="small" variant="secondary" onClick={onCancel}>
-            Cancel
-          </Button>
+          {onCancel && (
+            <Button size="small" variant="secondary" onClick={onCancel}>
+              Cancel
+            </Button>
+          )}
+          {confirm && (
+            <Button size="small" onClick={confirm.onClick}>
+              {confirm.label}
+            </Button>
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** A crew cost as pips, one per point of power: those the creatures tapped so far crew lit,
+ * those the creature pointed at would crew half lit. */
+function CrewMeter({
+  ask,
+  adding,
+}: {
+  ask: { crew: number; left: number };
+  adding: number;
+}) {
+  const crewed = ask.crew - ask.left;
+  return (
+    <div
+      className="crew-meter"
+      role="meter"
+      aria-label="Crew"
+      aria-valuemin={0}
+      aria-valuemax={ask.crew}
+      aria-valuenow={crewed}
+    >
+      {Array.from({ length: ask.crew }, (_, i) => (
+        <i
+          key={i}
+          className={
+            i < crewed
+              ? "crew-pip crew-pip-on"
+              : i < crewed + adding
+                ? "crew-pip crew-pip-next"
+                : "crew-pip"
+          }
+        />
+      ))}
     </div>
   );
 }

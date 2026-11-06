@@ -548,7 +548,10 @@ impl Game {
 
     /// The session's own answer to the human's decision `d`, if it gives one: under the
     /// smart stops, it passes their priority while only their own doings sit on the stack
-    /// ([`Game::own_top`]), and orders their simultaneous triggers ([`trigger_to_stack`]).
+    /// ([`Game::own_top`]), orders their simultaneous triggers ([`trigger_to_stack`]), and
+    /// pays a waterbend cost with mana whenever mana can pay it, tapping no artifact or
+    /// creature ([CR 701.67a](https://yawgatog.com/resources/magic-rules/#R70167a): "you may
+    /// tap an untapped artifact or creature you control rather than pay that mana").
     /// Like halts, these are the session's alone: the engine's smart stops, which the agent's
     /// search shares, are unchanged, and exact stops ask every one. A function of the position,
     /// the stops and the human's answers, so a replay finds each again; the replay records
@@ -563,6 +566,9 @@ impl Game {
                 Some(Choice(0))
             }
             DecisionKind::TriggerOrder => Some(trigger_to_stack(&self.state, &self.table, d)),
+            DecisionKind::Waterbend => (0..d.len() as u8)
+                .map(Choice)
+                .find(|&c| d.candidates.option(c) == Some(Opt::Done)),
             _ => None,
         }
     }

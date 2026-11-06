@@ -445,6 +445,30 @@
       "route": "/?fixture=namesake-target#/game",
       "width": 1600,
       "height": 900
+    },
+    {
+      "name": "game-untap",
+      "route": "/?fixture=choice-untap#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-attack-token",
+      "route": "/?fixture=attack-token#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-crew",
+      "route": "/?fixture=crew#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-waterbend",
+      "route": "/?fixture=waterbend-tap#/game",
+      "width": 1600,
+      "height": 900
     }
   ]
 }

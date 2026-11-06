@@ -1,14 +1,18 @@
 //! What the session answers for the human under the smart stops: their priority while only
-//! their own spells and abilities came and went on the stack, and the order of their
-//! simultaneous triggers. Exact stops ask both, and replays find every such answer again.
+//! their own spells and abilities came and went on the stack, the order of their
+//! simultaneous triggers, and a waterbend cost mana can pay. Exact stops ask both, and replays find every such answer again.
 
 use beryl_cards::CARDS;
-use beryl_cards::names::{GET_LOST, ISLAND, MANA_DRAIN, PLAINS, THUNDERTRAP_TRAINER};
+use beryl_cards::names::{
+    AANGS_ICEBERG, GET_LOST, ISLAND, JACE_VRYNS_PRODIGY, MANA_DRAIN, PLAINS, THUNDERTRAP_TRAINER,
+};
 use beryl_engine::state::StackEntry;
+use beryl_scenario::{P0, P1, Permanent, Scenario};
+use beryl_search::Budget;
 use beryl_session::protocol::{Candidate, Kind, Side, StackItem, ZoneName};
 use beryl_session::replay::Entry;
 use beryl_session::{
-    CandidateIndex, Game, PlayerView, Seat, SessionId, StartGame, Status, StopsSetting,
+    CandidateIndex, Game, PlayerView, Prepared, Seat, SessionId, StartGame, Status, StopsSetting,
 };
 
 const SESSION: SessionId = SessionId(1);
@@ -290,4 +294,78 @@ fn offspring_first(asked: &[Asked]) -> usize {
         }
     }
     checked
+}
+
+/// Aang's Iceberg, with three Plains and a creature, which may tap for one of its waterbend {3}.
+const WATERBEND: Scenario = Scenario::new("waterbend")
+    .battlefield(
+        P0,
+        &[
+            Permanent::new(AANGS_ICEBERG),
+            Permanent::new(JACE_VRYNS_PRODIGY),
+            Permanent::new(PLAINS),
+            Permanent::new(PLAINS),
+            Permanent::new(PLAINS),
+        ],
+    )
+    .library(P0, &[ISLAND, ISLAND, ISLAND])
+    .library(P1, &[ISLAND, ISLAND, ISLAND]);
+
+/// The kinds of decision the human is asked after activating [`WATERBEND`]'s Iceberg, up to
+/// its scry.
+fn asked_after_waterbend(stops: StopsSetting) -> Vec<Kind> {
+    let (table, state) = beryl_scenario::position(&CARDS, &WATERBEND).unwrap();
+    let random = beryl_search::agent("random").unwrap();
+    let mut game = Game::prepared(
+        Prepared {
+            opponent: (random.new)(&table, 1, Budget::DEFAULT),
+            stand_in: (random.new)(&table, 2, Budget::DEFAULT),
+            table,
+            state,
+            human: HUMAN,
+            stops,
+        },
+        SESSION,
+    );
+    let mut asked: Option<Vec<Kind>> = None;
+    while let Some(view) = game.next_view() {
+        let Status::Deciding { decision } = &view.status else {
+            continue;
+        };
+        if let Some(asked) = &mut asked {
+            asked.push(decision.kind);
+            if decision.kind == Kind::ChooseUpTo {
+                break;
+            }
+        }
+        let iceberg = view
+            .objects
+            .iter()
+            .find(|o| o.name.as_deref() == Some(AANGS_ICEBERG))
+            .map(|o| o.slot);
+        let activate = decision.candidates.iter().position(
+            |c| matches!(c.option, Candidate::Activate { slot, .. } if Some(slot) == iceberg),
+        );
+        let index = match (asked.is_none(), activate) {
+            (true, Some(i)) => {
+                asked = Some(Vec::new());
+                i
+            }
+            _ => 0,
+        };
+        let checked = game.answer(decision.id, CandidateIndex(index as u8));
+        game.choose(checked.unwrap());
+    }
+    asked.expect("the waterbend was activated")
+}
+
+/// Mana can pay the whole waterbend, so the smart stops pay it so; exact stops ask whether to
+/// tap the creature for some of it (CR 701.67a).
+#[test]
+fn smart_stops_pay_a_waterbend_with_mana_when_mana_can() {
+    assert!(!asked_after_waterbend(StopsSetting::Smart).contains(&Kind::Waterbend));
+    assert_eq!(
+        asked_after_waterbend(StopsSetting::Exact).first(),
+        Some(&Kind::Waterbend)
+    );
 }

@@ -7,15 +7,15 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use beryl_cards::names::{
-    AANGS_ICEBERG, ABHORRENT_OCULUS, BEZA_THE_BOUNDING_SPRING, COUNTERSPELL, CURRENCY_CONVERTER,
-    DAMN, ELITE_SPELLBINDER, GET_LOST, ISLAND, JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY,
-    JACE_WIELDER_OF_MYSTERIES, MALCOLM_ALLURING_SCOUNDREL, MANA_CRYPT, MANA_DRAIN, MANA_TITHE,
-    NO_MORE_LIES, OUST, OVERLORD_OF_THE_MISTMOORS, PLAINS, PORTABLE_HOLE, REPRIEVE,
-    SEACHROME_COAST, SINK_INTO_STUPOR, SNAPCASTER_MAGE, SPARAS_HEADQUARTERS,
-    SPHINX_OF_FALSE_CONCLUSIONS, STAFF_OF_THE_STORYTELLER, STOCK_UP, SUBTLETY,
-    SWIFT_RECONFIGURATION, TEFERI_HERO_OF_DOMINARIA, TEFERI_TIME_RAVELER, THE_WANDERING_EMPEROR,
-    THIEVING_SKYDIVER, THIRST_FOR_DISCOVERY, THUNDERTRAP_TRAINER, TIME_SPIRAL, TRINKET_MAGE,
-    TUNDRA, WINDS_OF_ABANDON,
+    AANGS_ICEBERG, ABHORRENT_OCULUS, ADELINE_RESPLENDENT_CATHAR, BEZA_THE_BOUNDING_SPRING,
+    COUNTERSPELL, CURRENCY_CONVERTER, DAMN, ELITE_SPELLBINDER, GET_LOST, ISLAND,
+    JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY, JACE_WIELDER_OF_MYSTERIES,
+    MALCOLM_ALLURING_SCOUNDREL, MANA_CRYPT, MANA_DRAIN, MANA_TITHE, NO_MORE_LIES, OUST,
+    OVERLORD_OF_THE_MISTMOORS, PLAINS, PORTABLE_HOLE, REPRIEVE, SEACHROME_COAST, SINK_INTO_STUPOR,
+    SNAPCASTER_MAGE, SPARAS_HEADQUARTERS, SPHINX_OF_FALSE_CONCLUSIONS, STAFF_OF_THE_STORYTELLER,
+    STOCK_UP, SUBTLETY, SWIFT_RECONFIGURATION, TEFERI_HERO_OF_DOMINARIA, TEFERI_TIME_RAVELER,
+    THE_WANDERING_EMPEROR, THIEVING_SKYDIVER, THIRST_FOR_DISCOVERY, THUNDERTRAP_TRAINER,
+    TIME_SPIRAL, TRINKET_MAGE, TUNDRA, WINDS_OF_ABANDON,
 };
 use beryl_engine::card::{Castings, FaceIx};
 use beryl_engine::state::CounterKind;
@@ -61,11 +61,8 @@ pub const BOARDS: &[Scenario] = &[
         .graveyard(P1, &[SWIFT_RECONFIGURATION])
         .exile(P1, &[MALCOLM_ALLURING_SCOUNDREL])
         .library(P1, LANDS)
-        .actions(&[
-            Action::activate(P0, AANGS_ICEBERG, 1),
-            // Lands pay the waterbend, not the Snapcaster Mage.
-            Action::answer(P0, DecisionKind::Waterbend, Pick::Done),
-        ]),
+        // Lands pay the waterbend, not the Snapcaster Mage, unasked.
+        .actions(&[Action::activate(P0, AANGS_ICEBERG, 1)]),
     // The human casts Thundertrap Trainer and takes nothing; in the opponent's turn they play
     // a land and Stock Up, and the human has nothing to do until their next main phase.
     Scenario::new("opponent-turn")
@@ -786,6 +783,67 @@ pub const BOARDS: &[Scenario] = &[
         )
         .library(P1, LANDS)
         .actions(&[Action::cast(P0, TIME_SPIRAL)]),
+    // Adeline attacks a player who controls The Wandering Emperor: her trigger's Human, made
+    // attacking, asks what it attacks.
+    Scenario::new("attack-token")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[Permanent::new(ADELINE_RESPLENDENT_CATHAR), PLAINS_, PLAINS_],
+        )
+        .library(P0, LANDS)
+        .battlefield(
+            P1,
+            &[Permanent::new(THE_WANDERING_EMPEROR), ISLAND_, PLAINS_],
+        )
+        .library(P1, LANDS)
+        .actions(&[choose(
+            P0,
+            DecisionKind::Attacker,
+            ADELINE_RESPLENDENT_CATHAR,
+        )]),
+    // Swift Reconfiguration makes Jace, Vryn's Prodigy a Vehicle with crew 5, which three
+    // creatures of power 2, 2 and 3 may crew: Snapcaster Mage, then Elite Spellbinder.
+    Scenario::new("crew")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(JACE_VRYNS_PRODIGY),
+                Permanent::new(SNAPCASTER_MAGE),
+                Permanent::new(TRINKET_MAGE),
+                Permanent::new(ELITE_SPELLBINDER),
+                PLAINS_,
+            ],
+        )
+        .hand(P0, &[SWIFT_RECONFIGURATION])
+        .library(P0, LANDS)
+        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[
+            Action::cast(P0, SWIFT_RECONFIGURATION),
+            choose(P0, DecisionKind::Target, JACE_VRYNS_PRODIGY),
+            Action::activate_granted(P0, JACE_VRYNS_PRODIGY, 0),
+            choose(P0, DecisionKind::Crew, SNAPCASTER_MAGE),
+            choose(P0, DecisionKind::Crew, ELITE_SPELLBINDER),
+        ]),
+    // Aang's Iceberg's waterbend {3} with one Plains: the Staff of the Storyteller or Jace,
+    // Vryn's Prodigy taps for one of it.
+    Scenario::new("waterbend-tap")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(AANGS_ICEBERG),
+                Permanent::new(STAFF_OF_THE_STORYTELLER),
+                Permanent::new(JACE_VRYNS_PRODIGY),
+                PLAINS_,
+            ],
+        )
+        .library(P0, LANDS)
+        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[Action::activate(P0, AANGS_ICEBERG, 1)]),
 ];
 
 /// A library to draw from for a few turns.

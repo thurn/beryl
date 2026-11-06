@@ -1391,6 +1391,33 @@
   max-height: 260px;
   overflow-y: auto;
 }
+/* A waterbend's cost still to pay, in symbols beside the title. */
+.prompt-cost {
+  margin-left: 10px;
+  font-size: 18px;
+}
+/* A crew cost as a row of pips: crewed gold, what the pointed-at creature would add soft. */
+.crew-meter {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.crew-pip {
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--metal-bright);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 6%);
+}
+.crew-pip-on {
+  border-color: var(--gold);
+  background: var(--gold);
+  box-shadow: 0 0 6px var(--gold-soft);
+}
+.crew-pip-next {
+  border-color: var(--gold);
+  background: var(--gold-soft);
+}
 /* A long label wraps in its pill rather than run out of it. */
 .prompt-choices .button {
   max-width: 100%;

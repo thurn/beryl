@@ -209,6 +209,9 @@ INTERACTION_FIXTURES = [
     "choice-explore",
     "choice-loot",
     "choice-untap",
+    "attack-token",
+    "crew",
+    "waterbend-tap",
 ]
 
 

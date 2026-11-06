@@ -15,7 +15,7 @@ import type {
   StackItem,
 } from "../generated/protocol";
 import { abilityText } from "./faces";
-import { optionsMatch, slotOf, twins, type Intent } from "./decisions";
+import { optionsMatch, type Intent } from "./decisions";
 
 /** The card at the overlay's right: what asks the choice. A card by name alone when the view
  * has no object for it (an ability whose source has left). */
@@ -102,8 +102,11 @@ export function choiceOf(view: PlayerView): Choice | undefined {
       return topOrBottom(at, ask);
     case "explore":
       return explore(at);
+    // Untaps (picked on the board), crews and waterbends are decided on the board.
     case "untap":
-      return untap(at, ask);
+    case "crew":
+    case "waterbend":
+      return undefined;
     case "unlessPays":
       return payOrCounter(at, ask) ?? yesNo(at);
     case "payLife":
@@ -531,44 +534,6 @@ function explore(at: Situation): Ask {
       { label: "Graveyard", plan: [yes("yesNo")] },
       { label: "Keep on Top", plan: [no("yesNo")] },
     ],
-  };
-}
-
-/** Permanents to untap, up to a number, one at a time, then done: those the engine offers and
- * their twins (it offers one of interchangeable permanents, architecture §7.2), yours first. */
-function untap(at: Situation, { max }: AskOf<"untap">): Pick {
-  const offered = at.offered.flatMap((s) => at.objects.get(s) ?? []);
-  const twinOf = (slot: number) => {
-    const o = at.objects.get(slot);
-    return o && offered.find((t) => t.slot === slot || twins(o, t));
-  };
-  const mine = (slot: number) => at.objects.get(slot)?.controller === "you";
-  const cards = at.view.battlefield
-    .filter((s) => twinOf(s) !== undefined)
-    .sort((a, b) => Number(mine(b)) - Number(mine(a)));
-  const lands = cards.every((s) => at.objects.get(s)?.types.includes("land"));
-  const noun = lands ? "lands" : "permanents";
-  // Picks a permanent, or the twin the engine offers in its place.
-  const pick = (slot: number): Intent => ({
-    kind: "chooseUpTo",
-    wants: (o) => o.kind === "object" && o.slot === slot,
-    alike: (o) => {
-      const [a, b] = [at.objects.get(slot), at.objects.get(slotOf(o) ?? -1)];
-      return a !== undefined && b !== undefined && twins(a, b);
-    },
-  });
-  return {
-    kind: "pick",
-    key: at.key,
-    title: `Untap ${capitalized(noun)}`,
-    instruction: `Up to ${inWords(max)}.`,
-    source: at.source,
-    cards,
-    pickable: cards,
-    min: 0,
-    max,
-    confirm: (n) => (n > 0 ? `Untap ${n}/${max}` : "Untap None"),
-    plan: (picked) => [...picked.map(pick), done("chooseUpTo")],
   };
 }
 

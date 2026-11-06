@@ -282,14 +282,36 @@ const PROMPTS: Partial<Record<Kind, string>> = {
   castOffer: "Cast it?",
   yesNo: "Choose",
   chooseObject: "Choose a card",
-  crew: "Choose a creature to crew with",
+  crew: "Crew",
   chooseUpTo: "Choose cards",
-  waterbend: "Tap for waterbend?",
+  waterbend: "Waterbend",
   exileCost: "Exile a card",
 };
 
 /** The prompt's title: what the decision asks, and for whom when there is a source. */
 export function prompt(decision: DecisionView, source?: string): string {
+  if (decision.ask.kind === "untap") return "Untap";
   const ask = PROMPTS[decision.kind] ?? "Choose";
   return source && decision.kind === "target" ? `${ask} for ${source}` : ask;
+}
+
+/** The picks that untap the permanents in `picked`, one at a time, then done: each the
+ * permanent itself or, failing that, the twin the engine offers in its place (it offers one
+ * of interchangeable permanents, architecture §7.2). */
+export function untapPlan(
+  picked: Iterable<number>,
+  objects: Map<number, ObjectView>,
+): Intent[] {
+  const pick = (slot: number): Intent => ({
+    kind: "chooseUpTo",
+    wants: (o) => o.kind === "object" && o.slot === slot,
+    alike: (o) => {
+      const [a, b] = [objects.get(slot), objects.get(slotOf(o) ?? -1)];
+      return a !== undefined && b !== undefined && twins(a, b);
+    },
+  });
+  return [
+    ...[...picked].map(pick),
+    { kind: "chooseUpTo", wants: (o) => o.kind === "done" },
+  ];
 }

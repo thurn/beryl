@@ -257,6 +257,23 @@
       "board": "choice-untap",
       "until": "first chooseUpTo decision for seat 0",
       "where": ["resolving Time Spiral"]
+    },
+    {
+      "name": "attack-token",
+      "board": "attack-token",
+      "until": "first attackTarget decision for seat 0",
+      "where": ["resolving Adeline, Resplendent Cathar"]
+    },
+    {
+      "name": "crew",
+      "board": "crew",
+      "until": "first crew decision for seat 0",
+      "after": 1
+    },
+    {
+      "name": "waterbend-tap",
+      "board": "waterbend-tap",
+      "until": "first waterbend decision for seat 0"
     }
   ]
 }
