@@ -37,9 +37,9 @@ export function opponentActivity(
 }
 
 /** The game log at the table's left: a heading for each turn, then what happened, newest at
- * the foot, scrolled to it as entries arrive. While permanents reach into its column it is
- * `folded` to a button, which toggles it `open`, the rows making room for it (layout.ts), so it
- * never lies over the cards or half hidden under them. */
+ * the foot, scrolled to it as entries arrive and whenever it shows again. While permanents
+ * reach into its column it is `folded` to a button, which toggles it `open`, the rows making
+ * room for it (layout.ts), so it never lies over the cards or half hidden under them. */
 export function GameLog({
   log,
   folded,
@@ -53,10 +53,20 @@ export function GameLog({
 }) {
   const list = useRef<HTMLOListElement>(null);
   const shown = !folded || open;
-  useLayoutEffect(() => {
+  const toNewest = () => {
     const el = list.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [log, shown]);
+  };
+  useLayoutEffect(toNewest, [log, shown]);
+  // A box laid out empty loses its scroll: hidden by an ancestor, or not yet sized. It
+  // scrolls to the newest entry again once it has its size.
+  useEffect(() => {
+    const el = list.current;
+    if (!el) return;
+    const observer = new ResizeObserver(toNewest);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   return (
     <section
       className={`game-log${folded ? " game-log-folded" : ""}`}

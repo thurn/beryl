@@ -8,12 +8,13 @@
 //! most draws) arrive with the cards that create them.
 
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityKind, FaceIx, Replacement, Types};
+use crate::card::{AbilityKind, FaceAbility, FaceIx, Replacement, Types};
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot};
 use crate::layers;
 use crate::state::{
-    Continuous, CounterKind, ObjectFlags, ObjectRef, State, TurnStep, Zone, token_slots,
+    Continuous, CounterKind, ObjectFlags, ObjectRef, State, TARGETS, Target, TurnStep, Zone,
+    token_slots,
 };
 use crate::table::GameTable;
 use crate::trigger;
@@ -115,6 +116,23 @@ pub enum Event {
     Cast {
         spell: ObjectRef,
         controller: Seat,
+    },
+    /// An ability was put on the stack, for the UI's log: an activated one as it becomes
+    /// activated, its costs paid
+    /// ([CR 602.2b](https://yawgatog.com/resources/magic-rules/#R6022b): "The remainder of the
+    /// process for activating an ability is identical to the process for casting a spell
+    /// listed in rules 601.2b-i"), or a triggered one once its targets are chosen
+    /// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d)). A triggered ability
+    /// without targets goes unsaid: what it does says it. The ability as it stood on the
+    /// stack then, which it may have left by the time anyone looks.
+    Ability {
+        source: Option<ObjectRef>,
+        controller: Seat,
+        card: CardIx,
+        face: FaceIx,
+        ability: FaceAbility,
+        targets: Fixed<Target, TARGETS>,
+        x: u8,
     },
     /// A player declared attackers ([CR 508.1](https://yawgatog.com/resources/magic-rules/#R5081)).
     Attack {

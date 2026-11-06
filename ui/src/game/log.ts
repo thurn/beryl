@@ -1,5 +1,6 @@
 // The game log: what each view's events say happened, as short sentences naming cards in
-// full ("Opponent cast <card> targeting <card>", "<card> was countered"). The routine (steps
+// full ("Opponent cast <card> targeting <card>", "You activated <card> +1 targeting Opponent",
+// "<card> was countered"). The routine (steps
 // beginning, the draw step's draw, tapping for mana) is left out; each turn opens with a
 // heading.
 import type {
@@ -66,6 +67,34 @@ const LOSSES: Record<LossReason, (life: number) => string> = {
 
 const counters = (n: number, kind: Counter) =>
   `${n === 1 ? "a" : n} ${COUNTERS[kind]} counter${n === 1 ? "" : "s"}`;
+
+/** A loyalty ability's cost as its card prints it: "+1", "0", "−3". */
+const loyaltyCost = (n: number) =>
+  n > 0 ? `+${n}` : n < 0 ? `\u2212${-n}` : "0";
+
+/** The indices of `events`' loyalty counters paid to activate an ability, which the
+ * activation's line says: the last such change to its source before it. */
+function loyaltyPaid(events: GameEvent[]): Set<number> {
+  const paid = new Set<number>();
+  events.forEach((e, i) => {
+    if (e.kind !== "ability" || !e.loyalty || e.item.kind !== "ability") return;
+    const source = e.item.source;
+    const kind = e.loyalty > 0 ? "countersAdded" : "countersRemoved";
+    for (let j = i - 1; j >= 0; j--) {
+      const c = events[j]!;
+      if (
+        c.kind === kind &&
+        c.slot === source &&
+        c.counter === "loyalty" &&
+        c.amount === Math.abs(e.loyalty)
+      ) {
+        paid.add(j);
+        return;
+      }
+    }
+  });
+  return paid;
+}
 
 /** What `view`'s events say happened, oldest first. `names` names the cards it no longer
  * shows (`learnNames` of the views before, and of this one). */
@@ -148,6 +177,22 @@ export function logLines(view: PlayerView, names: Names): LogLine[] {
           count === 1 ? `a ${n}` : `${count} ${n}s`,
         );
         say(e.controller, `${who(e.controller)} created ${listed(made)}`);
+        return;
+      }
+      case "ability": {
+        const item = e.item;
+        if (item.kind !== "ability") return;
+        const targets = item.targets.map(target);
+        const aimed = targets.length ? ` targeting ${listed(targets)}` : "";
+        if (item.triggered) {
+          say(item.controller, `${item.name} triggered${aimed}`);
+          return;
+        }
+        const cost = e.loyalty === null ? "" : ` ${loyaltyCost(e.loyalty)}`;
+        say(
+          item.controller,
+          `${who(item.controller)} activated ${item.name}${cost}${aimed}`,
+        );
         return;
       }
       case "attack":
@@ -246,6 +291,7 @@ export function logLines(view: PlayerView, names: Names): LogLine[] {
     }
   };
 
-  for (const e of view.events) line(e);
+  const paid = loyaltyPaid(view.events);
+  view.events.forEach((e, i) => paid.has(i) || line(e));
   return out;
 }

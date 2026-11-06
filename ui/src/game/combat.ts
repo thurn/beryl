@@ -3,7 +3,7 @@
 // table as if declared. The engine takes a declaration one pick at a time, with identical
 // creatures as one candidate (architecture §7.2, §11), so confirming plans the picks that say
 // it, which the game screen sends as each decision arrives. Pure functions of the view.
-import type { ObjectView, PlayerView } from "../generated/protocol";
+import type { ObjectView, PlayerView, Side } from "../generated/protocol";
 import { twins, type Intent } from "./decisions";
 
 /** A declaration in the making: each attacker and what it attacks (a planeswalker's slot, or
@@ -43,6 +43,23 @@ export function declared(view: PlayerView, draft: Draft): PlayerView {
     return o;
   });
   return { ...view, objects };
+}
+
+/** The combat damage `side` stands to take from the creatures attacking them that `view`
+ * shows unblocked, or undefined if none attacks them
+ * ([CR 510.1a](https://yawgatog.com/resources/magic-rules/#R5101a)): "An unblocked creature
+ * assigns its combat damage to the player, planeswalker, or battle it's attacking." The engine
+ * has no trample or double strike, so a blocked creature deals the player none and each
+ * deals its power once. */
+export function incoming(view: PlayerView, side: Side): number | undefined {
+  let total: number | undefined;
+  for (const o of view.objects) {
+    const c = o.combat;
+    if (c?.kind !== "attacking" || c.planeswalker !== null) continue;
+    if (o.controller === side) continue;
+    total = (total ?? 0) + (c.blocked ? 0 : Math.max(0, o.pt?.power ?? 0));
+  }
+  return total;
 }
 
 /** The first of `slots` interchangeable with the object in `slot`. */

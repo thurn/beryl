@@ -15,6 +15,7 @@ import assert from "node:assert/strict";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { slotOf as offeredSlot, twins } from "../src/game/decisions.ts";
+import { logLines } from "../src/game/log.ts";
 import { cutText, launch, workers } from "./capture.mjs";
 
 const [base, fixtures] = process.argv.slice(2);
@@ -122,6 +123,7 @@ async function check(
         viewport = { width: 1600, height: 900 },
         reducedMotion = "no-preference",
         hash = "#/game",
+        init,
     } = {},
 ) {
     await queue(async () => {
@@ -148,6 +150,7 @@ async function check(
         );
         try {
             await page.clock.install();
+            if (init) await page.addInitScript(init);
             const route = `/?fixture=${fixture}&at=${at}${hash}`;
             await page.goto(new URL(route, base).href, { waitUntil: "load" });
             await page.waitForSelector(ready);
@@ -705,6 +708,122 @@ await check(
         );
     },
     { fixture: "opponent-turn", at: 22, ready: ".game-log-entry" },
+);
+
+// The log names what an ability did and to what: an activation its source, its loyalty cost
+// (the counters paid go unsaid) and its targets, and a trigger with targets its source and them,
+// so a mill or a bounce that follows has its cause.
+{
+    const ability = (source, name, targets, triggered = false) => ({
+        kind: "ability",
+        source,
+        ability: 0,
+        granted: false,
+        name,
+        triggered,
+        nth: 0,
+        controller: "opponent",
+        targets,
+        x: 0,
+    });
+    const view = {
+        turn: { number: 19, active: "opponent", step: "precombatMain" },
+        status: { kind: "playing" },
+        objects: [{ slot: 30, owner: "you", controller: "you" }],
+        stack: [],
+        events: [
+            { kind: "countersAdded", slot: 7, counter: "loyalty", amount: 1 },
+            {
+                kind: "ability",
+                item: ability(7, "Jace, Wielder of Mysteries", [
+                    { kind: "player", player: "you" },
+                ]),
+                loyalty: 1,
+            },
+            {
+                kind: "zoneChange",
+                slot: 30,
+                from: "library",
+                to: "graveyard",
+                reason: "effect",
+            },
+            { kind: "countersRemoved", slot: 5, counter: "loyalty", amount: 3 },
+            {
+                kind: "ability",
+                item: ability(5, "Teferi, Time Raveler", [
+                    { kind: "object", slot: 9 },
+                ]),
+                loyalty: -3,
+            },
+            {
+                kind: "ability",
+                item: ability(
+                    11,
+                    "Subtlety",
+                    [{ kind: "object", slot: 9 }],
+                    true,
+                ),
+                loyalty: null,
+            },
+        ],
+    };
+    const names = new Map([
+        [5, "Teferi, Time Raveler"],
+        [7, "Jace, Wielder of Mysteries"],
+        [9, "Snapcaster Mage"],
+        [30, "Island"],
+    ]);
+    assert.deepEqual(
+        logLines(view, names).map((l) => l.text),
+        [
+            "Opponent activated Jace, Wielder of Mysteries +1 targeting you",
+            "Island was put into your graveyard",
+            "Opponent activated Teferi, Time Raveler \u22123 targeting Snapcaster Mage",
+            "Subtlety triggered targeting Snapcaster Mage",
+        ],
+    );
+    console.log("ok: the log names an ability's source, cost and targets");
+}
+
+// The log rests at its newest entry, even one laid out while hidden (by an ancestor), which has
+// no size to scroll in until it shows: it would show its first turn.
+await check(
+    "the log shows its newest entry once it shows",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const list = page.locator(".game-log-list");
+        assert.ok(await list.isHidden(), "the log is hidden");
+        await page.evaluate(() => document.getElementById("hide-log").remove());
+        // A resize is observed as the page renders, on the real clock.
+        const scroll = () =>
+            list.evaluate((el) => [
+                el.scrollTop,
+                el.clientHeight,
+                el.scrollHeight,
+            ]);
+        let [top, height, full] = await scroll();
+        for (let i = 0; i < 30 && top + height < full - 2; i++) {
+            await page.clock.runFor(100);
+            await page.waitForTimeout(100);
+            [top, height, full] = await scroll();
+        }
+        assert.ok(full > height, "the log overflows its box");
+        assert.ok(
+            top + height >= full - 2,
+            `scrolled to ${top} of ${full - height}`,
+        );
+    },
+    {
+        ready: "[data-life]",
+        init: () => {
+            const style = document.createElement("style");
+            style.id = "hide-log";
+            style.textContent = ".game-log { display: none !important }";
+            document.addEventListener("DOMContentLoaded", () =>
+                document.head.append(style),
+            );
+        },
+    },
 );
 
 /** Asserts that `button` takes a click anywhere along its middle, at 10, 30, 50, 70 and 90%
@@ -1331,6 +1450,60 @@ await check(
             blockRecord.picks,
             "the engine's picks, each blocker then its attacker, then done",
         );
+    },
+    blockRun,
+);
+
+// While blockers are declared, your orb shows the damage the unblocked attackers will deal,
+// falling as each attacker is blocked, and red when it is lethal.
+await check(
+    "the unblocked attackers' damage shows by your orb as blocks are declared",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const badge = page.locator('[data-life="you"] .life-incoming');
+        const power = (slot) =>
+            blockView.objects.find((o) => o.slot === slot).pt.power;
+        const atYou = blockView.objects.filter(
+            (o) =>
+                o.combat?.kind === "attacking" &&
+                o.combat.planeswalker === null,
+        );
+        const life = blockView.players.you.life;
+        let left = atYou.reduce((n, o) => n + Math.max(0, o.pt.power), 0);
+        const says = async (when) => {
+            assert.equal(
+                await badge.getAttribute("data-incoming"),
+                String(left),
+                when,
+            );
+            assert.equal(
+                await badge.getAttribute("data-lethal"),
+                left > 0 && left >= life ? "true" : null,
+                `${when}: lethal only at ${life}`,
+            );
+        };
+        assert.ok(left > 0, "the attackers deal damage");
+        await says("before any block");
+        assert.equal(
+            await page.locator('[data-life="opponent"] .life-incoming').count(),
+            0,
+            "the opponent is not attacked",
+        );
+        const blocked = new Set();
+        for (const [blocker, attacker] of declaredBlocks) {
+            await page.click(slotOf(blocker));
+            await page.clock.runFor(500);
+            await page.click(slotOf(attacker));
+            await page.clock.runFor(500);
+            if (
+                !blocked.has(attacker) &&
+                atYou.some((o) => o.slot === attacker)
+            ) {
+                left -= Math.max(0, power(attacker));
+            }
+            blocked.add(attacker);
+            await says(`${blocker} blocking ${attacker}`);
+        }
     },
     blockRun,
 );

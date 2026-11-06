@@ -79,6 +79,7 @@ import {
   blockPlan,
   declared,
   emptyDraft,
+  incoming,
   type Draft,
 } from "./combat";
 import {
@@ -255,6 +256,12 @@ export function Board({
     () => (drafting ? declared(view, draft) : view),
     [view, draft, drafting],
   );
+  // Until combat damage is dealt, what each player's unblocked attackers will deal them.
+  const beforeDamage =
+    view.turn.step === "declareAttackers" ||
+    view.turn.step === "declareBlockers";
+  const combatDamage = (side: Side) =>
+    beforeDamage ? incoming(shown, side) : undefined;
   // A decision other than priority, the opening's and combat's asks in a prompt over the
   // turn controls, under the stack, which rises to clear it.
   const prompting =
@@ -843,6 +850,7 @@ export function Board({
         <Life
           side="opponent"
           life={opponent.life}
+          incoming={combatDamage("opponent")}
           active={active === "opponent"}
           first={view.turn.starting === "opponent"}
           style={{ left: 670, top: 48 }}
@@ -852,6 +860,7 @@ export function Board({
         <Life
           side="you"
           life={you.life}
+          incoming={combatDamage("you")}
           active={active === "you"}
           first={view.turn.starting === "you"}
           style={{ left: 670, top: 618 }}
@@ -1272,6 +1281,7 @@ function Gear() {
 function Life({
   side,
   life,
+  incoming,
   active,
   first,
   style,
@@ -1280,6 +1290,8 @@ function Life({
 }: {
   side: Side;
   life: number;
+  /** In combat, before its damage: what the unblocked attackers will deal this player. */
+  incoming?: number;
   active: boolean;
   /** Their player takes, or took, the first turn: a coin by the orb says so. */
   first: boolean;
@@ -1320,6 +1332,9 @@ function Life({
         seat={side === "opponent" ? "opponent" : "you"}
         anchor={lifeId(side)}
       />
+      {incoming !== undefined && (
+        <Incoming amount={incoming} lethal={incoming > 0 && incoming >= life} />
+      )}
       {first && (
         <span className="life-first has-tip" data-first={side}>
           <Coin size={24} />
@@ -1327,6 +1342,24 @@ function Life({
         </span>
       )}
     </motion.div>
+  );
+}
+
+/** The combat damage a player is about to take, beside their orb: a number, red when it is
+ * lethal. */
+function Incoming({ amount, lethal }: { amount: number; lethal: boolean }) {
+  return (
+    <span
+      className={
+        lethal ? "life-incoming life-incoming-lethal" : "life-incoming"
+      }
+      role="status"
+      aria-label={`${amount} combat damage${lethal ? ", lethal" : ""}`}
+      data-incoming={amount}
+      data-lethal={lethal || undefined}
+    >
+      {amount > 0 ? `\u2212${amount}` : "0"}
+    </span>
   );
 }
 

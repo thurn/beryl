@@ -631,6 +631,17 @@ pub enum GameEvent {
         slot: u8,
         controller: Side,
     },
+    /// An ability was activated, or a triggered one with targets put on the stack, as the
+    /// stack then showed it.
+    Ability {
+        item: StackItem,
+        /// A loyalty ability's cost: the loyalty counters it added or removed, which the
+        /// activation says rather than the counters
+        /// ([CR 606.4](https://yawgatog.com/resources/magic-rules/#R6064)): "The cost to activate
+        /// a loyalty ability of a permanent is to put on or remove from that permanent a certain
+        /// number of loyalty counters, as shown by the loyalty symbol in the ability's cost."
+        loyalty: Option<i8>,
+    },
     Attack {
         player: Side,
         attackers: Vec<u8>,
@@ -874,7 +885,7 @@ pub fn player_view(
         objects,
         stack,
         stops,
-        events: events.iter().map(|e| game_event(obs, e)).collect(),
+        events: events.iter().map(|e| game_event(t, obs, e)).collect(),
     }
 }
 
@@ -1626,10 +1637,41 @@ fn recipient(obs: Observation<'_>, to: Recipient) -> TargetRef {
     }
 }
 
+/// An [`Event::Ability`] as the viewer of `obs` is told it: as the stack showed it.
+fn ability_event(t: &GameTable, obs: Observation<'_>, e: &Event) -> GameEvent {
+    let Event::Ability {
+        source,
+        controller,
+        card,
+        face,
+        ability,
+        targets,
+        x,
+    } = *e
+    else {
+        unreachable!("an ability's event");
+    };
+    let entry = StackEntry {
+        object: source,
+        controller,
+        ability: Some(ability),
+        card,
+        face,
+        targets,
+        x,
+        ..StackEntry::default()
+    };
+    GameEvent::Ability {
+        item: stack_item(t, obs, &entry),
+        loyalty: t.def(card).face(face).ability(ability).cost.loyalty,
+    }
+}
+
 /// An engine event as the viewer of `obs` is told it. Engine events name objects by slot and
-/// carry no identity, and this takes no table: anything an event says about a card must come
-/// from `obs`, which the information independence test redeals.
-fn game_event(obs: Observation<'_>, e: &Event) -> GameEvent {
+/// carry no identity: anything an event says about a card must come from `obs`, which the
+/// information independence test redeals. The table names only an ability's card, public as
+/// the stack shows it.
+fn game_event(t: &GameTable, obs: Observation<'_>, e: &Event) -> GameEvent {
     let side = |p| side(obs, p);
     match *e {
         Event::ZoneChange {
@@ -1698,6 +1740,7 @@ fn game_event(obs: Observation<'_>, e: &Event) -> GameEvent {
             slot: spell.slot.get(),
             controller: side(controller),
         },
+        Event::Ability { .. } => ability_event(t, obs, e),
         Event::Attack { player, attackers } => GameEvent::Attack {
             player: side(player),
             attackers: slots(attackers.iter()),

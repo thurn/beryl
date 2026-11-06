@@ -1062,6 +1062,7 @@ fn advance(s: &mut State, t: &GameTable, sink: &mut Sink, mut c: Casting) -> Res
                 let Some(spec) = specs.get(usize::from(c.spec)) else {
                     if c.triggered {
                         s.pending = Pending::None;
+                        sink.push(ability_event(&entry));
                         return Ok(());
                     }
                     let crew = entry_ability(t, &entry).map_or(0, |a| a.cost.crew);
@@ -1244,8 +1245,24 @@ fn finish(s: &mut State, t: &GameTable, sink: &mut Sink, c: Casting) -> Result<(
                 controller: entry.controller,
             },
         )?;
+    } else {
+        sink.push(ability_event(&entry));
     }
     Ok(())
+}
+
+/// The [`Event::Ability`] that says `entry`, an ability on the stack. It goes straight to the
+/// sink: no trigger listens to it and it changes nothing.
+fn ability_event(entry: &StackEntry) -> Event {
+    Event::Ability {
+        source: entry.object,
+        controller: entry.controller,
+        card: entry.card,
+        face: entry.face,
+        ability: entry.ability.expect("an ability's entry"),
+        targets: entry.targets,
+        x: entry.x,
+    }
 }
 
 /// The X values the payment can still cover, from the least allowed.
