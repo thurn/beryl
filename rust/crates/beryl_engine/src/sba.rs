@@ -165,18 +165,24 @@ fn name(s: &State, t: &GameTable, slot: Slot) -> &'static str {
     t.def(o.card).face_name(o.face)
 }
 
-/// The legendary permanents with the same controller and name as the one in `slot`.
-fn legend_group(s: &State, t: &GameTable, slot: Slot) -> Bitboard {
+/// The legendary permanents each player controls.
+fn legendary(s: &State) -> [Bitboard; 2] {
+    let mut by_controller = [Bitboard::EMPTY; 2];
+    for &slot in &s.battlefield {
+        if is_legendary(s, slot) {
+            by_controller[s.controller(slot).index()].insert(slot);
+        }
+    }
+    by_controller
+}
+
+/// The legendary permanents with the same controller and name as the one in `slot`, of
+/// `legendary`, each player's.
+fn legend_group(s: &State, t: &GameTable, legendary: &[Bitboard; 2], slot: Slot) -> Bitboard {
     let name_of = name(s, t, slot);
-    let controller = s.controller(slot);
-    s.battlefield
+    legendary[s.controller(slot).index()]
         .iter()
-        .copied()
-        .filter(|&other| {
-            s.controller(other) == controller
-                && name(s, t, other) == name_of
-                && is_legendary(s, other)
-        })
+        .filter(|&other| name(s, t, other) == name_of)
         .collect()
 }
 
@@ -192,25 +198,22 @@ pub(crate) fn unresolved_legends(
     t: &GameTable,
     kept: Bitboard,
 ) -> Option<(Seat, Bitboard)> {
+    let legendary = legendary(s);
     // A group needs two legendary permanents of one controller, which most checks lack.
-    let mut legendary = [Bitboard::EMPTY; 2];
-    for &slot in &s.battlefield {
-        if is_legendary(s, slot) {
-            legendary[s.controller(slot).index()].insert(slot);
-        }
-    }
     if legendary.iter().all(|b| b.count() < 2) {
         return None;
     }
     for player in apnap(s) {
+        let mut seen = Bitboard::EMPTY;
         for &slot in &s.battlefield {
-            if !legendary[player.index()].contains(slot) {
+            if !legendary[player.index()].contains(slot) || seen.contains(slot) {
                 continue;
             }
-            let group = legend_group(s, t, slot);
+            let group = legend_group(s, t, &legendary, slot);
             if group.count() >= 2 && (group & kept).is_empty() {
                 return Some((player, group));
             }
+            seen |= group;
         }
     }
     None
@@ -224,13 +227,12 @@ pub(crate) fn apply_legend_rule(
     sink: &mut Sink,
     kept: Bitboard,
 ) -> Result<(), Full> {
+    let legendary = legendary(s);
     let mut doomed = Bitboard::EMPTY;
-    for &slot in &s.battlefield {
-        if is_legendary(s, slot) {
-            let group = legend_group(s, t, slot);
-            if group.count() >= 2 {
-                doomed |= group & !kept;
-            }
+    for slot in (legendary[0] | legendary[1]).iter() {
+        let group = legend_group(s, t, &legendary, slot);
+        if group.count() >= 2 {
+            doomed |= group & !kept;
         }
     }
     s.pending = Pending::None;
