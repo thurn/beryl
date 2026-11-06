@@ -16,7 +16,7 @@ use crate::cast::{self, entry_ability};
 use crate::decision::{Answers, Decision};
 use crate::effect::EffectCtx;
 use crate::engine::Scratch;
-use crate::event::{self, Entry, Reason, Sink};
+use crate::event::{self, Entry, Event, Reason, Sink};
 use crate::fixed::{Fixed, Full};
 use crate::ids::Seat;
 use crate::state::{
@@ -101,11 +101,12 @@ fn keep_what_was_seen(s: &mut State, run: &State) {
 
 /// Replays a paused resolution into the scratch state up to its question, so a viewer sees
 /// the position the question is asked in (§7.3): the cards Brainstorm drew, for example. Its
-/// events are not kept.
+/// events go to `seen` if given, and are not kept otherwise.
 pub(crate) fn replay_to_question<'a>(
     s: &State,
     t: &GameTable,
     x: &'a mut Scratch,
+    seen: Option<&mut Vec<Event>>,
 ) -> Result<&'a State, Full> {
     let Pending::Resolving(r) = s.pending else {
         unreachable!("a paused resolution");
@@ -116,7 +117,10 @@ pub(crate) fn replay_to_question<'a>(
     spare.pending = Pending::None;
     let mark = sink.len();
     run(spare, t, sink, None, r.record.as_slice(), entry, ability)?;
-    sink.truncate(mark);
+    match seen {
+        Some(seen) => seen.extend(sink.take_from(mark)),
+        None => sink.truncate(mark),
+    }
     Ok(spare)
 }
 

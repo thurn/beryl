@@ -233,6 +233,11 @@ impl Sink {
         self.events.is_empty()
     }
 
+    /// Takes the events after the first `len`, those of a body run replayed (§7.3).
+    pub(crate) fn take_from(&mut self, len: usize) -> std::vec::Drain<'_, Event> {
+        self.events.drain(len..)
+    }
+
     /// Drops the events after the first `len`, those of a body run discarded (§7.3).
     pub(crate) fn truncate(&mut self, len: usize) {
         self.events.truncate(len);

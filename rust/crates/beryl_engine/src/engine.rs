@@ -6,7 +6,7 @@ use crate::card::{FaceIx, Types};
 use crate::decision::{
     Answers, Ask, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, StallReason, Step,
 };
-use crate::event::{self, Entry, Reason, Sink};
+use crate::event::{self, Entry, Event, Reason, Sink};
 use crate::fixed::{Fixed, Full};
 use crate::ids::{Seat, Slot};
 use crate::observation::Observation;
@@ -62,11 +62,23 @@ impl Scratch {
 /// began, so the paused body is replayed into scratch up to its question.
 pub fn view<'a>(s: &'a State, t: &GameTable, x: &'a mut Scratch) -> &'a State {
     if matches!(s.pending, Pending::Resolving(_))
-        && let Ok(paused) = resolve::replay_to_question(s, t, x)
+        && let Ok(paused) = resolve::replay_to_question(s, t, x, None)
     {
         return paused;
     }
     s
+}
+
+/// The events a paused resolution's body executes on its way to its question (§7.3), which
+/// [`view`]'s position shows done: the card a loot draws before it asks for the discard, the
+/// card an explore reveals before it asks where it goes. None while no resolution is paused.
+/// They are executed again, and so emitted, once the answers let the body finish.
+pub fn paused_events(s: &State, t: &GameTable, x: &mut Scratch) -> Vec<Event> {
+    let mut seen = Vec::new();
+    if matches!(s.pending, Pending::Resolving(_)) {
+        let _ = resolve::replay_to_question(s, t, x, Some(&mut seen));
+    }
+    seen
 }
 
 /// What `viewer` sees of the open decision: [`view`]'s position, rooted at the committed

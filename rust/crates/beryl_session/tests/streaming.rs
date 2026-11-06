@@ -3,10 +3,11 @@
 //! add where the engine would pass the human's priority for them.
 
 use beryl_cards::CARDS;
-use beryl_cards::decks::{WU_CONTROL, fuzz_deck};
-use beryl_engine::event::Event;
+use beryl_cards::decks::{VINTAGE_WU_CONTROL, WU_CONTROL, fuzz_deck};
+use beryl_cards::names;
+use beryl_engine::event::{Event, Reason};
 use beryl_engine::{Choice, GameTable, Profile, Replay, Scratch, State, Step, apply, next};
-use beryl_session::protocol::{Side, Step as TurnStep};
+use beryl_session::protocol::{Kind, Side, StackItem, Step as TurnStep};
 use beryl_session::replay::Entry;
 use beryl_session::{
     CandidateIndex, Game, PlayerView, Seat, SessionId, StartGame, Status, StopsSetting, with_stops,
@@ -157,6 +158,50 @@ fn each_step_and_each_agent_decision_has_a_view_and_each_event_one_view() {
         let streamed: Vec<Event> = views.iter().flat_map(|(_, e)| e.iter().copied()).collect();
         assert_eq!(streamed, events_of(&game_start, log), "seed {seed}");
     }
+}
+
+/// A loot asks for its discard with the card it drew in hand
+/// ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c): "The controller of the
+/// spell or ability follows its instructions in the order written"): the view that asks it
+/// reports the draw, and the views after it report the discard but not the draw again.
+#[test]
+fn a_loot_reports_its_draw_before_it_asks_for_the_discard() {
+    let decks = [owned(VINTAGE_WU_CONTROL), owned(VINTAGE_WU_CONTROL)];
+    let mut begin = start(1, decks, Seat::P0, StopsSetting::Smart);
+    begin.opponent = "greedy".to_owned();
+    let mut game = Game::new(&CARDS, &begin, SESSION).unwrap();
+    game.set_stand_in("greedy").unwrap();
+    let looting = |view: &PlayerView| {
+        matches!(&view.status, Status::Deciding { decision }
+            if decision.kind == Kind::Discard
+                && matches!(&decision.resolving,
+                    Some(StackItem::Ability { name, .. }) if name == names::JACE_VRYNS_PRODIGY))
+    };
+    let draws = |events: &[Event]| {
+        events
+            .iter()
+            .filter(|e| matches!(e, Event::Draw { player, .. } if *player == Seat::P0))
+            .count()
+    };
+    loop {
+        let view = game.next_view().expect("the game reaches Jace's loot");
+        if looting(&view) {
+            break;
+        }
+        game.answer_by_stand_in();
+    }
+    assert_eq!(draws(game.events()), 1, "the draw comes with the question");
+    game.answer_by_stand_in();
+    let after = game.next_view().unwrap();
+    assert!(!looting(&after));
+    assert_eq!(draws(game.events()), 0, "the draw is not reported again");
+    assert!(game.events().iter().any(|e| matches!(
+        e,
+        Event::ZoneChange {
+            reason: Reason::Discard,
+            ..
+        }
+    )));
 }
 
 /// Every event of the game `log` records, played on the engine alone.

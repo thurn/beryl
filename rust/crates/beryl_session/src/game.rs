@@ -14,7 +14,8 @@ use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{Pending, StackEntry};
 use beryl_engine::{
     Candidates, CardTable, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome,
-    Profile, Replay, Scratch, Seat, State, Step, TurnStep, apply, next_in_step, observe, view,
+    Profile, Replay, Scratch, Seat, State, Step, TurnStep, apply, next_in_step, observe,
+    paused_events, view,
 };
 use beryl_search::{Agent, Budget};
 
@@ -157,6 +158,9 @@ pub struct Game {
     stop: Arc<AtomicBool>,
     /// The engine's events the latest view reported.
     events: Vec<Event>,
+    /// The events of the paused resolution the latest view was in, which it reported: the
+    /// body executes them again as it goes on (architecture §7.3).
+    paused: Vec<Event>,
     /// Where the human's cast in progress began, while it can be taken back.
     before_cast: Option<BeforeCast>,
 }
@@ -244,6 +248,7 @@ impl Game {
             replay,
             stop: Arc::default(),
             events: Vec::new(),
+            paused: Vec::new(),
             before_cast: None,
         }
     }
@@ -644,10 +649,27 @@ impl Game {
         );
     }
 
-    /// The human's view now, with the engine's events since the previous view.
+    /// The human's view now, with the engine's events since the previous view. A view in a
+    /// paused resolution shows its body done up to its question (§7.3), so it reports the
+    /// events of that, once: the card a loot draws comes into the hand before the discard is
+    /// asked, not after. The body executes them again whenever it runs on, after an answer,
+    /// and those repeats go unreported.
     fn view(&mut self) -> PlayerView {
-        self.events.clear();
-        self.events.extend(self.scratch.events.drain());
+        let mut fresh: Vec<Event> = self.scratch.events.drain().collect();
+        let seen = self.paused.len();
+        if seen > 0
+            && let Some(at) = fresh.windows(seen).position(|w| w == self.paused)
+        {
+            fresh.drain(at..at + seen);
+        }
+        let paused = paused_events(&self.state, &self.table, &mut self.scratch);
+        fresh.extend_from_slice(
+            paused
+                .strip_prefix(self.paused.as_slice())
+                .unwrap_or(&paused),
+        );
+        self.events = fresh;
+        self.paused = paused;
         self.draw()
     }
 
