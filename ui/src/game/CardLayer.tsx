@@ -20,7 +20,13 @@ import {
   type MotionValue,
   type Transition,
 } from "motion/react";
-import { ASPECT, Card, CardBack, type Highlight } from "../components/Card";
+import {
+  ASPECT,
+  Card,
+  CardBack,
+  typeUnit,
+  type Highlight,
+} from "../components/Card";
 import { StackMarks } from "../components/Stack";
 import type { ObjectView, PaidCost, Side } from "../generated/protocol";
 import { StageScale } from "./Stage";
@@ -190,7 +196,7 @@ function CardElement({
   // A card changing looks is drawn at another type unit (a back, a full frame, a battlefield
   // frame): before that is painted, its scale makes up the difference, and then glides, so the
   // card's size changes smoothly too.
-  const unit = place.width / 12;
+  const unit = typeUnit(place.width, place.height);
   const drawnUnit = useRef(unit);
   useLayoutEffect(() => {
     if (drawnUnit.current === unit) return;
@@ -207,7 +213,8 @@ function CardElement({
   useGlide(opacity, place.opacity, reduce);
   // Raised, the card turns back upright about its top center and rises straight up the screen,
   // inside its element, which stays turned in the fan.
-  const raise = useRaise(lifted ? place.rotate : undefined, reduce);
+  const lift = place.lift ?? RAISE.lift;
+  const raise = useRaise(lifted ? place.rotate : undefined, lift, reduce);
   // Hovered but not held, a raised hand card is drawn over the hand by a copy the pointer
   // passes through (Ghost), while its element keeps the fan's order: each card's visible part
   // in the fan is what the pointer hits, the raised card included, and above the fan the raised
@@ -327,8 +334,8 @@ function CardElement({
             className="hand-hit"
             style={{
               width: place.width,
-              height: place.width / ASPECT.full + (raised ? RAISE.lift : 0),
-              top: raised ? -RAISE.lift : 0,
+              height: place.width / ASPECT.full + (raised ? lift : 0),
+              top: raised ? -lift : 0,
             }}
           />
         )}
@@ -349,16 +356,16 @@ function CardElement({
 }
 
 /** The transform raising a hand card out of a fan that turns it `turn` degrees, or none when
- * `turn` is undefined: it turns back upright about the card's top center, rises `RAISE.lift`
+ * `turn` is undefined: it turns back upright about the card's top center, rises `height`
  * straight up the screen and grows by `RAISE.scale`. */
-function useRaise(turn: number | undefined, instant: boolean) {
+function useRaise(turn: number | undefined, height: number, instant: boolean) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotate = useMotionValue(0);
   const scale = useMotionValue(1);
   const a = ((turn ?? 0) * Math.PI) / 180;
   // Straight up the screen, in the turned card's own axes.
-  const lift = turn === undefined ? 0 : RAISE.lift;
+  const lift = turn === undefined ? 0 : height;
   const how = { how: RAISING };
   useGlide(x, -lift * Math.sin(a), instant, how);
   useGlide(y, -lift * Math.cos(a), instant, how);
@@ -420,6 +427,7 @@ function Look({
       marks={field ? marksOf(object) : undefined}
       count={place.count}
       width={place.width}
+      height={field ? place.height : undefined}
       tapped={field && object.tapped}
       highlight={state.highlight}
       // A gold or cyan glow says more than the playable edge or the link's ring, which would

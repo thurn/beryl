@@ -63,7 +63,8 @@ export const HAND = {
 
 /** How the hand card the pointer is over rises out of the fan: straightened, lifted and a
  * little enlarged about its top center. CardLayer draws it inside the card's element, which
- * stays where the fan puts it, so hovering moves nothing else and the pointer keeps the card. */
+ * stays where the fan puts it, so hovering moves nothing else and the pointer keeps the card.
+ * A card rises less where it would reach over your lands (`Placement.lift`). */
 export const RAISE = { lift: 70, scale: 1.06 };
 
 /** How a placed card is drawn. */
@@ -86,6 +87,9 @@ export interface Placement {
   look: Look;
   /** The frame's width before scaling. */
   width: number;
+  /** A battlefield frame's height before scaling, which a crowded row keeps as it squeezes
+   * the frame narrower than its usual shape (SQUEEZE). */
+  height?: number;
   /** The width it takes on the table before scaling: a tapped frame's turned height. */
   span: number;
   x: number;
@@ -97,6 +101,8 @@ export interface Placement {
   z: number;
   /** On the top card of a pile of identical permanents, how many it holds. */
   count?: number;
+  /** On a hand card, how far it rises when the pointer is over it (RAISE). */
+  lift?: number;
 }
 
 /** A whole board: every object's placement, by slot. */
@@ -119,12 +125,13 @@ export function footprint(p: Placement): Box {
     p.look === "land" ||
     p.look === "beneath" ||
     p.look === "attached";
+  const frameHeight = p.height ?? p.width / ASPECT.field;
   const height =
     (!field
       ? p.width / FULL_ASPECT
       : p.span < p.width
         ? p.width
-        : p.width / ASPECT.field) * p.scale;
+        : frameHeight) * p.scale;
   const shear = Math.tan((p.skew * Math.PI) / 180) * height;
   const right = p.x + p.span * p.scale;
   return {
@@ -143,8 +150,8 @@ const BACK_WIDTH = 105;
  * `LANDS_END`, and its other permanents' row at `y`, centered on the table. The rows lie clear
  * of one another, so a long row of permanents may pass over the land piles' side of the table.
  * Every row's cards are scaled by their depth (depthScale), keeping the field frame's shape; a
- * row of permanents too long for the table shrinks, all its cards alike, so that none covers
- * another's name or marks. */
+ * row of permanents too long for the table squeezes its frames narrower (SQUEEZE), then
+ * shrinks, all its cards alike, so that none covers another's name or marks. */
 const ROWS: Record<
   Side,
   { lands: { x: number; y: number }; permanents: number }
@@ -157,10 +164,15 @@ const LANDS_END = 600;
 const LAND_GAP = 12;
 /** How far apart permanents stand, in frame widths. */
 const PERMANENT_GAP = 0.1;
+/** How narrow a crowded row of permanents squeezes its frames, as a fraction of their width,
+ * before it shrinks them: about a whole card's shape, as tall as ever, so a crowded row keeps
+ * its height and its names and marks their size (Card.tsx's `typeUnit`). */
+const SQUEEZE = 0.55;
 /** Where the permanents' rows may lie: centered on the table while they fit left of the
  * stack's column, sliding left when they don't, and shrinking when they still don't. The
  * stack and a prompt stand to the right, so neither moves a permanent by coming or going. A
- * row reaching into the game log's column folds the log away beside it (overLog). */
+ * row reaching into the game log's column folds the log away beside it (overLog); opened, the
+ * log takes its column back and the rows start right of it (BESIDE_LOG). */
 const ROOM = {
   // Right of the folded game log's button.
   start: 76,
@@ -171,8 +183,10 @@ const ROOM = {
 };
 
 /** The game log's column at the table's left (screens.css .game-log): the permanents' rows
- * pass through its height, and a long row reaches into it. */
+ * pass through its height, and a long row reaches into it, unless the log is open. */
 const LOG_RIGHT = 318;
+/** Where the permanents' rows start while the open log stands in its column: right of it. */
+const BESIDE_LOG = LOG_RIGHT + 14;
 
 /** Whether a permanent lies over the game log's column, so that the log must fold away rather
  * than hide behind it (Narration.tsx). Both rows of permanents span the log's height, so only
@@ -355,6 +369,38 @@ function handPlacements(cards: ObjectView[], tucked: boolean): Placement[] {
   });
 }
 
+/** How far the opponent's hand reaches down the stage: above their life orb's top (y 48),
+ * which would otherwise cover the middle backs' feet, so each back can be counted. */
+const HELD_FOOT = 44;
+
+/** How far each hand card in `hand` may rise (RAISE) without the raised card, or the reach of
+ * its element that keeps the pointer on it, coming over any of your lands' `lands` boxes: a
+ * land is always yours to point at. */
+function handLifts(hand: Placement[], lands: Box[]): Placement[] {
+  // Clear of a land's foot by this much.
+  const margin = 4;
+  return hand.map((p) => {
+    const a = (p.rotate * Math.PI) / 180;
+    // The card's top center: its element turns about its top-left corner.
+    const cx = p.x + (Math.cos(a) * p.width) / 2;
+    const cy = p.y + (Math.sin(a) * p.width) / 2;
+    // How far the turned card's higher top corner stands above its top center, and how far
+    // to either side the raised card and its element's reach can come.
+    const corner = (Math.abs(Math.sin(a)) * p.width) / 2;
+    const half =
+      (p.width * RAISE.scale) / 2 + RAISE.lift * Math.abs(Math.sin(a));
+    let lift = RAISE.lift;
+    for (const land of lands) {
+      if (land.right < cx - half || land.left > cx + half) continue;
+      // The element reaches `lift` above its turned top edge; the raised card's top stands
+      // `lift` above its top center.
+      const room = cy - land.bottom - margin;
+      lift = Math.min(lift, (room - corner) / Math.cos(a), room);
+    }
+    return { ...p, lift: Math.max(0, lift) };
+  });
+}
+
 /** The opponent's hand fanned along the top edge: backs, and the faces of the cards you know
  * (a look at their hand, a card returned to it). */
 function heldPlacements(cards: ObjectView[]): Placement[] {
@@ -372,7 +418,7 @@ function heldPlacements(cards: ObjectView[]): Placement[] {
     z: 100 + i,
     ...turned(
       STAGE.width / 2 - total / 2 + i * (BACK_WIDTH - 2),
-      -87.5,
+      HELD_FOOT - height,
       (i - mid) * -4.2,
       [BACK_WIDTH / 2, height / 2],
       -((i - mid) ** 2) * 3.5,
@@ -539,6 +585,18 @@ function lying(width: number, tapped: boolean) {
     : { frame: width, span: width };
 }
 
+/** How a permanent's battlefield frame stands on the table, before depth scaling, in a row
+ * `squeeze`d to that fraction of its frames' width: the frame's width and height, and the
+ * width it takes. Upright, it is narrower and as tall; tapped, it turns as `lying` says, and
+ * takes no more width than an upright one. */
+function standing(tapped: boolean, squeeze: number) {
+  const width = CREATURE_WIDTH * squeeze;
+  const height = CREATURE_WIDTH / ASPECT.field;
+  if (!tapped) return { frame: width, height, span: width };
+  const span = Math.min(lying(CREATURE_WIDTH, true).span, width);
+  return { frame: height, height: span, span };
+}
+
 /** One side's battlefield: land piles on the left, other permanents in the middle. A blocker
  * stands across the table from the attacker it blocks among the other side's placements
  * `across`, as combat.png does, an attacker's blockers side by side about its center, so a
@@ -555,8 +613,10 @@ function battlefieldPlacements(
   beneath: Map<number, ObjectView[]> = new Map(),
   attached: Map<number, ObjectView[]> = new Map(),
   named: Set<number> = new Set(),
+  logOpen = false,
 ): Placement[] {
   const rows = ROWS[side];
+  const room = { ...ROOM, start: logOpen ? BESIDE_LOG : ROOM.start };
   const lands = objects.filter((o) => o.types.includes("land"));
   const others = objects.filter((o) => !o.types.includes("land"));
   const out: Placement[] = [];
@@ -628,48 +688,62 @@ function battlefieldPlacements(
     else groups.push([o]);
   }
   const height = CREATURE_WIDTH / ASPECT.field;
-  const lies = (o: ObjectView) => lying(CREATURE_WIDTH, o.tapped);
-  // Each copy beneath a pile's top card peeks out by a step of its frame's size.
-  const unitStep = (o: ObjectView) => {
-    const unit = lies(o).frame;
+  // Each group's width before scaling, its frames squeezed to `k` of their width: its top
+  // card's, each copy beneath it peeking out by a step of its frame's size, and the cards of
+  // `beneath` and `attached` tucked under it peeking out to either side (see below).
+  const unitStep = (o: ObjectView, k: number) => {
+    const unit = standing(o.tapped, k).frame;
     return { x: unit * LAND_STEP.x, y: unit * LAND_STEP.y };
   };
-  // How far the cards of `under` tucked under a group's top card peek out beside it: what
-  // lies beneath to its left, what is attached to its right (see below).
-  const peek = (under: Map<number, ObjectView[]>) => (g: ObjectView[]) => {
-    const top = g[g.length - 1]!;
-    const n = under.get(top.slot)?.length ?? 0;
-    const narrower = (CREATURE_WIDTH - lies(top).span) / 2;
-    return n === 0 ? 0 : n * CREATURE_WIDTH * BENEATH_STEP.x + narrower;
-  };
-  // Each group's width and the gap between groups, before scaling: the row's scale is its
-  // depth's, or less if the row would not otherwise fit its room.
-  const unitWidths = groups.map(
-    (g) =>
-      lies(g[0]!).span +
-      unitStep(g[0]!).x * (g.length - 1) +
-      peek(beneath)(g) +
-      peek(attached)(g),
-  );
-  const unitLength =
-    unitWidths.reduce((a, w) => a + w, 0) +
-    PERMANENT_GAP * CREATURE_WIDTH * Math.max(0, groups.length - 1);
+  const peek =
+    (under: Map<number, ObjectView[]>, k: number) => (g: ObjectView[]) => {
+      const top = g[g.length - 1]!;
+      const n = under.get(top.slot)?.length ?? 0;
+      const tuckedWidth = CREATURE_WIDTH * k;
+      const narrower = (tuckedWidth - standing(top.tapped, k).span) / 2;
+      return n === 0 ? 0 : n * tuckedWidth * BENEATH_STEP.x + narrower;
+    };
+  const unitWidths = (k: number) =>
+    groups.map(
+      (g) =>
+        standing(g[0]!.tapped, k).span +
+        unitStep(g[0]!, k).x * (g.length - 1) +
+        peek(beneath, k)(g) +
+        peek(attached, k)(g),
+    );
+  const unitLength = (k: number) =>
+    unitWidths(k).reduce((a, w) => a + w, 0) +
+    PERMANENT_GAP * CREATURE_WIDTH * k * Math.max(0, groups.length - 1);
+  // A row too long for its room at its depth's scale first squeezes its frames, down to
+  // `SQUEEZE`, and only then shrinks, all its cards alike.
   const full = depthScale(rows.permanents);
-  const scale = Math.min(full, (ROOM.end - ROOM.start) / unitLength);
+  const fits = (k: number) => unitLength(k) * full <= room.end - room.start;
+  let squeeze = 1;
+  if (!fits(1)) {
+    let [lo, hi] = [SQUEEZE, 1];
+    for (let i = 0; i < 20; i++) {
+      const mid = (lo + hi) / 2;
+      if (fits(mid)) lo = mid;
+      else hi = mid;
+    }
+    squeeze = lo;
+  }
+  const scale = Math.min(full, (room.end - room.start) / unitLength(squeeze));
+  const lies = (o: ObjectView) => standing(o.tapped, squeeze);
   // A shrunken row keeps its edge toward its player where a full-size one has it, leaving the
   // lane between the rows, where combat and the stack's arrows run, as wide as it can be.
   const rowTop =
     rows.permanents + (side === "you" ? (full - scale) * height : 0);
-  const width = CREATURE_WIDTH * scale;
+  const width = CREATURE_WIDTH * squeeze * scale;
   const step = (o: ObjectView) => {
-    const { x, y } = unitStep(o);
+    const { x, y } = unitStep(o, squeeze);
     return { x: x * scale, y: y * scale };
   };
-  const tucked = (g: ObjectView[]) => peek(beneath)(g) * scale;
-  const widths = unitWidths.map((w) => w * scale);
+  const tucked = (g: ObjectView[]) => peek(beneath, squeeze)(g) * scale;
+  const widths = unitWidths(squeeze).map((w) => w * scale);
   const gap = PERMANENT_GAP * width;
-  const { start, end } = ROOM;
-  const xs = row(widths, gap, start, end, ROOM.center);
+  const { start, end } = room;
+  const xs = row(widths, gap, start, end, room.center);
   // Where each blocker wants to stand: its attacker's blockers side by side about its center.
   const attackers = new Map(across.map((p) => [p.slot, p]));
   const blocking = new Map<number, number[]>();
@@ -715,12 +789,13 @@ function battlefieldPlacements(
         (o.combat?.kind === "attacking" ? forward : 0);
       // Combat's creatures over their neighbors, so their marks show.
       const z = 40 + k * 8 + i + (o.combat ? 60 : 0);
-      const { frame, span } = lies(o);
+      const { frame, height: frameHeight, span } = lies(o);
       out.push({
         slot: o.slot,
         zone: o.zone,
         look: "field",
         width: frame,
+        height: frameHeight,
         span,
         opacity: 1,
         z,
@@ -731,6 +806,7 @@ function battlefieldPlacements(
       // the right, centered on the permanent. What is attached rises above what lies beneath,
       // `above` steps up, so that each name bar shows whole.
       const center = x + (span * scale) / 2;
+      const tuckedWidth = CREATURE_WIDTH * squeeze;
       const tuck = (
         under: ObjectView[] | undefined,
         look: "beneath" | "attached",
@@ -744,17 +820,17 @@ function battlefieldPlacements(
             slot: e.slot,
             zone: e.zone,
             look,
-            width: CREATURE_WIDTH,
-            span: CREATURE_WIDTH,
+            width: tuckedWidth,
+            height,
+            span: tuckedWidth,
             opacity: 1,
             z: z - up,
             ...onTable(
               center +
-                (toward * n * CREATURE_WIDTH * BENEATH_STEP.x -
-                  CREATURE_WIDTH / 2) *
+                (toward * n * tuckedWidth * BENEATH_STEP.x - tuckedWidth / 2) *
                   scale,
               y,
-              CREATURE_WIDTH,
+              tuckedWidth,
               up * height * BENEATH_STEP.y,
               scale,
             ),
@@ -855,11 +931,13 @@ function onPile(look: PileLook) {
 }
 
 /** Every object's placement. The stack is `lifted` over a prompt; the hand is `tucked` under a
- * screen over the table. Hovering changes none of it (CardLayer raises a hovered hand card). */
+ * screen over the table; the permanents' rows keep clear of the game log while it is
+ * `logOpen` over them. Hovering changes none of it (CardLayer raises a hovered hand card). */
 export function layout(
   view: PlayerView,
   lifted = false,
   tucked = false,
+  logOpen = false,
 ): Layout {
   const out: Placement[] = [];
   const objects = view.objects;
@@ -877,7 +955,6 @@ export function layout(
   const named = referenced(view);
   const behindHost = new Set([...attached.values()].flat().map((o) => o.slot));
 
-  out.push(...handPlacements(owned("you", "hand"), tucked));
   out.push(...heldPlacements(owned("opponent", "hand")));
   // Blockers stand across from their attackers, which stand where they would anyway: only the
   // defending side's row depends on the other's.
@@ -891,9 +968,16 @@ export function layout(
       beneath,
       attached,
       named,
+      logOpen,
     );
   const yours = field("you", field("opponent"));
   out.push(...yours, ...field("opponent", yours));
+  out.push(
+    ...handLifts(
+      handPlacements(owned("you", "hand"), tucked),
+      yours.filter((p) => p.look === "land").map(footprint),
+    ),
+  );
   for (const side of ["opponent", "you"] as const) {
     const player = view.players[side];
     const library = pileLook(side, PILES[side].library, player.library.length);

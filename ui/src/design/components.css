@@ -275,6 +275,18 @@
   margin: 0 -0.3em;
   padding: 0 0.26em;
 }
+/* A frame a crowded row squeezes (layout.ts) keeps its type's size: a long name wraps onto a
+   second line rather than shrinking, its bar growing to hold it. */
+.card-narrow .card-name-bar {
+  height: auto;
+  min-height: 1em;
+}
+.card-narrow .card-name {
+  max-height: 2.3em;
+  line-height: 1.08;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
 .card-name {
   overflow: hidden;
   padding-bottom: 0.06em;
@@ -1406,7 +1418,7 @@
 /* Darkens whatever is behind; the table also blurs itself (.table-dimmed) while an overlay is up. */
 .overlay-backdrop {
   position: absolute;
-  inset: 0;
+  inset: var(--bleed, 0);
   background: rgb(14 13 12 / 40%);
 }
 .overlay-main {
@@ -1558,6 +1570,12 @@
   top: calc(100% + 8px);
   /* Under a leaning pile (Piles.tsx' Lying), its foot. */
   margin-left: var(--drop, 0px);
+}
+.tip-over {
+  top: 50%;
+  transform: translate(-50%, -50%);
+  /* Over a leaning pile (Piles.tsx' Lying), its middle. */
+  margin-left: calc(var(--drop, 0px) / 2);
 }
 .has-tip:hover > .tip,
 .has-tip:focus-visible > .tip {

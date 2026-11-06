@@ -67,11 +67,13 @@ function Sparkle() {
   );
 }
 
-export function PriorityPill({ children }: { children: ReactNode }) {
+/** Who acts now, after a sparkle: a long line shrinks to fit a pill held narrow (fit.ts). */
+export function PriorityPill({ children }: { children: string }) {
+  const ref = useTextFit(children);
   return (
     <div className="priority-pill" role="status">
       <Sparkle />
-      <span>{children}</span>
+      <span ref={ref}>{children}</span>
     </div>
   );
 }
@@ -234,8 +236,9 @@ export function Tip({
   side,
   children,
 }: {
-  /** Where it opens: toward the middle of the table from the parent's edge of it. */
-  side: "above" | "below";
+  /** Where it opens: toward the middle of the table from the parent's edge of it, or over the
+   * parent's middle where nothing beside it is free (your piles, under your badge). */
+  side: "above" | "below" | "over";
   children: ReactNode;
 }) {
   return (

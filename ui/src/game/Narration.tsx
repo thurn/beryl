@@ -38,11 +38,20 @@ export function opponentActivity(
 
 /** The game log at the table's left: a heading for each turn, then what happened, newest at
  * the foot, scrolled to it as entries arrive. While permanents reach into its column it is
- * `folded` to a button, which opens it over them until pressed again, so it never lies half
- * hidden under the cards. */
-export function GameLog({ log, folded }: { log: LogEntry[]; folded: boolean }) {
+ * `folded` to a button, which toggles it `open`, the rows making room for it (layout.ts), so it
+ * never lies over the cards or half hidden under them. */
+export function GameLog({
+  log,
+  folded,
+  open,
+  onToggle,
+}: {
+  log: LogEntry[];
+  folded: boolean;
+  open: boolean;
+  onToggle(): void;
+}) {
   const list = useRef<HTMLOListElement>(null);
-  const [open, setOpen] = useState(false);
   const shown = !folded || open;
   useLayoutEffect(() => {
     const el = list.current;
@@ -59,7 +68,7 @@ export function GameLog({ log, folded }: { log: LogEntry[]; folded: boolean }) {
           className="game-log-toggle"
           aria-label={open ? "Hide log" : "Show log"}
           aria-expanded={open}
-          onClick={() => setOpen((o) => !o)}
+          onClick={onToggle}
         >
           <svg viewBox="0 0 20 20" aria-hidden>
             <path d="M4 5h12M4 10h12M4 15h8" />

@@ -270,9 +270,17 @@ export function Board({
   const cancellable = !waiting && !dimmed && decision?.cancellable === true;
   // The prompt or the cast step sits over the turn controls; the stack rises to clear it.
   const asking = prompting || castingNow !== undefined;
-  const placements = useMemo(
+  // The log folds away while the rows reach into its column; opened then, the rows give it room.
+  const [logOpen, setLogOpen] = useState(false);
+  const resting = useMemo(
     () => layout(shown, asking, dimmed),
     [shown, asking, dimmed],
+  );
+  const logFolded = overLog(resting);
+  const placements = useMemo(
+    () =>
+      logFolded && logOpen ? layout(shown, asking, dimmed, true) : resting,
+    [resting, logFolded, logOpen, shown, asking, dimmed],
   );
   // The hovered card, unless it has since gone where it is not shown alone.
   const hoveredPlace =
@@ -795,7 +803,7 @@ export function Board({
               key={side}
               look={pile}
               tip={
-                <Tip side={side === "you" ? "above" : "below"}>
+                <Tip side={side === "you" ? "over" : "below"}>
                   {pileTip("library", library.length)}
                 </Tip>
               }
@@ -866,7 +874,12 @@ export function Board({
           />
         )}
 
-        <GameLog log={log} folded={overLog(placements)} />
+        <GameLog
+          log={log}
+          folded={logFolded}
+          open={logOpen}
+          onToggle={() => setLogOpen((o) => !o)}
+        />
         {live && <Announcements view={view} />}
 
         {view.stack.map(

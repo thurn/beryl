@@ -647,9 +647,10 @@ for (const viewport of [
 }
 
 // On a table whose rows reach into the log's column, the log folds to a button rather than lie
-// half hidden under the permanents; the button opens it over them, whole, and closes it again.
+// half hidden under the permanents; the button opens it whole, the rows making room for it, and
+// closes it again.
 await check(
-    "the log folds away from a crowded table and opens over it",
+    "the log folds away from a crowded table and opens beside it",
     async (page) => {
         await page.clock.runFor(2000);
         const list = page.locator(".game-log-list");
@@ -657,7 +658,8 @@ await check(
         assert.ok(await list.isHidden(), "the log is folded");
         assert.deepEqual(await cutText(page), [], "no text is cut or covered");
         await toggle.click();
-        await page.clock.runFor(500);
+        // The rows glide aside.
+        await page.clock.runFor(2000);
         assert.ok(await list.isVisible(), "the button opens the log");
         const box = await list.boundingBox();
         const under = await page.$$eval(
@@ -673,7 +675,7 @@ await check(
                 }),
             box,
         );
-        assert.ok(under, "the open log lies over permanents");
+        assert.ok(!under, "the rows make room for the open log");
         assert.deepEqual(await cutText(page), [], "the open log shows whole");
         await page.getByRole("button", { name: "Hide log" }).click();
         assert.ok(await list.isHidden(), "the button folds it again");
@@ -1621,7 +1623,8 @@ assert.ok(
     faceDown.some((o) => o.tapped),
     "the blockers fixture has a tapped face-down permanent",
 );
-// The face-up permanents: a tapped one draws in a frame of its own size.
+// The face-up permanents: a tapped one draws in a frame of its own size. Each row's frames
+// share a size (a crowded row squeezes all of them alike), and a tapped one stands as tall.
 const faceUp = blockersView.objects.filter(
     (o) =>
         o.zone === "battlefield" &&
@@ -1637,8 +1640,9 @@ await check(
         const size = (o) =>
             el(o).evaluate((e) => [e.offsetWidth, e.offsetHeight]);
         for (const o of faceDown) {
-            const like = faceUp.find((u) => u.tapped === o.tapped);
-            assert.ok(like, `a face-up permanent is tapped as ${o.slot} is`);
+            const row = faceUp.filter((u) => u.controller === o.controller);
+            const like = row.find((u) => u.tapped === o.tapped) ?? row[0];
+            assert.ok(like, `a face-up permanent shares ${o.slot}'s row`);
             const [width, height] = await size(like);
             assert.match(
                 await el(o).getAttribute("class"),
@@ -1647,7 +1651,8 @@ await check(
             );
             const [w, h] = await size(o);
             assert.ok(
-                Math.abs(w - width) <= 1 && Math.abs(h - height) <= 1,
+                (like.tapped !== o.tapped || Math.abs(w - width) <= 1) &&
+                    Math.abs(h - height) <= 1,
                 `${o.slot} is ${w} by ${h}, ${like.name} ${width} by ${height}`,
             );
             assert.equal(
@@ -4184,6 +4189,369 @@ await check(
         await banner.waitFor({ state: "detached" });
     },
     { ...crowdedRun(crowdedAt), fixture: "crowded-flip" },
+);
+
+/** Each permanent's name on the table, by its card, and its type's size on screen in window
+ * pixels: its font's size by the scales its card and the stage are drawn at. */
+const nameSizes = (page) =>
+    page.$$eval(
+        '.card-el[data-zone="battlefield"]:not(.card-el-land) .card-name',
+        (names) => {
+            const scale = (e) => {
+                const m = new DOMMatrix(getComputedStyle(e).transform);
+                return Math.hypot(m.a, m.b);
+            };
+            const stage = scale(document.querySelector(".stage"));
+            return names.map((e) => {
+                const card = e.closest(".card-el");
+                return {
+                    name: card.dataset.card,
+                    px:
+                        parseFloat(getComputedStyle(e).fontSize) *
+                        scale(card) *
+                        stage,
+                };
+            });
+        },
+    );
+
+// A crowded row squeezes its frames narrower, as tall as ever, before it shrinks them: the
+// rows keep their height, filling the table between them, and their names stay readable.
+await check(
+    "a crowded table's names read at 10 px, its rows filling the room between them",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const sizes = await nameSizes(page);
+        assert.ok(sizes.length >= 16, "both rows' names are drawn");
+        const small = sizes
+            .filter((n) => n.px < 10)
+            .map((n) => `${n.name} at ${n.px.toFixed(1)} px`);
+        assert.deepEqual(small, [], "names under 10 px");
+        const { you, opponent } = await rows(page);
+        const far = Math.max(...opponent.map((c) => c.box.y + c.box.height));
+        const near = Math.min(...you.map((c) => c.box.y));
+        // Only the lane where combat and the stack's arrows run lies between them.
+        assert.ok(near - far <= 48, `${near - far} px between the rows`);
+        assert.deepEqual(await cutText(page), [], "no name is cut");
+    },
+    crowdedRun(crowdedAt),
+);
+
+/** What lies over the opponent's hand, a permanent or a land, of what `by` matches: at each one's
+ * middle and at its corners inset 8 px, as the ui-live harness's `probe.covered` looks. A copy
+ * beneath another in a pile is covered by its own pile, which `by` does not match. */
+const coveredBy = (page, by) =>
+    page.evaluate((by) => {
+        const out = [];
+        for (const e of document.querySelectorAll(
+            ".card-el-held, .card-el-field, .card-el-land",
+        )) {
+            const r = e.getBoundingClientRect();
+            const points = [
+                [r.left + r.width / 2, r.top + r.height / 2],
+                [r.left + 8, r.top + 8],
+                [r.right - 8, r.top + 8],
+                [r.left + 8, r.bottom - 8],
+                [r.right - 8, r.bottom - 8],
+            ].filter(
+                ([x, y]) =>
+                    x >= 0 && y >= 0 && x < innerWidth && y < innerHeight,
+            );
+            for (const [x, y] of points) {
+                const over = document.elementFromPoint(x, y)?.closest(by);
+                if (over && !e.contains(over)) {
+                    const what = e.dataset.card ?? "a back";
+                    out.push(
+                        `${what} under ${over.className} at ${Math.round(x)}, ${Math.round(y)}`,
+                    );
+                }
+            }
+        }
+        return out;
+    }, by);
+
+/** What may never lie over a card on the table: a life orb, a tip, the game log or the reach of
+ * a raised hand card. */
+const COVERS = "[data-life], .tip, .game-log, .hand-hit";
+
+for (const [title, run] of [
+    ["a crowded table", crowdedRun(crowdedAt)],
+    [
+        "a full opposing hand",
+        {
+            at: 106,
+            ready: ".card-el-held",
+            reducedMotion: "reduce",
+        },
+    ],
+]) {
+    await check(
+        `on ${title}, no orb, tip, log or raised hand card covers a card on the table`,
+        async (page) => {
+            await page.clock.runFor(2000);
+            assert.deepEqual(await coveredBy(page, COVERS), [], "at rest");
+            // Each hand card raised in turn, the pointer at its top.
+            for (const card of await page.locator(".card-el-hand").all()) {
+                const box = await card.boundingBox();
+                await page.mouse.move(box.x + box.width / 2, box.y + 30);
+                await page.clock.runFor(600);
+                const name = await card.getAttribute("data-card");
+                assert.deepEqual(
+                    await coveredBy(page, COVERS),
+                    [],
+                    `${name} raised`,
+                );
+            }
+            // Each of your piles' tips, over its pile, clear of your badge.
+            const badge = await page
+                .locator(".player-badge")
+                .last()
+                .boundingBox();
+            for (const pile of await page
+                .locator(".has-tip:has([aria-label^=Library]), [data-side=you]")
+                .all()) {
+                const box = await pile.boundingBox();
+                if (!box || box.y < 450) continue;
+                await page.mouse.move(box.x + box.width / 2, box.y + 20);
+                await page.clock.runFor(300);
+                const tip = page.locator(".tip").filter({ visible: true });
+                assert.equal(await tip.count(), 1, "the pile's tip shows");
+                assert.ok(
+                    !overlap(await tip.boundingBox(), badge),
+                    `${await tip.innerText()} covers your badge`,
+                );
+                assert.deepEqual(await coveredBy(page, COVERS), [], "a tip");
+            }
+            const toggle = page.getByRole("button", { name: "Show log" });
+            if (await toggle.isVisible()) {
+                await toggle.click();
+                await page.clock.runFor(2000);
+                assert.deepEqual(
+                    await coveredBy(page, COVERS),
+                    [],
+                    "the log open",
+                );
+            }
+        },
+        run,
+    );
+}
+
+// At 16:10, the table reaches the window's edges rather than stand in bands, and each hand
+// runs off its edge of the window as at 16:9, showing no less of each card.
+await check(
+    "a 16:10 window shows the table to its edges, both hands reaching them",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const { width, height } = page.viewportSize();
+        const bare = await page.evaluate(
+            ([w, h]) => {
+                const frame = document.querySelector(".stage-frame");
+                const points = [0.1, 0.3, 0.5, 0.7, 0.9].flatMap((f) => [
+                    [w * f, 16],
+                    [w * f, h - 16],
+                    [16, h * f],
+                    [w - 16, h * f],
+                ]);
+                return points
+                    .filter(
+                        ([x, y]) => document.elementFromPoint(x, y) === frame,
+                    )
+                    .map((p) => p.map(Math.round).join(", "));
+            },
+            [width, height],
+        );
+        assert.deepEqual(
+            bare,
+            [],
+            "points 16 px from an edge showing no table",
+        );
+        // Each card of both hands runs off the window's edge, as at 16:9, showing at least as
+        // much of itself as a 16:9 window would: as much as lies on the stage.
+        const hands = await page.$$eval(
+            ".card-el-hand, .card-el-held",
+            (cards) => {
+                const stage = document
+                    .querySelector(".stage")
+                    .getBoundingClientRect();
+                const part = (r, top, bottom) =>
+                    (Math.min(r.bottom, bottom) - Math.max(r.top, top)) /
+                    r.height;
+                return cards.map((e) => {
+                    const r = e.getBoundingClientRect();
+                    const held = e.classList.contains("card-el-held");
+                    return {
+                        slot: e.dataset.slot,
+                        held,
+                        shown: part(r, 0, innerHeight),
+                        wide: part(r, stage.top, stage.bottom),
+                        reaches: held ? r.top < 0 : r.bottom > innerHeight,
+                        inside: r.left >= 0 && r.right <= innerWidth,
+                    };
+                });
+            },
+        );
+        assert.ok(
+            hands.some((c) => c.held) && hands.some((c) => !c.held),
+            "both hands hold cards",
+        );
+        for (const c of hands) {
+            assert.ok(
+                c.reaches,
+                `slot ${c.slot} ends short of the window's edge`,
+            );
+            assert.ok(c.inside, `slot ${c.slot} is cut at the window's side`);
+            assert.ok(
+                c.shown >= c.wide - 0.01,
+                `slot ${c.slot} shows ${c.shown.toFixed(2)} of itself, ` +
+                    `${c.wide.toFixed(2)} at 16:9`,
+            );
+        }
+    },
+    {
+        at: 106,
+        ready: ".card-el-held",
+        reducedMotion: "reduce",
+        viewport: { width: 1280, height: 800 },
+    },
+);
+
+// The turn button stands where it is whatever it says and whatever lies under it: a long
+// caption or the priority pill stands centered under it, never pushing it aside.
+await derive("opponent-turn", "opponent-first-strike", 10, (v) => ({
+    ...v,
+    turn: { ...v.turn, step: "firstStrikeDamage" },
+}));
+for (const viewport of [
+    { width: 1600, height: 900 },
+    { width: 1280, height: 800 },
+]) {
+    await check(
+        `the turn button stands still whatever its label, at ${viewport.width} wide`,
+        async (page) => {
+            const seen = [];
+            const at = async (fixture, n, act) => {
+                await page.goto(
+                    new URL(`/?fixture=${fixture}&at=${n}#/game`, base).href,
+                    { waitUntil: "load" },
+                );
+                await page.waitForSelector(".turn-action .button");
+                await page.clock.runFor(2000);
+                if (act) {
+                    await act();
+                    await page.clock.runFor(1000);
+                }
+                seen.push({
+                    says: (await page.locator(".turn-action").innerText())
+                        .replace(/\s+/g, " ")
+                        .trim(),
+                    box: await page
+                        .locator(".turn-action .button")
+                        .boundingBox(),
+                });
+            };
+            await at(FIXTURE, 106);
+            await at("crowded", crowdedAt + 1);
+            await at("opponent-turn", 12);
+            await at("opponent-first-strike", 11);
+            await at("combat-declare", attackRecord.at);
+            await at("combat-declare", attackRecord.at, () =>
+                page.getByRole("button", { name: "Attack with All" }).click(),
+            );
+            const says = seen.map((s) => s.says);
+            assert.equal(new Set(says).size, seen.length, says.join(" | "));
+            assert.ok(
+                says.some((s) => /First-strike/.test(s)),
+                `a long pill: ${says.join(" | ")}`,
+            );
+            for (const { says, box } of seen) {
+                for (const k of ["x", "y", "width", "height"]) {
+                    assert.ok(
+                        Math.abs(box[k] - seen[0].box[k]) <= 0.5,
+                        `"${says}" moves the button's ${k} from ` +
+                            `${seen[0].box[k]} to ${box[k]}`,
+                    );
+                }
+            }
+        },
+        {
+            fixture: "crowded",
+            at: crowdedAt + 1,
+            ready: ".turn-action .button",
+            reducedMotion: "reduce",
+            viewport,
+        },
+    );
+}
+
+// A pile too long for its viewer fades out where more of it lies, until scrolled there.
+const crowdedYou = crowdedViews[crowdedAt].objects.find(
+    (o) =>
+        o.zone === "battlefield" &&
+        o.controller === "you" &&
+        !o.types.includes("land") &&
+        o.name,
+);
+await derive("crowded", "crowded-graveyard", crowdedAt, (v) => {
+    const dead = Array.from({ length: 14 }, (_, i) => ({
+        ...crowdedYou,
+        slot: 9000 + i,
+        zone: "graveyard",
+        tapped: false,
+        combat: null,
+        counters: [],
+        damage: 0,
+    }));
+    return {
+        ...v,
+        objects: [...v.objects, ...dead],
+        players: {
+            ...v.players,
+            you: {
+                ...v.players.you,
+                graveyard: [
+                    ...v.players.you.graveyard,
+                    ...dead.map((o) => o.slot),
+                ],
+            },
+        },
+    };
+});
+await check(
+    "a long pile's viewer fades where more of it lies beyond the scroll",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.click("[data-pile=graveyard][data-side=you]");
+        await page.clock.runFor(1000);
+        const list = page.locator(".zone-viewer-cards");
+        const state = () =>
+            list.evaluate((e) => ({
+                over: e.scrollHeight > e.clientHeight,
+                more: e.dataset.more,
+                mask:
+                    getComputedStyle(e).maskImage ||
+                    getComputedStyle(e).webkitMaskImage,
+            }));
+        const top = await state();
+        assert.ok(top.over, "fourteen cards overflow the viewer");
+        assert.equal(top.more, "below");
+        assert.notEqual(top.mask, "none", "the list's foot fades");
+        await list.evaluate((e) => {
+            e.scrollTop = e.scrollHeight;
+        });
+        // The browser sends the scroll event with its next frame, in its own time.
+        let more;
+        for (let tries = 0; tries < 30 && more !== "above"; tries++) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            await page.clock.runFor(100);
+            ({ more } = await state());
+        }
+        assert.equal(more, "above", "scrolled to its end");
+    },
+    {
+        ...crowdedRun(crowdedAt),
+        fixture: "crowded-graveyard",
+    },
 );
 
 // Cards over the table are small to fit; each shows whole on hover, wherever it is.

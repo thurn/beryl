@@ -671,10 +671,15 @@
 .stage-frame {
   position: fixed;
   inset: 0;
-  overflow: hidden;
+  /* Clipped, never scrolled: a pointer or a script bringing a card into view must not slide the
+     whole table. */
+  overflow: clip;
   background: var(--tabletop);
 }
 .stage {
+  /* An inset reaching from the stage's edges to the window's (Stage.tsx), for what covers the
+     whole table: its cloth, its shade and the scrims over it. */
+  --bleed: calc(-1 * var(--bleed-y, 0px)) calc(-1 * var(--bleed-x, 0px));
   position: absolute;
   left: 50%;
   top: 50%;
@@ -691,11 +696,16 @@
 .table {
   position: absolute;
   inset: 0;
-  /* Clipped, never scrolled: a pointer or a script bringing a card into view must not slide the
-     whole table. */
-  overflow: clip;
-  background: var(--tabletop);
+  isolation: isolate;
   font-family: var(--font-serif);
+}
+/* The cloth reaches the window's edges, under everything on the table and dimmed with it. */
+.table::before {
+  content: "";
+  position: absolute;
+  inset: var(--bleed);
+  z-index: -1;
+  background: var(--tabletop);
 }
 .table-dimmed {
   filter: blur(2.5px) brightness(0.68) saturate(0.85);
@@ -704,10 +714,11 @@
    the edge and gone a third of the way to the creatures (the screen mockups). */
 .far-shade {
   position: absolute;
-  inset: 0;
+  inset: var(--bleed);
   pointer-events: none;
   background: radial-gradient(
-    ellipse 300px 85px at 800px 48px,
+    ellipse 300px 85px at calc(800px + var(--bleed-x, 0px))
+      calc(48px + var(--bleed-y, 0px)),
     rgb(10 7 5 / 80%),
     rgb(10 7 5 / 64%) 50%,
     rgb(10 7 5 / 32%) 80%,
@@ -847,7 +858,8 @@
   display: none;
 }
 /* Folded while permanents reach into the log's column: a button in the gutter left of the rows,
-   which opens the log over the cards and their arrows (.board-arrows). */
+   which opens the log in its column, the rows making room (layout.ts), over their arrows
+   (.board-arrows). */
 .game-log-folded {
   z-index: 460;
   /* Only the button and the open list take the pointer, not the column's empty box over the
@@ -1141,9 +1153,21 @@
 .turn-action {
   right: 39px;
   top: 765px;
+  /* As wide as the button, whatever lies under it, so no caption or pill moves it: a wider one
+     stands centered under it, out over both sides. */
+  width: 250px;
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+.turn-action > :not(.button) {
+  flex: none;
+  max-width: 320px;
+}
+.turn-action .priority-pill > span {
+  min-width: 0;
+  white-space: nowrap;
+  font-size: calc(1em * var(--fit, 1));
 }
 /* The turn button keeps one size and type style for every label and state: its icon and label
    centered together, a label too long for it shrinking to fit (Controls.tsx's TurnButton). */
@@ -1203,6 +1227,7 @@
 }
 .turn-caption {
   margin-top: 8.5px;
+  text-align: center;
   font-size: 17.8px;
   line-height: 22px;
   color: #b4b2ae;
@@ -1463,7 +1488,7 @@
 /* A card's candidates, listed where it was clicked or dropped. */
 .menu-scrim {
   position: absolute;
-  inset: 0;
+  inset: var(--bleed);
   z-index: 1150;
 }
 .action-menu {
@@ -1649,7 +1674,7 @@
    it closes; under the hovered card's scan. */
 .viewer-scrim {
   position: absolute;
-  inset: 0;
+  inset: var(--bleed);
   z-index: 1240;
   background: rgb(14 12 11 / 55%);
 }
@@ -1710,6 +1735,31 @@
   margin: -12px;
   overflow-y: auto;
   scrollbar-width: thin;
+  scrollbar-color: var(--metal) transparent;
+  --fade: 56px;
+}
+/* A list longer than the panel fades out at each end with more beyond it, and keeps a thin
+   scroll bar in view: the system hides its own until scrolled. */
+.zone-viewer-cards[data-more="below"] {
+  mask-image: linear-gradient(to top, transparent, #000 var(--fade));
+}
+.zone-viewer-cards[data-more="above"] {
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--fade));
+}
+.zone-viewer-cards[data-more="both"] {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    #000 var(--fade) calc(100% - var(--fade)),
+    transparent
+  );
+}
+.zone-viewer-cards::-webkit-scrollbar {
+  width: 6px;
+}
+.zone-viewer-cards::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: var(--metal);
 }
 .zone-viewer-card-offered {
   cursor: pointer;

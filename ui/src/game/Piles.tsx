@@ -4,6 +4,8 @@
 // hover. A card the open decision offers something for (a target, a cast) is picked there.
 import {
   useEffect,
+  useLayoutEffect,
+  useRef,
   useState,
   type CSSProperties,
   type PointerEvent,
@@ -105,7 +107,7 @@ export function PileButton({
       look={look}
       className="pile-at"
       tip={
-        <Tip side={pile.side === "you" ? "above" : "below"}>
+        <Tip side={pile.side === "you" ? "over" : "below"}>
           {pileTip(pile.zone, cards.length)}
         </Tip>
       }
@@ -160,6 +162,7 @@ export function ZoneViewer({
   const cards = [...pile.cards].reverse();
   const columns = Math.min(VIEWER_COLUMNS, Math.max(1, cards.length));
   const name = pileName(pile);
+  const [list, more, onScroll] = useScrollEdges();
   return (
     <>
       <div className="viewer-scrim" onPointerDown={onClose} />
@@ -189,7 +192,10 @@ export function ZoneViewer({
           <p className="zone-viewer-empty">Nothing here.</p>
         ) : (
           <div
+            ref={list}
             className="zone-viewer-cards"
+            data-more={more}
+            onScroll={onScroll}
             style={{
               gridTemplateColumns: `repeat(${columns}, ${VIEWER_CARD}px)`,
             }}
@@ -210,6 +216,35 @@ export function ZoneViewer({
       {inspector}
     </>
   );
+}
+
+/** Which ends of a scrolling list have more beyond them: "below", "above", "both" or "none". */
+type Beyond = "none" | "above" | "below" | "both";
+
+const beyond = (e: HTMLElement): Beyond => {
+  const above = e.scrollTop > 1;
+  const below = e.scrollTop + e.clientHeight < e.scrollHeight - 1;
+  return above ? (below ? "both" : "above") : below ? "below" : "none";
+};
+
+/** A scrolling list's ref, which of its ends have more beyond them (for a fade there, so a
+ * list that overflows says so though the system hides its scroll bar), and its scroll
+ * handler. */
+function useScrollEdges() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState<Beyond>("none");
+  const measure = () => {
+    if (ref.current) setMore(beyond(ref.current));
+  };
+  useLayoutEffect(() => {
+    measure();
+    const el = ref.current;
+    if (!el) return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  return [ref, more, measure] as const;
 }
 
 function ViewerCard({

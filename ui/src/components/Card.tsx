@@ -61,6 +61,9 @@ export interface CardProps {
   variant?: "full" | "field";
   /** The card's width in pixels; the frame's aspect and everything else scale with it. */
   width?: number;
+  /** A battlefield frame's height, where a crowded row squeezes it narrower than its aspect
+   * (layout.ts): its type keeps the size its height gives it (`typeUnit`). */
+  height?: number;
   tapped?: boolean;
   highlight?: Highlight;
   combat?: CombatRole;
@@ -80,6 +83,14 @@ const TURN = { type: "spring", stiffness: 260, damping: 26 } as const;
 
 /** Width over height of each frame. */
 export const ASPECT = { full: 63 / 88, field: 1.3 } as const;
+
+/** The em of a frame `width` wide, `height` tall when its row squeezes it: a twelfth of its
+ * width, or of the width its height would give it at its usual aspect, though no more than
+ * half again its own width's, so a squeezed frame's name and marks keep their size. */
+export function typeUnit(width: number, height?: number): number {
+  if (height === undefined) return width / 12;
+  return Math.min(Math.max(width, height * ASPECT.field), width * 1.5) / 12;
+}
 
 const BASIC_TYPES: [string, Color][] = [
   ["Plains", "W"],
@@ -263,6 +274,7 @@ export function Card({
   card,
   variant = "full",
   width = 160,
+  height: squeezed,
   tapped = false,
   highlight,
   combat,
@@ -273,7 +285,11 @@ export function Card({
   style,
   id,
 }: CardProps) {
-  const height = width / ASPECT[variant];
+  const height =
+    variant === "field" && squeezed !== undefined
+      ? squeezed
+      : width / ASPECT[variant];
+  const em = typeUnit(width, variant === "field" ? squeezed : undefined);
   const nameRef = useTextFit(card.name);
   const typeRef = useTextFit(card.typeLine);
   const rulesRef = useRulesFit(card.text);
@@ -285,6 +301,8 @@ export function Card({
     card.colors.length > 1 && `accent-${card.colors[0]?.toLowerCase()}`,
     pt && "card-with-pt",
     card.ability && variant === "field" && "card-with-ability",
+    // Squeezed narrower than its type: a long name takes two lines.
+    em * 12 > width * 1.02 && "card-narrow",
     marks?.sick && "card-sick",
     marks?.token && "card-token",
     highlight && `card-${highlight}`,
@@ -302,7 +320,7 @@ export function Card({
   return (
     <motion.div
       className="card-slot"
-      style={{ fontSize: width / 12, ...style }}
+      style={{ fontSize: em, ...style }}
       id={id}
       initial={false}
       animate={slot}
