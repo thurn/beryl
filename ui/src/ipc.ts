@@ -61,7 +61,7 @@ export interface FixtureCall {
 
 /** Replays a fixture: each command gets its recorded responses in order (the last one again
  * once they run out). Listeners get the recorded events in order: all of them at once, or,
- * given `at`, the first `at`, and then after each `choose` the views up to the next one the
+ * given `at`, the first `at` (or all but the last `-at`, if negative), and then after each `choose` the views up to the next one the
  * player answers or the end, as if the app played on from the recorded answer. A `cancel`
  * goes back to the priority the cast began at, shown again with nothing happening in it, and
  * the next `choose` plays the recording on from there. The events a listener gets as it
@@ -84,7 +84,10 @@ export function fixtureTransport(
       events.push(m);
     }
   }
-  let released = at ?? events.length;
+  // A negative `at` counts back from the end, so a state named by its place before the
+  // recording's last view outlives a re-recording that plays out differently.
+  let released =
+    at === undefined ? events.length : at < 0 ? events.length + at : at;
   type Listener = {
     event: keyof Events;
     handler: (payload: never, past: boolean) => void;

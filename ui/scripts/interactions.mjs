@@ -4750,7 +4750,7 @@ const coveredBy = (page, by) =>
 const COVERS = "[data-life], .tip, .game-log, .hand-hit";
 
 // The opponent holding nine cards: their fan's outer backs, which its turn lifts, still show.
-await derive(FIXTURE, "held-nine", 105, (v) => {
+await derive(FIXTURE, "held-nine", views.length - 2, (v) => {
     const held = v.objects.filter(
         (o) => o.owner === "opponent" && o.zone === "hand",
     );
@@ -4765,7 +4765,7 @@ for (const [title, run] of [
     [
         "a full opposing hand",
         {
-            at: 106,
+            at: views.length - 1,
             ready: ".card-el-held",
             reducedMotion: "reduce",
         },
@@ -4774,7 +4774,7 @@ for (const [title, run] of [
         "nine cards in the opposing hand",
         {
             fixture: "held-nine",
-            at: 106,
+            at: views.length - 1,
             ready: ".card-el-held",
             reducedMotion: "reduce",
         },
@@ -4912,7 +4912,7 @@ await check(
         }
     },
     {
-        at: 106,
+        at: views.length - 1,
         ready: ".card-el-held",
         reducedMotion: "reduce",
         viewport: { width: 1280, height: 800 },
@@ -4953,7 +4953,7 @@ for (const viewport of [
                         .boundingBox(),
                 });
             };
-            await at(FIXTURE, 106);
+            await at(FIXTURE, views.length - 1);
             await at("crowded", crowdedAt + 1);
             await at("opponent-turn", 12);
             await at("opponent-first-strike", 11);
