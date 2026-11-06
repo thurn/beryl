@@ -558,28 +558,32 @@ fn later_costs(s: &State, t: &GameTable, player: Seat) -> Fixed<Later, 32> {
     later
 }
 
-/// How many of `later` stay payable after `plan`.
-fn still_payable(sources: &Sources, plan: &Plan, later: &[Later]) -> usize {
+/// What `plan` keeps payable of `later`: how many of the costs, and then how many colored and
+/// colorless symbols those costs have. Of two plans that keep as many costs payable, the one
+/// keeping the hungrier for colors wins, as an auto-tapper keeps {U}{U} open for Mana Drain
+/// rather than {1}{W} for Get Lost: a generic cost is the easier to pay from what is left.
+fn still_payable(sources: &Sources, plan: &Plan, later: &[Later]) -> (usize, u32) {
     let units = sources.units(plan.left, &plan.taps);
-    later
-        .iter()
-        .filter(|l| match l.taps {
-            None => units.pays(l.cost),
-            Some(slot) => {
-                if sources.taps_slot(&plan.taps, slot) {
-                    return false;
-                }
-                // The permanent taps for the ability, so it cannot also make mana for it.
-                let mut without = *plan;
-                for (i, c) in sources.classes().iter().enumerate() {
-                    if c.members.contains(slot) {
-                        without.taps[i] += 1;
-                    }
-                }
-                sources.units(plan.left, &without.taps).pays(l.cost)
+    let payable = later.iter().filter(|l| match l.taps {
+        None => units.pays(l.cost),
+        Some(slot) => {
+            if sources.taps_slot(&plan.taps, slot) {
+                return false;
             }
-        })
-        .count()
+            // The permanent taps for the ability, so it cannot also make mana for it.
+            let mut without = *plan;
+            for (i, c) in sources.classes().iter().enumerate() {
+                if c.members.contains(slot) {
+                    without.taps[i] += 1;
+                }
+            }
+            sources.units(plan.left, &without.taps).pays(l.cost)
+        }
+    });
+    payable.fold((0, 0), |(n, symbols), l| {
+        let colored: u32 = l.cost.symbols.iter().map(|&k| u32::from(k)).sum();
+        (n + 1, symbols + colored)
+    })
 }
 
 /// The plans a payment of `cost` offers, at most one per distinct floating remainder, in
@@ -606,7 +610,7 @@ pub(crate) fn plans(
         return Ok(out);
     }
     let later = later_costs(s, t, player);
-    let mut scores: Fixed<usize, 64> = Fixed::new();
+    let mut scores: Fixed<(usize, u32), 64> = Fixed::new();
     let mut full = false;
     each_plan(cost, pool, &sources, &mut |p| {
         let score = still_payable(&sources, p, later.as_slice());
