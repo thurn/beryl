@@ -146,3 +146,25 @@ fn a_game_past_its_turn_budget_stalls() {
     assert_eq!(outcome, Outcome::Stalled(StallReason::Turns));
     assert_eq!(s.turn().number, 10);
 }
+
+#[test]
+fn search_keeps_the_default_budgets_until_a_player_game_passes_them() {
+    let d = Limits::DEFAULT;
+    assert_eq!(Limits::search(0, 0), d);
+    assert_eq!(Limits::search(199, 499), d);
+    let past = Limits::search(250, 600);
+    assert_eq!(past.turns, 450);
+    assert_eq!(past.decisions_per_turn, 1_100);
+    assert_eq!(past.state_based_iterations, d.state_based_iterations);
+    assert_eq!(
+        Limits::search(u16::MAX, u16::MAX),
+        Limits {
+            state_based_iterations: d.state_based_iterations,
+            ..Limits::PLAYER
+        }
+    );
+    assert_eq!(
+        Limits::PLAYER.state_based_iterations,
+        d.state_based_iterations
+    );
+}

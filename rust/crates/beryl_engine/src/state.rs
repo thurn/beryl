@@ -10,7 +10,7 @@ use crate::decision::{Decision, Outcome};
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot};
 use crate::layout::{Layout, Queue, Small};
-use crate::profile::Profile;
+use crate::profile::{Limits, Profile};
 use crate::rng::Rng;
 
 /// Object slots: deck cards, tokens and spell copies.
@@ -906,6 +906,12 @@ impl<L: Layout> State<L> {
     /// Changes which decisions are offered from here on (architecture §15).
     pub fn set_profile(&mut self, profile: Profile) {
         self.profile = profile;
+    }
+
+    /// The budgets search plays under below this position ([`Limits::search`]): a player game
+    /// lifts its own ([`Limits::PLAYER`]), which a runaway rollout must not inherit.
+    pub fn search_limits(&self) -> Limits {
+        Limits::search(self.turn.number, self.budgets.decisions)
     }
 
     /// Reseeds the game's random streams, as search does for each copy it plays on so sibling

@@ -778,7 +778,10 @@ per turn, 200 turns per game, 32 state-based iterations per check, and the
 capacities of §4.2. Running out is `Stalled`. Search scores it as 0.5 unless an
 evaluation says otherwise; every test treats a stall as a failure; benchmarks
 report stall rates. A player game that runs out of a `Small` queue goes on in
-`Large` instead (§4.1).
+`Large` instead (§4.1). A player game also lifts the decision and turn budgets
+to their counters' maximum (`Limits::PLAYER`), since a human can always concede;
+search below it plays under the defaults again, or that much room past where the
+game stands once it has gone past one (`Limits::search`).
 
 The cube has long loops: Underworld Breach recasts Lion's Eye Diamond and Brain
 Freeze from the graveyard until a library is empty, one cast at a time. Under

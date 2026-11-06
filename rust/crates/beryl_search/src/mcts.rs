@@ -715,10 +715,12 @@ pub(crate) fn shows_the_same<L: Layout>(a: Observation<'_, L>, b: Observation<'_
 /// The profile below a tree's root. The root decision was offered under the game's profile;
 /// below it the tree plays under the smart stops, with no player's passes asked, no mana
 /// floated ahead of a payment and no activation offered that would do nothing. The payment profile stays, so a payment in progress is never
-/// asked under another.
+/// asked under another. The budgets go back to search's, which a player game lifts
+/// ([`State::search_limits`]).
 pub(crate) fn smart<L: Layout>(s: &mut State<L>) {
     s.set_profile(Profile {
         stops: Stops::Smart,
+        limits: s.search_limits(),
         breakpoint: None,
         full_control: None,
         asks_targets: None,
@@ -740,7 +742,23 @@ fn score(outcome: Outcome, player: Seat) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{finished, leader};
+    use beryl_cards::CARDS;
+    use beryl_cards::decks::WU_CONTROL;
+    use beryl_engine::{GameTable, Limits, Profile, Small, State};
+
+    use super::{finished, leader, smart};
+
+    #[test]
+    fn a_tree_plays_under_search_budgets_below_a_player_game() {
+        let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
+        let player = Profile {
+            limits: Limits::PLAYER,
+            ..Profile::SMART
+        };
+        let mut s: State<Small> = State::new(&t, 0, player);
+        smart(&mut s);
+        assert_eq!(s.profile().limits, Limits::DEFAULT);
+    }
 
     /// Every way to hand `left` more root visits to the candidates of `visits`.
     fn spendings(visits: &[u32], left: u32, out: &mut Vec<Vec<u32>>) {

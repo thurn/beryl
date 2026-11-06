@@ -107,11 +107,46 @@ pub struct Limits {
 }
 
 impl Limits {
+    /// The budgets of search and rollouts, which stop a runaway line.
     pub const DEFAULT: Limits = Limits {
         decisions_per_turn: 500,
         turns: 200,
         state_based_iterations: 32,
     };
+    /// The budgets of a player game: decisions and turns as many as their counters hold, since
+    /// a human repeating a loop by hand can always concede. State-based iterations keep the
+    /// default: an endless mandatory loop is a rules draw, which needs a loop check rather than
+    /// a bigger budget.
+    ///
+    /// [CR 104.4b](https://yawgatog.com/resources/magic-rules/#R1044b): "If a game that's not
+    /// using the limited range of influence option ... somehow enters a 'loop' of mandatory
+    /// actions, repeating a sequence of events with no way to stop, the game is a draw."
+    pub const PLAYER: Limits = Limits {
+        decisions_per_turn: u16::MAX,
+        turns: u16::MAX,
+        ..Limits::DEFAULT
+    };
+
+    /// The budgets search plays under below a position at turn `turn` with `decisions` already
+    /// offered this turn: the defaults, or, where a player game has gone past one, that much room
+    /// again from where it stands, so search is not stalled before it plays.
+    #[must_use]
+    pub const fn search(turn: u16, decisions: u16) -> Limits {
+        let d = Limits::DEFAULT;
+        Limits {
+            decisions_per_turn: if decisions < d.decisions_per_turn {
+                d.decisions_per_turn
+            } else {
+                decisions.saturating_add(d.decisions_per_turn)
+            },
+            turns: if turn < d.turns {
+                d.turns
+            } else {
+                turn.saturating_add(d.turns)
+            },
+            ..d
+        }
+    }
 }
 
 /// A turn and step where the active player's first priority is a decision even when passing

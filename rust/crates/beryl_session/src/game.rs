@@ -13,7 +13,7 @@ use beryl_engine::event::Event;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{Object, ObjectFlags, Pending, StackEntry, Turn};
 use beryl_engine::{
-    Ask, Candidates, CardTable, Choice, Decision, DecisionKind, GameTable, Large, Layout,
+    Ask, Candidates, CardTable, Choice, Decision, DecisionKind, GameTable, Large, Layout, Limits,
     Observation, Opt, Outcome, Profile, Replay, Scratch, Seat, Slot, Small, StallReason, State,
     Step, StepStops, TurnStep, apply, next_in_step, observe, paused_events, view,
 };
@@ -1065,7 +1065,9 @@ fn without_floating(mut d: Decision) -> Decision {
 /// offered an activation that would do nothing ([`Profile::hides_pointless`]). Whatever the stops, the
 /// human picks each target of their own spells and abilities, even a lone one, so a click never
 /// aims a spell for them ([`Profile::asks_targets`]), and may tap their mana sources at
-/// priority, floating the mana, as an Arena player clicks a land ([`Profile::taps_mana`]).
+/// priority, floating the mana, as an Arena player clicks a land ([`Profile::taps_mana`]). The
+/// game's budgets are a player's ([`Limits::PLAYER`]): a human repeating a loop by hand never
+/// runs into a rollout's.
 pub fn with_stops(profile: Profile, stops: StopsSetting, human: Seat) -> Profile {
     let mut step_stops = [StepStops::SMART; 2];
     step_stops[human.index()] = stops.step_stops();
@@ -1078,6 +1080,7 @@ pub fn with_stops(profile: Profile, stops: StopsSetting, human: Seat) -> Profile
         asks_targets: Some(human),
         taps_mana: Some(human),
         hides_pointless,
+        limits: Limits::PLAYER,
         ..profile
     }
 }

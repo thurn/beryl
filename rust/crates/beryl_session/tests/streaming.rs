@@ -6,7 +6,7 @@ use beryl_cards::CARDS;
 use beryl_cards::decks::{VINTAGE_WU_CONTROL, WU_CONTROL, fuzz_deck};
 use beryl_cards::names;
 use beryl_engine::event::{Event, Reason};
-use beryl_engine::{Choice, GameTable, Profile, Replay, Scratch, State, Step, apply, next};
+use beryl_engine::{Choice, GameTable, Limits, Profile, Replay, Scratch, State, Step, apply, next};
 use beryl_session::protocol::{Kind, Side, StackItem, Step as TurnStep};
 use beryl_session::replay::Entry;
 use beryl_session::{
@@ -303,5 +303,17 @@ fn a_human_who_can_play_stops_at_their_main_phase() {
             stops += 1;
         }
         assert!(stops > 4, "seed {seed}: only {stops} stops");
+    }
+}
+
+#[test]
+fn a_player_game_lifts_the_decision_and_turn_budgets() {
+    for stops in [StopsSetting::SMART, StopsSetting::EXACT] {
+        for human in Seat::BOTH {
+            let limits = with_stops(Profile::SMART, stops, human).limits;
+            assert_eq!(limits, Limits::PLAYER);
+            assert_eq!(limits.decisions_per_turn, u16::MAX);
+            assert_eq!(limits.turns, u16::MAX);
+        }
     }
 }
