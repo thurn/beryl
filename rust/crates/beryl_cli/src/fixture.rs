@@ -912,7 +912,12 @@ mod tests {
     /// second, so a change that breaks one fails here rather than in the UI's checks.
     #[test]
     fn every_board_fixture_records() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../ui/fixtures.json");
+        // Read at run time: a test binary from the shared target directory may have been
+        // built in a worktree that no longer exists.
+        let path = Path::new(
+            &std::env::var_os("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR"),
+        )
+        .join("../../../ui/fixtures.json");
         let text = std::fs::read_to_string(&path).unwrap();
         let defs: Definitions = serde_json::from_str(&text).unwrap();
         let boards: Vec<&Definition> = defs.fixtures.iter().filter(|d| d.board.is_some()).collect();

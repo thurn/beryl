@@ -1,7 +1,7 @@
 //! The generated names, the card table and the decklists.
 
 use std::fmt::Write;
-use std::path::Path;
+use std::path::PathBuf;
 
 use beryl_engine::card::{AbilityKind, FaceIx, ManaColor, Subtype, Supertypes, Types};
 use beryl_engine::rng::SplitMix64;
@@ -12,6 +12,12 @@ use beryl_engine::{
 };
 
 use crate::{CARDS, SCENARIOS, blue, decks, names};
+
+/// This crate's directory, read at run time: a test binary from the shared target directory
+/// may have been built in a worktree that no longer exists.
+fn crate_dir() -> PathBuf {
+    PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR"))
+}
 
 const CSV: &str = "data/arena-powered-cube-2025-10-30.csv";
 const BASIC_LANDS: [&str; 5] = ["Plains", "Island", "Swamp", "Mountain", "Forest"];
@@ -95,7 +101,7 @@ fn generate(csv: &str) -> String {
 
 #[test]
 fn names_are_current() {
-    let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let crate_dir = crate_dir();
     let csv = std::fs::read_to_string(crate_dir.join("../../..").join(CSV)).unwrap();
     let expected = generate(&csv);
     let path = crate_dir.join("src/names.rs");
@@ -123,7 +129,7 @@ fn constants_spell_names_plainly() {
 /// A decklist file's main deck: its `<count> <name>` lines up to the blank line before the
 /// sideboard.
 fn main_deck(path: &str) -> Vec<(u8, String)> {
-    let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(path)).unwrap();
+    let text = std::fs::read_to_string(crate_dir().join(path)).unwrap();
     text.lines()
         .take_while(|line| !line.trim().is_empty())
         .map(|line| {
@@ -162,7 +168,7 @@ fn the_decks_are_forty_cards_matching_their_decklist_files() {
 /// it, a face's name (`ui/src/cards.ts`): each must be there.
 #[test]
 fn every_face_token_and_emblem_name_is_in_the_card_data() {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../data/cards.json");
+    let path = crate_dir().join("../../../data/cards.json");
     let data: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     let mut known = std::collections::BTreeSet::new();

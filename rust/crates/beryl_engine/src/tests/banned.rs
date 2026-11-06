@@ -28,7 +28,12 @@ fn sources(dir: &Path, out: &mut Vec<PathBuf>) {
 
 #[test]
 fn the_engine_crates_use_no_banned_types() {
-    let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    // Read at run time: a test binary from the shared target directory may have been built in
+    // a worktree that no longer exists.
+    let manifest = PathBuf::from(
+        std::env::var_os("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR"),
+    );
+    let crates = manifest.parent().unwrap();
     let mut files = Vec::new();
     for name in ["beryl_engine", "beryl_cards"] {
         sources(&crates.join(name).join("src"), &mut files);

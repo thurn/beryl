@@ -6,9 +6,13 @@ use beryl_session::typescript::{PATH, typescript};
 
 #[test]
 fn the_generated_typescript_is_current() {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../..")
-        .join(PATH);
+    // Read at run time: a test binary from the shared target directory may have been built in
+    // a worktree that no longer exists.
+    let path = PathBuf::from(
+        std::env::var_os("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR"),
+    )
+    .join("../../..")
+    .join(PATH);
     let expected = typescript();
     if std::env::var_os("BERYL_UPDATE_TS").is_some() {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
