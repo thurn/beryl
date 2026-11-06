@@ -1,5 +1,5 @@
 {
-  "$comment": "What `just ui-shots` captures: a route (hash route, optionally ?fixture=<name>[&at=<n>] for a fixture ui/fixtures.json defines, from its nth view) at a viewport size, after clicking the element `click` selects, if given, or each element of a list of them in turn, and then with the pointer over the element `hover` selects, if given.",
+  "$comment": "What `just ui-shots` captures: a route (hash route, optionally ?fixture=<name>[&at=<n>] for a fixture ui/fixtures.json defines, from its nth view) at a viewport size, after clicking the element `click` selects, if given, or each element of a list of them in turn, and then with the pointer over the element `hover` selects, if given. With `compare`, a list of selectors, the shot is their elements cropped side by side, each with a little of the page around it, rather than the whole page.",
   "shots": [
     {
       "name": "gallery",
@@ -538,6 +538,87 @@
     {
       "name": "game-waterbend",
       "route": "/?fixture=waterbend-tap#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-sick-compare",
+      "route": "/?fixture=signals#/game",
+      "width": 1600,
+      "height": 900,
+      "compare": [
+        "[data-zone=battlefield][data-card='Snapcaster Mage']:has(.card-sick)",
+        "[data-zone=battlefield][data-card='Snapcaster Mage']:not(:has(.card-sick))"
+      ]
+    },
+    {
+      "name": "game-token-compare",
+      "route": "/?fixture=signals#/game",
+      "width": 1600,
+      "height": 900,
+      "compare": [
+        "[data-zone=battlefield][data-card='Thundertrap Trainer']:has(.card-token)",
+        "[data-zone=battlefield][data-card='Thundertrap Trainer']:not(:has(.card-token))"
+      ]
+    },
+    {
+      "name": "game-stolen-owner",
+      "route": "/?fixture=tokens#/game",
+      "width": 1600,
+      "height": 900,
+      "hover": "[data-zone=battlefield][data-card='Mana Crypt']"
+    },
+    {
+      "name": "game-full-control",
+      "route": "/?fixture=signals-full-control#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-tracker-main",
+      "route": "/?fixture=signals#/game",
+      "width": 1600,
+      "height": 900,
+      "compare": [".turn-controls .phase-tracker-compact"]
+    },
+    {
+      "name": "game-tracker-begin-combat",
+      "route": "/?fixture=game-over&at=2#/game",
+      "width": 1600,
+      "height": 900,
+      "compare": [".turn-controls .phase-tracker-compact"]
+    },
+    {
+      "name": "game-tracker-attackers",
+      "route": "/?fixture=game-over&at=4#/game",
+      "width": 1600,
+      "height": 900,
+      "compare": [".turn-controls .phase-tracker-compact"]
+    },
+    {
+      "name": "game-tracker-end-combat",
+      "route": "/?fixture=game-over&at=6#/game",
+      "width": 1600,
+      "height": 900,
+      "compare": [".turn-controls .phase-tracker-compact"]
+    },
+    {
+      "name": "game-tracker-blockers",
+      "route": "/?fixture=game-over&at=25#/game",
+      "width": 1600,
+      "height": 900,
+      "compare": [".turn-controls .phase-tracker-compact"]
+    },
+    {
+      "name": "game-tracker-damage",
+      "route": "/?fixture=combat-declare&at=32#/game",
+      "width": 1600,
+      "height": 900,
+      "compare": [".turn-controls .phase-tracker-compact"]
+    },
+    {
+      "name": "game-coin-on-draw",
+      "route": "/?fixture=choice-trigger-order&at=5#/game",
       "width": 1600,
       "height": 900
     }

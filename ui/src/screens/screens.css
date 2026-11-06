@@ -1142,6 +1142,25 @@
   left: 1337px;
   top: 706px;
 }
+/* Full control's stop sign, left of the turn button, while it is on. */
+.full-control {
+  right: 301px;
+  top: 775px;
+  display: flex;
+}
+.full-control svg {
+  width: 28px;
+  height: 28px;
+  fill: #2c2825;
+  stroke: var(--gold);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 70%));
+}
+.full-control .full-control-bars {
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
 /* A declaration's shortcuts, over the phase tracker. */
 .combat-actions {
   right: 39px;

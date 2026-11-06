@@ -351,13 +351,17 @@ export function ManaPool({ pool, pulse = 0 }: { pool: Pool; pulse?: number }) {
  * doing, if anything: the opponent thinking or taking their turn. */
 /** The coin of the flip that settles who plays first, which then marks the starting player: a
  * gold disc bearing a 1, drawn by its style as the icon it is, not text. It lands with a flip as
- * it appears, or keeps spinning while the flip's winner chooses. */
+ * it appears, or keeps spinning while the flip's winner chooses. Beside a player who does not
+ * go first, or before anyone is chosen, it is blank. */
 export function Coin({
   spinning = false,
+  first = true,
   size = 44,
   className,
 }: {
   spinning?: boolean;
+  /** It bears the 1: it stands beside the player who goes first. */
+  first?: boolean;
   size?: number;
   className?: string;
 }) {
@@ -366,6 +370,7 @@ export function Coin({
       className={[
         "coin",
         spinning ? "coin-spinning" : "coin-landing",
+        first && "coin-first",
         className,
       ]
         .filter(Boolean)

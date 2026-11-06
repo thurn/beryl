@@ -4,7 +4,14 @@
 // non-zero if a page logs an error, cuts off text (capture.mjs' clippedText) or never settles.
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { clippedText, launch, openPage, settle, workers } from "./capture.mjs";
+import {
+    clippedText,
+    compareSheet,
+    launch,
+    openPage,
+    settle,
+    workers,
+} from "./capture.mjs";
 
 const [base, out, list, ...only] = process.argv.slice(2);
 if (!base || !out || !list) {
@@ -49,7 +56,13 @@ async function capture(browser, shot) {
             await settle(page);
         }
         const path = join(out, `${shot.name}.png`);
-        await page.screenshot({ path, fullPage: true });
+        // A comparison crops what `compare` selects side by side, rather than the whole page.
+        if (shot.compare) {
+            const missing = await compareSheet(page, shot.compare, path);
+            for (const m of missing) errors.push(`not on screen: ${m}`);
+        } else {
+            await page.screenshot({ path, fullPage: true });
+        }
         for (const cut of await clippedText(page))
             errors.push(`text cut: ${cut}`);
         console.log(path);

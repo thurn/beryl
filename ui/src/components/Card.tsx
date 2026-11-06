@@ -1,9 +1,9 @@
 // The card frame: a name bar colored by the card's colors, art, a P/T badge and, on the full
 // frame, the type line and rules box. Battlefield permanents use the compact `field` frame,
 // with their marks: a badge per kind of counter, P/T inked up or down against the printed
-// values, summoning sickness as faded art, a token's pewter frame and a stolen permanent's
-// violet edge; the top card of a pile of identical ones wears their count. Tapping turns
-// either frame whole, never reshaping it.
+// values, summoning sickness as a moon badge over faded art, a token's coin badge on its pewter
+// frame and a stolen permanent's violet edge; the top card of a pile of identical ones wears
+// their count. Tapping turns either frame whole, never reshaping it.
 import {
   Fragment,
   useLayoutEffect,
@@ -226,8 +226,8 @@ function stats(card: CardFace): ReactNode {
 
 export const toneClass = (tone: StatTone | undefined) => tone && `stat-${tone}`;
 
-/** The icons of a permanent's marks, on a 16-unit square: counters by kind, and for the
- * inspector loyalty, damage and summoning sickness. */
+/** The icons of a permanent's marks, on a 16-unit square: counters by kind, summoning sickness
+ * and a token's coin, and for the inspector loyalty and damage. */
 const MARK_ICONS = {
   plusOne: "M8 1.5 L14.5 9.5 H10.5 V14.5 H5.5 V9.5 H1.5 Z",
   minusOne: "M8 14.5 L1.5 6.5 H5.5 V1.5 H10.5 V6.5 H14.5 Z",
@@ -241,6 +241,8 @@ const MARK_ICONS = {
   damage:
     "M8 0.5 L9.8 5.2 L15 4 L11.4 8 L15 12 L9.8 10.8 L8 15.5 L6.2 10.8 L1 12 L4.6 8 L1 4 L6.2 5.2 Z",
   sick: "M10.2 1.2 A7 7 0 1 0 14.8 11.4 A5.6 5.6 0 0 1 10.2 1.2 Z",
+  token:
+    "M8 1.2 A6.8 6.8 0 1 1 8 14.8 A6.8 6.8 0 1 1 8 1.2 Z M8 4.6 A3.4 3.4 0 1 0 8 11.4 A3.4 3.4 0 1 0 8 4.6 Z",
 } as const;
 
 export type MarkIcon = keyof typeof MARK_ICONS;
@@ -373,8 +375,11 @@ export function Card({
         {card.ability && variant === "field" && (
           <AbilityBadge ability={card.ability} />
         )}
-        {marks && marks.counters.length > 0 && (
+        {marks && (marks.counters.length > 0 || marks.sick || marks.token) && (
           <span className="card-counters">
+            {/* Marks that say what the frame and art also hint, apart from any art. */}
+            {marks.token && <MarkBadge icon="token" label="Token" />}
+            {marks.sick && <MarkBadge icon="sick" label="Summoning sick" />}
             {marks.counters.map((c) => (
               <MarkBadge
                 key={c.kind}

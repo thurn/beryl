@@ -184,6 +184,8 @@ enum Condition {
     /// A token differs from another of its name its controller controls by its types or an
     /// attachment, so the table must not pile them.
     ChangedToken,
+    /// A token stands beside a card of its name under one controller, as an offspring copy.
+    TokenBesideCard,
     /// A permanent is controlled by the player who doesn't own it.
     Stolen,
     /// The human has unspent mana (CR 106.4).
@@ -250,9 +252,9 @@ impl Condition {
     /// "namesake candidates", "resolving <card name>", "casting <card name>",
     /// "playable pair in hand", "exiled beneath a permanent", "attached across the table",
     /// "castable from exile", "known card in the opponent's hand", "token twins", "changed
-    /// token", "stolen permanent", "mana floating", "X on the stack", "spell on the stack", "<n>
-    /// nonland permanents a side", or "<mark> beside a twin" with the mark "+1/+1 counters",
-    /// "damage", "summoning sickness" or "story or time counters".
+    /// token", "token beside its card", "stolen permanent", "mana floating", "X on the stack",
+    /// "spell on the stack", "<n> nonland permanents a side", or "<mark> beside a twin" with the
+    /// mark "+1/+1 counters", "damage", "summoning sickness" or "story or time counters".
     fn parse(text: &str) -> Result<Condition, String> {
         let condition = match text {
             "attacking" => Condition::Attacking,
@@ -273,6 +275,7 @@ impl Condition {
             "known card in the opponent's hand" => Condition::KnownOpponentsHand,
             "token twins" => Condition::TokenTwins,
             "changed token" => Condition::ChangedToken,
+            "token beside its card" => Condition::TokenBesideCard,
             "stolen permanent" => Condition::Stolen,
             "mana floating" => Condition::ManaFloating,
             "X on the stack" => Condition::XOnStack,
@@ -390,6 +393,7 @@ impl Condition {
             Condition::KnownOpponentsHand => knows_opponents_hand(view),
             Condition::TokenTwins => token_pairs(view).any(|(a, b)| plain_twins(view, a, b)),
             Condition::ChangedToken => changed_token(view),
+            Condition::TokenBesideCard => token_beside_card(view),
             Condition::Stolen => stolen(view),
             Condition::ManaFloating => mana_floating(view),
             Condition::XOnStack => x_on_stack(view),
@@ -574,6 +578,20 @@ fn changed_token(view: &PlayerView) -> bool {
             || [a, b]
                 .iter()
                 .any(|o| o.attached_to.is_some() || bears_attachment(view, o))
+    })
+}
+
+/// Whether a token stands beside a card of its name under one controller.
+fn token_beside_card(view: &PlayerView) -> bool {
+    let field = || {
+        view.objects
+            .iter()
+            .filter(|o| o.zone == ZoneName::Battlefield)
+    };
+    field().any(|t| {
+        t.token
+            && t.name.is_some()
+            && field().any(|c| !c.token && c.name == t.name && c.controller == t.controller)
     })
 }
 
@@ -888,6 +906,10 @@ mod tests {
         assert_eq!(
             Condition::parse("changed token"),
             Ok(Condition::ChangedToken)
+        );
+        assert_eq!(
+            Condition::parse("token beside its card"),
+            Ok(Condition::TokenBesideCard)
         );
         assert_eq!(Condition::parse("stolen permanent"), Ok(Condition::Stolen));
         assert_eq!(

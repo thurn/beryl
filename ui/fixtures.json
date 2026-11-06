@@ -208,6 +208,19 @@
       "where": ["8 nonland permanents a side", "spell on the stack"]
     },
     {
+      "name": "signals",
+      "board": "signals",
+      "until": "first priority decision for seat 0",
+      "where": ["summoning sickness beside a twin", "token beside its card"]
+    },
+    {
+      "name": "signals-full-control",
+      "board": "signals",
+      "stops": "exact",
+      "until": "first priority decision for seat 0",
+      "where": ["summoning sickness beside a twin", "token beside its card"]
+    },
+    {
       "name": "marks-damage",
       "board": "marks-damage",
       "until": "first priority decision for seat 0",

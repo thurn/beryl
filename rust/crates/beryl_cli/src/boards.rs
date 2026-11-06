@@ -533,6 +533,32 @@ pub const BOARDS: &[Scenario] = &[
         .battlefield(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[Action::cast(P0, THIEVING_SKYDIVER)]),
+    // A Snapcaster Mage flashed in beside one that has been there, and a Thundertrap Trainer
+    // cast with offspring beside its token copy; a land to play keeps the human's priority.
+    Scenario::new("signals")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(SNAPCASTER_MAGE),
+                ISLAND_,
+                ISLAND_,
+                ISLAND_,
+                ISLAND_,
+                ISLAND_,
+                ISLAND_,
+                ISLAND_,
+                ISLAND_,
+            ],
+        )
+        .hand(P0, &[SNAPCASTER_MAGE, THUNDERTRAP_TRAINER, ISLAND])
+        .library(P0, LANDS)
+        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[
+            Action::cast(P0, SNAPCASTER_MAGE),
+            cast_with_option(P0, THUNDERTRAP_TRAINER),
+        ]),
     // Subtlety blocks one of two Abhorrent Oculi and leaves it damaged; a land to play keeps
     // the human's priority after combat.
     Scenario::new("marks-damage")
@@ -1003,7 +1029,7 @@ const fn choose(player: Seat, kind: DecisionKind, card: &'static str) -> Action 
 }
 
 /// `player` casts `card` with its first casting option: Overlord of the Mistmoors' impending
-/// cost, Thieving Skydiver's kicker, Damn's overload.
+/// cost, Thieving Skydiver's kicker, Damn's overload, Thundertrap Trainer's offspring.
 const fn cast_with_option(player: Seat, card: &'static str) -> Action {
     Action::Cast {
         player,

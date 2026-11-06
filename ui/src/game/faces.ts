@@ -31,8 +31,15 @@ export function tone(
 export const printedFace = (o: ObjectView, face: CardFace): CardFace =>
   (o.token && o.name !== null && tokenFace(o.name)) || face;
 
+/** The toughness drawn for `o`: less its marked damage, as Arena draws it, and never below 0,
+ * as damage past lethal only destroys it (CR 704.5g: "the total damage marked on it is greater
+ * than or equal to its toughness, that creature has been dealt lethal damage and is
+ * destroyed"). https://yawgatog.com/resources/magic-rules/#R7045g */
+const toughnessLeft = (o: ObjectView, toughness: number) =>
+  String(Math.max(0, toughness - o.damage));
+
 /** The frame for object `o`, from its card art (useCardArt). On the battlefield a creature's
- * toughness is drawn less its marked damage, as Arena draws it, and red then. */
+ * toughness is drawn less its marked damage (toughnessLeft), and red then. */
 export function frameFace(o: ObjectView, art: CardArt): FrameFace {
   const face = art.face;
   const onField = o.zone === "battlefield";
@@ -47,7 +54,7 @@ export function frameFace(o: ObjectView, art: CardArt): FrameFace {
     manaCost: face.mana_cost || undefined,
     text: text || undefined,
     power: onField ? pt?.power.toString() : face.power,
-    toughness: onField ? pt && String(pt.toughness - o.damage) : face.toughness,
+    toughness: onField ? pt && toughnessLeft(o, pt.toughness) : face.toughness,
     powerTone: pt && tone(pt.power, printed.power),
     toughnessTone:
       pt && (o.damage > 0 ? "down" : tone(pt.toughness, printed.toughness)),
@@ -108,7 +115,7 @@ const namelessFace = (o: ObjectView): FrameFace => ({
     o.types.map((t) => t.charAt(0).toUpperCase() + t.slice(1)).join(" "),
   colors: [],
   power: o.pt?.power.toString(),
-  toughness: o.pt ? String(o.pt.toughness - o.damage) : undefined,
+  toughness: o.pt ? toughnessLeft(o, o.pt.toughness) : undefined,
   toughnessTone: o.damage > 0 ? "down" : undefined,
 });
 

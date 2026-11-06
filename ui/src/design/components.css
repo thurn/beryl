@@ -424,8 +424,9 @@
   color: var(--stat-down-ink);
 }
 
-/* A permanent's marks (Card.tsx): a dark badge per kind of counter along its foot, between the
-   ability badge and the plaque, wrapping upward; summoning sickness fades its art. */
+/* A permanent's marks (Card.tsx): a dark badge along its foot, between the ability badge and
+   the plaque, wrapping upward: a token's coin, summoning sickness's moon (which also fades its
+   art), then one per kind of counter. */
 .card-counters {
   position: absolute;
   left: 0.62em;
@@ -470,9 +471,16 @@
 .mark-damage {
   --mark: var(--stat-down);
 }
+.mark-sick,
+.mark-token {
+  padding-right: 0.26em;
+}
 .mark-sick {
   --mark: var(--cyan);
-  padding-right: 0.26em;
+}
+.mark-token {
+  --mark: #d6d2cc;
+  fill-rule: evenodd;
 }
 .card-sick .card-art {
   filter: saturate(0.25) brightness(0.72);
@@ -1635,8 +1643,8 @@
   margin-top: 0;
 }
 
-/* The coin of the opening's flip and the starting player's mark: a gold disc bearing a 1, which
-   lands with a flip or spins while the flip's winner chooses. */
+/* The coin of the opening's flip and the starting player's mark: a gold disc, bearing a 1 by
+   the player who goes first, which lands with a flip or spins while the flip's winner chooses. */
 .coin {
   display: inline-grid;
   place-items: center;
@@ -1653,7 +1661,7 @@
   color: #5a3a12;
   text-shadow: 0 1px 0 rgb(255 240 200 / 60%);
 }
-.coin::after {
+.coin-first::after {
   content: "1";
 }
 .coin-landing {

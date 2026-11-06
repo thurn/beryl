@@ -3264,10 +3264,12 @@ for (const fixture of ["arrow-spell", "arrow-ability", "arrow-player"]) {
                     `${twin.name}'s twin wears no badge`,
                 );
             }
+            // Sickness fades the art and wears a badge, which no art can hide.
             const [ill, ready] = pair(marks, sick);
             assert.equal(await el(page, ill).locator(".card-sick").count(), 1);
+            assert.equal(await el(page, ill).locator(".mark-sick").count(), 1);
             assert.equal(
-                await el(page, ready).locator(".card-sick").count(),
+                await el(page, ready).locator(".card-sick, .mark-sick").count(),
                 0,
             );
         },
@@ -3288,6 +3290,21 @@ for (const fixture of ["arrow-spell", "arrow-ability", "arrow-player"]) {
                 await el(page, whole).locator(".card-pt b.stat-down").count(),
                 0,
             );
+            // Damage past lethal, as the table may show for a moment before the creature dies,
+            // draws no toughness below 0, by the page's own module.
+            const drawn = await page.evaluate(async (o) => {
+                const { frameFace } = await import("/src/game/faces.ts");
+                const face = {
+                    name: o.name,
+                    type_line: "Creature",
+                    colors: [],
+                    power: String(o.pt.power),
+                    toughness: String(o.pt.toughness),
+                };
+                const lethal = { ...o, damage: o.pt.toughness + 3 };
+                return frameFace(lethal, { face }).toughness;
+            }, o);
+            assert.equal(drawn, "0", "damage past lethal draws toughness 0");
         },
         { fixture: "marks-damage", at: hurt.length, ready: ".card-pt" },
     );

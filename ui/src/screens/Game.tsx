@@ -583,7 +583,11 @@ function Opening({
     <div className="opening" role="dialog" aria-label={title}>
       <div className="overlay-backdrop" />
       <div className="opening-coin" data-starting={starting ?? undefined}>
-        <Coin key={starting ?? "spinning"} spinning={starting === null} />
+        <Coin
+          key={starting ?? "spinning"}
+          spinning={starting === null}
+          first={starting === "you"}
+        />
         {starting && (
           <span className="opening-coin-label">
             {starting === "you" ? "On the play" : "On the draw"}

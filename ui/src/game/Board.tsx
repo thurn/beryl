@@ -939,8 +939,15 @@ export function Board({
         {/* Under a screen over the table, the turn's controls give way (scry.png). */}
         {!inert && (
           <div className="turn-controls">
+            {view.stops === "exact" && (
+              <span className="full-control has-tip">
+                <FullControlIcon />
+                <Tip side="above">Full control</Tip>
+              </span>
+            )}
             <PhaseTracker
               current={phaseOf(view.turn.step)}
+              step={view.turn.step}
               compact
               now={`Turn ${view.turn.number} · ${STEP_NAMES[view.turn.step]}`}
             />
@@ -1176,6 +1183,16 @@ function StepBanner({
         </motion.div>
       )}
     </AnimatePresence>
+  );
+}
+
+/** Full control's mark beside the turn button: a stop sign, for stopping at every priority. */
+function FullControlIcon() {
+  return (
+    <svg viewBox="0 0 24 24" role="img" aria-label="Full control">
+      <path d="M8 1.5 H16 L22.5 8 V16 L16 22.5 H8 L1.5 16 V8 Z" />
+      <path className="full-control-bars" d="M9.5 7.5 V16.5 M14.5 7.5 V16.5" />
+    </svg>
   );
 }
 

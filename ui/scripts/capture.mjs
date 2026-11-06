@@ -60,6 +60,59 @@ export async function settle(page) {
     });
 }
 
+/** Crops each element (a locator, or a selector) out of `page` at its size on screen, with
+ * `pad` px around it, and lays the crops side by side, labelled, in one image saved to `path`:
+ * for judging whether two states, or two things that should look alike, can be told apart at
+ * a glance. Returns the targets not on screen. */
+export async function compareSheet(page, targets, path, { pad = 12 } = {}) {
+    const crops = [];
+    for (const target of targets) {
+        const locator =
+            typeof target === "string" ? page.locator(target).first() : target;
+        const box = await locator.boundingBox();
+        if (!box) {
+            crops.push({ label: String(target), missing: true });
+            continue;
+        }
+        const view = page.viewportSize();
+        const x = Math.max(0, box.x - pad);
+        const y = Math.max(0, box.y - pad);
+        const clip = {
+            x,
+            y,
+            width: Math.min(view.width, box.x + box.width + pad) - x,
+            height: Math.min(view.height, box.y + box.height + pad) - y,
+        };
+        const png = await page.screenshot({ clip });
+        crops.push({
+            label:
+                typeof target === "string"
+                    ? target
+                    : await locator.evaluate(
+                          (e) =>
+                              e.getAttribute("data-card") ??
+                              e.getAttribute("aria-label") ??
+                              e.tagName.toLowerCase(),
+                      ),
+            src: `data:image/png;base64,${png.toString("base64")}`,
+        });
+    }
+    const sheet = await page.context().newPage();
+    await sheet.setContent(
+        `<body style="margin:0;padding:12px;background:#777;display:inline-flex;gap:16px;align-items:flex-start;font:13px sans-serif">${crops
+            .map(
+                (c) =>
+                    `<figure style="margin:0"><figcaption style="color:#fff;margin-bottom:4px">${c.label.replace(/</g, "&lt;")}</figcaption>${
+                        c.missing ? "(not on screen)" : `<img src="${c.src}">`
+                    }</figure>`,
+            )
+            .join("")}</body>`,
+    );
+    await sheet.locator("body").screenshot({ path });
+    await sheet.close();
+    return crops.filter((c) => c.missing).map((c) => c.label);
+}
+
 /** `cutText` once the page has held still: Motion's JavaScript-driven springs are not among
  * the animations `settle` waits for, so a cut is reported only if it is still there after a
  * few more settles. On a page whose clock Playwright drives, call `cutText` instead. */

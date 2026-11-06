@@ -502,6 +502,7 @@ const MARK_NAMES: Record<MarkIcon, string> = {
   chorus: "Chorus",
   damage: "Damage",
   sick: "Summoning sick",
+  token: "Token",
 };
 
 /** A permanent's marks, which the scan does not show: its owner when another player controls

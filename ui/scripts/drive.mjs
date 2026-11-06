@@ -12,7 +12,7 @@
 import { createServer } from "node:http";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { launch } from "./capture.mjs";
+import { compareSheet, launch } from "./capture.mjs";
 
 const [port, url, out, width = "1600", height = "900"] = process.argv.slice(2);
 if (!port || !url || !out) {
@@ -511,61 +511,13 @@ const probe = {
      * with `pad` px around it, and lays the crops side by side, labelled, in one image: for
      * judging whether two states, or two things that should look alike, can be told apart at
      * a glance. Returns the image's path. */
-    async compare(name, targets, { pad = 12 } = {}) {
-        const crops = [];
-        for (const target of targets) {
-            const locator =
-                typeof target === "string"
-                    ? page.locator(target).first()
-                    : target;
-            const box = await locator.boundingBox();
-            if (!box) {
-                crops.push({ label: String(target), missing: true });
-                continue;
-            }
-            const view = page.viewportSize();
-            const x = Math.max(0, box.x - pad);
-            const y = Math.max(0, box.y - pad);
-            const clip = {
-                x,
-                y,
-                width: Math.min(view.width, box.x + box.width + pad) - x,
-                height: Math.min(view.height, box.y + box.height + pad) - y,
-            };
-            const png = await page.screenshot({ clip });
-            crops.push({
-                label:
-                    typeof target === "string"
-                        ? target
-                        : await locator.evaluate(
-                              (e) =>
-                                  e.getAttribute("data-card") ??
-                                  e.getAttribute("aria-label") ??
-                                  e.tagName.toLowerCase(),
-                          ),
-                src: `data:image/png;base64,${png.toString("base64")}`,
-            });
-        }
-        const sheet = await context.newPage();
-        await sheet.setContent(
-            `<body style="margin:0;padding:12px;background:#777;display:inline-flex;gap:16px;align-items:flex-start;font:13px sans-serif">${crops
-                .map(
-                    (c) =>
-                        `<figure style="margin:0"><figcaption style="color:#fff;margin-bottom:4px">${c.label.replace(/</g, "&lt;")}</figcaption>${
-                            c.missing
-                                ? "(not on screen)"
-                                : `<img src="${c.src}">`
-                        }</figure>`,
-                )
-                .join("")}</body>`,
-        );
+    async compare(name, targets, options) {
         shots += 1;
         const path = join(
             out,
             `${String(shots).padStart(3, "0")}-${name}-compare.png`,
         );
-        await sheet.locator("body").screenshot({ path });
-        await sheet.close();
+        await compareSheet(page, targets, path, options);
         return path;
     },
 };
