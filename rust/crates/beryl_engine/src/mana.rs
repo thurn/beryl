@@ -880,11 +880,17 @@ pub(crate) fn plans(
         }
         return Ok(out);
     }
-    let later = later_costs(s, t, player);
-    let mut scores: Fixed<(u32, usize, u32), 64> = Fixed::new();
+    // Scores decide only between plans of one remainder and number sacrificed, and whether a
+    // plan sacrificing more is dominated, so each is found when one of those first needs it:
+    // a payment with one way to leave each remainder scores none.
+    let mut later: Option<Fixed<Later, 32>> = None;
+    let mut score = |p: &Plan| {
+        let later = later.get_or_insert_with(|| later_costs(s, t, player));
+        still_payable(&sources, p, later.as_slice())
+    };
+    let mut scores: Fixed<Option<(u32, usize, u32)>, 64> = Fixed::new();
     let mut full = false;
     each_plan(cost, pool, &sources, &mut |p| {
-        let score = still_payable(&sources, p, later.as_slice());
         let sacrificed = sources.sacrificed(p);
         match out
             .iter()
@@ -893,13 +899,16 @@ pub(crate) fn plans(
             // The first plan of a remainder taps the least flexible sources; a later one
             // replaces it only by keeping more costs payable.
             Some(i) => {
-                if score > scores.as_slice()[i] {
+                let q = out.as_slice()[i];
+                let first = *scores.as_mut_slice()[i].get_or_insert_with(|| score(&q));
+                let this = score(p);
+                if this > first {
                     out.as_mut_slice()[i] = *p;
-                    scores.as_mut_slice()[i] = score;
+                    scores.as_mut_slice()[i] = Some(this);
                 }
             }
             None => {
-                full |= out.push(*p).is_err() || scores.push(score).is_err();
+                full |= out.push(*p).is_err() || scores.push(None).is_err();
             }
         }
         !full
@@ -907,13 +916,20 @@ pub(crate) fn plans(
     if full {
         return Err(Full);
     }
+    // A plan is dominated only by one sacrificing fewer, so with one number sacrificed among
+    // them all no score is needed.
+    let fewest = out.iter().map(|p| sources.sacrificed(p)).min();
+    if out.iter().any(|p| Some(sources.sacrificed(p)) != fewest) {
+        for (p, sc) in out.iter().zip(scores.as_mut_slice()) {
+            sc.get_or_insert_with(|| score(p));
+        }
+    }
     let mut kept: Fixed<Plan, 64> = Fixed::new();
-    for (p, &score) in out.iter().zip(scores.iter()) {
+    for (p, &sc) in out.iter().zip(scores.iter()) {
         let sacrificed = sources.sacrificed(p);
-        let dominated = out
-            .iter()
-            .zip(scores.iter())
-            .any(|(q, &other)| sources.sacrificed(q) < sacrificed && other >= score);
+        let dominated = out.iter().zip(scores.iter()).any(|(q, &other)| {
+            sources.sacrificed(q) < sacrificed && other.expect("scored") >= sc.expect("scored")
+        });
         if !dominated {
             kept.push(*p)?;
         }
