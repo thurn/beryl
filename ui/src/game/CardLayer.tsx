@@ -351,11 +351,7 @@ function Look({
   if (place.look === "hidden") return null;
   // A face-down permanent shows its back to both players; its controller's hover still names
   // its card (CR 708.5).
-  if (
-    place.look === "back" ||
-    object.name === null ||
-    object.facing === "down"
-  ) {
+  if (object.name === null || object.facing === "down") {
     return <CardBack width={place.width} />;
   }
   const under = place.look === "beneath" || place.look === "attached";

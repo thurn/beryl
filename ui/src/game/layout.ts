@@ -68,7 +68,7 @@ export const RAISE = { lift: 70, scale: 1.06 };
 /** How a placed card is drawn. */
 export type Look =
   | "hand" // a full frame in your hand
-  | "back" // a card back: the opponent's hand
+  | "held" // the opponent's hand: a back, or the face of a card you know
   | "field" // a battlefield frame: nonland permanents
   | "land" // a battlefield frame in a land pile
   | "beneath" // a battlefield frame tucked beneath the permanent that exiled it
@@ -301,8 +301,9 @@ function handPlacements(cards: ObjectView[], tucked: boolean): Placement[] {
   });
 }
 
-/** The opponent's hand: backs fanned along the top edge. */
-function backPlacements(cards: ObjectView[]): Placement[] {
+/** The opponent's hand fanned along the top edge: backs, and the faces of the cards you know
+ * (a look at their hand, a card returned to it). */
+function heldPlacements(cards: ObjectView[]): Placement[] {
   const n = cards.length;
   const mid = (n - 1) / 2;
   const height = BACK_WIDTH / FULL_ASPECT;
@@ -310,7 +311,7 @@ function backPlacements(cards: ObjectView[]): Placement[] {
   return cards.map((o, i) => ({
     slot: o.slot,
     zone: o.zone,
-    look: "back",
+    look: "held",
     width: BACK_WIDTH,
     span: BACK_WIDTH,
     opacity: 1,
@@ -731,7 +732,7 @@ export function layout(
   const behindHost = new Set([...attached.values()].flat().map((o) => o.slot));
 
   out.push(...handPlacements(owned("you", "hand"), tucked));
-  out.push(...backPlacements(owned("opponent", "hand")));
+  out.push(...heldPlacements(owned("opponent", "hand")));
   // Blockers stand across from their attackers, which stand where they would anyway: only the
   // defending side's row depends on the other's.
   const stacked = view.stack.length > 0;
