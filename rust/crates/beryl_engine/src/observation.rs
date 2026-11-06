@@ -67,13 +67,17 @@ impl<'a> Observation<'a> {
     }
 
     /// The object in a slot, with every field that could betray an unknown identity masked:
-    /// its card, which only [`Observation::card`] reads, its copy and the face up.
+    /// its card, which only [`Observation::card`] reads, its copy and the face up. Whether a
+    /// permanent is face down is public: it is part of its status
+    /// ([CR 110.5](https://yawgatog.com/resources/magic-rules/#R1105)).
     pub fn object(&self, slot: Slot) -> Object {
         let mut o = *self.state.object(slot);
         if !self.knows(slot) {
             o.card = CardIx::default();
             o.copy_of = None;
-            o.face = FaceIx::FRONT;
+            if o.face != FaceIx::DOWN {
+                o.face = FaceIx::FRONT;
+            }
         }
         o
     }

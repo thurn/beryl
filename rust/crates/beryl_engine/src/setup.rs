@@ -71,10 +71,16 @@ impl State {
 
     /// Turns a double-faced permanent so that the face at `face` is up, as one that entered
     /// transformed has its back face up
-    /// ([CR 712.14a](https://yawgatog.com/resources/magic-rules/#R71214a)).
+    /// ([CR 712.14a](https://yawgatog.com/resources/magic-rules/#R71214a)), or turns a
+    /// permanent face down ([`FaceIx::DOWN`]), as a manifested one is. Then only its
+    /// controller knows it (CR 708.5).
     pub fn set_face(&mut self, slot: Slot, face: FaceIx) {
         debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
         self.object_mut(slot).face = face;
+        if face == FaceIx::DOWN {
+            let other = self.object(slot).base_controller.opponent();
+            self.knowledge[other.index()].remove(slot);
+        }
         self.flags.derived_dirty = true;
     }
 

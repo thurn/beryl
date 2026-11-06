@@ -27,8 +27,12 @@ impl CardDef {
         self.face(FaceIx::FRONT)
     }
 
-    /// The face at `face`.
+    /// The face at `face`, or for [`FaceIx::DOWN`] the characteristics every face-down
+    /// permanent has, [`FACE_DOWN`].
     pub fn face(&self, face: FaceIx) -> &'static Face {
+        if face == FaceIx::DOWN {
+            return &FACE_DOWN;
+        }
         &self.faces[usize::from(face.0)]
     }
 
@@ -43,7 +47,8 @@ impl CardDef {
     /// battlefield, it has only the characteristics of the face that's up." The same holds of
     /// a nonmodal one ([CR 712.8e](https://yawgatog.com/resources/magic-rules/#R7128e)):
     /// "While a nonmodal double-faced permanent has its back face up, it has only the
-    /// characteristics of its back face."
+    /// characteristics of its back face." A face-down permanent has no name (CR 708.2a): the
+    /// empty string.
     pub fn face_name(&self, face: FaceIx) -> &'static str {
         if face == FaceIx::FRONT {
             self.name
@@ -62,6 +67,13 @@ impl FaceIx {
     pub const FRONT: FaceIx = FaceIx(0);
     /// The back face of a double-faced card.
     pub const BACK: FaceIx = FaceIx(1);
+    /// Face down: a permanent whose card is turned face down
+    /// ([CR 110.5](https://yawgatog.com/resources/magic-rules/#R1105)): "A permanent's status
+    /// is its physical state. There are four status categories, each of which has two possible
+    /// values: tapped/untapped, flipped/unflipped, face up/face down, and phased in/phased
+    /// out." Its characteristics are [`FACE_DOWN`]'s, whichever card it is, so every reader
+    /// of [`CardDef::face`] sees what a face-down permanent has.
+    pub const DOWN: FaceIx = FaceIx(u8::MAX);
 
     /// The index in [`CardDef::faces`], as wire formats write it.
     pub fn get(self) -> u8 {
@@ -147,6 +159,10 @@ pub struct Face {
     /// double-faced card lets its caster choose the face
     /// ([CR 712.11b](https://yawgatog.com/resources/magic-rules/#R71211b)).
     pub transformed: bool,
+    /// "As an additional cost to cast this spell, exile N cards from your graveyard"
+    /// (Abhorrent Oculus): N, or 0 for no such cost. It is paid with the rest of the total
+    /// cost ([CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h)).
+    pub exile_from_graveyard: u8,
     /// Abilities this face grants to another object rather than has itself, such as the crew
     /// ability of Swift Reconfiguration's "Enchanted permanent is a Vehicle artifact with crew
     /// 5". [`Modification::Grant`] names one by its index here.
@@ -193,6 +209,21 @@ impl Face {
     }
 }
 
+/// What a face-down permanent is
+/// ([CR 708.2a](https://yawgatog.com/resources/magic-rules/#R7082a)): "A permanent that enters
+/// the battlefield face down also has these characteristics unless otherwise specified by the
+/// effect that put it onto the battlefield face down": "a 2/2 face-down creature with no text,
+/// no name, no subtypes, and no mana cost." These are its copiable values, applied in layer 1b
+/// ([CR 613.2b](https://yawgatog.com/resources/magic-rules/#R6132b)): "Face-down spells and
+/// permanents have their characteristics modified as defined in rule 708.2." The cube's only
+/// face-down permanents are manifested ones (CR 701.40a), which list the same values.
+pub static FACE_DOWN: Face = Face {
+    types: Types::CREATURE,
+    power: Some(2),
+    toughness: Some(2),
+    ..Face::EMPTY
+};
+
 impl Face {
     /// A face with no cost, types or abilities, for `..Face::EMPTY` in card files.
     pub const EMPTY: Face = Face {
@@ -209,6 +240,7 @@ impl Face {
         abilities: &[],
         casting: &[],
         transformed: false,
+        exile_from_graveyard: 0,
         grants: &[],
     };
 
@@ -505,6 +537,7 @@ pub enum Subtype {
     Cleric,
     Elemental,
     Elk,
+    Eye,
     Fish,
     Horror,
     Human,
@@ -527,7 +560,7 @@ pub enum Subtype {
 }
 
 impl Subtype {
-    pub const ALL: [Subtype; 31] = [
+    pub const ALL: [Subtype; 32] = [
         Subtype::Plains,
         Subtype::Island,
         Subtype::Swamp,
@@ -541,6 +574,7 @@ impl Subtype {
         Subtype::Cleric,
         Subtype::Elemental,
         Subtype::Elk,
+        Subtype::Eye,
         Subtype::Fish,
         Subtype::Horror,
         Subtype::Human,
@@ -574,6 +608,7 @@ impl Subtype {
             Subtype::Avatar
             | Subtype::Cleric
             | Subtype::Elemental
+            | Subtype::Eye
             | Subtype::Elk
             | Subtype::Fish
             | Subtype::Horror

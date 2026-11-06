@@ -787,7 +787,9 @@ slot.
   knowledge bits, in addition to reordering. Without the rebinding, the owner of
   a Brainstormed-back Ponder would know where it went.
 - Face-down exile (Memory Jar, Shelldock Isle) is a known-to-owner slot in
-  exile; cards exiled face up are known to both.
+  exile; cards exiled face up are known to both. A face-down permanent (a
+  manifested card) is a known-to-controller slot on the battlefield whose face
+  is `FaceIx::DOWN`, a 2/2 with no text; it is revealed as it leaves.
 - **Observation** is a borrowed view of the state for one viewer.
   `Observation<'a>` wraps `&State` and the viewer, and its accessors mask on
   read: a slot the viewer does not know reads as `card = UNKNOWN`, with the

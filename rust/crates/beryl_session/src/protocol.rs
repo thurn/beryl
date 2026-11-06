@@ -71,6 +71,16 @@ pub enum Side {
     Opponent,
 }
 
+/// Face up or face down
+/// ([CR 110.5](https://yawgatog.com/resources/magic-rules/#R1105)): one of a permanent's
+/// statuses. Cards elsewhere are face up.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum Facing {
+    Up,
+    Down,
+}
+
 /// A game session, numbered from 1 in the order sessions start.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, TS)]
 pub struct SessionId(pub u32);
@@ -145,8 +155,12 @@ pub struct ObjectView {
     pub owner: Side,
     pub controller: Side,
     /// The name of the face up, which keys the card data in `data/cards.json`; none for a card
-    /// the viewer has not seen.
+    /// the viewer has not seen. A face-down permanent's controller may look at it (CR 708.5):
+    /// its card's name, for them.
     pub name: Option<String>,
+    /// Whether a permanent is face up or face down, part of its status (CR 110.5). A face-down
+    /// one is a 2/2 creature with no name or text, whatever its card (CR 708.2a).
+    pub facing: Facing,
     pub token: bool,
     pub tapped: bool,
     /// Can't attack or use its tap abilities yet (CR 302.6), if it is a creature.
@@ -298,6 +312,13 @@ pub enum AskView {
     TopOrBottom { card: u8 },
     /// Whether the card an explore revealed goes to the graveyard.
     Explore,
+    /// A `chooseObject` for which of the top two cards of the viewer's library, which they
+    /// have looked at, to manifest as they manifest dread, the other going to the graveyard.
+    ManifestDread,
+    /// A card from the viewer's `zone`, their hand or graveyard, to exile to pay a cost,
+    /// `count` of them still to exile. From the graveyard they are asked for from the bottom
+    /// up, each above the one before, the lowest of interchangeable ones offered.
+    ExileCards { zone: ZoneName, count: u8 },
     /// Permanents to untap, up to `max`.
     Untap { max: u8 },
     /// Whether to pay `cost`, as Oracle text writes it, so that the effect does not happen.
@@ -416,6 +437,10 @@ pub enum Candidate {
     },
     Player {
         player: Side,
+    },
+    /// Turn the face-down permanent in `slot` face up, paying its card's mana cost.
+    TurnFaceUp {
+        slot: u8,
     },
 }
 
@@ -752,9 +777,14 @@ fn slots(slots: impl IntoIterator<Item = Slot>) -> Vec<u8> {
     slots.into_iter().map(Slot::get).collect()
 }
 
-/// The name of the face up of the object in `slot`, if the viewer knows it.
+/// The name of the face up of the object in `slot`, if the viewer knows it; for a face-down
+/// permanent, the name of its card, which it turns face up with (CR 712.15a).
 fn name(t: &GameTable, obs: Observation<'_>, slot: Slot) -> Option<&'static str> {
-    face_name(t, obs, slot, obs.object(slot).face)
+    let face = match obs.object(slot).face {
+        FaceIx::DOWN => FaceIx::FRONT,
+        face => face,
+    };
+    face_name(t, obs, slot, face)
 }
 
 /// The name of face `face` of the object in `slot`, if the viewer knows it: a copy's is the
@@ -800,6 +830,11 @@ fn object_view(t: &GameTable, obs: Observation<'_>, slot: Slot) -> ObjectView {
         owner: side(obs, o.owner),
         controller: side(obs, obs.controller(slot)),
         name: name(t, obs, slot).map(str::to_owned),
+        facing: if o.face == FaceIx::DOWN {
+            Facing::Down
+        } else {
+            Facing::Up
+        },
         token: flags.has(ObjectFlags::TOKEN),
         tapped: flags.has(ObjectFlags::TAPPED),
         summoning_sick: creature && flags.has(ObjectFlags::SUMMONING_SICK),
@@ -968,6 +1003,11 @@ fn ask_view(obs: Observation<'_>, ask: Ask) -> AskView {
         Ask::Bottom { count } => AskView::Bottom { count },
         Ask::DiscardBasicLand { count } => AskView::DiscardBasicLand { count },
         Ask::Explore => AskView::Explore,
+        Ask::ManifestDread => AskView::ManifestDread,
+        Ask::ExileCards { zone, count } => AskView::ExileCards {
+            zone: zone.into(),
+            count,
+        },
         Ask::TopOrBottom { card } => AskView::TopOrBottom { card: card.get() },
         Ask::Untap { max } => AskView::Untap { max },
         Ask::UnlessPays { cost } => AskView::UnlessPays {
@@ -1064,17 +1104,7 @@ fn candidate(t: &GameTable, obs: Observation<'_>, o: Opt) -> CandidateView {
             format!("Assign lethal damage to {}", named(slot)),
             Candidate::Lethal { slot: slot.get() },
         ),
-        Opt::Cast { slot, face, costs } => {
-            let spell = face_name(t, obs, slot, face).unwrap_or("a hidden card");
-            (
-                format!("Cast {spell}{}", casting_options(t, obs, slot, face, costs)),
-                Candidate::Cast {
-                    slot: slot.get(),
-                    face: face.get(),
-                    costs: costs.indices().collect(),
-                },
-            )
-        }
+        Opt::Cast { slot, face, costs } => cast_candidate(t, obs, slot, face, costs),
         Opt::Activate { slot, ability } => (
             match activated_cost(t, obs, slot, ability) {
                 Some(cost) => format!("{}: {cost}", named(slot)),
@@ -1112,6 +1142,10 @@ fn candidate(t: &GameTable, obs: Observation<'_>, o: Opt) -> CandidateView {
             named(slot).to_owned(),
             Candidate::Object { slot: slot.get() },
         ),
+        Opt::TurnFaceUp(slot) => (
+            format!("Turn {} face up", named(slot)),
+            Candidate::TurnFaceUp { slot: slot.get() },
+        ),
     };
     CandidateView {
         label,
@@ -1119,6 +1153,25 @@ fn candidate(t: &GameTable, obs: Observation<'_>, o: Opt) -> CandidateView {
         payments: Vec::new(),
         blocks: Vec::new(),
     }
+}
+
+/// A candidate that casts face `face` of the card in `slot` paying the options in `costs`.
+fn cast_candidate(
+    t: &GameTable,
+    obs: Observation<'_>,
+    slot: Slot,
+    face: FaceIx,
+    costs: Castings,
+) -> (String, Candidate) {
+    let spell = face_name(t, obs, slot, face).unwrap_or("a hidden card");
+    (
+        format!("Cast {spell}{}", casting_options(t, obs, slot, face, costs)),
+        Candidate::Cast {
+            slot: slot.get(),
+            face: face.get(),
+            costs: costs.indices().collect(),
+        },
+    )
 }
 
 /// How a cast of face `face` of the card in `slot` paying the options in `costs` reads after

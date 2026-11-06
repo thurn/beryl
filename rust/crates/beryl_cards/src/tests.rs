@@ -3,14 +3,14 @@
 use std::fmt::Write;
 use std::path::Path;
 
-use beryl_engine::card::{AbilityKind, ManaColor, Subtype, Supertypes, Types};
+use beryl_engine::card::{AbilityKind, FaceIx, ManaColor, Subtype, Supertypes, Types};
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
     Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome, Profile, Replay, Scratch,
     Seat, State, Step, TurnStep, Zone, apply, next,
 };
 
-use crate::{CARDS, SCENARIOS, decks, names};
+use crate::{CARDS, SCENARIOS, blue, decks, names};
 
 const CSV: &str = "data/arena-powered-cube-2025-10-30.csv";
 const BASIC_LANDS: [&str; 5] = ["Plains", "Island", "Swamp", "Mountain", "Forest"];
@@ -411,4 +411,42 @@ fn a_cleanup_discard_triggers_currency_converter() {
             (4, TurnStep::Upkeep, Seat::P0, DecisionKind::Priority),
         ]
     );
+}
+
+/// A manifested card is known to its controller alone while it is face down (CR 708.5), and
+/// to both players once it leaves the battlefield
+/// ([CR 708.9](https://yawgatog.com/resources/magic-rules/#R7089)): "If a face-down permanent
+/// ... moves from the battlefield to any other zone, its owner must reveal it to all players as
+/// they move it." Here it goes to a library, a hidden zone, where only that reveal tells the
+/// other player. A state determinized for them meanwhile keeps the permanent face down,
+/// whatever card it deals there.
+#[test]
+fn a_face_down_card_is_hidden_until_it_leaves() {
+    let scenario = blue::abhorrent_oculus::SCENARIOS
+        .iter()
+        .find(|s| s.name == "A face-down permanent leaving the battlefield is revealed")
+        .expect("the scenario");
+    let mut snapcaster = None;
+    let mut known = Vec::new();
+    beryl_scenario::visit(&CARDS, scenario, |t, s, d| {
+        let face_down = s
+            .battlefield()
+            .iter()
+            .copied()
+            .find(|&slot| s.object(slot).face == FaceIx::DOWN);
+        if let Some(slot) = face_down {
+            snapcaster = Some(slot);
+            let det = Observation::new(s, Seat::P1).determinize(t, &mut SplitMix64::new(3));
+            assert_eq!(det.object(slot).face, FaceIx::DOWN);
+            det.check_invariants(t).unwrap();
+        }
+        if let Some(slot) = snapcaster {
+            known.push((d.kind, s.knows(Seat::P0, slot), s.knows(Seat::P1, slot)));
+        }
+    })
+    .unwrap();
+    let face_down = &known[..known.len() - 1];
+    assert!(!face_down.is_empty());
+    assert!(face_down.iter().all(|&(_, p0, p1)| p0 && !p1), "{known:?}");
+    assert_eq!(known.last(), Some(&(DecisionKind::Priority, true, true)));
 }

@@ -95,6 +95,7 @@ export function twins(a: ObjectView, b: ObjectView): boolean {
     a.slot !== b.slot &&
     a.name !== null &&
     a.name === b.name &&
+    a.facing === b.facing &&
     a.zone === b.zone &&
     a.controller === b.controller &&
     a.token === b.token &&
@@ -122,6 +123,7 @@ export function slotOf(option: Candidate): number | undefined {
     case "cast":
     case "activate":
     case "mana":
+    case "turnFaceUp":
       return option.slot;
     case "defender":
       return option.planeswalker ?? undefined;

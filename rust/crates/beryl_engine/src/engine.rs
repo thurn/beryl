@@ -13,7 +13,7 @@ use crate::observation::Observation;
 use crate::profile::{Profile, Stops};
 use crate::state::{Pending, State, TurnStep, Zone};
 use crate::table::GameTable;
-use crate::{cast, combat, layers, mana, resolve, sba, start, trigger, turn, zone};
+use crate::{cast, combat, face_down, layers, mana, resolve, sba, start, trigger, turn, zone};
 
 /// Per-thread working memory, never copied with the state: the event sink, the counts, and
 /// the spare state transactional replay runs bodies on (§7.3), allocated once so the hot
@@ -316,6 +316,9 @@ pub(crate) fn decision(s: &State, t: &GameTable, sink: &mut Sink) -> Result<Deci
         Pending::DeclareBlockers { blocker } => combat::block_decision(s, blocker)?,
         Pending::CombatDamage { done, lethal } => combat::division_decision(s, done, lethal)?,
         Pending::Casting(c) => cast::decision(s, t, sink, &c)?,
+        Pending::TurningFaceUp { slot, remaining } => {
+            face_down::decision(s, t, sink, slot, remaining)?
+        }
         Pending::Resolving(r) => r.question,
         Pending::CastOffer {
             object,
@@ -370,6 +373,7 @@ fn priority_decision(s: &State, t: &GameTable) -> Result<Decision, Full> {
         }
     }
     cast::priority_options(s, t, player, &mut list)?;
+    face_down::face_up_options(s, t, player, &mut list)?;
     Ok(Decision {
         player,
         kind: DecisionKind::Priority,
@@ -411,6 +415,14 @@ fn perform_machine(
             d.candidates.option(c),
             d.candidates.object(c),
         ),
+        Pending::TurningFaceUp { slot, remaining } => face_down::perform(
+            s,
+            t,
+            &mut x.events,
+            slot,
+            remaining,
+            d.candidates.option(c).expect("a payment"),
+        ),
         Pending::CastOffer { player, free, .. } => {
             s.pending = Pending::None;
             match d.candidates.option(c).expect("an option choice") {
@@ -440,6 +452,9 @@ fn perform_priority(
         }
         Opt::Activate { slot, ability } => {
             cast::begin_activate(s, t, &mut x.events, player, slot, ability)
+        }
+        Opt::TurnFaceUp(slot) => {
+            face_down::begin_turning_face_up(s, t, &mut x.events, player, slot)
         }
         Opt::Mana { slot, color } => {
             mana::activate(s, t, &mut x.events, slot, color)?;
@@ -631,15 +646,31 @@ fn enter_from_hand(
 /// pending reference names, a target on the stack or a cast permission, is never collapsed
 /// with another; nor is one that combat relates another object to, since its signature
 /// doesn't show what attacks or blocks it.
+///
+/// Nor is a face-down permanent: whether two are the same card is hidden from all but their
+/// controller ([CR 708.5](https://yawgatog.com/resources/magic-rules/#R7085)): "You can't look
+/// at face-down cards in any other zone or face-down spells or permanents controlled by
+/// another player." Offering one of them, not both, would tell the other player.
 pub(crate) fn collapse(s: &State, candidates: Bitboard) -> Bitboard {
+    collapse_ordered(s, candidates.iter())
+}
+
+/// [`collapse`] keeping the first of interchangeable objects in the order of `slots`
+/// rather than the lowest slot.
+pub(crate) fn collapse_in_order(s: &State, slots: &[Slot]) -> Bitboard {
+    collapse_ordered(s, slots.iter().copied())
+}
+
+fn collapse_ordered(s: &State, slots: impl Iterator<Item = Slot>) -> Bitboard {
     let signature = |slot: Slot| zone::signature(s, slot);
     let referenced = cast::referenced(s) | combat::related(s);
     let mut kept = Bitboard::EMPTY;
-    for slot in candidates.iter() {
+    for slot in slots {
         // The signature holds the card, so objects of other cards are told apart without
         // building theirs.
         let card = s.object(slot).card;
         if referenced.contains(slot)
+            || s.object(slot).face == FaceIx::DOWN
             || !kept.iter().any(|k| {
                 !referenced.contains(k)
                     && s.object(k).card == card

@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use beryl_engine::card::Types;
+use beryl_engine::card::{FaceIx, Types};
 use beryl_engine::event::Event;
 use beryl_engine::state::{CounterKind, ObjectFlags};
 use beryl_engine::{
@@ -193,9 +193,14 @@ fn library_slot(s: &State, t: &GameTable, player: Seat, name: &str) -> Slot {
 }
 
 /// The name of the object in `slot`: its face up's, which is the card's own name everywhere
-/// but on the stack and the battlefield (CR 712.8a, 712.8f).
+/// but on the stack and the battlefield (CR 712.8a, 712.8f). A face-down permanent, which has
+/// no name, goes by its card's.
 fn name_of(s: &State, t: &GameTable, slot: Slot) -> &'static str {
-    t.def(s.card(slot)).face_name(s.object(slot).face)
+    let def = t.def(s.card(slot));
+    match s.object(slot).face {
+        FaceIx::DOWN => def.name,
+        face => def.face_name(face),
+    }
 }
 
 struct Runner<'a> {
@@ -280,13 +285,12 @@ impl Runner<'_> {
     fn act(&mut self, i: usize) -> Result<(), String> {
         match self.actions[i] {
             Action::PlayLand { player, card } => {
-                let d = self.expect(i, player, DecisionKind::Priority)?;
-                let c = option_index(
-                    &d,
-                    |o| matches!(o, Opt::PlayLand(slot) if self.name(slot) == card),
-                )
-                .ok_or_else(|| format!("playing {card} is not offered: {}", self.describe(&d)))?;
-                self.answer(c);
+                self.priority_option(
+                    i,
+                    player,
+                    &format!("playing {card}"),
+                    |r, o| matches!(o, Opt::PlayLand(slot) if r.name(slot) == card),
+                )?;
             }
             Action::Cast {
                 player,
@@ -294,34 +298,31 @@ impl Runner<'_> {
                 face,
                 costs,
             } => {
-                let d = self.expect(i, player, DecisionKind::Priority)?;
-                let c = option_index(&d, |o| {
+                let (f, m) = (face.get(), costs.bits());
+                let what = format!("casting {card} (face {f}, costs {m:#b})");
+                self.priority_option(i, player, &what, |r, o| {
                     matches!(o, Opt::Cast { slot, face: f, costs: m }
-                        if self.name(slot) == card && f == face && m == costs)
-                })
-                .ok_or_else(|| {
-                    let (f, m, offered) = (face.get(), costs.bits(), self.describe(&d));
-                    format!("casting {card} (face {f}, costs {m:#b}) is not offered: {offered}")
+                        if r.name(slot) == card && f == face && m == costs)
                 })?;
-                self.answer(c);
             }
             Action::Activate {
                 player,
                 card,
                 ability,
             } => {
-                let d = self.expect(i, player, DecisionKind::Priority)?;
-                let c = option_index(&d, |o| {
+                let what = format!("activating {card}'s ability {ability:?}");
+                self.priority_option(i, player, &what, |r, o| {
                     matches!(o, Opt::Activate { slot, ability: a }
-                        if self.name(slot) == card && a == ability)
-                })
-                .ok_or_else(|| {
-                    format!(
-                        "activating {card}'s ability {ability:?} is not offered: {}",
-                        self.describe(&d)
-                    )
+                        if r.name(slot) == card && a == ability)
                 })?;
-                self.answer(c);
+            }
+            Action::TurnFaceUp { player, card } => {
+                self.priority_option(
+                    i,
+                    player,
+                    &format!("turning {card} face up"),
+                    |r, o| matches!(o, Opt::TurnFaceUp(slot) if r.name(slot) == card),
+                )?;
             }
             Action::Resolve => {
                 // Waiting triggers go on the stack first.
@@ -380,6 +381,22 @@ impl Runner<'_> {
         Ok(())
     }
 
+    /// Answers `player`'s priority decision with the first option `wanted` accepts, or fails
+    /// saying that `what` is not offered.
+    fn priority_option(
+        &mut self,
+        i: usize,
+        player: Seat,
+        what: &str,
+        wanted: impl Fn(&Self, Opt) -> bool,
+    ) -> Result<(), String> {
+        let d = self.expect(i, player, DecisionKind::Priority)?;
+        let c = option_index(&d, |o| wanted(self, o))
+            .ok_or_else(|| format!("{what} is not offered: {}", self.describe(&d)))?;
+        self.answer(c);
+        Ok(())
+    }
+
     /// The open decision, which must be `player`'s and of `kind`.
     fn expect(&mut self, i: usize, player: Seat, kind: DecisionKind) -> Result<Decision, String> {
         let d = self.decision(i)?;
@@ -428,9 +445,17 @@ impl Runner<'_> {
             .filter(|p| p.flashback && self.s.is_current(p.object))
             .map(|p| self.name(p.object.slot))
             .collect();
+        let face_down = self
+            .s
+            .battlefield()
+            .iter()
+            .filter(|&&slot| self.s.object(slot).face == FaceIx::DOWN)
+            .map(|&slot| self.name(slot))
+            .collect();
         Position {
             forced: std::mem::take(&mut self.forced),
             flashback,
+            face_down,
             turn: turn.number,
             step: turn.step,
             active: turn.active,
@@ -456,7 +481,8 @@ impl Runner<'_> {
             | Opt::Cast { slot, .. }
             | Opt::Activate { slot, .. }
             | Opt::Mana { slot, .. }
-            | Opt::Object(slot) => Some(slot),
+            | Opt::Object(slot)
+            | Opt::TurnFaceUp(slot) => Some(slot),
             Opt::Defender(slot) => slot,
             Opt::Trigger(i) => self
                 .s
@@ -580,6 +606,16 @@ impl Runner<'_> {
                 card,
                 count,
             } => tally(self.permanents(player, card).count(), count),
+            Assertion::FaceDown {
+                player,
+                card,
+                count,
+            } => tally(
+                self.permanents(player, card)
+                    .filter(|&slot| s.object(slot).face == FaceIx::DOWN)
+                    .count(),
+                count,
+            ),
             Assertion::Attacking {
                 player,
                 card,
@@ -658,6 +694,7 @@ impl Runner<'_> {
             }
             Assertion::Tapped { .. }
             | Assertion::Controls { .. }
+            | Assertion::FaceDown { .. }
             | Assertion::Attacking { .. }
             | Assertion::Pt { .. }
             | Assertion::Creature { .. }

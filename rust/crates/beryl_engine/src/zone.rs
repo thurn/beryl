@@ -40,6 +40,14 @@ pub(crate) fn put_on_bottom(s: &mut State, slot: Slot) -> Result<(), Full> {
 }
 
 pub(crate) fn move_to_place(s: &mut State, slot: Slot, to: Zone, place: Place) -> Result<(), Full> {
+    // [CR 708.9](https://yawgatog.com/resources/magic-rules/#R7089): "If a face-down permanent
+    // ... moves from the battlefield to any other zone, its owner must reveal it to all players
+    // as they move it." Whatever zone it goes to, a hidden one included.
+    if s.object(slot).zone == Zone::Battlefield && s.object(slot).face == FaceIx::DOWN {
+        for k in &mut s.knowledge {
+            k.insert(slot);
+        }
+    }
     leave(s, slot);
     let timestamp = s.zones.next_timestamp;
     let o = s.object_mut(slot);

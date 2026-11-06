@@ -16,7 +16,7 @@ use crate::card::{
     Keywords, ManaCost, Rule, TargetKind, TargetSpec, Timing, Types,
 };
 use crate::decision::{Ask, Candidates, Decision, DecisionKind, Opt};
-use crate::engine::collapse;
+use crate::engine::{collapse, collapse_in_order};
 use crate::event::{self, Event, Reason, Sink};
 use crate::filter::{Filter, Whose};
 use crate::fixed::{Fixed, Full};
@@ -141,27 +141,77 @@ fn option_sets(face: &Face, alternative: bool) -> impl Iterator<Item = Castings>
     })
 }
 
-/// The cards in `player`'s hand other than `itself` that paying `costs` of `face` may exile,
-/// when they exile one.
-fn exile_candidates(
-    s: &State,
-    t: &GameTable,
-    player: Seat,
-    face: &Face,
-    costs: Castings,
-    itself: Slot,
-) -> Option<Bitboard> {
-    let colors = face.exiles_with(costs);
-    if colors == Colors::NONE {
-        return None;
+/// A cost paid by exiling cards ([CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h)):
+/// "The player pays the total cost." No face has two.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ExileCost {
+    /// A card of one of these colors from the caster's hand, as evoke's "Exile a blue card
+    /// from your hand".
+    Hand(Colors),
+    /// This many cards from the caster's graveyard, as Abhorrent Oculus's "exile six cards
+    /// from your graveyard".
+    Graveyard(u8),
+}
+
+impl ExileCost {
+    /// The cost that exiles cards of `face` cast with `costs`, if it has one.
+    fn of(face: &Face, costs: Castings) -> Option<ExileCost> {
+        let colors = face.exiles_with(costs);
+        if colors != Colors::NONE {
+            debug_assert_eq!(face.exile_from_graveyard, 0, "two costs that exile");
+            return Some(ExileCost::Hand(colors));
+        }
+        (face.exile_from_graveyard > 0).then_some(ExileCost::Graveyard(face.exile_from_graveyard))
     }
+
+    /// How many cards it exiles.
+    fn count(self) -> u8 {
+        match self {
+            ExileCost::Hand(_) => 1,
+            ExileCost::Graveyard(n) => n,
+        }
+    }
+
+    /// Whether `player` has the cards to pay it, the spell in `itself` aside: its caster
+    /// moves it to the stack before paying (CR 601.2a), so it can't pay for itself.
+    fn payable(self, s: &State, t: &GameTable, player: Seat, itself: Slot) -> bool {
+        match self {
+            ExileCost::Hand(colors) => !hand_cards(s, t, player, colors, itself).is_empty(),
+            ExileCost::Graveyard(n) => {
+                let mut graveyard = s.zone(player, Zone::Graveyard);
+                graveyard.remove(itself);
+                graveyard.count() >= u32::from(n)
+            }
+        }
+    }
+}
+
+/// The cards in `player`'s hand other than `itself` of one of `colors`.
+fn hand_cards(s: &State, t: &GameTable, player: Seat, colors: Colors, itself: Slot) -> Bitboard {
     let mut hand = s.zone(player, Zone::Hand);
     hand.remove(itself);
-    Some(
-        hand.iter()
-            .filter(|&slot| t.def(s.object(slot).card).front().colors.intersects(colors))
-            .collect(),
-    )
+    hand.iter()
+        .filter(|&slot| t.def(s.object(slot).card).front().colors.intersects(colors))
+        .collect()
+}
+
+/// The cards the exile step may choose next, one of each set of interchangeable ones (§7.2).
+/// From a graveyard: the cards from position `c.spec` up that leave enough above them for the
+/// `c.left - 1` still to choose after, the lowest of interchangeable ones, which leaves every
+/// choice the others would. So every set of cards is one sequence of answers, and a graveyard
+/// with no more cards than the cost exiles asks nothing.
+fn exile_choices(s: &State, t: &GameTable, c: &Casting) -> Bitboard {
+    let entry = top(s);
+    let face = t.def(entry.card).face(entry.face);
+    let itself = entry.object.expect("a spell's card").slot;
+    match ExileCost::of(face, entry.costs).expect("a cost that exiles") {
+        ExileCost::Hand(colors) => collapse(s, hand_cards(s, t, c.player, colors, itself)),
+        ExileCost::Graveyard(_) => {
+            let graveyard = s.graveyard(c.player);
+            let last = graveyard.len() - usize::from(c.left);
+            collapse_in_order(s, &graveyard[usize::from(c.spec)..=last])
+        }
+    }
 }
 
 /// Whether X is announced for this cast, and the least value it may take.
@@ -387,9 +437,10 @@ fn castable(
     ) {
         return Ok(false);
     }
-    // CR 601.2h: the player pays the total cost, so a card to exile must be there. The spell
-    // itself will be on the stack by then (CR 601.2a).
-    if exile_candidates(s, t, player, face, costs, slot).is_some_and(Bitboard::is_empty) {
+    // CR 601.2h: the player pays the total cost, so the cards to exile must be there.
+    // [CR 118.3](https://yawgatog.com/resources/magic-rules/#R1183): "A player can't pay a
+    // cost without having the necessary resources to pay it fully."
+    if ExileCost::of(face, costs).is_some_and(|cost| !cost.payable(s, t, player, slot)) {
         return Ok(false);
     }
     let x = x_range_start(face, costs, free).unwrap_or(0);
@@ -904,9 +955,10 @@ fn begin_payment(
     let entry = top(s);
     if entry.is_spell() {
         let face = t.def(entry.card).face(entry.face);
-        let itself = entry.object.expect("a spell's card").slot;
-        if exile_candidates(s, t, c.player, face, entry.costs, itself).is_some() {
+        if let Some(cost) = ExileCost::of(face, entry.costs) {
             c.step = CastStep::Exile;
+            c.left = cost.count();
+            c.spec = 0;
             s.pending = Pending::Casting(c);
             return Ok(());
         }
@@ -1163,14 +1215,18 @@ pub(crate) fn decision(
         CastStep::Exile => {
             let entry = top(s);
             let face = t.def(entry.card).face(entry.face);
-            let itself = entry.object.expect("a spell's card").slot;
-            let cards = exile_candidates(s, t, c.player, face, entry.costs, itself)
-                .expect("a cost that exiles a card");
+            let zone = match ExileCost::of(face, entry.costs) {
+                Some(ExileCost::Graveyard(_)) => Zone::Graveyard,
+                _ => Zone::Hand,
+            };
             Decision {
                 player: c.player,
                 kind: DecisionKind::ExileCost,
-                candidates: Candidates::Objects(collapse(s, cards)),
-                ask: Ask::Plain,
+                candidates: Candidates::Objects(exile_choices(s, t, c)),
+                ask: Ask::ExileCards {
+                    zone,
+                    count: c.left,
+                },
             }
         }
     })
@@ -1254,10 +1310,19 @@ pub(crate) fn perform(
             return Ok(());
         }
         CastStep::Exile => {
-            // CR 601.2h: "The player pays the total cost." The card goes from the hand to
-            // exile as part of it.
+            // CR 601.2h: "The player pays the total cost." The cards go from the hand or the
+            // graveyard to exile as part of it.
             let slot = object.expect("a card to exile");
+            if let Some(i) = s.graveyard(c.player).iter().position(|&g| g == slot) {
+                // The cards above it move down one, so the next pick starts here.
+                c.spec = i as u8;
+            }
             event::move_one(s, t, sink, slot, Zone::Exile, Reason::Exile)?;
+            c.left -= 1;
+            if c.left > 0 {
+                s.pending = Pending::Casting(c);
+                return Ok(());
+            }
             return pay_mana(s, t, sink, c);
         }
         CastStep::Manual => {

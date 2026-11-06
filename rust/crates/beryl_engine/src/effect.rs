@@ -9,7 +9,6 @@ use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, CardDef, FaceAbility, FaceIx, Flow, ManaColor, ManaCost, Modification, Pause, Types,
 };
-use crate::cast;
 use crate::decision::{Answers, Ask, Candidates, Choice, Decision, DecisionKind, Opt, StallReason};
 use crate::event::{self, Entry, Reason, Recipient, Sink, TokenEntry};
 use crate::filter::Filter;
@@ -24,6 +23,7 @@ use crate::state::{
 };
 use crate::table::GameTable;
 use crate::zone::{self, Place};
+use crate::{cast, face_down};
 use crate::{layers, trigger};
 
 /// What a body runs against: the working state and tables, the event sink, the stack entry
@@ -854,6 +854,26 @@ impl<'a> EffectCtx<'a> {
             let r = zone::reorder_library(self.state, slot, Place::Top);
             self.check(r);
         }
+        Ok(())
+    }
+
+    /// `player` manifests dread
+    /// ([CR 701.62a](https://yawgatog.com/resources/magic-rules/#R70162a)): "'Manifest dread'
+    /// means 'Look at the top two cards of your library. Manifest one of them, then put the
+    /// cards you looked at that were not manifested this way into your graveyard.'" With one
+    /// card in the library, that one is manifested; with none, nothing happens.
+    pub fn manifest_dread(&mut self, player: Seat) -> Flow {
+        let top = self.top_of_library(player, 2);
+        if top.is_empty() {
+            return Ok(());
+        }
+        self.look_at(player, top);
+        let chosen = self.choose_object(player, top, Ask::ManifestDread)?;
+        let r = face_down::manifest(self.state, self.table, self.sink, chosen, player);
+        self.check(r);
+        let mut rest = top;
+        rest.remove(chosen);
+        self.move_all(rest, Zone::Graveyard, Reason::Effect);
         Ok(())
     }
 

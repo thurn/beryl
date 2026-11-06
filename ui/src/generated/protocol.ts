@@ -103,9 +103,15 @@ export type ManaPool = { white: number, blue: number, black: number, red: number
 export type ObjectView = { slot: number, zone: ZoneName, owner: Side, controller: Side, 
 /**
  * The name of the face up, which keys the card data in `data/cards.json`; none for a card
- * the viewer has not seen.
+ * the viewer has not seen. A face-down permanent's controller may look at it (CR 708.5):
+ * its card's name, for them.
  */
-name: string | null, token: boolean, tapped: boolean, 
+name: string | null, 
+/**
+ * Whether a permanent is face up or face down, part of its status (CR 110.5). A face-down
+ * one is a 2/2 creature with no name or text, whatever its card (CR 708.2a).
+ */
+facing: Facing, token: boolean, tapped: boolean, 
 /**
  * Can't attack or use its tap abilities yet (CR 302.6), if it is a creature.
  */
@@ -122,6 +128,8 @@ pt: PowerToughness | null, attachedTo: number | null,
  * The permanent that exiled it until it leaves (CR 610.3).
  */
 exiledBy: number | null, combat: Combat | null, };
+
+export type Facing = "up" | "down";
 
 export type PowerToughness = { power: number, toughness: number, };
 
@@ -186,7 +194,7 @@ source: number | null,
  */
 halt: boolean, };
 
-export type AskView = { "kind": "plain" } | { "kind": "scry", count: number, } | { "kind": "look", player: Side, zone: ZoneName, count: number, to: ZoneName, eligible: Array<number>, } | { "kind": "putBack", count: number, } | { "kind": "fateseal", player: Side, } | { "kind": "take", count: number, take: number, } | { "kind": "bottom", count: number, } | { "kind": "discardBasicLand", count: number, } | { "kind": "topOrBottom", card: number, } | { "kind": "explore" } | { "kind": "untap", max: number, } | { "kind": "unlessPays", cost: string, } | { "kind": "payLife", life: number, } | { "kind": "cleanup", count: number, };
+export type AskView = { "kind": "plain" } | { "kind": "scry", count: number, } | { "kind": "look", player: Side, zone: ZoneName, count: number, to: ZoneName, eligible: Array<number>, } | { "kind": "putBack", count: number, } | { "kind": "fateseal", player: Side, } | { "kind": "take", count: number, take: number, } | { "kind": "bottom", count: number, } | { "kind": "discardBasicLand", count: number, } | { "kind": "topOrBottom", card: number, } | { "kind": "explore" } | { "kind": "manifestDread" } | { "kind": "exileCards", zone: ZoneName, count: number, } | { "kind": "untap", max: number, } | { "kind": "unlessPays", cost: string, } | { "kind": "payLife", life: number, } | { "kind": "cleanup", count: number, };
 
 export type PassTo = { "kind": "resolve" } | { "kind": "combatDamage" } | { "kind": "step", step: Step, } | { "kind": "nextTurn" };
 
@@ -217,7 +225,7 @@ plan: number | null,
  */
 taps: Array<number>, };
 
-export type Candidate = { "kind": "object", slot: number, } | { "kind": "pass" } | { "kind": "playLand", slot: number, } | { "kind": "play" } | { "kind": "draw" } | { "kind": "keep" } | { "kind": "mulligan" } | { "kind": "trigger", index: number, source: number | null, } | { "kind": "yes" } | { "kind": "no" } | { "kind": "done" } | { "kind": "attack", slot: number, } | { "kind": "defender", planeswalker: number | null, } | { "kind": "block", slot: number, } | { "kind": "lethal", slot: number, } | { "kind": "cast", slot: number, face: number, costs: Array<number>, } | { "kind": "activate", slot: number, ability: number, granted: boolean, } | { "kind": "mana", slot: number, color: Mana, } | { "kind": "pool", color: Mana, } | { "kind": "number", n: number, } | { "kind": "plan", index: number, } | { "kind": "player", player: Side, };
+export type Candidate = { "kind": "object", slot: number, } | { "kind": "pass" } | { "kind": "playLand", slot: number, } | { "kind": "play" } | { "kind": "draw" } | { "kind": "keep" } | { "kind": "mulligan" } | { "kind": "trigger", index: number, source: number | null, } | { "kind": "yes" } | { "kind": "no" } | { "kind": "done" } | { "kind": "attack", slot: number, } | { "kind": "defender", planeswalker: number | null, } | { "kind": "block", slot: number, } | { "kind": "lethal", slot: number, } | { "kind": "cast", slot: number, face: number, costs: Array<number>, } | { "kind": "activate", slot: number, ability: number, granted: boolean, } | { "kind": "mana", slot: number, color: Mana, } | { "kind": "pool", color: Mana, } | { "kind": "number", n: number, } | { "kind": "plan", index: number, } | { "kind": "player", player: Side, } | { "kind": "turnFaceUp", slot: number, };
 
 export type OutcomeView = { "kind": "win", winner: Side, } | { "kind": "draw" } | { "kind": "stalled", reason: Stall, };
 

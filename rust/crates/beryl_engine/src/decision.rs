@@ -162,6 +162,14 @@ pub enum Ask {
     /// A card to discard in the cleanup step, `count` of them still to discard to reach the
     /// maximum hand size ([CR 514.1](https://yawgatog.com/resources/magic-rules/#R5141)).
     Cleanup { count: u8 },
+    /// Which of the top two cards of the library, which the player has looked at, to manifest
+    /// as they manifest dread, the other going to the graveyard
+    /// ([CR 701.62a](https://yawgatog.com/resources/magic-rules/#R70162a)).
+    ManifestDread,
+    /// A card from `zone`, the hand or the graveyard, to exile to pay a cost, `count` of them
+    /// still to exile (CR 601.2h). From a graveyard they are asked for from the bottom up, each
+    /// above the one before.
+    ExileCards { zone: Zone, count: u8 },
 }
 
 /// The candidates of a decision. A `Choice(i)` names the `i`th object in ascending slot order,
@@ -256,6 +264,8 @@ pub enum Opt {
     Player(Seat),
     /// The object in this slot, among options that also offer [`Opt::Done`].
     Object(Slot),
+    /// Turn the face-down permanent in this slot face up, a special action (CR 116.2b).
+    TurnFaceUp(Slot),
 }
 
 const _: () = assert!(size_of::<Opt>() == 4);

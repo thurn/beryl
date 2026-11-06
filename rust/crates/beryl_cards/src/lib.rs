@@ -65,6 +65,7 @@ pub static CARDS: CardTable = CardTable::new(&[
     &azorius::teferi_hero_of_dominaria::CARD,
     &blue::jace_wielder_of_mysteries::CARD,
     &azorius::fractured_identity::CARD,
+    &blue::abhorrent_oculus::CARD,
 ]);
 
 /// Every card's scenarios (architecture §17.1), by card name.
@@ -172,6 +173,7 @@ pub static SCENARIOS: &[(&str, &[Scenario])] = &[
         names::FRACTURED_IDENTITY,
         azorius::fractured_identity::SCENARIOS,
     ),
+    (names::ABHORRENT_OCULUS, blue::abhorrent_oculus::SCENARIOS),
 ];
 
 #[cfg(test)]

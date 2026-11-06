@@ -1,7 +1,7 @@
 //! Derived characteristics: continuous effects applied in layers, recomputed from base when
 //! dirty (architecture §9, decision D5, CR 613).
 
-use crate::card::{Affected, Colors, Modification, StaticCondition, Subtypes, Types};
+use crate::card::{Affected, Colors, FaceIx, Modification, StaticCondition, Subtypes, Types};
 use crate::event::Sink;
 use crate::fixed::Fixed;
 use crate::ids::CardIx;
@@ -144,6 +144,15 @@ fn recompute(s: &mut State, t: &GameTable) {
         let delta = c.plus_one as i8 - c.minus_one as i8;
         d.power = d.power.saturating_add(delta);
         d.toughness = d.toughness.saturating_add(delta);
+    }
+    // [CR 708.5](https://yawgatog.com/resources/magic-rules/#R7085): "At any time, you may
+    // look at ... a face-down permanent you control". Control is settled here, so a player who
+    // gains control of one sees it from then on.
+    for i in 0..len {
+        let slot = s.battlefield.as_slice()[i];
+        if s.object(slot).face == FaceIx::DOWN {
+            s.knowledge[s.derived[i].controller.index()].insert(slot);
+        }
     }
 }
 

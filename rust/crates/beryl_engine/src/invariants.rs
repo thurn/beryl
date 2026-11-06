@@ -2,6 +2,7 @@
 //! §17.4). A violation is an engine bug, never a rules outcome.
 
 use crate::bitboard::Bitboard;
+use crate::card::FaceIx;
 use crate::ids::{Seat, Slot};
 use crate::state::{DECK_SLOTS, Object, ObjectFlags, Pending, State, TOKEN_SLOTS, Zone};
 use crate::table::GameTable;
@@ -126,9 +127,16 @@ impl State {
                 "a blocker blocking a nonattacker",
                 at,
             )?;
-            // CR 400.2: public zones are seen by everyone; CR 402.3: a hand by its owner.
+            // CR 400.2: public zones are seen by everyone; CR 402.3: a hand by its owner; CR
+            // 708.5: a face-down permanent by its controller.
             let known_by = |p: Seat| self.knows(p, slot);
-            if o.zone.is_public() {
+            if o.face == FaceIx::DOWN {
+                check(
+                    o.zone == Zone::Battlefield && known_by(self.controller(slot)),
+                    "a face-down permanent its controller doesn't know",
+                    at,
+                )?;
+            } else if o.zone.is_public() {
                 check(
                     known_by(Seat::P0) && known_by(Seat::P1),
                     "a public card unknown",

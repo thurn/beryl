@@ -98,7 +98,9 @@ fn payments(s: &State, t: &GameTable, d: &Decision) -> Vec<Vec<Payment>> {
         .enumerate()
         .map(|(i, &o)| {
             let at = match (d.kind, o) {
-                (_, Opt::Cast { .. } | Opt::Activate { .. }) => Payment::default(),
+                (_, Opt::Cast { .. } | Opt::Activate { .. } | Opt::TurnFaceUp(_)) => {
+                    Payment::default()
+                }
                 (DecisionKind::X, Opt::Number(n)) => Payment {
                     x: Some(n),
                     ..Payment::default()
@@ -131,7 +133,10 @@ fn walk(
     at: &Payment,
     out: &mut Vec<Payment>,
 ) {
-    while matches!(s.pending(), Pending::Casting(_)) {
+    while matches!(
+        s.pending(),
+        Pending::Casting(_) | Pending::TurningFaceUp { .. }
+    ) {
         let Step::Decide(d) = next(&mut s, t, scratch, &mut Replay) else {
             return;
         };

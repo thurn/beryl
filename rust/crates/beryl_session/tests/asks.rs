@@ -151,3 +151,20 @@ fn subtlety_asks_the_spells_owner_top_or_bottom() {
         );
     }
 }
+
+#[test]
+fn abhorrent_oculus_asks_for_graveyard_cards_then_a_card_to_manifest() {
+    assert_eq!(
+        asks(names::ABHORRENT_OCULUS),
+        [
+            (
+                Kind::ExileCost,
+                AskView::ExileCards {
+                    zone: ZoneName::Graveyard,
+                    count: 6
+                }
+            ),
+            (Kind::ChooseObject, AskView::ManifestDread),
+        ]
+    );
+}

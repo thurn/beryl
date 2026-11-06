@@ -102,6 +102,16 @@ impl Permanent {
         }
     }
 
+    /// Face down, as a manifested permanent (CR 701.40a): a 2/2 creature with no name or
+    /// text, which only its controller knows.
+    #[must_use]
+    pub const fn face_down(self) -> Permanent {
+        Permanent {
+            face: FaceIx::DOWN,
+            ..self
+        }
+    }
+
     /// With `count` counters of `kind`.
     #[must_use]
     pub const fn counters(self, kind: CounterKind, count: u8) -> Permanent {
@@ -150,6 +160,13 @@ pub enum Action {
         card: &'static str,
         #[serde(serialize_with = "ability_ix")]
         ability: AbilityIx,
+    },
+    /// `player` turns the face-down permanent `card` face up at a priority decision, a
+    /// special action (CR 116.2b). Its payment's questions follow as decisions.
+    TurnFaceUp {
+        #[serde(serialize_with = "seat")]
+        player: Seat,
+        card: &'static str,
     },
     /// Players pass priority until the top of the stack resolves, or until the next decision
     /// is not a priority decision (a question its resolution asks). The game then stops at
@@ -296,6 +313,14 @@ pub enum Assertion {
     Outcome { outcome: Ending },
     /// How many permanents named `card` `player` controls.
     Controls {
+        #[serde(serialize_with = "seat")]
+        player: Seat,
+        card: &'static str,
+        count: u8,
+    },
+    /// How many of the permanents named `card` that `player` controls are face down. A
+    /// face-down permanent has no name (CR 708.2a); the scenario names it by its card.
+    FaceDown {
         #[serde(serialize_with = "seat")]
         player: Seat,
         card: &'static str,
@@ -515,6 +540,9 @@ pub struct Position {
     /// casts them with their flashback ability, which a permission to cast a card from its
     /// graveyard is not.
     pub flashback: Vec<&'static str>,
+    /// The face-down permanents here, by their cards' names: an oracle names them otherwise,
+    /// as they have no name (CR 708.2a).
+    pub face_down: Vec<&'static str>,
 }
 
 /// A question with one answer, as the answer a scenario would script, and the turn and step

@@ -657,8 +657,11 @@ pub enum CastStep {
     /// Tapping artifacts and creatures for a waterbend cost's generic mana one at a time;
     /// `left` is the generic mana they may still pay (CR 701.67a).
     Waterbend,
-    /// Choosing the card from the hand that an alternative cost exiles, as evoke's "Exile a
-    /// blue card from your hand" (CR 601.2h).
+    /// Choosing a card a cost exiles (CR 601.2h): from the hand, as evoke's "Exile a blue card
+    /// from your hand", or one of the cards from the graveyard of an additional cost such as
+    /// Abhorrent Oculus's "exile six cards from your graveyard". `left` is the number still to
+    /// exile. Graveyard cards are chosen in graveyard order, bottom first, each above the one
+    /// before, from position `spec` up, so each set of cards is one sequence of answers (§7.2).
     Exile,
 }
 
@@ -667,9 +670,10 @@ pub enum CastStep {
 pub struct Casting {
     pub player: Seat,
     pub step: CastStep,
-    /// The target spec being chosen.
+    /// The target spec being chosen; for [`CastStep::Exile`], the graveyard position picks
+    /// continue from.
     pub spec: u8,
-    /// Targets still to choose for it.
+    /// Targets still to choose for it, or what another step still has to pay.
     pub left: u8,
     /// Generic mana a permission adds to the cost.
     pub extra: u8,
@@ -737,6 +741,10 @@ pub enum Pending {
         player: Seat,
         free: bool,
     },
+    /// The controller of the face-down permanent in `slot` turns it face up, a special action
+    /// (CR 116.2b), and chooses how to pay its mana cost: among payment plans, or under manual
+    /// payment one source at a time, `remaining` being what is left to pay.
+    TurningFaceUp { slot: Slot, remaining: ManaCost },
 }
 
 /// Counters toward the budgets of the profile (architecture §12.3).

@@ -104,6 +104,12 @@ export function choiceOf(view: PlayerView): Choice | undefined {
       return payLife(at, ask);
     case "cleanup":
       return discard(at, ask.count);
+    case "manifestDread":
+      return manifestDread(at);
+    case "exileCards":
+      return ask.zone === "graveyard"
+        ? graveyardExile(at, ask.count)
+        : exileCost(at);
     default:
       return assertNever(ask);
   }
@@ -124,8 +130,6 @@ function plain(at: Situation): Choice | undefined {
       return yesNo(at);
     case "discard":
       return discard(at);
-    case "exileCost":
-      return exileCost(at);
     case "legendRule":
       return legendRule(at);
     case "castOffer":
@@ -544,6 +548,73 @@ function discard(at: Situation, cleanup?: number): Pick {
     max: count,
     confirm: () => "Discard",
     plan: (picked) => picked.map((slot) => at.pickCard("discard", slot)),
+  };
+}
+
+/** Manifest dread ([CR 701.62a](https://yawgatog.com/resources/magic-rules/#R70162a)): one
+ * of the top two cards goes onto the battlefield face down, the other to the graveyard. */
+function manifestDread(at: Situation): Pick {
+  const cards = at.looked(2);
+  return {
+    kind: "pick",
+    key: at.key,
+    title: "Manifest Dread",
+    instruction: "Manifest one. The other goes to your graveyard.",
+    source: at.source,
+    cards,
+    pickable: at.offeredAmong(cards),
+    min: 1,
+    max: 1,
+    confirm: () => "Manifest",
+    plan: ([slot]) =>
+      slot === undefined ? [] : [at.pickCard("chooseObject", slot)],
+  };
+}
+
+/** Cards from the graveyard to exile for a cost, as Abhorrent Oculus's "exile six cards from
+ * your graveyard" ([CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h)). The
+ * engine asks for them from the bottom of the graveyard up, each above the one before, of
+ * cards with one name the lowest, and takes them unasked once one answer is left: the plan
+ * follows it, asking for each card the engine will ask for. */
+function graveyardExile(at: Situation, count: number): Pick {
+  const graveyard = at.view.players.you.graveyard;
+  return {
+    kind: "pick",
+    key: at.key,
+    title: "Exile",
+    instruction: `Choose ${inWords(count)} cards to exile.`,
+    source: at.source,
+    cards: [...graveyard].reverse(),
+    pickable: graveyard,
+    min: count,
+    max: count,
+    confirm: () => "Exile",
+    plan(picked) {
+      const need = new Map<string, number>();
+      for (const slot of picked) {
+        const name = at.name(slot) ?? "";
+        need.set(name, (need.get(name) ?? 0) + 1);
+      }
+      const left = [...graveyard];
+      const picks: Intent[] = [];
+      for (let from = 0, still = count; still > 0; still -= 1) {
+        const window = left.slice(from, left.length - still + 1);
+        const names = new Set(window.map((s) => at.name(s) ?? ""));
+        const i = window.findIndex(
+          (s) => (need.get(at.name(s) ?? "") ?? 0) > 0,
+        );
+        if (i < 0) break;
+        const name = at.name(window[i]!) ?? "";
+        // The lowest card of that name is the one the engine offers and exiles.
+        const first = window.findIndex((s) => (at.name(s) ?? "") === name);
+        if (names.size > 1)
+          picks.push(at.pickCard("exileCost", window[first]!));
+        need.set(name, need.get(name)! - 1);
+        left.splice(from + first, 1);
+        from += first;
+      }
+      return picks;
+    },
   };
 }
 

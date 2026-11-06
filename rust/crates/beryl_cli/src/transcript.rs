@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use beryl_engine::card::{AbilityIx, CastingOption, Types};
+use beryl_engine::card::{AbilityIx, CastingOption, FaceIx, Types};
 use beryl_engine::event::{Event, Reason, Recipient};
 use beryl_engine::state::{CounterKind, ObjectFlags, ObjectRef};
 use beryl_engine::{
@@ -281,11 +281,14 @@ fn list(items: &[String]) -> String {
     }
 }
 
-/// The name of the card in a slot, by the face it has up.
+/// The name of the card in a slot, by the face it has up; a face-down permanent, which has no
+/// name, by its card's.
 fn name(t: &GameTable, s: &State, slot: Slot) -> String {
-    t.def(s.card(slot))
-        .face_name(s.object(slot).face)
-        .to_owned()
+    let def = t.def(s.card(slot));
+    match s.object(slot).face {
+        FaceIx::DOWN => format!("face-down {}", def.name),
+        face => def.face_name(face).to_owned(),
+    }
 }
 
 /// An object among a decision's candidates: a permanent or a spell with its controller, so
@@ -395,5 +398,6 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
         Opt::Number(n) => n.to_string(),
         Opt::Plan(i) => format!("plan {}", i + 1),
         Opt::Player(p) => format!("P{}", p.get()),
+        Opt::TurnFaceUp(slot) => format!("turn {} face up", named(slot)),
     }
 }

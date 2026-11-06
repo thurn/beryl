@@ -347,7 +347,13 @@ function Look({
 }) {
   const card = useFace(object);
   if (place.look === "hidden") return null;
-  if (place.look === "back" || object.name === null) {
+  // A face-down permanent shows its back to both players; its controller's hover still names
+  // its card (CR 708.5).
+  if (
+    place.look === "back" ||
+    object.name === null ||
+    object.facing === "down"
+  ) {
     return <CardBack width={place.width} />;
   }
   const field =

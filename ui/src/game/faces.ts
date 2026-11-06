@@ -49,6 +49,7 @@ export const BLANK: ObjectView = {
   owner: "you",
   controller: "you",
   name: null,
+  facing: "up",
   token: false,
   tapped: false,
   summoningSick: false,
