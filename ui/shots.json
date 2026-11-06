@@ -1,5 +1,5 @@
 {
-  "$comment": "What `just ui-shots` captures: a route (hash route, optionally ?fixture=<name>[&at=<n>] for a fixture ui/fixtures.json defines, from its nth view) at a viewport size, after clicking the element `click` selects, if given, or each element of a list of them in turn, and then with the pointer over the element `hover` selects, if given. With `compare`, a list of selectors, the shot is their elements cropped side by side, each with a little of the page around it, rather than the whole page.",
+  "$comment": "What `just ui-shots` captures: a route (hash route, optionally ?fixture=<name>[&at=<n>] for a fixture ui/fixtures.json defines, from its nth view) at a viewport size, once an element `waitFor` selects shows, if given, after clicking the element `click` selects, if given, or each element of a list of them in turn, and then with the pointer over the element `hover` selects, if given. With `compare`, a list of selectors, the shot is their elements cropped side by side, each with a little of the page around it, rather than the whole page.",
   "shots": [
     {
       "name": "gallery",
@@ -72,6 +72,20 @@
     {
       "name": "game-opponent-flip",
       "route": "/?fixture=opening-bottom&at=1#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-opponent-choosing",
+      "route": "/?fixture=opening-opponent-play&at=1#/game",
+      "waitFor": ".coin-choosing",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-opponent-mulligan",
+      "route": "/?fixture=opening-opponent-play&at=2#/game",
+      "waitFor": ".opening-considering",
       "width": 1600,
       "height": 900
     },

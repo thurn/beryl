@@ -1963,6 +1963,34 @@
   font-size: 34px;
   color: var(--gold);
 }
+/* The opponent's hand, fanned where the player's buttons will be, while it decides on it: each
+   card lifts in turn as it looks through them. */
+.opening-considering {
+  display: flex;
+  padding-top: 14px;
+}
+.opening-considering .card-back {
+  transform-origin: 50% 120%;
+  animation: opening-considering 2.4s ease-in-out infinite;
+}
+.opening-considering .card-back + .card-back {
+  margin-left: -16px;
+}
+@keyframes opening-considering {
+  0%,
+  24%,
+  100% {
+    translate: 0 0;
+  }
+  12% {
+    translate: 0 -10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .opening-considering .card-back {
+    animation: none;
+  }
+}
 /* Above the title: the flip's coin, and once it lands, whether the player is on the play. */
 .opening-coin {
   display: flex;

@@ -5439,29 +5439,52 @@ await check(
             entries.some((e) => /You lost the game at -1 life/.test(e)),
             "the log says how",
         );
-        await result.getByRole("button", { name: "View battlefield" }).click();
+        await result
+            .getByRole("button", { name: "View Battlefield", exact: true })
+            .click();
         assert.equal(await result.count(), 0, "the battlefield shows");
         const back = page.getByRole("button", { name: "Back to Defeat" });
         await assertReachable(page, back);
         await back.click();
-        await result.getByRole("button", { name: "New game" }).waitFor();
+        // One capitalisation for New Game, here as on the start screen.
+        await result
+            .getByRole("button", { name: "New Game", exact: true })
+            .waitFor();
     },
     overAt,
 );
 
 await check(
-    "the settings concede the game",
+    "the settings concede the game once confirmed in place",
     async (page) => {
         await page.clock.runFor(2000);
-        await page.getByRole("button", { name: "Settings" }).click();
-        await page
-            .getByRole("button", { name: "Concede", exact: true })
-            .click();
-        const calls = await page.evaluate(() =>
-            window.berylFixture.calls.filter((c) => c.command === "concede"),
-        );
+        const concessions = () =>
+            page.evaluate(() =>
+                window.berylFixture.calls.filter(
+                    (c) => c.command === "concede",
+                ),
+            );
+        const settings = page.getByRole("button", { name: "Settings" });
+        const concede = page.getByRole("button", {
+            name: "Concede",
+            exact: true,
+        });
+        const confirm = page.getByRole("button", {
+            name: "Confirm Concede",
+            exact: true,
+        });
+        await settings.click();
+        await concede.click();
+        assert.deepEqual(await concessions(), [], "asks first");
+        assert.equal(await page.locator(".settings").count(), 1, "still open");
+        // Closing the settings puts the question back.
+        await settings.click();
+        await settings.click();
+        assert.equal(await confirm.count(), 0, "asked again");
+        await concede.click();
+        await confirm.click();
         assert.deepEqual(
-            calls.map((c) => c.args.request.session),
+            (await concessions()).map((c) => c.args.request.session),
             [overEvents[0].payload.session],
         );
         assert.equal(await page.locator(".settings").count(), 0, "closed");
@@ -5473,10 +5496,13 @@ await check(
     "a new game with one in progress asks first, then concedes it",
     async (page) => {
         await page.evaluate(() => (window.location.hash = "#/"));
-        const button = page.locator(".start-buttons button", {
-            hasText: "New Game",
-        });
-        await button.click();
+        assert.equal(
+            await page.locator(".start-title").textContent(),
+            "New Game",
+        );
+        await page
+            .getByRole("button", { name: "New Game", exact: true })
+            .click();
         const commands = () =>
             page.evaluate(() =>
                 window.berylFixture.calls

@@ -38,6 +38,8 @@ async function capture(browser, shot) {
         if (shot.route.includes("fixture=")) {
             await page.waitForFunction(() => window.berylFixture);
         }
+        // A state the page comes to on its own, such as the coin's flip ending.
+        if (shot.waitFor) await page.waitForSelector(shot.waitFor);
         await settle(page);
         // One selector, or several clicked in turn; then the pointer leaves, so that no card
         // it rests on is inspected over the table.

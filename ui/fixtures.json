@@ -9,6 +9,13 @@
       "until": "first putOnBottom decision for seat 0"
     },
     {
+      "name": "opening-opponent-play",
+      "seed": 15,
+      "decks": ["wu-control", "wu-control"],
+      "agents": ["random", "random"],
+      "until": "first keepOrMulligan decision for seat 0"
+    },
+    {
       "name": "first-target",
       "seed": 1,
       "decks": ["wu-control", "wu-control"],

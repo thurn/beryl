@@ -1107,19 +1107,15 @@ export function Board({
               </span>
             </label>
             {onConcede && (
-              <Button
-                variant="secondary"
-                size="small"
-                onClick={() => {
+              <ConcedeButton
+                onConcede={() => {
                   setSettings(false);
                   onConcede();
                 }}
-              >
-                Concede
-              </Button>
+              />
             )}
             <Button variant="secondary" size="small" onClick={onLeave}>
-              Leave game
+              Leave Game
             </Button>
           </div>
         )}
@@ -1128,6 +1124,21 @@ export function Board({
           (scry.png). */}
       <Brand />
     </>
+  );
+}
+
+/** Concede, asked once in place: the first click turns it into the confirmation, which the
+ * settings closing puts back. */
+function ConcedeButton({ onConcede }: { onConcede(): void }) {
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <Button
+      variant={confirming ? "primary" : "secondary"}
+      size="small"
+      onClick={confirming ? onConcede : () => setConfirming(true)}
+    >
+      {confirming ? "Confirm Concede" : "Concede"}
+    </Button>
   );
 }
 

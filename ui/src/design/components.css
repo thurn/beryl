@@ -1644,7 +1644,8 @@
 }
 
 /* The coin of the opening's flip and the starting player's mark: a gold disc, bearing a 1 by
-   the player who goes first, which lands with a flip or spins while the flip's winner chooses. */
+   the player who goes first, which lands with a flip, or spins and then rocks while the flip's
+   winner chooses. */
 .coin {
   display: inline-grid;
   place-items: center;
@@ -1669,6 +1670,18 @@
 }
 .coin-spinning {
   animation: coin-spin 0.8s linear infinite;
+}
+/* Toward one seat and then the other, as the flip's winner weighs going first. */
+.coin-choosing {
+  animation: coin-choose 1.4s ease-in-out infinite alternate;
+}
+@keyframes coin-choose {
+  from {
+    transform: translateY(-0.45em) rotateX(30deg);
+  }
+  to {
+    transform: translateY(0.45em) rotateX(-30deg);
+  }
 }
 @keyframes coin-land {
   from {
@@ -1707,7 +1720,8 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .coin-landing,
-  .coin-spinning {
+  .coin-spinning,
+  .coin-choosing {
     animation: none;
   }
 }

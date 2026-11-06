@@ -146,7 +146,7 @@ export function StartScreen({
       <div className="table start-screen">
         <Brand />
         <section className="start-panel">
-          <h1 className="start-title">New game</h1>
+          <h1 className="start-title">New Game</h1>
           <p className="start-subtitle">WU Control mirror</p>
           <fieldset className="start-agents">
             <legend>Opponent</legend>
@@ -509,6 +509,15 @@ function Opening({
   }, [spinning]);
   const starting = spinning ? null : view.turn.starting;
   const decision = spinning ? undefined : asked;
+  // What the opponent decides while the player waits: who goes first, the coin rocking
+  // between the seats, and then its hand, which it looks through.
+  const choosingFirst =
+    !spinning && starting === null && flipWinner === "opponent";
+  const considering =
+    !decision && starting !== null && view.status.kind === "thinking";
+  const opponentHand = view.objects.filter(
+    (o) => o.zone === "hand" && o.owner === "opponent",
+  ).length;
   const kind = decision?.kind;
   // The cards picked for the bottom, kept as they were: those sent are gone from the hand.
   const [bottom, setBottom] = useState<ObjectView[]>([]);
@@ -585,8 +594,9 @@ function Opening({
       <div className="opening-coin" data-starting={starting ?? undefined}>
         <Coin
           key={starting ?? "spinning"}
-          spinning={starting === null}
-          first={starting === "you"}
+          spinning={starting === null && !choosingFirst}
+          choosing={choosingFirst}
+          first={starting === "you" || choosingFirst}
         />
         {starting && (
           <span className="opening-coin-label">
@@ -647,12 +657,32 @@ function Opening({
             {b.label}
           </Button>
         ))}
-        {!decision && (
-          <i className="working-dots opening-waiting" role="status">
-            <i />
-            <i />
-            <i />
-          </i>
+        {considering ? (
+          <div
+            className="opening-considering"
+            role="status"
+            aria-label="Opponent's hand"
+          >
+            {Array.from({ length: opponentHand }, (_, i) => (
+              <CardBack
+                key={i}
+                width={44}
+                style={{
+                  rotate: `${(i - (opponentHand - 1) / 2) * 7}deg`,
+                  animationDelay: `${i * 0.18}s`,
+                }}
+              />
+            ))}
+          </div>
+        ) : (
+          !decision &&
+          !choosingFirst && (
+            <i className="working-dots opening-waiting" role="status">
+              <i />
+              <i />
+              <i />
+            </i>
+          )
         )}
       </div>
       {inspector}
@@ -760,9 +790,9 @@ function GameOver({
         </p>
       )}
       <div className="opening-buttons">
-        <Button onClick={() => (window.location.hash = "#/")}>New game</Button>
+        <Button onClick={() => (window.location.hash = "#/")}>New Game</Button>
         <Button variant="secondary" onClick={onClose}>
-          View battlefield
+          View Battlefield
         </Button>
       </div>
     </div>
