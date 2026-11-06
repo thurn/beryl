@@ -10,9 +10,9 @@ use crate::ipc::{
 use crate::protocol::{
     AskView, Candidate, CandidateIndex, CandidateView, CardType, Combat, Counter, CounterView,
     DecisionId, DecisionView, Declaration, Facing, GameEvent, Kind, LossReason, Mana, ManaPool,
-    ObjectView, OutcomeView, PassTo, Payment, PlayerState, PlayerView, Players, PowerToughness,
-    RefusalView, Refused, SessionId, Side, StackItem, Stall, Status, Step, StopsSetting, TargetRef,
-    TurnView, Why, ZoneName,
+    ObjectView, OutcomeView, PaidCost, PassTo, Payment, PlayerState, PlayerView, Players,
+    PowerToughness, RefusalView, Refused, SessionId, Side, StackItem, Stall, Status, Step,
+    StopsSetting, TargetRef, TurnView, Why, ZoneName,
 };
 use crate::{AgentView, GameUpdate, SessionError, StartRequest};
 
@@ -51,6 +51,7 @@ pub fn typescript() -> String {
         CounterView::decl(&cfg),
         Combat::decl(&cfg),
         StackItem::decl(&cfg),
+        PaidCost::decl(&cfg),
         TargetRef::decl(&cfg),
         DecisionView::decl(&cfg),
         AskView::decl(&cfg),

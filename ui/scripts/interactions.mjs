@@ -74,6 +74,29 @@ const where = (handle) =>
         return [Math.round(r.left), Math.round(r.top)];
     });
 
+/** Asserts that the points `[x, y]` `a` and `b` lie within 3 px of each other. */
+function assertNear(a, b, message) {
+    assert.ok(
+        Math.hypot(a[0] - b[0], a[1] - b[1]) <= 3,
+        `${message}: at ${a}, not ${b}`,
+    );
+}
+
+/** Asserts that every point of `path` lies in the box `from` and `to` span, give or take a
+ * spring's overshoot: a card travels between them rather than by way of anywhere else. */
+function assertBetween(path, from, to, message) {
+    const slack = 30;
+    for (const [x, y] of path) {
+        assert.ok(
+            x >= Math.min(from[0], to[0]) - slack &&
+                x <= Math.max(from[0], to[0]) + slack &&
+                y >= Math.min(from[1], to[1]) - slack &&
+                y <= Math.max(from[1], to[1]) + slack,
+            `${message} passes ${x},${y}, off its way from ${from} to ${to}`,
+        );
+    }
+}
+
 /** The center of a bounding box. */
 const center = (box) => ({
     x: box.x + box.width / 2,
@@ -176,6 +199,7 @@ await check(
         );
         // From here on time passes only when the test says so.
         await page.clock.pauseAt(Date.now() + 60_000);
+        const letGo = await where(handle);
         await page.mouse.up();
         assert.deepEqual(
             await chosen(page),
@@ -192,10 +216,17 @@ await check(
             "the cast card is the same element, now on the stack",
         );
         const dropped = await where(handle);
-        await page.clock.runFor(80);
+        assertNear(dropped, letGo, "the card leaves the stack from its drop");
+        const flight = [];
+        for (let i = 0; i < 5; i++) {
+            await page.clock.runFor(16);
+            flight.push(await where(handle));
+        }
+        await page.clock.runFor(80 - 5 * 16);
         const moving = await where(handle);
         await page.clock.runFor(5000);
         const landed = await where(handle);
+        assertBetween(flight, dropped, landed, "the cast card's flight");
         assert.notDeepEqual(
             moving,
             dropped,
@@ -253,6 +284,9 @@ await check(
     "a click casts a card with nothing to choose, and Escape takes it back",
     async (page) => {
         await page.clock.runFor(2000);
+        const handle = await page.$(card);
+        const inHand = await where(handle);
+        await page.clock.pauseAt(Date.now() + 60_000);
         await page.click(card);
         assert.deepEqual(
             await chosen(page),
@@ -260,6 +294,16 @@ await check(
             `chose "${castLabel}"`,
         );
         await page.waitForSelector(`${card}[data-zone="stack"]`);
+        // It goes to the stack from its place in the hand.
+        assertNear(await where(handle), inHand, "the clicked card's start");
+        const flight = [];
+        for (let i = 0; i < 6; i++) {
+            await page.clock.runFor(16);
+            flight.push(await where(handle));
+        }
+        await page.clock.runFor(3000);
+        assertBetween(flight, inHand, await where(handle), "its flight");
+        await page.clock.resume();
         // It asks for its target; Escape takes the cast back, and the card is in hand again.
         const targeting = page.getByRole("dialog", {
             name: `Choose a target for ${name}`,
@@ -1326,6 +1370,156 @@ await check(
             "dragged on, it blocks",
         );
         assert.deepEqual(await chosen(page), []);
+    },
+    blockRun,
+);
+
+/** The combat lines in the arrow layer `layer` selects: each one's ends, as the ids its spec
+ * names, and its path's first and last points, in page pixels. */
+const combatLines = (page, layer) =>
+    page.$$eval(`${layer} .arrow`, (gs) =>
+        gs.map((g) => {
+            const path = g.querySelector(".arrow-line path");
+            const ctm = path.getScreenCTM();
+            const at = (length) => {
+                const p = path.getPointAtLength(length);
+                const q = new DOMPoint(p.x, p.y).matrixTransform(ctm);
+                return [q.x, q.y];
+            };
+            return {
+                from: g.dataset.from,
+                to: g.dataset.to,
+                start: at(0),
+                end: at(path.getTotalLength()),
+            };
+        }),
+    );
+
+/** Asserts that each of `attackers` (slots) not blocked draws a line out of its chevron that
+ * ends on `side`'s life orb, clear of every card on the table: an attack on a player points
+ * at them, not at whatever stands across from the attacker. */
+async function assertAimedAtPlayer(page, attackers, side) {
+    const lines = await combatLines(page, ".board-arrows");
+    const orb = await page.locator(`#${side}-life-orb`).boundingBox();
+    const cards = await page.$$eval(
+        '.card-el[data-zone="battlefield"] .card-slot',
+        (es) =>
+            es.map((e) => {
+                const r = e.getBoundingClientRect();
+                return { x: r.x, y: r.y, width: r.width, height: r.height };
+            }),
+    );
+    const inside = ([x, y], b, m) =>
+        x > b.x - m &&
+        x < b.x + b.width + m &&
+        y > b.y - m &&
+        y < b.y + b.height + m;
+    for (const slot of attackers) {
+        const line = lines.find((l) => l.from === `card-${slot}-mark`);
+        assert.ok(line, `attacker ${slot} draws a line`);
+        assert.equal(line.to, `${side}-life-orb`, `${slot} aims at ${side}`);
+        assert.ok(inside(line.end, orb, 4), `${slot}'s line ends on the orb`);
+        assert.ok(
+            !cards.some((b) => inside(line.end, b, 0)),
+            `${slot}'s line ends clear of the cards`,
+        );
+    }
+}
+
+await check(
+    "an attack on a player ends on that player's life orb",
+    async (page) => {
+        await page.clock.runFor(2000);
+        // The opponent's attackers, none blocked yet, at the human.
+        const attacking = blockView.objects
+            .filter(
+                (o) =>
+                    o.combat?.kind === "attacking" &&
+                    o.combat.planeswalker === null,
+            )
+            .map((o) => o.slot);
+        assert.ok(attacking.length >= 3, "three attackers at the human");
+        await assertAimedAtPlayer(page, attacking, "you");
+        // Blocked, an attacker's line goes to its blockers instead.
+        for (const [blocker, attacker] of declaredBlocks) {
+            await page.click(slotOf(blocker));
+            await page.click(slotOf(attacker));
+        }
+        await page.clock.runFor(2000);
+        const blocked = new Set(declaredBlocks.values());
+        await assertAimedAtPlayer(
+            page,
+            attacking.filter((a) => !blocked.has(a)),
+            "you",
+        );
+        const lines = await combatLines(page, ".board-arrows");
+        for (const a of blocked) {
+            assert.ok(
+                !lines.some((l) => l.from === `card-${a}-mark`),
+                `blocked ${a} aims at no player`,
+            );
+        }
+    },
+    blockRun,
+);
+
+await check(
+    "the human's attack on the opponent ends on their life orb",
+    async (page) => {
+        await page.clock.runFor(2000);
+        // The twin the engine does not offer first, as a player could, then the rest.
+        for (const slot of [
+            insects[1],
+            ...declaredAttackers.filter((s) => s !== insects[1]),
+        ]) {
+            await page.click(slotOf(slot));
+            await page.clock.runFor(500);
+        }
+        await page.clock.runFor(2000);
+        await assertAimedAtPlayer(page, declaredAttackers, "opponent");
+    },
+    attackRun,
+);
+
+/** Whether the segments `a`-`b` and `c`-`d` cross at a point other than an end they share. */
+function crosses([a, b], [c, d]) {
+    const same = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 1;
+    if ([a, b].some((p) => same(p, c) || same(p, d))) return false;
+    const turn = (p, q, r) =>
+        Math.sign(
+            (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]),
+        );
+    return (
+        turn(a, b, c) * turn(a, b, d) < 0 && turn(c, d, a) * turn(c, d, b) < 0
+    );
+}
+
+await check(
+    "a double block's lines do not cross",
+    async (page) => {
+        await page.clock.runFor(2000);
+        // Each blocker, then its attacker, the doubled attacker's last.
+        const pairs = [...declaredBlocks].sort(
+            ([, a], [, b]) => Number(a === doubled) - Number(b === doubled),
+        );
+        for (const [blocker, attacker] of pairs) {
+            await page.click(slotOf(blocker));
+            await page.click(slotOf(attacker));
+            await page.clock.runFor(300);
+        }
+        await page.clock.runFor(2000);
+        const links = (await combatLines(page, ".board-arrows")).filter(
+            (l) => !l.from.endsWith("-mark"),
+        );
+        assert.equal(links.length, declaredBlocks.size, "a line a blocker");
+        for (const [i, l] of links.entries()) {
+            for (const m of links.slice(i + 1)) {
+                assert.ok(
+                    !crosses([l.start, l.end], [m.start, m.end]),
+                    `${l.from}-${l.to} crosses ${m.from}-${m.to}`,
+                );
+            }
+        }
     },
     blockRun,
 );

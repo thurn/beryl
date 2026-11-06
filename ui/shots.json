@@ -285,6 +285,12 @@
       "height": 900
     },
     {
+      "name": "game-stack-overload",
+      "route": "/?fixture=stack-overload#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
       "name": "game-mana-floating",
       "route": "/?fixture=mana-floating&at=2#/game",
       "width": 1600,

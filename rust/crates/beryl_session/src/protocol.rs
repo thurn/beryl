@@ -223,6 +223,10 @@ pub enum StackItem {
         targets: Vec<TargetRef>,
         /// The announced value of X.
         x: u8,
+        /// The alternative and additional costs it was cast with, in its card's order: what
+        /// they change, as an overload cost turns each "target" into "each", its printed text
+        /// does not say.
+        paid: Vec<PaidCost>,
     },
     /// The ability at index `ability` of the face named `name` (among the abilities it grants
     /// to other objects, when `granted`), from the object in `source`, which may have left its
@@ -242,6 +246,23 @@ pub enum StackItem {
         /// The announced value of X.
         x: u8,
     },
+}
+
+/// An alternative or additional cost a spell was cast with
+/// ([CR 601.2b](https://yawgatog.com/resources/magic-rules/#R6012b)): "If the spell has
+/// alternative or additional costs that will be paid as it's being cast ... the player
+/// announces their intentions to pay any or all of those costs".
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum PaidCost {
+    Kicker,
+    Offspring,
+    Impending,
+    Overload,
+    Evoke,
+    /// Cast from a graveyard for its flashback cost
+    /// ([CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a)).
+    Flashback,
 }
 
 /// A player or an object, as a target or a recipient of damage.
@@ -990,6 +1011,25 @@ fn ability_order(list: &[Ability], index: u8) -> (bool, u8) {
     )
 }
 
+/// The costs the spell `e` was cast with: a flashback cost, which is an alternative cost
+/// ([CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a)), or else the options of
+/// its face that were paid.
+fn paid_costs(t: &GameTable, e: &StackEntry) -> Vec<PaidCost> {
+    if e.flashback {
+        return vec![PaidCost::Flashback];
+    }
+    e.costs
+        .paid(t.def(e.card).face(e.face))
+        .map(|option| match option {
+            CastingOption::Kicker { .. } => PaidCost::Kicker,
+            CastingOption::Offspring(_) => PaidCost::Offspring,
+            CastingOption::Impending { .. } => PaidCost::Impending,
+            CastingOption::Overload { .. } => PaidCost::Overload,
+            CastingOption::Evoke { .. } => PaidCost::Evoke,
+        })
+        .collect()
+}
+
 fn stack_item(t: &GameTable, obs: Observation<'_>, e: &StackEntry) -> StackItem {
     let targets = e
         .targets
@@ -1008,6 +1048,7 @@ fn stack_item(t: &GameTable, obs: Observation<'_>, e: &StackEntry) -> StackItem 
             slot: source.expect("a spell's card"),
             targets,
             x: e.x,
+            paid: paid_costs(t, e),
         },
         Some(ability) => {
             let face = t.def(e.card).face(e.face);

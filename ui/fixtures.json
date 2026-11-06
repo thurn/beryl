@@ -227,6 +227,12 @@
       "where": ["X on the stack"]
     },
     {
+      "name": "stack-overload",
+      "board": "stack-overload",
+      "until": "first priority decision for seat 0",
+      "where": ["opponent's spell on the stack"]
+    },
+    {
       "name": "menu-choices",
       "board": "menu-choices",
       "until": "first priority decision for seat 0",

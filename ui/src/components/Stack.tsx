@@ -4,6 +4,7 @@ import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { CardArt, frameKey, type CardFace } from "./Card";
 import { useTextFit } from "./fit";
 import { RulesText } from "./Mana";
+import type { PaidCost } from "../generated/protocol";
 import {
   retrace,
   route,
@@ -63,15 +64,29 @@ export function StackItem({
   );
 }
 
-/** What a stack item's frame cannot say, on its corners: whose it is, as a diamond in that
- * player's colour (the game log's), and the X it was announced with, spell or ability alike.
- * An X of 0 goes unmarked, as for an item without X. */
+/** The keyword of each cost a spell can be cast with, as its card prints it. */
+const PAID: Record<PaidCost, string> = {
+  kicker: "Kicker",
+  offspring: "Offspring",
+  impending: "Impending",
+  overload: "Overload",
+  evoke: "Evoke",
+  flashback: "Flashback",
+};
+
+/** What a stack item's frame cannot say, on its edges: whose it is, as a diamond in that
+ * player's colour (the game log's), the X it was announced with, spell or ability alike, and
+ * the alternative or additional costs a spell was cast with, as Arena tags them, since its
+ * printed text does not say what they change (an overloaded spell targets nothing). An X of 0
+ * goes unmarked, as for an item without X. */
 export function StackMarks({
   controller,
   x,
+  paid = [],
 }: {
   controller: "you" | "opponent";
   x: number;
+  paid?: PaidCost[];
 }) {
   return (
     <>
@@ -84,6 +99,11 @@ export function StackMarks({
       {x > 0 && (
         <span className="stack-x" aria-label={`X is ${x}`}>
           X={x}
+        </span>
+      )}
+      {paid.length > 0 && (
+        <span className="stack-paid" data-paid={paid.join(" ")}>
+          {paid.map((p) => PAID[p]).join(" · ")}
         </span>
       )}
     </>

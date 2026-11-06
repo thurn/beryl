@@ -623,6 +623,34 @@ pub const BOARDS: &[Scenario] = &[
             Action::answer(P0, DecisionKind::X, Pick::Number { n: 1 }),
             Action::cast(P1, COUNTERSPELL),
         ]),
+    // The opponent's Damn cast for its overload cost, destroying each creature rather than a
+    // target, as the human gets priority over it, holding a Counterspell.
+    Scenario::new("stack-overload")
+        .at(4, P1, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(SNAPCASTER_MAGE),
+                Permanent::new(TRINKET_MAGE),
+                ISLAND_,
+                ISLAND_,
+            ],
+        )
+        .hand(P0, &[COUNTERSPELL])
+        .library(P0, LANDS)
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(ELITE_SPELLBINDER),
+                PLAINS_,
+                PLAINS_,
+                PLAINS_,
+                PLAINS_,
+            ],
+        )
+        .hand(P1, &[DAMN])
+        .library(P1, LANDS)
+        .actions(&[cast_with_option(P1, DAMN)]),
     // Jace, the Mind Sculptor's three affordable loyalty abilities, and Sink into Stupor both
     // castable and playable as its land face.
     Scenario::new("menu-choices")
@@ -975,7 +1003,7 @@ const fn choose(player: Seat, kind: DecisionKind, card: &'static str) -> Action 
 }
 
 /// `player` casts `card` with its first casting option: Overlord of the Mistmoors' impending
-/// cost, Thieving Skydiver's kicker.
+/// cost, Thieving Skydiver's kicker, Damn's overload.
 const fn cast_with_option(player: Seat, card: &'static str) -> Action {
     Action::Cast {
         player,

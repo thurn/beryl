@@ -389,7 +389,11 @@ export function Board({
   }
   for (const item of view.stack) {
     if (item.kind === "spell") {
-      states.set(item.slot, { ...states.get(item.slot), x: item.x });
+      states.set(item.slot, {
+        ...states.get(item.slot),
+        x: item.x,
+        paid: item.paid,
+      });
     }
   }
   // The top of the stack's source glows gold and its targets cyan, whoever has priority
@@ -742,6 +746,7 @@ export function Board({
       ? passButton(view, decision.passTo)
       : { label: "Pass", caption: "" };
   const arrows = useMemo(() => boardArrows(shown), [shown]);
+  const attacks = useMemo(() => attackLines(shown), [shown]);
   const announcement = combatBanner(view) ?? coinFlipBanner(view);
   // While a declaration is made, the banner says what to click; any other is an announcement,
   // which shows for a moment.
@@ -911,6 +916,9 @@ export function Board({
             ),
         )}
 
+        <div className="board-arrows board-arrows-under">
+          <Arrows arrows={attacks} follow />
+        </div>
         <div className="board-arrows">
           <Arrows arrows={arrows} follow avoid={AVOID} />
         </div>
@@ -1329,11 +1337,36 @@ const AVOID = ".card-el .card-slot, .stack-item, .life-orb, .game-log";
 /** The element id of the oval of a player's life orb. */
 const lifeId = (side: Side) => `${side}-life-orb`;
 
+/** The lines under the table's cards: each unblocked attacker's at a player, a hairline out of
+ * its chevron's apex into that player's life orb, so the chevron does not seem to point at
+ * whatever stands across from it. Under the cards, they do not cross the block lines and cards
+ * between, only leave the attacker and land on the orb. */
+function attackLines(view: PlayerView): ArrowSpec[] {
+  const objects = new Map(view.objects.map((o) => [o.slot, o]));
+  return view.battlefield.flatMap((slot): ArrowSpec[] => {
+    const combat = objects.get(slot)?.combat;
+    if (combat?.kind !== "attacking") return [];
+    if (combat.blocked || combat.planeswalker !== null) return [];
+    const up = objects.get(slot)?.controller === "you";
+    return [
+      {
+        from: `${cardId(slot)}-mark`,
+        to: lifeId(up ? "opponent" : "you"),
+        tone: "gold",
+        fromSide: up ? "top" : "bottom",
+        toSide: "facing",
+        bend: 0,
+        start: "none",
+        fine: true,
+      },
+    ];
+  });
+}
+
 /** The lines over the table (decision D10): each blocked attacker's to its blockers and each
  * attacker's at a planeswalker to it (combat.png), and for the top of the stack, a gold line
  * from an ability's source and a cyan one to each target (trigger_on_stack_with_target.png).
- * An attacker at the defending player draws none: its chevron and its step out of its row say
- * it attacks, and a line from each attacker to the life orb crossed the whole table. */
+ * An attacker at a player draws its line under the cards (`attackLines`). */
 function boardArrows(view: PlayerView): ArrowSpec[] {
   const objects = new Map(view.objects.map((o) => [o.slot, o]));
   const out: ArrowSpec[] = [];

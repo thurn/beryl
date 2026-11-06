@@ -22,7 +22,7 @@ import {
 } from "motion/react";
 import { ASPECT, Card, CardBack, type Highlight } from "../components/Card";
 import { StackMarks } from "../components/Stack";
-import type { ObjectView, Side } from "../generated/protocol";
+import type { ObjectView, PaidCost, Side } from "../generated/protocol";
 import { StageScale } from "./Stage";
 import { faceDownFace, marksOf, useFace } from "./faces";
 import { RAISE, type Layout, type Placement } from "./layout";
@@ -60,6 +60,8 @@ export interface CardState {
   linked?: boolean;
   /** On the stack, the X its spell was announced with. */
   x?: number;
+  /** On the stack, the alternative and additional costs its spell was cast with. */
+  paid?: PaidCost[];
 }
 
 export interface CardLayerProps {
@@ -438,7 +440,11 @@ function Look({
     return (
       <div className="on-stack">
         {card_}
-        <StackMarks controller={object.controller} x={state.x ?? 0} />
+        <StackMarks
+          controller={object.controller}
+          x={state.x ?? 0}
+          paid={state.paid}
+        />
       </div>
     );
   }

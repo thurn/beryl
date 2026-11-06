@@ -168,7 +168,13 @@ export type StackItem = { "kind": "spell", slot: number, targets: Array<TargetRe
 /**
  * The announced value of X.
  */
-x: number, } | { "kind": "ability", source: number | null, ability: number, granted: boolean, name: string, 
+x: number, 
+/**
+ * The alternative and additional costs it was cast with, in its card's order: what
+ * they change, as an overload cost turns each "target" into "each", its printed text
+ * does not say.
+ */
+paid: Array<PaidCost>, } | { "kind": "ability", source: number | null, ability: number, granted: boolean, name: string, 
 /**
  * A triggered ability rather than an activated one.
  */
@@ -182,6 +188,8 @@ nth: number, controller: Side, targets: Array<TargetRef>,
  * The announced value of X.
  */
 x: number, };
+
+export type PaidCost = "kicker" | "offspring" | "impending" | "overload" | "evoke" | "flashback";
 
 export type TargetRef = { "kind": "player", player: Side, } | { "kind": "object", slot: number, };
 
