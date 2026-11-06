@@ -99,10 +99,24 @@ export const BLANK: ObjectView = {
   combat: null,
 };
 
+/** A token with no name, a copy of a face-down permanent (CR 708.2): no card data, so its
+ * types and current power and toughness on a blank frame. */
+const namelessFace = (o: ObjectView): FrameFace => ({
+  name: "",
+  typeLine:
+    "Token " +
+    o.types.map((t) => t.charAt(0).toUpperCase() + t.slice(1)).join(" "),
+  colors: [],
+  power: o.pt?.power.toString(),
+  toughness: o.pt ? String(o.pt.toughness - o.damage) : undefined,
+  toughnessTone: o.damage > 0 ? "down" : undefined,
+});
+
 /** The frame for object `o`, as the game draws it. */
 export function useFace(o: ObjectView): FrameFace {
   const art = useCardArt(o.name ?? "");
-  return art ? frameFace(o, art) : unknownFace(o.name ?? "");
+  if (art) return frameFace(o, art);
+  return o.name === "" ? namelessFace(o) : unknownFace(o.name ?? "");
 }
 
 /** The frame an ability named `name` shows on the stack: its source's, from the card data by
