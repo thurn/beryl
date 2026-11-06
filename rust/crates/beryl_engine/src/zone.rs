@@ -250,7 +250,8 @@ pub(crate) fn rebind(s: &mut State, slots: &[Slot], rng: &mut SplitMix64) {
 /// A token in a zone other than the battlefield ceases to exist, and its slot returns to the
 /// shared pool ([CR 704.5d](https://yawgatog.com/resources/magic-rules/#R7045d)): "If a token
 /// is in a zone other than the battlefield, it ceases to exist." The incarnation is kept and
-/// bumped, so references to the token stay stale after the slot is reused.
+/// bumped, so references to the token stay stale after the slot is reused. The cards exiled
+/// with it are exiled with nothing any more.
 pub(crate) fn cease_to_exist(s: &mut State, slot: Slot) {
     leave(s, slot);
     let incarnation = s.object(slot).incarnation.wrapping_add(1);
@@ -258,6 +259,7 @@ pub(crate) fn cease_to_exist(s: &mut State, slot: Slot) {
         incarnation,
         ..Object::EMPTY
     };
+    forget_exiled_with(s, slot);
     for k in &mut s.knowledge {
         k.remove(slot);
     }

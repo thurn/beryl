@@ -662,6 +662,33 @@ fn a_dies_trigger_looks_back_and_its_intervening_if_skips_tokens() {
 }
 
 #[test]
+fn a_token_that_ceases_to_exist_unlinks_the_cards_exiled_with_it() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let bear = put(&t, &mut s, &mut x, p, "Test Bear");
+    let card = s.object(bear).card;
+    let mut token = None;
+    with_ctx(&t, &mut s, &mut x, bear, |ctx| {
+        token = ctx
+            .create_tokens_of(card, 1, TokenEntry::default())
+            .iter()
+            .next();
+    });
+    let token = token.expect("a token copy");
+    let land = find(&s, &t, p, "Test Land");
+    let land_ref = s.object_ref(land);
+    with_ctx(&t, &mut s, &mut x, token, |ctx| ctx.exile_linked(land_ref));
+    assert_eq!(s.object(land).linked, Some(token));
+    let token_ref = s.object_ref(token);
+    with_ctx(&t, &mut s, &mut x, token, |ctx| ctx.destroy(token_ref));
+    // The token ceases to exist (CR 704.5d), and nothing links to its freed slot.
+    resolve_all(&t, &mut s, &mut x);
+    assert_eq!(s.object(token).zone, Zone::Nowhere);
+    assert_eq!(s.object(land).zone, Zone::Exile);
+    assert_eq!(s.object(land).linked, None);
+}
+
+#[test]
 fn lethal_damage_zero_toughness_and_zero_loyalty_are_state_based() {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
