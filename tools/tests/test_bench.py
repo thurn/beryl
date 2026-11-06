@@ -85,3 +85,10 @@ def test_runner_version_comes_from_the_lockfile() -> None:
     lock = '[[package]]\nname = "gungraun"\nversion = "0.20.0"\n'
     assert bench.locked_version(lock, "gungraun") == "0.20.0"
     assert bench.locked_version(lock, "gungraun-runner") is None
+
+
+def test_counting_holds_the_vm_lock_and_a_home_of_its_own() -> None:
+    script = bench.count_script("provision\n", ["cargo", "bench"], "by-1")
+    lock, count = script.index("flock 9"), script.index("cargo bench")
+    assert lock < script.index("provision") < count
+    assert "GUNGRAUN_HOME=$HOME/gungraun/by-1 " in script

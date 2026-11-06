@@ -5,6 +5,7 @@
   `search` profile for this CPU (architecture §18) unless the arguments name a `--profile`.
 - `bench-count` runs the Gungraun (Valgrind) instruction-count benchmarks in a Lima Linux VM,
   creating and provisioning it on first use. Counts don't depend on load, so there's no check.
+  Every worktree builds into the VM's one target dir, so runs take turns under a lock in the VM.
 
 Extra arguments go to `cargo bench`: `by bench -p beryl_bench --bench example_abba`.
 """
@@ -30,6 +31,9 @@ BUILD_PROCESSES = ("rustc", "cargo", "clippy-driver", "clang", "swift-frontend")
 
 VM = "beryl-bench"
 VM_TARGET = "$HOME/target"  # inside the VM; the checkout is mounted read-only
+VM_LOCK = "$HOME/bench-count.lock"  # held while a run provisions, builds and counts
+# One Gungraun home per worktree, so its "old" results are the worktree's own.
+VM_GUNGRAUN = "$HOME/gungraun"
 COUNT_BENCHES = ["--bench", "*_counts"]
 # A Cargo profile can't set the CPU, so the recipes building the `search` profile pass it.
 SEARCH_CPU = "-C target-cpu=apple-m4"
@@ -200,6 +204,22 @@ def vm_shell(script: str) -> int:
     ).returncode
 
 
+def locked(script: str) -> str:
+    """`script` holding the VM's lock, which the kernel drops when the shell exits, however."""
+    return f"""exec 9>"{VM_LOCK}"
+if ! flock -n 9; then
+  echo "bench: another bench-count run is using the VM; waiting for it" >&2
+  flock 9
+fi
+{script}"""
+
+
+def count_script(provision: str, cargo: list[str], worktree: str) -> str:
+    home = f"{VM_GUNGRAUN}/{shlex.quote(worktree)}"
+    env = f"CARGO_TARGET_DIR={VM_TARGET} GUNGRAUN_HOME={home}"
+    return locked(f"{provision}{env} {shlex.join(cargo)}\n")
+
+
 def vm_ensure() -> int:
     if not output("which", "limactl").strip():
         log("Lima is missing: brew install lima")
@@ -215,22 +235,22 @@ def vm_ensure() -> int:
         code = subprocess.run(["limactl", "start", "--tty=false", VM]).returncode
     else:
         code = 0
-    if code != 0:
-        return code
-    runner = locked_version((paths.RUST / "Cargo.lock").read_text(), "gungraun")
-    if runner is None:
-        log("no gungraun in rust/Cargo.lock")
-        return 2
-    return vm_shell(provision_script(toolchain(), runner))
+    return code
 
 
 def bench_count(args: argparse.Namespace) -> int:
     code = vm_ensure()
     if code != 0:
         return code
+    runner = locked_version((paths.RUST / "Cargo.lock").read_text(), "gungraun")
+    if runner is None:
+        log("no gungraun in rust/Cargo.lock")
+        return 2
     extra: list[str] = args.extra or COUNT_BENCHES
-    cargo = shlex.join(cargo_bench(extra))
-    return vm_shell(f'. "$HOME/.cargo/env" && CARGO_TARGET_DIR={VM_TARGET} {cargo}')
+    script = count_script(
+        provision_script(toolchain(), runner), cargo_bench(extra), paths.REPO.name
+    )
+    return vm_shell(script)
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:

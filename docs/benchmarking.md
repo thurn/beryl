@@ -119,6 +119,11 @@ The VM:
   mounts only the main checkout, read-only, and builds into its own target
   directory. `by bench-count` installs Valgrind, the Rust pinned in
   `rust/rust-toolchain.toml` and the `gungraun-runner` matching `Cargo.lock`.
+- Every worktree builds into that one target directory, so runs take turns: a
+  run waits on a lock in the VM ("another bench-count run is using the VM")
+  while another provisions, builds or counts, then reports its own code's
+  counts. Each worktree keeps its own Gungraun results, so "No change" compares
+  with that worktree's previous run, not another's.
 - It keeps running between uses. `limactl stop beryl-bench` frees its memory;
   `limactl delete beryl-bench` removes it (the next `just bench-count` recreates
   it).
