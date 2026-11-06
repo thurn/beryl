@@ -4,11 +4,13 @@ data/cards.json: per card its printing, artist and per face the display text and
 The app downloads the images themselves on demand (rust/crates/beryl_app/src/art.rs).
 
 The default list is the main decks of the mirror and of the Vintage deck before it, and the
-basic lands; `--cube` takes the whole cube CSV. Scryfall picks each card's default printing;
-data/card-printings.csv pins another (name, set, collector_number). A printing with a name of its own, such as a Through the Omenpaths card
-that Arena names differently from Scryfall's oracle, takes its printed name and text, so it
-is keyed by the name the engine knows. `--record FILE` saves the requests and responses,
-which the tests replay.
+basic lands; `--cube` takes the whole cube CSV. data/card-printings.csv pins each card's
+printing (name, set, collector_number): its first printing, for its original art, which a run
+looks up for any card without a pin and adds to the file (`first_printing`), except that the
+basic lands are John Avon's full-art lands from Unstable. A printing with a name of its own,
+such as a Through the Omenpaths card that Arena names differently from Scryfall's oracle, takes
+its printed name and text, so it is keyed by the name the engine knows. `--record FILE` saves
+the requests and responses, which the tests replay; a replay looks up no printings.
 
 Scryfall's API guidelines, followed here: https://scryfall.com/docs/api
 """
@@ -20,6 +22,8 @@ import csv
 import json
 import sys
 import time
+import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable, Iterable
 from importlib import metadata
@@ -29,10 +33,14 @@ from typing import cast
 from . import paths
 
 API = "https://api.scryfall.com/cards/collection"
+SEARCH = "https://api.scryfall.com/cards/search"
 # /cards/collection takes at most 75 identifiers per request.
 BATCH = 75
 # Scryfall asks for 50 to 100 ms between requests; take the top of that range.
 INTERVAL = 0.1
+# Its searches are limited more tightly, and a run asking too often waits and tries again.
+SEARCH_INTERVAL = 0.6
+RETRIES = 5
 DATA: Path = paths.REPO / "data"
 # The Milestone 1 mirror deck.
 DECK: Path = (
@@ -44,6 +52,19 @@ VINTAGE_DECK: Path = (
 )
 # The basic lands, which any deck may play.
 BASICS = ("Plains", "Island", "Swamp", "Mountain", "Forest")
+# The basics' printings: John Avon's full-art lands from Unstable.
+BASIC_PRINTINGS: dict[str, tuple[str, str]] = {
+    "Plains": ("ust", "212"),
+    "Island": ("ust", "213"),
+    "Swamp": ("ust", "214"),
+    "Mountain": ("ust", "215"),
+    "Forest": ("ust", "216"),
+}
+# Kinds of sets whose printings are not a card's first real one: collectors' and joke sets,
+# tokens, and Arena's rebalanced cards.
+NOT_FIRST: frozenset[str] = frozenset(
+    {"memorabilia", "funny", "token", "minigame", "alchemy", "treasure_chest"}
+)
 CUBE: Path = DATA / "arena-powered-cube-2025-10-30.csv"
 PRINTINGS: Path = DATA / "card-printings.csv"
 OUTPUT: Path = DATA / "cards.json"
@@ -53,6 +74,8 @@ FACE_FIELDS = ("mana_cost", "type_line", "oracle_text", "power", "toughness", "l
 Json = dict[str, object]
 # Posts a JSON body to a URL and returns the decoded JSON response.
 Post = Callable[[str, Json], Json]
+# Fetches a URL and returns the decoded JSON response.
+Get = Callable[[str], Json]
 # A /cards/collection card identifier: a name, an id, or a set and collector number.
 Identifier = dict[str, str]
 
@@ -97,6 +120,93 @@ def printings(path: Path) -> dict[str, Identifier]:
             }
             for row in csv.DictReader(f)
         }
+
+
+def write_printings(path: Path, pins: dict[str, Identifier]) -> None:
+    """Writes pinned printings, by card name."""
+    with path.open("w", newline="") as f:
+        out = csv.writer(f, lineterminator="\n")
+        out.writerow(["name", "set", "collector_number"])
+        for name in sorted(pins):
+            out.writerow([name, pins[name]["set"], pins[name]["collector_number"]])
+
+
+def http_get(url: str) -> Json:
+    """Fetches `url`, waiting and trying again while Scryfall says it is asked too often."""
+    request = urllib.request.Request(
+        url, headers={"User-Agent": user_agent(), "Accept": "application/json"}
+    )
+    for attempt in range(RETRIES):
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                return cast(Json, json.load(response))
+        except urllib.error.HTTPError as e:
+            if e.code != 429 or attempt == RETRIES - 1:
+                raise
+            time.sleep(2.0 * (attempt + 1))
+    raise AssertionError("unreachable")
+
+
+def throttled_get(get: Get) -> Get:
+    last = 0.0
+
+    def wrapped(url: str) -> Json:
+        nonlocal last
+        wait = last + SEARCH_INTERVAL - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        try:
+            return get(url)
+        finally:
+            last = time.monotonic()
+
+    return wrapped
+
+
+def first_printing(get: Get, name: str) -> Identifier:
+    """A card's first printing, for its original art: the earliest English one sold in paper
+    that is no promo, oversized card or printing of the kinds `NOT_FIRST` names; failing that,
+    the earliest in paper (a card printed only in joke sets), else the earliest at all (one
+    printed only on Arena). A basic land's is `BASIC_PRINTINGS`'."""
+    if name in BASIC_PRINTINGS:
+        set_code, number = BASIC_PRINTINGS[name]
+        return {"set": set_code, "collector_number": number}
+    query = urllib.parse.urlencode(
+        {
+            "q": f'!"{name.split(" // ")[0]}"',
+            "unique": "prints",
+            "order": "released",
+            "dir": "asc",
+        }
+    )
+    # Oldest first: the first page holds the first printing.
+    found = cast(list[Json], get(f"{SEARCH}?{query}")["data"])
+    paper = [
+        p
+        for p in found
+        if not p.get("digital")
+        and not p.get("promo")
+        and not p.get("oversized")
+        and p.get("lang", "en") == "en"
+    ]
+    real = [p for p in paper if p.get("set_type") not in NOT_FIRST]
+    first = (real or paper or found)[0]
+    return {
+        "set": str(first["set"]),
+        "collector_number": str(first["collector_number"]),
+    }
+
+
+def pin_first_printings(
+    names: Iterable[str], pins: dict[str, Identifier], get: Get
+) -> dict[str, Identifier]:
+    """`pins`, with the first printing of each of `names` it has none for."""
+    out = dict(pins)
+    for name in names:
+        if name not in out:
+            out[name] = first_printing(get, name)
+            print(f"cards: pinned {name} to {out[name]['set']}", file=sys.stderr)
+    return out
 
 
 def http_post(url: str, body: Json) -> Json:
@@ -311,12 +421,17 @@ def render(data: Json) -> str:
 def cards(args: argparse.Namespace) -> int:
     names = cube_names(CUBE) if args.cube else m1_names()
     log: list[Json] = []
+    pins = printings(PRINTINGS)
     if args.replay:
         post = replaying(Path(args.replay))
     else:
         post = recording(throttled(http_post), log)
+        pinned = pin_first_printings(names, pins, throttled_get(http_get))
+        if pinned != pins:
+            write_printings(PRINTINGS, pinned)
+        pins = pinned
     output = Path(args.output)
-    output.write_text(render(build(names, printings(PRINTINGS), post)))
+    output.write_text(render(build(names, pins, post)))
     if args.record:
         Path(args.record).write_text(
             json.dumps(log, indent=1, ensure_ascii=False) + "\n"

@@ -1,4 +1,5 @@
 import json
+import urllib.parse
 from pathlib import Path
 from typing import cast
 
@@ -122,3 +123,54 @@ def test_a_card_scryfall_cannot_find_fails_the_run() -> None:
 
     with pytest.raises(LookupError, match="Nonexistent Card"):
         cards.build(["Nonexistent Card"], {}, post)
+
+
+def test_a_card_takes_its_first_real_printing() -> None:
+    def printing(set_code: str, **extra: object) -> cards.Json:
+        return {"set": set_code, "collector_number": "1", "lang": "en", **extra}
+
+    found: dict[str, list[cards.Json]] = {
+        "Damn": [
+            printing("pmh2", promo=True, set_type="promo"),
+            printing("ovnt", oversized=True),
+            printing("amh2", set_type="memorabilia"),
+            printing("mh2", set_type="expansion"),
+            printing("2x2", set_type="masters"),
+        ],
+        "Booster Tutor": [
+            printing("pal", promo=True),
+            printing("unh", set_type="funny"),
+        ],
+        "Arena Only": [printing("ymid", digital=True, set_type="alchemy")],
+    }
+    asked: list[str] = []
+
+    def get(url: str) -> cards.Json:
+        asked.append(url)
+        name = next(n for n in found if urllib.parse.quote_plus(f'!"{n}"') in url)
+        return {"data": found[name]}
+
+    first = {n: cards.first_printing(get, n)["set"] for n in found}
+    assert first == {"Damn": "mh2", "Booster Tutor": "unh", "Arena Only": "ymid"}
+    assert all("order=released" in u and "dir=asc" in u for u in asked)
+    # The basics are John Avon's Unstable full arts, with no search.
+    assert cards.first_printing(get, "Island") == {
+        "set": "ust",
+        "collector_number": "213",
+    }
+    assert len(asked) == 3
+
+
+def test_pins_keep_what_is_pinned_and_write_back_sorted(tmp_path: Path) -> None:
+    pins = {"Goben": {"set": "om1", "collector_number": "30"}}
+
+    def get(url: str) -> cards.Json:
+        return {"data": [{"set": "lea", "collector_number": "7", "lang": "en"}]}
+
+    pinned = cards.pin_first_printings(["Goben", "Black Lotus", "Forest"], pins, get)
+    assert pinned["Goben"] == pins["Goben"]
+    assert pinned["Black Lotus"] == {"set": "lea", "collector_number": "7"}
+    path = tmp_path / "printings.csv"
+    cards.write_printings(path, pinned)
+    assert cards.printings(path) == pinned
+    assert path.read_text().splitlines()[1].startswith("Black Lotus,lea,7")

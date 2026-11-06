@@ -52,9 +52,9 @@
     },
     {
       "name": "Adeline, Resplendent Cathar",
-      "scryfall_id": "1de30c12-2011-495a-be25-f7a46b23e142",
-      "set": "tdc",
-      "collector_number": "108",
+      "scryfall_id": "18092f68-b96e-4084-9eba-b240d2195d81",
+      "set": "mid",
+      "collector_number": "1",
       "layout": "normal",
       "artist": "Bryan Sola",
       "faces": [
@@ -69,9 +69,9 @@
             "W"
           ],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/1/d/1de30c12-2011-495a-be25-f7a46b23e142.jpg?1783907131",
-            "normal": "https://cards.scryfall.io/normal/front/1/d/1de30c12-2011-495a-be25-f7a46b23e142.jpg?1783907131",
-            "large": "https://cards.scryfall.io/large/front/1/d/1de30c12-2011-495a-be25-f7a46b23e142.jpg?1783907131"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/1/8/18092f68-b96e-4084-9eba-b240d2195d81.jpg?1783925668",
+            "normal": "https://cards.scryfall.io/normal/front/1/8/18092f68-b96e-4084-9eba-b240d2195d81.jpg?1783925668",
+            "large": "https://cards.scryfall.io/large/front/1/8/18092f68-b96e-4084-9eba-b240d2195d81.jpg?1783925668"
           }
         }
       ]
@@ -104,11 +104,11 @@
     },
     {
       "name": "Counterspell",
-      "scryfall_id": "4f616706-ec97-4923-bb1e-11a69fbaa1f8",
-      "set": "dsc",
-      "collector_number": "114",
+      "scryfall_id": "0df55e3f-14de-46ef-b6b1-616618724d9e",
+      "set": "lea",
+      "collector_number": "54",
       "layout": "normal",
-      "artist": "Zack Stella",
+      "artist": "Mark Poole",
       "faces": [
         {
           "name": "Counterspell",
@@ -119,18 +119,18 @@
             "U"
           ],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/4/f/4f616706-ec97-4923-bb1e-11a69fbaa1f8.jpg?1783909630",
-            "normal": "https://cards.scryfall.io/normal/front/4/f/4f616706-ec97-4923-bb1e-11a69fbaa1f8.jpg?1783909630",
-            "large": "https://cards.scryfall.io/large/front/4/f/4f616706-ec97-4923-bb1e-11a69fbaa1f8.jpg?1783909630"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/0/d/0df55e3f-14de-46ef-b6b1-616618724d9e.jpg?1783948707",
+            "normal": "https://cards.scryfall.io/normal/front/0/d/0df55e3f-14de-46ef-b6b1-616618724d9e.jpg?1783948707",
+            "large": "https://cards.scryfall.io/large/front/0/d/0df55e3f-14de-46ef-b6b1-616618724d9e.jpg?1783948707"
           }
         }
       ]
     },
     {
       "name": "Currency Converter",
-      "scryfall_id": "f91b18ef-ac8a-4d4c-9586-b101681d33e2",
-      "set": "frc",
-      "collector_number": "55",
+      "scryfall_id": "187b6719-e5ed-4615-a00b-3313ceca055b",
+      "set": "ncc",
+      "collector_number": "81",
       "layout": "normal",
       "artist": "Sean Murray",
       "faces": [
@@ -141,18 +141,18 @@
           "oracle_text": "Whenever you discard a card, you may exile that card from your graveyard.\n{2}, {T}: Draw a card, then discard a card.\n{T}: Put a card exiled with this artifact into its owner's graveyard. If it's a land card, create a Treasure token. If it's a nonland card, create a 2/2 black Rogue creature token.",
           "colors": [],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/f/9/f91b18ef-ac8a-4d4c-9586-b101681d33e2.jpg?1789599836",
-            "normal": "https://cards.scryfall.io/normal/front/f/9/f91b18ef-ac8a-4d4c-9586-b101681d33e2.jpg?1789599836",
-            "large": "https://cards.scryfall.io/large/front/f/9/f91b18ef-ac8a-4d4c-9586-b101681d33e2.jpg?1789599836"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/1/8/187b6719-e5ed-4615-a00b-3313ceca055b.jpg?1783923344",
+            "normal": "https://cards.scryfall.io/normal/front/1/8/187b6719-e5ed-4615-a00b-3313ceca055b.jpg?1783923344",
+            "large": "https://cards.scryfall.io/large/front/1/8/187b6719-e5ed-4615-a00b-3313ceca055b.jpg?1783923344"
           }
         }
       ]
     },
     {
       "name": "Damn",
-      "scryfall_id": "84056124-1a6f-4274-bee2-74cf0debddb5",
-      "set": "lcc",
-      "collector_number": "191",
+      "scryfall_id": "efeae088-9ac5-4d2f-a15c-d8675a471ac5",
+      "set": "mh2",
+      "collector_number": "80",
       "layout": "normal",
       "artist": "Lucas Graciano",
       "faces": [
@@ -165,9 +165,9 @@
             "B"
           ],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/8/4/84056124-1a6f-4274-bee2-74cf0debddb5.jpg?1783913875",
-            "normal": "https://cards.scryfall.io/normal/front/8/4/84056124-1a6f-4274-bee2-74cf0debddb5.jpg?1783913875",
-            "large": "https://cards.scryfall.io/large/front/8/4/84056124-1a6f-4274-bee2-74cf0debddb5.jpg?1783913875"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/e/f/efeae088-9ac5-4d2f-a15c-d8675a471ac5.jpg?1783926863",
+            "normal": "https://cards.scryfall.io/normal/front/e/f/efeae088-9ac5-4d2f-a15c-d8675a471ac5.jpg?1783926863",
+            "large": "https://cards.scryfall.io/large/front/e/f/efeae088-9ac5-4d2f-a15c-d8675a471ac5.jpg?1783926863"
           }
         }
       ]
@@ -222,11 +222,11 @@
     },
     {
       "name": "Forest",
-      "scryfall_id": "2e781bfd-f8cb-4d20-b977-4359f3a21311",
-      "set": "mdd",
-      "collector_number": "301",
+      "scryfall_id": "f8772631-d4a1-440d-ac89-ac6659bdc073",
+      "set": "ust",
+      "collector_number": "216",
       "layout": "normal",
-      "artist": "Samuele Bandini",
+      "artist": "John Avon",
       "faces": [
         {
           "name": "Forest",
@@ -235,20 +235,20 @@
           "oracle_text": "({T}: Add {G}.)",
           "colors": [],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/2/e/2e781bfd-f8cb-4d20-b977-4359f3a21311.jpg?1791578317",
-            "normal": "https://cards.scryfall.io/normal/front/2/e/2e781bfd-f8cb-4d20-b977-4359f3a21311.jpg?1791578317",
-            "large": "https://cards.scryfall.io/large/front/2/e/2e781bfd-f8cb-4d20-b977-4359f3a21311.jpg?1791578317"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/f/8/f8772631-d4a1-440d-ac89-ac6659bdc073.jpg?1783935360",
+            "normal": "https://cards.scryfall.io/normal/front/f/8/f8772631-d4a1-440d-ac89-ac6659bdc073.jpg?1783935360",
+            "large": "https://cards.scryfall.io/large/front/f/8/f8772631-d4a1-440d-ac89-ac6659bdc073.jpg?1783935360"
           }
         }
       ]
     },
     {
       "name": "Fractured Identity",
-      "scryfall_id": "70f852d6-3506-4968-9b95-d4cdb02109ca",
-      "set": "trc",
-      "collector_number": "475",
+      "scryfall_id": "b2f73f5d-1aad-48c2-9e74-5f7bdd87900f",
+      "set": "c17",
+      "collector_number": "37",
       "layout": "normal",
-      "artist": "Borja Pindado",
+      "artist": "Yongjae Choi",
       "faces": [
         {
           "name": "Fractured Identity",
@@ -260,9 +260,9 @@
             "W"
           ],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/7/0/70f852d6-3506-4968-9b95-d4cdb02109ca.jpg?1793111920",
-            "normal": "https://cards.scryfall.io/normal/front/7/0/70f852d6-3506-4968-9b95-d4cdb02109ca.jpg?1793111920",
-            "large": "https://cards.scryfall.io/large/front/7/0/70f852d6-3506-4968-9b95-d4cdb02109ca.jpg?1793111920"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/b/2/b2f73f5d-1aad-48c2-9e74-5f7bdd87900f.jpg?1783935938",
+            "normal": "https://cards.scryfall.io/normal/front/b/2/b2f73f5d-1aad-48c2-9e74-5f7bdd87900f.jpg?1783935938",
+            "large": "https://cards.scryfall.io/large/front/b/2/b2f73f5d-1aad-48c2-9e74-5f7bdd87900f.jpg?1783935938"
           }
         }
       ]
@@ -293,11 +293,11 @@
     },
     {
       "name": "Island",
-      "scryfall_id": "1335d293-3dd2-4f13-bd2c-22181f4528ee",
-      "set": "mdd",
-      "collector_number": "294",
+      "scryfall_id": "105b2118-b22c-4ef5-bac7-836db4b8b9ee",
+      "set": "ust",
+      "collector_number": "213",
       "layout": "normal",
-      "artist": "Eren Arik",
+      "artist": "John Avon",
       "faces": [
         {
           "name": "Island",
@@ -306,9 +306,9 @@
           "oracle_text": "({T}: Add {U}.)",
           "colors": [],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/1/3/1335d293-3dd2-4f13-bd2c-22181f4528ee.jpg?1791578424",
-            "normal": "https://cards.scryfall.io/normal/front/1/3/1335d293-3dd2-4f13-bd2c-22181f4528ee.jpg?1791578424",
-            "large": "https://cards.scryfall.io/large/front/1/3/1335d293-3dd2-4f13-bd2c-22181f4528ee.jpg?1791578424"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/1/0/105b2118-b22c-4ef5-bac7-836db4b8b9ee.jpg?1783935361",
+            "normal": "https://cards.scryfall.io/normal/front/1/0/105b2118-b22c-4ef5-bac7-836db4b8b9ee.jpg?1783935361",
+            "large": "https://cards.scryfall.io/large/front/1/0/105b2118-b22c-4ef5-bac7-836db4b8b9ee.jpg?1783935361"
           }
         }
       ]
@@ -381,9 +381,9 @@
     },
     {
       "name": "Jace, the Mind Sculptor",
-      "scryfall_id": "c8817585-0d32-4d56-9142-0d29512e86a9",
-      "set": "2xm",
-      "collector_number": "56",
+      "scryfall_id": "0e606072-a3aa-4300-ba90-ec92a721fa76",
+      "set": "wwk",
+      "collector_number": "31",
       "layout": "normal",
       "artist": "Jason Chan",
       "faces": [
@@ -397,9 +397,9 @@
             "U"
           ],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/c/8/c8817585-0d32-4d56-9142-0d29512e86a9.jpg?1783930196",
-            "normal": "https://cards.scryfall.io/normal/front/c/8/c8817585-0d32-4d56-9142-0d29512e86a9.jpg?1783930196",
-            "large": "https://cards.scryfall.io/large/front/c/8/c8817585-0d32-4d56-9142-0d29512e86a9.jpg?1783930196"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/0/e/0e606072-a3aa-4300-ba90-ec92a721fa76.jpg?1792506267",
+            "normal": "https://cards.scryfall.io/normal/front/0/e/0e606072-a3aa-4300-ba90-ec92a721fa76.jpg?1792506267",
+            "large": "https://cards.scryfall.io/large/front/0/e/0e606072-a3aa-4300-ba90-ec92a721fa76.jpg?1792506267"
           }
         }
       ]
@@ -432,9 +432,9 @@
     },
     {
       "name": "Mana Crypt",
-      "scryfall_id": "4d960186-4559-4af0-bd22-63baa15f8939",
-      "set": "2xm",
-      "collector_number": "270",
+      "scryfall_id": "0cb33b46-4d1b-4f97-bfdc-d815aee111da",
+      "set": "ema",
+      "collector_number": "225",
       "layout": "normal",
       "artist": "Matt Stewart",
       "faces": [
@@ -445,20 +445,20 @@
           "oracle_text": "At the beginning of your upkeep, flip a coin. If you lose the flip, this artifact deals 3 damage to you.\n{T}: Add {C}{C}.",
           "colors": [],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/4/d/4d960186-4559-4af0-bd22-63baa15f8939.jpg?1783930103",
-            "normal": "https://cards.scryfall.io/normal/front/4/d/4d960186-4559-4af0-bd22-63baa15f8939.jpg?1783930103",
-            "large": "https://cards.scryfall.io/large/front/4/d/4d960186-4559-4af0-bd22-63baa15f8939.jpg?1783930103"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/0/c/0cb33b46-4d1b-4f97-bfdc-d815aee111da.jpg?1783937544",
+            "normal": "https://cards.scryfall.io/normal/front/0/c/0cb33b46-4d1b-4f97-bfdc-d815aee111da.jpg?1783937544",
+            "large": "https://cards.scryfall.io/large/front/0/c/0cb33b46-4d1b-4f97-bfdc-d815aee111da.jpg?1783937544"
           }
         }
       ]
     },
     {
       "name": "Mana Drain",
-      "scryfall_id": "3c429c40-2389-41e5-8681-4bb274e25eba",
-      "set": "2x2",
-      "collector_number": "57",
+      "scryfall_id": "e691adef-3027-4e6a-889f-9f4e2df36a7c",
+      "set": "leg",
+      "collector_number": "65",
       "layout": "normal",
-      "artist": "Raymond Swanland",
+      "artist": "Mark Tedin",
       "faces": [
         {
           "name": "Mana Drain",
@@ -469,18 +469,18 @@
             "U"
           ],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/3/c/3c429c40-2389-41e5-8681-4bb274e25eba.jpg?1783921913",
-            "normal": "https://cards.scryfall.io/normal/front/3/c/3c429c40-2389-41e5-8681-4bb274e25eba.jpg?1783921913",
-            "large": "https://cards.scryfall.io/large/front/3/c/3c429c40-2389-41e5-8681-4bb274e25eba.jpg?1783921913"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/e/6/e691adef-3027-4e6a-889f-9f4e2df36a7c.jpg?1783948074",
+            "normal": "https://cards.scryfall.io/normal/front/e/6/e691adef-3027-4e6a-889f-9f4e2df36a7c.jpg?1783948074",
+            "large": "https://cards.scryfall.io/large/front/e/6/e691adef-3027-4e6a-889f-9f4e2df36a7c.jpg?1783948074"
           }
         }
       ]
     },
     {
       "name": "Mana Tithe",
-      "scryfall_id": "9ae707d5-d81d-4320-b947-6016dc188898",
-      "set": "tsr",
-      "collector_number": "26",
+      "scryfall_id": "7d48d622-f397-4f31-b1a5-0c23f60aa71c",
+      "set": "plc",
+      "collector_number": "25",
       "layout": "normal",
       "artist": "Martina Pilcerova",
       "faces": [
@@ -493,20 +493,20 @@
             "W"
           ],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/9/a/9ae707d5-d81d-4320-b947-6016dc188898.jpg?1783927870",
-            "normal": "https://cards.scryfall.io/normal/front/9/a/9ae707d5-d81d-4320-b947-6016dc188898.jpg?1783927870",
-            "large": "https://cards.scryfall.io/large/front/9/a/9ae707d5-d81d-4320-b947-6016dc188898.jpg?1783927870"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/7/d/7d48d622-f397-4f31-b1a5-0c23f60aa71c.jpg?1783943165",
+            "normal": "https://cards.scryfall.io/normal/front/7/d/7d48d622-f397-4f31-b1a5-0c23f60aa71c.jpg?1783943165",
+            "large": "https://cards.scryfall.io/large/front/7/d/7d48d622-f397-4f31-b1a5-0c23f60aa71c.jpg?1783943165"
           }
         }
       ]
     },
     {
       "name": "Mountain",
-      "scryfall_id": "85177bd7-6c50-48da-b692-ae5fe7bd357c",
-      "set": "mdd",
-      "collector_number": "298",
+      "scryfall_id": "44c1a862-00fc-4e79-a83a-289fef81503a",
+      "set": "ust",
+      "collector_number": "215",
       "layout": "normal",
-      "artist": "VEN",
+      "artist": "John Avon",
       "faces": [
         {
           "name": "Mountain",
@@ -515,9 +515,9 @@
           "oracle_text": "({T}: Add {R}.)",
           "colors": [],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/8/5/85177bd7-6c50-48da-b692-ae5fe7bd357c.jpg?1791578439",
-            "normal": "https://cards.scryfall.io/normal/front/8/5/85177bd7-6c50-48da-b692-ae5fe7bd357c.jpg?1791578439",
-            "large": "https://cards.scryfall.io/large/front/8/5/85177bd7-6c50-48da-b692-ae5fe7bd357c.jpg?1791578439"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/4/4/44c1a862-00fc-4e79-a83a-289fef81503a.jpg?1783935360",
+            "normal": "https://cards.scryfall.io/normal/front/4/4/44c1a862-00fc-4e79-a83a-289fef81503a.jpg?1783935360",
+            "large": "https://cards.scryfall.io/large/front/4/4/44c1a862-00fc-4e79-a83a-289fef81503a.jpg?1783935360"
           }
         }
       ]
@@ -549,9 +549,9 @@
     },
     {
       "name": "Oust",
-      "scryfall_id": "2c655916-08fc-4971-be2a-1e33bf8b22f3",
-      "set": "clu",
-      "collector_number": "67",
+      "scryfall_id": "07313dd3-d0dc-40ca-98a3-fa4d39e5bcae",
+      "set": "roe",
+      "collector_number": "40",
       "layout": "normal",
       "artist": "Mike Bierek",
       "faces": [
@@ -564,18 +564,18 @@
             "W"
           ],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/2/c/2c655916-08fc-4971-be2a-1e33bf8b22f3.jpg?1783912565",
-            "normal": "https://cards.scryfall.io/normal/front/2/c/2c655916-08fc-4971-be2a-1e33bf8b22f3.jpg?1783912565",
-            "large": "https://cards.scryfall.io/large/front/2/c/2c655916-08fc-4971-be2a-1e33bf8b22f3.jpg?1783912565"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/0/7/07313dd3-d0dc-40ca-98a3-fa4d39e5bcae.jpg?1783942004",
+            "normal": "https://cards.scryfall.io/normal/front/0/7/07313dd3-d0dc-40ca-98a3-fa4d39e5bcae.jpg?1783942004",
+            "large": "https://cards.scryfall.io/large/front/0/7/07313dd3-d0dc-40ca-98a3-fa4d39e5bcae.jpg?1783942004"
           }
         }
       ]
     },
     {
       "name": "Overlord of the Mistmoors",
-      "scryfall_id": "152d9e61-40f4-489a-b94d-af17a3674441",
-      "set": "frc",
-      "collector_number": "29",
+      "scryfall_id": "6bcafc2e-cef6-412d-8c5d-1658c3337292",
+      "set": "dsk",
+      "collector_number": "23",
       "layout": "normal",
       "artist": "Steven Belledin",
       "faces": [
@@ -590,20 +590,20 @@
             "W"
           ],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/1/5/152d9e61-40f4-489a-b94d-af17a3674441.jpg?1789599797",
-            "normal": "https://cards.scryfall.io/normal/front/1/5/152d9e61-40f4-489a-b94d-af17a3674441.jpg?1789599797",
-            "large": "https://cards.scryfall.io/large/front/1/5/152d9e61-40f4-489a-b94d-af17a3674441.jpg?1789599797"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/6/b/6bcafc2e-cef6-412d-8c5d-1658c3337292.jpg?1783909507",
+            "normal": "https://cards.scryfall.io/normal/front/6/b/6bcafc2e-cef6-412d-8c5d-1658c3337292.jpg?1783909507",
+            "large": "https://cards.scryfall.io/large/front/6/b/6bcafc2e-cef6-412d-8c5d-1658c3337292.jpg?1783909507"
           }
         }
       ]
     },
     {
       "name": "Plains",
-      "scryfall_id": "09ac862f-0a51-44dd-b86f-9412b8218b13",
-      "set": "mdd",
-      "collector_number": "292",
+      "scryfall_id": "7a2c8b8e-2e28-4f10-b04f-9b313c60c0bb",
+      "set": "ust",
+      "collector_number": "212",
       "layout": "normal",
-      "artist": "Shahab Alizadeh",
+      "artist": "John Avon",
       "faces": [
         {
           "name": "Plains",
@@ -612,9 +612,9 @@
           "oracle_text": "({T}: Add {W}.)",
           "colors": [],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/0/9/09ac862f-0a51-44dd-b86f-9412b8218b13.jpg?1791578423",
-            "normal": "https://cards.scryfall.io/normal/front/0/9/09ac862f-0a51-44dd-b86f-9412b8218b13.jpg?1791578423",
-            "large": "https://cards.scryfall.io/large/front/0/9/09ac862f-0a51-44dd-b86f-9412b8218b13.jpg?1791578423"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/7/a/7a2c8b8e-2e28-4f10-b04f-9b313c60c0bb.jpg?1783935361",
+            "normal": "https://cards.scryfall.io/normal/front/7/a/7a2c8b8e-2e28-4f10-b04f-9b313c60c0bb.jpg?1783935361",
+            "large": "https://cards.scryfall.io/large/front/7/a/7a2c8b8e-2e28-4f10-b04f-9b313c60c0bb.jpg?1783935361"
           }
         }
       ]
@@ -669,11 +669,11 @@
     },
     {
       "name": "Seachrome Coast",
-      "scryfall_id": "9ed7441f-f624-49c8-8611-d9bba0e441ac",
-      "set": "one",
-      "collector_number": "258",
+      "scryfall_id": "99939b90-e88c-4c2f-ba78-56d455611703",
+      "set": "som",
+      "collector_number": "229",
       "layout": "normal",
-      "artist": "Mauricio Calle",
+      "artist": "Lars Grant-West",
       "faces": [
         {
           "name": "Seachrome Coast",
@@ -682,9 +682,9 @@
           "oracle_text": "This land enters tapped unless you control two or fewer other lands.\n{T}: Add {W} or {U}.",
           "colors": [],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/9/e/9ed7441f-f624-49c8-8611-d9bba0e441ac.jpg?1783917980",
-            "normal": "https://cards.scryfall.io/normal/front/9/e/9ed7441f-f624-49c8-8611-d9bba0e441ac.jpg?1783917980",
-            "large": "https://cards.scryfall.io/large/front/9/e/9ed7441f-f624-49c8-8611-d9bba0e441ac.jpg?1783917980"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/9/9/99939b90-e88c-4c2f-ba78-56d455611703.jpg?1783941689",
+            "normal": "https://cards.scryfall.io/normal/front/9/9/99939b90-e88c-4c2f-ba78-56d455611703.jpg?1783941689",
+            "large": "https://cards.scryfall.io/large/front/9/9/99939b90-e88c-4c2f-ba78-56d455611703.jpg?1783941689"
           }
         }
       ]
@@ -727,9 +727,9 @@
     },
     {
       "name": "Snapcaster Mage",
-      "scryfall_id": "22b36ad5-bf4d-436a-9c3c-fa4acd0052fe",
-      "set": "inr",
-      "collector_number": "478",
+      "scryfall_id": "9e5b279e-4670-4a1e-87d0-3cab7e4f9e58",
+      "set": "isd",
+      "collector_number": "78",
       "layout": "normal",
       "artist": "Volkan Baǵa",
       "faces": [
@@ -744,9 +744,9 @@
             "U"
           ],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/2/2/22b36ad5-bf4d-436a-9c3c-fa4acd0052fe.jpg?1783907976",
-            "normal": "https://cards.scryfall.io/normal/front/2/2/22b36ad5-bf4d-436a-9c3c-fa4acd0052fe.jpg?1783907976",
-            "large": "https://cards.scryfall.io/large/front/2/2/22b36ad5-bf4d-436a-9c3c-fa4acd0052fe.jpg?1783907976"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/9/e/9e5b279e-4670-4a1e-87d0-3cab7e4f9e58.jpg?1783940966",
+            "normal": "https://cards.scryfall.io/normal/front/9/e/9e5b279e-4670-4a1e-87d0-3cab7e4f9e58.jpg?1783940966",
+            "large": "https://cards.scryfall.io/large/front/9/e/9e5b279e-4670-4a1e-87d0-3cab7e4f9e58.jpg?1783940966"
           }
         }
       ]
@@ -801,9 +801,9 @@
     },
     {
       "name": "Staff of the Storyteller",
-      "scryfall_id": "f9321060-c1bf-4190-aaf6-253d6df64237",
-      "set": "frc",
-      "collector_number": "34",
+      "scryfall_id": "ab1d1461-1625-4163-aacd-a939f4871fad",
+      "set": "onc",
+      "collector_number": "10",
       "layout": "normal",
       "artist": "Dan Murayama Scott",
       "faces": [
@@ -816,9 +816,9 @@
             "W"
           ],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/f/9/f9321060-c1bf-4190-aaf6-253d6df64237.jpg?1789599795",
-            "normal": "https://cards.scryfall.io/normal/front/f/9/f9321060-c1bf-4190-aaf6-253d6df64237.jpg?1789599795",
-            "large": "https://cards.scryfall.io/large/front/f/9/f9321060-c1bf-4190-aaf6-253d6df64237.jpg?1789599795"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/a/b/ab1d1461-1625-4163-aacd-a939f4871fad.jpg?1783918162",
+            "normal": "https://cards.scryfall.io/normal/front/a/b/ab1d1461-1625-4163-aacd-a939f4871fad.jpg?1783918162",
+            "large": "https://cards.scryfall.io/large/front/a/b/ab1d1461-1625-4163-aacd-a939f4871fad.jpg?1783918162"
           }
         }
       ]
@@ -849,11 +849,11 @@
     },
     {
       "name": "Strip Mine",
-      "scryfall_id": "f57fd4c9-0004-4f71-a30f-2720943f57ca",
-      "set": "vma",
-      "collector_number": "316",
+      "scryfall_id": "e7880157-7f27-4f1b-9cdc-ab36a6252376",
+      "set": "atq",
+      "collector_number": "82a",
       "layout": "normal",
-      "artist": "John Avon",
+      "artist": "Daniel Gelon",
       "faces": [
         {
           "name": "Strip Mine",
@@ -862,9 +862,9 @@
           "oracle_text": "{T}: Add {C}.\n{T}, Sacrifice this land: Destroy target land.",
           "colors": [],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/f/5/f57fd4c9-0004-4f71-a30f-2720943f57ca.jpg?1783939218",
-            "normal": "https://cards.scryfall.io/normal/front/f/5/f57fd4c9-0004-4f71-a30f-2720943f57ca.jpg?1783939218",
-            "large": "https://cards.scryfall.io/large/front/f/5/f57fd4c9-0004-4f71-a30f-2720943f57ca.jpg?1783939218"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/e/7/e7880157-7f27-4f1b-9cdc-ab36a6252376.jpg?1783948354",
+            "normal": "https://cards.scryfall.io/normal/front/e/7/e7880157-7f27-4f1b-9cdc-ab36a6252376.jpg?1783948354",
+            "large": "https://cards.scryfall.io/large/front/e/7/e7880157-7f27-4f1b-9cdc-ab36a6252376.jpg?1783948354"
           }
         }
       ]
@@ -897,11 +897,11 @@
     },
     {
       "name": "Swamp",
-      "scryfall_id": "b233b117-9369-45c1-80c5-cc857386b6be",
-      "set": "mdd",
-      "collector_number": "296",
+      "scryfall_id": "f108b0fb-420a-422d-ae85-9a99c0f73169",
+      "set": "ust",
+      "collector_number": "214",
       "layout": "normal",
-      "artist": "Maojin Lee",
+      "artist": "John Avon",
       "faces": [
         {
           "name": "Swamp",
@@ -910,9 +910,9 @@
           "oracle_text": "({T}: Add {B}.)",
           "colors": [],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/b/2/b233b117-9369-45c1-80c5-cc857386b6be.jpg?1791578437",
-            "normal": "https://cards.scryfall.io/normal/front/b/2/b233b117-9369-45c1-80c5-cc857386b6be.jpg?1791578437",
-            "large": "https://cards.scryfall.io/large/front/b/2/b233b117-9369-45c1-80c5-cc857386b6be.jpg?1791578437"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/f/1/f108b0fb-420a-422d-ae85-9a99c0f73169.jpg?1783935360",
+            "normal": "https://cards.scryfall.io/normal/front/f/1/f108b0fb-420a-422d-ae85-9a99c0f73169.jpg?1783935360",
+            "large": "https://cards.scryfall.io/large/front/f/1/f108b0fb-420a-422d-ae85-9a99c0f73169.jpg?1783935360"
           }
         }
       ]
@@ -969,9 +969,9 @@
     },
     {
       "name": "Teferi, Time Raveler",
-      "scryfall_id": "662fe50f-d75c-422c-8c6c-1f9b5c4ba21f",
-      "set": "rvr",
-      "collector_number": "232",
+      "scryfall_id": "5cb76266-ae50-4bbc-8f96-d98f309b02d3",
+      "set": "war",
+      "collector_number": "221",
       "layout": "normal",
       "artist": "Chris Rallis",
       "faces": [
@@ -986,9 +986,9 @@
             "W"
           ],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/6/6/662fe50f-d75c-422c-8c6c-1f9b5c4ba21f.jpg?1783913271",
-            "normal": "https://cards.scryfall.io/normal/front/6/6/662fe50f-d75c-422c-8c6c-1f9b5c4ba21f.jpg?1783913271",
-            "large": "https://cards.scryfall.io/large/front/6/6/662fe50f-d75c-422c-8c6c-1f9b5c4ba21f.jpg?1783913271"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/5/c/5cb76266-ae50-4bbc-8f96-d98f309b02d3.jpg?1783933384",
+            "normal": "https://cards.scryfall.io/normal/front/5/c/5cb76266-ae50-4bbc-8f96-d98f309b02d3.jpg?1783933384",
+            "large": "https://cards.scryfall.io/large/front/5/c/5cb76266-ae50-4bbc-8f96-d98f309b02d3.jpg?1783933384"
           }
         }
       ]
@@ -1020,9 +1020,9 @@
     },
     {
       "name": "Thieving Skydiver",
-      "scryfall_id": "06996ff1-7f57-4e73-940a-a58c4482cadd",
-      "set": "otc",
-      "collector_number": "118",
+      "scryfall_id": "ff84ea71-e477-44f7-a3f8-77fef708efeb",
+      "set": "znr",
+      "collector_number": "85",
       "layout": "normal",
       "artist": "Kieran Yanner",
       "faces": [
@@ -1037,9 +1037,9 @@
             "U"
           ],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/0/6/06996ff1-7f57-4e73-940a-a58c4482cadd.jpg?1783911936",
-            "normal": "https://cards.scryfall.io/normal/front/0/6/06996ff1-7f57-4e73-940a-a58c4482cadd.jpg?1783911936",
-            "large": "https://cards.scryfall.io/large/front/0/6/06996ff1-7f57-4e73-940a-a58c4482cadd.jpg?1783911936"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/f/f/ff84ea71-e477-44f7-a3f8-77fef708efeb.jpg?1783929385",
+            "normal": "https://cards.scryfall.io/normal/front/f/f/ff84ea71-e477-44f7-a3f8-77fef708efeb.jpg?1783929385",
+            "large": "https://cards.scryfall.io/large/front/f/f/ff84ea71-e477-44f7-a3f8-77fef708efeb.jpg?1783929385"
           }
         }
       ]
@@ -1120,11 +1120,11 @@
     },
     {
       "name": "Timetwister",
-      "scryfall_id": "fbee1e10-0b8c-44ea-b0e5-44cdd0bfcd76",
-      "set": "vma",
-      "collector_number": "3",
+      "scryfall_id": "9a49dc44-616e-4bdd-8220-0bb71eccc512",
+      "set": "lea",
+      "collector_number": "84",
       "layout": "normal",
-      "artist": "Matt Stewart",
+      "artist": "Mark Tedin",
       "faces": [
         {
           "name": "Timetwister",
@@ -1135,20 +1135,20 @@
             "U"
           ],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/f/b/fbee1e10-0b8c-44ea-b0e5-44cdd0bfcd76.jpg?1783939333",
-            "normal": "https://cards.scryfall.io/normal/front/f/b/fbee1e10-0b8c-44ea-b0e5-44cdd0bfcd76.jpg?1783939333",
-            "large": "https://cards.scryfall.io/large/front/f/b/fbee1e10-0b8c-44ea-b0e5-44cdd0bfcd76.jpg?1783939333"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/9/a/9a49dc44-616e-4bdd-8220-0bb71eccc512.jpg?1783948700",
+            "normal": "https://cards.scryfall.io/normal/front/9/a/9a49dc44-616e-4bdd-8220-0bb71eccc512.jpg?1783948700",
+            "large": "https://cards.scryfall.io/large/front/9/a/9a49dc44-616e-4bdd-8220-0bb71eccc512.jpg?1783948700"
           }
         }
       ]
     },
     {
       "name": "Trinket Mage",
-      "scryfall_id": "9a7800f7-95cd-4f5c-b054-4afad8924367",
-      "set": "ddu",
-      "collector_number": "41",
+      "scryfall_id": "4c5a41ab-1840-4abb-a8bb-f0b1e7d1b450",
+      "set": "5dn",
+      "collector_number": "39",
       "layout": "normal",
-      "artist": "Scott Chou",
+      "artist": "Mark A. Nelson",
       "faces": [
         {
           "name": "Trinket Mage",
@@ -1161,20 +1161,20 @@
             "U"
           ],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/9/a/9a7800f7-95cd-4f5c-b054-4afad8924367.jpg?1783935075",
-            "normal": "https://cards.scryfall.io/normal/front/9/a/9a7800f7-95cd-4f5c-b054-4afad8924367.jpg?1783935075",
-            "large": "https://cards.scryfall.io/large/front/9/a/9a7800f7-95cd-4f5c-b054-4afad8924367.jpg?1783935075"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/4/c/4c5a41ab-1840-4abb-a8bb-f0b1e7d1b450.jpg?1783944402",
+            "normal": "https://cards.scryfall.io/normal/front/4/c/4c5a41ab-1840-4abb-a8bb-f0b1e7d1b450.jpg?1783944402",
+            "large": "https://cards.scryfall.io/large/front/4/c/4c5a41ab-1840-4abb-a8bb-f0b1e7d1b450.jpg?1783944402"
           }
         }
       ]
     },
     {
       "name": "Tundra",
-      "scryfall_id": "efd35cb4-862d-4699-a197-b744989b3ceb",
-      "set": "vma",
-      "collector_number": "322",
+      "scryfall_id": "a03e8c5b-f4ed-4fd7-ba05-db813ccc05eb",
+      "set": "lea",
+      "collector_number": "284",
       "layout": "normal",
-      "artist": "Lars Grant-West",
+      "artist": "Jesper Myrfors",
       "faces": [
         {
           "name": "Tundra",
@@ -1183,9 +1183,9 @@
           "oracle_text": "({T}: Add {W} or {U}.)",
           "colors": [],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/e/f/efd35cb4-862d-4699-a197-b744989b3ceb.jpg?1783939215",
-            "normal": "https://cards.scryfall.io/normal/front/e/f/efd35cb4-862d-4699-a197-b744989b3ceb.jpg?1783939215",
-            "large": "https://cards.scryfall.io/large/front/e/f/efd35cb4-862d-4699-a197-b744989b3ceb.jpg?1783939215"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/a/0/a03e8c5b-f4ed-4fd7-ba05-db813ccc05eb.jpg?1783948659",
+            "normal": "https://cards.scryfall.io/normal/front/a/0/a03e8c5b-f4ed-4fd7-ba05-db813ccc05eb.jpg?1783948659",
+            "large": "https://cards.scryfall.io/large/front/a/0/a03e8c5b-f4ed-4fd7-ba05-db813ccc05eb.jpg?1783948659"
           }
         }
       ]
@@ -1273,11 +1273,11 @@
     },
     {
       "name": "Human Token",
-      "scryfall_id": "5054bb15-ddd5-4e5e-a9fd-6bdf255f7fd3",
-      "set": "ttdc",
-      "collector_number": "5",
+      "scryfall_id": "7d13a93a-a43d-4cf5-8300-8341f3b7f1b1",
+      "set": "tvow",
+      "collector_number": "1",
       "layout": "token",
-      "artist": "Ben Maier",
+      "artist": "Miguel Mercado",
       "made_by": [
         "Adeline, Resplendent Cathar"
       ],
@@ -1293,18 +1293,18 @@
             "W"
           ],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/5/0/5054bb15-ddd5-4e5e-a9fd-6bdf255f7fd3.jpg?1783906807",
-            "normal": "https://cards.scryfall.io/normal/front/5/0/5054bb15-ddd5-4e5e-a9fd-6bdf255f7fd3.jpg?1783906807",
-            "large": "https://cards.scryfall.io/large/front/5/0/5054bb15-ddd5-4e5e-a9fd-6bdf255f7fd3.jpg?1783906807"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/7/d/7d13a93a-a43d-4cf5-8300-8341f3b7f1b1.jpg?1783924701",
+            "normal": "https://cards.scryfall.io/normal/front/7/d/7d13a93a-a43d-4cf5-8300-8341f3b7f1b1.jpg?1783924701",
+            "large": "https://cards.scryfall.io/large/front/7/d/7d13a93a-a43d-4cf5-8300-8341f3b7f1b1.jpg?1783924701"
           }
         }
       ]
     },
     {
       "name": "Insect Token",
-      "scryfall_id": "f5d782a4-6726-4d64-9977-82ea2ab77e0f",
-      "set": "tfrc",
-      "collector_number": "2",
+      "scryfall_id": "b802aea8-0ca3-4d2c-a8ef-a80e16729c9b",
+      "set": "tdsk",
+      "collector_number": "5",
       "layout": "token",
       "artist": "Michele Giorgi",
       "made_by": [
@@ -1322,9 +1322,9 @@
             "W"
           ],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/f/5/f5d782a4-6726-4d64-9977-82ea2ab77e0f.jpg?1789737199",
-            "normal": "https://cards.scryfall.io/normal/front/f/5/f5d782a4-6726-4d64-9977-82ea2ab77e0f.jpg?1789737199",
-            "large": "https://cards.scryfall.io/large/front/f/5/f5d782a4-6726-4d64-9977-82ea2ab77e0f.jpg?1789737199"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/b/8/b802aea8-0ca3-4d2c-a8ef-a80e16729c9b.jpg?1783909266",
+            "normal": "https://cards.scryfall.io/normal/front/b/8/b802aea8-0ca3-4d2c-a8ef-a80e16729c9b.jpg?1783909266",
+            "large": "https://cards.scryfall.io/large/front/b/8/b802aea8-0ca3-4d2c-a8ef-a80e16729c9b.jpg?1783909266"
           }
         }
       ]
@@ -1381,8 +1381,8 @@
     },
     {
       "name": "Rogue Token",
-      "scryfall_id": "0526330e-40eb-4c5f-b0f5-5489839e5f44",
-      "set": "tfrc",
+      "scryfall_id": "06e503b9-a822-4c42-b478-1f598bc5941d",
+      "set": "tsnc",
       "collector_number": "7",
       "layout": "token",
       "artist": "Maria Poliakova",
@@ -1401,9 +1401,9 @@
             "B"
           ],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/0/5/0526330e-40eb-4c5f-b0f5-5489839e5f44.jpg?1789737431",
-            "normal": "https://cards.scryfall.io/normal/front/0/5/0526330e-40eb-4c5f-b0f5-5489839e5f44.jpg?1789737431",
-            "large": "https://cards.scryfall.io/large/front/0/5/0526330e-40eb-4c5f-b0f5-5489839e5f44.jpg?1789737431"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/0/6/06e503b9-a822-4c42-b478-1f598bc5941d.jpg?1783922961",
+            "normal": "https://cards.scryfall.io/normal/front/0/6/06e503b9-a822-4c42-b478-1f598bc5941d.jpg?1783922961",
+            "large": "https://cards.scryfall.io/large/front/0/6/06e503b9-a822-4c42-b478-1f598bc5941d.jpg?1783922961"
           }
         }
       ]
@@ -1439,11 +1439,11 @@
     },
     {
       "name": "Spirit Token",
-      "scryfall_id": "06a96ac2-94a4-4b1c-a3c5-add1a3112cb2",
-      "set": "tfrc",
-      "collector_number": "4",
+      "scryfall_id": "a171254d-7616-42c4-bd78-b2787fb973aa",
+      "set": "tonc",
+      "collector_number": "9",
       "layout": "token",
-      "artist": "Kim Sokol",
+      "artist": "Jason A. Engle",
       "made_by": [
         "Staff of the Storyteller"
       ],
@@ -1459,9 +1459,9 @@
             "W"
           ],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/0/6/06a96ac2-94a4-4b1c-a3c5-add1a3112cb2.jpg?1789737345",
-            "normal": "https://cards.scryfall.io/normal/front/0/6/06a96ac2-94a4-4b1c-a3c5-add1a3112cb2.jpg?1789737345",
-            "large": "https://cards.scryfall.io/large/front/0/6/06a96ac2-94a4-4b1c-a3c5-add1a3112cb2.jpg?1789737345"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/a/1/a171254d-7616-42c4-bd78-b2787fb973aa.jpg?1783918176",
+            "normal": "https://cards.scryfall.io/normal/front/a/1/a171254d-7616-42c4-bd78-b2787fb973aa.jpg?1783918176",
+            "large": "https://cards.scryfall.io/large/front/a/1/a171254d-7616-42c4-bd78-b2787fb973aa.jpg?1783918176"
           }
         }
       ]
@@ -1522,11 +1522,11 @@
     },
     {
       "name": "Treasure Token",
-      "scryfall_id": "03992f88-7a15-4234-9bed-b7617d7ff09c",
-      "set": "tfra",
-      "collector_number": "15",
+      "scryfall_id": "93116d98-2dad-4b80-a3af-9e36e34da6d4",
+      "set": "tsnc",
+      "collector_number": "17",
       "layout": "token",
-      "artist": "Alayna Danner",
+      "artist": "Forrest Imel",
       "made_by": [
         "Currency Converter"
       ],
@@ -1538,9 +1538,9 @@
           "oracle_text": "{T}, Sacrifice this token: Add one mana of any color.",
           "colors": [],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/0/3/03992f88-7a15-4234-9bed-b7617d7ff09c.jpg?1789735245",
-            "normal": "https://cards.scryfall.io/normal/front/0/3/03992f88-7a15-4234-9bed-b7617d7ff09c.jpg?1789735245",
-            "large": "https://cards.scryfall.io/large/front/0/3/03992f88-7a15-4234-9bed-b7617d7ff09c.jpg?1789735245"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/9/3/93116d98-2dad-4b80-a3af-9e36e34da6d4.jpg?1783922957",
+            "normal": "https://cards.scryfall.io/normal/front/9/3/93116d98-2dad-4b80-a3af-9e36e34da6d4.jpg?1783922957",
+            "large": "https://cards.scryfall.io/large/front/9/3/93116d98-2dad-4b80-a3af-9e36e34da6d4.jpg?1783922957"
           }
         }
       ]
