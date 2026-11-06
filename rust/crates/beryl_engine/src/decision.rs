@@ -153,6 +153,14 @@ pub enum Ask {
     Explore,
     /// Permanents to untap, up to `max`.
     Untap { max: u8 },
+    /// A creature to tap for a crew cost of `crew` power, `left` of it still to tap
+    /// ([CR 702.122a](https://yawgatog.com/resources/magic-rules/#R702122a)): "Tap any number
+    /// of untapped creatures you control with total power N or greater".
+    Crew { crew: u8, left: u8 },
+    /// An artifact or creature to tap for one generic mana of a waterbend cost, `cost` still
+    /// to pay ([CR 701.67a](https://yawgatog.com/resources/magic-rules/#R70167a)): "you may tap
+    /// an untapped artifact or creature you control rather than pay that mana."
+    Waterbend { cost: ManaCost },
     /// Whether to pay `cost` so that the effect does not happen
     /// ([CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a)): "[Effect] unless
     /// [player] pays [cost]".

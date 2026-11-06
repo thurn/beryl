@@ -47,11 +47,20 @@ fn asks(card: &str) -> Vec<(Kind, AskView)> {
 }
 
 #[test]
-fn a_scry_asks_for_the_bottom_then_the_order_of_the_top() {
+fn aangs_iceberg_waterbends_its_cost_then_scries_two() {
     let scry = AskView::Scry { count: 2 };
     assert_eq!(
         asks(names::AANGS_ICEBERG),
-        [(Kind::ChooseUpTo, scry.clone()), (Kind::ChooseObject, scry)]
+        [
+            (
+                Kind::Waterbend,
+                AskView::Waterbend {
+                    cost: "{3}".to_owned()
+                }
+            ),
+            (Kind::ChooseUpTo, scry.clone()),
+            (Kind::ChooseObject, scry)
+        ]
     );
 }
 

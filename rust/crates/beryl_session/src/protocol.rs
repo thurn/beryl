@@ -325,6 +325,12 @@ pub enum AskView {
     ExileCards { zone: ZoneName, count: u8 },
     /// Permanents to untap, up to `max`.
     Untap { max: u8 },
+    /// A `crew` decision's creature to tap for a crew cost of `crew` power, `left` of it
+    /// still to tap.
+    Crew { crew: u8, left: u8 },
+    /// A `waterbend` decision's artifact or creature to tap for one generic mana of the cost,
+    /// `cost` still to pay, as Oracle text writes it.
+    Waterbend { cost: String },
     /// Whether to pay `cost`, as Oracle text writes it, so that the effect does not happen.
     UnlessPays { cost: String },
     /// Whether to pay `life` so that a land doesn't enter tapped.
@@ -1039,6 +1045,10 @@ fn ask_view(obs: Observation<'_>, ask: Ask) -> AskView {
         },
         Ask::TopOrBottom { card } => AskView::TopOrBottom { card: card.get() },
         Ask::Untap { max } => AskView::Untap { max },
+        Ask::Crew { crew, left } => AskView::Crew { crew, left },
+        Ask::Waterbend { cost } => AskView::Waterbend {
+            cost: mana_text(cost),
+        },
         Ask::UnlessPays { cost } => AskView::UnlessPays {
             cost: mana_text(cost),
         },

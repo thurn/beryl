@@ -11,7 +11,7 @@ use crate::ids::{Seat, Slot};
 use crate::profile::Breakpoint;
 use crate::state::{ObjectFlags, Zone};
 use crate::{
-    Candidates, CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile,
+    Ask, Candidates, CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile,
     Replay, Scratch, State, Step, TurnStep, apply, next, zone,
 };
 
@@ -746,6 +746,7 @@ fn crew_taps_creatures_one_at_a_time_and_makes_an_artifact_creature_until_end_of
         first.candidates,
         Candidates::Objects([bear, sentry].into_iter().collect())
     );
+    assert_eq!(first.ask, Ask::Crew { crew: 3, left: 3 });
     g.pick_object(DecisionKind::Crew, bear);
     // One creature is left, so the second pick is applied silently. Crew uses the stack.
     g.expect(DecisionKind::Priority);

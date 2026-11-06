@@ -1224,20 +1224,31 @@ pub(crate) fn decision(
             }
             options(DecisionKind::PaymentPlan, list)
         }
-        CastStep::Crew => Decision {
-            player: c.player,
-            kind: DecisionKind::Crew,
-            candidates: Candidates::Objects(collapse(
-                s,
-                crew_candidates(s, c.player, source_of(&top(s)).expect("a Vehicle to crew")),
-            )),
-            ask: Ask::Plain,
-        },
+        CastStep::Crew => {
+            let entry = top(s);
+            Decision {
+                player: c.player,
+                kind: DecisionKind::Crew,
+                candidates: Candidates::Objects(collapse(
+                    s,
+                    crew_candidates(s, c.player, source_of(&entry).expect("a Vehicle to crew")),
+                )),
+                ask: Ask::Crew {
+                    crew: entry_ability(t, &entry).map_or(0, |a| a.cost.crew),
+                    left: c.left,
+                },
+            }
+        }
         CastStep::Manual => options(
             DecisionKind::ManaPayment,
             mana::manual_options(s, t, c.player, c.remaining, Bitboard::EMPTY)?,
         ),
-        CastStep::Waterbend => options(DecisionKind::Waterbend, waterbend_options(s, t, c)?),
+        CastStep::Waterbend => Decision {
+            ask: Ask::Waterbend {
+                cost: total_cost(t, &top(s), c),
+            },
+            ..options(DecisionKind::Waterbend, waterbend_options(s, t, c)?)
+        },
         CastStep::Exile => {
             let entry = top(s);
             let face = t.def(entry.card).face(entry.face);
