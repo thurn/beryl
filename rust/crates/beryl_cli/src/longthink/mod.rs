@@ -296,8 +296,9 @@ fn repo() -> PathBuf {
         .to_path_buf()
 }
 
-/// The run directories under `root`, oldest first: `run-001`, `run-002`, ...
-fn runs(root: &Path) -> Result<Vec<PathBuf>, String> {
+/// The run directories under `root` and their numbers, oldest first: `run-001`, `run-002`,
+/// ...
+fn runs(root: &Path) -> Result<Vec<(u32, PathBuf)>, String> {
     let mut runs: Vec<(u32, PathBuf)> = match fs::read_dir(root) {
         Ok(entries) => entries
             .filter_map(Result::ok)
@@ -310,23 +311,17 @@ fn runs(root: &Path) -> Result<Vec<PathBuf>, String> {
         Err(e) => return Err(format!("{}: {e}", root.display())),
     };
     runs.sort();
-    Ok(runs.into_iter().map(|(_, p)| p).collect())
+    Ok(runs)
 }
 
 fn latest(root: &Path) -> Result<Option<PathBuf>, String> {
-    Ok(runs(root)?.pop())
+    Ok(runs(root)?.pop().map(|(_, p)| p))
 }
 
-/// The directory a new run gets: the one after the latest.
+/// The directory a new run gets: numbered after the latest, so it becomes the latest.
 fn fresh_dir(root: &Path) -> Result<PathBuf, String> {
-    let n = runs(root)?.len() + 1;
-    let mut dir = root.join(format!("run-{n:03}"));
-    let mut n = n;
-    while dir.exists() {
-        n += 1;
-        dir = root.join(format!("run-{n:03}"));
-    }
-    Ok(dir)
+    let n = runs(root)?.last().map_or(0, |&(n, _)| n) + 1;
+    Ok(root.join(format!("run-{n:03}")))
 }
 
 /// Starts a run in `dir`: its settings, the code it plays, and its own copy of this binary.
@@ -482,6 +477,21 @@ mod tests {
         let up = Spec::new(&c, 2, Against::Below, 1);
         assert_eq!((up.seed, up.key.as_str()), (a.seed, "30k-v-10k-p000-s1"));
         assert_ne!(Spec::new(&c, 0, Against::Opponent, 2).seed, a.seed);
+    }
+
+    /// A new run is numbered after the latest, gaps or not, so plain `longthink` resumes it.
+    #[test]
+    fn a_new_run_becomes_the_latest() {
+        let root = std::env::temp_dir().join(format!("beryl-runs-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        assert_eq!(fresh_dir(&root).unwrap(), root.join("run-001"));
+        for run in ["run-001", "run-005", "other"] {
+            fs::create_dir_all(root.join(run)).unwrap();
+        }
+        let new = fresh_dir(&root).unwrap();
+        assert_eq!(new, root.join("run-006"));
+        fs::create_dir_all(&new).unwrap();
+        assert_eq!(latest(&root).unwrap(), Some(new));
     }
 
     fn git(repo: &Path, args: &[&str]) {

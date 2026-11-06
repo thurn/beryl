@@ -221,26 +221,32 @@ fn commit(dir: &Path, spec: &Spec, played: &Played) -> Result<GameRecord, String
         let e = &spec.entrants[usize::from(line.seat)];
         searched += 1;
         rollouts += u64::from(s.rollouts);
-        decisions.append(&DecisionRecord {
-            game: spec.key.clone(),
-            decision: i,
-            seat: line.seat,
-            agent: e.name.clone(),
-            iterations: e.budget.map_or(0, |b| b.iterations),
-            choice: line.choice,
-            agent_decision: s.decision,
-            chain: s.chain,
-            rollouts: s.rollouts,
-            inherited: s.inherited,
-            visits: s.visits.clone(),
-            mean: s
-                .visits
-                .iter()
-                .zip(&s.rewards)
-                .map(|(&v, &r)| (v > 0).then(|| r / f64::from(v)))
-                .collect(),
-        })?;
+        // One sync for the game's lines, before the line that commits it: each costs
+        // milliseconds, as much as a cheap rung's search.
+        decisions.write(
+            &DecisionRecord {
+                game: spec.key.clone(),
+                decision: i,
+                seat: line.seat,
+                agent: e.name.clone(),
+                iterations: e.budget.map_or(0, |b| b.iterations),
+                choice: line.choice,
+                agent_decision: s.decision,
+                chain: s.chain,
+                rollouts: s.rollouts,
+                inherited: s.inherited,
+                visits: s.visits.clone(),
+                mean: s
+                    .visits
+                    .iter()
+                    .zip(&s.rewards)
+                    .map(|(&v, &r)| (v > 0).then(|| r / f64::from(v)))
+                    .collect(),
+            },
+            false,
+        )?;
     }
+    decisions.sync()?;
     Log::open(&dir.join("clock.jsonl"))?.append(&ClockRecord {
         game: spec.key.clone(),
         seconds: played.lines.iter().map(|l| l.ms).sum::<u64>() as f64 / 1000.0,

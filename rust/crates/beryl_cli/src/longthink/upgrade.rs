@@ -61,21 +61,23 @@ pub fn verify(t: &GameTable, dir: &Path, c: &Config, build: &Build<'_>) -> Resul
     if !lines.is_empty() {
         check.replay(&next, &lines, [u32::MAX; 2], Some(lines.len()))?;
     }
-    // Fresh searches of the cheapest rung, evenly spaced, each searched again.
+    // Searches of the cheapest rung, evenly spaced, each searched again: one that reused
+    // the trees of the decisions before it from the fresh search that planted them, so a
+    // change to how trees are kept is caught too.
     let cheapest = scored().map(|g| g.rung).min();
     let mut searches = Vec::new();
     for g in scored().filter(|g| Some(g.rung) == cheapest) {
         for (i, line) in check.log(&g.game)?.iter().enumerate() {
-            if let Some(s) = line.search.as_ref().filter(|s| s.chain == s.decision) {
-                searches.push((g, i, usize::from(line.seat), s.decision));
+            if let Some(s) = &line.search {
+                searches.push((g, i, usize::from(line.seat), s.chain));
             }
         }
     }
     let step = searches.len().div_ceil(SAMPLE).max(1);
     let mut repeated = 0;
-    for &(g, i, seat, decision) in searches.iter().step_by(step) {
+    for &(g, i, seat, chain) in searches.iter().step_by(step) {
         let mut from = [u32::MAX; 2];
-        from[seat] = decision;
+        from[seat] = chain;
         check.replay(&check.spec(g)?, &check.log(&g.game)?, from, Some(i + 1))?;
         repeated += 1;
     }
@@ -149,6 +151,7 @@ impl Check<'_> {
 #[cfg(test)]
 mod tests {
     use beryl_engine::{Choice, Decision, Observation};
+    use beryl_search::Search;
 
     use super::super::game::{Choose, Entrant};
     use super::*;
@@ -171,6 +174,26 @@ mod tests {
             } else {
                 c
             }
+        }
+    }
+
+    /// A search that answers otherwise only where it reused the trees of the decision
+    /// before: what a change to how trees are kept could do.
+    struct Reuses {
+        inner: Box<dyn Choose>,
+    }
+
+    impl Choose for Reuses {
+        fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice {
+            let c = self.inner.choose(obs, d);
+            match self.inner.searched() {
+                Some((Some(s), _)) if s.chain != s.decision => Choice((c.0 + 1) % d.len() as u8),
+                _ => c,
+            }
+        }
+
+        fn searched(&self) -> Option<(Option<&Search>, u32)> {
+            self.inner.searched()
         }
     }
 
@@ -218,5 +241,25 @@ mod tests {
             e.contains("decision") && e.contains("logged candidate"),
             "{e}"
         );
+        let logs: Vec<Line> = fs::read_dir(dir.join("logs"))
+            .unwrap()
+            .flat_map(|f| files::read::<Line>(&f.unwrap().path()).unwrap())
+            .collect();
+        assert!(
+            logs.iter()
+                .filter_map(|l| l.search.as_ref())
+                .any(|s| s.chain != s.decision),
+            "the run reuses trees somewhere"
+        );
+        let reuse = |t: &GameTable, e: &Entrant, seed, from| {
+            let inner = game::build(t, e, seed, from)?;
+            Ok(if e.budget.is_some() {
+                Box::new(Reuses { inner }) as Box<dyn Choose>
+            } else {
+                inner
+            })
+        };
+        let e = verify(&t, &dir, &c, &reuse).unwrap_err();
+        assert!(e.contains("logged candidate"), "{e}");
     }
 }

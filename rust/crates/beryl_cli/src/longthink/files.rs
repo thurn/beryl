@@ -42,6 +42,13 @@ impl Log {
             .and_then(|()| if sync { self.file.sync_data() } else { Ok(()) })
             .map_err(|e| format!("appending a line: {e}"))
     }
+
+    /// Puts every line written so far on disk.
+    pub fn sync(&mut self) -> Result<(), String> {
+        self.file
+            .sync_data()
+            .map_err(|e| format!("syncing a log: {e}"))
+    }
 }
 
 /// The whole lines of JSONL file `path`, none if it is missing. A last line without its
