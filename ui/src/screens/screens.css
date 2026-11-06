@@ -1356,6 +1356,14 @@
   background: rgb(233 173 74 / 18%);
   outline: none;
 }
+/* A permanent attached to the one the pointer is over, or that it is attached to: a pale ring,
+   apart from the gold, cyan and ember ones. */
+.card-linked {
+  box-shadow:
+    0 0 0 2px rgb(236 240 255 / 95%),
+    0 0 12px 3px rgb(200 214 255 / 55%),
+    var(--card-shadow, var(--shadow-card));
+}
 /* A permanent the payment being set up taps: an ember ring, apart from a source's gold and a
    target's cyan. */
 .card-paying {
@@ -1596,6 +1604,25 @@
   font: italic 16px var(--font-serif);
   color: var(--type);
   text-shadow: 0 1px 2px rgb(0 0 0 / 80%);
+}
+/* Its card types now, the printed ones struck out. */
+.inspect-types {
+  margin: 6px 0 0;
+  text-align: center;
+  font: 600 18px var(--font-serif);
+  color: var(--type);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 80%);
+}
+.inspect-types s {
+  opacity: 0.6;
+}
+/* What is attached to it. */
+.inspect-attached {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
 }
 /* The opening decisions, over the dimmed table. */
 .opening,

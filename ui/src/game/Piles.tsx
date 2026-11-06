@@ -5,7 +5,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ASPECT, Card } from "../components/Card";
 import { cardEntry, useCardArt } from "../cards";
-import type { ObjectView } from "../generated/protocol";
+import type { CardType, ObjectView } from "../generated/protocol";
 import type { CardState } from "./CardLayer";
 import { BLANK, useFace } from "./faces";
 import type { PileLook, ZonePile } from "./layout";
@@ -226,19 +226,28 @@ function ViewerCard({
 }
 
 /** A card's full Scryfall scan, which carries the artist credit, large beside the table, its
- * left edge at `left`; outside the app, its frame stands in for the scan. */
+ * left edge at `left`; outside the app, its frame stands in for the scan. On the battlefield,
+ * what the scan cannot say follows it: its card types when effects have changed them, the
+ * printed ones struck out, and what is `attached` to it. */
 export function Inspect({
   object,
   left,
+  attached = [],
 }: {
   object?: ObjectView;
   left: number;
+  attached?: ObjectView[];
 }) {
   const name = object?.name;
   const scan = useCardArt(name ?? "", undefined, "normal");
   const face = useFace(object ?? BLANK);
   if (!object || !name) return null;
   const entry = cardEntry(name);
+  const printed = cardTypes(face.typeLine);
+  const changed =
+    object.zone === "battlefield" &&
+    face.typeLine !== "" &&
+    printed.join() !== object.types.join();
   return (
     <div className="inspect" style={{ left }} aria-label={`${name}, inspected`}>
       {scan?.src ? (
@@ -247,6 +256,52 @@ export function Inspect({
         <Card card={face} width={330} />
       )}
       {entry && <p className="inspect-artist">Illustrated by {entry.artist}</p>}
+      {changed && (
+        <p className="inspect-types" aria-label="Types now">
+          <s>{printed.map(titled).join(" ")}</s>{" "}
+          {object.types.map(titled).join(" ")}
+        </p>
+      )}
+      {attached.length > 0 && (
+        <div className="inspect-attached" aria-label="Attached">
+          {attached.map((o) => (
+            <InspectAttached key={o.slot} object={o} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
+
+/** The card types a type line names, in the protocol's order. */
+function cardTypes(typeLine: string): CardType[] {
+  const words = new Set(
+    (typeLine.split("—")[0] ?? "").toLowerCase().split(/\s+/),
+  );
+  return CARD_TYPES.filter((t) => words.has(t));
+}
+
+const CARD_TYPES: CardType[] = [
+  "artifact",
+  "creature",
+  "enchantment",
+  "instant",
+  "land",
+  "planeswalker",
+  "sorcery",
+];
+
+const titled = (t: string) => t[0]!.toUpperCase() + t.slice(1);
+
+/** An Aura or Equipment beneath the permanent it is attached to in the inspector. */
+function InspectAttached({ object }: { object: ObjectView }) {
+  const face = useFace(object);
+  return (
+    <div data-attached={object.slot}>
+      <Card card={face} variant="field" width={INSPECT_ATTACHED} />
+    </div>
+  );
+}
+
+/** Two attachments side by side fill the inspector's width. */
+const INSPECT_ATTACHED = 160;

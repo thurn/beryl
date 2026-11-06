@@ -44,7 +44,9 @@ export const LAND_WIDTH = 180;
 export const LAND_STEP = { x: 0.103, y: 0.022 };
 /** How far each card exiled by a permanent until it leaves (CR 610.3) peeks out from beneath
  * it, up and to the left, as a fraction of the permanent's untapped width and height: its whole
- * name bar shows, where a copy beneath a pile's top card peeks out down and to the left. */
+ * name bar shows, where a copy beneath a pile's top card peeks out down and to the left. Each
+ * Aura or Equipment attached to a permanent peeks out from behind it as far, up and to the
+ * right. */
 export const BENEATH_STEP = { x: 0.3, y: 0.17 };
 
 /** The hand's cards: each card's top center lies on an arc over the near edge, and the fan
@@ -70,6 +72,7 @@ export type Look =
   | "field" // a battlefield frame: nonland permanents
   | "land" // a battlefield frame in a land pile
   | "beneath" // a battlefield frame tucked beneath the permanent that exiled it
+  | "attached" // a battlefield frame tucked behind the permanent it is attached to
   | "stack" // a full frame on the stack
   | "pile" // a full frame on a graveyard or exile pile, which the pile's button covers
   | "hidden"; // nothing drawn: libraries
@@ -133,7 +136,10 @@ const LOG_RIGHT = 318;
  * how far left one reaches matters; a little slack covers the lean of a card's near end. */
 export function overLog(placements: Layout): boolean {
   for (const p of placements.values()) {
-    if ((p.look === "field" || p.look === "beneath") && p.x < LOG_RIGHT + 8) {
+    if (
+      (p.look === "field" || p.look === "beneath" || p.look === "attached") &&
+      p.x < LOG_RIGHT + 8
+    ) {
       return true;
     }
   }
@@ -417,8 +423,10 @@ function lying(width: number, tapped: boolean) {
  * `across`, as combat.png does, an attacker's blockers side by side about its center, so a
  * block reads as a short line; the rest of the row makes room. A row's attackers stand
  * together, first, so that no other permanent lies hidden between two of them. The cards each
- * permanent exiled until it leaves (`beneath`, by its slot) lie tucked under it, and its row
- * makes room for them to peek out. Each tapped card takes its turned width (`lying`). */
+ * permanent exiled until it leaves (`beneath`, by its slot) lie tucked under it, peeking out to
+ * its left, and the Auras and Equipment attached to it (`attached`, by its slot, whoever
+ * controls them, which `objects` leaves out) behind it, peeking out to its right; its row makes
+ * room for both. Each tapped card takes its turned width (`lying`). */
 function battlefieldPlacements(
   side: Side,
   objects: ObjectView[],
@@ -426,6 +434,7 @@ function battlefieldPlacements(
   end: number,
   across: Placement[] = [],
   beneath: Map<number, ObjectView[]> = new Map(),
+  attached: Map<number, ObjectView[]> = new Map(),
 ): Placement[] {
   const rows = ROWS[side];
   const lands = objects.filter((o) => o.types.includes("land"));
@@ -480,7 +489,8 @@ function battlefieldPlacements(
     o.counters.length === 0 &&
     o.damage === 0 &&
     !o.combat &&
-    !beneath.has(o.slot);
+    !beneath.has(o.slot) &&
+    !attached.has(o.slot);
   const groups = piles(others, (o) =>
     plain(o) ? `${o.name}|${o.tapped}` : `#${o.slot}`,
   ).sort((a, b) => Number(!attacking(a[0]!)) - Number(!attacking(b[0]!)));
@@ -493,18 +503,24 @@ function battlefieldPlacements(
     const unit = lies(o).frame * scale;
     return { x: unit * LAND_STEP.x, y: unit * LAND_STEP.y };
   };
-  // How far what lies beneath a group's top card peeks out to its left (see below).
-  const tucked = (g: ObjectView[]) => {
+  // How far the cards of `under` tucked under a group's top card peek out beside it: what
+  // lies beneath to its left, what is attached to its right (see below).
+  const peek = (under: Map<number, ObjectView[]>) => (g: ObjectView[]) => {
     const top = g[g.length - 1]!;
-    const n = beneath.get(top.slot)?.length ?? 0;
+    const n = under.get(top.slot)?.length ?? 0;
     const narrower = (CREATURE_WIDTH - lies(top).span) / 2;
     return n === 0
       ? 0
       : (n * CREATURE_WIDTH * BENEATH_STEP.x + narrower) * scale;
   };
+  const tucked = peek(beneath);
+  const behind = peek(attached);
   const widths = groups.map(
     (g) =>
-      lies(g[0]!).span * scale + step(g[0]!).x * (g.length - 1) + tucked(g),
+      lies(g[0]!).span * scale +
+      step(g[0]!).x * (g.length - 1) +
+      tucked(g) +
+      behind(g),
   );
   const gap = PERMANENT_GAP[mode] * width;
   const start = OPEN.start;
@@ -562,31 +578,83 @@ function battlefieldPlacements(
         z,
         ...onTable(x, y, span),
       });
-      // Untapped, each a step further up and to the left, centered on the permanent.
+      // Untapped, each a step further up and to the left, or for what is attached to it to
+      // the right, centered on the permanent. What is attached rises above what lies beneath,
+      // `above` steps up, so that each name bar shows whole.
       const center = x + (span * scale) / 2;
-      beneath.get(o.slot)?.forEach((e, j) => {
-        const n = j + 1;
-        out.push({
-          slot: e.slot,
-          zone: e.zone,
-          look: "beneath",
-          width: CREATURE_WIDTH,
-          span: CREATURE_WIDTH,
-          opacity: 1,
-          z: z - n,
-          ...onTable(
-            center -
-              (CREATURE_WIDTH / 2 + n * CREATURE_WIDTH * BENEATH_STEP.x) *
-                scale,
-            y,
-            CREATURE_WIDTH,
-            n * height * BENEATH_STEP.y,
-          ),
+      const tuck = (
+        under: ObjectView[] | undefined,
+        look: "beneath" | "attached",
+        toward: -1 | 1,
+        above = 0,
+      ) =>
+        under?.forEach((e, j) => {
+          const n = j + 1;
+          const up = above + n;
+          out.push({
+            slot: e.slot,
+            zone: e.zone,
+            look,
+            width: CREATURE_WIDTH,
+            span: CREATURE_WIDTH,
+            opacity: 1,
+            z: z - up,
+            ...onTable(
+              center +
+                (toward * n * CREATURE_WIDTH * BENEATH_STEP.x -
+                  CREATURE_WIDTH / 2) *
+                  scale,
+              y,
+              CREATURE_WIDTH,
+              up * height * BENEATH_STEP.y,
+            ),
+          });
         });
-      });
+      const exiled = beneath.get(o.slot);
+      tuck(exiled, "beneath", -1);
+      tuck(attached.get(o.slot), "attached", 1, exiled?.length);
     });
   });
   return out;
+}
+
+/** The Auras and Equipment drawn behind the permanents they are attached to, whoever controls
+ * them, by the permanent's slot: those attached to a nonland permanent that is not itself
+ * attached to another. Anything else attached (to a land in a pile, or to an attachment) stands
+ * in its controller's row. */
+export function attachments(view: PlayerView): Map<number, ObjectView[]> {
+  const bySlot = new Map(view.objects.map((o) => [o.slot, o]));
+  const out = new Map<number, ObjectView[]>();
+  for (const slot of view.battlefield) {
+    const o = bySlot.get(slot);
+    const host = o?.attachedTo == null ? undefined : bySlot.get(o.attachedTo);
+    if (
+      !o ||
+      !host ||
+      host.zone !== "battlefield" ||
+      host.attachedTo !== null ||
+      host.types.includes("land")
+    ) {
+      continue;
+    }
+    out.set(host.slot, [...(out.get(host.slot) ?? []), o]);
+  }
+  return out;
+}
+
+/** The permanents linked to `slot` by attachment: what it is attached to, and what is attached
+ * to it. */
+export function linked(view: PlayerView, slot: number | undefined): number[] {
+  if (slot === undefined) return [];
+  const self = view.objects.find((o) => o.slot === slot);
+  if (self?.zone !== "battlefield") return [];
+  return view.objects
+    .filter(
+      (o) =>
+        o.zone === "battlefield" &&
+        (o.slot === self.attachedTo || o.attachedTo === slot),
+    )
+    .map((o) => o.slot);
 }
 
 /** A pile of one player's cards lying face up, which opens to show them all: their graveyard,
@@ -655,6 +723,8 @@ export function layout(
     if (o.zone !== "exile" || o.exiledBy === null) continue;
     beneath.set(o.exiledBy, [...(beneath.get(o.exiledBy) ?? []), o]);
   }
+  const attached = attachments(view);
+  const behindHost = new Set([...attached.values()].flat().map((o) => o.slot));
 
   out.push(...handPlacements(owned("you", "hand"), tucked));
   out.push(...backPlacements(owned("opponent", "hand")));
@@ -667,11 +737,14 @@ export function layout(
   const field = (side: Side, across?: Placement[]) =>
     battlefieldPlacements(
       side,
-      permanents.filter((o) => o.controller === side),
+      permanents.filter(
+        (o) => o.controller === side && !behindHost.has(o.slot),
+      ),
       mode,
       end,
       across,
       beneath,
+      attached,
     );
   const yours = field("you", field("opponent"));
   out.push(...yours, ...field("opponent", yours));

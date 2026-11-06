@@ -1160,6 +1160,79 @@ await check(
     beneathRun,
 );
 
+// The opponent's Swift Reconfiguration on the human's Jace, Vryn's Prodigy (or whatever the
+// fixture attaches across the table): an Aura one player controls on a permanent the other does.
+const attachedView = (await load("attached-across")).at(-1);
+const attachedBySlot = new Map(attachedView.objects.map((o) => [o.slot, o]));
+const aura = attachedView.objects.find(
+    (o) =>
+        o.zone === "battlefield" &&
+        o.attachedTo !== null &&
+        attachedBySlot.get(o.attachedTo)?.controller !== o.controller,
+);
+assert.ok(aura, "the attached-across fixture attaches across the table");
+const auraHost = attachedBySlot.get(aura.attachedTo);
+
+await check(
+    "an attachment is drawn behind its host, linked on hover",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const mine = page.locator(`[data-slot="${aura.slot}"]`);
+        const host = page.locator(`[data-slot="${auraHost.slot}"]`);
+        const [a, h] = [await mine.boundingBox(), await host.boundingBox()];
+        // Their boxes overlap or touch, in the host's row rather than its controller's.
+        assert.ok(
+            a.x <= h.x + h.width &&
+                h.x <= a.x + a.width &&
+                a.y <= h.y + h.height &&
+                h.y <= a.y + a.height,
+            `${aura.name} touches ${auraHost.name}`,
+        );
+        assert.ok(
+            Math.abs(center(a).y - center(h).y) < h.height / 2,
+            `${aura.name} lies in ${auraHost.name}'s row`,
+        );
+        const z = (l) => l.evaluate((e) => Number(getComputedStyle(e).zIndex));
+        assert.ok((await z(mine)) < (await z(host)), "it lies behind");
+        // Its name bar, above the host's top edge.
+        const strip = { x: a.x + a.width * 0.4, y: (a.y + h.y) / 2 };
+        assert.equal(
+            await page.evaluate(
+                ({ x, y }) =>
+                    document.elementFromPoint(x, y)?.closest("[data-slot]")
+                        ?.dataset.slot,
+                strip,
+            ),
+            String(aura.slot),
+            "its name bar shows above its host",
+        );
+        // Hovering either rings the other.
+        await page.mouse.move(strip.x, strip.y);
+        await host.locator(".card-linked").waitFor();
+        await page.mouse.move(center(h).x, h.y + h.height * 0.75);
+        await mine.locator(".card-linked").waitFor();
+        // The host's inspector shows its types now and what is attached to it.
+        const inspect = page.locator(
+            `.inspect[aria-label="${auraHost.name}, inspected"]`,
+        );
+        await inspect.locator(`[data-attached="${aura.slot}"]`).waitFor();
+        const types = (await inspect.locator(".inspect-types").innerText())
+            .toLowerCase()
+            .split(/\s+/);
+        for (const t of auraHost.types) {
+            assert.ok(
+                types.includes(t),
+                `the inspector shows ${t} in ${types}`,
+            );
+        }
+    },
+    {
+        fixture: "attached-across",
+        at: (await load("attached-across")).length,
+        ready: `[data-slot="${aura.slot}"]`,
+    },
+);
+
 /** Drags a hand card by `by`: hovered first, so it rises clear of its neighbors in the fan,
  * then picked up there. */
 async function dragFromHand(page, selector, by) {

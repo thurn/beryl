@@ -138,6 +138,12 @@
       "height": 900
     },
     {
+      "name": "game-attached",
+      "route": "/?fixture=attached-across#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
       "name": "game-late",
       "route": "/?fixture=late-game#/game",
       "width": 1600,

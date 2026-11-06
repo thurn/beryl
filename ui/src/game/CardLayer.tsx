@@ -55,6 +55,8 @@ export interface CardState {
   draggable?: boolean;
   /** The payment of the cast being dragged or set up taps it. */
   paying?: boolean;
+  /** It is attached to the card the pointer is over, or that card is attached to it. */
+  linked?: boolean;
 }
 
 export interface CardLayerProps {
@@ -356,8 +358,8 @@ function Look({
   ) {
     return <CardBack width={place.width} />;
   }
-  const field =
-    place.look === "field" || place.look === "land" || place.look === "beneath";
+  const under = place.look === "beneath" || place.look === "attached";
+  const field = under || place.look === "field" || place.look === "land";
   const combat = field ? object.combat?.kind : undefined;
   const card_ = (
     <Card
@@ -374,12 +376,14 @@ function Look({
       width={place.width}
       tapped={field && object.tapped}
       highlight={state.highlight}
-      // A gold or cyan glow says more than the playable edge, which would hide it.
+      // A gold or cyan glow says more than the playable edge or the link's ring, which would
+      // hide it.
       className={
         [
           state.playable && !state.highlight && "card-playable",
           state.paying && "card-paying",
-          place.look === "beneath" && "card-under",
+          state.linked && !state.highlight && !state.paying && "card-linked",
+          under && "card-under",
         ]
           .filter(Boolean)
           .join(" ") || undefined

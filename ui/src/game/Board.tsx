@@ -81,6 +81,7 @@ import { CastStep } from "./CastStep";
 import {
   combatBanner,
   layout,
+  linked,
   overLog,
   passButton,
   phaseOf,
@@ -297,6 +298,10 @@ export function Board({
   }
   for (const slot of taps) {
     states.set(slot, { ...states.get(slot), paying: true, playable: false });
+  }
+  // The pointer over a permanent or what is attached to it shows the other.
+  for (const slot of linked(shown, hovered)) {
+    states.set(slot, { ...states.get(slot), linked: true });
   }
 
   // A declaration's creatures: those still to pick glow cyan, the one waiting for its attacker
@@ -676,6 +681,10 @@ export function Board({
         {inspected && !menu && !castingNow && !dimmed && (
           <Inspect
             object={objects.get(inspected.slot)}
+            attached={view.objects.filter(
+              (o) =>
+                o.zone === "battlefield" && o.attachedTo === inspected.slot,
+            )}
             // Beside the table on the side away from the card.
             left={inspected.x < 800 ? 1600 - 330 - 24 : 24}
           />

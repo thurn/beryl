@@ -147,6 +147,9 @@ enum Condition {
     PlayablePair,
     /// A card lies in exile beneath the permanent that exiled it until it leaves (CR 610.3).
     ExiledBeneath,
+    /// An Aura or Equipment one player controls is attached to a permanent the other
+    /// controls.
+    AttachedAcross,
 }
 
 impl Condition {
@@ -154,7 +157,7 @@ impl Condition {
     /// "blocking", "targeted trigger on the stack", "targeted spell on the stack", "player
     /// targeted on the stack", "ability targeting beside its source", "opponent's spell on
     /// the stack", "castable <card name>", "resolving <card name>", "casting <card name>",
-    /// "playable pair in hand" or "exiled beneath a permanent".
+    /// "playable pair in hand", "exiled beneath a permanent" or "attached across the table".
     fn parse(text: &str) -> Result<Condition, String> {
         let condition = match text {
             "attacking" => Condition::Attacking,
@@ -166,6 +169,7 @@ impl Condition {
             "opponent's spell on the stack" => Condition::OpponentsSpell,
             "playable pair in hand" => Condition::PlayablePair,
             "exiled beneath a permanent" => Condition::ExiledBeneath,
+            "attached across the table" => Condition::AttachedAcross,
             _ => {
                 if let Some(step) = text.strip_prefix("step ") {
                     Condition::Step(
@@ -282,8 +286,23 @@ impl Condition {
                             .any(|h| h.slot == host && h.zone == ZoneName::Battlefield)
                     })
             }),
+            Condition::AttachedAcross => attached_across(view),
         }
     }
+}
+
+/// Whether a permanent one player controls is attached to a permanent the other controls.
+fn attached_across(view: &PlayerView) -> bool {
+    view.objects.iter().any(|o| {
+        o.zone == ZoneName::Battlefield
+            && o.attached_to.is_some_and(|host| {
+                view.objects.iter().any(|h| {
+                    h.slot == host
+                        && h.zone == ZoneName::Battlefield
+                        && h.controller != o.controller
+                })
+            })
+    })
 }
 
 /// Whether the top of the stack is an ability of a permanent that targets another permanent
@@ -473,6 +492,10 @@ mod tests {
         assert_eq!(
             Condition::parse("exiled beneath a permanent"),
             Ok(Condition::ExiledBeneath)
+        );
+        assert_eq!(
+            Condition::parse("attached across the table"),
+            Ok(Condition::AttachedAcross)
         );
         assert_eq!(
             Condition::parse("ability targeting beside its source"),
