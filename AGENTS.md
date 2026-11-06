@@ -27,10 +27,11 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
   crates.
 - `ui/`: the frontend, Vite + React + TypeScript (strict). `src/ipc.ts` holds
   typed wrappers for the Rust commands; call Rust only through it. Its fixture
-  transport replays sessions recorded from seeded games (`fixtures.json`), which
-  `just ui-shots` captures in the states `shots.json` names.
-  `src/generated/protocol.ts` is generated from `beryl_session` by ts-rs: a test
-  fails when it is stale, and its header says how to regenerate it.
+  transport replays sessions recorded from seeded games or scripted boards
+  (`fixtures.json`, `beryl_cli`'s `boards.rs`), which `just ui-shots` captures
+  in the states `shots.json` names. `src/generated/protocol.ts` is generated
+  from `beryl_session` by ts-rs: a test fails when it is stale, and its header
+  says how to regenerate it.
 - `data/`: the V1 cube cardlist (`color,name` CSV); `cards.json`, the card data
   `just cards` writes from Scryfall (printing, artist, per-face text and image
   URLs); `card-printings.csv`, the printings it pins; `oracle-divergences.json`,

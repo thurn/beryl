@@ -34,13 +34,13 @@
     },
     {
       "name": "game-opponent-thinking",
-      "route": "/?fixture=opponent-turn&at=44#/game",
+      "route": "/?fixture=opponent-turn&at=12#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "game-halt-end-step",
-      "route": "/?fixture=opponent-turn&at=49#/game",
+      "route": "/?fixture=opponent-turn&at=22#/game",
       "width": 1600,
       "height": 900
     },
@@ -52,7 +52,7 @@
     },
     {
       "name": "game-log-counter",
-      "route": "/?fixture=stack-counter&at=158#/game",
+      "route": "/?fixture=stack-counter&at=5#/game",
       "width": 1600,
       "height": 900
     },
@@ -89,7 +89,7 @@
     },
     {
       "name": "game-cast-kicker",
-      "route": "/?fixture=cast-kicker&at=427#/game",
+      "route": "/?fixture=cast-kicker&at=1#/game",
       "width": 1600,
       "height": 900,
       "click": "[data-zone=hand][data-card='Thieving Skydiver']"
@@ -122,13 +122,13 @@
     },
     {
       "name": "game-crowded",
-      "route": "/?fixture=combat-blockers&at=176#/game",
+      "route": "/?fixture=combat-blockers&at=1#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "game-crowded-1280",
-      "route": "/?fixture=combat-blockers&at=176#/game",
+      "route": "/?fixture=combat-blockers&at=1#/game",
       "width": 1280,
       "height": 800
     },
@@ -189,13 +189,13 @@
     },
     {
       "name": "game-piles",
-      "route": "/?fixture=choice-scry&at=520#/game",
+      "route": "/?fixture=choice-scry&at=1#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "game-piles-1280",
-      "route": "/?fixture=choice-scry&at=520#/game",
+      "route": "/?fixture=choice-scry&at=1#/game",
       "width": 1280,
       "height": 800
     },
@@ -215,14 +215,14 @@
     },
     {
       "name": "game-graveyard-viewer",
-      "route": "/?fixture=choice-scry&at=520#/game",
+      "route": "/?fixture=choice-scry&at=1#/game",
       "width": 1600,
       "height": 900,
       "click": "[data-pile=graveyard][data-side=you]"
     },
     {
       "name": "game-exile-viewer",
-      "route": "/?fixture=choice-scry&at=520#/game",
+      "route": "/?fixture=choice-scry&at=1#/game",
       "width": 1600,
       "height": 900,
       "click": "[data-pile=exile][data-side=opponent]"
@@ -271,62 +271,62 @@
     },
     {
       "name": "game-declare-attack",
-      "route": "/?fixture=combat-declare&at=219#/game",
+      "route": "/?fixture=combat-declare&at=26#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "game-declare-attack-picked",
-      "route": "/?fixture=combat-declare&at=219#/game",
+      "route": "/?fixture=combat-declare&at=26#/game",
       "width": 1600,
       "height": 900,
       "click": [
-        "[data-slot='123']",
-        "[data-slot='30']",
+        "[data-slot='121']",
+        "[data-slot='10']",
         "[data-slot='120']",
-        "[data-slot='29']"
+        "[data-slot='12']"
       ]
     },
     {
       "name": "game-declare-block-choosing",
-      "route": "/?fixture=combat-double-block&at=799#/game",
+      "route": "/?fixture=combat-double-block&at=14#/game",
       "width": 1600,
       "height": 900,
-      "click": ["[data-slot='4']", "[data-slot='80']", "[data-slot='120']"]
+      "click": ["[data-slot='8']", "[data-slot='62']", "[data-slot='9']"]
     },
     {
       "name": "game-log-open",
-      "route": "/?fixture=combat-double-block&at=799#/game",
+      "route": "/?fixture=combat-double-block&at=14#/game",
       "width": 1600,
       "height": 900,
       "click": ".game-log-toggle"
     },
     {
       "name": "game-declare-block",
-      "route": "/?fixture=combat-double-block&at=799#/game",
+      "route": "/?fixture=combat-double-block&at=14#/game",
       "width": 1600,
       "height": 900,
       "click": [
-        "[data-slot='4']",
-        "[data-slot='80']",
-        "[data-slot='120']",
-        "[data-slot='80']",
-        "[data-slot='124']",
-        "[data-slot='91']"
+        "[data-slot='8']",
+        "[data-slot='62']",
+        "[data-slot='9']",
+        "[data-slot='62']",
+        "[data-slot='15']",
+        "[data-slot='69']"
       ]
     },
     {
       "name": "game-declare-block-1280",
-      "route": "/?fixture=combat-double-block&at=799#/game",
+      "route": "/?fixture=combat-double-block&at=14#/game",
       "width": 1280,
       "height": 800,
       "click": [
-        "[data-slot='4']",
-        "[data-slot='80']",
-        "[data-slot='120']",
-        "[data-slot='80']",
-        "[data-slot='124']",
-        "[data-slot='91']"
+        "[data-slot='8']",
+        "[data-slot='62']",
+        "[data-slot='9']",
+        "[data-slot='62']",
+        "[data-slot='15']",
+        "[data-slot='69']"
       ]
     },
     {

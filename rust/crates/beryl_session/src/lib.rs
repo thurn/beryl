@@ -21,6 +21,8 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 pub use beryl_engine::Seat;
+use beryl_engine::{GameTable, State};
+use beryl_search::Agent;
 pub use game::{Answer, Game, OpenDecision, with_stops};
 pub use protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status, StopsSetting};
 pub use replay::ReplayFile;
@@ -38,6 +40,19 @@ pub struct StartGame {
     /// The name of the agent in the other seat ([`beryl_search::AGENTS`]).
     pub opponent: String,
     pub stops: StopsSetting,
+}
+
+/// A game set up by hand rather than dealt from a seed (UI fixtures): its table, the state
+/// before its next decision, and the agents that play it.
+pub struct Prepared {
+    pub table: GameTable,
+    pub state: State,
+    pub human: Seat,
+    pub stops: StopsSetting,
+    /// The agent in the other seat.
+    pub opponent: Box<dyn Agent + Send>,
+    /// The agent answering the human's decisions in their place.
+    pub stand_in: Box<dyn Agent + Send>,
 }
 
 /// An agent a human can play against.

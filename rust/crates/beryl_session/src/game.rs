@@ -23,7 +23,7 @@ use crate::protocol::{
     CandidateIndex, DecisionId, Moment, PlayerView, SessionId, Status, StopsSetting, player_view,
 };
 use crate::replay::{Entry, ReplayFile};
-use crate::{SessionError, StartGame};
+use crate::{Prepared, SessionError, StartGame};
 
 /// The human's open decision, as a session records it: the one place an answer is checked.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -183,26 +183,69 @@ impl Game {
             &table,
             SplitMix64::new(start.seed).next_u64(),
         )?;
+        Ok(Game::assemble(
+            table,
+            &state,
+            replay,
+            start.human,
+            session,
+            agent,
+        ))
+    }
+
+    /// Sets up game `session` from a prepared position. Its replay file holds no decks or
+    /// agent, so nothing can replay it.
+    pub fn prepared(prepared: Prepared, session: SessionId) -> Game {
+        let Prepared {
+            table,
+            mut state,
+            human,
+            stops,
+            opponent,
+            stand_in,
+        } = prepared;
+        state.set_profile(with_stops(Profile::SMART, stops, human));
+        let replay = ReplayFile {
+            seed: 0,
+            decks: [Vec::new(), Vec::new()],
+            human: human.get(),
+            opponent: String::new(),
+            stops,
+            log: Vec::new(),
+        };
+        let mut game = Game::assemble(table, &state, replay, human, session, opponent);
+        game.stand_in = Some(stand_in);
+        game
+    }
+
+    fn assemble(
+        table: GameTable,
+        state: &State,
+        replay: ReplayFile,
+        human: Seat,
+        session: SessionId,
+        agent: Box<dyn Agent + Send>,
+    ) -> Game {
         let turn = state.turn();
-        Ok(Game {
+        Game {
             seen: (turn.number, turn.step),
             answered: None,
+            stops: replay.stops,
             table,
-            state,
+            state: *state,
             scratch: Scratch::recording(),
             peek: Scratch::new(),
-            human: start.human,
+            human,
             session,
             agent,
             stand_in: None,
             at: At::Playing,
             seq: 0,
-            stops: start.stops,
             replay,
             stop: Arc::default(),
             events: Vec::new(),
             before_cast: None,
-        })
+        }
     }
 
     /// Has the agent named `name` answer the human's decisions in their place (UI fixtures):

@@ -10,12 +10,13 @@
 //! - The budget flags `--iterations N` and `--trees K` set a searching agent's iterations
 //!   per decision and how many independent trees share them (`beryl_search::Budget`).
 //! - `beryl_cli record-fixture <definitions.json> <out-dir> [name...]` plays the seeded games
-//!   a definitions file describes and writes, for each, the stream of messages the UI's
+//!   and boards a definitions file describes and writes, for each, the stream of messages the UI's
 //!   fixture transport replays (`ui/src/ipc.ts`) to `<out-dir>/<name>.json`. `just ui-shots`
 //!   runs it over `ui/fixtures.json`, so fixtures are generated, never committed.
 //! - `beryl_cli serve [--port N]` serves the app's game commands over HTTP for a UI in a plain
 //!   browser to play live games through (`just ui-live`, [`serve`]).
 
+mod boards;
 mod fixture;
 mod game;
 mod serve;

@@ -607,7 +607,11 @@ await check(
     },
     {
         fixture: "combat-double-block",
-        at: 799,
+        // The table as the block declaration begins.
+        at:
+            (await load("combat-double-block")).findIndex(
+                (v) => v.status.decision?.kind === "blocker",
+            ) + 1,
         ready: ".game-log-toggle",
     },
 );

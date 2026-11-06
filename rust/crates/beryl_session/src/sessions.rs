@@ -15,7 +15,7 @@ use ts_rs::TS;
 use crate::game::Game;
 use crate::protocol::{CandidateIndex, DecisionId, SessionId, StopsSetting};
 use crate::session::GameSession;
-use crate::{GameUpdate, Seat, SessionError, StartGame};
+use crate::{GameUpdate, Prepared, Seat, SessionError, StartGame};
 
 /// The UI's request for a game: the WU Control mirror against `agent`, the human in seat 0
 /// under the smart stops.
@@ -86,17 +86,36 @@ impl Sessions {
         start: &StartGame,
         stand_in: Option<&str>,
     ) -> Result<SessionId, SessionError> {
+        let replay = self.replay_path(start.seed);
+        self.launch(
+            |session| Game::new(&CARDS, start, session),
+            stand_in,
+            replay,
+        )
+    }
+
+    /// Starts a game from `prepared`, replacing any game in progress. It writes no replay,
+    /// which could not reproduce it.
+    pub fn start_prepared(&self, prepared: Prepared) -> Result<SessionId, SessionError> {
+        self.launch(|session| Ok(Game::prepared(prepared, session)), None, None)
+    }
+
+    fn launch(
+        &self,
+        game: impl FnOnce(SessionId) -> Result<Game, SessionError>,
+        stand_in: Option<&str>,
+        replay: Option<PathBuf>,
+    ) -> Result<SessionId, SessionError> {
         let mut current = self.lock();
         // Stop the old game before the new one can emit.
         current.game = None;
         current.last += 1;
         let session = SessionId(current.last);
-        let mut game = Game::new(&CARDS, start, session)?;
+        let mut game = game(session)?;
         if let Some(name) = stand_in {
             game.set_stand_in(name)?;
         }
         let emit = Arc::clone(&self.emit);
-        let replay = self.replay_path(start.seed);
         let game =
             GameSession::start(game, replay, move |view| emit(GameUpdate { session, view }))?;
         current.game = Some((session, game));

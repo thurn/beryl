@@ -288,45 +288,12 @@ impl Runner<'_> {
 
     fn act(&mut self, i: usize) -> Result<(), String> {
         match self.actions[i] {
-            Action::PlayLand { player, card } => {
-                self.priority_option(
-                    i,
-                    player,
-                    &format!("playing {card}"),
-                    |r, o| matches!(o, Opt::PlayLand(slot) if r.name(slot) == card),
-                )?;
-            }
-            Action::Cast {
-                player,
-                card,
-                face,
-                costs,
-            } => {
-                let (f, m) = (face.get(), costs.bits());
-                let what = format!("casting {card} (face {f}, costs {m:#b})");
-                self.priority_option(i, player, &what, |r, o| {
-                    matches!(o, Opt::Cast { slot, face: f, costs: m }
-                        if r.name(slot) == card && f == face && m == costs)
-                })?;
-            }
-            Action::Activate {
-                player,
-                card,
-                ability,
-            } => {
-                let what = format!("activating {card}'s ability {ability:?}");
-                self.priority_option(i, player, &what, |r, o| {
-                    matches!(o, Opt::Activate { slot, ability: a }
-                        if r.name(slot) == card && a == ability)
-                })?;
-            }
-            Action::TurnFaceUp { player, card } => {
-                self.priority_option(
-                    i,
-                    player,
-                    &format!("turning {card} face up"),
-                    |r, o| matches!(o, Opt::TurnFaceUp(slot) if r.name(slot) == card),
-                )?;
+            action @ (Action::PlayLand { player, .. }
+            | Action::Cast { player, .. }
+            | Action::Activate { player, .. }
+            | Action::TurnFaceUp { player, .. }) => {
+                let what = taking(&action);
+                self.priority_option(i, player, &what, |r, o| takes(r.t, &r.s, &action, o))?;
             }
             Action::Resolve => {
                 // Waiting triggers go on the stack first.
@@ -490,27 +457,8 @@ impl Runner<'_> {
         name_of(&self.s, self.t, slot)
     }
 
-    /// The object an option names, if it names one.
     fn named(&self, o: Opt) -> Option<Slot> {
-        match o {
-            Opt::PlayLand(slot)
-            | Opt::Attack(slot)
-            | Opt::Block(slot)
-            | Opt::Lethal(slot)
-            | Opt::Cast { slot, .. }
-            | Opt::Activate { slot, .. }
-            | Opt::Mana { slot, .. }
-            | Opt::Object(slot)
-            | Opt::TurnFaceUp(slot) => Some(slot),
-            Opt::Defender(slot) => slot,
-            Opt::Trigger(i) => self
-                .s
-                .triggers()
-                .get(usize::from(i))
-                .and_then(|tr| tr.source)
-                .map(|r| r.slot),
-            _ => None,
-        }
+        named(&self.s, o)
     }
 
     /// The only answer to `d` as a pick, where the scenario vocabulary can name it.
@@ -542,25 +490,7 @@ impl Runner<'_> {
 
     /// The candidate of `d` that `pick` names.
     fn pick(&self, d: &Decision, pick: Pick) -> Option<Choice> {
-        let wanted = match pick {
-            Pick::Card { card } => {
-                return (0..d.len() as u8).map(Choice).find(|&c| {
-                    d.candidates
-                        .object(c)
-                        .or_else(|| d.candidates.option(c).and_then(|o| self.named(o)))
-                        .is_some_and(|slot| self.name(slot) == card)
-                });
-            }
-            Pick::Pass => Opt::Pass,
-            Pick::Number { n } => Opt::Number(n),
-            Pick::Yes => Opt::Yes,
-            Pick::No => Opt::No,
-            Pick::Done => Opt::Done,
-            Pick::Player { player } => Opt::Player(player),
-            Pick::DefendingPlayer => Opt::Defender(None),
-            Pick::Plan { i } => Opt::Plan(i),
-        };
-        option_index(d, |o| o == wanted)
+        pick_in(self.t, &self.s, d, pick)
     }
 
     /// The permanents named `card` that `player` controls, in the order they entered.
@@ -579,30 +509,8 @@ impl Runner<'_> {
             .ok_or_else(|| format!("player {player} controls no {card}"))
     }
 
-    /// A decision as a scenario author reads it.
     fn describe(&self, d: &Decision) -> String {
-        let candidates: Vec<String> = (0..d.len() as u8)
-            .map(|i| {
-                let c = Choice(i);
-                match (d.candidates.object(c), d.candidates.option(c)) {
-                    (Some(slot), _) => self.name(slot).to_string(),
-                    (_, Some(o)) => match self.named(o) {
-                        Some(slot) => format!("{o:?} ({})", self.name(slot)),
-                        None => format!("{o:?}"),
-                    },
-                    (None, None) => unreachable!("a choice within the candidates"),
-                }
-            })
-            .collect();
-        let turn = self.s.turn();
-        format!(
-            "player {} {:?} in turn {} {:?}, among [{}]",
-            d.player,
-            d.kind,
-            turn.number,
-            turn.step,
-            candidates.join(", ")
-        )
+        describe(self.t, &self.s, d)
     }
 
     /// The actual and expected values of an assertion about permanents.
@@ -782,4 +690,124 @@ fn option_index(d: &Decision, mut pick: impl FnMut(Opt) -> bool) -> Option<Choic
     (0..d.len() as u8)
         .map(Choice)
         .find(|&c| d.candidates.option(c).is_some_and(&mut pick))
+}
+
+/// The choice that answers `d` as `action` would in a scenario, if `d` offers it, for an
+/// action that answers one decision: playing a land, casting, activating, turning face up or
+/// an answer. Whose decision it is and of what kind is the caller's to check. For scripts
+/// that drive agents in place of the runner, such as the UI fixtures' boards.
+pub fn answer(t: &GameTable, s: &State, d: &Decision, action: &Action) -> Option<Choice> {
+    match *action {
+        Action::Answer { pick, .. } => pick_in(t, s, d, pick),
+        _ => option_index(d, |o| takes(t, s, action, o)),
+    }
+}
+
+/// Whether `o` is the priority option `action` takes: playing, casting, activating or turning
+/// face up its card.
+fn takes(t: &GameTable, s: &State, action: &Action, o: Opt) -> bool {
+    let name = |slot| name_of(s, t, slot);
+    match *action {
+        Action::PlayLand { card, .. } => matches!(o, Opt::PlayLand(slot) if name(slot) == card),
+        Action::Cast {
+            card, face, costs, ..
+        } => matches!(o, Opt::Cast { slot, face: f, costs: m }
+            if name(slot) == card && f == face && m == costs),
+        Action::Activate { card, ability, .. } => matches!(o, Opt::Activate { slot, ability: a }
+            if name(slot) == card && a == ability),
+        Action::TurnFaceUp { card, .. } => {
+            matches!(o, Opt::TurnFaceUp(slot) if name(slot) == card)
+        }
+        _ => false,
+    }
+}
+
+/// What a priority action takes, as a failure names it.
+fn taking(action: &Action) -> String {
+    match *action {
+        Action::PlayLand { card, .. } => format!("playing {card}"),
+        Action::Cast {
+            card, face, costs, ..
+        } => format!(
+            "casting {card} (face {}, costs {:#b})",
+            face.get(),
+            costs.bits()
+        ),
+        Action::Activate { card, ability, .. } => {
+            format!("activating {card}'s ability {ability:?}")
+        }
+        Action::TurnFaceUp { card, .. } => format!("turning {card} face up"),
+        action => format!("{action:?}"),
+    }
+}
+
+/// The option of `d` that `pick` names.
+fn pick_in(t: &GameTable, s: &State, d: &Decision, pick: Pick) -> Option<Choice> {
+    let wanted = match pick {
+        Pick::Card { card } => {
+            return (0..d.len() as u8).map(Choice).find(|&c| {
+                d.candidates
+                    .object(c)
+                    .or_else(|| d.candidates.option(c).and_then(|o| named(s, o)))
+                    .is_some_and(|slot| name_of(s, t, slot) == card)
+            });
+        }
+        Pick::Pass => Opt::Pass,
+        Pick::Number { n } => Opt::Number(n),
+        Pick::Yes => Opt::Yes,
+        Pick::No => Opt::No,
+        Pick::Done => Opt::Done,
+        Pick::Player { player } => Opt::Player(player),
+        Pick::DefendingPlayer => Opt::Defender(None),
+        Pick::Plan { i } => Opt::Plan(i),
+    };
+    option_index(d, |o| o == wanted)
+}
+
+/// The object an option names, if it names one.
+fn named(s: &State, o: Opt) -> Option<Slot> {
+    match o {
+        Opt::PlayLand(slot)
+        | Opt::Attack(slot)
+        | Opt::Block(slot)
+        | Opt::Lethal(slot)
+        | Opt::Cast { slot, .. }
+        | Opt::Activate { slot, .. }
+        | Opt::Mana { slot, .. }
+        | Opt::Object(slot)
+        | Opt::TurnFaceUp(slot) => Some(slot),
+        Opt::Defender(slot) => slot,
+        Opt::Trigger(i) => s
+            .triggers()
+            .get(usize::from(i))
+            .and_then(|tr| tr.source)
+            .map(|r| r.slot),
+        _ => None,
+    }
+}
+
+/// A decision as a scenario author reads it.
+pub fn describe(t: &GameTable, s: &State, d: &Decision) -> String {
+    let candidates: Vec<String> = (0..d.len() as u8)
+        .map(|i| {
+            let c = Choice(i);
+            match (d.candidates.object(c), d.candidates.option(c)) {
+                (Some(slot), _) => name_of(s, t, slot).to_string(),
+                (_, Some(o)) => match named(s, o) {
+                    Some(slot) => format!("{o:?} ({})", name_of(s, t, slot)),
+                    None => format!("{o:?}"),
+                },
+                (None, None) => unreachable!("a choice within the candidates"),
+            }
+        })
+        .collect();
+    let turn = s.turn();
+    format!(
+        "player {} {:?} in turn {} {:?}, among [{}]",
+        d.player,
+        d.kind,
+        turn.number,
+        turn.step,
+        candidates.join(", ")
+    )
 }

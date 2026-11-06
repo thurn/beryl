@@ -1,19 +1,28 @@
-//! UI fixtures (decision D11): a seeded game between named agents, played through the app's
-//! [`Sessions`] with an agent standing in for the human seat, recorded as the messages the
-//! app would have sent the UI up to a named stopping condition.
+//! UI fixtures (decision D11): a seeded game between named agents, or a board of
+//! [`crate::boards`] its script plays, played through the app's [`Sessions`] with an agent
+//! standing in for the human seat, recorded as the messages the app would have sent the UI up
+//! to a named stopping condition.
 
 use std::path::Path;
+use std::sync::Arc;
 use std::sync::mpsc::channel;
 
-use beryl_cards::decks::{VINTAGE_WU_CONTROL, WU_CONTROL, fuzz_deck};
+use beryl_cards::CARDS;
+use beryl_cards::decks::{WU_CONTROL, fuzz_deck};
+use beryl_search::Agent;
 use beryl_session::ipc::{self, Fixture, FixtureMessage};
 use beryl_session::protocol::{
     Candidate, CandidateView, CardType, Combat, Counter, Kind, ObjectView, Side, StackItem, Step,
     TargetRef, ZoneName,
 };
-use beryl_session::{PlayerView, Seat, Sessions, StartGame, Status, StopsSetting, agents};
+use beryl_session::{
+    PlayerView, Prepared, Seat, SessionError, SessionId, Sessions, StartGame, Status, StopsSetting,
+    agents,
+};
 use serde::Deserialize;
 use serde_json::json;
+
+use crate::boards::{self, Scripted, Shared};
 
 /// The definitions file.
 #[derive(Debug, Deserialize)]
@@ -26,12 +35,16 @@ struct Definitions {
 #[serde(deny_unknown_fields)]
 struct Definition {
     name: String,
-    seed: u64,
-    /// Each seat's deck: `wu-control` (the mirror), `vintage-wu-control` (the mirror before,
-    /// for cards outside the mirror) or `fuzz:<seed>` for a fuzz deck.
-    decks: [String; 2],
-    /// The agent playing each seat. The stopping condition's seat is the human's.
-    agents: [String; 2],
+    /// A seeded game's seed, with `decks`; or none, with `board`.
+    seed: Option<u64>,
+    /// Each seat's deck: `wu-control` (the mirror) or `fuzz:<seed>` for a fuzz deck.
+    decks: Option<[String; 2]>,
+    /// The board the game starts from, by its name in [`crate::boards::BOARDS`], in place of
+    /// a seeded deal.
+    board: Option<String>,
+    /// The agent playing each seat of a seeded game. The stopping condition's seat is the
+    /// human's. A board's own actions play it.
+    agents: Option<[String; 2]>,
     stops: Option<StopsSetting>,
     until: String,
     /// What else must hold of the view the recording stops at (see [`Condition::parse`]).
@@ -640,21 +653,13 @@ fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
         .map(|c| Condition::parse(c))
         .collect::<Result<Vec<_>, _>>()?;
     let human = until.seat();
-    let start = StartGame {
-        seed: def.seed,
-        decks: [deck(&def.decks[0])?, deck(&def.decks[1])?],
-        human,
-        opponent: def.agents[human.opponent().index()].clone(),
-        stops: def.stops.unwrap_or(StopsSetting::Smart),
-    };
     let (sent, updates) = channel();
     let sessions = Sessions::new(None, move |update| {
         // The recording stops listening once it has what it came for.
         let _ = sent.send(update);
     });
-    let session = sessions
-        .start_game(&start, Some(&def.agents[human.index()]))
-        .map_err(|e| e.to_string())?;
+    let progress = Shared::default();
+    let session = start(def, &sessions, human, &progress)?;
     let mut messages = vec![
         FixtureMessage::response(ipc::LIST_AGENTS, &agents()),
         FixtureMessage::response(ipc::START_GAME, &session),
@@ -664,9 +669,11 @@ fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
     // The human's decisions still to record once the stop is reached.
     let mut left = None;
     loop {
-        let update = updates
-            .recv()
-            .map_err(|_| "the session ended without a view".to_owned())?;
+        let update = updates.recv();
+        if let Some(failure) = boards::lock(&progress).failure.take() {
+            return Err(failure);
+        }
+        let update = update.map_err(|_| "the session ended without a view".to_owned())?;
         let reached = left.is_none()
             && until.reached(&update.view)
             && conditions.iter().all(|c| c.holds(&update.view));
@@ -682,6 +689,10 @@ fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
             left = Some(n - 1);
         }
         if left == Some(0) || (ended && left.is_some()) {
+            // A board's actions all lead up to where its recording ends.
+            if let Some(action) = boards::lock(&progress).next.iter().flatten().next() {
+                return Err(format!("the board's {action:?} was never taken"));
+            }
             return Ok(messages);
         }
         if ended {
@@ -694,11 +705,54 @@ fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
     }
 }
 
+/// Starts the fixture's game in `sessions`: its seeded deal, or its board, whose scripts
+/// report to `progress`.
+fn start(
+    def: &Definition,
+    sessions: &Sessions,
+    human: Seat,
+    progress: &Shared,
+) -> Result<SessionId, String> {
+    let stops = def.stops.unwrap_or(StopsSetting::Smart);
+    let started: Result<SessionId, SessionError> =
+        match (&def.board, def.seed, &def.decks, &def.agents) {
+            (None, Some(seed), Some(decks), Some(agents)) => sessions.start_game(
+                &StartGame {
+                    seed,
+                    decks: [deck(&decks[0])?, deck(&decks[1])?],
+                    human,
+                    opponent: agents[human.opponent().index()].clone(),
+                    stops,
+                },
+                Some(&agents[human.index()]),
+            ),
+            (Some(name), None, None, None) => {
+                let board = boards::named(name)?;
+                let (table, state) =
+                    beryl_scenario::position(&CARDS, board).map_err(|e| e.to_string())?;
+                let agent = |seat: Seat| {
+                    Scripted::new(board, seat, &table, Arc::clone(progress))
+                        .map(|a| Box::new(a) as Box<dyn Agent + Send>)
+                };
+                sessions.start_prepared(Prepared {
+                    opponent: agent(human.opponent())?,
+                    stand_in: agent(human)?,
+                    table,
+                    state,
+                    human,
+                    stops,
+                })
+            }
+            _ => {
+                return Err("a fixture has a seed, decks and agents, or a board".to_owned());
+            }
+        };
+    started.map_err(|e| e.to_string())
+}
+
 fn deck(name: &str) -> Result<Vec<(u8, String)>, String> {
     let list = if name == "wu-control" {
         WU_CONTROL.to_vec()
-    } else if name == "vintage-wu-control" {
-        VINTAGE_WU_CONTROL.to_vec()
     } else if let Some(seed) = name.strip_prefix("fuzz:") {
         fuzz_deck(
             seed.parse()
@@ -821,13 +875,28 @@ mod tests {
         assert!(Condition::parse("raining").is_err());
     }
 
+    /// Every board fixture the UI records still plays out to its stop, in a fraction of a
+    /// second, so a change that breaks one fails here rather than in the UI's checks.
+    #[test]
+    fn every_board_fixture_records() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../ui/fixtures.json");
+        let text = std::fs::read_to_string(&path).unwrap();
+        let defs: Definitions = serde_json::from_str(&text).unwrap();
+        let boards: Vec<&Definition> = defs.fixtures.iter().filter(|d| d.board.is_some()).collect();
+        assert!(!boards.is_empty());
+        for def in boards {
+            record(def).unwrap_or_else(|e| panic!("fixture {}: {e}", def.name));
+        }
+    }
+
     #[test]
     fn a_recording_stops_at_its_condition() {
         let def = Definition {
             name: "t".to_owned(),
-            seed: 4,
-            decks: ["fuzz:1".to_owned(), "fuzz:2".to_owned()],
-            agents: ["random".to_owned(), "random".to_owned()],
+            seed: Some(4),
+            decks: Some(["fuzz:1".to_owned(), "fuzz:2".to_owned()]),
+            board: None,
+            agents: Some(["random".to_owned(), "random".to_owned()]),
             stops: None,
             until: "first target decision for seat 1".to_owned(),
             conditions: vec![],
