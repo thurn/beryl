@@ -25,6 +25,7 @@ use beryl_search::Agent;
 
 /// The tokens the boards name, as the cards that make them name them.
 const INSECT_TOKEN: &str = "Insect Token";
+const MAP_TOKEN: &str = "Map Token";
 
 /// Every board, by name.
 pub const BOARDS: &[Scenario] = &[
@@ -688,6 +689,91 @@ pub const BOARDS: &[Scenario] = &[
         .hand(P1, &[STOCK_UP])
         .library(P1, LANDS)
         .actions(&[Action::cast(P1, STOCK_UP)]),
+    // Teferi, Time Raveler's −3 announces how many targets, up to one, with an artifact and a
+    // creature across the table; the human then announces one.
+    Scenario::new("target-up-to-one")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[Permanent::new(TEFERI_TIME_RAVELER), ISLAND_, PLAINS_])
+        .library(P0, LANDS)
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(STAFF_OF_THE_STORYTELLER),
+                Permanent::new(SNAPCASTER_MAGE),
+                ISLAND_,
+            ],
+        )
+        .library(P1, LANDS)
+        .actions(&[
+            Action::activate(P0, TEFERI_TIME_RAVELER, 2),
+            Action::answer(P0, DecisionKind::TargetCount, Pick::Number { n: 1 }),
+        ]),
+    // Snapcaster Mage attacks a player who controls The Wandering Emperor, so the engine asks
+    // what it attacks.
+    Scenario::new("attack-past-walker")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[Permanent::new(SNAPCASTER_MAGE), ISLAND_, PLAINS_])
+        .library(P0, LANDS)
+        .battlefield(
+            P1,
+            &[Permanent::new(THE_WANDERING_EMPEROR), ISLAND_, PLAINS_],
+        )
+        .library(P1, LANDS)
+        .actions(&[choose(P0, DecisionKind::Attacker, SNAPCASTER_MAGE)]),
+    // Get Lost destroys one of the human's Elite Spellbinders, leaving them two Maps; one
+    // makes the other Spellbinder explore, revealing Oust.
+    Scenario::new("choice-explore")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(ELITE_SPELLBINDER),
+                Permanent::new(ELITE_SPELLBINDER),
+                PLAINS_,
+                PLAINS_,
+                ISLAND_,
+            ],
+        )
+        .hand(P0, &[GET_LOST])
+        .library(P0, &[OUST, ISLAND, PLAINS, ISLAND, PLAINS])
+        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[
+            Action::cast(P0, GET_LOST),
+            Action::activate(P0, MAP_TOKEN, 0),
+        ]),
+    // Jace, Vryn's Prodigy loots: it draws Stock Up, then asks for the discard.
+    Scenario::new("choice-loot")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[Permanent::new(JACE_VRYNS_PRODIGY), ISLAND_, PLAINS_])
+        .hand(P0, &[COUNTERSPELL, OUST])
+        .library(P0, &[STOCK_UP, ISLAND, PLAINS, ISLAND, PLAINS])
+        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[Action::activate(P0, JACE_VRYNS_PRODIGY, 0)]),
+    // Time Spiral, paid with six of the human's seven lands, untaps up to six lands, beside
+    // the opponent's tapped and untapped ones.
+    Scenario::new("choice-untap")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                ISLAND_, ISLAND_, ISLAND_, ISLAND_, PLAINS_, PLAINS_, PLAINS_,
+            ],
+        )
+        .hand(P0, &[TIME_SPIRAL])
+        .library(P0, LANDS)
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(ISLAND).tapped(),
+                Permanent::new(PLAINS).tapped(),
+                ISLAND_,
+                PLAINS_,
+            ],
+        )
+        .library(P1, LANDS)
+        .actions(&[Action::cast(P0, TIME_SPIRAL)]),
 ];
 
 /// A library to draw from for a few turns.

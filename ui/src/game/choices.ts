@@ -15,7 +15,7 @@ import type {
   StackItem,
 } from "../generated/protocol";
 import { abilityText } from "./faces";
-import { optionsMatch, type Intent } from "./decisions";
+import { optionsMatch, slotOf, twins, type Intent } from "./decisions";
 
 /** The card at the overlay's right: what asks the choice. A card by name alone when the view
  * has no object for it (an ability whose source has left). */
@@ -101,7 +101,7 @@ export function choiceOf(view: PlayerView): Choice | undefined {
     case "topOrBottom":
       return topOrBottom(at, ask);
     case "explore":
-      return yesNo(at);
+      return explore(at);
     case "untap":
       return untap(at, ask);
     case "unlessPays":
@@ -514,26 +514,61 @@ function look(at: Situation, ask: AskOf<"look">): Pick {
   };
 }
 
-/** Permanents to untap, up to a number, one at a time, then done. */
+/** An explore ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)): "that
+ * permanent's controller reveals the top card of their library ... Otherwise, that player
+ * puts a +1/+1 counter on the exploring permanent and may put the revealed card into their
+ * graveyard." The revealed card is shown, each answer named by where it goes. */
+function explore(at: Situation): Ask {
+  const top = at.library("you")[0];
+  return {
+    kind: "ask",
+    key: at.key,
+    title: "Revealed",
+    instruction: "",
+    source: at.source,
+    cards: top === undefined ? [] : [top],
+    answers: [
+      { label: "Graveyard", plan: [yes("yesNo")] },
+      { label: "Keep on Top", plan: [no("yesNo")] },
+    ],
+  };
+}
+
+/** Permanents to untap, up to a number, one at a time, then done: those the engine offers and
+ * their twins (it offers one of interchangeable permanents, architecture §7.2), yours first. */
 function untap(at: Situation, { max }: AskOf<"untap">): Pick {
-  const cards = at.offeredAmong(at.view.battlefield);
+  const offered = at.offered.flatMap((s) => at.objects.get(s) ?? []);
+  const twinOf = (slot: number) => {
+    const o = at.objects.get(slot);
+    return o && offered.find((t) => t.slot === slot || twins(o, t));
+  };
+  const mine = (slot: number) => at.objects.get(slot)?.controller === "you";
+  const cards = at.view.battlefield
+    .filter((s) => twinOf(s) !== undefined)
+    .sort((a, b) => Number(mine(b)) - Number(mine(a)));
   const lands = cards.every((s) => at.objects.get(s)?.types.includes("land"));
   const noun = lands ? "lands" : "permanents";
+  // Picks a permanent, or the twin the engine offers in its place.
+  const pick = (slot: number): Intent => ({
+    kind: "chooseUpTo",
+    wants: (o) => o.kind === "object" && o.slot === slot,
+    alike: (o) => {
+      const [a, b] = [at.objects.get(slot), at.objects.get(slotOf(o) ?? -1)];
+      return a !== undefined && b !== undefined && twins(a, b);
+    },
+  });
   return {
     kind: "pick",
     key: at.key,
     title: `Untap ${capitalized(noun)}`,
-    instruction: `Choose up to ${inWords(max)} ${noun} to untap.`,
+    instruction: `Up to ${inWords(max)}.`,
     source: at.source,
     cards,
     pickable: cards,
     min: 0,
     max,
-    confirm: (n) => (n > 0 ? `Untap ${n}` : "Untap None"),
-    plan: (picked) => [
-      ...picked.map((slot) => at.pickCard("chooseUpTo", slot)),
-      done("chooseUpTo"),
-    ],
+    confirm: (n) => (n > 0 ? `Untap ${n}/${max}` : "Untap None"),
+    plan: (picked) => [...picked.map(pick), done("chooseUpTo")],
   };
 }
 
@@ -585,16 +620,14 @@ function discard(at: Situation, cleanup?: number): Pick {
     kind: "pick",
     key: at.key,
     title: "Discard",
-    instruction:
-      count === 1
-        ? "Choose a card to discard."
-        : `Choose ${count} cards to discard down to ${inWords(hand.length - count)}.`,
+    instruction: count === 1 ? "" : `Down to ${inWords(hand.length - count)}.`,
     source: cleanup === undefined ? at.source : undefined,
     cards: hand,
     pickable: at.offeredAmong(hand),
     min: count,
     max: count,
-    confirm: () => "Discard",
+    // The count still to pick, on the button.
+    confirm: (n) => (count === 1 ? "Discard" : `Discard ${n}/${count}`),
     plan: (picked) => picked.map((slot) => at.pickCard("discard", slot)),
   };
 }

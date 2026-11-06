@@ -84,7 +84,9 @@ function Shell({
     <Overlay
       className={`choice choice-${choice.kind}`}
       title={<RulesText text={choice.title} />}
-      instruction={<RulesText text={choice.instruction} />}
+      instruction={
+        choice.instruction && <RulesText text={choice.instruction} />
+      }
       aside={source && <SourceCard view={view} source={source} />}
       actions={actions}
       onViewBattlefield={onViewBattlefield}

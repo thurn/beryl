@@ -11,9 +11,10 @@ import type {
   Side,
 } from "../generated/protocol";
 
-/** One thing a card offers: the candidate's index and its label; for a cast or an activation,
- * the ways it can be paid; for a blocker, the attackers it may block; for an activation of
- * the card's own ability, which of its activated abilities it is. */
+/** One thing a card or a player offers: the candidate's index and its label; for a cast or an
+ * activation, the ways it can be paid; for a blocker, the attackers it may block; for an
+ * activation of the card's own ability, which of its activated abilities it is; and the picks
+ * it plans after its own (the target itself, for a count of targets taken with it). */
 export interface Act {
   index: CandidateIndex;
   label: string;
@@ -21,13 +22,16 @@ export interface Act {
   payments: Payment[];
   blocks: number[];
   nth: number | null;
+  then?: Intent[];
 }
 
 export interface Interactions {
   /** Each card's candidates, by slot. */
   bySlot: Map<number, Act[]>;
   /** The players the decision can name. */
-  players: Map<Side, CandidateIndex>;
+  players: Map<Side, Act>;
+  /** Choosing no target, at a count of up to one target taken on the board with its target. */
+  skip?: CandidateIndex;
   /** Passing priority, at a priority decision. */
   pass?: CandidateIndex;
   /** Finishing a declaration or a division (attackers, blockers, combat damage). */
@@ -151,7 +155,7 @@ export function slotOf(option: Candidate): number | undefined {
 export function interactions(view: PlayerView): Interactions {
   const status = view.status;
   const bySlot = new Map<number, Act[]>();
-  const players = new Map<Side, CandidateIndex>();
+  const players = new Map<Side, Act>();
   if (status.kind !== "deciding") {
     return { bySlot, players, picking: false };
   }
@@ -160,20 +164,21 @@ export function interactions(view: PlayerView): Interactions {
   let done: CandidateIndex | undefined;
   decision.candidates.forEach(({ option, ...candidate }, index) => {
     const slot = slotOf(option);
+    const act = { index, option, ...candidate };
     if (slot !== undefined) {
-      const act = { index, option, ...candidate };
       bySlot.set(slot, [...(bySlot.get(slot) ?? []), act]);
     } else if (option.kind === "player") {
-      players.set(option.player, index);
+      players.set(option.player, act);
     } else if (option.kind === "defender") {
       // Attacking no planeswalker is attacking the defending player (CR 508.1b).
-      players.set("opponent", index);
+      players.set("opponent", act);
     } else if (option.kind === "pass") {
       pass = index;
     } else if (option.kind === "done") {
       done = index;
     }
   });
+  const skip = upToOne(decision, bySlot, players);
   // Interchangeable cards collapse to one candidate (architecture §7.2): of two basic lands
   // of a name in your hand the engine offers one, of two untapped Insect tokens one attacker.
   // Either card offers it, unless the stack names one of them.
@@ -197,9 +202,46 @@ export function interactions(view: PlayerView): Interactions {
     players,
     pass,
     done,
+    skip,
     picking: decision.kind !== "priority",
     source: decision.source ?? undefined,
   };
+}
+
+/** A count of up to one target taken as the target itself
+ * ([CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c): "If the spell has a
+ * variable number of targets, the player announces how many targets they will choose before
+ * they announce those targets"): each target the count of one lets the spell choose is
+ * picked on the board, announcing one and then it, and none is a skip. Adds the targets to
+ * `bySlot` and `players`; returns the count of none, if the decision is such a count. */
+function upToOne(
+  decision: DecisionView,
+  bySlot: Map<number, Act[]>,
+  players: Map<Side, Act>,
+): CandidateIndex | undefined {
+  if (decision.kind !== "targetCount") return undefined;
+  const count = (n: number) =>
+    decision.candidates.findIndex(
+      (c) => c.option.kind === "number" && c.option.n === n,
+    );
+  const [none, one] = [count(0), count(1)];
+  if (decision.candidates.length !== 2 || none < 0 || one < 0) {
+    return undefined;
+  }
+  const { option, ...candidate } = decision.candidates[one]!;
+  for (const target of candidate.targets) {
+    const named: Candidate =
+      target.kind === "object"
+        ? { kind: "object", slot: target.slot }
+        : { kind: "player", player: target.player };
+    const then: Intent[] = [
+      { kind: "target", wants: (o) => optionsMatch(o, named) },
+    ];
+    const act = { index: one, option, ...candidate, then };
+    if (target.kind === "object") bySlot.set(target.slot, [act]);
+    else players.set(target.player, act);
+  }
+  return none;
 }
 
 /** The combat declarations: made on the board, finished with the turn button. */

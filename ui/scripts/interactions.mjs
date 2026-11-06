@@ -3364,6 +3364,196 @@ for (const [title, run, selector] of [
     );
 }
 
+// Up to one target is one targeting step (`target-up-to-one`: Teferi, Time Raveler's −3, "up to
+// one target artifact, creature, or enchantment"): its targets glow at the count, and clicking
+// one announces one target and then it; a single button chooses none.
+const upTo = await load("target-up-to-one");
+const countAt = upTo.findLastIndex(
+    (v) => v.status.decision?.kind === "targetCount",
+);
+const counted = upTo[countAt].status.decision;
+const targeted = upTo.slice(countAt + 1).find((v) => v.status.decision)
+    .status.decision;
+assert.equal(targeted.kind, "target", "the fixture announces one target");
+const countOf = (n) =>
+    counted.candidates.findIndex(
+        (c) => c.option.kind === "number" && c.option.n === n,
+    );
+const aimed = targeted.candidates.find(
+    (c) => c.label === "Staff of the Storyteller",
+).option.slot;
+const upToRun = {
+    fixture: "target-up-to-one",
+    at: countAt + 1,
+    ready: ".prompt",
+};
+await check(
+    "up to one target is picked on the board with its count",
+    async (page) => {
+        await page.clock.runFor(2000);
+        assert.ok(
+            await page.$(`${slotOf(aimed)} .card-target`),
+            "a target glows",
+        );
+        const prompt = page.getByRole("dialog");
+        assert.match(await prompt.innerText(), /Choose a target/);
+        assert.deepEqual(
+            await prompt.locator(".prompt-choices button").allInnerTexts(),
+            ["No Target"],
+            "no count is asked",
+        );
+        await page.click(slotOf(aimed));
+        assert.deepEqual(await settled(page, 2), [
+            countOf(1),
+            targeted.candidates.findIndex(
+                (c) => c.option.kind === "object" && c.option.slot === aimed,
+            ),
+        ]);
+    },
+    upToRun,
+);
+await check(
+    "up to one target chooses none from its one button",
+    async (page) => {
+        await page.getByRole("button", { name: "No Target" }).click();
+        assert.deepEqual(await settled(page, 1), [countOf(0)]);
+    },
+    upToRun,
+);
+
+// An attack on a player who controls a planeswalker (`attack-past-walker`: Snapcaster Mage
+// against The Wandering Emperor) attacks the player unasked: the engine's question of what it
+// attacks (CR 508.1b) is answered from the declaration.
+const pastWalker = await load("attack-past-walker");
+const firstAim = pastWalker.findIndex(
+    (v) => v.status.decision?.kind === "attackTarget",
+);
+const attackAt = pastWalker
+    .slice(0, firstAim)
+    .findLastIndex((v) => v.status.decision?.kind === "attacker");
+const attacking = pastWalker[attackAt].status.decision;
+const attacker = attacking.candidates.findIndex(
+    (c) => c.option.kind === "attack",
+);
+const aiming = pastWalker[firstAim].status.decision;
+await check(
+    "an attack past a planeswalker asks nothing of what it attacks",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.click(slotOf(attacking.candidates[attacker].option.slot));
+        await page.getByRole("button", { name: "Attack", exact: true }).click();
+        const [first, second] = await settled(page, 2);
+        assert.equal(first, attacker);
+        assert.deepEqual(
+            aiming.candidates[second].option,
+            { kind: "defender", planeswalker: null },
+            "the player is attacked",
+        );
+    },
+    {
+        fixture: "attack-past-walker",
+        at: attackAt + 1,
+        ready: slotOf(attacking.candidates[attacker].option.slot),
+    },
+);
+
+// Explore (`choice-explore`, a Map's) shows the card it revealed, each answer named by where
+// the card goes.
+const explore = await lastDecision("choice-explore");
+const revealed = explore.views.at(-1).players.you.library.at(-1);
+await check(
+    "explore shows the revealed card and answers by where it goes",
+    async (page) => {
+        assert.ok(await page.$(tray(revealed)), "the revealed card is shown");
+        await page
+            .getByRole("button", { name: "Graveyard", exact: true })
+            .click();
+        assert.deepEqual(await settled(page, 1), [
+            explore.decision.candidates.findIndex(
+                (c) => c.option.kind === "yes",
+            ),
+        ]);
+    },
+    { fixture: "choice-explore", at: explore.views.length, ready: ".choice" },
+);
+
+// A loot (`choice-loot`, Jace, Vryn's Prodigy's) shows its draw before it asks for the
+// discard: the card drawn is in hand, and the log says so, as the discard is asked.
+const loot = await lastDecision("choice-loot");
+const lootAt = loot.views.findLastIndex(
+    (v) => v.status.decision?.kind === "priority",
+);
+const lootHand = (v) =>
+    v.objects
+        .filter((o) => o.zone === "hand" && o.owner === "you")
+        .map((o) => o.slot);
+const lootDrawn = lootHand(loot.views.at(-1)).filter(
+    (slot) => !lootHand(loot.views[lootAt]).includes(slot),
+);
+assert.equal(lootDrawn.length, 1, "the loot draws one card");
+const jaceVp = named(loot.views[lootAt], "Jace, Vryn's Prodigy")[0];
+await check(
+    "a loot's draw shows before the discard is asked",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.click(slotOf(jaceVp));
+        await page.waitForSelector(".choice");
+        assert.ok(
+            await page.$(tray(lootDrawn[0])),
+            "the drawn card is offered",
+        );
+        const entries = await page.locator(".game-log-entry").allTextContents();
+        assert.match(entries.at(-1), /You drew a card/);
+        assert.deepEqual(await chosen(page), [
+            loot.views[lootAt].status.decision.candidates.findIndex(
+                (c) => c.option.kind === "activate" && c.option.slot === jaceVp,
+            ),
+        ]);
+    },
+    { fixture: "choice-loot", at: lootAt + 1, ready: slotOf(jaceVp) },
+);
+
+// Time Spiral's untap (`choice-untap`) offers the lands the engine may untap, the tapped ones,
+// and no others; picks of twins the engine offers one of go as that one.
+const untapping = await lastDecision("choice-untap");
+const untapView = untapping.views.at(-1);
+const tappedLands = untapView.objects
+    .filter(
+        (o) => o.zone === "battlefield" && o.types.includes("land") && o.tapped,
+    )
+    .map((o) => o.slot);
+assert.ok(
+    untapView.objects.some(
+        (o) =>
+            o.zone === "battlefield" && o.types.includes("land") && !o.tapped,
+    ),
+    "the fixture has untapped lands",
+);
+await check(
+    "an untap offers only the permanents it may untap",
+    async (page) => {
+        const shown = await page.$$eval(".choice-zone [data-slot]", (els) =>
+            els.map((e) => Number(e.dataset.slot)),
+        );
+        assert.deepEqual(
+            [...shown].sort((a, b) => a - b),
+            [...tappedLands].sort((a, b) => a - b),
+        );
+        await page.click(tray(shown[0]));
+        await page
+            .getByRole("button", {
+                name: `Untap 1/${untapping.decision.ask.max}`,
+            })
+            .click();
+        const [first] = await settled(page, 1);
+        const o = untapping.decision.candidates[first].option;
+        const named = (slot) =>
+            untapView.objects.find((x) => x.slot === slot).name;
+        assert.equal(named(o.slot), named(shown[0]), "the land picked");
+    },
+    { fixture: "choice-untap", at: untapping.views.length, ready: ".choice" },
+);
+
 await queue.drain();
 await browser.close();
 if (errors.length) {

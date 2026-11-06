@@ -317,7 +317,7 @@ export function Board({
   const pickAct = (slot: number, act: Act) => {
     const casts = castActs(can.bySlot.get(slot) ?? []);
     if (act.option.kind === "cast") setUp(slot, casts);
-    else pick(act.index);
+    else pick(act.index, act.then);
   };
 
   const states = new Map<number, CardState>();
@@ -464,7 +464,7 @@ export function Board({
       castOrSetUp(slot, casts);
     } else if (acts.length === 1) {
       // One use acts on the click: a land is played, an ability activated, a target picked.
-      pick(acts[0]!.index);
+      pick(acts[0]!.index, acts[0]!.then);
     } else {
       // One entry for all of a card's casts, which the cast step tells apart.
       const listed = acts.filter(
@@ -690,7 +690,7 @@ export function Board({
           active={active === "opponent"}
           style={{ left: 670, top: 48 }}
           target={deciding ? can.players.get("opponent") : undefined}
-          onPick={pick}
+          onPick={(act) => pick(act.index, act.then)}
         />
         <Life
           side="you"
@@ -698,7 +698,7 @@ export function Board({
           active={active === "you"}
           style={{ left: 670, top: 618 }}
           target={deciding ? can.players.get("you") : undefined}
-          onPick={pick}
+          onPick={(act) => pick(act.index, act.then)}
         />
         <div className="hud" style={POOLS.opponent}>
           <ManaPool pool={opponent.mana} />
@@ -821,6 +821,7 @@ export function Board({
         {prompting && decision && (
           <Prompt
             decision={decision}
+            skip={can.skip}
             source={sourceName}
             nameOf={nameOf}
             objects={objects}
@@ -1024,8 +1025,8 @@ function Life({
   life: number;
   active: boolean;
   style: CSSProperties;
-  target?: CandidateIndex;
-  onPick(index: CandidateIndex): void;
+  target?: Act;
+  onPick(act: Act): void;
 }) {
   const reduce = useReducedMotion() ?? false;
   const value = useMotionValue(life);
@@ -1300,6 +1301,7 @@ function Finish({
  * cards picked on the table, where each glows with its side and state in view. */
 function Prompt({
   decision,
+  skip,
   source,
   nameOf,
   objects,
@@ -1308,6 +1310,8 @@ function Prompt({
   onCancel,
 }: {
   decision: DecisionView;
+  /** Choosing no target, where the target is picked on the board with its count. */
+  skip?: CandidateIndex;
   source?: string;
   nameOf(slot: number): string;
   objects: Map<number, ObjectView>;
@@ -1327,9 +1331,19 @@ function Prompt({
     if (c.option.kind !== "plan" || !taps) return c.label;
     return taps.length > 0 ? `Tap ${tapList(taps.map(nameOf))}` : "Tap nothing";
   };
-  const buttons = decision.candidates
+  const offered = decision.candidates
     .map((c, index) => ({ c, index, label: label(c) }))
     .filter(({ c }) => c.option.kind !== "object" || !onTable(c.option.slot));
+  // Up to one target asks for the target, which the board takes with its count; the prompt
+  // offers none.
+  const buttons =
+    skip === undefined
+      ? offered
+      : [{ c: decision.candidates[skip]!, index: skip, label: "No Target" }];
+  const title = prompt(
+    skip === undefined ? decision : { ...decision, kind: "target" },
+    source,
+  );
   // Cards of one name off the table say whose they are.
   const named = (b: (typeof buttons)[number]) => {
     const o = b.c.option.kind === "object" && objects.get(b.c.option.slot);
@@ -1339,8 +1353,8 @@ function Prompt({
     return `${o.controller === "you" ? "Your" : "Their"} ${b.label}`;
   };
   return (
-    <div className="prompt" role="dialog" aria-label={prompt(decision, source)}>
-      <h2 className="prompt-title">{prompt(decision, source)}</h2>
+    <div className="prompt" role="dialog" aria-label={title}>
+      <h2 className="prompt-title">{title}</h2>
       {buttons.length > 0 && (
         <div className="prompt-choices">
           {buttons.map((b) => (

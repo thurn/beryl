@@ -229,6 +229,36 @@
       "board": "namesake-target",
       "until": "first target decision for seat 0",
       "where": ["namesake candidates"]
+    },
+    {
+      "name": "target-up-to-one",
+      "board": "target-up-to-one",
+      "until": "first targetCount decision for seat 0",
+      "after": 1
+    },
+    {
+      "name": "attack-past-walker",
+      "board": "attack-past-walker",
+      "until": "first attackTarget decision for seat 0",
+      "after": 1
+    },
+    {
+      "name": "choice-explore",
+      "board": "choice-explore",
+      "until": "first yesNo decision for seat 0",
+      "where": ["resolving Map Token"]
+    },
+    {
+      "name": "choice-loot",
+      "board": "choice-loot",
+      "until": "first discard decision for seat 0",
+      "where": ["resolving Jace, Vryn's Prodigy"]
+    },
+    {
+      "name": "choice-untap",
+      "board": "choice-untap",
+      "until": "first chooseUpTo decision for seat 0",
+      "where": ["resolving Time Spiral"]
     }
   ]
 }

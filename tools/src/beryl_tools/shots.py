@@ -204,6 +204,11 @@ INTERACTION_FIXTURES = [
     "namesake-target",
     "pay-life",
     "crowded",
+    "target-up-to-one",
+    "attack-past-walker",
+    "choice-explore",
+    "choice-loot",
+    "choice-untap",
 ]
 
 
