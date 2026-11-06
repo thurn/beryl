@@ -37,16 +37,36 @@ export function opponentActivity(
 }
 
 /** The game log at the table's left: a heading for each turn, then what happened, newest at
- * the foot, scrolled to it as entries arrive. */
-export function GameLog({ log }: { log: LogEntry[] }) {
+ * the foot, scrolled to it as entries arrive. While permanents reach into its column it is
+ * `folded` to a button, which opens it over them until pressed again, so it never lies half
+ * hidden under the cards. */
+export function GameLog({ log, folded }: { log: LogEntry[]; folded: boolean }) {
   const list = useRef<HTMLOListElement>(null);
+  const [open, setOpen] = useState(false);
+  const shown = !folded || open;
   useLayoutEffect(() => {
     const el = list.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [log]);
+  }, [log, shown]);
   return (
-    <section className="game-log" aria-label="Game log">
-      <ol ref={list} className="game-log-list">
+    <section
+      className={`game-log${folded ? " game-log-folded" : ""}`}
+      aria-label="Game log"
+    >
+      {folded && (
+        <button
+          type="button"
+          className="game-log-toggle"
+          aria-label={open ? "Hide log" : "Show log"}
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+        >
+          <svg viewBox="0 0 20 20" aria-hidden>
+            <path d="M4 5h12M4 10h12M4 15h8" />
+          </svg>
+        </button>
+      )}
+      <ol ref={list} className="game-log-list" hidden={!shown}>
         {log.map((e) => (
           <li
             key={e.key}

@@ -810,6 +810,54 @@
 .game-log-list:empty {
   display: none;
 }
+/* Folded while permanents reach into the log's column: a button in the gutter left of the rows,
+   which opens the log over the cards and their arrows (.board-arrows). */
+.game-log-folded {
+  z-index: 460;
+}
+.game-log-folded .game-log-list {
+  max-height: 228px;
+  margin-top: 8px;
+  background: rgb(24 21 19);
+  box-shadow:
+    inset 0 0 0 1px rgb(214 192 150 / 24%),
+    0 12px 28px rgb(0 0 0 / 45%);
+}
+.game-log-toggle {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: rgb(24 21 19 / 62%);
+  box-shadow: inset 0 0 0 1px rgb(214 192 150 / 16%);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition:
+    color 120ms,
+    box-shadow 120ms,
+    background 120ms;
+}
+.game-log-toggle svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.game-log-toggle:hover {
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px rgb(214 192 150 / 45%);
+}
+.game-log-toggle:active {
+  background: rgb(12 10 9 / 88%);
+}
+.game-log-toggle[aria-expanded="true"] {
+  color: var(--gold);
+}
 .game-log-entry {
   position: relative;
   padding: 2px 0 2px 15px;
@@ -1449,7 +1497,7 @@
   border: 1px solid var(--metal);
   border-top-color: var(--metal-bright);
   border-radius: 13px;
-  background: rgb(24 21 19 / 94%);
+  background: rgb(24 21 19);
   box-shadow: 0 2px 5px rgb(0 0 0 / 60%);
   font: 600 14px/24px var(--font-sans);
   color: var(--type);

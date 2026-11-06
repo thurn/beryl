@@ -68,7 +68,8 @@ export async function clippedText(page) {
  * line's glyph box may stand a little proud of its bar, so vertically only a fraction of a
  * line counts. A scrolling ancestor ends the search, since text scrolled out of view is
  * reachable, and so does a card's frame: a card may lie partly off the table or under another.
- * Each is described by its text and how it is cut, for a failure message. */
+ * Text not on a card is also cut where a card on the table lies over it, as permanents once hid
+ * the game log. Each is described by its text and how it is cut, for a failure message. */
 export function cutText(page) {
     return page.evaluate(() => {
         const CARD = ".card-slot, .card-back";
@@ -138,6 +139,59 @@ export function cutText(page) {
                     framed ||= frames;
                 }
                 if (scrolls(x) || scrolls(y) || a.matches(CARD)) break;
+            }
+            // Text of the table's own (the log, a badge, a banner) that a permanent or a hand
+            // card lies over, sampled at each line's ends and middle. Text on the cards and the
+            // stack's items, which overlap by design, is not checked.
+            if (el.closest(".card-el, .stack-item")) continue;
+            // Only where the text shows: not scrolled out of a list's view.
+            let view = {
+                left: 0,
+                top: 0,
+                right: innerWidth,
+                bottom: innerHeight,
+            };
+            for (let a = el.parentElement; a; a = a.parentElement) {
+                const s = getComputedStyle(a);
+                if (s.overflowX === "visible" && s.overflowY === "visible")
+                    continue;
+                const b = a.getBoundingClientRect();
+                view = {
+                    left: Math.max(view.left, b.left),
+                    top: Math.max(view.top, b.top),
+                    right: Math.min(view.right, b.right),
+                    bottom: Math.min(view.bottom, b.bottom),
+                };
+            }
+            covered: for (const r of range.getClientRects()) {
+                const y = (r.top + r.bottom) / 2;
+                if (y < view.top || y > view.bottom) continue;
+                for (const x of [
+                    r.left + 2,
+                    (r.left + r.right) / 2,
+                    r.right - 2,
+                ]) {
+                    if (x < view.left || x > view.right) continue;
+                    // A hit outside the element's own box is an unseen pseudo-element's.
+                    const hit = document.elementFromPoint(x, y);
+                    const b = hit?.getBoundingClientRect();
+                    const inside =
+                        b &&
+                        x >= b.left &&
+                        x <= b.right &&
+                        y >= b.top &&
+                        y <= b.bottom;
+                    // The stack, lifted over a prompt, may rise over the opponent's piles.
+                    const over =
+                        inside &&
+                        hit.closest(".card-layer .card-el:not(.card-el-stack)");
+                    if (over && !over.contains(el)) {
+                        found.push(
+                            `"${text}" lies under ${over.dataset.card ?? "a card"}`,
+                        );
+                        break covered;
+                    }
+                }
             }
         }
         return found;

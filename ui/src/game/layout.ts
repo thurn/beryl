@@ -124,6 +124,22 @@ const PERMANENT_GAP = { main: 0.06, lines: 0.24 };
 const OPEN = { start: 120, end: 1480 };
 const STACK_MARGIN = 25;
 
+/** The game log's column at the table's left (screens.css .game-log): the permanents' rows
+ * pass through its height, and a long row reaches into it. */
+const LOG_RIGHT = 318;
+
+/** Whether a permanent lies over the game log's column, so that the log must fold away rather
+ * than hide behind it (Narration.tsx). Both rows of permanents span the log's height, so only
+ * how far left one reaches matters; a little slack covers the lean of a card's near end. */
+export function overLog(placements: Layout): boolean {
+  for (const p of placements.values()) {
+    if ((p.look === "field" || p.look === "beneath") && p.x < LOG_RIGHT + 8) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** How the table is laid out: lines cross it in combat and while something is on the stack. */
 type Mode = keyof typeof PERMANENT_GAP;
 

@@ -382,6 +382,45 @@ for (const viewport of [
     );
 }
 
+// On a table whose rows reach into the log's column, the log folds to a button rather than lie
+// half hidden under the permanents; the button opens it over them, whole, and closes it again.
+await check(
+    "the log folds away from a crowded table and opens over it",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const list = page.locator(".game-log-list");
+        const toggle = page.getByRole("button", { name: "Show log" });
+        assert.ok(await list.isHidden(), "the log is folded");
+        assert.deepEqual(await cutText(page), [], "no text is cut or covered");
+        await toggle.click();
+        await page.clock.runFor(500);
+        assert.ok(await list.isVisible(), "the button opens the log");
+        const box = await list.boundingBox();
+        const under = await page.$$eval(
+            ".card-layer .card-el-field",
+            (els, b) =>
+                els.some((e) => {
+                    const r = e.getBoundingClientRect();
+                    return (
+                        r.left < b.x + b.width &&
+                        r.top < b.y + b.height &&
+                        r.bottom > b.y
+                    );
+                }),
+            box,
+        );
+        assert.ok(under, "the open log lies over permanents");
+        assert.deepEqual(await cutText(page), [], "the open log shows whole");
+        await page.getByRole("button", { name: "Hide log" }).click();
+        assert.ok(await list.isHidden(), "the button folds it again");
+    },
+    {
+        fixture: "combat-double-block",
+        at: 799,
+        ready: ".game-log-toggle",
+    },
+);
+
 /** Asserts that no permanent on the table covers a land: a long row of permanents may pass
  * over the land piles' side of the table, but in a row of its own. */
 async function assertClearOfLands(page) {

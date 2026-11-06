@@ -219,6 +219,13 @@
       "click": ["[data-slot='4']", "[data-slot='80']", "[data-slot='120']"]
     },
     {
+      "name": "game-log-open",
+      "route": "/?fixture=combat-double-block&at=799#/game",
+      "width": 1600,
+      "height": 900,
+      "click": ".game-log-toggle"
+    },
+    {
       "name": "game-declare-block",
       "route": "/?fixture=combat-double-block&at=799#/game",
       "width": 1600,

@@ -81,6 +81,7 @@ import { CastStep } from "./CastStep";
 import {
   combatBanner,
   layout,
+  overLog,
   passButton,
   phaseOf,
   pileLook,
@@ -552,7 +553,7 @@ export function Board({
 
         {banner && <StepBanner {...banner} />}
 
-        <GameLog log={log} />
+        <GameLog log={log} folded={overLog(placements)} />
         {live && <Announcements view={view} />}
 
         {view.stack.map(
