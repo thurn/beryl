@@ -469,7 +469,7 @@ impl Game {
         let c = match open {
             Open::Decision(d) => {
                 let obs = observe(&self.state, &self.table, &mut self.scratch, self.human);
-                stand_in.choose(obs, &d).0
+                stand_in.choose(obs, &without_floating(d)).0
             }
             Open::Halt => 0,
         };
@@ -854,6 +854,27 @@ fn trigger_to_stack(s: &State, t: &GameTable, d: &Decision) -> Choice {
         .max_by_key(|&(_, &opt)| resolves_late(opt))
         .expect("a decision has a candidate");
     Choice(u8::try_from(last).expect("at most 64 candidates"))
+}
+
+/// `d` without the mana activations a priority offers the human on their own
+/// ([`Profile::taps_mana`]), for an agent standing in for them: tapping ahead of a payment is
+/// dominated by tapping during it (architecture §10), and search never sees them. The engine
+/// lists them last, so every other candidate keeps its index.
+fn without_floating(mut d: Decision) -> Decision {
+    if let (DecisionKind::Priority, Candidates::Options(list)) = (d.kind, &mut d.candidates) {
+        let kept = list
+            .iter()
+            .take_while(|o| !matches!(o, Opt::Mana { .. }))
+            .count();
+        debug_assert!(
+            list.as_slice()[kept..]
+                .iter()
+                .all(|o| matches!(o, Opt::Mana { .. })),
+            "mana activations come last"
+        );
+        list.retain(|o| !matches!(o, Opt::Mana { .. }));
+    }
+    d
 }
 
 /// `profile` under the human's `stops`. Full control asks the human every priority they get,
