@@ -239,7 +239,7 @@ impl ManaFace {
             return ManaFace::Read;
         }
         let kinds = simple().fold(0, |k, a| k | a.produces.colors);
-        let amount = simple().last().map_or(0, |a| a.produces.amount);
+        let amount = simple().next_back().map_or(0, |a| a.produces.amount);
         if kinds == 0 {
             return ManaFace::Read;
         }
@@ -261,9 +261,21 @@ fn has_other_ability(face: &Face) -> bool {
     })
 }
 
+/// The permanents `player` controls, in battlefield order: read from their derived
+/// characteristics, which are at their places in the battlefield list.
+fn controlled(s: &State, player: Seat) -> impl Iterator<Item = Slot> + '_ {
+    debug_assert!(!s.flags.derived_dirty, "derived read while dirty");
+    s.battlefield
+        .iter()
+        .zip(s.derived.iter())
+        .filter(move |(_, d)| d.controller == player)
+        .map(|(&slot, _)| slot)
+}
+
 /// What an untapped source `player` controls makes, if the permanent in `slot` is one: the
 /// kinds of mana, how much, whether it has another ability, and whether making it sacrifices
 /// the source.
+#[inline]
 fn source(s: &State, t: &GameTable, player: Seat, slot: Slot) -> Option<(u8, u8, bool, bool)> {
     let o = s.object(slot);
     let mana = t.mana_face(o.card, o.face);
@@ -328,7 +340,7 @@ impl Sources {
         exclude: Bitboard,
     ) -> Result<Self, Full> {
         let mut classes: Fixed<Class, CLASSES> = Fixed::new();
-        for &slot in s.battlefield() {
+        for slot in controlled(s, player) {
             if exclude.contains(slot) {
                 continue;
             }
@@ -449,7 +461,7 @@ impl Funds {
         // The classes [`Sources::of`] would form, so that more than it holds is `Full` here
         // too.
         let mut classes: Fixed<(u8, u8, bool, Option<CardIx>), CLASSES> = Fixed::new();
-        for &slot in s.battlefield() {
+        for slot in controlled(s, player) {
             if let Some((kinds, amount, other, consumed)) = source(s, t, player, slot) {
                 sources.push((slot, kinds, amount))?;
                 // Sources a plan consumes are a class per card.

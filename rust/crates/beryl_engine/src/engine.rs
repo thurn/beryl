@@ -331,71 +331,76 @@ fn perform_or_stall(
 /// The open decision, a pure function of the state, so `apply` recomputes rather than
 /// remembers it. The sink only counts the payment solver's runs.
 pub(crate) fn decision(s: &State, t: &GameTable, sink: &mut Sink) -> Result<Decision, Full> {
-    Ok(match s.pending {
+    // Each arm returns its result as it is, so a decision is built once, in place.
+    match s.pending {
         Pending::None => match trigger::next_to_stack(s) {
             Some((player, triggers)) => {
                 let mut list = Fixed::new();
                 for &i in &triggers {
                     list.push(Opt::Trigger(i))?;
                 }
-                Decision {
+                Ok(Decision {
                     player,
                     kind: DecisionKind::TriggerOrder,
                     candidates: Candidates::Options(list),
                     ask: Ask::Plain,
-                }
+                })
             }
-            None => priority_decision(s, t)?,
+            None => priority_decision(s, t),
         },
         Pending::PlayOrDraw { chooser } => {
-            options(chooser, DecisionKind::PlayOrDraw, &[Opt::Play, Opt::Draw])?
+            options(chooser, DecisionKind::PlayOrDraw, &[Opt::Play, Opt::Draw])
         }
         Pending::Mulligans => match start::mulligan_question(s) {
-            (p, true) => objects(p, DecisionKind::PutOnBottom, collapse(s, turn::hand(s, p))),
-            (p, false) => options(p, DecisionKind::KeepOrMulligan, &[Opt::Keep, Opt::Mulligan])?,
+            (p, true) => Ok(objects(
+                p,
+                DecisionKind::PutOnBottom,
+                collapse(s, turn::hand(s, p)),
+            )),
+            (p, false) => options(p, DecisionKind::KeepOrMulligan, &[Opt::Keep, Opt::Mulligan]),
         },
         Pending::Discard => {
             let p = s.turn.active;
             let count = zone::hand_size(s, p).saturating_sub(turn::MAX_HAND_SIZE);
-            Decision {
+            Ok(Decision {
                 ask: Ask::Cleanup {
                     count: u8::try_from(count).unwrap_or(u8::MAX),
                 },
                 ..objects(p, DecisionKind::Discard, collapse(s, turn::hand(s, p)))
-            }
+            })
         }
         Pending::LegendRule { kept } => {
             let (p, group) =
                 sba::unresolved_legends(s, t, kept).expect("a legend-rule group without a keeper");
-            objects(p, DecisionKind::LegendRule, collapse(s, group))
+            Ok(objects(p, DecisionKind::LegendRule, collapse(s, group)))
         }
-        Pending::EnterPayingLife { slot, life } => Decision {
+        Pending::EnterPayingLife { slot, life } => Ok(Decision {
             ask: Ask::PayLife { land: slot, life },
             ..options(
                 s.object(slot).owner,
                 DecisionKind::PayLife,
                 &[Opt::Yes, Opt::No],
             )?
-        },
-        Pending::DeclareAttackers { attacker } => combat::attack_decision(s, attacker)?,
-        Pending::DeclareBlockers { blocker } => combat::block_decision(s, blocker)?,
-        Pending::CombatDamage { done, lethal } => combat::division_decision(s, done, lethal)?,
-        Pending::Casting(c) => cast::decision(s, t, sink, &c)?,
+        }),
+        Pending::DeclareAttackers { attacker } => combat::attack_decision(s, attacker),
+        Pending::DeclareBlockers { blocker } => combat::block_decision(s, blocker),
+        Pending::CombatDamage { done, lethal } => combat::division_decision(s, done, lethal),
+        Pending::Casting(c) => cast::decision(s, t, sink, &c),
         Pending::TurningFaceUp { slot, remaining } => {
-            face_down::decision(s, t, sink, slot, remaining)?
+            face_down::decision(s, t, sink, slot, remaining)
         }
-        Pending::Resolving(r) => r.question,
+        Pending::Resolving(r) => Ok(r.question),
         Pending::CastOffer {
             object,
             player,
             free,
-        } => Decision {
+        } => Ok(Decision {
             player,
             kind: DecisionKind::CastOffer,
             candidates: Candidates::Options(cast::offer_options(s, t, object, player, free)?),
             ask: Ask::Plain,
-        },
-    })
+        }),
+    }
 }
 
 fn objects(player: Seat, kind: DecisionKind, candidates: Bitboard) -> Decision {
@@ -426,7 +431,16 @@ fn options(player: Seat, kind: DecisionKind, opts: &[Opt]) -> Result<Decision, F
 /// may cast spells, activate abilities, and take special actions."
 fn priority_decision(s: &State, t: &GameTable) -> Result<Decision, Full> {
     let player = s.turn.priority;
-    let mut list = Fixed::new();
+    // Built in place: the list is most of a decision's size.
+    let mut d = Decision {
+        player,
+        kind: DecisionKind::Priority,
+        candidates: Candidates::Options(Fixed::new()),
+        ask: Ask::Plain,
+    };
+    let Candidates::Options(list) = &mut d.candidates else {
+        unreachable!("built with options");
+    };
     list.push(Opt::Pass)?;
     if turn::may_play_land(s, player) {
         let lands: Bitboard = turn::hand(s, player)
@@ -437,14 +451,9 @@ fn priority_decision(s: &State, t: &GameTable) -> Result<Decision, Full> {
             list.push(Opt::PlayLand(slot))?;
         }
     }
-    cast::priority_options(s, t, player, &mut list)?;
-    face_down::face_up_options(s, t, player, &mut list)?;
-    Ok(Decision {
-        player,
-        kind: DecisionKind::Priority,
-        candidates: Candidates::Options(list),
-        ask: Ask::Plain,
-    })
+    cast::priority_options(s, t, player, list)?;
+    face_down::face_up_options(s, t, player, list)?;
+    Ok(d)
 }
 
 /// The first face of a card that is a land, which is the face it is played with
@@ -731,15 +740,22 @@ pub(crate) fn collapse_in_order(s: &State, slots: &[Slot]) -> Bitboard {
 
 fn collapse_ordered(s: &State, slots: impl Iterator<Item = Slot>) -> Bitboard {
     let signature = |slot: Slot| zone::signature(s, slot);
-    let referenced = cast::referenced(s) | combat::related(s);
+    // Found only once two candidates are of one card: until then every one is kept, named by
+    // a reference or not.
+    let mut referenced = None;
     let mut kept = Bitboard::EMPTY;
     for slot in slots {
         // The signature holds the card, so objects of other cards are told apart without
         // building theirs.
         let card = s.object(slot).card;
+        if s.object(slot).face == FaceIx::DOWN || !kept.iter().any(|k| s.object(k).card == card) {
+            kept.insert(slot);
+            continue;
+        }
+        let referenced =
+            *referenced.get_or_insert_with(|| cast::referenced(s) | combat::related(s));
         let mut own = None;
         if referenced.contains(slot)
-            || s.object(slot).face == FaceIx::DOWN
             || !kept.iter().any(|k| {
                 !referenced.contains(k)
                     && s.object(k).card == card
