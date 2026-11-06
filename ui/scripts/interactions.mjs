@@ -1280,6 +1280,65 @@ await check(
     },
 );
 
+// A face-down permanent a side, the human's tapped: each in a permanent's frame (the field's
+// short one, not a card back's full height), showing its 2/2, over no land.
+const faceDown = blockersView.objects.filter(
+    (o) => o.zone === "battlefield" && o.facing === "down",
+);
+for (const side of ["you", "opponent"]) {
+    assert.ok(
+        faceDown.some((o) => o.controller === side),
+        `the blockers fixture has a face-down permanent for ${side}`,
+    );
+}
+assert.ok(
+    faceDown.some((o) => o.tapped),
+    "the blockers fixture has a tapped face-down permanent",
+);
+// The face-up permanents: a tapped one draws in a frame of its own size.
+const faceUp = blockersView.objects.filter(
+    (o) =>
+        o.zone === "battlefield" &&
+        o.facing === "up" &&
+        !o.types.includes("land"),
+);
+await check(
+    "a face-down permanent stands in a permanent's frame, a 2/2",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const el = (o) => page.locator(`.card-el[data-slot="${o.slot}"]`);
+        // Untransformed sizes, which a tapped card's turn leaves alone.
+        const size = (o) =>
+            el(o).evaluate((e) => [e.offsetWidth, e.offsetHeight]);
+        for (const o of faceDown) {
+            const like = faceUp.find((u) => u.tapped === o.tapped);
+            assert.ok(like, `a face-up permanent is tapped as ${o.slot} is`);
+            const [width, height] = await size(like);
+            assert.match(
+                await el(o).getAttribute("class"),
+                /card-el-field/,
+                `${o.slot} is drawn as a permanent`,
+            );
+            const [w, h] = await size(o);
+            assert.ok(
+                Math.abs(w - width) <= 1 && Math.abs(h - height) <= 1,
+                `${o.slot} is ${w} by ${h}, ${like.name} ${width} by ${height}`,
+            );
+            assert.equal(
+                await el(o).locator(".card-pt").textContent(),
+                "2/2",
+                `${o.slot} shows its power and toughness`,
+            );
+        }
+        await assertClearOfLands(page);
+    },
+    {
+        fixture: "combat-blockers",
+        at: blockersViews.length,
+        ready: `[data-slot="${faceDown[0].slot}"]`,
+    },
+);
+
 // A table with tapped and untapped lands and creatures, and a card Portable Hole exiled.
 const beneathViews = await load("exiled-beneath");
 const beneathView = beneathViews.at(-1);
