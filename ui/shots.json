@@ -477,12 +477,7 @@
       "name": "game-choice-pay",
       "route": "/?fixture=choice-pay#/game",
       "width": 1600,
-      "height": 900,
-      "known": [
-        "screen: Mana Tithe (slot 70, stack) drawn 0 times",
-        "screen at 1180×820: Mana Tithe (slot 70, stack) drawn 0 times"
-      ],
-      "knownWhy": "The resolving spell that asks a choice on the table, rather than in an overlay, is drawn nowhere: the view takes it off the stack (decision.resolving), and only an overlay's source card shows it."
+      "height": 900
     },
     {
       "name": "game-choice-search",
@@ -500,12 +495,7 @@
       "name": "game-choice-thirst-hand",
       "route": "/?fixture=choice-thirst&at=2#/game",
       "width": 1600,
-      "height": 900,
-      "known": [
-        "screen: Thirst for Discovery (slot 1, stack) drawn 0 times",
-        "screen at 1180×820: Thirst for Discovery (slot 1, stack) drawn 0 times"
-      ],
-      "knownWhy": "The resolving spell that asks a choice on the table, rather than in an overlay, is drawn nowhere: the view takes it off the stack (decision.resolving), and only an overlay's source card shows it."
+      "height": 900
     },
     {
       "name": "game-untap-teferi",

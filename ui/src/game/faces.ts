@@ -164,8 +164,8 @@ export function abilityText(
   if (at !== undefined) return text.split("\n")[at]!;
   // A delayed triggered ability is created by another ability's words rather than printed
   // as one of the card's own (CR 603.7a: "Delayed triggered abilities are created during the
-  // resolution of spells or abilities"), as Teferi, Hero of Dominaria's +1 makes "At the
-  // beginning of the next end step, untap up to two lands": its words from where they begin.
+  // resolution of spells or abilities"), as a loyalty ability's "At the beginning of the
+  // next end step, ..." does: its words from where they begin.
   const delayed = triggered
     ? /(?:^|[.:] )((?:At the beginning|When|Whenever)\b[^\n]*)/m.exec(text)
     : null;

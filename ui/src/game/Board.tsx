@@ -70,6 +70,7 @@ import {
   prompt,
   slotOf,
   triggerPlan,
+  withResolving,
   type Act,
   type Intent,
 } from "./decisions";
@@ -202,7 +203,7 @@ interface Casting {
 }
 
 export function Board({
-  view,
+  view: given,
   live,
   log,
   waiting,
@@ -215,6 +216,8 @@ export function Board({
   dimmed = false,
   inert = false,
 }: BoardProps) {
+  // The table shows what is resolving on the stack while its resolution asks a question.
+  const view = useMemo(() => withResolving(given), [given]);
   const [hovered, setHovered] = useState<number>();
   // The hand card a click found nothing to do with, which the inspector says why of while
   // the pointer stays on it.

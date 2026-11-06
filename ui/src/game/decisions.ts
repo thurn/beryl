@@ -9,6 +9,7 @@ import type {
   Payment,
   PlayerView,
   Side,
+  StackItem,
 } from "../generated/protocol";
 
 /** One thing a card or a player offers: the candidate's index and its label; for a cast or an
@@ -92,6 +93,23 @@ export function follow(
     intent.picked?.(decision.candidates[index]!.option);
   }
   return { intent, index, rest: plan.slice(i + 1) };
+}
+
+/** The view with what is resolving back on top of its stack. The engine takes a spell or
+ * ability off the stack as it begins to resolve, and a question its resolution asks names it
+ * as `resolving`; it is still on the stack until it finishes (CR 608.2n: "As the final part of
+ * an instant or sorcery spell's resolution, the spell is put into its owner's graveyard"), and
+ * the player answering sees what asks, as a spell asking whether they pay its tax. */
+export function withResolving(view: PlayerView): PlayerView {
+  if (view.status.kind !== "deciding") return view;
+  const resolving = view.status.decision.resolving;
+  if (!resolving) return view;
+  const same = (item: StackItem) =>
+    resolving.kind === "spell"
+      ? item.kind === "spell" && item.slot === resolving.slot
+      : JSON.stringify(item) === JSON.stringify(resolving);
+  if (view.stack.some(same)) return view;
+  return { ...view, stack: [...view.stack, resolving] };
 }
 
 /** The objects a spell or ability on the stack names, a target or an ability's source. The
