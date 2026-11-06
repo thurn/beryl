@@ -438,19 +438,24 @@ impl Policy<'_> {
                 .zone(self.me, Zone::Hand)
                 .iter()
                 .any(|s| self.info(s).is_some_and(|info| info.wheel))
-            || self.obs.battlefield().iter().any(|&slot| {
-                self.obs.controller(slot) == self.me
-                    && self.obs.card(slot).is_some_and(|card| {
-                        self.t
-                            .def(card)
-                            .face(self.obs.object(slot).face)
-                            .abilities
-                            .iter()
-                            .any(|a| {
-                                a.replacement == Replacement::WinInsteadOfDrawingFromEmptyLibrary
-                            })
-                    })
-            })
+            || self.wins_from_empty(self.me)
+    }
+
+    /// Whether `who` controls a permanent that wins them the game instead of the draw from an
+    /// empty library, as Jace, Wielder of Mysteries: "If you would draw a card while your
+    /// library has no cards in it, you win the game instead."
+    pub(crate) fn wins_from_empty(&self, who: Seat) -> bool {
+        self.obs.battlefield().iter().any(|&slot| {
+            self.obs.controller(slot) == who
+                && self.obs.card(slot).is_some_and(|card| {
+                    self.t
+                        .def(card)
+                        .face(self.obs.object(slot).face)
+                        .abilities
+                        .iter()
+                        .any(|a| a.replacement == Replacement::WinInsteadOfDrawingFromEmptyLibrary)
+                })
+        })
     }
 
     /// `v`, or 0 when the ability's first target is not worth it: a harmful one needs an

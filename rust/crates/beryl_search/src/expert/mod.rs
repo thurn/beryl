@@ -2395,6 +2395,19 @@ impl Expert<'_> {
         {
             return Some(best(d, |c| Some(i32::from(c.object()? == pump))));
         }
+        // Jace, Wielder of Mysteries' +1: "Target player mills two cards." Not the opponent
+        // while an empty library would win them the game; our own would win it for us.
+        if let Some(e) = self.obs().stack().last()
+            && e.controller == self.me()
+            && self.p.t.def(e.card).name == names::JACE_WIELDER_OF_MYSTERIES
+            && matches!(d.candidates, beryl_engine::Candidates::Options(_))
+        {
+            let mill_self = self.p.wins_from_empty(self.opp());
+            return Some(best(d, |c| match c.option() {
+                Some(Opt::Player(p)) => Some(i32::from((p == self.me()) == mill_self)),
+                _ => None,
+            }));
+        }
         // Jace, Telepath Unbound's −3: the card worth casting again.
         if let Some(e) = self.obs().stack().last()
             && e.controller == self.me()
