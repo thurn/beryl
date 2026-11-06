@@ -107,10 +107,11 @@ of multi-card choices, pruning of dominated moves and weak rollout policies.
    and scored by a simple evaluation. If strength climbs with budget, speed is
    the lever. If it is flat, rollouts and evaluation are.
 2. **Make the engine fast.** The goal is more full-game rollouts per core-second
-   on the cube rollout benchmark: one `next` plus `apply` at 1.5 µs per decision
-   instead of about 27 µs, which takes about 120 rollouts per core-second to
-   about 2,000. This also speeds research: one 300-seed paired A/B costs about 2
-   hours on 16 cores today.
+   on the cube rollout benchmark: one `next` plus `apply` at 1.5 µs per
+   decision. On 2026-11-05 it took 4.0 µs, about 1,740 rollouts per core-second
+   on a busy machine; by-2l8.6 has since cut a rollout's instructions by a
+   third, untimed. This also speeds research: one 300-seed paired A/B costs
+   about 2 hours on 16 cores today.
 3. **Build the general evaluator and shallow search.** Start from generic
    features and 17lands card scores. Add each term in its own paired A/B.
 4. **Learn a value model** from 17lands snapshots, then from self-play once the
@@ -118,6 +119,24 @@ of multi-card choices, pruning of dominated moves and weak rollout policies.
    and keep it only if it wins a paired A/B. Good calibration is not evidence.
 5. **Leave the WU mirror.** Measure on cube decks the evaluator was never tuned
    on.
+
+**A long-think reference agent** runs beside these steps. An agent known to be
+strong, however slow, is a teacher and a yardstick for steps 3 and 4.
+`just longthink` plays `mcts-hidden` against `expert-frozen` in the cb8d5d5f
+mirror at 3k, 10k, 30k, 100k, 300k and 1M rollouts per decision, then x3 a rung,
+with 18 trees:
+
+- Each rung plays 30 seat-alternated seed pairs before the next opens, then
+  keeps adding pairs. Every rung has the same seeds, so rungs compare pair by
+  pair. It is the budget half of step 1, at scale.
+- A rung that beats the expert 85%+ also plays the rung below it, an Elo chain.
+  `mcts-omniscient` also plays the expert at the top rung's budget, to show
+  whether hidden information has become the bottleneck.
+- Every searched decision's root visits and mean rewards go to the run's
+  `decisions.jsonl`, as training data.
+- It has no end and no pre-registered bar: the summary streams, and we stop when
+  we have learned enough. The exact stop and subtree reuse of
+  engine-architecture.md §19.1 save about 30% of its rollouts.
 
 ## 6. How we prove it works
 

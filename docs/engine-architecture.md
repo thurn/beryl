@@ -861,7 +861,7 @@ searcher optimistic, which is tuned, not fixed.
 | `beryl_scenario` | Scenario value types, the strict runner, the JSON serialization                                                                                                                            | `beryl_engine`                                                   |
 | `beryl_search`   | The `Agent` trait, `RandomAgent`, the greedy agent that is also the rollout policy, the expert system, MCTS, evaluation                                                                    | `beryl_engine`                                                   |
 | `beryl_session`  | `Sessions` and their threads, the `PlayerView` protocol and IPC names with generated TypeScript types, replay files                                                                        | `beryl_cards`, `beryl_engine`, `beryl_search`                    |
-| `beryl_cli`      | Headless games between agents, tournaments, transcripts, UI fixtures recorded from sessions of seeded games or of scripted boards                                                          | `beryl_cards`, `beryl_scenario`, `beryl_search`, `beryl_session` |
+| `beryl_cli`      | Headless games between agents, tournaments, the long-think ladder, transcripts, UI fixtures recorded from sessions of seeded games or of scripted boards                                   | `beryl_cards`, `beryl_scenario`, `beryl_search`, `beryl_session` |
 | `beryl_draft`    | Pack generation, draft state, the draft bot, deckbuilding (not yet created)                                                                                                                | `beryl_cards`                                                    |
 | `beryl_bench`    | Benchmark support and the `_counts`, `_abba` and `_timing` targets of the example and of the cube rollout benchmark                                                                        | `beryl_cards`, `beryl_engine`, `beryl_search`                    |
 | `beryl_app`      | The Tauri shell: IPC commands and events around `beryl_session`, the card-art cache                                                                                                        | all of the above                                                 |
@@ -1023,9 +1023,9 @@ card-specific knowledge (when to hold a counterspell, when to cast a wheel,
 which land to Strip Mine), using engine copies only for combat math, lethal
 checks and comparing payment plans. At the tournament budget of 300 iterations
 and 4 trees it beats both MCTS agents about 88% of the time: the search is
-starved by engine speed, at about 120 rollouts per core-second. It ships beside
-a `RandomAgent` used for fuzzing, and its games and the greedy agent's supply
-the positions of the cube rollout benchmark (§18).
+starved, at 75 full-game rollouts a tree. It ships beside a `RandomAgent` used
+for fuzzing, and its games and the greedy agent's supply the positions of the
+cube rollout benchmark (§18).
 
 **The rollout policy** (**D21**) is separate from the expert system, and
 cheaper. Wrapped as an `Agent`, it is also the greedy opponent:

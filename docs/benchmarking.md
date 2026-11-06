@@ -67,7 +67,19 @@ over the whole corpus:
 `rollout_timing` prints the decisions per rollout and per turn first, and its
 throughputs read as copies, decisions and rollouts per second on one core.
 `rollout_abba` runs the current code on both sides until an optimization puts
-its old version in A. `rollout::tests::corpus_never_changes` pins the corpus.
+its old version in A. `rollout::tests::corpus_never_changes` pins the corpus,
+and `rollouts_never_change` every corpus rollout's answers and ending.
+
+- **Profile** with the counts: after `just bench-count`, `callgrind_annotate` in
+  the VM reads the `rollouts` subject's exclusive cost by symbol from
+  `$HOME/gungraun/<worktree>/beryl_bench/rollout_counts/cube_rollout/rollouts.corpus/callgrind.rollouts.corpus.out`.
+  The largest cost is building priority decisions (`engine::decision`, about
+  19%), then the mana solver's source scan (`mana::source`, about 9%).
+- **A speed-up that keeps every answer** reaches a running long-think ladder:
+  `just longthink --upgrade` adopts the new binary only once the run's games
+  replay identically and a sample of its searches choose as they did. A change
+  that moves any answer re-pins `rollouts_never_change` and needs
+  `just longthink --new`.
 
 ## Determinism
 
