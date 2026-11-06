@@ -164,3 +164,7 @@ export function abilityParagraph(
     : /^[^(]*:/;
   return text.split("\n").flatMap((p, i) => (kind.test(p) ? [i] : []))[nth];
 }
+
+/** A paragraph of rules text without its reminder text, as a menu or the cast step says it. */
+export const withoutReminder = (paragraph: string) =>
+  paragraph.replace(/\s*\([^)]*\)/g, "").trim();

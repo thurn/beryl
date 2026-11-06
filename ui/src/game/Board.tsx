@@ -11,7 +11,6 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type ReactNode,
 } from "react";
 import {
   animate,
@@ -20,7 +19,7 @@ import {
   useMotionValue,
   useReducedMotion,
 } from "motion/react";
-import { faceEntry, landFace } from "../cards";
+import { cardEntry, faceEntry, landFace } from "../cards";
 import type { Highlight } from "../components/Card";
 import {
   Button,
@@ -68,6 +67,7 @@ import {
   isOpening,
   playActs,
   prompt,
+  slotOf,
   untapPlan,
   type Act,
   type Intent,
@@ -80,7 +80,13 @@ import {
   emptyDraft,
   type Draft,
 } from "./combat";
-import { abilityParagraph, abilityText, BLANK, useAbilityFace } from "./faces";
+import {
+  abilityParagraph,
+  abilityText,
+  BLANK,
+  useAbilityFace,
+  withoutReminder,
+} from "./faces";
 import {
   asksCastStep,
   castActs,
@@ -174,11 +180,13 @@ const BATTLEFIELD_EDGE = 690;
 const FORWARD = 60;
 
 /** A menu of a card's candidates, open at a point on the stage; `pointed`, the one under
- * the pointer. */
+ * the pointer. A planeswalker's lists its loyalty abilities it cannot activate too, as
+ * `unaffordable` paragraphs of its rules text. */
 interface Menu {
   slot: number;
   at: Point;
   acts: Act[];
+  unaffordable?: number[];
   pointed?: Act;
 }
 
@@ -206,6 +214,8 @@ export function Board({
   const [hovered, setHovered] = useState<number>();
   const [menu, setMenu] = useState<Menu>();
   const [casting, setCasting] = useState<Casting>();
+  // The spell cast last and the permanents its payment taps.
+  const [paid, setPaid] = useState<{ slot: number; taps: number[] }>();
   // The combat declaration being made, shown as if declared until it is confirmed.
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   // The permanents picked on the table to untap, until the pick is confirmed.
@@ -318,7 +328,11 @@ export function Board({
     choose(index, then);
   };
   /** Casts with `choice`: the cast, then its X and payment as each is asked. */
-  const cast = (choice: CastChoice) => pick(choice.act.index, castPlan(choice));
+  const cast = (choice: CastChoice) => {
+    const slot = slotOf(choice.act.option);
+    if (slot !== undefined) setPaid({ slot, taps: tapsOf(choice) });
+    pick(choice.act.index, castPlan(choice));
+  };
   /** Plays an act of a card's: a cast with its least X and the default payment. */
   const play = (act: Act) =>
     act.option.kind === "cast" ? cast(firstChoice(act)) : pick(act.index);
@@ -327,17 +341,22 @@ export function Board({
     setMenu(undefined);
     setCasting({ slot, casts, choice: firstChoice(casts[0]!) });
   };
-  /** Casts from a click: at once, as a drop does, unless the cast step has a choice to offer:
-   * which cast, X, or which permanents pay. */
+  /** Whether casting from `casts` stops in the cast step: to choose which cast or X or, under
+   * full control (Arena's), which permanents pay. Otherwise the client pays, as Arena's
+   * auto-tapper does, the way the session ranks first. */
+  const stepsIn = (casts: Act[]) =>
+    asksCastStep(casts) ||
+    (view.stops === "exact" && plansOf(firstChoice(casts[0]!)).length > 1);
+  /** Casts from a click: at once, as a drop does, unless the cast step has a choice to
+   * offer. */
   const castOrSetUp = (slot: number, casts: Act[]) => {
-    const choice = firstChoice(casts[0]!);
-    if (asksCastStep(casts) || plansOf(choice).length > 1) setUp(slot, casts);
-    else cast(choice);
+    if (stepsIn(casts)) setUp(slot, casts);
+    else cast(firstChoice(casts[0]!));
   };
-  /** A menu's pick: a cast goes to the cast step, with all of the card's casts. */
+  /** A menu's pick: a cast, with all of the card's casts, is made as a click makes it. */
   const pickAct = (slot: number, act: Act) => {
     const casts = castActs(can.bySlot.get(slot) ?? []);
-    if (act.option.kind === "cast") setUp(slot, casts);
+    if (act.option.kind === "cast") castOrSetUp(slot, casts);
     else pick(act.index, act.then);
   };
 
@@ -404,7 +423,16 @@ export function Board({
   const paying = castingNow
     ? castingNow.choice
     : liftedCast && firstChoice(liftedCast);
-  const taps = new Set(paying ? tapsOf(paying) : []);
+  // The spell cast last keeps its payment lit while it is on top of the stack: as its
+  // targets are chosen, before the payment is made (CR 601.2c to 601.2h), and once its
+  // permanents are tapped.
+  const taps = new Set(
+    paying
+      ? tapsOf(paying)
+      : paid && top?.kind === "spell" && top.slot === paid.slot
+        ? paid.taps
+        : [],
+  );
   const others = castingNow
     ? plansOf(castingNow.choice).flatMap((p) =>
         p.taps.filter((slot) => !taps.has(slot)),
@@ -523,7 +551,12 @@ export function Board({
       return false;
     }
     const casts = castActs(acts);
-    if (casts.length > 0 && casts.length === acts.length) {
+    const walker = loyaltyMenu(objects.get(slot), acts);
+    if (walker) {
+      // A loyalty ability, which cannot be taken back once its cost is paid, is chosen from
+      // all of them, even when only one can be activated.
+      setMenu({ slot, at, acts, unaffordable: walker });
+    } else if (casts.length > 0 && casts.length === acts.length) {
       // A card that can only be cast is cast, or set up in the cast step.
       castOrSetUp(slot, casts);
     } else if (acts.length === 1) {
@@ -558,8 +591,9 @@ export function Board({
     if (objects.get(slot)?.zone === "hand") {
       const plays = inHand ? [] : playActs(acts);
       const casts = castActs(plays);
-      if (casts.length === plays.length && asksCastStep(casts)) {
-        // The cast asks for more (which cast, X): the cast step, with the card back in hand.
+      if (casts.length > 0 && casts.length === plays.length && stepsIn(casts)) {
+        // The cast asks for more (which cast, X, its payment): the cast step, with the card
+        // back in hand.
         setUp(slot, casts);
         return false;
       }
@@ -966,6 +1000,7 @@ export function Board({
           <ActionMenu
             menu={menu}
             title={objects.get(menu.slot)?.name ?? undefined}
+            objects={objects}
             onPick={(act) => pickAct(menu.slot, act)}
             onPoint={(act) => setMenu({ ...menu, pointed: act })}
             onClose={() => setMenu(undefined)}
@@ -1668,17 +1703,117 @@ function litParagraph(
   return text ? abilityParagraph(text, false, act.nth) : undefined;
 }
 
-/** What a card offers, listed where it was clicked or dropped; pointing at an option says
- * which. */
+/** A loyalty ability's paragraph: its loyalty cost, then a colon
+ * ([CR 606.4](https://yawgatog.com/resources/magic-rules/#R6064): "The cost to activate a
+ * loyalty ability of a permanent is to put on or remove from that permanent a certain number
+ * of loyalty counters, as shown by the loyalty symbol in the ability's cost"). */
+const LOYALTY = /^[+\u2212-]?(\d+|X): /;
+
+/** For a planeswalker whose activations are all a click offers, the paragraphs of its rules
+ * text that say the loyalty abilities it cannot activate now, for its menu to show disabled;
+ * otherwise none, and the click does what it does for any card. */
+function loyaltyMenu(
+  o: ObjectView | undefined,
+  acts: Act[],
+): number[] | undefined {
+  if (
+    !o?.name ||
+    o.zone !== "battlefield" ||
+    !o.types.includes("planeswalker") ||
+    !acts.every((a) => a.option.kind === "activate")
+  ) {
+    return undefined;
+  }
+  const text = faceEntry(o.name)?.oracle_text;
+  if (!text) return undefined;
+  const offered = new Set(
+    acts.map((a) => a.nth !== null && abilityParagraph(text, false, a.nth)),
+  );
+  return text
+    .split("\n")
+    .flatMap((p, i) => (LOYALTY.test(p) && !offered.has(i) ? [i] : []));
+}
+
+/** One line of a card's menu: what it costs, in symbols, and what it does, from its
+ * paragraph or else (`labelled`) the candidate's label; a loyalty ability the planeswalker
+ * cannot activate has no candidate. `at` is its paragraph in the card's rules text. */
+interface MenuEntry {
+  act?: Act;
+  at?: number;
+  cost?: string;
+  effect: string;
+  labelled?: boolean;
+}
+
+/** The lines of a card's menu: each candidate, by its cost and effect (an activation's from
+ * its paragraph, a cast's the card's mana cost), and a planeswalker's unaffordable loyalty
+ * abilities among them, in the order its rules text lists them. */
+function menuEntries(
+  menu: Menu,
+  objects: Map<number, ObjectView>,
+): MenuEntry[] {
+  const name = objects.get(menu.slot)?.name ?? undefined;
+  const text = name ? faceEntry(name)?.oracle_text : undefined;
+  const paragraphs = text?.split("\n") ?? [];
+  const entries: MenuEntry[] = menu.acts.map((act) => {
+    const o = act.option;
+    if (o.kind === "activate") {
+      const at = litParagraph(act, objects);
+      const said = at === undefined ? undefined : paragraphs[at];
+      const cost =
+        name && act.label.startsWith(`${name}: `)
+          ? act.label.slice(name.length + 2)
+          : undefined;
+      if (said === undefined) {
+        return cost === undefined
+          ? { act, effect: act.label, labelled: true }
+          : { act, cost, effect: "" };
+      }
+      return {
+        act,
+        at,
+        cost,
+        effect: withoutReminder(said.slice(said.indexOf(": ") + 2)),
+      };
+    }
+    if (o.kind === "cast") {
+      const cost = name ? cardEntry(name)?.faces[o.face]?.mana_cost : undefined;
+      return {
+        act,
+        cost: cost || undefined,
+        effect: act.label,
+        labelled: true,
+      };
+    }
+    return { act, effect: act.label, labelled: true };
+  });
+  for (const at of menu.unaffordable ?? []) {
+    const p = paragraphs[at]!;
+    const colon = p.indexOf(": ");
+    entries.push({
+      at,
+      cost: p.slice(0, colon),
+      effect: withoutReminder(p.slice(colon + 2)),
+    });
+  }
+  return menu.unaffordable
+    ? entries.sort((a, b) => (a.at ?? -1) - (b.at ?? -1))
+    : entries;
+}
+
+/** What a card offers, listed where it was clicked or dropped, each by what it costs and
+ * does; pointing at an option shows the card with its paragraph lit. */
 function ActionMenu({
   menu,
   title,
+  objects,
   onPick,
   onPoint,
   onClose,
 }: {
   menu: Menu;
   title?: string;
+  objects: Map<number, ObjectView>;
   onPick(act: Act): void;
   onPoint(act: Act | undefined): void;
   onClose(): void;
@@ -1705,29 +1840,37 @@ function ActionMenu({
         }
       >
         {title && <div className="action-menu-title">{title}</div>}
-        {menu.acts.map((a) => (
-          <button
-            key={a.index}
-            type="button"
-            className="action-menu-item"
-            onClick={() => onPick(a)}
-            onPointerEnter={() => onPoint(a)}
-            onPointerLeave={() => onPoint(undefined)}
-          >
-            {menuLabel(a, title)}
-          </button>
-        ))}
+        {menuEntries(menu, objects).map(
+          ({ act, at, cost, effect, labelled }) => (
+            <button
+              key={act ? `act-${act.index}` : `text-${at}`}
+              type="button"
+              className="action-menu-item"
+              disabled={!act}
+              onClick={() => act && onPick(act)}
+              onPointerEnter={() => act && onPoint(act)}
+              onPointerLeave={() => act && onPoint(undefined)}
+            >
+              {cost !== undefined && (
+                <span className="action-menu-cost">
+                  <CostText text={cost} />
+                </span>
+              )}
+              {effect && (
+                <span
+                  className={
+                    labelled
+                      ? "action-menu-effect action-menu-label"
+                      : "action-menu-effect"
+                  }
+                >
+                  <RulesText text={effect} />
+                </span>
+              )}
+            </button>
+          ),
+        )}
       </div>
     </>
   );
-}
-
-/** A candidate's label in its card's menu, its symbols drawn: an activation by its cost
- * alone, not repeating the card's name. */
-function menuLabel(act: Act, name?: string): ReactNode {
-  const label = act.label;
-  if (name && label.startsWith(`${name}: `)) {
-    return <CostText text={label.slice(name.length + 2)} />;
-  }
-  return <RulesText text={label} />;
 }

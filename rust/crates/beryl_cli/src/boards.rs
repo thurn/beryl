@@ -640,6 +640,21 @@ pub const BOARDS: &[Scenario] = &[
         .library(P0, LANDS)
         .battlefield(P1, &[Permanent::new(SNAPCASTER_MAGE), ISLAND_, PLAINS_])
         .library(P1, LANDS),
+    // Teferi, Time Raveler at 1 loyalty: its +1 affordable, its −3 not, though the opponent's
+    // Snapcaster Mage could be its target.
+    Scenario::new("walker-low")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(TEFERI_TIME_RAVELER).counters(CounterKind::Loyalty, 1),
+                ISLAND_,
+                PLAINS_,
+            ],
+        )
+        .library(P0, LANDS)
+        .battlefield(P1, &[Permanent::new(SNAPCASTER_MAGE), ISLAND_, PLAINS_])
+        .library(P1, LANDS),
     // Sink into Stupor played as Soporific Springs beside three untapped lands, with Jace, the
     // Mind Sculptor the card a fourth would make castable.
     Scenario::new("pay-life")

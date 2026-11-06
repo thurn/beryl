@@ -1,12 +1,14 @@
-// The cast step (game/casting.ts): a card's casts, its X and its payment in one panel where the
-// turn's prompts go, while the board lights the permanents the payment taps. A payment the
-// engine offers a choice of is picked here by what it taps, or by clicking a permanent on the
-// board that another payment taps.
+// The cast step (game/casting.ts): a card's casts, each by its cost, its X and its payment in
+// one panel where the turn's prompts go, while the board lights the permanents the payment
+// taps. A payment the engine offers a choice of is picked here by what it taps, or by clicking
+// a permanent on the board that another payment taps.
 import { useEffect } from "react";
+import { cardEntry } from "../cards";
 import { Button } from "../components/Controls";
-import { RulesText } from "../components/Mana";
+import { ManaCost, RulesText } from "../components/Mana";
 import {
   castName,
+  castParagraphs,
   paymentOf,
   plansOf,
   tapList,
@@ -51,6 +53,14 @@ export function CastStep({
   const paying = paymentOf(choice);
   const taps = (slots: number[]) =>
     slots.length > 0 ? tapList(slots.map(nameOf)) : "nothing";
+  const card = cardEntry(name);
+  const faceOf = (a: Act) =>
+    a.option.kind === "cast" ? card?.faces[a.option.face] : undefined;
+  // What the chosen cast adds, in the card's words, as kicking or evoking it does.
+  const said = castParagraphs(
+    faceOf(choice.act)?.oracle_text ?? "",
+    castName(choice.act, name),
+  );
   return (
     <div className="prompt cast-step" role="dialog" aria-label={`Cast ${name}`}>
       <h2 className="prompt-title">Cast {name}</h2>
@@ -67,11 +77,20 @@ export function CastStep({
                 a !== choice.act && onChoose({ act: a, x: xValues(a)[0] })
               }
             >
-              <RulesText text={castName(a, name)} />
+              <CastLabel
+                label={castName(a, name)}
+                cost={faceOf(a)?.mana_cost}
+              />
             </button>
           ))}
         </div>
       )}
+      {casts.length > 1 &&
+        said.map((p) => (
+          <p key={p} className="cast-caption cast-said">
+            <RulesText text={p} />
+          </p>
+        ))}
       {x !== undefined && (
         <div className="cast-row cast-x">
           <span className="cast-x-label">X</span>
@@ -130,5 +149,17 @@ export function CastStep({
         </Button>
       </div>
     </div>
+  );
+}
+
+/** A cast's name in the cast step, by its cost: the card cast as printed by its mana cost,
+ * another cast by what it adds, as its name says ("Kicker {X}"). */
+function CastLabel({ label, cost }: { label: string; cost?: string }) {
+  return label === "Cast" && cost ? (
+    <>
+      Cast <ManaCost cost={cost} />
+    </>
+  ) : (
+    <RulesText text={label} />
   );
 }

@@ -128,11 +128,11 @@
       "height": 900
     },
     {
-      "name": "game-pay-plans",
-      "route": "/?fixture=pay-other&at=94#/game",
+      "name": "game-cast-evoke",
+      "route": "/?fixture=cast-evoke&at=1#/game",
       "width": 1600,
       "height": 900,
-      "click": "[data-zone=hand][data-card='Jace, Wielder of Mysteries']"
+      "click": ["[data-zone=hand][data-card='Subtlety']", ".cast-pill >> nth=1"]
     },
     {
       "name": "game-main",
@@ -484,6 +484,13 @@
       "height": 900,
       "click": "[data-zone=battlefield][data-card='Jace, the Mind Sculptor']",
       "hover": ".action-menu-item >> nth=2"
+    },
+    {
+      "name": "game-menu-walker-low",
+      "route": "/?fixture=walker-low#/game",
+      "width": 1600,
+      "height": 900,
+      "click": "[data-zone=battlefield][data-card='Teferi, Time Raveler']"
     },
     {
       "name": "game-menu-land-face",

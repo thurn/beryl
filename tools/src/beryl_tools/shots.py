@@ -204,6 +204,7 @@ INTERACTION_FIXTURES = [
     "mana-floating",
     "stack-x",
     "menu-choices",
+    "walker-low",
     "namesake-target",
     "pay-life",
     "crowded",

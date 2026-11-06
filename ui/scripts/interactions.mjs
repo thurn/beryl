@@ -1641,7 +1641,7 @@ await check(
 );
 
 // A permanent with more than one use (a planeswalker's loyalty abilities) lists them where it
-// is clicked, each a button.
+// is clicked, each a button, beside those it cannot use now (Teferi's −8), disabled.
 const uses = new Map();
 attachedView.status.decision.candidates.forEach((c, index) => {
     if (c.option.kind !== "activate") return;
@@ -1658,8 +1658,13 @@ await check(
         await page.clock.runFor(2000);
         await page.click(`[data-slot="${walker}"]`);
         const menu = page.locator(".action-menu");
-        const buttons = menu.getByRole("button");
+        const buttons = menu.locator("button:enabled");
         assert.equal(await buttons.count(), abilities.length, "one per use");
+        assert.equal(
+            await menu.locator("button:disabled").count(),
+            1,
+            "the −8, disabled",
+        );
         const label =
             attachedView.status.decision.candidates[abilities[1]].label;
         await menu
@@ -2049,6 +2054,35 @@ await check(
     evokeFixture,
 );
 
+// Each cast in the cast step says its cost, in symbols, and the card's words for what it adds.
+await check(
+    "the cast step's casts say their costs and what they add",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.click(subtlety);
+        const step = page.getByRole("dialog", { name: "Cast Subtlety" });
+        await step.waitFor();
+        const plain = step.getByRole("radio", { name: /^Cast/ });
+        assert.deepEqual(
+            await plain
+                .locator("[role=img]")
+                .evaluateAll((es) =>
+                    es.map((e) => e.getAttribute("aria-label")),
+                ),
+            ["{2}", "{U}", "{U}"],
+            "the card's mana cost",
+        );
+        assert.equal(await step.locator(".cast-said").count(), 0);
+        await step.getByRole("radio", { name: /^Evoke/ }).click();
+        assert.deepEqual(
+            await step.locator(".cast-said").allTextContents(),
+            ["Evoke\u2014Exile a blue card from your hand."],
+            "evoke's paragraph",
+        );
+    },
+    evokeFixture,
+);
+
 await check(
     "an evoke's exile is taken back by Escape, a right-click, Cancel and a drag",
     async (page) => {
@@ -2146,34 +2180,55 @@ async function payment(name) {
 const byDefault = await payment("pay-default");
 assert.equal(byDefault.chosenPlan, 0, "the stand-in paid the default way");
 assert.equal(byDefault.between.length, 0, "nothing asked before payment");
-await check(
-    "dragging a card lights the lands it will tap, then taps them unasked",
-    async (page) => {
-        await page.clock.runFor(2000);
-        await dragFromHand(page, byDefault.spell, { x: 0, y: -320 });
-        assert.deepEqual(
-            await lit(page),
-            byDefault.tapped,
-            "lit while dragged: the lands that tap",
-        );
-        await page.mouse.up();
-        assert.deepEqual(
-            await settled(page, 2),
-            [byDefault.castIndex, 0],
-            "cast, then paid the default way",
-        );
-        assert.equal(
-            await page.getByText(/Payment \d/).count(),
-            0,
-            "no payment prompt",
-        );
-    },
-    {
-        fixture: "pay-default",
-        at: byDefault.castAt + 1,
-        ready: byDefault.spell,
-    },
-);
+// A card the engine offers two payments for is cast in one gesture, a click as a drop, paying
+// the way the session ranks first (Arena's auto-tapper), its lands lit while it is on the
+// stack: here until the payment's view, which the page then waits past.
+await derive("pay-default", "pay-default-paying", 1, (v) => v);
+for (const gesture of ["drag", "click"]) {
+    await check(
+        `a ${gesture} casts a card with two payments, paying the first way`,
+        async (page) => {
+            await page.clock.runFor(2000);
+            if (gesture === "drag") {
+                await dragFromHand(page, byDefault.spell, { x: 0, y: -320 });
+                assert.deepEqual(
+                    await lit(page),
+                    byDefault.tapped,
+                    "lit while dragged: the lands that tap",
+                );
+                await page.mouse.up();
+            } else {
+                await page.click(byDefault.spell);
+            }
+            assert.deepEqual(
+                await settled(page, 2),
+                [byDefault.castIndex, 0],
+                "cast, then paid the default way",
+            );
+            assert.equal(
+                await page.getByRole("dialog", { name: /^Cast / }).count(),
+                0,
+                "no cast step",
+            );
+            await page.clock.runFor(2000);
+            assert.deepEqual(
+                await lit(page),
+                byDefault.tapped,
+                "the lands it tapped lit",
+            );
+            assert.equal(
+                await page.getByText(/Payment \d/).count(),
+                0,
+                "no payment prompt",
+            );
+        },
+        {
+            fixture: "pay-default-paying",
+            at: byDefault.castAt + 1,
+            ready: byDefault.spell,
+        },
+    );
+}
 
 const byChoice = await payment("pay-other");
 assert.notEqual(byChoice.chosenPlan, 0, "the stand-in paid another way");
@@ -2183,8 +2238,17 @@ const otherTaps = byChoice.cast.payments.find(
 const clicked = otherTaps.find(
     (slot) => !byChoice.cast.payments[0].taps.includes(slot),
 );
+// Under full control (Arena's), a click opens the cast step to choose the payment.
+const exactFixture = (
+    await readFile(join(fixtures, "pay-other.json"), "utf8")
+).replaceAll('"stops":"smart"', '"stops":"exact"');
+assert.ok(
+    exactFixture.includes('"stops":"exact"'),
+    "pay-other names its stops",
+);
+await writeFile(join(fixtures, "pay-other-exact.json"), exactFixture);
 await check(
-    "the cast step pays with a permanent clicked on the board",
+    "under full control, the cast step pays with a permanent clicked",
     async (page) => {
         await page.clock.runFor(2000);
         await page.click(byChoice.spell);
@@ -2219,7 +2283,7 @@ await check(
         assert.equal(await page.getByText(/Payment \d/).count(), 0);
     },
     {
-        fixture: "pay-other",
+        fixture: "pay-other-exact",
         at: byChoice.castAt + 1,
         ready: byChoice.spell,
     },
@@ -2532,8 +2596,18 @@ await check(
                 .evaluateAll((es) =>
                     es.map((e) => e.getAttribute("aria-label")),
                 ),
-            ["+2", "0", "\u22121"],
+            ["+2", "0", "\u22121", "\u221212"],
             "each loyalty ability by its symbol",
+        );
+        assert.deepEqual(
+            await items.evaluateAll((es) => es.map((e) => e.disabled)),
+            [false, false, false, true],
+            "the −12 shown, disabled",
+        );
+        assert.match(
+            await items.nth(1).locator(".action-menu-effect").textContent(),
+            /^Draw three cards/,
+            "each says what it does",
         );
         await items.nth(2).hover();
         assert.match(
@@ -2544,9 +2618,19 @@ await check(
         await page.keyboard.press("Escape");
         await page.click(`[data-slot="${stupor}"]`);
         assert.deepEqual(
-            await items.allTextContents(),
+            await items.locator(".action-menu-label").allTextContents(),
             ["Play Soporific Springs", "Cast Sink into Stupor"],
             "the land is played by its land face",
+        );
+        assert.deepEqual(
+            await items
+                .nth(1)
+                .locator(".action-menu-cost [role=img]")
+                .evaluateAll((es) =>
+                    es.map((e) => e.getAttribute("aria-label")),
+                ),
+            ["{1}", "{U}", "{U}"],
+            "the cast by its mana cost",
         );
         await items.nth(0).hover();
         assert.equal(
@@ -2556,6 +2640,52 @@ await check(
         );
     },
     { fixture: "menu-choices", at: menus.views.length, ready: ".turn-action" },
+);
+
+// Teferi, Time Raveler at 1 loyalty can activate only its +1: a loyalty ability cannot be
+// taken back, so the click still opens the menu, the −3 shown disabled.
+const lowViews = await load("walker-low");
+const lowView = lowViews.at(-1);
+const raveler = lowView.objects.find(
+    (o) => o.name === "Teferi, Time Raveler" && o.zone === "battlefield",
+).slot;
+const ravelerActs = lowView.status.decision.candidates.flatMap((c, i) =>
+    c.option.kind === "activate" && c.option.slot === raveler ? [i] : [],
+);
+assert.equal(ravelerActs.length, 1, "Teferi offers its +1 alone");
+await check(
+    "a planeswalker's click opens its menu, unaffordable abilities disabled",
+    async (page) => {
+        await page.clock.runFor(3000);
+        await page.click(`[data-slot="${raveler}"]`);
+        const items = page.locator(".action-menu-item");
+        assert.deepEqual(
+            await items.evaluateAll((es) =>
+                es.map((e) => [
+                    e
+                        .querySelector(".loyalty-cost")
+                        ?.getAttribute("aria-label"),
+                    e.disabled,
+                ]),
+            ),
+            [
+                ["+1", false],
+                ["\u22123", true],
+            ],
+            "+1, then −3 disabled",
+        );
+        assert.match(
+            await items.nth(1).textContent(),
+            /Return up to one target artifact/,
+            "the −3 says what it does",
+        );
+        assert.deepEqual(await chosen(page), [], "nothing activated");
+        await items.nth(1).click({ force: true });
+        assert.deepEqual(await chosen(page), [], "the −3 does nothing");
+        await items.nth(0).click();
+        assert.deepEqual(await settled(page, 1), ravelerActs, "the +1");
+    },
+    { fixture: "walker-low", at: lowViews.length, ready: ".turn-action" },
 );
 
 // A target prompt with two cards of one name (by-isv.8): `namesake-target` stops on a

@@ -237,6 +237,11 @@
       ]
     },
     {
+      "name": "walker-low",
+      "board": "walker-low",
+      "until": "first priority decision for seat 0"
+    },
+    {
       "name": "pay-life",
       "board": "pay-life",
       "until": "first payLife decision for seat 0"

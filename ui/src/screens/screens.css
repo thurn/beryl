@@ -1462,8 +1462,11 @@
   font: 600 15px var(--font-serif);
   color: var(--gold);
 }
+/* Each line: its cost in symbols, then what it does. */
 .action-menu-item {
-  display: block;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
   width: 100%;
   padding: 8px 10px;
   border: 0;
@@ -1474,10 +1477,28 @@
   text-align: left;
   cursor: pointer;
 }
-.action-menu-item:hover,
+.action-menu-cost {
+  flex: none;
+  min-width: 2.2em;
+}
+.action-menu-effect {
+  font: 13px/1.3 var(--font-sans);
+  color: var(--text-dim);
+}
+/* A line naming what it does by the candidate's own label, as a cast does. */
+.action-menu-label {
+  font-size: 15px;
+  color: var(--type);
+}
+.action-menu-item:enabled:hover,
 .action-menu-item:focus-visible {
   background: rgb(233 173 74 / 18%);
   outline: none;
+}
+/* A loyalty ability the planeswalker cannot activate now. */
+.action-menu-item:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 /* A permanent attached to the one the pointer is over, or that it is attached to: a pale ring,
    apart from the gold, cyan and ember ones. */
