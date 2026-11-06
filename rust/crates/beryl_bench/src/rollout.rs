@@ -364,6 +364,38 @@ mod tests {
         assert_eq!(stable_hash(&c.positions), 12_958_604_318_748_991_495);
     }
 
+    /// Every rollout of the corpus answers every question as it always has and ends the same
+    /// way. Speedups to the engine and the rollout policy must keep every move (by-2l8.6), so
+    /// that a running search can adopt a faster binary in place; a change that moves a rollout
+    /// on purpose updates this pin, and `corpus_never_changes` too if the corpus moved.
+    #[test]
+    fn rollouts_never_change() {
+        let c = Corpus::new();
+        let starts = c.starts();
+        let policy = RolloutPolicy::new(&c.table);
+        let (scripts, _, summary) = record(&c.table, &starts, &policy);
+        let mut x = Scratch::new();
+        let mut s = starts[0];
+        let ends: Vec<u64> = starts
+            .iter()
+            .map(|start| {
+                roll(
+                    &c.table,
+                    std::slice::from_ref(start),
+                    &policy,
+                    &mut s,
+                    &mut x,
+                )
+            })
+            .collect();
+        let answers: Vec<&[Choice]> = scripts.iter().map(|s| s.answers.as_slice()).collect();
+        assert_eq!(
+            (summary.decisions, summary.inline, summary.turns),
+            (13_845, 2_010, 1_679)
+        );
+        assert_eq!(stable_hash(&(answers, ends)), 7_706_074_336_951_784_095);
+    }
+
     /// The engine benchmark replays the rollouts the whole-rollout benchmark plays: the
     /// same games to the same ends.
     #[test]
