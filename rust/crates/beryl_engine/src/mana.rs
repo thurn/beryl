@@ -31,7 +31,11 @@ const CLASSES: usize = 16;
 /// {W} is one unit of `{W}`, an untapped Tundra one unit of `{W, U}`, a Mana Crypt two units
 /// of `{C}`.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct Units([u16; 1 << KINDS]);
+pub(crate) struct Units {
+    by_kinds: [u16; 1 << KINDS],
+    /// A bit per set of kinds with a unit, so reading the units skips the empty sets.
+    some: u64,
+}
 
 impl Default for Units {
     fn default() -> Self {
@@ -40,15 +44,34 @@ impl Default for Units {
 }
 
 impl Units {
-    const NONE: Units = Units([0; 1 << KINDS]);
+    const NONE: Units = Units {
+        by_kinds: [0; 1 << KINDS],
+        some: 0,
+    };
 
     pub(crate) fn add(&mut self, kinds: u8, n: u16) {
-        let k = &mut self.0[usize::from(kinds)];
+        let k = &mut self.by_kinds[usize::from(kinds)];
         *k = k.saturating_add(n);
+        if *k > 0 {
+            self.some |= 1 << kinds;
+        }
+    }
+
+    /// The sets of kinds with units, and how many each has, in order of the sets.
+    fn nonempty(&self) -> impl Iterator<Item = (u8, u16)> + '_ {
+        let mut some = self.some;
+        std::iter::from_fn(move || {
+            if some == 0 {
+                return None;
+            }
+            let kinds = some.trailing_zeros() as u8;
+            some &= some - 1;
+            Some((kinds, self.by_kinds[usize::from(kinds)]))
+        })
     }
 
     fn total(&self) -> u32 {
-        self.0.iter().map(|&n| u32::from(n)).sum()
+        self.nonempty().map(|(_, n)| u32::from(n)).sum()
     }
 
     /// Whether these units can pay `cost` (X already announced).
@@ -71,11 +94,9 @@ impl Units {
             by_kinds: [(0, 0); 1 << KINDS],
             len: 0,
         };
-        for (kinds, &n) in self.0.iter().enumerate() {
-            if n > 0 {
-                g.by_kinds[g.len] = (kinds as u8, u32::from(n));
-                g.len += 1;
-            }
+        for (kinds, n) in self.nonempty() {
+            g.by_kinds[g.len] = (kinds, u32::from(n));
+            g.len += 1;
         }
         g
     }
