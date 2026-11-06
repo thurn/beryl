@@ -10,6 +10,8 @@
 //! Spells that cannot be paid for or targeted are never offered, and every step offers only
 //! answers that leave the rest completable, so the machine never has to rewind.
 
+use std::cell::{Cell, OnceCell};
+
 use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityIx, AbilityKind, CastingOption, Castings, Colors, Face, FaceAbility, FaceIx,
@@ -427,20 +429,43 @@ pub(crate) fn still_legal(
 }
 
 /// What every check of one player's options reads, found once for all of them: the mana they
-/// could pay with, and whether an opponent limits them to sorcery speed.
+/// could pay with, found at the first check that needs it, and whether an opponent limits them
+/// to sorcery speed.
 struct Situation {
     player: Seat,
-    funds: Funds,
+    /// None once found if more sources than [`Funds`] holds: a stall for whatever needed them.
+    funds: OnceCell<Option<Funds>>,
+    full: Cell<bool>,
     sorcery_speed_only: bool,
 }
 
 impl Situation {
-    fn of(s: &State, t: &GameTable, player: Seat) -> Result<Situation, Full> {
-        Ok(Situation {
+    fn of(s: &State, t: &GameTable, player: Seat) -> Situation {
+        Situation {
             player,
-            funds: Funds::of(s, t, player)?,
+            funds: OnceCell::new(),
+            full: Cell::new(false),
             sorcery_speed_only: sorcery_speed_limiter(s, t, player).is_some(),
-        })
+        }
+    }
+
+    /// The player's funds. Most priority decisions offer nothing that costs mana, as an
+    /// opponent's turn with no instant in hand, so the source scan waits until a check needs it.
+    fn funds(&self, s: &State, t: &GameTable) -> Option<&Funds> {
+        let funds = self
+            .funds
+            .get_or_init(|| Funds::of(s, t, self.player).ok())
+            .as_ref();
+        if funds.is_none() {
+            self.full.set(true);
+        }
+        funds
+    }
+
+    /// `Full` if a check needed more sources than [`Funds`] holds, so that its answer was
+    /// not found: the options listed stand only if this is `Ok`.
+    fn complete(&self) -> Result<(), Full> {
+        if self.full.get() { Err(Full) } else { Ok(()) }
     }
 }
 
@@ -493,12 +518,11 @@ fn refused(
     // [CR 118.3](https://yawgatog.com/resources/magic-rules/#R1183): "A player can't pay a
     // cost without having the necessary resources to pay it fully."
     let x = x_range_start(face, costs, free).unwrap_or(0);
-    if !now.funds.pays(
-        s,
-        t,
-        spell_cost(face, costs, x, extra, free),
-        Bitboard::EMPTY,
-    ) {
+    let cost = spell_cost(face, costs, x, extra, free);
+    if !now
+        .funds(s, t)
+        .is_some_and(|f| f.pays(s, t, cost, Bitboard::EMPTY))
+    {
         return Some(Refusal::Mana);
     }
     // CR 601.2h: the player pays the total cost, so the cards to exile must be there.
@@ -539,7 +563,7 @@ pub(crate) fn refusal(
     slot: Slot,
     land: Option<Refusal>,
 ) -> Result<Option<Refusal>, Full> {
-    let now = Situation::of(s, t, player)?;
+    let now = Situation::of(s, t, player);
     let def = t.def(s.object(slot).card);
     let flashback = permission(s, player, slot).is_some_and(|p| p.flashback);
     let mut most = land;
@@ -569,6 +593,7 @@ pub(crate) fn refusal(
             });
         }
     }
+    now.complete()?;
     Ok(most)
 }
 
@@ -740,11 +765,13 @@ fn activatable(s: &State, t: &GameTable, now: &Situation, slot: Slot, ability: A
     // The mana before the targets, which read the battlefield: both checks are pure.
     let cost = a.cost.mana.with_x(0);
     let spent = spent_by_cost(slot, a);
-    let paid = if a.cost.waterbend > 0 {
-        waterbend_payable(s, t, &now.funds, player, cost, a.cost.waterbend, spent)
-    } else {
-        now.funds.pays(s, t, cost, spent)
-    };
+    let paid = now.funds(s, t).is_some_and(|funds| {
+        if a.cost.waterbend > 0 {
+            waterbend_payable(s, t, funds, player, cost, a.cost.waterbend, spent)
+        } else {
+            funds.pays(s, t, cost, spent)
+        }
+    });
     paid && targetable(s, t, Some(a), player, None, 0, Some(slot))
 }
 
@@ -849,9 +876,10 @@ pub(crate) fn priority_options(
     player: Seat,
     out: &mut Fixed<Opt, 64>,
 ) -> Result<(), Full> {
-    let now = Situation::of(s, t, player)?;
+    let now = Situation::of(s, t, player);
     cast_options(s, t, &now, cast_sources(s, player), From::Priority, out)?;
     activation_options(s, t, &now, out)?;
+    now.complete()?;
     if s.profile.payment == Payment::Manual {
         mana::standalone_options(s, t, player, out)?;
     }
@@ -1545,8 +1573,9 @@ pub(crate) fn offer_options(
     if s.is_current(object) {
         let mut cards = Bitboard::EMPTY;
         cards.insert(object.slot);
-        let now = Situation::of(s, t, player)?;
+        let now = Situation::of(s, t, player);
         cast_options(s, t, &now, cards, From::Resolution { free }, &mut out)?;
+        now.complete()?;
     }
     Ok(out)
 }
