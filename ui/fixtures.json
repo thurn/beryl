@@ -320,6 +320,17 @@
       "where": ["resolving Trinket Mage"]
     },
     {
+      "name": "choice-teferi",
+      "board": "choice-teferi",
+      "until": "first chooseUpTo decision for seat 0",
+      "where": ["resolving Teferi, Hero of Dominaria"]
+    },
+    {
+      "name": "target-graveyard",
+      "board": "target-graveyard",
+      "until": "first target decision for seat 0"
+    },
+    {
       "name": "choice-thirst",
       "board": "choice-thirst",
       "until": "first discard decision for seat 0",

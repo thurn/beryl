@@ -1493,6 +1493,87 @@
   max-height: 260px;
   overflow-y: auto;
 }
+/* Candidate cards off the table, as a graveyard's targets, by their faces: one row, which
+   scrolls sideways when they are many. */
+.prompt-cards {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+}
+.prompt-cards:not(:last-child) {
+  margin-bottom: 8px;
+}
+.prompt-card {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+/* Simultaneous triggers, each by its source and what it does, numbered in resolve order as
+   they are picked. */
+.prompt-triggers {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.prompt-trigger {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--metal);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 4%);
+  color: var(--type);
+  font: 15px var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+.prompt-trigger:enabled:hover,
+.prompt-trigger:focus-visible {
+  border-color: var(--gold);
+  background: rgb(233 173 74 / 18%);
+  outline: none;
+}
+.prompt-trigger:disabled {
+  border-color: var(--gold);
+  cursor: default;
+}
+.prompt-trigger-order {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--metal-bright);
+  border-radius: 50%;
+  font: 600 14px/20px var(--font-sans);
+  text-align: center;
+}
+.prompt-trigger:disabled .prompt-trigger-order {
+  border-color: var(--gold);
+  background: var(--gold);
+  color: rgb(33 31 28);
+}
+.prompt-trigger-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.prompt-trigger-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.prompt-trigger-text {
+  font: 13px/1.3 var(--font-sans);
+  color: var(--text-dim);
+}
 /* A waterbend's cost still to pay, in symbols beside the title. */
 .prompt-cost {
   margin-left: 10px;
@@ -1654,6 +1735,11 @@
   font: 600 22px var(--font-serif);
   text-align: center;
   color: var(--type);
+}
+/* The total cost the chosen X makes. */
+.cast-x-cost {
+  margin-left: auto;
+  font-size: 18px;
 }
 .cast-plans {
   display: flex;

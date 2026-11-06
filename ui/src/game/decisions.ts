@@ -290,9 +290,19 @@ const PROMPTS: Partial<Record<Kind, string>> = {
 
 /** The prompt's title: what the decision asks, and for whom when there is a source. */
 export function prompt(decision: DecisionView, source?: string): string {
-  if (decision.ask.kind === "untap") return "Untap";
-  const ask = PROMPTS[decision.kind] ?? "Choose";
-  return source && decision.kind === "target" ? `${ask} for ${source}` : ask;
+  const { ask } = decision;
+  switch (ask.kind) {
+    case "untap":
+      return "Untap";
+    case "unlessPays":
+      return `Pay ${ask.cost}?`;
+    case "discardBasicLand":
+      return `Discard a basic land or ${ask.count} cards`;
+  }
+  const asked = PROMPTS[decision.kind] ?? "Choose";
+  return source && decision.kind === "target"
+    ? `${asked} for ${source}`
+    : asked;
 }
 
 /** The picks that untap the permanents in `picked`, one at a time, then done: each the

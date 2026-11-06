@@ -492,6 +492,24 @@
       "height": 900
     },
     {
+      "name": "game-choice-thirst-hand",
+      "route": "/?fixture=choice-thirst&at=2#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-untap-teferi",
+      "route": "/?fixture=choice-teferi#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-target-graveyard",
+      "route": "/?fixture=target-graveyard#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
       "name": "game-choice-cleanup",
       "route": "/?fixture=choice-cleanup#/game",
       "width": 1600,

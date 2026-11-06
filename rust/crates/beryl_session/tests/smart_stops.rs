@@ -1,10 +1,12 @@
 //! What the session answers for the human under the smart stops: their priority while only
 //! their own spells and abilities came and went on the stack, the order of their
-//! simultaneous triggers, and a waterbend cost mana can pay. Exact stops ask both, and replays find every such answer again.
+//! simultaneous triggers, whether to search a library they know nothing of, and a waterbend
+//! cost mana can pay. Exact stops ask both, and replays find every such answer again.
 
 use beryl_cards::CARDS;
 use beryl_cards::names::{
-    AANGS_ICEBERG, GET_LOST, ISLAND, JACE_VRYNS_PRODIGY, MANA_DRAIN, PLAINS, THUNDERTRAP_TRAINER,
+    AANGS_ICEBERG, GET_LOST, ISLAND, JACE_VRYNS_PRODIGY, MANA_CRYPT, MANA_DRAIN, PLAINS,
+    THUNDERTRAP_TRAINER, TRINKET_MAGE,
 };
 use beryl_engine::state::StackEntry;
 use beryl_scenario::{P0, P1, Permanent, Scenario};
@@ -373,4 +375,69 @@ fn smart_stops_pay_a_waterbend_with_mana_when_mana_can() {
         asked_after_waterbend(StopsSetting::Exact).first(),
         Some(&Kind::Waterbend)
     );
+}
+
+/// Trinket Mage with the mana to cast it, and an artifact in a library the human knows nothing
+/// of.
+const TRINKET: Scenario = Scenario::new("trinket")
+    .battlefield(P0, &[Permanent::new(ISLAND); 3])
+    .hand(P0, &[TRINKET_MAGE])
+    .library(P0, &[ISLAND, MANA_CRYPT, ISLAND])
+    .library(P1, &[ISLAND, ISLAND, ISLAND]);
+
+/// The kinds of decision the human is asked after casting [`TRINKET`]'s Mage, up to its
+/// search.
+fn asked_after_trinket_mage(stops: StopsSetting) -> Vec<Kind> {
+    let (table, state) = beryl_scenario::position(&CARDS, &TRINKET).unwrap();
+    let random = beryl_search::agent("random").unwrap();
+    let mut game = Game::prepared(
+        Prepared {
+            opponent: (random.new)(&table, 1, Budget::DEFAULT),
+            stand_in: (random.new)(&table, 2, Budget::DEFAULT),
+            table,
+            state,
+            human: HUMAN,
+            stops,
+        },
+        SESSION,
+    );
+    let mut asked: Option<Vec<Kind>> = None;
+    while let Some(view) = game.next_view() {
+        let Status::Deciding { decision } = &view.status else {
+            continue;
+        };
+        if let Some(asked) = &mut asked {
+            asked.push(decision.kind);
+            if decision.kind == Kind::ChooseUpTo {
+                break;
+            }
+        }
+        let cast = decision
+            .candidates
+            .iter()
+            .position(|c| matches!(c.option, Candidate::Cast { .. }));
+        // Otherwise the first: a pass, or searching.
+        let index = match (asked.is_none(), cast) {
+            (true, Some(i)) => {
+                asked = Some(Vec::new());
+                i
+            }
+            _ => 0,
+        };
+        let checked = game.answer(decision.id, CandidateIndex(index as u8));
+        game.choose(checked.unwrap());
+    }
+    asked.expect("the Mage was cast")
+}
+
+/// Declining Trinket Mage's search differs from finding nothing only by the shuffle, which
+/// changes nothing for a player who knows no card in their library: the smart stops search,
+/// and the search itself may find nothing. Exact stops ask.
+#[test]
+fn smart_stops_search_a_library_the_human_knows_nothing_of() {
+    let smart = asked_after_trinket_mage(StopsSetting::Smart);
+    assert!(!smart.contains(&Kind::YesNo), "{smart:?}");
+    assert_eq!(smart.last(), Some(&Kind::ChooseUpTo));
+    let exact = asked_after_trinket_mage(StopsSetting::Exact);
+    assert!(exact.contains(&Kind::YesNo), "{exact:?}");
 }

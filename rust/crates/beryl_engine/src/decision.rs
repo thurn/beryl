@@ -158,6 +158,12 @@ pub enum Ask {
     /// card in a zone, look at all cards in that zone (even if it's a hidden zone) and find a
     /// card that matches the given description."
     Search { max: u8 },
+    /// Whether to search the library at all, as Trinket Mage's "you may search your library
+    /// for ...": declining searches nothing and shuffles nothing, so the answer matters only
+    /// to a player who knows where cards in their library are
+    /// ([CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a)): "To shuffle a
+    /// library ..., randomize the cards within it so that no player knows their order."
+    MaySearch,
     /// Permanents to untap, up to `max`.
     Untap { max: u8 },
     /// A creature to tap for a crew cost of `crew` power, `left` of it still to tap

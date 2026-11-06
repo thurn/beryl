@@ -891,7 +891,39 @@ pub const BOARDS: &[Scenario] = &[
         )
         .library(P1, LANDS)
         .actions(&[Action::cast(P0, TIME_SPIRAL)]),
-    // Trinket Mage searches for up to one artifact of mana value 1 or less, of two.
+    // Teferi, Hero of Dominaria's +1 untaps up to two lands at the end step, of the human's
+    // two tapped lands.
+    Scenario::new("choice-teferi")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(TEFERI_HERO_OF_DOMINARIA),
+                Permanent::new(ISLAND).tapped(),
+                Permanent::new(PLAINS).tapped(),
+                ISLAND_,
+            ],
+        )
+        .library(P0, LANDS)
+        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[Action::activate(P0, TEFERI_HERO_OF_DOMINARIA, 0)]),
+    // Snapcaster Mage's trigger targets an instant or sorcery card in the human's graveyard,
+    // of three beside a creature card it can't target.
+    Scenario::new("target-graveyard")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[ISLAND_, ISLAND_, PLAINS_])
+        .hand(P0, &[SNAPCASTER_MAGE])
+        .graveyard(
+            P0,
+            &[COUNTERSPELL, TRINKET_MAGE, THIRST_FOR_DISCOVERY, STOCK_UP],
+        )
+        .library(P0, LANDS)
+        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[Action::cast(P0, SNAPCASTER_MAGE)]),
+    // Trinket Mage searches for up to one artifact of mana value 1 or less, of two; the smart
+    // stops search, as the human knows nothing of their library.
     Scenario::new("choice-search")
         .at(3, P0, TurnStep::PrecombatMain)
         .battlefield(P0, &[ISLAND_, ISLAND_, PLAINS_])
@@ -902,10 +934,7 @@ pub const BOARDS: &[Scenario] = &[
         )
         .battlefield(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
-        .actions(&[
-            Action::cast(P0, TRINKET_MAGE),
-            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
-        ]),
+        .actions(&[Action::cast(P0, TRINKET_MAGE)]),
     // Thirst for Discovery draws three, and the human discards one of two basic lands rather
     // than two cards.
     Scenario::new("choice-thirst")

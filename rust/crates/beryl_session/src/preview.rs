@@ -8,12 +8,12 @@
 use beryl_engine::card::AbilityKind;
 use beryl_engine::state::{ObjectFlags, Pending};
 use beryl_engine::{
-    Candidates, Choice, Decision, DecisionKind, GameTable, Opt, Profile, Replay, Scratch, Seat,
-    Slot, State, Step, Stops, Zone, apply, next,
+    Ask, Candidates, Choice, Decision, DecisionKind, GameTable, Opt, Profile, Replay, Scratch,
+    Seat, Slot, State, Step, Stops, Zone, apply, cost_being_cast, next,
 };
 
 use crate::Status;
-use crate::protocol::{Payment, PlayerView, Side, TargetRef};
+use crate::protocol::{Payment, PlayerView, Side, TargetRef, mana_text};
 
 /// Adds to `view`, at the open decision `d` in `s`, the ways each candidate is paid
 /// ([`payments`]) and the attackers each blocker may block ([`blocks`]). They read the whole
@@ -164,9 +164,13 @@ fn payments(s: &State, t: &GameTable, d: &Decision) -> Vec<Vec<Payment>> {
                     plan: Some(plan),
                     ..Payment::default()
                 },
+                (DecisionKind::YesNo, Opt::Yes) if matches!(d.ask, Ask::UnlessPays { .. }) => {
+                    return vec![unless_paid(s, t, d, i)];
+                }
                 _ => return Vec::new(),
             };
             // The walk sees where the cast ends.
+            let at = priced(at, s, t);
             let mut copy = forced(s);
             let mut scratch = Scratch::new();
             apply(&mut copy, t, &mut scratch, &mut Replay, choice(i));
@@ -175,6 +179,30 @@ fn payments(s: &State, t: &GameTable, d: &Decision) -> Vec<Vec<Payment>> {
             out
         })
         .collect()
+}
+
+/// What paying an "unless pays" cost taps, by the yes at `i` of `d`, the open decision in `s`,
+/// and the engine's default payment plan
+/// ([CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a): "This means the same
+/// thing as '[A player may do something else]. If [that player doesn't], [do something].'"),
+/// so the UI can light the permanents that would pay.
+fn unless_paid(s: &State, t: &GameTable, d: &Decision, i: usize) -> Payment {
+    let mut copy = forced(s);
+    let mut scratch = Scratch::new();
+    apply(&mut copy, t, &mut scratch, &mut Replay, choice(i));
+    while let Step::Decide(paying) = next(&mut copy, t, &mut scratch, &mut Replay)
+        && paying.player == d.player
+        && matches!(
+            paying.kind,
+            DecisionKind::PaymentPlan | DecisionKind::ManaPayment
+        )
+    {
+        apply(&mut copy, t, &mut scratch, &mut Replay, Choice(0));
+    }
+    Payment {
+        taps: tapped(s, &copy, t),
+        ..Payment::default()
+    }
 }
 
 /// Answers the rest of the cast in `s`: every value of X and every payment plan, each on a
@@ -216,9 +244,10 @@ fn walk(
             .is_some_and(|&o| branch(o).is_some())
         {
             for (i, &o) in opts.iter().enumerate() {
+                let at = priced(branch(o).expect("one kind"), &s, t);
                 let mut copy = s;
                 apply(&mut copy, t, scratch, &mut Replay, choice(i));
-                walk(before, copy, t, scratch, &branch(o).expect("one kind"), out);
+                walk(before, copy, t, scratch, &at, out);
             }
             return;
         }
@@ -228,6 +257,20 @@ fn walk(
         taps: tapped(before, &s, t),
         ..at.clone()
     });
+}
+
+/// `at` with the total cost its X makes, announced at the X decision open in `s`
+/// ([CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f): "The total cost is the
+/// mana cost or alternative cost (as determined in rule 601.2b), plus all additional costs and
+/// cost increases, and minus all cost reductions").
+fn priced(at: Payment, s: &State, t: &GameTable) -> Payment {
+    match at.x {
+        Some(x) if at.cost.is_none() => Payment {
+            cost: cost_being_cast(s, t, x).map(mana_text),
+            ..at
+        },
+        _ => at,
+    }
 }
 
 /// The permanents untapped in `before` and tapped in `after`, by slot, with those the payment
@@ -358,6 +401,74 @@ mod tests {
                 .filter(|(c, _)| c.is_none())
                 .all(|(_, p)| p.is_empty())
         );
+    }
+
+    #[test]
+    fn each_value_of_x_says_the_total_cost_it_makes() {
+        let scenario = Scenario::new("payments")
+            .hand(P0, &[names::THIEVING_SKYDIVER])
+            .battlefield(P0, ISLANDS);
+        let (t, mut s) = beryl_scenario::position(&CARDS, &scenario).unwrap();
+        let Step::Decide(d) = next(&mut s, &t, &mut Scratch::new(), &mut Replay) else {
+            panic!("a decision");
+        };
+        let costs: Vec<_> = payments(&s, &t, &d)
+            .into_iter()
+            .flatten()
+            .map(|p| (p.x, p.cost))
+            .collect();
+        // {1}{U}, kicker {X}: the plain cast has no X to price.
+        assert_eq!(
+            costs,
+            [
+                (None, None),
+                (Some(1), Some("{2}{U}".to_owned())),
+                (Some(2), Some("{3}{U}".to_owned())),
+            ]
+        );
+    }
+
+    #[test]
+    fn paying_for_a_spell_unless_countered_lights_what_pays() {
+        use beryl_scenario::{Action, Pick};
+        // Thundertrap Trainer taps two of four lands; Mana Tithe asks {1} of the rest.
+        const SCENARIO: Scenario = Scenario::new("payments")
+            .at(3, P0, TurnStep::PrecombatMain)
+            .battlefield(P0, &[Permanent::new(names::ISLAND); 4])
+            .hand(P0, &[names::THUNDERTRAP_TRAINER])
+            .library(P0, &[names::ISLAND; 4])
+            .battlefield(P1, &[Permanent::new(names::PLAINS)])
+            .hand(P1, &[names::MANA_TITHE])
+            .library(P1, &[names::ISLAND; 4])
+            .actions(&[
+                Action::cast(P0, names::THUNDERTRAP_TRAINER),
+                Action::cast(P1, names::MANA_TITHE),
+                Action::answer(P0, DecisionKind::YesNo, Pick::No),
+            ]);
+        let mut seen = None;
+        beryl_scenario::visit(&CARDS, &SCENARIO, |t, s, d| {
+            if matches!(d.ask, Ask::UnlessPays { .. }) {
+                let untapped = |slot: u8| !s.object(Slot::new(slot)).flags.has(ObjectFlags::TAPPED);
+                let paid = payments(s, t, d);
+                let yes = (0..d.len())
+                    .position(|i| d.candidates.option(choice(i)) == Some(Opt::Yes))
+                    .expect("a yes");
+                seen = Some(
+                    paid.iter()
+                        .enumerate()
+                        .map(|(i, p)| {
+                            let taps = p.iter().flat_map(|p| p.taps.iter().copied());
+                            (i == yes, taps.filter(|&s| untapped(s)).count())
+                        })
+                        .collect::<Vec<_>>(),
+                );
+            }
+        })
+        .unwrap();
+        // Yes taps one untapped Island; No taps nothing.
+        let mut seen = seen.expect("the payment is asked");
+        seen.sort_unstable();
+        assert_eq!(seen, [(false, 0), (true, 1)]);
     }
 
     #[test]

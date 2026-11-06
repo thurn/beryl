@@ -115,6 +115,11 @@ export function CastStep({
           >
             +
           </Button>
+          {paying?.cost && (
+            <span className="cast-x-cost" aria-label="Total cost">
+              <ManaCost cost={paying.cost} />
+            </span>
+          )}
         </div>
       )}
       {plans.length > 1 ? (

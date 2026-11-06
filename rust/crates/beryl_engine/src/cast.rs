@@ -1037,6 +1037,18 @@ fn total_cost(t: &GameTable, entry: &StackEntry, c: &Casting) -> ManaCost {
     }
 }
 
+/// The total mana cost of the spell or ability being cast were its X announced as `x`; none
+/// when nothing is being cast.
+/// [CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f): "The total cost is the
+/// mana cost or alternative cost (as determined in rule 601.2b), plus all additional costs and
+/// cost increases, and minus all cost reductions."
+pub fn cost_being_cast(s: &State, t: &GameTable, x: u8) -> Option<ManaCost> {
+    match s.pending {
+        Pending::Casting(c) => Some(total_cost(t, &StackEntry { x, ..top(s) }, &c)),
+        _ => None,
+    }
+}
+
 /// What may be spent paying for the entry being cast, before its other costs are paid: all
 /// but a source that pays with itself.
 fn spent_by_entry(t: &GameTable, entry: &StackEntry) -> Bitboard {

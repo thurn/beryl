@@ -217,6 +217,8 @@ INTERACTION_FIXTURES = [
     "choice-search",
     "choice-thirst",
     "choice-cleanup",
+    "choice-teferi",
+    "target-graveyard",
     "attack-token",
     "crew",
     "waterbend-tap",

@@ -25,7 +25,7 @@ const TRINKET: Filter = Filter::All(&[Filter::Types(Types::ARTIFACT), Filter::Ma
 /// "To reveal a card, show that card to all players for a brief time."
 fn tutor(ctx: &mut EffectCtx) -> Flow {
     let you = ctx.controller();
-    if !ctx.choose_yes_no(you, Ask::Plain)? {
+    if !ctx.choose_yes_no(you, Ask::MaySearch)? {
         return Ok(());
     }
     if let Some(slot) = ctx.search_library(you, TRINKET)? {

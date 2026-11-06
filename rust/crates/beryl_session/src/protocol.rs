@@ -382,6 +382,8 @@ pub enum AskView {
     ExileCards { zone: ZoneName, count: u8 },
     /// A `chooseUpTo` for a card a library search finds, up to `max` of them.
     Search { max: u8 },
+    /// A `yesNo` whether to search the viewer's library at all.
+    MaySearch,
     /// Permanents to untap, up to `max`.
     Untap { max: u8 },
     /// A `crew` decision's creature to tap for a crew cost of `crew` power, `left` of it
@@ -425,9 +427,10 @@ pub struct CandidateView {
     /// For a candidate that declares a blocker: the attackers it may block, by slot, one of
     /// each set of interchangeable attackers (architecture §7.2). None otherwise.
     pub blocks: Vec<u8>,
-    /// For a candidate that activates an ability of the object's own face: how many activated
-    /// abilities, mana abilities among them, its face lists before it, as
-    /// [`StackItem::Ability`]'s `nth` counts them, so the UI finds the ability's paragraph.
+    /// For a candidate that activates an ability of the object's own face, or puts a waiting
+    /// trigger on the stack: how many abilities of its kind (activated, mana abilities among
+    /// them, or triggered) its face lists before it, as [`StackItem::Ability`]'s `nth` counts
+    /// them, so the UI finds the ability's paragraph.
     pub nth: Option<u8>,
     /// For a candidate that announces one or more targets: what the first of them may be, one
     /// of each set of interchangeable objects (§7.2), so the UI can take the count and the
@@ -447,6 +450,9 @@ pub struct Payment {
     pub plan: Option<u8>,
     /// Permanents, by slot.
     pub taps: Vec<u8>,
+    /// For a payment at a value of X: the total mana cost that value makes, as Oracle text
+    /// writes costs, so the UI can say what each X costs.
+    pub cost: Option<String>,
 }
 
 /// What a candidate does, by public slot (architecture §7.1).
@@ -1206,6 +1212,7 @@ fn ask_view(obs: Observation<'_>, ask: Ask) -> AskView {
         },
         Ask::TopOrBottom { card } => AskView::TopOrBottom { card: card.get() },
         Ask::Search { max } => AskView::Search { max },
+        Ask::MaySearch => AskView::MaySearch,
         Ask::Untap { max } => AskView::Untap { max },
         Ask::Crew { crew, left } => AskView::Crew { crew, left },
         Ask::Waterbend { cost } => AskView::Waterbend {
@@ -1370,21 +1377,24 @@ fn candidate(t: &GameTable, obs: Observation<'_>, o: Opt) -> CandidateView {
         option,
         payments: Vec::new(),
         blocks: Vec::new(),
-        nth: activation_nth(t, obs, o),
+        nth: ability_nth(t, obs, o),
         targets: Vec::new(),
     }
 }
 
 /// [`CandidateView::nth`].
-fn activation_nth(t: &GameTable, obs: Observation<'_>, o: Opt) -> Option<u8> {
-    let Opt::Activate {
-        slot,
-        ability: AbilityIx::Own(i),
-    } = o
-    else {
-        return None;
+fn ability_nth(t: &GameTable, obs: Observation<'_>, o: Opt) -> Option<u8> {
+    let (face, i) = match o {
+        Opt::Activate {
+            slot,
+            ability: AbilityIx::Own(i),
+        } => (t.def(obs.card(slot)?).face(obs.object(slot).face), i),
+        Opt::Trigger(index) => {
+            let trigger = obs.triggers()[usize::from(index)];
+            (t.def(trigger.card).face(trigger.face), trigger.ability)
+        }
+        _ => return None,
     };
-    let face = t.def(obs.card(slot)?).face(obs.object(slot).face);
     Some(ability_order(face.abilities, i).1)
 }
 
@@ -1547,7 +1557,7 @@ fn cost_text(cost: &Cost) -> String {
 
 /// A mana cost in braces, X first, as Oracle text writes it: "{X}{2}{W}{W}"
 /// ([CR 107.4](https://yawgatog.com/resources/magic-rules/#R1074)).
-fn mana_text(cost: ManaCost) -> String {
+pub(crate) fn mana_text(cost: ManaCost) -> String {
     let mut text = "{X}".repeat(usize::from(cost.x));
     if cost.generic > 0 || (cost.x == 0 && cost.symbols == [0; 6]) {
         text.push('{');

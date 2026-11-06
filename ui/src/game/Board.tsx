@@ -20,7 +20,7 @@ import {
   useReducedMotion,
 } from "motion/react";
 import { cardEntry, faceEntry, landFace } from "../cards";
-import type { Highlight } from "../components/Card";
+import { Card, type Highlight } from "../components/Card";
 import {
   Button,
   PhaseTracker,
@@ -66,10 +66,10 @@ import {
   interactions,
   isCombat,
   isOpening,
+  optionsMatch,
   playActs,
   prompt,
   slotOf,
-  untapPlan,
   type Act,
   type Intent,
 } from "./decisions";
@@ -87,6 +87,7 @@ import {
   abilityText,
   BLANK,
   useAbilityFace,
+  useFace,
   withoutReminder,
 } from "./faces";
 import {
@@ -100,6 +101,7 @@ import {
   type CastChoice,
 } from "./casting";
 import { CastStep } from "./CastStep";
+import { tablePick } from "./tablePick";
 import {
   combatBanner,
   footprint,
@@ -223,10 +225,15 @@ export function Board({
   const [paid, setPaid] = useState<{ slot: number; taps: number[] }>();
   // The combat declaration being made, shown as if declared until it is confirmed.
   const [draft, setDraft] = useState<Draft>(emptyDraft);
-  // The permanents picked on the table to untap, until the pick is confirmed.
-  const [untaps, setUntaps] = useState<ReadonlySet<number>>(new Set());
+  // The cards picked on the table for the view's choice of them, until it is confirmed.
+  const [picks, setPicks] = useState<{
+    view: PlayerView;
+    picked: ReadonlySet<number>;
+  }>();
   // The card being dragged.
   const [lifted, setLifted] = useState<number>();
+  // The card off the table the pointer is on in the prompt, shown whole.
+  const [pointedOff, setPointedOff] = useState<number>();
   const [settings, setSettings] = useState(false);
   /** How many times the player passed with mana unspent: each pulses their pool. */
   const [lost, setLost] = useState(0);
@@ -248,9 +255,14 @@ export function Board({
     deciding && (decision?.kind === "attacker" || decision?.kind === "blocker")
       ? decision.kind
       : undefined;
-  // Untapping up to a number of permanents: they are picked on the table, eligible ones lit.
-  const untapping =
-    deciding && decision?.ask.kind === "untap" ? decision.ask : undefined;
+  // A choice of cards made on the table (an untap's lands, a discard from the hand): the
+  // eligible ones lit, those picked to begin with picked until the player changes them.
+  const picking = useMemo(
+    () => (deciding ? tablePick(view, can) : undefined),
+    [deciding, view, can],
+  );
+  const picked =
+    picks?.view === view ? picks.picked : new Set(picking?.initial ?? []);
   // The table as the declaration would leave it.
   const shown = useMemo(
     () => (drafting ? declared(view, draft) : view),
@@ -343,7 +355,7 @@ export function Board({
     setMenu(undefined);
     setCasting(undefined);
     setDraft(emptyDraft());
-    setUntaps(new Set());
+    setPointedOff(undefined);
   }, [view]);
 
   const pick = (index: CandidateIndex, then?: Intent[]) => {
@@ -441,6 +453,12 @@ export function Board({
       highlight: "source",
     });
   }
+  // What paying "unless pays" would tap, lit as it is asked.
+  const unlessTaps =
+    deciding && decision?.ask.kind === "unlessPays"
+      ? decision.candidates.find((c) => c.option.kind === "yes")?.payments[0]
+          ?.taps
+      : undefined;
   // The permanents the payment taps glow as it is set up, or while the card is dragged, its
   // first cast's (the one a drop makes when it asks nothing more). In the cast step, the ones
   // only another payment taps can be clicked to pay that way.
@@ -457,9 +475,10 @@ export function Board({
   const taps = new Set(
     paying
       ? tapsOf(paying)
-      : paid && top?.kind === "spell" && top.slot === paid.slot
-        ? paid.taps
-        : [],
+      : (unlessTaps ??
+          (paid && top?.kind === "spell" && top.slot === paid.slot
+            ? paid.taps
+            : [])),
   );
   const others = castingNow
     ? plansOf(castingNow.choice).flatMap((p) =>
@@ -520,14 +539,14 @@ export function Board({
     }
   }
 
-  // An untap's permanents: those still to pick glow cyan while more may be, those picked gold.
-  if (untapping) {
-    for (const [slot, state] of states) {
-      if (!can.bySlot.has(slot)) continue;
-      const room = untaps.size < untapping.max;
+  // The cards of a choice on the table: those still to pick glow cyan while more may be,
+  // those picked gold.
+  if (picking) {
+    const room = picked.size < picking.max;
+    for (const slot of picking.eligible) {
       states.set(slot, {
-        ...state,
-        highlight: untaps.has(slot) ? "source" : room ? "target" : undefined,
+        ...states.get(slot),
+        highlight: picked.has(slot) ? "source" : room ? "target" : undefined,
         playable: false,
       });
     }
@@ -538,10 +557,11 @@ export function Board({
     return state.highlight === "target" && place ? [footprint(place)] : [];
   });
 
-  /** Confirms the untap: the picks that make it, as the engine asks them. */
-  const untap = () => {
-    if (!decision) return;
-    const { index, rest } = follow(decision, untapPlan(untaps, objects));
+  /** Confirms the cards picked on the table: the picks that say them, as the engine asks
+   * them. */
+  const confirmPicks = () => {
+    if (!decision || !picking?.ready(picked)) return;
+    const { index, rest } = follow(decision, picking.plan(picked));
     if (index !== undefined) pick(index, rest);
   };
 
@@ -566,11 +586,11 @@ export function Board({
       setDraft(drafted(draft, slot));
       return true;
     }
-    if (untapping) {
-      if (!can.bySlot.has(slot)) return false;
-      const next = new Set(untaps);
-      if (!next.delete(slot) && next.size < untapping.max) next.add(slot);
-      setUntaps(next);
+    if (picking) {
+      if (!picking.eligible.has(slot)) return false;
+      const next = new Set(picked);
+      if (!next.delete(slot) && next.size < picking.max) next.add(slot);
+      setPicks({ view, picked: next });
       return true;
     }
     const acts = deciding ? can.bySlot.get(slot) : undefined;
@@ -729,7 +749,7 @@ export function Board({
     let primary: (() => void) | undefined;
     if (castingNow) primary = () => cast(castingNow.choice);
     else if (drafting) primary = declare;
-    else if (untapping) primary = untap;
+    else if (picking) primary = confirmPicks;
     else if (declaring)
       primary = finish === undefined ? undefined : () => pick(finish);
     else if (deciding && decision?.kind === "priority" && pass !== undefined) {
@@ -1010,6 +1030,7 @@ export function Board({
 
         {prompting && decision && (
           <Prompt
+            key={decision.id.seq}
             decision={decision}
             skip={can.skip}
             source={sourceName}
@@ -1020,14 +1041,17 @@ export function Board({
               return look !== undefined && look !== "hidden" && look !== "pile";
             }}
             onPick={pick}
+            onPlan={(plan) => {
+              const { index, rest } = follow(decision, plan);
+              if (index !== undefined) pick(index, rest);
+            }}
             onCancel={cancellable ? cancel : undefined}
+            onPoint={setPointedOff}
             confirm={
-              untapping && {
-                label:
-                  untaps.size > 0
-                    ? `Untap ${untaps.size}/${untapping.max}`
-                    : "Untap None",
-                onClick: untap,
+              picking && {
+                label: picking.label(picked),
+                disabled: !picking.ready(picked),
+                onClick: confirmPicks,
               }
             }
             hovered={hovered}
@@ -1073,6 +1097,14 @@ export function Board({
             )}
             lit={menu?.pointed && litParagraph(menu.pointed, objects)}
             refusal={menu ? undefined : refusal}
+          />
+        )}
+
+        {pointedOff !== undefined && prompting && (
+          <InspectAt
+            view={view}
+            object={objects.get(pointedOff)}
+            place={inspectorPlace(STAGE.width, true, targets)}
           />
         )}
 
@@ -1623,7 +1655,8 @@ function Finish({
 }
 
 /** A decision other than priority: what it asks, with a button for each candidate but the
- * cards picked on the table, where each glows with its side and state in view. */
+ * cards picked on the table, where each glows with its side and state in view; a card off the
+ * table, as one in a graveyard, shows its face. */
 function Prompt({
   decision,
   skip,
@@ -1632,7 +1665,9 @@ function Prompt({
   objects,
   onTable,
   onPick,
+  onPlan,
   onCancel,
+  onPoint,
   confirm,
   hovered,
 }: {
@@ -1645,59 +1680,70 @@ function Prompt({
   /** Whether the card in a slot is shown on the table, to be clicked there. */
   onTable(slot: number): boolean;
   onPick(index: CandidateIndex): void;
+  /** Answers with picks that span decisions, as a trigger order does. */
+  onPlan(plan: Intent[]): void;
   /** Takes back the cast the decision is part of. */
   onCancel?(): void;
-  /** Confirms the cards picked on the table. */
-  confirm?: { label: string; onClick(): void } | false;
+  /** The card off the table the pointer is on, if any, to show whole. */
+  onPoint(slot: number | undefined): void;
+  /** Confirms the cards picked on the table, which leaves the prompt no candidate to offer. */
+  confirm?: { label: string; disabled: boolean; onClick(): void } | false;
   /** The card the pointer is on, which a crew meter previews. */
   hovered?: number;
 }) {
-  // A payment plan reads as what it taps, never as a number; a trigger as its source, since
-  // the title says what happens to it.
+  const { ask } = decision;
+  // A payment plan reads as what it taps, never as a number; a payment asked of a spell's
+  // controller by what it pays.
   const label = (c: DecisionView["candidates"][number]) => {
-    if (c.option.kind === "trigger" && c.option.source !== null) {
-      return nameOf(c.option.source);
+    if (ask.kind === "unlessPays") {
+      return c.option.kind === "yes" ? `Pay ${ask.cost}` : "Don't Pay";
     }
     const taps = c.payments[0]?.taps;
     if (c.option.kind !== "plan" || !taps) return c.label;
     return taps.length > 0 ? `Tap ${tapList(taps.map(nameOf))}` : "Tap nothing";
   };
-  // Cards picked on the table and confirmed from the prompt leave it no done to offer.
-  const offered = decision.candidates
-    .map((c, index) => ({ c, index, label: label(c) }))
-    .filter(({ c }) => c.option.kind !== "object" || !onTable(c.option.slot))
-    .filter(({ c }) => !confirm || c.option.kind !== "done");
+  // Cards picked on the table are not offered again; those off it show their faces.
+  const offered = confirm
+    ? []
+    : decision.candidates
+        .map((c, index) => ({ c, index, label: label(c) }))
+        .filter(
+          ({ c }) => c.option.kind !== "object" || !onTable(c.option.slot),
+        );
   // Up to one target asks for the target, which the board takes with its count; the prompt
   // offers none.
-  const buttons =
+  const listed =
     skip === undefined
       ? offered
       : [{ c: decision.candidates[skip]!, index: skip, label: "No Target" }];
-  const title = prompt(
-    skip === undefined ? decision : { ...decision, kind: "target" },
-    source,
-  );
-  // Cards of one name off the table say whose they are.
-  const named = (b: (typeof buttons)[number]) => {
-    const o = b.c.option.kind === "object" && objects.get(b.c.option.slot);
-    if (!o || buttons.filter((x) => x.label === b.label).length < 2) {
-      return b.label;
-    }
-    return `${o.controller === "you" ? "Your" : "Their"} ${b.label}`;
-  };
+  const faces = listed.flatMap(({ c, index }) => {
+    const o = c.option.kind === "object" && objects.get(c.option.slot);
+    return o ? [{ object: o, index }] : [];
+  });
+  const buttons = listed.filter(({ c }) => c.option.kind !== "object");
+  const ordering = decision.kind === "triggerOrder";
+  const [order, setOrder] = useState<CandidateIndex[]>([]);
+  const title = ordering
+    ? order.length === 0
+      ? "Resolve first"
+      : "Resolve next"
+    : prompt(
+        skip === undefined ? decision : { ...decision, kind: "target" },
+        source,
+      );
   return (
     <div className="prompt" role="dialog" aria-label={title}>
       <h2 className="prompt-title">
         {title}
-        {decision.ask.kind === "waterbend" && (
+        {ask.kind === "waterbend" && (
           <span className="prompt-cost">
-            <CostText text={decision.ask.cost} />
+            <CostText text={ask.cost} />
           </span>
         )}
       </h2>
-      {decision.ask.kind === "crew" && (
+      {ask.kind === "crew" && (
         <CrewMeter
-          ask={decision.ask}
+          ask={ask}
           adding={
             hovered !== undefined &&
             decision.candidates.some(
@@ -1708,19 +1754,43 @@ function Prompt({
           }
         />
       )}
-      {buttons.length > 0 && (
-        <div className="prompt-choices">
-          {buttons.map((b) => (
-            <Button
-              key={b.index}
-              size="small"
-              variant="secondary"
-              onClick={() => onPick(b.index)}
-            >
-              <RulesText text={named(b)} />
-            </Button>
-          ))}
-        </div>
+      {ordering ? (
+        <TriggerOrder
+          decision={decision}
+          nameOf={nameOf}
+          order={order}
+          onOrder={setOrder}
+          onPlan={onPlan}
+        />
+      ) : (
+        <>
+          {faces.length > 0 && (
+            <div className="prompt-cards">
+              {faces.map(({ object, index }) => (
+                <PromptCard
+                  key={index}
+                  object={object}
+                  onPick={() => onPick(index)}
+                  onPoint={(on) => onPoint(on ? object.slot : undefined)}
+                />
+              ))}
+            </div>
+          )}
+          {buttons.length > 0 && (
+            <div className="prompt-choices">
+              {buttons.map((b) => (
+                <Button
+                  key={b.index}
+                  size="small"
+                  variant="secondary"
+                  onClick={() => onPick(b.index)}
+                >
+                  <RulesText text={b.label} />
+                </Button>
+              ))}
+            </div>
+          )}
+        </>
       )}
       {(onCancel || confirm) && (
         <div className="cast-buttons">
@@ -1730,13 +1800,137 @@ function Prompt({
             </Button>
           )}
           {confirm && (
-            <Button size="small" onClick={confirm.onClick}>
+            <Button
+              size="small"
+              disabled={confirm.disabled}
+              onClick={confirm.onClick}
+            >
               {confirm.label}
             </Button>
           )}
         </div>
       )}
     </div>
+  );
+}
+
+/** A candidate card off the table, as a graveyard's target, by its face. */
+function PromptCard({
+  object,
+  onPick,
+  onPoint,
+}: {
+  object: ObjectView;
+  onPick(): void;
+  onPoint(on: boolean): void;
+}) {
+  const face = useFace(object);
+  return (
+    <button
+      type="button"
+      className="prompt-card"
+      data-option={object.slot}
+      aria-label={object.name ?? "A card"}
+      onClick={onPick}
+      onPointerEnter={() => onPoint(true)}
+      onPointerLeave={() => onPoint(false)}
+    >
+      <Card
+        card={face}
+        variant="field"
+        width={PROMPT_CARD_WIDTH}
+        highlight="target"
+      />
+    </button>
+  );
+}
+
+/** Faces in the prompt's one row, as the battlefield draws cards: low enough that the prompt
+ * stays under the lifted stack (layout's STACK_LIFT). */
+const PROMPT_CARD_WIDTH = 80;
+
+/** The order of simultaneous triggers ([CR 603.3b](https://yawgatog.com/resources/magic-rules/#R6033b):
+ * "If multiple players have triggered abilities that have triggered since the last time a
+ * player received priority, each player, in APNAP order, puts triggered abilities they control
+ * on the stack in any order they choose"), chosen as they will resolve: each trigger by its
+ * source and the paragraph that says it, numbered as it is picked, 1 resolving first. Once all
+ * but one are numbered, the picks put them on the stack from the last to resolve up, the first
+ * going on unasked; each pick after the first waits through the targets of the one before. */
+function TriggerOrder({
+  decision,
+  nameOf,
+  order,
+  onOrder,
+  onPlan,
+}: {
+  decision: DecisionView;
+  nameOf(slot: number): string;
+  order: CandidateIndex[];
+  onOrder(order: CandidateIndex[]): void;
+  onPlan(plan: Intent[]): void;
+}) {
+  const triggers = decision.candidates.map((c, index) => ({ c, index }));
+  const choose = (index: CandidateIndex) => {
+    const next = [...order, index];
+    if (next.length < triggers.length - 1) {
+      onOrder(next);
+      return;
+    }
+    const last = triggers.find((t) => !next.includes(t.index))!;
+    const put = [
+      last,
+      ...next
+        .slice(1)
+        .reverse()
+        .map((i) => triggers[i]!),
+    ];
+    onPlan(
+      put.map(({ c }, i) => {
+        const option = c.option;
+        const source = option.kind === "trigger" ? option.source : null;
+        return i === 0
+          ? { kind: "triggerOrder", wants: (o) => optionsMatch(o, option) }
+          : {
+              kind: "triggerOrder",
+              wants: (o) => o.kind === "trigger" && o.source === source,
+              waits: true,
+            };
+      }),
+    );
+  };
+  return (
+    <ol className="prompt-triggers">
+      {triggers.map(({ c, index }) => {
+        const source = c.option.kind === "trigger" ? c.option.source : null;
+        const name = source === null ? c.label : nameOf(source);
+        const text = faceEntry(name)?.oracle_text ?? "";
+        const at = abilityParagraph(text, true, c.nth ?? 0);
+        const n = order.indexOf(index);
+        return (
+          <li key={index}>
+            <button
+              type="button"
+              className="prompt-trigger"
+              aria-pressed={n >= 0}
+              disabled={n >= 0}
+              onClick={() => choose(index)}
+            >
+              <span className="prompt-trigger-order">
+                {n >= 0 ? n + 1 : ""}
+              </span>
+              <span className="prompt-trigger-body">
+                <span className="prompt-trigger-name">{name}</span>
+                {at !== undefined && (
+                  <span className="prompt-trigger-text">
+                    <RulesText text={withoutReminder(text.split("\n")[at]!)} />
+                  </span>
+                )}
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 

@@ -96,21 +96,22 @@ export function choiceOf(view: PlayerView): Choice | undefined {
       return takeAndBottom(at, ask.count, ask.take);
     case "bottom":
       return takeAndBottom(at, ask.count, 0);
-    case "discardBasicLand":
-      return discardBasicLand(at, ask);
     case "topOrBottom":
       return topOrBottom(at, ask);
     case "explore":
       return explore(at);
     case "search":
       return search(at, ask);
-    // Untaps (picked on the board), crews and waterbends are decided on the board.
+    case "maySearch":
+      return maySearch(at);
+    // Untaps and Thirst for Discovery's discard (picked on the board), crews, waterbends and
+    // payments (the board lights what pays) are decided on the board.
     case "untap":
+    case "discardBasicLand":
     case "crew":
     case "waterbend":
-      return undefined;
     case "unlessPays":
-      return payOrCounter(at, ask) ?? yesNo(at);
+      return undefined;
     case "payLife":
       return payLife(at, ask);
     case "cleanup":
@@ -411,28 +412,6 @@ function takeAndBottom(at: Situation, count: number, take: number): Arrange {
   };
 }
 
-/** "Discard two cards unless you discard a basic land card": which, then the discards. */
-function discardBasicLand(
-  at: Situation,
-  { count }: AskOf<"discardBasicLand">,
-): Ask {
-  return {
-    kind: "ask",
-    key: at.key,
-    title: "Discard",
-    instruction: `Discard a basic land, or ${inWords(count)} cards.`,
-    source: at.source,
-    cards: [],
-    answers: [
-      { label: "Basic Land", plan: [yes("yesNo")] },
-      {
-        label: `${capitalized(inWords(count))} Cards`,
-        plan: [no("yesNo")],
-      },
-    ],
-  };
-}
-
 /** Whether the top card of a player's library goes to the bottom. */
 function fateseal(at: Situation, { player }: AskOf<"fateseal">): Ask {
   const top = at.library(player)[0];
@@ -539,7 +518,9 @@ function explore(at: Situation): Ask {
 
 /** A library search ([CR 701.23a](https://yawgatog.com/resources/magic-rules/#R70123a)) for
  * up to `max` cards, which the engine asks for one at a time, then done. The source card at
- * the right says what the search finds. */
+ * the right says what the search finds. Finding nothing is the second button
+ * ([CR 701.23b](https://yawgatog.com/resources/magic-rules/#R70123b): "that player isn't
+ * required to find some or all of those cards"); a lone card found is picked to begin with. */
 function search(at: Situation, { max }: AskOf<"search">): Pick {
   const cards = at.offered;
   return {
@@ -550,12 +531,31 @@ function search(at: Situation, { max }: AskOf<"search">): Pick {
     source: at.source,
     cards,
     pickable: cards,
-    min: 0,
+    min: 1,
     max,
     confirm: () => "Done",
+    decline: "Find Nothing",
+    picked: cards.length === 1 ? cards : [],
     plan: (picked) => [
       ...picked.map((slot) => at.pickCard("chooseUpTo", slot)),
       done("chooseUpTo"),
+    ],
+  };
+}
+
+/** Whether to search at all, asked only of a player who knows cards in their library (the
+ * session searches for the others): declining keeps them where they are, unshuffled. */
+function maySearch(at: Situation): Ask {
+  return {
+    kind: "ask",
+    key: at.key,
+    title: "Search?",
+    instruction: "",
+    source: at.source,
+    cards: [],
+    answers: [
+      { label: "Search", plan: [yes("yesNo")] },
+      { label: "Don't Search", plan: [no("yesNo")] },
     ],
   };
 }
@@ -738,30 +738,6 @@ function payLife(at: Situation, { life }: AskOf<"payLife">): Ask {
   };
 }
 
-/** "Counter target spell unless its controller pays {N}", asked of that spell's controller
- * ([CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a)). */
-function payOrCounter(
-  at: Situation,
-  { cost }: AskOf<"unlessPays">,
-): Ask | undefined {
-  const r = at.resolving;
-  const target = r?.targets[0];
-  if (r?.kind !== "spell" || target?.kind !== "object") return undefined;
-  const spell = at.name(target.slot) ?? "your spell";
-  return {
-    kind: "ask",
-    key: at.key,
-    title: `Pay ${cost}?`,
-    instruction: `${at.resolvingName} counters ${spell} unless you pay ${cost}.`,
-    source: at.source,
-    cards: [target.slot],
-    answers: [
-      { label: `Pay ${cost}`, plan: [yes("yesNo")] },
-      { label: "Don't Pay", plan: [no("yesNo")] },
-    ],
-  };
-}
-
 function yesNo(at: Situation): Ask {
   return {
     kind: "ask",
@@ -799,16 +775,22 @@ function castOffer(at: Situation): Ask {
 }
 
 /** The value of X as a spell is cast ([CR 601.2b](https://yawgatog.com/resources/magic-rules/#R6012b)),
- * a kicker's X among them. */
+ * a kicker's X among them, each by the total cost it makes
+ * ([CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f)). */
 function chooseX(at: Situation): Ask {
-  const name = at.source?.name;
   return {
     kind: "ask",
     key: at.key,
     title: "Choose X",
-    instruction: `Choose the value of X${name ? ` for ${name}` : ""}.`,
+    instruction: "",
     source: at.source,
     cards: [],
-    answers: at.answers((_, label) => label),
+    answers: at.decision.candidates.map((c) => {
+      const cost = c.payments[0]?.cost;
+      return {
+        label: cost ? `${c.label} · ${cost}` : c.label,
+        plan: [answer(at.decision.kind, c.option)],
+      };
+    }),
   };
 }

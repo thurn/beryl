@@ -13,9 +13,9 @@ use beryl_engine::event::Event;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{ObjectFlags, Pending, StackEntry};
 use beryl_engine::{
-    Candidates, CardTable, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome,
-    Profile, Replay, Scratch, Seat, State, Step, TurnStep, apply, next_in_step, observe,
-    paused_events, view,
+    Ask, Candidates, CardTable, Choice, Decision, DecisionKind, GameTable, Observation, Opt,
+    Outcome, Profile, Replay, Scratch, Seat, State, Step, TurnStep, Zone, apply, next_in_step,
+    observe, paused_events, view,
 };
 use beryl_search::{Agent, Budget};
 
@@ -592,7 +592,8 @@ impl Game {
     /// The session's own answer to the human's decision `d`, if it gives one: under the
     /// smart stops, it passes their priority while only their own doings sit on the stack
     /// ([`Game::own_top`]) or in combat with nothing new to answer ([`Game::quiet_combat`]),
-    /// orders their simultaneous triggers ([`trigger_to_stack`]), and
+    /// orders their simultaneous triggers ([`trigger_to_stack`]), searches their library
+    /// where they may when they know no card in it ([`Game::searches_unasked`]), and
     /// pays a waterbend cost with mana whenever mana can pay it, tapping no artifact or
     /// creature ([CR 701.67a](https://yawgatog.com/resources/magic-rules/#R70167a): "you may
     /// tap an untapped artifact or creature you control rather than pay that mana").
@@ -610,11 +611,30 @@ impl Game {
                 Some(Choice(0))
             }
             DecisionKind::TriggerOrder => Some(trigger_to_stack(&self.state, &self.table, d)),
+            DecisionKind::YesNo if self.searches_unasked(d) => (0..d.len() as u8)
+                .map(Choice)
+                .find(|&c| d.candidates.option(c) == Some(Opt::Yes)),
             DecisionKind::Waterbend => (0..d.len() as u8)
                 .map(Choice)
                 .find(|&c| d.candidates.option(c) == Some(Opt::Done)),
             _ => None,
         }
+    }
+
+    /// Whether `d` asks whether to search the human's library (Trinket Mage's "you may
+    /// search") while they know no card in it. Declining differs from searching and finding
+    /// nothing ([CR 701.23b](https://yawgatog.com/resources/magic-rules/#R70123b): "If a
+    /// player is searching a hidden zone for cards with a stated quality ... that player isn't
+    /// required to find some or all of those cards") only by the shuffle, which then changes
+    /// nothing they know; the search itself offers taking nothing. A player who knows their
+    /// library's top, after a scry or a put-back, is asked.
+    fn searches_unasked(&self, d: &Decision) -> bool {
+        d.ask == Ask::MaySearch
+            && !self
+                .state
+                .zone(self.human, Zone::Library)
+                .iter()
+                .any(|slot| self.state.knows(self.human, slot))
     }
 
     /// Whether the top of the stack is the human's own spell or ability and, since their

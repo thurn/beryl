@@ -137,10 +137,13 @@ fn time_spiral_untaps_up_to_six_lands() {
 }
 
 #[test]
-fn trinket_mage_searches_for_up_to_one_card() {
+fn trinket_mage_may_search_for_up_to_one_card() {
     assert_eq!(
         asks(names::TRINKET_MAGE),
-        [(Kind::ChooseUpTo, AskView::Search { max: 1 })]
+        [
+            (Kind::YesNo, AskView::MaySearch),
+            (Kind::ChooseUpTo, AskView::Search { max: 1 })
+        ]
     );
 }
 

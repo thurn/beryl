@@ -2382,6 +2382,39 @@ await check(
     },
 );
 
+// The X decision of a kicked Thieving Skydiver (`cast-kicker`'s last), asked over the table:
+// each value of X says the total cost it makes, in symbols.
+const kickX = kickViews.at(-1).status.decision;
+assert.equal(kickX.kind, "x", "the fixture ends on X");
+await check(
+    "each X says the total cost it makes",
+    async (page) => {
+        await page.clock.runFor(2000);
+        // Each label with its symbols as braces.
+        const said = await page.$$eval(
+            ".choice .overlay-actions button:not(:last-child)",
+            (bs) =>
+                bs.map((b) => {
+                    const copy = b.cloneNode(true);
+                    for (const img of copy.querySelectorAll("[role=img]")) {
+                        img.replaceWith(img.getAttribute("aria-label"));
+                    }
+                    return copy.textContent.trim();
+                }),
+        );
+        assert.deepEqual(
+            said,
+            kickX.candidates.map((c) => `${c.label} · ${c.payments[0].cost}`),
+        );
+        assert.deepEqual(
+            kickX.candidates.map((c) => c.payments[0].cost),
+            ["{2}{U}", "{3}{U}", "{4}{U}"],
+            "{1}{U} kicked with X",
+        );
+    },
+    { fixture: "cast-kicker", at: kickViews.length, ready: ".choice" },
+);
+
 // Subtlety, cast for its mana or with evoke, whose exile from the hand is asked as a cost while
 // the cast can still be taken back.
 const evokeViews = await load("cast-evoke");
@@ -2921,17 +2954,36 @@ await check(
     { fixture: "choice-jace", at: jace.views.length, ready: tray(first) },
 );
 
+// Mana Tithe asks the human to pay {1} on the board, the table in view: the land the payment
+// would tap glows, and no other; the prompt answers from its buttons.
 const pay = await lastDecision("choice-pay");
 const decline = pay.decision.candidates.findIndex(
     (c) => c.option.kind === "no",
 );
+const payTaps = pay.decision.candidates.find((c) => c.option.kind === "yes")
+    .payments[0].taps;
+assert.equal(payTaps.length, 1, "one land pays {1}");
 await check(
-    "a pay-or-counter prompt answers from its buttons",
+    "a pay-or-counter prompt lights the land that would pay",
     async (page) => {
+        await page.clock.runFor(2000);
+        assert.equal(await page.$(".choice"), null, "no overlay opens");
+        assert.equal(await page.$(".table-dimmed"), null, "the table shows");
+        const lit = await page.$$eval(
+            '[data-zone="battlefield"] .card-paying',
+            (els) => [
+                ...new Set(
+                    els.map((e) =>
+                        Number(e.closest("[data-slot]").dataset.slot),
+                    ),
+                ),
+            ],
+        );
+        assert.deepEqual(lit, payTaps, "the paying land glows");
         await page.getByRole("button", { name: "Don't Pay" }).click();
         assert.deepEqual(await settled(page, 1), [decline]);
     },
-    { fixture: "choice-pay", at: pay.views.length, ready: ".choice" },
+    { fixture: "choice-pay", at: pay.views.length, ready: ".prompt" },
 );
 
 await check(
@@ -2948,7 +3000,11 @@ await check(
         await page.waitForSelector(".choice");
         assert.deepEqual(await chosen(page), [], "peeking answers nothing");
     },
-    { fixture: "choice-pay", at: pay.views.length, ready: ".choice" },
+    {
+        fixture: "choice-look",
+        at: (await load("choice-look")).length,
+        ready: ".choice",
+    },
 );
 
 // Menus and prompts say what each option does (by-isv.8). `menu-choices` stops at a priority
@@ -3218,7 +3274,42 @@ for (const [fixture, primary, kind] of [
     );
 }
 
-// The trigger-order prompt (still asked under exact stops) names each trigger's source in full,
+// The trigger-order prompt (still asked under exact stops) shows each trigger by its source and
+// the paragraph that says it, unnumbered until picked; picking the one that resolves first puts
+// the other on the stack, the first going on after it unasked.
+const order = await lastDecision("choice-trigger-order");
+await check(
+    "the trigger-order prompt says each trigger and picks what resolves first",
+    async (page) => {
+        await page.clock.runFor(3000);
+        const texts = await page
+            .locator(".prompt-trigger-text")
+            .allTextContents();
+        assert.equal(texts.length, 2, "both triggers say what they do");
+        assert.ok(
+            texts.every((t) => /^(When|Whenever|At)\b/.test(t)),
+            `each is its trigger's paragraph: ${texts}`,
+        );
+        assert.equal(
+            await page.locator(".prompt-title").textContent(),
+            "Resolve first",
+        );
+        assert.deepEqual(
+            await page.locator(".prompt-trigger-order").allTextContents(),
+            ["", ""],
+            "nothing is numbered yet",
+        );
+        await page.locator(".prompt-trigger").first().click();
+        assert.deepEqual(await settled(page, 1), [1], "the other goes first");
+    },
+    {
+        fixture: "choice-trigger-order",
+        at: order.views.length,
+        ready: ".prompt-trigger",
+    },
+);
+
+// The trigger-order prompt names each trigger's source in full,
 // even the cube's longest names: `choice-trigger-order` stops on one between two permanents,
 // renamed here to the two longest names in the cube list, and no text on the page is cut.
 const cube = await readFile(
@@ -3231,7 +3322,6 @@ const longest = cube
     .map((line) => line.replace(/^[^,]*,/, "").replace(/^"(.*)"$/, "$1"))
     .sort((a, b) => b.length - a.length)
     .slice(0, 2);
-const order = await lastDecision("choice-trigger-order");
 const sources = order.decision.candidates.map(
     (c) =>
         order.views.at(-1).objects.find((o) => o.slot === c.option.source).name,
@@ -3250,14 +3340,15 @@ await check(
     async (page) => {
         await page.clock.runFor(3000);
         assert.deepEqual(await cutText(page), [], "no text is cut");
-        const choices = page.locator(".prompt-choices .button");
+        const choices = page.locator(".prompt-trigger");
         assert.deepEqual(
-            await choices.allTextContents(),
+            await page.locator(".prompt-trigger-name").allTextContents(),
             longest,
             "each trigger is named by its source",
         );
+        // The second resolves first: the first goes on the stack.
         await choices.nth(1).click();
-        assert.deepEqual(await settled(page, 1), [1]);
+        assert.deepEqual(await settled(page, 1), [0]);
     },
     {
         fixture: "choice-trigger-order-long",
@@ -4888,10 +4979,9 @@ const visiblePoint = (page, selector, nth) =>
     );
 
 // A prompt's cards show whole on hover, beside its instruction, options and cards, never over
-// them, on an opaque inspector (by-isv.17): a look at the top four, a pay-or-counter and X.
+// them, on an opaque inspector (by-isv.17): a look at the top four and X.
 for (const [fixture, at] of [
     ["choice-look", (await load("choice-look")).length],
-    ["choice-pay", pay.views.length],
     ["cast-kicker", kickViews.length],
 ]) {
     await check(
@@ -5200,22 +5290,31 @@ await check(
 );
 
 // Time Spiral's untap (`choice-untap`) is picked on the board: the tapped lands it may untap
-// glow, wherever they sit and whoever controls them, and no others; each pick turns gold, its
-// count on the confirm button; picks of twins the engine offers one of go as that one.
+// glow, wherever they sit and whoever controls them, and no others. The engine offers only
+// tapped lands, so the human's own are picked to begin with, as many as it untaps; each pick
+// turns gold, its count on the confirm button, and a land let go glows to be picked again;
+// picks of twins the engine offers one of go as that one.
 const untapping = await lastDecision("choice-untap");
 const untapView = untapping.views.at(-1);
-const landsOf = (tapped) =>
+const landsOf = (tapped, controller) =>
     untapView.objects
         .filter(
             (o) =>
                 o.zone === "battlefield" &&
                 o.types.includes("land") &&
-                o.tapped === tapped,
+                o.tapped === tapped &&
+                (controller === undefined || o.controller === controller),
         )
-        .map((o) => o.slot);
+        .map((o) => o.slot)
+        .sort((a, b) => a - b);
 const tappedLands = landsOf(true);
 const untappedLands = landsOf(false);
+const ownTapped = landsOf(true, "you");
+const theirTapped = landsOf(true, "opponent");
+const untapMax = untapping.decision.ask.max;
 assert.ok(untappedLands.length > 0, "the fixture has untapped lands");
+assert.equal(ownTapped.length, untapMax, "the human's tapped lands fill it");
+assert.ok(theirTapped.length > 0, "the opponent has tapped lands");
 /** The slots of the permanents glowing `highlight`, in order. */
 const glowing = (page, highlight) =>
     page.$$eval(`[data-zone="battlefield"] .card-${highlight}`, (els) =>
@@ -5242,30 +5341,42 @@ const uncovered = (page, slots) =>
         slots,
     );
 await check(
-    "an untap is picked on the board with only eligible permanents lit",
+    "an untap is picked on the board, the human's tapped lands picked to begin with",
     async (page) => {
         await page.clock.runFor(2000);
         assert.equal(await page.$(".choice"), null, "no overlay opens");
-        assert.deepEqual(
-            await glowing(page, "target"),
-            [...tappedLands].sort((a, b) => a - b),
-        );
+        assert.deepEqual(await glowing(page, "source"), ownTapped);
+        assert.deepEqual(await glowing(page, "target"), [], "no room left");
         // An untapped land can't be picked.
         await page.click(slotOf(await uncovered(page, untappedLands)));
-        await page.getByRole("button", { name: "Untap None" }).waitFor();
-        const land = await uncovered(page, tappedLands);
-        await page.click(slotOf(land));
-        assert.deepEqual(await glowing(page, "source"), [land]);
+        const full = `Untap ${untapMax}/${untapMax}`;
+        await page.getByRole("button", { name: full }).waitFor();
+        // A land let go makes room: it and the opponent's tapped lands glow to be picked.
+        const mine = await uncovered(page, ownTapped);
+        await page.click(slotOf(mine));
         await page
-            .getByRole("button", {
-                name: `Untap 1/${untapping.decision.ask.max}`,
-            })
-            .click();
+            .getByRole("button", { name: `Untap ${untapMax - 1}/${untapMax}` })
+            .waitFor();
+        assert.deepEqual(
+            await glowing(page, "target"),
+            [mine, ...theirTapped].sort((a, b) => a - b),
+        );
+        const theirs = await uncovered(page, theirTapped);
+        await page.click(slotOf(theirs));
+        assert.ok((await glowing(page, "source")).includes(theirs));
+        await page.getByRole("button", { name: full }).click();
         const [first] = await settled(page, 1);
         const o = untapping.decision.candidates[first].option;
-        const named = (slot) =>
-            untapView.objects.find((x) => x.slot === slot).name;
-        assert.equal(named(o.slot), named(land), "the land picked");
+        assert.equal(o.kind, "object", "a land is untapped first");
+        assert.ok(
+            ownTapped
+                .filter((slot) => slot !== mine)
+                .some(
+                    (slot) =>
+                        nameIn(untapView, slot) === nameIn(untapView, o.slot),
+                ),
+            "one of the human's lands still picked",
+        );
     },
     {
         fixture: "choice-untap",
@@ -5274,10 +5385,184 @@ await check(
     },
 );
 
+// Teferi, Hero of Dominaria's untap at the end step (`choice-teferi`): the human's two tapped
+// lands are picked to begin with, so Space untaps them.
+const teferi = await lastDecision("choice-teferi");
+const teferiView = teferi.views.at(-1);
+const teferiTapped = teferiView.objects
+    .filter(
+        (o) =>
+            o.zone === "battlefield" &&
+            o.types.includes("land") &&
+            o.tapped &&
+            o.controller === "you",
+    )
+    .map((o) => o.slot)
+    .sort((a, b) => a - b);
+assert.equal(teferiTapped.length, 2, "the human has two tapped lands");
+await check(
+    "Teferi's untap picks the tapped lands to begin with",
+    async (page) => {
+        await page.clock.runFor(2000);
+        // Teferi glows gold too, as what asks.
+        assert.deepEqual(
+            await glowing(page, "source"),
+            [...teferiTapped, teferi.decision.source].sort((a, b) => a - b),
+        );
+        await page.getByRole("button", { name: "Untap 2/2" }).waitFor();
+        await page.keyboard.press("Space");
+        const [first] = await settled(page, 1);
+        assert.ok(
+            teferiTapped.includes(
+                teferi.decision.candidates[first].option.slot,
+            ),
+            "a tapped land is untapped",
+        );
+    },
+    { fixture: "choice-teferi", at: teferi.views.length, ready: ".prompt" },
+);
+
+// Thirst for Discovery (`choice-thirst`) asks its discard from the hand, the table in view: a
+// basic land and Discard (two gestures), or two cards.
+const thirstViews = await load("choice-thirst");
+const thirstAt = thirstViews.findIndex(
+    (v) => v.status.decision?.ask.kind === "discardBasicLand",
+);
+assert.ok(thirstAt >= 0, "the fixture asks Thirst's discard");
+const thirstView = thirstViews[thirstAt];
+const thirstAsk = thirstView.status.decision;
+const handOf = (view) =>
+    view.objects
+        .filter((o) => o.zone === "hand" && o.owner === "you")
+        .map((o) => o.slot);
+const plainsInHand = handOf(thirstView).find(
+    (slot) => nameIn(thirstView, slot) === "Plains",
+);
+const spellsInHand = handOf(thirstView).filter(
+    (slot) => !["Plains", "Island"].includes(nameIn(thirstView, slot)),
+);
+const thirstDiscard = thirstViews.at(-1).status.decision;
+const answerIndex = (decision, kind) =>
+    decision.candidates.findIndex((c) => c.option.kind === kind);
+const thirstRun = {
+    fixture: "choice-thirst",
+    at: thirstAt + 1,
+    ready: ".prompt",
+};
+const discardButton = (page) =>
+    page.locator(".prompt .cast-buttons .button", { hasText: "Discard" });
+await check(
+    "Thirst's basic land is discarded from the hand in two clicks",
+    async (page) => {
+        await page.clock.runFor(2000);
+        assert.equal(await page.$(".choice"), null, "no overlay opens");
+        assert.equal(await page.$(".table-dimmed"), null, "the table shows");
+        const lit = await page.$$eval(
+            '[data-zone="hand"] .card-target',
+            (els) =>
+                [
+                    ...new Set(
+                        els.map((e) =>
+                            Number(e.closest("[data-slot]").dataset.slot),
+                        ),
+                    ),
+                ].sort((a, b) => a - b),
+        );
+        assert.deepEqual(
+            lit,
+            [...handOf(thirstView)].sort((a, b) => a - b),
+        );
+        await page.click(slotOf(plainsInHand));
+        await discardButton(page).click();
+        assert.deepEqual(await settled(page, 2), [
+            answerIndex(thirstAsk, "yes"),
+            thirstDiscard.candidates.findIndex(
+                (c) =>
+                    c.option.kind === "object" &&
+                    nameIn(thirstViews.at(-1), c.option.slot) === "Plains",
+            ),
+        ]);
+    },
+    thirstRun,
+);
+await check(
+    "Thirst's two cards are picked from the hand before Discard is offered",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.click(slotOf(spellsInHand[0]));
+        assert.equal(await discardButton(page).textContent(), "Discard 1/2");
+        assert.ok(await discardButton(page).isDisabled(), "one is not enough");
+        await page.click(slotOf(spellsInHand[1]));
+        await discardButton(page).click();
+        assert.deepEqual((await settled(page, 1)).slice(0, 1), [
+            answerIndex(thirstAsk, "no"),
+        ]);
+    },
+    thirstRun,
+);
+
+// Snapcaster Mage's target in the graveyard (`target-graveyard`) is picked by its face in the
+// prompt.
+const snap = await lastDecision("target-graveyard");
+await check(
+    "graveyard targets show their faces",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const offered = await page.$$eval(".prompt-card", (els) =>
+            els.map((e) => Number(e.dataset.option)),
+        );
+        assert.deepEqual(
+            offered.sort((a, b) => a - b),
+            [...snap.bySlot.keys()].sort((a, b) => a - b),
+        );
+        const names = await page
+            .locator(".prompt-card .card-name")
+            .allTextContents();
+        assert.deepEqual(
+            names.sort(),
+            [...snap.bySlot.keys()]
+                .map((slot) => nameIn(snap.views.at(-1), slot))
+                .sort(),
+            "each shows its card",
+        );
+        assert.equal(
+            await page.$(".prompt-choices"),
+            null,
+            "no name-only buttons",
+        );
+        const [first] = offered;
+        // Each is shown whole on hover.
+        await page.hover(`.prompt-card[data-option="${first}"]`);
+        await inspectorOf(page, nameIn(snap.views.at(-1), first));
+        await page.click(`.prompt-card[data-option="${first}"]`);
+        assert.deepEqual(await settled(page, 1), [snap.bySlot.get(first)]);
+    },
+    { fixture: "target-graveyard", at: snap.views.length, ready: ".prompt" },
+);
+
 // Trinket Mage's search (`choice-search`) finds up to one of two artifacts: a second click
 // lights the second card in place of the first, never both, and Done sends the one lit.
 const searching = await lastDecision("choice-search");
 assert.equal(searching.decision.ask.max, 1, "the search finds up to one");
+assert.ok(
+    searching.views.every((v) => v.status.decision?.kind !== "yesNo"),
+    "the smart stops search without asking",
+);
+await check(
+    "a search finds nothing from its second button",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.getByRole("button", { name: "Find Nothing" }).click();
+        assert.deepEqual(await settled(page, 1), [
+            answerIndex(searching.decision, "done"),
+        ]);
+    },
+    {
+        fixture: "choice-search",
+        at: searching.views.length,
+        ready: ".choice",
+    },
+);
 const [crypt, converter] = [...searching.bySlot.keys()];
 await check(
     "an up-to-one search lights one card and sends it",
@@ -5324,7 +5609,6 @@ await check(
 for (const fixture of [
     "choice-scry",
     "choice-jace",
-    "choice-pay",
     "choice-explore",
     "choice-loot",
     "choice-search",

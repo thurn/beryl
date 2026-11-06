@@ -239,7 +239,7 @@ cancellable: boolean,
  */
 refused: Array<Refused>, };
 
-export type AskView = { "kind": "plain" } | { "kind": "scry", count: number, } | { "kind": "look", player: Side, zone: ZoneName, count: number, to: ZoneName, eligible: Array<number>, } | { "kind": "putBack", count: number, } | { "kind": "fateseal", player: Side, } | { "kind": "take", count: number, take: number, } | { "kind": "bottom", count: number, } | { "kind": "discardBasicLand", count: number, } | { "kind": "topOrBottom", card: number, } | { "kind": "explore" } | { "kind": "manifestDread" } | { "kind": "exileCards", zone: ZoneName, count: number, } | { "kind": "search", max: number, } | { "kind": "untap", max: number, } | { "kind": "crew", crew: number, left: number, } | { "kind": "waterbend", cost: string, } | { "kind": "unlessPays", cost: string, } | { "kind": "payLife", life: number, } | { "kind": "cleanup", count: number, };
+export type AskView = { "kind": "plain" } | { "kind": "scry", count: number, } | { "kind": "look", player: Side, zone: ZoneName, count: number, to: ZoneName, eligible: Array<number>, } | { "kind": "putBack", count: number, } | { "kind": "fateseal", player: Side, } | { "kind": "take", count: number, take: number, } | { "kind": "bottom", count: number, } | { "kind": "discardBasicLand", count: number, } | { "kind": "topOrBottom", card: number, } | { "kind": "explore" } | { "kind": "manifestDread" } | { "kind": "exileCards", zone: ZoneName, count: number, } | { "kind": "search", max: number, } | { "kind": "maySearch" } | { "kind": "untap", max: number, } | { "kind": "crew", crew: number, left: number, } | { "kind": "waterbend", cost: string, } | { "kind": "unlessPays", cost: string, } | { "kind": "payLife", life: number, } | { "kind": "cleanup", count: number, };
 
 export type PassTo = { "kind": "resolve" } | { "kind": "combatDamage" } | { "kind": "step", step: Step, } | { "kind": "nextTurn" };
 
@@ -263,9 +263,10 @@ payments: Array<Payment>,
  */
 blocks: Array<number>, 
 /**
- * For a candidate that activates an ability of the object's own face: how many activated
- * abilities, mana abilities among them, its face lists before it, as
- * [`StackItem::Ability`]'s `nth` counts them, so the UI finds the ability's paragraph.
+ * For a candidate that activates an ability of the object's own face, or puts a waiting
+ * trigger on the stack: how many abilities of its kind (activated, mana abilities among
+ * them, or triggered) its face lists before it, as [`StackItem::Ability`]'s `nth` counts
+ * them, so the UI finds the ability's paragraph.
  */
 nth: number | null, 
 /**
@@ -284,7 +285,12 @@ plan: number | null,
 /**
  * Permanents, by slot.
  */
-taps: Array<number>, };
+taps: Array<number>, 
+/**
+ * For a payment at a value of X: the total mana cost that value makes, as Oracle text
+ * writes costs, so the UI can say what each X costs.
+ */
+cost: string | null, };
 
 export type Candidate = { "kind": "object", slot: number, } | { "kind": "pass" } | { "kind": "playLand", slot: number, } | { "kind": "play" } | { "kind": "draw" } | { "kind": "keep" } | { "kind": "mulligan" } | { "kind": "trigger", index: number, source: number | null, } | { "kind": "yes" } | { "kind": "no" } | { "kind": "done" } | { "kind": "attack", slot: number, } | { "kind": "defender", planeswalker: number | null, } | { "kind": "block", slot: number, } | { "kind": "lethal", slot: number, } | { "kind": "cast", slot: number, face: number, costs: Array<number>, } | { "kind": "activate", slot: number, ability: number, granted: boolean, } | { "kind": "mana", slot: number, color: Mana, } | { "kind": "pool", color: Mana, } | { "kind": "number", n: number, } | { "kind": "plan", index: number, } | { "kind": "player", player: Side, } | { "kind": "turnFaceUp", slot: number, };
 
