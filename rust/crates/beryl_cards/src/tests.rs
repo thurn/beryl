@@ -359,3 +359,56 @@ fn a_search_that_finds_nothing_still_shuffles() {
     assert_eq!(searching, Some(&(DecisionKind::ChooseUpTo, 3)));
     assert_eq!(known.last(), Some(&(DecisionKind::Priority, 0)));
 }
+
+/// A discard to hand size in the cleanup step triggers Currency Converter, so the active
+/// player gets priority there and, once the trigger has resolved, another cleanup step begins
+/// ([CR 514.3a](https://yawgatog.com/resources/magic-rules/#R5143a)): "If so, those
+/// state-based actions are performed, then those triggered abilities are put on the stack,
+/// then the player whose turn it is receives priority. ... Once the stack is empty and all
+/// players pass in succession, another cleanup step begins." Not an oracle scenario: the Forge
+/// harness cannot script cleanup discards.
+#[test]
+fn a_cleanup_discard_triggers_currency_converter() {
+    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+    const HAND: &[&str] = &[names::ISLAND; 8];
+    const DISCARD: Scenario = Scenario::new("Currency Converter exiles a cleanup discard")
+        .at(3, P0, TurnStep::End)
+        .battlefield(P0, &[Permanent::new(names::CURRENCY_CONVERTER)])
+        .hand(P0, HAND)
+        .library(P0, &[names::PLAINS])
+        .library(P1, &[names::PLAINS, names::PLAINS])
+        .actions(&[
+            Action::pass(P0),
+            // Eight Islands: discarding one is no question.
+            Action::assert(Assertion::Stack { count: 1 }),
+            Action::Resolve,
+            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+            Action::assert(Assertion::Count {
+                player: P0,
+                zone: Zone::Exile,
+                card: Some(names::ISLAND),
+                count: 1,
+            }),
+            Action::pass(P0),
+            // Player 1's turn: the second cleanup step had nothing to do.
+            Action::pass(P0),
+        ]);
+    let mut seen = Vec::new();
+    beryl_scenario::visit(&CARDS, &DISCARD, |_, s, d| {
+        seen.push((s.turn().number, s.turn().step, d.player, d.kind));
+    })
+    .unwrap();
+    let cleanup = |player, kind| (3, TurnStep::Cleanup, player, kind);
+    assert_eq!(
+        seen,
+        [
+            (3, TurnStep::End, Seat::P0, DecisionKind::Priority),
+            // The trigger on the stack, in the cleanup step.
+            cleanup(Seat::P0, DecisionKind::Priority),
+            cleanup(Seat::P0, DecisionKind::YesNo),
+            cleanup(Seat::P0, DecisionKind::Priority),
+            // The next cleanup step ends the turn.
+            (4, TurnStep::Upkeep, Seat::P0, DecisionKind::Priority),
+        ]
+    );
+}

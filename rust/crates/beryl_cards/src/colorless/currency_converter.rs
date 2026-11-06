@@ -154,6 +154,15 @@ const LOOTING_WITH_JACE: &[Permanent] = &[
     Permanent::new(names::JACE_VRYNS_PRODIGY),
 ];
 
+/// The Converter, the {2} for its loot, and a tapped Jace, Vryn's Prodigy, which can neither
+/// loot nor attack on the first turn.
+const LOOTING_BESIDE_JACE: &[Permanent] = &[
+    PERMANENT,
+    ISLAND,
+    ISLAND,
+    Permanent::new(names::JACE_VRYNS_PRODIGY).tapped(),
+];
+
 pub const SCENARIOS: &[Scenario] = &[
     // The loot discards Oust, which the trigger exiles. Next turn the Converter puts it into
     // the graveyard: a nonland card, so a Rogue.
@@ -280,6 +289,36 @@ pub const SCENARIOS: &[Scenario] = &[
             count(P0, Zone::Exile, names::OUST, 1),
             controls(TREASURE_TOKEN, 1),
             controls(ROGUE_TOKEN, 0),
+        ]),
+    // P1 returns the Converter to P0's hand in response to its {T}. The ability still refers
+    // to the cards that Converter exiled (CR 607.2a), so Oust goes to the graveyard for a
+    // Rogue. Jace makes the target a choice, which the oracles are then told.
+    Scenario::new("Currency Converter's ability returns a card after the Converter left")
+        .battlefield(P0, LOOTING_BESIDE_JACE)
+        .hand(P0, &[names::OUST])
+        .library(P0, &[names::PLAINS, names::PLAINS, names::PLAINS])
+        .battlefield(P1, ISLANDS)
+        .hand(P1, &[names::SINK_INTO_STUPOR])
+        .library(P1, &[names::ISLAND, names::ISLAND])
+        .actions(&[
+            Action::activate(P0, CONVERTER, 1),
+            Action::Resolve,
+            Action::choose(P0, DecisionKind::Discard, names::OUST),
+            Action::Resolve,
+            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+            Action::AdvanceTo {
+                turn: 3,
+                step: TurnStep::PrecombatMain,
+            },
+            Action::activate(P0, CONVERTER, 2),
+            Action::pass(P0),
+            Action::cast(P1, names::SINK_INTO_STUPOR),
+            Action::choose(P1, DecisionKind::Target, CONVERTER),
+            Action::Resolve,
+            count(P0, Zone::Hand, CONVERTER, 1),
+            Action::Resolve,
+            count(P0, Zone::Graveyard, names::OUST, 1),
+            controls(ROGUE_TOKEN, 1),
         ]),
     // P1 returns the Converter to P0's hand after it exiled Oust. Recast, it is a new object
     // (CR 400.7), and Oust was exiled with the old one: its {T} finds nothing.
