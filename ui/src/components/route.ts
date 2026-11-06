@@ -99,8 +99,9 @@ const OFF_MIDDLE = 60;
  * one can take the only clear way out of the stack item from another. */
 const REORDER = 3;
 /** How far each control point lies from its end, as a fraction of the distance between the
- * ends: tighter or rounder curves. */
-const REACH = [0.3, 0.55];
+ * ends: flatter, tighter or rounder curves. The flattest lets a long arrow run along the
+ * narrow gap between a row of cards and what lies above or below it. */
+const REACH = [0.1, 0.3, 0.55];
 /** How many points along a curve price it: roughly, to shortlist the `SHORTLIST` likeliest
  * routes for an arrow, then finely, against the other arrows. */
 const COARSE = 10;

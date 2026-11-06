@@ -159,9 +159,9 @@
     },
     {
       "name": "arrow-ability",
-      "seed": 7,
+      "seed": 22,
       "decks": ["wu-control", "wu-control"],
-      "agents": ["random", "random"],
+      "agents": ["greedy", "greedy"],
       "until": "first priority decision for seat 0",
       "where": ["ability targeting beside its source"]
     },
