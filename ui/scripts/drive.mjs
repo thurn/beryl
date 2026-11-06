@@ -23,6 +23,11 @@ if (!port || !url || !out) {
 }
 await mkdir(out, { recursive: true });
 
+// A snippet's stray promise must not end the driver and the review with it.
+process.on("unhandledRejection", (e) =>
+    console.error(`drive: unhandled rejection: ${e?.stack ?? e}`),
+);
+
 const browser = await launch();
 // Playwright closes the browser on a signal, but the server below would keep Node running:
 // exit, so `by ui-live` stopping leaves no driver holding its port.
@@ -368,13 +373,21 @@ const probe = {
         const shots = { before: await shot(`${name}-before`) };
         const stop = await probe.motion();
         const start = Date.now();
-        const acted = action();
+        // A failing action must not reject unwatched while the samples run: that would end
+        // the driver. It fails the call once the motion probe is stopped.
+        const acted = Promise.resolve()
+            .then(action)
+            .then(
+                () => undefined,
+                (e) => e ?? new Error("the action failed"),
+            );
         for (const ms of samples) {
             await page.waitForTimeout(Math.max(0, ms - (Date.now() - start)));
             shots[`${ms}ms`] = await shot(`${name}-${ms}ms`);
         }
-        await acted;
+        const failed = await acted;
         const motion = await stop(0);
+        if (failed) throw failed;
         let decision;
         if (wait) {
             decision = await probe
