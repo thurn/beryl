@@ -252,6 +252,13 @@ public final class BerylForgeHarness {
                     if (!step.get("op").getAsString().equals("assert")) {
                         throw new StepFailed("the game ended before step " + (next - 1) + ": " + step);
                     }
+                    // Forge takes a player's cards out of the game when they lose, as CR 800.4a
+                    // has only in multiplayer games, so their zones can't be counted.
+                    JsonObject assertion = step.getAsJsonObject("assertion");
+                    if (assertion.get("assert").getAsString().equals("Count") && player(assertion).hasLost()) {
+                        notes.add("unchecked after p" + seat(player(assertion)) + " lost: " + assertion);
+                        continue;
+                    }
                     check(step);
                 }
             } catch (ScriptDone done) {
@@ -288,12 +295,13 @@ public final class BerylForgeHarness {
 
         // ---- The script ----
 
+        // By the registered players: Forge drops a player who has lost from getPlayers().
         int seat(Player player) {
-            return game.getPlayers().indexOf(player);
+            return game.getRegisteredPlayers().indexOf(player);
         }
 
         Player player(JsonObject object) {
-            return game.getPlayers().get(object.get("player").getAsInt());
+            return game.getRegisteredPlayers().get(object.get("player").getAsInt());
         }
 
         String describeNext() {
@@ -345,6 +353,25 @@ public final class BerylForgeHarness {
             mode = Mode.PLAY;
             stopped = false;
             return steps.get(next++).getAsJsonObject("pick");
+        }
+
+        /** Takes the next answer only if it is one that picks a card among `options`. */
+        JsonObject takeFollowingAmong(Player player, Set<String> kinds, List<? extends GameObject> options) {
+            if (next >= steps.size() || !isAnswer(steps.get(next), player, kinds)) {
+                return null;
+            }
+            JsonObject pick = steps.get(next).getAsJsonObject("pick");
+            if (!pick.has("card")) {
+                return null;
+            }
+            String name = pick.get("card").getAsString();
+            for (GameObject option : options) {
+                if (option instanceof Card card && named(card, name)) {
+                    next++;
+                    return pick;
+                }
+            }
+            return null;
         }
 
         /** Takes the next answer only if it is one, without checking asserts first. */
@@ -836,7 +863,7 @@ public final class BerylForgeHarness {
         }
 
         Player winner() {
-            for (Player p : game.getPlayers()) {
+            for (Player p : game.getRegisteredPlayers()) {
                 if (!p.hasLost()) {
                     return p;
                 }
@@ -1072,7 +1099,44 @@ public final class BerylForgeHarness {
             if (!cards.isEmpty() && lastPicks.containsAll(cards)) {
                 return cards;
             }
+            // Cards for the bottom of a library that the script orders next, as Stock Up's rest:
+            // Beryl puts each under the one before, the last unasked, as Forge moves them in turn.
+            if (destination == ZoneType.Library && cards.size() > 1) {
+                List<Card> rest = new ArrayList<>(cards);
+                CardCollection order = new CardCollection();
+                while (rest.size() > 1) {
+                    JsonObject pick = run.takeFollowingAmong(player, Set.of("ChooseObject"), rest);
+                    if (pick == null) {
+                        break;
+                    }
+                    Card card = (Card) run.resolvePick(pick, rest);
+                    rest.remove(card);
+                    order.add(card);
+                }
+                if (!order.isEmpty()) {
+                    order.addAll(rest);
+                    return order;
+                }
+            }
             return super.orderMoveToZoneList(cards, destination, source);
+        }
+
+        @Override
+        public CardCollectionView chooseCardsToDiscardUnlessType(int num, CardCollectionView hand, String[] uTypes, SpellAbility sa) {
+            // Beryl asks whether to discard a card of the type instead when that differs from
+            // discarding `num` (a hand of more than one card), then which; else the `num` discards.
+            List<Card> ofType = new ArrayList<>();
+            for (Card card : hand) {
+                if (card.isValid(uTypes, sa.getActivatingPlayer(), sa.getHostCard(), sa)) {
+                    ofType.add(card);
+                }
+            }
+            boolean instead = !ofType.isEmpty()
+                    && (hand.size() < 2 || yes(YES_NO, "discard " + String.join(",", uTypes) + " instead", false));
+            List<Card> options = instead ? ofType : List.copyOf(hand);
+            int count = instead ? 1 : Math.min(num, hand.size());
+            List<Card> picked = pickMany(options, count, count, "discard");
+            return picked != null ? new CardCollection(picked) : super.chooseCardsToDiscardUnlessType(num, hand, uTypes, sa);
         }
 
         @Override

@@ -125,6 +125,7 @@ MANA_ABILITIES: dict[str, str] = {
 }
 # Mana sources XMage could tap for more than one kind of mana, where the payment is left to it.
 MANA_CHOICES = (
+    "Floodfarm Verge",
     "Tundra",
     "Seachrome Coast",
     "Spara's Headquarters",
@@ -178,6 +179,14 @@ CHOICES_AS_TARGETS = ("Jace, the Mind Sculptor",)
 # (ChooseUpTo), then the rest from the top down (ChooseObject). XMage takes the bottom ones as
 # one target list.
 SCRIES = ("Aang's Iceberg",)
+
+# Resolving cards that look at the top of a library, put some of the cards into the hand and
+# the rest on the bottom in any order, with how many go to the hand. Beryl chooses those one at
+# a time (ChooseObject), then the rest for the bottom one at a time, each under the one before.
+# XMage takes the cards for the hand as one target list and the bottom order, in the same
+# sense, from the choice queue. With no more cards than go to the hand, Beryl takes them all
+# unasked where XMage asks for them, so the scenario cannot name the answer.
+TAKES: dict[str, int] = {"Stock Up": 2}
 
 # The answers XMage takes from the choice queue, by Beryl decision kind.
 CHOICE_KINDS = (
@@ -294,6 +303,10 @@ class Exporter:
         self.may_choose: str | None = None
         # A scry in progress: who scries, the cards for the bottom, and those ordered on top.
         self.scry: tuple[str, list[str], list[str]] | None = None
+        # A `TAKES` card cast but not yet resolved by its picks, and the cards chosen for the
+        # hand by the one resolving.
+        self.take_pending: str | None = None
+        self.taking: list[str] | None = None
         # The `UNLESS_PAYS` counterspells on the stack whose payer Beryl has not asked yet, with
         # that payer.
         self.unless_pays: dict[str, str] = {}
@@ -358,6 +371,8 @@ class Exporter:
                 self.end_scry()
             self.act(action, p)
         self.end_scry()
+        if self.take_pending is not None:
+            raise Unsupported(f"{self.take_pending} putting cards into a hand unasked")
         self.stop()
 
     def unasked(self, p: Position) -> None:
@@ -522,6 +537,8 @@ class Exporter:
             self.emit(f"setChoice({who}, {java_string(answer)});")
         if card in UNLESS_PAYS:
             self.unless_pays[card] = self.target_controller(action["player"], card)
+        if card in TAKES:
+            self.take_pending = card
 
     def pay(self, who: str, p: Position, source: str | None) -> None:
         """Before a cast or activation at an empty stack, taps the mana sources Beryl's payment
@@ -621,7 +638,9 @@ class Exporter:
         pick = cast(Json, action["pick"])
         what = cast(str, pick["pick"])
         card = cast("str | None", pick.get("card"))
-        if source in SCRIES and kind == "ChooseUpTo":
+        if source in TAKES and kind == "ChooseObject" and card is not None:
+            self.take(who, source, card)
+        elif source in SCRIES and kind == "ChooseUpTo":
             if self.scry is None:
                 self.scry = (who, [], [])
             if card is not None:
@@ -691,6 +710,21 @@ class Exporter:
             self.emit(f'setChoice({who}, "X={pick["n"]}");')
         else:
             raise Unsupported(f"answering {kind} with {what}")
+
+    def take(self, who: str, source: str, card: str) -> None:
+        """One pick of a `TAKES` card: for the hand, queued as one target list once all are
+        chosen, then for the bottom, from the choice queue."""
+        if self.take_pending == source:
+            self.take_pending = None
+            self.taking = []
+        taking = self.taking
+        if taking is None:
+            self.emit(f"setChoice({who}, {java_string(card)});")
+            return
+        taking.append(card)
+        if len(taking) == TAKES[source]:
+            self.emit(f"addTarget({who}, {java_string('^'.join(taking))});")
+            self.taking = None
 
     @staticmethod
     def choice_command(source: str | None, kind: str) -> str:
