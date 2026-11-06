@@ -5,7 +5,7 @@
 
 use beryl_cards::CARDS;
 use beryl_cards::names::{
-    AANGS_ICEBERG, GET_LOST, ISLAND, JACE_VRYNS_PRODIGY, MANA_CRYPT, MANA_DRAIN, PLAINS,
+    AANGS_ICEBERG, GET_LOST, ISLAND, JACE_VRYNS_PRODIGY, MANA_CRYPT, MANA_DRAIN, PLAINS, STOCK_UP,
     THUNDERTRAP_TRAINER, TRINKET_MAGE,
 };
 use beryl_engine::state::StackEntry;
@@ -385,10 +385,21 @@ const TRINKET: Scenario = Scenario::new("trinket")
     .library(P0, &[ISLAND, MANA_CRYPT, ISLAND])
     .library(P1, &[ISLAND, ISLAND, ISLAND]);
 
-/// The kinds of decision the human is asked after casting [`TRINKET`]'s Mage, up to its
-/// search.
-fn asked_after_trinket_mage(stops: StopsSetting) -> Vec<Kind> {
-    let (table, state) = beryl_scenario::position(&CARDS, &TRINKET).unwrap();
+/// [`TRINKET`] after Stock Up, which puts three cards the human has seen on the bottom of
+/// their library.
+const STOCKED: Scenario = Scenario::new("stocked")
+    .battlefield(P0, &[Permanent::new(ISLAND); 6])
+    .hand(P0, &[STOCK_UP, TRINKET_MAGE])
+    .library(
+        P0,
+        &[ISLAND, ISLAND, ISLAND, ISLAND, ISLAND, MANA_CRYPT, ISLAND],
+    )
+    .library(P1, &[ISLAND, ISLAND, ISLAND]);
+
+/// The kinds of decision the human is asked after casting `scenario`'s Trinket Mage, up to its
+/// search, having first cast anything else they hold.
+fn asked_after_trinket_mage(scenario: &Scenario, stops: StopsSetting) -> Vec<Kind> {
+    let (table, state) = beryl_scenario::position(&CARDS, scenario).unwrap();
     let random = beryl_search::agent("random").unwrap();
     let mut game = Game::prepared(
         Prepared {
@@ -412,13 +423,31 @@ fn asked_after_trinket_mage(stops: StopsSetting) -> Vec<Kind> {
                 break;
             }
         }
-        let cast = decision
+        let name = |slot: u8| {
+            view.objects
+                .iter()
+                .find(|o| o.slot == slot)
+                .and_then(|o| o.name.clone())
+        };
+        let casts: Vec<_> = decision
             .candidates
             .iter()
-            .position(|c| matches!(c.option, Candidate::Cast { .. }));
-        // Otherwise the first: a pass, or searching.
-        let index = match (asked.is_none(), cast) {
-            (true, Some(i)) => {
+            .enumerate()
+            .filter_map(|(i, c)| match c.option {
+                Candidate::Cast { slot, .. } => Some((i, name(slot))),
+                _ => None,
+            })
+            .collect();
+        let other = casts
+            .iter()
+            .find(|(_, n)| n.as_deref() != Some(TRINKET_MAGE));
+        let mage = casts
+            .iter()
+            .find(|(_, n)| n.as_deref() == Some(TRINKET_MAGE));
+        // Otherwise the first: a pass, a card to take, or searching.
+        let index = match (asked.is_none(), other, mage) {
+            (true, Some(&(i, _)), _) => i,
+            (true, None, Some(&(i, _))) => {
                 asked = Some(Vec::new());
                 i
             }
@@ -432,12 +461,15 @@ fn asked_after_trinket_mage(stops: StopsSetting) -> Vec<Kind> {
 
 /// Declining Trinket Mage's search differs from finding nothing only by the shuffle, which
 /// changes nothing for a player who knows no card in their library: the smart stops search,
-/// and the search itself may find nothing. Exact stops ask.
+/// and the search itself may find nothing. A player who knows cards there, as Stock Up's on
+/// the bottom, is asked, as exact stops ask everyone.
 #[test]
 fn smart_stops_search_a_library_the_human_knows_nothing_of() {
-    let smart = asked_after_trinket_mage(StopsSetting::Smart);
+    let smart = asked_after_trinket_mage(&TRINKET, StopsSetting::Smart);
     assert!(!smart.contains(&Kind::YesNo), "{smart:?}");
     assert_eq!(smart.last(), Some(&Kind::ChooseUpTo));
-    let exact = asked_after_trinket_mage(StopsSetting::Exact);
+    let known = asked_after_trinket_mage(&STOCKED, StopsSetting::Smart);
+    assert!(known.contains(&Kind::YesNo), "{known:?}");
+    let exact = asked_after_trinket_mage(&TRINKET, StopsSetting::Exact);
     assert!(exact.contains(&Kind::YesNo), "{exact:?}");
 }

@@ -471,10 +471,13 @@ pub enum Candidate {
     Draw,
     Keep,
     Mulligan,
-    /// The waiting triggered ability at `index`, from the object in `source`.
+    /// The waiting triggered ability at `index`, from the object in `source`: its face's
+    /// `ability`th, by which a later decision's candidates (each index shifts as triggers go
+    /// onto the stack) still name it.
     Trigger {
         index: u8,
         source: Option<u8>,
+        ability: u8,
     },
     Yes,
     No,
@@ -1605,6 +1608,7 @@ fn trigger(t: &GameTable, obs: Observation<'_>, index: u8) -> (String, Candidate
         Candidate::Trigger {
             index,
             source: trigger.source.map(|r| r.slot.get()),
+            ability: trigger.ability,
         },
     )
 }

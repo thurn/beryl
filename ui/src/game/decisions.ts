@@ -305,6 +305,35 @@ export function prompt(decision: DecisionView, source?: string): string {
     : asked;
 }
 
+/** The picks that put simultaneous triggers on the stack to resolve in `order`, the indexes of
+ * `decision`'s triggers from the first to resolve, all but one of them
+ * ([CR 405.2](https://yawgatog.com/resources/magic-rules/#R4052): "Each time an object is put on
+ * the stack, it's put on top of all objects already there"): the trigger left out first, as it
+ * resolves last, then the rest from the last to resolve up, the first to resolve going on
+ * unasked as the last left. After the first, each names its trigger by its source and ability,
+ * as the candidates' indexes shift, and waits through the targets of the one before. */
+export function triggerPlan(
+  decision: DecisionView,
+  order: CandidateIndex[],
+): Intent[] {
+  const triggers = decision.candidates.map((c) => c.option);
+  const last = triggers.findIndex((_, i) => !order.includes(i));
+  const put = [last, ...order.slice(1).reverse()].map((i) => triggers[i]!);
+  return put.map((option, i) =>
+    i === 0
+      ? { kind: "triggerOrder", wants: (o) => optionsMatch(o, option) }
+      : {
+          kind: "triggerOrder",
+          wants: (o) =>
+            o.kind === "trigger" &&
+            option.kind === "trigger" &&
+            o.source === option.source &&
+            o.ability === option.ability,
+          waits: true,
+        },
+  );
+}
+
 /** The picks that untap the permanents in `picked`, one at a time, then done: each the
  * permanent itself or, failing that, the twin the engine offers in its place (it offers one
  * of interchangeable permanents, architecture §7.2). */

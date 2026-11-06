@@ -40,18 +40,18 @@ export function tablePick(
   return undefined;
 }
 
-/** "Untap up to N lands": the engine offers only tapped ones (CR 701.26b), so every one is
- * worth untapping, the player's own first; as many as may be are picked to begin with. */
+/** "Untap up to N lands", whoever controls them: the engine offers only tapped ones
+ * (CR 701.26b), so each of the player's own is worth untapping, and as many as may be are
+ * picked to begin with; an opponent's, whose mana would let them answer, only by a click. */
 function untapPick(
   can: Interactions,
   objects: Map<number, ObjectView>,
   max: number,
 ): TablePick {
   const eligible = new Set(can.bySlot.keys());
-  const own = (slot: number) =>
-    objects.get(slot)?.controller === "you" ? 0 : 1;
   const initial = [...eligible]
-    .sort((a, b) => own(a) - own(b) || a - b)
+    .filter((slot) => objects.get(slot)?.controller === "you")
+    .sort((a, b) => a - b)
     .slice(0, max);
   return {
     eligible,

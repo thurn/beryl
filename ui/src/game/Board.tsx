@@ -66,10 +66,10 @@ import {
   interactions,
   isCombat,
   isOpening,
-  optionsMatch,
   playActs,
   prompt,
   slotOf,
+  triggerPlan,
   type Act,
   type Intent,
 } from "./decisions";
@@ -1872,31 +1872,8 @@ function TriggerOrder({
   const triggers = decision.candidates.map((c, index) => ({ c, index }));
   const choose = (index: CandidateIndex) => {
     const next = [...order, index];
-    if (next.length < triggers.length - 1) {
-      onOrder(next);
-      return;
-    }
-    const last = triggers.find((t) => !next.includes(t.index))!;
-    const put = [
-      last,
-      ...next
-        .slice(1)
-        .reverse()
-        .map((i) => triggers[i]!),
-    ];
-    onPlan(
-      put.map(({ c }, i) => {
-        const option = c.option;
-        const source = option.kind === "trigger" ? option.source : null;
-        return i === 0
-          ? { kind: "triggerOrder", wants: (o) => optionsMatch(o, option) }
-          : {
-              kind: "triggerOrder",
-              wants: (o) => o.kind === "trigger" && o.source === source,
-              waits: true,
-            };
-      }),
-    );
+    if (next.length < triggers.length - 1) onOrder(next);
+    else onPlan(triggerPlan(decision, next));
   };
   return (
     <ol className="prompt-triggers">

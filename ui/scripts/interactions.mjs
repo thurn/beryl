@@ -14,7 +14,11 @@
 import assert from "node:assert/strict";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { slotOf as offeredSlot, twins } from "../src/game/decisions.ts";
+import {
+    slotOf as offeredSlot,
+    triggerPlan,
+    twins,
+} from "../src/game/decisions.ts";
 import { logLines } from "../src/game/log.ts";
 import { cutText, launch, workers } from "./capture.mjs";
 
@@ -3309,6 +3313,72 @@ await check(
     },
 );
 
+// Three triggers, two of one source: picked to resolve C, then A, then B, they go on the
+// stack B, then A, C last unasked. Later picks name their trigger by source and ability, as
+// the candidates' indexes shift once one is on the stack.
+{
+    const t = (index, source, ability) => ({
+        kind: "trigger",
+        index,
+        source,
+        ability,
+    });
+    const [a, b, c] = [t(0, 10, 0), t(1, 10, 2), t(2, 20, 0)];
+    const plan = triggerPlan(
+        { candidates: [a, b, c].map((option) => ({ option })) },
+        [2, 0],
+    );
+    assert.equal(plan.length, 2, "the first to resolve goes on unasked");
+    assert.ok(plan[0].wants(b) && !plan[0].wants(a) && !plan[0].wants(c));
+    // Then, with B on the stack, A is first of those left.
+    const [a2, c2] = [t(0, 10, 0), t(1, 20, 0)];
+    assert.ok(plan[1].wants(a2) && !plan[1].wants(c2) && plan[1].waits);
+    assert.ok(!plan[1].wants(t(0, 10, 2)), "not the other of its source");
+}
+
+// The trigger-order prompt with a third trigger (`choice-trigger-order` with its first
+// trigger's source given a second one): each pick but the last is numbered as it resolves,
+// the title asking for the next; the last pick sends the order.
+await derive(
+    "choice-trigger-order",
+    "choice-trigger-order-three",
+    order.views.length - 1,
+    (v) => {
+        const d = v.status.decision;
+        const [first] = d.candidates;
+        d.candidates.push({
+            ...first,
+            option: { ...first.option, index: 2, ability: 9 },
+        });
+        return v;
+    },
+);
+await check(
+    "three triggers are numbered in resolve order as they are picked",
+    async (page) => {
+        await page.clock.runFor(3000);
+        const triggers = page.locator(".prompt-trigger");
+        await triggers.nth(2).click();
+        assert.deepEqual(
+            await page.locator(".prompt-trigger-order").allTextContents(),
+            ["", "", "1"],
+        );
+        assert.equal(
+            await page.locator(".prompt-title").textContent(),
+            "Resolve next",
+        );
+        assert.deepEqual(await chosen(page), [], "nothing is sent yet");
+        await triggers.nth(0).click();
+        // The one left resolves last: it goes on the stack first.
+        assert.deepEqual(await settled(page, 1), [1]);
+    },
+    {
+        fixture: "choice-trigger-order-three",
+        at: order.views.length,
+        ready: ".prompt-trigger",
+    },
+);
+
 // The trigger-order prompt names each trigger's source in full,
 // even the cube's longest names: `choice-trigger-order` stops on one between two permanents,
 // renamed here to the two longest names in the cube list, and no text on the page is cut.
@@ -5291,9 +5361,10 @@ await check(
 
 // Time Spiral's untap (`choice-untap`) is picked on the board: the tapped lands it may untap
 // glow, wherever they sit and whoever controls them, and no others. The engine offers only
-// tapped lands, so the human's own are picked to begin with, as many as it untaps; each pick
-// turns gold, its count on the confirm button, and a land let go glows to be picked again;
-// picks of twins the engine offers one of go as that one.
+// tapped lands, so the human's own are picked to begin with, though they are fewer than it
+// untaps; the opponent's, whose mana would let them answer, only by a click. Each pick turns
+// gold, its count on the confirm button; picks of twins the engine offers one of go as that
+// one.
 const untapping = await lastDecision("choice-untap");
 const untapView = untapping.views.at(-1);
 const landsOf = (tapped, controller) =>
@@ -5313,7 +5384,10 @@ const ownTapped = landsOf(true, "you");
 const theirTapped = landsOf(true, "opponent");
 const untapMax = untapping.decision.ask.max;
 assert.ok(untappedLands.length > 0, "the fixture has untapped lands");
-assert.equal(ownTapped.length, untapMax, "the human's tapped lands fill it");
+assert.ok(
+    ownTapped.length > 0 && ownTapped.length < untapMax,
+    "the human's tapped lands leave room",
+);
 assert.ok(theirTapped.length > 0, "the opponent has tapped lands");
 /** The slots of the permanents glowing `highlight`, in order. */
 const glowing = (page, highlight) =>
@@ -5346,25 +5420,27 @@ await check(
         await page.clock.runFor(2000);
         assert.equal(await page.$(".choice"), null, "no overlay opens");
         assert.deepEqual(await glowing(page, "source"), ownTapped);
-        assert.deepEqual(await glowing(page, "target"), [], "no room left");
-        // An untapped land can't be picked.
-        await page.click(slotOf(await uncovered(page, untappedLands)));
-        const full = `Untap ${untapMax}/${untapMax}`;
-        await page.getByRole("button", { name: full }).waitFor();
-        // A land let go makes room: it and the opponent's tapped lands glow to be picked.
-        const mine = await uncovered(page, ownTapped);
-        await page.click(slotOf(mine));
-        await page
-            .getByRole("button", { name: `Untap ${untapMax - 1}/${untapMax}` })
-            .waitFor();
         assert.deepEqual(
             await glowing(page, "target"),
-            [mine, ...theirTapped].sort((a, b) => a - b),
+            theirTapped,
+            "the opponent's are not picked",
         );
+        const picked = (n) => `Untap ${n}/${untapMax}`;
+        // An untapped land can't be picked.
+        await page.click(slotOf(await uncovered(page, untappedLands)));
+        await page
+            .getByRole("button", { name: picked(ownTapped.length) })
+            .waitFor();
+        // A land let go glows to be picked again.
+        const mine = await uncovered(page, ownTapped);
+        await page.click(slotOf(mine));
+        assert.ok((await glowing(page, "target")).includes(mine));
         const theirs = await uncovered(page, theirTapped);
         await page.click(slotOf(theirs));
         assert.ok((await glowing(page, "source")).includes(theirs));
-        await page.getByRole("button", { name: full }).click();
+        await page
+            .getByRole("button", { name: picked(ownTapped.length) })
+            .click();
         const [first] = await settled(page, 1);
         const o = untapping.decision.candidates[first].option;
         assert.equal(o.kind, "object", "a land is untapped first");

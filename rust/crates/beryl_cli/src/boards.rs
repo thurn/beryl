@@ -868,14 +868,19 @@ pub const BOARDS: &[Scenario] = &[
         .battlefield(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[Action::activate(P0, JACE_VRYNS_PRODIGY, 0)]),
-    // Time Spiral, paid with six of the human's seven lands, untaps up to six lands, beside
-    // the opponent's tapped and untapped ones.
+    // Time Spiral, paid with Mana Crypt and the human's lands, untaps up to six lands, more
+    // than the human has tapped, beside the opponent's tapped and untapped ones.
     Scenario::new("choice-untap")
         .at(3, P0, TurnStep::PrecombatMain)
         .battlefield(
             P0,
             &[
-                ISLAND_, ISLAND_, ISLAND_, ISLAND_, PLAINS_, PLAINS_, PLAINS_,
+                Permanent::new(MANA_CRYPT),
+                ISLAND_,
+                ISLAND_,
+                ISLAND_,
+                PLAINS_,
+                PLAINS_,
             ],
         )
         .hand(P0, &[TIME_SPIRAL])
