@@ -24,7 +24,7 @@ import { ASPECT, Card, CardBack, type Highlight } from "../components/Card";
 import { StackMarks } from "../components/Stack";
 import type { ObjectView, Side } from "../generated/protocol";
 import { StageScale } from "./Stage";
-import { marksOf, useFace } from "./faces";
+import { faceDownFace, marksOf, useFace } from "./faces";
 import { RAISE, type Layout, type Placement } from "./layout";
 
 /** Where on the stage a pointer is, in stage pixels. */
@@ -391,18 +391,20 @@ function Look({
 }) {
   const card = useFace(object);
   if (place.look === "hidden") return null;
-  // A face-down permanent shows its back to both players; its controller's hover still names
-  // its card (CR 708.5).
-  if (object.name === null || object.facing === "down") {
-    return <CardBack width={place.width} />;
-  }
   const under = place.look === "beneath" || place.look === "attached";
   const field = under || place.look === "field" || place.look === "land";
+  // A face-down permanent shows its back to both players; its controller's hover still names
+  // its card (CR 708.5). On the table it keeps a permanent's frame, its marks and its 2/2.
+  const down = object.facing === "down";
+  if (down ? !field : object.name === null) {
+    return <CardBack width={place.width} />;
+  }
   const combat = field ? object.combat?.kind : undefined;
   const card_ = (
     <Card
       id={ghost ? undefined : cardId(object.slot)}
-      card={card}
+      card={down ? faceDownFace(object) : card}
+      back={down}
       combat={
         combat === "attacking"
           ? "attacker"

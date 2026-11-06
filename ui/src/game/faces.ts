@@ -112,6 +112,14 @@ const namelessFace = (o: ObjectView): FrameFace => ({
   toughnessTone: o.damage > 0 ? "down" : undefined,
 });
 
+/** A face-down permanent (CR 708.2a: "a 2/2 face-down creature with no text, no name, no
+ * subtypes, and no mana cost"): no name, whatever card its controller knows it is, and its
+ * current power and toughness. https://yawgatog.com/resources/magic-rules/#R7082a */
+export const faceDownFace = (o: ObjectView): FrameFace => ({
+  ...namelessFace(o),
+  typeLine: "",
+});
+
 /** The frame for object `o`, as the game draws it. */
 export function useFace(o: ObjectView): FrameFace {
   const art = useCardArt(o.name ?? "");

@@ -67,6 +67,8 @@ export interface CardProps {
   marks?: CardMarks;
   /** On the top card of a pile of identical permanents, how many it holds. */
   count?: number;
+  /** Face down (CR 708.2): the back in place of its face, its marks and stats drawn over it. */
+  back?: boolean;
   className?: string;
   /** Placement on the slot: Motion style, so `rotate` and `y` compose with layout animation. */
   style?: MotionStyle;
@@ -266,6 +268,7 @@ export function Card({
   combat,
   marks,
   count,
+  back = false,
   className,
   style,
   id,
@@ -286,6 +289,7 @@ export function Card({
     marks?.token && "card-token",
     highlight && `card-${highlight}`,
     combat && `card-${combat}`,
+    back && "card-face-down",
     className,
   ]
     .filter(Boolean)
@@ -313,37 +317,41 @@ export function Card({
         animate={{ rotate: tapped ? 90 : 0 }}
         transition={TURN}
       >
-        <div className="card-rim">
-          <div className="card-name-bar">
-            <span className="card-name" ref={nameRef}>
-              {card.name}
-            </span>
-            {variant === "full" && card.manaCost && (
-              <ManaCost cost={card.manaCost} />
+        {back ? (
+          <BackField />
+        ) : (
+          <div className="card-rim">
+            <div className="card-name-bar">
+              <span className="card-name" ref={nameRef}>
+                {card.name}
+              </span>
+              {variant === "full" && card.manaCost && (
+                <ManaCost cost={card.manaCost} />
+              )}
+            </div>
+            <CardArt card={card} />
+            {variant === "full" && (
+              <>
+                <div className="card-type-bar">
+                  <span className="card-type-line" ref={typeRef}>
+                    {card.typeLine}
+                  </span>
+                </div>
+                <div className="card-rules">
+                  {card.text && (
+                    <p ref={rulesRef}>
+                      {card.lit === undefined ? (
+                        <RulesText text={card.text} />
+                      ) : (
+                        <LitRules text={card.text} lit={card.lit} />
+                      )}
+                    </p>
+                  )}
+                </div>
+              </>
             )}
           </div>
-          <CardArt card={card} />
-          {variant === "full" && (
-            <>
-              <div className="card-type-bar">
-                <span className="card-type-line" ref={typeRef}>
-                  {card.typeLine}
-                </span>
-              </div>
-              <div className="card-rules">
-                {card.text && (
-                  <p ref={rulesRef}>
-                    {card.lit === undefined ? (
-                      <RulesText text={card.text} />
-                    ) : (
-                      <LitRules text={card.text} lit={card.lit} />
-                    )}
-                  </p>
-                )}
-              </div>
-            </>
-          )}
-        </div>
+        )}
         {card.ability && variant === "field" && (
           <AbilityBadge ability={card.ability} />
         )}
@@ -444,19 +452,27 @@ export function CardBack({
         ...style,
       }}
     >
-      <div className="card-back-field">
-        {["r", "w", "w", "r"].map((c, i) => (
-          <i key={i} className={`card-back-stud dot-${c}`} />
-        ))}
-        <div className="card-back-oval">
-          <Crest className="card-back-crest" />
-          <span className="card-back-title">Project Beryl</span>
-          <span className="card-back-dots">
-            {["w", "r", "g", "b"].map((c) => (
-              <i key={c} className={`dot-${c}`} />
-            ))}
-          </span>
-        </div>
+      <BackField />
+    </div>
+  );
+}
+
+/** The back's tooled panel, studs and oval, which also stands in for a face-down permanent's
+ * face (`CardProps.back`). */
+function BackField() {
+  return (
+    <div className="card-back-field">
+      {["r", "w", "w", "r"].map((c, i) => (
+        <i key={i} className={`card-back-stud dot-${c}`} />
+      ))}
+      <div className="card-back-oval">
+        <Crest className="card-back-crest" />
+        <span className="card-back-title">Project Beryl</span>
+        <span className="card-back-dots">
+          {["w", "r", "g", "b"].map((c) => (
+            <i key={c} className={`dot-${c}`} />
+          ))}
+        </span>
       </div>
     </div>
   );

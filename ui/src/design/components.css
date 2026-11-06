@@ -1604,3 +1604,15 @@
     animation: none;
   }
 }
+/* A face-down permanent: the back's panel fills its frame (Card's `back`), and on the table's
+   short frame the oval bears the crest alone. */
+.card-face-down {
+  padding: 0.42em;
+}
+.card-face-down.card-field .card-back-title,
+.card-face-down.card-field .card-back-dots {
+  display: none;
+}
+.card-face-down.card-field .card-back-crest {
+  margin-top: 0;
+}
