@@ -1,9 +1,10 @@
 //! The static card table and the per-game table built from two decklists (architecture §6.4,
 //! decision D20).
 
-use crate::card::{CardDef, FACE_DOWN_COPY, Trigger};
+use crate::card::{CardDef, FACE_DOWN_COPY, FaceIx, Trigger};
 use crate::event::kind;
 use crate::ids::{CardIx, Seat};
+use crate::mana::ManaFace;
 use crate::state::DECK_SLOTS;
 
 /// Every card the program knows, built once and shared by every thread as a `&'static`.
@@ -52,6 +53,8 @@ pub struct GameTable {
     listens: Vec<u16>,
     /// Every kind any card of the game listens to.
     listens_any: u16,
+    /// Per game index, what its first two faces make as mana sources.
+    mana_faces: Vec<[ManaFace; 2]>,
     /// The game index of [`FACE_DOWN_COPY`].
     face_down_copy: CardIx,
 }
@@ -103,12 +106,20 @@ impl GameTable {
         let face_down_copy = CardIx::new((defs.len() - 1) as u8);
         let listens: Vec<u16> = defs.iter().map(|d| listens(d)).collect();
         let listens_any = listens.iter().fold(0, |a, &b| a | b);
+        let mana_faces = defs
+            .iter()
+            .map(|d| {
+                let of = |i: usize| d.faces.get(i).map_or(ManaFace::Read, ManaFace::of);
+                [of(0), of(1)]
+            })
+            .collect();
         Ok(Self {
             cards,
             defs,
             decks: indices,
             listens,
             listens_any,
+            mana_faces,
             face_down_copy,
         })
     }
@@ -129,6 +140,15 @@ impl GameTable {
     /// The event kinds the triggered abilities of the card at `card` listen to.
     pub(crate) fn listens(&self, card: CardIx) -> u16 {
         self.listens[card.index()]
+    }
+
+    /// What the face `face` of the card at `card` makes as a mana source; a face beyond the
+    /// first two, or face down, is read from the face itself.
+    pub(crate) fn mana_face(&self, card: CardIx, face: FaceIx) -> ManaFace {
+        self.mana_faces[card.index()]
+            .get(usize::from(face.get()))
+            .copied()
+            .unwrap_or(ManaFace::Read)
     }
 
     /// The event kinds any card of this game listens to.

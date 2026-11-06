@@ -22,6 +22,8 @@
 //! - Say yes to every "may" and every "unless pays"; keep the cards worth most, and scry to
 //!   the bottom only the cards not worth drawing.
 
+use std::cell::Cell;
+
 use beryl_engine::card::{
     Ability, AbilityIx, AbilityKind, CardDef, CastingOption, Castings, Face, FaceAbility, FaceIx,
     Keywords, Replacement, TargetKind, TargetSpec, Types,
@@ -102,6 +104,7 @@ impl RolloutPolicy {
             obs,
             me,
             expert,
+            may_draw: Cell::new(None),
         }
     }
 
@@ -246,6 +249,8 @@ pub(crate) struct Policy<'a> {
     pub(crate) me: Seat,
     /// Whether permanents are valued as the expert values them ([`crate::expert`]).
     pub(crate) expert: bool,
+    /// [`Policy::may_draw`], once asked: every option of a decision may ask it.
+    may_draw: Cell<Option<bool>>,
 }
 
 impl Policy<'_> {
@@ -432,6 +437,15 @@ impl Policy<'_> {
     /// attempted to draw a card from a library with no cards in it since the last time
     /// state-based actions were checked, that player loses the game."
     pub(crate) fn may_draw(&self) -> bool {
+        if let Some(may) = self.may_draw.get() {
+            return may;
+        }
+        let may = self.find_may_draw();
+        self.may_draw.set(Some(may));
+        may
+    }
+
+    fn find_may_draw(&self) -> bool {
         self.obs.library(self.me).len() > LIBRARY_LOW
             || self
                 .obs

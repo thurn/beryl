@@ -182,6 +182,25 @@ fn legendary(s: &State) -> [Bitboard; 2] {
     by_controller
 }
 
+/// Whether the permanents in `a` and `b` have the same name. The same card with the same face
+/// up does without comparing the names.
+fn same_name(s: &State, t: &GameTable, a: Slot, b: Slot) -> bool {
+    let (oa, ob) = (s.object(a), s.object(b));
+    (oa.card == ob.card && oa.face == ob.face) || name(s, t, a) == name(s, t, b)
+}
+
+/// Whether some player controls two legendary permanents of `legendary` with the same name:
+/// whether any legend-rule group exists, kept or not.
+fn any_group(s: &State, t: &GameTable, legendary: &[Bitboard; 2]) -> bool {
+    legendary.iter().any(|&mine| {
+        let mut rest = mine;
+        mine.iter().any(|a| {
+            rest.remove(a);
+            rest.iter().any(|b| same_name(s, t, a, b))
+        })
+    })
+}
+
 /// The legendary permanents with the same controller and name as the one in `slot`, of
 /// `legendary`, each player's.
 fn legend_group(s: &State, t: &GameTable, legendary: &[Bitboard; 2], slot: Slot) -> Bitboard {
@@ -205,8 +224,9 @@ pub(crate) fn unresolved_legends(
     kept: Bitboard,
 ) -> Option<(Seat, Bitboard)> {
     let legendary = legendary(s);
-    // A group needs two legendary permanents of one controller, which most checks lack.
-    if legendary.iter().all(|b| b.count() < 2) {
+    // A group needs two legendary permanents of one controller with one name, which most
+    // checks lack.
+    if legendary.iter().all(|b| b.count() < 2) || !any_group(s, t, &legendary) {
         return None;
     }
     for player in apnap(s) {

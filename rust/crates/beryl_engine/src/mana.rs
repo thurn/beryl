@@ -15,7 +15,7 @@
 //! sacrificing more, when it keeps more later costs payable (§10).
 
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, AbilityKind, Cost, ManaColor, ManaCost, Types};
+use crate::card::{Ability, AbilityKind, Cost, Face, ManaColor, ManaCost, Types};
 use crate::decision::Opt;
 use crate::effect::EffectCtx;
 use crate::event::{self, Sink};
@@ -208,21 +208,80 @@ fn is_sacrificed(a: &Ability) -> bool {
 /// most five colors and {C}, two ranks each.
 const CONSUMED_RANK: u8 = 2 * KINDS as u8 + 2;
 
+/// What a face makes as a source, found once per game ([`GameTable::mana_face`]) for the
+/// many faces [`source`] reads: the cube's permanents are mostly not sources, or sources whose
+/// mana depends on nothing else.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ManaFace {
+    /// No mana ability the solver taps for: never a source.
+    Not,
+    /// Mana abilities the solver taps for, none limited to a kind of permanent you control:
+    /// the kinds they make, how much, and whether the face has another ability.
+    Plain { kinds: u8, amount: u8, other: bool },
+    /// Anything else, which [`source`] reads from the face.
+    Read,
+}
+
+impl ManaFace {
+    pub(crate) fn of(face: &Face) -> ManaFace {
+        let simple = || face.abilities.iter().filter(|a| is_simple(a));
+        if !face
+            .abilities
+            .iter()
+            .any(|a| is_simple(a) || is_sacrificed(a))
+        {
+            return ManaFace::Not;
+        }
+        if simple().next().is_none() || simple().any(|a| a.only_if_you_control.is_some()) {
+            return ManaFace::Read;
+        }
+        let kinds = simple().fold(0, |k, a| k | a.produces.colors);
+        let amount = simple().last().map_or(0, |a| a.produces.amount);
+        if kinds == 0 {
+            return ManaFace::Read;
+        }
+        ManaFace::Plain {
+            kinds,
+            amount,
+            other: has_other_ability(face),
+        }
+    }
+}
+
+/// Whether a face has an ability other than those the solver taps for, which tapping it for
+/// mana would cost. Abilities that work only from a hand, such as cycling, don't count.
+fn has_other_ability(face: &Face) -> bool {
+    face.abilities.iter().any(|a| {
+        matches!(a.kind, AbilityKind::Activated | AbilityKind::Mana)
+            && !is_simple(a)
+            && !a.cost.discard_self
+    })
+}
+
 /// What an untapped source `player` controls makes, if the permanent in `slot` is one: the
 /// kinds of mana, how much, whether it has another ability, and whether making it sacrifices
 /// the source.
 fn source(s: &State, t: &GameTable, player: Seat, slot: Slot) -> Option<(u8, u8, bool, bool)> {
     let o = s.object(slot);
-    if s.controller(slot) != player || o.flags.has(ObjectFlags::TAPPED) {
+    let mana = t.mana_face(o.card, o.face);
+    if mana == ManaFace::Not || s.controller(slot) != player || o.flags.has(ObjectFlags::TAPPED) {
         return None;
     }
-    let face = t.def(o.card).face(o.face);
     // CR 302.6: a creature's {T} abilities need it under its controller's control since their
     // most recent turn began.
     if s.derived(slot).types.intersects(Types::CREATURE) && o.flags.has(ObjectFlags::SUMMONING_SICK)
     {
         return None;
     }
+    if let ManaFace::Plain {
+        kinds,
+        amount,
+        other,
+    } = mana
+    {
+        return Some((kinds, amount, other, false));
+    }
+    let face = t.def(o.card).face(o.face);
     let mut kinds = 0;
     let mut amount = 0;
     // A source whose mana depends on other permanents, as Floodfarm Verge's {U}, is a class
@@ -254,14 +313,7 @@ fn source(s: &State, t: &GameTable, player: Seat, slot: Slot) -> Option<(u8, u8,
         amount == 1 || kinds.is_power_of_two(),
         "a source of several mana makes one kind"
     );
-    // Abilities that work only from a hand, such as cycling, don't count.
-    let other = conditional
-        || face.abilities.iter().any(|a| {
-            matches!(a.kind, AbilityKind::Activated | AbilityKind::Mana)
-                && !is_simple(a)
-                && !a.cost.discard_self
-        });
-    Some((kinds, amount, other, false))
+    Some((kinds, amount, conditional || has_other_ability(face), false))
 }
 
 impl Sources {
