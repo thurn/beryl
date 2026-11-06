@@ -124,6 +124,34 @@ const DRAIN: &[&str] = &[names::MANA_DRAIN];
 const TITHE: &[&str] = &[names::MANA_TITHE];
 const ONE_PLAINS: &[Permanent] = &[Permanent::new(PLAINS)];
 
+/// The opponent's Winds of Abandon exiles the expert's Jace, Vryn's Prodigy: its controller
+/// searches for a basic land, and the expert takes one rather than nothing.
+#[test]
+fn winds_of_abandon_fetches_a_basic() {
+    const WINDS: Scenario = Scenario::new("Winds of Abandon on the expert's creature")
+        .at(3, P1, TurnStep::PrecombatMain)
+        .hand(P1, &[names::WINDS_OF_ABANDON])
+        .battlefield(P1, &[Permanent::new(PLAINS), Permanent::new(PLAINS)])
+        .library(P1, LIBRARY)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(PLAINS),
+                Permanent::new(names::JACE_VRYNS_PRODIGY),
+            ],
+        )
+        .library(P0, LIBRARY);
+    let (t, mut s) = arrange(&WINDS);
+    let (d, c) = expert_at(&t, &mut s, casts(names::WINDS_OF_ABANDON), |_, d| {
+        d.kind == DecisionKind::ChooseUpTo
+    });
+    assert!(
+        matches!(chosen(&d, c), Opt::Object(slot) if name(&t, &s, slot) == PLAINS || name(&t, &s, slot) == ISLAND),
+        "{:?}",
+        chosen(&d, c)
+    );
+}
+
 #[test]
 fn mana_drain_counters_a_planeswalker() {
     const JACE: Scenario = counter_scenario(

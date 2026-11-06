@@ -19,8 +19,8 @@
 //!   alive, or at the player once they are at 6 life or less.
 //! - Block when the blocker kills the attacker and survives, trades up, or survives; chump
 //!   only when the unblocked damage would be lethal.
-//! - Say yes to every "may" and every "unless pays"; keep the cards worth most, and scry to
-//!   the bottom only the cards not worth drawing.
+//! - Say yes to every "may" and every "unless pays"; keep the cards worth most, take the best
+//!   a search finds, and scry to the bottom only the cards not worth drawing.
 
 use beryl_engine::Layout;
 use std::cell::Cell;
@@ -32,7 +32,7 @@ use beryl_engine::card::{
 use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::state::{ObjectFlags, StackEntry};
 use beryl_engine::{
-    Answers, Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome,
+    Answers, Ask, Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome,
     Scratch, Seat, Slot, State, Step, Zone, apply_decided, next,
 };
 
@@ -197,10 +197,14 @@ impl RolloutPolicy {
                     }
                 })
             }),
-            // Cards on top of a library are being chosen for the bottom, as a scry asks: only
-            // those not worth drawing go. Anything else, such as lands to untap, is worth
+            // A search's finds are worth taking, the best first, as Winds of Abandon's basic.
+            // Other cards on top of a library are being chosen for the bottom, as a scry asks:
+            // only those not worth drawing go. Anything else, such as lands to untap, is worth
             // taking by its value.
             DecisionKind::ChooseUpTo => pick.choose(d, |c| match c.object() {
+                Some(slot) if matches!(d.ask, Ask::Search { .. }) => {
+                    Some(1 + p.in_hand(slot).max(0))
+                }
                 Some(slot) if obs.object(slot).zone == Zone::Library => {
                     Some(DRAW_MIN - p.in_hand(slot))
                 }
