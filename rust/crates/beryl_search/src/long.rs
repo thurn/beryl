@@ -16,16 +16,19 @@
 //! - **Knowledge.** The card values the rollout policy and the evaluation read
 //!   ([`Knowledge`]).
 //! - **Work.** A budget is engine steps, not iterations: every decision `next` returns or
-//!   settles itself, in the tree or a rollout, plus what dealing a world and an evaluation
-//!   cost in steps' time ([`WORLD_STEPS`], [`EVAL_STEPS`]). So a full rollout (about 360
+//!   settles itself, in the tree or a rollout, plus what copying the root, dealing a world
+//!   and an evaluation cost in steps' time ([`ITERATION_STEPS`], [`WORLD_STEPS`],
+//!   [`EVAL_STEPS`]). So a full rollout (about 360
 //!   steps from a mid-game position) and an evaluation (one) are charged what they cost,
 //!   and every leaf compares at matched CPU, deterministically: a seed reproduces a move on
 //!   any machine.
 //!
-//! Every tree's children are keyed by the action, not by its index: an option naming a card
-//! the searcher knew at the root keys by its slot, one naming a card it did not (the
-//! opponent's spell from hand, the card it will draw) by the card, so the same action in two
-//! worlds is one child. A child counts the times it was available as well as visited, and
+//! Every tree's children are keyed by the action as the searcher tells it apart, not by its
+//! index: an option naming a card it knew at the root keys by its slot; one naming a card it
+//! sees only in this world (one it drew) or one the option shows (the opponent's spell from
+//! hand) by the card; one naming a card it cannot see (a face-down permanent) by its slot.
+//! So the same action in two worlds is one child, and the searcher never plans on a card it
+//! would not know. A child counts the times it was available as well as visited, and
 //! UCB1 reads the former (ISMCTS's availability count). A fixed world offers the same
 //! actions each time, so there it is plain UCT.
 //!
@@ -42,6 +45,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 
+use beryl_engine::card::FaceIx;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
     Bitboard, Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome,
@@ -100,6 +104,10 @@ pub const WORLD_STEPS: u64 = 3;
 /// Engine steps charged for an evaluation: a pass over the battlefield and the hands.
 /// Measured as [`WORLD_STEPS`]: 0.29 µs, rounded up to a step.
 pub const EVAL_STEPS: u64 = 1;
+
+/// Engine steps charged for an iteration's copy of the root, so that none costs nothing: an
+/// action that ends the game at once counts no step of the engine's.
+pub const ITERATION_STEPS: u64 = 1;
 
 /// The UCT exploration constant, as `Mcts`'s.
 const EXPLORATION: f64 = 0.7;
@@ -638,6 +646,13 @@ impl Tree {
             return false;
         };
         if self.resample {
+            // Only a question that follows the choice within its own action (a spell's
+            // targets, its payment) keeps the tree: before a priority decision the opponent
+            // may have had one of their own, which a resampling tree cannot rule out without
+            // reading what they hold.
+            if d.kind == DecisionKind::Priority {
+                return false;
+            }
             self.state = *obs.unmasked_root();
         } else {
             let mut s = self.state;
@@ -664,9 +679,9 @@ impl Tree {
     fn root_keys(&self, t: &GameTable, d: &Decision) -> Vec<u64> {
         if self.resample {
             let world = self.deal(t, &mut self.rng.clone());
-            keys(&world, d, self.known)
+            keys(&world, d, self.known, self.viewer)
         } else {
-            keys(&self.state, d, self.known)
+            keys(&self.state, d, self.known, self.viewer)
         }
     }
 
@@ -693,6 +708,7 @@ impl Tree {
             self.state
         };
         self.x.counts.copied();
+        self.extra += ITERATION_STEPS;
         let mut path: [u32; 256] = [0; 256];
         let mut depth = 0;
         let mut node = self.root;
@@ -702,7 +718,7 @@ impl Tree {
             let keys = if at_root {
                 std::mem::take(&mut self.root_keys)
             } else {
-                keys(&s, &d, self.known)
+                keys(&s, &d, self.known, self.viewer)
             };
             let (child, choice) = self.select(node, &keys, d.player);
             if at_root {
@@ -816,34 +832,42 @@ fn value(outcome: Outcome) -> f64 {
     }
 }
 
-/// Each candidate's key: its player, the decision's kind and the option with each card it
-/// names given by slot if the searcher knew it at the root, else by card; then which of the
-/// candidates with that much in common it is.
-fn keys(world: &State, d: &Decision, known: Bitboard) -> Vec<u64> {
+/// Each candidate's key: its player, the decision's kind and the option with the card it
+/// names, if any, told apart as the searcher (`viewer`) tells it apart; then which of the
+/// candidates with that much in common it is. A card the searcher knew at the root keys by
+/// its slot, the same card in every world. One it knows only in this world (a card it drew)
+/// keys by the card, and so does one the option itself shows: a spell cast face up from a
+/// hidden hand ([CR 601.2a](https://yawgatog.com/resources/magic-rules/#R6012a): "To propose
+/// the casting of a spell, a player first moves that card (or that copy of a card) from
+/// where it is to the stack. It becomes the topmost object on the stack. It has all the
+/// characteristics of the card"), a land played, a permanent turned face up. Any other card
+/// it cannot see (a face-down permanent, a card picked from a library it cannot see) keys by
+/// its slot, so the searcher never plans on a card it would not know.
+fn keys(world: &State, d: &Decision, known: Bitboard, viewer: Seat) -> Vec<u64> {
     let mut bases = Vec::with_capacity(d.len());
     for i in 0..d.len() {
         let c = Choice(i as u8);
         let mut h = DefaultHasher::new();
         d.player.hash(&mut h);
         d.kind.hash(&mut h);
-        let named = |slot: Slot| -> (Option<Slot>, u8) {
-            if known.contains(slot) {
-                (Some(slot), 0)
-            } else {
+        let named = |slot: Slot, shows: bool| -> (Option<Slot>, u8) {
+            if !known.contains(slot) && (shows || world.knows(viewer, slot)) {
                 (None, world.card(slot).index() as u8)
+            } else {
+                (Some(slot), 0)
             }
         };
         match d.candidates {
             Candidates::Objects(_) => {
                 0u8.hash(&mut h);
-                named(d.candidates.object(c).expect("an object")).hash(&mut h);
+                named(d.candidates.object(c).expect("an object"), false).hash(&mut h);
             }
             Candidates::Options(_) => {
                 let opt = d.candidates.option(c).expect("an option");
                 1u8.hash(&mut h);
                 match names_slot(opt) {
                     Some(slot) => {
-                        named(slot).hash(&mut h);
+                        named(slot, shows(opt)).hash(&mut h);
                         with_slot(opt, Slot::new(0)).hash(&mut h);
                     }
                     None => opt.hash(&mut h),
@@ -860,6 +884,15 @@ fn keys(world: &State, d: &Decision, known: Bitboard) -> Vec<u64> {
             b ^ ordinal.wrapping_mul(0x9E37_79B9_7F4A_7C15)
         })
         .collect()
+}
+
+/// Whether taking an option shows everyone the card it names.
+fn shows(opt: Opt) -> bool {
+    match opt {
+        Opt::Cast { face, .. } => face != FaceIx::DOWN,
+        Opt::PlayLand(_) | Opt::TurnFaceUp(_) => true,
+        _ => false,
+    }
 }
 
 /// The slot an option names.
@@ -902,7 +935,52 @@ fn with_slot(opt: Opt, to: Slot) -> Opt {
 
 #[cfg(test)]
 mod tests {
+    use beryl_cards::CARDS;
+    use beryl_cards::decks::WU_CONTROL;
+    use beryl_engine::Profile;
+
     use super::*;
+
+    /// A decision's keys are the same in every world its player could be in, so a tree's
+    /// statistics for an action never depend on a card the player cannot see: checked at
+    /// every decision of greedy mirror games, among them choices naming face-down permanents
+    /// and cards in a library.
+    #[test]
+    fn keys_are_the_same_in_every_world_the_player_could_be_in() {
+        let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
+        let policy = RolloutPolicy::new(&t);
+        let mut unseen = 0;
+        for seed in 0..6 {
+            let mut s = State::new(&t, seed, Profile::SMART);
+            let mut x = Scratch::new();
+            loop {
+                let d = match next(&mut s, &t, &mut x, &mut Replay) {
+                    Step::Over(_) => break,
+                    Step::Decide(d) => d,
+                };
+                let obs = observe(&s, &t, &mut x, d.player);
+                let known: Bitboard = Slot::all().filter(|&q| obs.knows(q)).collect();
+                let world = |i| obs.determinize(&t, &mut SplitMix64::new(i));
+                let first = keys(&world(0), &d, known, d.player);
+                for i in 1..4 {
+                    assert_eq!(keys(&world(i), &d, known, d.player), first, "seed {seed}");
+                }
+                unseen += (0..d.len())
+                    .filter_map(|i| match d.candidates {
+                        Candidates::Objects(_) => d.candidates.object(Choice(i as u8)),
+                        Candidates::Options(_) => names_slot(d.candidates.option(Choice(i as u8))?),
+                    })
+                    .filter(|&q| !known.contains(q))
+                    .count();
+                let c = policy.choose(&t, obs, &d);
+                apply(&mut s, &t, &mut x, &mut Replay, c);
+            }
+        }
+        assert!(
+            unseen > 0,
+            "no choice named a card its player could not see"
+        );
+    }
 
     /// A family reads back as it prints.
     #[test]

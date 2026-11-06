@@ -7,7 +7,10 @@
 //!   hidden while the panel is up and shown again whenever the runner exits, leaving the
 //!   panel's last frame on screen.
 //! - Ctrl-C once asks for a stop after this game (the header shows ⏸); twice stops at once,
-//!   losing the game in progress, which the next run replays to where it was.
+//!   losing the game in progress, which the next run replays to where it was. While the
+//!   panel is up the terminal keeps its output on Ctrl-C (`NOFLSH`): by default it discards
+//!   what is queued, which can be part of a frame, and the next one, moving up over lines that
+//!   never came, would overwrite the log above.
 //! - Not a terminal, or `TERM=dumb`: no escapes at all, just the log lines and a board table
 //!   every 10 games. `NO_COLOR` turns colors off and keeps the panel.
 
@@ -87,13 +90,44 @@ impl<W: Write> Screen<W> {
     }
 }
 
-/// Shows the cursor if a panel hid it: for a panic, which under the search profile aborts
-/// before anything else could.
+/// Shows the cursor if a panel hid it, and gives the terminal back its settings: for a
+/// panic, which under the search profile aborts before anything else could.
 pub fn restore() {
     if LIVE.load(Ordering::Relaxed) {
         let mut out = io::stdout();
         let _ = out.write_all(SHOW.as_bytes());
         let _ = out.flush();
+        settings(false);
+    }
+}
+
+/// The terminal's settings before the panel changed them.
+static SAVED: Mutex<Option<libc::termios>> = Mutex::new(None);
+
+/// With `keep`, has stdout's terminal keep its queued output when Ctrl-C is pressed,
+/// saving its settings; without, puts the saved ones back.
+#[allow(unsafe_code)]
+fn settings(keep: bool) {
+    let fd = libc::STDOUT_FILENO;
+    let mut saved = SAVED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    match (keep, saved.take()) {
+        (true, _) => {
+            // SAFETY: tcgetattr writes a termios for a valid descriptor, which zeroed bytes
+            // are a valid value of; tcsetattr only reads it.
+            let mut t: libc::termios = unsafe { std::mem::zeroed() };
+            if unsafe { libc::tcgetattr(fd, &raw mut t) } == 0 {
+                *saved = Some(t);
+                t.c_lflag |= libc::NOFLSH;
+                unsafe { libc::tcsetattr(fd, libc::TCSANOW, &raw const t) };
+            }
+        }
+        (false, Some(t)) => {
+            // SAFETY: as above.
+            unsafe { libc::tcsetattr(fd, libc::TCSANOW, &raw const t) };
+        }
+        (false, None) => {}
     }
 }
 
@@ -265,6 +299,7 @@ impl Shared {
         self.paint(&mut screen);
         if let Some(s) = screen.take() {
             let _ = s.close();
+            settings(false);
         }
         LIVE.store(false, Ordering::Relaxed);
     }
@@ -289,6 +324,7 @@ impl Display {
     ) -> Result<Display, String> {
         let (live, color) = modes();
         let screen = if live {
+            settings(true);
             Some(Screen::new(io::stdout()).map_err(|e| format!("the terminal: {e}"))?)
         } else {
             None

@@ -190,20 +190,32 @@ impl Ratings {
     }
 
     /// Each of `among`'s chance of the best rating among them, and of the best in its
-    /// family, from independent draws of the ratings seeded by `seed`.
+    /// family, from draws of the ratings seeded by `seed`, correlated as the pool's
+    /// covariance says: two entrants that have played each other often differ by a known
+    /// margin, however uncertain each is against the anchor.
     pub fn best(&self, among: &[String], seed: u64) -> Vec<(f64, f64)> {
         if among.is_empty() {
             return Vec::new();
         }
+        let n = among.len();
+        let cov: Vec<Vec<f64>> = among
+            .iter()
+            .map(|e| among.iter().map(|f| self.covariance(e, f)).collect())
+            .collect();
+        let factor = cholesky(&cov);
+        let means: Vec<f64> = among.iter().map(|e| self.get(e).0).collect();
         let mut rng = SplitMix64::new(seed);
         let families: Vec<&str> = among.iter().map(|e| family_of(e)).collect();
-        let mut overall = vec![0u32; among.len()];
-        let mut in_family = vec![0u32; among.len()];
-        let mut draw = vec![0.0; among.len()];
+        let mut overall = vec![0u32; n];
+        let mut in_family = vec![0u32; n];
+        let mut z = vec![0.0; n];
+        let mut draw = vec![0.0; n];
         for _ in 0..DRAWS {
-            for (d, e) in draw.iter_mut().zip(among) {
-                let (m, s) = self.get(e);
-                *d = m + s * normal(&mut rng);
+            for v in &mut z {
+                *v = normal(&mut rng);
+            }
+            for (i, d) in draw.iter_mut().enumerate() {
+                *d = means[i] + (0..=i).map(|j| factor[i][j] * z[j]).sum::<f64>();
             }
             let top = argmax(&draw, |_| true);
             overall[top] += 1;
@@ -226,6 +238,34 @@ impl Ratings {
             })
             .collect()
     }
+
+    /// The covariance of `e`'s and `f`'s ratings; an entrant not rated has the prior's
+    /// variance and no covariance.
+    fn covariance(&self, e: &str, f: &str) -> f64 {
+        match (self.index.get(e), self.index.get(f)) {
+            (Some(&i), Some(&j)) => self.cov[i][j],
+            _ if e == f => PRIOR * PRIOR,
+            _ => 0.0,
+        }
+    }
+}
+
+/// The lower-triangular `l` with `l lᵀ = a`, for a covariance `a`; a pivot that rounding
+/// leaves at or below zero (the anchor's, which is fixed) is taken as zero.
+fn cholesky(a: &[Vec<f64>]) -> Vec<Vec<f64>> {
+    let n = a.len();
+    let mut l = vec![vec![0.0; n]; n];
+    for i in 0..n {
+        for j in 0..=i {
+            let dot: f64 = (0..j).map(|k| l[i][k] * l[j][k]).sum();
+            if i == j {
+                l[i][i] = (a[i][i] - dot).max(0.0).sqrt();
+            } else if l[j][j] > 1e-9 {
+                l[i][j] = (a[i][j] - dot) / l[j][j];
+            }
+        }
+    }
+    l
 }
 
 /// The index of the largest of `xs` that `keep` keeps, the first of equals.
@@ -424,6 +464,43 @@ mod tests {
         assert!(close(s, 100.0, 1e-9) && close(m, 27.718, 1e-3), "{s} {m}");
         assert_eq!(climb(&[(1_000, 0.0, 10.0)]), None);
         assert_eq!(climb_text((-1e-14, 47.2)), "+0 ±47");
+    }
+
+    /// Two entrants each known poorly against the anchor, but one known to beat the other:
+    /// the correlated draws make the better one best nearly always.
+    #[test]
+    fn the_chance_of_being_best_reads_the_covariance() {
+        use crate::longthink::schedule::Matchup;
+        let c = Config {
+            families: Vec::new(),
+            fixed: vec!["expert".to_owned()],
+            anchor: "expert".to_owned(),
+            budgets: vec![1_000],
+            threads: 1,
+            seed: 0,
+        };
+        let (a, b) = ("f/x@1k", "f/y@1k");
+        let mut games = Vec::new();
+        for (m, n, wins) in [
+            (Matchup::new(a, b), 200, 150),
+            (Matchup::new("expert", a), 2, 1),
+            (Matchup::new("expert", b), 2, 1),
+        ] {
+            for g in 0..n {
+                let v = if g < wins {
+                    Verdict::Win
+                } else {
+                    Verdict::Loss
+                };
+                games.push(GameRecord::example(&m, g, v));
+            }
+        }
+        let r = Ratings::new(&c, &games, &HashMap::new(), &[]);
+        let (_, sa) = r.get(a);
+        let (gap, sd) = r.diff(a, b);
+        assert!(sa > 3.0 * sd && gap > 2.0 * sd, "{sa} {gap} {sd}");
+        let best = r.best(&[a.to_owned(), b.to_owned()], 1);
+        assert!(best[0].0 > 0.97, "{best:?}");
     }
 
     #[test]

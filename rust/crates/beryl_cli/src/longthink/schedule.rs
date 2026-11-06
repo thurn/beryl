@@ -4,8 +4,9 @@
 //! - An entrant is a fixed agent (`expert-frozen`), or a search family at a budget of
 //!   engine steps a decision (`ismcts18/hidden/rollout/17l@3M`). Each family opens at the
 //!   first of the configured budgets; the next opens once the last has played
-//!   [`OPEN_GAMES`] games, and past the configured ones, ×3 each, only while the last step
-//!   up still gained rating with 80% confidence. So a family that stops climbing stops
+//!   [`OPEN_GAMES`] games, and past the configured ones (or the first two, with one
+//!   configured), ×3 each, only while the last step up still gained rating with 80%
+//!   confidence. So a family that stops climbing stops
 //!   growing, and one that resumes climbing grows again.
 //! - Every game is one of a seed pair: the same deal twice, each side taking each seat in
 //!   turn. Pair `p` has the same seed in every matchup, so entrants compare pair by pair,
@@ -152,11 +153,12 @@ pub fn open(c: &Config, r: &Ratings) -> Vec<String> {
             if r.tally(&e).games < OPEN_GAMES {
                 break;
             }
-            let more = k + 1 < c.budgets.len()
-                || k > 0 && {
-                    let (gain, sd) = r.diff(&e, &c.entrant(f, k - 1));
-                    sd > 0.0 && phi(gain / sd) >= CLIMBING
-                };
+            // With one configured budget, the second opens as the configured ones do: a
+            // step up is measured only once there is one.
+            let more = k + 1 < c.budgets.len().max(2) || {
+                let (gain, sd) = r.diff(&e, &c.entrant(f, k - 1));
+                sd > 0.0 && phi(gain / sd) >= CLIMBING
+            };
             if !more {
                 break;
             }

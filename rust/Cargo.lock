@@ -162,6 +162,7 @@ dependencies = [
  "beryl_search",
  "beryl_session",
  "ctrlc",
+ "libc",
  "serde",
  "serde_json",
  "terminal_size",
