@@ -2,7 +2,7 @@
 // opponent's badge), the game log, and the spells that came and went in the view on screen,
 // shown large for a moment so a counter or an instant is seen rather than only found later in
 // a graveyard.
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Card } from "../components/Card";
 import type { ObjectView, PlayerView, Side } from "../generated/protocol";
@@ -40,7 +40,7 @@ export function opponentActivity(
  * the foot, scrolled to it as entries arrive and whenever it shows again. While permanents
  * reach into its column it is `folded` to a button, which toggles it `open`, the rows making
  * room for it (layout.ts), so it never lies over the cards or half hidden under them. */
-export function GameLog({
+export const GameLog = memo(function GameLog({
   log,
   folded,
   open,
@@ -97,7 +97,7 @@ export function GameLog({
       </ol>
     </section>
   );
-}
+});
 
 /** A spell that left the stack in the view on screen, and how. */
 interface Announced {

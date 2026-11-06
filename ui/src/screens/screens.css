@@ -1249,6 +1249,12 @@
   user-select: none;
   -webkit-user-select: none;
 }
+/* Each card the table shows is its own compositor layer, painted once and then only moved:
+   otherwise WebKit repaints every card a moving one overlaps, shadows and all, on each frame
+   of a hover's rise or a drag, which drops frames on a full late-game table. */
+.card-el:not(.card-el-hidden) {
+  will-change: transform;
+}
 .card-el-hidden,
 .card-el-pile {
   pointer-events: none;

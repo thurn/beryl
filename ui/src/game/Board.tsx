@@ -6,6 +6,7 @@
 // step banner; spells and abilities large at the right, a gold line from an ability's source
 // and cyan lines to targets.
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -327,6 +328,7 @@ export function Board({
   // The log stays folded to its button until opened; opened while the rows reach into its
   // column, the rows give it room.
   const [logOpen, setLogOpen] = useState(false);
+  const toggleLog = useCallback(() => setLogOpen((o) => !o), []);
   const resting = useMemo(
     () => layout(shown, asking, dimmed),
     [shown, asking, dimmed],
@@ -991,12 +993,7 @@ export function Board({
           />
         )}
 
-        <GameLog
-          log={log}
-          folded
-          open={logOpen}
-          onToggle={() => setLogOpen((o) => !o)}
-        />
+        <GameLog log={log} folded open={logOpen} onToggle={toggleLog} />
         {live && <Announcements view={view} />}
         <TurnBanner view={view} live={live} />
 

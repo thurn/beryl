@@ -4,6 +4,7 @@
 // cards with something to play drag onto the battlefield, attackers forward and blockers onto
 // attackers; a click on any card asks the board what it offers.
 import {
+  memo,
   useContext,
   useEffect,
   useLayoutEffect,
@@ -103,6 +104,16 @@ const RAISED_Z = 300;
 /** A refused click's shake, side to side in stage pixels. */
 const SHAKE = [0, -7, 6, -4, 2, 0];
 
+/** What a card element calls back: the same object for the layer's life, each call going to
+ * the handler of the latest render, so that a card whose own props are unchanged (all but the
+ * hovered one and those it links, when the pointer moves) skips rendering. */
+type Callbacks = Pick<
+  CardLayerProps,
+  "onClick" | "onDrop" | "onHover" | "onLift"
+>;
+
+const NO_STATE: CardState = {};
+
 export function CardLayer(props: CardLayerProps) {
   const { objects, placements } = props;
   // Cards there from the start are simply there; later ones (tokens) fade and grow in.
@@ -110,6 +121,36 @@ export function CardLayer(props: CardLayerProps) {
   useEffect(() => {
     shown.current = true;
   }, []);
+  const latest = useRef(props);
+  latest.current = props;
+  // The pointer moving from card to card leaves one and enters the next in the same task:
+  // the leave waits for the rest of the task, so that the enter, taking its place, makes one
+  // render of the board rather than two.
+  const leaving = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(leaving.current), []);
+  const [callbacks] = useState<Callbacks>(() => ({
+    onClick: (slot, at) => latest.current.onClick(slot, at),
+    onDrop: (slot, drop) => latest.current.onDrop(slot, drop),
+    onHover: (slot) => {
+      clearTimeout(leaving.current);
+      if (slot === undefined) {
+        leaving.current = setTimeout(() => latest.current.onHover(undefined));
+      } else {
+        latest.current.onHover(slot);
+      }
+    },
+    onLift: (slot) => latest.current.onLift?.(slot),
+  }));
+  // The board builds each card's state afresh on every render: one equal to the last keeps
+  // the last's identity.
+  const states = useRef(new Map<number, CardState>());
+  const stateOf = (slot: number) => {
+    const given = props.states.get(slot) ?? NO_STATE;
+    const last = states.current.get(slot);
+    if (last && sameState(last, given)) return last;
+    states.current.set(slot, given);
+    return given;
+  };
   return (
     <div className="card-layer">
       <AnimatePresence>
@@ -121,9 +162,10 @@ export function CardLayer(props: CardLayerProps) {
                 key={o.slot}
                 object={o}
                 place={place}
-                state={props.states.get(o.slot) ?? {}}
+                state={stateOf(o.slot)}
                 raised={props.hovered === o.slot}
-                layer={props}
+                epoch={props.epoch}
+                callbacks={callbacks}
                 appearing={shown.current}
               />
             )
@@ -131,6 +173,14 @@ export function CardLayer(props: CardLayerProps) {
         })}
       </AnimatePresence>
     </div>
+  );
+}
+
+/** Whether two card states show alike: their fields are the same values. */
+function sameState(a: CardState, b: CardState) {
+  const keys = Object.keys(a) as (keyof CardState)[];
+  return (
+    keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k])
   );
 }
 
@@ -160,19 +210,21 @@ interface GlideOptions {
  * it was played on (its epoch) is replaced. */
 type Held = { dragging: true } | { dragging: false; epoch: unknown };
 
-function CardElement({
+const CardElement = memo(function CardElement({
   object,
   place,
   state,
   raised,
-  layer,
+  epoch,
+  callbacks: layer,
   appearing,
 }: {
   object: ObjectView;
   place: Placement;
   state: CardState;
   raised: boolean;
-  layer: CardLayerProps;
+  epoch: unknown;
+  callbacks: Callbacks;
   appearing: boolean;
 }) {
   const reduce = useReducedMotion() ?? false;
@@ -189,8 +241,7 @@ function CardElement({
   // The pointer places the card while it holds it, whatever its placement does meanwhile. A
   // dropped card is let go with the view it was played on, whatever the engine did with it (a
   // twin of it may be the card played), and from then on is drawn as if never held.
-  const holding =
-    held !== undefined && (held.dragging || held.epoch === layer.epoch);
+  const holding = held !== undefined && (held.dragging || held.epoch === epoch);
   useGlide(x, place.x, reduce, { holding });
   useGlide(y, place.y, reduce, { holding });
   // A card changing looks, or tapping, is drawn at another width (a back, a whole card, a
@@ -321,7 +372,7 @@ function CardElement({
       at,
       onto: under(e, e.currentTarget as HTMLElement),
     });
-    setHeld(played ? { dragging: false, epoch: layer.epoch } : undefined);
+    setHeld(played ? { dragging: false, epoch } : undefined);
   };
 
   const classes = [
@@ -402,7 +453,7 @@ function CardElement({
       )}
     </>
   );
-}
+});
 
 /** The transform raising a hand card out of a fan that turns it `turn` degrees, or none when
  * `turn` is undefined: it turns back upright about the card's top center, rises `height`
