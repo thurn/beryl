@@ -231,6 +231,14 @@ def step(action: JsonObject) -> JsonObject | None:
             "card": action["card"],
             "ability": selector,
         }
+    if kind == "TurnFaceUp":
+        # Forge offers turning a manifested permanent face up as its "Unmanifest" ability.
+        return {
+            "op": "activate",
+            "player": action["player"],
+            "card": action["card"],
+            "ability": "Unmanifest",
+        }
     if kind == "Resolve":
         return {"op": "resolve"}
     if kind == "AdvanceTo":
@@ -245,6 +253,10 @@ def step(action: JsonObject) -> JsonObject | None:
             raise Unsupported("a chosen payment plan")
         if action["kind"] == "Priority" and pick["pick"] == "Card":
             raise Unsupported("a mana ability activated at priority")
+        if action["kind"] == "ExileCost":
+            # Forge's AI pays a spell's costs itself (AiCostDecision), asking its controller
+            # nothing.
+            raise Unsupported("a choice of the cards an exile cost takes")
         return {
             "op": "answer",
             "player": action["player"],

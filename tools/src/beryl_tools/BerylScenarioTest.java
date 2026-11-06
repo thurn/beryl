@@ -165,10 +165,22 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
         player.addChoice(OPTIONAL + turn + ":" + step.name() + ":" + choice);
     }
 
+    /**
+     * Whether `permanent` goes by `name` in a scenario: its own name, or for a face-down
+     * permanent, which has none (CR 708.2a), its card's.
+     */
+    private boolean named(Permanent permanent, String name) {
+        if (permanent.getName().equals(name)) {
+            return true;
+        }
+        Card card = currentGame.getCard(permanent.getId());
+        return permanent.isFaceDown(currentGame) && card != null && card.getName().equals(name);
+    }
+
     /** The permanents named `name` that `controller` controls, in the order they entered. */
     private List<Permanent> controlled(Player controller, String name) {
         return currentGame.getBattlefield().getAllActivePermanents().stream()
-                .filter(p -> p.isControlledBy(controller.getId()) && p.getName().equals(name))
+                .filter(p -> p.isControlledBy(controller.getId()) && named(p, name))
                 .collect(Collectors.toList());
     }
 
@@ -181,7 +193,7 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
     /** How many cards `owner` owns on the battlefield: all of them, or those named `name`. */
     protected void assertOwnedOnBattlefield(Player owner, String name, int count) {
         long found = currentGame.getBattlefield().getAllActivePermanents().stream()
-                .filter(p -> p.isOwnedBy(owner.getId()) && (name == null || p.getName().equals(name)))
+                .filter(p -> p.isOwnedBy(owner.getId()) && (name == null || named(p, name)))
                 .count();
         Assert.assertEquals("(Battlefield) " + owner.getName() + " owns " + name, count, found);
     }
@@ -189,6 +201,11 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
     protected void assertTappedControlled(Player controller, String name, int count) {
         long found = controlled(controller, name).stream().filter(Permanent::isTapped).count();
         Assert.assertEquals("tapped " + name + " of " + controller.getName(), count, found);
+    }
+
+    protected void assertFaceDownControlled(Player controller, String name, int count) {
+        long found = controlled(controller, name).stream().filter(p -> p.isFaceDown(currentGame)).count();
+        Assert.assertEquals("face-down " + name + " of " + controller.getName(), count, found);
     }
 
     protected void assertAttackingControlled(Player controller, String name, int count) {

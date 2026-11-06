@@ -293,6 +293,7 @@ class Position:
     taps: list[str]
     forced: list[Json]
     flashback: list[str]
+    face_down: list[str]
 
 
 @dataclass
@@ -466,6 +467,7 @@ class Exporter:
             taps=cast(list[str], t["taps"]),
             forced=cast(list[Json], t["forced"]),
             flashback=cast(list[str], t.get("flashback", [])),
+            face_down=cast(list[str], t.get("face_down", [])),
         )
 
     def arrange(self) -> None:
@@ -552,8 +554,28 @@ class Exporter:
             self.activate(action, p)
         elif kind == "Answer":
             self.answer(action, p)
+        elif kind == "TurnFaceUp":
+            self.turn_face_up(action, p)
         else:
             raise Unsupported(f"action {kind}")
+
+    def turn_face_up(self, action: Json, p: Position) -> None:
+        """Turns a manifested permanent face up for its card's mana cost, the special action
+        XMage offers as "<cost>: Turn this face-down permanent face up"."""
+        who = self.player(action["player"])
+        card = cast(str, action["card"])
+        self.prepare(who, p)
+        self.pay(who, p, None)
+        text = java_string(f"{self.faces.mana_cost[card]}: Turn")
+        self.emit(f"activateAbility({self.at(p)}, {who}, {text});")
+
+    @staticmethod
+    def object_name(card: str, p: Position) -> str:
+        """How XMage's test commands name the object `card` picks: a face-down permanent, which
+        has no name, as XMage's stand-in for one."""
+        if card in p.face_down:
+            return "[face_down_creature]"
+        return card
 
     def empty_search(self, p: Position) -> None:
         """After a `FORCED_SEARCHES` card resolves without Beryl asking for a card, the skip XMage's
@@ -772,7 +794,7 @@ class Exporter:
                 self.prepare(who, p)
                 self.emit(f"resolveTop({self.at(p)}, {who});")
         elif kind == "Target" and card is not None:
-            self.emit(f"addTarget({who}, {java_string(card)});")
+            self.emit(f"addTarget({who}, {java_string(self.object_name(card, p))});")
         elif kind == "Target" and what == "Player":
             self.emit(f"addTarget({who}, {self.player(pick['player'])});")
         elif kind == "TargetCount" and what == "Number":
@@ -798,9 +820,8 @@ class Exporter:
         elif kind == "TriggerOrder" and card in TRIGGERS_FIRST:
             self.emit(f"setChoice({who}, {java_string(TRIGGERS_FIRST[card])});")
         elif kind in CHOICE_KINDS and card is not None:
-            self.emit(
-                f"{self.choice_command(source, kind)}({who}, {java_string(card)});"
-            )
+            name = java_string(self.object_name(card, p))
+            self.emit(f"{self.choice_command(source, kind)}({who}, {name});")
         elif kind in ("ChooseUpTo", "Waterbend") and what == "Done":
             if self.choice_command(source, kind) == "addTarget":
                 self.emit(f"addTarget({who}, TestPlayer.TARGET_SKIP);")
@@ -909,6 +930,8 @@ class Exporter:
             return f"assertPermanentCount({who}, {name}, {count})"
         if what == "Attacking":
             return f"assertAttackingControlled({who}, {name}, {count})"
+        if what == "FaceDown":
+            return f"assertFaceDownControlled({who}, {name}, {count})"
         if what == "Pt":
             token = "true" if a["token"] else "false"
             return f"assertPt({who}, {name}, {token}, {a['power']}, {a['toughness']})"

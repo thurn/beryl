@@ -11,6 +11,7 @@ import forge.ai.ComputerUtil;
 import forge.ai.ComputerUtilCost;
 import forge.ai.LobbyPlayerAi;
 import forge.ai.PlayerControllerAi;
+import forge.card.CardStateName;
 import forge.deck.Deck;
 import forge.game.Game;
 import forge.game.GameEntity;
@@ -727,8 +728,10 @@ public final class BerylForgeHarness {
 
         // ---- Asserts ----
 
+        /** Whether `card` goes by `name` in a scenario: its own name, or for a face-down card, which has none (CR 708.2a), its card's. */
         static boolean named(Card card, String name) {
-            return card.getName().equals(name);
+            return card.getName().equals(name)
+                    || (card.isFaceDown() && card.getState(CardStateName.Original).getName().equals(name));
         }
 
         List<Card> controlled(Player player, String name) {
@@ -786,6 +789,16 @@ public final class BerylForgeHarness {
                     case "Controls" -> {
                         expected = a.get("count").getAsInt();
                         actual = controlled(player(a), a.get("card").getAsString()).size();
+                    }
+                    case "FaceDown" -> {
+                        expected = a.get("count").getAsInt();
+                        int count = 0;
+                        for (Card card : controlled(player(a), a.get("card").getAsString())) {
+                            if (card.isFaceDown()) {
+                                count++;
+                            }
+                        }
+                        actual = count;
                     }
                     case "Attacking" -> {
                         expected = a.get("count").getAsInt();
