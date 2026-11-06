@@ -331,6 +331,15 @@ pub fn main(args: &[String]) -> Result<(), String> {
     {
         return Ok(());
     }
+    // A runner already playing reads the settings before each game, so there is none to
+    // start.
+    if !add.is_empty() && files::lock(&dir).is_err() {
+        println!(
+            "{} plays what was added from its next game",
+            run::run_name(&dir)
+        );
+        return Ok(());
+    }
     supervise(&dir, games)
 }
 

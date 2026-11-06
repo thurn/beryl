@@ -252,6 +252,30 @@ fn one_runner_per_run() {
     assert!(text(&o).contains(&format!("process {pid}")), "{}", text(&o));
 }
 
+/// `--add` on a run being played adds the family for its runner to take up, and starts no
+/// second runner.
+#[test]
+fn a_family_added_to_a_run_being_played() {
+    let dir = scratch("add");
+    tiny(&dir);
+    let first = runner(&dir, 1000).spawn().unwrap();
+    let pid = first.id().to_string();
+    while fs::read_to_string(dir.join("lock"))
+        .unwrap_or_default()
+        .trim()
+        != pid
+    {
+        thread::sleep(Duration::from_millis(1));
+    }
+    let family = "ismcts1/hidden/cut1/tuned";
+    let o = longthink(&dir, &["--run", dir.to_str().unwrap(), "--add", family]);
+    kill(first);
+    assert!(o.status.success(), "{}", text(&o));
+    assert!(text(&o).contains("from its next game"), "{}", text(&o));
+    let config = fs::read_to_string(dir.join("config.json")).unwrap();
+    assert!(config.contains(family), "{config}");
+}
+
 /// A runner that panics is restarted; a game that panics twice at one decision is recorded
 /// as crashed, where, and skipped. `--status` then prints the board and plays nothing.
 #[test]

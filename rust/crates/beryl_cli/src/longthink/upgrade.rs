@@ -1,23 +1,24 @@
 //! `--upgrade`: adopts this binary into a run only if it plays as the run's own does, so
 //! speed work reaches a running arena without mixing results. Every logged game must replay
 //! through its log to the same transcript, every agent asked again for real answering as
-//! logged, and a sample of the cheapest entrant's searches, searched again at their budgets
-//! and seeds, must choose as they did.
+//! logged, and a sample of every searching entrant's searches, searched again at their
+//! budgets and seeds, must choose as they did.
 
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
 use beryl_engine::GameTable;
+use beryl_search::AgentDecision;
 
 use super::files;
 use super::game::{self, Build, Game, GameDecision, Line, Played, Resume, Stop};
-use super::schedule::{Config, budget_of};
+use super::schedule::Config;
 use super::{GameRecord, Spec, Verdict};
 use crate::game::mirror;
 
-/// Searches re-searched at most.
-const SAMPLE: usize = 200;
+/// Searches re-searched at most for each searching entrant: as many fresh as reusing trees.
+const PER_ENTRANT: usize = 8;
 
 /// Checks this binary against run `dir` and, if it plays identically, makes it the run's.
 pub fn adopt(dir: &Path, code: Option<&BTreeMap<String, String>>) -> Result<(), String> {
@@ -66,45 +67,54 @@ pub fn verify(t: &GameTable, dir: &Path, c: &Config, build: &Build<'_>) -> Resul
             Some(GameDecision(lines.len())),
         )?;
     }
-    // Searches of the cheapest searching entrant, evenly spaced, each searched again: one
-    // that reused the trees of the decisions before it from the fresh search that planted
-    // them, so a change to how trees are kept is caught too.
-    let cheapest = scored()
-        .flat_map(|g| [&g.a, &g.b])
-        .filter(|e| budget_of(e).is_some())
-        .min_by_key(|e| (budget_of(e), e.as_str()))
-        .cloned();
-    let mut searches = Vec::new();
+    // Searches of every searching entrant, evenly spaced, each searched again, so that a
+    // change to any family's play is caught, not just the cheapest's: half of them fresh
+    // searches, half ones that reused the trees of the decisions before them, searched
+    // again from the decision that planted them, so a change to how trees are kept is
+    // caught too.
+    let mut searches: BTreeMap<String, [Vec<Sampled<'_>>; 2]> = BTreeMap::new();
     for g in scored() {
-        let Some(e) = &cheapest else { break };
         let spec = check.spec(g)?;
         for (i, line) in check.log(&g.game)?.iter().enumerate() {
             let seat = usize::from(line.seat);
-            if let Some(s) = &line.search
-                && spec.entrants[seat].label() == *e
-            {
-                searches.push((g, i, seat, s.chain));
+            let e = &spec.entrants[seat];
+            if let (Some(s), Some(_)) = (&line.search, e.budget()) {
+                let kind = usize::from(s.chain != s.decision);
+                searches.entry(e.label()).or_default()[kind].push((g, i, seat, s.chain));
             }
         }
     }
-    let step = searches.len().div_ceil(SAMPLE).max(1);
     let mut repeated = 0;
-    for &(g, i, seat, chain) in searches.iter().step_by(step) {
-        let mut from = [Resume::Log; 2];
-        from[seat] = Resume::At(chain);
-        let until = Some(GameDecision(i + 1));
-        check.replay(&check.spec(g)?, &check.log(&g.game)?, from, until)?;
-        repeated += 1;
+    for kinds in searches.values() {
+        for found in kinds {
+            for &(g, i, seat, chain) in evenly(found, PER_ENTRANT / 2) {
+                let mut from = [Resume::Log; 2];
+                from[seat] = Resume::At(chain);
+                let until = Some(GameDecision(i + 1));
+                check.replay(&check.spec(g)?, &check.log(&g.game)?, from, until)?;
+                repeated += 1;
+            }
+        }
     }
     Ok(format!(
-        "{} games replayed{}, {repeated} searches repeated",
+        "{} games replayed{}, {repeated} searches of {} entrants repeated",
         scored().count(),
         match unfinished.len() {
             0 => String::new(),
             1 => " and the one in progress".to_owned(),
             n => format!(" and the {n} in progress"),
-        }
+        },
+        searches.len()
     ))
+}
+
+/// A search to repeat: its game, its index there, its seat and the decision that planted
+/// its trees.
+type Sampled<'a> = (&'a GameRecord, usize, usize, AgentDecision);
+
+/// At most `n` of `xs`, evenly spaced from the first.
+fn evenly<T>(xs: &[T], n: usize) -> impl Iterator<Item = &T> {
+    xs.iter().step_by(xs.len().div_ceil(n).max(1))
 }
 
 /// A run and the code checked against it.
@@ -226,12 +236,12 @@ mod tests {
         }
     }
 
-    /// Four games of a tiny arena, played in-process.
-    fn tiny_run(name: &str) -> (std::path::PathBuf, Config) {
+    /// `games` games of a tiny arena of `families`, played in-process.
+    fn tiny_run(name: &str, families: &[&str], games: u32) -> (std::path::PathBuf, Config) {
         let dir = std::env::temp_dir().join(format!("beryl-upgrade-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let c = Config {
-            families: vec!["ismcts1/hidden/rollout/tuned".to_owned()],
+            families: families.iter().map(|&f| f.to_owned()).collect(),
             fixed: vec!["expert".to_owned()],
             anchor: "expert".to_owned(),
             budgets: vec![1_500],
@@ -239,19 +249,34 @@ mod tests {
             seed: 0,
         };
         super::super::start(&dir, &c, None).unwrap();
-        super::super::run::run(&dir, Some(4)).unwrap();
+        super::super::run::run(&dir, Some(games)).unwrap();
         (dir, c)
     }
 
     /// The code a run was played with passes; an opponent that answers one decision
     /// otherwise is caught replaying, and a search that would choose otherwise is caught
-    /// searching again, each named by its decision.
+    /// searching again, whichever entrant it is, each named by its decision. (One run: a
+    /// process takes Ctrl-C for one runner.)
     #[test]
     fn only_code_that_plays_identically_is_adopted() {
-        let (dir, c) = tiny_run("verify");
+        let families = ["ismcts1/hidden/rollout/tuned", "pimc1/hidden/rollout/tuned"];
+        let (dir, c) = tiny_run("verify", &families, 4);
         let t = mirror();
         let ok = verify(&t, &dir, &c, &game::build).unwrap();
-        assert!(ok.starts_with("4 games replayed"), "{ok}");
+        assert!(
+            ok.starts_with("4 games replayed") && ok.contains("of 2 entrants"),
+            "{ok}"
+        );
+        // A change to the entrant that sorts after the cheapest alone.
+        let pimc = |t: &GameTable, e: &Entrant, seed: u64, from| {
+            let seed = match e {
+                Entrant::Search(s) if s.family.to_string() == families[1] => !seed,
+                _ => seed,
+            };
+            game::build(t, e, seed, from)
+        };
+        let e = verify(&t, &dir, &c, &pimc).unwrap_err();
+        assert!(e.contains("pimc1") && e.contains("logged candidate"), "{e}");
         let opponent = |t: &GameTable, e: &Entrant, seed, from| {
             let inner = game::build(t, e, seed, from)?;
             Ok(match e {
