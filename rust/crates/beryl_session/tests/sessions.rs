@@ -11,7 +11,9 @@ use beryl_engine::{
     Decision, GameTable, Observation, Replay, Scratch, Seat, Slot, State, Step, next,
 };
 use beryl_session::preview::add_previews;
-use beryl_session::protocol::{DecisionView, Moment, player_view};
+use beryl_session::protocol::{
+    DecisionView, GameEvent, LossReason, Moment, OutcomeView, Side, player_view,
+};
 use beryl_session::{
     CandidateIndex, DecisionId, Game, PlayerView, ReplayFile, SessionError, SessionId, Sessions,
     StartGame, Status, StopsSetting,
@@ -149,6 +151,153 @@ fn a_scripted_human_plays_a_whole_game_and_its_replay_reproduces_it() {
     let (_, replayed) = Game::from_replay(&CARDS, &file, session).unwrap();
     assert_eq!(replayed, last);
     std::fs::remove_dir_all(&dir).unwrap();
+    // The end says why the loser lost.
+    if let Status::Over {
+        outcome: OutcomeView::Win { winner, reason },
+    } = last.status
+    {
+        let loser = match winner {
+            Side::You => &last.players.opponent,
+            Side::Opponent => &last.players.you,
+        };
+        let by_life = loser.life <= 0;
+        assert_eq!(reason == LossReason::Life, by_life, "{reason:?}");
+        assert!(by_life || reason == LossReason::Library || reason == LossReason::Effect);
+    }
+}
+
+/// The views a session emits until the next that asks the human something or ends the game.
+fn to_decision(views: &std::sync::mpsc::Receiver<beryl_session::GameUpdate>) -> PlayerView {
+    loop {
+        let view = views.recv().unwrap().view;
+        if matches!(view.status, Status::Deciding { .. } | Status::Over { .. }) {
+            return view;
+        }
+    }
+}
+
+#[test]
+fn the_latest_view_of_the_game_in_progress_is_kept_for_a_reloaded_ui() {
+    let (sent, views) = channel();
+    let sessions = Sessions::new(None, move |u| sent.send(u).unwrap());
+    assert_eq!(sessions.current(), None, "no game");
+    let first = sessions
+        .start_game(&start(2, StopsSetting::Smart), None)
+        .unwrap();
+    let view = to_decision(&views);
+    // The session waits on the human, so nothing follows the decision.
+    let current = sessions.current().unwrap();
+    assert_eq!((current.session, &current.view), (first, &view));
+    let (id, index) = script(&view);
+    sessions.choose(id, index).unwrap();
+    let view = to_decision(&views);
+    assert_eq!(sessions.current().unwrap().view, view);
+
+    // A new game's views replace the old game's.
+    let second = sessions
+        .start_game(&start(3, StopsSetting::Smart), None)
+        .unwrap();
+    assert!(sessions.current().is_none_or(|u| u.session == second));
+    let view = loop {
+        let update = views.recv().unwrap();
+        if update.session == second && matches!(update.view.status, Status::Deciding { .. }) {
+            break update.view;
+        }
+    };
+    assert_eq!(sessions.current().unwrap().view, view);
+}
+
+#[test]
+fn a_concession_ends_the_game_in_defeat_and_its_replay_reproduces_it() {
+    let dir = std::env::temp_dir().join(format!("beryl-concede-{}", std::process::id()));
+    let (sent, views) = channel();
+    let sessions = Sessions::new(Some(dir.clone()), move |u| sent.send(u).unwrap());
+    let session = sessions
+        .start_game(&start(4, StopsSetting::Smart), None)
+        .unwrap();
+    let mut view = to_decision(&views);
+    for _ in 0..10 {
+        let (id, index) = script(&view);
+        sessions.choose(id, index).unwrap();
+        view = to_decision(&views);
+    }
+    assert!(matches!(view.status, Status::Deciding { .. }));
+    sessions.concede(session).unwrap();
+    let over = to_decision(&views);
+    assert_eq!(
+        over.status,
+        Status::Over {
+            outcome: OutcomeView::Win {
+                winner: Side::Opponent,
+                reason: LossReason::Concede,
+            }
+        }
+    );
+    assert!(
+        over.events
+            .iter()
+            .any(|e| matches!(e, GameEvent::Lose { player: Side::You })),
+        "the log hears of the loss"
+    );
+    assert_eq!(sessions.current().unwrap().view, over);
+    // The decision open when they conceded is closed.
+    let (id, index) = script(&view);
+    assert_eq!(sessions.choose(id, index), Err(SessionError::NotDeciding));
+
+    let replays: Vec<_> = std::fs::read_dir(&dir).unwrap().collect();
+    let file = ReplayFile::load(&replays[0].as_ref().unwrap().path()).unwrap();
+    let (_, replayed) = Game::from_replay(&CARDS, &file, session).unwrap();
+    assert_eq!(replayed.status, over.status);
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn a_concession_is_taken_where_the_game_waits_on_a_decision() {
+    let mut game = Game::new(&CARDS, &start(6, StopsSetting::Exact), SESSION).unwrap();
+    let mut seen = (false, false);
+    loop {
+        let view = game
+            .next_view()
+            .expect("the agent decides before the game ends");
+        match view.status {
+            // A step began and the game plays on: there is no decision to concede at.
+            Status::Playing => {
+                assert_eq!(game.concede(), None);
+                seen.0 = true;
+            }
+            // The agent decides next; it never does.
+            Status::Thinking if seen.0 => {
+                let before = game.replay().log.len();
+                let over = game.concede().unwrap();
+                assert!(matches!(
+                    over.status,
+                    Status::Over {
+                        outcome: OutcomeView::Win {
+                            winner: Side::Opponent,
+                            reason: LossReason::Concede
+                        }
+                    }
+                ));
+                assert_eq!(
+                    game.replay().log.len(),
+                    before + 1,
+                    "the agent never decided"
+                );
+                assert_eq!(game.next_view(), None, "the game is over");
+                assert_eq!(game.concede(), None, "a game ends once");
+                seen.1 = true;
+                break;
+            }
+            Status::Deciding { .. } => {
+                let (id, index) = script(&view);
+                game.choose(game.answer(id, index).unwrap());
+            }
+            _ => {}
+        }
+    }
+    assert!(seen.1);
+    let (_, replayed) = Game::from_replay(&CARDS, game.replay(), SESSION).unwrap();
+    assert!(matches!(replayed.status, Status::Over { .. }));
 }
 
 #[test]

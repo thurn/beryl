@@ -38,6 +38,8 @@ pub enum Entry {
     /// The answer the session gave to the human's decision for them (a priority passed, a
     /// trigger ordered under the smart stops), which it finds again as a replay plays on.
     Auto(u8),
+    /// The human conceded, at the open decision, theirs or the agent's.
+    Concede,
 }
 
 impl ReplayFile {

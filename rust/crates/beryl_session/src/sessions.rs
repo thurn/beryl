@@ -51,6 +51,8 @@ pub struct Sessions {
     replays: Option<PathBuf>,
     emit: Arc<Emit>,
     current: Mutex<Current>,
+    /// The latest view emitted, of whichever game emitted last.
+    latest: Arc<Mutex<Option<GameUpdate>>>,
 }
 
 #[derive(Default)]
@@ -71,6 +73,7 @@ impl Sessions {
             replays,
             emit: Arc::new(emit),
             current: Mutex::default(),
+            latest: Arc::default(),
         }
     }
 
@@ -116,10 +119,38 @@ impl Sessions {
             game.set_stand_in(name)?;
         }
         let emit = Arc::clone(&self.emit);
-        let game =
-            GameSession::start(game, replay, move |view| emit(GameUpdate { session, view }))?;
+        let latest = Arc::clone(&self.latest);
+        let game = GameSession::start(game, replay, move |view| {
+            let update = GameUpdate { session, view };
+            {
+                let mut latest = latest.lock().unwrap_or_else(PoisonError::into_inner);
+                // A replaced game's thread may emit once more as the next one starts.
+                if latest.as_ref().is_none_or(|l| l.session <= session) {
+                    *latest = Some(update.clone());
+                }
+            }
+            emit(update);
+        })?;
         current.game = Some((session, game));
         Ok(session)
+    }
+
+    /// The latest view of the game in progress, or of the one that ended last: what a UI that
+    /// lost its views (a page reload) shows to take up the game where it is. None before the
+    /// game's first view, or with no game.
+    pub fn current(&self) -> Option<GameUpdate> {
+        let current = self.lock();
+        let (session, _) = current.game.as_ref()?;
+        self.latest
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+            .filter(|u| u.session == *session)
+    }
+
+    /// The human concedes game `session` ([`crate::Game::concede`]).
+    pub fn concede(&self, session: SessionId) -> Result<(), SessionError> {
+        self.with(session, GameSession::concede)
     }
 
     /// Answers the human's open decision `decision` with its candidate `index`.

@@ -25,6 +25,11 @@ pub const SET_STOPS: &str = "set_stops";
 /// Takes back the spell the human is casting, or the ability they are activating, before its
 /// costs are paid ([`crate::protocol::DecisionView::cancellable`]).
 pub const CANCEL: &str = "cancel";
+/// The human concedes the game in progress.
+pub const CONCEDE: &str = "concede";
+/// The latest view of the game in progress ([`crate::Sessions::current`]), which a reloaded UI
+/// takes up the game from.
+pub const CURRENT_GAME: &str = "current_game";
 
 /// The event every view arrives on, carrying a [`GameUpdate`].
 pub const GAME_UPDATE: &str = "game-update";
@@ -52,6 +57,13 @@ pub struct SetStopsRequest {
 pub struct CancelRequest {
     /// The open decision the UI received, part of the cast.
     pub decision: DecisionId,
+}
+
+/// The [`CONCEDE`] command's request.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ConcedeRequest {
+    pub session: SessionId,
 }
 
 /// What the app is.
@@ -144,7 +156,19 @@ pub(crate) fn typescript(cfg: &Config) -> String {
             CANCEL,
             request(name::<CancelRequest>(cfg)),
             name::<()>(cfg),
+            error.clone(),
+        ),
+        (
+            CONCEDE,
+            request(name::<ConcedeRequest>(cfg)),
+            name::<()>(cfg),
             error,
+        ),
+        (
+            CURRENT_GAME,
+            "Record<string, never>".to_owned(),
+            name::<Option<GameUpdate>>(cfg),
+            never.clone(),
         ),
     ];
     let mut out = String::from(

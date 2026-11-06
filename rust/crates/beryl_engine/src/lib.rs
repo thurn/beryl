@@ -42,7 +42,8 @@ pub use decision::{
     Step,
 };
 pub use engine::{
-    Counts, Scratch, apply, apply_decided, next, next_in_step, observe, paused_events, view,
+    Counts, Scratch, apply, apply_decided, concede, next, next_in_step, observe, paused_events,
+    view,
 };
 pub use ids::{CardIx, Seat, Slot};
 pub use invariants::{At, Violation};

@@ -16,7 +16,9 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use beryl_session::ipc::{self, AppInfo, CancelRequest, ChooseRequest, SetStopsRequest};
+use beryl_session::ipc::{
+    self, AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, SetStopsRequest,
+};
 use beryl_session::{GameUpdate, Sessions, StartRequest, agents};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -166,6 +168,11 @@ fn invoke(sessions: &Sessions, command: &str, args: Value) -> Value {
             request::<CancelRequest>(args)
                 .and_then(|r| sessions.cancel(r.decision).map_err(|e| json!(e))),
         ),
+        ipc::CONCEDE => answer(
+            request::<ConcedeRequest>(args)
+                .and_then(|r| sessions.concede(r.session).map_err(|e| json!(e))),
+        ),
+        ipc::CURRENT_GAME => answer::<_, ()>(Ok(sessions.current())),
         _ => json!({ "err": { "kind": "unknownCommand", "command": command } }),
     }
 }

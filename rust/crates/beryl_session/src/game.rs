@@ -117,7 +117,8 @@ enum At {
     Agent(Decision),
     /// The human's open decision.
     Human(DecisionId, Open),
-    Over(Outcome),
+    /// The game is over; `conceded`, because the human conceded ([`Game::concede`]).
+    Over { outcome: Outcome, conceded: bool },
     /// Stopped by the stop flag before the agent's decision.
     Stopped,
 }
@@ -320,7 +321,10 @@ impl Game {
                         .map_err(|_| bad("a choice out of range"))?;
                     game.choose(answer);
                 }
-                (At::Over(_), _) => return Err(bad("the log goes on after the game ended")),
+                (At::Agent(_) | At::Human(..), Entry::Concede) => {
+                    game.concede();
+                }
+                (At::Over { .. }, _) => return Err(bad("the log goes on after the game ended")),
                 (_, entry) => {
                     return Err(bad(&format!("{entry:?} where the game does not ask it")));
                 }
@@ -340,7 +344,7 @@ impl Game {
     /// game shows that it stopped.
     pub fn next_view(&mut self) -> Option<PlayerView> {
         match self.at {
-            At::Human(..) | At::Over(_) | At::Stopped => return None,
+            At::Human(..) | At::Over { .. } | At::Stopped => return None,
             At::Agent(_) if self.stop.load(Ordering::Relaxed) => self.at = At::Stopped,
             At::Agent(d) => {
                 let obs = observe(&self.state, &self.table, &mut self.scratch, d.player);
@@ -485,6 +489,29 @@ impl Game {
         Ok(self.draw())
     }
 
+    /// The human concedes, and the view of the game's end is returned. A concession is taken
+    /// where the game waits on a decision, the human's or the agent's (before the agent
+    /// thinks), which a replay finds again; elsewhere, and once the game is over, there is
+    /// none. A cast in progress is taken back first ([`Game::cancel`]), so the end shows the
+    /// table as it stood.
+    pub fn concede(&mut self) -> Option<PlayerView> {
+        if !matches!(self.at, At::Agent(_) | At::Human(..)) {
+            return None;
+        }
+        if self.cancellable() {
+            self.cancel().expect("a cancellable cast can be taken back");
+        }
+        self.before_cast = None;
+        beryl_engine::concede(&mut self.state, &mut self.scratch, self.human);
+        self.replay.log.push(Entry::Concede);
+        let outcome = self.state.outcome().expect("a concession ends the game");
+        self.at = At::Over {
+            outcome,
+            conceded: true,
+        };
+        Some(self.view())
+    }
+
     /// A flag that, once set, stops the game before the agent's next decision: the game in
     /// progress returns a stopped view, and no decision opens again. A session sets it when it
     /// is dropped, so an abandoned game stops thinking.
@@ -539,7 +566,10 @@ impl Game {
                         At::Playing
                     }
                 }
-                Some(Step::Over(outcome)) => At::Over(outcome),
+                Some(Step::Over(outcome)) => At::Over {
+                    outcome,
+                    conceded: false,
+                },
                 Some(Step::Decide(d)) if d.player == self.human => {
                     if let Some(c) = self.auto_answer(&d) {
                         self.apply(Entry::Auto(c.0));
@@ -700,7 +730,10 @@ impl Game {
             At::Agent(_) => Moment::Thinking,
             At::Human(id, Open::Decision(d)) => Moment::Deciding(*id, d, resolving),
             At::Human(id, Open::Halt) => Moment::Halted(*id),
-            At::Over(outcome) => Moment::Over(*outcome),
+            At::Over { outcome, conceded } => Moment::Over {
+                outcome: *outcome,
+                conceded: *conceded,
+            },
             At::Stopped => Moment::Stopped,
         };
         let obs = Observation::new(

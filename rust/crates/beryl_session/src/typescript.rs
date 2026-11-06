@@ -4,12 +4,15 @@
 
 use ts_rs::{Config, TS};
 
-use crate::ipc::{AppInfo, CancelRequest, ChooseRequest, Fixture, FixtureMessage, SetStopsRequest};
+use crate::ipc::{
+    AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, Fixture, FixtureMessage, SetStopsRequest,
+};
 use crate::protocol::{
     AskView, Candidate, CandidateIndex, CandidateView, CardType, Combat, Counter, CounterView,
-    DecisionId, DecisionView, Declaration, Facing, GameEvent, Kind, Mana, ManaPool, ObjectView,
-    OutcomeView, PassTo, Payment, PlayerState, PlayerView, Players, PowerToughness, SessionId,
-    Side, StackItem, Stall, Status, Step, StopsSetting, TargetRef, TurnView, Why, ZoneName,
+    DecisionId, DecisionView, Declaration, Facing, GameEvent, Kind, LossReason, Mana, ManaPool,
+    ObjectView, OutcomeView, PassTo, Payment, PlayerState, PlayerView, Players, PowerToughness,
+    SessionId, Side, StackItem, Stall, Status, Step, StopsSetting, TargetRef, TurnView, Why,
+    ZoneName,
 };
 use crate::{AgentView, GameUpdate, SessionError, StartRequest};
 
@@ -27,6 +30,7 @@ pub fn typescript() -> String {
         ChooseRequest::decl(&cfg),
         SetStopsRequest::decl(&cfg),
         CancelRequest::decl(&cfg),
+        ConcedeRequest::decl(&cfg),
         SessionError::decl(&cfg),
         GameUpdate::decl(&cfg),
         AgentView::decl(&cfg),
@@ -56,6 +60,7 @@ pub fn typescript() -> String {
         Candidate::decl(&cfg),
         OutcomeView::decl(&cfg),
         Stall::decl(&cfg),
+        LossReason::decl(&cfg),
         StopsSetting::decl(&cfg),
         GameEvent::decl(&cfg),
         Kind::decl(&cfg),

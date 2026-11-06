@@ -474,12 +474,34 @@ pub enum Candidate {
 pub enum OutcomeView {
     Win {
         winner: Side,
+        /// Why the other player lost.
+        reason: LossReason,
     },
     Draw,
     /// The engine gave up when a budget or capacity ran out; not a rules outcome.
     Stalled {
         reason: Stall,
     },
+}
+
+/// Why a player lost the game.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LossReason {
+    /// [CR 704.5a](https://yawgatog.com/resources/magic-rules/#R7045a): "If a player has 0 or
+    /// less life, that player loses the game."
+    Life,
+    /// [CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b): "If a player attempted
+    /// to draw a card from a library with no cards in it since the last time state-based
+    /// actions were checked, that player loses the game."
+    Library,
+    /// An effect had the other player win
+    /// ([CR 104.2b](https://yawgatog.com/resources/magic-rules/#R1042b)): "An effect may state
+    /// that a player wins the game."
+    Effect,
+    /// [CR 104.3a](https://yawgatog.com/resources/magic-rules/#R1043a): "A player can concede
+    /// the game at any time."
+    Concede,
 }
 
 /// Where the viewer gets priority (architecture §15, decision D13).
@@ -690,7 +712,11 @@ pub enum Moment<'a> {
     Thinking,
     Playing,
     Stopped,
-    Over(Outcome),
+    /// The game is over; `conceded`, because the loser conceded.
+    Over {
+        outcome: Outcome,
+        conceded: bool,
+    },
 }
 
 /// Builds the viewer's view of `obs`'s position (the position the open decision is made in,
@@ -776,8 +802,8 @@ pub fn player_view(
         Moment::Thinking => Status::Thinking,
         Moment::Playing => Status::Playing,
         Moment::Stopped => Status::Stopped,
-        Moment::Over(outcome) => Status::Over {
-            outcome: outcome_view(obs, outcome),
+        Moment::Over { outcome, conceded } => Status::Over {
+            outcome: outcome_view(obs, outcome, conceded),
         },
     };
     PlayerView {
@@ -1443,10 +1469,23 @@ fn trigger(t: &GameTable, obs: Observation<'_>, index: u8) -> (String, Candidate
 /// Mana symbols by [`ManaColor`] index.
 const MANA_SYMBOLS: [&str; 6] = ["{W}", "{U}", "{B}", "{R}", "{G}", "{C}"];
 
-fn outcome_view(obs: Observation<'_>, o: Outcome) -> OutcomeView {
+fn outcome_view(obs: Observation<'_>, o: Outcome, conceded: bool) -> OutcomeView {
     match o {
         Outcome::Win(player) => OutcomeView::Win {
             winner: side(obs, player),
+            reason: {
+                // Both state-based losses may hold at one check: life is named.
+                let loser = obs.player(player.opponent());
+                if conceded {
+                    LossReason::Concede
+                } else if loser.life <= 0 {
+                    LossReason::Life
+                } else if loser.drew_from_empty {
+                    LossReason::Library
+                } else {
+                    LossReason::Effect
+                }
+            },
         },
         Outcome::Draw => OutcomeView::Draw,
         Outcome::Stalled(reason) => OutcomeView::Stalled {

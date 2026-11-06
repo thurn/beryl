@@ -31,6 +31,8 @@ export type CancelRequest = {
  */
 decision: DecisionId, };
 
+export type ConcedeRequest = { session: SessionId, };
+
 export type SessionError = { "kind": "unknownAgent", name: string, } | { "kind": "unknownCard", name: string, } | { "kind": "deck", reason: string, } | { "kind": "staleSession", session: SessionId, } | { "kind": "notDeciding" } | { "kind": "staleDecision", decision: DecisionId, open: DecisionId, } | { "kind": "noSuchCandidate", index: CandidateIndex, candidates: number, } | { "kind": "notCancellable" } | { "kind": "ended" } | { "kind": "badReplay", reason: string, } | { "kind": "io", reason: string, };
 
 export type GameUpdate = { 
@@ -270,9 +272,15 @@ taps: Array<number>, };
 
 export type Candidate = { "kind": "object", slot: number, } | { "kind": "pass" } | { "kind": "playLand", slot: number, } | { "kind": "play" } | { "kind": "draw" } | { "kind": "keep" } | { "kind": "mulligan" } | { "kind": "trigger", index: number, source: number | null, } | { "kind": "yes" } | { "kind": "no" } | { "kind": "done" } | { "kind": "attack", slot: number, } | { "kind": "defender", planeswalker: number | null, } | { "kind": "block", slot: number, } | { "kind": "lethal", slot: number, } | { "kind": "cast", slot: number, face: number, costs: Array<number>, } | { "kind": "activate", slot: number, ability: number, granted: boolean, } | { "kind": "mana", slot: number, color: Mana, } | { "kind": "pool", color: Mana, } | { "kind": "number", n: number, } | { "kind": "plan", index: number, } | { "kind": "player", player: Side, } | { "kind": "turnFaceUp", slot: number, };
 
-export type OutcomeView = { "kind": "win", winner: Side, } | { "kind": "draw" } | { "kind": "stalled", reason: Stall, };
+export type OutcomeView = { "kind": "win", winner: Side, 
+/**
+ * Why the other player lost.
+ */
+reason: LossReason, } | { "kind": "draw" } | { "kind": "stalled", reason: Stall, };
 
 export type Stall = "decisionsPerTurn" | "turns" | "stateBasedIterations" | "capacity";
+
+export type LossReason = "life" | "library" | "effect" | "concede";
 
 export type StopsSetting = "smart" | "exact";
 
@@ -305,6 +313,8 @@ export type Commands = {
   choose: { args: { request: ChooseRequest }; result: null; error: SessionError };
   set_stops: { args: { request: SetStopsRequest }; result: null; error: SessionError };
   cancel: { args: { request: CancelRequest }; result: null; error: SessionError };
+  concede: { args: { request: ConcedeRequest }; result: null; error: SessionError };
+  current_game: { args: Record<string, never>; result: GameUpdate | null; error: never };
 };
 
 /** Each event's payload. */

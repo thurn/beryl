@@ -69,6 +69,18 @@ pub fn view<'a>(s: &'a State, t: &GameTable, x: &'a mut Scratch) -> &'a State {
     s
 }
 
+/// `player` concedes, ending the game, unless it is over already
+/// ([CR 104.3a](https://yawgatog.com/resources/magic-rules/#R1043a)): "A player can concede the
+/// game at any time. A player who concedes leaves the game immediately. That player loses the
+/// game." Their opponent, the one player left, wins
+/// ([CR 104.2a](https://yawgatog.com/resources/magic-rules/#R1042a)): "A player still in the
+/// game wins the game if that player's opponents have all left the game."
+pub fn concede(s: &mut State, x: &mut Scratch, player: Seat) {
+    if s.outcome.is_none() {
+        sba::end_game(s, &mut x.events, player);
+    }
+}
+
 /// The events a paused resolution's body executes on its way to its question (§7.3), which
 /// [`view`]'s position shows done: the card a loot draws before it asks for the discard, the
 /// card an explore reveals before it asks where it goes. None while no resolution is paused.

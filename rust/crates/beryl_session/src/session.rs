@@ -19,12 +19,17 @@ pub(crate) struct GameSession {
     open: Arc<Mutex<Option<OpenDecision>>>,
     /// The game's stop flag ([`Game::stop_flag`]).
     stop: Arc<AtomicBool>,
+    /// Set once the human concedes, so the thread concedes at the next decision even while
+    /// the game plays on without them.
+    conceded: Arc<AtomicBool>,
 }
 
 enum Command {
     Choose(Answer),
     SetStops(StopsSetting),
     Cancel,
+    /// Wakes the thread waiting on the human to take their concession.
+    Concede,
 }
 
 impl GameSession {
@@ -39,10 +44,14 @@ impl GameSession {
         let stop = game.stop_flag();
         let (commands, received) = channel();
         let open = Arc::new(Mutex::new(None));
-        let shared = Arc::clone(&open);
+        let conceded = Arc::new(AtomicBool::new(false));
+        let thread = Shared {
+            open: Arc::clone(&open),
+            conceded: Arc::clone(&conceded),
+        };
         std::thread::Builder::new()
             .name("game session".to_owned())
-            .spawn(move || run(game, &received, &shared, replay.as_deref(), emit))
+            .spawn(move || run(game, &received, &thread, replay.as_deref(), emit))
             .map_err(|e| SessionError::Io {
                 reason: e.to_string(),
             })?;
@@ -50,6 +59,7 @@ impl GameSession {
             commands,
             open,
             stop,
+            conceded,
         })
     }
 
@@ -82,6 +92,22 @@ impl GameSession {
             .send(Command::SetStops(stops))
             .map_err(|_| SessionError::Ended)
     }
+
+    /// The human concedes ([`Game::concede`]). It returns at once; the view of the game's end
+    /// arrives through `emit` at the next decision, theirs or before the agent's next one.
+    pub(crate) fn concede(&self) -> Result<(), SessionError> {
+        self.conceded.store(true, Ordering::Relaxed);
+        *self.open.lock().unwrap_or_else(PoisonError::into_inner) = None;
+        self.commands
+            .send(Command::Concede)
+            .map_err(|_| SessionError::Ended)
+    }
+}
+
+/// What the session shares with its thread.
+struct Shared {
+    open: Arc<Mutex<Option<OpenDecision>>>,
+    conceded: Arc<AtomicBool>,
 }
 
 impl Drop for GameSession {
@@ -96,7 +122,7 @@ impl Drop for GameSession {
 fn run(
     mut game: Game,
     commands: &Receiver<Command>,
-    open: &Mutex<Option<OpenDecision>>,
+    shared: &Shared,
     replay: Option<&Path>,
     mut emit: impl FnMut(PlayerView),
 ) {
@@ -111,8 +137,9 @@ fn run(
         {
             eprintln!("beryl_session: {e}");
         }
-        if reopen && deciding {
-            *open.lock().unwrap_or_else(PoisonError::into_inner) = game.open();
+        // A concession closes the human's decisions for good.
+        if reopen && deciding && !shared.conceded.load(Ordering::Relaxed) {
+            *shared.open.lock().unwrap_or_else(PoisonError::into_inner) = game.open();
         }
         if stop.load(Ordering::Relaxed) {
             return true;
@@ -123,6 +150,14 @@ fn run(
     loop {
         while let Some(view) = game.next_view() {
             if publish(&game, view, true) {
+                return;
+            }
+            // The game plays on without the human: it takes their concession before the
+            // agent's next decision.
+            if shared.conceded.load(Ordering::Relaxed)
+                && let Some(view) = game.concede()
+            {
+                publish(&game, view, false);
                 return;
             }
         }
@@ -153,6 +188,12 @@ fn run(
                     }
                     Err(e) => eprintln!("beryl_session: {e}"),
                 },
+                Command::Concede => {
+                    if let Some(view) = game.concede() {
+                        publish(&game, view, false);
+                    }
+                    return;
+                }
                 Command::SetStops(stops) => match game.set_stops(stops) {
                     Ok(view) => {
                         if publish(&game, view, false) {
