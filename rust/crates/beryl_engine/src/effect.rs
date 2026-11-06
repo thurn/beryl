@@ -1159,29 +1159,35 @@ impl<'a> EffectCtx<'a> {
         let you = self.entry.controller;
         let attacking =
             crate::combat::in_combat(self.state.turn.step) && self.state.turn.active == you;
-        let walker = if attacking {
-            let opts = crate::combat::attack_targets(self.state, you.opponent());
-            match self.ask_options(you, DecisionKind::AttackTarget, opts.as_slice(), Ask::Plain)? {
-                Opt::Defender(slot) => Some(slot),
-                _ => unreachable!("a defender"),
-            }
-        } else {
-            None
-        };
         let tokens = self.create_tokens(
             def,
             count,
             TokenEntry {
                 tapped: true,
-                attacking: walker.is_some(),
+                attacking,
                 ..TokenEntry::default()
             },
         );
-        if let Some(walker) = walker.flatten() {
-            for slot in tokens.iter() {
-                let o = self.state.object_mut(slot);
-                o.combat = Some(walker);
-                o.flags.set(ObjectFlags::ATTACKS_PLANESWALKER, true);
+        if attacking {
+            // The choice is the controller's "as it enters", yet asked once the tokens are on
+            // the battlefield, attacking the player, so they see what they choose for. Nothing
+            // sees them in between: it is one step of the resolution, in which no player gets
+            // priority and no ability triggers or state-based action is checked
+            // ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c): "The
+            // controller of the spell or ability follows its instructions in the order
+            // written").
+            let opts = crate::combat::attack_targets(self.state, you.opponent());
+            let Opt::Defender(walker) =
+                self.ask_options(you, DecisionKind::AttackTarget, opts.as_slice(), Ask::Plain)?
+            else {
+                unreachable!("a defender")
+            };
+            if let Some(walker) = walker {
+                for slot in tokens.iter() {
+                    let o = self.state.object_mut(slot);
+                    o.combat = Some(walker);
+                    o.flags.set(ObjectFlags::ATTACKS_PLANESWALKER, true);
+                }
             }
         }
         Ok(tokens)

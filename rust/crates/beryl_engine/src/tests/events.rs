@@ -1438,7 +1438,22 @@ fn a_token_created_attacking_may_attack_a_planeswalker() {
             // The declared attacker attacks the player; the Human, as it is created, the
             // planeswalker.
             DecisionKind::AttackTarget if s.stack().is_empty() => pick(Opt::Defender(None)),
-            DecisionKind::AttackTarget => pick(Opt::Defender(Some(walker))),
+            DecisionKind::AttackTarget => {
+                // Asked with the Human in view, attacking the player until it is told
+                // otherwise.
+                let mut seen = Scratch::new();
+                let paused = crate::view(&s, &t, &mut seen);
+                let shown = paused
+                    .battlefield()
+                    .iter()
+                    .copied()
+                    .find(|&slot| t.def(paused.object(slot).card).name == "Test Human")
+                    .expect("the Human on the battlefield as it is asked about");
+                let o = paused.object(shown);
+                assert!(o.flags.has(ObjectFlags::ATTACKING) && o.flags.has(ObjectFlags::TAPPED));
+                assert_eq!(o.combat, None);
+                pick(Opt::Defender(Some(walker)))
+            }
             _ => Choice(0),
         };
         apply(&mut s, &t, &mut x, &mut Replay, choice);
