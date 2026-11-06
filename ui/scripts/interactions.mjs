@@ -633,9 +633,10 @@ await check(
 );
 
 /** A recorded combat declaration: the last run of the human's decisions of `kinds` in
- * `views`, the `at` that opens a page on its first, and the candidate each was answered with,
- * as the views after them show: the creature newly attacking or blocking, the attacker the
- * blocker waiting for one blocks, or done. */
+ * `views`, the `at` that opens a page on its first, the candidate each was answered with, as
+ * the view after it shows (the creature newly attacking or blocking, the attacker the blocker
+ * waiting for one blocks, or done), and the view after the last, which shows the whole
+ * declaration before combat moves on. */
 function recordedDeclaration(views, kinds) {
     const asked = views.flatMap((v, i) =>
         v.status.kind === "deciding" ? [[v, i]] : [],
@@ -650,7 +651,7 @@ function recordedDeclaration(views, kinds) {
     const picks = [];
     for (let k = first; k <= last; k++) {
         const [view] = asked[k];
-        const next = asked[k + 1]?.[0] ?? views.at(-1);
+        const next = views[asked[k][1] + 1] ?? views.at(-1);
         const { candidates } = view.status.decision;
         const waiting = view.objects.find(
             (o) => o.combat?.kind === "blocking" && o.combat.attacker === null,
@@ -669,7 +670,12 @@ function recordedDeclaration(views, kinds) {
                 : candidates.findIndex((c) => c.option.kind === "done"),
         );
     }
-    return { at: asked[first][1] + 1, view: asked[first][0], picks };
+    return {
+        at: asked[first][1] + 1,
+        view: asked[first][0],
+        picks,
+        declared: views[asked[last][1] + 1] ?? views.at(-1),
+    };
 }
 
 const slotOf = (slot) => `[data-slot="${slot}"]`;
@@ -686,11 +692,8 @@ const named = (view, name) =>
 const attackViews = await load("combat-declare");
 const attackRecord = recordedDeclaration(attackViews, ["attacker"]);
 const attackView = attackRecord.view;
-const declaredAttackers = attackViews
-    .at(-1)
-    .objects.filter(
-        (o) => o.controller === "you" && o.combat?.kind === "attacking",
-    )
+const declaredAttackers = attackRecord.declared.objects
+    .filter((o) => o.controller === "you" && o.combat?.kind === "attacking")
     .map((o) => o.slot);
 const insects = named(attackView, "Insect Token");
 assert.equal(insects.length, 2, "two Insect tokens");
@@ -821,15 +824,13 @@ await check(
     attackRun,
 );
 
-// The block declaration (`combat-double-block`): two blockers on one attacker, a Human token,
-// and one on another, Overlord of the Mistmoors.
+// The block declaration (`combat-double-block`): two blockers on each of two attackers.
 const blockViews = await load("combat-double-block");
 const blockRecord = recordedDeclaration(blockViews, ["blocker", "blockTarget"]);
 const blockView = blockRecord.view;
 const declaredBlocks = new Map(
-    blockViews
-        .at(-1)
-        .objects.filter((o) => o.combat?.kind === "blocking")
+    blockRecord.declared.objects
+        .filter((o) => o.combat?.kind === "blocking")
         .map((o) => [o.slot, o.combat.attacker]),
 );
 const doubled = [...declaredBlocks.values()].find(
@@ -900,19 +901,36 @@ await check(
     "a blocker blocks only an attacker it may, and can be dragged onto it",
     async (page) => {
         await page.clock.runFor(2000);
-        // A creature without flying or reach may not block a flyer (CR 702.9b).
-        const trainer = named(blockView, "Thundertrap Trainer")[0];
-        const skydiver = named(blockView, "Thieving Skydiver")[0];
-        await page.click(slotOf(trainer));
+        // A blocker that may block the doubled attacker but not another, as a creature without
+        // flying or reach may not block a flyer (CR 702.9b): by the engine's preview, which
+        // names one of identical attackers, so one named like none it may block.
+        const nameOf = (slot) => nameIn(blockView, slot);
+        const attacking = blockView.objects
+            .filter((o) => o.combat?.kind === "attacking")
+            .map((o) => o.slot);
+        const [blocker, unblockable] = blockView.status.decision.candidates
+            .filter((c) => c.option.kind === "block")
+            .map((c) => {
+                const names = new Set(c.blocks.map(nameOf));
+                return [
+                    c.option.slot,
+                    c.blocks.includes(doubled)
+                        ? attacking.find((a) => !names.has(nameOf(a)))
+                        : undefined,
+                ];
+            })
+            .find(([, a]) => a !== undefined);
+        assert.ok(blocker !== undefined, "a blocker that may not block all");
+        await page.click(slotOf(blocker));
         await page.clock.runFor(500);
-        assert.ok(!(await page.$(`${slotOf(skydiver)} .card-target`)));
-        await page.click(slotOf(skydiver));
+        assert.ok(!(await page.$(`${slotOf(unblockable)} .card-target`)));
+        await page.click(slotOf(unblockable));
         await page.clock.runFor(500);
-        assert.ok(!(await shows(page, trainer, "blocker")), "no block");
-        await drag(page, slotOf(trainer), { to: slotOf(doubled) });
+        assert.ok(!(await shows(page, blocker, "blocker")), "no block");
+        await drag(page, slotOf(blocker), { to: slotOf(doubled) });
         await page.clock.runFor(1000);
         assert.ok(
-            await shows(page, trainer, "blocker"),
+            await shows(page, blocker, "blocker"),
             "dragged on, it blocks",
         );
         assert.deepEqual(await chosen(page), []);
@@ -1432,16 +1450,32 @@ await check(
     { fixture: "choice-scry", at: scry.views.length, ready: tray(scryNext) },
 );
 
-// Late in the scry fixture both players have graveyards and exiled cards, and the human holds
-// a hand wide enough to fan out as far as it goes.
+// The last priority in the scry fixture where both players have graveyards and exiled cards,
+// and the human holds a hand wide enough to fan out as far as it goes.
+const exiledFrom = (v, side) =>
+    v.objects.filter(
+        (o) =>
+            o.owner === side &&
+            o.zone === "exile" &&
+            !v.battlefield.includes(o.exiledBy),
+    );
 const pilesAt = scry.views.findLastIndex(
-    (v) => v.status.decision?.kind === "priority",
+    (v) =>
+        v.status.decision?.kind === "priority" &&
+        v.objects.filter((o) => o.zone === "hand" && o.owner === "you")
+            .length >= 6 &&
+        ["you", "opponent"].every(
+            (side) =>
+                v.players[side].graveyard.length > 0 &&
+                exiledFrom(v, side).length > 0,
+        ),
 );
+assert.ok(pilesAt >= 0, "the scry fixture has a view with every pile");
 const pilesView = scry.views[pilesAt];
 const pile = (side, zone) => `[data-pile="${zone}"][data-side="${side}"]`;
 const pileRun = {
     fixture: "choice-scry",
-    at: pilesAt,
+    at: pilesAt + 1,
     ready: pile("you", "graveyard"),
 };
 const overlaps = (a, b) =>
@@ -1480,14 +1514,7 @@ function pileNames(side, zone) {
     const slots =
         zone === "graveyard"
             ? pilesView.players[side].graveyard
-            : pilesView.objects
-                  .filter(
-                      (o) =>
-                          o.owner === side &&
-                          o.zone === "exile" &&
-                          !pilesView.battlefield.includes(o.exiledBy),
-                  )
-                  .map((o) => o.slot);
+            : exiledFrom(pilesView, side).map((o) => o.slot);
     return slots.map(
         (slot) => pilesView.objects.find((o) => o.slot === slot).name,
     );

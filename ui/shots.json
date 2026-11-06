@@ -213,37 +213,37 @@
     },
     {
       "name": "game-declare-block-choosing",
-      "route": "/?fixture=combat-double-block&at=507#/game",
+      "route": "/?fixture=combat-double-block&at=799#/game",
       "width": 1600,
       "height": 900,
-      "click": ["[data-slot='121']", "[data-slot='120']", "[data-slot='28']"]
+      "click": ["[data-slot='4']", "[data-slot='80']", "[data-slot='120']"]
     },
     {
       "name": "game-declare-block",
-      "route": "/?fixture=combat-double-block&at=507#/game",
+      "route": "/?fixture=combat-double-block&at=799#/game",
       "width": 1600,
       "height": 900,
       "click": [
-        "[data-slot='121']",
+        "[data-slot='4']",
+        "[data-slot='80']",
         "[data-slot='120']",
-        "[data-slot='28']",
-        "[data-slot='122']",
-        "[data-slot='10']",
-        "[data-slot='122']"
+        "[data-slot='80']",
+        "[data-slot='124']",
+        "[data-slot='91']"
       ]
     },
     {
       "name": "game-declare-block-1280",
-      "route": "/?fixture=combat-double-block&at=507#/game",
+      "route": "/?fixture=combat-double-block&at=799#/game",
       "width": 1280,
       "height": 800,
       "click": [
-        "[data-slot='121']",
+        "[data-slot='4']",
+        "[data-slot='80']",
         "[data-slot='120']",
-        "[data-slot='28']",
-        "[data-slot='122']",
-        "[data-slot='10']",
-        "[data-slot='122']"
+        "[data-slot='80']",
+        "[data-slot='124']",
+        "[data-slot='91']"
       ]
     },
     {

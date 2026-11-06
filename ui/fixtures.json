@@ -55,11 +55,11 @@
     },
     {
       "name": "combat-double-block",
-      "seed": 120,
+      "seed": 12001,
       "decks": ["wu-control", "wu-control"],
       "agents": ["random", "random"],
-      "until": "first blocker decision for seat 0 from turn 23",
-      "after": 8
+      "until": "first blocker decision for seat 0 from turn 36",
+      "after": 5
     },
     {
       "name": "stack-trigger",
