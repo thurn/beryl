@@ -71,7 +71,10 @@ export interface FixtureCall {
 export function fixtureTransport(
   fixture: Fixture,
   at?: number,
-): Transport & { calls: FixtureCall[] } {
+): Transport & {
+  calls: FixtureCall[];
+  view(): Events["game-update"]["view"] | undefined;
+} {
   const responses = new Map<Command, unknown[]>();
   const events: { event: keyof Events; payload: unknown }[] = [];
   for (const m of fixture.messages) {
@@ -138,6 +141,15 @@ export function fixtureTransport(
   };
   return {
     calls,
+    /** The latest view released, which the screen should show once it settles: what
+     * `just ui-shots` checks the screen against. */
+    view() {
+      const latest = events
+        .slice(0, released)
+        .reverse()
+        .find((e) => e.event === "game-update");
+      return (latest?.payload as Events["game-update"] | undefined)?.view;
+    },
     invoke<C extends Command>(command: C, args: Args<C>): Promise<Result<C>> {
       calls.push({ command, args });
       if (command === "cancel") return cancel() as Promise<Result<C>>;

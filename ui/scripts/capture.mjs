@@ -262,3 +262,158 @@ export function cutText(page) {
         return found;
     });
 }
+
+/** Where the game screen disagrees with the view the fixture last released
+ * (`window.berylFixture.view()`, src/ipc.ts), once it has settled: each permanent, spell and
+ * card in the viewer's hand drawn exactly once, in its zone, under its name; a permanent's
+ * power and toughness (less marked damage), loyalty, counters and tapped state as the view has
+ * them; both life totals; and no card drawn that the view does not have. Each is described for
+ * a failure message. Nothing on a page without a fixture. */
+export async function screenFaults(page) {
+    return page.evaluate(() => {
+        const view = window.berylFixture?.view?.();
+        // A screen other than the game's, as the menu, draws no table to check.
+        if (!view || !document.querySelector("[data-life]")) return [];
+        const faults = [];
+        const drawn = new Map();
+        for (const e of document.querySelectorAll(".card-el[data-slot]")) {
+            const slot = Number(e.dataset.slot);
+            drawn.set(slot, [...(drawn.get(slot) ?? []), e]);
+        }
+        const objects = new Map(view.objects.map((o) => [o.slot, o]));
+        const text = (e) => e?.textContent?.replace(/\s+/g, "") ?? "nothing";
+        for (const o of view.objects) {
+            const shown =
+                o.zone === "battlefield" ||
+                o.zone === "stack" ||
+                (o.zone === "hand" && o.owner === "you");
+            if (!shown) continue;
+            const what = `${o.name ?? "a hidden card"} (slot ${o.slot}, ${o.zone})`;
+            const els = drawn.get(o.slot) ?? [];
+            // A resolving spell may be drawn beside the choice it asks rather than on the table:
+            // as a choice overlay's source card, known by its name.
+            const beside =
+                o.zone === "stack" &&
+                els.length === 0 &&
+                (document.querySelector(`[data-slot="${o.slot}"]`) ||
+                    [...document.querySelectorAll(".shown-card")].some(
+                        (e) => o.name && e.textContent?.includes(o.name),
+                    ));
+            if (beside) continue;
+            if (els.length !== 1) {
+                faults.push(`${what} drawn ${els.length} times`);
+                continue;
+            }
+            const e = els[0];
+            if (e.dataset.zone !== o.zone) {
+                faults.push(`${what} drawn in the ${e.dataset.zone}`);
+            }
+            if (o.name && e.dataset.card !== o.name) {
+                faults.push(`${what} drawn as ${e.dataset.card ?? "no card"}`);
+            }
+            if (o.zone !== "battlefield") continue;
+            const stats = text(e.querySelector(".card-pt"));
+            const loyalty = o.counters.find((c) => c.kind === "loyalty");
+            const want = o.pt
+                ? `${o.pt.power}/${Math.max(0, o.pt.toughness - o.damage)}`
+                : loyalty && String(loyalty.count);
+            if (want !== undefined && stats !== want) {
+                faults.push(`${what} shows ${stats} for ${want}`);
+            }
+            for (const c of o.counters) {
+                if (c.kind === "loyalty") continue;
+                const badge = text(e.querySelector(`.mark-${c.kind} b`));
+                if (badge !== String(c.count)) {
+                    faults.push(
+                        `${what} shows ${badge} ${c.kind} counters for ${c.count}`,
+                    );
+                }
+            }
+            // A tapped card lies turned a quarter, wider than tall.
+            const box = e.getBoundingClientRect();
+            if (box.width > box.height !== o.tapped) {
+                faults.push(
+                    `${what} drawn ${o.tapped ? "untapped" : "tapped"}`,
+                );
+            }
+        }
+        for (const slot of drawn.keys()) {
+            if (!objects.has(slot))
+                faults.push(`slot ${slot} drawn but not in the view`);
+        }
+        for (const side of ["you", "opponent"]) {
+            const total = document.querySelector(
+                `[data-life="${side}"] .life-orb-total`,
+            );
+            const life = String(view.players[side].life);
+            if (total && text(total) !== life) {
+                faults.push(`${side} at ${text(total)} life for ${life}`);
+            }
+        }
+        return faults;
+    });
+}
+
+/** The controls a player can't fully reach: a button or other control a click reaches (no
+ * modal covers its middle) lying partly outside the window, or overlapping another such
+ * control that is neither inside it nor around it, so that a click meant for one may land on
+ * the other. Cards may overlap one another, as a fan or a pile does. Each is described for a
+ * failure message. */
+export async function crowdedControls(page) {
+    return page.evaluate(() => {
+        const controls = [
+            ...document.querySelectorAll(
+                "button, [role=button], a[href], input, select, .life-target",
+            ),
+        ].filter((e) => {
+            const box = e.getBoundingClientRect();
+            const style = getComputedStyle(e);
+            if (
+                box.width <= 0 ||
+                box.height <= 0 ||
+                style.visibility === "hidden" ||
+                Number(style.opacity) <= 0 ||
+                e.closest("[aria-hidden=true], .card-el")
+            ) {
+                return false;
+            }
+            const hit = document.elementFromPoint(
+                box.left + box.width / 2,
+                box.top + box.height / 2,
+            );
+            return hit !== null && (e.contains(hit) || hit.contains(e));
+        });
+        const name = (e) =>
+            e.getAttribute("aria-label") ||
+            e.textContent?.trim().slice(0, 30) ||
+            e.className ||
+            e.tagName.toLowerCase();
+        const faults = [];
+        const slack = 1;
+        const boxes = controls.map((e) => e.getBoundingClientRect());
+        controls.forEach((e, i) => {
+            const b = boxes[i];
+            if (
+                b.left < -slack ||
+                b.top < -slack ||
+                b.right > innerWidth + slack ||
+                b.bottom > innerHeight + slack
+            ) {
+                faults.push(`${name(e)} reaches outside the window`);
+            }
+            for (let j = i + 1; j < controls.length; j++) {
+                const other = controls[j];
+                if (e.contains(other) || other.contains(e)) continue;
+                const card = (c) => c.closest("[data-card]") !== null;
+                if (card(e) && card(other)) continue;
+                const o = boxes[j];
+                const w = Math.min(b.right, o.right) - Math.max(b.left, o.left);
+                const h = Math.min(b.bottom, o.bottom) - Math.max(b.top, o.top);
+                if (w > slack && h > slack) {
+                    faults.push(`${name(e)} overlaps ${name(other)}`);
+                }
+            }
+        });
+        return faults;
+    });
+}
