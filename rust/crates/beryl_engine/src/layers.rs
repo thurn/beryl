@@ -56,6 +56,11 @@ fn recompute(s: &mut State, t: &GameTable) {
     s.effects
         .retain(|e| objects[e.affected.slot.index()].incarnation == e.affected.incarnation);
 
+    s.listening = s
+        .battlefield
+        .iter()
+        .fold(0, |k, &slot| k | t.listens(s.object(slot).card));
+
     // Made at the first effect that applies: most recomputes have none, and the list is big.
     let mut list: Option<Fixed<Apply, 192>> = None;
     for i in 0..s.battlefield.len() {

@@ -37,19 +37,34 @@ pub(crate) fn match_event(s: &mut State, t: &GameTable, e: &Event) -> Result<(),
         return Ok(());
     }
     if t.listens_any() & k != 0 {
-        for i in 0..s.battlefield.len() {
-            let slot = s.battlefield.as_slice()[i];
-            let card = s.object(slot).card;
-            if t.listens(card) & k == 0 {
-                continue;
-            }
-            let source = s.object_ref(slot);
-            let controller = s.controller(slot);
-            let face = s.object(slot).face;
-            for (a, ability) in face_abilities(t, card, face) {
-                if let Some(info) = fires(s, ability.trigger, Some(slot), controller, e) {
-                    for _ in 0..times(ability.trigger, e) {
-                        enqueue(s, t, Some(source), card, face, a, controller, info)?;
+        // Only permanents can have changed what listens while the layer results are stale.
+        let listening = if s.flags.derived_dirty {
+            t.listens_any()
+        } else {
+            debug_assert_eq!(
+                s.listening,
+                s.battlefield
+                    .iter()
+                    .fold(0, |k, &slot| k | t.listens(s.object(slot).card)),
+                "the battlefield's listeners, as the layer results found them"
+            );
+            s.listening
+        };
+        if listening & k != 0 {
+            for i in 0..s.battlefield.len() {
+                let slot = s.battlefield.as_slice()[i];
+                let card = s.object(slot).card;
+                if t.listens(card) & k == 0 {
+                    continue;
+                }
+                let source = s.object_ref(slot);
+                let controller = s.controller(slot);
+                let face = s.object(slot).face;
+                for (a, ability) in face_abilities(t, card, face) {
+                    if let Some(info) = fires(s, ability.trigger, Some(slot), controller, e) {
+                        for _ in 0..times(ability.trigger, e) {
+                            enqueue(s, t, Some(source), card, face, a, controller, info)?;
+                        }
                     }
                 }
             }

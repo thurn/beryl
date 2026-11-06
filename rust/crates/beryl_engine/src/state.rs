@@ -817,6 +817,10 @@ pub struct State {
     pub(crate) battlefield: Fixed<Slot, BATTLEFIELD>,
     /// Layer results, by battlefield index.
     pub(crate) derived: [Derived; BATTLEFIELD],
+    /// The kinds of event the permanents on the battlefield have triggered abilities for
+    /// ([`crate::table::GameTable::listens`] of each), found with the layer results and
+    /// current while they are.
+    pub(crate) listening: u16,
     pub(crate) zones: Zones,
     pub(crate) players: [Player; 2],
     pub(crate) turn: Turn,

@@ -78,6 +78,7 @@ impl State {
             objects: [Object::EMPTY; SLOTS],
             battlefield: Fixed::new(),
             derived: [Derived::default(); BATTLEFIELD],
+            listening: 0,
             zones: Zones {
                 members: [[Bitboard::EMPTY; Zone::OWNED]; 2],
                 stack: Bitboard::EMPTY,
