@@ -219,3 +219,9 @@ pub fn next_stop(obs: Observation<'_>, stops: Stops) -> NextStop {
     }
     NextStop::NextTurn
 }
+
+/// Whether the defending player in the position `obs` shows has a creature that can block
+/// now, so that declaring blockers would be a decision of theirs.
+pub fn can_declare_blockers(obs: Observation<'_>) -> bool {
+    combat::can_declare_blockers(obs.shown())
+}

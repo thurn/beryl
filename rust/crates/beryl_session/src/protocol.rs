@@ -11,7 +11,7 @@ use beryl_engine::event::{Event, Reason, Recipient};
 use beryl_engine::state::{CounterKind, MulliganStatus, ObjectFlags, StackEntry, TurnStep};
 use beryl_engine::{
     Ask, Candidates, Decision, DecisionKind, GameTable, NextStop, Observation, Opt, Outcome, Seat,
-    Slot, StallReason, Stops, Zone, next_stop,
+    Slot, StallReason, Stops, Zone, can_declare_blockers, next_stop,
 };
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -1103,8 +1103,22 @@ fn ask_view(obs: Observation<'_>, ask: Ask) -> AskView {
     }
 }
 
+/// [`DecisionView::pass_to`]: the engine's [`next_stop`], less the declare blockers step for a
+/// defender with nothing to block with under the smart stops. The session passes them through
+/// it, as no creature blocks ([`crate::Game`]), on to their next stop: the end step, as the
+/// postcombat main phase is the active player's.
 fn pass_to(obs: Observation<'_>, stops: StopsSetting) -> PassTo {
-    match next_stop(obs, stops.stops()) {
+    let next = match next_stop(obs, stops.stops()) {
+        NextStop::Step(TurnStep::DeclareBlockers)
+            if stops == StopsSetting::Smart
+                && obs.turn().active != obs.viewer()
+                && !can_declare_blockers(obs) =>
+        {
+            NextStop::Step(TurnStep::End)
+        }
+        next => next,
+    };
+    match next {
         NextStop::Resolve => PassTo::Resolve,
         NextStop::CombatDamage => PassTo::CombatDamage,
         NextStop::Step(step) => PassTo::Step { step: step.into() },

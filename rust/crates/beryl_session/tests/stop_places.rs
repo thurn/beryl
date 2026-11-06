@@ -9,7 +9,7 @@ use beryl_cards::names::{
 use beryl_engine::TurnStep;
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_search::Budget;
-use beryl_session::protocol::{Candidate, Kind, Side, Step};
+use beryl_session::protocol::{Candidate, Kind, PassTo, Side, Step};
 use beryl_session::{CandidateIndex, Game, Prepared, Seat, SessionId, Status, StopsSetting};
 
 const SESSION: SessionId = SessionId(1);
@@ -93,6 +93,8 @@ struct Stop {
     step: Step,
     stack: bool,
     kind: Kind,
+    /// Where passing priority was to take the human, as the pass button says.
+    pass_to: Option<PassTo>,
 }
 
 /// Plays `scenario` under `stops` until the human's turn after the next begins: every
@@ -131,6 +133,7 @@ fn stops_against(scenario: &Scenario, stops: StopsSetting, agent: &str) -> Vec<S
             step: view.turn.step,
             stack: !view.stack.is_empty(),
             kind: decision.kind,
+            pass_to: decision.pass_to.clone(),
         });
         let attack = decision
             .candidates
@@ -150,6 +153,22 @@ fn stops_against(scenario: &Scenario, stops: StopsSetting, agent: &str) -> Vec<S
         game.choose(checked.unwrap());
     }
     asked
+}
+
+/// Asserts that each pass the human made to a step of the turn took them to that step: the
+/// pass button names where the human is next stopped. Their attack is declared in the combat
+/// it names.
+fn assert_passes_land_where_named(asked: &[Stop]) {
+    for pair in asked.windows(2) {
+        let (Some(PassTo::Step { step }), next) = (&pair[0].pass_to, &pair[1]) else {
+            continue;
+        };
+        let landed = match next.step {
+            Step::DeclareAttackers if next.kind == Kind::Attacker => Step::BeginningOfCombat,
+            landed => landed,
+        };
+        assert_eq!(landed, *step, "passed to {step:?}, stopped at {next:?}");
+    }
 }
 
 fn priority_in(asked: &[Stop], active: Side, step: Step) -> usize {
@@ -194,6 +213,7 @@ fn holding_flash_does_not_stop_each_combat_step_of_ones_own_turn() {
         assert_eq!(in_combat(&smart, step), 0, "stopped at {step:?}: {smart:?}");
     }
     assert_eq!(priority_in(&smart, Side::You, Step::PostcombatMain), 1);
+    assert_passes_land_where_named(&smart);
     // The opponent's end step, where flashing in the Emperor is the play.
     assert_eq!(priority_in(&smart, Side::Opponent, Step::End), 1);
     let exact = stops_in(&ATTACK_HOLDING_FLASH, StopsSetting::Exact);
@@ -235,4 +255,5 @@ fn holding_flash_stops_after_the_opponents_attack() {
         0,
         "stopped after no blocks: {smart:?}"
     );
+    assert_passes_land_where_named(&smart);
 }

@@ -234,11 +234,17 @@ fn may_block(s: &State, slot: Slot) -> bool {
         && s.battlefield().iter().any(|&a| can_block(s, slot, a))
 }
 
+/// Whether the defending player has a creature that can block now, so that declaring blockers
+/// is a decision.
+pub(crate) fn can_declare_blockers(s: &State) -> bool {
+    s.battlefield().iter().any(|&slot| may_block(s, slot))
+}
+
 /// The declare blockers step's turn-based action begins
 /// ([CR 509.1](https://yawgatog.com/resources/magic-rules/#R5091)): "First, the defending
 /// player declares blockers. This turn-based action doesn't use the stack."
 pub(crate) fn begin_blockers(s: &mut State) {
-    if s.battlefield().iter().any(|&slot| may_block(s, slot)) {
+    if can_declare_blockers(s) {
         s.pending = Pending::DeclareBlockers { blocker: None };
     }
 }
