@@ -141,6 +141,10 @@ export interface BoardProps {
   /** An answer was sent and the next view has not arrived, or the game plays on without the
    * player: the opponent is acting. */
   waiting: boolean;
+  /** While views wait to be shown, shows them all at once: a press on the table or Space
+   * ends the replay. A card pressed then is let go on the newest view, so its click or drag
+   * acts there. */
+  onSkip?: () => void;
   /** Answers the open decision, and the decisions after it with `then`, as each arrives. */
   choose(index: CandidateIndex, then?: Intent[]): void;
   /** Takes back the spell or ability being cast, at a decision that may
@@ -190,6 +194,7 @@ export function Board({
   live,
   log,
   waiting,
+  onSkip,
   choose,
   cancel,
   setFullControl,
@@ -652,6 +657,11 @@ export function Board({
     }
     const target = e.target instanceof Element ? e.target : null;
     if (target?.closest("button, input, select, textarea, a")) return;
+    if (onSkip) {
+      e.preventDefault();
+      onSkip();
+      return;
+    }
     const { pass } = can;
     let primary: (() => void) | undefined;
     if (castingNow) primary = () => cast(castingNow.choice);
@@ -713,6 +723,9 @@ export function Board({
       <div
         className={dimmed ? "table table-dimmed" : "table"}
         onPointerDown={() => setSettings(false)}
+        // Before the card under it hears the press, so that the card's click or drag is one on
+        // the newest view.
+        onPointerDownCapture={onSkip}
         // A right-click takes back what was begun, as Escape does.
         onContextMenu={(e) => {
           e.preventDefault();

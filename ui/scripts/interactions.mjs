@@ -911,6 +911,89 @@ await check(
     { fixture: "opponent-turn", at: lookAt + 1, ready: ".choice" },
 );
 
+await check(
+    "Space during the opponent's turn shows the rest of it at once",
+    async (page) => {
+        await page.clock.runFor(2000);
+        // From here on time passes only when the test says so: the replay cannot advance.
+        await page.clock.pauseAt(Date.now() + 60_000);
+        await page.getByRole("button", { name: "Take Nothing" }).click();
+        await page.waitForSelector(".table:not(.table-dimmed)");
+        const halt = page.getByRole("button", { name: "Continue" });
+        assert.ok(!(await halt.isVisible()), "the turn is still playing out");
+        await page.keyboard.press("Space");
+        // The turn's last view at once, with nothing it did lost.
+        await halt.waitFor();
+        assert.ok(await halt.isEnabled(), "Continue is the turn button");
+        await page.waitForSelector(
+            `[data-slot="${opponentLand.slot}"][data-zone="battlefield"]`,
+        );
+        const log = await page.locator(".game-log").textContent();
+        assert.ok(
+            log.includes(`Opponent played ${landName}`),
+            `the log says the land was played: ${log}`,
+        );
+        assert.equal((await chosen(page)).length, 1, "Space passed nothing");
+        // The next press acts on it.
+        await page.keyboard.press("Space");
+        assert.deepEqual((await chosen(page)).slice(1), [0], "continued");
+    },
+    { fixture: "opponent-turn", at: lookAt + 1, ready: ".choice" },
+);
+
+// A pass that the game answers with several views before the human's next priority, at which
+// they may play a land that was in their hand all along.
+const replayed = views.flatMap((v, i) => {
+    const next = views.findIndex((w, j) => j > i && awaits(w));
+    const between = views.slice(i + 1, next).filter((w) => w.events.length);
+    const pass = v.status.decision?.candidates.findIndex(
+        (c) => c.option.kind === "pass",
+    );
+    const land = views[next]?.status.decision?.candidates.findIndex(
+        (c) =>
+            c.option.kind === "playLand" &&
+            v.objects.some(
+                (o) => o.slot === c.option.slot && o.zone === "hand",
+            ),
+    );
+    return v.status.decision?.kind === "priority" &&
+        pass >= 0 &&
+        between.length >= 3 &&
+        land >= 0
+        ? [{ at: i, pass, next, land }]
+        : [];
+})[0];
+assert.ok(replayed, "a pass is followed by several views, then a land drop");
+const replayedLand = `[data-slot="${
+    views[replayed.next].status.decision.candidates[replayed.land].option.slot
+}"]`;
+
+await check(
+    "a land clicked while the game plays on to it is played",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.clock.pauseAt(Date.now() + 60_000);
+        await page.keyboard.press("Space");
+        assert.deepEqual(await chosen(page), [replayed.pass], "passed");
+        const box = await page.locator(replayedLand).boundingBox();
+        assert.ok(
+            !(await page.$(`${replayedLand}.card-el-playable`)),
+            "the land is not yet playable",
+        );
+        // Pressed during the replay, which ends; let go at the land drop, which plays it.
+        await page.mouse.click(box.x + box.width / 2, box.y + 40);
+        assert.deepEqual(
+            await chosen(page),
+            [replayed.pass, replayed.land],
+            "played the land",
+        );
+    },
+    {
+        at: replayed.at + 1,
+        ready: `${replayedLand}[data-zone="hand"]`,
+    },
+);
+
 /** A recorded combat declaration: the last run of the human's decisions of `kinds` in
  * `views`, the `at` that opens a page on its first, the candidate each was answered with, as
  * the view after it shows (the creature newly attacking or blocking, the attacker the blocker

@@ -3,7 +3,8 @@
 // could follow; here they queue and show one at a time, each held long enough to see what its
 // events did, so the opponent's turn plays out rather than jumps. A view the player must
 // answer ends each run of them. Views from before the screen started listening (a fixture's
-// recorded past) show at once.
+// recorded past) show at once, and the player may skip the rest of a run (`Playback.skip`), as
+// a click skips Arena's animations.
 import { useEffect, useReducer } from "react";
 import {
   currentGame,
@@ -58,6 +59,8 @@ export interface Playback {
   live: boolean;
   /** More views wait to be shown after it. */
   behind: boolean;
+  /** Shows every view waiting at once, the last with all their events. */
+  skip(): void;
   /** What has happened in the game up to it, oldest first. */
   log: LogEntry[];
 }
@@ -79,6 +82,7 @@ interface State {
 type Action =
   | { kind: "arrive"; update: GameUpdate; past: boolean; now: number }
   | { kind: "advance"; now: number }
+  | { kind: "skip"; now: number }
   | { kind: "starting"; on: boolean }
   | { kind: "resume"; update?: GameUpdate; now: number };
 
@@ -164,6 +168,9 @@ function reduce(state: State, action: Action): State {
       } while (queue.length > 0 && holdFor(taken.at(-1)!.view) === 0);
       return show({ ...state, queue }, taken, true, action.now);
     }
+    case "skip":
+      if (state.queue.length === 0) return state;
+      return show({ ...state, queue: [] }, state.queue, true, action.now);
   }
 }
 
@@ -224,6 +231,7 @@ export function usePlayback(): {
       update: shown,
       live: state.live,
       behind: queue.length > 0,
+      skip: () => dispatch({ kind: "skip", now: Date.now() }),
       log: state.log,
     },
     starting: state.starting,
