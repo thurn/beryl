@@ -146,45 +146,46 @@ export const FULL_WIDTH = HAND.width;
 const BACK_WIDTH = 105;
 
 /** Each side's rows, in stage pixels, as MTG Arena lays them out: its creatures' row at
- * `permanents`, toward the middle of the table and centered on it; behind it, its land piles
- * from (x, y), filling rightward to `LANDS_END`, and its other permanents (artifacts,
- * enchantments, planeswalkers that are not creatures), `others.width` wide, smaller than a
- * creature, right of its life orb from `others.x` to `others.end` with their tops at
- * `others.y`. Each permanent's row follows its types after continuous effects, so an animated
- * land or a crewed Vehicle stands with the creatures. The rows lie clear of one another, so a
- * long row of creatures may pass over the land piles' side of the table. Every row's cards are
- * scaled by their depth (depthScale); a row too long for its room shrinks, all its cards alike,
- * so that none covers another's marks. */
+ * `permanents`, toward the middle of the table and centered on it; behind it, one back row with
+ * its top at `back`, in front of its library and graveyard: its land piles from `lands`, filling
+ * rightward to `LANDS_END`, and its other permanents (artifacts, enchantments, planeswalkers that
+ * are not creatures), `others.width` wide, smaller than a creature, right of its life orb from
+ * `others.x` to `others.end`. Each permanent's row follows its types after continuous effects, so
+ * an animated land or a crewed Vehicle stands with the creatures. The rows lie clear of one
+ * another, so a long row of creatures may pass over the land piles' side of the table. Every
+ * row's cards are scaled by their depth (depthScale); a row too long for its room shrinks, all
+ * its cards alike, so that none covers another's marks. */
 const ROWS: Record<
   Side,
   {
-    lands: { x: number; y: number };
+    back: number;
+    lands: number;
     permanents: number;
-    others: { x: number; end: number; y: number; width: number };
+    others: { x: number; end: number; width: number };
   }
 > = {
-  // Right of the opponent's orb, left of their library, just under their hand, so that they
-  // end above the step banner's detail (screens.css .step-banner); as wide as keeps a
-  // planeswalker's loyalty readable at that depth.
+  // Just under the opponent's hand; their other permanents right of the orb and the step
+  // banner's detail (screens.css .step-banner), and well left of their library, which lies
+  // behind the row in the far corner. As wide as keeps a planeswalker's loyalty readable at
+  // that depth.
   opponent: {
-    lands: { x: 158, y: 112 },
+    back: 112,
+    lands: 158,
     permanents: 235,
-    others: { x: 940, end: 1166, y: 50, width: 110 },
+    others: { x: 948, end: 1160, width: 110 },
   },
-  // Right of your orb, left of the stack's column and the prompt, standing a little higher
-  // than your lands so that a hand card under them still rises (handLifts); lower, toward the
-  // lands, where a long row of creatures reaches over them.
+  // Right of your orb, left of the stack's column and the prompt; your library and graveyard
+  // lie behind the row, in the near left corner.
   you: {
-    lands: { x: 111, y: 570 },
+    back: 570,
+    lands: 111,
     permanents: 408,
-    others: { x: 940, end: 1196, y: 538, width: 92 },
+    others: { x: 940, end: 1196, width: 92 },
   },
 };
 /** Where each side's life orb begins (Board.tsx's Life, with its wings): the back row's other
  * permanents that overflow the room right of it stand left of it, right of the lands. */
 const ORB_LEFT = 664;
-/** How far your other permanents stand below the creatures' row where it reaches over them. */
-const FRONT_CLEARANCE = 6;
 /** How narrow, on the stage, the back row's other permanents may shrink to fit their room before
  * they crowd one another instead: as narrow as keeps their loyalty and counters readable. */
 const OTHERS_LEAST = 84;
@@ -238,8 +239,8 @@ export function overLog(placements: Layout): boolean {
 export const PILES = {
   opponent: {
     width: 104,
-    library: { x: 1174, y: 13 },
-    graveyard: { x: 1327, y: 40 },
+    library: { x: 1236, y: 13 },
+    graveyard: { x: 1336, y: 40 },
     exile: { x: 1432, y: 40 },
   },
   you: {
@@ -717,10 +718,10 @@ function battlefieldPlacements(
   // The back row's other permanents that overflow their room right of the orb stand left of
   // it, past the land piles, which crowd together for them, down to `LANDS_SQUEEZE` of their
   // length, as far as the others need at their least scale.
-  const landScale = depthScale(rows.lands.y);
+  const landScale = depthScale(rows.back);
   const otherWidth = rows.others.width;
   const othersLeast = Math.min(
-    depthScale(rows.others.y),
+    depthScale(rows.back),
     OTHERS_LEAST / otherWidth,
   );
   const { overflow: deficit } = split(
@@ -754,24 +755,24 @@ function battlefieldPlacements(
   const landXs = row(
     landPiles.map(pileWidth),
     landGap,
-    rows.lands.x,
+    rows.lands,
     Math.min(
       LANDS_END,
       Math.max(
-        rows.lands.x + landsLength * LANDS_SQUEEZE,
+        rows.lands + landsLength * LANDS_SQUEEZE,
         ORB_LEFT - 2 * landGap - deficit,
       ),
     ),
   );
   // Where the land piles end: the back row's other permanents may stand from there to the orb.
-  let landsEnd = rows.lands.x;
+  let landsEnd = rows.lands;
   landPiles.forEach((pile, p) => {
     landsEnd = landXs[p]! + pileWidth(pile);
     const { frame, span } = lying(LAND_WIDTH, pile[0]!.tapped);
     pile.forEach((o, i) => {
       const depth = pile.length - 1 - i;
       const x = landXs[p]! + i * frame * LAND_STEP.x * landScale;
-      const y = rows.lands.y + depth * frame * LAND_STEP.y * landScale;
+      const y = rows.back + depth * frame * LAND_STEP.y * landScale;
       out.push({
         slot: o.slot,
         zone: o.zone,
@@ -801,43 +802,23 @@ function battlefieldPlacements(
     beneath,
     attached,
   );
-  const back = (y: number) =>
-    permanentRow(
-      side,
-      others,
-      {
-        width: otherWidth,
-        y,
-        start: rows.others.x,
-        end: rows.others.end,
-        // Toward the stack's column, clear of the hand's middle.
-        center: Infinity,
-        least: othersLeast,
-        overflow: { start: landsEnd + 2 * landGap, end: ORB_LEFT },
-      },
-      [],
-      beneath,
-      attached,
-    );
-  // Your other permanents stand clear of the creatures' row: as low as they must, down to your
-  // lands' line.
-  let behind = back(rows.others.y);
-  if (side === "you") {
-    const fronts = front.map(footprint);
-    const below = Math.max(
-      0,
-      ...behind
-        .map(footprint)
-        .flatMap((b) =>
-          fronts
-            .filter((f) => f.right > b.left && f.left < b.right)
-            .map((f) => f.bottom + FRONT_CLEARANCE - b.top),
-        ),
-    );
-    if (below > 0) {
-      behind = back(Math.min(rows.lands.y, rows.others.y + below));
-    }
-  }
+  const behind = permanentRow(
+    side,
+    others,
+    {
+      width: otherWidth,
+      y: rows.back,
+      start: rows.others.x,
+      end: rows.others.end,
+      // Toward the stack's column, clear of the hand's middle.
+      center: Infinity,
+      least: othersLeast,
+      overflow: { start: landsEnd + 2 * landGap, end: ORB_LEFT },
+    },
+    [],
+    beneath,
+    attached,
+  );
   out.push(...front, ...behind);
   return out;
 }
