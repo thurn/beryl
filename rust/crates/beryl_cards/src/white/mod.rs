@@ -1,6 +1,7 @@
 pub mod aangs_iceberg;
 pub mod adeline_resplendent_cathar;
 pub mod beza_the_bounding_spring;
+pub mod damn;
 pub mod elite_spellbinder;
 pub mod get_lost;
 pub mod mana_tithe;
@@ -12,3 +13,4 @@ pub mod reprieve;
 pub mod staff_of_the_storyteller;
 pub mod swift_reconfiguration;
 pub mod the_wandering_emperor;
+pub mod winds_of_abandon;

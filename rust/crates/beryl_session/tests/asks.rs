@@ -139,3 +139,15 @@ fn mana_tithe_asks_its_target_to_pay_one() {
         )]
     );
 }
+
+#[test]
+fn subtlety_asks_the_spells_owner_top_or_bottom() {
+    let asked = asks(names::SUBTLETY);
+    assert!(!asked.is_empty());
+    for ask in &asked {
+        assert!(
+            matches!(ask, (Kind::YesNo, AskView::TopOrBottom { .. })),
+            "{asked:?}"
+        );
+    }
+}

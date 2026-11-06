@@ -140,6 +140,15 @@
     },
     {
      "name": "Floodfarm Verge"
+    },
+    {
+     "name": "Swamp"
+    },
+    {
+     "name": "Mountain"
+    },
+    {
+     "name": "Forest"
     }
    ]
   },
@@ -1250,6 +1259,69 @@
      "mana_cost": "",
      "type_line": "Land",
      "oracle_text": "{T}: Add {W}.\n{T}: Add {U}. Activate only if you control a Plains or an Island."
+    },
+    {
+     "id": "b233b117-9369-45c1-80c5-cc857386b6be",
+     "name": "Swamp",
+     "set": "mdd",
+     "collector_number": "296",
+     "layout": "normal",
+     "artist": "Maojin Lee",
+     "colors": [],
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/b/2/b233b117-9369-45c1-80c5-cc857386b6be.jpg?1791578437",
+      "normal": "https://cards.scryfall.io/normal/front/b/2/b233b117-9369-45c1-80c5-cc857386b6be.jpg?1791578437",
+      "large": "https://cards.scryfall.io/large/front/b/2/b233b117-9369-45c1-80c5-cc857386b6be.jpg?1791578437"
+     },
+     "mana_cost": "",
+     "type_line": "Basic Land — Swamp",
+     "oracle_text": "({T}: Add {B}.)"
+    },
+    {
+     "id": "85177bd7-6c50-48da-b692-ae5fe7bd357c",
+     "name": "Mountain",
+     "set": "mdd",
+     "collector_number": "298",
+     "layout": "normal",
+     "artist": "VEN",
+     "colors": [],
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/8/5/85177bd7-6c50-48da-b692-ae5fe7bd357c.jpg?1791578439",
+      "normal": "https://cards.scryfall.io/normal/front/8/5/85177bd7-6c50-48da-b692-ae5fe7bd357c.jpg?1791578439",
+      "large": "https://cards.scryfall.io/large/front/8/5/85177bd7-6c50-48da-b692-ae5fe7bd357c.jpg?1791578439"
+     },
+     "mana_cost": "",
+     "type_line": "Basic Land — Mountain",
+     "oracle_text": "({T}: Add {R}.)"
+    },
+    {
+     "id": "2e781bfd-f8cb-4d20-b977-4359f3a21311",
+     "name": "Forest",
+     "set": "mdd",
+     "collector_number": "301",
+     "layout": "normal",
+     "artist": "Samuele Bandini",
+     "colors": [],
+     "image_uris": {
+      "art_crop": "https://cards.scryfall.io/art_crop/front/2/e/2e781bfd-f8cb-4d20-b977-4359f3a21311.jpg?1791578317",
+      "normal": "https://cards.scryfall.io/normal/front/2/e/2e781bfd-f8cb-4d20-b977-4359f3a21311.jpg?1791578317",
+      "large": "https://cards.scryfall.io/large/front/2/e/2e781bfd-f8cb-4d20-b977-4359f3a21311.jpg?1791578317"
+     },
+     "all_parts": [
+      {
+       "id": "2e781bfd-f8cb-4d20-b977-4359f3a21311",
+       "component": "combo_piece",
+       "type_line": "Basic Land — Forest"
+      },
+      {
+       "id": "aed8ae06-ae54-4a16-8830-6547164ce6ae",
+       "component": "combo_piece",
+       "type_line": "Creature — Elf Druid"
+      }
+     ],
+     "mana_cost": "",
+     "type_line": "Basic Land — Forest",
+     "oracle_text": "({T}: Add {G}.)"
     }
    ]
   }

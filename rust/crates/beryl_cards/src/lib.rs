@@ -5,6 +5,7 @@
 #![allow(clippy::unnecessary_wraps)]
 
 pub mod azorius;
+pub mod black;
 pub mod blue;
 pub mod colorless;
 pub mod decks;
@@ -56,6 +57,11 @@ pub static CARDS: CardTable = CardTable::new(&[
     &blue::trinket_mage::CARD,
     &white::beza_the_bounding_spring::CARD,
     &colorless::currency_converter::CARD,
+    &black::swamp::CARD,
+    &white::damn::CARD,
+    &white::winds_of_abandon::CARD,
+    &blue::subtlety::CARD,
+    &blue::snapcaster_mage::CARD,
 ]);
 
 /// Every card's scenarios (architecture §17.1), by card name.
@@ -146,6 +152,11 @@ pub static SCENARIOS: &[(&str, &[Scenario])] = &[
         names::CURRENCY_CONVERTER,
         colorless::currency_converter::SCENARIOS,
     ),
+    (names::SWAMP, black::swamp::SCENARIOS),
+    (names::DAMN, white::damn::SCENARIOS),
+    (names::WINDS_OF_ABANDON, white::winds_of_abandon::SCENARIOS),
+    (names::SUBTLETY, blue::subtlety::SCENARIOS),
+    (names::SNAPCASTER_MAGE, blue::snapcaster_mage::SCENARIOS),
 ];
 
 #[cfg(test)]

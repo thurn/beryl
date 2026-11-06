@@ -221,6 +221,28 @@
       ]
     },
     {
+      "name": "Forest",
+      "scryfall_id": "2e781bfd-f8cb-4d20-b977-4359f3a21311",
+      "set": "mdd",
+      "collector_number": "301",
+      "layout": "normal",
+      "artist": "Samuele Bandini",
+      "faces": [
+        {
+          "name": "Forest",
+          "mana_cost": "",
+          "type_line": "Basic Land — Forest",
+          "oracle_text": "({T}: Add {G}.)",
+          "colors": [],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/2/e/2e781bfd-f8cb-4d20-b977-4359f3a21311.jpg?1791578317",
+            "normal": "https://cards.scryfall.io/normal/front/2/e/2e781bfd-f8cb-4d20-b977-4359f3a21311.jpg?1791578317",
+            "large": "https://cards.scryfall.io/large/front/2/e/2e781bfd-f8cb-4d20-b977-4359f3a21311.jpg?1791578317"
+          }
+        }
+      ]
+    },
+    {
       "name": "Fractured Identity",
       "scryfall_id": "70f852d6-3506-4968-9b95-d4cdb02109ca",
       "set": "trc",
@@ -474,6 +496,28 @@
             "art_crop": "https://cards.scryfall.io/art_crop/front/9/a/9ae707d5-d81d-4320-b947-6016dc188898.jpg?1783927870",
             "normal": "https://cards.scryfall.io/normal/front/9/a/9ae707d5-d81d-4320-b947-6016dc188898.jpg?1783927870",
             "large": "https://cards.scryfall.io/large/front/9/a/9ae707d5-d81d-4320-b947-6016dc188898.jpg?1783927870"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Mountain",
+      "scryfall_id": "85177bd7-6c50-48da-b692-ae5fe7bd357c",
+      "set": "mdd",
+      "collector_number": "298",
+      "layout": "normal",
+      "artist": "VEN",
+      "faces": [
+        {
+          "name": "Mountain",
+          "mana_cost": "",
+          "type_line": "Basic Land — Mountain",
+          "oracle_text": "({T}: Add {R}.)",
+          "colors": [],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/8/5/85177bd7-6c50-48da-b692-ae5fe7bd357c.jpg?1791578439",
+            "normal": "https://cards.scryfall.io/normal/front/8/5/85177bd7-6c50-48da-b692-ae5fe7bd357c.jpg?1791578439",
+            "large": "https://cards.scryfall.io/large/front/8/5/85177bd7-6c50-48da-b692-ae5fe7bd357c.jpg?1791578439"
           }
         }
       ]
@@ -847,6 +891,28 @@
             "art_crop": "https://cards.scryfall.io/art_crop/front/7/0/701256d5-1389-48b7-9581-d6037209bd06.jpg?1783926869",
             "normal": "https://cards.scryfall.io/normal/front/7/0/701256d5-1389-48b7-9581-d6037209bd06.jpg?1783926869",
             "large": "https://cards.scryfall.io/large/front/7/0/701256d5-1389-48b7-9581-d6037209bd06.jpg?1783926869"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Swamp",
+      "scryfall_id": "b233b117-9369-45c1-80c5-cc857386b6be",
+      "set": "mdd",
+      "collector_number": "296",
+      "layout": "normal",
+      "artist": "Maojin Lee",
+      "faces": [
+        {
+          "name": "Swamp",
+          "mana_cost": "",
+          "type_line": "Basic Land — Swamp",
+          "oracle_text": "({T}: Add {B}.)",
+          "colors": [],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/b/2/b233b117-9369-45c1-80c5-cc857386b6be.jpg?1791578437",
+            "normal": "https://cards.scryfall.io/normal/front/b/2/b233b117-9369-45c1-80c5-cc857386b6be.jpg?1791578437",
+            "large": "https://cards.scryfall.io/large/front/b/2/b233b117-9369-45c1-80c5-cc857386b6be.jpg?1791578437"
           }
         }
       ]

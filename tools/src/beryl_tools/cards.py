@@ -3,8 +3,8 @@ endpoint, plus the tokens and emblems the cards make (each card's `all_parts`), 
 data/cards.json: per card its printing, artist and per face the display text and image URLs.
 The app downloads the images themselves on demand (rust/crates/beryl_app/src/art.rs).
 
-The default list is the Milestone 1 main deck; `--cube` takes the whole cube CSV. Scryfall
-picks each card's default printing; data/card-printings.csv pins another (name, set,
+The default list is both mirror decks' main decks and the basic lands; `--cube` takes the
+whole cube CSV. Scryfall picks each card's default printing; data/card-printings.csv pins another (name, set,
 collector_number). A printing with a name of its own, such as a Through the Omenpaths card
 that Arena names differently from Scryfall's oracle, takes its printed name and text, so it
 is keyed by the name the engine knows. `--record FILE` saves the requests and responses,
@@ -42,6 +42,8 @@ DECK: Path = (
 MIRROR: Path = (
     paths.REPO / "docs" / "sample-decks" / "2025-11-18-17lands-cb8d5d5f-wu-control.txt"
 )
+# The basic lands, which any deck may play.
+BASICS = ("Plains", "Island", "Swamp", "Mountain", "Forest")
 CUBE: Path = DATA / "arena-powered-cube-2025-10-30.csv"
 PRINTINGS: Path = DATA / "card-printings.csv"
 OUTPUT: Path = DATA / "cards.json"
@@ -71,8 +73,8 @@ def deck_names(path: Path) -> list[str]:
 
 
 def m1_names() -> list[str]:
-    """The cards of both mirror decks, each once."""
-    return list(dict.fromkeys(deck_names(DECK) + deck_names(MIRROR)))
+    """The cards of both mirror decks and the basic lands, each once."""
+    return list(dict.fromkeys(deck_names(DECK) + deck_names(MIRROR) + list(BASICS)))
 
 
 def cube_names(path: Path) -> list[str]:
