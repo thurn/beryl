@@ -40,9 +40,20 @@ export function useTextFit(text: string) {
     };
     fit();
     void document.fonts.ready.then(fit);
-    const observer = new ResizeObserver(fit);
+    // A box sized by its text (the priority pill) resizes as the text is fitted: fitted inside
+    // the resize's notification, it would be resized again before the observer returns, a loop
+    // the browser cuts short with an error. A frame later the fit's own resize is notified
+    // afresh, and refitting it changes nothing.
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(fit);
+    });
     observer.observe(box);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
   }, [text]);
   return ref;
 }
