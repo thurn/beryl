@@ -1054,13 +1054,22 @@ await check(
         await page.getByRole("button", { name: "Take Nothing" }).click();
         await until(page, '.turn-banner[data-turn="opponent"]');
         assert.equal(
-            await page.locator(".turn-banner-title").textContent(),
+            await page
+                .locator(
+                    '.turn-banner[data-turn="opponent"] .turn-banner-title',
+                )
+                .textContent(),
             "Opponent's Turn",
         );
-        await page.clock.runFor(2500);
+        // A new turn's banner replaces any still showing: one at a time.
         await until(page, '.turn-banner[data-turn="you"]');
-        await page.clock.runFor(2500);
-        await page.locator(".turn-banner").waitFor({ state: "detached" });
+        assert.equal(await page.locator(".turn-banner").count(), 1, "one");
+        // Its timer, on the page's clock, removes it; React commits on the real one.
+        for (let i = 0; i < 40 && (await page.$(".turn-banner")); i++) {
+            await page.clock.runFor(100);
+            await page.waitForTimeout(20);
+        }
+        assert.equal(await page.locator(".turn-banner").count(), 0, "it goes");
     },
     { fixture: "opponent-turn", at: lookAt + 1, ready: ".choice" },
 );

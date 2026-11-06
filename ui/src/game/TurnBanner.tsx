@@ -1,12 +1,13 @@
 // The turn's announcement, as Arena makes it: "Your Turn" or "Opponent's Turn" across the middle
 // of the table as each turn begins, in a display face over two rosettes of interlaced circles
 // turning against each other on a smoky band, in the player's color (cyan) or the opponent's
-// (ember). It takes no pointer and fades on its own.
-import { useEffect, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+// (ember). It takes no pointer and fades on its own. One shows at a time: CSS keyframes fade
+// it in and out within its time and its timer removes it, so nothing waits on an exit
+// animation (which a loaded machine may never finish) and a new turn replaces it outright.
+import { useEffect, useState, type CSSProperties } from "react";
 import type { PlayerView, Side } from "../generated/protocol";
 
-/** How long the announcement shows, in ms. */
+/** How long the announcement shows, in ms, its fades included. */
 export const TURN_BANNER_MS = 1700;
 
 /** `count` circles of radius `r` whose centers lie `r` from the middle: each passes through the
@@ -33,7 +34,6 @@ export function TurnBanner({
   view: PlayerView;
   live: boolean;
 }) {
-  const reduce = useReducedMotion() ?? false;
   const [shown, setShown] = useState<{ turn: number; side: Side }>();
   useEffect(() => {
     if (!live) return;
@@ -48,49 +48,29 @@ export function TurnBanner({
     const timer = setTimeout(() => setShown(undefined), TURN_BANNER_MS);
     return () => clearTimeout(timer);
   }, [shown]);
-  const spin = (turns: number) =>
-    reduce
-      ? undefined
-      : {
-          rotate: [0, turns * 90],
-          transition: {
-            duration: TURN_BANNER_MS / 1000 + 0.6,
-            ease: "linear" as const,
-          },
-        };
+  if (!shown) return null;
   return (
-    <AnimatePresence>
-      {shown && (
-        <motion.div
-          key={shown.turn}
-          className={`turn-banner turn-banner-${shown.side}`}
-          role="status"
-          data-turn={shown.side}
-          initial={reduce ? false : { opacity: 0, scale: 0.92 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={reduce ? undefined : { opacity: 0, scale: 1.04 }}
-          transition={{ duration: 0.35, ease: "easeOut" }}
-        >
-          <div className="turn-banner-band" />
-          <svg
-            className="turn-banner-rings"
-            viewBox="-110 -110 220 220"
-            aria-hidden
-          >
-            <motion.g className="turn-banner-ring-outer" animate={spin(1)}>
-              {rosette(12, 50)}
-            </motion.g>
-            <motion.g className="turn-banner-ring-inner" animate={spin(-1)}>
-              {rosette(8, 32, 0.5)}
-            </motion.g>
-            <circle className="turn-banner-rim" r={101} />
-            <circle className="turn-banner-rim" r={104} />
-          </svg>
-          <span className="turn-banner-title">
-            {shown.side === "you" ? "Your Turn" : "Opponent's Turn"}
-          </span>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <div
+      key={shown.turn}
+      className={`turn-banner turn-banner-${shown.side}`}
+      role="status"
+      data-turn={shown.side}
+      style={{ "--turn-ms": `${TURN_BANNER_MS}ms` } as CSSProperties}
+    >
+      <div className="turn-banner-band" />
+      <svg
+        className="turn-banner-rings"
+        viewBox="-110 -110 220 220"
+        aria-hidden
+      >
+        <g className="turn-banner-ring-outer">{rosette(12, 50)}</g>
+        <g className="turn-banner-ring-inner">{rosette(8, 32, 0.5)}</g>
+        <circle className="turn-banner-rim" r={101} />
+        <circle className="turn-banner-rim" r={104} />
+      </svg>
+      <span className="turn-banner-title">
+        {shown.side === "you" ? "Your Turn" : "Opponent's Turn"}
+      </span>
+    </div>
   );
 }

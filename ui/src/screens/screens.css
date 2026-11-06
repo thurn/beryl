@@ -2339,6 +2339,22 @@
   display: grid;
   place-items: center;
   pointer-events: none;
+  animation: turn-banner var(--turn-ms) ease-out both;
+}
+@keyframes turn-banner {
+  0% {
+    opacity: 0;
+    scale: 0.92;
+  }
+  20%,
+  80% {
+    opacity: 1;
+    scale: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 1.04;
+  }
 }
 .turn-banner-opponent {
   --turn: var(--ember);
@@ -2370,6 +2386,12 @@
   stroke: var(--turn);
   filter: drop-shadow(0 0 4px var(--turn-glow));
 }
+.turn-banner-ring-outer,
+.turn-banner-ring-inner {
+  transform-box: view-box;
+  transform-origin: center;
+  animation: turn-banner-spin calc(var(--turn-ms) + 600ms) linear both;
+}
 .turn-banner-ring-outer {
   stroke-width: 0.7;
   opacity: 0.55;
@@ -2377,6 +2399,19 @@
 .turn-banner-ring-inner {
   stroke-width: 0.9;
   opacity: 0.4;
+  animation-direction: reverse;
+}
+@keyframes turn-banner-spin {
+  to {
+    rotate: 90deg;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .turn-banner,
+  .turn-banner-ring-outer,
+  .turn-banner-ring-inner {
+    animation: none;
+  }
 }
 .turn-banner-rim {
   stroke-width: 0.6;
