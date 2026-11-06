@@ -1160,7 +1160,7 @@ await check(
     beneathRun,
 );
 
-// The opponent's Swift Reconfiguration on the human's Jace, Vryn's Prodigy (or whatever the
+// The human's Swift Reconfiguration on the opponent's Sphinx of False Conclusions (or whatever the
 // fixture attaches across the table): an Aura one player controls on a permanent the other does.
 const attachedView = (await load("attached-across")).at(-1);
 const attachedBySlot = new Map(attachedView.objects.map((o) => [o.slot, o]));

@@ -144,7 +144,7 @@
     {
       "name": "attached-across",
       "seed": 1,
-      "decks": ["fuzz:1020", "fuzz:20"],
+      "decks": ["fuzz:1020", "fuzz:22"],
       "agents": ["greedy", "greedy"],
       "until": "first priority decision for seat 0",
       "where": ["attached across the table"]
