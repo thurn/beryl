@@ -2062,6 +2062,12 @@ await check(
             ["Play Soporific Springs", "Cast Sink into Stupor"],
             "the land is played by its land face",
         );
+        await items.nth(0).hover();
+        assert.equal(
+            await page.locator(".inspect").getAttribute("aria-label"),
+            "Soporific Springs, inspected",
+            "pointing at it shows that face",
+        );
     },
     { fixture: "menu-choices", at: menus.views.length, ready: ".turn-action" },
 );
@@ -2110,6 +2116,49 @@ await check(
         ready: ".prompt",
     },
 );
+
+// Paying life for a land (by-isv.8): `pay-life` stops as Sink into Stupor is played as
+// Soporific Springs with three untapped lands, Jace, the Mind Sculptor in hand the one card
+// the fourth would make castable. The prompt shows the land face over the player's life orb
+// and defaults to paying; with Jace renamed Counterspell, nothing wants the mana this turn
+// and it defaults to entering tapped.
+const payLife = await lastDecision("pay-life");
+const answerOf = (kind) =>
+    payLife.decision.candidates.findIndex((c) => c.option.kind === kind);
+await writeFile(
+    join(fixtures, "pay-life-unwanted.json"),
+    (await readFile(join(fixtures, "pay-life.json"), "utf8")).replaceAll(
+        "Jace, the Mind Sculptor",
+        "Counterspell",
+    ),
+);
+for (const [fixture, primary, kind] of [
+    ["pay-life", "Pay 3 Life", "yes"],
+    ["pay-life-unwanted", "Enter Tapped", "no"],
+]) {
+    await check(
+        `paying life for a land defaults by whether its mana is wanted (${fixture})`,
+        async (page) => {
+            await page.clock.runFor(2000);
+            assert.equal(
+                await page.locator(".overlay-aside .card-name").textContent(),
+                "Soporific Springs",
+                "the land face",
+            );
+            assert.equal(
+                await page
+                    .locator(".choice-life .life-orb-total")
+                    .textContent(),
+                String(payLife.views.at(-1).players.you.life),
+            );
+            const confirm = page.locator(".overlay-confirm");
+            assert.equal(await confirm.textContent(), primary);
+            await confirm.click();
+            assert.deepEqual(await settled(page, 1), [answerOf(kind)]);
+        },
+        { fixture, at: payLife.views.length, ready: ".choice" },
+    );
+}
 
 // The trigger-order prompt (still asked under exact stops) names each trigger's source in full,
 // even the cube's longest names: `choice-trigger-order` stops on one between two creatures,

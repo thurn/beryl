@@ -202,6 +202,7 @@ INTERACTION_FIXTURES = [
     "stack-x",
     "menu-choices",
     "namesake-target",
+    "pay-life",
 ]
 
 

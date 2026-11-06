@@ -3,7 +3,7 @@
 // asks one pick at a time (a scry is a card for the bottom, then another, then done, then the
 // order of the rest), so the overlay takes the whole choice at once and plans the picks that
 // say it, which the game screen sends as each decision arrives. Pure functions of the view.
-import { cardEntry } from "../cards";
+import { cardEntry, faceEntry, landFace } from "../cards";
 import type {
   AskView,
   Candidate,
@@ -222,19 +222,19 @@ class Situation {
     return r?.kind === "ability" ? abilityText(text, r.triggered, r.nth) : text;
   }
 
-  /** Whether one more untapped land would let the viewer cast a card in their hand that
-   * their untapped lands cannot pay for, by mana value. */
-  untappedLandWanted(): boolean {
-    const untapped = this.view.battlefield.filter((s) => {
+  /** Whether the land being played, untapped, would let the viewer cast another card in
+   * their hand that their untapped mana sources cannot pay for, by mana value. */
+  untappedLandWanted(land?: number): boolean {
+    const mana = this.view.battlefield.reduce((sum, s) => {
       const o = this.objects.get(s);
-      return o?.controller === "you" && o.types.includes("land") && !o.tapped;
-    }).length;
+      return o?.controller === "you" && !o.tapped ? sum + manaMade(o) : sum;
+    }, 0);
     return this.hand("you").some((s) => {
       const name = this.name(s);
       const face = name ? cardEntry(name)?.faces[0] : undefined;
-      if (!face || /\bLand\b/.test(face.type_line)) return false;
+      if (s === land || !face || /\bLand\b/.test(face.type_line)) return false;
       const value = manaValue(face.mana_cost ?? "");
-      return value > untapped && value <= untapped + 1;
+      return value > mana && value <= mana + 1;
     });
   }
 
@@ -292,6 +292,16 @@ function manaValue(cost: string): number {
     const n = Number(symbol);
     return sum + (Number.isInteger(n) ? n : symbol === "X" ? 0 : 1);
   }, 0);
+}
+
+/** The mana a permanent makes when tapped: one for a land; for another permanent, the
+ * symbols of a "{T}: Add" ability, as Mana Crypt's two, or one for "Add one mana". */
+function manaMade(o: ObjectView): number {
+  if (o.types.includes("land")) return 1;
+  const text = (o.name && faceEntry(o.name)?.oracle_text) || "";
+  const add = /^\{T\}: Add ([^.]*)/m.exec(text)?.[1];
+  if (add === undefined) return 0;
+  return Math.max(1, (add.match(/\{[^}]+\}/g) ?? []).length);
 }
 
 /** The answer that names `option`. */
@@ -704,8 +714,7 @@ function legendRule(at: Situation): Pick {
  * card in hand castable this turn that the untapped lands cannot. */
 function payLife(at: Situation, { life }: AskOf<"payLife">): Ask {
   const name = at.source?.name;
-  const land =
-    name && cardEntry(name)?.faces.find((f) => /\bLand\b/.test(f.type_line));
+  const land = name ? landFace(name) : undefined;
   const pay = { label: `Pay ${life} Life`, plan: [yes("payLife")] };
   const tapped = { label: "Enter Tapped", plan: [no("payLife")] };
   return {
@@ -715,7 +724,9 @@ function payLife(at: Situation, { life }: AskOf<"payLife">): Ask {
     instruction: "",
     source: land ? { name: land.name } : at.source,
     cards: [],
-    answers: at.untappedLandWanted() ? [pay, tapped] : [tapped, pay],
+    answers: at.untappedLandWanted(at.source?.slot)
+      ? [pay, tapped]
+      : [tapped, pay],
     life: at.view.players.you.life,
   };
 }

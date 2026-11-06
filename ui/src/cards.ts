@@ -43,6 +43,12 @@ for (const card of [...data.tokens, ...data.cards]) {
 
 export const cardEntry = (name: string) => byName.get(name)?.card;
 
+/** The face a card named `name` is played with as a land: its first land face
+ * ([CR 712.12](https://yawgatog.com/resources/magic-rules/#R71212)), as Sink into Stupor is
+ * played as Soporific Springs. */
+export const landFace = (name: string) =>
+  cardEntry(name)?.faces.find((f) => /\bLand\b/.test(f.type_line));
+
 /** The face a card or face name names: a card's first, or the face of that name. */
 export function faceEntry(name: string): CardFace | undefined {
   const found = byName.get(name);

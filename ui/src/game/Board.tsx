@@ -19,7 +19,7 @@ import {
   useMotionValue,
   useReducedMotion,
 } from "motion/react";
-import { faceEntry } from "../cards";
+import { faceEntry, landFace } from "../cards";
 import type { Highlight } from "../components/Card";
 import {
   Button,
@@ -809,7 +809,10 @@ export function Board({
         {(menu?.pointed ?? (inspected && !menu)) && !castingNow && !dimmed && (
           <InspectAt
             view={view}
-            object={objects.get(menu?.slot ?? inspected!.slot)}
+            object={pointedObject(
+              objects.get(menu?.slot ?? inspected!.slot),
+              menu?.pointed,
+            )}
             x={menu ? menu.at.x : inspected!.x}
             lit={menu?.pointed && litParagraph(menu.pointed, objects)}
           />
@@ -1284,6 +1287,18 @@ function InspectAt({
       lit={lit}
     />
   );
+}
+
+/** A card as an option pointed at shows it: playing a land, its land face. */
+function pointedObject(
+  object: ObjectView | undefined,
+  act: Act | undefined,
+): ObjectView | undefined {
+  const land =
+    act?.option.kind === "playLand" && object?.name
+      ? landFace(object.name)
+      : undefined;
+  return land && object ? { ...object, name: land.name } : object;
 }
 
 /** The paragraph of its card's rules text an activation's ability is, if the card says it. */
