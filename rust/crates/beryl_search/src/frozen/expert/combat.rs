@@ -313,7 +313,7 @@ impl Sim<'_> {
                 top = (i, score);
             }
         }
-        Choice(top.0 as u8)
+        Choice(top.0 as u16)
     }
 
     /// What an attacker could attack: the player, then each planeswalker the opponent
@@ -597,7 +597,7 @@ fn declare(s: &State, d: &Decision, want: Declare) -> Option<Choice> {
             (Declare::Every(_), Opt::Attack(b)) => s.derived(b).power > 0,
             _ => false,
         })
-        .map(|i| Choice(i as u8))
+        .map(|i| Choice(i as u16))
 }
 
 /// The answer to the question that follows declaring `d`: what it attacks or blocks.
@@ -663,5 +663,5 @@ fn option(d: &Decision, want: Opt) -> Option<Choice> {
             _ => None,
         },
     }
-    .map(|i| Choice(i as u8))
+    .map(|i| Choice(i as u16))
 }

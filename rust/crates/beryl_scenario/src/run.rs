@@ -196,7 +196,7 @@ fn library_slot(s: &State, t: &GameTable, player: Seat, name: &str) -> Slot {
 /// The name of the object in `slot`: its face up's, which is the card's own name everywhere
 /// but on the stack and the battlefield (CR 712.8a, 712.8f). A face-down permanent, which has
 /// no name, goes by its card's.
-fn name_of<L: Layout>(s: &State<L>, t: &GameTable, slot: Slot) -> &'static str {
+fn name_of<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> &'static str {
     let def = t.def(s.card(slot));
     match s.object(slot).face {
         FaceIx::DOWN => def.name,
@@ -871,7 +871,7 @@ impl Runner {
     /// action: one the runner, given the action, would answer `d` with.
     fn picks(&self, d: &Decision) -> Vec<(Choice, Action)> {
         let mut out = Vec::new();
-        for c in (0..d.len() as u8).map(Choice) {
+        for c in (0..d.len() as u16).map(Choice) {
             let action = if d.kind == DecisionKind::Priority {
                 let Some(o) = d.candidates.option(c) else {
                     continue;
@@ -1015,8 +1015,11 @@ impl Live {
 }
 
 /// The first option of `d` that `pick` accepts.
-fn option_index(d: &Decision, mut pick: impl FnMut(Opt) -> bool) -> Option<Choice> {
-    (0..d.len() as u8)
+fn option_index<L: Layout>(
+    d: &Decision<L>,
+    mut pick: impl FnMut(Opt<L>) -> bool,
+) -> Option<Choice> {
+    (0..d.len() as u16)
         .map(Choice)
         .find(|&c| d.candidates.option(c).is_some_and(&mut pick))
 }
@@ -1028,7 +1031,7 @@ fn option_index(d: &Decision, mut pick: impl FnMut(Opt) -> bool) -> Option<Choic
 pub fn answer<L: Layout>(
     t: &GameTable,
     s: &State<L>,
-    d: &Decision,
+    d: &Decision<L>,
     action: &Action,
 ) -> Option<Choice> {
     match *action {
@@ -1039,7 +1042,7 @@ pub fn answer<L: Layout>(
 
 /// Whether `o` is the priority option `action` takes: playing, casting, activating or turning
 /// face up its card.
-fn takes<L: Layout>(t: &GameTable, s: &State<L>, action: &Action, o: Opt) -> bool {
+fn takes<L: Layout>(t: &GameTable, s: &State<L>, action: &Action, o: Opt<L>) -> bool {
     let name = |slot| name_of(s, t, slot);
     match *action {
         Action::PlayLand { card, .. } => matches!(o, Opt::PlayLand(slot) if name(slot) == card),
@@ -1076,10 +1079,10 @@ fn taking(action: &Action) -> String {
 }
 
 /// The option of `d` that `pick` names.
-fn pick_in<L: Layout>(t: &GameTable, s: &State<L>, d: &Decision, pick: Pick) -> Option<Choice> {
+fn pick_in<L: Layout>(t: &GameTable, s: &State<L>, d: &Decision<L>, pick: Pick) -> Option<Choice> {
     let wanted = match pick {
         Pick::Card { card } => {
-            return (0..d.len() as u8).map(Choice).find(|&c| {
+            return (0..d.len() as u16).map(Choice).find(|&c| {
                 d.candidates
                     .object(c)
                     .or_else(|| d.candidates.option(c).and_then(|o| named(s, o)))
@@ -1099,7 +1102,7 @@ fn pick_in<L: Layout>(t: &GameTable, s: &State<L>, d: &Decision, pick: Pick) -> 
 }
 
 /// The object an option names, if it names one.
-fn named<L: Layout>(s: &State<L>, o: Opt) -> Option<Slot> {
+fn named<L: Layout>(s: &State<L>, o: Opt<L>) -> Option<L::Slot> {
     match o {
         Opt::PlayLand(slot)
         | Opt::Attack(slot)
@@ -1113,7 +1116,7 @@ fn named<L: Layout>(s: &State<L>, o: Opt) -> Option<Slot> {
         Opt::Defender(slot) => slot,
         Opt::Trigger(i) => s
             .triggers()
-            .get(usize::from(i))
+            .get(Into::<usize>::into(i))
             .and_then(|tr| tr.source)
             .map(|r| r.slot),
         _ => None,
@@ -1121,8 +1124,8 @@ fn named<L: Layout>(s: &State<L>, o: Opt) -> Option<Slot> {
 }
 
 /// A decision as a scenario author reads it.
-pub fn describe<L: Layout>(t: &GameTable, s: &State<L>, d: &Decision) -> String {
-    let candidates: Vec<String> = (0..d.len() as u8)
+pub fn describe<L: Layout>(t: &GameTable, s: &State<L>, d: &Decision<L>) -> String {
+    let candidates: Vec<String> = (0..d.len() as u16)
         .map(|i| {
             let c = Choice(i);
             match (d.candidates.object(c), d.candidates.option(c)) {

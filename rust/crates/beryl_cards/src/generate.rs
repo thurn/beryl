@@ -118,7 +118,7 @@ fn unambiguous(live: &Live, d: &beryl_engine::Decision) -> Vec<Action> {
         } => Some(card),
         _ => None,
     };
-    let names: Vec<&str> = (0..d.len() as u8)
+    let names: Vec<&str> = (0..d.len() as u16)
         .filter_map(|c| live.name_of(d, beryl_engine::Choice(c)))
         .collect();
     picks

@@ -44,7 +44,7 @@ impl AgentDecision {
 
 /// A player: answers decisions from what its seat can see.
 pub trait Agent<L: Layout = Small> {
-    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision) -> Choice;
+    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice;
 
     /// The search behind the last answer; none if it was answered without one, or by an
     /// agent that does not search.
@@ -62,7 +62,7 @@ pub trait Agent<L: Layout = Small> {
 
 /// A boxed agent, as the registry builds them, plays like the agent inside.
 impl<L: Layout, T: Agent<L> + ?Sized> Agent<L> for Box<T> {
-    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision) -> Choice {
+    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
         (**self).choose(obs, d)
     }
 
@@ -117,7 +117,7 @@ impl<A: Widen> Agent<Small> for Widening<A> {
 }
 
 impl<A: Widen> Agent<Large> for Widening<A> {
-    fn choose(&mut self, obs: Observation<'_, Large>, d: &Decision) -> Choice {
+    fn choose(&mut self, obs: Observation<'_, Large>, d: &Decision<Large>) -> Choice {
         let small = &self.small;
         self.large
             .get_or_insert_with(|| small.widen())
@@ -152,8 +152,8 @@ impl RandomAgent {
 }
 
 impl<L: Layout> Agent<L> for RandomAgent {
-    fn choose(&mut self, _obs: Observation<'_, L>, d: &Decision) -> Choice {
-        Choice(self.rng.below(d.len() as u64) as u8)
+    fn choose(&mut self, _obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
+        Choice(self.rng.below(d.len() as u64) as u16)
     }
 }
 
@@ -176,7 +176,7 @@ impl GreedyAgent {
 }
 
 impl<L: Layout> Agent<L> for GreedyAgent {
-    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision) -> Choice {
+    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
         self.policy.choose(&self.table, obs, d)
     }
 }

@@ -8,11 +8,12 @@ use beryl_engine::card::{
     ManaColor, ManaCost, Types,
 };
 use beryl_engine::event::{Event, Reason, Recipient};
+use beryl_engine::layout::Queue;
 use beryl_engine::state::{CounterKind, MulliganStatus, ObjectFlags, StackEntry, TurnStep};
 use beryl_engine::{
     Ask, Candidates, Decision, DecisionKind, GameTable, Layout, NextStop, Observation, Opt,
-    Outcome, Refusal, Seat, Slot, StallReason, StepStops, Stops, Zone, can_declare_blockers,
-    next_step_stop, next_stop, refusal,
+    Outcome, Refusal, Seat, SlotId, Small, StallReason, StepStops, Stops, Zone,
+    can_declare_blockers, next_step_stop, next_stop, refusal,
 };
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -31,7 +32,7 @@ pub struct PlayerView {
     pub turn: TurnView,
     pub players: Players,
     /// Permanents, in the order they entered.
-    pub battlefield: Vec<u8>,
+    pub battlefield: Vec<u16>,
     /// Every object in a zone, by slot: the battlefield, the stack, and each player's library,
     /// hand, graveyard and exile.
     pub objects: Vec<ObjectView>,
@@ -98,7 +99,7 @@ pub struct DecisionId {
 
 /// A candidate of a decision, by its position in [`DecisionView::candidates`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub struct CandidateIndex(pub u8);
+pub struct CandidateIndex(pub u16);
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -135,9 +136,9 @@ pub struct PlayerState {
     /// Where they are in the mulligan (CR 103.5): kept, once the game begins.
     pub mulligan: Declaration,
     /// Bottom first.
-    pub library: Vec<u8>,
+    pub library: Vec<u16>,
     /// Bottom first.
-    pub graveyard: Vec<u8>,
+    pub graveyard: Vec<u16>,
     /// The emblems' names.
     pub emblems: Vec<String>,
 }
@@ -158,7 +159,7 @@ pub struct ManaPool {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ObjectView {
-    pub slot: u8,
+    pub slot: u16,
     pub zone: ZoneName,
     pub owner: Side,
     pub controller: Side,
@@ -179,13 +180,13 @@ pub struct ObjectView {
     pub types: Vec<CardType>,
     /// On the battlefield, for creatures: power and toughness after continuous effects.
     pub pt: Option<PowerToughness>,
-    pub attached_to: Option<u8>,
+    pub attached_to: Option<u16>,
     /// The permanent that exiled it until it leaves (CR 610.3).
-    pub exiled_by: Option<u8>,
+    pub exiled_by: Option<u16>,
     /// The object whose linked ability exiled it, if that object's other abilities may still
     /// find it among the cards "exiled with" it
     /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)).
-    pub exiled_with: Option<u8>,
+    pub exiled_with: Option<u16>,
     pub combat: Option<Combat>,
 }
 
@@ -210,12 +211,12 @@ pub enum Combat {
     /// Attacking a player, or the planeswalker in `planeswalker`.
     #[serde(rename_all = "camelCase")]
     Attacking {
-        planeswalker: Option<u8>,
+        planeswalker: Option<u16>,
         blocked: bool,
     },
     /// Blocking the attacker in `attacker`, if it is still in combat.
     #[serde(rename_all = "camelCase")]
-    Blocking { attacker: Option<u8> },
+    Blocking { attacker: Option<u16> },
 }
 
 /// A spell or ability on the stack.
@@ -224,7 +225,7 @@ pub enum Combat {
 pub enum StackItem {
     /// The spell in `slot`, whose object says what it is and who controls it.
     Spell {
-        slot: u8,
+        slot: u16,
         targets: Vec<TargetRef>,
         /// The announced value of X.
         x: u8,
@@ -237,7 +238,7 @@ pub enum StackItem {
     /// to other objects, when `granted`), from the object in `source`, which may have left its
     /// zone since; an emblem's ability has none.
     Ability {
-        source: Option<u8>,
+        source: Option<u16>,
         ability: u8,
         granted: bool,
         name: String,
@@ -275,7 +276,7 @@ pub enum PaidCost {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum TargetRef {
     Player { player: Side },
-    Object { slot: u8 },
+    Object { slot: u16 },
 }
 
 /// The viewer's decision, its candidates in the order a [`CandidateIndex`] counts them.
@@ -300,7 +301,7 @@ pub struct DecisionView {
     /// the stack (which a target, an X or a payment is chosen for); the attacker whose combat
     /// damage is divided; the land asking for life. None for priority and the other combat
     /// declarations.
-    pub source: Option<u8>,
+    pub source: Option<u16>,
     /// The session halts the viewer here: a priority where passing is all they can do,
     /// which the engine would pass for them, offered under the smart stops at the start of
     /// their own precombat main phase (an end-turn button), so their turn never ends unseen.
@@ -318,7 +319,7 @@ pub struct DecisionView {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Refused {
-    pub slot: u8,
+    pub slot: u16,
     pub reason: RefusalView,
 }
 
@@ -330,7 +331,7 @@ pub enum RefusalView {
     /// Only at sorcery speed, which it is not. `by`: the opponent's permanent limiting the
     /// viewer to sorcery speed, as Teferi, Time Raveler does, if the card could be cast now
     /// but for it.
-    Timing { by: Option<u8> },
+    Timing { by: Option<u16> },
     /// A land, and the viewer has played their land this turn.
     LandPlayed,
     /// Its mana cost can't be paid.
@@ -358,7 +359,7 @@ pub enum AskView {
         zone: ZoneName,
         count: u8,
         to: ZoneName,
-        eligible: Vec<u8>,
+        eligible: Vec<u16>,
     },
     /// A card from the hand to put on top of the library, `count` of them still to put, each
     /// on the one before.
@@ -375,9 +376,9 @@ pub enum AskView {
     DiscardBasicLand { count: u8 },
     /// Whether the card in `card` goes on top of its owner's library (yes) or the bottom
     /// (no).
-    TopOrBottom { card: u8 },
+    TopOrBottom { card: u16 },
     /// Whether to move the card in `card` to `to`, as "you may exile that card".
-    MayMove { card: u8, to: ZoneName },
+    MayMove { card: u16, to: ZoneName },
     /// Whether the card an explore revealed goes to the graveyard.
     Explore,
     /// A `chooseObject` for which of the top two cards of the viewer's library, which they
@@ -433,7 +434,7 @@ pub struct CandidateView {
     pub payments: Vec<Payment>,
     /// For a candidate that declares a blocker: the attackers it may block, by slot, one of
     /// each set of interchangeable attackers (architecture §7.2). None otherwise.
-    pub blocks: Vec<u8>,
+    pub blocks: Vec<u16>,
     /// For a candidate that activates an ability of the object's own face, or puts a waiting
     /// trigger on the stack: how many abilities of its kind (activated, mana abilities among
     /// them, or triggered) its face lists before it, as [`StackItem::Ability`]'s `nth` counts
@@ -456,7 +457,7 @@ pub struct Payment {
     /// consume or leave floating, architecture §10).
     pub plan: Option<u8>,
     /// Permanents, by slot.
-    pub taps: Vec<u8>,
+    pub taps: Vec<u16>,
     /// For a payment at a value of X: the total mana cost that value makes, as Oracle text
     /// writes costs, so the UI can say what each X costs.
     pub cost: Option<String>,
@@ -468,11 +469,11 @@ pub struct Payment {
 pub enum Candidate {
     /// The object in this slot, for a decision among objects.
     Object {
-        slot: u8,
+        slot: u16,
     },
     Pass,
     PlayLand {
-        slot: u8,
+        slot: u16,
     },
     Play,
     Draw,
@@ -482,41 +483,41 @@ pub enum Candidate {
     /// `ability`th, by which a later decision's candidates (each index shifts as triggers go
     /// onto the stack) still name it.
     Trigger {
-        index: u8,
-        source: Option<u8>,
+        index: u16,
+        source: Option<u16>,
         ability: u8,
     },
     Yes,
     No,
     Done,
     Attack {
-        slot: u8,
+        slot: u16,
     },
     /// Attack the planeswalker in `planeswalker`, or the defending player.
     Defender {
-        planeswalker: Option<u8>,
+        planeswalker: Option<u16>,
     },
     Block {
-        slot: u8,
+        slot: u16,
     },
     Lethal {
-        slot: u8,
+        slot: u16,
     },
     /// Cast with face `face` up, paying the face's casting options at the indices in `costs`.
     Cast {
-        slot: u8,
+        slot: u16,
         face: u8,
         costs: Vec<u8>,
     },
     /// The ability at index `ability` among the object's own, or, when `granted`, among
     /// those other objects grant it.
     Activate {
-        slot: u8,
+        slot: u16,
         ability: u8,
         granted: bool,
     },
     Mana {
-        slot: u8,
+        slot: u16,
         color: Mana,
     },
     Pool {
@@ -533,7 +534,7 @@ pub enum Candidate {
     },
     /// Turn the face-down permanent in `slot` face up, paying its card's mana cost.
     TurnFaceUp {
-        slot: u8,
+        slot: u16,
     },
 }
 
@@ -688,13 +689,13 @@ impl<'de> Deserialize<'de> for StepSet {
 pub enum GameEvent {
     /// The object now in `slot` arrived from another zone.
     ZoneChange {
-        slot: u8,
+        slot: u16,
         from: ZoneName,
         to: ZoneName,
         reason: Why,
     },
     Damage {
-        source: u8,
+        source: u16,
         to: TargetRef,
         amount: u8,
         combat: bool,
@@ -712,27 +713,27 @@ pub enum GameEvent {
         amount: u8,
     },
     CountersAdded {
-        slot: u8,
+        slot: u16,
         counter: Counter,
         amount: u8,
     },
     CountersRemoved {
-        slot: u8,
+        slot: u16,
         counter: Counter,
         amount: u8,
     },
     Tap {
-        slot: u8,
+        slot: u16,
     },
     Untap {
-        slot: u8,
+        slot: u16,
     },
     TokensCreated {
         controller: Side,
-        tokens: Vec<u8>,
+        tokens: Vec<u16>,
     },
     Cast {
-        slot: u8,
+        slot: u16,
         controller: Side,
     },
     /// An ability was activated, or a triggered one with targets put on the stack, as the
@@ -748,21 +749,21 @@ pub enum GameEvent {
     },
     Attack {
         player: Side,
-        attackers: Vec<u8>,
+        attackers: Vec<u16>,
     },
     StepBegins {
         step: Step,
         active: Side,
     },
     GainControl {
-        slot: u8,
+        slot: u16,
         player: Side,
     },
     CoinFlip {
         player: Side,
         won: bool,
         /// The permanent whose ability flipped it.
-        source: u8,
+        source: u16,
     },
     Lose {
         player: Side,
@@ -879,10 +880,10 @@ impl CardType {
 
 /// Where the game stands, as the session knows it: what [`player_view`] turns into a [`Status`].
 #[derive(Clone, Copy, Debug)]
-pub enum Moment<'a> {
+pub enum Moment<'a, L: Layout = Small> {
     /// The viewer's decision `id` is open, asked by the resolution of the stack entry given,
     /// if one asks it.
-    Deciding(DecisionId, &'a Decision, Option<&'a StackEntry>),
+    Deciding(DecisionId, &'a Decision<L>, Option<&'a StackEntry<L>>),
     /// The viewer is halted ([`DecisionView::halt`]) with decision `id`.
     Halted(DecisionId),
     Thinking,
@@ -901,9 +902,9 @@ pub enum Moment<'a> {
 pub fn player_view<L: Layout>(
     t: &GameTable,
     obs: Observation<'_, L>,
-    moment: Moment<'_>,
+    moment: Moment<'_, L>,
     stops: StopsSetting,
-    events: &[Event],
+    events: &[Event<L>],
 ) -> PlayerView {
     let turn = obs.turn();
     let mut objects = Vec::new();
@@ -935,7 +936,7 @@ pub fn player_view<L: Layout>(
             objects.extend(
                 slots
                     .iter()
-                    .map(|&slot| object_view(t, obs, Slot::new(slot))),
+                    .map(|&slot| object_view(t, obs, L::Slot::from_index(usize::from(slot)))),
             );
         }
         // Unordered zones: their objects say where they are.
@@ -1011,13 +1012,13 @@ fn side<L: Layout>(obs: Observation<'_, L>, p: Seat) -> Side {
 }
 
 /// Slots as the protocol numbers them.
-fn slots(slots: impl IntoIterator<Item = Slot>) -> Vec<u8> {
-    slots.into_iter().map(Slot::get).collect()
+fn slots<S: SlotId>(slots: impl IntoIterator<Item = S>) -> Vec<u16> {
+    slots.into_iter().map(SlotId::num).collect()
 }
 
 /// The name of the face up of the object in `slot`, if the viewer knows it; for a face-down
 /// permanent, the name of its card, which it turns face up with (CR 712.15a).
-fn name<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: Slot) -> Option<&'static str> {
+fn name<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot) -> Option<&'static str> {
     let face = match obs.object(slot).face {
         FaceIx::DOWN => FaceIx::FRONT,
         face => face,
@@ -1030,13 +1031,13 @@ fn name<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: Slot) -> Option
 fn face_name<L: Layout>(
     t: &GameTable,
     obs: Observation<'_, L>,
-    slot: Slot,
+    slot: L::Slot,
     face: FaceIx,
 ) -> Option<&'static str> {
     Some(t.def(obs.card(slot)?).face_name(face))
 }
 
-fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: Slot) -> ObjectView {
+fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot) -> ObjectView {
     let o = obs.object(slot);
     let flags = o.flags;
     let on_battlefield = o.zone == Zone::Battlefield;
@@ -1060,9 +1061,9 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: Slot) ->
         })
     })
     .collect();
-    let some = |s: Option<Slot>| s.map(Slot::get);
+    let some = |s: Option<L::Slot>| s.map(SlotId::num);
     ObjectView {
-        slot: slot.get(),
+        slot: slot.num(),
         zone: o.zone.into(),
         owner: side(obs, o.owner),
         controller: side(obs, obs.controller(slot)),
@@ -1142,7 +1143,7 @@ fn ability_order(list: &[Ability], index: u8) -> (bool, u8) {
 /// The costs the spell `e` was cast with: a flashback cost, which is an alternative cost
 /// ([CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a)), or else the options of
 /// its face that were paid.
-fn paid_costs(t: &GameTable, e: &StackEntry) -> Vec<PaidCost> {
+fn paid_costs<L: Layout>(t: &GameTable, e: &StackEntry<L>) -> Vec<PaidCost> {
     if e.flashback {
         return vec![PaidCost::Flashback];
     }
@@ -1158,7 +1159,7 @@ fn paid_costs(t: &GameTable, e: &StackEntry) -> Vec<PaidCost> {
         .collect()
 }
 
-fn stack_item<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &StackEntry) -> StackItem {
+fn stack_item<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &StackEntry<L>) -> StackItem {
     let targets = e
         .targets
         .iter()
@@ -1166,11 +1167,11 @@ fn stack_item<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &StackEntry)
             (Some(player), _) => TargetRef::Player {
                 player: side(obs, player),
             },
-            (None, Some(o)) => TargetRef::Object { slot: o.slot.get() },
+            (None, Some(o)) => TargetRef::Object { slot: o.slot.num() },
             (None, None) => unreachable!("a target is a player or an object"),
         })
         .collect();
-    let source = e.object.map(|r| r.slot.get());
+    let source = e.object.map(|r| r.slot.num());
     match e.ability {
         None => StackItem::Spell {
             slot: source.expect("a spell's card"),
@@ -1204,8 +1205,8 @@ fn decision_view<L: Layout>(
     t: &GameTable,
     obs: Observation<'_, L>,
     id: DecisionId,
-    d: &Decision,
-    resolving: Option<&StackEntry>,
+    d: &Decision<L>,
+    resolving: Option<&StackEntry<L>>,
     stops: StopsSetting,
 ) -> DecisionView {
     let candidates = match &d.candidates {
@@ -1213,7 +1214,7 @@ fn decision_view<L: Layout>(
             .iter()
             .map(|slot| CandidateView {
                 label: name(t, obs, slot).unwrap_or("a hidden card").to_owned(),
-                option: Candidate::Object { slot: slot.get() },
+                option: Candidate::Object { slot: slot.num() },
                 payments: Vec::new(),
                 blocks: Vec::new(),
                 nth: None,
@@ -1248,7 +1249,7 @@ fn refused<L: Layout>(t: &GameTable, obs: Observation<'_, L>) -> Vec<Refused> {
         .filter_map(|slot| {
             let reason = match refusal(obs, t, slot)? {
                 Refusal::Timing { by } => RefusalView::Timing {
-                    by: by.map(Slot::get),
+                    by: by.map(SlotId::num),
                 },
                 Refusal::LandPlayed => RefusalView::LandPlayed,
                 Refusal::Mana => RefusalView::Mana,
@@ -1256,7 +1257,7 @@ fn refused<L: Layout>(t: &GameTable, obs: Observation<'_, L>) -> Vec<Refused> {
                 Refusal::Target => RefusalView::Target,
             };
             Some(Refused {
-                slot: slot.get(),
+                slot: slot.num(),
                 reason,
             })
         })
@@ -1291,7 +1292,7 @@ fn halt_view<L: Layout>(
     }
 }
 
-fn ask_view<L: Layout>(obs: Observation<'_, L>, ask: Ask) -> AskView {
+fn ask_view<L: Layout>(obs: Observation<'_, L>, ask: Ask<L>) -> AskView {
     match ask {
         Ask::Plain => AskView::Plain,
         Ask::Scry { count } => AskView::Scry { count },
@@ -1316,7 +1317,7 @@ fn ask_view<L: Layout>(obs: Observation<'_, L>, ask: Ask) -> AskView {
         Ask::Bottom { count } => AskView::Bottom { count },
         Ask::DiscardBasicLand { count } => AskView::DiscardBasicLand { count },
         Ask::MayMove { card, to } => AskView::MayMove {
-            card: card.get(),
+            card: card.num(),
             to: to.into(),
         },
         Ask::Explore => AskView::Explore,
@@ -1325,7 +1326,7 @@ fn ask_view<L: Layout>(obs: Observation<'_, L>, ask: Ask) -> AskView {
             zone: zone.into(),
             count,
         },
-        Ask::TopOrBottom { card } => AskView::TopOrBottom { card: card.get() },
+        Ask::TopOrBottom { card } => AskView::TopOrBottom { card: card.num() },
         Ask::Search { max } => AskView::Search { max },
         Ask::MaySearch => AskView::MaySearch,
         Ask::Untap { max } => AskView::Untap { max },
@@ -1368,9 +1369,9 @@ fn pass_to<L: Layout>(obs: Observation<'_, L>, stops: StopsSetting) -> PassTo {
 /// [`DecisionView::source`].
 fn decision_source<L: Layout>(
     obs: Observation<'_, L>,
-    d: &Decision,
-    resolving: Option<&StackEntry>,
-) -> Option<u8> {
+    d: &Decision<L>,
+    resolving: Option<&StackEntry<L>>,
+) -> Option<u16> {
     let slot = match (d.kind, d.ask) {
         (_, Ask::PayLife { land, .. }) => Some(land),
         (
@@ -1396,11 +1397,11 @@ fn decision_source<L: Layout>(
             .and_then(|e| e.object)
             .map(|r| r.slot),
     };
-    slot.map(Slot::get)
+    slot.map(SlotId::num)
 }
 
-fn candidate<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt) -> CandidateView {
-    let named = |slot: Slot| name(t, obs, slot).unwrap_or("a hidden card");
+fn candidate<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) -> CandidateView {
+    let named = |slot: L::Slot| name(t, obs, slot).unwrap_or("a hidden card");
     let player = |p: Seat| match side(obs, p) {
         Side::You => "you",
         Side::Opponent => "your opponent",
@@ -1413,7 +1414,7 @@ fn candidate<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt) -> Candi
                 "Play {}",
                 land_face_name(t, obs, slot).unwrap_or("a hidden card")
             ),
-            Candidate::PlayLand { slot: slot.get() },
+            Candidate::PlayLand { slot: slot.num() },
         ),
         Opt::Play => ("Play first".to_owned(), Candidate::Play),
         Opt::Draw => ("Draw first".to_owned(), Candidate::Draw),
@@ -1425,7 +1426,7 @@ fn candidate<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt) -> Candi
         Opt::Done => ("Done".to_owned(), Candidate::Done),
         Opt::Attack(slot) => (
             format!("Attack with {}", named(slot)),
-            Candidate::Attack { slot: slot.get() },
+            Candidate::Attack { slot: slot.num() },
         ),
         Opt::Defender(None) => (
             format!("Attack {}", player(obs.turn().active.opponent())),
@@ -1434,16 +1435,16 @@ fn candidate<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt) -> Candi
         Opt::Defender(Some(slot)) => (
             format!("Attack {}", named(slot)),
             Candidate::Defender {
-                planeswalker: Some(slot.get()),
+                planeswalker: Some(slot.num()),
             },
         ),
         Opt::Block(slot) => (
             format!("Block with {}", named(slot)),
-            Candidate::Block { slot: slot.get() },
+            Candidate::Block { slot: slot.num() },
         ),
         Opt::Lethal(slot) => (
             format!("Assign lethal damage to {}", named(slot)),
-            Candidate::Lethal { slot: slot.get() },
+            Candidate::Lethal { slot: slot.num() },
         ),
         Opt::Cast { slot, face, costs } => cast_candidate(t, obs, slot, face, costs),
         Opt::Activate { slot, ability } => (
@@ -1458,7 +1459,7 @@ fn candidate<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt) -> Candi
             (
                 format!("Tap {} for {symbol}", named(slot)),
                 Candidate::Mana {
-                    slot: slot.get(),
+                    slot: slot.num(),
                     color,
                 },
             )
@@ -1481,11 +1482,11 @@ fn candidate<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt) -> Candi
         ),
         Opt::Object(slot) => (
             named(slot).to_owned(),
-            Candidate::Object { slot: slot.get() },
+            Candidate::Object { slot: slot.num() },
         ),
         Opt::TurnFaceUp(slot) => (
             format!("Turn {} face up", named(slot)),
-            Candidate::TurnFaceUp { slot: slot.get() },
+            Candidate::TurnFaceUp { slot: slot.num() },
         ),
     };
     CandidateView {
@@ -1499,14 +1500,14 @@ fn candidate<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt) -> Candi
 }
 
 /// [`CandidateView::nth`].
-fn ability_nth<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt) -> Option<u8> {
+fn ability_nth<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) -> Option<u8> {
     let (face, i) = match o {
         Opt::Activate {
             slot,
             ability: AbilityIx::Own(i),
         } => (t.def(obs.card(slot)?).face(obs.object(slot).face), i),
         Opt::Trigger(index) => {
-            let trigger = obs.triggers()[usize::from(index)];
+            let trigger = obs.triggers()[Into::<usize>::into(index)];
             (t.def(trigger.card).face(trigger.face), trigger.ability)
         }
         _ => return None,
@@ -1522,7 +1523,7 @@ fn ability_nth<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt) -> Opt
 fn land_face_name<L: Layout>(
     t: &GameTable,
     obs: Observation<'_, L>,
-    slot: Slot,
+    slot: L::Slot,
 ) -> Option<&'static str> {
     let def = t.def(obs.card(slot)?);
     let face = def
@@ -1535,7 +1536,7 @@ fn land_face_name<L: Layout>(
 fn cast_candidate<L: Layout>(
     t: &GameTable,
     obs: Observation<'_, L>,
-    slot: Slot,
+    slot: L::Slot,
     face: FaceIx,
     costs: Castings,
 ) -> (String, Candidate) {
@@ -1543,7 +1544,7 @@ fn cast_candidate<L: Layout>(
     (
         format!("Cast {spell}{}", casting_options(t, obs, slot, face, costs)),
         Candidate::Cast {
-            slot: slot.get(),
+            slot: slot.num(),
             face: face.get(),
             costs: costs.indices().collect(),
         },
@@ -1558,7 +1559,7 @@ fn cast_candidate<L: Layout>(
 fn casting_options<L: Layout>(
     t: &GameTable,
     obs: Observation<'_, L>,
-    slot: Slot,
+    slot: L::Slot,
     face: FaceIx,
     costs: Castings,
 ) -> String {
@@ -1624,7 +1625,7 @@ fn color_words(colors: Colors) -> String {
 fn activated_cost<L: Layout>(
     t: &GameTable,
     obs: Observation<'_, L>,
-    slot: Slot,
+    slot: L::Slot,
     ability: AbilityIx,
 ) -> Option<String> {
     let (card, face, ability) = match ability {
@@ -1702,29 +1703,33 @@ fn counter_name(kind: CounterKind) -> &'static str {
 }
 
 /// Activating ability `ability` of the object in `slot`.
-fn activate(slot: Slot, ability: AbilityIx) -> Candidate {
+fn activate<S: SlotId>(slot: S, ability: AbilityIx) -> Candidate {
     let (ability, granted) = match ability {
         AbilityIx::Own(i) => (i, false),
         AbilityIx::Granted(k) => (k, true),
     };
     Candidate::Activate {
-        slot: slot.get(),
+        slot: slot.num(),
         ability,
         granted,
     }
 }
 
 /// Putting the waiting trigger at `index` on the stack.
-fn trigger<L: Layout>(t: &GameTable, obs: Observation<'_, L>, index: u8) -> (String, Candidate) {
-    let trigger = obs.triggers()[usize::from(index)];
+fn trigger<L: Layout>(
+    t: &GameTable,
+    obs: Observation<'_, L>,
+    index: L::Index,
+) -> (String, Candidate) {
+    let trigger = obs.triggers()[Into::<usize>::into(index)];
     (
         format!(
             "Put {}'s trigger on the stack",
             t.def(trigger.card).face_name(trigger.face)
         ),
         Candidate::Trigger {
-            index,
-            source: trigger.source.map(|r| r.slot.get()),
+            index: index.into(),
+            source: trigger.source.map(|r| r.slot.num()),
             ability: trigger.ability,
         },
     )
@@ -1759,17 +1764,17 @@ fn outcome_view<L: Layout>(obs: Observation<'_, L>, o: Outcome, conceded: bool) 
 }
 
 /// What damage was dealt to, as the viewer names it.
-fn recipient<L: Layout>(obs: Observation<'_, L>, to: Recipient) -> TargetRef {
+fn recipient<L: Layout>(obs: Observation<'_, L>, to: Recipient<L>) -> TargetRef {
     match to {
         Recipient::Player(player) => TargetRef::Player {
             player: side(obs, player),
         },
-        Recipient::Permanent(o) => TargetRef::Object { slot: o.slot.get() },
+        Recipient::Permanent(o) => TargetRef::Object { slot: o.slot.num() },
     }
 }
 
 /// An [`Event::Ability`] as the viewer of `obs` is told it: as the stack showed it.
-fn ability_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event) -> GameEvent {
+fn ability_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -> GameEvent {
     let Event::Ability {
         source,
         controller,
@@ -1778,7 +1783,7 @@ fn ability_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event) -
         ability,
         targets,
         x,
-    } = *e
+    } = e.clone()
     else {
         unreachable!("an ability's event");
     };
@@ -1802,7 +1807,7 @@ fn ability_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event) -
 /// carry no identity: anything an event says about a card must come from `obs`, which the
 /// information independence test redeals. The table names only an ability's card, public as
 /// the stack shows it.
-fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event) -> GameEvent {
+fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -> GameEvent {
     let side = |p| side(obs, p);
     match *e {
         Event::ZoneChange {
@@ -1811,7 +1816,7 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event) -> G
             to,
             reason,
         } => GameEvent::ZoneChange {
-            slot: object.slot.get(),
+            slot: object.slot.num(),
             from: from.into(),
             to: to.into(),
             reason: reason.into(),
@@ -1822,7 +1827,7 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event) -> G
             amount,
             combat,
         } => GameEvent::Damage {
-            source: source.slot.get(),
+            source: source.slot.num(),
             to: recipient(obs, to),
             amount,
             combat,
@@ -1844,7 +1849,7 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event) -> G
             kind,
             amount,
         } => GameEvent::CountersAdded {
-            slot: object.slot.get(),
+            slot: object.slot.num(),
             counter: kind.into(),
             amount,
         },
@@ -1853,22 +1858,22 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event) -> G
             kind,
             amount,
         } => GameEvent::CountersRemoved {
-            slot: object.slot.get(),
+            slot: object.slot.num(),
             counter: kind.into(),
             amount,
         },
         Event::Tap { object } => GameEvent::Tap {
-            slot: object.slot.get(),
+            slot: object.slot.num(),
         },
         Event::Untap { object } => GameEvent::Untap {
-            slot: object.slot.get(),
+            slot: object.slot.num(),
         },
         Event::TokensCreated { controller, tokens } => GameEvent::TokensCreated {
             controller: side(controller),
             tokens: slots(tokens.iter()),
         },
         Event::Cast { spell, controller } => GameEvent::Cast {
-            slot: spell.slot.get(),
+            slot: spell.slot.num(),
             controller: side(controller),
         },
         Event::Ability { .. } => ability_event(t, obs, e),
@@ -1881,7 +1886,7 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event) -> G
             active: side(active),
         },
         Event::GainControl { object, player } => GameEvent::GainControl {
-            slot: object.slot.get(),
+            slot: object.slot.num(),
             player: side(player),
         },
         Event::CoinFlip {
@@ -1891,7 +1896,7 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event) -> G
         } => GameEvent::CoinFlip {
             player: side(player),
             won,
-            source: source.slot.get(),
+            source: source.slot.num(),
         },
         Event::Lose { player } => GameEvent::Lose {
             player: side(player),

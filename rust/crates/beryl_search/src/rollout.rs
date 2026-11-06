@@ -22,7 +22,8 @@
 //! - Say yes to every "may" and every "unless pays"; keep the cards worth most, take the best
 //!   a search finds, and scry to the bottom only the cards not worth drawing.
 
-use beryl_engine::Layout;
+use beryl_engine::layout::Queue;
+use beryl_engine::{Layout, Small};
 use std::cell::Cell;
 
 use beryl_engine::card::{
@@ -33,7 +34,7 @@ use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::state::{ObjectFlags, StackEntry};
 use beryl_engine::{
     Answers, Ask, Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome,
-    Scratch, Seat, Slot, State, Step, Zone, apply_decided, next,
+    Scratch, Seat, State, Step, Zone, apply_decided, next,
 };
 
 use beryl_engine::rng::SplitMix64;
@@ -64,20 +65,20 @@ pub struct RolloutPolicy {
 
 /// One candidate of a decision, objects and options alike.
 #[derive(Clone, Copy)]
-pub(crate) enum Candidate {
-    Object(Slot),
-    Option(Opt),
+pub(crate) enum Candidate<L: Layout = Small> {
+    Object(L::Slot),
+    Option(Opt<L>),
 }
 
-impl Candidate {
-    pub(crate) fn option(self) -> Option<Opt> {
+impl<L: Layout> Candidate<L> {
+    pub(crate) fn option(self) -> Option<Opt<L>> {
         match self {
             Candidate::Option(o) => Some(o),
             Candidate::Object(_) => None,
         }
     }
 
-    pub(crate) fn object(self) -> Option<Slot> {
+    pub(crate) fn object(self) -> Option<L::Slot> {
         match self {
             Candidate::Object(slot) | Candidate::Option(Opt::Object(slot)) => Some(slot),
             Candidate::Option(_) => None,
@@ -126,7 +127,7 @@ impl RolloutPolicy {
         &self,
         t: &GameTable,
         obs: Observation<'_, L>,
-        d: &Decision,
+        d: &Decision<L>,
     ) -> Choice {
         self.decide(t, obs, d, false)
     }
@@ -136,7 +137,7 @@ impl RolloutPolicy {
         &self,
         t: &GameTable,
         obs: Observation<'_, L>,
-        d: &Decision,
+        d: &Decision<L>,
         expert: bool,
     ) -> Choice {
         self.decide_by(t, obs, d, expert, &mut Pick::Best)
@@ -149,7 +150,7 @@ impl RolloutPolicy {
         &self,
         t: &GameTable,
         obs: Observation<'_, L>,
-        d: &Decision,
+        d: &Decision<L>,
         soft: &mut Softmax<'_>,
     ) -> Choice {
         self.decide_by(t, obs, d, false, &mut Pick::Soft(soft))
@@ -162,7 +163,7 @@ impl RolloutPolicy {
         &self,
         t: &GameTable,
         obs: Observation<'_, L>,
-        d: &Decision,
+        d: &Decision<L>,
         expert: bool,
         pick: &mut Pick<'_, '_>,
     ) -> Choice {
@@ -268,9 +269,12 @@ impl RolloutPolicy {
 
 /// The candidate with the highest score, the first of equals. A candidate scored `None` is
 /// never chosen over one with a score; when none has one, the first is.
-pub(crate) fn best(d: &Decision, mut score: impl FnMut(Candidate) -> Option<i32>) -> Choice {
+pub(crate) fn best<L: Layout>(
+    d: &Decision<L>,
+    mut score: impl FnMut(Candidate<L>) -> Option<i32>,
+) -> Choice {
     let mut top = (0, i32::MIN);
-    let mut consider = |i: usize, c: Candidate| {
+    let mut consider = |i: usize, c: Candidate<L>| {
         if let Some(s) = score(c)
             && s > top.1
         {
@@ -287,7 +291,7 @@ pub(crate) fn best(d: &Decision, mut score: impl FnMut(Candidate) -> Option<i32>
             .enumerate()
             .for_each(|(i, &opt)| consider(i, Candidate::Option(opt))),
     }
-    Choice(top.0 as u8)
+    Choice(top.0 as u16)
 }
 
 /// How a decision's scores become a choice.
@@ -299,7 +303,11 @@ enum Pick<'s, 'r> {
 }
 
 impl Pick<'_, '_> {
-    fn choose(&mut self, d: &Decision, score: impl FnMut(Candidate) -> Option<i32>) -> Choice {
+    fn choose<L: Layout>(
+        &mut self,
+        d: &Decision<L>,
+        score: impl FnMut(Candidate<L>) -> Option<i32>,
+    ) -> Choice {
         match self {
             Pick::Best => best(d, score),
             Pick::Soft(soft) => soft.choose(d, score),
@@ -322,11 +330,15 @@ pub struct Softmax<'r> {
 }
 
 impl Softmax<'_> {
-    fn choose(&mut self, d: &Decision, mut score: impl FnMut(Candidate) -> Option<i32>) -> Choice {
+    fn choose<L: Layout>(
+        &mut self,
+        d: &Decision<L>,
+        mut score: impl FnMut(Candidate<L>) -> Option<i32>,
+    ) -> Choice {
         let mut scores = [None; 256];
         let mut n = 0;
         let mut top = i32::MIN;
-        let mut consider = |i: usize, c: Candidate| {
+        let mut consider = |i: usize, c: Candidate<L>| {
             let s = score(c);
             if let Some(s) = s {
                 top = top.max(s);
@@ -357,18 +369,18 @@ impl Softmax<'_> {
             if w > 0.0 {
                 last = i;
                 if u < w {
-                    return Choice(i as u8);
+                    return Choice(i as u16);
                 }
                 u -= w;
             }
         }
         // Rounding left the draw past the last weight.
-        Choice(last as u8)
+        Choice(last as u16)
     }
 }
 
 /// Calls `f` with each candidate of `d` and its index.
-fn for_each(d: &Decision, mut f: impl FnMut(usize, Candidate)) {
+fn for_each<L: Layout>(d: &Decision<L>, mut f: impl FnMut(usize, Candidate<L>)) {
     match &d.candidates {
         Candidates::Objects(b) => b
             .iter()
@@ -394,14 +406,14 @@ pub(crate) struct Policy<'a, L: Layout> {
 }
 
 impl<L: Layout> Policy<'_, L> {
-    pub(crate) fn info(&self, slot: Slot) -> Option<CardInfo> {
+    pub(crate) fn info(&self, slot: L::Slot) -> Option<CardInfo> {
         self.obs.card(slot).map(|card| self.values.get(card))
     }
 
     /// What an object is worth: its card's value, plus a creature's power and a
     /// planeswalker's loyalty as they stand on the battlefield, where a land is worth at most
     /// [`LAND_MAX`]. An unknown card is worth 0.
-    pub(crate) fn value(&self, slot: Slot) -> i32 {
+    pub(crate) fn value(&self, slot: L::Slot) -> i32 {
         let Some(info) = self.info(slot) else {
             return 0;
         };
@@ -428,7 +440,7 @@ impl<L: Layout> Policy<'_, L> {
         v
     }
 
-    pub(crate) fn is_land(&self, slot: Slot) -> bool {
+    pub(crate) fn is_land(&self, slot: L::Slot) -> bool {
         self.obs.card(slot).is_some_and(|card| {
             self.t
                 .def(card)
@@ -440,7 +452,7 @@ impl<L: Layout> Policy<'_, L> {
 
     /// What a card in hand is worth keeping: a land is worth much while lands are short and
     /// little once there are six.
-    pub(crate) fn in_hand(&self, slot: Slot) -> i32 {
+    pub(crate) fn in_hand(&self, slot: L::Slot) -> i32 {
         if !self.is_land(slot) {
             return self.value(slot);
         }
@@ -480,7 +492,7 @@ impl<L: Layout> Policy<'_, L> {
     }
 
     /// The score of a priority action or a cast offer; 0 is passing.
-    pub(crate) fn action(&self, o: Opt) -> i32 {
+    pub(crate) fn action(&self, o: Opt<L>) -> i32 {
         match o {
             Opt::PlayLand(slot) => 1000 - self.value(slot),
             Opt::Cast { slot, face, costs } => self.cast(slot, face, costs),
@@ -492,7 +504,7 @@ impl<L: Layout> Policy<'_, L> {
         }
     }
 
-    pub(crate) fn cast(&self, slot: Slot, face: FaceIx, costs: Castings) -> i32 {
+    pub(crate) fn cast(&self, slot: L::Slot, face: FaceIx, costs: Castings) -> i32 {
         let Some(card) = self.obs.card(slot) else {
             return 0;
         };
@@ -540,7 +552,7 @@ impl<L: Layout> Policy<'_, L> {
         }
     }
 
-    pub(crate) fn activate(&self, slot: Slot, i: u8) -> i32 {
+    pub(crate) fn activate(&self, slot: L::Slot, i: u8) -> i32 {
         let Some(card) = self.obs.card(slot) else {
             return 0;
         };
@@ -658,7 +670,7 @@ impl<L: Layout> Policy<'_, L> {
         } else {
             self.me.opponent()
         };
-        let ok = move |slot: Slot, controller: Seat| {
+        let ok = move |slot: L::Slot, controller: Seat| {
             controller == side && self.obs.matches(self.t, &spec.filter, slot)
         };
         let permanents = matches!(
@@ -716,7 +728,7 @@ impl<L: Layout> Policy<'_, L> {
     /// spec of the spell or ability on top of the stack, which a casting or a triggered
     /// ability being put on the stack puts there first (CR 601.2a).
     pub(crate) fn targeting(&self) -> Option<(&'static TargetSpec, bool)> {
-        let e: &StackEntry = self.obs.stack().last()?;
+        let e: &StackEntry<L> = self.obs.stack().last()?;
         let def: &'static CardDef = self.t.def(e.card);
         let face: &'static Face = def.face(e.face);
         let a = match e.ability {
@@ -736,7 +748,7 @@ impl<L: Layout> Policy<'_, L> {
 
     /// A target's score: a candidate on the right side by its value, far above the wrong
     /// side; choosing none in between.
-    pub(crate) fn target(&self, c: Candidate, friendly: bool) -> i32 {
+    pub(crate) fn target(&self, c: Candidate<L>, friendly: bool) -> i32 {
         let side = if friendly {
             self.me
         } else {
@@ -761,24 +773,24 @@ impl<L: Layout> Policy<'_, L> {
         if controller == side { 1000 + v } else { -v }
     }
 
-    pub(crate) fn creature(&self, slot: Slot) -> bool {
+    pub(crate) fn creature(&self, slot: L::Slot) -> bool {
         self.obs.derived(slot).types.intersects(Types::CREATURE)
     }
 
-    pub(crate) fn flags(&self, slot: Slot) -> ObjectFlags {
+    pub(crate) fn flags(&self, slot: L::Slot) -> ObjectFlags {
         self.obs.object(slot).flags
     }
 
     /// Whether `blocker` could block `attacker`, by evasion
     /// ([CR 702.9b](https://yawgatog.com/resources/magic-rules/#R7029b)): "A creature with
     /// flying can't be blocked except by creatures with flying and/or reach."
-    pub(crate) fn evades(&self, attacker: Slot, blocker: Slot) -> bool {
-        let has = |slot: Slot, k: Keywords| self.obs.derived(slot).keywords.intersects(k);
+    pub(crate) fn evades(&self, attacker: L::Slot, blocker: L::Slot) -> bool {
+        let has = |slot: L::Slot, k: Keywords| self.obs.derived(slot).keywords.intersects(k);
         has(attacker, Keywords::FLYING) && !has(blocker, Keywords::FLYING.union(Keywords::REACH))
     }
 
     /// Whether `by`'s power is at least the damage left to kill `slot`.
-    pub(crate) fn kills(&self, by: Slot, slot: Slot) -> bool {
+    pub(crate) fn kills(&self, by: L::Slot, slot: L::Slot) -> bool {
         let left =
             i16::from(self.obs.derived(slot).toughness) - i16::from(self.obs.object(slot).damage);
         i16::from(self.obs.derived(by).power) >= left
@@ -786,7 +798,7 @@ impl<L: Layout> Policy<'_, L> {
 
     /// No untapped creature of the opponent that could block `attacker` would kill it, and
     /// it deals damage.
-    pub(crate) fn safe_attack(&self, attacker: Slot) -> bool {
+    pub(crate) fn safe_attack(&self, attacker: L::Slot) -> bool {
         self.obs.derived(attacker).power > 0
             && !self.obs.battlefield().iter().any(|&b| {
                 self.obs.controller(b) != self.me
@@ -803,7 +815,7 @@ impl<L: Layout> Policy<'_, L> {
     /// ([CR 120.3c](https://yawgatog.com/resources/magic-rules/#R1203c)): "Damage dealt to
     /// a planeswalker causes that many loyalty counters to be removed from that
     /// planeswalker."
-    pub(crate) fn walker_target(&self, walker: Slot) -> i32 {
+    pub(crate) fn walker_target(&self, walker: L::Slot) -> i32 {
         let sent: i32 = self
             .obs
             .battlefield()
@@ -823,11 +835,11 @@ impl<L: Layout> Policy<'_, L> {
         }
     }
 
-    pub(crate) fn attacking(&self, slot: Slot) -> bool {
+    pub(crate) fn attacking(&self, slot: L::Slot) -> bool {
         self.obs.controller(slot) != self.me && self.flags(slot).has(ObjectFlags::ATTACKING)
     }
 
-    pub(crate) fn blocked(&self, attacker: Slot) -> bool {
+    pub(crate) fn blocked(&self, attacker: L::Slot) -> bool {
         self.obs.battlefield().iter().any(|&b| {
             let o = self.obs.object(b);
             o.flags.has(ObjectFlags::BLOCKING) && o.combat == Some(attacker)
@@ -850,7 +862,7 @@ impl<L: Layout> Policy<'_, L> {
 
     /// The score of `blocker` blocking `attacker`, if it is a block worth making: killing it
     /// and surviving, trading up, surviving, or chumping when the damage would be lethal.
-    pub(crate) fn block(&self, blocker: Slot, attacker: Slot) -> Option<i32> {
+    pub(crate) fn block(&self, blocker: L::Slot, attacker: L::Slot) -> Option<i32> {
         if !self.attacking(attacker) || self.blocked(attacker) || self.evades(attacker, blocker) {
             return None;
         }
@@ -871,7 +883,7 @@ impl<L: Layout> Policy<'_, L> {
         }
     }
 
-    pub(crate) fn best_block(&self, blocker: Slot) -> Option<i32> {
+    pub(crate) fn best_block(&self, blocker: L::Slot) -> Option<i32> {
         self.obs
             .battlefield()
             .iter()
@@ -881,7 +893,7 @@ impl<L: Layout> Policy<'_, L> {
 
     /// The creature just declared as a blocker, whose attacker is being chosen: ours,
     /// blocking, and blocking nothing yet (CR 509.1a).
-    pub(crate) fn declaring_blocker(&self) -> Option<Slot> {
+    pub(crate) fn declaring_blocker(&self) -> Option<L::Slot> {
         self.obs.battlefield().iter().copied().find(|&b| {
             let o = self.obs.object(b);
             self.obs.controller(b) == self.me
@@ -920,7 +932,7 @@ impl<L: Layout> Answers<L> for Inline<'_> {
         true
     }
 
-    fn answer(&mut self, obs: Observation<'_, L>, d: &Decision) -> Option<Choice> {
+    fn answer(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Option<Choice> {
         Some(self.policy.choose(self.t, obs, d))
     }
 }
@@ -990,7 +1002,7 @@ fn play_out<A: Answers<L>, L: Layout>(
     x: &mut Scratch<L>,
     answers: &mut A,
     turn: u16,
-    mut choose: impl FnMut(&mut A, Observation<'_, L>, &Decision) -> Choice,
+    mut choose: impl FnMut(&mut A, Observation<'_, L>, &Decision<L>) -> Choice,
 ) -> Option<Outcome> {
     loop {
         match next(s, t, x, answers) {
@@ -1016,7 +1028,7 @@ impl<L: Layout> Answers<L> for SoftInline<'_, '_> {
         true
     }
 
-    fn answer(&mut self, obs: Observation<'_, L>, d: &Decision) -> Option<Choice> {
+    fn answer(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Option<Choice> {
         Some(self.policy.choose_soft(self.t, obs, d, self.soft))
     }
 }

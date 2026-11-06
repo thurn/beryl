@@ -196,7 +196,7 @@ impl Agent for ExpertAgent {
                     };
                     // What each plan leaves untapped: a look at the payment, not ahead.
                     let mut s = start;
-                    apply(&mut s, t, x, &mut inline, Choice(i));
+                    apply(&mut s, t, x, &mut inline, Choice(u16::from(i)));
                     let after = Expert::new(self.policy.view(
                         t,
                         Observation::new(&s, d.player),

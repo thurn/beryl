@@ -2,7 +2,7 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{Subtype, Supertypes, Types};
-use crate::ids::{Seat, Slot};
+use crate::ids::Seat;
 use crate::layout::Layout;
 use crate::state::{ObjectFlags, State, Zone};
 use crate::table::GameTable;
@@ -42,7 +42,13 @@ pub enum Filter {
 
 impl Filter {
     /// Whether the object in `slot` passes, evaluated for player `you`, where X is 0.
-    pub fn matches<L: Layout>(&self, s: &State<L>, t: &GameTable, slot: Slot, you: Seat) -> bool {
+    pub fn matches<L: Layout>(
+        &self,
+        s: &State<L>,
+        t: &GameTable,
+        slot: L::Slot,
+        you: Seat,
+    ) -> bool {
         self.matches_x(s, t, slot, you, 0)
     }
 
@@ -52,7 +58,7 @@ impl Filter {
         &self,
         s: &State<L>,
         t: &GameTable,
-        slot: Slot,
+        slot: L::Slot,
         you: Seat,
         x: u8,
     ) -> bool {
@@ -113,9 +119,9 @@ impl Filter {
         &self,
         s: &State<L>,
         t: &GameTable,
-        within: Bitboard,
+        within: Bitboard<L::Slot>,
         you: Seat,
-    ) -> Bitboard {
+    ) -> Bitboard<L::Slot> {
         self.select_x(s, t, within, you, 0)
     }
 
@@ -124,10 +130,10 @@ impl Filter {
         &self,
         s: &State<L>,
         t: &GameTable,
-        within: Bitboard,
+        within: Bitboard<L::Slot>,
         you: Seat,
         x: u8,
-    ) -> Bitboard {
+    ) -> Bitboard<L::Slot> {
         within
             .iter()
             .filter(|&slot| self.matches_x(s, t, slot, you, x))

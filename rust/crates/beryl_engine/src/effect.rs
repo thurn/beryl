@@ -12,8 +12,8 @@ use crate::card::{
 use crate::decision::{Answers, Ask, Candidates, Choice, Decision, DecisionKind, Opt, StallReason};
 use crate::event::{self, Entry, Reason, Recipient, Sink, TokenEntry};
 use crate::filter::Filter;
-use crate::fixed::{Fixed, Full};
-use crate::ids::{CardIx, Seat, Slot};
+use crate::fixed::Full;
+use crate::ids::{CardIx, Seat};
 use crate::layout::{Layout, Queue, Small};
 use crate::mana;
 use crate::observation::Observation;
@@ -33,22 +33,22 @@ use crate::{layers, trigger};
 pub struct EffectCtx<'a, L: Layout = Small> {
     pub(crate) state: &'a mut State<L>,
     pub(crate) table: &'a GameTable,
-    pub(crate) sink: &'a mut Sink,
-    pub(crate) entry: StackEntry,
+    pub(crate) sink: &'a mut Sink<L>,
+    pub(crate) entry: StackEntry<L>,
     pub(crate) ability: &'static Ability,
     /// Where questions go: an inline source answers them, anything else pauses the body.
     answers: Option<&'a mut dyn Answers<L>>,
     /// The answers given so far to this resolution's questions, and how many this run of
     /// the body has used.
-    record: &'a [u8],
+    record: &'a [L::Index],
     used: usize,
     /// The question that paused this run.
-    pub(crate) question: Option<Decision>,
+    pub(crate) question: Option<Decision<L>>,
     /// For a mana ability that can produce more than one kind of mana, the kind its
     /// activator chose.
     pub(crate) mana: ManaColor,
     /// A card the body lets a player cast as it finishes resolving (CR 608.2g).
-    pub(crate) offer: Option<(ObjectRef, Seat, bool)>,
+    pub(crate) offer: Option<(ObjectRef<L>, Seat, bool)>,
     /// A fixed capacity ran out; the engine stalls once the body returns (§12.3).
     pub(crate) full: bool,
 }
@@ -59,8 +59,8 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     pub(crate) fn new(
         state: &'a mut State<L>,
         table: &'a GameTable,
-        sink: &'a mut Sink,
-        trigger: &PendingTrigger,
+        sink: &'a mut Sink<L>,
+        trigger: &PendingTrigger<L>,
         ability: &'static Ability,
     ) -> Self {
         let entry = StackEntry {
@@ -80,10 +80,10 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     pub(crate) fn resolving(
         state: &'a mut State<L>,
         table: &'a GameTable,
-        sink: &'a mut Sink,
+        sink: &'a mut Sink<L>,
         answers: Option<&'a mut dyn Answers<L>>,
-        record: &'a [u8],
-        entry: StackEntry,
+        record: &'a [L::Index],
+        entry: StackEntry<L>,
         ability: &'static Ability,
     ) -> Self {
         Self {
@@ -119,7 +119,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// # Panics
     ///
     /// For an emblem's ability, which has no source.
-    pub fn source(&self) -> ObjectRef {
+    pub fn source(&self) -> ObjectRef<L> {
         self.entry.object.expect("an ability with a source")
     }
 
@@ -138,7 +138,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
 
     /// What a triggered ability triggered on, with last-known information for a look-back
     /// trigger.
-    pub fn trigger(&self) -> TriggerInfo {
+    pub fn trigger(&self) -> TriggerInfo<L> {
         self.entry.info
     }
 
@@ -156,14 +156,14 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// illegal now ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "Illegal
     /// targets, if any, won't be affected by parts of a resolving spell's effect for which
     /// they're illegal."
-    pub fn target(&self, i: usize) -> Option<Target> {
+    pub fn target(&self, i: usize) -> Option<Target<L>> {
         let target = *self.entry.targets.as_slice().get(i)?;
         cast::still_legal(self.state, self.table, &self.entry, self.ability, target)
             .then_some(target)
     }
 
     /// The `i`th target as an object, if it is one and still legal.
-    pub fn target_object(&self, i: usize) -> Option<ObjectRef> {
+    pub fn target_object(&self, i: usize) -> Option<ObjectRef<L>> {
         self.target(i).and_then(Target::as_object)
     }
 
@@ -200,24 +200,24 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// doesn't resolve and none of its effects occur. A countered spell is put into its
     /// owner's graveyard." With `exile`, it is exiled instead. Returns whether it was
     /// countered.
-    pub fn counter(&mut self, spell: ObjectRef, exile: bool) -> bool {
+    pub fn counter(&mut self, spell: ObjectRef<L>, exile: bool) -> bool {
         let r = cast::counter(self.state, self.table, self.sink, spell, exile);
         self.checked(r)
     }
 
     /// The controller of a spell on the stack.
-    pub fn spell_controller(&self, spell: ObjectRef) -> Option<Seat> {
+    pub fn spell_controller(&self, spell: ObjectRef<L>) -> Option<Seat> {
         self.spell_entry(spell).map(|e| e.controller)
     }
 
-    fn spell_entry(&self, spell: ObjectRef) -> Option<&StackEntry> {
+    fn spell_entry(&self, spell: ObjectRef<L>) -> Option<&StackEntry<L>> {
         self.state.stack().iter().find(|e| e.spell() == Some(spell))
     }
 
     /// The mana value of a spell on the stack, X included
     /// ([CR 202.3e](https://yawgatog.com/resources/magic-rules/#R2023e)): "X is treated as the
     /// number chosen for it while the object is on the stack."
-    pub fn spell_mana_value(&self, spell: ObjectRef) -> Option<u8> {
+    pub fn spell_mana_value(&self, spell: ObjectRef<L>) -> Option<u8> {
         let e = self.spell_entry(spell)?;
         let cost = self.table.def(e.card).face(e.face).cost;
         Some(cost.mana_value().saturating_add(cost.x.saturating_mul(e.x)))
@@ -227,7 +227,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// [`Stops::Forced`]. Otherwise the choice record answers it, or an inline source does, or
     /// the body pauses here. Once the game is over, as when a player won it mid-resolution,
     /// the body asks nothing more.
-    fn ask(&mut self, d: &Decision) -> Result<Choice, Pause> {
+    fn ask(&mut self, d: &Decision<L>) -> Result<Choice, Pause> {
         debug_assert!(
             self.ability.may_pause,
             "a body asked a question without declaring may_pause"
@@ -241,7 +241,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         }
         if let Some(&c) = self.record.get(self.used) {
             self.used += 1;
-            return Ok(Choice(c));
+            return Ok(Choice(c.into()));
         }
         if let Some(answers) = self.answers.as_deref_mut()
             && answers.inline()
@@ -262,7 +262,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
                 return Ok(c);
             }
         }
-        self.question = Some(*d);
+        self.question = Some(d.clone());
         Err(Pause)
     }
 
@@ -270,10 +270,10 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         &mut self,
         player: Seat,
         kind: DecisionKind,
-        opts: &[Opt],
-        ask: Ask,
-    ) -> Result<Opt, Pause> {
-        let mut list = Fixed::new();
+        opts: &[Opt<L>],
+        ask: Ask<L>,
+    ) -> Result<Opt<L>, Pause> {
+        let mut list: L::Queue<Opt<L>, 64> = Default::default();
         for &o in opts {
             if list.push(o).is_err() {
                 self.full = true;
@@ -291,7 +291,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     }
 
     /// Asks `player` yes or no, for the purpose `ask`.
-    pub fn choose_yes_no(&mut self, player: Seat, ask: Ask) -> Result<bool, Pause> {
+    pub fn choose_yes_no(&mut self, player: Seat, ask: Ask<L>) -> Result<bool, Pause> {
         Ok(self.ask_options(player, DecisionKind::YesNo, &[Opt::Yes, Opt::No], ask)? == Opt::Yes)
     }
 
@@ -301,10 +301,10 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     pub fn choose_up_to(
         &mut self,
         player: Seat,
-        candidates: Bitboard,
+        candidates: Bitboard<L::Slot>,
         n: u8,
-        ask: Ask,
-    ) -> Result<Bitboard, Pause> {
+        ask: Ask<L>,
+    ) -> Result<Bitboard<L::Slot>, Pause> {
         let mut chosen = Bitboard::EMPTY;
         while chosen.count() < u32::from(n) && !(candidates & !chosen).is_empty() {
             match self.choose_or_done(player, candidates & !chosen, ask)? {
@@ -320,10 +320,10 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     fn choose_or_done(
         &mut self,
         player: Seat,
-        candidates: Bitboard,
-        ask: Ask,
-    ) -> Result<Option<Slot>, Pause> {
-        let mut opts: Fixed<Opt, 64> = Fixed::new();
+        candidates: Bitboard<L::Slot>,
+        ask: Ask<L>,
+    ) -> Result<Option<L::Slot>, Pause> {
+        let mut opts: L::Queue<Opt<L>, 64> = Default::default();
         let left = crate::engine::collapse(self.state, candidates);
         for o in core::iter::once(Opt::Done).chain(left.iter().map(Opt::Object)) {
             if opts.push(o).is_err() {
@@ -344,9 +344,9 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     pub fn choose_object(
         &mut self,
         player: Seat,
-        candidates: Bitboard,
-        ask: Ask,
-    ) -> Result<Slot, Pause> {
+        candidates: Bitboard<L::Slot>,
+        ask: Ask<L>,
+    ) -> Result<L::Slot, Pause> {
         self.ask_object(player, DecisionKind::ChooseObject, candidates, ask)
     }
 
@@ -354,9 +354,9 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         &mut self,
         player: Seat,
         kind: DecisionKind,
-        candidates: Bitboard,
-        ask: Ask,
-    ) -> Result<Slot, Pause> {
+        candidates: Bitboard<L::Slot>,
+        ask: Ask<L>,
+    ) -> Result<L::Slot, Pause> {
         let d = Decision {
             player,
             kind,
@@ -371,7 +371,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// ([CR 701.9b](https://yawgatog.com/resources/magic-rules/#R7019b)): "By default, effects
     /// that cause a player to discard a card allow the affected player to choose which card
     /// to discard." Returns the card in the graveyard, or `None` from an empty hand.
-    pub fn discard_a_card(&mut self, player: Seat) -> Result<Option<ObjectRef>, Pause> {
+    pub fn discard_a_card(&mut self, player: Seat) -> Result<Option<ObjectRef<L>>, Pause> {
         self.discard_one_of(player, self.state.zone(player, Zone::Hand))
     }
 
@@ -381,8 +381,8 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     pub fn discard_one_of(
         &mut self,
         player: Seat,
-        cards: Bitboard,
-    ) -> Result<Option<ObjectRef>, Pause> {
+        cards: Bitboard<L::Slot>,
+    ) -> Result<Option<ObjectRef<L>>, Pause> {
         debug_assert!((cards & !self.state.zone(player, Zone::Hand)).is_empty());
         if cards.is_empty() {
             return Ok(None);
@@ -398,9 +398,9 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     pub fn may_choose_object(
         &mut self,
         player: Seat,
-        candidates: Bitboard,
-        ask: Ask,
-    ) -> Result<Option<Slot>, Pause> {
+        candidates: Bitboard<L::Slot>,
+        ask: Ask<L>,
+    ) -> Result<Option<L::Slot>, Pause> {
         if candidates.is_empty() || !self.choose_yes_no(player, ask)? {
             return Ok(None);
         }
@@ -464,7 +464,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             greedy,
         );
         let plans = self.checked(r);
-        let mut opts: Fixed<Opt, 64> = Fixed::new();
+        let mut opts: L::Queue<Opt<L>, 64> = Default::default();
         for i in 0..plans.len() {
             let _ = opts.push(Opt::Plan(i as u8));
         }
@@ -497,7 +497,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// owner's graveyard.
     pub fn allow_cast(
         &mut self,
-        object: ObjectRef,
+        object: ObjectRef<L>,
         player: Seat,
         extra: u8,
         this_turn: bool,
@@ -522,7 +522,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// flashback cost was paid, exile this card instead of putting it anywhere else any time
     /// it would leave the stack.'" Only its owner can cast it from their graveyard, so
     /// `player` is its owner.
-    pub fn grant_flashback(&mut self, object: ObjectRef, player: Seat) {
+    pub fn grant_flashback(&mut self, object: ObjectRef<L>, player: Seat) {
         let r = self.state.permissions.push(CastPermission {
             object,
             player,
@@ -539,7 +539,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// resolving, which is when a spell cast during resolution would otherwise have
     /// mattered, since "no player receives priority after it's cast"
     /// ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)).
-    pub fn offer_cast(&mut self, object: ObjectRef, player: Seat, free: bool) {
+    pub fn offer_cast(&mut self, object: ObjectRef<L>, player: Seat, free: bool) {
         self.offer = Some((object, player, free));
     }
 
@@ -561,7 +561,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// # Panics
     ///
     /// For an emblem's ability, which has no source.
-    pub fn deal_damage(&mut self, to: Recipient, amount: u8) {
+    pub fn deal_damage(&mut self, to: Recipient<L>, amount: u8) {
         let r = event::deal_damage(
             self.state,
             self.table,
@@ -589,28 +589,28 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         self.check(r);
     }
 
-    pub fn add_counters(&mut self, object: ObjectRef, kind: CounterKind, amount: u8) {
+    pub fn add_counters(&mut self, object: ObjectRef<L>, kind: CounterKind, amount: u8) {
         let r = event::add_counters(self.state, self.table, self.sink, object, kind, amount);
         self.check(r);
     }
 
-    pub fn remove_counters(&mut self, object: ObjectRef, kind: CounterKind, amount: u8) {
+    pub fn remove_counters(&mut self, object: ObjectRef<L>, kind: CounterKind, amount: u8) {
         let r = event::remove_counters(self.state, self.table, self.sink, object, kind, amount);
         self.check(r);
     }
 
-    pub fn tap(&mut self, object: ObjectRef) {
+    pub fn tap(&mut self, object: ObjectRef<L>) {
         let r = event::set_tapped(self.state, self.table, self.sink, object, true);
         self.check(r);
     }
 
-    pub fn untap(&mut self, object: ObjectRef) {
+    pub fn untap(&mut self, object: ObjectRef<L>) {
         let r = event::set_tapped(self.state, self.table, self.sink, object, false);
         self.check(r);
     }
 
     /// Moves an object to a zone, to the top of an ordered one.
-    pub fn move_to(&mut self, object: ObjectRef, to: Zone, reason: Reason) {
+    pub fn move_to(&mut self, object: ObjectRef<L>, to: Zone, reason: Reason) {
         if !self.state.is_current(object) {
             return;
         }
@@ -623,7 +623,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// to any library, graveyard, or hand other than its owner's, it goes to its owner's
     /// corresponding zone." A spell leaves the stack without resolving, and one cast with
     /// flashback is exiled instead (CR 702.34a).
-    pub fn return_to_hand(&mut self, object: ObjectRef) {
+    pub fn return_to_hand(&mut self, object: ObjectRef<L>) {
         if !self.state.is_current(object) {
             return;
         }
@@ -641,7 +641,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// Puts a spell on top of its owner's library, or on the bottom unless `top`. It leaves
     /// the stack without resolving, and one cast with flashback is exiled instead
     /// (CR 702.34a).
-    pub fn put_spell_into_library(&mut self, spell: ObjectRef, top: bool) {
+    pub fn put_spell_into_library(&mut self, spell: ObjectRef<L>, top: bool) {
         if !self.state.is_current(spell) {
             return;
         }
@@ -667,7 +667,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
 
     /// Puts a permanent into its owner's library under `under` cards from the top, or at the
     /// bottom of a library with fewer, as Oust's "second from the top" is under one.
-    pub fn put_into_library(&mut self, object: ObjectRef, under: u8) {
+    pub fn put_into_library(&mut self, object: ObjectRef<L>, under: u8) {
         if !self.on_battlefield(object) {
             return;
         }
@@ -685,7 +685,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     }
 
     /// Moves a set of objects to one zone simultaneously, each to its owner's (CR 400.3).
-    pub fn move_all(&mut self, objects: Bitboard, to: Zone, reason: Reason) {
+    pub fn move_all(&mut self, objects: Bitboard<L::Slot>, to: Zone, reason: Reason) {
         let r = event::move_batch(
             self.state,
             self.table,
@@ -710,7 +710,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// ([CR 701.20a](https://yawgatog.com/resources/magic-rules/#R70120a)): "To reveal a card,
     /// show that card to all players for a brief time." Each player knows it from then on,
     /// until it is shuffled or otherwise hidden anew.
-    pub fn reveal(&mut self, slot: Slot) {
+    pub fn reveal(&mut self, slot: L::Slot) {
         for k in &mut self.state.knowledge {
             k.insert(slot);
         }
@@ -729,7 +729,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// its last known information is used to determine which object explored and who
     /// controlled it." The only explorer here is a target, which this ability's controller
     /// controls, so that is the controller once it is gone.
-    pub fn explore(&mut self, object: ObjectRef) -> Flow {
+    pub fn explore(&mut self, object: ObjectRef<L>) -> Flow {
         let player = if self.on_battlefield(object) {
             self.state.controller(object.slot)
         } else {
@@ -756,7 +756,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     }
 
     /// The top `n` cards of a player's library, or all of it if it has fewer.
-    pub fn top_of_library(&self, player: Seat, n: u8) -> Bitboard {
+    pub fn top_of_library(&self, player: Seat, n: u8) -> Bitboard<L::Slot> {
         let library = self.state.library(player);
         library[library.len().saturating_sub(usize::from(n))..]
             .iter()
@@ -768,14 +768,14 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// a library and a hand are hidden zones
     /// ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)), "zones in which not
     /// all players can be expected to see the cards' faces."
-    pub fn look_at(&mut self, player: Seat, cards: Bitboard) {
+    pub fn look_at(&mut self, player: Seat, cards: Bitboard<L::Slot>) {
         self.state.knowledge[player.index()] |= cards;
     }
 
     /// Discards a card from its owner's hand
     /// ([CR 701.9a](https://yawgatog.com/resources/magic-rules/#R7019a)): "To discard a card,
     /// move it from its owner's hand to that player's graveyard."
-    pub fn discard(&mut self, card: ObjectRef) {
+    pub fn discard(&mut self, card: ObjectRef<L>) {
         if self.state.is_current(card) && self.state.object(card.slot).zone == Zone::Hand {
             self.move_to(card, Zone::Graveyard, Reason::Discard);
         }
@@ -785,7 +785,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// are dealt anew among the slots they land in, so no player knows which is where
     /// ([CR 401.4](https://yawgatog.com/resources/magic-rules/#R4014)): "That library's owner
     /// doesn't reveal the order in which the cards go into the library."
-    pub fn put_on_bottom_in_random_order(&mut self, cards: Bitboard) {
+    pub fn put_on_bottom_in_random_order(&mut self, cards: Bitboard<L::Slot>) {
         let r = event::move_batch_to(
             self.state,
             self.table,
@@ -799,7 +799,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         self.check(r);
         // Rebound within each owner's library, among the slots that went there.
         for owner in Seat::BOTH {
-            let mut moved: Fixed<Slot, 64> = Fixed::new();
+            let mut moved: L::Queue<L::Slot, 64> = Default::default();
             for &slot in self.state.library(owner) {
                 if cards.contains(slot) && moved.push(slot).is_err() {
                     self.full = true;
@@ -814,7 +814,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// Puts a card in a library on the bottom of that library, as Jace, the Mind Sculptor's
     /// "You may put that card on the bottom of that player's library." It stays in the
     /// library, so it is still the same object.
-    pub fn put_library_card_on_bottom(&mut self, object: ObjectRef) {
+    pub fn put_library_card_on_bottom(&mut self, object: ObjectRef<L>) {
         if self.state.is_current(object) && self.state.object(object.slot).zone == Zone::Library {
             let r = zone::reorder_library(self.state, object.slot, Place::Bottom);
             self.check(r);
@@ -842,7 +842,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             self.check(r);
             left.remove(slot);
         }
-        let mut order: Fixed<Slot, 60> = Fixed::new();
+        let mut order: L::Queue<L::Slot, 60> = Default::default();
         while left.count() > 1 {
             let slot = self.choose_object(player, left, ask)?;
             left.remove(slot);
@@ -896,7 +896,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// ability puts a double-faced card onto the battlefield 'transformed' or 'converted,' it
     /// enters the battlefield with its back face up." If it already left the battlefield, it
     /// isn't exiled, so it doesn't return.
-    pub fn exile_and_return_transformed(&mut self, object: ObjectRef) {
+    pub fn exile_and_return_transformed(&mut self, object: ObjectRef<L>) {
         if !self.on_battlefield(object) {
             return;
         }
@@ -923,7 +923,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
 
     /// Destroys a permanent ([CR 701.8a](https://yawgatog.com/resources/magic-rules/#R7018a)):
     /// "To destroy a permanent, move it from the battlefield to its owner's graveyard."
-    pub fn destroy(&mut self, object: ObjectRef) {
+    pub fn destroy(&mut self, object: ObjectRef<L>) {
         if self.on_battlefield(object) {
             self.move_to(object, Zone::Graveyard, Reason::Destroy);
         }
@@ -931,7 +931,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
 
     /// Destroys a set of permanents simultaneously (CR 701.8a), as "Destroy each creature"
     /// does: one event, so "whenever one or more" abilities see them together.
-    pub fn destroy_all(&mut self, objects: Bitboard) {
+    pub fn destroy_all(&mut self, objects: Bitboard<L::Slot>) {
         self.move_all(objects, Zone::Graveyard, Reason::Destroy);
     }
 
@@ -943,7 +943,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         player: Seat,
         filter: Filter,
         n: u8,
-    ) -> Result<Bitboard, Pause> {
+    ) -> Result<Bitboard<L::Slot>, Pause> {
         let library = self.state.zone(player, Zone::Library);
         self.look_at(player, library);
         let found = filter.select(self.state, self.table, library, player);
@@ -952,7 +952,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
 
     /// Puts cards onto the battlefield tapped, each under its owner's control, simultaneously:
     /// "Those cards enter tapped."
-    pub fn put_onto_battlefield_tapped(&mut self, cards: Bitboard) {
+    pub fn put_onto_battlefield_tapped(&mut self, cards: Bitboard<L::Slot>) {
         let r = event::move_batch(
             self.state,
             self.table,
@@ -971,13 +971,13 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// Sacrifices a permanent ([CR 701.21a](https://yawgatog.com/resources/magic-rules/#R70121a)):
     /// "To sacrifice a permanent, its controller moves it from the battlefield directly to its
     /// owner's graveyard."
-    pub fn sacrifice(&mut self, object: ObjectRef) {
+    pub fn sacrifice(&mut self, object: ObjectRef<L>) {
         if self.on_battlefield(object) {
             self.move_to(object, Zone::Graveyard, Reason::Sacrifice);
         }
     }
 
-    fn on_battlefield(&self, object: ObjectRef) -> bool {
+    fn on_battlefield(&self, object: ObjectRef<L>) -> bool {
         self.state.is_current(object) && self.state.object(object.slot).zone == Zone::Battlefield
     }
 
@@ -995,7 +995,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// # Panics
     ///
     /// For an emblem's ability, which has no source.
-    pub fn exile_until_source_leaves(&mut self, object: ObjectRef) {
+    pub fn exile_until_source_leaves(&mut self, object: ObjectRef<L>) {
         let source = self.source();
         if !self.on_battlefield(source) || !self.on_battlefield(object) {
             return;
@@ -1019,7 +1019,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// # Panics
     ///
     /// For an emblem's ability, which has no source.
-    pub fn exile_linked(&mut self, object: ObjectRef) {
+    pub fn exile_linked(&mut self, object: ObjectRef<L>) {
         if !self.state.is_current(object) {
             return;
         }
@@ -1039,7 +1039,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// # Panics
     ///
     /// For an emblem's ability, which has no source.
-    pub fn exiled_with_source(&self) -> Bitboard {
+    pub fn exiled_with_source(&self) -> Bitboard<L::Slot> {
         self.state.exiled_with(self.source().slot)
     }
 
@@ -1053,13 +1053,22 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// card found, still in the library: the body says where it goes, whether it is revealed
     /// ([CR 701.23e](https://yawgatog.com/resources/magic-rules/#R70123e)), and shuffles.
     /// The question is a [`DecisionKind::ChooseUpTo`] whose [`Opt::Done`] finds nothing.
-    pub fn search_library(&mut self, player: Seat, filter: Filter) -> Result<Option<Slot>, Pause> {
+    pub fn search_library(
+        &mut self,
+        player: Seat,
+        filter: Filter,
+    ) -> Result<Option<L::Slot>, Pause> {
         Ok(self.search_library_up_to(player, filter, 1)?.iter().next())
     }
 
     /// Creates `count` tokens of a predefined kind under this ability's controller
     /// ([CR 111.10](https://yawgatog.com/resources/magic-rules/#R11110)).
-    pub fn create_tokens(&mut self, def: &'static CardDef, count: u8, how: TokenEntry) -> Bitboard {
+    pub fn create_tokens(
+        &mut self,
+        def: &'static CardDef,
+        count: u8,
+        how: TokenEntry,
+    ) -> Bitboard<L::Slot> {
         self.create_tokens_for(self.entry.controller, def, count, how)
     }
 
@@ -1073,14 +1082,19 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         def: &'static CardDef,
         count: u8,
         how: TokenEntry,
-    ) -> Bitboard {
+    ) -> Bitboard<L::Slot> {
         let card = self.game_index(def);
         self.tokens(player, card, count, how)
     }
 
     /// Creates `count` tokens that are copies of the card with this game index, such as the
     /// card a last-known-information record names (CR 707.2).
-    pub fn create_tokens_of(&mut self, card: CardIx, count: u8, how: TokenEntry) -> Bitboard {
+    pub fn create_tokens_of(
+        &mut self,
+        card: CardIx,
+        count: u8,
+        how: TokenEntry,
+    ) -> Bitboard<L::Slot> {
         self.tokens(self.entry.controller, card, count, how)
     }
 
@@ -1093,7 +1107,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         card: CardIx,
         count: u8,
         how: TokenEntry,
-    ) -> Bitboard {
+    ) -> Bitboard<L::Slot> {
         self.tokens(player, card, count, how)
     }
 
@@ -1112,7 +1126,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// characteristics are the copiable values of that object's characteristics." Being face
     /// down is a status, which isn't copied, so its copy is a face-up token of
     /// [`crate::card::FACE_DOWN_COPY`], not of the hidden card.
-    pub fn copiable_values(&self, object: ObjectRef) -> (CardIx, TokenEntry) {
+    pub fn copiable_values(&self, object: ObjectRef<L>) -> (CardIx, TokenEntry) {
         let o = self.state.object(object.slot);
         if o.face == FaceIx::DOWN {
             return (self.table.face_down_copy(), TokenEntry::default());
@@ -1125,7 +1139,13 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         (o.card, how)
     }
 
-    fn tokens(&mut self, player: Seat, card: CardIx, count: u8, how: TokenEntry) -> Bitboard {
+    fn tokens(
+        &mut self,
+        player: Seat,
+        card: CardIx,
+        count: u8,
+        how: TokenEntry,
+    ) -> Bitboard<L::Slot> {
         let created =
             event::create_tokens(self.state, self.table, self.sink, player, card, count, how);
         created.unwrap_or_else(|Full| {
@@ -1149,7 +1169,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         &mut self,
         def: &'static CardDef,
         count: u8,
-    ) -> Result<Bitboard, Pause> {
+    ) -> Result<Bitboard<L::Slot>, Pause> {
         let you = self.entry.controller;
         let attacking =
             crate::combat::in_combat(self.state.turn.step) && self.state.turn.active == you;
@@ -1194,7 +1214,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// # Panics
     ///
     /// For an emblem's ability, which has no source.
-    pub fn add_effect(&mut self, affected: ObjectRef, effect: Continuous, duration: Duration) {
+    pub fn add_effect(&mut self, affected: ObjectRef<L>, effect: Continuous, duration: Duration) {
         if !self.state.is_current(affected) {
             return;
         }
@@ -1222,7 +1242,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// # Panics
     ///
     /// For an emblem's ability, which has no source.
-    pub fn gain_control(&mut self, object: ObjectRef, duration: Duration) {
+    pub fn gain_control(&mut self, object: ObjectRef<L>, duration: Duration) {
         if !self.on_battlefield(object) {
             return;
         }
@@ -1335,7 +1355,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// its back face up) and any counters it enters with.
     pub fn put_onto_battlefield(
         &mut self,
-        object: ObjectRef,
+        object: ObjectRef<L>,
         face: FaceIx,
         counters: Option<(CounterKind, u8)>,
     ) {
@@ -1401,7 +1421,7 @@ pub fn draw_a_card<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// intervening "if" of its enters ability (CR 603.4). The mark is set as the permanent enters
 /// and never changes while it stays; once it has left, the answer is what it was as the
 /// ability triggered, and it triggered only if the cost was paid.
-fn entered_with<L: Layout>(s: &State<L>, tr: &PendingTrigger, flag: u32) -> bool {
+fn entered_with<L: Layout>(s: &State<L>, tr: &PendingTrigger<L>, flag: u32) -> bool {
     match tr.source {
         Some(r) if s.is_current(r) => s.object(r.slot).flags.has(flag),
         _ => true,
@@ -1411,12 +1431,12 @@ fn entered_with<L: Layout>(s: &State<L>, tr: &PendingTrigger, flag: u32) -> bool
 /// "If it was kicked" ([CR 702.33d](https://yawgatog.com/resources/magic-rules/#R70233d)):
 /// "If a spell's controller declares the intention to pay any of that spell's kicker costs,
 /// that spell has been 'kicked.'"
-pub fn kicked<L: Layout>(s: &State<L>, _: &GameTable, tr: &PendingTrigger) -> bool {
+pub fn kicked<L: Layout>(s: &State<L>, _: &GameTable, tr: &PendingTrigger<L>) -> bool {
     entered_with(s, tr, ObjectFlags::KICKED)
 }
 
 /// Offspring's "if its offspring cost was paid" (CR 702.175a).
-pub fn offspring_paid<L: Layout>(s: &State<L>, _: &GameTable, tr: &PendingTrigger) -> bool {
+pub fn offspring_paid<L: Layout>(s: &State<L>, _: &GameTable, tr: &PendingTrigger<L>) -> bool {
     entered_with(s, tr, ObjectFlags::OFFSPRING)
 }
 
@@ -1437,7 +1457,7 @@ pub fn offspring_copy<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 }
 
 /// Evoke's "if its evoke cost was paid" (CR 702.74a).
-pub fn evoked<L: Layout>(s: &State<L>, _: &GameTable, tr: &PendingTrigger) -> bool {
+pub fn evoked<L: Layout>(s: &State<L>, _: &GameTable, tr: &PendingTrigger<L>) -> bool {
     entered_with(s, tr, ObjectFlags::EVOKED)
 }
 
@@ -1453,7 +1473,7 @@ pub fn sacrifice_itself<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 pub fn impending_counting_down<L: Layout>(
     s: &State<L>,
     _: &GameTable,
-    tr: &PendingTrigger,
+    tr: &PendingTrigger<L>,
 ) -> bool {
     tr.source.is_some_and(|r| {
         let o = s.object(r.slot);

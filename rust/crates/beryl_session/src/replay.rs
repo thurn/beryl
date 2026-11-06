@@ -30,14 +30,14 @@ pub struct ReplayFile {
 #[serde(rename_all = "camelCase")]
 pub enum Entry {
     /// The answer to the open decision, whichever seat made it.
-    Choice(u8),
+    Choice(u16),
     /// The human changed their stops while their decision was open.
     Stops(StopsSetting),
     /// The human went on from a halt, which the session, not the engine, asked.
     Halt,
     /// The answer the session gave to the human's decision for them (a priority passed, a
     /// trigger ordered under the smart stops), which it finds again as a replay plays on.
-    Auto(u8),
+    Auto(u16),
     /// The human conceded, at the open decision, theirs or the agent's.
     Concede,
 }

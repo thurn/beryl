@@ -10,9 +10,9 @@ use crate::card::{Keywords, Types};
 use crate::decision::{Ask, Candidates, Decision, DecisionKind, Opt};
 use crate::engine::collapse;
 use crate::event::{self, Event, Recipient, Sink};
-use crate::fixed::{Fixed, Full};
-use crate::ids::{Seat, Slot};
-use crate::layout::{Layout, Queue};
+use crate::fixed::Full;
+use crate::ids::Seat;
+use crate::layout::{Layout, Queue, Small};
 use crate::state::{ObjectFlags, ObjectRef, Pending, State, TurnStep};
 use crate::table::GameTable;
 
@@ -23,20 +23,20 @@ fn defender<L: Layout>(s: &State<L>) -> Seat {
     s.turn.active.opponent()
 }
 
-fn flags<L: Layout>(s: &State<L>, slot: Slot) -> ObjectFlags {
+fn flags<L: Layout>(s: &State<L>, slot: L::Slot) -> ObjectFlags {
     s.object(slot).flags
 }
 
-fn is_creature<L: Layout>(s: &State<L>, slot: Slot) -> bool {
+fn is_creature<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
     s.derived(slot).types.contains(Types::CREATURE)
 }
 
-fn has<L: Layout>(s: &State<L>, slot: Slot, keyword: Keywords) -> bool {
+fn has<L: Layout>(s: &State<L>, slot: L::Slot, keyword: Keywords) -> bool {
     s.derived(slot).keywords.contains(keyword)
 }
 
 /// The battlefield objects with a flag.
-fn with_flag<L: Layout>(s: &State<L>, flag: u32) -> Bitboard {
+fn with_flag<L: Layout>(s: &State<L>, flag: u32) -> Bitboard<L::Slot> {
     s.battlefield()
         .iter()
         .copied()
@@ -45,7 +45,7 @@ fn with_flag<L: Layout>(s: &State<L>, flag: u32) -> Bitboard {
 }
 
 /// The creatures blocking an attacker.
-fn blockers_of<L: Layout>(s: &State<L>, attacker: Slot) -> Bitboard {
+fn blockers_of<L: Layout>(s: &State<L>, attacker: L::Slot) -> Bitboard<L::Slot> {
     s.battlefield()
         .iter()
         .copied()
@@ -59,7 +59,7 @@ fn blockers_of<L: Layout>(s: &State<L>, attacker: Slot) -> Bitboard {
 /// The objects another object's `combat` names: the attacked planeswalkers and the blocked
 /// attackers with a blocker still blocking them. Two Ogres, one blocked by a 2/2 and one by
 /// a 1/3, share a signature but are not interchangeable to a third blocker.
-pub(crate) fn related<L: Layout>(s: &State<L>) -> Bitboard {
+pub(crate) fn related<L: Layout>(s: &State<L>) -> Bitboard<L::Slot> {
     s.battlefield()
         .iter()
         .filter_map(|&slot| s.object(slot).combat)
@@ -73,7 +73,7 @@ pub(crate) fn related<L: Layout>(s: &State<L>) -> Bitboard {
 /// be untapped, they can't also be battles, and each one must either have haste or have been
 /// controlled by the active player continuously since the turn began." None of the cards has
 /// haste.
-fn may_attack<L: Layout>(s: &State<L>, slot: Slot) -> bool {
+fn may_attack<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
     let o = s.object(slot);
     s.controller(slot) == s.turn.active
         && is_creature(s, slot)
@@ -106,12 +106,12 @@ pub(crate) fn begin_attackers<L: Layout>(s: &mut State<L>) {
 /// one candidate is applied silently (§7.2).
 pub(crate) fn attack_decision<L: Layout>(
     s: &State<L>,
-    attacker: Option<Slot>,
-) -> Result<Decision, Full> {
-    let mut list = Fixed::new();
+    attacker: Option<L::Slot>,
+) -> Result<Decision<L>, Full> {
+    let mut list: L::Queue<Opt<L>, 64> = Default::default();
     let (player, kind) = if attacker.is_none() {
         list.push(Opt::Done)?;
-        let able: Bitboard = s
+        let able: Bitboard<L::Slot> = s
             .battlefield()
             .iter()
             .copied()
@@ -134,8 +134,8 @@ pub(crate) fn attack_decision<L: Layout>(
 }
 
 /// What a creature can attack: the defending player, then each planeswalker they control.
-pub(crate) fn attack_targets<L: Layout>(s: &State<L>, defending: Seat) -> Fixed<Opt, 64> {
-    let mut list = Fixed::new();
+pub(crate) fn attack_targets<L: Layout>(s: &State<L>, defending: Seat) -> L::Queue<Opt<L>, 64> {
+    let mut list: L::Queue<Opt<L>, 64> = Default::default();
     // No player controls 63 planeswalkers.
     let _ = list.push(Opt::Defender(None));
     for &slot in s.battlefield() {
@@ -150,8 +150,8 @@ pub(crate) fn attack_targets<L: Layout>(s: &State<L>, defending: Seat) -> Fixed<
 pub(crate) fn attack<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
-    opt: Opt,
+    sink: &mut Sink<L>,
+    opt: Opt<L>,
 ) -> Result<(), Full> {
     match opt {
         Opt::Attack(slot) => {
@@ -194,7 +194,11 @@ pub(crate) fn attack<L: Layout>(
 /// ([CR 508.4](https://yawgatog.com/resources/magic-rules/#R5084)): creatures put onto the
 /// battlefield attacking, "for the purposes of trigger events and effects, ... never
 /// 'attacked.'"
-fn finish_attack<L: Layout>(s: &mut State<L>, t: &GameTable, sink: &mut Sink) -> Result<(), Full> {
+fn finish_attack<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+) -> Result<(), Full> {
     s.pending = Pending::None;
     let attackers = with_flag(s, ObjectFlags::ATTACKING);
     for slot in attackers.iter() {
@@ -219,7 +223,7 @@ fn finish_attack<L: Layout>(s: &mut State<L>, t: &GameTable, sink: &mut Sink) ->
 ///
 /// [CR 702.9b](https://yawgatog.com/resources/magic-rules/#R7029b): "A creature with flying
 /// can't be blocked except by creatures with flying and/or reach."
-fn can_block<L: Layout>(s: &State<L>, blocker: Slot, attacker: Slot) -> bool {
+fn can_block<L: Layout>(s: &State<L>, blocker: L::Slot, attacker: L::Slot) -> bool {
     let a = s.object(attacker);
     a.flags.has(ObjectFlags::ATTACKING)
         && !(a.flags.has(ObjectFlags::ATTACKS_PLANESWALKER) && a.combat.is_none())
@@ -234,7 +238,7 @@ fn can_block<L: Layout>(s: &State<L>, blocker: Slot, attacker: Slot) -> bool {
 /// [CR 509.1a](https://yawgatog.com/resources/magic-rules/#R5091a): "The defending player
 /// chooses which creatures they control, if any, will block. The chosen creatures must be
 /// untapped and they can't also be battles."
-fn may_block<L: Layout>(s: &State<L>, slot: Slot) -> bool {
+fn may_block<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
     let o = s.object(slot);
     s.controller(slot) == defender(s)
         && is_creature(s, slot)
@@ -262,8 +266,8 @@ pub(crate) fn begin_blockers<L: Layout>(s: &mut State<L>) {
 /// chosen, the attacker it blocks. Evasion prunes both.
 pub(crate) fn block_decision<L: Layout>(
     s: &State<L>,
-    blocker: Option<Slot>,
-) -> Result<Decision, Full> {
+    blocker: Option<L::Slot>,
+) -> Result<Decision<L>, Full> {
     let player = defender(s);
     if let Some(blocker) = blocker {
         let attackers = s
@@ -279,7 +283,7 @@ pub(crate) fn block_decision<L: Layout>(
             ask: Ask::Plain,
         });
     }
-    let mut list = Fixed::new();
+    let mut list: L::Queue<Opt<L>, 64> = Default::default();
     list.push(Opt::Done)?;
     let able = s
         .battlefield()
@@ -302,7 +306,7 @@ pub(crate) fn block_decision<L: Layout>(
 ///
 /// [CR 509.1g](https://yawgatog.com/resources/magic-rules/#R5091g): "Each chosen creature
 /// still controlled by the defending player becomes a blocking creature."
-pub(crate) fn block_with<L: Layout>(s: &mut State<L>, blocker: Slot) {
+pub(crate) fn block_with<L: Layout>(s: &mut State<L>, blocker: L::Slot) {
     s.object_mut(blocker).flags.set(ObjectFlags::BLOCKING, true);
     s.pending = Pending::DeclareBlockers {
         blocker: Some(blocker),
@@ -315,7 +319,7 @@ pub(crate) fn block_with<L: Layout>(s: &mut State<L>, blocker: Slot) {
 /// with one or more creatures declared as blockers for it becomes a blocked creature". It
 /// becomes blocked as soon as its first blocker is chosen, so a blocked and an unblocked
 /// attacker are never offered as interchangeable to the next blocker.
-pub(crate) fn block_attacker<L: Layout>(s: &mut State<L>, attacker: Slot) {
+pub(crate) fn block_attacker<L: Layout>(s: &mut State<L>, attacker: L::Slot) {
     let Pending::DeclareBlockers {
         blocker: Some(blocker),
     } = s.pending
@@ -348,7 +352,7 @@ pub(crate) fn first_strike_step<L: Layout>(s: &State<L>) -> bool {
 /// Whether a creature in combat assigns combat damage in this step: in a first-strike step
 /// those with first strike; in the other, "the remaining attackers and blockers that had
 /// neither first strike nor double strike as the first combat damage step began" (CR 510.4).
-fn assigns_now<L: Layout>(s: &State<L>, slot: Slot) -> bool {
+fn assigns_now<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
     if !flags(s, slot).has(ObjectFlags::ATTACKING | ObjectFlags::BLOCKING) {
         return false;
     }
@@ -363,7 +367,7 @@ fn assigns_now<L: Layout>(s: &State<L>, slot: Slot) -> bool {
 /// ([CR 510.1a](https://yawgatog.com/resources/magic-rules/#R5101a)): "Each attacking creature
 /// and each blocking creature assigns combat damage equal to its power. Creatures that would
 /// assign 0 or less damage this way don't assign combat damage at all."
-fn power<L: Layout>(s: &State<L>, slot: Slot) -> u8 {
+fn power<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
     u8::try_from(s.derived(slot).power.max(0)).unwrap_or(0)
 }
 
@@ -371,14 +375,14 @@ fn power<L: Layout>(s: &State<L>, slot: Slot) -> u8 {
 /// marked on it ([CR 120.6](https://yawgatog.com/resources/magic-rules/#R1206)): "If the total
 /// damage marked on a creature is greater than or equal to its toughness, that creature has
 /// been dealt lethal damage". At least 1.
-fn lethal<L: Layout>(s: &State<L>, slot: Slot) -> u8 {
+fn lethal<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
     let left = i16::from(s.derived(slot).toughness) - i16::from(s.object(slot).damage);
     u8::try_from(left.clamp(1, 255)).unwrap_or(1)
 }
 
 /// The next attacker whose damage its controller divides: blocked by two or more creatures
 /// and assigning damage now, and not yet divided.
-fn next_division<L: Layout>(s: &State<L>, done: Bitboard) -> Option<Slot> {
+fn next_division<L: Layout>(s: &State<L>, done: Bitboard<L::Slot>) -> Option<L::Slot> {
     s.battlefield().iter().copied().find(|&slot| {
         flags(s, slot).has(ObjectFlags::ATTACKING)
             && flags(s, slot).has(ObjectFlags::BLOCKED)
@@ -398,7 +402,7 @@ fn next_division<L: Layout>(s: &State<L>, done: Bitboard) -> Option<Slot> {
 pub(crate) fn begin_damage<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
 ) -> Result<(), Full> {
     if s.turn.step == TurnStep::FirstStrikeDamage {
         for i in 0..s.battlefield.len() {
@@ -432,9 +436,9 @@ pub(crate) fn begin_damage<L: Layout>(
 /// of the cards deals noncombat damage to creatures, so damage on a survivor never matters.
 pub(crate) fn division_decision<L: Layout>(
     s: &State<L>,
-    done: Bitboard,
-    chosen: Bitboard,
-) -> Result<Decision, Full> {
+    done: Bitboard<L::Slot>,
+    chosen: Bitboard<L::Slot>,
+) -> Result<Decision<L>, Full> {
     let attacker = next_division(s, done).expect("a division without an attacker");
     let blockers = blockers_of(s, attacker);
     let killed = blockers & chosen;
@@ -444,7 +448,7 @@ pub(crate) fn division_decision<L: Layout>(
         .iter()
         .map(|b| u32::from(lethal(s, b)) - 1)
         .sum();
-    let mut list = Fixed::new();
+    let mut list: L::Queue<Opt<L>, 64> = Default::default();
     if !killed.is_empty() || left <= absorbable {
         list.push(Opt::Done)?;
     }
@@ -467,10 +471,10 @@ pub(crate) fn division_decision<L: Layout>(
 pub(crate) fn divide<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
-    done: Bitboard,
-    mut chosen: Bitboard,
-    opt: Opt,
+    sink: &mut Sink<L>,
+    done: Bitboard<L::Slot>,
+    mut chosen: Bitboard<L::Slot>,
+    opt: Opt<L>,
 ) -> Result<(), Full> {
     let mut done = done;
     if let Opt::Lethal(b) = opt {
@@ -491,10 +495,10 @@ pub(crate) fn divide<L: Layout>(
 }
 
 /// One assignment of combat damage.
-#[derive(Clone, Copy, Default)]
-struct Assignment {
-    source: ObjectRef,
-    to: Option<Recipient>,
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+struct Assignment<L: Layout = Small> {
+    source: ObjectRef<L>,
+    to: Option<Recipient<L>>,
     amount: u8,
 }
 
@@ -507,10 +511,10 @@ struct Assignment {
 fn deal<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
-    lethal: Bitboard,
+    sink: &mut Sink<L>,
+    lethal: Bitboard<L::Slot>,
 ) -> Result<(), Full> {
-    let mut assigned: Fixed<Assignment, 128> = Fixed::new();
+    let mut assigned: L::Queue<Assignment<L>, 128> = Default::default();
     for &slot in s.battlefield() {
         if !assigns_now(s, slot) || power(s, slot) == 0 {
             continue;
@@ -518,7 +522,7 @@ fn deal<L: Layout>(
         let o = s.object(slot);
         let source = s.object_ref(slot);
         let amount = power(s, slot);
-        let mut push = |to: Recipient, amount: u8| {
+        let mut push = |to: Recipient<L>, amount: u8| {
             assigned.push(Assignment {
                 source,
                 to: Some(to),
@@ -533,7 +537,7 @@ fn deal<L: Layout>(
                 push(Recipient::Permanent(s.object_ref(other)), amount)?;
             }
         } else if o.flags.has(ObjectFlags::BLOCKED) {
-            for (b, n) in &division(s, slot, lethal) {
+            for (b, n) in division(s, slot, lethal).iter() {
                 push(Recipient::Permanent(s.object_ref(*b)), *n)?;
             }
         } else if o.flags.has(ObjectFlags::ATTACKS_PLANESWALKER) {
@@ -548,7 +552,7 @@ fn deal<L: Layout>(
             push(Recipient::Player(defender(s)), amount)?;
         }
     }
-    for a in &assigned {
+    for a in assigned.iter() {
         if let Some(to) = a.to {
             event::deal_damage(s, t, sink, a.source, to, a.amount, true)?;
         }
@@ -563,10 +567,10 @@ fn deal<L: Layout>(
 /// all its combat damage to that creature").
 fn division<L: Layout>(
     s: &State<L>,
-    attacker: Slot,
-    lethal_to: Bitboard,
-) -> Fixed<(Slot, u8), 128> {
-    let mut out: Fixed<(Slot, u8), 128> = Fixed::new();
+    attacker: L::Slot,
+    lethal_to: Bitboard<L::Slot>,
+) -> L::Queue<(L::Slot, u8), 128> {
+    let mut out: L::Queue<(L::Slot, u8), 128> = Default::default();
     let blockers = blockers_of(s, attacker);
     let mut left = power(s, attacker);
     if let (1, Some(blocker)) = (blockers.count(), blockers.first()) {
@@ -626,7 +630,7 @@ pub(crate) fn prune<L: Layout>(s: &mut State<L>) {
     }
 }
 
-fn remove_from_combat<L: Layout>(s: &mut State<L>, slot: Slot) {
+fn remove_from_combat<L: Layout>(s: &mut State<L>, slot: L::Slot) {
     let o = s.object_mut(slot);
     o.flags.set(ObjectFlags::COMBAT, false);
     o.combat = None;

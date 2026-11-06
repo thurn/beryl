@@ -21,9 +21,9 @@ use crate::decision::{Ask, Candidates, Decision, DecisionKind, Opt, Refusal};
 use crate::engine::{collapse, collapse_in_order};
 use crate::event::{self, Event, Reason, Sink};
 use crate::filter::{Filter, Whose};
-use crate::fixed::{Fixed, Full};
-use crate::ids::{CardIx, Seat, Slot};
-use crate::layout::{Layout, Queue, Table};
+use crate::fixed::Full;
+use crate::ids::{CardIx, Seat, SlotId};
+use crate::layout::{Layout, Queue, Small, Table};
 use crate::mana::{self, Funds};
 use crate::profile::Payment;
 use crate::state::{
@@ -35,7 +35,10 @@ use crate::table::GameTable;
 /// The ability a stack entry resolves: an ability of its card's face, or a spell's spell
 /// ability, as the casting options paid for it make it (an overloaded spell's). A permanent
 /// spell with no targets has none.
-pub(crate) fn entry_ability(t: &GameTable, entry: &StackEntry) -> Option<&'static Ability> {
+pub(crate) fn entry_ability<L: Layout>(
+    t: &GameTable,
+    entry: &StackEntry<L>,
+) -> Option<&'static Ability> {
     let face = t.def(entry.card).face(entry.face);
     match entry.ability {
         None => face.spell_ability_with(entry.costs),
@@ -44,7 +47,7 @@ pub(crate) fn entry_ability(t: &GameTable, entry: &StackEntry) -> Option<&'stati
 }
 
 /// The ability of a stack entry that is an ability, by its card, face and index.
-fn entry_ability_of(t: &GameTable, entry: &StackEntry) -> &'static Ability {
+fn entry_ability_of<L: Layout>(t: &GameTable, entry: &StackEntry<L>) -> &'static Ability {
     entry_ability(t, entry).expect("an ability's entry")
 }
 
@@ -53,7 +56,7 @@ fn entry_ability_of(t: &GameTable, entry: &StackEntry) -> &'static Ability {
 /// granting card's front face (§9).
 fn activated<L: Layout>(
     s: &State<L>,
-    slot: Slot,
+    slot: L::Slot,
     ability: AbilityIx,
 ) -> Option<(CardIx, FaceIx, FaceAbility)> {
     let o = s.object(slot);
@@ -84,7 +87,7 @@ pub(crate) fn sorcery_timing<L: Layout>(s: &State<L>, player: Seat) -> bool {
 
 /// Whether a permanent on the battlefield has a static ability with this rule.
 #[inline]
-fn has_rule<L: Layout>(s: &State<L>, t: &GameTable, slot: Slot, rule: Rule) -> bool {
+fn has_rule<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot, rule: Rule) -> bool {
     let o = s.object(slot);
     let has = t.may_have_rule(o.card, rule) && t.facts(o.card, o.face).has_rule(rule);
     #[cfg(feature = "coverage")]
@@ -104,7 +107,7 @@ fn has_rule<L: Layout>(s: &State<L>, t: &GameTable, slot: Slot, rule: Rule) -> b
 /// ([CR 101.2](https://yawgatog.com/resources/magic-rules/#R1012)): "When a rule or effect
 /// allows or directs something to happen, and another effect states that it can't happen,
 /// the "can't" effect takes precedence."
-fn sorcery_speed_limiter<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Option<Slot> {
+fn sorcery_speed_limiter<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Option<L::Slot> {
     // A permanent's derived characteristics, its controller among them, are at its place in
     // the battlefield list.
     s.battlefield
@@ -128,7 +131,7 @@ fn instant_speed<L: Layout>(s: &State<L>, face: &Face, player: Seat) -> bool {
 }
 
 /// The permission that lets `player` cast the card in `slot`, if one does.
-fn permission<L: Layout>(s: &State<L>, player: Seat, slot: Slot) -> Option<CastPermission> {
+fn permission<L: Layout>(s: &State<L>, player: Seat, slot: L::Slot) -> Option<CastPermission<L>> {
     s.permissions
         .iter()
         .copied()
@@ -190,7 +193,13 @@ impl ExileCost {
 
     /// Whether `player` has the cards to pay it, the spell in `itself` aside: its caster
     /// moves it to the stack before paying (CR 601.2a), so it can't pay for itself.
-    fn payable<L: Layout>(self, s: &State<L>, t: &GameTable, player: Seat, itself: Slot) -> bool {
+    fn payable<L: Layout>(
+        self,
+        s: &State<L>,
+        t: &GameTable,
+        player: Seat,
+        itself: L::Slot,
+    ) -> bool {
         match self {
             ExileCost::Hand(colors) => !hand_cards(s, t, player, colors, itself).is_empty(),
             ExileCost::Graveyard(n) => {
@@ -208,8 +217,8 @@ fn hand_cards<L: Layout>(
     t: &GameTable,
     player: Seat,
     colors: Colors,
-    itself: Slot,
-) -> Bitboard {
+    itself: L::Slot,
+) -> Bitboard<L::Slot> {
     let mut hand = s.zone(player, Zone::Hand);
     hand.remove(itself);
     hand.iter()
@@ -222,7 +231,7 @@ fn hand_cards<L: Layout>(
 /// `c.left - 1` still to choose after, the lowest of interchangeable ones, which leaves every
 /// choice the others would. So every set of cards is one sequence of answers, and a graveyard
 /// with no more cards than the cost exiles asks nothing.
-fn exile_choices<L: Layout>(s: &State<L>, t: &GameTable, c: &Casting) -> Bitboard {
+fn exile_choices<L: Layout>(s: &State<L>, t: &GameTable, c: &Casting) -> Bitboard<L::Slot> {
     let entry = top(s);
     let face = t.def(entry.card).face(entry.face);
     let itself = entry.object.expect("a spell's card").slot;
@@ -279,8 +288,8 @@ fn spell_cost(face: &Face, costs: Castings, x: u8, extra: u8, free: bool) -> Man
 
 /// The objects or players a target spec can choose.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum TargetSet {
-    Objects(Bitboard),
+pub(crate) enum TargetSet<L: Layout = Small> {
+    Objects(Bitboard<L::Slot>),
     /// A bit per player.
     Players(u8),
 }
@@ -295,7 +304,7 @@ fn player_matches(filter: Filter, player: Seat, you: Seat) -> bool {
 }
 
 /// The spells on the stack, as objects.
-fn spells<L: Layout>(s: &State<L>) -> Bitboard {
+fn spells<L: Layout>(s: &State<L>) -> Bitboard<L::Slot> {
     s.stack
         .iter()
         .filter_map(StackEntry::spell)
@@ -303,7 +312,7 @@ fn spells<L: Layout>(s: &State<L>) -> Bitboard {
         .collect()
 }
 
-fn in_zone<L: Layout>(s: &State<L>, zone: Zone) -> Bitboard {
+fn in_zone<L: Layout>(s: &State<L>, zone: Zone) -> Bitboard<L::Slot> {
     s.zone(Seat::P0, zone) | s.zone(Seat::P1, zone)
 }
 
@@ -319,10 +328,10 @@ fn candidates<L: Layout>(
     t: &GameTable,
     spec: &TargetSpec,
     you: Seat,
-    itself: Option<Slot>,
+    itself: Option<L::Slot>,
     x: u8,
-    source: Option<Slot>,
-) -> TargetSet {
+    source: Option<L::Slot>,
+) -> TargetSet<L> {
     match domain(s, spec, you, itself, source) {
         TargetSet::Objects(within) => {
             TargetSet::Objects(spec.filter.select_x(s, t, within, you, x))
@@ -337,9 +346,9 @@ fn domain<L: Layout>(
     s: &State<L>,
     spec: &TargetSpec,
     you: Seat,
-    itself: Option<Slot>,
-    source: Option<Slot>,
-) -> TargetSet {
+    itself: Option<L::Slot>,
+    source: Option<L::Slot>,
+) -> TargetSet<L> {
     let mut within = match spec.kind {
         TargetKind::Player => {
             let players = Seat::BOTH
@@ -369,9 +378,9 @@ fn enough_candidates<L: Layout>(
     t: &GameTable,
     spec: &TargetSpec,
     you: Seat,
-    itself: Option<Slot>,
+    itself: Option<L::Slot>,
     x: u8,
-    source: Option<Slot>,
+    source: Option<L::Slot>,
 ) -> bool {
     let need = usize::from(spec.count);
     match domain(s, spec, you, itself, source) {
@@ -387,7 +396,7 @@ fn enough_candidates<L: Layout>(
     }
 }
 
-impl TargetSet {
+impl<L: Layout> TargetSet<L> {
     fn count(self) -> u32 {
         match self {
             TargetSet::Objects(b) => b.count(),
@@ -404,9 +413,9 @@ fn targetable<L: Layout>(
     t: &GameTable,
     ability: Option<&Ability>,
     you: Seat,
-    itself: Option<Slot>,
+    itself: Option<L::Slot>,
     x: u8,
-    source: Option<Slot>,
+    source: Option<L::Slot>,
 ) -> bool {
     ability.is_none_or(|a| {
         a.targets
@@ -416,7 +425,7 @@ fn targetable<L: Layout>(
 }
 
 /// The slot of an entry's ability source; a spell has none.
-fn source_of(entry: &StackEntry) -> Option<Slot> {
+fn source_of<L: Layout>(entry: &StackEntry<L>) -> Option<L::Slot> {
     entry.object.filter(|_| !entry.is_spell()).map(|r| r.slot)
 }
 
@@ -428,9 +437,9 @@ fn source_of(entry: &StackEntry) -> Option<Slot> {
 pub(crate) fn still_legal<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    entry: &StackEntry,
+    entry: &StackEntry<L>,
     ability: &Ability,
-    target: Target,
+    target: Target<L>,
 ) -> bool {
     let spec = &ability.targets[usize::from(target.spec)];
     let you = entry.controller;
@@ -452,16 +461,16 @@ pub(crate) fn still_legal<L: Layout>(
 /// What every check of one player's options reads, found once for all of them: the mana they
 /// could pay with and whether an opponent limits them to sorcery speed, each found at the first
 /// check that needs it.
-struct Situation {
+struct Situation<L: Layout = Small> {
     player: Seat,
     /// None once found if more sources than [`Funds`] holds: a stall for whatever needed them.
-    funds: OnceCell<Option<Funds>>,
+    funds: OnceCell<Option<Funds<L>>>,
     full: Cell<bool>,
     sorcery_speed_only: OnceCell<bool>,
 }
 
-impl Situation {
-    fn of(player: Seat) -> Situation {
+impl<L: Layout> Situation<L> {
+    fn of(player: Seat) -> Situation<L> {
         Situation {
             player,
             funds: OnceCell::new(),
@@ -472,7 +481,7 @@ impl Situation {
 
     /// Whether an opponent's permanent limits the player to sorcery speed: read only for a
     /// face that could otherwise be cast at instant speed.
-    fn sorcery_speed_only<L: Layout>(&self, s: &State<L>, t: &GameTable) -> bool {
+    fn sorcery_speed_only(&self, s: &State<L>, t: &GameTable) -> bool {
         *self
             .sorcery_speed_only
             .get_or_init(|| sorcery_speed_limiter(s, t, self.player).is_some())
@@ -480,7 +489,7 @@ impl Situation {
 
     /// The player's funds. Most priority decisions offer nothing that costs mana, as an
     /// opponent's turn with no instant in hand, so the source scan waits until a check needs it.
-    fn funds<L: Layout>(&self, s: &State<L>, t: &GameTable) -> Option<&Funds> {
+    fn funds(&self, s: &State<L>, t: &GameTable) -> Option<&Funds<L>> {
         let funds = self
             .funds
             .get_or_init(|| Funds::of(s, t, self.player).ok())
@@ -503,7 +512,7 @@ impl Situation {
 fn in_time<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    now: &Situation,
+    now: &Situation<L>,
     face: &Face,
     from: From,
 ) -> bool {
@@ -533,12 +542,12 @@ fn in_time<L: Layout>(
 fn refused<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    now: &Situation,
-    slot: Slot,
+    now: &Situation<L>,
+    slot: L::Slot,
     face_index: FaceIx,
     costs: Castings,
     from: From,
-) -> Option<Refusal> {
+) -> Option<Refusal<L>> {
     let player = now.player;
     let face = t.def(s.object(slot).card).face(face_index);
     if !in_time(s, t, now, face, from) {
@@ -578,7 +587,7 @@ fn refused<L: Layout>(
 
 /// How far a refusal's way of casting got through [`refused`]'s checks, which run in this
 /// order.
-fn progress(r: Refusal) -> u8 {
+fn progress<L: Layout>(r: Refusal<L>) -> u8 {
     match r {
         Refusal::Timing { .. } | Refusal::LandPlayed => 0,
         Refusal::Mana => 1,
@@ -595,9 +604,9 @@ pub(crate) fn refusal<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
-    slot: Slot,
-    land: Option<Refusal>,
-) -> Result<Option<Refusal>, Full> {
+    slot: L::Slot,
+    land: Option<Refusal<L>>,
+) -> Result<Option<Refusal<L>>, Full> {
     let now = Situation::of(player);
     let def = t.def(s.object(slot).card);
     let flashback = permission(s, player, slot).is_some_and(|p| p.flashback);
@@ -633,7 +642,7 @@ pub(crate) fn refusal<L: Layout>(
 }
 
 /// The cards `player` can cast at priority: their hand and the cards a permission names.
-fn cast_sources<L: Layout>(s: &State<L>, player: Seat) -> Bitboard {
+fn cast_sources<L: Layout>(s: &State<L>, player: Seat) -> Bitboard<L::Slot> {
     let mut cards = s.zone(player, Zone::Hand);
     for p in s.permissions.iter() {
         if p.player == player && s.is_current(p.object) {
@@ -647,17 +656,17 @@ fn cast_sources<L: Layout>(s: &State<L>, player: Seat) -> Bitboard {
 fn cast_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    now: &Situation,
-    cards: Bitboard,
+    now: &Situation<L>,
+    cards: Bitboard<L::Slot>,
     from: From,
-    out: &mut Fixed<Opt, 64>,
+    out: &mut L::Queue<Opt<L>, 64>,
 ) -> Result<(), Full> {
     let player = now.player;
     let free = matches!(from, From::Resolution { free: true });
     // Cards no face of which may be cast now are left out before collapsing, which saves
     // comparing them: whether one may depends only on its card, which interchangeable cards
     // share, so the cards kept are the same.
-    let cards: Bitboard = cards
+    let cards: Bitboard<L::Slot> = cards
         .iter()
         .filter(|&slot| {
             let def = t.def(s.object(slot).card);
@@ -692,7 +701,7 @@ fn cast_options<L: Layout>(
 
 /// The permanents that pay for an ability with themselves, and so cannot also tap for its
 /// mana.
-fn spent_by_cost(slot: Slot, a: &Ability) -> Bitboard {
+fn spent_by_cost<S: SlotId>(slot: S, a: &Ability) -> Bitboard<S> {
     let mut b = Bitboard::EMPTY;
     if a.cost.tap || a.cost.sacrifice_self {
         b.insert(slot);
@@ -703,7 +712,7 @@ fn spent_by_cost(slot: Slot, a: &Ability) -> Bitboard {
 /// The other untapped creatures `player` controls, which may crew the Vehicle in `vehicle`
 /// (CR 702.122a). Summoning sickness doesn't stop them: tapping them is a cost of the
 /// Vehicle's ability, not an ability of theirs with {T} (CR 302.6).
-fn crew_candidates<L: Layout>(s: &State<L>, player: Seat, vehicle: Slot) -> Bitboard {
+fn crew_candidates<L: Layout>(s: &State<L>, player: Seat, vehicle: L::Slot) -> Bitboard<L::Slot> {
     s.battlefield()
         .iter()
         .copied()
@@ -717,12 +726,12 @@ fn crew_candidates<L: Layout>(s: &State<L>, player: Seat, vehicle: Slot) -> Bitb
 }
 
 /// A creature's power counted toward a crew cost; less than 0 counts as 0.
-fn power_of<L: Layout>(s: &State<L>, slot: Slot) -> u8 {
+fn power_of<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
     u8::try_from(s.derived(slot).power.max(0)).unwrap_or(0)
 }
 
 /// The total power of the creatures that could crew the Vehicle in `vehicle`.
-fn crew_power<L: Layout>(s: &State<L>, player: Seat, vehicle: Slot) -> u32 {
+fn crew_power<L: Layout>(s: &State<L>, player: Seat, vehicle: L::Slot) -> u32 {
     crew_candidates(s, player, vehicle)
         .iter()
         .map(|slot| u32::from(power_of(s, slot)))
@@ -736,8 +745,8 @@ fn crew_power<L: Layout>(s: &State<L>, player: Seat, vehicle: Slot) -> u32 {
 fn activatable<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    now: &Situation,
-    slot: Slot,
+    now: &Situation<L>,
+    slot: L::Slot,
     ability: AbilityIx,
 ) -> bool {
     let player = now.player;
@@ -823,11 +832,11 @@ fn activatable<L: Layout>(
 fn waterbend_payable<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    funds: &Funds,
+    funds: &Funds<L>,
     player: Seat,
     mut cost: ManaCost,
     bendable: u8,
-    mut exclude: Bitboard,
+    mut exclude: Bitboard<L::Slot>,
 ) -> bool {
     let free = benders(s, player) & !exclude & !funds.sources(exclude);
     for slot in free.iter().take(usize::from(bendable.min(cost.generic))) {
@@ -840,7 +849,7 @@ fn waterbend_payable<L: Layout>(
 /// The untapped artifacts and creatures `player` controls, which may each pay for one
 /// generic mana of a waterbend cost (CR 701.67a). Summoning sickness doesn't stop them:
 /// tapping them is a cost of the ability, not an ability of theirs with {T} (CR 302.6).
-fn benders<L: Layout>(s: &State<L>, player: Seat) -> Bitboard {
+fn benders<L: Layout>(s: &State<L>, player: Seat) -> Bitboard<L::Slot> {
     s.battlefield()
         .iter()
         .copied()
@@ -858,7 +867,12 @@ fn benders<L: Layout>(s: &State<L>, player: Seat) -> Bitboard {
 /// declares ([`Needs`]): its cost would be paid and its effect find nothing to act on. The
 /// activation is still legal (CR 602.2); [`Profile::hides_pointless`](crate::Profile) says
 /// who isn't offered it.
-pub fn pointless<L: Layout>(s: &State<L>, t: &GameTable, slot: Slot, ability: AbilityIx) -> bool {
+pub fn pointless<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    ability: AbilityIx,
+) -> bool {
     let Some((card, face, index)) = activated(s, slot, ability) else {
         return false;
     };
@@ -874,8 +888,8 @@ pub fn pointless<L: Layout>(s: &State<L>, t: &GameTable, slot: Slot, ability: Ab
 fn activation_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    now: &Situation,
-    out: &mut Fixed<Opt, 64>,
+    now: &Situation<L>,
+    out: &mut L::Queue<Opt<L>, 64>,
 ) -> Result<(), Full> {
     let player = now.player;
     // Activations that would do nothing, left out for the player the profile hides them from,
@@ -883,15 +897,16 @@ fn activation_options<L: Layout>(
     let prunes = s.profile.hides_pointless[player.index()] && t.needy();
     let mine = s.zone(Seat::P0, Zone::Battlefield) | s.zone(Seat::P1, Zone::Battlefield);
     let objects = mine.iter().filter(|&slot| s.controller(slot) == player);
-    let objects: Bitboard = objects.collect::<Bitboard>() | s.zone(player, Zone::Hand);
+    let objects: Bitboard<L::Slot> =
+        objects.collect::<Bitboard<L::Slot>>() | s.zone(player, Zone::Hand);
     // Most objects have no activated ability; leaving them out before collapsing saves
     // comparing them. Whether one has is part of what collapsing compares (its card, face
     // and granted abilities), so the result is the same.
-    let activated = |slot: Slot| {
+    let activated = |slot: L::Slot| {
         let o = s.object(slot);
         t.facts(o.card, o.face).activated
     };
-    let objects: Bitboard = objects
+    let objects: Bitboard<L::Slot> = objects
         .iter()
         .filter(|&slot| {
             activated(slot) != 0
@@ -933,7 +948,7 @@ pub(crate) fn priority_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
-    out: &mut Fixed<Opt, 64>,
+    out: &mut L::Queue<Opt<L>, 64>,
 ) -> Result<(), Full> {
     let now = Situation::of(player);
     cast_options(s, t, &now, cast_sources(s, player), From::Priority, out)?;
@@ -954,9 +969,9 @@ pub(crate) fn priority_options<L: Layout>(
 pub(crate) fn begin_cast<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
     player: Seat,
-    option: Opt,
+    option: Opt<L>,
     resolving: Option<bool>,
 ) -> Result<(), Full> {
     let Opt::Cast { slot, face, costs } = option else {
@@ -1008,9 +1023,9 @@ pub(crate) fn begin_cast<L: Layout>(
 pub(crate) fn begin_activate<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
     player: Seat,
-    slot: Slot,
+    slot: L::Slot,
     ability: AbilityIx,
 ) -> Result<(), Full> {
     let (card, face, index) = activated(s, slot, ability).expect("an ability offered");
@@ -1057,7 +1072,7 @@ pub(crate) fn begin_activate<L: Layout>(
 pub(crate) fn target_trigger<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
 ) -> Result<(), Full> {
     let entry = top(s);
     let Some(ability) = entry_ability(t, &entry) else {
@@ -1093,14 +1108,15 @@ pub(crate) fn target_trigger<L: Layout>(
     advance(s, t, sink, c)
 }
 
-fn top<L: Layout>(s: &State<L>) -> StackEntry {
-    *s.stack
+fn top<L: Layout>(s: &State<L>) -> StackEntry<L> {
+    s.stack
         .as_slice()
         .last()
         .expect("the spell or ability being cast")
+        .clone()
 }
 
-fn top_mut<L: Layout>(s: &mut State<L>) -> &mut StackEntry {
+fn top_mut<L: Layout>(s: &mut State<L>) -> &mut StackEntry<L> {
     s.stack
         .as_mut_slice()
         .last_mut()
@@ -1108,12 +1124,12 @@ fn top_mut<L: Layout>(s: &mut State<L>) -> &mut StackEntry {
 }
 
 /// The target specs of the spell or ability being cast.
-fn specs(t: &GameTable, entry: &StackEntry) -> &'static [TargetSpec] {
+fn specs<L: Layout>(t: &GameTable, entry: &StackEntry<L>) -> &'static [TargetSpec] {
     entry_ability(t, entry).map_or(&[], |a| a.targets)
 }
 
 /// The total mana cost of the spell or ability being cast, once X is announced.
-fn total_cost(t: &GameTable, entry: &StackEntry, c: &Casting) -> ManaCost {
+fn total_cost<L: Layout>(t: &GameTable, entry: &StackEntry<L>, c: &Casting) -> ManaCost {
     let face = t.def(entry.card).face(entry.face);
     match entry.ability {
         None => spell_cost(face, entry.costs, entry.x, c.extra, c.free),
@@ -1139,7 +1155,7 @@ pub fn cost_being_cast<L: Layout>(s: &State<L>, t: &GameTable, x: u8) -> Option<
 
 /// What may be spent paying for the entry being cast, before its other costs are paid: all
 /// but a source that pays with itself.
-fn spent_by_entry(t: &GameTable, entry: &StackEntry) -> Bitboard {
+fn spent_by_entry<L: Layout>(t: &GameTable, entry: &StackEntry<L>) -> Bitboard<L::Slot> {
     match source_of(entry) {
         Some(source) => spent_by_cost(source, entry_ability_of(t, entry)),
         None => Bitboard::EMPTY,
@@ -1150,7 +1166,7 @@ fn spent_by_entry(t: &GameTable, entry: &StackEntry) -> Bitboard {
 fn advance<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
     mut c: Casting,
 ) -> Result<(), Full> {
     loop {
@@ -1209,7 +1225,7 @@ fn advance<L: Layout>(
 fn begin_payment<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
     mut c: Casting,
 ) -> Result<(), Full> {
     let entry = top(s);
@@ -1266,11 +1282,11 @@ fn waterbend_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     c: &Casting,
-) -> Result<Fixed<Opt, 64>, Full> {
-    let mut out = Fixed::new();
+) -> Result<L::Queue<Opt<L>, 64>, Full> {
+    let mut out: L::Queue<Opt<L>, 64> = Default::default();
     let entry = top(s);
     let cost = total_cost(t, &entry, c);
-    let mut objects = Fixed::<Opt, 64>::new();
+    let mut objects: L::Queue<Opt<L>, 64> = Default::default();
     if c.left > 0 {
         let mut fewer = cost;
         fewer.generic -= 1;
@@ -1288,7 +1304,7 @@ fn waterbend_options<L: Layout>(
     if mana::payable(s, t, c.player, cost, Bitboard::EMPTY)? {
         out.push(Opt::Done)?;
     }
-    for &o in &objects {
+    for &o in objects.iter() {
         out.push(o)?;
     }
     Ok(out)
@@ -1298,7 +1314,7 @@ fn waterbend_options<L: Layout>(
 fn pay_mana<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
     mut c: Casting,
 ) -> Result<(), Full> {
     let entry = top(s);
@@ -1347,7 +1363,7 @@ fn pay_mana<L: Layout>(
 fn finish<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
     c: Casting,
 ) -> Result<(), Full> {
     s.pending = Pending::None;
@@ -1378,20 +1394,24 @@ fn finish<L: Layout>(
 
 /// The [`Event::Ability`] that says `entry`, an ability on the stack. It goes straight to the
 /// sink: no trigger listens to it and it changes nothing.
-fn ability_event(entry: &StackEntry) -> Event {
+fn ability_event<L: Layout>(entry: &StackEntry<L>) -> Event<L> {
     Event::Ability {
         source: entry.object,
         controller: entry.controller,
         card: entry.card,
         face: entry.face,
         ability: entry.ability.expect("an ability's entry"),
-        targets: entry.targets,
+        targets: entry.targets.clone(),
         x: entry.x,
     }
 }
 
 /// The X values the payment can still cover, from the least allowed.
-fn x_options<L: Layout>(s: &State<L>, t: &GameTable, c: &Casting) -> Result<Fixed<Opt, 64>, Full> {
+fn x_options<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    c: &Casting,
+) -> Result<L::Queue<Opt<L>, 64>, Full> {
     let entry = top(s);
     let face = t.def(entry.card).face(entry.face);
     let least = if entry.is_spell() {
@@ -1400,9 +1420,9 @@ fn x_options<L: Layout>(s: &State<L>, t: &GameTable, c: &Casting) -> Result<Fixe
         0
     };
     let exclude = spent_by_entry(t, &entry);
-    let mut out = Fixed::new();
+    let mut out: L::Queue<Opt<L>, 64> = Default::default();
     for x in least..(least.saturating_add(64)) {
-        let mut probe = entry;
+        let mut probe = entry.clone();
         probe.x = x;
         if !mana::payable(s, t, c.player, total_cost(t, &probe, c), exclude)? {
             break;
@@ -1414,7 +1434,7 @@ fn x_options<L: Layout>(s: &State<L>, t: &GameTable, c: &Casting) -> Result<Fixe
 
 /// The objects or players the current target spec can still choose: not one already chosen
 /// for it.
-fn target_options<L: Layout>(s: &State<L>, t: &GameTable, c: &Casting) -> TargetSet {
+fn target_options<L: Layout>(s: &State<L>, t: &GameTable, c: &Casting) -> TargetSet<L> {
     let entry = top(s);
     let spec = &specs(t, &entry)[usize::from(c.spec)];
     let itself = entry.spell().map(|r| r.slot);
@@ -1442,10 +1462,10 @@ fn target_options<L: Layout>(s: &State<L>, t: &GameTable, c: &Casting) -> Target
 pub(crate) fn decision<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
     c: &Casting,
-) -> Result<Decision, Full> {
-    let options = |kind: DecisionKind, list: Fixed<Opt, 64>| Decision {
+) -> Result<Decision<L>, Full> {
+    let options = |kind: DecisionKind, list: L::Queue<Opt<L>, 64>| Decision {
         player: c.player,
         kind,
         candidates: Candidates::Options(list),
@@ -1457,7 +1477,7 @@ pub(crate) fn decision<L: Layout>(
             let entry = top(s);
             let spec = &specs(t, &entry)[usize::from(c.spec)];
             let most = target_options(s, t, c).count().min(u32::from(spec.count));
-            let mut list = Fixed::new();
+            let mut list: L::Queue<Opt<L>, 64> = Default::default();
             for n in 0..=most {
                 list.push(Opt::Number(n as u8))?;
             }
@@ -1471,7 +1491,7 @@ pub(crate) fn decision<L: Layout>(
                 ask: Ask::Plain,
             },
             TargetSet::Players(p) => {
-                let mut list = Fixed::new();
+                let mut list: L::Queue<Opt<L>, 64> = Default::default();
                 for player in Seat::BOTH.into_iter().filter(|q| p & (1 << q.get()) != 0) {
                     list.push(Opt::Player(player))?;
                 }
@@ -1489,7 +1509,7 @@ pub(crate) fn decision<L: Layout>(
                 Bitboard::EMPTY,
                 false,
             )?;
-            let mut list = Fixed::new();
+            let mut list: L::Queue<Opt<L>, 64> = Default::default();
             for i in 0..plans.len() {
                 list.push(Opt::Plan(i as u8))?;
             }
@@ -1544,10 +1564,10 @@ pub(crate) fn decision<L: Layout>(
 pub(crate) fn perform<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
     mut c: Casting,
-    option: Option<Opt>,
-    object: Option<Slot>,
+    option: Option<Opt<L>>,
+    object: Option<L::Slot>,
 ) -> Result<(), Full> {
     match c.step {
         CastStep::X => {
@@ -1649,11 +1669,11 @@ pub(crate) fn perform<L: Layout>(
 pub(crate) fn offer_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    object: ObjectRef,
+    object: ObjectRef<L>,
     player: Seat,
     free: bool,
-) -> Result<Fixed<Opt, 64>, Full> {
-    let mut out = Fixed::new();
+) -> Result<L::Queue<Opt<L>, 64>, Full> {
+    let mut out: L::Queue<Opt<L>, 64> = Default::default();
     out.push(Opt::Pass)?;
     if s.is_current(object) {
         let mut cards = Bitboard::EMPTY;
@@ -1670,8 +1690,8 @@ pub(crate) fn offer_options<L: Layout>(
 pub(crate) fn counter<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
-    spell: ObjectRef,
+    sink: &mut Sink<L>,
+    spell: ObjectRef<L>,
     exile: bool,
 ) -> Result<bool, Full> {
     let Some(entry) = take_spell(s, spell) else {
@@ -1683,7 +1703,10 @@ pub(crate) fn counter<L: Layout>(
 
 /// Removes a spell's entry from the stack, if it is there, for an effect that moves the
 /// spell's card elsewhere.
-pub(crate) fn take_spell<L: Layout>(s: &mut State<L>, spell: ObjectRef) -> Option<StackEntry> {
+pub(crate) fn take_spell<L: Layout>(
+    s: &mut State<L>,
+    spell: ObjectRef<L>,
+) -> Option<StackEntry<L>> {
     let i = s.stack.iter().position(|e| e.spell() == Some(spell))?;
     Some(s.stack.remove(i))
 }
@@ -1693,8 +1716,8 @@ pub(crate) fn take_spell<L: Layout>(s: &mut State<L>, spell: ObjectRef) -> Optio
 pub(crate) fn leave_stack<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
-    entry: &StackEntry,
+    sink: &mut Sink<L>,
+    entry: &StackEntry<L>,
     exile: bool,
     reason: Reason,
 ) -> Result<(), Full> {
@@ -1717,13 +1740,13 @@ pub(crate) fn leave_stack<L: Layout>(
 /// remainder of the process for activating an ability is identical to the process for casting a
 /// spell listed in rules 601.2b-i"). A Strip Mine targeting itself is sacrificed and its ability
 /// does nothing; targeting its twin destroys the twin.
-pub(crate) fn referenced<L: Layout>(s: &State<L>) -> Bitboard {
+pub(crate) fn referenced<L: Layout>(s: &State<L>) -> Bitboard<L::Slot> {
     let mut b = Bitboard::EMPTY;
     for e in s.stack.iter() {
         if let Some(source) = e.object.filter(|_| !e.is_spell()) {
             b.insert(source.slot);
         }
-        for target in &e.targets {
+        for target in e.targets.iter() {
             if let Some(r) = target.as_object() {
                 b.insert(r.slot);
             }

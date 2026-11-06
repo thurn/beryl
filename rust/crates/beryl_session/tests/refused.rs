@@ -33,7 +33,7 @@ fn seen(v: &PlayerView) -> Vec<Seen> {
     let Status::Deciding { decision } = &v.status else {
         panic!("no decision is open");
     };
-    let name = |slot: u8| {
+    let name = |slot: u16| {
         v.objects
             .iter()
             .find(|o| o.slot == slot)

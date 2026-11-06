@@ -5,10 +5,10 @@ use crate::card::{Subtype, Supertypes, Types};
 use crate::decision::{Outcome, StallReason};
 use crate::event::{self, Entry, Event, Reason, Sink};
 use crate::fixed::Full;
-use crate::ids::{Seat, Slot};
+use crate::ids::Seat;
 use crate::layers;
 use crate::layout::{Layout, Queue, Table};
-use crate::state::{ObjectFlags, Pending, State, TOKEN_POOL, Zone};
+use crate::state::{ObjectFlags, Pending, State, Zone};
 use crate::table::GameTable;
 use crate::turn::apnap;
 use crate::zone;
@@ -31,7 +31,7 @@ use crate::zone;
 pub(crate) fn check<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
 ) -> Result<bool, Full> {
     if check_losses(s, sink) {
         return Ok(true);
@@ -69,6 +69,10 @@ pub(crate) fn check<L: Layout>(
     Ok(true)
 }
 
+/// What [`doomed`] finds: the permanents bound for graveyards, the tokens that cease to exist,
+/// and each player's legendary permanents.
+type Doomed<S> = (Bitboard<S>, Bitboard<S>, [Bitboard<S>; 2]);
+
 /// The permanents state-based actions put into graveyards, and the tokens that cease to
 /// exist.
 ///
@@ -94,7 +98,7 @@ pub(crate) fn check<L: Layout>(
 ///
 /// With them, in the same pass, the legendary permanents each player controls, for the legend
 /// rule.
-fn doomed<L: Layout>(s: &State<L>) -> (Bitboard, Bitboard, [Bitboard; 2]) {
+fn doomed<L: Layout>(s: &State<L>) -> Doomed<L::Slot> {
     let mut graveyard = Bitboard::EMPTY;
     let mut legendary = [Bitboard::EMPTY; 2];
     debug_assert!(!s.flags.derived_dirty, "derived read while dirty");
@@ -120,7 +124,7 @@ fn doomed<L: Layout>(s: &State<L>) -> (Bitboard, Bitboard, [Bitboard; 2]) {
             away |= s.zone(player, zone);
         }
     }
-    let tokens = (away & TOKEN_POOL)
+    let tokens = (away & L::TOKEN_POOL)
         .iter()
         .filter(|&slot| s.object(slot).flags.has(ObjectFlags::TOKEN))
         .collect();
@@ -138,8 +142,11 @@ fn doomed<L: Layout>(s: &State<L>) -> (Bitboard, Bitboard, [Bitboard; 2]) {
 ///
 /// [CR 104.4a](https://yawgatog.com/resources/magic-rules/#R1044a): "If all the players
 /// remaining in a game lose simultaneously, the game is a draw."
-fn check_losses<L: Layout>(s: &mut State<L>, sink: &mut Sink) -> bool {
-    let lost = s.players.map(|p| p.life <= 0 || p.drew_from_empty);
+fn check_losses<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>) -> bool {
+    let lost = s
+        .players
+        .each_ref()
+        .map(|p| p.life <= 0 || p.drew_from_empty);
     if lost == [false, false] {
         return false;
     }
@@ -152,13 +159,13 @@ fn check_losses<L: Layout>(s: &mut State<L>, sink: &mut Sink) -> bool {
 /// that a player wins the game." In a two-player game that is one ending
 /// ([CR 104.2a](https://yawgatog.com/resources/magic-rules/#R1042a)): "A player still in the
 /// game wins the game if that player's opponents have all left the game."
-pub(crate) fn end_game<L: Layout>(s: &mut State<L>, sink: &mut Sink, loser: Seat) {
+pub(crate) fn end_game<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, loser: Seat) {
     let mut lost = [false; 2];
     lost[loser.index()] = true;
     end(s, sink, lost);
 }
 
-fn end<L: Layout>(s: &mut State<L>, sink: &mut Sink, lost: [bool; 2]) {
+fn end<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, lost: [bool; 2]) {
     s.outcome = Some(match lost {
         [true, false] => Outcome::Win(Seat::P1),
         [false, true] => Outcome::Win(Seat::P0),
@@ -174,13 +181,13 @@ fn end<L: Layout>(s: &mut State<L>, sink: &mut Sink, lost: [bool; 2]) {
 }
 
 /// The name of the permanent in `slot`: its face up's (CR 712.8d, 712.8e).
-fn name<L: Layout>(s: &State<L>, t: &GameTable, slot: Slot) -> &'static str {
+fn name<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> &'static str {
     let o = s.object(slot);
     t.def(o.card).face_name(o.face)
 }
 
 /// The legendary permanents each player controls.
-fn legendary<L: Layout>(s: &State<L>) -> [Bitboard; 2] {
+fn legendary<L: Layout>(s: &State<L>) -> [Bitboard<L::Slot>; 2] {
     let mut by_controller = [Bitboard::EMPTY; 2];
     // A permanent's derived characteristics, its controller among them, are at its place in
     // the battlefield list.
@@ -195,14 +202,14 @@ fn legendary<L: Layout>(s: &State<L>) -> [Bitboard; 2] {
 
 /// Whether the permanents in `a` and `b` have the same name. The same card with the same face
 /// up does without comparing the names.
-fn same_name<L: Layout>(s: &State<L>, t: &GameTable, a: Slot, b: Slot) -> bool {
+fn same_name<L: Layout>(s: &State<L>, t: &GameTable, a: L::Slot, b: L::Slot) -> bool {
     let (oa, ob) = (s.object(a), s.object(b));
     (oa.card == ob.card && oa.face == ob.face) || name(s, t, a) == name(s, t, b)
 }
 
 /// Whether some player controls two legendary permanents of `legendary` with the same name:
 /// whether any legend-rule group exists, kept or not.
-fn any_group<L: Layout>(s: &State<L>, t: &GameTable, legendary: &[Bitboard; 2]) -> bool {
+fn any_group<L: Layout>(s: &State<L>, t: &GameTable, legendary: &[Bitboard<L::Slot>; 2]) -> bool {
     legendary.iter().any(|&mine| {
         let mut rest = mine;
         mine.iter().any(|a| {
@@ -217,9 +224,9 @@ fn any_group<L: Layout>(s: &State<L>, t: &GameTable, legendary: &[Bitboard; 2]) 
 fn legend_group<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    legendary: &[Bitboard; 2],
-    slot: Slot,
-) -> Bitboard {
+    legendary: &[Bitboard<L::Slot>; 2],
+    slot: L::Slot,
+) -> Bitboard<L::Slot> {
     let name_of = name(s, t, slot);
     legendary[s.controller(slot).index()]
         .iter()
@@ -237,8 +244,8 @@ fn legend_group<L: Layout>(
 pub(crate) fn unresolved_legends<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    kept: Bitboard,
-) -> Option<(Seat, Bitboard)> {
+    kept: Bitboard<L::Slot>,
+) -> Option<(Seat, Bitboard<L::Slot>)> {
     legend_group_in(s, t, &legendary(s), kept)
 }
 
@@ -246,9 +253,9 @@ pub(crate) fn unresolved_legends<L: Layout>(
 fn legend_group_in<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    legendary: &[Bitboard; 2],
-    kept: Bitboard,
-) -> Option<(Seat, Bitboard)> {
+    legendary: &[Bitboard<L::Slot>; 2],
+    kept: Bitboard<L::Slot>,
+) -> Option<(Seat, Bitboard<L::Slot>)> {
     // A group needs two legendary permanents of one controller with one name, which most
     // checks lack.
     if legendary.iter().all(|b| b.count() < 2) || !any_group(s, t, legendary) {
@@ -275,8 +282,8 @@ fn legend_group_in<L: Layout>(
 pub(crate) fn apply_legend_rule<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
-    kept: Bitboard,
+    sink: &mut Sink<L>,
+    kept: Bitboard<L::Slot>,
 ) -> Result<(), Full> {
     let legendary = legendary(s);
     let mut doomed = Bitboard::EMPTY;

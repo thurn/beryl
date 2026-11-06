@@ -238,7 +238,7 @@ pub(crate) fn best(d: &Decision, mut score: impl FnMut(Candidate) -> Option<i32>
             .enumerate()
             .for_each(|(i, &opt)| consider(i, Candidate::Option(opt))),
     }
-    Choice(top.0 as u8)
+    Choice(top.0 as u16)
 }
 
 /// One decision's view, for the rules above.

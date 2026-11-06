@@ -182,7 +182,7 @@ fn exact_stop_chooses_as_the_full_budget(iterations: u32, count: usize, from_end
         }
         assert_eq!(
             agent.choose(obs, d),
-            Choice(most as u8),
+            Choice(most as u16),
             "decision {i}: {full:?}"
         );
         spent += agent.last_search().expect("a search").rollouts;

@@ -259,7 +259,7 @@ fn kicker_x_announces_an_x_of_at_least_one_and_marks_the_permanent() {
     assert_eq!(d.kind, DecisionKind::X);
     // {1}{U} plus X from four Islands: X is 1 or 2, never 0.
     let xs: Vec<_> = (0..d.len())
-        .map(|i| d.candidates.option(Choice(i as u8)).unwrap())
+        .map(|i| d.candidates.option(Choice(i as u16)).unwrap())
         .collect();
     assert_eq!(xs, [Opt::Number(1), Opt::Number(2)]);
     g.pick(Opt::Number(2));

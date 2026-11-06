@@ -39,7 +39,7 @@
 //! decision asked straight after the last, with nothing learned between, keeps its trees,
 //! as `Mcts` does; their visits count toward the budget at what they cost.
 
-use beryl_engine::{Layout, Small};
+use beryl_engine::{Layout, SlotId, Small};
 use std::collections::hash_map::DefaultHasher;
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -52,7 +52,7 @@ use beryl_engine::card::FaceIx;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
     Bitboard, Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome,
-    Replay, Scratch, Seat, Slot, State, Step, Zone, apply, next, observe,
+    Replay, Scratch, Seat, State, Step, Zone, apply, next, observe,
 };
 
 use crate::eval::evaluate;
@@ -228,7 +228,7 @@ struct Kept<L: Layout> {
     /// Each slot's incarnation, and whether the deciding player knew its card, then.
     seen: Vec<(u16, bool)>,
     /// The card the choice names, which it may move.
-    moves: Option<Slot>,
+    moves: Option<L::Slot>,
 }
 
 impl<L: Layout> LongSearch<L> {
@@ -254,7 +254,7 @@ impl<L: Layout> LongSearch<L> {
     fn plant(
         &self,
         obs: Observation<'_, L>,
-        d: &Decision,
+        d: &Decision<L>,
         decision: AgentDecision,
     ) -> Vec<Tree<L>> {
         let mut seeds = SplitMix64::new(
@@ -268,7 +268,7 @@ impl<L: Layout> LongSearch<L> {
             Method::Pimc { worlds } => (worlds, false),
             Method::Ismcts { trees } => (trees, true),
         };
-        let known: Bitboard = Slot::all().filter(|&slot| obs.knows(slot)).collect();
+        let known: Bitboard<L::Slot> = L::Slot::all().filter(|&slot| obs.knows(slot)).collect();
         (0..n.max(1))
             .map(|_| {
                 Tree::new(
@@ -291,12 +291,12 @@ impl<L: Layout> LongSearch<L> {
         &self,
         kept: Kept<L>,
         obs: Observation<'_, L>,
-        d: &Decision,
+        d: &Decision<L>,
     ) -> Option<Vec<Tree<L>>> {
         // CR 400.7: "An object that moves from one zone to another becomes a new object
         // with no memory of or relation to its previous existence", so a new incarnation is
         // a zone change.
-        for (slot, &(incarnation, knew)) in Slot::all().zip(&kept.seen) {
+        for (slot, &(incarnation, knew)) in L::Slot::all().zip(&kept.seen) {
             let o = obs.object(slot);
             if obs.knows(slot) != knew || (o.incarnation != incarnation && kept.moves != Some(slot))
             {
@@ -450,7 +450,7 @@ fn totals<L: Layout>(trees: &[Tree<L>]) -> (Vec<u32>, Vec<f64>) {
 }
 
 /// The card a choice names, which answering it may move.
-fn names(d: &Decision, c: Choice) -> Option<Slot> {
+fn names<L: Layout>(d: &Decision<L>, c: Choice) -> Option<L::Slot> {
     match d.candidates {
         Candidates::Objects(_) => d.candidates.object(c),
         Candidates::Options(_) => match d.candidates.option(c)? {
@@ -466,7 +466,7 @@ fn names(d: &Decision, c: Choice) -> Option<Slot> {
 impl<L: Layout> Agent<L> for LongSearch<L> {
     /// The candidate visited most across the trees, of equals the best by mean. A decision with one
     /// candidate is never searched, nor is passing with one's own object on top of the stack.
-    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision) -> Choice {
+    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
         let decision = self.decision;
         self.decision = decision.next();
         self.last = None;
@@ -487,7 +487,7 @@ impl<L: Layout> Agent<L> for LongSearch<L> {
         let inherited = trees.iter().map(Tree::visits).sum();
         let (iterations, work) = self.grow(&mut trees);
         let (visits, rewards) = totals(&trees);
-        let choice = Choice(leader(&visits, &rewards) as u8);
+        let choice = Choice(leader(&visits, &rewards) as u16);
         self.last = Some(Search {
             decision,
             chain,
@@ -502,7 +502,7 @@ impl<L: Layout> Agent<L> for LongSearch<L> {
                 trees,
                 chain,
                 choice,
-                seen: Slot::all()
+                seen: L::Slot::all()
                     .map(|slot| (obs.object(slot).incarnation, obs.knows(slot)))
                     .collect(),
                 moves: names(d, choice),
@@ -555,7 +555,7 @@ struct Tree<L: Layout> {
     nodes: Vec<Node>,
     root: u32,
     /// The root decision.
-    decision: Decision,
+    decision: Decision<L>,
     /// Each root candidate's key.
     root_keys: Vec<u64>,
     /// A fixed world's state at the root; for a resampling tree, the true state, which each
@@ -565,7 +565,7 @@ struct Tree<L: Layout> {
     family: Family,
     resample: bool,
     /// The slots the searcher knew at the first root, whose options key by slot.
-    known: Bitboard,
+    known: Bitboard<L::Slot>,
     rng: SplitMix64,
     x: Scratch<L>,
     /// Engine steps and iterations over the tree's life.
@@ -580,8 +580,8 @@ impl<L: Layout> Tree<L> {
         t: &GameTable,
         family: Family,
         obs: Observation<'_, L>,
-        d: &Decision,
-        known: Bitboard,
+        d: &Decision<L>,
+        known: Bitboard<L::Slot>,
         resample: bool,
         seed: u64,
     ) -> Self {
@@ -590,7 +590,7 @@ impl<L: Layout> Tree<L> {
         let mut tree = Tree {
             nodes: vec![Node::new(0, d.player)],
             root: 0,
-            decision: *d,
+            decision: d.clone(),
             root_keys: Vec::new(),
             state: truth,
             viewer: d.player,
@@ -675,7 +675,13 @@ impl<L: Layout> Tree<L> {
     }
 
     /// Moves the root down to its child for `c`, if `d` may follow it.
-    fn descend(&mut self, t: &GameTable, c: Choice, obs: Observation<'_, L>, d: &Decision) -> bool {
+    fn descend(
+        &mut self,
+        t: &GameTable,
+        c: Choice,
+        obs: Observation<'_, L>,
+        d: &Decision<L>,
+    ) -> bool {
         let Some(child) = self.child(self.root, self.root_keys[usize::from(c.0)]) else {
             return false;
         };
@@ -693,7 +699,7 @@ impl<L: Layout> Tree<L> {
             self.x.counts.copied();
             apply(&mut s, t, &mut self.x, &mut Replay, c);
             smart(&mut s);
-            if next(&mut s, t, &mut self.x, &mut Replay) != Step::Decide(*d) {
+            if next(&mut s, t, &mut self.x, &mut Replay) != Step::Decide(d.clone()) {
                 return false;
             }
             if !shows_the_same(observe(&s, t, &mut self.x, d.player), obs)
@@ -704,7 +710,7 @@ impl<L: Layout> Tree<L> {
             self.state = s;
         }
         self.root = child;
-        self.decision = *d;
+        self.decision = d.clone();
         self.root_keys = self.root_keys(t, d);
         self.work = self.spent();
         true
@@ -719,18 +725,18 @@ impl<L: Layout> Tree<L> {
     /// knows their order") is shuffled by the world's random streams, not the game's, and a
     /// card the viewer does not know may land anywhere.
     fn keeps_to(&self, s: &State<L>, truth: &State<L>) -> bool {
-        let shown = |slot: Slot| match self.family.sight {
+        let shown = |slot: L::Slot| match self.family.sight {
             Sight::Hidden => false,
             Sight::Hands => truth.object(slot).zone == Zone::Hand,
             Sight::Omniscient => true,
         };
         Seat::BOTH.iter().all(|&p| s.library(p) == truth.library(p))
-            && Slot::all().all(|slot| !shown(slot) || s.card(slot) == truth.card(slot))
+            && L::Slot::all().all(|slot| !shown(slot) || s.card(slot) == truth.card(slot))
     }
 
     /// The keys of root decision `d`'s candidates, read in a world: the fixed one, or one
     /// dealt for the purpose, so that no key is read off the true state.
-    fn root_keys(&self, t: &GameTable, d: &Decision) -> Vec<u64> {
+    fn root_keys(&self, t: &GameTable, d: &Decision<L>) -> Vec<u64> {
         if self.resample {
             let world = self.deal(t, &mut self.rng.clone());
             keys(&world, d, self.known, self.viewer)
@@ -766,7 +772,7 @@ impl<L: Layout> Tree<L> {
         let mut path: [u32; 256] = [0; 256];
         let mut depth = 0;
         let mut node = self.root;
-        let mut d = self.decision;
+        let mut d = self.decision.clone();
         let value = loop {
             let at_root = node == self.root;
             let keys = if at_root {
@@ -838,7 +844,7 @@ impl<L: Layout> Tree<L> {
                 .filter(|&(_, &c)| self.nodes[c as usize].visits == 0)
                 .nth(pick)
                 .expect("a fresh child");
-            return (c, Choice(i as u8));
+            return (c, Choice(i as u16));
         }
         // Equal bounds are broken at random: by index, the first candidate (passing, in a
         // priority decision) would take every tie, and with flat rewards the root's visits
@@ -863,7 +869,7 @@ impl<L: Layout> Tree<L> {
                 std::cmp::Ordering::Less => {}
             }
         }
-        (children[best.0], Choice(best.0 as u8))
+        (children[best.0], Choice(best.0 as u16))
     }
 
     /// A new node's score for the first seat, from `s` just after its action.
@@ -915,14 +921,19 @@ fn value(outcome: Outcome) -> f64 {
 /// characteristics of the card"), a land played, a permanent turned face up. Any other card
 /// it cannot see (a face-down permanent, a card picked from a library it cannot see) keys by
 /// its slot, so the searcher never plans on a card it would not know.
-fn keys<L: Layout>(world: &State<L>, d: &Decision, known: Bitboard, viewer: Seat) -> Vec<u64> {
+fn keys<L: Layout>(
+    world: &State<L>,
+    d: &Decision<L>,
+    known: Bitboard<L::Slot>,
+    viewer: Seat,
+) -> Vec<u64> {
     let mut bases = Vec::with_capacity(d.len());
     for i in 0..d.len() {
-        let c = Choice(i as u8);
+        let c = Choice(i as u16);
         let mut h = DefaultHasher::new();
         d.player.hash(&mut h);
         d.kind.hash(&mut h);
-        let named = |slot: Slot, shows: bool| -> (Option<Slot>, u8) {
+        let named = |slot: L::Slot, shows: bool| -> (Option<L::Slot>, u8) {
             if !known.contains(slot) && (shows || world.knows(viewer, slot)) {
                 (None, world.card(slot).index() as u8)
             } else {
@@ -940,7 +951,7 @@ fn keys<L: Layout>(world: &State<L>, d: &Decision, known: Bitboard, viewer: Seat
                 match names_slot(opt) {
                     Some(slot) => {
                         named(slot, shows(opt)).hash(&mut h);
-                        with_slot(opt, Slot::new(0)).hash(&mut h);
+                        with_slot(opt, L::Slot::from_index(0)).hash(&mut h);
                     }
                     None => opt.hash(&mut h),
                 }
@@ -959,7 +970,7 @@ fn keys<L: Layout>(world: &State<L>, d: &Decision, known: Bitboard, viewer: Seat
 }
 
 /// Whether taking an option shows everyone the card it names.
-fn shows(opt: Opt) -> bool {
+fn shows<L: Layout>(opt: Opt<L>) -> bool {
     match opt {
         Opt::Cast { face, .. } => face != FaceIx::DOWN,
         Opt::PlayLand(_) | Opt::TurnFaceUp(_) => true,
@@ -968,7 +979,7 @@ fn shows(opt: Opt) -> bool {
 }
 
 /// The slot an option names.
-fn names_slot(opt: Opt) -> Option<Slot> {
+fn names_slot<L: Layout>(opt: Opt<L>) -> Option<L::Slot> {
     match opt {
         Opt::PlayLand(slot)
         | Opt::Attack(slot)
@@ -985,7 +996,7 @@ fn names_slot(opt: Opt) -> Option<Slot> {
 }
 
 /// The option with the slot it names replaced.
-fn with_slot(opt: Opt, to: Slot) -> Opt {
+fn with_slot<L: Layout>(opt: Opt<L>, to: L::Slot) -> Opt<L> {
     match opt {
         Opt::PlayLand(_) => Opt::PlayLand(to),
         Opt::Attack(_) => Opt::Attack(to),
@@ -1009,7 +1020,7 @@ fn with_slot(opt: Opt, to: Slot) -> Opt {
 mod tests {
     use beryl_cards::CARDS;
     use beryl_cards::decks::WU_CONTROL;
-    use beryl_engine::Profile;
+    use beryl_engine::{Profile, Slot};
 
     use super::*;
 
@@ -1039,8 +1050,10 @@ mod tests {
                 }
                 unseen += (0..d.len())
                     .filter_map(|i| match d.candidates {
-                        Candidates::Objects(_) => d.candidates.object(Choice(i as u8)),
-                        Candidates::Options(_) => names_slot(d.candidates.option(Choice(i as u8))?),
+                        Candidates::Objects(_) => d.candidates.object(Choice(i as u16)),
+                        Candidates::Options(_) => {
+                            names_slot(d.candidates.option(Choice(i as u16))?)
+                        }
                     })
                     .filter(|&q| !known.contains(q))
                     .count();

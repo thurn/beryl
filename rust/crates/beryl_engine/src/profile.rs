@@ -280,7 +280,7 @@ impl Profile {
     /// player casts or an ability they activate, while [`Profile::asks_targets`] names them.
     /// A triggered ability's lone target stays silent, as nothing can take it back
     /// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d)).
-    pub(crate) fn asks_lone<L: Layout>(self, s: &State<L>, d: &Decision) -> bool {
+    pub(crate) fn asks_lone<L: Layout>(self, s: &State<L>, d: &Decision<L>) -> bool {
         d.kind == DecisionKind::Target
             && self.asks_targets == Some(d.player)
             && matches!(s.pending, Pending::Casting(c) if !c.triggered)

@@ -5,7 +5,7 @@
 use crate::bitboard::Bitboard;
 use crate::card::FaceIx;
 use crate::fixed::{Fixed, Full};
-use crate::ids::{CardIx, Seat, Slot};
+use crate::ids::{CardIx, Seat, SlotId};
 use crate::layout::{Layout, Queue};
 use crate::rng::SplitMix64;
 use crate::state::{Counters, DECK_SLOTS, Derived, Object, ObjectFlags, State, Zone};
@@ -31,18 +31,18 @@ pub(crate) enum Place {
 /// [CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003): "If an object would go to
 /// any library, graveyard, or hand other than its owner's, it goes to its owner's
 /// corresponding zone." Zones are kept by owner, so that holds by construction.
-pub(crate) fn move_to<L: Layout>(s: &mut State<L>, slot: Slot, to: Zone) -> Result<(), Full> {
+pub(crate) fn move_to<L: Layout>(s: &mut State<L>, slot: L::Slot, to: Zone) -> Result<(), Full> {
     move_to_place(s, slot, to, Place::Top)
 }
 
 /// Moves an object to the bottom of its owner's library.
-pub(crate) fn put_on_bottom<L: Layout>(s: &mut State<L>, slot: Slot) -> Result<(), Full> {
+pub(crate) fn put_on_bottom<L: Layout>(s: &mut State<L>, slot: L::Slot) -> Result<(), Full> {
     move_to_place(s, slot, Zone::Library, Place::Bottom)
 }
 
 pub(crate) fn move_to_place<L: Layout>(
     s: &mut State<L>,
-    slot: Slot,
+    slot: L::Slot,
     to: Zone,
     place: Place,
 ) -> Result<(), Full> {
@@ -121,7 +121,7 @@ pub(crate) fn move_to_place<L: Layout>(
 /// to exile them in the first ability." An ability of that object still on the stack after it
 /// left finds them; the new object is not that object
 /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)) and does not.
-fn forget_exiled_with<L: Layout>(s: &mut State<L>, slot: Slot) {
+fn forget_exiled_with<L: Layout>(s: &mut State<L>, slot: L::Slot) {
     let exile = s.zones.members[0][Zone::Exile as usize] | s.zones.members[1][Zone::Exile as usize];
     for x in exile.iter() {
         let o = s.object_mut(x);
@@ -132,7 +132,7 @@ fn forget_exiled_with<L: Layout>(s: &mut State<L>, slot: Slot) {
     }
 }
 
-fn leave<L: Layout>(s: &mut State<L>, slot: Slot) {
+fn leave<L: Layout>(s: &mut State<L>, slot: L::Slot) {
     let o = *s.object(slot);
     let owner = o.owner.index();
     match o.zone {
@@ -166,7 +166,7 @@ fn leave<L: Layout>(s: &mut State<L>, slot: Slot) {
     }
 }
 
-fn remove_slot(list: &mut impl Queue<Slot>, slot: Slot) {
+fn remove_slot<S: SlotId>(list: &mut impl Queue<S>, slot: S) {
     if let Some(i) = list.position(slot) {
         list.remove(i);
     }
@@ -203,7 +203,7 @@ pub(crate) fn draw_n<L: Layout>(s: &mut State<L>, player: Seat, n: u8) -> Result
 /// knows where they put each card.
 pub(crate) fn reorder_library<L: Layout>(
     s: &mut State<L>,
-    slot: Slot,
+    slot: L::Slot,
     place: Place,
 ) -> Result<(), Full> {
     let library = &mut s.zones.library[s.objects[slot.index()].owner.index()];
@@ -245,7 +245,7 @@ pub(crate) fn shuffle_library<L: Layout>(s: &mut State<L>, player: Seat) {
 /// object ([CR 701.20d](https://yawgatog.com/resources/magic-rules/#R70120d)): "If cards in a
 /// player's library are shuffled or otherwise reordered, any revealed cards that are
 /// reordered stop being revealed and become new objects."
-pub(crate) fn rebind<L: Layout>(s: &mut State<L>, slots: &[Slot], rng: &mut SplitMix64) {
+pub(crate) fn rebind<L: Layout>(s: &mut State<L>, slots: &[L::Slot], rng: &mut SplitMix64) {
     let mut cards: Fixed<CardIx, DECK_SLOTS> = Fixed::new();
     for &slot in slots {
         // A library never holds more than its owner's deck slots.
@@ -257,7 +257,7 @@ pub(crate) fn rebind<L: Layout>(s: &mut State<L>, slots: &[Slot], rng: &mut Spli
         o.card = card;
         o.incarnation = o.incarnation.wrapping_add(1);
     }
-    let rebound: Bitboard = slots.iter().copied().collect();
+    let rebound: Bitboard<L::Slot> = slots.iter().copied().collect();
     for k in &mut s.knowledge {
         *k &= !rebound;
     }
@@ -268,7 +268,7 @@ pub(crate) fn rebind<L: Layout>(s: &mut State<L>, slots: &[Slot], rng: &mut Spli
 /// is in a zone other than the battlefield, it ceases to exist." The incarnation is kept and
 /// bumped, so references to the token stay stale after the slot is reused. The cards exiled
 /// with it are exiled with nothing any more.
-pub(crate) fn cease_to_exist<L: Layout>(s: &mut State<L>, slot: Slot) {
+pub(crate) fn cease_to_exist<L: Layout>(s: &mut State<L>, slot: L::Slot) {
     leave(s, slot);
     let incarnation = s.object(slot).incarnation.wrapping_add(1);
     *s.object_mut(slot) = Object {
@@ -285,7 +285,7 @@ pub(crate) fn cease_to_exist<L: Layout>(s: &mut State<L>, slot: Slot) {
 /// timestamp and the battlefield index, and for a permanent its characteristics after continuous effects, so two
 /// untapped basic lands match but a stolen Mana Crypt does not match your own, nor a
 /// creature that got -2/-0 one that didn't.
-pub(crate) fn signature<L: Layout>(s: &State<L>, slot: Slot) -> (Object, Option<Derived>) {
+pub(crate) fn signature<L: Layout>(s: &State<L>, slot: L::Slot) -> (Object<L>, Option<Derived>) {
     let o = s.object(slot);
     let derived = (o.zone == Zone::Battlefield).then(|| *s.derived(slot));
     (

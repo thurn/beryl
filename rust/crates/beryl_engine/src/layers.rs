@@ -3,15 +3,14 @@
 
 use crate::card::{Affected, Colors, FaceIx, Modification, StaticCondition, Subtypes, Types};
 use crate::event::Sink;
-use crate::fixed::Fixed;
-use crate::ids::{CardIx, Slot};
+use crate::ids::{CardIx, SlotId};
 use crate::layout::{Layout, Queue, Table};
 use crate::state::{Continuous, CounterKind, Derived, GrantRef, ObjectFlags, State, Zone};
 use crate::table::GameTable;
 use crate::trigger::face;
 
 /// One continuous effect to apply in this recompute.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 struct Apply {
     layer: u8,
     timestamp: u16,
@@ -28,7 +27,7 @@ struct Apply {
 /// Recomputes `derived` if anything changed since the last recompute. Every chokepoint that
 /// mutates a layer input sets `derived_dirty`, and every path that reads `derived` after one
 /// calls this first, so reads never see stale values and never recompute.
-pub(crate) fn refresh<L: Layout>(s: &mut State<L>, t: &GameTable, sink: &mut Sink) {
+pub(crate) fn refresh<L: Layout>(s: &mut State<L>, t: &GameTable, sink: &mut Sink<L>) {
     if s.flags.derived_dirty {
         sink.work.layer_recomputes += 1;
         recompute(s, t);
@@ -59,7 +58,7 @@ pub(crate) fn listening<L: Layout>(s: &State<L>, t: &GameTable) -> u16 {
 pub(crate) fn counters_matter<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    slot: Slot,
+    slot: L::Slot,
     kind: CounterKind,
 ) -> bool {
     matches!(kind, CounterKind::PlusOne | CounterKind::MinusOne)
@@ -97,7 +96,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
     s.listening = listening(s, t);
 
     // Made at the first effect that applies: most recomputes have none, and the list is big.
-    let mut list: Option<Fixed<Apply, 192>> = None;
+    let mut list: Option<L::Queue<Apply, 192>> = None;
     for i in 0..s.battlefield.len() {
         let slot = s.battlefield.as_slice()[i];
         let o = *s.object(slot);
@@ -138,7 +137,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
                 crate::coverage::hit(ability);
                 // A list longer than its capacity would need more effects than the cards
                 // can create at once.
-                let _ = list.get_or_insert_with(Fixed::new).push(Apply {
+                let _ = list.get_or_insert_with(Default::default).push(Apply {
                     layer: spec.modification.layer() as u8,
                     timestamp: o.timestamp,
                     order: n as u8,
@@ -158,7 +157,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
         }
         if let Some(target) = s.battlefield_position(e.affected.slot) {
             let source = s.object(e.source.slot);
-            let _ = list.get_or_insert_with(Fixed::new).push(Apply {
+            let _ = list.get_or_insert_with(Default::default).push(Apply {
                 layer: m.layer() as u8,
                 timestamp: e.timestamp,
                 order: 0,
@@ -172,7 +171,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
     if let Some(list) = &mut list {
         list.as_mut_slice()
             .sort_unstable_by_key(|a| (a.layer, a.timestamp, a.order, a.target));
-        for a in &*list {
+        for a in list.iter() {
             let Some(m) = a.modification else { continue };
             let i = usize::from(a.target);
             apply(&mut s.derived.as_mut_slice()[..len], i, a.source, m);

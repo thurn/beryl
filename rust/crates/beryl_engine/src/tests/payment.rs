@@ -143,7 +143,7 @@ fn manual_payment_offers_no_tap_that_strands_the_rest() {
     // the other two lands pay the rest, so both its colors are offered.
     let dual_options = (0..d.len())
         .filter(|&i| {
-            matches!(d.candidates.option(crate::Choice(i as u8)), Some(Opt::Mana { slot, .. }) if slot == dual)
+            matches!(d.candidates.option(crate::Choice(i as u16)), Some(Opt::Mana { slot, .. }) if slot == dual)
         })
         .count();
     assert_eq!(dual_options, 2);
@@ -333,7 +333,7 @@ fn priority_options(g: &mut Game) -> Vec<Opt> {
     let d = g.decide();
     assert_eq!(d.kind, DecisionKind::Priority);
     (0..d.len())
-        .filter_map(|i| d.candidates.option(crate::Choice(i as u8)))
+        .filter_map(|i| d.candidates.option(crate::Choice(i as u16)))
         .collect()
 }
 
@@ -541,7 +541,7 @@ fn a_priority_with_only_mana_to_make_passes_silently() {
     // Floating mana nothing can spend changes nothing (CR 106.4), so the engine passes.
     let offers_mana = (0..d.len()).any(|i| {
         matches!(
-            d.candidates.option(crate::Choice(i as u8)),
+            d.candidates.option(crate::Choice(i as u16)),
             Some(Opt::Mana { .. })
         )
     });

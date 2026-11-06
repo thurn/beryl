@@ -256,7 +256,7 @@ fn a_game_of_the_three_lands_runs_to_decking() {
     let mut s = State::new(&t, 42, Profile::SMART);
     let mut x = Scratch::new();
     let choose = |d: &Decision| match d.kind {
-        DecisionKind::Priority => Choice((d.len() - 1) as u8),
+        DecisionKind::Priority => Choice((d.len() - 1) as u16),
         _ => Choice(0),
     };
     let outcome = loop {
@@ -373,7 +373,7 @@ fn a_question_after_a_look_keeps_the_look() {
         match next(&mut s, &t, &mut x, &mut Replay) {
             Step::Decide(d) if d.kind == DecisionKind::YesNo => break d,
             Step::Decide(d) => {
-                let cast = (0..d.len() as u8)
+                let cast = (0..d.len() as u16)
                     .map(Choice)
                     .find(|&c| matches!(d.candidates.option(c), Some(Opt::Cast { .. })));
                 apply(&mut s, &t, &mut x, &mut Replay, cast.unwrap_or(Choice(0)));
@@ -563,7 +563,7 @@ fn a_copy_of_a_face_down_permanent_hides_its_card() {
     let derived = s.derived(copy);
     assert_eq!((derived.power, derived.toughness), (2, 2));
     assert!(
-        !(0..d.len() as u8)
+        !(0..d.len() as u16)
             .any(|i| matches!(d.candidates.option(Choice(i)), Some(Opt::TurnFaceUp(_)))),
         "{d:?}"
     );
@@ -685,7 +685,7 @@ fn a_hidden_pointless_activation_is_left_out() {
             panic!("a decision");
         };
         assert_eq!(d.kind, DecisionKind::Priority);
-        (0..d.len() as u8).any(|i| {
+        (0..d.len() as u16).any(|i| {
             d.candidates.option(Choice(i))
                 == Some(Opt::Activate {
                     slot: converter,

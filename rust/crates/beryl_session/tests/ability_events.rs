@@ -17,7 +17,7 @@ fn events(
     name: &str,
     actions: usize,
     viewer: Seat,
-) -> (Vec<GameEvent>, impl Fn(&str) -> u8) {
+) -> (Vec<GameEvent>, impl Fn(&str) -> u16) {
     let (_, scenarios) = SCENARIOS
         .iter()
         .find(|&&(c, _)| c == card)
@@ -57,7 +57,7 @@ fn events(
         StopsSetting::SMART,
         x.events.events(),
     );
-    let slots: Vec<(String, u8)> = view
+    let slots: Vec<(String, u16)> = view
         .objects
         .iter()
         .filter_map(|o| Some((o.name.clone()?, o.slot)))

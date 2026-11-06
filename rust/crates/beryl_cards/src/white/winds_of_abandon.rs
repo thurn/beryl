@@ -36,12 +36,12 @@ const BASIC_LANDS: Filter = Filter::All(&[
 /// ([CR 701.23b](https://yawgatog.com/resources/magic-rules/#R70123b)): "that player isn't
 /// required to find some or all of those cards". Who searches is each creature's controller
 /// as it last existed on the battlefield: in exile it has none.
-fn exile_and_fetch<L: Layout>(ctx: &mut EffectCtx<'_, L>, creatures: Bitboard) -> Flow {
+fn exile_and_fetch<L: Layout>(ctx: &mut EffectCtx<'_, L>, creatures: Bitboard<L::Slot>) -> Flow {
     let controlled = Seat::BOTH.map(|player| {
         creatures
             .iter()
             .filter(|&slot| ctx.state().controller(slot) == player)
-            .collect::<Bitboard>()
+            .collect::<Bitboard<L::Slot>>()
     });
     ctx.move_all(creatures, Zone::Exile, Reason::Exile);
     for player in Seat::BOTH {

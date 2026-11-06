@@ -70,7 +70,7 @@ impl Entrant {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Line {
     pub seat: u8,
-    pub choice: u8,
+    pub choice: u16,
     /// For a searching agent, the decision of its own a rebuilt agent must start from after
     /// this one ([`Agent::resume_point`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -189,8 +189,8 @@ pub enum Stop {
     /// The answer to decision `decision` is not the logged one.
     Differs {
         decision: GameDecision,
-        logged: u8,
-        now: u8,
+        logged: u16,
+        now: u16,
     },
     /// Replay reached decision `until`, as asked.
     Reached(GameDecision),

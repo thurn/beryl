@@ -3,7 +3,7 @@
 use crate::decision::{Outcome, StallReason};
 use crate::event::{self, Event, Reason, Sink};
 use crate::fixed::Full;
-use crate::ids::{Seat, Slot};
+use crate::ids::Seat;
 use crate::layers;
 use crate::layout::{Layout, Queue};
 use crate::state::{Duration, ManaPool, ObjectFlags, Pending, State, TurnStep, Zone};
@@ -33,7 +33,7 @@ pub(crate) fn any_attacking<L: Layout>(s: &State<L>) -> bool {
 pub(crate) fn begin_turn<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
 ) -> Result<(), Full> {
     if s.turn.number >= s.profile.limits.turns {
         s.outcome = Some(Outcome::Stalled(StallReason::Turns));
@@ -89,7 +89,7 @@ pub(crate) fn begin_turn<L: Layout>(
 pub(crate) fn begin_step<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
     step: TurnStep,
 ) -> Result<(), Full> {
     s.turn.step = step;
@@ -126,7 +126,7 @@ pub(crate) fn begin_step<L: Layout>(
 /// ([CR 502.3](https://yawgatog.com/resources/magic-rules/#R5023)): "the active player
 /// determines which permanents they control will untap. Then they untap them all
 /// simultaneously."
-fn untap<L: Layout>(s: &mut State<L>, t: &GameTable, sink: &mut Sink) -> Result<(), Full> {
+fn untap<L: Layout>(s: &mut State<L>, t: &GameTable, sink: &mut Sink<L>) -> Result<(), Full> {
     let active = s.turn.active;
     let mut i = 0;
     while i < s.battlefield.len() {
@@ -149,7 +149,7 @@ fn untap<L: Layout>(s: &mut State<L>, t: &GameTable, sink: &mut Sink) -> Result<
 pub(crate) fn end_step<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
 ) -> Result<(), Full> {
     for p in &mut s.players {
         p.mana = ManaPool::default();
@@ -207,8 +207,8 @@ fn cleanup<L: Layout>(s: &mut State<L>) {
 pub(crate) fn cleanup_discard<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
-    slot: Slot,
+    sink: &mut Sink<L>,
+    slot: L::Slot,
 ) -> Result<(), Full> {
     event::move_one(s, t, sink, slot, Zone::Graveyard, Reason::Discard)?;
     if zone::hand_size(s, s.turn.active) <= MAX_HAND_SIZE {
@@ -271,6 +271,6 @@ pub(crate) fn may_play_land<L: Layout>(s: &State<L>, player: Seat) -> bool {
 }
 
 /// The cards in a player's hand.
-pub(crate) fn hand<L: Layout>(s: &State<L>, player: Seat) -> crate::bitboard::Bitboard {
+pub(crate) fn hand<L: Layout>(s: &State<L>, player: Seat) -> crate::bitboard::Bitboard<L::Slot> {
     s.zone(player, Zone::Hand)
 }

@@ -29,7 +29,7 @@
 //! Every rollout bumps a process-wide counter ([`rollouts_run`]) for a progress display. The
 //! search only ever adds to it, relaxed, so it orders nothing and decides nothing.
 
-use beryl_engine::{Large, Layout, Small};
+use beryl_engine::{Large, Layout, SlotId, Small};
 use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Barrier, Mutex};
@@ -38,7 +38,7 @@ use std::thread;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
     Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome, Profile,
-    Replay, Scratch, Seat, Slot, State, Step, Stops, apply, next, observe,
+    Replay, Scratch, Seat, State, Step, Stops, apply, next, observe,
 };
 
 use crate::rollout::{RolloutPolicy, rollout};
@@ -165,7 +165,7 @@ struct Kept<L: Layout> {
     /// Each slot's incarnation, and whether the deciding player knew its card, then.
     seen: Vec<(u16, bool)>,
     /// The card the choice names, which it may move: the spell cast, the land played.
-    moves: Option<Slot>,
+    moves: Option<L::Slot>,
 }
 
 impl<L: Layout> Mcts<L> {
@@ -197,7 +197,7 @@ impl<L: Layout> Mcts<L> {
 
     /// The root visit counts of every tree, summed, one per candidate of `d`: what a fresh
     /// search of the next decision on its full budget counts, with no stop. Changes nothing.
-    pub fn visits(&self, obs: Observation<'_, L>, d: &Decision) -> Vec<u32> {
+    pub fn visits(&self, obs: Observation<'_, L>, d: &Decision<L>) -> Vec<u32> {
         let mut trees = self.plant(obs, d, self.decision);
         self.grow(&mut trees, false);
         totals(&trees).0
@@ -207,7 +207,7 @@ impl<L: Layout> Mcts<L> {
     fn plant(
         &self,
         obs: Observation<'_, L>,
-        d: &Decision,
+        d: &Decision<L>,
         decision: AgentDecision,
     ) -> Vec<Tree<L>> {
         // The `decision`th output of the agent's stream, computed directly.
@@ -272,12 +272,12 @@ impl<L: Layout> Mcts<L> {
         &self,
         kept: Kept<L>,
         obs: Observation<'_, L>,
-        d: &Decision,
+        d: &Decision<L>,
     ) -> Option<Vec<Tree<L>>> {
         // CR 400.7: "An object that moves from one zone to another becomes a new object
         // with no memory of or relation to its previous existence", so a new incarnation is
         // a zone change.
-        for (slot, &(incarnation, knew)) in Slot::all().zip(&kept.seen) {
+        for (slot, &(incarnation, knew)) in L::Slot::all().zip(&kept.seen) {
             let o = obs.object(slot);
             if obs.knows(slot) != knew || (o.incarnation != incarnation && kept.moves != Some(slot))
             {
@@ -296,7 +296,7 @@ impl<L: Layout> Mcts<L> {
     /// Whether `d` is priority with the player's own spell or ability on top of the stack,
     /// which they pass unsearched. Over 400 expert mirror games that was 27 of 159
     /// decisions per seat a game, and the expert never acted there.
-    fn passes(obs: Observation<'_, L>, d: &Decision) -> bool {
+    fn passes(obs: Observation<'_, L>, d: &Decision<L>) -> bool {
         d.kind == DecisionKind::Priority
             && obs.stack().last().is_some_and(|e| e.controller == d.player)
     }
@@ -324,7 +324,7 @@ impl Widen for Mcts<Small> {
 impl<L: Layout> Agent<L> for Mcts<L> {
     /// The candidate visited most across the trees, the first of equals. A decision with one
     /// candidate is never searched, nor is passing with one's own object on top of the stack.
-    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision) -> Choice {
+    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
         let decision = self.decision;
         self.decision = decision.next();
         self.last = None;
@@ -346,7 +346,7 @@ impl<L: Layout> Agent<L> for Mcts<L> {
         let rollouts = self.grow(&mut trees, true);
         let work = trees.iter().map(Tree::steps).sum::<u64>() - before;
         let (visits, rewards) = totals(&trees);
-        let choice = Choice(leader(&visits) as u8);
+        let choice = Choice(leader(&visits) as u16);
         self.last = Some(Search {
             decision,
             chain,
@@ -361,7 +361,7 @@ impl<L: Layout> Agent<L> for Mcts<L> {
                 trees,
                 chain,
                 choice,
-                seen: Slot::all()
+                seen: L::Slot::all()
                     .map(|slot| (obs.object(slot).incarnation, obs.knows(slot)))
                     .collect(),
                 moves: names(d, choice),
@@ -498,7 +498,7 @@ fn totals<L: Layout>(trees: &[Tree<L>]) -> (Vec<u32>, Vec<f64>) {
 
 /// The card a choice names, which answering it may move: the card cast, the land played,
 /// the source activated (a cost may sacrifice it), the object picked.
-fn names(d: &Decision, c: Choice) -> Option<Slot> {
+fn names<L: Layout>(d: &Decision<L>, c: Choice) -> Option<L::Slot> {
     match d.candidates {
         Candidates::Objects(_) => d.candidates.object(c),
         Candidates::Options(_) => match d.candidates.option(c)? {
@@ -550,7 +550,13 @@ struct Tree<L: Layout> {
 
 impl<L: Layout> Tree<L> {
     /// A tree of one expanded root, for the position `obs` shows at decision `d`.
-    fn new(t: &GameTable, sight: Sight, obs: Observation<'_, L>, d: &Decision, seed: u64) -> Self {
+    fn new(
+        t: &GameTable,
+        sight: Sight,
+        obs: Observation<'_, L>,
+        d: &Decision<L>,
+        seed: u64,
+    ) -> Self {
         let mut rng = SplitMix64::new(seed);
         let state = match sight {
             Sight::Omniscient => {
@@ -605,13 +611,19 @@ impl<L: Layout> Tree<L> {
     /// Moves the root down to its child for `c`, if the game there reaches `d` with no other
     /// decision between and shows everything `obs` shows: had another player acted in the
     /// game, a tapped permanent, a counter or an entry on the stack would differ.
-    fn descend(&mut self, t: &GameTable, c: Choice, obs: Observation<'_, L>, d: &Decision) -> bool {
+    fn descend(
+        &mut self,
+        t: &GameTable,
+        c: Choice,
+        obs: Observation<'_, L>,
+        d: &Decision<L>,
+    ) -> bool {
         let child = self.nodes[self.root as usize].first + u32::from(c.0);
         let mut s = self.state.clone();
         self.x.counts.copied();
         apply(&mut s, t, &mut self.x, &mut Replay, c);
         smart(&mut s);
-        if next(&mut s, t, &mut self.x, &mut Replay) != Step::Decide(*d) {
+        if next(&mut s, t, &mut self.x, &mut Replay) != Step::Decide(d.clone()) {
             return false;
         }
         if !shows_the_same(observe(&s, t, &mut self.x, d.player), obs) {
@@ -634,7 +646,7 @@ impl<L: Layout> Tree<L> {
             let child = self.select(node);
             path[depth] = child;
             depth += 1;
-            let choice = Choice((child - self.nodes[node as usize].first) as u8);
+            let choice = Choice((child - self.nodes[node as usize].first) as u16);
             apply(&mut s, t, &mut self.x, &mut Replay, choice);
             if node == self.root {
                 smart(&mut s);
@@ -662,7 +674,7 @@ impl<L: Layout> Tree<L> {
     }
 
     /// Gives `node` one child per candidate of its decision `d`.
-    fn expand(&mut self, node: u32, d: &Decision) {
+    fn expand(&mut self, node: u32, d: &Decision<L>) {
         let first = self.nodes.len() as u32;
         self.nodes.extend((0..d.len()).map(|_| Node::new(d.player)));
         let n = &mut self.nodes[node as usize];
@@ -708,7 +720,7 @@ pub(crate) fn shows_the_same<L: Layout>(a: Observation<'_, L>, b: Observation<'_
         && a.stack() == b.stack()
         && a.triggers() == b.triggers()
         && a.permissions() == b.permissions()
-        && Slot::all()
+        && L::Slot::all()
             .all(|slot| a.knows(slot) == b.knows(slot) && a.object(slot) == b.object(slot))
 }
 

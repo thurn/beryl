@@ -5,7 +5,7 @@ use crate::bitboard::Bitboard;
 use crate::card::FaceIx;
 use crate::filter::Filter;
 use crate::fixed::Fixed;
-use crate::ids::{CardIx, Seat, Slot};
+use crate::ids::{CardIx, Seat};
 use crate::layout::{Layout, Small};
 use crate::rng::SplitMix64;
 use crate::state::{
@@ -58,12 +58,12 @@ impl<'a, L: Layout> Observation<'a, L> {
         self.viewer
     }
 
-    pub fn knows(&self, slot: Slot) -> bool {
+    pub fn knows(&self, slot: L::Slot) -> bool {
         self.state.knows(self.viewer, slot)
     }
 
     /// The game index of the card in a slot, if the viewer knows it.
-    pub fn card(&self, slot: Slot) -> Option<CardIx> {
+    pub fn card(&self, slot: L::Slot) -> Option<CardIx> {
         self.knows(slot).then(|| self.state.card(slot))
     }
 
@@ -71,7 +71,7 @@ impl<'a, L: Layout> Observation<'a, L> {
     /// its card, which only [`Observation::card`] reads, and the face up. Whether a
     /// permanent is face down is public: it is part of its status
     /// ([CR 110.5](https://yawgatog.com/resources/magic-rules/#R1105)).
-    pub fn object(&self, slot: Slot) -> Object {
+    pub fn object(&self, slot: L::Slot) -> Object<L> {
         let mut o = *self.state.object(slot);
         if !self.knows(slot) {
             o.card = CardIx::default();
@@ -85,11 +85,11 @@ impl<'a, L: Layout> Observation<'a, L> {
     /// Who controls an object: for a permanent the layer-2 result, otherwise its base
     /// controller ([CR 109.4](https://yawgatog.com/resources/magic-rules/#R1094)). Public:
     /// control is never hidden.
-    pub fn controller(&self, slot: Slot) -> Seat {
+    pub fn controller(&self, slot: L::Slot) -> Seat {
         self.state.controller(slot)
     }
 
-    pub fn player(&self, player: Seat) -> &'a Player {
+    pub fn player(&self, player: Seat) -> &'a Player<L> {
         self.state.player(player)
     }
 
@@ -109,21 +109,21 @@ impl<'a, L: Layout> Observation<'a, L> {
     }
 
     /// The slots a player owns in a zone: public, though the identities may not be.
-    pub fn zone(&self, owner: Seat, zone: Zone) -> Bitboard {
+    pub fn zone(&self, owner: Seat, zone: Zone) -> Bitboard<L::Slot> {
         self.state.zone(owner, zone)
     }
 
     /// A player's library as slots, bottom first.
-    pub fn library(&self, player: Seat) -> &'a [Slot] {
+    pub fn library(&self, player: Seat) -> &'a [L::Slot] {
         self.state.library(player)
     }
 
     /// A player's graveyard as slots, bottom first.
-    pub fn graveyard(&self, player: Seat) -> &'a [Slot] {
+    pub fn graveyard(&self, player: Seat) -> &'a [L::Slot] {
         self.state.graveyard(player)
     }
 
-    pub fn battlefield(&self) -> &'a [Slot] {
+    pub fn battlefield(&self) -> &'a [L::Slot] {
         self.state.battlefield()
     }
 
@@ -133,14 +133,14 @@ impl<'a, L: Layout> Observation<'a, L> {
     /// # Panics
     ///
     /// If `slot` is not on the battlefield.
-    pub fn derived(&self, slot: Slot) -> &'a Derived {
+    pub fn derived(&self, slot: L::Slot) -> &'a Derived {
         self.state.derived(slot)
     }
 
     /// The stack, bottom first. It is a public zone (CR 400.2), and a spell is revealed as it
     /// is cast ([CR 601.2a](https://yawgatog.com/resources/magic-rules/#R6012a)): "a player
     /// first moves that card ... from where it is to the stack".
-    pub fn stack(&self) -> &'a [StackEntry] {
+    pub fn stack(&self) -> &'a [StackEntry<L>] {
         self.state.stack()
     }
 
@@ -148,19 +148,19 @@ impl<'a, L: Layout> Observation<'a, L> {
     /// much more: public, as the effects that grant them are. Elite Spellbinder's exiled card
     /// is face up ([CR 406.3](https://yawgatog.com/resources/magic-rules/#R4063): "Exiled cards
     /// are, by default, kept face up and may be examined by any player at any time").
-    pub fn permissions(&self) -> &'a [CastPermission] {
+    pub fn permissions(&self) -> &'a [CastPermission<L>] {
         self.state.permissions()
     }
 
     /// The triggered abilities waiting to be put on the stack. Each names its public source;
     /// [`crate::DecisionKind::TriggerOrder`] options index this list.
-    pub fn triggers(&self) -> &'a [PendingTrigger] {
+    pub fn triggers(&self) -> &'a [PendingTrigger<L>] {
         self.state.triggers()
     }
 
     /// Whether the object in `slot` passes `filter`, evaluated for the viewer: always false
     /// for an object the viewer does not know, whose characteristics would betray it.
-    pub fn matches(&self, t: &GameTable, filter: &Filter, slot: Slot) -> bool {
+    pub fn matches(&self, t: &GameTable, filter: &Filter, slot: L::Slot) -> bool {
         self.knows(slot) && filter.matches(self.state, t, slot, self.viewer)
     }
 
@@ -200,7 +200,12 @@ impl<'a, L: Layout> Observation<'a, L> {
 
     /// The root with each player's cards the viewer does not know, `shown` ones aside, dealt
     /// at random from the rest of their decklist.
-    fn deal(&self, t: &GameTable, rng: &mut SplitMix64, shown: impl Fn(Slot) -> bool) -> State<L> {
+    fn deal(
+        &self,
+        t: &GameTable,
+        rng: &mut SplitMix64,
+        shown: impl Fn(L::Slot) -> bool,
+    ) -> State<L> {
         let mut s = self.root.clone();
         for player in Seat::BOTH {
             let deck = t.deck(player);
@@ -209,7 +214,7 @@ impl<'a, L: Layout> Observation<'a, L> {
                 // A deck never holds more than DECK_SLOTS cards (GameTable::new).
                 let _ = remainder.push(card);
             }
-            let mut unknown: Fixed<Slot, DECK_SLOTS> = Fixed::new();
+            let mut unknown: Fixed<L::Slot, DECK_SLOTS> = Fixed::new();
             for i in 0..deck.len() {
                 let slot = deck_slot(player, i);
                 if self.root.knows(self.viewer, slot) || shown(slot) {

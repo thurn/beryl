@@ -409,7 +409,7 @@ mod tests {
             (summary.decisions, summary.inline, summary.turns),
             (12_815, 1_987, 1_592)
         );
-        assert_eq!(stable_hash(&(answers, ends)), 5_019_175_599_099_605_554);
+        assert_eq!(stable_hash(&(answers, ends)), 14_451_444_511_842_074_322);
     }
 
     /// The engine benchmark replays the rollouts the whole-rollout benchmark plays: the

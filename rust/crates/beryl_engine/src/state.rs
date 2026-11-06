@@ -7,8 +7,8 @@ use crate::card::{
     Supertypes, Types,
 };
 use crate::decision::{Decision, Outcome};
-use crate::fixed::{Fixed, Full};
-use crate::ids::{CardIx, Seat, Slot};
+use crate::fixed::Full;
+use crate::ids::{CardIx, Seat, Slot, SlotId};
 use crate::layout::{Layout, Queue, Small};
 use crate::profile::{Limits, Profile};
 use crate::rng::Rng;
@@ -24,21 +24,17 @@ pub const TOKEN_SLOTS: u8 = 2 * DECK_SLOTS as u8;
 /// Permanents on the battlefield at once.
 pub const BATTLEFIELD: usize = 128;
 /// The [`State::battlefield_index`] of a slot not on the battlefield.
-pub(crate) const OFF_BATTLEFIELD: u8 = u8::MAX;
+pub(crate) const OFF_BATTLEFIELD: u16 = u16::MAX;
 
 /// The slot of the `i`th card of `player`'s deck.
-pub(crate) fn deck_slot(player: Seat, i: usize) -> Slot {
-    Slot::new((player.index() * DECK_SLOTS + i) as u8)
+pub(crate) fn deck_slot<S: SlotId>(player: Seat, i: usize) -> S {
+    S::from_index(player.index() * DECK_SLOTS + i)
 }
 
-/// The slots of the shared pool for tokens and spell copies.
-pub(crate) fn token_slots() -> impl Iterator<Item = Slot> {
-    (TOKEN_SLOTS..SLOTS as u8).map(Slot::new)
+/// The slots of the shared pool for tokens and spell copies ([`Layout::TOKEN_POOL`]).
+pub(crate) fn token_slots<S: SlotId>() -> impl Iterator<Item = S> {
+    (usize::from(TOKEN_SLOTS)..S::COUNT).map(S::from_index)
 }
-
-/// [`token_slots`] as a set.
-pub(crate) const TOKEN_POOL: Bitboard =
-    Bitboard([0, !0 << (TOKEN_SLOTS - 64), !0, !0 >> (256 - SLOTS)]);
 
 /// Where an object is. Objects in [`Zone::Nowhere`] are unused slots.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -200,7 +196,7 @@ impl Counters {
 
 /// The base data of the object in one slot (architecture §4.2).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Object {
+pub struct Object<L: Layout = Small> {
     /// Index into the game table: which card this is. Engine-only, since an
     /// [`crate::Observation`] masks it; others read [`State::card`] or
     /// [`crate::Observation::card`].
@@ -217,9 +213,9 @@ pub struct Object {
     pub damage: u8,
     pub counters: Counters,
     /// The object an Aura or Equipment is attached to.
-    pub attached_to: Option<Slot>,
+    pub attached_to: Option<L::Slot>,
     /// The object that exiled, imprinted or hid this one.
-    pub linked: Option<Slot>,
+    pub linked: Option<L::Slot>,
     /// Battlefield entry order, for layers.
     pub timestamp: u16,
     /// Which face is up.
@@ -227,16 +223,16 @@ pub struct Object {
     /// In combat: the planeswalker an attacker attacks, or the attacker a blocker blocks;
     /// `None` for an attacker attacking a player, or once that object has left the
     /// battlefield.
-    pub combat: Option<Slot>,
+    pub combat: Option<L::Slot>,
     /// The object's index in [`State::battlefield`], so finding a permanent's `derived` is
     /// one read rather than a search of the battlefield; [`OFF_BATTLEFIELD`] off it. Only
     /// [`State::enter_battlefield`] and [`State::leave_battlefield`] change it, and it fills
     /// what was padding.
-    pub(crate) battlefield_index: u8,
+    pub(crate) battlefield_index: u16,
 }
 
-impl Object {
-    pub const EMPTY: Object = Object {
+impl<L: Layout> Object<L> {
+    pub const EMPTY: Object<L> = Object {
         card: CardIx::new(0),
         incarnation: 0,
         zone: Zone::Nowhere,
@@ -261,11 +257,11 @@ impl Object {
 }
 
 const _: () = assert!(size_of::<Option<Slot>>() == 1 && size_of::<Option<CardIx>>() == 1);
-const _: () = assert!(size_of::<Object>() == 24);
+const _: () = assert!(size_of::<Object<Small>>() == 24);
 
 /// Every field but the battlefield index, a cache of the battlefield list's order, in
 /// declaration order, as a derived `Hash` would: so a hash of a state is a hash of the game.
-impl std::hash::Hash for Object {
+impl<L: Layout> std::hash::Hash for Object<L> {
     fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
         let Object {
             card,
@@ -302,8 +298,8 @@ impl std::hash::Hash for Object {
 /// A reference to one incarnation of the object in a slot (architecture §5). A reference
 /// whose incarnation no longer matches names an object that has left its zone.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct ObjectRef {
-    pub slot: Slot,
+pub struct ObjectRef<L: Layout = Small> {
+    pub slot: L::Slot,
     pub incarnation: u16,
 }
 
@@ -337,12 +333,12 @@ pub struct GrantRef {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Zones<L: Layout = Small> {
     /// Membership by owner, indexed by `Zone as usize` for the owned zones.
-    pub members: [[Bitboard; Zone::OWNED]; 2],
-    pub stack: Bitboard,
+    pub members: [[Bitboard<L::Slot>; Zone::OWNED]; 2],
+    pub stack: Bitboard<L::Slot>,
     /// Bottom first: the top card is the last.
-    pub library: [L::Queue<Slot, DECK_SLOTS>; 2],
+    pub library: [L::Queue<L::Slot, DECK_SLOTS>; 2],
     /// Bottom first: the top card is the last.
-    pub graveyard: [L::Queue<Slot, DECK_SLOTS>; 2],
+    pub graveyard: [L::Queue<L::Slot, DECK_SLOTS>; 2],
     /// The next battlefield timestamp.
     pub next_timestamp: u16,
 }
@@ -388,8 +384,8 @@ impl std::ops::IndexMut<ManaColor> for ManaPool {
 }
 
 /// One player (architecture §4.4).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct Player {
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Player<L: Layout = Small> {
     pub life: i16,
     /// Unspent mana.
     pub mana: ManaPool,
@@ -405,11 +401,13 @@ pub struct Player {
     /// ([CR 114.1](https://yawgatog.com/resources/magic-rules/#R1141)): "An emblem is a
     /// marker used to represent an object that has one or more abilities, but usually no
     /// other characteristics."
-    pub emblems: Fixed<CardIx, 4>,
+    pub emblems: L::Queue<CardIx, 4>,
     /// "Until your next turn, you may cast sorcery spells as though they had flash." (Teferi,
     /// Time Raveler)
     pub sorceries_as_flash: bool,
 }
+
+impl Copy for Player<Small> {}
 
 /// The steps of a turn ([CR 500.1](https://yawgatog.com/resources/magic-rules/#R5001)): "A
 /// turn consists of five phases, in this order: beginning, precombat main, combat, postcombat
@@ -481,16 +479,16 @@ pub const TARGETS: usize = 8;
 /// with its padding used, where an enum of the two would take eight: a player has no slot
 /// and the player in place of the incarnation.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct Target {
+pub struct Target<L: Layout = Small> {
     pub spec: u8,
-    slot: Option<Slot>,
+    slot: Option<L::Slot>,
     incarnation: u16,
 }
 
-const _: () = assert!(size_of::<Target>() == 4);
+const _: () = assert!(size_of::<Target<Small>>() == 4);
 
-impl Target {
-    pub fn object(spec: u8, object: ObjectRef) -> Target {
+impl<L: Layout> Target<L> {
+    pub fn object(spec: u8, object: ObjectRef<L>) -> Target<L> {
         Target {
             spec,
             slot: Some(object.slot),
@@ -498,7 +496,7 @@ impl Target {
         }
     }
 
-    pub fn player(spec: u8, player: Seat) -> Target {
+    pub fn player(spec: u8, player: Seat) -> Target<L> {
         Target {
             spec,
             slot: None,
@@ -507,7 +505,7 @@ impl Target {
     }
 
     /// The targeted object, if it is one.
-    pub fn as_object(self) -> Option<ObjectRef> {
+    pub fn as_object(self) -> Option<ObjectRef<L>> {
         self.slot.map(|slot| ObjectRef {
             slot,
             incarnation: self.incarnation,
@@ -527,10 +525,10 @@ impl Target {
 /// "When a spell is cast, the physical card is put on the stack (see rule 601.2a). When an
 /// ability is activated or triggers, it goes on top of the stack without any card associated
 /// with it".
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct StackEntry {
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct StackEntry<L: Layout = Small> {
     /// The spell's card, or the ability's source; an emblem's ability has none.
-    pub object: Option<ObjectRef>,
+    pub object: Option<ObjectRef<L>>,
     pub controller: Seat,
     /// The ability of `face`, or `None` for a spell.
     pub ability: Option<FaceAbility>,
@@ -541,8 +539,8 @@ pub struct StackEntry {
     pub card: CardIx,
     pub face: FaceIx,
     /// For a triggered ability: what it triggered on.
-    pub info: TriggerInfo,
-    pub targets: Fixed<Target, TARGETS>,
+    pub info: TriggerInfo<L>,
+    pub targets: L::Queue<Target<L>, TARGETS>,
     /// The announced value of X ([CR 107.3a](https://yawgatog.com/resources/magic-rules/#R1073a)).
     pub x: u8,
     /// The face's casting options paid.
@@ -556,13 +554,15 @@ pub struct StackEntry {
     pub flashback: bool,
 }
 
-impl StackEntry {
+impl Copy for StackEntry<Small> {}
+
+impl<L: Layout> StackEntry<L> {
     pub fn is_spell(&self) -> bool {
         self.ability.is_none()
     }
 
     /// The spell's card, if this is a spell.
-    pub fn spell(&self) -> Option<ObjectRef> {
+    pub fn spell(&self) -> Option<ObjectRef<L>> {
         self.object.filter(|_| self.is_spell())
     }
 }
@@ -585,8 +585,8 @@ pub struct Lki {
 /// What a triggered ability triggered on: the object and player the event involved, an
 /// amount, and last-known information for look-back triggers.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct TriggerInfo {
-    pub object: Option<ObjectRef>,
+pub struct TriggerInfo<L: Layout = Small> {
+    pub object: Option<ObjectRef<L>>,
     pub player: Seat,
     pub amount: u8,
     pub lki: Lki,
@@ -597,8 +597,8 @@ pub struct TriggerInfo {
 /// cast a spell only if a rule or effect allows that player to cast it". It names one
 /// incarnation of the card, so it ends when the card leaves that zone.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct CastPermission {
-    pub object: ObjectRef,
+pub struct CastPermission<L: Layout = Small> {
+    pub object: ObjectRef<L>,
     pub player: Seat,
     /// Generic mana added to the cost, as in "A spell cast this way costs {2} more to cast."
     /// (Elite Spellbinder)
@@ -618,9 +618,9 @@ pub struct CastPermission {
 
 /// An ability that has triggered and waits to be put on the stack.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct PendingTrigger {
+pub struct PendingTrigger<L: Layout = Small> {
     /// The object with the ability; an emblem's trigger has none.
-    pub source: Option<ObjectRef>,
+    pub source: Option<ObjectRef<L>>,
     pub card: CardIx,
     pub face: FaceIx,
     /// The index of the ability among the face's own.
@@ -628,7 +628,7 @@ pub struct PendingTrigger {
     /// The player who controlled the source when it triggered
     /// ([CR 603.3a](https://yawgatog.com/resources/magic-rules/#R6033a)).
     pub controller: Seat,
-    pub info: TriggerInfo,
+    pub info: TriggerInfo<L>,
 }
 
 /// How long a floating effect lasts
@@ -666,15 +666,15 @@ pub enum Continuous {
 /// affects is determined when that continuous effect begins. After that point, the set won't
 /// change."
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct FloatingEffect {
-    pub source: ObjectRef,
+pub struct FloatingEffect<L: Layout = Small> {
+    pub source: ObjectRef<L>,
     pub timestamp: u16,
     pub duration: Duration,
-    pub affected: ObjectRef,
+    pub affected: ObjectRef<L>,
     pub effect: Continuous,
 }
 
-impl Default for FloatingEffect {
+impl<L: Layout> Default for FloatingEffect<L> {
     fn default() -> Self {
         FloatingEffect {
             source: ObjectRef::default(),
@@ -745,17 +745,19 @@ pub struct Casting {
 /// A paused resolution (architecture §7.3): the answers its body has been given so far, and
 /// the question it stopped at. The committed state is still the state before the resolution
 /// began.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct Resolving {
-    pub record: Fixed<u8, 32>,
-    pub question: Decision,
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Resolving<L: Layout = Small> {
+    pub record: L::Queue<L::Index, 32>,
+    pub question: Decision<L>,
 }
+
+impl Copy for Resolving<Small> {}
 
 /// The open question when it belongs to a machine step rather than to priority. Flat, like
 /// the rest of the state.
 #[allow(clippy::large_enum_variant)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub enum Pending {
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Pending<L: Layout = Small> {
     /// Priority, or nothing to ask.
     #[default]
     None,
@@ -767,34 +769,39 @@ pub enum Pending {
     Discard,
     /// The legend rule (CR 704.5j): `kept` holds the permanent each player chose to keep so
     /// far.
-    LegendRule { kept: Bitboard },
+    LegendRule { kept: Bitboard<L::Slot> },
     /// A land being played asks whether its controller pays life so that it doesn't enter
     /// tapped ([`crate::card::Replacement::EntersTappedUnlessPayLife`]).
-    EnterPayingLife { slot: Slot, life: u8 },
+    EnterPayingLife { slot: L::Slot, life: u8 },
     /// The active player declares attackers (CR 508.1), one creature at a time: `attacker`
     /// is the creature just chosen, whose defender is still to choose, if any.
-    DeclareAttackers { attacker: Option<Slot> },
+    DeclareAttackers { attacker: Option<L::Slot> },
     /// The defending player declares blockers (CR 509.1), one creature at a time: `blocker`
     /// is the creature just chosen, whose attacker is still to choose, if any.
-    DeclareBlockers { blocker: Option<Slot> },
+    DeclareBlockers { blocker: Option<L::Slot> },
     /// The active player divides blocked attackers' combat damage (CR 510.1c): `done` holds
     /// the attackers divided so far, `lethal` the blockers chosen to be dealt lethal damage.
-    CombatDamage { done: Bitboard, lethal: Bitboard },
+    CombatDamage {
+        done: Bitboard<L::Slot>,
+        lethal: Bitboard<L::Slot>,
+    },
     /// A spell being cast or an ability being activated.
     Casting(Casting),
     /// A body paused for an answer.
-    Resolving(Resolving),
+    Resolving(Resolving<L>),
     /// A resolving spell or ability lets `player` cast this card now (CR 608.2g).
     CastOffer {
-        object: ObjectRef,
+        object: ObjectRef<L>,
         player: Seat,
         free: bool,
     },
     /// The controller of the face-down permanent in `slot` turns it face up, a special action
     /// (CR 116.2b), and chooses how to pay its mana cost: among payment plans, or under manual
     /// payment one source at a time, `remaining` being what is left to pay.
-    TurningFaceUp { slot: Slot, remaining: ManaCost },
+    TurningFaceUp { slot: L::Slot, remaining: ManaCost },
 }
+
+impl Copy for Pending<Small> {}
 
 /// Counters toward the budgets of the profile (architecture §12.3).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -816,9 +823,9 @@ pub struct Flags {
 /// (architecture §4.1).
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct State<L: Layout = Small> {
-    pub(crate) objects: L::Table<Object, SLOTS>,
+    pub(crate) objects: L::Table<Object<L>, SLOTS>,
     /// Slots on the battlefield, in the order they entered.
-    pub(crate) battlefield: L::Queue<Slot, BATTLEFIELD>,
+    pub(crate) battlefield: L::Queue<L::Slot, BATTLEFIELD>,
     /// Layer results, by battlefield index.
     pub(crate) derived: L::Table<Derived, BATTLEFIELD>,
     /// The kinds of event the permanents on the battlefield have triggered abilities for
@@ -826,23 +833,23 @@ pub struct State<L: Layout = Small> {
     /// current while they are.
     pub(crate) listening: u16,
     pub(crate) zones: Zones<L>,
-    pub(crate) players: [Player; 2],
+    pub(crate) players: [Player<L>; 2],
     pub(crate) turn: Turn,
-    pub(crate) stack: L::Queue<StackEntry, 64>,
-    pub(crate) triggers: L::Queue<PendingTrigger, 64>,
+    pub(crate) stack: L::Queue<StackEntry<L>, 64>,
+    pub(crate) triggers: L::Queue<PendingTrigger<L>, 64>,
     /// Delayed triggered abilities waiting for their moment (CR 603.7), which their
     /// ability's [`crate::card::Trigger::Delayed`] names.
-    pub(crate) delayed: L::Queue<PendingTrigger, 32>,
-    pub(crate) effects: L::Queue<FloatingEffect, 64>,
-    pub(crate) permissions: L::Queue<CastPermission, 8>,
+    pub(crate) delayed: L::Queue<PendingTrigger<L>, 32>,
+    pub(crate) effects: L::Queue<FloatingEffect<L>, 64>,
+    pub(crate) permissions: L::Queue<CastPermission<L>, 8>,
     /// The value of X the spells that became these permanents were cast with, for their
     /// enters abilities ([CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)):
     /// "the value of X for that ability is the same as the value of X for that spell". Only
     /// a nonzero X is kept, and only while the permanent stays.
-    pub(crate) entered_x: L::Queue<(ObjectRef, u8), 8>,
-    pub(crate) pending: Pending,
+    pub(crate) entered_x: L::Queue<(ObjectRef<L>, u8), 8>,
+    pub(crate) pending: Pending<L>,
     /// `knowledge[p]` holds the slots whose identity player `p` knows (architecture §13).
-    pub(crate) knowledge: [Bitboard; 2],
+    pub(crate) knowledge: [Bitboard<L::Slot>; 2],
     pub(crate) rng: Rng,
     pub(crate) profile: Profile,
     pub(crate) budgets: Budgets,
@@ -864,18 +871,18 @@ impl<L: Layout> Clone for State<L> {
 impl Copy for State<Small> {}
 
 impl<L: Layout> State<L> {
-    pub fn object(&self, slot: Slot) -> &Object {
+    pub fn object(&self, slot: L::Slot) -> &Object<L> {
         &self.objects[slot.index()]
     }
 
     /// The game index of the card in a slot. Players read it through
     /// [`crate::Observation::card`], which masks what they do not know.
-    pub fn card(&self, slot: Slot) -> CardIx {
+    pub fn card(&self, slot: L::Slot) -> CardIx {
         self.object(slot).card
     }
 
     /// The current incarnation of the object in a slot.
-    pub fn object_ref(&self, slot: Slot) -> ObjectRef {
+    pub fn object_ref(&self, slot: L::Slot) -> ObjectRef<L> {
         ObjectRef {
             slot,
             incarnation: self.object(slot).incarnation,
@@ -883,11 +890,11 @@ impl<L: Layout> State<L> {
     }
 
     /// Whether a reference still names the object it was taken from.
-    pub fn is_current(&self, r: ObjectRef) -> bool {
+    pub fn is_current(&self, r: ObjectRef<L>) -> bool {
         self.object(r.slot).incarnation == r.incarnation
     }
 
-    pub fn player(&self, player: Seat) -> &Player {
+    pub fn player(&self, player: Seat) -> &Player<L> {
         &self.players[player.index()]
     }
 
@@ -921,7 +928,7 @@ impl<L: Layout> State<L> {
     }
 
     /// The slots a player owns in a zone other than the stack.
-    pub fn zone(&self, owner: Seat, zone: Zone) -> Bitboard {
+    pub fn zone(&self, owner: Seat, zone: Zone) -> Bitboard<L::Slot> {
         self.zones.members[owner.index()][zone as usize]
     }
 
@@ -930,7 +937,7 @@ impl<L: Layout> State<L> {
     /// ability refers only to cards in the exile zone that were put there as a result of an
     /// instruction to exile them in the first ability." Kept while that object has left its
     /// zone, until a new object arrives in the slot (CR 400.7).
-    pub fn exiled_with(&self, source: Slot) -> Bitboard {
+    pub fn exiled_with(&self, source: L::Slot) -> Bitboard<L::Slot> {
         (self.zone(Seat::P0, Zone::Exile) | self.zone(Seat::P1, Zone::Exile))
             .iter()
             .filter(|&x| {
@@ -941,26 +948,26 @@ impl<L: Layout> State<L> {
     }
 
     /// A player's library as slots, bottom first.
-    pub fn library(&self, player: Seat) -> &[Slot] {
+    pub fn library(&self, player: Seat) -> &[L::Slot] {
         self.zones.library[player.index()].as_slice()
     }
 
     /// A player's graveyard as slots, bottom first.
-    pub fn graveyard(&self, player: Seat) -> &[Slot] {
+    pub fn graveyard(&self, player: Seat) -> &[L::Slot] {
         self.zones.graveyard[player.index()].as_slice()
     }
 
     /// Slots on the battlefield, in the order they entered.
-    pub fn battlefield(&self) -> &[Slot] {
+    pub fn battlefield(&self) -> &[L::Slot] {
         self.battlefield.as_slice()
     }
 
-    pub fn pending(&self) -> &Pending {
+    pub fn pending(&self) -> &Pending<L> {
         &self.pending
     }
 
     /// The value of X the permanent in `slot` was cast with (CR 107.3m), 0 if none.
-    pub fn x_of(&self, slot: Slot) -> u8 {
+    pub fn x_of(&self, slot: L::Slot) -> u8 {
         self.entered_x
             .iter()
             .find(|&&(r, _)| r.slot == slot && self.is_current(r))
@@ -968,7 +975,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Whether `player` knows the identity of the object in `slot`.
-    pub fn knows(&self, player: Seat, slot: Slot) -> bool {
+    pub fn knows(&self, player: Seat, slot: L::Slot) -> bool {
         self.knowledge[player.index()].contains(slot)
     }
 
@@ -978,7 +985,7 @@ impl<L: Layout> State<L> {
     /// # Panics
     ///
     /// If `slot` is not on the battlefield, or, in debug builds, if `derived` is stale.
-    pub fn derived(&self, slot: Slot) -> &Derived {
+    pub fn derived(&self, slot: L::Slot) -> &Derived {
         debug_assert!(!self.flags.derived_dirty, "derived read while dirty");
         let i = self
             .battlefield_position(slot)
@@ -988,21 +995,21 @@ impl<L: Layout> State<L> {
 
     /// The index of the permanent in `slot` in the battlefield list, if it is on the
     /// battlefield.
-    pub(crate) fn battlefield_position(&self, slot: Slot) -> Option<usize> {
+    pub(crate) fn battlefield_position(&self, slot: L::Slot) -> Option<usize> {
         let i = self.object(slot).battlefield_index;
         (i != OFF_BATTLEFIELD).then_some(usize::from(i))
     }
 
     /// Lists `slot` last on the battlefield.
-    pub(crate) fn enter_battlefield(&mut self, slot: Slot) -> Result<(), Full> {
+    pub(crate) fn enter_battlefield(&mut self, slot: L::Slot) -> Result<(), Full> {
         debug_assert!(self.battlefield_position(slot).is_none());
         self.battlefield.push(slot)?;
-        self.object_mut(slot).battlefield_index = (self.battlefield.len() - 1) as u8;
+        self.object_mut(slot).battlefield_index = (self.battlefield.len() - 1) as u16;
         Ok(())
     }
 
     /// Takes `slot` off the battlefield list, keeping the others in order.
-    pub(crate) fn leave_battlefield(&mut self, slot: Slot) {
+    pub(crate) fn leave_battlefield(&mut self, slot: L::Slot) {
         let Some(i) = self.battlefield_position(slot) else {
             return;
         };
@@ -1010,13 +1017,13 @@ impl<L: Layout> State<L> {
         self.object_mut(slot).battlefield_index = OFF_BATTLEFIELD;
         for j in i..self.battlefield.len() {
             let later = self.battlefield.as_slice()[j];
-            self.object_mut(later).battlefield_index = j as u8;
+            self.object_mut(later).battlefield_index = j as u16;
         }
     }
 
     /// Who controls an object: for a permanent the layer-2 result, otherwise the base
     /// controller ([CR 109.4](https://yawgatog.com/resources/magic-rules/#R1094)).
-    pub fn controller(&self, slot: Slot) -> Seat {
+    pub fn controller(&self, slot: L::Slot) -> Seat {
         let o = self.object(slot);
         if o.zone == Zone::Battlefield {
             self.derived(slot).controller
@@ -1026,30 +1033,30 @@ impl<L: Layout> State<L> {
     }
 
     /// The abilities waiting to be put on the stack.
-    pub fn triggers(&self) -> &[PendingTrigger] {
+    pub fn triggers(&self) -> &[PendingTrigger<L>] {
         self.triggers.as_slice()
     }
 
     /// The stack, bottom first.
-    pub fn stack(&self) -> &[StackEntry] {
+    pub fn stack(&self) -> &[StackEntry<L>] {
         self.stack.as_slice()
     }
 
     /// The permissions to cast a card from a zone it could not otherwise be cast from.
-    pub fn permissions(&self) -> &[CastPermission] {
+    pub fn permissions(&self) -> &[CastPermission<L>] {
         self.permissions.as_slice()
     }
 
     /// The floating continuous effects.
-    pub fn effects(&self) -> &[FloatingEffect] {
+    pub fn effects(&self) -> &[FloatingEffect<L>] {
         self.effects.as_slice()
     }
 
-    pub(crate) fn object_mut(&mut self, slot: Slot) -> &mut Object {
+    pub(crate) fn object_mut(&mut self, slot: L::Slot) -> &mut Object<L> {
         &mut self.objects[slot.index()]
     }
 
-    pub(crate) fn player_mut(&mut self, player: Seat) -> &mut Player {
+    pub(crate) fn player_mut(&mut self, player: Seat) -> &mut Player<L> {
         &mut self.players[player.index()]
     }
 }

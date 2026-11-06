@@ -17,7 +17,7 @@ use crate::decision::{Answers, Decision};
 use crate::effect::EffectCtx;
 use crate::engine::Scratch;
 use crate::event::{self, Entry, Event, Reason, Sink};
-use crate::fixed::{Fixed, Full};
+use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
 use crate::state::{
@@ -32,11 +32,16 @@ pub(crate) fn resolve<L: Layout>(
     x: &mut Scratch<L>,
     a: &mut dyn Answers<L>,
 ) -> Result<(), Full> {
-    let entry = *s.stack.as_slice().last().expect("a stack entry to resolve");
+    let entry = s
+        .stack
+        .as_slice()
+        .last()
+        .expect("a stack entry to resolve")
+        .clone();
     let ability = entry_ability(t, &entry);
     let record = match s.pending {
-        Pending::Resolving(r) => r.record,
-        _ => Fixed::new(),
+        Pending::Resolving(ref r) => r.record.clone(),
+        _ => Default::default(),
     };
     if !ability.is_some_and(|b| b.may_pause) || a.inline() {
         // An inline source runs the body once on the committed state. A resolution that
@@ -49,7 +54,7 @@ pub(crate) fn resolve<L: Layout>(
             &mut x.events,
             Some(a),
             record.as_slice(),
-            entry,
+            &entry,
             ability,
         )?;
         debug_assert!(
@@ -62,7 +67,7 @@ pub(crate) fn resolve<L: Layout>(
     spare.pending = Pending::None;
     // Events of a run that ends paused are discarded with the copy (§7.3).
     let mark = sink.len();
-    match run(spare, t, sink, Some(a), record.as_slice(), entry, ability)? {
+    match run(spare, t, sink, Some(a), record.as_slice(), &entry, ability)? {
         None => {
             s.clone_from(spare);
             x.counts.copied();
@@ -107,17 +112,22 @@ pub(crate) fn replay_to_question<'a, L: Layout>(
     s: &State<L>,
     t: &GameTable,
     x: &'a mut Scratch<L>,
-    seen: Option<&mut Vec<Event>>,
+    seen: Option<&mut Vec<Event<L>>>,
 ) -> Result<&'a State<L>, Full> {
-    let Pending::Resolving(r) = s.pending else {
+    let Pending::Resolving(r) = s.pending.clone() else {
         unreachable!("a paused resolution");
     };
-    let entry = *s.stack.as_slice().last().expect("a stack entry to resolve");
+    let entry = s
+        .stack
+        .as_slice()
+        .last()
+        .expect("a stack entry to resolve")
+        .clone();
     let ability = entry_ability(t, &entry);
     let (spare, sink) = x.copy_to_spare(s);
     spare.pending = Pending::None;
     let mark = sink.len();
-    run(spare, t, sink, None, r.record.as_slice(), entry, ability)?;
+    run(spare, t, sink, None, r.record.as_slice(), &entry, ability)?;
     match seen {
         Some(seen) => seen.extend(sink.take_from(mark)),
         None => sink.truncate(mark),
@@ -132,7 +142,7 @@ pub(crate) fn replay_to_question<'a, L: Layout>(
 fn fizzles<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    entry: &StackEntry,
+    entry: &StackEntry<L>,
     ability: Option<&Ability>,
 ) -> bool {
     let Some(ability) = ability else {
@@ -152,7 +162,7 @@ fn fizzles<L: Layout>(
 fn condition_fails<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    entry: &StackEntry,
+    entry: &StackEntry<L>,
     ability: &Ability,
 ) -> bool {
     if ability.kind != AbilityKind::Triggered {
@@ -180,35 +190,35 @@ fn condition_fails<L: Layout>(
 fn run<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
     mut answers: Option<&mut dyn Answers<L>>,
-    record: &[u8],
-    entry: StackEntry,
+    record: &[L::Index],
+    entry: &StackEntry<L>,
     ability: Option<&'static Ability>,
-) -> Result<Option<Decision>, Full> {
+) -> Result<Option<Decision<L>>, Full> {
     s.stack.pop();
     let face = t.def(entry.card).face(entry.face);
-    if fizzles(s, t, &entry, ability) {
+    if fizzles(s, t, entry, ability) {
         if entry.is_spell() {
-            cast::leave_stack(s, t, sink, &entry, false, Reason::Resolve)?;
+            cast::leave_stack(s, t, sink, entry, false, Reason::Resolve)?;
         }
     } else if entry.is_spell() && !face.is_instant_or_sorcery() {
         // An Aura's spell ability, which says what it targets, does its work by entering.
         if let Some(ability) = ability {
             crate::coverage::hit(ability);
         }
-        enter_battlefield(s, t, sink, &entry)?;
-    } else if ability.is_some_and(|b| condition_fails(s, t, &entry, b)) {
+        enter_battlefield(s, t, sink, entry)?;
+    } else if ability.is_some_and(|b| condition_fails(s, t, entry, b)) {
         // Removed from the stack; it does nothing.
     } else {
         let mut offer = None;
         // An instant or sorcery without a spell ability does nothing.
         if let Some(ability) = ability {
             let answers = answers.as_mut().map(|a| &mut **a as &mut dyn Answers<L>);
-            let mut ctx = EffectCtx::resolving(s, t, sink, answers, record, entry, ability);
+            let mut ctx = EffectCtx::resolving(s, t, sink, answers, record, entry.clone(), ability);
             crate::coverage::hit(ability);
             let flow = L::body(ability)(&mut ctx);
-            let question = ctx.question;
+            let question = ctx.question.take();
             offer = ctx.offer;
             ctx.finish()?;
             if s.outcome.is_some() {
@@ -223,7 +233,7 @@ fn run<L: Layout>(
         // ability is removed from the stack and ceases to exist." Unless its own effect moved
         // it already, as Time Spiral exiles itself.
         if entry.is_spell() && entry.object.is_some_and(|r| s.is_current(r)) {
-            cast::leave_stack(s, t, sink, &entry, false, Reason::Resolve)?;
+            cast::leave_stack(s, t, sink, entry, false, Reason::Resolve)?;
         }
         if let Some((object, player, free)) = offer {
             s.pending = Pending::CastOffer {
@@ -254,8 +264,8 @@ fn run<L: Layout>(
 fn enter_battlefield<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
-    entry: &StackEntry,
+    sink: &mut Sink<L>,
+    entry: &StackEntry<L>,
 ) -> Result<(), Full> {
     let slot = entry.object.expect("a spell's card").slot;
     let face = t.def(entry.card).face(entry.face);

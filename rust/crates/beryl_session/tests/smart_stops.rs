@@ -95,7 +95,7 @@ fn answer(game: &mut Game, view: &PlayerView) -> Candidate {
         _ => None,
     }
     .unwrap_or(0);
-    let checked = game.answer(decision.id, CandidateIndex(index as u8));
+    let checked = game.answer(decision.id, CandidateIndex(index as u16));
     game.choose(checked.unwrap());
     candidates[index].option.clone()
 }
@@ -360,7 +360,7 @@ fn asked_after_waterbend(stops: StopsSetting) -> Vec<Kind> {
             }
             _ => 0,
         };
-        let checked = game.answer(decision.id, CandidateIndex(index as u8));
+        let checked = game.answer(decision.id, CandidateIndex(index as u16));
         game.choose(checked.unwrap());
     }
     asked.expect("the waterbend was activated")
@@ -423,7 +423,7 @@ fn asked_after_trinket_mage(scenario: &Scenario, stops: StopsSetting) -> Vec<Kin
                 break;
             }
         }
-        let name = |slot: u8| {
+        let name = |slot: u16| {
             view.objects
                 .iter()
                 .find(|o| o.slot == slot)
@@ -453,7 +453,7 @@ fn asked_after_trinket_mage(scenario: &Scenario, stops: StopsSetting) -> Vec<Kin
             }
             _ => 0,
         };
-        let checked = game.answer(decision.id, CandidateIndex(index as u8));
+        let checked = game.answer(decision.id, CandidateIndex(index as u16));
         game.choose(checked.unwrap());
     }
     asked.expect("the Mage was cast")

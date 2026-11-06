@@ -6,10 +6,11 @@
 //! the UI can take the count with the target.
 
 use beryl_engine::card::AbilityKind;
+use beryl_engine::layout::Queue;
 use beryl_engine::state::{ObjectFlags, Pending};
 use beryl_engine::{
     Ask, Candidates, Choice, Decision, DecisionKind, GameTable, Layout, Opt, Profile, Replay,
-    Scratch, Seat, Slot, State, Step, Stops, Zone, apply, cost_being_cast, next,
+    Scratch, Seat, SlotId, State, Step, Stops, Zone, apply, cost_being_cast, next,
 };
 
 use crate::Status;
@@ -19,7 +20,12 @@ use crate::protocol::{Payment, PlayerView, Side, TargetRef, mana_text};
 /// ([`payments`]) and the attackers each blocker may block ([`blocks`]). They read the whole
 /// state, not the viewer's observation, but only the costs, the viewer's own permanents and
 /// the attackers' public characteristics decide them.
-pub fn add_previews<L: Layout>(view: &mut PlayerView, s: &State<L>, t: &GameTable, d: &Decision) {
+pub fn add_previews<L: Layout>(
+    view: &mut PlayerView,
+    s: &State<L>,
+    t: &GameTable,
+    d: &Decision<L>,
+) {
     if let Status::Deciding { decision } = &mut view.status {
         for (((c, p), b), targets) in decision
             .candidates
@@ -48,7 +54,7 @@ fn forced<L: Layout>(s: &State<L>) -> State<L> {
 
 /// The candidate at `i` as a choice.
 fn choice(i: usize) -> Choice {
-    Choice(u8::try_from(i).expect("at most 64 candidates"))
+    Choice(u16::try_from(i).expect("at most 64 candidates"))
 }
 
 /// The attackers each candidate of `d`, the open decision in `s`, may block, by slot, in
@@ -59,7 +65,7 @@ fn choice(i: usize) -> Choice {
 /// player, a planeswalker they control, or a battle they protect." The engine asks it as the
 /// pick after the blocker, with evasion pruning the attackers (architecture §11); identical
 /// attackers are one candidate (§7.2).
-fn blocks<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision) -> Vec<Vec<u8>> {
+fn blocks<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Vec<Vec<u16>> {
     let Candidates::Options(opts) = &d.candidates else {
         return vec![Vec::new(); d.len()];
     };
@@ -77,7 +83,7 @@ fn blocks<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision) -> Vec<Vec<u8>> 
                     kind: DecisionKind::BlockTarget,
                     candidates: Candidates::Objects(attackers),
                     ..
-                }) => attackers.iter().map(Slot::get).collect(),
+                }) => attackers.iter().map(SlotId::num).collect(),
                 _ => Vec::new(),
             }
         })
@@ -91,7 +97,7 @@ fn blocks<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision) -> Vec<Vec<u8>> 
 /// variable number of targets, the player announces how many targets they will choose before
 /// they announce those targets." The engine asks the targets as the picks after the count;
 /// identical objects are one candidate (§7.2).
-fn targets<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision) -> Vec<Vec<TargetRef>> {
+fn targets<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Vec<Vec<TargetRef>> {
     let Candidates::Options(opts) = &d.candidates else {
         return vec![Vec::new(); d.len()];
     };
@@ -119,7 +125,7 @@ fn targets<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision) -> Vec<Vec<Targ
                 }) => match candidates {
                     Candidates::Objects(objects) => objects
                         .iter()
-                        .map(|slot| TargetRef::Object { slot: slot.get() })
+                        .map(|slot| TargetRef::Object { slot: slot.num() })
                         .collect(),
                     Candidates::Options(opts) => opts
                         .iter()
@@ -145,7 +151,7 @@ fn targets<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision) -> Vec<Vec<Targ
 /// "If the total cost includes a mana payment, the player then has a chance to activate mana
 /// abilities"; the engine settles which sources among plans with the same consequences
 /// (architecture §10), so a payment per plan it offers.
-fn payments<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision) -> Vec<Vec<Payment>> {
+fn payments<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Vec<Vec<Payment>> {
     let Candidates::Options(opts) = &d.candidates else {
         return vec![Vec::new(); d.len()];
     };
@@ -186,7 +192,7 @@ fn payments<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision) -> Vec<Vec<Pay
 /// ([CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a): "This means the same
 /// thing as '[A player may do something else]. If [that player doesn't], [do something].'"),
 /// so the UI can light the permanents that would pay.
-fn unless_paid<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision, i: usize) -> Payment {
+fn unless_paid<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>, i: usize) -> Payment {
     let mut copy = forced(s);
     let mut scratch = Scratch::new();
     apply(&mut copy, t, &mut scratch, &mut Replay, choice(i));
@@ -227,7 +233,7 @@ fn walk<L: Layout>(
             apply(&mut s, t, scratch, &mut Replay, Choice(0));
             continue;
         };
-        let branch = |o: Opt| match (d.kind, o) {
+        let branch = |o: Opt<L>| match (d.kind, o) {
             (DecisionKind::X, Opt::Number(n)) => Some(Payment {
                 x: Some(n),
                 ..at.clone()
@@ -278,12 +284,12 @@ fn priced<L: Layout>(at: Payment, s: &State<L>, t: &GameTable) -> Payment {
 /// ([CR 111.10a](https://yawgatog.com/resources/magic-rules/#R11110a)): "{T}, Sacrifice this
 /// token: Add one mana of any color." A permanent sacrificed otherwise, as Strip Mine for its
 /// own ability, paid no mana.
-fn tapped<L: Layout>(before: &State<L>, after: &State<L>, t: &GameTable) -> Vec<u8> {
+fn tapped<L: Layout>(before: &State<L>, after: &State<L>, t: &GameTable) -> Vec<u16> {
     let untapped = |s: &State<L>, slot| {
         let o = s.object(slot);
         o.zone == Zone::Battlefield && !o.flags.has(ObjectFlags::TAPPED)
     };
-    let sacrifices_for_mana = |slot: Slot| {
+    let sacrifices_for_mana = |slot: L::Slot| {
         let face = t.def(before.card(slot)).face(before.object(slot).face);
         face.abilities
             .iter()
@@ -300,15 +306,15 @@ fn tapped<L: Layout>(before: &State<L>, after: &State<L>, t: &GameTable) -> Vec<
                 sacrifices_for_mana(slot)
             }
         })
-        .map(|slot| slot.get())
+        .map(|slot| slot.num())
         .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use beryl_cards::{CARDS, names};
-    use beryl_engine::TurnStep;
     use beryl_engine::card::{AbilityIx, Castings};
+    use beryl_engine::{Slot, TurnStep};
     use beryl_scenario::{P0, P1, Permanent, Scenario};
 
     use super::*;
@@ -345,7 +351,10 @@ mod tests {
                             (
                                 p.x,
                                 p.plan,
-                                p.taps.iter().map(|&t| named(Slot::new(t))).collect(),
+                                p.taps
+                                    .iter()
+                                    .map(|&t| named(Slot::from_index(usize::from(t))))
+                                    .collect(),
                             )
                         })
                         .collect();
@@ -448,7 +457,11 @@ mod tests {
         let mut seen = None;
         beryl_scenario::visit(&CARDS, &SCENARIO, |t, s, d| {
             if matches!(d.ask, Ask::UnlessPays { .. }) {
-                let untapped = |slot: u8| !s.object(Slot::new(slot)).flags.has(ObjectFlags::TAPPED);
+                let untapped = |slot: u16| {
+                    !s.object(Slot::from_index(usize::from(slot)))
+                        .flags
+                        .has(ObjectFlags::TAPPED)
+                };
                 let paid = payments(s, t, d);
                 let yes = (0..d.len())
                     .position(|i| d.candidates.option(choice(i)) == Some(Opt::Yes))
@@ -494,7 +507,7 @@ mod tests {
             ]);
         let mut taps = Vec::new();
         beryl_scenario::visit(&CARDS, &SCENARIO, |t, s, d| {
-            let named = |slot: u8| t.def(s.card(Slot::new(slot))).name;
+            let named = |slot: u16| t.def(s.card(Slot::from_index(usize::from(slot)))).name;
             taps = payments(s, t, d)
                 .into_iter()
                 .zip((0..d.len()).map(|i| d.candidates.option(choice(i))))
@@ -606,7 +619,9 @@ mod tests {
                     assert!(b.is_empty(), "only a blocker blocks");
                     return None;
                 };
-                let attackers = b.into_iter().map(|a| named(&s, Slot::new(a)));
+                let attackers = b
+                    .into_iter()
+                    .map(|a| named(&s, Slot::from_index(usize::from(a))));
                 Some((named(&s, blocker), attackers.collect::<Vec<_>>()))
             })
             .collect();
@@ -635,7 +650,7 @@ mod tests {
             .battlefield(P0, TEFERI)
             .battlefield(P1, STAFF);
         let (t, mut s) = beryl_scenario::position(&CARDS, &scenario).unwrap();
-        let named = |s: &State, slot: u8| t.def(s.card(Slot::new(slot))).name;
+        let named = |s: &State, slot: u16| t.def(s.card(Slot::from_index(usize::from(slot)))).name;
         let mut scratch = Scratch::new();
         // Teferi's −3, its third ability: "Return up to one target artifact, creature, or
         // enchantment to its owner's hand."

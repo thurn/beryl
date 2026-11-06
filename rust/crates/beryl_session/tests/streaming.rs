@@ -6,7 +6,9 @@ use beryl_cards::CARDS;
 use beryl_cards::decks::{VINTAGE_WU_CONTROL, WU_CONTROL, fuzz_deck};
 use beryl_cards::names;
 use beryl_engine::event::{Event, Reason};
-use beryl_engine::{Choice, GameTable, Limits, Profile, Replay, Scratch, State, Step, apply, next};
+use beryl_engine::{
+    Choice, GameTable, Large, Limits, Profile, Relayout, Replay, Scratch, State, Step, apply, next,
+};
 use beryl_session::protocol::{Kind, Side, StackItem, Step as TurnStep};
 use beryl_session::replay::Entry;
 use beryl_session::{
@@ -40,12 +42,12 @@ fn answer(game: &mut Game, view: &PlayerView) {
         return;
     };
     let n = decision.candidates.len() as u32;
-    let index = CandidateIndex(((decision.id.seq * 7 + 3) % n) as u8);
+    let index = CandidateIndex(((decision.id.seq * 7 + 3) % n) as u16);
     game.choose(game.answer(decision.id, index).unwrap());
 }
 
 /// Every view of a whole game, each with the engine events it reported.
-fn play_out(game: &mut Game) -> Vec<(PlayerView, Vec<Event>)> {
+fn play_out(game: &mut Game) -> Vec<(PlayerView, Vec<Event<Large>>)> {
     let mut views = Vec::new();
     while let Some(view) = game.next_view() {
         answer(game, &view);
@@ -151,7 +153,8 @@ fn each_step_and_each_agent_decision_has_a_view_and_each_event_one_view() {
         assert!(began_steps > 50, "seed {seed}: only {began_steps} steps");
 
         // The views' events, in order, are the game's.
-        let streamed: Vec<Event> = views.iter().flat_map(|(_, e)| e.iter().copied()).collect();
+        let streamed: Vec<Event<Large>> =
+            views.iter().flat_map(|(_, e)| e.iter().cloned()).collect();
         assert_eq!(streamed, events_of(&game_start, log), "seed {seed}");
     }
 }
@@ -173,7 +176,7 @@ fn a_loot_reports_its_draw_before_it_asks_for_the_discard() {
                 && matches!(&decision.resolving,
                     Some(StackItem::Ability { name, .. }) if name == names::JACE_VRYNS_PRODIGY))
     };
-    let draws = |events: &[Event]| {
+    let draws = |events: &[Event<Large>]| {
         events
             .iter()
             .filter(|e| matches!(e, Event::Draw { player, .. } if *player == Seat::P0))
@@ -201,7 +204,7 @@ fn a_loot_reports_its_draw_before_it_asks_for_the_discard() {
 }
 
 /// Every event of the game `log` records, played on the engine alone.
-fn events_of(begin: &StartGame, log: &[Entry]) -> Vec<Event> {
+fn events_of(begin: &StartGame, log: &[Entry]) -> Vec<Event<Large>> {
     let decks = begin.decks.each_ref().map(|deck| {
         deck.iter()
             .map(|(n, name)| (*n, CARDS.get(name).unwrap().name))
@@ -219,7 +222,7 @@ fn events_of(begin: &StartGame, log: &[Entry]) -> Vec<Event> {
         apply(&mut s, &t, &mut x, &mut Replay, choices.next().unwrap());
     }
     assert_eq!(choices.next(), None);
-    x.events.drain().collect()
+    x.events.drain().map(|e| e.relayout()).collect()
 }
 
 #[test]

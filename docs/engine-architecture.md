@@ -213,8 +213,14 @@ in `Small`. When an engine call stalls it for a capacity, the session widens the
 state as it stood before the call (`State::widen`, which keeps every slot, queue
 order and knowledge bit) and makes the call again in `Large`, where the game
 stays. Card bodies are generic functions, instantiated once per layout
-(`bodies!`). Slots, bitboards and the queues nested in other values (targets,
-emblems, a decision's options) are still `Small`'s in `Large`.
+(`bodies!`). The slot and index types are the layout's too (`Layout::Slot`,
+`Layout::Index`): `Large` has four times the slots, 1,024 (`LargeSlot`, a `u16`,
+with 1,024-bit bitboards), and grows the queues nested in other values (a stack
+entry's targets, a player's emblems, a paused resolution's choice record, a
+decision's options). So `ObjectRef`, `Decision`, `Opt`, `Pending` and `Event`
+take the layout as a parameter, and `Relayout` moves any of them to the other
+layout by slot number; the session keeps its own copies in `Large`. The mana
+solver's capacities (§10) are still `Small`'s in `Large`.
 
 ### 4.2 Objects and slots
 
@@ -253,7 +259,7 @@ About 21 bytes, so the table is under 6 KiB.
   has, not objects. The continuous-effect machinery treats an emblem as a source
   like any other.
 
-- **Capacities**, each a stall when exceeded:
+- **Capacities** of `Small`, each a stall when exceeded (§4.1):
 
   | Quantity                      | Capacity |
   | ----------------------------- | -------- |
@@ -777,11 +783,11 @@ Defaults, overridable per profile: 500 decisions and 2,000 trigger resolutions
 per turn, 200 turns per game, 32 state-based iterations per check, and the
 capacities of §4.2. Running out is `Stalled`. Search scores it as 0.5 unless an
 evaluation says otherwise; every test treats a stall as a failure; benchmarks
-report stall rates. A player game that runs out of a `Small` queue goes on in
-`Large` instead (§4.1). A player game also lifts the decision and turn budgets
-to their counters' maximum (`Limits::PLAYER`), since a human can always concede;
-search below it plays under the defaults again, or that much room past where the
-game stands once it has gone past one (`Limits::search`).
+report stall rates. A player game that runs out of a capacity of `Small` goes on
+in `Large` instead (§4.1). A player game also lifts the decision and turn
+budgets to their counters' maximum (`Limits::PLAYER`), since a human can always
+concede; search below it plays under the defaults again, or that much room past
+where the game stands once it has gone past one (`Limits::search`).
 
 The cube has long loops: Underworld Breach recasts Lion's Eye Diamond and Brain
 Freeze from the graveyard until a library is empty, one cast at a time. Under

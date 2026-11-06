@@ -10,7 +10,7 @@
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityKind, Cost, ManaCost, Types};
 use crate::event::Sink;
-use crate::ids::{Seat, Slot};
+use crate::ids::{Seat, SlotId};
 use crate::invariants::{At, Violation};
 use crate::layers;
 use crate::layout::{Layout, Queue, Table};
@@ -74,7 +74,7 @@ impl<L: Layout> State<L> {
             check(
                 fresh.derived[i] == self.derived[i],
                 "layer results differ from a fresh recompute",
-                Some(At::Slot(self.battlefield.as_slice()[i])),
+                Some(At::Slot(self.battlefield.as_slice()[i].index())),
             )?;
         }
         check(
@@ -209,7 +209,7 @@ fn controls<L: Layout>(
     a.only_if_you_control.is_none_or(|f| {
         s.battlefield()
             .iter()
-            .any(|&slot: &Slot| s.controller(slot) == player && f.matches(s, t, slot, player))
+            .any(|&slot: &L::Slot| s.controller(slot) == player && f.matches(s, t, slot, player))
     })
 }
 

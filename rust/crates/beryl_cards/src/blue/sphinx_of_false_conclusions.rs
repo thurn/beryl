@@ -25,7 +25,7 @@ fn loot<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
 /// "If it isn't a token", as it last existed on the battlefield
 /// ([CR 603.10a](https://yawgatog.com/resources/magic-rules/#R60310a)): "Some zone-change
 /// triggers look back in time."
-fn not_a_token<L: Layout>(_: &State<L>, _: &GameTable, tr: &PendingTrigger) -> bool {
+fn not_a_token<L: Layout>(_: &State<L>, _: &GameTable, tr: &PendingTrigger<L>) -> bool {
     !tr.info.lki.token
 }
 

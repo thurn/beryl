@@ -13,7 +13,7 @@ use crate::{
 /// Answers every question at once, at random, as a rollout policy would, and logs its answers.
 struct Inline {
     rng: SplitMix64,
-    log: Vec<u8>,
+    log: Vec<u16>,
 }
 
 impl Answers for Inline {
@@ -22,7 +22,7 @@ impl Answers for Inline {
     }
 
     fn answer(&mut self, _obs: Observation<'_>, d: &Decision) -> Option<Choice> {
-        let c = self.rng.below(d.len() as u64) as u8;
+        let c = self.rng.below(d.len() as u64) as u16;
         self.log.push(c);
         Some(Choice(c))
     }
@@ -32,9 +32,9 @@ impl Answers for Inline {
 #[derive(Debug, PartialEq, Eq)]
 enum Logged {
     /// A decision `next` returned: the state's hash, and the answer.
-    Decision { hash: u64, choice: u8 },
+    Decision { hash: u64, choice: u16 },
     /// A question a body asked, answered inline.
-    Inline(u8),
+    Inline(u16),
 }
 
 /// A random game with inline answers, under `profile`.
@@ -60,7 +60,7 @@ fn inline_game(seed: u64, profile: Profile) -> (Vec<Logged>, Outcome) {
                 if let Err(v) = s.check_invariants(&t) {
                     panic!("seed {seed}: {v:?}");
                 }
-                let choice = agent.below(d.len() as u64) as u8;
+                let choice = agent.below(d.len() as u64) as u16;
                 logged.push(Logged::Decision {
                     hash: fingerprint(&s),
                     choice,

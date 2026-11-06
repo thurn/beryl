@@ -149,7 +149,7 @@ fn stops_against(scenario: &Scenario, stops: StopsSetting, agent: &str) -> Vec<S
             }),
             _ => 0,
         };
-        let checked = game.answer(decision.id, CandidateIndex(index as u8));
+        let checked = game.answer(decision.id, CandidateIndex(index as u16));
         game.choose(checked.unwrap());
     }
     asked

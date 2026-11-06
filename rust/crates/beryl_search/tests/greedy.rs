@@ -170,7 +170,7 @@ fn a_rollout_scry_keeps_the_card_worth_drawing() {
         let c = match offered {
             Some(i) if !activated && d.kind == DecisionKind::Priority => {
                 activated = true;
-                Choice(i as u8)
+                Choice(i as u16)
             }
             _ => policy.choose(&t, Observation::new(&s, d.player), &d),
         };

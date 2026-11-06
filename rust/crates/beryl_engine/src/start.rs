@@ -3,7 +3,7 @@
 use crate::bitboard::Bitboard;
 use crate::event::Sink;
 use crate::fixed::{Fixed, Full};
-use crate::ids::{CardIx, Seat, Slot};
+use crate::ids::{CardIx, Seat};
 use crate::layout::{Layout, Table};
 use crate::profile::Profile;
 use crate::rng::Rng;
@@ -20,7 +20,7 @@ const STARTING_HAND: u8 = 7;
 
 /// A player before the game begins ([CR 103.4](https://yawgatog.com/resources/magic-rules/#R1034)):
 /// "Each player begins the game with a starting life total of 20."
-fn new_player() -> Player {
+fn new_player<L: Layout>() -> Player<L> {
     Player {
         life: 20,
         mana: ManaPool::default(),
@@ -29,7 +29,7 @@ fn new_player() -> Player {
         mulligans: 0,
         mulligan: MulliganStatus::Undeclared,
         to_bottom: 0,
-        emblems: Fixed::new(),
+        emblems: Default::default(),
         sorceries_as_flash: false,
     }
 }
@@ -89,7 +89,7 @@ impl<L: Layout> State<L> {
                 graveyard: Default::default(),
                 next_timestamp: 0,
             },
-            players: [new_player(); 2],
+            players: [new_player(), new_player()],
             turn: Turn {
                 number: 0,
                 active: Seat::P0,
@@ -127,7 +127,7 @@ impl<L: Layout> State<L> {
 pub(crate) fn set_starting_player<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
     starting: Seat,
 ) -> Result<(), Full> {
     s.turn.starting_player = starting;
@@ -149,7 +149,7 @@ pub(crate) fn turn_order<L: Layout>(s: &State<L>) -> [Seat; 2] {
 pub(crate) fn declare<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
     player: Seat,
     mulligan: bool,
 ) -> Result<(), Full> {
@@ -182,9 +182,9 @@ fn keep<L: Layout>(s: &mut State<L>, player: Seat) {
 pub(crate) fn put_on_bottom<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
     player: Seat,
-    slot: Slot,
+    slot: L::Slot,
 ) -> Result<(), Full> {
     zone::put_on_bottom(s, slot)?;
     s.player_mut(player).to_bottom -= 1;
@@ -206,7 +206,7 @@ pub(crate) fn put_on_bottom<L: Layout>(
 fn advance_mulligans<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
 ) -> Result<(), Full> {
     let order = turn_order(s);
     loop {

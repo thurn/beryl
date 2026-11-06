@@ -44,7 +44,7 @@ pub fn play<L: Layout>(
     s: &mut State<L>,
     x: &mut Scratch<L>,
     agents: &mut [impl Agent<L>; 2],
-    mut watch: impl FnMut(&State<L>, &Decision),
+    mut watch: impl FnMut(&State<L>, &Decision<L>),
 ) -> Outcome {
     loop {
         match next(s, t, x, &mut Replay) {

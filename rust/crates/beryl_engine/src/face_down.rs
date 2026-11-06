@@ -12,9 +12,9 @@ use crate::card::{FaceIx, ManaCost, Types};
 use crate::decision::{Ask, Candidates, Decision, DecisionKind, Opt};
 use crate::engine::collapse;
 use crate::event::{self, Entry, Reason, Sink};
-use crate::fixed::{Fixed, Full};
-use crate::ids::{Seat, Slot};
-use crate::layout::Layout;
+use crate::fixed::Full;
+use crate::ids::Seat;
+use crate::layout::{Layout, Queue};
 use crate::mana;
 use crate::profile::Payment;
 use crate::state::{Pending, State, Zone};
@@ -40,8 +40,8 @@ use crate::table::GameTable;
 pub(crate) fn manifest<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
-    slot: Slot,
+    sink: &mut Sink<L>,
+    slot: L::Slot,
     player: Seat,
 ) -> Result<(), Full> {
     let knew = Seat::BOTH.map(|p| s.knows(p, slot));
@@ -76,7 +76,7 @@ pub(crate) fn manifest<L: Layout>(
 /// turns up ([CR 712.15a](https://yawgatog.com/resources/magic-rules/#R71215a)): "If it's
 /// turned face up, it will have its front face up." No creature card in the cube costs {0},
 /// so a cost of nothing is no mana cost.
-fn face_up_cost<L: Layout>(s: &State<L>, t: &GameTable, slot: Slot) -> Option<ManaCost> {
+fn face_up_cost<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Option<ManaCost> {
     let front = t.def(s.card(slot)).front();
     (front.types.contains(Types::CREATURE) && !front.cost.is_zero()).then(|| front.cost.with_x(0))
 }
@@ -90,9 +90,9 @@ pub(crate) fn face_up_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
-    out: &mut Fixed<Opt, 64>,
+    out: &mut L::Queue<Opt<L>, 64>,
 ) -> Result<(), Full> {
-    let face_down: Bitboard = s
+    let face_down: Bitboard<L::Slot> = s
         .battlefield()
         .iter()
         .copied()
@@ -116,9 +116,9 @@ pub(crate) fn face_up_options<L: Layout>(
 pub(crate) fn begin_turning_face_up<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
     player: Seat,
-    slot: Slot,
+    slot: L::Slot,
 ) -> Result<(), Full> {
     s.turn.priority = player;
     s.turn.passes = 0;
@@ -153,10 +153,10 @@ pub(crate) fn begin_turning_face_up<L: Layout>(
 pub(crate) fn decision<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    sink: &mut Sink,
-    slot: Slot,
+    sink: &mut Sink<L>,
+    slot: L::Slot,
     remaining: ManaCost,
-) -> Result<Decision, Full> {
+) -> Result<Decision<L>, Full> {
     let player = s.controller(slot);
     let (kind, list) = if s.profile.payment == Payment::Manual {
         (
@@ -165,7 +165,7 @@ pub(crate) fn decision<L: Layout>(
         )
     } else {
         let plans = mana::plans(s, t, sink, player, remaining, Bitboard::EMPTY, false)?;
-        let mut list = Fixed::new();
+        let mut list: L::Queue<Opt<L>, 64> = Default::default();
         for i in 0..plans.len() {
             list.push(Opt::Plan(i as u8))?;
         }
@@ -183,10 +183,10 @@ pub(crate) fn decision<L: Layout>(
 pub(crate) fn perform<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
-    slot: Slot,
+    sink: &mut Sink<L>,
+    slot: L::Slot,
     remaining: ManaCost,
-    option: Opt,
+    option: Opt<L>,
 ) -> Result<(), Full> {
     let player = s.controller(slot);
     let remaining = match option {
@@ -218,7 +218,7 @@ pub(crate) fn perform<L: Layout>(
 /// Every player has seen it (CR 701.40b), and it gets a new timestamp
 /// ([CR 613.7f](https://yawgatog.com/resources/magic-rules/#R6137f)): "A permanent receives a
 /// new timestamp each time it turns face up or face down."
-fn turn_face_up<L: Layout>(s: &mut State<L>, slot: Slot) {
+fn turn_face_up<L: Layout>(s: &mut State<L>, slot: L::Slot) {
     let timestamp = s.zones.next_timestamp;
     s.zones.next_timestamp = timestamp.wrapping_add(1);
     let o = s.object_mut(slot);

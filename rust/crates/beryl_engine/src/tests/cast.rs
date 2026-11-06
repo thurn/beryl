@@ -113,7 +113,7 @@ fn binder<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
         return Ok(());
     };
     let s = ctx.state();
-    let nonland: Bitboard = s
+    let nonland: Bitboard<L::Slot> = s
         .zone(opponent, Zone::Hand)
         .iter()
         .filter(|&slot| !LANDS.matches(s, ctx.table, slot, opponent))
@@ -750,7 +750,7 @@ impl Game {
         let d = self.current();
         d.kind == DecisionKind::Priority
             && (0..d.len()).any(|i| {
-                matches!(d.candidates.option(Choice(i as u8)), Some(Opt::Cast { slot: s, .. }) if s == slot)
+                matches!(d.candidates.option(Choice(i as u16)), Some(Opt::Cast { slot: s, .. }) if s == slot)
             })
     }
 
@@ -761,13 +761,13 @@ impl Game {
 
 pub(crate) fn index_of(d: &Decision, opt: Opt) -> Option<Choice> {
     (0..d.len())
-        .map(|i| Choice(i as u8))
+        .map(|i| Choice(i as u16))
         .find(|&c| d.candidates.option(c) == Some(opt))
 }
 
 pub(crate) fn object_index(d: &Decision, slot: Slot) -> Option<Choice> {
     (0..d.len())
-        .map(|i| Choice(i as u8))
+        .map(|i| Choice(i as u16))
         .find(|&c| d.candidates.object(c) == Some(slot))
 }
 

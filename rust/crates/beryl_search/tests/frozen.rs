@@ -34,7 +34,7 @@ fn moves() -> u64 {
                 Step::Over(outcome) => break outcome,
                 Step::Decide(d) => {
                     let c = agents[d.player.index()].choose(observe(&s, &t, x, d.player), &d);
-                    h = fnv(h, c.0);
+                    h = fnv(h, u8::try_from(c.0).expect("a choice of a Small game"));
                     apply(&mut s, &t, x, &mut Replay, c);
                 }
             }

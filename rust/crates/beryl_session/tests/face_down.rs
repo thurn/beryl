@@ -6,7 +6,7 @@
 //! by another player."
 
 use beryl_cards::{CARDS, SCENARIOS, names};
-use beryl_engine::{Observation, Seat, Zone};
+use beryl_engine::{Observation, Seat, SlotId, Zone};
 use beryl_session::StopsSetting;
 use beryl_session::protocol::{
     CardType, Facing, Moment, ObjectView, PowerToughness, Side, player_view,
@@ -101,7 +101,7 @@ fn a_copy_of_a_face_down_permanent_is_a_face_up_nameless_two_two() {
         let o = view
             .objects
             .iter()
-            .find(|o| o.slot == copy.get())
+            .find(|o| o.slot == copy.num())
             .expect("the copy's view");
         assert_eq!(o.zone, Zone::Battlefield.into());
         assert_eq!(o.facing, Facing::Up, "{viewer:?}");

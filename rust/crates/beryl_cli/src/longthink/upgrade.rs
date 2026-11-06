@@ -205,7 +205,7 @@ mod tests {
             }
             self.choices += 1;
             if self.choices == 3 {
-                Choice((c.0 + 1) % d.len() as u8)
+                Choice((c.0 + 1) % d.len() as u16)
             } else {
                 c
             }
@@ -222,7 +222,7 @@ mod tests {
         fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice {
             let c = self.inner.choose(obs, d);
             match self.inner.last_search() {
-                Some(s) if s.chain != s.decision => Choice((c.0 + 1) % d.len() as u8),
+                Some(s) if s.chain != s.decision => Choice((c.0 + 1) % d.len() as u16),
                 _ => c,
             }
         }

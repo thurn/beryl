@@ -9,10 +9,11 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityKind, FaceAbility, FaceIx, Replacement, Types};
-use crate::fixed::{Fixed, Full};
-use crate::ids::{CardIx, Seat, Slot};
+use crate::fixed::Full;
+use crate::ids::{CardIx, Seat};
 use crate::layers;
-use crate::layout::{Layout, Queue};
+use crate::layout::{Layout, Queue, Small};
+use crate::relayout::Relayout;
 use crate::state::{
     Continuous, CounterKind, ObjectFlags, ObjectRef, State, TARGETS, Target, TurnStep, Zone,
     token_slots,
@@ -56,27 +57,27 @@ pub enum Reason {
 
 /// The player or permanent dealt damage.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Recipient {
+pub enum Recipient<L: Layout = Small> {
     Player(Seat),
-    Permanent(ObjectRef),
+    Permanent(ObjectRef<L>),
 }
 
 /// One thing that happened (architecture §8.1). Simultaneous happenings that rules read as
 /// one carry a set: one `TokensCreated` for every token an effect creates, one `Attack` for
 /// every attacker declared. Flag writes and cache updates never go through events.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Event {
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Event<L: Layout = Small> {
     /// An object changed zones; `object` is the new object
     /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
     ZoneChange {
-        object: ObjectRef,
+        object: ObjectRef<L>,
         from: Zone,
         to: Zone,
         reason: Reason,
     },
     Damage {
-        source: ObjectRef,
-        to: Recipient,
+        source: ObjectRef<L>,
+        to: Recipient<L>,
         amount: u8,
         combat: bool,
     },
@@ -93,29 +94,29 @@ pub enum Event {
         amount: u8,
     },
     CountersAdded {
-        object: ObjectRef,
+        object: ObjectRef<L>,
         kind: CounterKind,
         amount: u8,
     },
     CountersRemoved {
-        object: ObjectRef,
+        object: ObjectRef<L>,
         kind: CounterKind,
         amount: u8,
     },
     Tap {
-        object: ObjectRef,
+        object: ObjectRef<L>,
     },
     Untap {
-        object: ObjectRef,
+        object: ObjectRef<L>,
     },
     /// "Whenever you create one or more tokens" reads this once per event.
     TokensCreated {
         controller: Seat,
-        tokens: Bitboard,
+        tokens: Bitboard<L::Slot>,
     },
     /// A spell was cast ([CR 601.2i](https://yawgatog.com/resources/magic-rules/#R6012i)).
     Cast {
-        spell: ObjectRef,
+        spell: ObjectRef<L>,
         controller: Seat,
     },
     /// An ability was put on the stack, for the UI's log: an activated one as it becomes
@@ -127,18 +128,18 @@ pub enum Event {
     /// without targets goes unsaid: what it does says it. The ability as it stood on the
     /// stack then, which it may have left by the time anyone looks.
     Ability {
-        source: Option<ObjectRef>,
+        source: Option<ObjectRef<L>>,
         controller: Seat,
         card: CardIx,
         face: FaceIx,
         ability: FaceAbility,
-        targets: Fixed<Target, TARGETS>,
+        targets: L::Queue<Target<L>, TARGETS>,
         x: u8,
     },
     /// A player declared attackers ([CR 508.1](https://yawgatog.com/resources/magic-rules/#R5081)).
     Attack {
         player: Seat,
-        attackers: Bitboard,
+        attackers: Bitboard<L::Slot>,
     },
     /// A step or phase began ([CR 500.6](https://yawgatog.com/resources/magic-rules/#R5006)).
     StepBegins {
@@ -146,7 +147,7 @@ pub enum Event {
         active: Seat,
     },
     GainControl {
-        object: ObjectRef,
+        object: ObjectRef<L>,
         player: Seat,
     },
     /// A coin flip ([CR 705.2](https://yawgatog.com/resources/magic-rules/#R7052)): "If the
@@ -155,7 +156,7 @@ pub enum Event {
         player: Seat,
         won: bool,
         /// The object whose ability flipped it.
-        source: ObjectRef,
+        source: ObjectRef<L>,
     },
     Lose {
         player: Seat,
@@ -179,7 +180,9 @@ pub(crate) mod kind {
     pub const DRAW: u16 = 1 << 8;
 }
 
-impl Event {
+impl Copy for Event<Small> {}
+
+impl<L: Layout> Event<L> {
     /// The listener kind of this event, or 0 if no trigger listens to it.
     pub(crate) fn kind(&self) -> u16 {
         match self {
@@ -204,8 +207,8 @@ impl Event {
 
 /// Where executed events go for the UI or a replay (§8.2, step 6). Search leaves it off.
 #[derive(Debug, Default)]
-pub struct Sink {
-    events: Vec<Event>,
+pub struct Sink<L: Layout = Small> {
+    events: Vec<Event<L>>,
     on: bool,
     /// The work done since the scratch last took the counts: the sink goes everywhere the
     /// engine does it.
@@ -222,7 +225,7 @@ pub(crate) struct Work {
     pub(crate) solver_runs: u64,
 }
 
-impl Sink {
+impl<L: Layout> Sink<L> {
     /// A sink that drops every event.
     pub fn off() -> Self {
         Self::default()
@@ -237,11 +240,11 @@ impl Sink {
     }
 
     /// The events since the last drain, oldest first.
-    pub fn drain(&mut self) -> std::vec::Drain<'_, Event> {
+    pub fn drain(&mut self) -> std::vec::Drain<'_, Event<L>> {
         self.events.drain(..)
     }
 
-    pub fn events(&self) -> &[Event] {
+    pub fn events(&self) -> &[Event<L>] {
         &self.events
     }
 
@@ -255,7 +258,7 @@ impl Sink {
     }
 
     /// Takes the events after the first `len`, those of a body run replayed (§7.3).
-    pub(crate) fn take_from(&mut self, len: usize) -> std::vec::Drain<'_, Event> {
+    pub(crate) fn take_from(&mut self, len: usize) -> std::vec::Drain<'_, Event<L>> {
         self.events.drain(len..)
     }
 
@@ -265,7 +268,16 @@ impl Sink {
         self.events.truncate(len);
     }
 
-    pub(crate) fn push(&mut self, e: Event) {
+    /// The same events in layout `M`, recorded or not as this sink records them.
+    pub fn relayout<M: Layout>(&self) -> Sink<M> {
+        Sink {
+            events: self.events.iter().map(Relayout::relayout).collect(),
+            on: self.on,
+            work: self.work,
+        }
+    }
+
+    pub(crate) fn push(&mut self, e: Event<L>) {
         self.work.events += 1;
         if self.on {
             self.events.push(e);
@@ -275,8 +287,8 @@ impl Sink {
 
 /// How a permanent enters, as decided by whatever puts it onto the battlefield, before the
 /// replacement effects of §8.2 apply.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) struct Entry {
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub(crate) struct Entry<L: Layout = Small> {
     pub tapped: bool,
     /// Put onto the battlefield attacking
     /// ([CR 508.4](https://yawgatog.com/resources/magic-rules/#R5084)).
@@ -295,7 +307,7 @@ pub(crate) struct Entry {
     pub flags: u32,
     pub x: u8,
     /// The object an Aura spell attaches to as it resolves (CR 608.3c).
-    pub attach: Option<Slot>,
+    pub attach: Option<L::Slot>,
 }
 
 /// Executes the remaining steps of the pipeline for an event its primitive has executed:
@@ -304,8 +316,8 @@ pub(crate) struct Entry {
 pub(crate) fn settle<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
-    e: Event,
+    sink: &mut Sink<L>,
+    e: Event<L>,
 ) -> Result<(), Full> {
     layers::refresh(s, t, sink);
     trigger::match_event(s, t, &e)?;
@@ -317,8 +329,8 @@ pub(crate) fn settle<L: Layout>(
 pub(crate) fn move_one<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
-    slot: Slot,
+    sink: &mut Sink<L>,
+    slot: L::Slot,
     to: Zone,
     reason: Reason,
 ) -> Result<(), Full> {
@@ -354,11 +366,11 @@ pub(crate) fn move_one<L: Layout>(
 pub(crate) fn move_batch<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
-    objects: Bitboard,
+    sink: &mut Sink<L>,
+    objects: Bitboard<L::Slot>,
     to: Zone,
     reason: Reason,
-    entry: Entry,
+    entry: Entry<L>,
 ) -> Result<(), Full> {
     move_batch_to(s, t, sink, objects, to, Place::Top, reason, entry)
 }
@@ -368,15 +380,15 @@ pub(crate) fn move_batch<L: Layout>(
 pub(crate) fn move_batch_to<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
-    objects: Bitboard,
+    sink: &mut Sink<L>,
+    objects: Bitboard<L::Slot>,
     to: Zone,
     place: Place,
     reason: Reason,
-    entry: Entry,
+    entry: Entry<L>,
 ) -> Result<(), Full> {
     layers::refresh(s, t, sink);
-    let mut moves: Fixed<(Slot, Zone, Zone, Entry), 128> = Fixed::new();
+    let mut moves: L::Queue<(L::Slot, Zone, Zone, Entry<L>), 128> = Default::default();
     let mut returning = Bitboard::EMPTY;
     for slot in objects.iter() {
         let o = *s.object(slot);
@@ -398,7 +410,7 @@ pub(crate) fn move_batch_to<L: Layout>(
             returning |= exiled_until(s, slot);
         }
     }
-    for &(slot, from, dest, entry) in &moves {
+    for &(slot, from, dest, entry) in moves.iter() {
         if dest == Zone::Battlefield && entry.pay_life {
             pay_life_to_enter(s, t, sink, slot, entry)?;
         }
@@ -439,7 +451,7 @@ pub(crate) fn move_batch_to<L: Layout>(
         });
     }
     layers::refresh(s, t, sink);
-    for &(slot, from, dest, _) in &moves {
+    for &(slot, from, dest, _) in moves.iter() {
         let e = Event::ZoneChange {
             object: s.object_ref(slot),
             from,
@@ -468,7 +480,7 @@ pub(crate) fn move_batch_to<L: Layout>(
 /// create is "exile it instead" of a graveyard, and no two of them can apply to one event
 /// differently, so the ordering of [CR 616.1](https://yawgatog.com/resources/magic-rules/#R6161)
 /// never becomes a choice.
-fn destination<L: Layout>(s: &State<L>, slot: Slot, to: Zone) -> Zone {
+fn destination<L: Layout>(s: &State<L>, slot: L::Slot, to: Zone) -> Zone {
     let r = s.object_ref(slot);
     let exiled = to == Zone::Graveyard
         && s.effects
@@ -478,7 +490,7 @@ fn destination<L: Layout>(s: &State<L>, slot: Slot, to: Zone) -> Zone {
 }
 
 /// The objects exiled until the permanent in `slot` leaves the battlefield.
-fn exiled_until<L: Layout>(s: &State<L>, slot: Slot) -> Bitboard {
+fn exiled_until<L: Layout>(s: &State<L>, slot: L::Slot) -> Bitboard<L::Slot> {
     (s.zone(Seat::P0, Zone::Exile) | s.zone(Seat::P1, Zone::Exile))
         .iter()
         .filter(|&x| {
@@ -498,9 +510,9 @@ fn exiled_until<L: Layout>(s: &State<L>, slot: Slot) -> Bitboard {
 fn enter_replacements<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    slot: Slot,
-    mut entry: Entry,
-) -> Entry {
+    slot: L::Slot,
+    mut entry: Entry<L>,
+) -> Entry<L> {
     let o = s.object(slot);
     let face = t.def(o.card).face(entry.face);
     let controller = entry.controller.unwrap_or(o.owner);
@@ -547,9 +559,9 @@ fn enter_replacements<L: Layout>(
 fn pay_life_to_enter<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
-    slot: Slot,
-    entry: Entry,
+    sink: &mut Sink<L>,
+    slot: L::Slot,
+    entry: Entry<L>,
 ) -> Result<(), Full> {
     let o = s.object(slot);
     let face = t.def(o.card).face(entry.face);
@@ -580,7 +592,7 @@ pub(crate) fn life_to_enter(t: &GameTable, card: CardIx, face: FaceIx) -> Option
 pub(crate) fn lose_life<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
     player: Seat,
     amount: u8,
 ) -> Result<(), Full> {
@@ -592,7 +604,7 @@ pub(crate) fn lose_life<L: Layout>(
 pub(crate) fn gain_life<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
     player: Seat,
     amount: u8,
 ) -> Result<(), Full> {
@@ -614,7 +626,7 @@ pub(crate) fn gain_life<L: Layout>(
 pub(crate) fn draw<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
     player: Seat,
     cards: u8,
 ) -> Result<(), Full> {
@@ -678,9 +690,9 @@ fn wins_instead_of_drawing<L: Layout>(s: &State<L>, t: &GameTable, player: Seat)
 pub(crate) fn deal_damage<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
-    source: ObjectRef,
-    to: Recipient,
+    sink: &mut Sink<L>,
+    source: ObjectRef<L>,
+    to: Recipient<L>,
     amount: u8,
     combat: bool,
 ) -> Result<(), Full> {
@@ -721,8 +733,8 @@ pub(crate) fn deal_damage<L: Layout>(
 pub(crate) fn add_counters<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
-    object: ObjectRef,
+    sink: &mut Sink<L>,
+    object: ObjectRef<L>,
     kind: CounterKind,
     amount: u8,
 ) -> Result<(), Full> {
@@ -750,8 +762,8 @@ pub(crate) fn add_counters<L: Layout>(
 pub(crate) fn remove_counters<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
-    object: ObjectRef,
+    sink: &mut Sink<L>,
+    object: ObjectRef<L>,
     kind: CounterKind,
     amount: u8,
 ) -> Result<(), Full> {
@@ -791,8 +803,8 @@ pub(crate) fn remove_counters<L: Layout>(
 pub(crate) fn set_tapped<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
-    object: ObjectRef,
+    sink: &mut Sink<L>,
+    object: ObjectRef<L>,
     tapped: bool,
 ) -> Result<(), Full> {
     if !s.is_current(object) || s.object(object.slot).flags.has(ObjectFlags::TAPPED) == tapped {
@@ -837,12 +849,12 @@ pub struct TokenEntry {
 pub(crate) fn create_tokens<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
     controller: Seat,
     card: CardIx,
     count: u8,
     how: TokenEntry,
-) -> Result<Bitboard, Full> {
+) -> Result<Bitboard<L::Slot>, Full> {
     let mut tokens = Bitboard::EMPTY;
     let mut free = token_slots().filter(|&slot| s.object(slot).zone == Zone::Nowhere);
     for _ in 0..count {

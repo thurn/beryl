@@ -99,7 +99,7 @@ fn play_switching(game: &mut Game, mut switch: Option<StopsSetting>) -> Seen {
                     .position(|c| matches!(c.option, Candidate::Cast { .. }))
             })
             .unwrap_or(0);
-        let answer = game.answer(decision.id, CandidateIndex(index as u8));
+        let answer = game.answer(decision.id, CandidateIndex(index as u16));
         game.choose(answer.unwrap());
     }
     assert_eq!(switch, None, "the stops never changed");

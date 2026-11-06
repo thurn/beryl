@@ -198,7 +198,7 @@ static BEAR: CardDef = CardDef {
     tokens: &[],
 };
 
-fn not_a_token<L: Layout>(_: &State<L>, _: &GameTable, tr: &PendingTrigger) -> bool {
+fn not_a_token<L: Layout>(_: &State<L>, _: &GameTable, tr: &PendingTrigger<L>) -> bool {
     !tr.info.lki.token
 }
 
@@ -521,7 +521,7 @@ fn game_with_seed(seed: u64) -> (GameTable, State, Seat) {
 }
 
 /// A slot holding `name` in the player's library or hand.
-fn find<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, name: &str) -> Slot {
+fn find<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, name: &str) -> L::Slot {
     (s.zone(player, Zone::Library) | s.zone(player, Zone::Hand))
         .iter()
         .find(|&slot| t.def(s.object(slot).card).name == name)
@@ -604,7 +604,7 @@ fn advance_to(
     }
 }
 
-fn types<L: Layout>(s: &State<L>, slot: Slot) -> Types {
+fn types<L: Layout>(s: &State<L>, slot: L::Slot) -> Types {
     s.derived(slot).types
 }
 
@@ -615,7 +615,7 @@ fn an_enters_trigger_resolves_after_the_land_is_played() {
     let land = find(&s, &t, p, "Test Gain Land");
     crate::zone::move_to(&mut s, land, Zone::Hand).unwrap();
     let d = decide_with(&t, &mut s, &mut x);
-    let play = (0..d.len() as u8)
+    let play = (0..d.len() as u16)
         .find(|&i| d.candidates.option(Choice(i)) == Some(Opt::PlayLand(land)))
         .unwrap();
     apply(&mut s, &t, &mut x, &mut Replay, Choice(play));
@@ -1025,7 +1025,7 @@ fn lands_enter_tapped_conditionally_or_unless_life_is_paid() {
         let springs = find(&s, &t, p, "Test Springs");
         crate::zone::move_to(&mut s, springs, Zone::Hand).unwrap();
         let d = decide_with(&t, &mut s, &mut x);
-        let play = (0..d.len() as u8)
+        let play = (0..d.len() as u16)
             .find(|&i| d.candidates.option(Choice(i)) == Some(Opt::PlayLand(springs)))
             .unwrap();
         apply(&mut s, &t, &mut x, &mut Replay, Choice(play));
@@ -1048,7 +1048,7 @@ fn lands_enter_tapped_conditionally_or_unless_life_is_paid() {
     let springs = find(&s, &t, p, "Test Springs");
     crate::zone::move_to(&mut s, springs, Zone::Hand).unwrap();
     let d = decide_with(&t, &mut s, &mut x);
-    let play = (0..d.len() as u8)
+    let play = (0..d.len() as u16)
         .find(|&i| d.candidates.option(Choice(i)) == Some(Opt::PlayLand(springs)))
         .unwrap();
     apply(&mut s, &t, &mut x, &mut Replay, Choice(play));
@@ -1373,7 +1373,7 @@ fn random_games_with_triggers_never_read_derived_dirty() {
         let outcome = super::play(
             &t,
             &mut s,
-            |_, d| Choice(rng.below(d.len() as u64) as u8),
+            |_, d| Choice(rng.below(d.len() as u64) as u16),
             |s, _| assert_eq!(s.check_invariants(&t), Ok(())),
         );
         assert!(
@@ -1437,7 +1437,7 @@ fn a_token_created_attacking_may_attack_a_planeswalker() {
         }
         let d = decide_with(&t, &mut s, &mut x);
         let pick = |o: Opt| {
-            let i = (0..d.len() as u8)
+            let i = (0..d.len() as u16)
                 .find(|&i| d.candidates.option(Choice(i)) == Some(o))
                 .unwrap_or_else(|| panic!("{o:?} not among {d:?}"));
             Choice(i)
@@ -1565,7 +1565,7 @@ fn an_enters_ability_targets_by_the_x_its_spell_was_cast_with() {
         while !cast || !s.stack().is_empty() || !s.triggers().is_empty() {
             let d = decide_with(&t, &mut s, &mut scratch);
             let option = |o: Opt| {
-                (0..d.len() as u8)
+                (0..d.len() as u16)
                     .map(Choice)
                     .find(|&c| d.candidates.option(c) == Some(o))
             };
@@ -1582,7 +1582,7 @@ fn an_enters_ability_targets_by_the_x_its_spell_was_cast_with() {
                 DecisionKind::X => option(Opt::Number(x)).unwrap(),
                 DecisionKind::Target => {
                     assert_eq!(d.len(), 2, "kicked for {x}");
-                    let i = (0..d.len() as u8)
+                    let i = (0..d.len() as u16)
                         .find(|&i| d.candidates.object(Choice(i)) == Some(rocks[1]))
                         .unwrap();
                     Choice(i)

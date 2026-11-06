@@ -12,7 +12,7 @@ use beryl_engine::coverage;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
     CardIx, Choice, Counts, Decision, GameTable, Large, Layout, Observation, Outcome, Profile,
-    Replay, Scratch, Seat, Slot, StallReason, State, Step, Zone, apply, next,
+    Relayout, Replay, Scratch, Seat, Slot, StallReason, State, Step, Zone, apply, next,
 };
 use beryl_search::{Agent, GreedyAgent, RandomAgent};
 use common::{agents, fingerprint, game, games, mirror, play};
@@ -87,7 +87,7 @@ fn a_widened_game_plays_on_as_the_small_one() {
             let step = next(&mut small, &t, &mut xs, &mut Replay);
             assert_eq!(
                 next(&mut large, &t, &mut xl, &mut Replay),
-                step,
+                step.relayout(),
                 "seed {seed}"
             );
             assert!(small.widen() == large, "seed {seed}, decision {decisions}");
@@ -187,7 +187,7 @@ impl Agent for Observer {
             }
         }
         (obs.viewer(), obs.turn(), obs.battlefield()).hash(&mut h);
-        Choice((h.finish() % d.len() as u64) as u8)
+        Choice((h.finish() % d.len() as u64) as u16)
     }
 }
 

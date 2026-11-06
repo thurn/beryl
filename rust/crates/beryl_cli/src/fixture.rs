@@ -317,7 +317,7 @@ impl Condition {
     }
 
     fn holds(&self, view: &PlayerView) -> bool {
-        let name = |slot: u8| {
+        let name = |slot: u16| {
             view.objects
                 .iter()
                 .find(|o| o.slot == slot)
@@ -457,7 +457,7 @@ fn playable_pair(view: &PlayerView) -> bool {
     let Status::Deciding { decision } = &view.status else {
         return false;
     };
-    let in_hand = |slot: u8| {
+    let in_hand = |slot: u16| {
         view.objects
             .iter()
             .find(|o| o.slot == slot && o.zone == ZoneName::Hand)
@@ -479,7 +479,7 @@ fn playable_pair(view: &PlayerView) -> bool {
 }
 
 /// Whether a card in exile links, by `host`, to a permanent on the battlefield.
-fn exiled_by_permanent(view: &PlayerView, host: impl Fn(&ObjectView) -> Option<u8>) -> bool {
+fn exiled_by_permanent(view: &PlayerView, host: impl Fn(&ObjectView) -> Option<u16>) -> bool {
     view.objects.iter().any(|o| {
         o.zone == ZoneName::Exile
             && host(o).is_some_and(|host| {
@@ -669,7 +669,7 @@ fn targets_beside_source(view: &PlayerView) -> bool {
     else {
         return false;
     };
-    let permanent = |slot: u8| {
+    let permanent = |slot: u16| {
         view.objects
             .iter()
             .find(|o| o.slot == slot && o.zone == ZoneName::Battlefield)

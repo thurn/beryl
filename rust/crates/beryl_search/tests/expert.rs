@@ -66,7 +66,7 @@ fn casts(card: &'static str) -> impl FnMut(&GameTable, &State, &Decision) -> Cho
         Candidates::Options(o) if d.kind == DecisionKind::Priority => o
             .iter()
             .position(|&o| matches!(o, Opt::Cast { slot, .. } if name(t, s, slot) == card))
-            .map_or(Choice(0), |i| Choice(i as u8)),
+            .map_or(Choice(0), |i| Choice(i as u16)),
         _ => Choice(0),
     }
 }

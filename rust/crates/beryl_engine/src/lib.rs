@@ -29,6 +29,7 @@ mod mana;
 pub mod observation;
 pub mod profile;
 mod reference;
+pub mod relayout;
 mod resolve;
 pub mod rng;
 mod sba;
@@ -50,7 +51,7 @@ pub use engine::{
     Counts, Scratch, apply, apply_decided, concede, next, next_in_step, observe, paused_events,
     refusal, view,
 };
-pub use ids::{CardIx, Seat, Slot};
+pub use ids::{CardIx, LargeSlot, Seat, Slot, SlotId};
 pub use invariants::{At, Violation};
 pub use layout::{Large, Layout, Small};
 pub use observation::Observation;
@@ -58,6 +59,7 @@ pub use profile::{
     Breakpoint, Limits, NextStop, Payment, Profile, StepStops, Stops, can_declare_blockers,
     next_step_stop, next_stop,
 };
+pub use relayout::Relayout;
 pub use state::{State, TurnStep, Zone};
 pub use table::{CardTable, Decklist, GameTable, TableError};
 

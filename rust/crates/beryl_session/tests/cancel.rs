@@ -46,7 +46,7 @@ fn deciding(view: &PlayerView) -> Option<&beryl_session::protocol::DecisionView>
 /// Answers `index` and plays on to the human's next decision.
 fn answer(game: &mut Game, view: &PlayerView, index: usize) -> PlayerView {
     let id = deciding(view).unwrap().id;
-    game.choose(game.answer(id, CandidateIndex(index as u8)).unwrap());
+    game.choose(game.answer(id, CandidateIndex(index as u16)).unwrap());
     to_human(game)
 }
 

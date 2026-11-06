@@ -8,7 +8,8 @@ use beryl_cards::decks::{WU_CONTROL, fuzz_deck};
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::Pending;
 use beryl_engine::{
-    Decision, GameTable, Observation, Replay, Scratch, Seat, Slot, State, Step, next,
+    Decision, GameTable, Observation, Relayout, Replay, Scratch, Seat, Slot, SlotId, State, Step,
+    next,
 };
 use beryl_session::preview::add_previews;
 use beryl_session::protocol::{
@@ -47,7 +48,7 @@ fn decision(view: &PlayerView) -> &DecisionView {
 fn script(view: &PlayerView) -> (DecisionId, CandidateIndex) {
     let d = decision(view);
     let n = d.candidates.len() as u32;
-    (d.id, CandidateIndex(((d.id.seq * 7 + 3) % n) as u8))
+    (d.id, CandidateIndex(((d.id.seq * 7 + 3) % n) as u16))
 }
 
 /// Plays on to the human's next decision or the end, and returns the view there.
@@ -111,7 +112,7 @@ fn a_scripted_human_plays_a_whole_game_and_its_replay_reproduces_it() {
                 open: id
             })
         );
-        let past = CandidateIndex(candidates as u8);
+        let past = CandidateIndex(candidates as u16);
         assert_eq!(
             sessions.choose(id, past),
             Err(SessionError::NoSuchCandidate {
@@ -366,7 +367,7 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
             for o in &view.objects {
                 if o.name.is_some() {
                     assert!(
-                        seen.knows(Seat::P0, Slot::new(o.slot)),
+                        seen.knows(Seat::P0, Slot::from_index(usize::from(o.slot))),
                         "seed {seed}: slot {} is named but unknown",
                         o.slot
                     );
@@ -406,7 +407,11 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
                     Observation::new(beryl_engine::view(&det, t, &mut x), Seat::P0),
                     moment,
                     view.stops,
-                    game.events(),
+                    &game
+                        .events()
+                        .iter()
+                        .map(Relayout::relayout)
+                        .collect::<Vec<_>>(),
                 );
                 // What a cast taps and whom a blocker may block, played out on the redealt state.
                 if let Some(d) = &d {

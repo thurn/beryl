@@ -122,7 +122,7 @@ pub struct DecisionRecord {
     pub agent: String,
     /// Its budget, in engine steps.
     pub budget: u64,
-    pub choice: u8,
+    pub choice: u16,
     /// The decision's index among the agent's own, and that of the decision whose search
     /// planted the trees it grew.
     pub agent_decision: AgentDecision,

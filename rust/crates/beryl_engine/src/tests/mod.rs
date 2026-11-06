@@ -101,7 +101,7 @@ pub(crate) fn fingerprint(s: &State) -> u64 {
 /// the starting player plays first, and everyone keeps.
 pub(crate) fn land_go(_obs: Observation<'_>, d: &Decision) -> Choice {
     match d.kind {
-        DecisionKind::Priority => Choice((d.len() - 1) as u8),
+        DecisionKind::Priority => Choice((d.len() - 1) as u16),
         _ => Choice(0),
     }
 }

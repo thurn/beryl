@@ -1243,7 +1243,7 @@ impl Scripted {
 }
 
 impl<L: Layout> Agent<L> for Scripted {
-    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision) -> Choice {
+    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
         let s = obs.unmasked_root();
         let next = self.script.front().copied();
         if let Some(action) = next {

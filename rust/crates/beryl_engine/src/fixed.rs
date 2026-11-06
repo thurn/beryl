@@ -5,7 +5,7 @@ use std::hash::{Hash, Hasher};
 /// An `[T; N]` plus a `u8` length, `Copy` whenever `T` is. Pushing past `N` returns [`Full`],
 /// which the engine turns into a stall, never a panic.
 #[derive(Clone, Copy)]
-pub struct Fixed<T: Copy, const N: usize> {
+pub struct Fixed<T, const N: usize> {
     items: [T; N],
     len: u8,
 }
@@ -14,23 +14,23 @@ pub struct Fixed<T: Copy, const N: usize> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Full;
 
-impl<T: Copy + Default, const N: usize> Fixed<T, N> {
+impl<T: Clone + Default, const N: usize> Fixed<T, N> {
     pub fn new() -> Self {
         const { assert!(N <= u8::MAX as usize) };
         Self {
-            items: [T::default(); N],
+            items: std::array::from_fn(|_| T::default()),
             len: 0,
         }
     }
 }
 
-impl<T: Copy + Default, const N: usize> Default for Fixed<T, N> {
+impl<T: Clone + Default, const N: usize> Default for Fixed<T, N> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: Copy, const N: usize> Fixed<T, N> {
+impl<T: Clone, const N: usize> Fixed<T, N> {
     pub fn len(&self) -> usize {
         usize::from(self.len)
     }
@@ -64,7 +64,9 @@ impl<T: Copy, const N: usize> Fixed<T, N> {
         if len == N {
             return Err(Full);
         }
-        self.items.copy_within(index..len, index + 1);
+        for i in (index..len).rev() {
+            self.items[i + 1] = self.items[i].clone();
+        }
         self.items[index] = item;
         self.len += 1;
         Ok(())
@@ -75,14 +77,16 @@ impl<T: Copy, const N: usize> Fixed<T, N> {
             return None;
         }
         self.len -= 1;
-        Some(self.items[self.len()])
+        Some(self.items[self.len()].clone())
     }
 
     /// Removes the item at `index`, keeping the order of the rest.
     pub fn remove(&mut self, index: usize) -> T {
         let len = self.len();
-        let item = self.as_slice()[index];
-        self.items.copy_within(index + 1..len, index);
+        let item = self.as_slice()[index].clone();
+        for i in index + 1..len {
+            self.items[i - 1] = self.items[i].clone();
+        }
         self.len -= 1;
         item
     }
@@ -95,9 +99,8 @@ impl<T: Copy, const N: usize> Fixed<T, N> {
     pub fn retain(&mut self, mut keep: impl FnMut(&T) -> bool) {
         let mut kept = 0;
         for i in 0..self.len() {
-            let item = self.items[i];
-            if keep(&item) {
-                self.items[kept] = item;
+            if keep(&self.items[i]) {
+                self.items[kept] = self.items[i].clone();
                 kept += 1;
             }
         }
@@ -111,11 +114,11 @@ impl<T: Copy, const N: usize> Fixed<T, N> {
 
 impl<T: Copy + PartialEq, const N: usize> Fixed<T, N> {
     pub fn position(&self, item: T) -> Option<usize> {
-        self.iter().position(|&x| x == item)
+        self.iter().position(|x| *x == item)
     }
 }
 
-impl<'a, T: Copy, const N: usize> IntoIterator for &'a Fixed<T, N> {
+impl<'a, T: Clone, const N: usize> IntoIterator for &'a Fixed<T, N> {
     type Item = &'a T;
     type IntoIter = std::slice::Iter<'a, T>;
 
@@ -125,21 +128,21 @@ impl<'a, T: Copy, const N: usize> IntoIterator for &'a Fixed<T, N> {
 }
 
 // Equality and hashing see only the live items, so stale ones past `len` never matter.
-impl<T: Copy + PartialEq, const N: usize> PartialEq for Fixed<T, N> {
+impl<T: Clone + PartialEq, const N: usize> PartialEq for Fixed<T, N> {
     fn eq(&self, other: &Self) -> bool {
         self.as_slice() == other.as_slice()
     }
 }
 
-impl<T: Copy + Eq, const N: usize> Eq for Fixed<T, N> {}
+impl<T: Clone + Eq, const N: usize> Eq for Fixed<T, N> {}
 
-impl<T: Copy + Hash, const N: usize> Hash for Fixed<T, N> {
+impl<T: Clone + Hash, const N: usize> Hash for Fixed<T, N> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.as_slice().hash(state);
     }
 }
 
-impl<T: Copy + std::fmt::Debug, const N: usize> std::fmt::Debug for Fixed<T, N> {
+impl<T: Clone + std::fmt::Debug, const N: usize> std::fmt::Debug for Fixed<T, N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_list().entries(self.as_slice()).finish()
     }

@@ -224,7 +224,7 @@ impl Game {
     /// Answers the next decision, of `kind`, with the option `opt`.
     fn pick(&mut self, kind: DecisionKind, opt: Opt) {
         let d = self.expect(kind);
-        let i = (0..d.len() as u8)
+        let i = (0..d.len() as u16)
             .find(|&i| d.candidates.option(Choice(i)) == Some(opt))
             .unwrap_or_else(|| panic!("{opt:?} not offered: {d:?}"));
         apply(&mut self.s, &self.t, &mut self.x, &mut Replay, Choice(i));
@@ -233,7 +233,7 @@ impl Game {
     /// Answers the next decision, of `kind`, with the object `slot`.
     fn pick_object(&mut self, kind: DecisionKind, slot: Slot) {
         let d = self.expect(kind);
-        let i = (0..d.len() as u8)
+        let i = (0..d.len() as u16)
             .find(|&i| d.candidates.object(Choice(i)) == Some(slot))
             .unwrap_or_else(|| panic!("{slot} not offered: {d:?}"));
         apply(&mut self.s, &self.t, &mut self.x, &mut Replay, Choice(i));
@@ -293,7 +293,7 @@ fn attacks(slots: &[Slot]) -> Vec<Opt> {
 }
 
 fn options(d: &Decision) -> Vec<Opt> {
-    (0..d.len() as u8)
+    (0..d.len() as u16)
         .map(|i| d.candidates.option(Choice(i)).unwrap())
         .collect()
 }
@@ -830,7 +830,7 @@ fn random_combat_games_keep_the_invariants() {
                     rng ^= rng << 13;
                     rng ^= rng >> 7;
                     rng ^= rng << 17;
-                    let c = Choice((rng % d.len() as u64) as u8);
+                    let c = Choice((rng % d.len() as u64) as u16);
                     apply(&mut g.s, &g.t, &mut g.x, &mut Replay, c);
                 }
             }

@@ -17,7 +17,7 @@ fn mulligans_until(
         let c = match d.kind {
             DecisionKind::PlayOrDraw | DecisionKind::PutOnBottom => Choice(0),
             DecisionKind::KeepOrMulligan => {
-                Choice(u8::from(mulligan(d.player, s.player(d.player).mulligans)))
+                Choice(u16::from(mulligan(d.player, s.player(d.player).mulligans)))
             }
             _ => return (d, log),
         };

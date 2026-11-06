@@ -3,36 +3,39 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityIx, Castings, FaceIx, ManaColor, ManaCost};
-use crate::fixed::Fixed;
-use crate::ids::{Seat, Slot};
-use crate::layout::{Layout, Small};
+use crate::ids::Seat;
+use crate::layout::{Layout, Queue, Small};
 use crate::observation::Observation;
 use crate::state::Zone;
 
 /// What `next` returns: a decision to make, or the end of the game. A decision is a flat
 /// value with its candidates inline, so it can live in the state and be copied with it.
 #[allow(clippy::large_enum_variant)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Step {
-    Decide(Decision),
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Step<L: Layout = Small> {
+    Decide(Decision<L>),
     Over(Outcome),
 }
 
+impl Copy for Step<Small> {}
+
 /// An answer: an index into the decision's candidates.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct Choice(pub u8);
+pub struct Choice(pub u16);
 
 /// One factored single pick for one player.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct Decision {
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Decision<L: Layout = Small> {
     pub player: Seat,
     pub kind: DecisionKind,
-    pub candidates: Candidates,
+    pub candidates: Candidates<L>,
     /// What the question is for, where the kind alone does not say.
-    pub ask: Ask,
+    pub ask: Ask<L>,
 }
 
-impl Decision {
+impl Copy for Decision<Small> {}
+
+impl<L: Layout> Decision<L> {
     pub fn len(&self) -> usize {
         self.candidates.len()
     }
@@ -109,7 +112,7 @@ pub enum DecisionKind {
 /// consumers (the UI, agents) need not recover it from the card asking. The [`DecisionKind`]
 /// says the shape of the answer; this says its meaning.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub enum Ask {
+pub enum Ask<L: Layout = Small> {
     /// Nothing more than the kind says.
     #[default]
     Plain,
@@ -128,7 +131,7 @@ pub enum Ask {
         zone: Zone,
         count: u8,
         to: Zone,
-        eligible: Bitboard,
+        eligible: Bitboard<L::Slot>,
     },
     /// A card from the hand to put on top of the library, `count` of them still to put, each
     /// on the one before.
@@ -148,13 +151,13 @@ pub enum Ask {
     DiscardBasicLand { count: u8 },
     /// Whether the card in `card` goes on top of its owner's library (yes) or the bottom
     /// (no), as Subtlety's "Its owner puts it on the top or bottom of their library."
-    TopOrBottom { card: Slot },
+    TopOrBottom { card: L::Slot },
     /// Whether to move the card in `card` to `to`, as Currency Converter's "you may exile
     /// that card from your graveyard"
     /// ([CR 608.2d](https://yawgatog.com/resources/magic-rules/#R6082d)): "If an effect of a
     /// spell or ability offers any choices ..., the player announces these while applying the
     /// effect."
-    MayMove { card: Slot, to: Zone },
+    MayMove { card: L::Slot, to: Zone },
     /// Whether the card an explore revealed goes to the graveyard
     /// ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)): the controller
     /// "may put the revealed card into their graveyard."
@@ -186,7 +189,7 @@ pub enum Ask {
     /// [player] pays [cost]".
     UnlessPays { cost: ManaCost },
     /// Whether to pay `life` so that the land in `land` doesn't enter tapped.
-    PayLife { land: Slot, life: u8 },
+    PayLife { land: L::Slot, life: u8 },
     /// A card to discard in the cleanup step, `count` of them still to discard to reach the
     /// maximum hand size ([CR 514.1](https://yawgatog.com/resources/magic-rules/#R5141)).
     Cleanup { count: u8 },
@@ -203,13 +206,15 @@ pub enum Ask {
 /// The candidates of a decision. A `Choice(i)` names the `i`th object in ascending slot order,
 /// or the `i`th option.
 #[allow(clippy::large_enum_variant)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Candidates {
-    Objects(Bitboard),
-    Options(Fixed<Opt, 64>),
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Candidates<L: Layout = Small> {
+    Objects(Bitboard<L::Slot>),
+    Options(L::Queue<Opt<L>, 64>),
 }
 
-impl Candidates {
+impl Copy for Candidates<Small> {}
+
+impl<L: Layout> Candidates<L> {
     pub fn len(&self) -> usize {
         match self {
             Candidates::Objects(b) => b.count() as usize,
@@ -222,7 +227,7 @@ impl Candidates {
     }
 
     /// The object a choice names, for object candidates.
-    pub fn object(&self, c: Choice) -> Option<Slot> {
+    pub fn object(&self, c: Choice) -> Option<L::Slot> {
         match self {
             Candidates::Objects(b) => b.nth(usize::from(c.0)),
             Candidates::Options(_) => None,
@@ -230,7 +235,7 @@ impl Candidates {
     }
 
     /// The option a choice names, for option candidates.
-    pub fn option(&self, c: Choice) -> Option<Opt> {
+    pub fn option(&self, c: Choice) -> Option<Opt<L>> {
         match self {
             Candidates::Objects(_) => None,
             Candidates::Options(o) => o.as_slice().get(usize::from(c.0)).copied(),
@@ -240,12 +245,12 @@ impl Candidates {
 
 /// One option of a decision whose candidates are not simply objects.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub enum Opt {
+pub enum Opt<L: Layout = Small> {
     /// Pass priority.
     #[default]
     Pass,
     /// Play the land card in this slot.
-    PlayLand(Slot),
+    PlayLand(L::Slot),
     /// Take the first turn.
     Play,
     /// Let the other player take the first turn.
@@ -253,33 +258,33 @@ pub enum Opt {
     Keep,
     Mulligan,
     /// The waiting trigger at this index.
-    Trigger(u8),
+    Trigger(L::Index),
     Yes,
     No,
     /// Finish a declaration or a division.
     Done,
     /// Declare the creature in this slot as an attacker.
-    Attack(Slot),
+    Attack(L::Slot),
     /// Attack the planeswalker in this slot, or, for `None`, the defending player.
-    Defender(Option<Slot>),
+    Defender(Option<L::Slot>),
     /// Declare the creature in this slot as a blocker.
-    Block(Slot),
+    Block(L::Slot),
     /// Assign lethal damage to the blocker in this slot.
-    Lethal(Slot),
+    Lethal(L::Slot),
     /// Cast the card in `slot` with face `face` up, paying the casting options `costs`.
     Cast {
-        slot: Slot,
+        slot: L::Slot,
         face: FaceIx,
         costs: Castings,
     },
     /// Activate an ability of the object in `slot`.
     Activate {
-        slot: Slot,
+        slot: L::Slot,
         ability: AbilityIx,
     },
     /// Tap the mana source in `slot` for one mana of `color`.
     Mana {
-        slot: Slot,
+        slot: L::Slot,
         color: ManaColor,
     },
     /// Spend floating mana of `color`.
@@ -291,12 +296,12 @@ pub enum Opt {
     /// A player, as a target.
     Player(Seat),
     /// The object in this slot, among options that also offer [`Opt::Done`].
-    Object(Slot),
+    Object(L::Slot),
     /// Turn the face-down permanent in this slot face up, a special action (CR 116.2b).
-    TurnFaceUp(Slot),
+    TurnFaceUp(L::Slot),
 }
 
-const _: () = assert!(size_of::<Opt>() == 4);
+const _: () = assert!(size_of::<Opt<Small>>() == 4);
 
 /// How a game ended.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -312,10 +317,10 @@ pub enum Outcome {
 /// Why a player can't cast a card from their hand or play it as a land at priority now
 /// ([`crate::refusal`]): the first rule its most nearly legal way of playing it breaks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Refusal {
+pub enum Refusal<L: Layout = Small> {
     /// Only at sorcery speed, which it is not: an opponent's permanent `by` limits the player
     /// to casting spells at sorcery speed, if the card could be cast now without it.
-    Timing { by: Option<Slot> },
+    Timing { by: Option<L::Slot> },
     /// A land, and the player has played their land this turn.
     LandPlayed,
     /// Its mana cost can't be paid.
@@ -350,7 +355,7 @@ pub trait Answers<L: Layout = Small> {
 
     /// Answers `d`, observed by `d.player`. Asked only of an inline source, which must
     /// answer.
-    fn answer(&mut self, obs: Observation<'_, L>, d: &Decision) -> Option<Choice>;
+    fn answer(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Option<Choice>;
 }
 
 /// The answer source for tree nodes and the UI: the engine answers from the choice record in
@@ -358,7 +363,7 @@ pub trait Answers<L: Layout = Small> {
 pub struct Replay;
 
 impl<L: Layout> Answers<L> for Replay {
-    fn answer(&mut self, _obs: Observation<'_, L>, _d: &Decision) -> Option<Choice> {
+    fn answer(&mut self, _obs: Observation<'_, L>, _d: &Decision<L>) -> Option<Choice> {
         None
     }
 }

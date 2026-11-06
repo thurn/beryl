@@ -4,10 +4,10 @@
 use crate::card::{Ability, Delayed, Face, FaceAbility, FaceIx, Trigger, Types};
 use crate::event::{Event, Reason, Recipient, Sink, kind};
 use crate::filter::Whose;
-use crate::fixed::{Fixed, Full};
-use crate::ids::{CardIx, Seat, Slot};
+use crate::fixed::Full;
+use crate::ids::{CardIx, Seat};
 use crate::layers;
-use crate::layout::{Layout, Queue};
+use crate::layout::{Layout, Queue, index};
 use crate::state::{
     Lki, ObjectFlags, ObjectRef, PendingTrigger, StackEntry, State, TriggerInfo, TurnStep, Zone,
 };
@@ -15,7 +15,7 @@ use crate::table::GameTable;
 use crate::turn::apnap;
 
 /// The printed face of a permanent, or of the card a token copies.
-pub(crate) fn face<L: Layout>(s: &State<L>, t: &GameTable, slot: Slot) -> &'static Face {
+pub(crate) fn face<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> &'static Face {
     let o = s.object(slot);
     t.def(o.card).face(o.face)
 }
@@ -36,7 +36,7 @@ pub(crate) fn ability(t: &GameTable, card: CardIx, face: FaceIx, ability: u8) ->
 pub(crate) fn match_event<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    e: &Event,
+    e: &Event<L>,
 ) -> Result<(), Full> {
     let k = e.kind();
     if k == 0 {
@@ -74,8 +74,8 @@ pub(crate) fn match_event<L: Layout>(
             }
         }
         for player in Seat::BOTH {
-            let emblems = s.player(player).emblems;
-            for &card in &emblems {
+            let emblems = s.player(player).emblems.clone();
+            for &card in emblems.iter() {
                 if t.listens(card) & k == 0 {
                     continue;
                 }
@@ -100,8 +100,8 @@ pub(crate) fn match_event<L: Layout>(
 /// ([CR 603.2c](https://yawgatog.com/resources/magic-rules/#R6032c)): "An ability triggers
 /// only once each time its trigger event occurs. However, it can trigger repeatedly if one
 /// event contains multiple occurrences."
-fn times(trigger: Trigger, e: &Event) -> u8 {
-    match (trigger, *e) {
+fn times<L: Layout>(trigger: Trigger, e: &Event<L>) -> u8 {
+    match (trigger, e.clone()) {
         (Trigger::YouDraw, Event::Draw { cards, .. }) => cards,
         _ => 1,
     }
@@ -124,18 +124,18 @@ fn face_abilities(
 fn fires<L: Layout>(
     s: &State<L>,
     trigger: Trigger,
-    this: Option<Slot>,
+    this: Option<L::Slot>,
     you: Seat,
-    e: &Event,
-) -> Option<TriggerInfo> {
-    let is_this = |r: ObjectRef| this == Some(r.slot) && s.is_current(r);
-    let info = |object: Option<ObjectRef>, player: Seat, amount: u8| TriggerInfo {
+    e: &Event<L>,
+) -> Option<TriggerInfo<L>> {
+    let is_this = |r: ObjectRef<L>| this == Some(r.slot) && s.is_current(r);
+    let info = |object: Option<ObjectRef<L>>, player: Seat, amount: u8| TriggerInfo {
         object,
         player,
         amount,
         lki: Lki::default(),
     };
-    match (trigger, *e) {
+    match (trigger, e.clone()) {
         // The amount is the X its spell was cast with
         // ([CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)): "If an object's
         // enters-the-battlefield triggered ability ... refers to X, and the spell that became
@@ -211,7 +211,7 @@ fn whose_turn(whose: Whose, you: Seat, active: Seat) -> bool {
 pub(crate) fn match_leaving<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    slot: Slot,
+    slot: L::Slot,
     to: Zone,
 ) -> Result<(), Full> {
     let card = s.object(slot).card;
@@ -239,7 +239,7 @@ pub(crate) fn match_leaving<L: Layout>(
 }
 
 /// A permanent's last-known information, from its current characteristics.
-pub(crate) fn lki<L: Layout>(s: &State<L>, slot: Slot) -> Lki {
+pub(crate) fn lki<L: Layout>(s: &State<L>, slot: L::Slot) -> Lki {
     let d = s.derived(slot);
     let o = s.object(slot);
     Lki {
@@ -260,12 +260,12 @@ pub(crate) fn lki<L: Layout>(s: &State<L>, slot: Slot) -> Lki {
 fn enqueue<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    source: Option<ObjectRef>,
+    source: Option<ObjectRef<L>>,
     card: CardIx,
     face: FaceIx,
     ability: u8,
     controller: Seat,
-    info: TriggerInfo,
+    info: TriggerInfo<L>,
 ) -> Result<(), Full> {
     let pending = PendingTrigger {
         source,
@@ -318,27 +318,28 @@ fn fire_delayed<L: Layout>(
 /// [CR 603.3b](https://yawgatog.com/resources/magic-rules/#R6033b): "each player, in APNAP
 /// order, puts each triggered ability they control ... on the stack in any order they
 /// choose."
-pub(crate) fn next_to_stack<L: Layout>(s: &State<L>) -> Option<(Seat, Fixed<u8, 64>)> {
+pub(crate) fn next_to_stack<L: Layout>(s: &State<L>) -> Option<(Seat, L::Queue<L::Index, 64>)> {
     let player = apnap(s)
         .into_iter()
         .find(|&p| s.triggers.iter().any(|tr| tr.controller == p))?;
-    let mut kept = Fixed::new();
-    let mut firsts: Fixed<PendingTrigger, 64> = Fixed::new();
+    let mut kept: L::Queue<L::Index, 64> = Default::default();
+    let mut firsts: L::Queue<PendingTrigger<L>, 64> = Default::default();
     for (i, tr) in s.triggers.iter().enumerate() {
         if tr.controller != player || firsts.iter().any(|k| equivalent(s, k, tr)) {
             continue;
         }
-        // The waiting triggers never exceed the capacity of these lists.
+        // The waiting triggers never exceed the capacity of these lists, and the layout's
+        // index names every one.
         let _ = firsts.push(*tr);
-        let _ = kept.push(i as u8);
+        let _ = kept.push(index::<L>(i));
     }
     Some((player, kept))
 }
 
 /// Triggers of the same ability from interchangeable sources, on the same event with
 /// interchangeable objects, lead to the same game whatever their order (§7.2).
-fn equivalent<L: Layout>(s: &State<L>, a: &PendingTrigger, b: &PendingTrigger) -> bool {
-    let interchangeable = |x: Option<ObjectRef>, y: Option<ObjectRef>| match (x, y) {
+fn equivalent<L: Layout>(s: &State<L>, a: &PendingTrigger<L>, b: &PendingTrigger<L>) -> bool {
+    let interchangeable = |x: Option<ObjectRef<L>>, y: Option<ObjectRef<L>>| match (x, y) {
         (Some(x), Some(y)) => {
             x == y || crate::zone::signature(s, x.slot) == crate::zone::signature(s, y.slot)
         }
@@ -357,10 +358,10 @@ fn equivalent<L: Layout>(s: &State<L>, a: &PendingTrigger, b: &PendingTrigger) -
 pub(crate) fn put_on_stack<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
-    index: u8,
+    sink: &mut Sink<L>,
+    index: L::Index,
 ) -> Result<(), Full> {
-    let tr = s.triggers.remove(usize::from(index));
+    let tr = s.triggers.remove(index.into());
     // An enters ability's X is its spell's (CR 107.3m), captured as it triggered.
     let entering = ability(t, tr.card, tr.face, tr.ability).trigger == Trigger::Enters;
     s.stack.push(StackEntry {
@@ -377,6 +378,6 @@ pub(crate) fn put_on_stack<L: Layout>(
 }
 
 /// Creates a delayed triggered ability ([CR 603.7](https://yawgatog.com/resources/magic-rules/#R6037)).
-pub(crate) fn delay<L: Layout>(s: &mut State<L>, trigger: PendingTrigger) -> Result<(), Full> {
+pub(crate) fn delay<L: Layout>(s: &mut State<L>, trigger: PendingTrigger<L>) -> Result<(), Full> {
     s.delayed.push(trigger)
 }

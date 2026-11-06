@@ -20,8 +20,8 @@ use crate::decision::Opt;
 use crate::effect::EffectCtx;
 use crate::event::{self, Sink};
 use crate::fixed::{Fixed, Full};
-use crate::ids::{CardIx, Seat, Slot};
-use crate::layout::{Layout, Queue, Table};
+use crate::ids::{CardIx, Seat, SlotId};
+use crate::layout::{Layout, Queue, Small, Table};
 use crate::state::{Derived, ObjectFlags, PendingTrigger, State, Zone};
 use crate::table::GameTable;
 
@@ -186,20 +186,20 @@ impl Groups {
 
 /// Interchangeable sources: the same mana, and nothing else to do with them.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct Class {
+struct Class<L: Layout = Small> {
     /// The kinds of mana each makes, a bit per [`ManaColor`].
     kinds: u8,
     amount: u8,
     /// The flexibility rank (§10): fewer kinds first, then sources with no other ability,
     /// and sources a plan consumes last. Lower ranks are tapped first.
     rank: u8,
-    members: Bitboard,
+    members: Bitboard<L::Slot>,
     /// Whether tapping one for mana also sacrifices it: a plan's taps of this class are the
     /// permanents it consumes (§10).
     consumed: bool,
 }
 
-impl Class {
+impl<L: Layout> Class<L> {
     fn count(&self) -> u8 {
         self.members.count() as u8
     }
@@ -207,8 +207,8 @@ impl Class {
 
 /// A player's untapped sources, by class in rank order.
 #[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct Sources {
-    classes: Fixed<Class, CLASSES>,
+pub(crate) struct Sources<L: Layout = Small> {
+    classes: Fixed<Class<L>, CLASSES>,
 }
 
 /// Whether an ability is one the solver taps for: a mana ability whose whole cost is {T}.
@@ -301,7 +301,7 @@ fn has_other_ability(face: &Face) -> bool {
 fn controlled<L: Layout>(
     s: &State<L>,
     player: Seat,
-) -> impl Iterator<Item = (Slot, &Derived)> + '_ {
+) -> impl Iterator<Item = (L::Slot, &Derived)> + '_ {
     debug_assert!(!s.flags.derived_dirty, "derived read while dirty");
     s.battlefield
         .iter()
@@ -318,7 +318,7 @@ fn source<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
-    slot: Slot,
+    slot: L::Slot,
     d: &Derived,
 ) -> Option<(u8, u8, bool, bool)> {
     let o = s.object(slot);
@@ -397,15 +397,15 @@ fn read_source<L: Layout>(
     Some((kinds, amount, conditional || has_other_ability(face), false))
 }
 
-impl Sources {
+impl<L: Layout> Sources<L> {
     /// The untapped sources `player` controls, but those in `exclude`.
-    pub(crate) fn of<L: Layout>(
+    pub(crate) fn of(
         s: &State<L>,
         t: &GameTable,
         player: Seat,
-        exclude: Bitboard,
+        exclude: Bitboard<L::Slot>,
     ) -> Result<Self, Full> {
-        let mut classes: Fixed<Class, CLASSES> = Fixed::new();
+        let mut classes: Fixed<Class<L>, CLASSES> = Fixed::new();
         for (slot, d) in controlled(s, player) {
             if exclude.contains(slot) {
                 continue;
@@ -424,7 +424,7 @@ impl Sources {
                 };
                 // Only permanents of one card are interchangeable when spending one: the
                 // payment sacrifices whichever comes first.
-                let same = |c: &Class| {
+                let same = |c: &Class<L>| {
                     c.consumed && c.members.iter().next().map(|m| s.card(m)) == Some(s.card(slot))
                 };
                 if let Some(i) = classes.iter().position(same) {
@@ -459,7 +459,7 @@ impl Sources {
         Ok(Sources { classes })
     }
 
-    fn classes(&self) -> &[Class] {
+    fn classes(&self) -> &[Class<L>] {
         self.classes.as_slice()
     }
 
@@ -486,7 +486,7 @@ impl Sources {
     }
 
     /// Whether the source in `slot` is tapped by a plan.
-    fn taps_slot(&self, tapped: &[u8; CLASSES], slot: Slot) -> bool {
+    fn taps_slot(&self, tapped: &[u8; CLASSES], slot: L::Slot) -> bool {
         self.classes()
             .iter()
             .zip(tapped)
@@ -500,7 +500,7 @@ pub(crate) fn available<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
-    exclude: Bitboard,
+    exclude: Bitboard<L::Slot>,
 ) -> Result<Units, Full> {
     let sources = Sources::of(s, t, player, exclude)?;
     Ok(sources.units(s.player(player).mana.amounts(), &[0; CLASSES]))
@@ -511,10 +511,10 @@ pub(crate) fn available<L: Layout>(
 /// depend on which others a check excludes, so [`Funds::pays`] answers as [`payable`] does,
 /// taking an excluded source's units back out of the whole.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct Funds {
+pub(crate) struct Funds<L: Layout = Small> {
     player: Seat,
     /// The sources' slots.
-    slots: Bitboard,
+    slots: Bitboard<L::Slot>,
     /// What the pool and all the sources make.
     units: Units,
     /// The same, grouped, for the checks that exclude none.
@@ -524,8 +524,8 @@ pub(crate) struct Funds {
 /// The most sources [`Funds`] holds, as many as a payment's [`Sources`] can.
 const MAX_SOURCES: usize = 128;
 
-impl Funds {
-    pub(crate) fn of<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Result<Funds, Full> {
+impl<L: Layout> Funds<L> {
+    pub(crate) fn of(s: &State<L>, t: &GameTable, player: Seat) -> Result<Funds<L>, Full> {
         let mut units = Units::NONE;
         for (k, &n) in s.player(player).mana.amounts().iter().enumerate() {
             units.add(1 << k, u16::from(n));
@@ -560,12 +560,12 @@ impl Funds {
 
     /// Whether the player can pay `cost` with none of `exclude`, as [`payable`]. `s` is the
     /// state the funds were found in.
-    pub(crate) fn pays<L: Layout>(
+    pub(crate) fn pays(
         &self,
         s: &State<L>,
         t: &GameTable,
         cost: ManaCost,
-        exclude: Bitboard,
+        exclude: Bitboard<L::Slot>,
     ) -> bool {
         debug_assert_eq!(cost.x, 0, "X is announced before payment");
         let excluded = exclude & self.slots;
@@ -582,7 +582,7 @@ impl Funds {
     }
 
     /// The untapped sources but those in `exclude`.
-    pub(crate) fn sources(&self, exclude: Bitboard) -> Bitboard {
+    pub(crate) fn sources(&self, exclude: Bitboard<L::Slot>) -> Bitboard<L::Slot> {
         self.slots & !exclude
     }
 }
@@ -593,7 +593,7 @@ pub(crate) fn payable<L: Layout>(
     t: &GameTable,
     player: Seat,
     cost: ManaCost,
-    exclude: Bitboard,
+    exclude: Bitboard<L::Slot>,
 ) -> Result<bool, Full> {
     Ok(available(s, t, player, exclude)?.pays(cost))
 }
@@ -610,10 +610,10 @@ pub(crate) struct Plan {
 /// Calls `f` with every plan that pays `cost` exactly with no source tapped in vain, in
 /// greedy order: the most floating mana first, then the least flexible sources. `f`
 /// returns false to stop.
-fn each_plan(
+fn each_plan<L: Layout>(
     cost: ManaCost,
     pool: [u8; KINDS],
-    sources: &Sources,
+    sources: &Sources<L>,
     f: &mut dyn FnMut(&Plan) -> bool,
 ) {
     let total = cost.total(0);
@@ -624,11 +624,11 @@ fn each_plan(
 /// The plan search: positions `0..KINDS` choose floating mana to spend, the rest how many
 /// sources of each class to tap. `must` counts the units that must be spent so far.
 #[allow(clippy::too_many_arguments)]
-fn walk(
+fn walk<L: Layout>(
     cost: ManaCost,
     total: u32,
     pool: [u8; KINDS],
-    sources: &Sources,
+    sources: &Sources<L>,
     position: usize,
     must: u32,
     plan: &mut Plan,
@@ -682,7 +682,7 @@ fn walk(
 
 /// How many units each tapped class spends under `plan`: all of a one-mana source's, and of
 /// the sources that make several, `need` spread over them, at least one each.
-fn spent_by_class(sources: &Sources, plan: &Plan, need: u32) -> [u32; CLASSES] {
+fn spent_by_class<L: Layout>(sources: &Sources<L>, plan: &Plan, need: u32) -> [u32; CLASSES] {
     let mut spent = [0; CLASSES];
     let mut rest = need;
     for (i, c) in sources.classes().iter().enumerate() {
@@ -706,11 +706,11 @@ fn spent_by_class(sources: &Sources, plan: &Plan, need: u32) -> [u32; CLASSES] {
 }
 
 /// Checks a plan's tap counts and floating spend: the result when they pay `cost` exactly.
-fn complete(
+fn complete<L: Layout>(
     cost: ManaCost,
     total: u32,
     pool: [u8; KINDS],
-    sources: &Sources,
+    sources: &Sources<L>,
     plan: &Plan,
 ) -> Option<Plan> {
     let classes = sources.classes();
@@ -759,7 +759,13 @@ fn complete(
 /// extra source only turns into floating mana, which tapping it later would make as well, so
 /// the plan is dominated (§10) and never offered or taken. The cube has no {C} symbol in a
 /// cost, so colorless mana left floating is never worth more than the source's own mana.
-fn wasteful(cost: ManaCost, total: u32, pool: [u8; KINDS], sources: &Sources, plan: &Plan) -> bool {
+fn wasteful<L: Layout>(
+    cost: ManaCost,
+    total: u32,
+    pool: [u8; KINDS],
+    sources: &Sources<L>,
+    plan: &Plan,
+) -> bool {
     (0..sources.classes().len()).any(|i| {
         plan.taps[i] > 0 && {
             let mut fewer = *plan;
@@ -780,7 +786,7 @@ fn wasteful(cost: ManaCost, total: u32, pool: [u8; KINDS], sources: &Sources, pl
 ///   empties at the end of each step and phase".
 /// - [CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a): "A player may activate
 ///   an activated mana ability whenever they have priority".
-fn floats_for_nothing(sources: &Sources, p: &Plan, q: &Plan) -> bool {
+fn floats_for_nothing<L: Layout>(sources: &Sources<L>, p: &Plan, q: &Plan) -> bool {
     if p == q
         || q.taps.iter().zip(&p.taps).any(|(a, b)| a > b)
         || q.left.iter().zip(&p.left).any(|(a, b)| a > b)
@@ -809,17 +815,17 @@ fn lowest_kind(kinds: u8) -> usize {
 /// A cost the player might want to pay later: a card's mana cost, or an ability's
 /// activation cost and the permanent it taps.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct Later {
+struct Later<L: Layout = Small> {
     cost: ManaCost,
     /// The permanent whose {T} the cost includes, or none.
-    taps: Option<Slot>,
+    taps: Option<L::Slot>,
 }
 
 /// The costs a payment should keep payable (§10): the mana costs of the player's cards in
 /// hand and the activation costs of their permanents' abilities, each once.
-fn later_costs<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Fixed<Later, 32> {
-    let mut later: Fixed<Later, 32> = Fixed::new();
-    let mut add = |l: Later| {
+fn later_costs<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Fixed<Later<L>, 32> {
+    let mut later: Fixed<Later<L>, 32> = Fixed::new();
+    let mut add = |l: Later<L>| {
         if !later.iter().any(|&x| x == l) {
             // Past capacity, the rest are not considered: a heuristic, not a rule.
             let _ = later.push(l);
@@ -866,7 +872,11 @@ fn later_costs<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Fixed<La
 /// auto-tapper keeps colors open: {U}{U} for Mana Drain rather than {1}{W} for Get Lost and
 /// {W} for Oust, of which the two lands left would cast only one anyway. A cost hungry for
 /// colors is the one a careless payment strands; a generic one is paid from whatever is left.
-fn still_payable(sources: &Sources, plan: &Plan, later: &[Later]) -> (u32, usize, u32) {
+fn still_payable<L: Layout>(
+    sources: &Sources<L>,
+    plan: &Plan,
+    later: &[Later<L>],
+) -> (u32, usize, u32) {
     let units = sources.units(plan.left, &plan.taps);
     let payable = later.iter().filter(|l| match l.taps {
         None => units.pays(l.cost),
@@ -899,10 +909,10 @@ fn still_payable(sources: &Sources, plan: &Plan, later: &[Later]) -> (u32, usize
 pub(crate) fn plans<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
     player: Seat,
     cost: ManaCost,
-    exclude: Bitboard,
+    exclude: Bitboard<L::Slot>,
     greedy: bool,
 ) -> Result<Fixed<Plan, 64>, Full> {
     sink.work.solver_runs += 1;
@@ -926,7 +936,7 @@ pub(crate) fn plans<L: Layout>(
     // Scores decide only between plans of one remainder and number sacrificed, and whether a
     // plan sacrificing more is dominated, so each is found when one of those first needs it:
     // a payment with one way to leave each remainder scores none.
-    let mut later: Option<Fixed<Later, 32>> = None;
+    let mut later: Option<Fixed<Later<L>, 32>> = None;
     let mut score = |p: &Plan| {
         let later = later.get_or_insert_with(|| later_costs(s, t, player));
         still_payable(&sources, p, later.as_slice())
@@ -1011,10 +1021,10 @@ pub(crate) fn plans<L: Layout>(
 pub(crate) fn pay<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
     player: Seat,
     cost: ManaCost,
-    exclude: Bitboard,
+    exclude: Bitboard<L::Slot>,
     plan: &Plan,
 ) -> Result<(), Full> {
     let sources = Sources::of(s, t, player, exclude)?;
@@ -1029,14 +1039,14 @@ pub(crate) fn pay<L: Layout>(
             .sum::<u32>();
     let spent = spent_by_class(&sources, plan, total - must);
     // The units spent: (kinds, source slot or none for floating mana, how many).
-    let mut units: Fixed<(u8, Option<Slot>, u8), 64> = Fixed::new();
+    let mut units: Fixed<(u8, Option<L::Slot>, u8), 64> = Fixed::new();
     for (k, &n) in plan.spend.iter().enumerate() {
         for _ in 0..n {
             units.push((1 << k, None, 1))?;
         }
     }
     for (i, c) in sources.classes().iter().enumerate() {
-        let tapped: Fixed<Slot, 64> = {
+        let tapped: Fixed<L::Slot, 64> = {
             let mut v = Fixed::new();
             for slot in c.members.iter().take(usize::from(plan.taps[i])) {
                 v.push(slot)?;
@@ -1073,11 +1083,11 @@ pub(crate) fn pay<L: Layout>(
 }
 
 /// One augmenting-path step of [`assign`]: finds a unit slot for symbol `sym`.
-fn augment(
+fn augment<S: SlotId>(
     sym: usize,
     symbols: &[usize],
     slots: &[usize],
-    units: &[(u8, Option<Slot>, u8)],
+    units: &[(u8, Option<S>, u8)],
     owner: &mut [Option<usize>],
     seen: &mut [bool; 64],
 ) -> bool {
@@ -1101,7 +1111,7 @@ fn augment(
 /// Assigns the colored and colorless symbols of `cost` to units, each unit `(kinds, _, n)`
 /// paying `n` symbols of one kind: the kind each unit is spent as, or `None` where it pays
 /// only generic mana. Kuhn's augmenting paths over the few symbols a cost has.
-fn assign(cost: ManaCost, units: &[(u8, Option<Slot>, u8)]) -> Fixed<Option<usize>, 64> {
+fn assign<S: SlotId>(cost: ManaCost, units: &[(u8, Option<S>, u8)]) -> Fixed<Option<usize>, 64> {
     let mut symbols: Fixed<usize, 64> = Fixed::new();
     for (k, &n) in cost.symbols.iter().enumerate() {
         for _ in 0..n {
@@ -1151,8 +1161,8 @@ fn assign(cost: ManaCost, units: &[(u8, Option<Slot>, u8)]) -> Fixed<Option<usiz
 pub(crate) fn activate<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
-    slot: Slot,
+    sink: &mut Sink<L>,
+    slot: L::Slot,
     color: ManaColor,
 ) -> Result<(), Full> {
     let o = *s.object(slot);
@@ -1216,11 +1226,11 @@ pub(crate) fn manual_options<L: Layout>(
     t: &GameTable,
     player: Seat,
     remaining: ManaCost,
-    exclude: Bitboard,
-) -> Result<Fixed<Opt, 64>, Full> {
+    exclude: Bitboard<L::Slot>,
+) -> Result<L::Queue<Opt<L>, 64>, Full> {
     let sources = Sources::of(s, t, player, exclude)?;
     let pool = s.player(player).mana.amounts();
-    let mut out = Fixed::new();
+    let mut out: L::Queue<Opt<L>, 64> = Default::default();
     for kind in 0..KINDS {
         if pool[kind] == 0 || !helps(remaining, kind) {
             continue;
@@ -1260,10 +1270,10 @@ pub(crate) fn manual_options<L: Layout>(
 pub(crate) fn manual_pay<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    sink: &mut Sink,
+    sink: &mut Sink<L>,
     player: Seat,
     mut remaining: ManaCost,
-    option: Opt,
+    option: Opt<L>,
 ) -> Result<ManaCost, Full> {
     let color = match option {
         Opt::Pool(color) => color,
@@ -1292,9 +1302,9 @@ pub(crate) fn standalone_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
-    out: &mut Fixed<Opt, 64>,
+    out: &mut L::Queue<Opt<L>, 64>,
 ) {
-    let sources: Bitboard = controlled(s, player)
+    let sources: Bitboard<L::Slot> = controlled(s, player)
         .filter(|&(slot, d)| source(s, t, player, slot, d).is_some())
         .map(|(slot, _)| slot)
         .collect();

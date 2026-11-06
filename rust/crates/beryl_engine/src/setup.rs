@@ -5,7 +5,7 @@
 
 use crate::card::FaceIx;
 use crate::fixed::Full;
-use crate::ids::{Seat, Slot};
+use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
 use crate::state::{CounterKind, MulliganStatus, ObjectFlags, Pending, State, TurnStep, Zone};
 use crate::zone;
@@ -54,7 +54,7 @@ impl<L: Layout> State<L> {
     /// Moves the object in `slot` to the top of `zone`. A permanent put onto the battlefield
     /// this way has been there since its controller's turn began, so it is not summoning sick
     /// ([CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026)).
-    pub fn place(&mut self, slot: Slot, zone: Zone) -> Result<(), Full> {
+    pub fn place(&mut self, slot: L::Slot, zone: Zone) -> Result<(), Full> {
         zone::move_to(self, slot, zone)?;
         if zone == Zone::Battlefield {
             self.object_mut(slot)
@@ -65,7 +65,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Sets how many counters of a kind a permanent has, such as a planeswalker's loyalty.
-    pub fn set_counters(&mut self, slot: Slot, kind: CounterKind, n: u8) {
+    pub fn set_counters(&mut self, slot: L::Slot, kind: CounterKind, n: u8) {
         debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
         *self.object_mut(slot).counters.get_mut(kind) = n;
     }
@@ -75,7 +75,7 @@ impl<L: Layout> State<L> {
     /// ([CR 712.14a](https://yawgatog.com/resources/magic-rules/#R71214a)), or turns a
     /// permanent face down ([`FaceIx::DOWN`]), as a manifested one is. Then only its
     /// controller knows it (CR 708.5).
-    pub fn set_face(&mut self, slot: Slot, face: FaceIx) {
+    pub fn set_face(&mut self, slot: L::Slot, face: FaceIx) {
         debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
         self.object_mut(slot).face = face;
         if face == FaceIx::DOWN {
@@ -86,7 +86,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Taps or untaps a permanent.
-    pub fn set_tapped(&mut self, slot: Slot, tapped: bool) {
+    pub fn set_tapped(&mut self, slot: L::Slot, tapped: bool) {
         debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
         self.object_mut(slot).flags.set(ObjectFlags::TAPPED, tapped);
     }
@@ -97,10 +97,10 @@ impl<L: Layout> State<L> {
 
     /// Puts a player's library in the given order, top first. `top_first` must hold exactly
     /// the slots of that library.
-    pub fn order_library(&mut self, player: Seat, top_first: &[Slot]) {
+    pub fn order_library(&mut self, player: Seat, top_first: &[L::Slot]) {
         let library = &mut self.zones.library[player.index()];
         assert_eq!(library.len(), top_first.len(), "not the whole library");
-        let distinct: crate::bitboard::Bitboard = top_first.iter().copied().collect();
+        let distinct: crate::bitboard::Bitboard<L::Slot> = top_first.iter().copied().collect();
         assert_eq!(distinct.count() as usize, top_first.len(), "a slot twice");
         for &slot in top_first {
             assert!(

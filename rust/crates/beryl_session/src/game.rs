@@ -10,11 +10,12 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use beryl_engine::event::Event;
+use beryl_engine::layout::Queue;
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::state::{Object, ObjectFlags, Pending, StackEntry, Turn};
+use beryl_engine::state::{ObjectFlags, Pending, StackEntry, Turn};
 use beryl_engine::{
     Ask, Candidates, CardTable, Choice, Decision, DecisionKind, GameTable, Large, Layout, Limits,
-    Observation, Opt, Outcome, Profile, Replay, Scratch, Seat, Slot, Small, StallReason, State,
+    Observation, Opt, Outcome, Profile, Relayout, Replay, Scratch, Seat, Small, StallReason, State,
     Step, StepStops, TurnStep, apply, next_in_step, observe, paused_events, view,
 };
 use beryl_search::{Budget, GameAgent};
@@ -96,25 +97,26 @@ pub struct Answer {
 }
 
 /// What the human must answer.
-// One lives in a game at a time; it is copied once per decision, never in a hot loop.
+// One lives in a game at a time; it is cloned once per decision, never in a hot loop.
 #[allow(clippy::large_enum_variant)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 enum Open {
-    /// The engine's decision.
-    Decision(Decision),
+    /// The engine's decision, in [`Large`] whatever the game's layout: the session keeps the
+    /// game's decisions, stacks and events so, and the slots keep their numbers in either.
+    Decision(Decision<Large>),
     /// A halt ([`Game::halts`]): the session stops the human where the engine passes their
     /// priority for them, and they go on with its one candidate.
     Halt,
 }
 
 /// Where a game stands between views.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 enum At {
     /// The game plays on from here without the human: before the first view, after an
     /// answer, or as a step begins.
     Playing,
     /// The agent makes this decision next.
-    Agent(Decision),
+    Agent(Decision<Large>),
     /// The human's open decision.
     Human(DecisionId, Open),
     /// The game is over; `conceded`, because the human conceded ([`Game::concede`]).
@@ -177,7 +179,7 @@ impl Boards {
             unreachable!("only a Small game is widened");
         };
         let mut scratch = Scratch::new();
-        scratch.events = std::mem::take(&mut b.scratch.events);
+        scratch.events = b.scratch.events.relayout();
         scratch.events.truncate(events);
         *self = Boards::Large(Box::new(Board {
             state: before.widen(),
@@ -203,12 +205,12 @@ impl Boards {
     }
 
     /// Plays on as [`next_in_step`] does, widening the game if it runs out of capacity.
-    fn next_in_step(&mut self, t: &GameTable, seen: (u16, TurnStep)) -> Option<Step> {
+    fn next_in_step(&mut self, t: &GameTable, seen: (u16, TurnStep)) -> Option<Step<Large>> {
         if let Boards::Small(b) = self {
             let (before, events) = (b.state, b.scratch.events.len());
             let step = next_in_step(&mut b.state, t, &mut b.scratch, &mut Replay, seen);
             if !ran_out(&b.state) {
-                return step;
+                return step.map(|s| s.relayout());
             }
             self.widen(&before, events);
         }
@@ -219,13 +221,13 @@ impl Boards {
     }
 
     /// What [`Boards::next_in_step`] would return, played on a copy.
-    fn ahead(&mut self, t: &GameTable, seen: (u16, TurnStep)) -> Option<Step> {
+    fn ahead(&mut self, t: &GameTable, seen: (u16, TurnStep)) -> Option<Step<Large>> {
         match self {
             Boards::Small(b) => {
                 let mut ahead = b.state;
                 let step = next_in_step(&mut ahead, t, &mut b.peek, &mut Replay, seen);
                 if !ran_out(&ahead) {
-                    return step;
+                    return step.map(|s| s.relayout());
                 }
                 let mut wide = b.state.widen();
                 next_in_step(&mut wide, t, &mut Scratch::new(), &mut Replay, seen)
@@ -256,36 +258,52 @@ impl Boards {
     }
 
     /// The events the engine recorded since the last drain.
-    fn drain_events(&mut self) -> Vec<Event> {
-        on_board!(self, b => b.scratch.events.drain().collect())
+    fn drain_events(&mut self) -> Vec<Event<Large>> {
+        on_board!(self, b => b.scratch.events.drain().map(|e| e.relayout()).collect())
     }
 
-    fn pending(&self) -> &Pending {
-        on_board!(self, b => b.state.pending())
+    /// Whether a spell is being cast or an ability activated or put on the stack, and if so
+    /// whether it is a triggered ability, putting its targets.
+    fn casting(&self) -> Option<bool> {
+        on_board!(self, b => match b.state.pending() {
+            Pending::Casting(c) => Some(c.triggered),
+            _ => None,
+        })
     }
 
-    fn stack(&self) -> &[StackEntry] {
-        on_board!(self, b => b.state.stack())
+    /// Whether a resolution is paused for an answer (§7.3).
+    fn resolving(&self) -> bool {
+        on_board!(self, b => matches!(b.state.pending(), Pending::Resolving(_)))
+    }
+
+    fn stack(&self) -> Vec<StackEntry<Large>> {
+        on_board!(self, b => b.state.stack().iter().map(Relayout::relayout).collect())
+    }
+
+    fn stack_is_empty(&self) -> bool {
+        on_board!(self, b => b.state.stack().is_empty())
     }
 
     fn turn(&self) -> &Turn {
         on_board!(self, b => b.state.turn())
     }
 
-    fn battlefield(&self) -> &[Slot] {
-        on_board!(self, b => b.state.battlefield())
+    /// Whether a creature is blocking.
+    fn any_blocking(&self) -> bool {
+        on_board!(self, b => b
+            .state
+            .battlefield()
+            .iter()
+            .any(|&slot| b.state.object(slot).flags.has(ObjectFlags::BLOCKING)))
     }
 
-    fn object(&self, slot: Slot) -> &Object {
-        on_board!(self, b => b.state.object(slot))
-    }
-
-    fn library(&self, player: Seat) -> &[Slot] {
-        on_board!(self, b => b.state.library(player))
-    }
-
-    fn knows(&self, player: Seat, slot: Slot) -> bool {
-        on_board!(self, b => b.state.knows(player, slot))
+    /// Whether `player` knows the top card of their library.
+    fn knows_top(&self, player: Seat) -> bool {
+        on_board!(self, b => b
+            .state
+            .library(player)
+            .last()
+            .is_some_and(|&slot| b.state.knows(player, slot)))
     }
 
     fn outcome(&self) -> Option<Outcome> {
@@ -306,7 +324,7 @@ impl Boards {
 struct BeforeCast {
     state: Snapshot,
     at: At,
-    answered: Option<Vec<StackEntry>>,
+    answered: Option<Vec<StackEntry<Large>>>,
     /// The length of the choice log then.
     log: usize,
     stops: StopsSetting,
@@ -330,17 +348,17 @@ pub struct Game {
     /// ([CR 500.2](https://yawgatog.com/resources/magic-rules/#R5002): "A phase or step in
     /// which players receive priority ends when the stack is empty and all players pass in
     /// succession").
-    answered: Option<Vec<StackEntry>>,
+    answered: Option<Vec<StackEntry<Large>>>,
     seq: u32,
     stops: StopsSetting,
     replay: ReplayFile,
     /// Set from another thread to stop the agent at its next decision.
     stop: Arc<AtomicBool>,
     /// The engine's events the latest view reported.
-    events: Vec<Event>,
+    events: Vec<Event<Large>>,
     /// The events of the paused resolution the latest view was in, which it reported: the
     /// body executes them again as it goes on (architecture §7.3).
-    paused: Vec<Event>,
+    paused: Vec<Event<Large>>,
     /// Where the human's cast in progress began, while it can be taken back.
     before_cast: Option<BeforeCast>,
     /// The coin flip's winner, who chooses who takes the first turn
@@ -483,7 +501,7 @@ impl Game {
             };
             // Live play's view here took the events so far.
             game.board.drain_events();
-            match (game.at, entry) {
+            match (game.at.clone(), entry) {
                 (At::Agent(d), Entry::Choice(c)) if usize::from(c) < d.len() => {
                     game.apply(entry);
                     game.at = At::Playing;
@@ -519,13 +537,13 @@ impl Game {
     /// the end was shown. With the stop flag set, the agent's next decision is not made: the
     /// game shows that it stopped.
     pub fn next_view(&mut self) -> Option<PlayerView> {
-        match self.at {
+        match &self.at {
             At::Human(..) | At::Over { .. } | At::Stopped => return None,
             At::Agent(_) if self.stop.load(Ordering::Relaxed) => self.at = At::Stopped,
             At::Agent(d) => {
                 let c = on_board!(&mut self.board, b => {
                     let obs = observe(&b.state, &self.table, &mut b.scratch, d.player);
-                    self.agent.choose(obs, &d)
+                    self.agent.choose(obs, &d.relayout())
                 });
                 self.apply(Entry::Choice(c.0));
                 self.at = At::Playing;
@@ -559,7 +577,7 @@ impl Game {
     /// "The remainder of the process for putting a triggered ability on the stack is
     /// identical to the process for casting a spell").
     fn casting(&self) -> bool {
-        matches!(self.board.pending(), Pending::Casting(c) if !c.triggered)
+        self.board.casting() == Some(false)
     }
 
     /// Takes back the spell the human is casting or the ability they are activating, before
@@ -608,7 +626,7 @@ impl Game {
 
     /// Applies an answer to the human's open decision; [`Game::next_view`] plays on from it.
     pub fn choose(&mut self, answer: Answer) {
-        let At::Human(id, open) = self.at else {
+        let At::Human(id, open) = self.at.clone() else {
             panic!("an answer is checked against the open decision");
         };
         debug_assert_eq!(id, answer.id, "an answer names the open decision");
@@ -617,7 +635,7 @@ impl Game {
                 // A cast or an activation from priority can be taken back until it is paid for.
                 let before = (d.kind == DecisionKind::Priority).then(|| BeforeCast {
                     state: self.board.snapshot(),
-                    at: self.at,
+                    at: self.at.clone(),
                     answered: self.answered.clone(),
                     log: self.replay.log.len(),
                     stops: self.stops,
@@ -629,7 +647,7 @@ impl Game {
             }
             Open::Halt => self.replay.log.push(Entry::Halt),
         }
-        self.answered = Some(self.board.stack().to_vec());
+        self.answered = Some(self.board.stack());
         self.at = At::Playing;
     }
 
@@ -637,13 +655,14 @@ impl Game {
     /// ([`Game::set_stand_in`]) and a decision is open; it goes on from a halt. Returns
     /// whether it answered.
     pub fn answer_by_stand_in(&mut self) -> bool {
-        let (At::Human(id, open), Some(stand_in)) = (self.at, self.stand_in.as_mut()) else {
+        let (At::Human(id, open), Some(stand_in)) = (self.at.clone(), self.stand_in.as_mut())
+        else {
             return false;
         };
-        let c = match open {
+        let c = match &open {
             Open::Decision(d) => on_board!(&mut self.board, b => {
                 let obs = observe(&b.state, &self.table, &mut b.scratch, self.human);
-                stand_in.choose(obs, &without_floating(d)).0
+                stand_in.choose(obs, &without_floating(d.relayout())).0
             }),
             Open::Halt => 0,
         };
@@ -727,7 +746,7 @@ impl Game {
     }
 
     /// The engine's events the latest view reported, for tests.
-    pub fn events(&self) -> &[Event] {
+    pub fn events(&self) -> &[Event<Large>] {
         &self.events
     }
 
@@ -738,7 +757,7 @@ impl Game {
         loop {
             let step = self.board.next_in_step(&self.table, self.seen);
             // Once a cast is complete, or another player decides, it can no longer be taken back.
-            if !matches!(step, Some(Step::Decide(d)) if d.player == self.human && self.casting()) {
+            if !matches!(&step, Some(Step::Decide(d)) if d.player == self.human && self.casting()) {
                 self.before_cast = None;
             }
             self.at = match step {
@@ -760,7 +779,7 @@ impl Game {
                 Some(Step::Decide(d)) if d.player == self.human => {
                     if let Some(c) = self.auto_answer(&d) {
                         self.apply(Entry::Auto(c.0));
-                        self.answered = Some(self.board.stack().to_vec());
+                        self.answered = Some(self.board.stack());
                         continue;
                     }
                     self.seq += 1;
@@ -784,7 +803,7 @@ impl Game {
     /// search shares, are unchanged, and exact stops ask every one. A function of the position,
     /// the stops and the human's answers, so a replay finds each again; the replay records
     /// each as an [`Entry::Auto`].
-    fn auto_answer(&self, d: &Decision) -> Option<Choice> {
+    fn auto_answer(&self, d: &Decision<Large>) -> Option<Choice> {
         if self.stops.full_control {
             return None;
         }
@@ -794,12 +813,12 @@ impl Game {
                 Some(Choice(0))
             }
             DecisionKind::TriggerOrder => Some(on_board!(&self.board, b => {
-                trigger_to_stack(&b.state, &self.table, d)
+                trigger_to_stack(&b.state, &self.table, &d.relayout())
             })),
-            DecisionKind::YesNo if self.searches_unasked(d) => (0..d.len() as u8)
+            DecisionKind::YesNo if self.searches_unasked(d) => (0..d.len() as u16)
                 .map(Choice)
                 .find(|&c| d.candidates.option(c) == Some(Opt::Yes)),
-            DecisionKind::Waterbend => (0..d.len() as u8)
+            DecisionKind::Waterbend => (0..d.len() as u16)
                 .map(Choice)
                 .find(|&c| d.candidates.option(c) == Some(Opt::Done)),
             _ => None,
@@ -817,13 +836,8 @@ impl Game {
     /// question only when it loses them the card they know they draw next, after a put-back
     /// or a scry to the top. Cards they know deeper down, as a London mulligan's on the
     /// bottom, are not worth a question each time they search.
-    fn searches_unasked(&self, d: &Decision) -> bool {
-        d.ask == Ask::MaySearch
-            && !self
-                .board
-                .library(self.human)
-                .last()
-                .is_some_and(|&slot| self.board.knows(self.human, slot))
+    fn searches_unasked(&self, d: &Decision<Large>) -> bool {
+        d.ask == Ask::MaySearch && !self.board.knows_top(self.human)
     }
 
     /// Whether the top of the stack is the human's own spell or ability and, since their
@@ -834,10 +848,10 @@ impl Game {
     fn own_top(&self) -> bool {
         let answered = self.answered.as_deref().unwrap_or_default();
         let now = self.board.stack();
-        let own = |e: &StackEntry| e.controller == self.human;
+        let own = |e: &StackEntry<Large>| e.controller == self.human;
         let kept = answered
             .iter()
-            .zip(now)
+            .zip(&now)
             .take_while(|(then, now)| then == now)
             .count();
         now.last().is_some_and(own)
@@ -856,7 +870,7 @@ impl Game {
     /// search shares, give it to both players whenever creatures attack. Like Arena, the
     /// session stops the human after the opponent's attack, and after blocks.
     fn quiet_combat(&self) -> bool {
-        if !self.board.stack().is_empty() {
+        if !self.board.stack_is_empty() {
             return false;
         }
         let turn = self.board.turn();
@@ -869,10 +883,7 @@ impl Game {
     }
 
     fn any_blocking(&self) -> bool {
-        self.board
-            .battlefield()
-            .iter()
-            .any(|&slot| self.board.object(slot).flags.has(ObjectFlags::BLOCKING))
+        self.board.any_blocking()
     }
 
     /// Whether the human is halted as the step that just began, a session-level stop the
@@ -934,8 +945,12 @@ impl Game {
         {
             fresh.drain(at..at + seen);
         }
-        let paused =
-            on_board!(&mut self.board, b => paused_events(&b.state, &self.table, &mut b.scratch));
+        let paused: Vec<Event<Large>> = on_board!(&mut self.board, b => {
+            paused_events(&b.state, &self.table, &mut b.scratch)
+                .iter()
+                .map(Relayout::relayout)
+                .collect()
+        });
         fresh.extend_from_slice(
             paused
                 .strip_prefix(self.paused.as_slice())
@@ -950,24 +965,35 @@ impl Game {
     fn draw(&mut self) -> PlayerView {
         // A paused resolution's entry is still on top of the committed stack; the position
         // replayed to its question has taken it off.
-        let resolving = matches!(self.board.pending(), Pending::Resolving(_))
-            .then(|| self.board.stack().last().copied())
+        let resolving = self
+            .board
+            .resolving()
+            .then(|| self.board.stack().pop())
             .flatten();
-        let moment = match &self.at {
-            At::Playing => Moment::Playing,
-            At::Agent(_) => Moment::Thinking,
-            At::Human(id, Open::Decision(d)) => Moment::Deciding(*id, d, resolving.as_ref()),
-            At::Human(id, Open::Halt) => Moment::Halted(*id),
-            At::Over { outcome, conceded } => Moment::Over {
-                outcome: *outcome,
-                conceded: *conceded,
-            },
-            At::Stopped => Moment::Stopped,
-        };
         let mut view = on_board!(&mut self.board, b => {
+            // The session's decision, stack entry and events, in the game's layout.
+            let decision = match &self.at {
+                At::Human(_, Open::Decision(d)) => Some(d.relayout()),
+                _ => None,
+            };
+            let resolving = resolving.as_ref().map(Relayout::relayout);
+            let events: Vec<_> = self.events.iter().map(Relayout::relayout).collect();
+            let moment = match (&self.at, &decision) {
+                (At::Playing, _) => Moment::Playing,
+                (At::Agent(_), _) => Moment::Thinking,
+                (At::Human(id, Open::Decision(_)), Some(d)) => {
+                    Moment::Deciding(*id, d, resolving.as_ref())
+                }
+                (At::Human(id, _), _) => Moment::Halted(*id),
+                (At::Over { outcome, conceded }, _) => Moment::Over {
+                    outcome: *outcome,
+                    conceded: *conceded,
+                },
+                (At::Stopped, _) => Moment::Stopped,
+            };
             let obs = Observation::new(view(&b.state, &self.table, &mut b.scratch), self.human);
-            let mut view = player_view(&self.table, obs, moment, self.stops, &self.events);
-            if let At::Human(_, Open::Decision(d)) = &self.at {
+            let mut view = player_view(&self.table, obs, moment, self.stops, &events);
+            if let Some(d) = &decision {
                 preview::add_previews(&mut view, &b.state, &self.table, d);
             }
             view
@@ -1012,12 +1038,12 @@ fn new_agent(
 ///    made seeing everything the others did;
 ///
 /// and, within each group, in the order they triggered.
-fn trigger_to_stack<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision) -> Choice {
-    let resolves_late = |opt: Opt| {
+fn trigger_to_stack<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Choice {
+    let resolves_late = |opt: Opt<L>| {
         let Opt::Trigger(i) = opt else {
             unreachable!("a trigger-order decision offers only triggers");
         };
-        let tr = &s.triggers()[usize::from(i)];
+        let tr = &s.triggers()[Into::<usize>::into(i)];
         let ability = &t.def(tr.card).face(tr.face).abilities[usize::from(tr.ability)];
         let group = if ability.may_pause {
             2
@@ -1034,14 +1060,14 @@ fn trigger_to_stack<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision) -> Cho
         .enumerate()
         .max_by_key(|&(_, &opt)| resolves_late(opt))
         .expect("a decision has a candidate");
-    Choice(u8::try_from(last).expect("at most 64 candidates"))
+    Choice(u16::try_from(last).expect("a choice names its candidate"))
 }
 
 /// `d` without the mana activations a priority offers the human on their own
 /// ([`Profile::taps_mana`]), for an agent standing in for them: tapping ahead of a payment is
 /// dominated by tapping during it (architecture §10), and search never sees them. The engine
 /// lists them last, so every other candidate keeps its index.
-fn without_floating(mut d: Decision) -> Decision {
+fn without_floating<L: Layout>(mut d: Decision<L>) -> Decision<L> {
     if let (DecisionKind::Priority, Candidates::Options(list)) = (d.kind, &mut d.candidates) {
         let kept = list
             .iter()
