@@ -156,10 +156,18 @@ export function usePlayback(): {
 } {
   const [state, dispatch] = useReducer(reduce, INITIAL);
   useEffect(() => {
-    const unlisten = onGameUpdate((update, past) =>
-      dispatch({ kind: "arrive", update, past, now: Date.now() }),
-    );
-    return () => void unlisten.then((stop) => stop());
+    // Stopping waits for the listener to start, and updates can reach it first (a fixture's
+    // history, or a live update meanwhile): once cleaned up, it drops them, or a remount
+    // (StrictMode's) would log every one twice.
+    let listening = true;
+    const unlisten = onGameUpdate((update, past) => {
+      if (listening)
+        dispatch({ kind: "arrive", update, past, now: Date.now() });
+    });
+    return () => {
+      listening = false;
+      void unlisten.then((stop) => stop());
+    };
   }, []);
   // The next queued view takes over once the one shown has had its time.
   const { queue, until, shown } = state;

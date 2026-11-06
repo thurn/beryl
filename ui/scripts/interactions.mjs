@@ -626,6 +626,22 @@ await check(
     },
 );
 
+// A fixture's history reaches the log once, however often the screen starts listening (React's
+// StrictMode mounts it twice), so no turn's heading comes twice.
+await check(
+    "the log tells a fixture's history once",
+    async (page) => {
+        const turns = await page.locator(".game-log-turn").allTextContents();
+        assert.ok(turns.length > 0, "the log heads its turns");
+        assert.deepEqual(
+            turns,
+            [...new Set(turns)],
+            `each turn is headed once: ${await page.locator(".game-log").textContent()}`,
+        );
+    },
+    { fixture: "opponent-turn", at: 22, ready: ".game-log-entry" },
+);
+
 /** Asserts that no permanent on the table covers a land: a long row of permanents may pass
  * over the land piles' side of the table, but in a row of its own. */
 async function assertClearOfLands(page) {
