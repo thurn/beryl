@@ -16,6 +16,9 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::rung_name;
+use super::standings::Standings;
+
 /// A run's settings, fixed when it starts.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Config {
@@ -73,21 +76,34 @@ pub enum Against {
 }
 
 /// A rung and who it plays.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Matchup {
     pub rung: usize,
     pub against: Against,
 }
 
-/// What the schedule needs to know of a matchup's finished games.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Tally {
-    /// Games finished, crashed ones included: a crashed game is not replayed.
-    pub games: u32,
-    /// Of the games of the first pairs that did not crash, how many there are and the
-    /// rung's score in them, a draw or a stall counting half.
-    pub first_scored: u32,
-    pub first_score: f64,
+impl Matchup {
+    /// The matchup's sides, as every view names them: the rung's agent (`3k`, `omniscient
+    /// 3k`) and who it plays (`expert-frozen`, `1k`).
+    pub fn sides(&self, c: &Config) -> (String, String) {
+        let r = rung_name(c.iterations(self.rung));
+        match self.against {
+            Against::Opponent => (r, c.opponent.clone()),
+            Against::Omniscient => (format!("omniscient {r}"), c.opponent.clone()),
+            Against::Below => (r, rung_name(c.iterations(self.rung - 1))),
+        }
+    }
+
+    /// The matchup's name: `3k v expert-frozen`.
+    pub fn label(&self, c: &Config) -> String {
+        let (a, b) = self.sides(c);
+        format!("{a} v {b}")
+    }
+
+    /// The prefix of its games' keys: `3k-v-expert-frozen`.
+    pub fn key(&self, c: &Config) -> String {
+        self.label(c).replace(' ', "-")
+    }
 }
 
 /// The share of the first pairs' games a rung must score against the opponent to play the
@@ -95,11 +111,11 @@ pub struct Tally {
 pub const CHAIN_AT: f64 = 0.85;
 
 /// The matchup whose next game the ladder plays.
-pub fn next(c: &Config, tally: impl Fn(Matchup) -> Tally) -> Matchup {
+pub fn next(c: &Config, s: &Standings) -> Matchup {
     let pair = 2 * c.pairs;
-    let games = |rung, against| tally(Matchup { rung, against }).games;
+    let games = |rung, against| s.get(Matchup { rung, against }).games;
     // A matchup finishes the pair it began.
-    for rung in 0..=top(c, &tally) {
+    for rung in 0..=top(c, s) {
         for against in [Against::Opponent, Against::Omniscient, Against::Below] {
             if games(rung, against) % 2 == 1 {
                 return Matchup { rung, against };
@@ -107,14 +123,14 @@ pub fn next(c: &Config, tally: impl Fn(Matchup) -> Tally) -> Matchup {
         }
     }
     let chains = |rung: usize| {
-        let t = tally(Matchup {
+        let t = s.get(Matchup {
             rung,
             against: Against::Opponent,
         });
         rung > 0
             && t.games >= pair
-            && t.first_scored > 0
-            && t.first_score >= CHAIN_AT * f64::from(t.first_scored)
+            && t.first.scored() > 0
+            && t.first.points() >= CHAIN_AT * f64::from(t.first.scored())
     };
     // What a rung plays on its turn: whichever of its matchups has played least, the
     // opponent first among equals.
@@ -138,7 +154,7 @@ pub fn next(c: &Config, tally: impl Fn(Matchup) -> Tally) -> Matchup {
             return m;
         }
     }
-    let top = top(c, &tally);
+    let top = top(c, s);
     if top == c.cheap {
         return Matchup {
             rung: top,
@@ -165,9 +181,9 @@ pub fn next(c: &Config, tally: impl Fn(Matchup) -> Tally) -> Matchup {
 
 /// The newest open rung: the lowest above the cheap ones short of its pairs against the
 /// opponent, or the cheap ones' last while they play.
-fn top(c: &Config, tally: &impl Fn(Matchup) -> Tally) -> usize {
+fn top(c: &Config, s: &Standings) -> usize {
     let done = |rung| {
-        tally(Matchup {
+        s.get(Matchup {
             rung,
             against: Against::Opponent,
         })
@@ -186,23 +202,18 @@ fn top(c: &Config, tally: &impl Fn(Matchup) -> Tally) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use super::*;
+    use crate::longthink::{GameRecord, Verdict};
 
-    /// Plays `games` games of the schedule, the rung's agent scoring `score(rung, against)`
-    /// in each, and returns the matchups in the order played, as `(rung, against)`.
-    fn play(c: &Config, games: usize, score: impl Fn(usize, Against) -> f64) -> Vec<Matchup> {
-        let mut tallies: HashMap<Matchup, Tally> = HashMap::new();
+    /// Plays `games` games of the schedule, game `g` of matchup `m` ending
+    /// `outcome(m, g)` for the rung's agent, and returns the matchups in the order played.
+    fn play(c: &Config, games: usize, outcome: impl Fn(Matchup, u32) -> Verdict) -> Vec<Matchup> {
+        let mut s = Standings::default();
         let mut played = Vec::new();
         for _ in 0..games {
-            let m = next(c, |m| tallies.get(&m).copied().unwrap_or_default());
-            let t = tallies.entry(m).or_default();
-            if t.games < 2 * c.pairs {
-                t.first_scored += 1;
-                t.first_score += score(m.rung, m.against);
-            }
-            t.games += 1;
+            let m = next(c, &s);
+            let g = s.get(m).games;
+            s.record(c, &GameRecord::example(m, g, outcome(m, g)), None);
             played.push(m);
         }
         played
@@ -249,7 +260,7 @@ mod tests {
     /// through the opponent and the omniscient diagnostic.
     #[test]
     fn cheap_rungs_first_then_new_rungs_alternate_with_the_one_below() {
-        let played = play(&config(), 32, |_, _| 0.5);
+        let played = play(&config(), 32, |_, _| Verdict::Draw);
         assert_eq!(
             pairs(&played),
             "0o 0o 1o 1o 2o 2o 2s 3o 2s 3o 3s 4o 3s 4o 4s 5o"
@@ -257,12 +268,18 @@ mod tests {
     }
 
     /// A rung that scores 85% over its first pairs against the opponent also plays the
-    /// rung below it; one that scores less never does.
+    /// rung below it; one that scores less, here 75%, never does.
     #[test]
     fn a_rung_that_beats_the_opponent_plays_the_rung_below() {
-        let played = play(&config(), 24, |rung, _| if rung == 1 { 0.9 } else { 0.8 });
+        let played = play(&config(), 24, |m, g| {
+            if m.rung == 1 || g % 4 != 3 {
+                Verdict::Win
+            } else {
+                Verdict::Loss
+            }
+        });
         assert_eq!(pairs(&played), "0o 0o 1o 1o 1b 1b 2o 2o 2s 3o 2s 3o");
-        let strong = play(&config(), 24, |_, _| 1.0);
+        let strong = play(&config(), 24, |_, _| Verdict::Win);
         assert_eq!(pairs(&strong), "0o 0o 1o 1o 1b 1b 2o 2o 2s 3o 2b 3o");
     }
 
@@ -271,21 +288,12 @@ mod tests {
     #[test]
     fn a_pair_begun_is_finished_first() {
         let c = config();
-        let half = |m: Matchup| Tally {
-            games: u32::from(
-                m == Matchup {
-                    rung: 1,
-                    against: Against::Opponent,
-                },
-            ),
-            ..Tally::default()
+        let m = Matchup {
+            rung: 1,
+            against: Against::Opponent,
         };
-        assert_eq!(
-            next(&c, half),
-            Matchup {
-                rung: 1,
-                against: Against::Opponent
-            }
-        );
+        let mut half = Standings::default();
+        half.record(&c, &GameRecord::example(m, 0, Verdict::Win), None);
+        assert_eq!(next(&c, &half), m);
     }
 }

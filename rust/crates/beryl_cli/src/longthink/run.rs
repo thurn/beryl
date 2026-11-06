@@ -12,7 +12,8 @@ use serde::{Deserialize, Serialize};
 
 use super::files::{self, Log};
 use super::game::{self, Game, Line, Played};
-use super::schedule::{self, Config, Matchup, Tally};
+use super::schedule::{self, Config};
+use super::standings::Standings;
 use super::term::Display;
 use super::{ClockRecord, DecisionRecord, GameRecord, Spec, Verdict, summary};
 use crate::game::mirror;
@@ -43,7 +44,9 @@ pub fn run(dir: &Path, total: Option<u32>) -> Result<(), String> {
     // A stop between a game's commit and the summary's rewrite leaves it behind.
     write_summary(dir, &c, &games)?;
     record_panics();
-    let out = Display::start(&run_name(dir), &c, &games, clock(dir)?)?;
+    let clock = clock(dir)?;
+    let mut standings = Standings::new(&c, &games, &clock);
+    let out = Display::start(&run_name(dir), &c, &games, clock)?;
     // A fault injected for the supervisor's tests: panic at decision N of game K, "K@N".
     let inject: Option<(String, usize)> =
         std::env::var("BERYL_LONGTHINK_PANIC").ok().and_then(|v| {
@@ -54,8 +57,8 @@ pub fn run(dir: &Path, total: Option<u32>) -> Result<(), String> {
         fs::create_dir_all(dir.join(sub)).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
     while total.is_none_or(|n| games.len() < n as usize) && !out.stopping() {
-        let m = schedule::next(&c, |m| tally(&c, &games, m));
-        let spec = Spec::new(&c, m.rung, m.against, played(&games, m));
+        let m = schedule::next(&c, &standings);
+        let spec = Spec::new(&c, m, standings.get(m).games);
         let path = dir.join("logs").join(format!("{}.jsonl", spec.key));
         files::repair(&path)?;
         let logged: Vec<Line> = files::read(&path)?;
@@ -97,6 +100,7 @@ pub fn run(dir: &Path, total: Option<u32>) -> Result<(), String> {
         };
         Log::open(&dir.join("games.jsonl"))?.append(&record)?;
         out.finished(&record, seconds);
+        standings.record(&c, &record, seconds);
         games.push(record);
         write_summary(dir, &c, &games)?;
     }
@@ -150,34 +154,6 @@ fn recover(dir: &Path) -> Result<Vec<GameRecord>, String> {
     Ok(games)
 }
 
-/// How many games matchup `m` has finished.
-pub fn played(games: &[GameRecord], m: Matchup) -> u32 {
-    games
-        .iter()
-        .filter(|g| (g.rung, g.against) == (m.rung, m.against))
-        .count() as u32
-}
-
-/// What the schedule needs of matchup `m`'s finished games.
-pub fn tally(c: &Config, games: &[GameRecord], m: Matchup) -> Tally {
-    let mut t = Tally::default();
-    for g in games
-        .iter()
-        .filter(|g| (g.rung, g.against) == (m.rung, m.against))
-    {
-        t.games += 1;
-        if g.pair < c.pairs && g.outcome != Verdict::Crashed {
-            t.first_scored += 1;
-            t.first_score += match g.outcome {
-                Verdict::Win => 1.0,
-                Verdict::Draw | Verdict::Stalled => 0.5,
-                Verdict::Loss | Verdict::Crashed => 0.0,
-            };
-        }
-    }
-    t
-}
-
 /// Records where the runner was when it panics, before the panic ends it.
 fn record_panics() {
     let default = std::panic::take_hook();
@@ -216,11 +192,10 @@ fn crashed(spec: &Spec, logged: &[Line], at: usize) -> GameRecord {
     let searches = || logged.iter().filter_map(|l| l.search.as_ref());
     GameRecord {
         game: spec.key.clone(),
-        rung: spec.rung,
+        matchup: spec.matchup,
         iterations: spec.entrants[usize::from(spec.seat)]
             .budget
             .map_or(0, |b| b.iterations),
-        against: spec.against,
         pair: spec.pair,
         seed: spec.seed,
         seat: spec.seat,
@@ -292,9 +267,8 @@ fn commit(dir: &Path, spec: &Spec, played: &Played) -> Result<GameRecord, String
     let rung = &spec.entrants[usize::from(spec.seat)];
     Ok(GameRecord {
         game: spec.key.clone(),
-        rung: spec.rung,
+        matchup: spec.matchup,
         iterations: rung.budget.map_or(0, |b| b.iterations),
-        against: spec.against,
         pair: spec.pair,
         seed: spec.seed,
         seat: spec.seat,

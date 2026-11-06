@@ -24,7 +24,7 @@ use beryl_engine::{Decision, State, Zone};
 use super::game::Line;
 use super::panel::{self, Frame, Now};
 use super::schedule::{Config, Matchup};
-use super::{GameRecord, Spec, Verdict, matchup_label};
+use super::{GameRecord, Spec, Verdict};
 
 /// Shows the cursor.
 pub const SHOW: &str = "\x1b[?25h";
@@ -349,19 +349,11 @@ impl Display {
     /// Game `spec` begins, with `logged` decisions already made.
     pub fn begin(&self, spec: &Spec, logged: usize) {
         let mut b = self.shared.board();
-        let matchup = Matchup {
-            rung: spec.rung,
-            against: spec.against,
-        };
-        let label = matchup_label(&b.config, spec.rung, spec.against);
+        let matchup = spec.matchup;
+        let label = matchup.label(&b.config);
         let seat = if spec.seat == 0 { 'A' } else { 'B' };
         let mut lines = Vec::new();
-        if !b
-            .games
-            .iter()
-            .any(|g| (g.rung, g.against) == (spec.rung, spec.against))
-            && logged == 0
-        {
+        if !b.games.iter().any(|g| g.matchup == matchup) && logged == 0 {
             lines.push(format!("▸ {label} opens"));
         }
         if logged > 0 {
@@ -426,13 +418,8 @@ impl Display {
         b.games.push(g.clone());
         b.playing = None;
         let target = 2 * b.config.pairs;
-        let done = b
-            .games
-            .iter()
-            .filter(|x| (x.rung, x.against) == (g.rung, g.against))
-            .count()
-            == target as usize;
-        let label = matchup_label(&b.config, g.rung, g.against);
+        let done = b.games.iter().filter(|x| x.matchup == g.matchup).count() == target as usize;
+        let label = g.matchup.label(&b.config);
         // Plain output has no panel: a table every 10 games stands for it.
         let table = (!self.shared.live && b.games.len().is_multiple_of(10)).then(|| {
             let (rows, climb) = panel::ladder(&b.config, &b.games, &b.seconds, None);
@@ -502,9 +489,11 @@ mod tests {
     fn game(rung: usize, n: u32, outcome: Verdict) -> GameRecord {
         GameRecord {
             game: format!("{rung}-{n}"),
-            rung,
+            matchup: Matchup {
+                rung,
+                against: Against::Opponent,
+            },
             iterations: 0,
-            against: Against::Opponent,
             pair: n / 2,
             seed: 0,
             seat: (n % 2) as u8,

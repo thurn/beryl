@@ -4,16 +4,17 @@
 //! logged, and a sample of the cheapest rung's fresh searches, searched again at their
 //! budgets and seeds, must choose as they did.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::Path;
 
 use beryl_engine::GameTable;
 
+use super::files;
 use super::game::{self, Build, Game, Line, Played, Stop};
 use super::schedule::{self, Config};
+use super::standings::Standings;
 use super::{GameRecord, Spec, Verdict};
-use super::{files, run};
 use crate::game::mirror;
 
 /// Searches re-searched at most.
@@ -55,8 +56,9 @@ pub fn verify(t: &GameTable, dir: &Path, c: &Config, build: &Build<'_>) -> Resul
         }
     }
     // The game being played, as far as it has gone.
-    let m = schedule::next(c, |m| run::tally(c, &games, m));
-    let next = Spec::new(c, m.rung, m.against, run::played(&games, m));
+    let standings = Standings::new(c, &games, &HashMap::new());
+    let m = schedule::next(c, &standings);
+    let next = Spec::new(c, m, standings.get(m).games);
     let lines = check.log(&next.key)?;
     if !lines.is_empty() {
         check.replay(&next, &lines, [u32::MAX; 2], Some(lines.len()))?;
@@ -64,9 +66,9 @@ pub fn verify(t: &GameTable, dir: &Path, c: &Config, build: &Build<'_>) -> Resul
     // Searches of the cheapest rung, evenly spaced, each searched again: one that reused
     // the trees of the decisions before it from the fresh search that planted them, so a
     // change to how trees are kept is caught too.
-    let cheapest = scored().map(|g| g.rung).min();
+    let cheapest = scored().map(|g| g.matchup.rung).min();
     let mut searches = Vec::new();
-    for g in scored().filter(|g| Some(g.rung) == cheapest) {
+    for g in scored().filter(|g| Some(g.matchup.rung) == cheapest) {
         for (i, line) in check.log(&g.game)?.iter().enumerate() {
             if let Some(s) = &line.search {
                 searches.push((g, i, usize::from(line.seat), s.chain));
@@ -107,7 +109,7 @@ impl Check<'_> {
 
     /// The finished game `g`, as this code names it.
     fn spec(&self, g: &GameRecord) -> Result<Spec, String> {
-        let spec = Spec::new(self.c, g.rung, g.against, 2 * g.pair + u32::from(g.seat));
+        let spec = Spec::new(self.c, g.matchup, 2 * g.pair + u32::from(g.seat));
         if spec.key == g.game {
             Ok(spec)
         } else {
@@ -217,7 +219,7 @@ mod tests {
             seed: 0,
         };
         super::super::start(&dir, &c, None).unwrap();
-        run::run(&dir, Some(2)).unwrap();
+        super::super::run::run(&dir, Some(2)).unwrap();
         (dir, c)
     }
 

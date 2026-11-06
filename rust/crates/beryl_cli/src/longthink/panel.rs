@@ -8,12 +8,12 @@
 //!   played; then Elo per tripling of the budget and the last 10 results;
 //! - now: the game being played and the decision being searched.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::fmt::Write;
 
 use super::schedule::{Against, Config, Matchup};
-use super::summary::elo;
-use super::{GameRecord, Verdict, matchup_label, rung_name};
+use super::standings::{Standing, Standings, climb_text};
+use super::{GameRecord, Verdict, rung_name};
 use crate::tournament::wilson;
 
 /// What a frame shows.
@@ -78,66 +78,40 @@ pub fn ladder(
     seconds: &HashMap<String, f64>,
     playing: Option<Matchup>,
 ) -> (Vec<Row>, Option<(f64, f64)>) {
-    #[derive(Default)]
-    struct Tally {
-        games: u32,
-        scored: u32,
-        score: f64,
-        clocked: u32,
-        seconds: f64,
+    let standings = Standings::new(c, games, seconds);
+    let mut shown: Vec<(Matchup, Standing)> = standings.iter().map(|(m, s)| (m, *s)).collect();
+    if let Some(m) = playing.filter(|&m| standings.get(m).games == 0) {
+        shown.push((m, Standing::default()));
+        shown.sort_by_key(|&(m, _)| m);
     }
-    let mut tallies: BTreeMap<Matchup, Tally> = BTreeMap::new();
-    for g in games {
-        let t = tallies
-            .entry(Matchup {
-                rung: g.rung,
-                against: g.against,
-            })
-            .or_default();
-        t.games += 1;
-        let points = match g.outcome {
-            Verdict::Win => Some(1.0),
-            Verdict::Draw | Verdict::Stalled => Some(0.5),
-            Verdict::Loss => Some(0.0),
-            Verdict::Crashed => None,
-        };
-        if let Some(p) = points {
-            t.scored += 1;
-            t.score += p;
-        }
-        if let Some(s) = seconds.get(&g.game) {
-            t.clocked += 1;
-            t.seconds += s;
-        }
-    }
-    if let Some(m) = playing {
-        tallies.entry(m).or_default();
-    }
-    let next = tallies.keys().map(|m| m.rung + 1).max().unwrap_or(0);
+    let next = shown.iter().map(|(m, _)| m.rung + 1).max().unwrap_or(0);
     let next = Matchup {
         rung: next,
         against: Against::Opponent,
     };
     let target = 2 * c.pairs;
-    let mut rows: Vec<Row> = tallies
+    let mut rows: Vec<Row> = shown
         .iter()
-        .map(|(&m, t)| {
-            let (name, vs) = names(c, m);
+        .map(|&(m, s)| {
+            let (name, vs) = m.sides(c);
+            let n = s.score.scored();
             Row {
                 rung: m.rung,
                 name,
                 vs,
-                score: (t.scored > 0)
-                    .then(|| (t.score / f64::from(t.scored), wilson(t.score, t.scored))),
-                games: t.games,
+                score: (n > 0).then(|| {
+                    let points = s.score.points();
+                    (points / f64::from(n), wilson(points, n))
+                }),
+                games: s.games,
                 target,
-                seconds: (t.clocked > 0).then(|| t.seconds / f64::from(t.clocked)),
+                seconds: s.mean_seconds(),
                 playing: playing == Some(m),
                 opened: true,
             }
         })
         .collect();
-    let (name, vs) = names(c, next);
+    let (name, vs) = next.sides(c);
     rows.push(Row {
         rung: next.rung,
         name,
@@ -149,57 +123,7 @@ pub fn ladder(
         playing: false,
         opened: false,
     });
-    let points: Vec<(f64, f64, f64)> = tallies
-        .iter()
-        .filter(|(m, t)| m.against == Against::Opponent && t.scored > 0)
-        .map(|(m, t)| {
-            let n = f64::from(t.scored);
-            let p = (t.score / n).clamp(0.5 / n, 1.0 - 0.5 / n);
-            // The delta method: Elo is 400 log10(p / (1 - p)), p's variance p(1 - p) / n.
-            let se = 400.0 / (std::f64::consts::LN_10 * (n * p * (1.0 - p)).sqrt());
-            (
-                f64::from(c.iterations(m.rung)).log(3.0),
-                elo(t.score, t.scored),
-                se,
-            )
-        })
-        .collect();
-    (rows, climb(&points))
-}
-
-/// A matchup's row names: the rung, the omniscient search marked, and who it plays.
-fn names(c: &Config, m: Matchup) -> (String, String) {
-    let r = rung_name(c.iterations(m.rung));
-    match m.against {
-        Against::Opponent => (r, c.opponent.clone()),
-        Against::Omniscient => (format!("{r} omni"), c.opponent.clone()),
-        Against::Below => (r, rung_name(c.iterations(m.rung - 1))),
-    }
-}
-
-/// The weighted least-squares slope of Elo against triplings of the budget, and its 95%
-/// margin, from (triplings, Elo, standard error) points; none from fewer than two budgets.
-fn climb(points: &[(f64, f64, f64)]) -> Option<(f64, f64)> {
-    let w: Vec<f64> = points.iter().map(|&(_, _, se)| 1.0 / (se * se)).collect();
-    let total: f64 = w.iter().sum();
-    let mean = |f: fn(&(f64, f64, f64)) -> f64| {
-        points.iter().zip(&w).map(|(p, w)| w * f(p)).sum::<f64>() / total
-    };
-    let (x, y) = (mean(|p| p.0), mean(|p| p.1));
-    let sxx: f64 = points
-        .iter()
-        .zip(&w)
-        .map(|(p, w)| w * (p.0 - x).powi(2))
-        .sum();
-    if points.len() < 2 || sxx <= 0.0 {
-        return None;
-    }
-    let sxy: f64 = points
-        .iter()
-        .zip(&w)
-        .map(|(p, w)| w * (p.0 - x) * (p.1 - y))
-        .sum();
-    Some((sxy / sxx, 1.96 / sxx.sqrt()))
+    (rows, standings.climb(c))
 }
 
 /// SGR codes.
@@ -228,11 +152,8 @@ pub fn render(f: &Frame, width: usize, height: usize, color: bool) -> Vec<String
     let (rows, columns) = rows(f, color);
     let mut tail = Vec::new();
     let mut trend = Vec::new();
-    if let Some((slope, margin)) = f.climb {
-        // Rounded first, so that a slope a hair below zero reads +0, not -0; adding zero
-        // turns the -0 rounding leaves into 0.
-        let slope = slope.round() + 0.0;
-        trend.push(format!("Elo/×3  {slope:+.0} ±{margin:.0}"));
+    if let Some(climb) = f.climb {
+        trend.push(format!("Elo/×3  {}", climb_text(climb)));
     }
     if !f.last.is_empty() {
         let dots: String = f.last.iter().map(|&v| dot(v, color)).collect();
@@ -387,7 +308,7 @@ pub fn game_line(c: &Config, g: &GameRecord, seconds: Option<f64>, color: bool) 
     let mut line = format!(
         "{} {}  s{}·{seat}  {word:<4}",
         paint(color, code, glyph),
-        matchup_label(c, g.rung, g.against),
+        g.matchup.label(c),
         g.pair,
     );
     match g.crashed_at {
@@ -518,9 +439,11 @@ mod tests {
             clock.insert(key.clone(), seconds);
             out.push(GameRecord {
                 game: key,
-                rung,
+                matchup: Matchup {
+                    rung,
+                    against: Against::Opponent,
+                },
                 iterations: config().iterations(rung),
-                against: Against::Opponent,
                 pair: g / 2,
                 seed: 0,
                 seat: (g % 2) as u8,
@@ -541,13 +464,19 @@ mod tests {
         }
     }
 
-    fn mid_run() -> Frame {
-        let c = config();
+    /// The games of a run six hours in, and their wall seconds.
+    fn mid_run_games() -> (Vec<GameRecord>, HashMap<String, f64>) {
         let (mut g, mut s) = (Vec::new(), HashMap::new());
         games(&mut g, &mut s, 0, 60, 17, 0, 21.0);
         games(&mut g, &mut s, 1, 60, 24, 1, 65.0);
         games(&mut g, &mut s, 2, 60, 34, 0, 192.0);
         games(&mut g, &mut s, 3, 33, 24, 0, 424.0);
+        (g, s)
+    }
+
+    fn mid_run() -> Frame {
+        let c = config();
+        let (g, s) = mid_run_games();
         let playing = Matchup {
             rung: 3,
             against: Against::Opponent,
@@ -613,6 +542,26 @@ Elo/×3  +103 ±47      last 10  ●●○●●●○●●◐
             lines.iter().any(|l| l.starts_with("Elo/×3  +0 ±478")),
             "{lines:?}"
         );
+    }
+
+    /// summary.txt and the panel show one Elo per tripling of the budget.
+    #[test]
+    fn the_summary_and_the_panel_agree_on_elo_per_tripling() {
+        let c = config();
+        let (g, s) = mid_run_games();
+        let summary = crate::longthink::summary::text("run-001", &c, &g, &s);
+        let summary = summary
+            .lines()
+            .find_map(|l| l.strip_prefix("elo per tripling, v expert: "))
+            .expect(&summary)
+            .to_owned();
+        let panel = render(&mid_run(), 100, 40, false);
+        let panel = panel
+            .iter()
+            .find_map(|l| l.strip_prefix("Elo/×3  "))
+            .and_then(|l| l.split("      ").next())
+            .expect("the panel's Elo per tripling");
+        assert_eq!((summary.as_str(), panel), ("+103 ±47", "+103 ±47"));
     }
 
     /// Colors mark the results and the search's bar, and nothing else changes.
@@ -741,20 +690,6 @@ Elo/×3  +103 ±47      last 10  ●●○●●●○●●◐
             game_line(&c, &g[0], None, true),
             "\x1b[31m!\x1b[0m 100k v expert  s0·A  crashed at decision 9"
         );
-    }
-
-    /// Hand-computed: two budgets a tripling apart, 100 Elo between them, each known to a
-    /// standard error of 10, climb 100 per tripling, ±1.96 √200; a third point on the line
-    /// changes nothing but the margin.
-    #[test]
-    fn elo_per_tripling_is_a_weighted_slope() {
-        let (slope, margin) = climb(&[(0.0, 0.0, 10.0), (1.0, 100.0, 10.0)]).unwrap();
-        assert!((slope - 100.0).abs() < 1e-9 && (margin - 27.718).abs() < 1e-3);
-        let (slope, margin) =
-            climb(&[(0.0, 0.0, 10.0), (1.0, 100.0, 10.0), (2.0, 200.0, 10.0)]).unwrap();
-        assert!((slope - 100.0).abs() < 1e-9 && margin < 27.0);
-        assert_eq!(climb(&[(1.0, 50.0, 10.0)]), None);
-        assert_eq!(climb(&[(1.0, 0.0, 10.0), (1.0, 50.0, 5.0)]), None);
     }
 
     #[test]

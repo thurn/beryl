@@ -29,6 +29,7 @@ mod game;
 mod panel;
 mod run;
 mod schedule;
+mod standings;
 mod summary;
 mod term;
 mod upgrade;
@@ -44,7 +45,7 @@ use beryl_search::Budget;
 use serde::{Deserialize, Serialize};
 
 pub use run::run;
-use schedule::{Against, Config};
+use schedule::{Against, Config, Matchup};
 
 /// The crates whose code decides how a run plays.
 const CRATES: [&str; 3] = ["beryl_engine", "beryl_cards", "beryl_search"];
@@ -65,9 +66,9 @@ pub enum Verdict {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GameRecord {
     pub game: String,
-    pub rung: usize,
+    #[serde(flatten)]
+    pub matchup: Matchup,
     pub iterations: u32,
-    pub against: Against,
     pub pair: u32,
     pub seed: u64,
     /// The seat of the rung's agent.
@@ -125,22 +126,11 @@ pub fn rung_name(iterations: u32) -> String {
     }
 }
 
-/// A matchup as the summary names it.
-pub fn matchup_label(c: &Config, rung: usize, against: Against) -> String {
-    let r = rung_name(c.iterations(rung));
-    match against {
-        Against::Opponent => format!("{r} v {}", c.opponent),
-        Against::Omniscient => format!("omniscient {r} v {}", c.opponent),
-        Against::Below => format!("{r} v {}", rung_name(c.iterations(rung - 1))),
-    }
-}
-
 /// Game `g` of a matchup: its key, seed and agents.
 #[derive(Clone, Debug)]
 pub struct Spec {
     pub key: String,
-    pub rung: usize,
-    pub against: Against,
+    pub matchup: Matchup,
     pub pair: u32,
     pub seed: u64,
     /// The seat of the rung's agent.
@@ -150,8 +140,9 @@ pub struct Spec {
 }
 
 impl Spec {
-    /// Game `g` of the rung's matchup: pair `g / 2`, the rung's agent in seat `g % 2`.
-    pub fn new(c: &Config, rung: usize, against: Against, g: u32) -> Spec {
+    /// Game `g` of matchup `m`: pair `g / 2`, the rung's agent in seat `g % 2`.
+    pub fn new(c: &Config, m: Matchup, g: u32) -> Spec {
+        let Matchup { rung, against } = m;
         let search = |name: &str, rung: usize| game::Entrant {
             name: name.to_owned(),
             budget: Some(Budget {
@@ -170,20 +161,35 @@ impl Spec {
             Against::Below => (search("mcts-hidden", rung), search("mcts-hidden", rung - 1)),
         };
         let (pair, seat) = (g / 2, (g % 2) as u8);
-        let r = rung_name(c.iterations(rung));
-        let name = match against {
-            Against::Opponent => format!("{r}-v-{}", c.opponent),
-            Against::Omniscient => format!("omniscient-{r}-v-{}", c.opponent),
-            Against::Below => format!("{r}-v-{}", rung_name(c.iterations(rung - 1))),
-        };
         Spec {
-            key: format!("{name}-p{pair:03}-s{seat}"),
-            rung,
-            against,
+            key: format!("{}-p{pair:03}-s{seat}", m.key(c)),
+            matchup: m,
             pair,
             seed: crate::tournament::game_seed(c.seed, 0, pair),
             seat,
             entrants: if seat == 0 { [a, b] } else { [b, a] },
+        }
+    }
+}
+
+#[cfg(test)]
+impl GameRecord {
+    /// Game `g` of matchup `m`, ended `outcome` for the rung's agent.
+    fn example(m: Matchup, g: u32, outcome: Verdict) -> GameRecord {
+        GameRecord {
+            game: format!("{}-{:?}-{g}", m.rung, m.against),
+            matchup: m,
+            iterations: 0,
+            pair: g / 2,
+            seed: 0,
+            seat: (g % 2) as u8,
+            outcome,
+            turns: 20,
+            decisions: 300,
+            searched: 130,
+            rollouts: 1,
+            budget: 0,
+            crashed_at: None,
         }
     }
 }
@@ -499,13 +505,16 @@ mod tests {
     #[test]
     fn a_pair_plays_one_seed_from_both_seats() {
         let c = Config::default();
-        let [a, b] = [0, 1].map(|g| Spec::new(&c, 0, Against::Opponent, g));
+        let at = |rung, against| Matchup { rung, against };
+        let [a, b] = [0, 1].map(|g| Spec::new(&c, at(0, Against::Opponent), g));
         assert_eq!((a.seed, a.seat, b.seat), (b.seed, 0, 1));
         assert_eq!(a.entrants[0], b.entrants[1]);
         assert_eq!(a.key, "3k-v-expert-frozen-p000-s0");
-        let up = Spec::new(&c, 2, Against::Below, 1);
+        let up = Spec::new(&c, at(2, Against::Below), 1);
         assert_eq!((up.seed, up.key.as_str()), (a.seed, "30k-v-10k-p000-s1"));
-        assert_ne!(Spec::new(&c, 0, Against::Opponent, 2).seed, a.seed);
+        assert_ne!(Spec::new(&c, at(0, Against::Opponent), 2).seed, a.seed);
+        let omniscient = Spec::new(&c, at(1, Against::Omniscient), 0);
+        assert_eq!(omniscient.key, "omniscient-10k-v-expert-frozen-p000-s0");
     }
 
     /// A new run is numbered after the latest, gaps or not, so plain `longthink` resumes it.
