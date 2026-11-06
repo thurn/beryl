@@ -167,9 +167,14 @@ fn a_scripted_human_plays_a_whole_game_and_its_replay_reproduces_it() {
 }
 
 /// The views a session emits until the next that asks the human something or ends the game.
+/// A session that stops emitting fails the test rather than hanging it (the limit is far
+/// beyond any machine's time for these games against the random agent).
 fn to_decision(views: &std::sync::mpsc::Receiver<beryl_session::GameUpdate>) -> PlayerView {
     loop {
-        let view = views.recv().unwrap().view;
+        let view = views
+            .recv_timeout(std::time::Duration::from_secs(120))
+            .expect("the session emits a view")
+            .view;
         if matches!(view.status, Status::Deciding { .. } | Status::Over { .. }) {
             return view;
         }
@@ -199,7 +204,9 @@ fn the_latest_view_of_the_game_in_progress_is_kept_for_a_reloaded_ui() {
         .unwrap();
     assert!(sessions.current().is_none_or(|u| u.session == second));
     let view = loop {
-        let update = views.recv().unwrap();
+        let update = views
+            .recv_timeout(std::time::Duration::from_secs(120))
+            .expect("the session emits a view");
         if update.session == second && matches!(update.view.status, Status::Deciding { .. }) {
             break update.view;
         }

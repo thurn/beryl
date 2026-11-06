@@ -109,16 +109,17 @@ fn respond(stream: &mut TcpStream, status: &str, body: &str) -> Result<(), Strin
     .map_err(|e| e.to_string())
 }
 
-/// Streams each view emitted from now on until the browser goes away.
+/// Streams each view emitted from now on until the browser goes away. The stream subscribes
+/// before it answers, so a page that sees it open misses no view after that.
 fn events(mut stream: TcpStream, streams: &Streams) -> Result<(), String> {
+    let (sent, received) = channel();
+    lock(streams).push(sent);
     write!(
         stream,
         "HTTP/1.1 200 OK\r\n{CORS}Content-Type: text/event-stream\r\nCache-Control: no-cache\r\n\r\n"
     )
     .map_err(|e| e.to_string())?;
     stream.flush().map_err(|e| e.to_string())?;
-    let (sent, received) = channel();
-    lock(streams).push(sent);
     for message in received {
         if stream.write_all(message.as_bytes()).is_err() || stream.flush().is_err() {
             break;

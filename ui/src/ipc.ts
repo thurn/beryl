@@ -198,6 +198,11 @@ export type LiveEntry =
 export function liveTransport(base: string): Transport & { log: LiveEntry[] } {
   const log: LiveEntry[] = [];
   const events = new EventSource(`${base}/events`);
+  // The server subscribes the stream before it answers: once open, no view is missed.
+  const opened = new Promise<void>((resolve) => {
+    if (events.readyState === EventSource.OPEN) resolve();
+    else events.addEventListener("open", () => resolve(), { once: true });
+  });
   return {
     log,
     async invoke<C extends Command>(command: C, args: Args<C>) {
@@ -233,6 +238,8 @@ export function liveTransport(base: string): Transport & { log: LiveEntry[] } {
         handler(payload, false);
       };
       events.addEventListener(event, listener);
+      // A command sent once listening (`current_game`) sees no view slip past.
+      await opened;
       return () => events.removeEventListener(event, listener);
     },
   };

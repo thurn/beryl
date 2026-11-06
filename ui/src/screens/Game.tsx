@@ -399,7 +399,19 @@ function Playing({ playback }: { playback: Playback }) {
           setStops(session, on ? "exact" : "smart").catch(fail)
         }
         onLeave={() => (window.location.hash = "#/")}
-        onConcede={ended ? undefined : () => void concede(session).catch(fail)}
+        onConcede={
+          ended
+            ? undefined
+            : () =>
+                void concede(session).catch((e: unknown) => {
+                  // A second concession, or one the game's end overtook.
+                  if (!(
+                    e instanceof CommandError && e.error.kind === "ended"
+                  )) {
+                    fail(e);
+                  }
+                })
+        }
         dimmed={opening || over || (choice !== undefined && !peeking)}
         inert={choice !== undefined}
       />
