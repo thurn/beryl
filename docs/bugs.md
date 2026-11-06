@@ -6,6 +6,16 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- Decisions collapsed an activated ability's source with an interchangeable twin
+  (`engine::collapse`, which keeps only the objects `cast::referenced` names
+  apart), so with two Strip Mines the target decision offered one, and taking it
+  aimed the ability at its own source, sacrificed as its cost, rather than the
+  twin (CR 601.2c, 601.2h, 602.2b). Found by a generated oracle scenario, where
+  XMage destroyed the twin. Prevention: derive "interchangeable" from everything
+  a pending object refers to, the stack entries' sources as much as their
+  targets, in one place both the stack and collapse read; generated scenarios
+  check name-equal candidates against the oracles.
+
 - The battlefield's cached trigger listeners (`State::listening`, found by the
   layer recompute) counted face-down permanents by their hidden card, so masking
   or determinizing that identity for a viewer left the cache describing cards no
