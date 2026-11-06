@@ -11,7 +11,7 @@ use beryl_engine::{Decision, State};
 use serde::{Deserialize, Serialize};
 
 use super::files::{self, Log};
-use super::game::{self, Game, Line, Played};
+use super::game::{self, Game, GameDecision, Line, Played};
 use super::schedule::{self, Config};
 use super::standings::Standings;
 use super::term::Display;
@@ -19,13 +19,13 @@ use super::{ClockRecord, DecisionRecord, GameRecord, Spec, Verdict, summary};
 use crate::game::mirror;
 
 /// The game and decision being played, for the panic hook.
-static PLAYING: Mutex<Option<(PathBuf, String, usize)>> = Mutex::new(None);
+static PLAYING: Mutex<Option<(PathBuf, String, GameDecision)>> = Mutex::new(None);
 
 /// A line of `crashes.jsonl`.
 #[derive(Debug, Serialize, Deserialize)]
 struct Crash {
     game: String,
-    decision: usize,
+    decision: GameDecision,
     message: String,
 }
 
@@ -48,10 +48,10 @@ pub fn run(dir: &Path, total: Option<u32>) -> Result<(), String> {
     let mut standings = Standings::new(&c, &games, &clock);
     let out = Display::start(&run_name(dir), &c, &games, clock)?;
     // A fault injected for the supervisor's tests: panic at decision N of game K, "K@N".
-    let inject: Option<(String, usize)> =
+    let inject: Option<(String, GameDecision)> =
         std::env::var("BERYL_LONGTHINK_PANIC").ok().and_then(|v| {
             let (k, n) = v.rsplit_once('@')?;
-            Some((k.to_owned(), n.parse().ok()?))
+            Some((k.to_owned(), GameDecision(n.parse().ok()?)))
         });
     for sub in ["logs", "transcripts"] {
         fs::create_dir_all(dir.join(sub)).map_err(|e| format!("{}: {e}", dir.display()))?;
@@ -67,7 +67,7 @@ pub fn run(dir: &Path, total: Option<u32>) -> Result<(), String> {
         } else {
             out.begin(&spec, logged.len());
             *PLAYING.lock().expect("the position") =
-                Some((dir.to_owned(), spec.key.clone(), logged.len()));
+                Some((dir.to_owned(), spec.key.clone(), GameDecision(logged.len())));
             let mut log = Log::open(&path)?;
             let g = Game {
                 seed: spec.seed,
@@ -75,7 +75,7 @@ pub fn run(dir: &Path, total: Option<u32>) -> Result<(), String> {
                 from: game::resume_points(&logged),
                 until: None,
             };
-            let asking = |i: usize, s: &State, d: &Decision| {
+            let asking = |i: GameDecision, s: &State, d: &Decision| {
                 out.asking(i, s, d);
                 if let Some((_, _, at)) = PLAYING.lock().expect("the position").as_mut() {
                     *at = i;
@@ -174,8 +174,8 @@ fn record_panics() {
 }
 
 /// The decision game `key` has crashed at twice, if any.
-fn crashed_twice(dir: &Path, key: &str) -> Result<Option<usize>, String> {
-    let mut seen: HashMap<usize, u32> = HashMap::new();
+fn crashed_twice(dir: &Path, key: &str) -> Result<Option<GameDecision>, String> {
+    let mut seen: HashMap<GameDecision, u32> = HashMap::new();
     for crash in files::read::<Crash>(&dir.join("crashes.jsonl"))? {
         if crash.game == key {
             let n = seen.entry(crash.decision).or_default();
@@ -188,13 +188,13 @@ fn crashed_twice(dir: &Path, key: &str) -> Result<Option<usize>, String> {
     Ok(None)
 }
 
-fn crashed(spec: &Spec, logged: &[Line], at: usize) -> GameRecord {
+fn crashed(spec: &Spec, logged: &[Line], at: GameDecision) -> GameRecord {
     let searches = || logged.iter().filter_map(|l| l.search.as_ref());
     GameRecord {
         game: spec.key.clone(),
         matchup: spec.matchup,
         iterations: spec.entrants[usize::from(spec.seat)]
-            .budget
+            .budget()
             .map_or(0, |b| b.iterations),
         pair: spec.pair,
         seed: spec.seed,
@@ -214,7 +214,7 @@ fn budget(spec: &Spec, lines: &[Line]) -> u64 {
     lines
         .iter()
         .filter(|l| l.search.is_some())
-        .filter_map(|l| spec.entrants[usize::from(l.seat)].budget)
+        .filter_map(|l| spec.entrants[usize::from(l.seat)].budget())
         .map(|b| u64::from(b.iterations))
         .sum()
 }
@@ -239,10 +239,10 @@ fn commit(dir: &Path, spec: &Spec, played: &Played) -> Result<GameRecord, String
         decisions.write(
             &DecisionRecord {
                 game: spec.key.clone(),
-                decision: i,
+                decision: GameDecision(i),
                 seat: line.seat,
-                agent: e.name.clone(),
-                iterations: e.budget.map_or(0, |b| b.iterations),
+                agent: e.name().to_owned(),
+                iterations: e.budget().map_or(0, |b| b.iterations),
                 choice: line.choice,
                 agent_decision: s.decision,
                 chain: s.chain,
@@ -268,7 +268,7 @@ fn commit(dir: &Path, spec: &Spec, played: &Played) -> Result<GameRecord, String
     Ok(GameRecord {
         game: spec.key.clone(),
         matchup: spec.matchup,
-        iterations: rung.budget.map_or(0, |b| b.iterations),
+        iterations: rung.budget().map_or(0, |b| b.iterations),
         pair: spec.pair,
         seed: spec.seed,
         seat: spec.seat,
@@ -292,4 +292,49 @@ pub fn write_summary(dir: &Path, c: &Config, games: &[GameRecord]) -> Result<Str
     let text = summary::text(&run_name(dir), c, games, &clock(dir)?);
     files::write_whole(&dir.join("summary.txt"), text.as_bytes())?;
     Ok(text)
+}
+
+#[cfg(test)]
+mod tests {
+    use serde::Serialize;
+    use serde::de::DeserializeOwned;
+
+    use super::*;
+
+    /// Reads `line` as a `T` and writes it back, as JSON: the same fields, of the same types,
+    /// in any order.
+    fn again<T: Serialize + DeserializeOwned>(line: &str) -> serde_json::Value {
+        let value: T = serde_json::from_str(line).unwrap();
+        serde_json::to_value(&value).unwrap()
+    }
+
+    fn json(line: &str) -> serde_json::Value {
+        serde_json::from_str(line).unwrap()
+    }
+
+    /// Lines of each file a run writes, as the runner wrote them before the decision indices
+    /// were typed, read and written again unchanged: a run started by that binary resumes.
+    #[test]
+    fn run_files_keep_their_format() {
+        let logs = [
+            r#"{"seat":0,"choice":0,"ms":0}"#,
+            r#"{"seat":1,"choice":0,"resume":2,"search":{"decision":3,"chain":2,"rollouts":2,"inherited":2,"visits":[2,1],"rewards":[2.0,0.0]},"ms":27}"#,
+        ];
+        for line in logs {
+            assert_eq!(again::<Line>(line), json(line));
+        }
+        let games = [
+            r#"{"game":"4-v-expert-p000-s1","rung":0,"iterations":4,"against":"opponent","pair":0,"seed":12035550249420947055,"seat":1,"outcome":"loss","turns":14,"decisions":127,"searched":22,"rollouts":63,"budget":88}"#,
+            r#"{"game":"4-v-expert-p000-s0","rung":0,"iterations":4,"against":"opponent","pair":0,"seed":12035550249420947055,"seat":0,"outcome":"crashed","turns":0,"decisions":5,"searched":2,"rollouts":6,"budget":8,"crashed_at":5}"#,
+        ];
+        for line in games {
+            assert_eq!(again::<GameRecord>(line), json(line));
+        }
+        let decision = r#"{"game":"4-v-expert-p000-s0","decision":7,"seat":0,"agent":"mcts-hidden","iterations":4,"choice":0,"agent_decision":4,"chain":4,"rollouts":4,"inherited":0,"visits":[1,0,1,0,1,1],"mean":[0.0,null,0.0,null,0.0,0.0]}"#;
+        assert_eq!(again::<DecisionRecord>(decision), json(decision));
+        let crash = r#"{"game":"4-v-expert-p000-s0","decision":5,"message":"panicked at crates/beryl_cli/src/longthink/run.rs:84:21:\ninjected at decision 5 of 4-v-expert-p000-s0"}"#;
+        assert_eq!(again::<Crash>(crash), json(crash));
+        let clock = r#"{"game":"4-v-expert-p000-s0","seconds":2.487}"#;
+        assert_eq!(again::<ClockRecord>(clock), json(clock));
+    }
 }

@@ -10,7 +10,7 @@ use beryl_engine::{
     Candidates, Choice, Decision, DecisionKind, GameTable, Opt, Profile, Replay, Scratch, Seat,
     Slot, State, Step, apply, next, observe, view,
 };
-use beryl_search::{Agent, Budget, GreedyAgent, Mcts, Sight};
+use beryl_search::{Agent, AgentDecision, Budget, GreedyAgent, Mcts, Sight};
 use common::{mirror, play};
 
 /// A small budget, root-parallel: three trees of two iterations.
@@ -206,8 +206,8 @@ struct Asked {
     /// The game's decisions before this one, either player's.
     index: usize,
     /// Where an agent rebuilt before this decision had to start, and what it searched.
-    resume_point: u32,
-    chain: Option<u32>,
+    resume_point: AgentDecision,
+    chain: Option<AgentDecision>,
 }
 
 /// A small budget on one thread, enough for the chosen child to have a subtree of its own.
@@ -243,7 +243,7 @@ fn searched_game(t: &GameTable, seed: u64, from_end: usize) -> (Vec<Asked>, Vec<
         };
         let obs = observe(&s, t, &mut x, d.player);
         let c = if d.player == Seat::P0 {
-            let resume_point = search.resume_point();
+            let resume_point = search.resume_point().expect("a search resumes");
             let c = search.choose(obs, &d);
             asked.push(Asked {
                 state: s,
@@ -311,7 +311,7 @@ fn subtree_reuse_stays_within_one_action() {
                         && (was.object(slot).incarnation == now.object(slot).incarnation
                             || moves == Some(slot))
                 });
-            if chain < k {
+            if chain < AgentDecision(k) {
                 reused += 1;
                 assert!(
                     straight,
@@ -334,10 +334,10 @@ fn a_rebuilt_agent_plays_on_as_the_uninterrupted_one() {
     for (seed, from_end) in REUSE_GAMES {
         let (asked, _) = searched_game(&t, seed, from_end);
         for (k, a) in asked.iter().enumerate() {
-            let r = a.resume_point as usize;
+            let r = a.resume_point.0 as usize;
             let chain_ends = asked
                 .get(k + 1)
-                .is_none_or(|b| b.resume_point as usize != r);
+                .is_none_or(|b| b.resume_point != a.resume_point);
             // Rebuild at the last decision of each reuse chain, and at every fourth outside
             // one, for the test's time.
             if r < k && chain_ends {

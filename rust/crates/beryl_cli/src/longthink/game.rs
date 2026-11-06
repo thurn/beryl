@@ -11,6 +11,7 @@
 //! the game. A replayed answer that differs from the logged one stops the game: the binary
 //! no longer plays as the run did.
 
+use std::fmt;
 use std::time::Instant;
 
 use beryl_engine::event::Event;
@@ -18,25 +19,66 @@ use beryl_engine::{
     Choice, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch, State, Step,
     apply, next, observe, view,
 };
-use beryl_search::{Agent, Budget, Mcts, Search, Sight, agent};
+use beryl_search::{Agent, AgentDecision, Budget, Mcts, Search, Sight, agent};
 use serde::{Deserialize, Serialize};
 
 use crate::game::seat_seeds;
 use crate::transcript::Transcript;
 
-/// An agent in a ladder game: a name in the registry, and a searching agent's budget.
+/// A decision's index in the game, from 0, counting both players' decisions: not its index
+/// among the deciding agent's own ([`AgentDecision`]).
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
+#[serde(transparent)]
+pub struct GameDecision(pub usize);
+
+impl fmt::Display for GameDecision {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+/// An agent in a ladder game.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Entrant {
-    pub name: String,
-    pub budget: Option<Budget>,
+pub enum Entrant {
+    /// The search, at a budget.
+    Search { sight: Sight, budget: Budget },
+    /// An agent of the registry that does not search, by name.
+    Fixed(String),
 }
 
 impl Entrant {
+    /// Its name in the registry.
+    pub fn name(&self) -> &str {
+        match self {
+            Entrant::Search {
+                sight: Sight::Hidden,
+                ..
+            } => "mcts-hidden",
+            Entrant::Search {
+                sight: Sight::Omniscient,
+                ..
+            } => "mcts-omniscient",
+            Entrant::Fixed(name) => name,
+        }
+    }
+
+    /// A search's budget.
+    pub fn budget(&self) -> Option<Budget> {
+        match self {
+            Entrant::Search { budget, .. } => Some(*budget),
+            Entrant::Fixed(_) => None,
+        }
+    }
+
     /// How a transcript names it.
     pub fn label(&self) -> String {
-        match self.budget {
-            Some(b) => format!("{} {}", self.name, super::rung_name(b.iterations)),
-            None => self.name.clone(),
+        match self {
+            Entrant::Search { budget, .. } => {
+                format!("{} {}", self.name(), super::rung_name(budget.iterations))
+            }
+            Entrant::Fixed(name) => name.clone(),
         }
     }
 }
@@ -46,10 +88,10 @@ impl Entrant {
 pub struct Line {
     pub seat: u8,
     pub choice: u8,
-    /// For a searching agent, the decision (its own index) a rebuilt agent must start from
-    /// after this one ([`Mcts::resume_point`]).
+    /// For a searching agent, the decision of its own a rebuilt agent must start from after
+    /// this one ([`Agent::resume_point`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub resume: Option<u32>,
+    pub resume: Option<AgentDecision>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub search: Option<Searched>,
     /// Wall milliseconds spent deciding.
@@ -59,39 +101,51 @@ pub struct Line {
 /// What a searched decision found and spent ([`Search`]).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Searched {
-    /// The decision's index among the agent's own.
-    pub decision: u32,
-    pub chain: u32,
+    pub decision: AgentDecision,
+    /// The decision whose search planted the trees this one grew.
+    pub chain: AgentDecision,
     pub rollouts: u32,
     pub inherited: u32,
     pub visits: Vec<u32>,
     pub rewards: Vec<f64>,
 }
 
+/// How much of a search's play a game takes from its log.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Resume {
+    /// All of it: the search is never asked.
+    Log,
+    /// Its decisions before this one; it is asked from there.
+    At(AgentDecision),
+}
+
 /// A seat's agent and, for a search, how far the log answers for it.
 struct Seated {
-    agent: Box<dyn Choose>,
+    agent: Box<dyn Agent>,
     seat: u8,
-    /// A search's decisions before `from` are taken from the log; `asked` counts its
-    /// decisions so far.
     search: Option<Progress>,
 }
 
 struct Progress {
-    from: u32,
-    asked: u32,
+    from: Resume,
+    /// The search's next decision.
+    asked: AgentDecision,
 }
 
 impl Seated {
     /// Whether the agent's next decision is taken from the log, counting it if so.
     fn replays(&mut self) -> bool {
-        match self.search.as_mut() {
-            Some(p) if p.asked < p.from => {
-                p.asked += 1;
-                true
-            }
-            _ => false,
+        let Some(p) = self.search.as_mut() else {
+            return false;
+        };
+        let replays = match p.from {
+            Resume::Log => true,
+            Resume::At(from) => p.asked < from,
+        };
+        if replays {
+            p.asked = p.asked.next();
         }
+        replays
     }
 
     /// Asks the agent decision `d`, and logs its answer.
@@ -100,64 +154,37 @@ impl Seated {
         let c = self.agent.choose(obs, d);
         let ms = start.elapsed().as_millis() as u64;
         if let Some(p) = self.search.as_mut() {
-            p.asked += 1;
+            p.asked = p.asked.next();
         }
-        let (search, resume) = match self.agent.searched() {
-            Some((search, resume)) => (search.map(searched), Some(resume)),
-            None => (None, None),
-        };
         Line {
             seat: self.seat,
             choice: c.0,
-            resume,
-            search,
+            resume: self.agent.resume_point(),
+            search: self.agent.last_search().map(searched),
             ms,
         }
     }
 }
 
-/// Builds the agent `e` for a seat, from its seed, as it stands before its `from`th
-/// decision. Tests substitute their own.
-pub type Build<'a> = dyn Fn(&GameTable, &Entrant, u64, u32) -> Result<Box<dyn Choose>, String> + 'a;
-
-/// An agent as a game asks it, with what a log needs of a search.
-pub trait Choose {
-    fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice;
-    /// The search behind the last answer, and where a rebuilt agent must start.
-    fn searched(&self) -> Option<(Option<&Search>, u32)> {
-        None
-    }
-}
-
-impl Choose for Mcts {
-    fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice {
-        Agent::choose(self, obs, d)
-    }
-
-    fn searched(&self) -> Option<(Option<&Search>, u32)> {
-        Some((self.last_search(), self.resume_point()))
-    }
-}
-
-impl Choose for Box<dyn Agent + Send> {
-    fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice {
-        Agent::choose(self, obs, d)
-    }
-}
+/// Builds the agent `e` for a seat, from its seed, as it stands before its own decision
+/// `from`. Tests substitute their own.
+pub type Build<'a> =
+    dyn Fn(&GameTable, &Entrant, u64, AgentDecision) -> Result<Box<dyn Agent>, String> + 'a;
 
 /// The agents as the registry builds them; a search as [`Mcts::resumed`] rebuilds it.
-pub fn build(t: &GameTable, e: &Entrant, seed: u64, from: u32) -> Result<Box<dyn Choose>, String> {
-    let sight = match e.name.as_str() {
-        "mcts-hidden" => Some(Sight::Hidden),
-        "mcts-omniscient" => Some(Sight::Omniscient),
-        _ => None,
-    };
-    match (sight, e.budget) {
-        (Some(sight), Some(budget)) => Ok(Box::new(Mcts::resumed(t, sight, budget, seed, from))),
-        (Some(_), None) => Err(format!("{} needs a budget", e.name)),
-        (None, _) => {
-            let info = agent(&e.name).ok_or_else(|| format!("no agent is named {:?}", e.name))?;
-            Ok(Box::new((info.new)(t, seed, Budget::DEFAULT)))
+pub fn build(
+    t: &GameTable,
+    e: &Entrant,
+    seed: u64,
+    from: AgentDecision,
+) -> Result<Box<dyn Agent>, String> {
+    match e {
+        Entrant::Search { sight, budget } => {
+            Ok(Box::new(Mcts::resumed(t, *sight, *budget, seed, from)))
+        }
+        Entrant::Fixed(name) => {
+            let info = agent(name).ok_or_else(|| format!("no agent is named {name:?}"))?;
+            Ok((info.new)(t, seed, Budget::DEFAULT))
         }
     }
 }
@@ -175,14 +202,14 @@ pub struct Played {
 /// Why a game stopped short.
 #[derive(Debug)]
 pub enum Stop {
-    /// The answer to decision `decision` (the game's, from 0) is not the logged one.
+    /// The answer to decision `decision` is not the logged one.
     Differs {
-        decision: usize,
+        decision: GameDecision,
         logged: u8,
         now: u8,
     },
     /// Replay reached decision `until`, as asked.
-    Reached(usize),
+    Reached(GameDecision),
     Failed(String),
 }
 
@@ -194,14 +221,16 @@ impl From<String> for Stop {
 
 /// Where each seat's search starts asking rather than taking the log: where its last logged
 /// line says a rebuilt agent must start, else at its first decision.
-pub fn resume_points(logged: &[Line]) -> [u32; 2] {
+pub fn resume_points(logged: &[Line]) -> [Resume; 2] {
     [0, 1].map(|seat| {
-        logged
-            .iter()
-            .rev()
-            .find(|l| l.seat == seat)
-            .and_then(|l| l.resume)
-            .unwrap_or(0)
+        Resume::At(
+            logged
+                .iter()
+                .rev()
+                .find(|l| l.seat == seat)
+                .and_then(|l| l.resume)
+                .unwrap_or(AgentDecision(0)),
+        )
     })
 }
 
@@ -209,10 +238,10 @@ pub fn resume_points(logged: &[Line]) -> [u32; 2] {
 pub struct Game<'a> {
     pub seed: u64,
     pub entrants: [&'a Entrant; 2],
-    /// Each seat's search takes its decisions before this from the log.
-    pub from: [u32; 2],
-    /// Stop once this many decisions are answered.
-    pub until: Option<usize>,
+    /// How much of each seat's search the log answers for.
+    pub from: [Resume; 2],
+    /// Stop before asking this decision.
+    pub until: Option<GameDecision>,
 }
 
 /// Plays `g` to its end through the `logged` answers, calling `asking` with the index, the
@@ -224,16 +253,24 @@ pub fn play(
     g: &Game<'_>,
     build: &Build<'_>,
     logged: &[Line],
-    mut asking: impl FnMut(usize, &State, &Decision),
-    mut answered: impl FnMut(usize, &Line, &str) -> Result<(), String>,
+    mut asking: impl FnMut(GameDecision, &State, &Decision),
+    mut answered: impl FnMut(GameDecision, &Line, &str) -> Result<(), String>,
 ) -> Result<Played, Stop> {
     let seeds = seat_seeds(g.seed);
     let mut players = Vec::with_capacity(2);
     for ((e, seed), from) in g.entrants.iter().zip(seeds).zip(g.from) {
+        // A search the log answers for entirely is never asked: where it starts is moot.
+        let start = match from {
+            Resume::Log => AgentDecision(0),
+            Resume::At(d) => d,
+        };
         players.push(Seated {
-            agent: build(t, e, seed, from)?,
+            agent: build(t, e, seed, start)?,
             seat: players.len() as u8,
-            search: e.budget.map(|_| Progress { from, asked: 0 }),
+            search: matches!(e, Entrant::Search { .. }).then_some(Progress {
+                from,
+                asked: AgentDecision(0),
+            }),
         });
     }
     let mut s = State::new(t, g.seed, Profile::SMART);
@@ -244,7 +281,7 @@ pub fn play(
     ]);
     let mut lines = Vec::new();
     let outcome = loop {
-        let i = lines.len();
+        let i = GameDecision(lines.len());
         if g.until == Some(i) {
             return Err(Stop::Reached(i));
         }
@@ -253,7 +290,7 @@ pub fn play(
             Step::Decide(d) => d,
         };
         let seat = d.player.index();
-        let logged = logged.get(i);
+        let logged = logged.get(i.0);
         if let Some(l) = logged
             && (usize::from(l.seat) != seat || usize::from(l.choice) >= d.len())
         {
@@ -279,6 +316,15 @@ pub fn play(
                     });
                 }
                 (l.clone(), false)
+            }
+            None if player
+                .search
+                .as_ref()
+                .is_some_and(|p| p.from == Resume::Log) =>
+            {
+                return Err(Stop::Failed(format!(
+                    "decision {i}: the log ends before seat {seat}'s search's play"
+                )));
             }
             None => {
                 asking(i, view(&s, t, &mut x), &d);

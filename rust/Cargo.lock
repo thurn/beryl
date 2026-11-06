@@ -187,6 +187,7 @@ dependencies = [
  "beryl_cards",
  "beryl_engine",
  "beryl_scenario",
+ "serde",
 ]
 
 [[package]]

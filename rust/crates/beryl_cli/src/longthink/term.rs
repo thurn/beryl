@@ -21,7 +21,7 @@ use std::time::{Duration, Instant};
 
 use beryl_engine::{Decision, State, Zone};
 
-use super::game::Line;
+use super::game::{GameDecision, Line};
 use super::panel::{self, Frame, Now};
 use super::schedule::{Config, Matchup};
 use super::{GameRecord, Spec, Verdict};
@@ -127,7 +127,7 @@ struct Playing {
 
 /// The decision being asked.
 struct Asked {
-    decision: usize,
+    decision: GameDecision,
     turn: u16,
     /// The rung's agent's, then its opponent's.
     life: [i16; 2],
@@ -367,7 +367,7 @@ impl Display {
             label,
             pair: spec.pair,
             seat: spec.seat,
-            budgets: [0, 1].map(|s| spec.entrants[s].budget.map(|b| b.iterations)),
+            budgets: [0, 1].map(|s| spec.entrants[s].budget().map(|b| b.iterations)),
             asked: None,
             planned: 0,
             unspent: 0,
@@ -380,7 +380,7 @@ impl Display {
     }
 
     /// Decision `decision`, `d`, is about to be asked in position `s`.
-    pub fn asking(&self, decision: usize, s: &State, d: &Decision) {
+    pub fn asking(&self, decision: GameDecision, s: &State, d: &Decision) {
         let rollouts = beryl_search::rollouts_run();
         let mut b = self.shared.board();
         let Some(p) = b.playing.as_mut() else { return };
@@ -542,7 +542,7 @@ mod tests {
                         seat: 0,
                         budgets: [Some(3_000), None],
                         asked: Some(Asked {
-                            decision: k as usize,
+                            decision: GameDecision(k as usize),
                             turn: 3,
                             life: [20, 18],
                             hand: [5, 6],

@@ -41,6 +41,7 @@ use beryl_engine::{
 };
 
 use crate::rollout::{RolloutPolicy, rollout};
+use crate::{Agent, AgentDecision};
 
 /// What a search may spend on one decision. Iterations, not time, so a seed reproduces a move
 /// on any machine.
@@ -112,11 +113,11 @@ pub fn rollouts_run() -> u64 {
 /// What one searched decision found and spent, for a runner's log and as training data.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Search {
-    /// The decision's index among the agent's own, from 0, unsearched ones included.
-    pub decision: u32,
+    /// The decision's index among the agent's own.
+    pub decision: AgentDecision,
     /// The decision whose fresh search planted the trees this one grew: `decision`, unless it
     /// reused the trees of the decisions before it.
-    pub chain: u32,
+    pub chain: AgentDecision,
     /// The rollouts it ran.
     pub rollouts: u32,
     /// The root visits its trees brought from the decision before.
@@ -137,7 +138,7 @@ pub struct Mcts {
     budget: Budget,
     seed: u64,
     /// The next decision's index among the agent's own.
-    decision: u32,
+    decision: AgentDecision,
     /// The last decision's trees, while its chosen child may root the next one's.
     kept: Option<Kept>,
     last: Option<Search>,
@@ -147,7 +148,7 @@ pub struct Mcts {
 #[derive(Debug)]
 struct Kept {
     trees: Vec<Tree>,
-    chain: u32,
+    chain: AgentDecision,
     choice: Choice,
     /// Each slot's incarnation, and whether the deciding player knew its card, then.
     seen: Vec<(u16, bool)>,
@@ -157,13 +158,19 @@ struct Kept {
 
 impl Mcts {
     pub fn new(t: &GameTable, sight: Sight, budget: Budget, seed: u64) -> Self {
-        Self::resumed(t, sight, budget, seed, 0)
+        Self::resumed(t, sight, budget, seed, AgentDecision(0))
     }
 
-    /// The agent built from `seed` as it stands before its `decision`th decision (from 0),
-    /// for a game resumed midway: it plays on as the uninterrupted agent would, if it is
-    /// first asked the decision [`Mcts::resume_point`] named.
-    pub fn resumed(t: &GameTable, sight: Sight, budget: Budget, seed: u64, decision: u32) -> Self {
+    /// The agent built from `seed` as it stands before its own decision `decision`, for a
+    /// game resumed midway: it plays on as the uninterrupted agent would, if it is first
+    /// asked the decision [`Agent::resume_point`] named.
+    pub fn resumed(
+        t: &GameTable,
+        sight: Sight,
+        budget: Budget,
+        seed: u64,
+        decision: AgentDecision,
+    ) -> Self {
         Self {
             table: t.clone(),
             policy: RolloutPolicy::new(t),
@@ -176,18 +183,6 @@ impl Mcts {
         }
     }
 
-    /// The search behind the last decision; none if it was answered without one.
-    pub fn last_search(&self) -> Option<&Search> {
-        self.last.as_ref()
-    }
-
-    /// The decision a rebuilt agent must be asked first, as [`Mcts::resumed`] builds it, to
-    /// play on as this one: the next, unless this agent keeps trees the next may reuse, then
-    /// the decision whose fresh search planted them, re-searched from there.
-    pub fn resume_point(&self) -> u32 {
-        self.kept.as_ref().map_or(self.decision, |k| k.chain)
-    }
-
     /// The root visit counts of every tree, summed, one per candidate of `d`: what a fresh
     /// search of the next decision on its full budget counts, with no stop. Changes nothing.
     pub fn visits(&self, obs: Observation<'_>, d: &Decision) -> Vec<u32> {
@@ -197,12 +192,12 @@ impl Mcts {
     }
 
     /// One tree per [`Budget::trees`], seeded from the agent's seed and the decision's index.
-    fn plant(&self, obs: Observation<'_>, d: &Decision, decision: u32) -> Vec<Tree> {
+    fn plant(&self, obs: Observation<'_>, d: &Decision, decision: AgentDecision) -> Vec<Tree> {
         // The `decision`th output of the agent's stream, computed directly.
         let mut seeds = SplitMix64::new(
             SplitMix64::new(
                 self.seed
-                    .wrapping_add(u64::from(decision).wrapping_mul(0x9E37_79B9_7F4A_7C15)),
+                    .wrapping_add(u64::from(decision.0).wrapping_mul(0x9E37_79B9_7F4A_7C15)),
             )
             .next_u64(),
         );
@@ -285,12 +280,12 @@ impl Mcts {
     }
 }
 
-impl crate::Agent for Mcts {
+impl Agent for Mcts {
     /// The candidate visited most across the trees, the first of equals. A decision with one
     /// candidate is never searched, nor is passing with one's own object on top of the stack.
     fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice {
         let decision = self.decision;
-        self.decision += 1;
+        self.decision = decision.next();
         self.last = None;
         let kept = self.kept.take();
         if d.len() < 2 {
@@ -329,6 +324,16 @@ impl crate::Agent for Mcts {
             });
         }
         choice
+    }
+
+    fn last_search(&self) -> Option<&Search> {
+        self.last.as_ref()
+    }
+
+    /// The next decision, unless this agent keeps trees the next may reuse, then the
+    /// decision whose fresh search planted them, re-searched from there.
+    fn resume_point(&self) -> Option<AgentDecision> {
+        Some(self.kept.as_ref().map_or(self.decision, |k| k.chain))
     }
 }
 

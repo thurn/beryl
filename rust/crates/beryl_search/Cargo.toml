@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 beryl_cards = { path = "../beryl_cards" }
 beryl_engine = { path = "../beryl_engine" }
+serde = { version = "1.0.229", features = ["derive"] }
 
 [dev-dependencies]
 beryl_scenario = { path = "../beryl_scenario" }

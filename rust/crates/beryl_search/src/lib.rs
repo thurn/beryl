@@ -12,6 +12,7 @@ mod values;
 
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{Choice, Decision, GameTable, Observation};
+use serde::{Deserialize, Serialize};
 
 pub use expert::ExpertAgent;
 pub use frozen::FrozenExpertAgent;
@@ -19,15 +20,50 @@ pub use mcts::{Budget, Mcts, Search, Sight, rollouts_run};
 pub use rollout::{COUNTER_MIN, Inline, REMOVAL_MIN, RolloutPolicy, rollout};
 pub use values::{CardInfo, CardValues};
 
+/// A decision's index among one agent's own, from 0, unsearched ones included: not its index
+/// in the game, which counts both players' decisions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct AgentDecision(pub u32);
+
+impl AgentDecision {
+    /// The decision after this one.
+    #[must_use]
+    pub fn next(self) -> Self {
+        AgentDecision(self.0 + 1)
+    }
+}
+
 /// A player: answers decisions from what its seat can see.
 pub trait Agent {
     fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice;
+
+    /// The search behind the last answer; none if it was answered without one, or by an
+    /// agent that does not search.
+    fn last_search(&self) -> Option<&Search> {
+        None
+    }
+
+    /// For an agent a game resumed midway must rebuild ([`Mcts::resumed`]), the decision the
+    /// rebuilt agent must be asked first to play on as this one; none for an agent whose
+    /// state follows the game when it is asked every decision again.
+    fn resume_point(&self) -> Option<AgentDecision> {
+        None
+    }
 }
 
 /// A boxed agent, as the registry builds them, plays like the agent inside.
 impl<T: Agent + ?Sized> Agent for Box<T> {
     fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice {
         (**self).choose(obs, d)
+    }
+
+    fn last_search(&self) -> Option<&Search> {
+        (**self).last_search()
+    }
+
+    fn resume_point(&self) -> Option<AgentDecision> {
+        (**self).resume_point()
     }
 }
 

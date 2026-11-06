@@ -41,9 +41,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use beryl_search::Budget;
+use beryl_search::{AgentDecision, Budget, Sight};
 use serde::{Deserialize, Serialize};
 
+use game::{Entrant, GameDecision};
 pub use run::run;
 use schedule::{Against, Config, Matchup};
 
@@ -85,23 +86,22 @@ pub struct GameRecord {
     pub budget: u64,
     /// The decision a crashed game crashed at.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub crashed_at: Option<usize>,
+    pub crashed_at: Option<GameDecision>,
 }
 
 /// A line of `decisions.jsonl`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct DecisionRecord {
     pub game: String,
-    /// The decision's index in the game, from 0.
-    pub decision: usize,
+    pub decision: GameDecision,
     pub seat: u8,
     pub agent: String,
     pub iterations: u32,
     pub choice: u8,
     /// The decision's index among the agent's own, and that of the decision whose search
     /// planted the trees it grew.
-    pub agent_decision: u32,
-    pub chain: u32,
+    pub agent_decision: AgentDecision,
+    pub chain: AgentDecision,
     pub rollouts: u32,
     pub inherited: u32,
     pub visits: Vec<u32>,
@@ -136,29 +136,26 @@ pub struct Spec {
     /// The seat of the rung's agent.
     pub seat: u8,
     /// The agents, by seat.
-    pub entrants: [game::Entrant; 2],
+    pub entrants: [Entrant; 2],
 }
 
 impl Spec {
     /// Game `g` of matchup `m`: pair `g / 2`, the rung's agent in seat `g % 2`.
     pub fn new(c: &Config, m: Matchup, g: u32) -> Spec {
         let Matchup { rung, against } = m;
-        let search = |name: &str, rung: usize| game::Entrant {
-            name: name.to_owned(),
-            budget: Some(Budget {
+        let search = |sight, rung: usize| Entrant::Search {
+            sight,
+            budget: Budget {
                 iterations: c.iterations(rung),
                 trees: c.trees,
                 parallel: true,
-            }),
+            },
         };
-        let opponent = game::Entrant {
-            name: c.opponent.clone(),
-            budget: None,
-        };
+        let opponent = Entrant::Fixed(c.opponent.clone());
         let (a, b) = match against {
-            Against::Opponent => (search("mcts-hidden", rung), opponent),
-            Against::Omniscient => (search("mcts-omniscient", rung), opponent),
-            Against::Below => (search("mcts-hidden", rung), search("mcts-hidden", rung - 1)),
+            Against::Opponent => (search(Sight::Hidden, rung), opponent),
+            Against::Omniscient => (search(Sight::Omniscient, rung), opponent),
+            Against::Below => (search(Sight::Hidden, rung), search(Sight::Hidden, rung - 1)),
         };
         let (pair, seat) = (g / 2, (g % 2) as u8);
         Spec {

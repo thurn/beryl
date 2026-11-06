@@ -11,7 +11,7 @@ use std::path::Path;
 use beryl_engine::GameTable;
 
 use super::files;
-use super::game::{self, Build, Game, Line, Played, Stop};
+use super::game::{self, Build, Game, GameDecision, Line, Played, Resume, Stop};
 use super::schedule::{self, Config};
 use super::standings::Standings;
 use super::{GameRecord, Spec, Verdict};
@@ -38,7 +38,7 @@ pub fn verify(t: &GameTable, dir: &Path, c: &Config, build: &Build<'_>) -> Resul
     for g in scored() {
         let spec = check.spec(g)?;
         let played = check
-            .replay(&spec, &check.log(&g.game)?, [u32::MAX; 2], None)?
+            .replay(&spec, &check.log(&g.game)?, [Resume::Log; 2], None)?
             .expect("a game replayed to its end");
         let path = dir.join("transcripts").join(format!("{}.txt", g.game));
         let logged = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -61,7 +61,12 @@ pub fn verify(t: &GameTable, dir: &Path, c: &Config, build: &Build<'_>) -> Resul
     let next = Spec::new(c, m, standings.get(m).games);
     let lines = check.log(&next.key)?;
     if !lines.is_empty() {
-        check.replay(&next, &lines, [u32::MAX; 2], Some(lines.len()))?;
+        check.replay(
+            &next,
+            &lines,
+            [Resume::Log; 2],
+            Some(GameDecision(lines.len())),
+        )?;
     }
     // Searches of the cheapest rung, evenly spaced, each searched again: one that reused
     // the trees of the decisions before it from the fresh search that planted them, so a
@@ -78,9 +83,10 @@ pub fn verify(t: &GameTable, dir: &Path, c: &Config, build: &Build<'_>) -> Resul
     let step = searches.len().div_ceil(SAMPLE).max(1);
     let mut repeated = 0;
     for &(g, i, seat, chain) in searches.iter().step_by(step) {
-        let mut from = [u32::MAX; 2];
-        from[seat] = chain;
-        check.replay(&check.spec(g)?, &check.log(&g.game)?, from, Some(i + 1))?;
+        let mut from = [Resume::Log; 2];
+        from[seat] = Resume::At(chain);
+        let until = Some(GameDecision(i + 1));
+        check.replay(&check.spec(g)?, &check.log(&g.game)?, from, until)?;
         repeated += 1;
     }
     Ok(format!(
@@ -117,14 +123,14 @@ impl Check<'_> {
         }
     }
 
-    /// Replays a game through its log, each seat's search asked from its `from`th decision,
-    /// to its end, or with `until` to that many decisions, and then returns nothing.
+    /// Replays a game through its log, each seat's search asked from where `from` says, to
+    /// its end, or with `until` to that decision, and then returns nothing.
     fn replay(
         &self,
         spec: &Spec,
         lines: &[Line],
-        from: [u32; 2],
-        until: Option<usize>,
+        from: [Resume; 2],
+        until: Option<GameDecision>,
     ) -> Result<Option<Played>, String> {
         let g = Game {
             seed: spec.seed,
@@ -142,7 +148,10 @@ impl Check<'_> {
             |_, _, _| Ok(()),
         ) {
             Ok(played) if until.is_none() => Ok(Some(played)),
-            Ok(_) => Err(format!("{key}: the game ends before decision {until:?}")),
+            Ok(_) => Err(format!(
+                "{key}: the game ends before decision {}",
+                until.unwrap_or_default()
+            )),
             Err(Stop::Reached(_)) if until.is_some() => Ok(None),
             Err(Stop::Reached(i)) => Err(format!("{key}: replay stopped at decision {i}")),
             Err(Stop::Differs {
@@ -160,18 +169,18 @@ impl Check<'_> {
 #[cfg(test)]
 mod tests {
     use beryl_engine::{Choice, Decision, Observation};
-    use beryl_search::Search;
+    use beryl_search::{Agent, AgentDecision, Search};
 
-    use super::super::game::{Choose, Entrant};
+    use super::super::game::Entrant;
     use super::*;
 
     /// An agent that answers as another but for its third real choice.
     struct Off {
-        inner: Box<dyn Choose>,
+        inner: Box<dyn Agent>,
         choices: u32,
     }
 
-    impl Choose for Off {
+    impl Agent for Off {
         fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice {
             let c = self.inner.choose(obs, d);
             if d.len() < 2 {
@@ -189,20 +198,24 @@ mod tests {
     /// A search that answers otherwise only where it reused the trees of the decision
     /// before: what a change to how trees are kept could do.
     struct Reuses {
-        inner: Box<dyn Choose>,
+        inner: Box<dyn Agent>,
     }
 
-    impl Choose for Reuses {
+    impl Agent for Reuses {
         fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice {
             let c = self.inner.choose(obs, d);
-            match self.inner.searched() {
-                Some((Some(s), _)) if s.chain != s.decision => Choice((c.0 + 1) % d.len() as u8),
+            match self.inner.last_search() {
+                Some(s) if s.chain != s.decision => Choice((c.0 + 1) % d.len() as u8),
                 _ => c,
             }
         }
 
-        fn searched(&self) -> Option<(Option<&Search>, u32)> {
-            self.inner.searched()
+        fn last_search(&self) -> Option<&Search> {
+            self.inner.last_search()
+        }
+
+        fn resume_point(&self) -> Option<AgentDecision> {
+            self.inner.resume_point()
         }
     }
 
@@ -234,16 +247,19 @@ mod tests {
         assert!(ok.starts_with("2 games replayed"), "{ok}");
         let opponent = |t: &GameTable, e: &Entrant, seed, from| {
             let inner = game::build(t, e, seed, from)?;
-            Ok(if e.budget.is_none() {
-                Box::new(Off { inner, choices: 0 }) as Box<dyn Choose>
-            } else {
-                inner
+            Ok(match e {
+                Entrant::Fixed(_) => Box::new(Off { inner, choices: 0 }) as Box<dyn Agent>,
+                Entrant::Search { .. } => inner,
             })
         };
         let e = verify(&t, &dir, &c, &opponent).unwrap_err();
         assert!(e.starts_with("4-v-expert-p000-s0 decision "), "{e}");
         let search = |t: &GameTable, e: &Entrant, seed: u64, from| {
-            game::build(t, e, if e.budget.is_some() { !seed } else { seed }, from)
+            let seed = match e {
+                Entrant::Search { .. } => !seed,
+                Entrant::Fixed(_) => seed,
+            };
+            game::build(t, e, seed, from)
         };
         let e = verify(&t, &dir, &c, &search).unwrap_err();
         assert!(
@@ -262,10 +278,9 @@ mod tests {
         );
         let reuse = |t: &GameTable, e: &Entrant, seed, from| {
             let inner = game::build(t, e, seed, from)?;
-            Ok(if e.budget.is_some() {
-                Box::new(Reuses { inner }) as Box<dyn Choose>
-            } else {
-                inner
+            Ok(match e {
+                Entrant::Search { .. } => Box::new(Reuses { inner }) as Box<dyn Agent>,
+                Entrant::Fixed(_) => inner,
             })
         };
         let e = verify(&t, &dir, &c, &reuse).unwrap_err();

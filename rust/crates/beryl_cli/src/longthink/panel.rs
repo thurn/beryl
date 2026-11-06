@@ -11,6 +11,7 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
+use super::game::GameDecision;
 use super::schedule::{Against, Config, Matchup};
 use super::standings::{Standing, Standings, climb_text};
 use super::{GameRecord, Verdict, rung_name};
@@ -59,7 +60,7 @@ pub struct Now {
     pub turn: u16,
     pub life: [i16; 2],
     pub hand: [u32; 2],
-    pub decision: usize,
+    pub decision: GameDecision,
     /// When a search is deciding: the rollouts it has run and its budget.
     pub search: Option<(u64, u32)>,
     /// Seconds spent on the decision so far.
@@ -498,7 +499,7 @@ mod tests {
                 turn: 9,
                 life: [14, 9],
                 hand: [4, 3],
-                decision: 64,
+                decision: GameDecision(64),
                 search: Some((58_120, 100_000)),
                 seconds: 3.1,
                 saved: Some(0.31),
@@ -605,7 +606,7 @@ Elo/×3  +103 ±47      last 10  ●●○●●●○●●◐
                 turn: 1,
                 life: [20, 20],
                 hand: [7, 7],
-                decision: 0,
+                decision: GameDecision(0),
                 search: Some((0, 3_000)),
                 seconds: 0.0,
                 saved: None,
@@ -685,7 +686,7 @@ Elo/×3  +103 ±47      last 10  ●●○●●●○●●◐
             ]
         );
         g[0].outcome = Crashed;
-        g[0].crashed_at = Some(9);
+        g[0].crashed_at = Some(GameDecision(9));
         assert_eq!(
             game_line(&c, &g[0], None, true),
             "\x1b[31m!\x1b[0m 100k v expert  s0·A  crashed at decision 9"
