@@ -4,7 +4,7 @@
 use beryl_cards::CARDS;
 use beryl_cards::decks::WU_CONTROL;
 use beryl_engine::Seat;
-use beryl_session::protocol::{Candidate, Kind};
+use beryl_session::protocol::{Candidate, Kind, StackItem};
 use beryl_session::replay::Entry;
 use beryl_session::{
     CandidateIndex, Game, PlayerView, SessionError, SessionId, StartGame, Status, StopsSetting,
@@ -51,7 +51,9 @@ fn answer(game: &mut Game, view: &PlayerView, index: usize) -> PlayerView {
 }
 
 /// Plays the game with the human passing or playing a land, until they hold priority with a
-/// spell whose cast asks for a target: the view there, and that cast's index.
+/// spell whose cast asks for a target: the view there, and that cast's index. On the way, a
+/// trigger's target asked once a cast is complete (an enters trigger, as smart stops let the
+/// spell resolve) is checked to be no part of the cast: it cannot be taken back.
 fn to_a_targeted_cast(game: &mut Game) -> (PlayerView, usize) {
     let mut view = to_human(game);
     for _ in 0..400 {
@@ -64,8 +66,20 @@ fn to_a_targeted_cast(game: &mut Game) -> (PlayerView, usize) {
                 // Look ahead in a copy of the game: does the cast ask a target?
                 let mut ahead = Game::from_replay(&CARDS, game.replay(), SESSION).unwrap().0;
                 let next = answer(&mut ahead, &view, i);
-                if deciding(&next).is_some_and(|n| n.kind == Kind::Target) {
-                    return (view, i);
+                let Some(n) = deciding(&next).filter(|n| n.kind == Kind::Target) else {
+                    continue;
+                };
+                let Candidate::Cast { slot, .. } = c.option else {
+                    unreachable!("a cast");
+                };
+                match next.stack.last() {
+                    Some(StackItem::Spell { slot: s, .. }) if *s == slot => return (view, i),
+                    Some(StackItem::Ability {
+                        triggered: true, ..
+                    }) => {
+                        assert!(!n.cancellable, "a trigger's target is no part of a cast");
+                    }
+                    _ => {}
                 }
             }
         }
