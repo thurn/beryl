@@ -490,59 +490,69 @@ impl Policy<'_> {
             TargetKind::Player => 0,
             _ => REMOVAL_MIN,
         };
-        match self.best_target(spec, friendly) {
-            Some(best) if best >= min => v,
-            _ if spec.optional && !matches!(spec.kind, TargetKind::Spell) => v / 2,
-            _ => 0,
+        // The best target is worth `min` exactly when some target is.
+        if self.target_values(spec, friendly).any(|best| best >= min) {
+            v
+        } else if spec.optional && !matches!(spec.kind, TargetKind::Spell) {
+            v / 2
+        } else {
+            0
         }
     }
 
     /// The most valuable object a spec could target on the side it should: the opponent's
     /// for a harmful effect, ours for a helpful one. Players count as 0.
     pub(crate) fn best_target(&self, spec: &TargetSpec, friendly: bool) -> Option<i32> {
+        self.target_values(spec, friendly).max()
+    }
+
+    /// What each object a spec could target on the side it should is worth, as
+    /// [`Policy::best_target`] weighs them, players as 0.
+    fn target_values<'s>(
+        &'s self,
+        spec: &'s TargetSpec,
+        friendly: bool,
+    ) -> impl Iterator<Item = i32> + 's {
         let side = if friendly {
             self.me
         } else {
             self.me.opponent()
         };
-        let ok = |slot: Slot, controller: Seat| {
+        let ok = move |slot: Slot, controller: Seat| {
             controller == side && self.obs.matches(self.t, &spec.filter, slot)
         };
-        let mut top: Option<i32> = None;
-        let mut offer = |v: i32| top = Some(top.map_or(v, |t| t.max(v)));
         let permanents = matches!(
             spec.kind,
             TargetKind::Permanent | TargetKind::SpellOrPermanent
         );
         let spells = matches!(spec.kind, TargetKind::Spell | TargetKind::SpellOrPermanent);
-        if permanents {
-            for &slot in self.obs.battlefield() {
-                if ok(slot, self.obs.controller(slot)) {
-                    offer(self.value(slot));
-                }
-            }
+        let graveyard = spec.kind == TargetKind::GraveyardCard;
+        let on_battlefield = if permanents {
+            self.obs.battlefield()
+        } else {
+            &[]
         }
-        if spells {
-            for e in self.obs.stack() {
-                if let Some(r) = e.spell()
-                    && ok(r.slot, e.controller)
-                {
-                    offer(self.value(r.slot));
-                }
-            }
+        .iter()
+        .filter(move |&&slot| ok(slot, self.obs.controller(slot)))
+        .map(|&slot| self.value(slot));
+        let on_stack = if spells { self.obs.stack() } else { &[] }
+            .iter()
+            .filter_map(|e| e.spell().map(|r| (r.slot, e.controller)))
+            .filter(move |&(slot, controller)| ok(slot, controller))
+            .map(|(slot, _)| self.value(slot));
+        let graveyard = if graveyard {
+            self.obs.graveyard(side)
+        } else {
+            &[]
         }
-        match spec.kind {
-            TargetKind::GraveyardCard => {
-                for &slot in self.obs.graveyard(side) {
-                    if self.obs.matches(self.t, &spec.filter, slot) {
-                        offer(self.value(slot));
-                    }
-                }
-            }
-            TargetKind::Player => offer(0),
-            _ => {}
-        }
-        top
+        .iter()
+        .filter(|&&slot| self.obs.matches(self.t, &spec.filter, slot))
+        .map(|&slot| self.value(slot));
+        let player = (spec.kind == TargetKind::Player).then_some(0);
+        on_battlefield
+            .chain(on_stack)
+            .chain(graveyard)
+            .chain(player)
     }
 
     /// What hitting each permanent `spec`'s filter accepts gains a harmful effect: the value of
