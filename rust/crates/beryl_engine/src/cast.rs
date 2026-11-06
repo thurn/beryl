@@ -298,6 +298,23 @@ fn candidates(
     x: u8,
     source: Option<Slot>,
 ) -> TargetSet {
+    match domain(s, spec, you, itself, source) {
+        TargetSet::Objects(within) => {
+            TargetSet::Objects(spec.filter.select_x(s, t, within, you, x))
+        }
+        players @ TargetSet::Players(_) => players,
+    }
+}
+
+/// What [`candidates`] chooses from: the players a spec can choose, or the objects its filter
+/// is still to pass on.
+fn domain(
+    s: &State,
+    spec: &TargetSpec,
+    you: Seat,
+    itself: Option<Slot>,
+    source: Option<Slot>,
+) -> TargetSet {
     let mut within = match spec.kind {
         TargetKind::Player => {
             let players = Seat::BOTH
@@ -317,7 +334,32 @@ fn candidates(
     if let Some(source) = source.filter(|_| spec.other) {
         within.remove(source);
     }
-    TargetSet::Objects(spec.filter.select_x(s, t, within, you, x))
+    TargetSet::Objects(within)
+}
+
+/// Whether [`candidates`] holds at least `spec.count` targets, found without testing the
+/// filter on more objects than that takes.
+fn enough_candidates(
+    s: &State,
+    t: &GameTable,
+    spec: &TargetSpec,
+    you: Seat,
+    itself: Option<Slot>,
+    x: u8,
+    source: Option<Slot>,
+) -> bool {
+    let need = usize::from(spec.count);
+    match domain(s, spec, you, itself, source) {
+        TargetSet::Objects(within) => {
+            within
+                .iter()
+                .filter(|&slot| spec.filter.matches_x(s, t, slot, you, x))
+                .take(need)
+                .count()
+                >= need
+        }
+        TargetSet::Players(players) => players.count_ones() as usize >= need,
+    }
 }
 
 impl TargetSet {
@@ -342,10 +384,9 @@ fn targetable(
     source: Option<Slot>,
 ) -> bool {
     ability.is_none_or(|a| {
-        a.targets.iter().all(|spec| {
-            spec.optional
-                || candidates(s, t, spec, you, itself, x, source).count() >= u32::from(spec.count)
-        })
+        a.targets
+            .iter()
+            .all(|spec| spec.optional || enough_candidates(s, t, spec, you, itself, x, source))
     })
 }
 
