@@ -87,6 +87,24 @@ fn flashback(ctx: &mut EffectCtx) -> Flow {
     Ok(())
 }
 
+/// "Target instant or sorcery card in your graveyard gains flashback until end of turn. The
+/// flashback cost is equal to its mana cost."
+fn snapback(ctx: &mut EffectCtx) -> Flow {
+    if let Some(card) = ctx.target_object(0) {
+        let you = ctx.controller();
+        ctx.grant_flashback(card, you);
+    }
+    Ok(())
+}
+
+/// "Return target spell to its owner's hand."
+fn bounce_spell(ctx: &mut EffectCtx) -> Flow {
+    if let Some(spell) = ctx.target_object(0) {
+        ctx.return_to_hand(spell);
+    }
+    Ok(())
+}
+
 /// "Look at target opponent's hand. You may exile a nonland card from it. For as long as that
 /// card remains exiled, its owner may cast it. A spell cast this way costs {2} more to cast."
 fn binder(ctx: &mut EffectCtx) -> Flow {
@@ -449,6 +467,44 @@ pub(crate) static FLASHBACK: CardDef = CardDef {
     }],
 };
 
+pub(crate) static SNAPBACK: CardDef = CardDef {
+    name: "Test Snapback",
+    tokens: &[],
+    faces: &[Face {
+        cost: mana(0, 0, 1),
+        types: Types::INSTANT,
+        abilities: &[Ability {
+            kind: AbilityKind::Spell,
+            targets: &[TargetSpec::one(
+                TargetKind::GraveyardCard,
+                Filter::All(&[
+                    Filter::Types(Types::INSTANT.union(Types::SORCERY)),
+                    Filter::Whose(Whose::You),
+                ]),
+            )],
+            body: snapback,
+            ..Ability::NONE
+        }],
+        ..Face::EMPTY
+    }],
+};
+
+pub(crate) static BOUNCE: CardDef = CardDef {
+    name: "Test Bounce",
+    tokens: &[],
+    faces: &[Face {
+        cost: mana(0, 0, 1),
+        types: Types::INSTANT,
+        abilities: &[Ability {
+            kind: AbilityKind::Spell,
+            targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any)],
+            body: bounce_spell,
+            ..Ability::NONE
+        }],
+        ..Face::EMPTY
+    }],
+};
+
 pub(crate) static BINDER: CardDef = CardDef {
     name: "Test Binder",
     tokens: &[],
@@ -507,7 +563,7 @@ pub(crate) static STINGER: CardDef = CardDef {
 pub(crate) static CAST_CARDS: CardTable = CardTable::new(&[
     &LAND, &ISLAND, &DUAL, &CRYPT, &STRIP, &HQ, &BEAR, &REMOVAL, &TITHE, &LIES, &PONDER, &FLASHER,
     &DIVER, &TRAINER, &OVERLORD, &STUPOR, &RAVELER, &EMPEROR, &FLASHBACK, &BINDER, &LOOTER,
-    &STINGER,
+    &STINGER, &SNAPBACK, &BOUNCE,
 ]);
 
 /// Every test card, two of most, and lands.
@@ -534,6 +590,8 @@ pub(crate) const EVERYTHING: &Decklist = &[
     (1, "Test Binder"),
     (1, "Test Looter"),
     (1, "Test Stinger"),
+    (1, "Test Snapback"),
+    (1, "Test Bounce"),
 ];
 
 /// A game of [`EVERYTHING`] mirrors, with empty hands, set up position by position.

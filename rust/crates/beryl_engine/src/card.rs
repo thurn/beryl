@@ -167,6 +167,30 @@ impl Face {
     pub fn spell_ability(&self) -> Option<&'static Ability> {
         self.abilities.iter().find(|a| a.kind == AbilityKind::Spell)
     }
+
+    /// The spell ability of this face cast with the options `costs`: its overloaded one when
+    /// its overload cost is paid ([`CastingOption::Overload`]), else
+    /// [`Face::spell_ability`].
+    pub fn spell_ability_with(&self, costs: Castings) -> Option<&'static Ability> {
+        costs
+            .paid(self)
+            .find_map(|o| match o {
+                CastingOption::Overload { ability, .. } => {
+                    Some(&self.abilities[usize::from(ability)])
+                }
+                _ => None,
+            })
+            .or_else(|| self.spell_ability())
+    }
+
+    /// The colors of the card that paying `costs` exiles from its caster's hand, such as
+    /// Subtlety's evoke cost, "Exile a blue card from your hand"; none for no such card.
+    pub fn exiles_with(&self, costs: Castings) -> Colors {
+        costs.paid(self).fold(Colors::NONE, |colors, o| match o {
+            CastingOption::Evoke { exile, .. } => colors.union(exile),
+            _ => colors,
+        })
+    }
 }
 
 impl Face {
@@ -485,6 +509,7 @@ pub enum Subtype {
     Horror,
     Human,
     Illusion,
+    Incarnation,
     Insect,
     Knight,
     Merfolk,
@@ -502,7 +527,7 @@ pub enum Subtype {
 }
 
 impl Subtype {
-    pub const ALL: [Subtype; 30] = [
+    pub const ALL: [Subtype; 31] = [
         Subtype::Plains,
         Subtype::Island,
         Subtype::Swamp,
@@ -520,6 +545,7 @@ impl Subtype {
         Subtype::Horror,
         Subtype::Human,
         Subtype::Illusion,
+        Subtype::Incarnation,
         Subtype::Insect,
         Subtype::Knight,
         Subtype::Merfolk,
@@ -553,6 +579,7 @@ impl Subtype {
             | Subtype::Horror
             | Subtype::Human
             | Subtype::Illusion
+            | Subtype::Incarnation
             | Subtype::Insect
             | Subtype::Knight
             | Subtype::Merfolk
@@ -774,6 +801,19 @@ pub enum CastingOption {
     /// cost,' 'If you chose to pay this permanent's impending cost, it enters with N time
     /// counters on it'".
     Impending { cost: ManaCost, counters: u8 },
+    /// [CR 702.96a](https://yawgatog.com/resources/magic-rules/#R70296a): "Overload [cost]"
+    /// means "You may choose to pay [cost] rather than pay this spell's mana cost" and "If you
+    /// chose to pay this spell's overload cost, change its text by replacing all instances of
+    /// the word 'target' with the word 'each.'" The changed text is the face's spell ability
+    /// at index `ability`, an untargeted [`AbilityKind::Spell`] the face lists after its own.
+    Overload { cost: ManaCost, ability: u8 },
+    /// [CR 702.74a](https://yawgatog.com/resources/magic-rules/#R70274a): "Evoke [cost]" means
+    /// "You may cast this card by paying [cost] rather than paying its mana cost" and "When
+    /// this permanent enters, if its evoke cost was paid, its controller sacrifices it." The
+    /// cost is `cost` and, unless `exile` is empty, a card of one of those colors exiled from
+    /// its caster's hand, as Subtlety's "Evoke--Exile a blue card from your hand." The face
+    /// lists [`Ability::evoke`] too.
+    Evoke { cost: ManaCost, exile: Colors },
 }
 
 impl CastingOption {
@@ -781,14 +821,22 @@ impl CastingOption {
     /// ([CR 118.9](https://yawgatog.com/resources/magic-rules/#R1189)) instead of on top of
     /// it.
     pub fn is_alternative(self) -> bool {
-        matches!(self, CastingOption::Impending { .. })
+        matches!(
+            self,
+            CastingOption::Impending { .. }
+                | CastingOption::Overload { .. }
+                | CastingOption::Evoke { .. }
+        )
     }
 
+    /// Its mana cost: all of it, or the mana part of an evoke cost.
     pub fn cost(self) -> ManaCost {
         match self {
             CastingOption::Kicker { cost, .. }
             | CastingOption::Offspring(cost)
-            | CastingOption::Impending { cost, .. } => cost,
+            | CastingOption::Impending { cost, .. }
+            | CastingOption::Overload { cost, .. }
+            | CastingOption::Evoke { cost, .. } => cost,
         }
     }
 }
@@ -946,6 +994,17 @@ impl Ability {
                 Trigger::Step(TurnStep::End, Whose::You),
                 crate::effect::remove_a_time_counter,
             )
+        }
+    }
+
+    /// Evoke's triggered ability
+    /// ([CR 702.74a](https://yawgatog.com/resources/magic-rules/#R70274a)): "When this
+    /// permanent enters, if its evoke cost was paid, its controller sacrifices it." The face
+    /// lists [`CastingOption::Evoke`] too.
+    pub const fn evoke() -> Ability {
+        Ability {
+            condition: Some(crate::effect::evoked),
+            ..Ability::triggered(Trigger::Enters, crate::effect::sacrifice_itself)
         }
     }
 

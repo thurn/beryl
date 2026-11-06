@@ -77,6 +77,9 @@ COLORS: Mapping[str, str] = {
 # optional cost's type.
 COSTS: Mapping[str, str] = {
     "Overlord of the Mistmoors": "Impending",
+    "Damn": "Overload",
+    "Winds of Abandon": "Overload",
+    "Subtlety": "Evoke",
     "Thieving Skydiver": "Kicker",
     "Thundertrap Trainer": "Offspring",
 }
@@ -285,6 +288,14 @@ def export(
                         for forced in cast(list[JsonObject], trace[i].get("forced", []))
                         if forced["kind"] == "Target"
                     )
+                flashback = (
+                    cast(list[str], trace[i].get("flashback", []))
+                    if i < len(trace)
+                    else []
+                )
+                if action["action"] == "Cast" and action["card"] in flashback:
+                    # The harness finds Forge's flashback spell but fails to play it.
+                    raise Unsupported(f"casting {action['card']} with flashback")
                 converted = step(action)
                 if converted is None:
                     unchecked += 1

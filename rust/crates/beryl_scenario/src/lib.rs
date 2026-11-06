@@ -511,6 +511,10 @@ pub struct Position {
     /// The questions with one answer since the previous action began, which Beryl answers
     /// without asking and an oracle may ask.
     pub forced: Vec<Forced>,
+    /// The cards that have flashback here, by name, as a Snapcaster Mage grants it: an oracle
+    /// casts them with their flashback ability, which a permission to cast a card from its
+    /// graveyard is not.
+    pub flashback: Vec<&'static str>,
 }
 
 /// A question with one answer, as the answer a scenario would script, and the turn and step

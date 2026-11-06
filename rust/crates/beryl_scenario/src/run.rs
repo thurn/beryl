@@ -421,8 +421,16 @@ impl Runner<'_> {
             Step::Decide(d) => (Some(d.player), Some(d.kind)),
             Step::Over(_) => (None, None),
         };
+        let flashback = self
+            .s
+            .permissions()
+            .iter()
+            .filter(|p| p.flashback && self.s.is_current(p.object))
+            .map(|p| self.name(p.object.slot))
+            .collect();
         Position {
             forced: std::mem::take(&mut self.forced),
+            flashback,
             turn: turn.number,
             step: turn.step,
             active: turn.active,

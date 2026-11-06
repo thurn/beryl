@@ -186,7 +186,7 @@ source: number | null,
  */
 halt: boolean, };
 
-export type AskView = { "kind": "plain" } | { "kind": "scry", count: number, } | { "kind": "look", player: Side, zone: ZoneName, count: number, to: ZoneName, eligible: Array<number>, } | { "kind": "putBack", count: number, } | { "kind": "fateseal", player: Side, } | { "kind": "take", count: number, take: number, } | { "kind": "bottom", count: number, } | { "kind": "discardBasicLand", count: number, } | { "kind": "explore" } | { "kind": "untap", max: number, } | { "kind": "unlessPays", cost: string, } | { "kind": "payLife", life: number, } | { "kind": "cleanup", count: number, };
+export type AskView = { "kind": "plain" } | { "kind": "scry", count: number, } | { "kind": "look", player: Side, zone: ZoneName, count: number, to: ZoneName, eligible: Array<number>, } | { "kind": "putBack", count: number, } | { "kind": "fateseal", player: Side, } | { "kind": "take", count: number, take: number, } | { "kind": "bottom", count: number, } | { "kind": "discardBasicLand", count: number, } | { "kind": "topOrBottom", card: number, } | { "kind": "explore" } | { "kind": "untap", max: number, } | { "kind": "unlessPays", cost: string, } | { "kind": "payLife", life: number, } | { "kind": "cleanup", count: number, };
 
 export type PassTo = { "kind": "resolve" } | { "kind": "combatDamage" } | { "kind": "step", step: Step, } | { "kind": "nextTurn" };
 
@@ -227,7 +227,7 @@ export type StopsSetting = "smart" | "exact";
 
 export type GameEvent = { "kind": "zoneChange", slot: number, from: ZoneName, to: ZoneName, reason: Why, } | { "kind": "damage", source: number, to: TargetRef, amount: number, combat: boolean, } | { "kind": "draw", player: Side, cards: number, } | { "kind": "lifeGain", player: Side, amount: number, } | { "kind": "lifeLoss", player: Side, amount: number, } | { "kind": "countersAdded", slot: number, counter: Counter, amount: number, } | { "kind": "countersRemoved", slot: number, counter: Counter, amount: number, } | { "kind": "tap", slot: number, } | { "kind": "untap", slot: number, } | { "kind": "tokensCreated", controller: Side, tokens: Array<number>, } | { "kind": "cast", slot: number, controller: Side, } | { "kind": "attack", player: Side, attackers: Array<number>, } | { "kind": "stepBegins", step: Step, active: Side, } | { "kind": "gainControl", slot: number, player: Side, } | { "kind": "coinFlip", player: Side, won: boolean, } | { "kind": "lose", player: Side, } | { "kind": "win", player: Side, };
 
-export type Kind = "priority" | "playOrDraw" | "keepOrMulligan" | "putOnBottom" | "discard" | "legendRule" | "triggerOrder" | "payLife" | "attacker" | "attackTarget" | "blocker" | "blockTarget" | "damageDivision" | "x" | "targetCount" | "target" | "paymentPlan" | "manaPayment" | "castOffer" | "yesNo" | "chooseObject" | "crew" | "chooseUpTo" | "waterbend";
+export type Kind = "priority" | "playOrDraw" | "keepOrMulligan" | "putOnBottom" | "discard" | "legendRule" | "triggerOrder" | "payLife" | "attacker" | "attackTarget" | "blocker" | "blockTarget" | "damageDivision" | "x" | "targetCount" | "target" | "paymentPlan" | "manaPayment" | "castOffer" | "yesNo" | "chooseObject" | "crew" | "chooseUpTo" | "waterbend" | "exileCost";
 
 export type Step = "untap" | "upkeep" | "draw" | "precombatMain" | "beginningOfCombat" | "declareAttackers" | "declareBlockers" | "firstStrikeDamage" | "combatDamage" | "endOfCombat" | "postcombatMain" | "end" | "cleanup";
 

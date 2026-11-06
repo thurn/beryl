@@ -1215,7 +1215,9 @@ impl Expert<'_> {
                 }
                 CastingOption::Offspring(c) => cost += i32::from(c.mana_value()),
                 // An alternative cost, instead of the mana cost.
-                CastingOption::Impending { cost: c, .. } => cost = i32::from(c.mana_value()),
+                CastingOption::Impending { cost: c, .. }
+                | CastingOption::Overload { cost: c, .. }
+                | CastingOption::Evoke { cost: c, .. } => cost = i32::from(c.mana_value()),
             }
         }
         self.mana(self.me()) - cost
@@ -2236,7 +2238,7 @@ impl Expert<'_> {
         let face = self.p.t.def(e.card).face(e.face);
         let a = match e.ability {
             Some(ability) => face.ability(ability),
-            None => face.spell_ability()?,
+            None => face.spell_ability_with(e.costs)?,
         };
         a.targets.first()
     }

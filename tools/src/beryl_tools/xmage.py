@@ -137,14 +137,28 @@ MANA_CHOICES = (
 )
 
 # Cards whose casting options (Beryl's `costs` bits, in order) XMage asks about when the spell
-# is cast: for each, XMage's answer for paying it and for not paying it.
-CAST_QUESTIONS: dict[str, list[tuple[str, str]]] = {
+# is cast: for each, XMage's answer for paying it and for not paying it, if it asks then.
+CAST_QUESTIONS: dict[str, list[tuple[str, str | None]]] = {
     # An alternative cost, a choice among the ways to cast it.
     "Overlord of the Mistmoors": [("Cast with Impending", "Cast with no")],
+    # Asked only while a blue card in hand could pay it.
+    "Subtlety": [("Cast with Evoke", None)],
     # Kicker and offspring, yes or no.
     "Thieving Skydiver": [("Yes", "No")],
     "Thundertrap Trainer": [("Yes", "No")],
 }
+
+# Cards with overload (bit 0 of `costs`), which XMage casts overloaded as a spell of its own,
+# "<name> with overload".
+OVERLOADS = ("Damn", "Winds of Abandon")
+
+# Cards with two triggers that wait together, by the start of XMage's text of the one a
+# TriggerOrder answer naming the card puts on the stack: Beryl's first, by ability index.
+TRIGGERS_FIRST: dict[str, str] = {"Subtlety": "When {this} enters, choose"}
+
+# Resolving cards whose search of a library XMage asks for even with nothing to find, by the
+# searcher relative to the spell's controller; Beryl asks nothing then.
+FORCED_SEARCHES: dict[str, str] = {"Winds of Abandon": "opponent"}
 
 # Cards whose targets go in the cast command rather than the target queue: TestPlayer's
 # addTarget cannot choose a permanent for a "spell or permanent" target.
@@ -167,7 +181,7 @@ MAY_CHOOSE: dict[str, tuple[bool, str]] = {
 # Questions with one answer, which Beryl answers silently, that XMage asks anyway: targets (with
 # none to choose too), X, whose limit XMage leaves to the payment, and the permanents to tap
 # for a crew or waterbend cost.
-FORCED_ASKED = ("Target", "TargetCount", "X", "Crew", "Waterbend")
+FORCED_ASKED = ("Target", "TargetCount", "X", "Crew", "Waterbend", "ExileCost")
 # Others XMage asks when the one answer stands for several identical cards.
 FORCED_CHOICES = ("Discard", "ChooseObject", "ChooseUpTo")
 
@@ -177,7 +191,7 @@ FORCED_CHOICES = ("Discard", "ChooseObject", "ChooseUpTo")
 UNLESS_PAYS = ("Mana Tithe", "No More Lies")
 
 # Resolving cards whose choices of cards XMage takes from the target queue instead.
-CHOICES_AS_TARGETS = ("Jace, the Mind Sculptor", "Trinket Mage")
+CHOICES_AS_TARGETS = ("Jace, the Mind Sculptor", "Trinket Mage", "Winds of Abandon")
 
 # Resolving cards that may search a library, a yes or no and then the search, which XMage asks
 # as a target from the library (CHOICES_AS_TARGETS) even with no card to find, where Beryl,
@@ -205,6 +219,7 @@ CHOICE_KINDS = (
     "TriggerOrder",
     "Crew",
     "Waterbend",
+    "ExileCost",
 )
 YES_NO_KINDS = ("YesNo", "PayLife", "CastOffer")
 
@@ -216,11 +231,12 @@ class Unsupported(Exception):
 @dataclass(frozen=True)
 class Faces:
     """What the exporter needs from data/cards.json: each card's back face, the back faces that
-    are lands, and printed loyalty by face name."""
+    are lands, printed loyalty by face name, and each card's front mana cost."""
 
     back: dict[str, str]
     land_back: dict[str, str]
     loyalty: dict[str, int]
+    mana_cost: dict[str, str]
 
     @staticmethod
     def load(path: Path) -> Faces:
@@ -228,9 +244,11 @@ class Faces:
         back: dict[str, str] = {}
         land_back: dict[str, str] = {}
         loyalty: dict[str, int] = {}
+        mana_cost: dict[str, str] = {}
         for card in cast(list[Json], data["cards"]):
             faces = cast(list[Json], card["faces"])
             names = [cast(str, f["name"]) for f in faces]
+            mana_cost[names[0]] = cast(str, faces[0].get("mana_cost", ""))
             for face, name in zip(faces, names):
                 if "loyalty" in face:
                     loyalty[name] = int(cast(str, face["loyalty"]))
@@ -239,7 +257,7 @@ class Faces:
                 front_land = "Land" in cast(str, faces[0]["type_line"])
                 if "Land" in cast(str, faces[1]["type_line"]) and not front_land:
                     land_back[names[0]] = names[1]
-        return Faces(back, land_back, loyalty)
+        return Faces(back, land_back, loyalty, mana_cost)
 
 
 def java_string(text: str) -> str:
@@ -267,6 +285,7 @@ class Position:
     flips: list[Json]
     taps: list[str]
     forced: list[Json]
+    flashback: list[str]
 
 
 @dataclass
@@ -427,6 +446,7 @@ class Exporter:
             flips=cast(list[Json], t["flips"]),
             taps=cast(list[str], t["taps"]),
             forced=cast(list[Json], t["forced"]),
+            flashback=cast(list[str], t.get("flashback", [])),
         )
 
     def arrange(self) -> None:
@@ -500,6 +520,7 @@ class Exporter:
             who = self.player(p.decider)
             self.prepare(who, p)
             self.emit(f"resolveTop({self.at(p)}, {who});")
+            self.empty_search(p)
         elif kind == "PlayLand":
             who = self.player(action["player"])
             card = cast(str, action["card"])
@@ -515,11 +536,35 @@ class Exporter:
         else:
             raise Unsupported(f"action {kind}")
 
+    def empty_search(self, p: Position) -> None:
+        """After a `FORCED_SEARCHES` card resolves without Beryl asking for a card, the skip XMage's
+        search with nothing to find asks for."""
+        if not p.stack or p.stack[-1]["name"] not in FORCED_SEARCHES:
+            return
+        following = self.actions[self.index + 1 : self.index + 2]
+        if following and following[0].get("kind") == "ChooseUpTo":
+            return
+        top = p.stack[-1]
+        caster = self.player(top["controller"])
+        searcher = caster
+        if FORCED_SEARCHES[cast(str, top["name"])] == "opponent":
+            searcher = "playerB" if caster == "playerA" else "playerA"
+        self.emit(f"addTarget({searcher}, TestPlayer.TARGET_SKIP);")
+
     def cast(self, action: Json, p: Position) -> None:
         who = self.player(action["player"])
         card = cast(str, action["card"])
         if action["face"]:
             raise Unsupported(f"casting {card}'s back face")
+        costs = cast(int, action["costs"])
+        if card in p.flashback:
+            self.flashback(action, p)
+            return
+        name = card
+        if card in OVERLOADS and costs:
+            if costs != 1:
+                raise Unsupported(f"casting option {costs:#b} of {card}")
+            name, costs = f"{card} with overload", 0
         self.prepare(who, p, starts=True)
         self.pay(who, p, None)
         spell = self.spell_on_top(p)
@@ -529,31 +574,48 @@ class Exporter:
         if p.stack and not any(cast(bool, item["spell"]) for item in p.stack):
             # XMage's spell abilities are named "Cast <card>"; an ability's text is its rule.
             self.emit(
-                f"castSpell({self.at(p)}, {who}, {java_string(card)}, {targets}, "
+                f"castSpell({self.at(p)}, {who}, {java_string(name)}, {targets}, "
                 f'"Cast ", StackClause.WHILE_NOT_ON_STACK);'
             )
         elif spell is None and targets == "TestPlayer.NO_TARGET":
-            self.emit(f"castSpell({self.at(p)}, {who}, {java_string(card)});")
+            self.emit(f"castSpell({self.at(p)}, {who}, {java_string(name)});")
         elif spell is None:
             self.emit(
-                f"castSpell({self.at(p)}, {who}, {java_string(card)}, {targets});"
+                f"castSpell({self.at(p)}, {who}, {java_string(name)}, {targets});"
             )
         else:
             self.emit(
-                f"castSpell({self.at(p)}, {who}, {java_string(card)}, {targets}, "
+                f"castSpell({self.at(p)}, {who}, {java_string(name)}, {targets}, "
                 f"{java_string(spell)});"
             )
-        costs = cast(int, action["costs"])
         questions = CAST_QUESTIONS.get(card, [])
         if costs >> len(questions):
             raise Unsupported(f"casting option {costs:#b} of {card}")
         for bit, answers in enumerate(questions):
             answer = answers[0] if costs >> bit & 1 else answers[1]
-            self.emit(f"setChoice({who}, {java_string(answer)});")
+            if answer is not None:
+                self.emit(f"setChoice({who}, {java_string(answer)});")
         if card in UNLESS_PAYS:
             self.unless_pays[card] = self.target_controller(action["player"], card)
         if card in TAKES:
             self.take_pending = card
+
+    def flashback(self, action: Json, p: Position) -> None:
+        """Casts a card with flashback for its mana cost (Snapcaster Mage) from its owner's
+        graveyard, which XMage activates as the card's "Flashback {cost}" ability. Its targets
+        follow in the target queue. Onto a stack, it is unsupported: the ability that granted
+        flashback resolved in the same Beryl action as what put it there, where XMage's
+        commands resolve one object at a time."""
+        who = self.player(action["player"])
+        card = cast(str, action["card"])
+        if action["costs"]:
+            raise Unsupported(f"flashback of {card} with a casting option")
+        if p.stack:
+            raise Unsupported(f"flashback of {card} onto a stack")
+        text = java_string(f"Flashback {self.faces.mana_cost[card]}")
+        self.prepare(who, p, starts=True)
+        self.pay(who, p, None)
+        self.emit(f"activateAbility({self.at(p)}, {who}, {text});")
 
     def pay(self, who: str, p: Position, source: str | None) -> None:
         """Before a cast or activation at an empty stack, taps the mana sources Beryl's payment
@@ -714,6 +776,8 @@ class Exporter:
                 f"block({self.turn(p.turn)}, {who}, {java_string(card)}, "
                 f"{java_string(attackers[0])});"
             )
+        elif kind == "TriggerOrder" and card in TRIGGERS_FIRST:
+            self.emit(f"setChoice({who}, {java_string(TRIGGERS_FIRST[card])});")
         elif kind in CHOICE_KINDS and card is not None:
             self.emit(
                 f"{self.choice_command(source, kind)}({who}, {java_string(card)});"

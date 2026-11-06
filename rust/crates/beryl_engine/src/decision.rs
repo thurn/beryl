@@ -98,6 +98,9 @@ pub enum DecisionKind {
     /// An artifact or creature to tap for one generic mana of a waterbend cost, as an
     /// [`Opt::Object`], or [`Opt::Done`] to pay the rest with mana (CR 701.67a).
     Waterbend,
+    /// A card from the hand to exile to pay a cost, as evoke's "Exile a blue card from your
+    /// hand" (CR 601.2h).
+    ExileCost,
 }
 
 /// What a decision asks, said once where the rules or a card's code asks it, so that
@@ -141,6 +144,9 @@ pub enum Ask {
     /// Whether to discard a basic land card rather than `count` cards, as Thirst for
     /// Discovery's "discard two cards unless you discard a basic land card".
     DiscardBasicLand { count: u8 },
+    /// Whether the card in `card` goes on top of its owner's library (yes) or the bottom
+    /// (no), as Subtlety's "Its owner puts it on the top or bottom of their library."
+    TopOrBottom { card: Slot },
     /// Whether the card an explore revealed goes to the graveyard
     /// ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)): the controller
     /// "may put the revealed card into their graveyard."

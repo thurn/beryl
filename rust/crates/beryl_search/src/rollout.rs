@@ -130,7 +130,7 @@ impl RolloutPolicy {
                     Some(i32::from((c.option() == Some(Opt::Yes)) == yes))
                 })
             }
-            DecisionKind::PutOnBottom | DecisionKind::Discard => {
+            DecisionKind::PutOnBottom | DecisionKind::Discard | DecisionKind::ExileCost => {
                 best(d, |c| c.object().map(|slot| -p.in_hand(slot)))
             }
             DecisionKind::ChooseObject => best(d, |c| {
@@ -346,10 +346,12 @@ impl Policy<'_> {
         for option in costs.paid(f) {
             v += match option {
                 CastingOption::Kicker { .. } | CastingOption::Offspring(_) => 10,
-                CastingOption::Impending { .. } => -10,
+                CastingOption::Impending { .. } | CastingOption::Overload { .. } => -10,
+                // A card from hand and the permanent itself, for its enters ability alone.
+                CastingOption::Evoke { .. } => -30,
             };
         }
-        match f.spell_ability() {
+        match f.spell_ability_with(costs) {
             Some(a) => self.worth_targeting(a, info.friendly(index_of(f, a)), v),
             None => v,
         }
@@ -453,7 +455,7 @@ impl Policy<'_> {
         let face: &'static Face = def.face(e.face);
         let a = match e.ability {
             Some(ability) => face.ability(ability),
-            None => face.spell_ability()?,
+            None => face.spell_ability_with(e.costs)?,
         };
         let spec = a.targets.first()?;
         let index = match e.ability {

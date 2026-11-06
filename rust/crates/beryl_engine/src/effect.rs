@@ -505,6 +505,27 @@ impl<'a> EffectCtx<'a> {
             extra,
             this_turn,
             exile,
+            flashback: false,
+        });
+        self.checked(r);
+    }
+
+    /// The card in `object`'s slot gains flashback until end of turn, its flashback cost
+    /// equal to its mana cost, for `player` (Snapcaster Mage)
+    /// ([CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a)): "'Flashback
+    /// [cost]' means 'You may cast this card from your graveyard if the resulting spell is an
+    /// instant or sorcery spell by paying [cost] rather than paying its mana cost' and 'If the
+    /// flashback cost was paid, exile this card instead of putting it anywhere else any time
+    /// it would leave the stack.'" Only its owner can cast it from their graveyard, so
+    /// `player` is its owner.
+    pub fn grant_flashback(&mut self, object: ObjectRef, player: Seat) {
+        let r = self.state.permissions.push(CastPermission {
+            object,
+            player,
+            extra: 0,
+            this_turn: true,
+            exile: false,
+            flashback: true,
         });
         self.checked(r);
     }
@@ -596,19 +617,48 @@ impl<'a> EffectCtx<'a> {
     /// Returns a spell or a permanent to its owner's hand
     /// ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)): "If an object would go
     /// to any library, graveyard, or hand other than its owner's, it goes to its owner's
-    /// corresponding zone." A spell leaves the stack without resolving.
+    /// corresponding zone." A spell leaves the stack without resolving, and one cast with
+    /// flashback is exiled instead (CR 702.34a).
     pub fn return_to_hand(&mut self, object: ObjectRef) {
         if !self.state.is_current(object) {
             return;
         }
-        let returns = match self.state.object(object.slot).zone {
-            Zone::Battlefield => true,
-            Zone::Stack => cast::take_spell(self.state, object).is_some(),
-            _ => false,
+        let to = match self.state.object(object.slot).zone {
+            Zone::Battlefield => Some(Zone::Hand),
+            Zone::Stack => cast::take_spell(self.state, object)
+                .map(|e| if e.flashback { Zone::Exile } else { Zone::Hand }),
+            _ => None,
         };
-        if returns {
-            self.move_to(object, Zone::Hand, Reason::Effect);
+        if let Some(to) = to {
+            self.move_to(object, to, Reason::Effect);
         }
+    }
+
+    /// Puts a spell on top of its owner's library, or on the bottom unless `top`. It leaves
+    /// the stack without resolving, and one cast with flashback is exiled instead
+    /// (CR 702.34a).
+    pub fn put_spell_into_library(&mut self, spell: ObjectRef, top: bool) {
+        if !self.state.is_current(spell) {
+            return;
+        }
+        let Some(entry) = cast::take_spell(self.state, spell) else {
+            return;
+        };
+        if entry.flashback {
+            self.move_to(spell, Zone::Exile, Reason::Effect);
+            return;
+        }
+        let r = event::move_batch_to(
+            self.state,
+            self.table,
+            self.sink,
+            Bitboard::single(spell.slot),
+            Zone::Library,
+            if top { Place::Top } else { Place::Bottom },
+            Reason::Effect,
+            Entry::default(),
+        );
+        self.check(r);
     }
 
     /// Puts a permanent into its owner's library under `under` cards from the top, or at the
@@ -855,6 +905,45 @@ impl<'a> EffectCtx<'a> {
         }
     }
 
+    /// Destroys a set of permanents simultaneously (CR 701.8a), as "Destroy each creature"
+    /// does: one event, so "whenever one or more" abilities see them together.
+    pub fn destroy_all(&mut self, objects: Bitboard) {
+        self.move_all(objects, Zone::Graveyard, Reason::Destroy);
+    }
+
+    /// [`EffectCtx::search_library`] for up to `n` cards, as Winds of Abandon's "a basic land
+    /// card" for each creature exiled: those found, still in the library, one
+    /// [`DecisionKind::ChooseUpTo`] at a time. The caller shuffles once they have moved.
+    pub fn search_library_up_to(
+        &mut self,
+        player: Seat,
+        filter: Filter,
+        n: u8,
+    ) -> Result<Bitboard, Pause> {
+        let library = self.state.zone(player, Zone::Library);
+        self.look_at(player, library);
+        let found = filter.select(self.state, self.table, library, player);
+        self.choose_up_to(player, found, n, Ask::Plain)
+    }
+
+    /// Puts cards onto the battlefield tapped, each under its owner's control, simultaneously:
+    /// "Those cards enter tapped."
+    pub fn put_onto_battlefield_tapped(&mut self, cards: Bitboard) {
+        let r = event::move_batch(
+            self.state,
+            self.table,
+            self.sink,
+            cards,
+            Zone::Battlefield,
+            Reason::Effect,
+            Entry {
+                tapped: true,
+                ..Entry::default()
+            },
+        );
+        self.check(r);
+    }
+
     /// Sacrifices a permanent ([CR 701.21a](https://yawgatog.com/resources/magic-rules/#R70121a)):
     /// "To sacrifice a permanent, its controller moves it from the battlefield directly to its
     /// owner's graveyard."
@@ -948,11 +1037,7 @@ impl<'a> EffectCtx<'a> {
     /// ([CR 701.23e](https://yawgatog.com/resources/magic-rules/#R70123e)), and shuffles.
     /// The question is a [`DecisionKind::ChooseUpTo`] whose [`Opt::Done`] finds nothing.
     pub fn search_library(&mut self, player: Seat, filter: Filter) -> Result<Option<Slot>, Pause> {
-        let library = self.state.zone(player, Zone::Library);
-        self.look_at(player, library);
-        let matching = filter.select(self.state, self.table, library, player);
-        let found = self.choose_up_to(player, matching, 1, Ask::Plain)?;
-        Ok(found.iter().next())
+        Ok(self.search_library_up_to(player, filter, 1)?.iter().next())
     }
 
     /// Creates `count` tokens of a predefined kind under this ability's controller
@@ -1245,6 +1330,18 @@ pub fn offspring_copy(ctx: &mut EffectCtx) -> Flow {
             ..TokenEntry::default()
         },
     );
+    Ok(())
+}
+
+/// Evoke's "if its evoke cost was paid" (CR 702.74a).
+pub fn evoked(s: &State, _: &GameTable, tr: &PendingTrigger) -> bool {
+    entered_with(s, tr, ObjectFlags::EVOKED)
+}
+
+/// Evoke's "its controller sacrifices it" (CR 702.74a): the permanent the ability belongs to,
+/// if it is still that object on the battlefield.
+pub fn sacrifice_itself(ctx: &mut EffectCtx) -> Flow {
+    ctx.sacrifice(ctx.source());
     Ok(())
 }
 

@@ -218,6 +218,7 @@ const PROMPTS: Partial<Record<Kind, string>> = {
   crew: "Choose a creature to crew with",
   chooseUpTo: "Choose cards",
   waterbend: "Tap for waterbend?",
+  exileCost: "Exile a card",
 };
 
 /** The prompt's title: what the decision asks, and for whom when there is a source. */

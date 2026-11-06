@@ -4,8 +4,8 @@
 //! ([`crate::typescript`]).
 
 use beryl_engine::card::{
-    Ability, AbilityIx, AbilityKind, CastingOption, Castings, Cost, FaceAbility, FaceIx, ManaColor,
-    ManaCost, Types,
+    Ability, AbilityIx, AbilityKind, CastingOption, Castings, Colors, Cost, FaceAbility, FaceIx,
+    ManaColor, ManaCost, Types,
 };
 use beryl_engine::event::{Event, Reason, Recipient};
 use beryl_engine::state::{CounterKind, ObjectFlags, StackEntry, TurnStep};
@@ -293,6 +293,9 @@ pub enum AskView {
     Bottom { count: u8 },
     /// Whether to discard a basic land card rather than `count` cards.
     DiscardBasicLand { count: u8 },
+    /// Whether the card in `card` goes on top of its owner's library (yes) or the bottom
+    /// (no).
+    TopOrBottom { card: u8 },
     /// Whether the card an explore revealed goes to the graveyard.
     Explore,
     /// Permanents to untap, up to `max`.
@@ -552,6 +555,7 @@ mirror! {
         Priority, PlayOrDraw, KeepOrMulligan, PutOnBottom, Discard, LegendRule, TriggerOrder,
         PayLife, Attacker, AttackTarget, Blocker, BlockTarget, DamageDivision, X, TargetCount,
         Target, PaymentPlan, ManaPayment, CastOffer, YesNo, ChooseObject, Crew, ChooseUpTo, Waterbend,
+        ExileCost,
     }
 }
 
@@ -964,6 +968,7 @@ fn ask_view(obs: Observation<'_>, ask: Ask) -> AskView {
         Ask::Bottom { count } => AskView::Bottom { count },
         Ask::DiscardBasicLand { count } => AskView::DiscardBasicLand { count },
         Ask::Explore => AskView::Explore,
+        Ask::TopOrBottom { card } => AskView::TopOrBottom { card: card.get() },
         Ask::Untap { max } => AskView::Untap { max },
         Ask::UnlessPays { cost } => AskView::UnlessPays {
             cost: mana_text(cost),
@@ -1131,6 +1136,14 @@ fn casting_options(
     let Some(card) = obs.card(slot) else {
         return String::new();
     };
+    // CR 702.34a: a flashback cost is an alternative cost, so no other is paid with it.
+    if obs
+        .permissions()
+        .iter()
+        .any(|p| p.object.slot == slot && p.player == obs.viewer() && p.flashback)
+    {
+        return " with flashback".to_owned();
+    }
     costs
         .paid(t.def(card).face(face))
         .map(|option| match option {
@@ -1139,8 +1152,35 @@ fn casting_options(
             CastingOption::Impending { cost, counters } => {
                 format!(" with impending {counters}, {}", mana_text(cost))
             }
+            CastingOption::Overload { cost, .. } => format!(" with overload {}", mana_text(cost)),
+            CastingOption::Evoke { cost, exile } => {
+                let mut parts = Vec::new();
+                if cost != ManaCost::NONE {
+                    parts.push(mana_text(cost));
+                }
+                if exile != Colors::NONE {
+                    parts.push(format!("exile a {} card", color_words(exile)));
+                }
+                format!(" with evoke, {}", parts.join(", "))
+            }
         })
         .collect()
+}
+
+/// A set of colors as card text names them: "blue", "white or blue".
+fn color_words(colors: Colors) -> String {
+    [
+        (Colors::WHITE, "white"),
+        (Colors::BLUE, "blue"),
+        (Colors::BLACK, "black"),
+        (Colors::RED, "red"),
+        (Colors::GREEN, "green"),
+    ]
+    .into_iter()
+    .filter(|&(c, _)| colors.contains(c))
+    .map(|(_, word)| word)
+    .collect::<Vec<_>>()
+    .join(" or ")
 }
 
 /// The cost of activating ability `ability` of the object in `slot`, as its text reads

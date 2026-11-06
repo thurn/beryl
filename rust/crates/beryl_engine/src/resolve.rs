@@ -259,6 +259,9 @@ fn enter_battlefield(
                 how.flags |= ObjectFlags::IMPENDING;
                 how.counters = Some((CounterKind::Time, counters));
             }
+            CastingOption::Evoke { .. } => how.flags |= ObjectFlags::EVOKED,
+            // An instant or sorcery's, which never enters.
+            CastingOption::Overload { .. } => {}
         }
     }
     event::move_batch(

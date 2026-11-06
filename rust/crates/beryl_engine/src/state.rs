@@ -120,6 +120,8 @@ impl ObjectFlags {
     pub const OFFSPRING: u32 = 1 << 19;
     /// Its impending cost was paid (CR 702.176a).
     pub const IMPENDING: u32 = 1 << 20;
+    /// Its evoke cost was paid (CR 702.74a).
+    pub const EVOKED: u32 = 1 << 21;
 
     pub fn has(self, flag: u32) -> bool {
         self.0 & flag != 0
@@ -498,6 +500,11 @@ pub struct StackEntry {
     pub costs: Castings,
     /// If the spell would be put into its owner's graveyard, it is exiled instead.
     pub exile: bool,
+    /// Cast for its flashback cost, so it is exiled wherever else it would go as it leaves
+    /// the stack ([CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a)): "If the
+    /// flashback cost was paid, exile this card instead of putting it anywhere else any time
+    /// it would leave the stack."
+    pub flashback: bool,
 }
 
 impl StackEntry {
@@ -552,6 +559,12 @@ pub struct CastPermission {
     /// "If that spell would be put into your graveyard, exile it instead." (Jace, Telepath
     /// Unbound)
     pub exile: bool,
+    /// The card has flashback, its cost the card's mana cost (Snapcaster Mage)
+    /// ([CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a)): "'Flashback
+    /// [cost]' means 'You may cast this card from your graveyard if the resulting spell is an
+    /// instant or sorcery spell by paying [cost] rather than paying its mana cost'". Paying it
+    /// is an alternative cost, so the card's own can't be added.
+    pub flashback: bool,
 }
 
 /// An ability that has triggered and waits to be put on the stack.
@@ -651,6 +664,9 @@ pub enum CastStep {
     /// Tapping artifacts and creatures for a waterbend cost's generic mana one at a time;
     /// `left` is the generic mana they may still pay (CR 701.67a).
     Waterbend,
+    /// Choosing the card from the hand that an alternative cost exiles, as evoke's "Exile a
+    /// blue card from your hand" (CR 601.2h).
+    Exile,
 }
 
 /// A spell being cast or an ability being activated.

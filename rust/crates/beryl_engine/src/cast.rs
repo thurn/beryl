@@ -12,8 +12,8 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityIx, AbilityKind, CastingOption, Castings, Face, FaceAbility, FaceIx, Keywords,
-    ManaCost, Rule, TargetKind, TargetSpec, Timing, Types,
+    Ability, AbilityIx, AbilityKind, CastingOption, Castings, Colors, Face, FaceAbility, FaceIx,
+    Keywords, ManaCost, Rule, TargetKind, TargetSpec, Timing, Types,
 };
 use crate::decision::{Ask, Candidates, Decision, DecisionKind, Opt};
 use crate::engine::collapse;
@@ -36,11 +36,12 @@ fn face_of(s: &State, t: &GameTable, slot: Slot) -> &'static Face {
 }
 
 /// The ability a stack entry resolves: an ability of its card's face, or a spell's spell
-/// ability. A permanent spell with no targets has none.
+/// ability, as the casting options paid for it make it (an overloaded spell's). A permanent
+/// spell with no targets has none.
 pub(crate) fn entry_ability(t: &GameTable, entry: &StackEntry) -> Option<&'static Ability> {
     let face = t.def(entry.card).face(entry.face);
     match entry.ability {
-        None => face.spell_ability(),
+        None => face.spell_ability_with(entry.costs),
         Some(ability) => Some(face.ability(ability)),
     }
 }
@@ -131,12 +132,36 @@ enum From {
 /// costs, and at most one alternative cost
 /// ([CR 118.9a](https://yawgatog.com/resources/magic-rules/#R1189a)): "Only one alternative
 /// cost can be applied to any one spell as it's being cast." Casting without paying the mana
-/// cost is itself an alternative cost, so `free` excludes the face's own.
-fn option_sets(face: &Face, free: bool) -> impl Iterator<Item = Castings> + '_ {
+/// cost is itself an alternative cost, and so is a flashback cost, so `alternative` (one of
+/// them is paid) excludes the face's own.
+fn option_sets(face: &Face, alternative: bool) -> impl Iterator<Item = Castings> + '_ {
     Castings::subsets(face).filter(move |&costs| {
         let alternatives = costs.paid(face).filter(|o| o.is_alternative()).count();
-        alternatives <= usize::from(!free)
+        alternatives <= usize::from(!alternative)
     })
+}
+
+/// The cards in `player`'s hand other than `itself` that paying `costs` of `face` may exile,
+/// when they exile one.
+fn exile_candidates(
+    s: &State,
+    t: &GameTable,
+    player: Seat,
+    face: &Face,
+    costs: Castings,
+    itself: Slot,
+) -> Option<Bitboard> {
+    let colors = face.exiles_with(costs);
+    if colors == Colors::NONE {
+        return None;
+    }
+    let mut hand = s.zone(player, Zone::Hand);
+    hand.remove(itself);
+    Some(
+        hand.iter()
+            .filter(|&slot| t.def(s.object(slot).card).front().colors.intersects(colors))
+            .collect(),
+    )
 }
 
 /// Whether X is announced for this cast, and the least value it may take.
@@ -351,7 +376,20 @@ fn castable(
             (0, free)
         }
     };
-    if !targetable(s, t, face.spell_ability(), player, Some(slot), 0, None) {
+    if !targetable(
+        s,
+        t,
+        face.spell_ability_with(costs),
+        player,
+        Some(slot),
+        0,
+        None,
+    ) {
+        return Ok(false);
+    }
+    // CR 601.2h: the player pays the total cost, so a card to exile must be there. The spell
+    // itself will be on the stack by then (CR 601.2a).
+    if exile_candidates(s, t, player, face, costs, slot).is_some_and(Bitboard::is_empty) {
         return Ok(false);
     }
     let x = x_range_start(face, costs, free).unwrap_or(0);
@@ -387,12 +425,14 @@ fn cast_options(
     let free = matches!(from, From::Resolution { free: true });
     for slot in collapse(s, cards).iter() {
         let def = t.def(s.object(slot).card);
+        let flashback =
+            from == From::Priority && permission(s, player, slot).is_some_and(|p| p.flashback);
         for f in def.face_ixs() {
             let face = def.face(f);
             if face.transformed {
                 continue;
             }
-            for costs in option_sets(face, free) {
+            for costs in option_sets(face, free || flashback) {
                 if castable(s, t, player, slot, f, costs, from)? {
                     out.push(Opt::Cast {
                         slot,
@@ -646,7 +686,8 @@ pub(crate) fn begin_cast(
         card,
         face,
         costs,
-        exile: permission.is_some_and(|p| p.exile),
+        exile: permission.is_some_and(|p| p.exile || p.flashback),
+        flashback: permission.is_some_and(|p| p.flashback),
         ..StackEntry::default()
     })?;
     let free = resolving.unwrap_or(false);
@@ -808,7 +849,8 @@ fn advance(s: &mut State, t: &GameTable, sink: &mut Sink, mut c: Casting) -> Res
             | CastStep::Plan
             | CastStep::Manual
             | CastStep::Crew
-            | CastStep::Waterbend => break,
+            | CastStep::Waterbend
+            | CastStep::Exile => break,
             CastStep::TargetCount | CastStep::Target => {
                 let entry = top(s);
                 let specs = specs(t, &entry);
@@ -860,7 +902,15 @@ fn begin_payment(
     mut c: Casting,
 ) -> Result<(), Full> {
     let entry = top(s);
-    if !entry.is_spell() {
+    if entry.is_spell() {
+        let face = t.def(entry.card).face(entry.face);
+        let itself = entry.object.expect("a spell's card").slot;
+        if exile_candidates(s, t, c.player, face, entry.costs, itself).is_some() {
+            c.step = CastStep::Exile;
+            s.pending = Pending::Casting(c);
+            return Ok(());
+        }
+    } else {
         let a = entry_ability_of(t, &entry);
         let source = entry.object.expect("an activated ability's source");
         if a.cost.tap {
@@ -1110,6 +1160,19 @@ pub(crate) fn decision(
             mana::manual_options(s, t, c.player, c.remaining, Bitboard::EMPTY)?,
         ),
         CastStep::Waterbend => options(DecisionKind::Waterbend, waterbend_options(s, t, c)?),
+        CastStep::Exile => {
+            let entry = top(s);
+            let face = t.def(entry.card).face(entry.face);
+            let itself = entry.object.expect("a spell's card").slot;
+            let cards = exile_candidates(s, t, c.player, face, entry.costs, itself)
+                .expect("a cost that exiles a card");
+            Decision {
+                player: c.player,
+                kind: DecisionKind::ExileCost,
+                candidates: Candidates::Objects(collapse(s, cards)),
+                ask: Ask::Plain,
+            }
+        }
     })
 }
 
@@ -1189,6 +1252,13 @@ pub(crate) fn perform(
             }
             s.pending = Pending::Casting(c);
             return Ok(());
+        }
+        CastStep::Exile => {
+            // CR 601.2h: "The player pays the total cost." The card goes from the hand to
+            // exile as part of it.
+            let slot = object.expect("a card to exile");
+            event::move_one(s, t, sink, slot, Zone::Exile, Reason::Exile)?;
+            return pay_mana(s, t, sink, c);
         }
         CastStep::Manual => {
             let option = option.expect("a manual payment");

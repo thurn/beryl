@@ -448,6 +448,30 @@ fn a_card_can_be_cast_from_a_graveyard_this_turn_and_is_then_exiled() {
     assert_eq!(g.s.object(ponder).zone, Zone::Exile);
 }
 
+/// [CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a): "If the flashback cost
+/// was paid, exile this card instead of putting it anywhere else any time it would leave the
+/// stack." Returned to its owner's hand, it is exiled instead.
+#[test]
+fn a_spell_cast_with_flashback_is_exiled_wherever_else_it_would_go() {
+    let mut g = Game::new(Profile::EXACT);
+    let snapback = g.give(g.me, "Test Snapback", Zone::Hand);
+    let ponder = g.give(g.me, "Test Ponder", Zone::Graveyard);
+    let bounce = g.give(g.them, "Test Bounce", Zone::Hand);
+    g.give(g.me, "Test Island", Zone::Battlefield);
+    g.give(g.me, "Test Island", Zone::Battlefield);
+    g.give(g.them, "Test Island", Zone::Battlefield);
+    assert!(!g.offers_cast(ponder));
+    g.pick(cast(snapback));
+    g.pass_both();
+    g.pick(cast(ponder));
+    assert_eq!(g.s.object(ponder).zone, Zone::Stack);
+    // P0 can only pass, which `next` does silently: P1 holds priority.
+    g.pick(cast(bounce));
+    g.pass_both();
+    assert_eq!(g.s.object(ponder).zone, Zone::Exile);
+    assert_eq!(g.s.object(bounce).zone, Zone::Graveyard);
+}
+
 #[test]
 fn a_permission_from_exile_costs_its_increase_more() {
     let mut g = Game::new(Profile::EXACT);

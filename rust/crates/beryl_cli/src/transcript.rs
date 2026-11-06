@@ -370,6 +370,8 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
                     CastingOption::Kicker { .. } => " kicked",
                     CastingOption::Offspring(_) => " with offspring",
                     CastingOption::Impending { .. } => " for impending",
+                    CastingOption::Overload { .. } => " overloaded",
+                    CastingOption::Evoke { .. } => " for evoke",
                 });
             }
             text

@@ -92,6 +92,8 @@ export function choiceOf(view: PlayerView): Choice | undefined {
       return takeAndBottom(at, ask.count, 0);
     case "discardBasicLand":
       return discardBasicLand(at, ask);
+    case "topOrBottom":
+      return topOrBottom(at, ask);
     case "explore":
       return yesNo(at);
     case "untap":
@@ -122,6 +124,8 @@ function plain(at: Situation): Choice | undefined {
       return yesNo(at);
     case "discard":
       return discard(at);
+    case "exileCost":
+      return exileCost(at);
     case "legendRule":
       return legendRule(at);
     case "castOffer":
@@ -398,6 +402,22 @@ function fateseal(at: Situation, { player }: AskOf<"fateseal">): Ask {
   };
 }
 
+/** Whether a spell goes on top of its owner's library or the bottom. */
+function topOrBottom(at: Situation, { card }: AskOf<"topOrBottom">): Ask {
+  return {
+    kind: "ask",
+    key: at.key,
+    title: "Top or Bottom?",
+    instruction: "Put it into your library.",
+    source: at.source,
+    cards: [card],
+    answers: [
+      { label: "Top", plan: [yes("yesNo")] },
+      { label: "Bottom", plan: [no("yesNo")] },
+    ],
+  };
+}
+
 /** A look at the top of a library or at a hand that may move one of the cards it lights
  * (the source card at the right says which, and what happens to the rest): asked yes or no
  * first, then which (`may_choose_object`). */
@@ -524,6 +544,26 @@ function discard(at: Situation, cleanup?: number): Pick {
     max: count,
     confirm: () => "Discard",
     plan: (picked) => picked.map((slot) => at.pickCard("discard", slot)),
+  };
+}
+
+/** A card from the hand to exile for a cost, as evoke's "Exile a blue card from your hand"
+ * ([CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h)). */
+function exileCost(at: Situation): Pick {
+  const hand = at.hand("you");
+  return {
+    kind: "pick",
+    key: at.key,
+    title: "Exile",
+    instruction: "Choose a card to exile.",
+    source: at.source,
+    cards: hand,
+    pickable: at.offeredAmong(hand),
+    min: 1,
+    max: 1,
+    confirm: () => "Exile",
+    plan: ([slot]) =>
+      slot === undefined ? [] : [at.pickCard("exileCost", slot)],
   };
 }
 
