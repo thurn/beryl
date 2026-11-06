@@ -219,8 +219,6 @@ pub struct Object {
     pub attached_to: Option<Slot>,
     /// The object that exiled, imprinted or hid this one.
     pub linked: Option<Slot>,
-    /// The game index of the card this object copies.
-    pub copy_of: Option<CardIx>,
     /// Battlefield entry order, for layers.
     pub timestamp: u16,
     /// Which face is up.
@@ -254,7 +252,6 @@ impl Object {
         },
         attached_to: None,
         linked: None,
-        copy_of: None,
         timestamp: 0,
         face: FaceIx::FRONT,
         combat: None,
@@ -280,7 +277,6 @@ impl std::hash::Hash for Object {
             counters,
             attached_to,
             linked,
-            copy_of,
             timestamp,
             face,
             combat,
@@ -296,7 +292,6 @@ impl std::hash::Hash for Object {
         counters.hash(h);
         attached_to.hash(h);
         linked.hash(h);
-        copy_of.hash(h);
         timestamp.hash(h);
         face.hash(h);
         combat.hash(h);

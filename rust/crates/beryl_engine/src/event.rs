@@ -825,14 +825,6 @@ pub(crate) fn create_tokens(
             ..Entry::default()
         },
     )?;
-    if how.face == FaceIx::DOWN {
-        // A copy of a face-down permanent is a 2/2 with no text and no name, a copy of no card
-        // ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)). The card it points
-        // at, the original's, is no one's to know.
-        for k in &mut s.knowledge {
-            *k &= !tokens;
-        }
-    }
     settle(s, t, sink, Event::TokensCreated { controller, tokens })?;
     Ok(tokens)
 }

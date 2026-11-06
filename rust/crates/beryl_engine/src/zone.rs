@@ -42,10 +42,9 @@ pub(crate) fn put_on_bottom(s: &mut State, slot: Slot) -> Result<(), Full> {
 pub(crate) fn move_to_place(s: &mut State, slot: Slot, to: Zone, place: Place) -> Result<(), Full> {
     // [CR 708.9](https://yawgatog.com/resources/magic-rules/#R7089): "If a face-down permanent
     // ... moves from the battlefield to any other zone, its owner must reveal it to all players
-    // as they move it." Whatever zone it goes to, a hidden one included. A token copying a
-    // face-down permanent represents no card to reveal.
+    // as they move it." Whatever zone it goes to, a hidden one included.
     let o = s.object(slot);
-    if o.zone == Zone::Battlefield && o.face == FaceIx::DOWN && !o.flags.has(ObjectFlags::TOKEN) {
+    if o.zone == Zone::Battlefield && o.face == FaceIx::DOWN {
         for k in &mut s.knowledge {
             k.insert(slot);
         }
@@ -62,7 +61,6 @@ pub(crate) fn move_to_place(s: &mut State, slot: Slot, to: Zone, place: Place) -
     o.counters = Counters::default();
     o.attached_to = None;
     o.linked = None;
-    o.copy_of = None;
     o.face = FaceIx::FRONT;
     o.combat = None;
     let owner = o.owner.index();

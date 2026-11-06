@@ -224,6 +224,21 @@ pub static FACE_DOWN: Face = Face {
     ..Face::EMPTY
 };
 
+/// The card a token copying a face-down permanent is a copy of: one face, [`FACE_DOWN`], and no
+/// name. Face up or face down is a status
+/// ([CR 110.5](https://yawgatog.com/resources/magic-rules/#R1105)), which a copy doesn't copy
+/// ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)): "Other effects ...,
+/// status, counters, and stickers are not copied." What it does copy are the face-down
+/// values ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)): "Any listed
+/// characteristics are the copiable values of that object's characteristics." So the copy is
+/// a face-up token of this card, which every game table holds
+/// ([`GameTable::face_down_copy`]): public, it betrays nothing of the card behind the original.
+pub static FACE_DOWN_COPY: CardDef = CardDef {
+    name: "",
+    faces: std::slice::from_ref(&FACE_DOWN),
+    tokens: &[],
+};
+
 impl Face {
     /// A face with no cost, types or abilities, for `..Face::EMPTY` in card files.
     pub const EMPTY: Face = Face {

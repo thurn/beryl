@@ -195,7 +195,7 @@ fn not_a_token(_: &State, _: &GameTable, tr: &PendingTrigger) -> bool {
     !tr.info.lki.token
 }
 
-fn copy_of_the_dead(ctx: &mut EffectCtx) -> crate::card::Flow {
+fn copy_the_dead(ctx: &mut EffectCtx) -> crate::card::Flow {
     let card = ctx.trigger().lki.card;
     ctx.create_tokens_of(card, 1, TokenEntry::default());
     Ok(())
@@ -211,7 +211,7 @@ static SPHINX: CardDef = CardDef {
         toughness: Some(3),
         abilities: &[Ability {
             condition: Some(not_a_token),
-            ..Ability::triggered(Trigger::Dies, copy_of_the_dead)
+            ..Ability::triggered(Trigger::Dies, copy_the_dead)
         }],
         ..Face::EMPTY
     }],

@@ -282,12 +282,15 @@ fn list(items: &[String]) -> String {
 }
 
 /// The name of the card in a slot, by the face it has up; a face-down permanent, which has no
-/// name, by its card's.
+/// name, by its card's, and a copy of one, a token with no name (CR 708.2), as such.
 fn name(t: &GameTable, s: &State, slot: Slot) -> String {
     let def = t.def(s.card(slot));
     match s.object(slot).face {
         FaceIx::DOWN => format!("face-down {}", def.name),
-        face => def.face_name(face).to_owned(),
+        face => match def.face_name(face) {
+            "" => "nameless token".to_owned(),
+            name => name.to_owned(),
+        },
     }
 }
 

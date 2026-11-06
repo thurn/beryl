@@ -5,6 +5,7 @@ use std::path::Path;
 
 use beryl_engine::card::{AbilityKind, FaceIx, ManaColor, Subtype, Supertypes, Types};
 use beryl_engine::rng::SplitMix64;
+use beryl_engine::state::ObjectFlags;
 use beryl_engine::{
     Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome, Profile, Replay, Scratch,
     Seat, State, Step, TurnStep, Zone, apply, next,
@@ -482,9 +483,11 @@ fn a_face_down_card_is_hidden_until_it_leaves() {
     assert_eq!(known.last(), Some(&(DecisionKind::Priority, true, true)));
 }
 
-/// A token copying a face-down permanent is a 2/2 with no text that copies no card
-/// ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)): neither player learns the
-/// card behind the original from it, and it can't be turned face up (CR 701.40b).
+/// A token copying a face-down permanent is a face-up 2/2 with no text and no name: face down
+/// is a status, which isn't copied (CR 707.2), and the face-down values are what is
+/// ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)). It is a token of no card in
+/// either deck, so neither player learns the card behind the original from it, and it can't be
+/// turned face up (CR 701.40b).
 #[test]
 fn a_copy_of_a_face_down_permanent_hides_its_card() {
     let scenario = blue::abhorrent_oculus::SCENARIOS
@@ -492,19 +495,21 @@ fn a_copy_of_a_face_down_permanent_hides_its_card() {
         .find(|s| s.name == "Fractured Identity copies a face-down permanent as a 2/2")
         .expect("the scenario");
     let mut last = None;
-    beryl_scenario::visit(&CARDS, scenario, |_, s, d| {
-        last = Some((*s, *d));
+    beryl_scenario::visit(&CARDS, scenario, |t, s, d| {
+        last = Some((t.face_down_copy(), *s, *d));
     })
     .unwrap();
-    let (s, d) = last.expect("a decision");
+    let (face_down_copy, s, d) = last.expect("a decision");
     let copy = s
         .battlefield()
         .iter()
         .copied()
-        .find(|&slot| s.object(slot).face == FaceIx::DOWN)
+        .find(|&slot| s.object(slot).flags.has(ObjectFlags::TOKEN))
         .expect("the copy");
     assert_eq!(s.controller(copy), Seat::P1);
-    assert!(!s.knows(Seat::P0, copy) && !s.knows(Seat::P1, copy));
+    assert_eq!(s.object(copy).face, FaceIx::FRONT);
+    assert_eq!(s.card(copy), face_down_copy);
+    assert!(s.knows(Seat::P0, copy) && s.knows(Seat::P1, copy));
     let derived = s.derived(copy);
     assert_eq!((derived.power, derived.toughness), (2, 2));
     assert!(

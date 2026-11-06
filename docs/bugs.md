@@ -6,6 +6,14 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- A token copying a face-down permanent still held the original's hidden card,
+  masked only by knowledge, so `Observation::determinize`, which redeals unknown
+  deck slots alone, handed it to the searching agent unchanged, and every
+  face-down rule needed a token exemption (CR 707.2, 708.2). Prevention: a copy
+  is a token of its copiable values, never of a hidden card; the face-down copy
+  is a token of the public synthetic card `FACE_DOWN_COPY`, so no hidden
+  identity exists outside the deck slots that determinization redeals.
+
 - Fractured Identity's copy of a face-down permanent kept the original's card
   and face down, so the copy's controller knew the hidden card, could turn the
   copy face up for that card's cost, and both players saw it as the copy left

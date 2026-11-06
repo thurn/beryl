@@ -1,7 +1,7 @@
 //! The static card table and the per-game table built from two decklists (architecture §6.4,
 //! decision D20).
 
-use crate::card::{CardDef, Trigger};
+use crate::card::{CardDef, FACE_DOWN_COPY, Trigger};
 use crate::event::kind;
 use crate::ids::{CardIx, Seat};
 use crate::state::DECK_SLOTS;
@@ -52,12 +52,14 @@ pub struct GameTable {
     listens: Vec<u16>,
     /// Every kind any card of the game listens to.
     listens_any: u16,
+    /// The game index of [`FACE_DOWN_COPY`].
+    face_down_copy: CardIx,
 }
 
 impl GameTable {
     /// Assigns game indices in order of first appearance, the first deck before the second,
-    /// then the tokens and emblems those cards can create, so the same decklists always give
-    /// the same table.
+    /// then the tokens and emblems those cards can create, then [`FACE_DOWN_COPY`], so the
+    /// same decklists always give the same table.
     pub fn new(cards: &'static CardTable, decks: [&Decklist; 2]) -> Result<Self, TableError> {
         let mut defs: Vec<&'static CardDef> = Vec::new();
         let mut indices: [Vec<CardIx>; 2] = [Vec::new(), Vec::new()];
@@ -94,9 +96,11 @@ impl GameTable {
             }
             i += 1;
         }
+        defs.push(&FACE_DOWN_COPY);
         if defs.len() > CardIx::COUNT {
             return Err(TableError::TooManyCards);
         }
+        let face_down_copy = CardIx::new((defs.len() - 1) as u8);
         let listens: Vec<u16> = defs.iter().map(|d| listens(d)).collect();
         let listens_any = listens.iter().fold(0, |a, &b| a | b);
         Ok(Self {
@@ -105,7 +109,13 @@ impl GameTable {
             decks: indices,
             listens,
             listens_any,
+            face_down_copy,
         })
+    }
+
+    /// The game index of [`FACE_DOWN_COPY`], the card a copy of a face-down permanent copies.
+    pub fn face_down_copy(&self) -> CardIx {
+        self.face_down_copy
     }
 
     /// The game index of a card or token, if the game can contain it.

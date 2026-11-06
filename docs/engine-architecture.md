@@ -222,12 +222,11 @@ object in a slot:
 | `damage: u8`                  | 1    | Marked damage this turn                                                                     |
 | `counters`                    | 5    | +1/+1, -1/-1, loyalty, and one (kind, count) pair for the long tail                         |
 | `attached_to`, `linked`       | 2    | `Option<Slot>`: equipment and auras; what exiled, imprinted or hid this card                |
-| `copy_of: Option<CardIx>`     | 1    | Layer 1 copiable values when this object is a copy, as a game-table index                   |
 | `timestamp: u16`              | 2    | Battlefield entry order, for layers                                                         |
 | `face`                        | 1    | Which face is up; a chosen color or type joins it with the first card that names one        |
 | `combat: Option<Slot>`        | 1    | The planeswalker an attacker attacks, or the attacker a blocker blocks                      |
 
-About 22 bytes, so the table is under 6 KiB.
+About 21 bytes, so the table is under 6 KiB.
 
 - **Deck cards get fixed slots.** Each player's deck, up to 60 cards, is
   assigned slots by a random permutation drawn from the hidden RNG at game
@@ -651,10 +650,11 @@ pub struct Derived {
   what A does, A waits for B. The cube appears to have no same-layer dependency
   today; the test corpus (§17) keeps that claim honest.
 - Reads never recompute. Legality checks and state-based actions read arrays.
-- Copy effects (layer 1) use copiable values: `copy_of` names the definition
-  copied, and the few exceptions (Metamorph is an artifact in addition,
-  Phantasmal Image is an Illusion with its sacrifice trigger) are flags the
-  recompute honors.
+- Copy effects (layer 1) use copiable values: a copy is a token whose `card` is
+  the definition copied. A copy of a face-down permanent is a face-up token of
+  `FACE_DOWN_COPY`, a nameless 2/2 every game table holds (CR 707.2, 708.2). The
+  few exceptions (Metamorph is an artifact in addition, Phantasmal Image is an
+  Illusion with its sacrifice trigger) are flags the recompute honors.
 
 The research found every engine's layer bugs in incremental apply-and-unapply
 schemes. Recomputing from base over compact arrays is simpler and, for a cube

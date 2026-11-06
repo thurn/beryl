@@ -789,15 +789,14 @@ fn name(t: &GameTable, obs: Observation<'_>, slot: Slot) -> Option<&'static str>
 }
 
 /// The name of face `face` of the object in `slot`, if the viewer knows it: a copy's is the
-/// copied card's (CR 707.2).
+/// copied card's (CR 707.2), since a token copy is a token of that card.
 fn face_name(
     t: &GameTable,
     obs: Observation<'_>,
     slot: Slot,
     face: FaceIx,
 ) -> Option<&'static str> {
-    let card = obs.object(slot).copy_of.or(obs.card(slot))?;
-    Some(t.def(card).face_name(face))
+    Some(t.def(obs.card(slot)?).face_name(face))
 }
 
 fn object_view(t: &GameTable, obs: Observation<'_>, slot: Slot) -> ObjectView {

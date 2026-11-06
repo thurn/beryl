@@ -1115,10 +1115,14 @@ impl<'a> EffectCtx<'a> {
     /// ([CR 707.8a](https://yawgatog.com/resources/magic-rules/#R7078a)). A face-down
     /// permanent's are the 2/2 with no text
     /// ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)): "Any listed
-    /// characteristics are the copiable values of that object's characteristics." Its copy has
-    /// [`FaceIx::DOWN`] up for them, its card known to no one ([`event::create_tokens`]).
+    /// characteristics are the copiable values of that object's characteristics." Being face
+    /// down is a status, which isn't copied, so its copy is a face-up token of
+    /// [`crate::card::FACE_DOWN_COPY`], not of the hidden card.
     pub fn copiable_values(&self, object: ObjectRef) -> (CardIx, TokenEntry) {
         let o = self.state.object(object.slot);
+        if o.face == FaceIx::DOWN {
+            return (self.table.face_down_copy(), TokenEntry::default());
+        }
         let how = TokenEntry {
             one_one: o.flags.has(ObjectFlags::ONE_ONE),
             face: o.face,
