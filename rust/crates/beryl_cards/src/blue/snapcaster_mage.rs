@@ -57,6 +57,7 @@ pub static CARD: CardDef = CardDef {
 
 const SNAPCASTER: &str = names::SNAPCASTER_MAGE;
 const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
+const ADELINE: &str = names::ADELINE_RESPLENDENT_CATHAR;
 
 const fn priority_candidates(candidates: u8) -> Action {
     Action::assert(Assertion::Decision {
@@ -76,9 +77,9 @@ const fn count(player: beryl_engine::Seat, zone: Zone, card: &'static str, count
 }
 
 pub const SCENARIOS: &[Scenario] = &[
-    // Flashed in against P1's Timetwister, it gives the Mana Drain in P0's graveyard
-    // flashback; Mana Drain counters Timetwister and is exiled rather than going back to the
-    // graveyard. The Plains in P1's hand keeps P1's main phase a decision afterward.
+    // Flashed in against P1's Timetwister, it gives the Counterspell in P0's graveyard
+    // flashback; Counterspell counters Timetwister and is exiled rather than going back to
+    // the graveyard. The Plains in P1's hand keeps P1's main phase a decision afterward.
     Scenario::new("Snapcaster Mage: flashback a counterspell, then exile it")
         .at(2, P1, TurnStep::PrecombatMain)
         .battlefield(
@@ -91,7 +92,7 @@ pub const SCENARIOS: &[Scenario] = &[
             ],
         )
         .hand(P0, &[SNAPCASTER])
-        .graveyard(P0, &[names::MANA_DRAIN])
+        .graveyard(P0, &[names::COUNTERSPELL])
         .battlefield(
             P1,
             &[
@@ -108,11 +109,60 @@ pub const SCENARIOS: &[Scenario] = &[
             // Snapcaster, then its trigger, which no one can respond to.
             Action::Resolve,
             Action::pass(P1),
-            // Mana Drain resolves at once: neither player can respond.
-            Action::cast(P0, names::MANA_DRAIN),
+            // Counterspell resolves at once: neither player can respond.
+            Action::cast(P0, names::COUNTERSPELL),
             count(P1, Zone::Graveyard, names::TIMETWISTER, 1),
-            count(P0, Zone::Exile, names::MANA_DRAIN, 1),
-            count(P0, Zone::Graveyard, names::MANA_DRAIN, 0),
+            count(P0, Zone::Exile, names::COUNTERSPELL, 1),
+            count(P0, Zone::Graveyard, names::COUNTERSPELL, 0),
+        ]),
+    // P1 answers the flashback Counterspell with Reprieve, which would return it to P0's
+    // hand: cast with flashback, it is exiled instead (CR 702.34a), and Adeline resolves.
+    Scenario::new("Snapcaster Mage: a flashback spell returned to hand is exiled")
+        .at(2, P1, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(names::ISLAND),
+                Permanent::new(names::ISLAND),
+                Permanent::new(names::ISLAND),
+                Permanent::new(names::ISLAND),
+            ],
+        )
+        .hand(P0, &[SNAPCASTER])
+        .graveyard(P0, &[names::COUNTERSPELL])
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(names::PLAINS),
+                Permanent::new(names::PLAINS),
+                Permanent::new(names::PLAINS),
+                Permanent::new(names::PLAINS),
+                Permanent::new(names::ISLAND),
+            ],
+        )
+        .hand(P1, &[ADELINE, names::REPRIEVE, names::PLAINS])
+        .library(P1, &[names::ISLAND])
+        .actions(&[
+            Action::cast(P1, ADELINE),
+            Action::pass(P1),
+            Action::cast(P0, SNAPCASTER),
+            // Snapcaster resolves; P1, who could Reprieve, passes as its trigger resolves and
+            // again with Adeline alone on the stack.
+            Action::Resolve,
+            Action::pass(P1),
+            Action::pass(P1),
+            Action::cast(P0, names::COUNTERSPELL),
+            Action::cast(P1, names::REPRIEVE),
+            Action::choose(P1, DecisionKind::Target, names::COUNTERSPELL),
+            Action::Resolve,
+            count(P0, Zone::Exile, names::COUNTERSPELL, 1),
+            count(P0, Zone::Hand, names::COUNTERSPELL, 0),
+            Action::Resolve,
+            Action::assert(Assertion::Controls {
+                player: P1,
+                card: ADELINE,
+                count: 1,
+            }),
         ]),
     // Damn given flashback is cast for its mana cost only: the flashback cost is the
     // alternative cost, so overload can't be added (CR 118.9a), though P0 could pay it. The
@@ -182,7 +232,7 @@ pub const SCENARIOS: &[Scenario] = &[
             ],
         )
         .hand(P0, &[SNAPCASTER])
-        .graveyard(P0, &[names::PLAINS, names::ADELINE_RESPLENDENT_CATHAR])
+        .graveyard(P0, &[names::PLAINS, ADELINE])
         .library(P1, &[names::ISLAND])
         .actions(&[
             Action::cast(P0, SNAPCASTER),
