@@ -109,8 +109,9 @@ const BACK_WIDTH = 105;
 /** Each side's rows, in stage pixels: its land piles from (x, y), filling rightward to
  * `LANDS_END`, and its other permanents' row at `y`, centered on the table. The rows lie clear
  * of one another, so a long row of permanents may pass over the land piles' side of the table.
- * Every row's cards are scaled by their depth alone (depthScale), keeping the field frame's
- * shape. */
+ * Every row's cards are scaled by their depth (depthScale), keeping the field frame's shape; a
+ * row of permanents too long for the table shrinks, all its cards alike, so that none covers
+ * another's name or marks. */
 const ROWS: Record<
   Side,
   { lands: { x: number; y: number }; permanents: number }
@@ -121,14 +122,20 @@ const ROWS: Record<
 /** Lands fill from the left up to here, `LAND_GAP` apart before depth scaling. */
 const LANDS_END = 600;
 const LAND_GAP = 12;
-/** How far apart permanents stand, in frame widths: further while lines cross the table, in
- * combat or with something on the stack, to make room for them. */
-const PERMANENT_GAP = { main: 0.06, lines: 0.24 };
-/** The permanents' rows are centered on the table, between these edges while the table's
- * right is clear (as far from its middle on either side); while the stack or a prompt stands
- * there, a row too long to stay centered left of it slides left just enough to clear it. */
-const OPEN = { start: 120, end: 1480 };
-const STACK_MARGIN = 25;
+/** How far apart permanents stand, in frame widths. */
+const PERMANENT_GAP = 0.1;
+/** Where the permanents' rows may lie: centered on the table while they fit left of the
+ * stack's column, sliding left when they don't, and shrinking when they still don't. The
+ * stack and a prompt stand to the right, so neither moves a permanent by coming or going. A
+ * row reaching into the game log's column folds the log away beside it (overLog). */
+const ROOM = {
+  // Right of the folded game log's button.
+  start: 76,
+  // Left of the stack's column (STACK.x), with room between for an arrow from the row's
+  // last card to the stack.
+  end: 1160,
+  center: STAGE.width / 2,
+};
 
 /** The game log's column at the table's left (screens.css .game-log): the permanents' rows
  * pass through its height, and a long row reaches into it. */
@@ -148,9 +155,6 @@ export function overLog(placements: Layout): boolean {
   }
   return false;
 }
-
-/** How the table is laid out: lines cross it in combat and while something is on the stack. */
-type Mode = keyof typeof PERMANENT_GAP;
 
 /** Where each side's library, graveyard and exile lie: their top cards' top-left corners, and
  * how wide a top card is before its depth shrinks it. The opponent's lie at the far right; yours
@@ -246,12 +250,16 @@ const ADVANCE = 16;
 /** How far a blocker's center leans from its attacker's toward the table's middle. */
 const ACROSS_LEAN = 0.16;
 
-const attacking = (o: ObjectView) => o.combat?.kind === "attacking";
-
-/** Places a thing `width` wide (before its depth scaling) lying on the table at (x, y), or
- * reaching `rise` above it (before scaling) while scaled and leaning as if it lay there. */
-function onTable(x: number, y: number, width: number, rise = 0) {
-  const scale = depthScale(y);
+/** Places a thing `width` wide (before its `scale`, its depth's by default) lying on the table
+ * at (x, y), or reaching `rise` above it (before scaling) while scaled and leaning as if it lay
+ * there. */
+function onTable(
+  x: number,
+  y: number,
+  width: number,
+  rise = 0,
+  scale = depthScale(y),
+) {
   return {
     x,
     y: y - rise * scale,
@@ -435,17 +443,15 @@ function lying(width: number, tapped: boolean) {
 /** One side's battlefield: land piles on the left, other permanents in the middle. A blocker
  * stands across the table from the attacker it blocks among the other side's placements
  * `across`, as combat.png does, an attacker's blockers side by side about its center, so a
- * block reads as a short line; the rest of the row makes room. A row's attackers stand
- * together, first, so that no other permanent lies hidden between two of them. The cards each
- * permanent exiled until it leaves (`beneath`, by its slot) lie tucked under it, peeking out to
- * its left, and the Auras and Equipment attached to it (`attached`, by its slot, whoever
- * controls them, which `objects` leaves out) behind it, peeking out to its right; its row makes
- * room for both. Each tapped card takes its turned width (`lying`). */
+ * block reads as a short line; the rest of the row makes room. An attacker keeps its place in
+ * the row, standing out of it toward the other side, so declaring one moves no other. The
+ * cards each permanent exiled until it leaves (`beneath`, by its slot) lie tucked under it,
+ * peeking out to its left, and the Auras and Equipment attached to it (`attached`, by its
+ * slot, whoever controls them, which `objects` leaves out) behind it, peeking out to its right;
+ * its row makes room for both. Each tapped card takes its turned width (`lying`). */
 function battlefieldPlacements(
   side: Side,
   objects: ObjectView[],
-  mode: Mode,
-  end: number,
   across: Placement[] = [],
   beneath: Map<number, ObjectView[]> = new Map(),
   attached: Map<number, ObjectView[]> = new Map(),
@@ -522,14 +528,11 @@ function battlefieldPlacements(
     if (pile) pile.push(o);
     else groups.push([o]);
   }
-  groups.sort((a, b) => Number(!attacking(a[0]!)) - Number(!attacking(b[0]!)));
-  const scale = depthScale(rows.permanents);
-  const width = CREATURE_WIDTH * scale;
   const height = CREATURE_WIDTH / ASPECT.field;
   const lies = (o: ObjectView) => lying(CREATURE_WIDTH, o.tapped);
   // Each copy beneath a pile's top card peeks out by a step of its frame's size.
-  const step = (o: ObjectView) => {
-    const unit = lies(o).frame * scale;
+  const unitStep = (o: ObjectView) => {
+    const unit = lies(o).frame;
     return { x: unit * LAND_STEP.x, y: unit * LAND_STEP.y };
   };
   // How far the cards of `under` tucked under a group's top card peek out beside it: what
@@ -538,22 +541,36 @@ function battlefieldPlacements(
     const top = g[g.length - 1]!;
     const n = under.get(top.slot)?.length ?? 0;
     const narrower = (CREATURE_WIDTH - lies(top).span) / 2;
-    return n === 0
-      ? 0
-      : (n * CREATURE_WIDTH * BENEATH_STEP.x + narrower) * scale;
+    return n === 0 ? 0 : n * CREATURE_WIDTH * BENEATH_STEP.x + narrower;
   };
-  const tucked = peek(beneath);
-  const behind = peek(attached);
-  const widths = groups.map(
+  // Each group's width and the gap between groups, before scaling: the row's scale is its
+  // depth's, or less if the row would not otherwise fit its room.
+  const unitWidths = groups.map(
     (g) =>
-      lies(g[0]!).span * scale +
-      step(g[0]!).x * (g.length - 1) +
-      tucked(g) +
-      behind(g),
+      lies(g[0]!).span +
+      unitStep(g[0]!).x * (g.length - 1) +
+      peek(beneath)(g) +
+      peek(attached)(g),
   );
-  const gap = PERMANENT_GAP[mode] * width;
-  const start = OPEN.start;
-  const xs = row(widths, gap, start, end, STAGE.width / 2);
+  const unitLength =
+    unitWidths.reduce((a, w) => a + w, 0) +
+    PERMANENT_GAP * CREATURE_WIDTH * Math.max(0, groups.length - 1);
+  const full = depthScale(rows.permanents);
+  const scale = Math.min(full, (ROOM.end - ROOM.start) / unitLength);
+  // A shrunken row keeps its edge toward its player where a full-size one has it, leaving the
+  // lane between the rows, where combat and the stack's arrows run, as wide as it can be.
+  const rowTop =
+    rows.permanents + (side === "you" ? (full - scale) * height : 0);
+  const width = CREATURE_WIDTH * scale;
+  const step = (o: ObjectView) => {
+    const { x, y } = unitStep(o);
+    return { x: x * scale, y: y * scale };
+  };
+  const tucked = (g: ObjectView[]) => peek(beneath)(g) * scale;
+  const widths = unitWidths.map((w) => w * scale);
+  const gap = PERMANENT_GAP * width;
+  const { start, end } = ROOM;
+  const xs = row(widths, gap, start, end, ROOM.center);
   // Where each blocker wants to stand: its attacker's blockers side by side about its center.
   const attackers = new Map(across.map((p) => [p.slot, p]));
   const blocking = new Map<number, number[]>();
@@ -591,7 +608,7 @@ function battlefieldPlacements(
       const depth = group.length - 1 - i;
       const x = left + i * step(o).x;
       const y =
-        rows.permanents +
+        rowTop +
         depth * step(o).y +
         (o.combat?.kind === "attacking" ? forward : 0);
       // Combat's creatures over their neighbors, so their marks show.
@@ -606,7 +623,7 @@ function battlefieldPlacements(
         opacity: 1,
         z,
         count: depth === 0 && group.length > 1 ? group.length : undefined,
-        ...onTable(x, y, span),
+        ...onTable(x, y, span, 0, scale),
       });
       // Untapped, each a step further up and to the left, or for what is attached to it to
       // the right, centered on the permanent. What is attached rises above what lies beneath,
@@ -637,6 +654,7 @@ function battlefieldPlacements(
               y,
               CREATURE_WIDTH,
               up * height * BENEATH_STEP.y,
+              scale,
             ),
           });
         });
@@ -761,18 +779,12 @@ export function layout(
   out.push(...heldPlacements(owned("opponent", "hand")));
   // Blockers stand across from their attackers, which stand where they would anyway: only the
   // defending side's row depends on the other's.
-  const stacked = view.stack.length > 0;
-  const mode: Mode = combatBanner(view) || stacked ? "lines" : "main";
-  // The stack and a prompt stand at the table's right.
-  const end = stacked || lifted ? STACK.x - STACK_MARGIN : OPEN.end;
   const field = (side: Side, across?: Placement[]) =>
     battlefieldPlacements(
       side,
       permanents.filter(
         (o) => o.controller === side && !behindHost.has(o.slot),
       ),
-      mode,
-      end,
       across,
       beneath,
       attached,

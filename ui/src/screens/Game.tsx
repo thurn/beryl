@@ -25,6 +25,7 @@ import { ChoiceOverlay } from "../game/ChoiceOverlay";
 import { choiceOf, type Choice } from "../game/choices";
 import { follow, isOpening, type Intent } from "../game/decisions";
 import { useFace } from "../game/faces";
+import { useHoverInspect, type HoverHandlers } from "../game/Piles";
 import type { Playback } from "../game/playback";
 import { Brand, Stage } from "../game/Stage";
 
@@ -349,6 +350,8 @@ function Opening({
     c.option.kind === "object" ? [] : [{ label: c.label, index: i }],
   );
   const mulligans = view.players.you.mulligans;
+  // The hand's cards are small to fit seven: hovering one shows it whole.
+  const [inspector, inspect] = useHoverInspect();
   const [title, instruction] =
     decision.kind === "playOrDraw"
       ? ["Play or draw?", "Choose whether to take the first turn."]
@@ -375,6 +378,7 @@ function Opening({
             object={o}
             pick={picks.get(o.slot)}
             onPick={onPick}
+            hover={inspect(o)}
           />
         ))}
       </div>
@@ -389,6 +393,7 @@ function Opening({
           </Button>
         ))}
       </div>
+      {inspector}
     </div>
   );
 }
@@ -397,10 +402,12 @@ function OpeningCard({
   object,
   pick,
   onPick,
+  hover,
 }: {
   object: ObjectView;
   pick?: CandidateIndex;
   onPick(index: CandidateIndex): void;
+  hover: HoverHandlers;
 }) {
   const face = useFace(object);
   const name = object.name ?? "";
@@ -411,6 +418,7 @@ function OpeningCard({
       disabled={pick === undefined}
       data-card={name}
       onClick={() => pick !== undefined && onPick(pick)}
+      {...hover}
     >
       <Card
         card={face}

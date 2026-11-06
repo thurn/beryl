@@ -540,11 +540,16 @@ for (const viewport of [
     { width: 1600, height: 900 },
 ]) {
     await check(
-        `each battlefield row is centered on the table at ${viewport.width} wide`,
+        `each battlefield row is centered as near as the stack allows at ${viewport.width} wide`,
         async (page) => {
             await page.clock.runFor(2000);
             const stage = await page.locator(".stage").boundingBox();
             const middle = stage.x + stage.width / 2;
+            // A row too long to center left of the stack's column (layout.ts ROOM, which the
+            // stack's coming and going never changes) reaches that column's edge instead,
+            // short of it by no more than the lean of its last card.
+            const scale = stage.width / 1600;
+            const roomEnd = stage.x + 1160 * scale;
             const boxes = async (objects) =>
                 Promise.all(
                     objects.map((o) =>
@@ -557,9 +562,14 @@ for (const viewport of [
                 assert.ok(row.length > 0, `${whose} row is empty`);
                 const left = Math.min(...row.map((b) => b.x));
                 const right = Math.max(...row.map((b) => b.x + b.width));
+                const centered = Math.abs((left + right) / 2 - middle) <= 3;
+                const flush =
+                    (left + right) / 2 < middle &&
+                    Math.abs(right - roomEnd) <= 12 * scale;
                 assert.ok(
-                    Math.abs((left + right) / 2 - middle) <= 3,
-                    `${whose} row spans ${left} to ${right}, centered on ${middle}`,
+                    centered || flush,
+                    `${whose} row spans ${left} to ${right}, centered on ${middle} ` +
+                        `or reaching ${roomEnd}`,
                 );
             }
             await assertClearOfLands(page);
@@ -3002,6 +3012,357 @@ await check(
         reducedMotion: "reduce",
     },
 );
+
+// A late, crowded table: at least eight nonland permanents a side and a spell on the stack.
+const crowdedViews = await load("crowded");
+const crowdedAt = crowdedViews.findLastIndex(
+    (v) =>
+        v.status.decision?.kind === "priority" &&
+        v.stack.some((item) => item.kind === "spell"),
+);
+assert.ok(crowdedAt >= 0, "the crowded fixture has a spell on the stack");
+for (const side of ["you", "opponent"]) {
+    assert.ok(
+        nonlands(crowdedViews[crowdedAt], side).length >= 8,
+        `the crowded fixture has eight nonland permanents for ${side}`,
+    );
+}
+const crowdedRun = (at, viewport) => ({
+    fixture: "crowded",
+    at: at + 1,
+    ready: '[data-zone="battlefield"]',
+    reducedMotion: "reduce",
+    ...(viewport && { viewport }),
+});
+
+/** The permanents of each row a player sees whole, by side: each but the lands, what lies
+ * tucked under another, and the copies beneath a pile's top card, with the box of the card and
+ * of each of its name, power and toughness (or loyalty), count and counter badges. */
+const rows = (page) =>
+    page.evaluate(() => {
+        const cards = [
+            ...document.querySelectorAll(
+                '.card-el[data-zone="battlefield"]:not(.card-el-land)',
+            ),
+        ].filter((e) => !e.querySelector(".card-under"));
+        const z = (e) => Number(e.style.zIndex) || 0;
+        const box = (e) => {
+            const r = e.getBoundingClientRect();
+            return { x: r.x, y: r.y, width: r.width, height: r.height };
+        };
+        const beneath = (e) => {
+            const r = e.getBoundingClientRect();
+            return cards.some((f) => {
+                const s = f.getBoundingClientRect();
+                return (
+                    f !== e &&
+                    f.dataset.card === e.dataset.card &&
+                    z(f) > z(e) &&
+                    Math.abs(s.x - r.x) < r.width * 0.2 &&
+                    Math.abs(s.y - r.y) < r.height * 0.2
+                );
+            });
+        };
+        const out = { you: [], opponent: [] };
+        for (const e of cards.filter((e) => !beneath(e))) {
+            const side = e.classList.contains("card-el-you")
+                ? "you"
+                : "opponent";
+            out[side].push({
+                slot: e.dataset.slot,
+                name: e.dataset.card,
+                box: box(e),
+                marks: [
+                    ...e.querySelectorAll(
+                        ".card-name, .card-pt, .card-count, .mark-badge",
+                    ),
+                ].map((m) => ({ mark: m.className, box: box(m) })),
+            });
+        }
+        for (const side of Object.values(out))
+            side.sort((a, b) => a.box.x - b.box.x);
+        return out;
+    });
+
+/** Of the points across the middle of `box`, inset 2 px, those where the topmost element is
+ * not inside the card in `slot`. */
+const coveredPoints = (page, slot, box) =>
+    page.evaluate(
+        ({ slot, box }) => {
+            const y = box.y + box.height / 2;
+            const xs = [
+                box.x + 2,
+                box.x + box.width / 2,
+                box.x + box.width - 2,
+            ];
+            return xs.filter((x) => {
+                const top = document.elementFromPoint(x, y);
+                return top?.closest("[data-slot]")?.dataset.slot !== slot;
+            });
+        },
+        { slot, box },
+    );
+
+/** Whether two boxes overlap by more than a pixel each way. */
+const overlap = (a, b) =>
+    Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) > 1 &&
+    Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) > 1;
+
+await check(
+    "no permanent's name or marks are covered on a crowded table",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const covered = [];
+        for (const cards of Object.values(await rows(page))) {
+            for (const { slot, name, marks } of cards) {
+                for (const { mark, box } of marks) {
+                    const at = await coveredPoints(page, slot, box);
+                    if (at.length) covered.push(`${name} ${mark} at x ${at}`);
+                }
+            }
+        }
+        assert.deepEqual(covered, [], "covered names and marks");
+        await assertClearOfLands(page);
+    },
+    crowdedRun(crowdedAt),
+);
+
+await check(
+    "sweeping a crowded table moves no card but inspects each, clear of the stack and lives",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const still = await drawn(page);
+        const forbidden = await page.evaluate(() =>
+            [
+                ...document.querySelectorAll(
+                    ".card-el-stack, .stack-ability, [data-life]",
+                ),
+            ].map((e) => {
+                const r = e.getBoundingClientRect();
+                return {
+                    what: e.dataset.card ?? e.dataset.life ?? "an ability",
+                    x: r.x,
+                    y: r.y,
+                    width: r.width,
+                    height: r.height,
+                };
+            }),
+        );
+        assert.ok(
+            forbidden.filter((f) => f.what === "you" || f.what === "opponent")
+                .length === 2 && forbidden.length >= 3,
+            "the stack and both lives are drawn",
+        );
+        const { you, opponent } = await rows(page);
+        const hand = await page.$$eval(".card-el-hand", (cards) =>
+            cards.map((e) => {
+                const r = e.getBoundingClientRect();
+                return {
+                    slot: e.dataset.slot,
+                    name: e.dataset.card,
+                    box: { x: r.x, y: r.y, width: r.width, height: r.height },
+                };
+            }),
+        );
+        for (const { slot, name, box } of [...opponent, ...you, ...hand]) {
+            // Where the card shows: its frame's middle, or a hand card's top.
+            const at = {
+                x: box.x + box.width / 2,
+                y:
+                    box.y +
+                    (hand.some((h) => h.slot === slot) ? 30 : box.height / 2),
+            };
+            await page.mouse.move(at.x, at.y);
+            await page.clock.runFor(400);
+            const now = await drawn(page);
+            for (const [other, { box: b }] of Object.entries(now)) {
+                if (other === slot || !still[other]) continue;
+                const moved = Math.max(
+                    ...b.map((v, i) => Math.abs(v - still[other].box[i])),
+                );
+                assert.ok(
+                    moved <= 1,
+                    `hovering ${name} moved slot ${other} by ${moved}`,
+                );
+            }
+            const inspect = page.locator(
+                `.inspect[aria-label="${name}, inspected"]`,
+            );
+            assert.equal(
+                await inspect.count(),
+                1,
+                `the pointer at ${name}'s middle inspects it`,
+            );
+            const shown = await inspect.boundingBox();
+            for (const f of forbidden) {
+                assert.ok(
+                    !overlap(shown, f),
+                    `${name}'s inspector covers ${f.what}`,
+                );
+            }
+            // A raised hand card stays under the life orbs, which are drawn over it (though
+            // yours lets the pointer through to it: hit-test it as if it didn't).
+            const life = await page.evaluate(() =>
+                [...document.querySelectorAll("[data-life]")].every((e) => {
+                    const r = e.getBoundingClientRect();
+                    e.style.pointerEvents = "auto";
+                    const top = document.elementFromPoint(
+                        r.x + r.width / 2,
+                        r.y + r.height / 2,
+                    );
+                    e.style.pointerEvents = "";
+                    return e.contains(top);
+                }),
+            );
+            assert.ok(life, `hovering ${name} hides a life total`);
+        }
+    },
+    crowdedRun(crowdedAt),
+);
+
+/** Writes the fixture `as`: fixture `name` up to its view at index `at`, that view changed by
+ * `edit`, so that a check can see one state of the table with and without something. */
+async function derive(name, as, at, edit) {
+    const fixture = JSON.parse(
+        await readFile(join(fixtures, `${name}.json`), "utf8"),
+    );
+    const messages = [];
+    let seen = -1;
+    for (const m of fixture.messages) {
+        if (m.kind === "event" && ++seen > at) break;
+        if (m.kind === "event" && seen === at) {
+            m.payload.view = edit(m.payload.view);
+        }
+        messages.push(m);
+    }
+    await writeFile(
+        join(fixtures, `${as}.json`),
+        JSON.stringify({ ...fixture, messages }),
+    );
+}
+
+// The crowded table with a spell on the stack, and the same table with the stack empty, as it
+// stands before the spell is cast and after it resolves. The spell names nothing here: a pile
+// the stack names splits (by-isv.2), which changes the table.
+const topSpell = crowdedViews[crowdedAt].stack.findLast(
+    (item) => item.kind === "spell",
+);
+await derive("crowded", "crowded-stacked", crowdedAt, (v) => ({
+    ...v,
+    stack: [{ ...topSpell, targets: [] }],
+}));
+await derive("crowded", "crowded-unstacked", crowdedAt, (v) => ({
+    ...v,
+    stack: [],
+}));
+await check(
+    "the stack appearing or resolving moves no permanent on a crowded table",
+    async (page) => {
+        const places = async (fixture) => {
+            await page.goto(
+                new URL(`/?fixture=${fixture}&at=${crowdedAt + 1}#/game`, base)
+                    .href,
+                { waitUntil: "load" },
+            );
+            await page.waitForSelector('[data-zone="battlefield"]');
+            await page.clock.runFor(2000);
+            return page.$$eval('.card-el[data-zone="battlefield"]', (cards) =>
+                Object.fromEntries(
+                    cards.map((e) => {
+                        const r = e.getBoundingClientRect();
+                        return [e.dataset.slot, [r.x, r.y, r.width, r.height]];
+                    }),
+                ),
+            );
+        };
+        const stacked = await places("crowded-stacked");
+        assert.ok(
+            await page.$(".card-el-stack"),
+            "the spell is drawn on the stack",
+        );
+        const unstacked = await places("crowded-unstacked");
+        assert.equal(
+            await page.$(".card-el-stack"),
+            null,
+            "the stack is empty",
+        );
+        for (const [slot, box] of Object.entries(stacked)) {
+            const moved = Math.max(
+                ...box.map((v, i) => Math.abs(v - unstacked[slot][i])),
+            );
+            assert.ok(moved <= 4, `the stack moves slot ${slot} by ${moved}`);
+        }
+    },
+    crowdedRun(crowdedAt),
+);
+
+// A coin flip is announced for a moment, below the opponent's life orb.
+await derive("crowded", "crowded-flip", crowdedAt, (v) => ({
+    ...v,
+    events: [...v.events, { kind: "coinFlip", player: "opponent", won: false }],
+}));
+await check(
+    "a coin flip's banner clears the life orbs and goes after a moment",
+    async (page) => {
+        const banner = page.locator(".step-banner");
+        await banner.waitFor();
+        assert.match(await banner.innerText(), /flip/i, "the flip's banner");
+        const shown = await banner.boundingBox();
+        for (const side of ["you", "opponent"]) {
+            const life = await page
+                .locator(`[data-life="${side}"]`)
+                .boundingBox();
+            assert.ok(!overlap(shown, life), `the banner covers ${side}r life`);
+        }
+        await page.clock.runFor(4000);
+        await banner.waitFor({ state: "detached" });
+    },
+    { ...crowdedRun(crowdedAt), fixture: "crowded-flip" },
+);
+
+// Cards over the table are small to fit; each shows whole on hover, wherever it is.
+for (const [title, run, selector] of [
+    ["the opening hand", { at: 2, ready: ".opening-card" }, ".opening-card"],
+    [
+        "a scry",
+        {
+            fixture: "choice-scry",
+            at: scry.views.length,
+            ready: ".choice-card .shown-card",
+        },
+        ".choice-card .shown-card",
+    ],
+]) {
+    await check(
+        `hovering a card in ${title} inspects it`,
+        async (page) => {
+            await page.clock.runFor(2000);
+            const cards = page.locator(selector);
+            const target = cards.last();
+            const box = await target.boundingBox();
+            // The card's visible right edge: cards in a tray may overlap.
+            await page.mouse.move(
+                box.x + box.width - 12,
+                box.y + box.height / 2,
+            );
+            await page.clock.runFor(300);
+            const name = await target.evaluate(
+                (e) => e.closest("[data-card]")?.dataset.card,
+            );
+            await page
+                .getByLabel(`${name}, inspected`)
+                .waitFor({ state: "visible" });
+            await page.mouse.move(1, 1);
+            await page.clock.runFor(300);
+            assert.equal(
+                await page.$(".inspect"),
+                null,
+                "the inspector goes with the pointer",
+            );
+        },
+        run,
+    );
+}
 
 await queue.drain();
 await browser.close();

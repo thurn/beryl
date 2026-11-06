@@ -2,7 +2,13 @@
 // where layout.ts puts it, a graveyard or exile pile is one button that opens it, never a card
 // to point at alone, and the zone viewer lists every card in the pile, each shown whole on
 // hover. A card the open decision offers something for (a target, a cast) is picked there.
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useState,
+  type CSSProperties,
+  type PointerEvent,
+  type ReactNode,
+} from "react";
 import {
   ASPECT,
   Card,
@@ -15,7 +21,7 @@ import { cardEntry, useCardArt, type CardFace } from "../cards";
 import type { CardType, ObjectView } from "../generated/protocol";
 import type { CardState } from "./CardLayer";
 import { BLANK, printedFace, tone, useFace } from "./faces";
-import type { PileLook, ZonePile } from "./layout";
+import { STAGE, type PileLook, type ZonePile } from "./layout";
 
 /** A pile lying on the table as `look` says: its top card's top-left corner at the look's
  * corner, the edges beneath on whichever side they show. Its `tip` (Controls.tsx' Tip), shown
@@ -144,7 +150,7 @@ export function ZoneViewer({
   onPick(slot: number): void;
   onClose(): void;
 }) {
-  const [previewing, setPreviewing] = useState<number>();
+  const [inspector, inspect] = useHoverInspect();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -194,22 +200,13 @@ export function ZoneViewer({
                 state={states.get(o.slot) ?? {}}
                 offered={offers(o.slot)}
                 onPick={() => onPick(o.slot)}
-                onHover={(on) =>
-                  setPreviewing((p) =>
-                    on ? o.slot : p === o.slot ? undefined : p,
-                  )
-                }
+                hover={inspect(o)}
               />
             ))}
           </div>
         )}
       </div>
-      {previewing !== undefined && (
-        <Inspect
-          object={cards.find((o) => o.slot === previewing)}
-          left={1600 - 330 - 24}
-        />
-      )}
+      {inspector}
     </>
   );
 }
@@ -219,13 +216,13 @@ function ViewerCard({
   state,
   offered,
   onPick,
-  onHover,
+  hover,
 }: {
   object: ObjectView;
   state: CardState;
   offered: boolean;
   onPick(): void;
-  onHover(on: boolean): void;
+  hover: HoverHandlers;
 }) {
   const face = useFace(object);
   return (
@@ -239,8 +236,7 @@ function ViewerCard({
       data-card={object.name ?? undefined}
       role={offered ? "button" : undefined}
       onClick={offered ? onPick : undefined}
-      onPointerEnter={() => onHover(true)}
-      onPointerLeave={() => onHover(false)}
+      {...hover}
     >
       <Card
         card={face}
@@ -254,19 +250,65 @@ function ViewerCard({
   );
 }
 
-/** A card's full Scryfall scan, which carries the artist credit, large beside the table, its
- * left edge at `left`; outside the app, its frame stands in for the scan. On the battlefield,
+/** The pointer handlers that inspect a card while it is hovered. */
+export interface HoverHandlers {
+  onPointerEnter(e: PointerEvent<HTMLElement>): void;
+  onPointerLeave(): void;
+}
+
+/** Hovering a card the table does not place, in an overlay over it, a pile's viewer or the
+ * opening hand, shows it whole in the inspector, on the stage's side away from the card, as
+ * hovering one on the table does. Returns the inspector to draw (or nothing) and, for each
+ * card, the handlers for its element. A card the viewer doesn't know is not inspected. */
+export function useHoverInspect(): [
+  ReactNode,
+  (object: ObjectView | undefined) => HoverHandlers,
+] {
+  const [shown, setShown] = useState<{ object: ObjectView; left: number }>();
+  const handlers = (object: ObjectView | undefined): HoverHandlers => ({
+    onPointerEnter: (e) => {
+      if (!object?.name) return;
+      const box = e.currentTarget.getBoundingClientRect();
+      const stage = e.currentTarget.closest(".stage")?.getBoundingClientRect();
+      const left =
+        stage && (box.left + box.right) / 2 - stage.left < stage.width / 2
+          ? STAGE.width - INSPECT_WIDTH - 24
+          : 24;
+      setShown({ object, left });
+    },
+    onPointerLeave: () =>
+      setShown((s) => (s?.object.slot === object?.slot ? undefined : s)),
+  });
+  return [
+    shown && <Inspect object={shown.object} place={{ left: shown.left }} />,
+    handlers,
+  ];
+}
+
+/** The inspector's width (screens.css .inspect). */
+export const INSPECT_WIDTH = 330;
+
+/** Where the inspector stands: its left edge, and its top and width when not the usual ones
+ * (screens.css .inspect). */
+export interface InspectPlace {
+  left: number;
+  top?: number;
+  width?: number;
+}
+
+/** A card's full Scryfall scan, which carries the artist credit, large beside the table where
+ * `place` puts it; outside the app, its frame stands in for the scan. On the battlefield,
  * what the scan cannot say follows it: its card types when effects have changed them, the
  * printed ones struck out, its marks spelled out, and what is `attached` to it. With a
  * paragraph `lit`, the ability an option uses, its frame shows, that paragraph marked. */
 export function Inspect({
   object,
-  left,
+  place: { left, top, width = INSPECT_WIDTH },
   attached = [],
   lit,
 }: {
   object?: ObjectView;
-  left: number;
+  place: InspectPlace;
   attached?: ObjectView[];
   lit?: number;
 }) {
@@ -281,11 +323,15 @@ export function Inspect({
     face.typeLine !== "" &&
     printed.join() !== object.types.join();
   return (
-    <div className="inspect" style={{ left }} aria-label={`${name}, inspected`}>
+    <div
+      className="inspect"
+      style={{ left, top, width }}
+      aria-label={`${name}, inspected`}
+    >
       {scan?.src && lit === undefined ? (
         <img className="inspect-scan" src={scan.src} alt={name} />
       ) : (
-        <Card card={{ ...face, lit }} width={330} />
+        <Card card={{ ...face, lit }} width={width} />
       )}
       {entry && <p className="inspect-artist">Illustrated by {entry.artist}</p>}
       {changed && (

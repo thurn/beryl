@@ -133,6 +133,12 @@
       "height": 800
     },
     {
+      "name": "game-crowded-stack",
+      "route": "/?fixture=crowded&at=2#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
       "name": "game-main-1920",
       "route": "/?fixture=greedy-turn-9&at=119#/game",
       "width": 1920,

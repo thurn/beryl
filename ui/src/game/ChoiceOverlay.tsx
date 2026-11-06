@@ -3,6 +3,7 @@
 // a click fallback), the source card at the right, and "View Battlefield" to peek under it.
 // The overlay says the whole choice; `onPlan` gets the picks that answer it (game/choices.ts).
 import {
+  createContext,
   useContext,
   useEffect,
   useRef,
@@ -25,6 +26,7 @@ import { StageScale } from "./Stage";
 import type { Arrange, Ask, Choice, Pick, Source } from "./choices";
 import type { Intent } from "./decisions";
 import { useFace } from "./faces";
+import { useHoverInspect, type HoverHandlers } from "./Piles";
 
 export interface ChoiceOverlayProps {
   view: PlayerView;
@@ -37,14 +39,26 @@ export interface ChoiceOverlayProps {
 
 export function ChoiceOverlay(props: ChoiceOverlayProps) {
   const { choice } = props;
-  return choice.kind === "arrange" ? (
-    <ArrangeChoice {...props} choice={choice} />
-  ) : choice.kind === "pick" ? (
-    <PickChoice {...props} choice={choice} />
-  ) : (
-    <AskChoice {...props} choice={choice} />
+  // Its cards are small: hovering one shows it whole.
+  const [inspector, inspect] = useHoverInspect();
+  return (
+    <Inspecting.Provider value={inspect}>
+      {choice.kind === "arrange" ? (
+        <ArrangeChoice {...props} choice={choice} />
+      ) : choice.kind === "pick" ? (
+        <PickChoice {...props} choice={choice} />
+      ) : (
+        <AskChoice {...props} choice={choice} />
+      )}
+      {inspector}
+    </Inspecting.Provider>
   );
 }
+
+/** The handlers that inspect an overlay's card while it is hovered. */
+const Inspecting = createContext<
+  ((object: ObjectView | undefined) => HoverHandlers) | undefined
+>(undefined);
 
 /** The tray's size (the overlay's choice column) and the cards' in it, stage pixels. */
 const TRAY = { width: 1000, height: 468 };
@@ -98,9 +112,15 @@ function ShownCard({
   highlight?: Highlight;
 }) {
   const shown = object?.name ?? name;
-  const face = useFace(object ?? { ...NOWHERE, name: shown ?? null });
+  const known = object ?? { ...NOWHERE, name: shown ?? null };
+  const face = useFace(known);
+  const inspect = useContext(Inspecting);
   if (!shown) return <CardBack width={width} />;
-  return <Card card={face} width={width} highlight={highlight} />;
+  return (
+    <span className="shown-card" {...inspect?.(known)}>
+      <Card card={face} width={width} highlight={highlight} />
+    </span>
+  );
 }
 
 /** A card known only by name, for frameFace. */

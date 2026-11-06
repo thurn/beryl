@@ -15,6 +15,7 @@ import {
 } from "react";
 import {
   animate,
+  AnimatePresence,
   motion,
   useMotionValue,
   useReducedMotion,
@@ -101,7 +102,9 @@ import {
   STACK_Z,
   stackPlace,
   STEP_NAMES,
+  STAGE,
   zonePiles,
+  type Placement,
   type ZonePile,
 } from "./layout";
 import type { LogEntry } from "./log";
@@ -113,6 +116,8 @@ import {
 } from "./Narration";
 import {
   Inspect,
+  INSPECT_WIDTH,
+  type InspectPlace,
   Lying,
   pileMark,
   PileButton,
@@ -242,6 +247,38 @@ export function Board({
     hoveredPlace?.look === "hidden" || hoveredPlace?.look === "pile"
       ? undefined
       : hoveredPlace;
+  // A hovered card that a new view moves may leave the pointer, which then sends no event: once
+  // it has glided to its new place, it stays inspected only if the pointer is still on it.
+  const pointer = useRef<{ x: number; y: number }>(undefined);
+  const hoveredAt = useRef<Placement>(undefined);
+  const recheck = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => {
+    const was = hoveredAt.current;
+    hoveredAt.current = hoveredPlace;
+    if (
+      !was ||
+      !hoveredPlace ||
+      was.slot !== hoveredPlace.slot ||
+      (was.zone === hoveredPlace.zone &&
+        Math.hypot(hoveredPlace.x - was.x, hoveredPlace.y - was.y) <= 4)
+    ) {
+      return;
+    }
+    const slot = hoveredPlace.slot;
+    clearTimeout(recheck.current);
+    recheck.current = setTimeout(() => {
+      const at = pointer.current;
+      const under =
+        at &&
+        document
+          .elementFromPoint(at.x, at.y)
+          ?.closest<HTMLElement>("[data-slot]")?.dataset.slot;
+      if (under !== String(slot)) {
+        setHovered((h) => (h === slot ? undefined : h));
+      }
+    }, GLIDE_MS);
+  }, [hoveredPlace]);
+  useEffect(() => () => clearTimeout(recheck.current), []);
   const piles = useMemo(() => zonePiles(shown), [shown]);
   const viewed = piles.find(
     (p) => p.side === viewing?.side && p.zone === viewing.zone,
@@ -573,12 +610,16 @@ export function Board({
       ? passButton(view, decision.passTo)
       : { label: "Pass", caption: "" };
   const arrows = useMemo(() => boardArrows(shown), [shown]);
+  const announcement = combatBanner(view) ?? coinFlipBanner(view);
+  // While a declaration is made, the banner says what to click; any other is an announcement,
+  // which shows for a moment.
   const banner = drafting
     ? {
         title: "Combat",
         detail: instruction(drafting, draft, walkers.length > 0, nameOf),
+        lasting: true,
       }
-    : (combatBanner(view) ?? coinFlipBanner(view));
+    : announcement && { ...announcement, lasting: false };
   // A combat declaration is finished with the turn button, where priority is passed.
   const declaring =
     deciding && decision && isCombat(decision.kind) ? decision : undefined;
@@ -594,6 +635,9 @@ export function Board({
           if (menu || inert) return;
           if (castingNow) setCasting(undefined);
           else if (cancellable) cancel?.();
+        }}
+        onPointerMove={(e) => {
+          pointer.current = { x: e.clientX, y: e.clientY };
         }}
       >
         <div className="far-shade" />
@@ -663,7 +707,14 @@ export function Board({
           <ManaPool pool={you.mana} pulse={lost} />
         </div>
 
-        {banner && <StepBanner {...banner} />}
+        {banner && (
+          <StepBanner
+            key={
+              banner.lasting ? "lasting" : `${banner.title}|${banner.detail}`
+            }
+            {...banner}
+          />
+        )}
 
         <GameLog log={log} folded={overLog(placements)} />
         {live && <Announcements view={view} />}
@@ -813,7 +864,10 @@ export function Board({
               objects.get(menu?.slot ?? inspected!.slot),
               menu?.pointed,
             )}
-            x={menu ? menu.at.x : inspected!.x}
+            place={inspectorPlace(
+              menu ? menu.at.x : inspected!.x,
+              view.stack.length > 0 || asking,
+            )}
             lit={menu?.pointed && litParagraph(menu.pointed, objects)}
           />
         )}
@@ -879,23 +933,71 @@ function haltButton(view: PlayerView): { label: string; caption: string } {
     : { label: "Continue", caption: "To Your Turn" };
 }
 
-/** A step announcement over the battlefield, such as "Combat" over "Blockers declared". */
-function StepBanner({ title, detail }: { title: string; detail: string }) {
+/** How long a card takes to glide to a new place (CardLayer's spring), near enough, in ms. */
+const GLIDE_MS = 700;
+
+/** How long an announcing banner shows, in ms. */
+const BANNER_MS = 2500;
+
+/** A step announcement over the battlefield, such as "Combat" over "Blockers declared", between
+ * the opponent's life orb and their permanents: it fades away after a moment unless `lasting`
+ * (a declaration's instruction). */
+function StepBanner({
+  title,
+  detail,
+  lasting = false,
+}: {
+  title: string;
+  detail: string;
+  lasting?: boolean;
+}) {
+  const reduce = useReducedMotion() ?? false;
+  const [shown, setShown] = useState(true);
+  useEffect(() => {
+    if (lasting) return;
+    const timer = setTimeout(() => setShown(false), BANNER_MS);
+    return () => clearTimeout(timer);
+  }, [lasting]);
   return (
-    <div className="step-banner" role="status">
-      <i className="step-banner-rule step-banner-rule-left" />
-      <i className="step-banner-diamond" />
-      <span className="step-banner-title">{title}</span>
-      <i className="step-banner-dot" />
-      <i className="step-banner-rule step-banner-rule-right" />
-      <i className="step-banner-underline" />
-      <span className="step-banner-detail">{detail}</span>
-      <svg className="step-banner-notch" viewBox="0 0 140 12" aria-hidden>
-        <path d="M0 1.5 H60.5 L70 10.5 L79.5 1.5 H140" />
-      </svg>
-    </div>
+    <AnimatePresence>
+      {shown && (
+        <motion.div
+          className="step-banner"
+          role="status"
+          exit={
+            reduce ? undefined : { opacity: 0, transition: { duration: 0.4 } }
+          }
+        >
+          <i className="step-banner-rule step-banner-rule-left" />
+          <i className="step-banner-diamond" />
+          <span className="step-banner-title">{title}</span>
+          <i className="step-banner-dot" />
+          <i className="step-banner-rule step-banner-rule-right" />
+          <i className="step-banner-underline" />
+          <span className="step-banner-detail">{detail}</span>
+          <svg className="step-banner-notch" viewBox="0 0 140 12" aria-hidden>
+            <path d="M0 1.5 H60.5 L70 10.5 L79.5 1.5 H140" />
+          </svg>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
+
+/** Where the inspector stands: beside the table on the side away from the card at `x`, never over a
+ * life orb, which lies between the two sides. While the stack or a prompt holds the table's
+ * right (`taken`), a card on the left is shown smaller in the column between the life orbs and
+ * the stack. */
+function inspectorPlace(x: number, taken: boolean): InspectPlace {
+  if (x >= STAGE.width / 2) return { left: 24 };
+  return taken
+    ? BETWEEN_ORBS_AND_STACK
+    : { left: STAGE.width - INSPECT_WIDTH - 24 };
+}
+
+/** Right of the life orbs (x 670 to 930), left of the stack (STACK.x), and below the
+ * opponent's orb and above yours (y 159 and 618), with room for the artist's line. */
+const BETWEEN_ORBS_AND_STACK = { left: 940, top: 172, width: 258 };
 
 /** The settings gear at the top right. */
 function Gear() {
@@ -1264,17 +1366,17 @@ function Prompt({
   );
 }
 
-/** The inspector for `object`, beside the table on the side away from `x`, with what is
- * attached to it. */
+/** The inspector for `object`, where `place` puts it (inspectorPlace), with what is attached
+ * to it. */
 function InspectAt({
   view,
   object,
-  x,
+  place,
   lit,
 }: {
   view: PlayerView;
   object?: ObjectView;
-  x: number;
+  place: InspectPlace;
   lit?: number;
 }) {
   return (
@@ -1283,7 +1385,7 @@ function InspectAt({
       attached={view.objects.filter(
         (o) => o.zone === "battlefield" && o.attachedTo === object?.slot,
       )}
-      left={x < 800 ? 1600 - 330 - 24 : 24}
+      place={place}
       lit={lit}
     />
   );

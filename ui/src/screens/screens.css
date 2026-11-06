@@ -605,6 +605,9 @@
 .choice-card:disabled {
   cursor: default;
 }
+.shown-card {
+  display: block;
+}
 .choice-card-out {
   filter: brightness(0.55) saturate(0.6);
 }
@@ -746,6 +749,16 @@
 .hud {
   position: absolute;
 }
+/* Over a raised hand card (CardLayer's RAISED_Z), which would hide your life total, but under
+   a dragged one. */
+.table .life {
+  z-index: 350;
+}
+/* Your orb takes the pointer only to be picked as a target: otherwise the top of a raised hand
+   card under it stays at hand. (A drag only ever aims at the opponent's orb.) */
+.table .life[data-life="you"]:not(.life-target) {
+  pointer-events: none;
+}
 /* Mockup pixels on the 1600-wide stage. */
 .table .life-orb {
   --orb: calc(1px / 1.045);
@@ -795,9 +808,6 @@
 .hand-card {
   position: absolute;
 }
-/* A step announcement over the battlefield (combat.png's "Combat / Blockers declared"): a gold
-   title between ornamented rules over an italic detail, on a smoky shade. Laid out from its
-   center line; the shade's box is the banner. */
 /* The game log at the table's left, between the far lands and the near ones: a heading for each
    turn in small gold capitals, then an entry per line marked with its player's color (yours
    cyan, the opponent's ember), the newest brightest at the foot and the oldest fading out at
@@ -829,6 +839,12 @@
    which opens the log over the cards and their arrows (.board-arrows). */
 .game-log-folded {
   z-index: 460;
+  /* Only the button and the open list take the pointer, not the column's empty box over the
+     cards. */
+  pointer-events: none;
+}
+.game-log-folded > * {
+  pointer-events: auto;
 }
 .game-log-folded .game-log-list {
   max-height: 228px;
@@ -961,12 +977,19 @@
   text-transform: uppercase;
   color: var(--ember);
 }
+/* A step announcement over the battlefield (combat.png's "Combat / Blockers declared"): a gold
+   title between ornamented rules over an italic detail, on a smoky shade, in the band between
+   the opponent's life orb and their permanents. Laid out from its center line; the shade's box
+   is the banner. */
 .step-banner {
   position: absolute;
+  /* Over the permanents (CardLayer), which a card peeking out above its row would otherwise
+     lay over the detail; it takes no pointer, so they stay at hand. Under the life orbs. */
+  z-index: 340;
   left: 802px;
-  top: 137px;
+  top: 158px;
   width: 400px;
-  height: 130px;
+  height: 80px;
   translate: -50% 0;
   pointer-events: none;
   background: radial-gradient(
@@ -982,7 +1005,7 @@
   left: 50%;
 }
 .step-banner-title {
-  top: 18.6px;
+  top: 4px;
   translate: -50% 0;
   /* The mockup's title face is narrower than our serif's. */
   scale: 0.92 1;
@@ -999,7 +1022,7 @@
     drop-shadow(0 2px 5px rgb(0 0 0 / 50%));
 }
 .step-banner-detail {
-  top: 53.6px;
+  top: 39px;
   translate: -50% 0;
   font-size: 20.2px;
   font-style: italic;
@@ -1012,7 +1035,7 @@
     0 2px 6px rgb(0 0 0 / 55%);
 }
 .step-banner-rule {
-  top: 38.6px;
+  top: 24px;
   width: 50px;
   height: 2px;
   border-radius: 1px;
@@ -1027,7 +1050,7 @@
   background: linear-gradient(270deg, transparent, #f7b95d 70%, #ffe0a0);
 }
 .step-banner-diamond {
-  top: 34.2px;
+  top: 19.6px;
   margin-left: -111px;
   width: 9px;
   height: 9px;
@@ -1037,7 +1060,7 @@
   box-shadow: 0 0 6px rgb(245 150 50 / 90%);
 }
 .step-banner-dot {
-  top: 37.4px;
+  top: 22.8px;
   margin-left: 100px;
   width: 4px;
   height: 4px;
@@ -1046,7 +1069,7 @@
   box-shadow: 0 0 4px rgb(245 150 50 / 90%);
 }
 .step-banner-underline {
-  top: 48px;
+  top: 33.4px;
   margin-left: -100px;
   width: 190px;
   height: 1px;
@@ -1062,7 +1085,7 @@
 }
 /* A faint rule under the banner that dips into a V at its middle. */
 .step-banner-notch {
-  top: 89px;
+  top: 64px;
   margin-left: -70px;
   width: 140px;
   height: 12px;
@@ -1624,7 +1647,7 @@
 }
 .inspect-scan {
   display: block;
-  width: 330px;
+  width: 100%;
   border-radius: 15px;
   box-shadow: 0 12px 32px rgb(0 0 0 / 60%);
 }
@@ -1712,6 +1735,9 @@
 .opening > :not(.overlay-backdrop),
 .game-over > :not(.overlay-backdrop) {
   position: relative;
+}
+.opening > .inspect {
+  position: absolute;
 }
 .opening-title,
 .game-over-title {
