@@ -19,6 +19,7 @@ import {
   useMotionValue,
   useReducedMotion,
 } from "motion/react";
+import { faceEntry } from "../cards";
 import type { Highlight } from "../components/Card";
 import {
   Button,
@@ -27,6 +28,7 @@ import {
   Tip,
   TurnButton,
 } from "../components/Controls";
+import { CostText, RulesText } from "../components/Mana";
 import {
   FaceUpEdges,
   floating,
@@ -75,7 +77,7 @@ import {
   emptyDraft,
   type Draft,
 } from "./combat";
-import { abilityText, BLANK, useAbilityFace } from "./faces";
+import { abilityParagraph, abilityText, BLANK, useAbilityFace } from "./faces";
 import {
   asksCastStep,
   castActs,
@@ -155,11 +157,13 @@ const BATTLEFIELD_EDGE = 690;
 /** Dragged forward at least this far, a creature attacks. */
 const FORWARD = 60;
 
-/** A menu of a card's candidates, open at a point on the stage. */
+/** A menu of a card's candidates, open at a point on the stage; `pointed`, the one under
+ * the pointer. */
 interface Menu {
   slot: number;
   at: Point;
   acts: Act[];
+  pointed?: Act;
 }
 
 /** A card's cast being set up in the cast step. */
@@ -768,6 +772,11 @@ export function Board({
             decision={decision}
             source={sourceName}
             nameOf={nameOf}
+            objects={objects}
+            onTable={(slot) => {
+              const look = placements.get(slot)?.look;
+              return look !== undefined && look !== "hidden" && look !== "pile";
+            }}
             onPick={pick}
             onCancel={cancellable ? cancel : undefined}
           />
@@ -790,19 +799,19 @@ export function Board({
             menu={menu}
             title={objects.get(menu.slot)?.name ?? undefined}
             onPick={(act) => pickAct(menu.slot, act)}
+            onPoint={(act) => setMenu({ ...menu, pointed: act })}
             onClose={() => setMenu(undefined)}
           />
         )}
 
-        {inspected && !menu && !castingNow && !dimmed && (
-          <Inspect
-            object={objects.get(inspected.slot)}
-            attached={view.objects.filter(
-              (o) =>
-                o.zone === "battlefield" && o.attachedTo === inspected.slot,
-            )}
-            // Beside the table on the side away from the card.
-            left={inspected.x < 800 ? 1600 - 330 - 24 : 24}
+        {/* The card the pointer is on or, while its menu points at an ability, the card that
+            ability's paragraph lit. */}
+        {(menu?.pointed ?? (inspected && !menu)) && !castingNow && !dimmed && (
+          <InspectAt
+            view={view}
+            object={objects.get(menu?.slot ?? inspected!.slot)}
+            x={menu ? menu.at.x : inspected!.x}
+            lit={menu?.pointed && litParagraph(menu.pointed, objects)}
           />
         )}
 
@@ -1182,18 +1191,23 @@ function Finish({
   );
 }
 
-/** A decision other than priority: what it asks, with every candidate as a button, so each
- * pick on the board has a click fallback here too. */
+/** A decision other than priority: what it asks, with a button for each candidate but the
+ * cards picked on the table, where each glows with its side and state in view. */
 function Prompt({
   decision,
   source,
   nameOf,
+  objects,
+  onTable,
   onPick,
   onCancel,
 }: {
   decision: DecisionView;
   source?: string;
   nameOf(slot: number): string;
+  objects: Map<number, ObjectView>;
+  /** Whether the card in a slot is shown on the table, to be clicked there. */
+  onTable(slot: number): boolean;
   onPick(index: CandidateIndex): void;
   /** Takes back the cast the decision is part of. */
   onCancel?(): void;
@@ -1208,21 +1222,34 @@ function Prompt({
     if (c.option.kind !== "plan" || !taps) return c.label;
     return taps.length > 0 ? `Tap ${tapList(taps.map(nameOf))}` : "Tap nothing";
   };
+  const buttons = decision.candidates
+    .map((c, index) => ({ c, index, label: label(c) }))
+    .filter(({ c }) => c.option.kind !== "object" || !onTable(c.option.slot));
+  // Cards of one name off the table say whose they are.
+  const named = (b: (typeof buttons)[number]) => {
+    const o = b.c.option.kind === "object" && objects.get(b.c.option.slot);
+    if (!o || buttons.filter((x) => x.label === b.label).length < 2) {
+      return b.label;
+    }
+    return `${o.controller === "you" ? "Your" : "Their"} ${b.label}`;
+  };
   return (
     <div className="prompt" role="dialog" aria-label={prompt(decision, source)}>
       <h2 className="prompt-title">{prompt(decision, source)}</h2>
-      <div className="prompt-choices">
-        {decision.candidates.map((c, i) => (
-          <Button
-            key={i}
-            size="small"
-            variant="secondary"
-            onClick={() => onPick(i)}
-          >
-            {label(c)}
-          </Button>
-        ))}
-      </div>
+      {buttons.length > 0 && (
+        <div className="prompt-choices">
+          {buttons.map((b) => (
+            <Button
+              key={b.index}
+              size="small"
+              variant="secondary"
+              onClick={() => onPick(b.index)}
+            >
+              <RulesText text={named(b)} />
+            </Button>
+          ))}
+        </div>
+      )}
       {onCancel && (
         <div className="cast-buttons">
           <Button size="small" variant="secondary" onClick={onCancel}>
@@ -1234,16 +1261,56 @@ function Prompt({
   );
 }
 
-/** What a card offers, listed where it was clicked or dropped. */
+/** The inspector for `object`, beside the table on the side away from `x`, with what is
+ * attached to it. */
+function InspectAt({
+  view,
+  object,
+  x,
+  lit,
+}: {
+  view: PlayerView;
+  object?: ObjectView;
+  x: number;
+  lit?: number;
+}) {
+  return (
+    <Inspect
+      object={object}
+      attached={view.objects.filter(
+        (o) => o.zone === "battlefield" && o.attachedTo === object?.slot,
+      )}
+      left={x < 800 ? 1600 - 330 - 24 : 24}
+      lit={lit}
+    />
+  );
+}
+
+/** The paragraph of its card's rules text an activation's ability is, if the card says it. */
+function litParagraph(
+  act: Act,
+  objects: Map<number, ObjectView>,
+): number | undefined {
+  const o = act.option;
+  if (o.kind !== "activate" || act.nth === null) return undefined;
+  const name = objects.get(o.slot)?.name;
+  const text = name ? faceEntry(name)?.oracle_text : undefined;
+  return text ? abilityParagraph(text, false, act.nth) : undefined;
+}
+
+/** What a card offers, listed where it was clicked or dropped; pointing at an option says
+ * which. */
 function ActionMenu({
   menu,
   title,
   onPick,
+  onPoint,
   onClose,
 }: {
   menu: Menu;
   title?: string;
   onPick(act: Act): void;
+  onPoint(act: Act | undefined): void;
   onClose(): void;
 }) {
   useEffect(() => {
@@ -1274,6 +1341,8 @@ function ActionMenu({
             type="button"
             className="action-menu-item"
             onClick={() => onPick(a)}
+            onPointerEnter={() => onPoint(a)}
+            onPointerLeave={() => onPoint(undefined)}
           >
             {menuLabel(a, title)}
           </button>
@@ -1283,11 +1352,12 @@ function ActionMenu({
   );
 }
 
-/** A candidate's label in its card's menu, without repeating the card's name. */
+/** A candidate's label in its card's menu, its symbols drawn: an activation by its cost
+ * alone, not repeating the card's name. */
 function menuLabel(act: Act, name?: string): ReactNode {
   const label = act.label;
   if (name && label.startsWith(`${name}: `)) {
-    return label.slice(name.length + 2);
+    return <CostText text={label.slice(name.length + 2)} />;
   }
-  return label;
+  return <RulesText text={label} />;
 }

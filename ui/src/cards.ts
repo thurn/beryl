@@ -43,6 +43,12 @@ for (const card of [...data.tokens, ...data.cards]) {
 
 export const cardEntry = (name: string) => byName.get(name)?.card;
 
+/** The face a card or face name names: a card's first, or the face of that name. */
+export function faceEntry(name: string): CardFace | undefined {
+  const found = byName.get(name);
+  return found?.card.faces[found.face];
+}
+
 const tokens = new Map(data.tokens.map((t) => [t.name, t]));
 
 /** The printed face of a token named `name` where it has its own, as Thundertrap Trainer's

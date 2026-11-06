@@ -121,6 +121,38 @@
 .mana-generic {
   background: #d3cbc1;
 }
+/* A loyalty cost on its printed symbol (Mana.tsx's LoyaltyCost), a shield whose edge points
+   up, down or flat: pale with dark numerals, to stand out on the dark panels that list it. */
+.loyalty-cost {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 2.6em;
+  height: 1.9em;
+  vertical-align: -0.5em;
+}
+.loyalty-glyph {
+  grid-area: 1 / 1;
+  font: normal 1.9em/1 Mana;
+  color: #ece6da;
+}
+.loyalty-number {
+  grid-area: 1 / 1;
+  font: 700 0.9em/1 var(--font-serif);
+  color: #1c1a19;
+}
+.loyalty-down .loyalty-number {
+  translate: 0 -0.1em;
+}
+.loyalty-up .loyalty-number {
+  translate: 0 0.1em;
+}
+/* The paragraph of a card's rules text that says the ability an option uses. */
+.rules-lit {
+  background: var(--gold-soft);
+  box-shadow: 0 0 0 0.15em var(--gold-soft);
+  border-radius: 0.1em;
+}
 .ability-badge {
   position: absolute;
   --ink: #2b2b30;

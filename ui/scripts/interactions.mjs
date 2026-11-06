@@ -1999,6 +1999,118 @@ await check(
     { fixture: "choice-pay", at: pay.views.length, ready: ".choice" },
 );
 
+// Menus and prompts say what each option does (by-isv.8). `menu-choices` stops at a priority
+// decision with Jace, the Mind Sculptor's three loyalty abilities and Sink into Stupor, a
+// spell whose back is a land: every card's menu draws its costs as symbols, never braces;
+// pointing at a loyalty ability lights its paragraph of Jace's text; and the land is played
+// by its land face's name.
+const menus = await lastDecision("menu-choices");
+const menuView = menus.views.at(-1);
+const nameOfSlot = (view, slot) =>
+    view.objects.find((o) => o.slot === slot)?.name;
+const menuSlots = [
+    ...Map.groupBy(
+        menus.decision.candidates.filter(
+            (c) => offeredSlot(c.option) !== undefined,
+        ),
+        (c) => offeredSlot(c.option),
+    ),
+]
+    .filter(([, cs]) => cs.length > 1)
+    .map(([slot]) => slot);
+const jace = menuView.objects.find(
+    (o) => o.name === "Jace, the Mind Sculptor" && o.zone === "battlefield",
+).slot;
+const stupor = menuView.objects.find(
+    (o) => o.name === "Sink into Stupor" && o.zone === "hand",
+).slot;
+assert.ok(
+    menuSlots.includes(jace) && menuSlots.includes(stupor),
+    "Jace and Sink into Stupor each offer more than one thing",
+);
+await check(
+    "menus draw costs as symbols and light the ability pointed at",
+    async (page) => {
+        await page.clock.runFor(3000);
+        for (const slot of menuSlots) {
+            await page.click(`[data-slot="${slot}"]`);
+            const text = await page.locator(".action-menu").textContent();
+            assert.ok(!text.includes("{"), `no braces in ${text}`);
+            await page.keyboard.press("Escape");
+        }
+        await page.click(`[data-slot="${jace}"]`);
+        const items = page.locator(".action-menu-item");
+        assert.deepEqual(
+            await items
+                .locator(".loyalty-cost")
+                .evaluateAll((es) =>
+                    es.map((e) => e.getAttribute("aria-label")),
+                ),
+            ["+2", "0", "\u22121"],
+            "each loyalty ability by its symbol",
+        );
+        await items.nth(2).hover();
+        assert.match(
+            await page.locator(".inspect .rules-lit").textContent(),
+            /^\u22121: Return target creature/,
+            "pointing at −1 lights its paragraph",
+        );
+        await page.keyboard.press("Escape");
+        await page.click(`[data-slot="${stupor}"]`);
+        assert.deepEqual(
+            await items.allTextContents(),
+            ["Play Soporific Springs", "Cast Sink into Stupor"],
+            "the land is played by its land face",
+        );
+    },
+    { fixture: "menu-choices", at: menus.views.length, ready: ".turn-action" },
+);
+
+// A target prompt with two cards of one name (by-isv.8): `namesake-target` stops on a
+// target for Teferi, Hero of Dominaria with a Snapcaster Mage on each side. The prompt lists
+// neither; each glows on the table, on its side, and clicking one there picks it.
+const namesake = await lastDecision("namesake-target");
+const namesakeView = namesake.views.at(-1);
+const mages = [...namesake.bySlot.keys()].filter(
+    (slot) => nameOfSlot(namesakeView, slot) === "Snapcaster Mage",
+);
+const theirMage = mages.find(
+    (slot) =>
+        namesakeView.objects.find((o) => o.slot === slot).controller ===
+        "opponent",
+);
+assert.equal(mages.length, 2, "the fixture offers two Snapcaster Mages");
+await check(
+    "a target prompt leaves same-named cards to the table",
+    async (page) => {
+        await page.clock.runFor(3000);
+        const buttons = await page
+            .locator(".prompt-choices .button")
+            .allTextContents();
+        assert.ok(
+            !buttons.some((b) => b.includes("Snapcaster Mage")),
+            `the prompt lists no Snapcaster Mage: ${buttons}`,
+        );
+        for (const slot of mages) {
+            assert.ok(
+                await page.$(
+                    `[data-slot="${slot}"][data-zone="battlefield"] .card-target`,
+                ),
+                "each glows on the table",
+            );
+        }
+        await page.click(`[data-slot="${theirMage}"]`);
+        assert.deepEqual(await settled(page, 1), [
+            namesake.bySlot.get(theirMage),
+        ]);
+    },
+    {
+        fixture: "namesake-target",
+        at: namesake.views.length,
+        ready: ".prompt",
+    },
+);
+
 // The trigger-order prompt (still asked under exact stops) names each trigger's source in full,
 // even the cube's longest names: `choice-trigger-order` stops on one between two creatures,
 // renamed here to the two longest names in the cube list, and no text on the page is cut.

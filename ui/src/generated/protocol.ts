@@ -224,7 +224,13 @@ payments: Array<Payment>,
  * For a candidate that declares a blocker: the attackers it may block, by slot, one of
  * each set of interchangeable attackers (architecture §7.2). None otherwise.
  */
-blocks: Array<number>, };
+blocks: Array<number>, 
+/**
+ * For a candidate that activates an ability of the object's own face: how many activated
+ * abilities, mana abilities among them, its face lists before it, as
+ * [`StackItem::Ability`]'s `nth` counts them, so the UI finds the ability's paragraph.
+ */
+nth: number | null, };
 
 export type Payment = { x: number | null, 
 /**

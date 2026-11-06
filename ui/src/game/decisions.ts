@@ -12,13 +12,15 @@ import type {
 } from "../generated/protocol";
 
 /** One thing a card offers: the candidate's index and its label; for a cast or an activation,
- * the ways it can be paid; for a blocker, the attackers it may block. */
+ * the ways it can be paid; for a blocker, the attackers it may block; for an activation of
+ * the card's own ability, which of its activated abilities it is. */
 export interface Act {
   index: CandidateIndex;
   label: string;
   option: Candidate;
   payments: Payment[];
   blocks: number[];
+  nth: number | null;
 }
 
 export interface Interactions {
@@ -156,10 +158,10 @@ export function interactions(view: PlayerView): Interactions {
   const decision = status.decision;
   let pass: CandidateIndex | undefined;
   let done: CandidateIndex | undefined;
-  decision.candidates.forEach(({ label, option, payments, blocks }, index) => {
+  decision.candidates.forEach(({ option, ...candidate }, index) => {
     const slot = slotOf(option);
     if (slot !== undefined) {
-      const act = { index, label, option, payments, blocks };
+      const act = { index, option, ...candidate };
       bySlot.set(slot, [...(bySlot.get(slot) ?? []), act]);
     } else if (option.kind === "player") {
       players.set(option.player, index);

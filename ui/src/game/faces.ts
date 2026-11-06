@@ -141,8 +141,18 @@ export function abilityText(
   triggered: boolean,
   nth: number,
 ): string {
+  const at = abilityParagraph(text, triggered, nth);
+  return at === undefined ? text : text.split("\n")[at]!;
+}
+
+/** The index of the paragraph abilityText finds, if one matches. */
+export function abilityParagraph(
+  text: string,
+  triggered: boolean,
+  nth: number,
+): number | undefined {
   const kind = triggered
     ? /^(When|Whenever|At)\b|\(.*\b([Ww]hen|[Ww]henever|At the beginning)\b/
     : /^[^(]*:/;
-  return text.split("\n").filter((p) => kind.test(p))[nth] ?? text;
+  return text.split("\n").flatMap((p, i) => (kind.test(p) ? [i] : []))[nth];
 }

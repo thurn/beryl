@@ -200,6 +200,8 @@ INTERACTION_FIXTURES = [
     "tokens",
     "mana-floating",
     "stack-x",
+    "menu-choices",
+    "namesake-target",
 ]
 
 

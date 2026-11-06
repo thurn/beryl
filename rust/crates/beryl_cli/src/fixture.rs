@@ -8,8 +8,8 @@ use std::sync::mpsc::channel;
 use beryl_cards::decks::{VINTAGE_WU_CONTROL, WU_CONTROL, fuzz_deck};
 use beryl_session::ipc::{self, Fixture, FixtureMessage};
 use beryl_session::protocol::{
-    Candidate, CardType, Combat, Counter, Kind, ObjectView, Side, StackItem, Step, TargetRef,
-    ZoneName,
+    Candidate, CandidateView, CardType, Combat, Counter, Kind, ObjectView, Side, StackItem, Step,
+    TargetRef, ZoneName,
 };
 use beryl_session::{PlayerView, Seat, Sessions, StartGame, Status, StopsSetting, agents};
 use serde::Deserialize;
@@ -138,6 +138,13 @@ enum Condition {
     OpponentsSpell,
     /// The human may cast a card of this name.
     Castable(String),
+    /// The human may play a card of this name as a land.
+    Playable(String),
+    /// The human may activate more than one ability of a permanent of this name, so clicking
+    /// it opens a menu.
+    Abilities(String),
+    /// The open decision offers two objects of one name.
+    NamesakeCandidates,
     /// The open decision is asked by the resolution of a spell of this name or an ability of
     /// a card of this name.
     Resolving(String),
@@ -222,7 +229,8 @@ impl Condition {
     /// Parses "step <step>" (as the protocol names steps: "declareBlockers"), "attacking",
     /// "blocking", "targeted trigger on the stack", "targeted spell on the stack", "player
     /// targeted on the stack", "ability targeting beside its source", "opponent's spell on
-    /// the stack", "castable <card name>", "resolving <card name>", "casting <card name>",
+    /// the stack", "castable <card name>", "playable <card name>", "abilities of <card name>",
+    /// "namesake candidates", "resolving <card name>", "casting <card name>",
     /// "playable pair in hand", "exiled beneath a permanent", "attached across the table",
     /// "castable from exile", "known card in the opponent's hand", "token twins", "changed
     /// token", "stolen permanent", "mana floating", "X on the stack", or "<mark> beside a twin"
@@ -251,6 +259,7 @@ impl Condition {
             "stolen permanent" => Condition::Stolen,
             "mana floating" => Condition::ManaFloating,
             "X on the stack" => Condition::XOnStack,
+            "namesake candidates" => Condition::NamesakeCandidates,
             _ => {
                 if let Some(step) = text.strip_prefix("step ") {
                     Condition::Step(
@@ -259,6 +268,10 @@ impl Condition {
                     )
                 } else if let Some(name) = text.strip_prefix("castable ") {
                     Condition::Castable(name.to_owned())
+                } else if let Some(name) = text.strip_prefix("playable ") {
+                    Condition::Playable(name.to_owned())
+                } else if let Some(name) = text.strip_prefix("abilities of ") {
+                    Condition::Abilities(name.to_owned())
                 } else if let Some(name) = text.strip_prefix("resolving ") {
                     Condition::Resolving(name.to_owned())
                 } else if let Some(name) = text.strip_prefix("casting ") {
@@ -316,6 +329,11 @@ impl Condition {
                     Candidate::Cast { slot, .. } if name(slot) == Some(card.as_str())
                 ))
             ),
+            Condition::Playable(card) => candidates(view).any(|c| {
+                matches!(c.option, Candidate::PlayLand { slot } if name(slot) == Some(card.as_str()))
+            }),
+            Condition::Abilities(card) => abilities_of(view, card),
+            Condition::NamesakeCandidates => namesake_candidates(view),
             Condition::Resolving(card) => match &view.status {
                 Status::Deciding { decision } => match &decision.resolving {
                     Some(StackItem::Spell { slot, .. }) => name(*slot) == Some(card.as_str()),
@@ -357,6 +375,50 @@ impl Condition {
             Condition::XOnStack => x_on_stack(view),
         }
     }
+}
+
+/// Whether the human may activate more than one ability of a permanent named `card`.
+fn abilities_of(view: &PlayerView, card: &str) -> bool {
+    view.battlefield
+        .iter()
+        .filter(|&&slot| {
+            view.objects
+                .iter()
+                .any(|o| o.slot == slot && o.name.as_deref() == Some(card))
+        })
+        .any(|&slot| {
+            candidates(view)
+                .filter(|c| matches!(c.option, Candidate::Activate { slot: s, .. } if s == slot))
+                .count()
+                > 1
+        })
+}
+
+/// Whether the open decision offers two objects of one name.
+fn namesake_candidates(view: &PlayerView) -> bool {
+    let names: Vec<_> = candidates(view)
+        .filter_map(|c| match c.option {
+            Candidate::Object { slot } => view
+                .objects
+                .iter()
+                .find(|o| o.slot == slot)
+                .and_then(|o| o.name.as_deref()),
+            _ => None,
+        })
+        .collect();
+    names
+        .iter()
+        .enumerate()
+        .any(|(i, n)| names[i + 1..].contains(n))
+}
+
+/// The open decision's candidates, if any.
+fn candidates(view: &PlayerView) -> impl Iterator<Item = &CandidateView> {
+    match &view.status {
+        Status::Deciding { decision } => decision.candidates.as_slice(),
+        _ => &[],
+    }
+    .iter()
 }
 
 /// Whether the human may play or cast a card from their hand of which they hold another just
@@ -696,6 +758,18 @@ mod tests {
             Ok(Condition::Castable("Mana Drain".to_owned()))
         );
         assert_eq!(Condition::parse("blocking"), Ok(Condition::Blocking));
+        assert_eq!(
+            Condition::parse("playable Sink into Stupor"),
+            Ok(Condition::Playable("Sink into Stupor".to_owned()))
+        );
+        assert_eq!(
+            Condition::parse("abilities of The Wandering Emperor"),
+            Ok(Condition::Abilities("The Wandering Emperor".to_owned()))
+        );
+        assert_eq!(
+            Condition::parse("namesake candidates"),
+            Ok(Condition::NamesakeCandidates)
+        );
         assert_eq!(
             Condition::parse("resolving Mana Tithe"),
             Ok(Condition::Resolving("Mana Tithe".to_owned()))

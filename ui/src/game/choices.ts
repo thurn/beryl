@@ -57,14 +57,20 @@ export interface Pick extends Common {
   max: number;
   /** The confirm button's label for `n` picked. */
   confirm(n: number): string;
+  /** A second button that picks nothing, if the choice may. */
+  decline?: string;
+  /** The cards picked to begin with. */
+  picked?: number[];
   plan(picked: number[]): Intent[];
 }
 
-/** A question with an answer per button, over the cards it is about. */
+/** A question with an answer per button, the first the default, over the cards it is about
+ * or, for a question of life, the player's life orb. */
 export interface Ask extends Common {
   kind: "ask";
   cards: number[];
   answers: { label: string; plan: Intent[] }[];
+  life?: number;
 }
 
 export type Choice = Arrange | Pick | Ask;
@@ -216,6 +222,22 @@ class Situation {
     return r?.kind === "ability" ? abilityText(text, r.triggered, r.nth) : text;
   }
 
+  /** Whether one more untapped land would let the viewer cast a card in their hand that
+   * their untapped lands cannot pay for, by mana value. */
+  untappedLandWanted(): boolean {
+    const untapped = this.view.battlefield.filter((s) => {
+      const o = this.objects.get(s);
+      return o?.controller === "you" && o.types.includes("land") && !o.tapped;
+    }).length;
+    return this.hand("you").some((s) => {
+      const name = this.name(s);
+      const face = name ? cardEntry(name)?.faces[0] : undefined;
+      if (!face || /\bLand\b/.test(face.type_line)) return false;
+      const value = manaValue(face.mana_cost ?? "");
+      return value > untapped && value <= untapped + 1;
+    });
+  }
+
   /** A player's library, top first. */
   library(side: Side) {
     return [...this.view.players[side].library].reverse();
@@ -261,6 +283,15 @@ class Situation {
       plan: [answer(this.decision.kind, c.option)],
     }));
   }
+}
+
+/** A mana cost's mana value ([CR 202.3](https://yawgatog.com/resources/magic-rules/#R2023)),
+ * X as zero: "{2}{W}{W}" is 4. */
+function manaValue(cost: string): number {
+  return [...cost.matchAll(/\{([^}]+)\}/g)].reduce((sum, [, symbol]) => {
+    const n = Number(symbol);
+    return sum + (Number.isInteger(n) ? n : symbol === "X" ? 0 : 1);
+  }, 0);
 }
 
 /** The answer that names `option`. */
@@ -440,6 +471,8 @@ function look(at: Situation, ask: AskOf<"look">): Pick {
       : "Opponent's Hand";
   const taking = to === "hand";
   const verb = taking ? "Put in Hand" : capitalized(to);
+  // A card is nearly always worth taking: the one card that can be is picked to begin with,
+  // and taking nothing is the second button.
   return {
     kind: "pick",
     key: at.key,
@@ -452,10 +485,15 @@ function look(at: Situation, ask: AskOf<"look">): Pick {
     source: at.source,
     cards,
     pickable,
-    min: asking ? 0 : 1,
+    min: 1,
     max: 1,
-    confirm: (n) =>
-      n > 0 ? verb : taking ? "Take Nothing" : `${capitalized(to)} Nothing`,
+    confirm: () => verb,
+    decline: asking
+      ? taking
+        ? "Take Nothing"
+        : `${capitalized(to)} Nothing`
+      : undefined,
+    picked: pickable.length === 1 ? pickable : [],
     plan: ([slot]) =>
       slot === undefined
         ? [no("yesNo")]
@@ -660,20 +698,25 @@ function legendRule(at: Situation): Pick {
   };
 }
 
-/** "As this land enters, you may pay N life. If you don't, it enters tapped." */
+/** "As this land enters, you may pay N life. If you don't, it enters tapped": the land as it
+ * is played, a double-faced card's land face ([CR 712.12](https://yawgatog.com/resources/magic-rules/#R71212)),
+ * over the player's life orb. Paying is the default only when the land's mana would make a
+ * card in hand castable this turn that the untapped lands cannot. */
 function payLife(at: Situation, { life }: AskOf<"payLife">): Ask {
-  const source = at.source;
+  const name = at.source?.name;
+  const land =
+    name && cardEntry(name)?.faces.find((f) => /\bLand\b/.test(f.type_line));
+  const pay = { label: `Pay ${life} Life`, plan: [yes("payLife")] };
+  const tapped = { label: "Enter Tapped", plan: [no("payLife")] };
   return {
     kind: "ask",
     key: at.key,
     title: `Pay ${life} Life?`,
-    instruction: `${source?.name ?? "This land"} enters tapped unless you pay ${life} life.`,
-    source,
+    instruction: "",
+    source: land ? { name: land.name } : at.source,
     cards: [],
-    answers: [
-      { label: `Pay ${life} Life`, plan: [yes("payLife")] },
-      { label: "Enter Tapped", plan: [no("payLife")] },
-    ],
+    answers: at.untappedLandWanted() ? [pay, tapped] : [tapped, pay],
+    life: at.view.players.you.life,
   };
 }
 

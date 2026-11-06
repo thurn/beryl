@@ -5,6 +5,7 @@
 // violet edge; the top card of a pile of identical ones wears their count. Tapping turns
 // either frame whole, never reshaping it.
 import {
+  Fragment,
   useLayoutEffect,
   useRef,
   type CSSProperties,
@@ -28,6 +29,8 @@ export interface CardFace {
   /** Art URL; a placeholder painting is drawn until there is one. */
   art?: string;
   ability?: AbilityIcon;
+  /** The paragraph of the rules text lit, by index: the ability an option uses. */
+  lit?: number;
   /** How the power and toughness shown compare with the printed ones: raised, or lowered by
    * an effect or, for toughness, by marked damage. */
   powerTone?: StatTone;
@@ -142,6 +145,18 @@ export function CardArt({ card }: { card: CardFace }) {
       style={{ backgroundImage: placeholderArt(card) }}
     />
   );
+}
+
+/** Rules text with paragraph `lit` marked, the rest as printed. */
+function LitRules({ text, lit }: { text: string; lit: number }) {
+  return text.split("\n").map((paragraph, i) => (
+    <Fragment key={i}>
+      {i > 0 && "\n"}
+      <span className={i === lit ? "rules-lit" : undefined}>
+        <RulesText text={paragraph} />
+      </span>
+    </Fragment>
+  ));
 }
 
 /** Shrinks long rules text to fit its box rather than cutting it off mid-line, as the cube's
@@ -318,7 +333,11 @@ export function Card({
               <div className="card-rules">
                 {card.text && (
                   <p ref={rulesRef}>
-                    <RulesText text={card.text} />
+                    {card.lit === undefined ? (
+                      <RulesText text={card.text} />
+                    ) : (
+                      <LitRules text={card.text} lit={card.lit} />
+                    )}
                   </p>
                 )}
               </div>

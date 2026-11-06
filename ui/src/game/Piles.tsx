@@ -257,15 +257,18 @@ function ViewerCard({
 /** A card's full Scryfall scan, which carries the artist credit, large beside the table, its
  * left edge at `left`; outside the app, its frame stands in for the scan. On the battlefield,
  * what the scan cannot say follows it: its card types when effects have changed them, the
- * printed ones struck out, its marks spelled out, and what is `attached` to it. */
+ * printed ones struck out, its marks spelled out, and what is `attached` to it. With a
+ * paragraph `lit`, the ability an option uses, its frame shows, that paragraph marked. */
 export function Inspect({
   object,
   left,
   attached = [],
+  lit,
 }: {
   object?: ObjectView;
   left: number;
   attached?: ObjectView[];
+  lit?: number;
 }) {
   const name = object?.name;
   const scan = useCardArt(name ?? "", undefined, "normal");
@@ -279,10 +282,10 @@ export function Inspect({
     printed.join() !== object.types.join();
   return (
     <div className="inspect" style={{ left }} aria-label={`${name}, inspected`}>
-      {scan?.src ? (
+      {scan?.src && lit === undefined ? (
         <img className="inspect-scan" src={scan.src} alt={name} />
       ) : (
-        <Card card={face} width={330} />
+        <Card card={{ ...face, lit }} width={330} />
       )}
       {entry && <p className="inspect-artist">Illustrated by {entry.artist}</p>}
       {changed && (

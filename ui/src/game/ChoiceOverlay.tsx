@@ -19,6 +19,7 @@ import {
 import { ASPECT, Card, CardBack, type Highlight } from "../components/Card";
 import { Overlay, type OverlayAction } from "../components/Overlay";
 import { RulesText } from "../components/Mana";
+import { LifeOrb } from "../components/Player";
 import type { ObjectView, PlayerView } from "../generated/protocol";
 import { StageScale } from "./Stage";
 import type { Arrange, Ask, Choice, Pick, Source } from "./choices";
@@ -444,7 +445,7 @@ function PickChoice({
   onPlan,
   onViewBattlefield,
 }: ChoiceOverlayProps & { choice: Pick }) {
-  const [picked, setPicked] = useState<number[]>([]);
+  const [picked, setPicked] = useState<number[]>(choice.picked ?? []);
   const toggle = (slot: number) =>
     setPicked((now) =>
       now.includes(slot)
@@ -466,11 +467,24 @@ function PickChoice({
       choice={choice}
       onViewBattlefield={onViewBattlefield}
       actions={[
-        {
-          label: choice.confirm(count),
-          disabled: busy || !ok,
-          onClick: () => onPlan(choice.plan(picked)),
-        },
+        ...(choice.pickable.length > 0 || !choice.decline
+          ? [
+              {
+                label: choice.confirm(count),
+                disabled: busy || !ok,
+                onClick: () => onPlan(choice.plan(picked)),
+              },
+            ]
+          : []),
+        ...(choice.decline
+          ? [
+              {
+                label: choice.decline,
+                disabled: busy,
+                onClick: () => onPlan(choice.plan([])),
+              },
+            ]
+          : []),
       ]}
     >
       <div className="scry-zone choice-zone" data-choice="pick">
@@ -529,6 +543,11 @@ function AskChoice({
         onClick: () => onPlan(a.plan),
       }))}
     >
+      {choice.life !== undefined && (
+        <div className="scry-zone choice-zone choice-life" data-choice="ask">
+          <LifeOrb life={choice.life} />
+        </div>
+      )}
       {choice.cards.length > 0 && (
         <div className="scry-zone choice-zone" data-choice="ask">
           {choice.cards.map((slot, i) => {

@@ -412,6 +412,33 @@
       "route": "/?fixture=choice-pay#/game",
       "width": 1600,
       "height": 900
+    },
+    {
+      "name": "game-menu-walker",
+      "route": "/?fixture=menu-choices#/game",
+      "width": 1600,
+      "height": 900,
+      "click": "[data-zone=battlefield][data-card='Jace, the Mind Sculptor']",
+      "hover": ".action-menu-item >> nth=2"
+    },
+    {
+      "name": "game-menu-land-face",
+      "route": "/?fixture=menu-choices#/game",
+      "width": 1600,
+      "height": 900,
+      "click": "[data-zone=hand][data-card='Sink into Stupor']"
+    },
+    {
+      "name": "game-pay-life",
+      "route": "/?fixture=pay-life#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-namesake-target",
+      "route": "/?fixture=namesake-target#/game",
+      "width": 1600,
+      "height": 900
     }
   ]
 }

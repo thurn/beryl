@@ -360,6 +360,10 @@ pub struct CandidateView {
     /// For a candidate that declares a blocker: the attackers it may block, by slot, one of
     /// each set of interchangeable attackers (architecture §7.2). None otherwise.
     pub blocks: Vec<u8>,
+    /// For a candidate that activates an ability of the object's own face: how many activated
+    /// abilities, mana abilities among them, its face lists before it, as
+    /// [`StackItem::Ability`]'s `nth` counts them, so the UI finds the ability's paragraph.
+    pub nth: Option<u8>,
 }
 
 /// One way a cast or activation is paid, found by playing it out on a copy of the game: the
@@ -878,6 +882,29 @@ fn object_view(t: &GameTable, obs: Observation<'_>, slot: Slot) -> ObjectView {
     }
 }
 
+/// Whether ability `index` of `list` is triggered, and how many abilities of its kind
+/// (triggered, or activated) come before it: the face's text says them in that order, so the
+/// UI finds its paragraph.
+fn ability_order(list: &[Ability], index: u8) -> (bool, u8) {
+    // Triggered, or activated (mana abilities are written as activated ones are); the other
+    // kinds have no paragraph of their own to find.
+    let class = |a: &Ability| match a.kind {
+        AbilityKind::Triggered => Some(true),
+        AbilityKind::Activated | AbilityKind::Mana => Some(false),
+        _ => None,
+    };
+    let kind = list.get(usize::from(index)).and_then(class) == Some(true);
+    let nth = list
+        .iter()
+        .take(usize::from(index))
+        .filter(|a| class(a) == Some(kind))
+        .count();
+    (
+        kind,
+        u8::try_from(nth).expect("a face has fewer than 256 abilities"),
+    )
+}
+
 fn stack_item(t: &GameTable, obs: Observation<'_>, e: &StackEntry) -> StackItem {
     let targets = e
         .targets
@@ -903,26 +930,14 @@ fn stack_item(t: &GameTable, obs: Observation<'_>, e: &StackEntry) -> StackItem 
                 FaceAbility::Own(i) => (face.abilities, i),
                 FaceAbility::Grant(i) => (face.grants, i),
             };
-            // Triggered, or activated (mana abilities are written as activated ones are); the
-            // other kinds have no paragraph of their own to find.
-            let class = |a: &Ability| match a.kind {
-                AbilityKind::Triggered => Some(true),
-                AbilityKind::Activated | AbilityKind::Mana => Some(false),
-                _ => None,
-            };
-            let kind = list.get(usize::from(index)).and_then(class) == Some(true);
-            let nth = list
-                .iter()
-                .take(usize::from(index))
-                .filter(|a| class(a) == Some(kind))
-                .count();
+            let (kind, nth) = ability_order(list, index);
             StackItem::Ability {
                 source,
                 ability: index,
                 granted: matches!(ability, FaceAbility::Grant(_)),
                 name: t.def(e.card).face_name(e.face).to_owned(),
                 triggered: kind,
-                nth: u8::try_from(nth).expect("a face has fewer than 256 abilities"),
+                nth,
                 controller: side(obs, e.controller),
                 targets,
                 x: e.x,
@@ -947,6 +962,7 @@ fn decision_view(
                 option: Candidate::Object { slot: slot.get() },
                 payments: Vec::new(),
                 blocks: Vec::new(),
+                nth: None,
             })
             .collect(),
         Candidates::Options(opts) => opts.iter().map(|&o| candidate(t, obs, o)).collect(),
@@ -974,6 +990,7 @@ fn halt_view(obs: Observation<'_>, id: DecisionId, stops: StopsSetting) -> Decis
             option: Candidate::Pass,
             payments: Vec::new(),
             blocks: Vec::new(),
+            nth: None,
         }],
         resolving: None,
         ask: AskView::Plain,
@@ -1077,7 +1094,10 @@ fn candidate(t: &GameTable, obs: Observation<'_>, o: Opt) -> CandidateView {
     let (label, option) = match o {
         Opt::Pass => ("Pass".to_owned(), Candidate::Pass),
         Opt::PlayLand(slot) => (
-            format!("Play {}", named(slot)),
+            format!(
+                "Play {}",
+                land_face_name(t, obs, slot).unwrap_or("a hidden card")
+            ),
             Candidate::PlayLand { slot: slot.get() },
         ),
         Opt::Play => ("Play first".to_owned(), Candidate::Play),
@@ -1158,7 +1178,34 @@ fn candidate(t: &GameTable, obs: Observation<'_>, o: Opt) -> CandidateView {
         option,
         payments: Vec::new(),
         blocks: Vec::new(),
+        nth: activation_nth(t, obs, o),
     }
+}
+
+/// [`CandidateView::nth`].
+fn activation_nth(t: &GameTable, obs: Observation<'_>, o: Opt) -> Option<u8> {
+    let Opt::Activate {
+        slot,
+        ability: AbilityIx::Own(i),
+    } = o
+    else {
+        return None;
+    };
+    let face = t.def(obs.card(slot)?).face(obs.object(slot).face);
+    Some(ability_order(face.abilities, i).1)
+}
+
+/// The name of the face of the card in `slot` it is played with as a land, if the viewer knows
+/// it: its first land face ([CR 712.12](https://yawgatog.com/resources/magic-rules/#R71212):
+/// "A player playing a modal double-faced card ... as a land chooses one of its faces that's a
+/// land before putting it onto the battlefield"), as Sink into Stupor plays as Soporific
+/// Springs.
+fn land_face_name(t: &GameTable, obs: Observation<'_>, slot: Slot) -> Option<&'static str> {
+    let def = t.def(obs.card(slot)?);
+    let face = def
+        .face_ixs()
+        .find(|&f| def.face(f).types.intersects(Types::LAND))?;
+    Some(def.face_name(face))
 }
 
 /// A candidate that casts face `face` of the card in `slot` paying the options in `costs`.

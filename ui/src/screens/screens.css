@@ -557,6 +557,14 @@
   border-radius: 10px;
   background: rgb(0 0 0 / 18%);
 }
+/* A question of life shows the player's life orb, large, where the cards would be. */
+.choice-life {
+  display: grid;
+  place-items: center;
+}
+.choice-life .life-orb {
+  --orb: 2px;
+}
 .scry-zone .card-target {
   --card-shadow: 4px 6px 12px rgb(0 0 0 / 35%), 0 3px 6px rgb(0 0 0 / 30%);
 }
