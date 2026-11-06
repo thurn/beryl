@@ -946,7 +946,7 @@ impl<'a> EffectCtx<'a> {
         let library = self.state.zone(player, Zone::Library);
         self.look_at(player, library);
         let found = filter.select(self.state, self.table, library, player);
-        self.choose_up_to(player, found, n, Ask::Plain)
+        self.choose_up_to(player, found, n, Ask::Search { max: n })
     }
 
     /// Puts cards onto the battlefield tapped, each under its owner's control, simultaneously:

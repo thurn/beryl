@@ -459,6 +459,24 @@
       "height": 900
     },
     {
+      "name": "game-choice-search",
+      "route": "/?fixture=choice-search#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-choice-thirst",
+      "route": "/?fixture=choice-thirst#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-choice-cleanup",
+      "route": "/?fixture=choice-cleanup#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
       "name": "game-menu-walker",
       "route": "/?fixture=menu-choices#/game",
       "width": 1600,

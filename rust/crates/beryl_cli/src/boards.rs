@@ -819,6 +819,54 @@ pub const BOARDS: &[Scenario] = &[
         )
         .library(P1, LANDS)
         .actions(&[Action::cast(P0, TIME_SPIRAL)]),
+    // Trinket Mage searches for up to one artifact of mana value 1 or less, of two.
+    Scenario::new("choice-search")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[ISLAND_, ISLAND_, PLAINS_])
+        .hand(P0, &[TRINKET_MAGE])
+        .library(
+            P0,
+            &[MANA_CRYPT, ISLAND, CURRENCY_CONVERTER, PLAINS, ISLAND],
+        )
+        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[
+            Action::cast(P0, TRINKET_MAGE),
+            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+        ]),
+    // Thirst for Discovery draws three, and the human discards one of two basic lands rather
+    // than two cards.
+    Scenario::new("choice-thirst")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[ISLAND_, ISLAND_, PLAINS_])
+        .hand(P0, &[THIRST_FOR_DISCOVERY, PLAINS, ISLAND, COUNTERSPELL])
+        .library(P0, &[STOCK_UP, OUST, MANA_DRAIN, ISLAND, PLAINS])
+        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[
+            Action::cast(P0, THIRST_FOR_DISCOVERY),
+            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+        ]),
+    // The human ends their turn with eight cards in hand, one over the maximum.
+    Scenario::new("choice-cleanup")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[ISLAND_, PLAINS_])
+        .hand(
+            P0,
+            &[
+                COUNTERSPELL,
+                OUST,
+                MANA_DRAIN,
+                STOCK_UP,
+                DAMN,
+                ISLAND,
+                PLAINS,
+                REPRIEVE,
+            ],
+        )
+        .library(P0, LANDS)
+        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS),
     // Adeline attacks a player who controls The Wandering Emperor: her trigger's Human, made
     // attacking, asks what it attacks.
     Scenario::new("attack-token")

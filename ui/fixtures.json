@@ -283,6 +283,24 @@
       "where": ["resolving Time Spiral"]
     },
     {
+      "name": "choice-search",
+      "board": "choice-search",
+      "until": "first chooseUpTo decision for seat 0",
+      "where": ["resolving Trinket Mage"]
+    },
+    {
+      "name": "choice-thirst",
+      "board": "choice-thirst",
+      "until": "first discard decision for seat 0",
+      "where": ["resolving Thirst for Discovery"]
+    },
+    {
+      "name": "choice-cleanup",
+      "board": "choice-cleanup",
+      "until": "first discard decision for seat 0",
+      "where": ["step cleanup"]
+    },
+    {
       "name": "attack-token",
       "board": "attack-token",
       "until": "first attackTarget decision for seat 0",

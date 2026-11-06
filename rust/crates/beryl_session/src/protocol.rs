@@ -330,6 +330,8 @@ pub enum AskView {
     /// `count` of them still to exile. From the graveyard they are asked for from the bottom
     /// up, each above the one before, the lowest of interchangeable ones offered.
     ExileCards { zone: ZoneName, count: u8 },
+    /// A `chooseUpTo` for a card a library search finds, up to `max` of them.
+    Search { max: u8 },
     /// Permanents to untap, up to `max`.
     Untap { max: u8 },
     /// A `crew` decision's creature to tap for a crew cost of `crew` power, `left` of it
@@ -1087,6 +1089,7 @@ fn ask_view(obs: Observation<'_>, ask: Ask) -> AskView {
             count,
         },
         Ask::TopOrBottom { card } => AskView::TopOrBottom { card: card.get() },
+        Ask::Search { max } => AskView::Search { max },
         Ask::Untap { max } => AskView::Untap { max },
         Ask::Crew { crew, left } => AskView::Crew { crew, left },
         Ask::Waterbend { cost } => AskView::Waterbend {

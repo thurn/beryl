@@ -137,6 +137,25 @@ fn time_spiral_untaps_up_to_six_lands() {
 }
 
 #[test]
+fn trinket_mage_searches_for_up_to_one_card() {
+    assert_eq!(
+        asks(names::TRINKET_MAGE),
+        [(Kind::ChooseUpTo, AskView::Search { max: 1 })]
+    );
+}
+
+#[test]
+fn winds_of_abandon_searches_for_a_land_per_creature_exiled() {
+    assert_eq!(
+        asks(names::WINDS_OF_ABANDON),
+        [
+            (Kind::ChooseUpTo, AskView::Search { max: 1 }),
+            (Kind::ChooseUpTo, AskView::Search { max: 2 })
+        ]
+    );
+}
+
+#[test]
 fn mana_tithe_asks_its_target_to_pay_one() {
     assert_eq!(
         asks(names::MANA_TITHE),

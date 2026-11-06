@@ -102,6 +102,8 @@ export function choiceOf(view: PlayerView): Choice | undefined {
       return topOrBottom(at, ask);
     case "explore":
       return explore(at);
+    case "search":
+      return search(at, ask);
     // Untaps (picked on the board), crews and waterbends are decided on the board.
     case "untap":
     case "crew":
@@ -131,8 +133,6 @@ function assertNever(ask: never): never {
 /** A decision that asks no more than its kind says. */
 function plain(at: Situation): Choice | undefined {
   switch (at.decision.kind) {
-    case "chooseUpTo":
-      return chooseUpTo(at);
     case "chooseObject":
       return chooseObject(at);
     case "yesNo":
@@ -537,19 +537,21 @@ function explore(at: Situation): Ask {
   };
 }
 
-/** Any other choice of up to a number of cards, one at a time, then done. */
-function chooseUpTo(at: Situation): Pick {
+/** A library search ([CR 701.23a](https://yawgatog.com/resources/magic-rules/#R70123a)) for
+ * up to `max` cards, which the engine asks for one at a time, then done. The source card at
+ * the right says what the search finds. */
+function search(at: Situation, { max }: AskOf<"search">): Pick {
   const cards = at.offered;
   return {
     kind: "pick",
     key: at.key,
-    title: "Choose Cards",
-    instruction: at.sourceText || "Choose any number of cards.",
+    title: "Search",
+    instruction: `Choose up to ${inWords(max)}.`,
     source: at.source,
     cards,
     pickable: cards,
     min: 0,
-    max: cards.length,
+    max,
     confirm: () => "Done",
     plan: (picked) => [
       ...picked.map((slot) => at.pickCard("chooseUpTo", slot)),
@@ -577,22 +579,29 @@ function chooseObject(at: Situation): Pick {
 
 /** A discard of the player's choice ([CR 701.9b](https://yawgatog.com/resources/magic-rules/#R7019b)),
  * one card at a time; in the cleanup step, `cleanup` of them down to the maximum hand size
- * ([CR 514.1](https://yawgatog.com/resources/magic-rules/#R5141)). */
+ * ([CR 514.1](https://yawgatog.com/resources/magic-rules/#R5141)), the hand size it leaves
+ * said and the count picked on the button. */
 function discard(at: Situation, cleanup?: number): Pick {
   const hand = at.hand("you");
+  const pickable = at.offeredAmong(hand);
   const count = Math.max(1, cleanup ?? 1);
   return {
     kind: "pick",
     key: at.key,
     title: "Discard",
-    instruction: count === 1 ? "" : `Down to ${inWords(hand.length - count)}.`,
+    instruction:
+      cleanup !== undefined
+        ? `Down to ${inWords(hand.length - count)}.`
+        : pickable.length < hand.length
+          ? "Discard a highlighted card."
+          : "Discard a card.",
     source: cleanup === undefined ? at.source : undefined,
     cards: hand,
-    pickable: at.offeredAmong(hand),
+    pickable,
     min: count,
     max: count,
-    // The count still to pick, on the button.
-    confirm: (n) => (count === 1 ? "Discard" : `Discard ${n}/${count}`),
+    confirm: (n) =>
+      cleanup === undefined ? "Discard" : `Discard ${n}/${count}`,
     plan: (picked) => picked.map((slot) => at.pickCard("discard", slot)),
   };
 }

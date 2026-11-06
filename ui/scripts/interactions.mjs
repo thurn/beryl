@@ -4131,6 +4131,110 @@ await check(
     },
 );
 
+// Trinket Mage's search (`choice-search`) finds up to one of two artifacts: a second click
+// lights the second card in place of the first, never both, and Done sends the one lit.
+const searching = await lastDecision("choice-search");
+assert.equal(searching.decision.ask.max, 1, "the search finds up to one");
+const [crypt, converter] = [...searching.bySlot.keys()];
+await check(
+    "an up-to-one search lights one card and sends it",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.click(tray(crypt));
+        await page.click(tray(converter));
+        const lit = await page.$$eval(
+            '.choice-zone [aria-pressed="true"]',
+            (cards) => cards.map((c) => Number(c.dataset.slot)),
+        );
+        assert.deepEqual(lit, [converter], "one card is lit, the last");
+        await page.getByRole("button", { name: "Done" }).click();
+        assert.deepEqual(
+            await settled(page, 2),
+            [searching.bySlot.get(converter)],
+            "Done sends one pick",
+        );
+    },
+    {
+        fixture: "choice-search",
+        at: searching.views.length,
+        ready: tray(crypt),
+    },
+);
+
+// The cleanup discard (`choice-cleanup`: eight cards, one over) counts its picks on its button.
+const cleanup = await lastDecision("choice-cleanup");
+const [extra] = [...cleanup.bySlot.keys()];
+await check(
+    "the cleanup discard counts its picks",
+    async (page) => {
+        await page.getByRole("button", { name: "Discard 0/1" }).waitFor();
+        await page.click(tray(extra));
+        await page.getByRole("button", { name: "Discard 1/1" }).click();
+        assert.deepEqual(await settled(page, 1), [cleanup.bySlot.get(extra)]);
+    },
+    { fixture: "choice-cleanup", at: cleanup.views.length, ready: tray(extra) },
+);
+
+// Every choice overlay the fixtures hold keeps its words in their places: the instruction
+// between the header's two rules, the title above the first, each label in its button. A
+// picker of cards always says what to do; a question's buttons may say it alone.
+for (const fixture of [
+    "choice-scry",
+    "choice-jace",
+    "choice-pay",
+    "choice-explore",
+    "choice-loot",
+    "choice-search",
+    "choice-thirst",
+    "choice-cleanup",
+    "pay-life",
+]) {
+    const { views } = await lastDecision(fixture);
+    await check(
+        `${fixture}'s choice text fits its box`,
+        async (page) => {
+            await page.evaluate(() => document.fonts.ready.then(() => {}));
+            await page.clock.runFor(2000);
+            const misfits = await page.evaluate(() => {
+                const header = document
+                    .querySelector(".choice .overlay-header")
+                    .getBoundingClientRect();
+                const out = [];
+                const picker = document.querySelector(".choice-pick") !== null;
+                const within = (selector, top, bottom) => {
+                    const e = document.querySelector(`.choice ${selector}`);
+                    const text = e?.textContent.trim() ?? "";
+                    if (!text) {
+                        if (picker) out.push(`${selector} is empty`);
+                        return;
+                    }
+                    const r = e.getBoundingClientRect();
+                    if (
+                        r.top < header.top + top - 1 ||
+                        r.bottom > header.top + bottom + 1
+                    )
+                        out.push(
+                            `${selector} "${text}" spans ${r.top - header.top}..${r.bottom - header.top}`,
+                        );
+                };
+                // The header's rules lie 68 and 131 pixels down (components.css).
+                within(".overlay-title", -8, 68);
+                within(".overlay-instruction", 70, 131);
+                for (const b of document.querySelectorAll(".choice button")) {
+                    if (
+                        b.scrollWidth > b.clientWidth + 1 ||
+                        b.scrollHeight > b.clientHeight + 1
+                    )
+                        out.push(`button "${b.textContent}" overflows`);
+                }
+                return out;
+            });
+            assert.deepEqual(misfits, [], "choice text out of its box");
+        },
+        { fixture, at: views.length, ready: ".choice" },
+    );
+}
+
 // Adeline's trigger (`attack-token`) asks what its Human attacks with the Human on the table,
 // attacking the player; the turn button keeps that, and clicking The Wandering Emperor turns
 // it on her.

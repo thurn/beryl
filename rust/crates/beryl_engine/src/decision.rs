@@ -152,6 +152,12 @@ pub enum Ask {
     /// ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)): the controller
     /// "may put the revealed card into their graveyard."
     Explore,
+    /// A card a library search finds, up to `max` of them, one
+    /// [`DecisionKind::ChooseUpTo`] at a time
+    /// ([CR 701.23a](https://yawgatog.com/resources/magic-rules/#R70123a)): "To search for a
+    /// card in a zone, look at all cards in that zone (even if it's a hidden zone) and find a
+    /// card that matches the given description."
+    Search { max: u8 },
     /// Permanents to untap, up to `max`.
     Untap { max: u8 },
     /// A creature to tap for a crew cost of `crew` power, `left` of it still to tap
