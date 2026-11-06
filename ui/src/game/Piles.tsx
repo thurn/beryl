@@ -21,7 +21,7 @@ import { cardEntry, useCardArt, type CardFace } from "../cards";
 import type { CardType, ObjectView } from "../generated/protocol";
 import type { CardState } from "./CardLayer";
 import { BLANK, printedFace, tone, useFace } from "./faces";
-import { STAGE, type PileLook, type ZonePile } from "./layout";
+import { STAGE, type Box, type PileLook, type ZonePile } from "./layout";
 
 /** A pile lying on the table as `look` says: its top card's top-left corner at the look's
  * corner, the edges beneath on whichever side they show. Its `tip` (Controls.tsx' Tip), shown
@@ -257,13 +257,13 @@ export interface HoverHandlers {
 }
 
 /** Hovering a card the table does not place, in an overlay over it, a pile's viewer or the
- * opening hand, shows it whole in the inspector, on the stage's side away from the card, as
- * hovering one on the table does. Returns the inspector to draw (or nothing) and, for each
- * card, the handlers for its element. A card the viewer doesn't know is not inspected. */
-export function useHoverInspect(): [
-  ReactNode,
-  (object: ObjectView | undefined) => HoverHandlers,
-] {
+ * opening hand, shows it whole in the inspector: at `place` when given, else on the stage's
+ * side away from the card, as hovering one on the table does. Returns the inspector to draw
+ * (or nothing) and, for each card, the handlers for its element. A card the viewer doesn't
+ * know is not inspected. */
+export function useHoverInspect(
+  place?: InspectPlace,
+): [ReactNode, (object: ObjectView | undefined) => HoverHandlers] {
   const [shown, setShown] = useState<{ object: ObjectView; left: number }>();
   const handlers = (object: ObjectView | undefined): HoverHandlers => ({
     onPointerEnter: (e) => {
@@ -280,13 +280,34 @@ export function useHoverInspect(): [
       setShown((s) => (s?.object.slot === object?.slot ? undefined : s)),
   });
   return [
-    shown && <Inspect object={shown.object} place={{ left: shown.left }} />,
+    shown && (
+      <Inspect object={shown.object} place={place ?? { left: shown.left }} />
+    ),
     handlers,
   ];
 }
 
-/** The inspector's width (screens.css .inspect). */
+/** The inspector's width, top and inner margin (screens.css .inspect). */
 export const INSPECT_WIDTH = 330;
+const INSPECT_TOP = 118;
+export const INSPECT_PAD = 8;
+/** The artist's line under the scan, with its margin. */
+const INSPECT_ARTIST = 30;
+
+/** The box the inspector covers at `place`, for a card without marks under its scan. */
+export function inspectorBox({
+  left,
+  top = INSPECT_TOP,
+  width = INSPECT_WIDTH,
+}: InspectPlace): Box {
+  const inner = width - 2 * INSPECT_PAD;
+  return {
+    left,
+    top,
+    right: left + width,
+    bottom: top + inner / ASPECT.full + 2 * INSPECT_PAD + INSPECT_ARTIST,
+  };
+}
 
 /** Where the inspector stands: its left edge, and its top and width when not the usual ones
  * (screens.css .inspect). */
@@ -331,7 +352,7 @@ export function Inspect({
       {scan?.src && lit === undefined ? (
         <img className="inspect-scan" src={scan.src} alt={name} />
       ) : (
-        <Card card={{ ...face, lit }} width={width} />
+        <Card card={{ ...face, lit }} width={width - 2 * INSPECT_PAD} />
       )}
       {entry && <p className="inspect-artist">Illustrated by {entry.artist}</p>}
       {changed && (
@@ -385,8 +406,8 @@ function InspectAttached({ object }: { object: ObjectView }) {
   );
 }
 
-/** Two attachments side by side fill the inspector's width. */
-const INSPECT_ATTACHED = 160;
+/** Two attachments side by side fill the inspector's width inside its margin. */
+const INSPECT_ATTACHED = 152;
 
 const MARK_NAMES: Record<MarkIcon, string> = {
   plusOne: "+1/+1",

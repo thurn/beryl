@@ -26,7 +26,7 @@ import { StageScale } from "./Stage";
 import type { Arrange, Ask, Choice, Pick, Source } from "./choices";
 import type { Intent } from "./decisions";
 import { useFace } from "./faces";
-import { useHoverInspect, type HoverHandlers } from "./Piles";
+import { INSPECT_PAD, useHoverInspect, type HoverHandlers } from "./Piles";
 
 export interface ChoiceOverlayProps {
   view: PlayerView;
@@ -42,8 +42,9 @@ export interface ChoiceOverlayProps {
 
 export function ChoiceOverlay(props: ChoiceOverlayProps) {
   const { choice } = props;
-  // Its cards are small: hovering one shows it whole.
-  const [inspector, inspect] = useHoverInspect();
+  // Its cards are small: hovering one shows it whole, over the source card's column, clear of
+  // the instruction, the choice and its buttons.
+  const [inspector, inspect] = useHoverInspect(SIDE);
   return (
     <Inspecting.Provider value={inspect}>
       {choice.kind === "arrange" ? (
@@ -62,6 +63,14 @@ export function ChoiceOverlay(props: ChoiceOverlayProps) {
 const Inspecting = createContext<
   ((object: ObjectView | undefined) => HoverHandlers) | undefined
 >(undefined);
+
+/** The inspector over the source card, its margin around the card's edges (components.css
+ * .overlay: a 338 px side column from x 1208, the card from y 205 under View Battlefield). */
+const SIDE = {
+  left: 1208 - INSPECT_PAD,
+  top: 205 - INSPECT_PAD,
+  width: 338 + 2 * INSPECT_PAD,
+};
 
 /** The tray's size (the overlay's choice column) and the cards' in it, stage pixels. */
 const TRAY = { width: 1000, height: 468 };

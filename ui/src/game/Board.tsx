@@ -94,9 +94,11 @@ import {
 import { CastStep } from "./CastStep";
 import {
   combatBanner,
+  footprint,
   layout,
   linked,
   overLog,
+  overlaps,
   passButton,
   phaseOf,
   pileLook,
@@ -106,6 +108,7 @@ import {
   STEP_NAMES,
   STAGE,
   zonePiles,
+  type Box,
   type Placement,
   type ZonePile,
 } from "./layout";
@@ -119,6 +122,7 @@ import {
 import {
   Inspect,
   INSPECT_WIDTH,
+  inspectorBox,
   type InspectPlace,
   Lying,
   pileMark,
@@ -468,6 +472,12 @@ export function Board({
       });
     }
   }
+  // The cards glowing as targets, which the inspector keeps clear of.
+  const targets = [...states].flatMap(([slot, state]) => {
+    const place = placements.get(slot);
+    return state.highlight === "target" && place ? [footprint(place)] : [];
+  });
+
   /** Confirms the untap: the picks that make it, as the engine asks them. */
   const untap = () => {
     if (!decision) return;
@@ -962,6 +972,7 @@ export function Board({
             place={inspectorPlace(
               menu ? menu.at.x : inspected!.x,
               view.stack.length > 0 || asking,
+              targets,
             )}
             lit={menu?.pointed && litParagraph(menu.pointed, objects)}
           />
@@ -1093,14 +1104,28 @@ function StepBanner({
 
 /** Where the inspector stands: beside the table on the side away from the card at `x`, never over a
  * life orb, which lies between the two sides. While the stack or a prompt holds the table's
- * right (`taken`), a card on the left is shown smaller in the column between the life orbs and
- * the stack. */
-function inspectorPlace(x: number, taken: boolean): InspectPlace {
-  if (x >= STAGE.width / 2) return { left: 24 };
-  return taken
+ * right (`taken`), it is shown smaller in the column between the life orbs and the stack
+ * instead. It never covers a card glowing as a target (`targets`, their boxes), which the
+ * player may be about to pick: where the side it prefers would, it takes the other. */
+function inspectorPlace(
+  x: number,
+  taken: boolean,
+  targets: Box[],
+): InspectPlace {
+  const right = taken
     ? BETWEEN_ORBS_AND_STACK
     : { left: STAGE.width - INSPECT_WIDTH - 24 };
+  const sides = x >= STAGE.width / 2 ? [LEFT, right] : [right, LEFT];
+  return (
+    sides.find((side) => {
+      const box = inspectorBox(side);
+      return !targets.some((t) => overlaps(box, t));
+    }) ?? sides[0]!
+  );
 }
+
+/** The table's left, under the badges. */
+const LEFT = { left: 24 };
 
 /** Right of the life orbs (x 670 to 930), left of the stack (STACK.x), and below the
  * opponent's orb and above yours (y 159 and 618), with room for the artist's line. */

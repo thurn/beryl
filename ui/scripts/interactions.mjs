@@ -3590,6 +3590,157 @@ for (const [title, run, selector] of [
     );
 }
 
+/** The inspector's box, once it shows the card `name`. */
+async function inspectorOf(page, name) {
+    const inspect = page.locator(`.inspect[aria-label="${name}, inspected"]`);
+    await inspect.waitFor({ state: "visible" });
+    return inspect.boundingBox();
+}
+
+/** A point of the element `selector` picks (the `nth`) where it is on top, so the pointer
+ * reaches it: its middle if nothing covers that, else the first such point on a 10 px grid. */
+const visiblePoint = (page, selector, nth) =>
+    page.evaluate(
+        ([selector, nth]) => {
+            const e = document.querySelectorAll(selector)[nth];
+            const r = e.getBoundingClientRect();
+            const on = (x, y) => e.contains(document.elementFromPoint(x, y));
+            const mid = { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+            if (on(mid.x, mid.y)) return mid;
+            for (let y = r.top + 5; y < r.bottom; y += 10) {
+                for (let x = r.left + 5; x < r.right; x += 10) {
+                    if (on(x, y)) return { x, y };
+                }
+            }
+            return null;
+        },
+        [selector, nth],
+    );
+
+// A prompt's cards show whole on hover, beside its instruction, options and cards, never over
+// them, on an opaque inspector (by-isv.17): a look at the top four, a pay-or-counter and X.
+for (const [fixture, at] of [
+    ["choice-look", (await load("choice-look")).length],
+    ["choice-pay", pay.views.length],
+    ["cast-kicker", kickViews.length],
+]) {
+    await check(
+        `hovering a card in ${fixture}'s prompt keeps its inspector off the prompt`,
+        async (page) => {
+            await page.clock.runFor(2000);
+            const prompt = await page.$$eval(
+                ".overlay-main :is(.overlay-title, .overlay-instruction, button, .shown-card)",
+                (els) =>
+                    els.map((e) => {
+                        const r = e.getBoundingClientRect();
+                        return {
+                            what:
+                                e.closest("[data-card]")?.dataset.card ??
+                                e.textContent.trim().slice(0, 30),
+                            x: r.x,
+                            y: r.y,
+                            width: r.width,
+                            height: r.height,
+                        };
+                    }),
+            );
+            assert.ok(
+                prompt.some((p) => p.what) && prompt.length >= 3,
+                "the prompt is drawn",
+            );
+            const cards = ".overlay .shown-card";
+            const count = await page.locator(cards).count();
+            assert.ok(count >= 1, "the prompt shows a card");
+            for (let i = 0; i < count; i++) {
+                const point = await visiblePoint(page, cards, i);
+                if (!point) continue;
+                await page.mouse.move(point.x, point.y);
+                await page.clock.runFor(300);
+                const inspect = page.locator(".inspect");
+                await inspect.waitFor({ state: "visible" });
+                const name = await inspect.getAttribute("aria-label");
+                const shown = await inspect.boundingBox();
+                for (const p of prompt) {
+                    assert.ok(
+                        !overlap(shown, p),
+                        `${name}'s inspector covers ${p.what}`,
+                    );
+                }
+                const fill = await inspect.evaluate(
+                    (e) => getComputedStyle(e).backgroundColor,
+                );
+                assert.match(
+                    fill,
+                    /^rgb\(/,
+                    `the inspector is opaque, not ${fill}`,
+                );
+            }
+        },
+        { fixture, at, ready: ".overlay .shown-card" },
+    );
+}
+
+// In a target step, a hand card shows whole clear of every target it might cover (by-isv.17):
+// Fractured Identity's in greedy-turn-9, whose targets fill the table's middle, and Swift
+// Reconfiguration's in attached-across.
+for (const fixture of ["greedy-turn-9", "attached-across"]) {
+    const views = await load(fixture);
+    const at = views.findIndex(
+        (v) =>
+            v.status.decision?.kind === "target" &&
+            v.objects.some((o) => o.zone === "hand" && o.owner === "you"),
+    );
+    await check(
+        `hovering a hand card in ${fixture}'s target step covers no target`,
+        async (page) => {
+            await page.clock.runFor(2000);
+            const targets = await page.$$eval(
+                '[data-zone="battlefield"]:has(.card-target)',
+                (els) =>
+                    els.map((e) => {
+                        const r = e.getBoundingClientRect();
+                        return {
+                            what: e.dataset.card,
+                            x: r.x,
+                            y: r.y,
+                            width: r.width,
+                            height: r.height,
+                        };
+                    }),
+            );
+            assert.ok(targets.length > 0, "the targets glow");
+            const hand = await page.$$eval(".card-el-hand", (cards) =>
+                cards.map((e) => {
+                    const r = e.getBoundingClientRect();
+                    return {
+                        name: e.dataset.card,
+                        x: r.x + r.width / 2,
+                        y: r.y + 30,
+                    };
+                }),
+            );
+            assert.ok(hand.length > 0, "the hand is drawn");
+            for (const { name, x, y } of hand) {
+                await page.mouse.move(x, y);
+                await page.clock.runFor(400);
+                const shown = await inspectorOf(page, name);
+                for (const t of targets) {
+                    assert.ok(
+                        !overlap(shown, t),
+                        `${name}'s inspector covers the target ${t.what}`,
+                    );
+                }
+            }
+        },
+        {
+            fixture,
+            at: at + 1,
+            ready: ".card-el-hand",
+            reducedMotion: "reduce",
+        },
+    );
+}
+
 // Up to one target is one targeting step (`target-up-to-one`: Teferi, Time Raveler's −3, "up to
 // one target artifact, creature, or enchantment"): its targets glow at the count, and clicking
 // one announces one target and then it; a single button chooses none.

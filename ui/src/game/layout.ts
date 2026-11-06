@@ -102,6 +102,42 @@ export interface Placement {
 /** A whole board: every object's placement, by slot. */
 export type Layout = Map<number, Placement>;
 
+/** An upright rectangle on the stage, in stage pixels. */
+export interface Box {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/** Whether two boxes share any area. */
+export function overlaps(a: Box, b: Box): boolean {
+  return (
+    a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
+  );
+}
+
+/** The box a placed card covers, its lean and turn aside: a battlefield frame as wide as it
+ * takes (`span`) and, tapped, as tall as its frame is wide (lying); any other a full card. */
+export function footprint(p: Placement): Box {
+  const field =
+    p.look === "field" ||
+    p.look === "land" ||
+    p.look === "beneath" ||
+    p.look === "attached";
+  const height = !field
+    ? p.width / FULL_ASPECT
+    : p.span < p.width
+      ? p.width
+      : p.width / ASPECT.field;
+  return {
+    left: p.x,
+    top: p.y,
+    right: p.x + p.span * p.scale,
+    bottom: p.y + height * p.scale,
+  };
+}
+
 /** The hand's full frames, and the width of everything drawn from a full frame. */
 export const FULL_WIDTH = HAND.width;
 const BACK_WIDTH = 105;

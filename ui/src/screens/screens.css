@@ -1674,18 +1674,22 @@
   font: italic 16px var(--font-sans);
   color: var(--text-dim);
 }
+/* An opaque panel, so nothing beneath it shows through around the scan or its lines. */
 .inspect {
   position: absolute;
   top: 118px;
   z-index: 1300;
   width: 330px;
+  padding: 8px;
+  border-radius: 22px;
+  background: var(--surface-sunk);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 60%);
   pointer-events: none;
 }
 .inspect-scan {
   display: block;
   width: 100%;
   border-radius: 15px;
-  box-shadow: 0 12px 32px rgb(0 0 0 / 60%);
 }
 .inspect-artist {
   margin: 8px 0 0;

@@ -183,6 +183,7 @@ INTERACTION_FIXTURES = [
     "combat-double-block",
     "combat-blockers",
     "choice-scry",
+    "choice-look",
     "choice-jace",
     "choice-pay",
     "choice-trigger-order",
