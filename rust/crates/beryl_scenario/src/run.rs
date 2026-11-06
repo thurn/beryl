@@ -388,7 +388,7 @@ impl Runner<'_> {
         let mut taps = Vec::new();
         for e in self.x.events.drain() {
             match e {
-                Event::CoinFlip { player, won } => flips.push(CoinFlip { player, won }),
+                Event::CoinFlip { player, won, .. } => flips.push(CoinFlip { player, won }),
                 Event::Tap { object } => taps.push(object),
                 _ => {}
             }

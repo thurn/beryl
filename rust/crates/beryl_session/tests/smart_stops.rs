@@ -200,7 +200,9 @@ fn a_humans_own_spell_resolves_without_their_priority_under_smart_stops_only() {
 #[test]
 fn an_opponents_response_gives_the_human_priority() {
     let (mut responses, mut after_responses) = (0, 0);
-    for seed in 0..8 {
+    // A response leaving the stack from above the human's spell is rare: play seeds until one
+    // has (seed 34, once the mulligan put its bottom picks after the keep).
+    for seed in 0..64 {
         let mut game = new_game(seed, get_lost(), StopsSetting::Smart);
         let (views, asked) = play(&mut game);
         let theirs = |e: &StackEntry| e.controller != HUMAN;
@@ -222,6 +224,9 @@ fn an_opponents_response_gives_the_human_priority() {
             }
         }
         assert_replays(&game, &views);
+        if responses > 0 && after_responses > 0 {
+            break;
+        }
     }
     assert!(responses > 0, "the opponent never responded");
     assert!(

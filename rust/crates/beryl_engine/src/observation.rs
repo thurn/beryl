@@ -8,8 +8,8 @@ use crate::fixed::Fixed;
 use crate::ids::{CardIx, Seat, Slot};
 use crate::rng::SplitMix64;
 use crate::state::{
-    CastPermission, DECK_SLOTS, Derived, Object, PendingTrigger, Player, StackEntry, State, Turn,
-    Zone, deck_slot,
+    CastPermission, DECK_SLOTS, Derived, Object, Pending, PendingTrigger, Player, StackEntry,
+    State, Turn, Zone, deck_slot,
 };
 use crate::table::GameTable;
 
@@ -94,6 +94,17 @@ impl<'a> Observation<'a> {
 
     pub fn turn(&self) -> &'a Turn {
         self.state.turn()
+    }
+
+    /// The player chosen to take the first turn; none while the coin flip's winner chooses.
+    /// [CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031): "the players determine
+    /// which one of them will choose who takes the first turn ... The player chosen to take
+    /// the first turn is the starting player."
+    pub fn starting_player(&self) -> Option<Seat> {
+        match self.state.pending() {
+            Pending::PlayOrDraw { .. } => None,
+            _ => Some(self.state.turn().starting_player),
+        }
     }
 
     /// The slots a player owns in a zone: public, though the identities may not be.

@@ -140,7 +140,8 @@ pub(crate) fn turn_order(s: &State) -> [Seat; 2] {
     [s.turn.starting_player, s.turn.starting_player.opponent()]
 }
 
-/// Records a keep or mulligan declaration.
+/// Records a keep or mulligan declaration. A player who keeps after taking mulligans then
+/// puts that many cards on the bottom ([`keep`]).
 pub(crate) fn declare(
     s: &mut State,
     t: &GameTable,
@@ -148,12 +149,29 @@ pub(crate) fn declare(
     player: Seat,
     mulligan: bool,
 ) -> Result<(), Full> {
-    s.player_mut(player).mulligan = if mulligan {
-        MulliganStatus::WillMulligan
+    if mulligan {
+        s.player_mut(player).mulligan = MulliganStatus::WillMulligan;
     } else {
-        MulliganStatus::Kept
-    };
+        keep(s, player);
+    }
     advance_mulligans(s, t, sink)
+}
+
+/// Keeps a player's hand, leaving them a card to put on the bottom for each mulligan taken.
+///
+/// [CR 103.5](https://yawgatog.com/resources/magic-rules/#R1035) has a player who takes a
+/// mulligan draw a new hand, "then [put] a number of those cards equal to the number of
+/// times that player has taken a mulligan on the bottom of their library in any order", and
+/// "Once a player chooses not to take a mulligan, the remaining cards become that player's
+/// opening hand." Here the player looks at all seven and declares first, and puts cards on
+/// the bottom only once they keep, as Arena and tournament play do. Nothing anyone can see
+/// differs: a hand mulliganed again is shuffled away whole, bottomed cards included, and the
+/// bottomed cards are hidden either way.
+fn keep(s: &mut State, player: Seat) {
+    let hand = zone::hand_size(s, player) as u8;
+    let p = s.player_mut(player);
+    p.mulligan = MulliganStatus::Kept;
+    p.to_bottom = p.mulligans.min(hand);
 }
 
 /// Puts one card from a player's hand on the bottom of their library after a mulligan.
@@ -185,12 +203,12 @@ fn advance_mulligans(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<()
     let order = turn_order(s);
     loop {
         for &p in &order {
-            let player = s.player_mut(p);
+            let player = s.player(p);
             if player.mulligan == MulliganStatus::Undeclared && player.mulligans >= STARTING_HAND {
-                player.mulligan = MulliganStatus::Kept;
+                keep(s, p);
             }
         }
-        // Bottom picks come first: they finish the mulligan just taken.
+        // Bottom picks come first: they finish the hand just kept.
         if order.iter().any(|&p| s.player(p).to_bottom > 0) {
             return Ok(());
         }
@@ -211,10 +229,8 @@ fn advance_mulligans(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<()
             }
             zone::shuffle_library(s, p);
             zone::draw_n(s, p, STARTING_HAND)?;
-            let hand = zone::hand_size(s, p) as u8;
             let player = s.player_mut(p);
             player.mulligans += 1;
-            player.to_bottom = player.mulligans.min(hand);
             player.mulligan = MulliganStatus::Undeclared;
         }
         if !any {

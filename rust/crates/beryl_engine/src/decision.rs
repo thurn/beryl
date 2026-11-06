@@ -50,7 +50,8 @@ pub enum DecisionKind {
     PlayOrDraw,
     /// Keep or mulligan (CR 103.5).
     KeepOrMulligan,
-    /// A card from the hand to put on the bottom of the library after a mulligan (CR 103.5).
+    /// A card from the hand to put on the bottom of the library, once a hand is kept after a
+    /// mulligan (CR 103.5).
     PutOnBottom,
     /// A card to discard down to the maximum hand size (CR 514.1).
     Discard,

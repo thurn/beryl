@@ -39,7 +39,11 @@ export type GameUpdate = {
  */
 session: SessionId, view: PlayerView, };
 
-export type AgentView = { name: string, description: string, };
+export type AgentView = { name: string, 
+/**
+ * What a human calls it.
+ */
+title: string, description: string, };
 
 export type SessionId = number;
 
@@ -82,7 +86,11 @@ export type TurnView = {
 /**
  * 0 before the first turn.
  */
-number: number, active: Side, step: Step, priority: Side, };
+number: number, active: Side, step: Step, priority: Side, 
+/**
+ * Who takes the first turn (CR 103.1); none while the coin flip's winner chooses.
+ */
+starting: Side | null, };
 
 export type Players = { you: PlayerState, opponent: PlayerState, };
 
@@ -91,6 +99,10 @@ export type PlayerState = { life: number,
  * Unspent mana.
  */
 mana: ManaPool, landsPlayed: number, mulligans: number, 
+/**
+ * Where they are in the mulligan (CR 103.5): kept, once the game begins.
+ */
+mulligan: Declaration, 
 /**
  * Bottom first.
  */
@@ -257,7 +269,11 @@ export type Stall = "decisionsPerTurn" | "turns" | "stateBasedIterations" | "cap
 
 export type StopsSetting = "smart" | "exact";
 
-export type GameEvent = { "kind": "zoneChange", slot: number, from: ZoneName, to: ZoneName, reason: Why, } | { "kind": "damage", source: number, to: TargetRef, amount: number, combat: boolean, } | { "kind": "draw", player: Side, cards: number, } | { "kind": "lifeGain", player: Side, amount: number, } | { "kind": "lifeLoss", player: Side, amount: number, } | { "kind": "countersAdded", slot: number, counter: Counter, amount: number, } | { "kind": "countersRemoved", slot: number, counter: Counter, amount: number, } | { "kind": "tap", slot: number, } | { "kind": "untap", slot: number, } | { "kind": "tokensCreated", controller: Side, tokens: Array<number>, } | { "kind": "cast", slot: number, controller: Side, } | { "kind": "attack", player: Side, attackers: Array<number>, } | { "kind": "stepBegins", step: Step, active: Side, } | { "kind": "gainControl", slot: number, player: Side, } | { "kind": "coinFlip", player: Side, won: boolean, } | { "kind": "lose", player: Side, } | { "kind": "win", player: Side, };
+export type GameEvent = { "kind": "zoneChange", slot: number, from: ZoneName, to: ZoneName, reason: Why, } | { "kind": "damage", source: number, to: TargetRef, amount: number, combat: boolean, } | { "kind": "draw", player: Side, cards: number, } | { "kind": "lifeGain", player: Side, amount: number, } | { "kind": "lifeLoss", player: Side, amount: number, } | { "kind": "countersAdded", slot: number, counter: Counter, amount: number, } | { "kind": "countersRemoved", slot: number, counter: Counter, amount: number, } | { "kind": "tap", slot: number, } | { "kind": "untap", slot: number, } | { "kind": "tokensCreated", controller: Side, tokens: Array<number>, } | { "kind": "cast", slot: number, controller: Side, } | { "kind": "attack", player: Side, attackers: Array<number>, } | { "kind": "stepBegins", step: Step, active: Side, } | { "kind": "gainControl", slot: number, player: Side, } | { "kind": "coinFlip", player: Side, won: boolean, 
+/**
+ * The permanent whose ability flipped it.
+ */
+source: number, } | { "kind": "lose", player: Side, } | { "kind": "win", player: Side, };
 
 export type Kind = "priority" | "playOrDraw" | "keepOrMulligan" | "putOnBottom" | "discard" | "legendRule" | "triggerOrder" | "payLife" | "attacker" | "attackTarget" | "blocker" | "blockTarget" | "damageDivision" | "x" | "targetCount" | "target" | "paymentPlan" | "manaPayment" | "castOffer" | "yesNo" | "chooseObject" | "crew" | "chooseUpTo" | "waterbend" | "exileCost";
 

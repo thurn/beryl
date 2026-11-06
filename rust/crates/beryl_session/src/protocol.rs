@@ -8,7 +8,7 @@ use beryl_engine::card::{
     ManaColor, ManaCost, Types,
 };
 use beryl_engine::event::{Event, Reason, Recipient};
-use beryl_engine::state::{CounterKind, ObjectFlags, StackEntry, TurnStep};
+use beryl_engine::state::{CounterKind, MulliganStatus, ObjectFlags, StackEntry, TurnStep};
 use beryl_engine::{
     Ask, Candidates, Decision, DecisionKind, GameTable, NextStop, Observation, Opt, Outcome, Seat,
     Slot, StallReason, Stops, Zone, next_stop,
@@ -107,6 +107,8 @@ pub struct TurnView {
     pub active: Side,
     pub step: Step,
     pub priority: Side,
+    /// Who takes the first turn (CR 103.1); none while the coin flip's winner chooses.
+    pub starting: Option<Side>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -126,6 +128,8 @@ pub struct PlayerState {
     pub mana: ManaPool,
     pub lands_played: u8,
     pub mulligans: u8,
+    /// Where they are in the mulligan (CR 103.5): kept, once the game begins.
+    pub mulligan: Declaration,
     /// Bottom first.
     pub library: Vec<u8>,
     /// Bottom first.
@@ -564,6 +568,8 @@ pub enum GameEvent {
     CoinFlip {
         player: Side,
         won: bool,
+        /// The permanent whose ability flipped it.
+        source: u8,
     },
     Lose {
         player: Side,
@@ -610,6 +616,11 @@ mirror! {
         DeclareBlockers, FirstStrikeDamage, CombatDamage, EndOfCombat, PostcombatMain, End,
         Cleanup,
     }
+}
+
+mirror! {
+    /// A player's mulligan declaration this round ([`MulliganStatus`]).
+    Declaration from MulliganStatus { Undeclared, WillMulligan, Kept }
 }
 
 mirror! {
@@ -706,6 +717,7 @@ pub fn player_view(
             },
             lands_played: player.lands_played,
             mulligans: player.mulligans,
+            mulligan: player.mulligan.into(),
             library: slots(obs.library(p).iter().copied()),
             graveyard: slots(obs.graveyard(p).iter().copied()),
             emblems: player
@@ -772,6 +784,7 @@ pub fn player_view(
             active: side(obs, turn.active),
             step: turn.step.into(),
             priority: side(obs, turn.priority),
+            starting: obs.starting_player().map(|p| side(obs, p)),
         },
         players,
         battlefield: slots(obs.battlefield().iter().copied()),
@@ -1527,9 +1540,14 @@ fn game_event(obs: Observation<'_>, e: &Event) -> GameEvent {
             slot: object.slot.get(),
             player: side(player),
         },
-        Event::CoinFlip { player, won } => GameEvent::CoinFlip {
+        Event::CoinFlip {
+            player,
+            won,
+            source,
+        } => GameEvent::CoinFlip {
             player: side(player),
             won,
+            source: source.slot.get(),
         },
         Event::Lose { player } => GameEvent::Lose {
             player: side(player),

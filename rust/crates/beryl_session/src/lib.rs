@@ -60,6 +60,8 @@ pub struct Prepared {
 #[serde(rename_all = "camelCase")]
 pub struct AgentView {
     pub name: String,
+    /// What a human calls it.
+    pub title: String,
     pub description: String,
 }
 
@@ -69,6 +71,7 @@ pub fn agents() -> Vec<AgentView> {
         .iter()
         .map(|a| AgentView {
             name: a.name.to_owned(),
+            title: a.title.to_owned(),
             description: a.description.to_owned(),
         })
         .collect()

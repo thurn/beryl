@@ -212,9 +212,9 @@ fn perf_counts_stay_in_their_bands() {
     // (greedy, seed): decisions, silent, state-based checks, state copies, layer recomputes,
     // solver runs, events.
     let pinned: [(bool, u64, [u64; 7]); 6] = [
-        (false, 0, [165, 526, 640, 44, 81, 51, 603]),
-        (false, 1, [153, 475, 574, 76, 83, 51, 605]),
-        (false, 2, [212, 538, 647, 86, 80, 50, 708]),
+        (false, 0, [104, 482, 551, 46, 38, 28, 513]),
+        (false, 1, [251, 682, 829, 198, 91, 90, 841]),
+        (false, 2, [218, 672, 803, 84, 102, 74, 807]),
         (true, 0, [116, 443, 527, 62, 57, 41, 531]),
         (true, 1, [237, 671, 813, 116, 102, 67, 886]),
         (true, 2, [237, 730, 867, 158, 108, 81, 1027]),

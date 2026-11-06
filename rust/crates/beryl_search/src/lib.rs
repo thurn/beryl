@@ -78,6 +78,8 @@ impl Agent for GreedyAgent {
 #[derive(Clone, Copy, Debug)]
 pub struct AgentInfo {
     pub name: &'static str,
+    /// What a human calls it.
+    pub title: &'static str,
     /// One line for a human choosing an opponent.
     pub description: &'static str,
     /// Builds the agent for a game from a seed, so a seed reproduces its games, and the
@@ -89,26 +91,31 @@ pub struct AgentInfo {
 pub static AGENTS: &[AgentInfo] = &[
     AgentInfo {
         name: "random",
+        title: "Random",
         description: "Chooses uniformly at random among its legal options",
         new: random,
     },
     AgentInfo {
         name: "greedy",
+        title: "Greedy",
         description: "Plays its most valuable card, attacks when safe, never looks ahead",
         new: greedy,
     },
     AgentInfo {
         name: "expert",
+        title: "Expert",
         description: "Plays by a strong player's rules for this deck, and works out combat",
         new: expert,
     },
     AgentInfo {
         name: "mcts-omniscient",
+        title: "Seer",
         description: "Cheats: searches the true game, your hand and its library order included",
         new: mcts_omniscient,
     },
     AgentInfo {
         name: "mcts-hidden",
+        title: "Searcher",
         description: "Searches many guesses at the cards it cannot see, playing each out greedily",
         new: mcts_hidden,
     },

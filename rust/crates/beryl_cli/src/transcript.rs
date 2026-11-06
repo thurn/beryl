@@ -216,7 +216,7 @@ impl Transcript {
                     player.get(),
                     self.called(t, s, object)
                 )),
-                Event::CoinFlip { player, won } => Some(format!(
+                Event::CoinFlip { player, won, .. } => Some(format!(
                     "P{} {} a coin flip",
                     player.get(),
                     if won { "wins" } else { "loses" }

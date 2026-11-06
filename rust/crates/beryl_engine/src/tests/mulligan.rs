@@ -34,17 +34,17 @@ fn a_mulligan_puts_one_card_on_the_bottom_that_only_its_owner_knows() {
     let p = s.turn().starting_player;
     let q = p.opponent();
     assert_eq!(first.kind, DecisionKind::Priority);
-    // Both declare, both mulligan at once, both bottom a card, then both keep.
-    let kinds: Vec<_> = log.iter().map(|&(k, player)| (k, player)).collect();
+    // Both declare and mulligan at once; then each keeps their new seven and only then puts a
+    // card on the bottom.
     assert_eq!(
-        kinds[1..],
+        log[1..],
         [
             (DecisionKind::KeepOrMulligan, p),
             (DecisionKind::KeepOrMulligan, q),
-            (DecisionKind::PutOnBottom, p),
-            (DecisionKind::PutOnBottom, q),
             (DecisionKind::KeepOrMulligan, p),
+            (DecisionKind::PutOnBottom, p),
             (DecisionKind::KeepOrMulligan, q),
+            (DecisionKind::PutOnBottom, q),
         ]
     );
     for player in [p, q] {
@@ -60,6 +60,32 @@ fn a_mulligan_puts_one_card_on_the_bottom_that_only_its_owner_knows() {
     }
     // The starting player skipped their draw, so their hand is the kept six.
     assert_eq!(s.zone(p, Zone::Hand).count(), 6);
+}
+
+#[test]
+fn a_player_decides_on_a_full_new_seven_before_putting_cards_on_the_bottom() {
+    let t = table([MIXED, MIXED]);
+    let mut s = State::new(&t, 11, Profile::EXACT);
+    // Mulligan twice, keeping the third seven.
+    let (_, log) = mulligans_until(&t, &mut s, |player, n| player == Seat::P0 && n < 2);
+    let asked: Vec<_> = log
+        .iter()
+        .filter(|&&(_, player)| player == Seat::P0)
+        .map(|&(k, _)| k)
+        .skip_while(|&k| k == DecisionKind::PlayOrDraw)
+        .collect();
+    assert_eq!(
+        asked,
+        [
+            DecisionKind::KeepOrMulligan,
+            DecisionKind::KeepOrMulligan,
+            DecisionKind::KeepOrMulligan,
+            DecisionKind::PutOnBottom,
+            DecisionKind::PutOnBottom,
+        ]
+    );
+    assert_eq!(s.player(Seat::P0).mulligans, 2);
+    assert_eq!(s.library(Seat::P0).len(), 35);
 }
 
 #[test]

@@ -135,6 +135,8 @@ pub enum Event {
     CoinFlip {
         player: Seat,
         won: bool,
+        /// The object whose ability flipped it.
+        source: ObjectRef,
     },
     Lose {
         player: Seat,

@@ -6,6 +6,12 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- After a mulligan the engine asked for the cards to put on the bottom before
+  the keep decision, so a player chose what to bottom from a hand they might
+  then shuffle away, and "keep" described a bottom already done (CR 103.5).
+  Prevention: derive the bottom count from the keep itself (`start::keep`), the
+  one place a hand becomes the opening hand, so no other step can create it.
+
 - The payment solver ignored Treasures, so under auto and greedy payment a
   spell, ability or "unless pays" cost payable only with one was not offered;
   the Treasure was instead offered as five standalone activations at every

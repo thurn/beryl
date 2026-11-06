@@ -323,7 +323,9 @@ impl Policy<'_> {
     pub(crate) fn keep(&self) -> bool {
         let hand = self.obs.zone(self.me, Zone::Hand);
         let lands = hand.iter().filter(|&slot| self.is_land(slot)).count();
-        hand.count() <= 5 || (2..=5).contains(&lands)
+        // A kept hand loses a card to the bottom for each mulligan taken.
+        let kept = hand.count().saturating_sub(u32::from(self.obs.player(self.me).mulligans));
+        kept <= 5 || (2..=5).contains(&lands)
     }
 
     /// The score of a priority action or a cast offer; 0 is passing.

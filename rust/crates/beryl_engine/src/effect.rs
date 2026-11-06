@@ -1321,11 +1321,16 @@ impl<'a> EffectCtx<'a> {
     /// randomness decides it (architecture §14).
     pub fn flip_coin(&mut self, player: Seat) -> bool {
         let won = self.state.rng.other.below(2) == 0;
+        let source = self.source();
         let r = event::settle(
             self.state,
             self.table,
             self.sink,
-            event::Event::CoinFlip { player, won },
+            event::Event::CoinFlip {
+                player,
+                won,
+                source,
+            },
         );
         self.check(r);
         won

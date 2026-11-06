@@ -360,7 +360,7 @@ mod tests {
         let c = Corpus::new();
         let turns: Vec<u16> = c.positions.iter().map(|s| s.turn().number).collect();
         assert_eq!(turns, CUTS.repeat(2 * GAMES as usize));
-        assert_eq!(stable_hash(&c.positions), 15_220_760_356_927_757_732);
+        assert_eq!(stable_hash(&c.positions), 6_916_876_755_175_271_620);
     }
 
     /// The engine benchmark replays the rollouts the whole-rollout benchmark plays: the

@@ -396,7 +396,7 @@ pub struct Player {
     pub drew_from_empty: bool,
     pub mulligans: u8,
     pub mulligan: MulliganStatus,
-    /// Cards still to put on the bottom after the latest mulligan.
+    /// Cards still to put on the bottom of the hand just kept, one per mulligan taken.
     pub to_bottom: u8,
     /// The emblems the player has, as game indices
     /// ([CR 114.1](https://yawgatog.com/resources/magic-rules/#R1141)): "An emblem is a
