@@ -241,6 +241,11 @@
       "after": 1
     },
     {
+      "name": "mana-picker",
+      "board": "mana-picker",
+      "until": "first priority decision for seat 0"
+    },
+    {
       "name": "stack-x",
       "board": "stack-x",
       "until": "first priority decision for seat 0",

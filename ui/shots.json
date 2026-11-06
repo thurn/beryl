@@ -311,6 +311,13 @@
       "height": 900
     },
     {
+      "name": "game-mana-picker",
+      "route": "/?fixture=mana-picker#/game",
+      "width": 1600,
+      "height": 900,
+      "click": "[data-zone=battlefield][data-card='Tundra']"
+    },
+    {
       "name": "game-attackers",
       "route": "/?fixture=combat-attackers#/game",
       "width": 1600,

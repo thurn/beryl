@@ -28,7 +28,12 @@ import {
   Tip,
   TurnButton,
 } from "../components/Controls";
-import { CostText, RulesText } from "../components/Mana";
+import {
+  CostText,
+  MANA_SYMBOLS,
+  ManaSymbol,
+  RulesText,
+} from "../components/Mana";
 import {
   FaceUpEdges,
   floating,
@@ -187,6 +192,13 @@ const POOLS: Record<Side, CSSProperties> = {
 const BATTLEFIELD_EDGE = 690;
 /** Dragged forward at least this far, a creature attacks. */
 const FORWARD = 60;
+
+/** Whether all a card offers is tapping it for mana
+ * ([CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a): "A player may activate an
+ * activated mana ability whenever they have priority"), floating it until it is spent or the
+ * step ends. */
+const tapsOnly = (acts: Act[]) =>
+  acts.length > 0 && acts.every((a) => a.option.kind === "mana");
 
 /** A menu of a card's candidates, open at a point on the stage; `pointed`, the one under
  * the pointer. A planeswalker's lists its loyalty abilities it cannot activate too, as
@@ -411,7 +423,8 @@ export function Board({
       const single = can.picking && acts.length === 1;
       states.set(slot, {
         highlight: single ? "target" : undefined,
-        playable: !single,
+        // Every untapped source can tap for mana at priority, which no glow need say.
+        playable: !single && !tapsOnly(acts),
         draggable:
           (o?.zone === "hand" &&
             o.owner === "you" &&
@@ -2116,6 +2129,9 @@ function menuEntries(
         effect: withoutReminder(said.slice(said.indexOf(": ") + 2)),
       };
     }
+    if (o.kind === "mana") {
+      return { act, effect: `Add {${MANA_SYMBOLS[o.color]}}`, labelled: true };
+    }
     if (o.kind === "cast") {
       const cost = name ? cardEntry(name)?.faces[o.face]?.mana_cost : undefined;
       return {
@@ -2166,6 +2182,37 @@ function ActionMenu({
   // Kept on the stage: opened near an edge, it opens away from it.
   const left = Math.min(menu.at.x, 1600 - 330);
   const bottom = menu.at.y > 450;
+  const place = bottom
+    ? { left, bottom: 900 - menu.at.y + 8 }
+    : { left, top: menu.at.y + 8 };
+  if (tapsOnly(menu.acts)) {
+    // A source of several colors: the mana it can add, one symbol each.
+    return (
+      <>
+        <div className="menu-scrim" onPointerDown={onClose} />
+        <div
+          className="mana-picker"
+          role="group"
+          aria-label={title}
+          style={place}
+        >
+          {menu.acts.map((act) =>
+            act.option.kind === "mana" ? (
+              <button
+                key={act.index}
+                type="button"
+                className="mana-picker-item"
+                aria-label={act.label}
+                onClick={() => onPick(act)}
+              >
+                <ManaSymbol symbol={MANA_SYMBOLS[act.option.color]} />
+              </button>
+            ) : null,
+          )}
+        </div>
+      </>
+    );
+  }
   return (
     <>
       <div className="menu-scrim" onPointerDown={onClose} />
@@ -2173,11 +2220,7 @@ function ActionMenu({
         className="action-menu"
         role="group"
         aria-label={title}
-        style={
-          bottom
-            ? { left, bottom: 900 - menu.at.y + 8 }
-            : { left, top: menu.at.y + 8 }
-        }
+        style={place}
       >
         {title && <div className="action-menu-title">{title}</div>}
         {menuEntries(menu, objects).map(

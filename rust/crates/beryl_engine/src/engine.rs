@@ -256,7 +256,7 @@ fn advance<const STEPS: bool>(
         };
         debug_assert!(!d.is_empty());
         let priority = d.kind == DecisionKind::Priority;
-        let forced = d.len() == 1
+        let forced = (d.len() == 1 || (s.profile.floats_for(d.player) && only_pass(&d)))
             && (priority || s.profile.stops != Stops::Forced)
             && !s.profile.asks_lone(s, &d);
         let silent = (forced || (priority && !s.profile.stops_for(s, d.player)))
@@ -479,7 +479,27 @@ fn priority_decision(s: &State, t: &GameTable) -> Result<Decision, Full> {
     }
     cast::priority_options(s, t, player, list)?;
     face_down::face_up_options(s, t, player, list)?;
+    // Last, as the options a full list leaves out: tapping ahead is never needed, the payment
+    // taps for itself.
+    if s.profile.floats_for(player) {
+        mana::standalone_options(s, t, player, list);
+    }
     Ok(d)
+}
+
+/// Whether `d` is a priority decision whose only action is passing, but for activating mana
+/// abilities on their own: the engine answers it as a lone pass where it would one, as floating
+/// mana that nothing else can spend now changes nothing
+/// ([CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064): "Each player's mana pool
+/// empties at the end of each step and phase").
+fn only_pass(d: &Decision) -> bool {
+    d.kind == DecisionKind::Priority
+        && match &d.candidates {
+            Candidates::Options(list) => list
+                .iter()
+                .all(|o| matches!(o, Opt::Pass | Opt::Mana { .. })),
+            Candidates::Objects(_) => false,
+        }
 }
 
 /// The first face of a card that is a land, which is the face it is played with

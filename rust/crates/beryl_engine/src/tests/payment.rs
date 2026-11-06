@@ -453,3 +453,120 @@ fn manual_payment_offers_the_treasure_as_a_source() {
     assert_eq!(g.s.object(treasure).zone, Zone::Graveyard);
     assert_eq!(g.s.object(bear).zone, Zone::Stack);
 }
+
+/// The exact profile, with `g.me` tapping their mana sources at priority as a human may.
+fn tapping(g: &Game) -> Profile {
+    Profile {
+        taps_mana: Some(g.me),
+        ..Profile::EXACT
+    }
+}
+
+#[test]
+fn the_named_player_taps_a_source_at_priority_and_pays_with_its_mana() {
+    let mut g = Game::new(Profile::EXACT);
+    g.s.set_profile(tapping(&g));
+    let bear = g.give(g.me, "Test Bear", Zone::Hand);
+    let land = g.give(g.me, "Test Land", Zone::Battlefield);
+    let dual = g.give(g.me, "Test Dual", Zone::Battlefield);
+    let island = g.give(g.me, "Test Island", Zone::Battlefield);
+    // CR 605.3a: each source, for each kind of mana it makes.
+    let options = priority_options(&mut g);
+    for (slot, color) in [
+        (land, ManaColor::White),
+        (dual, ManaColor::White),
+        (dual, ManaColor::Blue),
+        (island, ManaColor::Blue),
+    ] {
+        assert!(options.contains(&Opt::Mana { slot, color }), "{options:?}");
+    }
+    g.pick(Opt::Mana {
+        slot: dual,
+        color: ManaColor::Blue,
+    });
+    assert!(tapped(&g, dual));
+    assert_eq!(g.s.player(g.me).mana.amounts(), [0, 1, 0, 0, 0, 0]);
+    // CR 117.3c: they keep priority, and may still cast with the mana.
+    assert!(g.offers_cast(bear));
+    // The floating {U} pays the {1}, not the Island leaving it floating (§10).
+    g.pick(cast(bear));
+    assert_eq!(
+        g.s.object(bear).zone,
+        Zone::Stack,
+        "paid without a question"
+    );
+    assert!(tapped(&g, land));
+    assert!(!tapped(&g, island));
+    assert_eq!(g.s.player(g.me).mana, ManaPool::default());
+}
+
+#[test]
+fn floating_mana_no_source_left_could_make_is_still_a_choice() {
+    let mut g = Game::new(Profile::EXACT);
+    let bear = g.give(g.me, "Test Bear", Zone::Hand);
+    g.give(g.me, "Test Land", Zone::Battlefield);
+    g.give(g.me, "Test Land", Zone::Battlefield);
+    g.s.player_mut(g.me).mana[ManaColor::Blue] = 1;
+    g.pick(cast(bear));
+    // {U} and a Plains, or two Plains keeping the {U}: no Plains makes {U} again.
+    let d = g.decide();
+    assert_eq!(d.kind, DecisionKind::PaymentPlan);
+    assert_eq!(d.len(), 2);
+    // The engine's default, the first plan, spends the floating mana.
+    g.choose(crate::Choice(0));
+    assert_eq!(g.s.player(g.me).mana, ManaPool::default());
+}
+
+#[test]
+fn only_the_named_player_is_offered_mana_at_priority() {
+    let mut g = Game::new(Profile::EXACT);
+    g.s.set_profile(Profile {
+        taps_mana: Some(g.them),
+        ..Profile::EXACT
+    });
+    let bear = g.give(g.me, "Test Bear", Zone::Hand);
+    g.give(g.me, "Test Land", Zone::Battlefield);
+    g.give(g.me, "Test Island", Zone::Battlefield);
+    let options = priority_options(&mut g);
+    assert!(options.contains(&cast(bear)));
+    assert!(!options.iter().any(|o| matches!(o, Opt::Mana { .. })));
+}
+
+#[test]
+fn a_priority_with_only_mana_to_make_passes_silently() {
+    let mut g = Game::new(Profile::EXACT);
+    g.s.set_profile(tapping(&g));
+    let land = g.give(g.me, "Test Land", Zone::Battlefield);
+    let d = g.decide();
+    // Floating mana nothing can spend changes nothing (CR 106.4), so the engine passes.
+    let offers_mana = (0..d.len()).any(|i| {
+        matches!(
+            d.candidates.option(crate::Choice(i as u8)),
+            Some(Opt::Mana { .. })
+        )
+    });
+    assert!(!(d.player == g.me && offers_mana), "{d:?}");
+    assert!(!tapped(&g, land));
+}
+
+#[test]
+fn floating_mana_empties_as_the_step_ends() {
+    let mut g = Game::new(Profile::EXACT);
+    g.s.set_profile(Profile {
+        full_control: Some(g.me),
+        ..tapping(&g)
+    });
+    let land = g.give(g.me, "Test Land", Zone::Battlefield);
+    let step = g.s.turn().step;
+    g.pick(Opt::Mana {
+        slot: land,
+        color: ManaColor::White,
+    });
+    assert_eq!(g.s.player(g.me).mana.amounts(), [1, 0, 0, 0, 0, 0]);
+    // CR 500.4: "When a step or phase ends, any unused mana left in a player's mana pool
+    // empties."
+    while g.s.turn().step == step {
+        g.choose(crate::Choice(0));
+    }
+    assert_eq!(g.s.player(g.me).mana, ManaPool::default());
+}

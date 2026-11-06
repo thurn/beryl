@@ -173,6 +173,19 @@ pub struct Profile {
     ///   be completed, "the casting of the spell is illegal; the game returns to the moment
     ///   before the casting of that spell was proposed".
     pub asks_targets: Option<Seat>,
+    /// The player, if any, whose priority offers each untapped mana source's mana abilities on
+    /// their own, the mana floating until spent or the step ends: a human, who taps a land
+    /// before casting to choose its mana over the payment the engine would pick, as an Arena
+    /// player clicks one. For everyone else tapping ahead of a payment is dominated by tapping
+    /// during it (§10), so nothing is offered, and a priority whose only actions are these is
+    /// still answered as a lone pass.
+    ///
+    /// - [CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a): "A player may
+    ///   activate an activated mana ability whenever they have priority".
+    /// - [CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064): mana "can stay in the
+    ///   player's mana pool as unspent mana. Each player's mana pool empties at the end of each
+    ///   step and phase".
+    pub taps_mana: Option<Seat>,
 }
 
 impl Profile {
@@ -185,6 +198,7 @@ impl Profile {
         payment: Payment::KeepMostPayable,
         full_control: None,
         asks_targets: None,
+        taps_mana: None,
     };
     /// The smart stops, for search and, by default, for humans.
     pub const SMART: Profile = Profile {
@@ -195,6 +209,7 @@ impl Profile {
         payment: Payment::KeepMostPayable,
         full_control: None,
         asks_targets: None,
+        taps_mana: None,
     };
 
     /// Whether `player`'s priority now is a decision, given they have a legal action.
@@ -203,6 +218,12 @@ impl Profile {
             Stops::Exact | Stops::Forced => true,
             Stops::Smart => is_smart_stop(s, player, self.step_stops[player.index()]),
         }
+    }
+
+    /// Whether `player`'s priority offers activating mana abilities on their own: under
+    /// manual payment, or while [`Profile::taps_mana`] names them.
+    pub(crate) fn floats_for(self, player: Seat) -> bool {
+        self.payment == Payment::Manual || self.taps_mana == Some(player)
     }
 
     /// Whether `player`'s priority now is a decision even when passing is all they can do: at

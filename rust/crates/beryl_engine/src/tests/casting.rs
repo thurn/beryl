@@ -612,6 +612,11 @@ fn a_mana_ability_taps_for_the_color_chosen() {
         payment: crate::Payment::Manual,
         ..Profile::EXACT
     });
+    // A priority with only mana to make passes silently but under full control.
+    g.s.set_profile(Profile {
+        full_control: Some(g.me),
+        ..g.s.profile()
+    });
     let island = g.give(g.me, "Test Island", Zone::Battlefield);
     g.pick(Opt::Mana {
         slot: island,

@@ -759,6 +759,39 @@ fn wasteful(cost: ManaCost, total: u32, pool: [u8; KINDS], sources: &Sources, pl
     })
 }
 
+/// Whether plan `p` taps sources only to leave mana floating that they would make as well
+/// left untapped, as plan `q` leaves them: `q` taps some of what `p` taps, sacrifices no more,
+/// and leaves less floating, by mana the sources `p` taps beyond it could make. A player who
+/// floated {R} from a Mountain pays a Lightning Bolt with it, not with their other Mountain,
+/// so `p` is dominated (§10) and never offered or taken: mana floats only until the step
+/// ends, and an untapped source makes it whenever its controller next has priority.
+///
+/// - [CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064): "Each player's mana pool
+///   empties at the end of each step and phase".
+/// - [CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a): "A player may activate
+///   an activated mana ability whenever they have priority".
+fn floats_for_nothing(sources: &Sources, p: &Plan, q: &Plan) -> bool {
+    if p == q
+        || q.taps.iter().zip(&p.taps).any(|(a, b)| a > b)
+        || q.left.iter().zip(&p.left).any(|(a, b)| a > b)
+        || sources.sacrificed(q) > sources.sacrificed(p)
+    {
+        return false;
+    }
+    let mut extra = Units::NONE;
+    for (i, c) in sources.classes().iter().enumerate() {
+        extra.add(
+            c.kinds,
+            u16::from(c.amount) * u16::from(p.taps[i] - q.taps[i]),
+        );
+    }
+    let mut more = [0; KINDS];
+    for (m, (a, b)) in more.iter_mut().zip(p.left.iter().zip(&q.left)) {
+        *m = a - b;
+    }
+    extra.pays(ManaCost::new(0, more))
+}
+
 fn lowest_kind(kinds: u8) -> usize {
     kinds.trailing_zeros() as usize
 }
@@ -933,6 +966,10 @@ pub(crate) fn plans(
         if !dominated {
             kept.push(*p)?;
         }
+    }
+    if pool.iter().any(|&n| n > 0) {
+        let all = kept;
+        kept.retain(|p| !all.iter().any(|q| floats_for_nothing(&sources, p, q)));
     }
     kept.as_mut_slice().sort_by_key(|p| {
         let floating: u32 = p.left.iter().map(|&n| u32::from(n)).sum();
@@ -1220,25 +1257,33 @@ pub(crate) fn manual_pay(
     Ok(remaining)
 }
 
-/// The standalone mana activations offered at priority under manual payment
+/// The standalone mana activations offered at priority, under manual payment or to the player
+/// [`crate::Profile::taps_mana`] names
 /// ([CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a)): "A player may activate
 /// an activated mana ability whenever they have priority". Otherwise tapping ahead of a
 /// payment is dominated by tapping during it (§10), so nothing is offered.
-pub(crate) fn standalone_options(
-    s: &State,
-    t: &GameTable,
-    player: Seat,
-    out: &mut Fixed<Opt, 64>,
-) -> Result<(), Full> {
-    let sources = Sources::of(s, t, player, Bitboard::EMPTY)?;
-    for c in sources.classes() {
-        let slot = c.members.iter().next().expect("a class has a member");
-        for kind in (0..KINDS).filter(|&k| c.kinds & (1 << k) != 0) {
-            out.push(Opt::Mana {
+///
+/// One per kind of mana each untapped source makes, of each set of interchangeable objects
+/// (§7.2), not of each class of sources: a player taps the permanent they mean, an Island
+/// rather than the Mox Sapphire that makes the same mana. A list these would fill takes as
+/// many as fit: tapping ahead is never needed, as a payment taps for itself.
+pub(crate) fn standalone_options(s: &State, t: &GameTable, player: Seat, out: &mut Fixed<Opt, 64>) {
+    let sources: Bitboard = controlled(s, player)
+        .filter(|&(slot, d)| source(s, t, player, slot, d).is_some())
+        .map(|(slot, _)| slot)
+        .collect();
+    for slot in crate::engine::collapse(s, sources).iter() {
+        let Some((kinds, ..)) = source(s, t, player, slot, s.derived(slot)) else {
+            continue;
+        };
+        for kind in (0..KINDS).filter(|&k| kinds & (1 << k) != 0) {
+            let option = Opt::Mana {
                 slot,
                 color: ManaColor::ALL[kind],
-            })?;
+            };
+            if out.push(option).is_err() {
+                return;
+            }
         }
     }
-    Ok(())
 }

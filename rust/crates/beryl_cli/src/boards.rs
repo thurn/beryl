@@ -634,6 +634,15 @@ pub const BOARDS: &[Scenario] = &[
         .battlefield(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[Action::cast(P0, CURRENCY_CONVERTER)]),
+    // The human's own main phase with a Tundra, an Island and a Plains untapped and Reprieve
+    // to cast: tapping the Tundra asks which mana it adds.
+    Scenario::new("mana-picker")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[Permanent::new(TUNDRA), ISLAND_, PLAINS_])
+        .hand(P0, &[REPRIEVE])
+        .library(P0, LANDS)
+        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS),
     // Counterspell over a Thieving Skydiver kicked for X=1: a stack of both players' items,
     // one with an X.
     Scenario::new("stack-x")

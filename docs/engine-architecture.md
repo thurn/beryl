@@ -696,6 +696,13 @@ What becomes a decision:
   (Lion's Eye Diamond in response to one's own spell) or when the ability has
   effects beyond mana; otherwise pre-tapping is dominated by paying during the
   cast.
+- The profile's `taps_mana` seat, the human, is offered every untapped source's
+  mana at priority, one candidate per kind of mana for each set of
+  interchangeable objects, so a click taps the land clicked and floats its mana,
+  as on Arena. These candidates come last in the list and stop at its capacity,
+  and a priority offering nothing else still passes silently. Search clears the
+  seat below the root. A plan that taps a source only to leave mana floating
+  that source could make again is dominated, so floating mana is spent first.
 - A `manual_mana` profile flag turns every tap into an offered choice for a
   human who wants it.
 

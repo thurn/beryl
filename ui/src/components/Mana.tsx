@@ -1,6 +1,17 @@
 // Mana and ability symbols from the Mana font (src/design/fonts.ts). Glyph code points follow
 // mana-font's mana.css.
 import { Fragment, type ReactNode } from "react";
+import type { Mana } from "../generated/protocol";
+
+/** Each type of mana's symbol. */
+export const MANA_SYMBOLS: Record<Mana, string> = {
+  white: "W",
+  blue: "U",
+  black: "B",
+  red: "R",
+  green: "G",
+  colorless: "C",
+};
 
 // Code points in the Mana font.
 const CODES: Record<string, number> = {

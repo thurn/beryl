@@ -886,8 +886,7 @@ fn activation_options(
     Ok(())
 }
 
-/// Appends the priority actions casting and activation add: spells, abilities, and under
-/// manual payment, standalone mana abilities.
+/// Appends the priority actions casting and activation add: spells and abilities.
 pub(crate) fn priority_options(
     s: &State,
     t: &GameTable,
@@ -898,9 +897,6 @@ pub(crate) fn priority_options(
     cast_options(s, t, &now, cast_sources(s, player), From::Priority, out)?;
     activation_options(s, t, &now, out)?;
     now.complete()?;
-    if s.profile.payment == Payment::Manual {
-        mana::standalone_options(s, t, player, out)?;
-    }
     Ok(())
 }
 
