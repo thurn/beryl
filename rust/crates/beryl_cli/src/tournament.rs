@@ -136,7 +136,7 @@ pub fn run(
     for (p, tally) in tallies.iter_mut().enumerate() {
         let n = f64::from(tally.games.max(1));
         tally.a_win_rate = f64::from(tally.a_wins) / n;
-        tally.a_win_interval = wilson(tally.a_wins, tally.games);
+        tally.a_win_interval = wilson(f64::from(tally.a_wins), tally.games);
         tally.stall_rate = f64::from(tally.stalls) / n;
         tally.mean_turns = turns[p] as f64 / n;
         tally.mean_decisions = decisions[p] as f64 / n;
@@ -148,14 +148,14 @@ pub fn run(
     })
 }
 
-/// The Wilson score interval at 95% for `wins` of `n`.
-pub fn wilson(wins: u32, n: u32) -> [f64; 2] {
+/// The Wilson score interval at 95% for `wins` of `n`; a draw may count half a win.
+pub fn wilson(wins: f64, n: u32) -> [f64; 2] {
     if n == 0 {
         return [0.0, 1.0];
     }
     let z = 1.959_964;
     let n = f64::from(n);
-    let p = f64::from(wins) / n;
+    let p = wins / n;
     let z2 = z * z;
     let centre = (p + z2 / (2.0 * n)) / (1.0 + z2 / n);
     let half = z * (p * (1.0 - p) / n + z2 / (4.0 * n * n)).sqrt() / (1.0 + z2 / n);
@@ -202,14 +202,14 @@ mod tests {
 
     #[test]
     fn wilson_intervals_match_known_values() {
-        let [lo, hi] = wilson(90, 100);
+        let [lo, hi] = wilson(90.0, 100);
         assert!(
             (lo - 0.8256).abs() < 1e-3 && (hi - 0.9448).abs() < 1e-3,
             "{lo} {hi}"
         );
-        let [lo, hi] = wilson(0, 0);
+        let [lo, hi] = wilson(0.0, 0);
         assert!(lo.abs() < 1e-9 && (hi - 1.0).abs() < 1e-9);
-        let [lo, hi] = wilson(10, 10);
+        let [lo, hi] = wilson(10.0, 10);
         assert!(
             (lo - 0.7225).abs() < 1e-3 && (hi - 1.0).abs() < 1e-9,
             "{lo} {hi}"

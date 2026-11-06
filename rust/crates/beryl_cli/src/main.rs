@@ -13,12 +13,16 @@
 //!   and boards a definitions file describes and writes, for each, the stream of messages the UI's
 //!   fixture transport replays (`ui/src/ipc.ts`) to `<out-dir>/<name>.json`. `just ui-shots`
 //!   runs it over `ui/fixtures.json`, so fixtures are generated, never committed.
+//! - `beryl_cli longthink [--status | --upgrade] [--new | --run DIR] [--games N]` starts the
+//!   long-think ladder or resumes it ([`longthink`], `just longthink`), and supervises
+//!   `beryl_cli longthink-run <dir> [--games N]`, the run's own copy of this binary playing it.
 //! - `beryl_cli serve [--port N]` serves the app's game commands over HTTP for a UI in a plain
 //!   browser to play live games through (`just ui-live`, [`serve`]).
 
 mod boards;
 mod fixture;
 mod game;
+mod longthink;
 mod serve;
 mod tournament;
 mod transcript;
@@ -34,6 +38,7 @@ const USAGE: &str = "usage:
   beryl_cli tournament <agent>... [--games N] [--seed N] [--json FILE] [--check]
       [--iterations N] [--trees K]
   beryl_cli record-fixture <definitions.json> <out-dir> [name...]
+  beryl_cli longthink [--status | --upgrade] [--new | --run DIR] [--games N]
   beryl_cli serve [--port N]";
 
 /// The port `serve` listens on unless told otherwise.
@@ -44,6 +49,11 @@ fn main() -> ExitCode {
     let result = match args.as_slice() {
         [command, definitions, out, names @ ..] if command == "record-fixture" => {
             fixture::record_all(Path::new(definitions), Path::new(out), names)
+        }
+        [command, rest @ ..] if command == "longthink" => longthink::main(rest),
+        [command, dir] if command == "longthink-run" => longthink::run(Path::new(dir), None),
+        [command, dir, flag, n] if command == "longthink-run" && flag == "--games" => {
+            number(flag, n).and_then(|n| longthink::run(Path::new(dir), Some(n)))
         }
         [command] if command == "serve" => serve::serve(DEFAULT_PORT),
         [command, flag, port] if command == "serve" && flag == "--port" => {

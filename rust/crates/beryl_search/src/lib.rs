@@ -15,7 +15,7 @@ use beryl_engine::{Choice, Decision, GameTable, Observation};
 
 pub use expert::ExpertAgent;
 pub use frozen::FrozenExpertAgent;
-pub use mcts::{Budget, Mcts, Sight};
+pub use mcts::{Budget, Mcts, Search, Sight};
 pub use rollout::{COUNTER_MIN, Inline, REMOVAL_MIN, RolloutPolicy, rollout};
 pub use values::{CardInfo, CardValues};
 

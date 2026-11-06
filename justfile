@@ -99,6 +99,12 @@ play *args:
 tournament *args:
     RUSTFLAGS="{{ search_cpu }}" nice -n 10 cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- tournament "$@"
 
+# The long-think ladder: starts or resumes the latest run, low priority, kept awake (--status, --new, --run DIR, --upgrade, --games N)
+[group('agents')]
+[no-cd]
+longthink *args:
+    RUSTFLAGS="{{ search_cpu }}" caffeinate -i nice -n 10 cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- longthink "$@"
+
 # The tools' tests
 [group('test')]
 test-py *args:

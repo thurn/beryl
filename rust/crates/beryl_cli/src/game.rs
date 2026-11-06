@@ -25,23 +25,29 @@ pub struct Played {
     pub decisions: u32,
 }
 
-/// The agents named for each seat, built for game `seed`, each from its own stream, a
-/// searching one with `budget`.
+/// The seeds of game `seed`'s agents, each seat's from its own stream.
+pub fn seat_seeds(seed: u64) -> [u64; 2] {
+    let mut rng = SplitMix64::new(seed ^ 0xa9e1_7c3b_55d0_e4f1);
+    [rng.next_u64(), rng.next_u64()]
+}
+
+/// The agents named for each seat, built for game `seed`, a searching one with `budget`.
 pub fn agents(
     t: &GameTable,
     names: [&str; 2],
     seed: u64,
     budget: Budget,
 ) -> Result<[Box<dyn Agent + Send>; 2], String> {
-    let mut rng = SplitMix64::new(seed ^ 0xa9e1_7c3b_55d0_e4f1);
-    let mut build = |name: &str| {
+    let seeds = seat_seeds(seed);
+    let build = |seat: usize| {
+        let name = names[seat];
         let info = agent(name).ok_or_else(|| {
             let known: Vec<&str> = beryl_search::AGENTS.iter().map(|a| a.name).collect();
             format!("no agent is named {name:?} (agents: {})", known.join(", "))
         })?;
-        Ok::<_, String>((info.new)(t, rng.next_u64(), budget))
+        Ok::<_, String>((info.new)(t, seeds[seat], budget))
     };
-    Ok([build(names[0])?, build(names[1])?])
+    Ok([build(0)?, build(1)?])
 }
 
 /// Plays game `seed` to its end, under the smart stops, searching agents with `budget`. With
