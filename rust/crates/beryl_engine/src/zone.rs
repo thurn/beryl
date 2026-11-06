@@ -77,7 +77,7 @@ pub(crate) fn move_to_place(s: &mut State, slot: Slot, to: Zone, place: Place) -
         },
         Zone::Graveyard => s.zones.graveyard[owner].push(slot)?,
         Zone::Battlefield => {
-            s.battlefield.push(slot)?;
+            s.enter_battlefield(slot)?;
             // CR 302.6: a permanent that just arrived hasn't been under its controller's
             // control since their most recent turn began.
             let o = s.object_mut(slot);
@@ -135,9 +135,7 @@ fn leave(s: &mut State, slot: Slot) {
         Zone::Library => remove_slot(&mut s.zones.library[owner], slot),
         Zone::Graveyard => remove_slot(&mut s.zones.graveyard[owner], slot),
         Zone::Battlefield => {
-            if let Some(i) = s.battlefield.position(slot) {
-                s.battlefield.remove(i);
-            }
+            s.leave_battlefield(slot);
             s.flags.derived_dirty = true;
             // [CR 506.4](https://yawgatog.com/resources/magic-rules/#R5064): "A permanent is
             // removed from combat if it leaves the battlefield". The creatures attacking it or
@@ -275,8 +273,8 @@ pub(crate) fn cease_to_exist(s: &mut State, slot: Slot) {
     }
 }
 
-/// What makes two objects interchangeable (§7.2): every field but the incarnation and the
-/// timestamp, and for a permanent its characteristics after continuous effects, so two
+/// What makes two objects interchangeable (§7.2): every field but the incarnation, the
+/// timestamp and the battlefield index, and for a permanent its characteristics after continuous effects, so two
 /// untapped basic lands match but a stolen Mana Crypt does not match your own, nor a
 /// creature that got -2/-0 one that didn't.
 pub(crate) fn signature(s: &State, slot: Slot) -> (Object, Option<Derived>) {
@@ -286,6 +284,7 @@ pub(crate) fn signature(s: &State, slot: Slot) -> (Object, Option<Derived>) {
         Object {
             incarnation: 0,
             timestamp: 0,
+            battlefield_index: 0,
             ..*o
         },
         derived,

@@ -91,7 +91,7 @@ fn recompute(s: &mut State, t: &GameTable) {
             };
             let target = match spec.affected {
                 Affected::Itself => Some(i),
-                Affected::Enchanted => o.attached_to.and_then(|a| s.battlefield.position(a)),
+                Affected::Enchanted => o.attached_to.and_then(|a| s.battlefield_position(a)),
             };
             if let (true, Some(target)) = (applies, target) {
                 // A list longer than its capacity would need more effects than the cards
@@ -114,7 +114,7 @@ fn recompute(s: &mut State, t: &GameTable) {
         if s.object(e.affected.slot).zone != Zone::Battlefield {
             continue;
         }
-        if let Some(target) = s.battlefield.position(e.affected.slot) {
+        if let Some(target) = s.battlefield_position(e.affected.slot) {
             let source = s.object(e.source.slot);
             let _ = list.push(Apply {
                 layer: m.layer() as u8,

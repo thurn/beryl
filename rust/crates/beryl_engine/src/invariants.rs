@@ -196,6 +196,21 @@ impl State {
             "the battlefield list disagrees",
             None,
         )?;
+        for (i, &slot) in self.battlefield().iter().enumerate() {
+            check(
+                self.battlefield_position(slot) == Some(i),
+                "the battlefield index disagrees",
+                Some(At::Slot(slot)),
+            )?;
+        }
+        check(
+            Slot::all()
+                .filter_map(|slot| self.battlefield_position(slot))
+                .count()
+                == self.battlefield().len(),
+            "the battlefield index lists a slot off the battlefield",
+            None,
+        )?;
         for e in &self.stack {
             if e.is_spell() {
                 check(

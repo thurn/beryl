@@ -7,7 +7,7 @@ use crate::card::{
     Supertypes, Types,
 };
 use crate::decision::{Decision, Outcome};
-use crate::fixed::Fixed;
+use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot};
 use crate::profile::Profile;
 use crate::rng::Rng;
@@ -22,6 +22,8 @@ pub const DECK_SLOTS: usize = 60;
 pub const TOKEN_SLOTS: u8 = 2 * DECK_SLOTS as u8;
 /// Permanents on the battlefield at once.
 pub const BATTLEFIELD: usize = 128;
+/// The [`State::battlefield_index`] of a slot not on the battlefield.
+pub(crate) const OFF_BATTLEFIELD: u8 = u8::MAX;
 
 /// The slot of the `i`th card of `player`'s deck.
 pub(crate) fn deck_slot(player: Seat, i: usize) -> Slot {
@@ -192,7 +194,7 @@ impl Counters {
 }
 
 /// The base data of the object in one slot (architecture §4.2).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Object {
     /// Index into the game table: which card this is. Engine-only, since an
     /// [`crate::Observation`] masks it; others read [`State::card`] or
@@ -223,6 +225,11 @@ pub struct Object {
     /// `None` for an attacker attacking a player, or once that object has left the
     /// battlefield.
     pub combat: Option<Slot>,
+    /// The object's index in [`State::battlefield`], so finding a permanent's `derived` is
+    /// one read rather than a search of the battlefield; [`OFF_BATTLEFIELD`] off it. Only
+    /// [`State::enter_battlefield`] and [`State::leave_battlefield`] change it, and it fills
+    /// what was padding.
+    pub(crate) battlefield_index: u8,
 }
 
 impl Object {
@@ -247,10 +254,50 @@ impl Object {
         timestamp: 0,
         face: FaceIx::FRONT,
         combat: None,
+        battlefield_index: OFF_BATTLEFIELD,
     };
 }
 
 const _: () = assert!(size_of::<Option<Slot>>() == 1 && size_of::<Option<CardIx>>() == 1);
+const _: () = assert!(size_of::<Object>() == 24);
+
+/// Every field but the battlefield index, a cache of the battlefield list's order, in
+/// declaration order, as a derived `Hash` would: so a hash of a state is a hash of the game.
+impl std::hash::Hash for Object {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        let Object {
+            card,
+            incarnation,
+            zone,
+            owner,
+            base_controller,
+            flags,
+            damage,
+            counters,
+            attached_to,
+            linked,
+            copy_of,
+            timestamp,
+            face,
+            combat,
+            battlefield_index: _,
+        } = self;
+        card.hash(h);
+        incarnation.hash(h);
+        zone.hash(h);
+        owner.hash(h);
+        base_controller.hash(h);
+        flags.hash(h);
+        damage.hash(h);
+        counters.hash(h);
+        attached_to.hash(h);
+        linked.hash(h);
+        copy_of.hash(h);
+        timestamp.hash(h);
+        face.hash(h);
+        combat.hash(h);
+    }
+}
 
 /// A reference to one incarnation of the object in a slot (architecture §5). A reference
 /// whose incarnation no longer matches names an object that has left its zone.
@@ -895,10 +942,37 @@ impl State {
     pub fn derived(&self, slot: Slot) -> &Derived {
         debug_assert!(!self.flags.derived_dirty, "derived read while dirty");
         let i = self
-            .battlefield
-            .position(slot)
+            .battlefield_position(slot)
             .expect("derived characteristics of a permanent");
         &self.derived[i]
+    }
+
+    /// The index of the permanent in `slot` in the battlefield list, if it is on the
+    /// battlefield.
+    pub(crate) fn battlefield_position(&self, slot: Slot) -> Option<usize> {
+        let i = self.object(slot).battlefield_index;
+        (i != OFF_BATTLEFIELD).then_some(usize::from(i))
+    }
+
+    /// Lists `slot` last on the battlefield.
+    pub(crate) fn enter_battlefield(&mut self, slot: Slot) -> Result<(), Full> {
+        debug_assert!(self.battlefield_position(slot).is_none());
+        self.battlefield.push(slot)?;
+        self.object_mut(slot).battlefield_index = (self.battlefield.len() - 1) as u8;
+        Ok(())
+    }
+
+    /// Takes `slot` off the battlefield list, keeping the others in order.
+    pub(crate) fn leave_battlefield(&mut self, slot: Slot) {
+        let Some(i) = self.battlefield_position(slot) else {
+            return;
+        };
+        self.battlefield.remove(i);
+        self.object_mut(slot).battlefield_index = OFF_BATTLEFIELD;
+        for j in i..self.battlefield.len() {
+            let later = self.battlefield.as_slice()[j];
+            self.object_mut(later).battlefield_index = j as u8;
+        }
     }
 
     /// Who controls an object: for a permanent the layer-2 result, otherwise the base
