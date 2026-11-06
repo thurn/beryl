@@ -622,6 +622,16 @@ pub const BOARDS: &[Scenario] = &[
         .battlefield(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[play_land(P0, SINK_INTO_STUPOR)]),
+    // Staff of the Storyteller cast beside Mana Crypt, which pays it a second way, leaving a
+    // mana floating; the human pays the default way, with lands.
+    Scenario::new("pay-default")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[Permanent::new(MANA_CRYPT), ISLAND_, PLAINS_])
+        .hand(P0, &[STAFF_OF_THE_STORYTELLER, ISLAND])
+        .library(P0, LANDS)
+        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[Action::cast(P0, STAFF_OF_THE_STORYTELLER)]),
     // Teferi, Hero of Dominaria's −3 with a Snapcaster Mage on each side.
     Scenario::new("namesake-target")
         .at(3, P0, TurnStep::PrecombatMain)

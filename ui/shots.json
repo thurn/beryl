@@ -28,7 +28,7 @@
     },
     {
       "name": "game-start-resume",
-      "route": "/?fixture=greedy-turn-9&at=50#/",
+      "route": "/?fixture=greedy-turn-9&at=49#/",
       "width": 1600,
       "height": 900
     },
@@ -70,16 +70,16 @@
     },
     {
       "name": "game-castable",
-      "route": "/?fixture=greedy-turn-9&at=85#/game",
+      "route": "/?fixture=greedy-turn-9&at=106#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "game-cast-step",
-      "route": "/?fixture=greedy-turn-9&at=85#/game",
+      "route": "/?fixture=greedy-turn-9&at=106#/game",
       "width": 1600,
       "height": 900,
-      "click": "[data-zone=hand][data-card='Jace, Wielder of Mysteries']"
+      "click": "[data-zone=hand][data-card='Fractured Identity']"
     },
     {
       "name": "game-hand-pair",
@@ -103,20 +103,20 @@
     },
     {
       "name": "game-main",
-      "route": "/?fixture=greedy-turn-9&at=119#/game",
+      "route": "/?fixture=greedy-turn-9&at=106#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "game-tracker-tip",
-      "route": "/?fixture=greedy-turn-9&at=119#/game",
+      "route": "/?fixture=greedy-turn-9&at=106#/game",
       "width": 1600,
       "height": 900,
       "hover": ".turn-controls .phase-current"
     },
     {
       "name": "game-main-1280",
-      "route": "/?fixture=greedy-turn-9&at=119#/game",
+      "route": "/?fixture=greedy-turn-9&at=106#/game",
       "width": 1280,
       "height": 800
     },
@@ -140,7 +140,7 @@
     },
     {
       "name": "game-main-1920",
-      "route": "/?fixture=greedy-turn-9&at=119#/game",
+      "route": "/?fixture=greedy-turn-9&at=106#/game",
       "width": 1920,
       "height": 1080
     },
