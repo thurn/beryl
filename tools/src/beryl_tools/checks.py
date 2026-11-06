@@ -1,6 +1,8 @@
 """The checks. `by check` is the fast one `enact push` runs (budget 60 s); `by ci` is slow CI
 on the staging tip (budget 300 s, and a run over it fails). Both run lanes in parallel, each a
-sequence of timed steps, and print failed lanes last.
+sequence of timed steps, and print failed lanes last. A run has a hard deadline of twice its
+budget ($CHECK_DEADLINE_S overrides it): a step still running then is killed, with everything it
+started, and fails its lane.
 
 The fast check runs the lanes whose files changed since the branch left origin/staging. Slow
 CI runs every lane plus `app` (the debug app built and launched headless until its UI loads),
@@ -15,8 +17,11 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
+import tempfile
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Iterable
@@ -62,31 +67,104 @@ class Outcome:
     timings: list[str]
 
 
-def run_lane(lane: Lane, script: str, env: dict[str, str]) -> Outcome:
+class Steps:
+    """A run's steps, each started in its own session, so that once the run's deadline passes,
+    or the run is interrupted, a step can be killed with everything it started."""
+
+    def __init__(self, deadline: float) -> None:
+        self.deadline = deadline
+        self.ends: float = time.monotonic() + deadline
+        self.stopped = threading.Event()
+        self.lock = threading.Lock()
+        self.running: set[subprocess.Popen[bytes]] = set()
+
+    def run(
+        self, cmd: list[str], cwd: Path, env: dict[str, str]
+    ) -> tuple[int | None, str]:
+        """The step's exit code, None when the deadline killed it, and its output. The output
+        goes to a file, not a pipe, so a killed step's straggler cannot hold up reading it.
+        """
+        with tempfile.TemporaryFile("w+", errors="replace") as out:
+            with self.lock:
+                if self.stopped.is_set() or time.monotonic() >= self.ends:
+                    return None, ""
+                proc = subprocess.Popen(
+                    cmd,
+                    cwd=cwd,
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                    stdout=out,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
+                self.running.add(proc)
+            code: int | None
+            try:
+                code = proc.wait(timeout=max(0.0, self.ends - time.monotonic()))
+            except subprocess.TimeoutExpired:
+                kill_tree(proc.pid)
+                proc.wait()
+                code = None
+            finally:
+                with self.lock:
+                    self.running.discard(proc)
+            out.seek(0)
+            return code, out.read()
+
+    def stop(self) -> None:
+        """Kills every running step and starts no more."""
+        with self.lock:
+            self.stopped.set()
+            for proc in self.running:
+                kill_tree(proc.pid)
+
+
+def kill_tree(pid: int) -> None:
+    """SIGKILLs the process group `pid` leads and every process under `pid`, including any
+    that left the group (cargo-nextest gives each test its own)."""
+    table = subprocess.run(
+        ["ps", "-A", "-o", "pid=,ppid="], capture_output=True, text=True, check=False
+    ).stdout
+    children: dict[int, list[int]] = {}
+    for row in table.splitlines():
+        child, parent = map(int, row.split())
+        children.setdefault(parent, []).append(child)
+    tree: list[int] = []
+    frontier = [pid]
+    while frontier:
+        frontier = [c for p in frontier for c in children.get(p, [])]
+        tree += frontier
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+    for p in tree:
+        try:
+            os.kill(p, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+
+def run_lane(lane: Lane, script: str, env: dict[str, str], steps: Steps) -> Outcome:
     started = time.monotonic()
     log: list[str] = []
     timings: list[str] = []
     for name, cmd, cwd in lane.steps:
         t = time.monotonic()
-        run = subprocess.run(
-            cmd,
-            cwd=cwd,
-            env=env,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            errors="replace",
-            check=False,
-        )
+        code, output = steps.run(cmd, cwd, env)
         seconds = time.monotonic() - t
-        if run.stdout.strip():
-            log.append(run.stdout.rstrip())
-        if run.returncode != 0:
+        if output.strip():
+            log.append(output.rstrip())
+        if code != 0:
             log.append(
-                f"{script} {lane.name} {name}: FAILED (exit {run.returncode}) after {seconds:.0f} s"
+                f"{script} {lane.name} {name}: "
+                + (
+                    f"TIMED OUT after {seconds:.0f} s (deadline {steps.deadline:.0f} s)"
+                    if code is None
+                    else f"FAILED (exit {code}) after {seconds:.0f} s"
+                )
             )
-            timings.append(f"{name} FAILED")
+            timings.append(f"{name} {'TIMED OUT' if code is None else 'FAILED'}")
             return Outcome(
                 lane.name, False, time.monotonic() - started, "\n".join(log), timings
             )
@@ -97,11 +175,19 @@ def run_lane(lane: Lane, script: str, env: dict[str, str]) -> Outcome:
 
 def run_lanes(lanes: list[Lane], script: str, budget: int, strict: bool) -> int:
     started = time.monotonic()
+    steps = Steps(float(os.environ.get("CHECK_DEADLINE_S", 2 * budget)))
     if any(lane.warm for lane in lanes):
         warm.ensure()
     env = dict(os.environ)
     with ThreadPoolExecutor(max_workers=max(1, len(lanes))) as pool:
-        outcomes = list(pool.map(lambda lane: run_lane(lane, script, env), lanes))
+        try:
+            outcomes = list(
+                pool.map(lambda lane: run_lane(lane, script, env, steps), lanes)
+            )
+        # Ctrl-C reaches only this process, not the steps' sessions.
+        except BaseException:
+            steps.stop()
+            raise
     for o in sorted(outcomes, key=lambda o: not o.ok):
         print(f"=== {script} {o.lane}: {'passed' if o.ok else 'FAILED'}\n{o.log}")
     for o in outcomes:
@@ -211,6 +297,9 @@ def python_lane() -> Lane:
 def rust_lane() -> Lane:
     return (
         Lane("rust", warm=True)
+        .step(
+            "build-paths", [sys.executable, "-m", "beryl_tools.checks", "build-paths"]
+        )
         .step("fmt", ["cargo", "fmt", "--all", "--check"], paths.RUST)
         .step(
             "clippy",
@@ -326,6 +415,46 @@ def card_names_step() -> int:
     return 1 if found else 0
 
 
+# `env!` of a build path fixes the compiling worktree's absolute path into the binary. The warm
+# cache clones `rust/target` into other worktrees with test binaries cargo counts as fresh, which
+# would then run a deleted worktree's binary or read its files, and pass against the wrong code.
+BAKED_PATH: re.Pattern[str] = re.compile(
+    r'(?<!\w)(?:option_)?env!\s*\(\s*"(CARGO_BIN_EXE_\w+|CARGO_MANIFEST_DIR)"'
+)
+RUN_TIME_PATH = {
+    "CARGO_BIN_EXE": "find the binary at run time, as beryl_cli/tests/exe/mod.rs does"
+    " (std::env::current_exe)",
+    "CARGO_MANIFEST_DIR": 'read std::env::var_os("CARGO_MANIFEST_DIR") at run time',
+}
+
+
+def baked_build_paths(directory: Path) -> list[str]:
+    """Each `env!` of a build path in a Rust file under `directory`, except in a `//` comment, as
+    `path:line: problem; alternative`."""
+    found: list[str] = []
+    for path in sorted(directory.rglob("*.rs")):
+        for number, line in enumerate(path.read_text().splitlines(), 1):
+            if line.lstrip().startswith("//"):
+                continue
+            for m in BAKED_PATH.finditer(line):
+                var = m.group(1)
+                alternative = RUN_TIME_PATH[
+                    "CARGO_BIN_EXE" if var.startswith("CARGO_BIN_EXE_") else var
+                ]
+                found.append(
+                    f"{path}:{number}: {m.group(0)}) bakes in this worktree's path;"
+                    f" {alternative}"
+                )
+    return found
+
+
+def build_paths_step() -> int:
+    found = baked_build_paths(paths.RUST / "crates")
+    for place in found:
+        print(f"build-paths: {place}")
+    return 1 if found else 0
+
+
 def pytest_step() -> int:
     code = subprocess.run(
         [sys.executable, "-m", "pytest", "-q"], cwd=paths.TOOLS, check=False
@@ -388,5 +517,6 @@ if __name__ == "__main__":
         "pytest": pytest_step,
         "rust-tests": rust_tests_step,
         "card-names": card_names_step,
+        "build-paths": build_paths_step,
     }
     sys.exit(steps[sys.argv[1]]())
