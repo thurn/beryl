@@ -207,9 +207,9 @@ impl Ratings {
             }
             let top = argmax(&draw, |_| true);
             overall[top] += 1;
-            let mut seen = BTreeSet::new();
+            let mut counted = BTreeSet::new();
             for &f in &families {
-                if seen.insert(f) {
+                if counted.insert(f) {
                     let top = argmax(&draw, |i| families[i] == f);
                     in_family[top] += 1;
                 }
@@ -390,7 +390,7 @@ mod tests {
         let mut results = BTreeMap::new();
         results.insert((1, 0), (300.0, 400.0));
         let (r, cov) = fit(2, &results);
-        assert_eq!(r[0], 0.0);
+        assert!(r[0].abs() < f64::EPSILON);
         assert!(close(r[1], 190.8, 2.0), "{r:?}");
         // The delta method: 400 / (ln 10 √(n p (1 − p))) = 20.05.
         assert!(close(cov[1][1].sqrt(), 20.05, 0.5), "{cov:?}");

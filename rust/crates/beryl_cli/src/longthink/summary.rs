@@ -78,7 +78,7 @@ pub fn text(
             t.games,
             format!("{}-{}-{}", t.wins, t.draws, t.losses),
             100.0 * overall,
-            steps.map_or("-".to_owned(), |s| short(s)),
+            steps.map_or("-".to_owned(), short),
             t.mean_seconds()
                 .map_or("-".to_owned(), |s| format!("{:.1}", s / 60.0)),
         );

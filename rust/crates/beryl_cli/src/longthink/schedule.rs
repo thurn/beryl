@@ -168,7 +168,7 @@ pub fn open(c: &Config, r: &Ratings) -> Vec<String> {
 
 /// The standard normal distribution function.
 pub fn phi(z: f64) -> f64 {
-    0.5 * (1.0 + erf(z / std::f64::consts::SQRT_2))
+    f64::midpoint(1.0, erf(z / std::f64::consts::SQRT_2))
 }
 
 /// The error function, to 1.5e-7 (Abramowitz and Stegun 7.1.26).
@@ -335,12 +335,10 @@ mod tests {
         let strong = |m: &Matchup, _| {
             // The higher budget wins; a search beats a fixed agent.
             let rank = |e: &str| budget_of(e).unwrap_or(0);
-            if rank(&m.a) > rank(&m.b) {
-                Verdict::Win
-            } else if rank(&m.a) < rank(&m.b) {
-                Verdict::Loss
-            } else {
-                Verdict::Draw
+            match rank(&m.a).cmp(&rank(&m.b)) {
+                std::cmp::Ordering::Greater => Verdict::Win,
+                std::cmp::Ordering::Less => Verdict::Loss,
+                std::cmp::Ordering::Equal => Verdict::Draw,
             }
         };
         let (_, games) = play(&c, 400, strong);

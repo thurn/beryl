@@ -1,5 +1,5 @@
 //! `--upgrade`: adopts this binary into a run only if it plays as the run's own does, so
-//! speed work reaches a running ladder without mixing results. Every logged game must replay
+//! speed work reaches a running arena without mixing results. Every logged game must replay
 //! through its log to the same transcript, every agent asked again for real answering as
 //! logged, and a sample of the cheapest entrant's searches, searched again at their budgets
 //! and seeds, must choose as they did.

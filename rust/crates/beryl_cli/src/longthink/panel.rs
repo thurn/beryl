@@ -115,8 +115,8 @@ fn paint(color: bool, code: &str, text: &str) -> String {
 const RULE: usize = 64;
 
 /// The frame's lines, each cut to `width` columns, at most `height - 1` of them so the
-/// cursor's line stays on screen: a terminal too short drops the ladder rows below the one
-/// being played first, then those above it.
+/// cursor's line stays on screen: a terminal too short drops the board's lowest rows first,
+/// never those being played.
 pub fn render(f: &Frame, width: usize, height: usize, color: bool) -> Vec<String> {
     let rule = "─".repeat(width.min(RULE));
     let mut head = vec![rule.clone(), header(f, color)];

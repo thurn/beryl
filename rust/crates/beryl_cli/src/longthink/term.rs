@@ -8,7 +8,7 @@
 //!   panel's last frame on screen.
 //! - Ctrl-C once asks for a stop after this game (the header shows ⏸); twice stops at once,
 //!   losing the game in progress, which the next run replays to where it was.
-//! - Not a terminal, or `TERM=dumb`: no escapes at all, just the log lines and a ladder table
+//! - Not a terminal, or `TERM=dumb`: no escapes at all, just the log lines and a board table
 //!   every 10 games. `NO_COLOR` turns colors off and keeps the panel.
 
 use std::collections::HashMap;
