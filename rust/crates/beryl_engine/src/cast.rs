@@ -445,7 +445,22 @@ fn castable(
             (0, free)
         }
     };
-    if !targetable(
+    // The checks are pure, so their order changes nothing but their cost: the mana, found
+    // once for the decision, first, and the targets, which read the battlefield, last.
+    // [CR 118.3](https://yawgatog.com/resources/magic-rules/#R1183): "A player can't pay a
+    // cost without having the necessary resources to pay it fully."
+    let x = x_range_start(face, costs, free).unwrap_or(0);
+    if !now
+        .funds
+        .pays(spell_cost(face, costs, x, extra, free), Bitboard::EMPTY)
+    {
+        return false;
+    }
+    // CR 601.2h: the player pays the total cost, so the cards to exile must be there.
+    if ExileCost::of(face, costs).is_some_and(|cost| !cost.payable(s, t, player, slot)) {
+        return false;
+    }
+    targetable(
         s,
         t,
         face.spell_ability_with(costs),
@@ -453,18 +468,7 @@ fn castable(
         Some(slot),
         0,
         None,
-    ) {
-        return false;
-    }
-    // CR 601.2h: the player pays the total cost, so the cards to exile must be there.
-    // [CR 118.3](https://yawgatog.com/resources/magic-rules/#R1183): "A player can't pay a
-    // cost without having the necessary resources to pay it fully."
-    if ExileCost::of(face, costs).is_some_and(|cost| !cost.payable(s, t, player, slot)) {
-        return false;
-    }
-    let x = x_range_start(face, costs, free).unwrap_or(0);
-    now.funds
-        .pays(spell_cost(face, costs, x, extra, free), Bitboard::EMPTY)
+    )
 }
 
 /// The cards `player` can cast at priority: their hand and the cards a permission names.
@@ -619,15 +623,15 @@ fn activatable(s: &State, t: &GameTable, now: &Situation, slot: Slot, ability: A
     if sorcery_speed && !sorcery_timing(s, player) {
         return false;
     }
-    if !targetable(s, t, Some(a), player, None, 0, Some(slot)) {
-        return false;
-    }
+    // The mana before the targets, which read the battlefield: both checks are pure.
     let cost = a.cost.mana.with_x(0);
     let spent = spent_by_cost(slot, a);
-    if a.cost.waterbend > 0 {
-        return waterbend_payable(s, &now.funds, player, cost, a.cost.waterbend, spent);
-    }
-    now.funds.pays(cost, spent)
+    let paid = if a.cost.waterbend > 0 {
+        waterbend_payable(s, &now.funds, player, cost, a.cost.waterbend, spent)
+    } else {
+        now.funds.pays(cost, spent)
+    };
+    paid && targetable(s, t, Some(a), player, None, 0, Some(slot))
 }
 
 /// Whether `player` can pay `cost`, tapping artifacts and creatures for up to `bendable` of

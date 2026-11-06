@@ -93,11 +93,13 @@ impl Units {
     fn groups(&self) -> Groups {
         let mut g = Groups {
             total: self.total(),
-            by_kinds: [(0, 0); 1 << KINDS],
+            kinds: [0; 1 << KINDS],
+            units: [0; 1 << KINDS],
             len: 0,
         };
         for (kinds, n) in self.nonempty() {
-            g.by_kinds[g.len] = (kinds, u32::from(n));
+            g.kinds[g.len] = kinds;
+            g.units[g.len] = n;
             g.len += 1;
         }
         g
@@ -109,7 +111,9 @@ impl Units {
 #[derive(Clone, Copy, Debug)]
 struct Groups {
     total: u32,
-    by_kinds: [(u8, u32); 1 << KINDS],
+    /// The first `len` sets of kinds with units, and how many units each has.
+    kinds: [u8; 1 << KINDS],
+    units: [u16; 1 << KINDS],
     len: usize,
 }
 
@@ -125,17 +129,16 @@ impl Groups {
         let present = (0..KINDS)
             .filter(|&k| cost.symbols[k] > 0)
             .fold(0u8, |m, k| m | (1 << k));
-        let groups = &self.by_kinds[..self.len];
+        let groups = || self.kinds[..self.len].iter().zip(&self.units[..self.len]);
         let mut mask = present;
         while mask != 0 {
             let need: u32 = (0..KINDS)
                 .filter(|&k| mask & (1 << k) != 0)
                 .map(|k| u32::from(cost.symbols[k]))
                 .sum();
-            let cover: u32 = groups
-                .iter()
-                .filter(|&&(kinds, _)| kinds & mask != 0)
-                .map(|&(_, n)| n)
+            let cover: u32 = groups()
+                .filter(|&(&kinds, _)| kinds & mask != 0)
+                .map(|(_, &n)| u32::from(n))
                 .sum();
             if cover < need {
                 return false;

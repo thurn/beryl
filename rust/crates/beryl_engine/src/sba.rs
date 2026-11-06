@@ -88,8 +88,8 @@ pub(crate) fn check(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<boo
 /// case arises: what it enchanted left the battlefield (`zone::leave` detaches it).
 fn doomed(s: &State) -> (Bitboard, Bitboard) {
     let mut graveyard = Bitboard::EMPTY;
-    for &slot in &s.battlefield {
-        let d = s.derived(slot);
+    debug_assert!(!s.flags.derived_dirty, "derived read while dirty");
+    for (&slot, d) in s.battlefield.iter().zip(s.derived.iter()) {
         let o = s.object(slot);
         let types = d.types;
         let dies = types.contains(Types::CREATURE)
@@ -161,10 +161,6 @@ fn end(s: &mut State, sink: &mut Sink, lost: [bool; 2]) {
     }
 }
 
-fn is_legendary(s: &State, slot: Slot) -> bool {
-    s.derived(slot).supertypes.contains(Supertypes::LEGENDARY)
-}
-
 /// The name of the permanent in `slot`: its face up's (CR 712.8d, 712.8e).
 fn name(s: &State, t: &GameTable, slot: Slot) -> &'static str {
     let o = s.object(slot);
@@ -174,9 +170,12 @@ fn name(s: &State, t: &GameTable, slot: Slot) -> &'static str {
 /// The legendary permanents each player controls.
 fn legendary(s: &State) -> [Bitboard; 2] {
     let mut by_controller = [Bitboard::EMPTY; 2];
-    for &slot in &s.battlefield {
-        if is_legendary(s, slot) {
-            by_controller[s.controller(slot).index()].insert(slot);
+    // A permanent's derived characteristics, its controller among them, are at its place in
+    // the battlefield list.
+    debug_assert!(!s.flags.derived_dirty, "derived read while dirty");
+    for (&slot, d) in s.battlefield.iter().zip(s.derived.iter()) {
+        if d.supertypes.contains(Supertypes::LEGENDARY) {
+            by_controller[d.controller.index()].insert(slot);
         }
     }
     by_controller
