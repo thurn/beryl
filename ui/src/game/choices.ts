@@ -295,7 +295,7 @@ function manaValue(cost: string): number {
 }
 
 /** The mana a permanent makes when tapped: one for a land; for another permanent, the
- * symbols of a "{T}: Add" ability, as Mana Crypt's two, or one for "Add one mana". */
+ * symbols of a "{T}: Add" ability, or one for "Add one mana". */
 function manaMade(o: ObjectView): number {
   if (o.types.includes("land")) return 1;
   const text = (o.name && faceEntry(o.name)?.oracle_text) || "";
