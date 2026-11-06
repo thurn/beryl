@@ -6028,6 +6028,18 @@ const overViews = await load("game-over");
 const overEvents = overFixture.messages.filter((m) => m.kind === "event");
 const lastPass = overViews.findLastIndex((v) => v.status.kind === "deciding");
 const overAt = { fixture: "game-over", at: lastPass + 1, ready: "[data-life]" };
+/** Lets React commit what the clock's last step set off. Its scheduler posts each render as a
+ * MessageChannel message, which Playwright's clock does not drive, so under load a poll made
+ * right after a step could see the page a step behind; a message posted now lands after it. */
+const committed = (page) =>
+    page.evaluate(
+        () =>
+            new Promise((resolve) => {
+                const channel = new MessageChannel();
+                channel.port1.onmessage = () => resolve();
+                channel.port2.postMessage(null);
+            }),
+    );
 const lifeShown = async (page) =>
     Number(
         (
@@ -6045,6 +6057,7 @@ await check(
         // When the damage shows, and when the view of the end does (its log line).
         let [lost, ended] = [undefined, undefined];
         let t = 0;
+        await committed(page);
         for (; t < 60 && !(await result.count()); t++) {
             lost ??= (await lifeShown(page)) < 0 ? t : undefined;
             const log = await page.locator(".game-log-entry").allTextContents();
@@ -6052,6 +6065,7 @@ await check(
                 ? t
                 : undefined;
             await page.clock.runFor(100);
+            await committed(page);
         }
         assert.ok(await result.count(), "the result shows");
         assert.ok(lost !== undefined && lost < t, "the damage shows first");
