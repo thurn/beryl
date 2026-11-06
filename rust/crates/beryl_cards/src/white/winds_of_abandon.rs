@@ -61,6 +61,9 @@ fn exile_and_fetch(ctx: &mut EffectCtx, creatures: Bitboard) -> Flow {
     Ok(())
 }
 
+/// "Exile target creature you don't control"
+/// ([CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a)): "To exile an object,
+/// move it to the exile zone from wherever it is."
 fn exile_target(ctx: &mut EffectCtx) -> Flow {
     let Some(creature) = ctx.target_object(0) else {
         return Ok(());
