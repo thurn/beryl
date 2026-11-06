@@ -204,7 +204,18 @@ def run_lanes(lanes: list[Lane], script: str, budget: int, strict: bool) -> int:
             f"{script}: over budget: speed up or delete the slowest step"
             + (" (this fails slow CI)" if strict else "")
         )
+        # A run slowed by other work (a game, `just longthink` at full power) looks like a slow
+        # step in every lane at once; the load says which it was before anyone bisects.
+        print(f"{script}: {load_note()}")
     return 1 if failed or (over and strict) else 0
+
+
+def load_note() -> str:
+    one, five, fifteen = os.getloadavg()
+    return (
+        f"load average {one:.0f} {five:.0f} {fifteen:.0f} on {os.cpu_count()} cores;"
+        " if every lane is slow and the load is high, rerun on a quieter machine"
+    )
 
 
 # What changed.

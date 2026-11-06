@@ -90,3 +90,13 @@ def test_baked_in_build_paths_are_refused_with_the_run_time_way(
 
 def test_the_crates_bake_in_no_build_paths() -> None:
     assert checks.baked_build_paths(checks.paths.RUST / "crates") == []
+
+
+def test_an_over_budget_run_reports_the_machine_load(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(os, "getloadavg", lambda: (53.0, 45.2, 46.1))
+    monkeypatch.setattr(os, "cpu_count", lambda: 18)
+    lane = checks.Lane("slow").step("true", ["true"])
+    assert checks.run_lanes([lane], "ci", 0, strict=True) == 1
+    assert "ci: load average 53 45 46 on 18 cores" in capsys.readouterr().out
