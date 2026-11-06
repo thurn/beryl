@@ -1,5 +1,5 @@
 {
-  "$comment": "UI fixtures `just ui-shots` records with `beryl_cli record-fixture` into ui/public/fixtures before capturing: a seeded game between named agents (`wu-control` or `fuzz:<seed>` decks), stopped at the human seat's first decision of a kind (`first <kind> decision for seat <n>`, kinds as ui/src/generated/protocol.ts names them, optionally `from turn <t>`) or at `game over`, where every condition in `where` also holds of the view (`step <step>`, `attacking`, `blocking`, `targeted trigger on the stack`, `targeted spell on the stack`: one targeting a permanent, `player targeted on the stack`, `ability targeting beside its source`: an ability of a permanent targeting another its controller controls, `opponent's spell on the stack`, `castable <card>`, `resolving <card>`: the decision is asked by that card's spell or ability as it resolves, `casting <card>`: by that spell as it is cast, `playable pair in hand`: a card the human may play has a twin in their hand, `exiled beneath a permanent`: a card lies in exile until the permanent that exiled it leaves, `attached across the table`: an Aura or Equipment one player controls is attached to a permanent the other controls), recording `after` more views past it if given. Shots replay one with `?fixture=<name>`, from its nth view with `&at=<n>`.",
+  "$comment": "UI fixtures `just ui-shots` records with `beryl_cli record-fixture` into ui/public/fixtures before capturing: a seeded game between named agents (`wu-control` or `fuzz:<seed>` decks), stopped at the human seat's first decision of a kind (`first <kind> decision for seat <n>`, kinds as ui/src/generated/protocol.ts names them, optionally `from turn <t>`) or at `game over`, where every condition in `where` also holds of the view (`step <step>`, `attacking`, `blocking`, `targeted trigger on the stack`, `targeted spell on the stack`: one targeting a permanent, `player targeted on the stack`, `ability targeting beside its source`: an ability of a permanent targeting another its controller controls, `opponent's spell on the stack`, `castable <card>`, `resolving <card>`: the decision is asked by that card's spell or ability as it resolves, `casting <card>`: by that spell as it is cast, `playable pair in hand`: a card the human may play has a twin in their hand, `exiled beneath a permanent`: a card lies in exile until the permanent that exiled it leaves, `attached across the table`: an Aura or Equipment one player controls is attached to a permanent the other controls, `<mark> beside a twin`: a permanent with `+1/+1 counters`, `damage`, `summoning sickness` or `story or time counters` and no other mark, and another of the same name with none), recording `after` more views past it if given. Shots replay one with `?fixture=<name>`, from its nth view with `&at=<n>`.",
   "fixtures": [
     {
       "name": "first-target",
@@ -188,6 +188,26 @@
       "agents": ["greedy", "greedy"],
       "until": "first priority decision for seat 0",
       "where": ["player targeted on the stack"]
+    },
+    {
+      "name": "marks",
+      "seed": 6,
+      "decks": ["wu-control", "wu-control"],
+      "agents": ["greedy", "greedy"],
+      "until": "first priority decision for seat 0",
+      "where": [
+        "+1/+1 counters beside a twin",
+        "summoning sickness beside a twin",
+        "story or time counters beside a twin"
+      ]
+    },
+    {
+      "name": "marks-damage",
+      "seed": 69,
+      "decks": ["wu-control", "wu-control"],
+      "agents": ["greedy", "greedy"],
+      "until": "first priority decision for seat 0",
+      "where": ["damage beside a twin"]
     }
   ]
 }

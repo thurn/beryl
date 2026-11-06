@@ -18,6 +18,12 @@
   --cyan-soft: rgb(56 220 255 / 45%);
   --ember: #f07a1c;
   --ember-deep: #c84a0c;
+  /* A number raised or lowered against the printed one, as Arena inks it: deep inks on a
+     card's pale plaque, bright ones on the dark surfaces. */
+  --stat-up-ink: #0e7a2c;
+  --stat-down-ink: #c0141a;
+  --stat-up: #6fe08a;
+  --stat-down: #ff6a5e;
 
   /* Thin metallic borders: a pale gold line that catches the light. */
   --metal: rgb(214 192 150 / 42%);

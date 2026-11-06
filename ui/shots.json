@@ -150,6 +150,18 @@
       "height": 900
     },
     {
+      "name": "game-marks",
+      "route": "/?fixture=marks#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-marks-damage",
+      "route": "/?fixture=marks-damage#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
       "name": "game-piles",
       "route": "/?fixture=choice-scry&at=520#/game",
       "width": 1600,

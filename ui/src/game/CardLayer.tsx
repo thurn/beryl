@@ -23,7 +23,7 @@ import {
 import { Card, CardBack, type Highlight } from "../components/Card";
 import type { ObjectView, Side } from "../generated/protocol";
 import { StageScale } from "./Stage";
-import { useFace } from "./faces";
+import { marksOf, useFace } from "./faces";
 import { RAISE, type Layout, type Placement } from "./layout";
 
 /** Where on the stage a pointer is, in stage pixels. */
@@ -373,6 +373,7 @@ function Look({
             : undefined
       }
       variant={field ? "field" : "full"}
+      marks={field ? marksOf(object) : undefined}
       width={place.width}
       tapped={field && object.tapped}
       highlight={state.highlight}

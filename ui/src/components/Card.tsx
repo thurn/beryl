@@ -1,6 +1,8 @@
 // The card frame: a name bar colored by the card's colors, art, a P/T badge and, on the full
-// frame, the type line and rules box. Battlefield permanents use the compact `field` frame.
-// Tapping turns either frame whole, never reshaping it.
+// frame, the type line and rules box. Battlefield permanents use the compact `field` frame,
+// with their marks: a badge per kind of counter, P/T inked up or down against the printed
+// values, and summoning sickness as faded art. Tapping turns either frame whole, never
+// reshaping it.
 import {
   useLayoutEffect,
   useRef,
@@ -25,6 +27,22 @@ export interface CardFace {
   /** Art URL; a placeholder painting is drawn until there is one. */
   art?: string;
   ability?: AbilityIcon;
+  /** How the power and toughness shown compare with the printed ones: raised, or lowered by
+   * an effect or, for toughness, by marked damage. */
+  powerTone?: StatTone;
+  toughnessTone?: StatTone;
+}
+
+export type StatTone = "up" | "down";
+
+/** A kind of counter a permanent wears as a badge; loyalty is its plaque's. */
+export type CounterMark = "plusOne" | "minusOne" | "time" | "story" | "chorus";
+
+/** What the battlefield draws on a permanent beyond its frame. */
+export interface CardMarks {
+  counters: { kind: CounterMark; count: number }[];
+  /** Its controller can't attack or tap with it yet (CR 302.6). */
+  sick: boolean;
 }
 
 export type Highlight = "source" | "target";
@@ -38,6 +56,7 @@ export interface CardProps {
   tapped?: boolean;
   highlight?: Highlight;
   combat?: CombatRole;
+  marks?: CardMarks;
   className?: string;
   /** Placement on the slot: Motion style, so `rotate` and `y` compose with layout animation. */
   style?: MotionStyle;
@@ -151,14 +170,15 @@ function useRulesFit(text: string | undefined) {
   return ref;
 }
 
-/** Power and toughness (or loyalty), numerals inked blue and the slash black as on the mockups. */
+/** Power and toughness (or loyalty), numerals inked blue and the slash black as on the mockups,
+ * or green when raised and red when lowered, as Arena inks them. */
 function stats(card: CardFace): ReactNode {
   if (card.power !== undefined && card.toughness !== undefined) {
     return (
       <span>
-        <b>{card.power}</b>
+        <b className={toneClass(card.powerTone)}>{card.power}</b>
         <i>/</i>
-        <b>{card.toughness}</b>
+        <b className={toneClass(card.toughnessTone)}>{card.toughness}</b>
       </span>
     );
   }
@@ -169,6 +189,52 @@ function stats(card: CardFace): ReactNode {
   ) : undefined;
 }
 
+export const toneClass = (tone: StatTone | undefined) => tone && `stat-${tone}`;
+
+/** The icons of a permanent's marks, on a 16-unit square: counters by kind, and for the
+ * inspector loyalty, damage and summoning sickness. */
+const MARK_ICONS = {
+  plusOne: "M8 1.5 L14.5 9.5 H10.5 V14.5 H5.5 V9.5 H1.5 Z",
+  minusOne: "M8 14.5 L1.5 6.5 H5.5 V1.5 H10.5 V6.5 H14.5 Z",
+  time: "M3 1 H13 V3.2 C13 5.8 10.6 7 9.3 8 C10.6 9 13 10.2 13 12.8 V15 H3 V12.8 C3 10.2 5.4 9 6.7 8 C5.4 7 3 5.8 3 3.2 Z",
+  story:
+    "M0.8 3 C3.2 1.8 5.8 2.1 7.4 3.4 V14.2 C5.8 13 3.2 12.8 0.8 13.8 Z M15.2 3 C12.8 1.8 10.2 2.1 8.6 3.4 V14.2 C10.2 13 12.8 12.8 15.2 13.8 Z",
+  chorus:
+    "M5.6 2.6 L14.4 0.8 V11.6 A2.6 2.1 0 1 1 12.6 9.6 V4.4 L7.4 5.5 V13.2 A2.6 2.1 0 1 1 5.6 11.2 Z",
+  loyalty:
+    "M8 0.8 L14.4 2.9 V8 C14.4 11.6 11.4 14.2 8 15.3 C4.6 14.2 1.6 11.6 1.6 8 V2.9 Z",
+  damage:
+    "M8 0.5 L9.8 5.2 L15 4 L11.4 8 L15 12 L9.8 10.8 L8 15.5 L6.2 10.8 L1 12 L4.6 8 L1 4 L6.2 5.2 Z",
+  sick: "M10.2 1.2 A7 7 0 1 0 14.8 11.4 A5.6 5.6 0 0 1 10.2 1.2 Z",
+} as const;
+
+export type MarkIcon = keyof typeof MARK_ICONS;
+
+/** A mark's badge: its icon, with a count when it has one, named `label` for assistive
+ * technology when it stands alone. */
+export function MarkBadge({
+  icon,
+  count,
+  label,
+}: {
+  icon: MarkIcon;
+  count?: number;
+  label?: string;
+}) {
+  return (
+    <span
+      className={`mark-badge mark-${icon}`}
+      role={label ? "img" : undefined}
+      aria-label={label}
+    >
+      <svg viewBox="0 0 16 16" aria-hidden>
+        <path d={MARK_ICONS[icon]} />
+      </svg>
+      {count !== undefined && <b>{count}</b>}
+    </span>
+  );
+}
+
 export function Card({
   card,
   variant = "full",
@@ -176,6 +242,7 @@ export function Card({
   tapped = false,
   highlight,
   combat,
+  marks,
   className,
   style,
   id,
@@ -191,6 +258,8 @@ export function Card({
     `frame-${frameKey(card)}`,
     card.colors.length > 1 && `accent-${card.colors[0]?.toLowerCase()}`,
     pt && "card-with-pt",
+    card.ability && variant === "field" && "card-with-ability",
+    marks?.sick && "card-sick",
     highlight && `card-${highlight}`,
     combat && `card-${combat}`,
     className,
@@ -249,6 +318,18 @@ export function Card({
         </div>
         {card.ability && variant === "field" && (
           <AbilityBadge ability={card.ability} />
+        )}
+        {marks && marks.counters.length > 0 && (
+          <span className="card-counters">
+            {marks.counters.map((c) => (
+              <MarkBadge
+                key={c.kind}
+                icon={c.kind}
+                count={c.count}
+                label={`${c.count} ${c.kind} counters`}
+              />
+            ))}
+          </span>
         )}
         {pt && <span className="card-pt">{pt}</span>}
       </motion.div>

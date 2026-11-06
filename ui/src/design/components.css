@@ -373,6 +373,66 @@
 .card-full .card-pt {
   font-size: 0.8em;
 }
+.card-pt b.stat-up {
+  color: var(--stat-up-ink);
+}
+.card-pt b.stat-down {
+  color: var(--stat-down-ink);
+}
+
+/* A permanent's marks (Card.tsx): a dark badge per kind of counter along its foot, between the
+   ability badge and the plaque, wrapping upward; summoning sickness fades its art. */
+.card-counters {
+  position: absolute;
+  left: 0.62em;
+  right: 0.62em;
+  bottom: 0.3em;
+  display: flex;
+  flex-wrap: wrap-reverse;
+  gap: 0.2em;
+  pointer-events: none;
+}
+.card-with-ability .card-counters {
+  left: 3em;
+}
+.card-with-pt .card-counters {
+  right: 5.1em;
+}
+.mark-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1em;
+  height: 1.8em;
+  padding: 0 0.32em 0 0.26em;
+  border-radius: 0.9em;
+  font: 700 1em/1 var(--font-sans);
+  color: var(--type);
+  background: linear-gradient(180deg, #3a3631, #1c1a17);
+  border: 0.1em solid var(--metal-bright);
+  box-shadow: 0 0.06em 0.2em rgb(0 0 0 / 60%);
+}
+.mark-badge svg {
+  width: 1.15em;
+  height: 1.15em;
+  fill: var(--mark, var(--gold));
+}
+.mark-badge b {
+  font-size: 1.1em;
+}
+.mark-plusOne {
+  --mark: var(--stat-up);
+}
+.mark-minusOne,
+.mark-damage {
+  --mark: var(--stat-down);
+}
+.mark-sick {
+  --mark: var(--cyan);
+  padding-right: 0.26em;
+}
+.card-sick .card-art {
+  filter: saturate(0.25) brightness(0.72);
+}
 
 /* States: tapped turns the card (Card.tsx), source glows gold, target glows cyan, an attacker
    wears an angular chevron above and a blocker a rounded arc below. */

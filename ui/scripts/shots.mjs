@@ -28,6 +28,10 @@ try {
     for (const shot of chosen) {
         const { context, page, errors } = await openPage(browser, shot);
         await page.goto(new URL(shot.route, base).href, { waitUntil: "load" });
+        // A large fixture is still being fetched when the page first renders.
+        if (shot.route.includes("fixture=")) {
+            await page.waitForFunction(() => window.berylFixture);
+        }
         await settle(page);
         // One selector, or several clicked in turn; then the pointer leaves, so that no card
         // it rests on is inspected over the table.

@@ -3,11 +3,17 @@
 // to point at alone, and the zone viewer lists every card in the pile, each shown whole on
 // hover. A card the open decision offers something for (a target, a cast) is picked there.
 import { useEffect, useState, type ReactNode } from "react";
-import { ASPECT, Card } from "../components/Card";
-import { cardEntry, useCardArt } from "../cards";
+import {
+  ASPECT,
+  Card,
+  MarkBadge,
+  toneClass,
+  type MarkIcon,
+} from "../components/Card";
+import { cardEntry, useCardArt, type CardFace } from "../cards";
 import type { CardType, ObjectView } from "../generated/protocol";
 import type { CardState } from "./CardLayer";
-import { BLANK, useFace } from "./faces";
+import { BLANK, printedFace, tone, useFace } from "./faces";
 import type { PileLook, ZonePile } from "./layout";
 
 /** A pile lying on the table as `look` says: its top card's top-left corner at the look's
@@ -228,7 +234,7 @@ function ViewerCard({
 /** A card's full Scryfall scan, which carries the artist credit, large beside the table, its
  * left edge at `left`; outside the app, its frame stands in for the scan. On the battlefield,
  * what the scan cannot say follows it: its card types when effects have changed them, the
- * printed ones struck out, and what is `attached` to it. */
+ * printed ones struck out, its marks spelled out, and what is `attached` to it. */
 export function Inspect({
   object,
   left,
@@ -262,6 +268,10 @@ export function Inspect({
           {object.types.map(titled).join(" ")}
         </p>
       )}
+      <InspectMarks
+        object={object}
+        printed={scan && printedFace(object, scan.face)}
+      />
       {attached.length > 0 && (
         <div className="inspect-attached" aria-label="Attached">
           {attached.map((o) => (
@@ -305,3 +315,58 @@ function InspectAttached({ object }: { object: ObjectView }) {
 
 /** Two attachments side by side fill the inspector's width. */
 const INSPECT_ATTACHED = 160;
+
+const MARK_NAMES: Record<MarkIcon, string> = {
+  plusOne: "+1/+1",
+  minusOne: "\u22121/\u22121",
+  loyalty: "Loyalty",
+  time: "Time",
+  story: "Story",
+  chorus: "Chorus",
+  damage: "Damage",
+  sick: "Summoning sick",
+};
+
+/** A permanent's marks, which the scan does not show: its power and toughness against the
+ * printed ones when they differ, each kind of counter, marked damage and summoning sickness. */
+function InspectMarks({
+  object,
+  printed,
+}: {
+  object: ObjectView;
+  printed?: CardFace;
+}) {
+  if (object.zone !== "battlefield") return null;
+  const { pt, counters, damage, summoningSick } = object;
+  const tones =
+    pt && printed
+      ? [tone(pt.power, printed.power), tone(pt.toughness, printed.toughness)]
+      : [];
+  const marks: { icon: MarkIcon; count?: number }[] = [
+    ...counters.map((c) => ({ icon: c.kind, count: c.count })),
+    ...(damage > 0 ? [{ icon: "damage" as const, count: damage }] : []),
+    ...(summoningSick ? [{ icon: "sick" as const }] : []),
+  ];
+  const changed = pt && printed && tones.some(Boolean);
+  if (!changed && marks.length === 0) return null;
+  return (
+    <ul className="inspect-marks">
+      {changed && (
+        <li className="inspect-pt">
+          <s>
+            {printed.power}/{printed.toughness}
+          </s>
+          {" \u2192 "}
+          <b className={toneClass(tones[0])}>{pt.power}</b>/
+          <b className={toneClass(tones[1])}>{pt.toughness}</b>
+        </li>
+      )}
+      {marks.map(({ icon, count }) => (
+        <li key={icon}>
+          <MarkBadge icon={icon} count={count} />
+          {MARK_NAMES[icon]}
+        </li>
+      ))}
+    </ul>
+  );
+}

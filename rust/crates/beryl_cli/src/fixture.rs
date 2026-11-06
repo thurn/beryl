@@ -8,7 +8,8 @@ use std::sync::mpsc::channel;
 use beryl_cards::decks::{WU_CONTROL, fuzz_deck};
 use beryl_session::ipc::{self, Fixture, FixtureMessage};
 use beryl_session::protocol::{
-    Candidate, Combat, Kind, Side, StackItem, Step, TargetRef, ZoneName,
+    Candidate, CardType, Combat, Counter, Kind, ObjectView, Side, StackItem, Step, TargetRef,
+    ZoneName,
 };
 use beryl_session::{PlayerView, Seat, Sessions, StartGame, Status, StopsSetting, agents};
 use serde::Deserialize;
@@ -150,6 +151,55 @@ enum Condition {
     /// An Aura or Equipment one player controls is attached to a permanent the other
     /// controls.
     AttachedAcross,
+    /// A permanent bears this mark and no other while another of the same name bears none, so
+    /// the table shows the mark alone beside a plain twin.
+    Marked(Mark),
+}
+
+/// What the table draws on a permanent beyond its frame.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Mark {
+    /// +1/+1 counters on a creature.
+    PlusOne,
+    /// Damage marked on a creature (CR 120.3).
+    Damage,
+    /// A creature its controller can't attack with yet (CR 302.6).
+    Sick,
+    /// Story or time counters on a permanent.
+    StoryOrTime,
+}
+
+impl Mark {
+    const ALL: [Mark; 4] = [Mark::PlusOne, Mark::Damage, Mark::Sick, Mark::StoryOrTime];
+
+    /// The kinds of counter this mark is.
+    fn kinds(self) -> &'static [Counter] {
+        match self {
+            Mark::PlusOne => &[Counter::PlusOne],
+            Mark::StoryOrTime => &[Counter::Story, Counter::Time],
+            Mark::Damage | Mark::Sick => &[],
+        }
+    }
+
+    /// Whether `o` bears exactly the mark `only`, or none: no other mark, and no counter but
+    /// loyalty (which its plaque shows) and the mark's own.
+    fn only(only: Option<Mark>, o: &ObjectView) -> bool {
+        Mark::ALL.iter().all(|&m| m.on(o) == (Some(m) == only))
+            && o.counters.iter().all(|c| {
+                c.kind == Counter::Loyalty || only.is_some_and(|m| m.kinds().contains(&c.kind))
+            })
+    }
+
+    fn on(self, o: &ObjectView) -> bool {
+        let creature = o.types.contains(&CardType::Creature);
+        let counters = |kinds: &[Counter]| o.counters.iter().any(|c| kinds.contains(&c.kind));
+        match self {
+            Mark::PlusOne => creature && counters(self.kinds()),
+            Mark::Damage => creature && o.damage > 0,
+            Mark::Sick => creature && o.summoning_sick,
+            Mark::StoryOrTime => counters(self.kinds()),
+        }
+    }
 }
 
 impl Condition {
@@ -157,7 +207,9 @@ impl Condition {
     /// "blocking", "targeted trigger on the stack", "targeted spell on the stack", "player
     /// targeted on the stack", "ability targeting beside its source", "opponent's spell on
     /// the stack", "castable <card name>", "resolving <card name>", "casting <card name>",
-    /// "playable pair in hand", "exiled beneath a permanent" or "attached across the table".
+    /// "playable pair in hand", "exiled beneath a permanent", "attached across the table", or
+    /// "<mark> beside a twin" with the mark "+1/+1 counters", "damage", "summoning sickness"
+    /// or "story or time counters".
     fn parse(text: &str) -> Result<Condition, String> {
         let condition = match text {
             "attacking" => Condition::Attacking,
@@ -170,6 +222,10 @@ impl Condition {
             "playable pair in hand" => Condition::PlayablePair,
             "exiled beneath a permanent" => Condition::ExiledBeneath,
             "attached across the table" => Condition::AttachedAcross,
+            "+1/+1 counters beside a twin" => Condition::Marked(Mark::PlusOne),
+            "damage beside a twin" => Condition::Marked(Mark::Damage),
+            "summoning sickness beside a twin" => Condition::Marked(Mark::Sick),
+            "story or time counters beside a twin" => Condition::Marked(Mark::StoryOrTime),
             _ => {
                 if let Some(step) = text.strip_prefix("step ") {
                     Condition::Step(
@@ -287,6 +343,7 @@ impl Condition {
                     })
             }),
             Condition::AttachedAcross => attached_across(view),
+            Condition::Marked(mark) => marked_beside_twin(view, *mark),
         }
     }
 }
@@ -301,6 +358,26 @@ fn attached_across(view: &PlayerView) -> bool {
                         && h.zone == ZoneName::Battlefield
                         && h.controller != o.controller
                 })
+            })
+    })
+}
+
+/// Whether a permanent bears `mark` and no other while another of the same name and types,
+/// and a token if it is one, bears none.
+fn marked_beside_twin(view: &PlayerView, mark: Mark) -> bool {
+    let field = || {
+        view.objects
+            .iter()
+            .filter(|o| o.zone == ZoneName::Battlefield && o.name.is_some())
+    };
+    field().any(|o| {
+        Mark::only(Some(mark), o)
+            && field().any(|t| {
+                t.slot != o.slot
+                    && t.name == o.name
+                    && t.token == o.token
+                    && t.types == o.types
+                    && Mark::only(None, t)
             })
     })
 }
@@ -496,6 +573,10 @@ mod tests {
         assert_eq!(
             Condition::parse("attached across the table"),
             Ok(Condition::AttachedAcross)
+        );
+        assert_eq!(
+            Condition::parse("damage beside a twin"),
+            Ok(Condition::Marked(Mark::Damage))
         );
         assert_eq!(
             Condition::parse("ability targeting beside its source"),

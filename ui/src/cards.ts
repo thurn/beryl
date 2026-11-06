@@ -43,6 +43,12 @@ for (const card of [...data.tokens, ...data.cards]) {
 
 export const cardEntry = (name: string) => byName.get(name)?.card;
 
+const tokens = new Map(data.tokens.map((t) => [t.name, t]));
+
+/** The printed face of a token named `name` where it has its own, as Thundertrap Trainer's
+ * offspring, a 1/1 copy, has beside the card it shares a name with. */
+export const tokenFace = (name: string) => tokens.get(name)?.faces[0];
+
 export interface CardArt {
   card: CardEntry;
   face: CardFace;

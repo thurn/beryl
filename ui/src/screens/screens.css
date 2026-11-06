@@ -1624,6 +1624,42 @@
   gap: 10px;
   margin-top: 10px;
 }
+/* Under the scan, a permanent's marks spelled out: its P/T against the printed one, then a
+   badge per mark. */
+.inspect-marks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 14px;
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  list-style: none;
+  border-radius: 10px;
+  font: 600 15px var(--font-sans);
+  color: var(--type);
+  background: rgb(27 26 24 / 88%);
+  box-shadow: 0 6px 16px rgb(0 0 0 / 50%);
+}
+.inspect-marks li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.inspect-marks .mark-badge {
+  font-size: 12px;
+}
+.inspect-pt {
+  font-size: 18px;
+}
+.inspect-pt s {
+  color: var(--text-dim);
+}
+.inspect-pt .stat-up {
+  color: var(--stat-up);
+}
+.inspect-pt .stat-down {
+  color: var(--stat-down);
+}
 /* The opening decisions, over the dimmed table. */
 .opening,
 .game-over {

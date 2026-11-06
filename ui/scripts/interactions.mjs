@@ -1896,6 +1896,124 @@ for (const fixture of ["arrow-spell", "arrow-ability", "arrow-player"]) {
     );
 }
 
+// `marks` and `marks-damage` end on boards where a permanent bearing one mark and no other
+// stands beside a twin of the same name bearing none: +1/+1 counters, summoning sickness and
+// story or time counters in one, damage in the other.
+{
+    const counted = (kinds) => (o) =>
+        o.counters.some((c) => kinds.includes(c.kind));
+    const creature = (o) => o.types.includes("creature");
+    const MARKS = [
+        (o) => creature(o) && counted(["plusOne"])(o),
+        (o) => creature(o) && o.damage > 0,
+        (o) => creature(o) && o.summoningSick,
+        counted(["story", "time"]),
+    ];
+    const [plusOne, damaged, sick, storyOrTime] = MARKS;
+    /** A permanent bearing `mark` alone in fixture `views`' last view, and a bare twin. */
+    const pair = (views, mark) => {
+        const field = views
+            .at(-1)
+            .objects.filter((o) => o.zone === "battlefield" && o.name !== null);
+        const bare = (o) =>
+            !MARKS.some((m) => m(o)) &&
+            o.counters.every((c) => c.kind === "loyalty");
+        for (const o of field) {
+            if (!mark(o) || MARKS.some((m) => m !== mark && m(o))) continue;
+            const twin = field.find(
+                (t) =>
+                    t.slot !== o.slot &&
+                    t.name === o.name &&
+                    t.token === o.token &&
+                    bare(t),
+            );
+            if (twin) return [o, twin];
+        }
+        assert.fail("the fixture has a marked permanent beside a bare twin");
+    };
+    const el = (page, o) => page.locator(`.card-el[data-slot="${o.slot}"]`);
+    const marks = await load("marks");
+    const hurt = await load("marks-damage");
+    await check(
+        "marks: counters and sickness are drawn",
+        async (page) => {
+            await page.clock.runFor(2000);
+            for (const [kinds, mark] of [
+                [["plusOne"], plusOne],
+                [["story", "time"], storyOrTime],
+            ]) {
+                const [o, twin] = pair(marks, mark);
+                const shown = await el(page, o)
+                    .locator(".card-counters .mark-badge")
+                    .evaluateAll((bs) =>
+                        bs.map((b) => [b.className, b.textContent]),
+                    );
+                for (const c of o.counters.filter((c) =>
+                    kinds.includes(c.kind),
+                )) {
+                    assert.ok(
+                        shown.some(
+                            ([cls, n]) =>
+                                cls.includes(`mark-${c.kind}`) &&
+                                n === String(c.count),
+                        ),
+                        `${o.name} wears ${c.count} ${c.kind}: ${shown}`,
+                    );
+                }
+                assert.equal(
+                    await el(page, twin).locator(".card-counters").count(),
+                    0,
+                    `${twin.name}'s twin wears no badge`,
+                );
+            }
+            const [ill, ready] = pair(marks, sick);
+            assert.equal(await el(page, ill).locator(".card-sick").count(), 1);
+            assert.equal(
+                await el(page, ready).locator(".card-sick").count(),
+                0,
+            );
+        },
+        { fixture: "marks", at: marks.length, ready: ".card-counters" },
+    );
+    await check(
+        "marks: damage lowers the toughness drawn, in red",
+        async (page) => {
+            await page.clock.runFor(2000);
+            const [o, whole] = pair(hurt, damaged);
+            const toughness = el(page, o).locator(".card-pt b").last();
+            assert.equal(
+                await toughness.textContent(),
+                String(o.pt.toughness - o.damage),
+            );
+            assert.match(await toughness.getAttribute("class"), /stat-down/);
+            assert.equal(
+                await el(page, whole).locator(".card-pt b.stat-down").count(),
+                0,
+            );
+        },
+        { fixture: "marks-damage", at: hurt.length, ready: ".card-pt" },
+    );
+    await check(
+        "marks: a countered creature's inspector shows its current P/T",
+        async (page) => {
+            await page.clock.runFor(2000);
+            const [o] = pair(marks, plusOne);
+            await page.hover(`.card-el[data-slot="${o.slot}"]`);
+            const pt = page.locator(".inspect .inspect-pt");
+            await pt.waitFor();
+            const text = await pt.textContent();
+            assert.ok(
+                text.endsWith(`${o.pt.power}/${o.pt.toughness}`),
+                `${o.name}'s inspector reads ${text}`,
+            );
+            await page
+                .locator(".inspect .inspect-marks .mark-plusOne")
+                .waitFor();
+        },
+        { fixture: "marks", at: marks.length, ready: ".card-counters" },
+    );
+}
+
 await browser.close();
 if (errors.length) {
     failed = true;

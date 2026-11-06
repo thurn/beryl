@@ -1,9 +1,15 @@
 // What a card in a PlayerView looks like: its frame data from data/cards.json, with the
-// battlefield's current power, toughness and loyalty.
-import type { CardFace as FrameFace, Color } from "../components/Card";
+// battlefield's current power, toughness and loyalty, and its marks.
+import type {
+  CardFace as FrameFace,
+  CardMarks,
+  Color,
+  CounterMark,
+  StatTone,
+} from "../components/Card";
 import type { AbilityIcon } from "../components/Mana";
-import { useCardArt, type CardArt } from "../cards";
-import type { ObjectView } from "../generated/protocol";
+import { tokenFace, useCardArt, type CardArt, type CardFace } from "../cards";
+import type { CounterView, ObjectView } from "../generated/protocol";
 
 const ABILITIES: [RegExp, AbilityIcon][] = [
   [/^Flying\b/m, "flying"],
@@ -11,20 +17,40 @@ const ABILITIES: [RegExp, AbilityIcon][] = [
   [/^Vigilance\b/m, "vigilance"],
 ];
 
-/** The frame for object `o`, from its card art (useCardArt). */
+/** How `current` compares with a printed value, when the printed one is a number. */
+export function tone(
+  current: number,
+  printed: string | undefined,
+): StatTone | undefined {
+  const p = printed === undefined || printed === "" ? NaN : Number(printed);
+  if (!Number.isFinite(p) || current === p) return undefined;
+  return current > p ? "up" : "down";
+}
+
+/** The face `o` was printed with, from its card face `face`: a token's own where it has one. */
+export const printedFace = (o: ObjectView, face: CardFace): CardFace =>
+  (o.token && o.name !== null && tokenFace(o.name)) || face;
+
+/** The frame for object `o`, from its card art (useCardArt). On the battlefield a creature's
+ * toughness is drawn less its marked damage, as Arena draws it, and red then. */
 export function frameFace(o: ObjectView, art: CardArt): FrameFace {
   const face = art.face;
   const onField = o.zone === "battlefield";
   const loyalty = o.counters.find((c) => c.kind === "loyalty")?.count;
   const text = face.oracle_text ?? "";
+  const pt = onField ? (o.pt ?? undefined) : undefined;
+  const printed = printedFace(o, face);
   return {
     name: face.name,
     typeLine: face.type_line,
     colors: face.colors.filter((c): c is Color => "WUBRG".includes(c)),
     manaCost: face.mana_cost || undefined,
     text: text || undefined,
-    power: onField ? o.pt?.power.toString() : face.power,
-    toughness: onField ? o.pt?.toughness.toString() : face.toughness,
+    power: onField ? pt?.power.toString() : face.power,
+    toughness: onField ? pt && String(pt.toughness - o.damage) : face.toughness,
+    powerTone: pt && tone(pt.power, printed.power),
+    toughnessTone:
+      pt && (o.damage > 0 ? "down" : tone(pt.toughness, printed.toughness)),
     loyalty: onField
       ? loyalty === undefined
         ? undefined
@@ -34,6 +60,15 @@ export function frameFace(o: ObjectView, art: CardArt): FrameFace {
     ability: ABILITIES.find(([pattern]) => pattern.test(text))?.[1],
   };
 }
+
+const isBadged = (c: CounterView): c is { kind: CounterMark; count: number } =>
+  c.kind !== "loyalty";
+
+/** What the battlefield draws on object `o` beyond its frame. */
+export const marksOf = (o: ObjectView): CardMarks => ({
+  counters: o.counters.filter(isBadged),
+  sick: o.summoningSick,
+});
 
 /** A card the data does not name (it should not happen): its name on a blank frame. */
 export const unknownFace = (name: string): FrameFace => ({

@@ -483,7 +483,9 @@ function battlefieldPlacements(
     });
   });
 
-  // Identical untouched tokens share a pile, as lands do; everything else stands alone.
+  // Identical untouched tokens share a pile, as lands do; everything else stands alone. A sick
+  // token and a ready one, or a pumped one and a plain one, look different (Card.tsx's marks),
+  // so they never share one.
   const plain = (o: ObjectView) =>
     o.token &&
     o.counters.length === 0 &&
@@ -492,7 +494,9 @@ function battlefieldPlacements(
     !beneath.has(o.slot) &&
     !attached.has(o.slot);
   const groups = piles(others, (o) =>
-    plain(o) ? `${o.name}|${o.tapped}` : `#${o.slot}`,
+    plain(o)
+      ? `${o.name}|${o.tapped}|${o.summoningSick}|${o.pt?.power}/${o.pt?.toughness}`
+      : `#${o.slot}`,
   ).sort((a, b) => Number(!attacking(a[0]!)) - Number(!attacking(b[0]!)));
   const scale = depthScale(rows.permanents);
   const width = CREATURE_WIDTH * scale;
