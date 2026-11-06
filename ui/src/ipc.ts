@@ -372,17 +372,22 @@ export const artAvailable = () =>
   new URLSearchParams(window.location.search).has("art");
 
 // Card images come from the app's `beryl-art` URI scheme (rust/crates/beryl_app/src/art.rs),
-// which serves Scryfall's image paths from a disk cache and downloads misses.
-const SCRYFALL_IMAGES = "https://cards.scryfall.io/";
+// which serves Scryfall's image paths from a disk cache and downloads misses: a card's from its
+// image host, the card back's (under `/backs`) from its back host.
+const SCRYFALL_HOSTS: Record<string, string> = {
+  "https://cards.scryfall.io": "",
+  "https://backs.scryfall.io": "/backs",
+};
 
 /** The app URL for an image URL from data/cards.json: the URL itself in a live browser. */
 export const cardImageUrl = (scryfallUrl: string) => {
   const url = new URL(scryfallUrl);
-  if (url.origin + "/" !== SCRYFALL_IMAGES) {
+  const prefix = SCRYFALL_HOSTS[url.origin];
+  if (prefix === undefined) {
     throw new Error(`not a Scryfall image: ${scryfallUrl}`);
   }
   if (!("__TAURI_INTERNALS__" in window)) {
     return scryfallUrl;
   }
-  return `beryl-art://localhost${url.pathname}`;
+  return `beryl-art://localhost${prefix}${url.pathname}`;
 };

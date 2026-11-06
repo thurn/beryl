@@ -1,8 +1,10 @@
 //! Card images, served to the UI over the `beryl-art` URI scheme from a disk cache.
 //!
 //! `data/cards.json` (written by `by cards`) lists each face's image URLs on Scryfall's image
-//! host, such as `https://cards.scryfall.io/art_crop/front/a/b/ab12….jpg?1700000000`. The UI
-//! asks for the same path under `beryl-art://localhost/`. A hit is read from the cache; a miss
+//! host, such as `https://cards.scryfall.io/art_crop/front/a/b/ab12….jpg?1700000000`, and the
+//! card back's on its card back host, `https://backs.scryfall.io/large/0/a/0aee….jpg`. The UI
+//! asks for the same path under `beryl-art://localhost/`, a back's under
+//! `beryl-art://localhost/backs/`. A hit is read from the cache; a miss
 //! goes to a single download queue that fetches one image at a time, at least
 //! [`INTERVAL`] apart, as Scryfall's API guidelines ask (<https://scryfall.com/docs/api>), and
 //! writes it to the cache atomically. A failure answers with an error status, which the UI shows
@@ -19,47 +21,92 @@ use std::time::{Duration, Instant};
 use tauri::http::{Response, StatusCode, header};
 
 pub const SCHEME: &str = "beryl-art";
-pub const SCRYFALL_IMAGES: &str = "https://cards.scryfall.io";
+/// Scryfall's hosts for card images and for card backs.
+pub const SCRYFALL: Origins<'static> = Origins {
+    cards: "https://cards.scryfall.io",
+    backs: "https://backs.scryfall.io",
+};
+/// The path prefix under which the UI asks for a card back.
+const BACKS: &str = "/backs";
 /// The least time between two downloads.
 pub const INTERVAL: Duration = Duration::from_millis(100);
 /// Scryfall's images are a few hundred kilobytes; anything far larger is not one.
 const MAX_BYTES: u64 = 8 << 20;
 const VERSIONS: [&str; 3] = ["art_crop", "normal", "large"];
 const SIDES: [&str; 2] = ["front", "back"];
+const BACK_VERSIONS: [&str; 3] = ["small", "normal", "large"];
 
-/// One image on Scryfall's image host: `/<version>/<side>/<id[0]>/<id[1]>/<id>.jpg`.
+/// Where images download from: [`SCRYFALL`] outside tests.
+#[derive(Debug, Clone, Copy)]
+pub struct Origins<'a> {
+    pub cards: &'a str,
+    pub backs: &'a str,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Host {
+    Cards,
+    Backs,
+}
+
+/// One image on Scryfall: a card's on its image host, `/<version>/<side>/<id[0]>/<id[1]>/<id>.jpg`,
+/// or a card back on its back host, `/<version>/<id[0]>/<id[1]>/<id>.jpg`, asked for under
+/// [`BACKS`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Image {
+    host: Host,
+    /// The path the UI asks for, which is also the file's in the cache.
     path: String,
+    /// The path on its host.
+    remote: String,
 }
 
 impl Image {
     /// Accepts exactly the paths of Scryfall's images, so a request can neither name another
-    /// file on that host nor escape the cache directory.
+    /// file on those hosts nor escape the cache directory.
     fn parse(path: &str) -> Option<Self> {
+        if let Some(remote) = path.strip_prefix(BACKS) {
+            let parts: Vec<&str> = remote.strip_prefix('/')?.split('/').collect();
+            let [version, first, second, file] = parts[..] else {
+                return None;
+            };
+            return (BACK_VERSIONS.contains(&version) && named(first, second, file)).then(|| {
+                Self {
+                    host: Host::Backs,
+                    path: path.to_owned(),
+                    remote: remote.to_owned(),
+                }
+            });
+        }
         let parts: Vec<&str> = path.strip_prefix('/')?.split('/').collect();
         let [version, side, first, second, file] = parts[..] else {
             return None;
         };
-        let id = file.strip_suffix(".jpg")?;
-        let uuid = id.len() == 36
-            && id.char_indices().all(|(i, c)| match i {
-                8 | 13 | 18 | 23 => c == '-',
-                _ => c.is_ascii_digit() || ('a'..='f').contains(&c),
-            });
-        let ok = VERSIONS.contains(&version)
-            && SIDES.contains(&side)
-            && uuid
-            && first == &id[0..1]
-            && second == &id[1..2];
+        let ok = VERSIONS.contains(&version) && SIDES.contains(&side) && named(first, second, file);
         ok.then(|| Self {
+            host: Host::Cards,
             path: path.to_owned(),
+            remote: path.to_owned(),
         })
     }
 
     fn file(&self, dir: &Path) -> PathBuf {
         dir.join(&self.path[1..])
     }
+}
+
+/// Whether `<first>/<second>/<file>` names an image by a Scryfall id, filed under its first two
+/// characters: `0/a/0a1b….jpg`.
+fn named(first: &str, second: &str, file: &str) -> bool {
+    let Some(id) = file.strip_suffix(".jpg") else {
+        return false;
+    };
+    let uuid = id.len() == 36
+        && id.char_indices().all(|(i, c)| match i {
+            8 | 13 | 18 | 23 => c == '-',
+            _ => c.is_ascii_digit() || ('a'..='f').contains(&c),
+        });
+    uuid && first == &id[0..1] && second == &id[1..2]
 }
 
 #[derive(Debug)]
@@ -92,12 +139,13 @@ pub struct ArtCache {
 }
 
 impl ArtCache {
-    /// A cache in `dir` that downloads misses from `origin` ([`SCRYFALL_IMAGES`] outside tests).
-    pub fn new(dir: PathBuf, origin: &str) -> Self {
+    /// A cache in `dir` that downloads misses from `origins`.
+    pub fn new(dir: PathBuf, origins: Origins) -> Self {
         let (jobs, queue) = mpsc::channel();
         let downloader = Downloader {
             dir: dir.clone(),
-            origin: origin.to_owned(),
+            cards: origins.cards.to_owned(),
+            backs: origins.backs.to_owned(),
             agent: agent(),
             last: None,
         };
@@ -158,7 +206,8 @@ fn agent() -> ureq::Agent {
 
 struct Downloader {
     dir: PathBuf,
-    origin: String,
+    cards: String,
+    backs: String,
     agent: ureq::Agent,
     last: Option<Instant>,
 }
@@ -183,16 +232,20 @@ impl Downloader {
         {
             thread::sleep(wait);
         }
-        let bytes = self.download(&image.path);
+        let bytes = self.download(image);
         self.last = Some(Instant::now());
         let bytes = bytes.map_err(|e| ArtError::Download(e.to_string()))?;
         write_atomically(&file, &bytes).map_err(ArtError::Io)?;
         Ok(bytes)
     }
 
-    fn download(&self, path: &str) -> Result<Vec<u8>, ureq::Error> {
+    fn download(&self, image: &Image) -> Result<Vec<u8>, ureq::Error> {
+        let origin = match image.host {
+            Host::Cards => &self.cards,
+            Host::Backs => &self.backs,
+        };
         self.agent
-            .get(format!("{}{path}", self.origin))
+            .get(format!("{origin}{}", image.remote))
             .header(header::ACCEPT, "image/jpeg,image/*")
             .call()?
             .body_mut()
@@ -228,6 +281,18 @@ mod tests {
 
     fn path(id: &str) -> String {
         format!("/art_crop/front/{}/{}/{id}.jpg", &id[0..1], &id[1..2])
+    }
+
+    fn back(id: &str) -> String {
+        format!("/large/{}/{}/{id}.jpg", &id[0..1], &id[1..2])
+    }
+
+    /// Both hosts at one stub server's origin.
+    fn both(origin: &str) -> Origins<'_> {
+        Origins {
+            cards: origin,
+            backs: origin,
+        }
     }
 
     struct Request {
@@ -304,7 +369,7 @@ mod tests {
         fs::write(&file, b"cached").unwrap();
         let (origin, requests) = stub(vec![]);
 
-        let cache = ArtCache::new(dir, &origin);
+        let cache = ArtCache::new(dir, both(&origin));
         let response = cache.respond(&path(ID));
 
         assert_eq!(response.status(), StatusCode::OK);
@@ -316,7 +381,7 @@ mod tests {
     fn a_miss_downloads_once_and_caches_the_image() {
         let (_dir, dir) = cache_dir();
         let (origin, requests) = stub(vec![(200, b"image")]);
-        let cache = ArtCache::new(dir.clone(), &origin);
+        let cache = ArtCache::new(dir.clone(), both(&origin));
 
         assert_eq!(cache.get(&path(ID)).unwrap(), b"image");
         assert_eq!(cache.get(&path(ID)).unwrap(), b"image");
@@ -335,7 +400,7 @@ mod tests {
     fn a_failed_download_answers_an_error_and_caches_nothing() {
         let (_dir, dir) = cache_dir();
         let (origin, requests) = stub(vec![(404, b"missing")]);
-        let cache = ArtCache::new(dir.clone(), &origin);
+        let cache = ArtCache::new(dir.clone(), both(&origin));
 
         let response = cache.respond(&path(ID));
 
@@ -345,10 +410,32 @@ mod tests {
     }
 
     #[test]
+    fn a_card_back_downloads_from_the_back_host() {
+        let (_dir, dir) = cache_dir();
+        let (cards, card_requests) = stub(vec![]);
+        let (backs, back_requests) = stub(vec![(200, b"back")]);
+        let cache = ArtCache::new(
+            dir.clone(),
+            Origins {
+                cards: &cards,
+                backs: &backs,
+            },
+        );
+        let asked = format!("/backs{}", back(ID));
+
+        assert_eq!(cache.get(&asked).unwrap(), b"back");
+
+        let request = back_requests.recv().unwrap();
+        assert_eq!(request.line, format!("GET {} HTTP/1.1", back(ID)));
+        assert!(card_requests.try_recv().is_err());
+        assert_eq!(fs::read(dir.join(&asked[1..])).unwrap(), b"back");
+    }
+
+    #[test]
     fn downloads_are_spaced_apart() {
         let (_dir, dir) = cache_dir();
         let (origin, requests) = stub(vec![(200, b"one"), (200, b"two")]);
-        let cache = ArtCache::new(dir, &origin);
+        let cache = ArtCache::new(dir, both(&origin));
 
         cache.get(&path(ID)).unwrap();
         cache.get(&path(OTHER)).unwrap();
@@ -362,7 +449,7 @@ mod tests {
     fn only_scryfall_image_paths_are_served() {
         let (_dir, dir) = cache_dir();
         let (origin, requests) = stub(vec![]);
-        let cache = ArtCache::new(dir, &origin);
+        let cache = ArtCache::new(dir, both(&origin));
         for bad in [
             "/art_crop/front/1/a/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d.jpg",
             "/art_crop/front/0/a/../../0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d.jpg",
@@ -370,6 +457,10 @@ mod tests {
             "/art_crop/left/0/a/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d.jpg",
             "/art_crop/front/0/a/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4D.jpg",
             "/art_crop/front/0/a/0a1b2c3d.jpg",
+            "/large/0/a/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d.jpg",
+            "/backs/art_crop/0/a/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d.jpg",
+            "/backs/large/0/a/../0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d.jpg",
+            "/backs/large/front/0/a/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d.jpg",
             "/",
         ] {
             assert_eq!(cache.respond(bad).status(), StatusCode::NOT_FOUND, "{bad}");

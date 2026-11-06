@@ -1,16 +1,21 @@
 """`by cards`: card data from Scryfall. Looks up a card list on Scryfall's /cards/collection
 endpoint, plus the tokens and emblems the cards make (each card's `all_parts`), and writes
-data/cards.json: per card its printing, artist and per face the display text and image URLs.
-The app downloads the images themselves on demand (rust/crates/beryl_app/src/art.rs).
+data/cards.json: per card its printing, artist and per face the display text and image URLs,
+and the image of Magic's card back. The app downloads the images themselves on demand
+(rust/crates/beryl_app/src/art.rs).
 
 The default list is the main decks of the mirror and of the Vintage deck before it, and the
 basic lands; `--cube` takes the whole cube CSV. data/card-printings.csv pins each card's
-printing (name, set, collector_number): its first printing, for its original art, which a run
-looks up for any card without a pin and adds to the file (`first_printing`), except that the
-basic lands are John Avon's full-art lands from Unstable. A printing with a name of its own,
-such as a Through the Omenpaths card that Arena names differently from Scryfall's oracle, takes
-its printed name and text, so it is keyed by the name the engine knows. `--record FILE` saves
-the requests and responses, which the tests replay; a replay looks up no printings.
+printing (name, set, collector_number), which a run looks up for any card without a pin and
+adds to the file (`printing`); to apply a new rule to a card, delete its pin. A card shows its
+original art, the illustration of its first printing, in the newest printing of that art that
+looks like an ordinary card of it: a reprint's scan or render is cleaner than the early scans,
+and its text closer to the oracle's (Alpha's Counterspell, an "Interrupt" dark with age, takes
+Dominaria Remastered's retro-frame reprint). The basic lands are John Avon's full-art lands
+from Unstable. A printing with a name of its own, such as a Through the Omenpaths card that
+Arena names differently from Scryfall's oracle, takes its printed name and text, so it is keyed
+by the name the engine knows. `--record FILE` saves the requests and responses, which the tests
+replay; a replay looks up no printings.
 
 Scryfall's API guidelines, followed here: https://scryfall.com/docs/api
 """
@@ -25,6 +30,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections import Counter
 from collections.abc import Callable, Iterable
 from importlib import metadata
 from pathlib import Path
@@ -33,6 +39,8 @@ from typing import cast
 from . import paths
 
 API = "https://api.scryfall.com/cards/collection"
+# Scryfall's card back images: /<size>/<id[0]>/<id[1]>/<card_back_id>.jpg.
+BACKS = "https://backs.scryfall.io/large"
 SEARCH = "https://api.scryfall.com/cards/search"
 # /cards/collection takes at most 75 identifiers per request.
 BATCH = 75
@@ -64,6 +72,28 @@ BASIC_PRINTINGS: dict[str, tuple[str, str]] = {
 # tokens, and Arena's rebalanced cards.
 NOT_FIRST: frozenset[str] = frozenset(
     {"memorabilia", "funny", "token", "minigame", "alchemy", "treasure_chest"}
+)
+# Nor do a card's printings in promo sets show its art as an ordinary card would: they carry
+# foil glare, watermarks and stamps (a judge gift, a Friday Night Magic promo); nor do the
+# all-foil sets', whose scans catch the glare.
+NOT_REPRINT: frozenset[str] = NOT_FIRST | {"promo", "from_the_vault", "premium_deck"}
+# The List's reprints, each stamped with a planeswalker symbol.
+STAMPED_SETS: frozenset[str] = frozenset({"plst", "ulst"})
+# Promos stamped or marked as other than the card.
+STAMPED_PROMOS: frozenset[str] = frozenset(
+    {
+        "prerelease",
+        "datestamped",
+        "stamped",
+        "promopack",
+        "playtest",
+        "thick",
+        "serialized",
+    }
+)
+# Frame treatments that change a card's look from its ordinary frame.
+TREATMENTS: frozenset[str] = frozenset(
+    {"showcase", "extendedart", "etched", "inverted", "shatteredglass", "fullart"}
 )
 CUBE: Path = DATA / "arena-powered-cube-2025-10-30.csv"
 PRINTINGS: Path = DATA / "card-printings.csv"
@@ -163,11 +193,9 @@ def throttled_get(get: Get) -> Get:
     return wrapped
 
 
-def first_printing(get: Get, name: str) -> Identifier:
-    """A card's first printing, for its original art: the earliest English one sold in paper
-    that is no promo, oversized card or printing of the kinds `NOT_FIRST` names; failing that,
-    the earliest in paper (a card printed only in joke sets), else the earliest at all (one
-    printed only on Arena). A basic land's is `BASIC_PRINTINGS`'."""
+def printing(get: Get, name: str) -> Identifier:
+    """The printing a card shows: the newest that `shows_original_art`, else its first
+    (`first_of`). A basic land's is `BASIC_PRINTINGS`'."""
     if name in BASIC_PRINTINGS:
         set_code, number = BASIC_PRINTINGS[name]
         return {"set": set_code, "collector_number": number}
@@ -179,8 +207,26 @@ def first_printing(get: Get, name: str) -> Identifier:
             "dir": "asc",
         }
     )
-    # Oldest first: the first page holds the first printing.
-    found = cast(list[Json], get(f"{SEARCH}?{query}")["data"])
+    found: list[Json] = []
+    url: str | None = f"{SEARCH}?{query}"
+    while url:
+        page = get(url)
+        found.extend(cast(list[Json], page["data"]))
+        url = cast(str | None, page.get("next_page"))
+    first = first_of(found)
+    # Oldest first, so the last is the newest.
+    chosen = [p for p in found if shows_original_art(p, first)][-1:] or [first]
+    return {
+        "set": str(chosen[0]["set"]),
+        "collector_number": str(chosen[0]["collector_number"]),
+    }
+
+
+def first_of(found: list[Json]) -> Json:
+    """A card's first printing, which has its original art, of its printings oldest first: the
+    earliest English one sold in paper that is no promo, oversized card or printing of the
+    kinds `NOT_FIRST` names; failing that, the earliest in paper (a card printed only in joke
+    sets), else the earliest at all (one printed only on Arena)."""
     paper = [
         p
         for p in found
@@ -190,22 +236,52 @@ def first_printing(get: Get, name: str) -> Identifier:
         and p.get("lang", "en") == "en"
     ]
     real = [p for p in paper if p.get("set_type") not in NOT_FIRST]
-    first = (real or paper or found)[0]
-    return {
-        "set": str(first["set"]),
-        "collector_number": str(first["collector_number"]),
-    }
+    return (real or paper or found)[0]
 
 
-def pin_first_printings(
+def shows_original_art(p: Json, first: Json) -> bool:
+    """Whether printing `p` shows `first`'s illustration as an ordinary card of it would: in
+    English, with the same border and a frame no older (never a modern card in a retro frame,
+    nor the Future Sight frame), at full size, and with no treatment, stamp or alternate
+    look. It is sold in paper, or else only on Magic Online, whose renders are clean: Scryfall
+    renders a digital card Arena has as Arena draws it, dropping the flavor text and changing
+    the type. It has a high-resolution image."""
+    illustration = first.get("illustration_id")
+    games = cast(list[str], p.get("games", []))
+    frame = str(p.get("frame", ""))
+    return (
+        illustration is not None
+        and p.get("illustration_id") == illustration
+        and p.get("lang") == "en"
+        and p.get("border_color") == first.get("border_color")
+        # The frames are named by the year they began: "1993", "1997", "2003", "2015".
+        and frame != "future"
+        and frame >= str(first.get("frame", ""))
+        and not p.get("oversized")
+        and not p.get("full_art")
+        and not p.get("textless")
+        and not TREATMENTS & set(cast(list[str], p.get("frame_effects", [])))
+        and not STAMPED_PROMOS & set(cast(list[str], p.get("promo_types", [])))
+        and p.get("set_type") not in NOT_REPRINT
+        and p.get("set") not in STAMPED_SETS
+        and ("paper" in games or games == ["mtgo"])
+        and p.get("image_status") == "highres_scan"
+    )
+
+
+def pin_printings(
     names: Iterable[str], pins: dict[str, Identifier], get: Get
 ) -> dict[str, Identifier]:
-    """`pins`, with the first printing of each of `names` it has none for."""
+    """`pins`, with the printing of each of `names` it has none for."""
     out = dict(pins)
     for name in names:
         if name not in out:
-            out[name] = first_printing(get, name)
-            print(f"cards: pinned {name} to {out[name]['set']}", file=sys.stderr)
+            out[name] = printing(get, name)
+            print(
+                f"cards: pinned {name} to {out[name]['set']} "
+                f"{out[name]['collector_number']}",
+                file=sys.stderr,
+            )
     return out
 
 
@@ -254,6 +330,7 @@ CARD_FIELDS: tuple[str, ...] = (
     "all_parts",
     "printed_name",
     "printed_text",
+    "card_back_id",
     *FACE_FIELDS,
 )
 PART_FIELDS = ("id", "component", "type_line")
@@ -402,12 +479,23 @@ def build(names: list[str], pinned: dict[str, Identifier], post: Post) -> Json:
     made = token_parts(cards)
     tokens = collection(post, [{"id": i} for i in sorted(made)])
     return {
+        "card_back": card_back(cards),
         "cards": sorted((entry(c) for c in cards), key=by_name),
         "tokens": sorted(
             (token_entry(t, sorted(made[str(t["id"])])) for t in tokens),
             key=by_name,
         ),
     }
+
+
+def card_back(cards: Iterable[Json]) -> str:
+    """The image of the back most of these cards have: Magic's own, which a few cards replace
+    (a double-faced card's back is its other face)."""
+    backs = Counter(str(c["card_back_id"]) for c in cards if "card_back_id" in c)
+    if not backs:
+        raise LookupError("Scryfall gave no card back")
+    back = backs.most_common(1)[0][0]
+    return f"{BACKS}/{back[0]}/{back[1]}/{back}.jpg"
 
 
 def by_name(card: Json) -> tuple[str, str]:
@@ -426,7 +514,7 @@ def cards(args: argparse.Namespace) -> int:
         post = replaying(Path(args.replay))
     else:
         post = recording(throttled(http_post), log)
-        pinned = pin_first_printings(names, pins, throttled_get(http_get))
+        pinned = pin_printings(names, pins, throttled_get(http_get))
         if pinned != pins:
             write_printings(PRINTINGS, pinned)
         pins = pinned

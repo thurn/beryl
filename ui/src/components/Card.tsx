@@ -13,6 +13,7 @@ import {
   type ReactNode,
 } from "react";
 import { motion, type MotionStyle } from "motion/react";
+import { useCardBack } from "../cards";
 import { useTextFit } from "./fit";
 import { AbilityBadge, type AbilityIcon, ManaCost, RulesText } from "./Mana";
 
@@ -362,7 +363,7 @@ export function Card({
         transition={TURN}
       >
         {back ? (
-          <BackField />
+          <BackImage />
         ) : scan ? (
           <>
             <img
@@ -488,8 +489,7 @@ function BlockArc({ id }: { id?: string }) {
   );
 }
 
-/** The back of a card, for hidden cards and libraries: the Project Beryl back of scry.png, tooled
- * leather with corner studs around an oval panel bearing the crest, the wordmark and four dots. */
+/** The back of a card, for hidden cards and libraries: Magic's card back. */
 export function CardBack({
   width = 160,
   style,
@@ -500,37 +500,20 @@ export function CardBack({
   return (
     <div
       className="card-back"
-      style={{
-        width,
-        height: width / CARD_ASPECT,
-        fontSize: width / 12,
-        ...style,
-      }}
+      style={{ width, height: width / CARD_ASPECT, ...style }}
     >
-      <BackField />
+      <BackImage />
     </div>
   );
 }
 
-/** The back's tooled panel, studs and oval, which also stands in for a face-down permanent's
- * face (`CardProps.back`). */
-function BackField() {
-  return (
-    <div className="card-back-field">
-      {["r", "w", "w", "r"].map((c, i) => (
-        <i key={i} className={`card-back-stud dot-${c}`} />
-      ))}
-      <div className="card-back-oval">
-        <Crest className="card-back-crest" />
-        <span className="card-back-title">Project Beryl</span>
-        <span className="card-back-dots">
-          {["w", "r", "g", "b"].map((c) => (
-            <i key={c} className={`dot-${c}`} />
-          ))}
-        </span>
-      </div>
-    </div>
-  );
+/** The card back's image, which also stands in for a face-down permanent's face
+ * (`CardProps.back`). Until it loads, and where images do not, the plain card under it shows. */
+function BackImage() {
+  const src = useCardBack();
+  return src ? (
+    <img className="card-back-image" src={src} alt="" draggable={false} />
+  ) : null;
 }
 
 /** The Beryl crest: five slender flames rising from a shield that tapers to a point, after the

@@ -65,6 +65,7 @@ def test_lookups_go_in_batches_and_honor_pinned_printings() -> None:
             "set": "set",
             "collector_number": "1",
             "layout": "normal",
+            "card_back_id": "back",
             "image_uris": {v: image for v in cards.IMAGE_VERSIONS},
         }
 
@@ -102,6 +103,7 @@ def test_a_printing_s_own_name_and_text_replace_the_oracle_s() -> None:
             "set": "om1",
             "collector_number": "30",
             "layout": "modal_dfc",
+            "card_back_id": "back",
             "card_faces": [
                 face("Norman Osborn", "Goben"),
                 face("Green Goblin", "Fleem"),
@@ -150,15 +152,108 @@ def test_a_card_takes_its_first_real_printing() -> None:
         name = next(n for n in found if urllib.parse.quote_plus(f'!"{n}"') in url)
         return {"data": found[name]}
 
-    first = {n: cards.first_printing(get, n)["set"] for n in found}
+    first = {n: cards.printing(get, n)["set"] for n in found}
     assert first == {"Damn": "mh2", "Booster Tutor": "unh", "Arena Only": "ymid"}
     assert all("order=released" in u and "dir=asc" in u for u in asked)
     # The basics are John Avon's Unstable full arts, with no search.
-    assert cards.first_printing(get, "Island") == {
+    assert cards.printing(get, "Island") == {
         "set": "ust",
         "collector_number": "213",
     }
     assert len(asked) == 3
+
+
+def test_a_card_takes_the_newest_ordinary_printing_of_its_first_art() -> None:
+    def printing(set_code: str, art: str = "alpha", **extra: object) -> cards.Json:
+        return {
+            "set": set_code,
+            "collector_number": "1",
+            "lang": "en",
+            "illustration_id": art,
+            "border_color": "black",
+            "frame": "1993",
+            "set_type": "core",
+            "games": ["paper"],
+            "image_status": "highres_scan",
+            **extra,
+        }
+
+    found = [
+        printing("lea"),
+        printing("leb"),
+        printing("2ed", border_color="white"),
+        printing("ice", art="ice age"),
+        printing("me4", frame="1997", digital=True, games=["mtgo"]),
+        printing("dmr", frame="1997", promo=True, promo_types=["release"]),
+        # None of these: a promo set's foil and watermark, an all-foil set, The List's
+        # stamp, a playtest card, a borderless treatment, the Future Sight frame, Arena
+        # renders, a scan waiting for its high-resolution image, and new art.
+        printing("g99", frame="1997", promo=True, set_type="promo"),
+        printing("v16", frame="2015", set_type="from_the_vault"),
+        printing("plst", frame="2015", set_type="masters"),
+        printing("sld", frame="2015", promo_types=["playtest"]),
+        printing("sld", frame="2015", border_color="borderless"),
+        printing("mb2", frame="future"),
+        printing("aa1", frame="2015", digital=True, games=["arena"]),
+        printing("omb", frame="2015", digital=True, games=["arena", "mtgo"]),
+        printing("fdc", frame="2015", image_status="lowres"),
+        printing("fdc", art="new", frame="2015"),
+    ]
+    # Only Magic Online renders a reserved card in a newer frame.
+    reserved = found[:5]
+    # A modern card never takes a retro frame.
+    modern = [
+        printing("mh2", frame="2015"),
+        printing("h2r", frame="1997", promo_types=["boosterfun"]),
+    ]
+    pages: dict[str, list[cards.Json]] = {
+        "Counterspell": found,
+        "Tundra": reserved,
+        "Ragavan": modern,
+    }
+
+    def get(url: str) -> cards.Json:
+        name = next(n for n in pages if urllib.parse.quote_plus(f'!"{n}"') in url)
+        return {"data": pages[name]}
+
+    chosen = {n: cards.printing(get, n)["set"] for n in pages}
+    assert chosen == {"Counterspell": "dmr", "Tundra": "me4", "Ragavan": "mh2"}
+
+
+def test_a_search_reads_every_page() -> None:
+    def printing(set_code: str) -> cards.Json:
+        return {
+            "set": set_code,
+            "collector_number": "1",
+            "lang": "en",
+            "illustration_id": "art",
+            "border_color": "black",
+            "frame": "2015",
+            "games": ["paper"],
+            "image_status": "highres_scan",
+        }
+
+    def get(url: str) -> cards.Json:
+        if url == "next":
+            return {"data": [printing("fdc")]}
+        return {"data": [printing("m11")], "next_page": "next"}
+
+    assert cards.printing(get, "Grave Titan")["set"] == "fdc"
+
+
+def test_the_back_is_the_one_most_cards_have() -> None:
+    standard = "0aeebaf5-8c7d-4636-9e82-8c27447861f7"
+    found: list[cards.Json] = [
+        {"card_back_id": standard},
+        {"card_back_id": standard},
+        {"card_back_id": "1234"},
+        {"layout": "transform"},
+    ]
+    assert cards.card_back(found) == (
+        f"https://backs.scryfall.io/large/0/a/{standard}.jpg"
+    )
+    with pytest.raises(LookupError):
+        cards.card_back([{"layout": "transform"}])
 
 
 def test_pins_keep_what_is_pinned_and_write_back_sorted(tmp_path: Path) -> None:
@@ -167,7 +262,7 @@ def test_pins_keep_what_is_pinned_and_write_back_sorted(tmp_path: Path) -> None:
     def get(url: str) -> cards.Json:
         return {"data": [{"set": "lea", "collector_number": "7", "lang": "en"}]}
 
-    pinned = cards.pin_first_printings(["Goben", "Black Lotus", "Forest"], pins, get)
+    pinned = cards.pin_printings(["Goben", "Black Lotus", "Forest"], pins, get)
     assert pinned["Goben"] == pins["Goben"]
     assert pinned["Black Lotus"] == {"set": "lea", "collector_number": "7"}
     path = tmp_path / "printings.csv"

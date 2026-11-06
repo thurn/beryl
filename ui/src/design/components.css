@@ -649,176 +649,28 @@
   stroke-linecap: round;
 }
 
-/* Card backs and piles. The back (after scry.png): the card's black body around tooled leather,
-   a gem stud in each corner, and a blue-edged oval of smooth leather holding the gold crest, the
-   wordmark and five dots in a ring. */
+/* Card backs and piles. The back is Magic's own (Card.tsx's `BackImage`), over a plain card, a
+   brown field in a black border, that shows while it loads or where images do not. */
 .card-back {
   position: relative;
   flex: none;
-  padding: 0.42em;
-  border-radius: 0.6em;
-  background: linear-gradient(180deg, #201f1e, #161615);
-  box-shadow:
-    inset 0 0 0 0.05em rgb(255 255 255 / 9%),
-    var(--shadow-card);
+  box-shadow: var(--shadow-card);
 }
-/* Tooled leather: dark, mottled veins from low-frequency turbulence. */
-.card-back {
-  --tooling: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='t'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.05' numOctaves='2' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0.14 0 0 0 0 0.07 0 0 0 0 0.02 0 0 -9 0 1.1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23t)'/%3E%3C/svg%3E");
-}
-.card-back-field {
-  position: relative;
-  height: 100%;
-  display: grid;
-  place-items: center;
-  border-radius: 0.3em;
+.card-back,
+.card-face-down {
+  padding: 3.5%;
+  border-radius: 4.8% / 3.4%;
   background:
-    var(--grain), var(--tooling),
-    radial-gradient(
-      ellipse at 30% 20%,
-      rgb(255 220 170 / 12%),
-      transparent 60%
-    ),
-    linear-gradient(160deg, #6f4322, #633a1e 55%, #532f18);
-  box-shadow:
-    inset 0 0 0 0.06em rgb(0 0 0 / 55%),
-    inset 0 0 0 0.3em rgb(0 0 0 / 14%),
-    inset 0 0 0.9em rgb(0 0 0 / 55%);
+    radial-gradient(ellipse at 50% 45%, #6b4426, #4a2d18 75%) content-box,
+    #15110e;
 }
-.card-back-stud {
+.card-back-image {
   position: absolute;
-  width: 0.5em;
-  height: 0.5em;
-  border-radius: 50%;
-  background-image: radial-gradient(
-    circle at 35% 30%,
-    rgb(255 255 255 / 75%),
-    transparent 45%
-  );
-  box-shadow:
-    inset 0 -0.06em 0.08em rgb(0 0 0 / 45%),
-    inset 0 0.06em 0.06em rgb(255 255 255 / 55%),
-    0 0.04em 0.08em rgb(0 0 0 / 60%);
-}
-.card-back-stud:nth-child(1) {
-  left: 0.45em;
-  top: 0.45em;
-}
-.card-back-stud:nth-child(2) {
-  right: 0.45em;
-  top: 0.45em;
-}
-.card-back-stud:nth-child(3) {
-  left: 0.45em;
-  bottom: 0.45em;
-}
-.card-back-stud:nth-child(4) {
-  right: 0.45em;
-  bottom: 0.45em;
-}
-.card-back-oval {
-  width: 82%;
-  height: 84%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  border: 0.14em solid #2d62cc;
-  background: radial-gradient(
-    ellipse 70% 60% at 50% 42%,
-    #74401f,
-    #66381d 55%,
-    #4f2a17
-  );
-  box-shadow:
-    0 0 0 0.05em rgb(0 0 0 / 50%),
-    inset 0 0 0.6em rgb(0 0 0 / 35%);
-}
-/* The crest (slimmer than the brand's) and wordmark are struck in gold, edged dark where they
-   sink into the leather (vector strokes and text shadows: a filter would blur them on a turned
-   card). */
-.card-back-crest {
-  width: 2.5em;
-  margin-top: 0.8em;
-  scale: 0.8 1;
-  color: #d6a964;
-  overflow: visible;
-}
-.card-back-crest path {
-  stroke: #2b1607;
-  stroke-width: 1.2;
-  paint-order: stroke;
-}
-.card-back-title {
-  margin-top: 0.3em;
-  font-family: var(--font-serif);
-  font-size: 1.15em;
-  letter-spacing: 0.12em;
-  line-height: 1.15;
-  text-transform: uppercase;
-  text-align: center;
-  width: 5em;
-  color: #d8ab63;
-  -webkit-text-stroke: 0.025em #d8ab63;
-  text-shadow:
-    0 -0.03em 0 rgb(255 232 180 / 45%),
-    0 0.05em 0 rgb(40 20 6 / 90%),
-    0 0 0.04em rgb(40 20 6 / 80%);
-}
-/* Four dots sit in a diamond. */
-.card-back-dots {
-  position: relative;
-  width: 2.2em;
-  height: 2.3em;
-  margin-top: 1.4em;
-}
-.card-back-dots i {
-  position: absolute;
-  width: 0.56em;
-  height: 0.56em;
-  border-radius: 50%;
-  background-image: radial-gradient(
-    circle at 35% 30%,
-    rgb(255 255 255 / 55%),
-    transparent 50%
-  );
-  box-shadow:
-    0 0 0 0.06em #2a1508,
-    inset 0 -0.06em 0.08em rgb(0 0 0 / 50%),
-    0 0.04em 0.06em rgb(0 0 0 / 55%);
-}
-.card-back-dots i:nth-child(1),
-.card-back-dots i:nth-child(4) {
-  left: calc(50% - 0.28em);
-}
-.card-back-dots i:nth-child(2),
-.card-back-dots i:nth-child(3) {
-  top: calc(50% - 0.28em);
-}
-.card-back-dots i:nth-child(1) {
-  top: 0;
-}
-.card-back-dots i:nth-child(2) {
-  left: 0;
-}
-.card-back-dots i:nth-child(3) {
-  right: 0;
-}
-.card-back-dots i:nth-child(4) {
-  bottom: 0;
-}
-.dot-w {
-  background: #e3a34a;
-}
-.dot-b {
-  background: #b96a86;
-}
-.dot-r {
-  background: #cf4a3c;
-}
-.dot-g {
-  background: #63a24c;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
 }
 .pile {
   position: relative;
@@ -1744,19 +1596,6 @@
     animation: none;
   }
 }
-/* A face-down permanent: the back's panel fills its frame (Card's `back`), and on the table's
-   short frame the oval bears the crest alone. */
-.card-face-down {
-  padding: 0.42em;
-}
-.card-face-down.card-field .card-back-title,
-.card-face-down.card-field .card-back-dots {
-  display: none;
-}
-.card-face-down.card-field .card-back-crest {
-  margin-top: 0;
-}
-
 /* The coin of the opening's flip and the starting player's mark: a gold disc, bearing a 1 by
    the player who goes first, which lands with a flip, or spins and then rocks while the flip's
    winner chooses. */

@@ -101,7 +101,7 @@ pub fn run() {
         .setup(|app| {
             app.manage(games::sessions(app.handle()));
             let dir = app.path().app_cache_dir()?.join("art");
-            app.manage(ArtCache::new(dir, art::SCRYFALL_IMAGES));
+            app.manage(ArtCache::new(dir, art::SCRYFALL));
             // The main window starts hidden (tauri.conf.json) so a smoke run never shows it.
             let Some(seconds) = smoke_seconds() else {
                 if let Some(window) = app.get_webview_window("main") {

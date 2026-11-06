@@ -29,7 +29,12 @@ export interface CardEntry {
   faces: CardFace[];
 }
 
-const data = cardData as { cards: CardEntry[]; tokens: CardEntry[] };
+const data = cardData as {
+  /** The image of Magic's card back. */
+  card_back: string;
+  cards: CardEntry[];
+  tokens: CardEntry[];
+};
 
 // By card name and by each face's name, with the face it names: the names the engine gives
 // faces, tokens and emblems (`by cards` writes tokens under them, and a beryl_cards test checks
@@ -82,6 +87,27 @@ export function useCardArt(
   const entry = found?.card.faces[face ?? found.face];
   const url =
     entry && artAvailable() ? cardImageUrl(entry.images[version]) : undefined;
+  const status = useImage(url);
+  if (!found || !entry) {
+    return undefined;
+  }
+  return {
+    card: found.card,
+    face: entry,
+    src: status === "loaded" ? url : undefined,
+    status,
+  };
+}
+
+/** The card back's image once it has loaded: undefined until then, if it fails, and where
+ * images do not load (`artAvailable`). */
+export function useCardBack(): string | undefined {
+  const url = artAvailable() ? cardImageUrl(data.card_back) : undefined;
+  return useImage(url) === "loaded" ? url : undefined;
+}
+
+/** Whether the image at `url` has loaded. */
+function useImage(url: string | undefined): CardArt["status"] {
   const [loaded, setLoaded] = useState<{ url: string; ok: boolean }>();
 
   useEffect(() => {
@@ -97,20 +123,11 @@ export function useCardArt(
     };
   }, [url]);
 
-  if (!found || !entry) {
-    return undefined;
-  }
-  const status = !url
+  return !url
     ? "failed"
     : !loaded || loaded.url !== url
       ? "loading"
       : loaded.ok
         ? "loaded"
         : "failed";
-  return {
-    card: found.card,
-    face: entry,
-    src: status === "loaded" ? url : undefined,
-    status,
-  };
 }
