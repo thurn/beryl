@@ -1,9 +1,10 @@
-// The card frame: a name bar colored by the card's colors, art, a P/T badge and, on the full
-// frame, the type line and rules box. Battlefield permanents use the compact `field` frame,
-// with their marks: a badge per kind of counter, P/T inked up or down against the printed
-// values, summoning sickness as a moon badge over faded art, a token's coin badge on its pewter
-// frame and a stolen permanent's violet edge; the top card of a pile of identical ones wears
-// their count. Tapping turns either frame whole, never reshaping it.
+// A card: its Scryfall scan wherever one has loaded, else a frame drawn in its place (a name
+// bar colored by the card's colors, art, a P/T badge and, on the full frame, the type line and
+// rules box). Battlefield permanents (`field`) wear their marks over either: a P/T plaque inked
+// up or down against the printed values, a badge per kind of counter, summoning sickness as a
+// moon badge over faded art, a token's coin badge on its pewter frame and a stolen permanent's
+// violet edge; the top card of a pile of identical ones wears their count. Tapping turns the
+// card whole, never reshaping it.
 import {
   Fragment,
   useLayoutEffect,
@@ -26,10 +27,13 @@ export interface CardFace {
   power?: string;
   toughness?: string;
   loyalty?: string;
-  /** Art URL; a placeholder painting is drawn until there is one. */
+  /** Art URL for a drawn frame; a placeholder painting is drawn until there is one. */
   art?: string;
+  /** The card's whole scan, once it has loaded: drawn in place of the frame. */
+  scan?: string;
   ability?: AbilityIcon;
-  /** The paragraph of the rules text lit, by index: the ability an option uses. */
+  /** The paragraph of the rules text lit, by index: the ability an option uses. Over a scan,
+   * a plate over its text box says that paragraph alone. */
   lit?: number;
   /** How the power and toughness shown compare with the printed ones: raised, or lowered by
    * an effect or, for toughness, by marked damage. */
@@ -59,11 +63,8 @@ export type CombatRole = "attacker" | "blocker";
 export interface CardProps {
   card: CardFace;
   variant?: "full" | "field";
-  /** The card's width in pixels; the frame's aspect and everything else scale with it. */
+  /** The card's width in pixels; its height and everything on it scale with it. */
   width?: number;
-  /** A battlefield frame's height, where a crowded row squeezes it narrower than its aspect
-   * (layout.ts): its type keeps the size its height gives it (`typeUnit`). */
-  height?: number;
   tapped?: boolean;
   highlight?: Highlight;
   combat?: CombatRole;
@@ -81,16 +82,13 @@ export interface CardProps {
 /** How a card turns as it taps or untaps, and its slot with it. */
 const TURN = { type: "spring", stiffness: 260, damping: 26 } as const;
 
-/** Width over height of each frame. */
-export const ASPECT = { full: 63 / 88, field: 1.3 } as const;
+/** A card's width over its height, 63 by 88 millimeters. */
+export const CARD_ASPECT = 63 / 88;
 
-/** The em of a frame `width` wide, `height` tall when its row squeezes it: a twelfth of its
- * width, or of the width its height would give it at its usual aspect, though no more than
- * half again its own width's, so a squeezed frame's name and marks keep their size. */
-export function typeUnit(width: number, height?: number): number {
-  if (height === undefined) return width / 12;
-  return Math.min(Math.max(width, height * ASPECT.field), width * 1.5) / 12;
-}
+/** The em of a card `width` wide: everything on it is sized in em. A battlefield card's is
+ * larger, so its marks read on a card a scan's printed text is too small to. */
+export const typeUnit = (width: number, field = false) =>
+  width / (field ? 10 : 12);
 
 const BASIC_TYPES: [string, Color][] = [
   ["Plains", "W"],
@@ -157,6 +155,29 @@ export function CardArt({ card }: { card: CardFace }) {
       className="card-art"
       style={{ backgroundImage: placeholderArt(card) }}
     />
+  );
+}
+
+/** The plate a scan wears over its text box to say one ability alone: an ability on the stack,
+ * or the one an option uses. Every frame era prints its text box in the card's lower half, so
+ * the plate covers it whatever the printing. */
+export function AbilityPlate({
+  label,
+  text,
+}: {
+  label?: string;
+  text: string;
+}) {
+  const ref = useRulesFit(text);
+  return (
+    <div className="ability-plate">
+      {label && <span className="ability-plate-label">{label}</span>}
+      <div className="ability-plate-text">
+        <p ref={ref}>
+          <RulesText text={text} />
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -276,7 +297,6 @@ export function Card({
   card,
   variant = "full",
   width = 160,
-  height: squeezed,
   tapped = false,
   highlight,
   combat,
@@ -287,24 +307,28 @@ export function Card({
   style,
   id,
 }: CardProps) {
-  const height =
-    variant === "field" && squeezed !== undefined
-      ? squeezed
-      : width / ASPECT[variant];
-  const em = typeUnit(width, variant === "field" ? squeezed : undefined);
+  const height = width / CARD_ASPECT;
+  const field = variant === "field";
+  const em = typeUnit(width, field);
+  const scan = back ? undefined : card.scan;
   const nameRef = useTextFit(card.name);
   const typeRef = useTextFit(card.typeLine);
   const rulesRef = useRulesFit(card.text);
-  const pt = stats(card);
+  // A scan prints its own power and toughness, legible wherever a whole card is drawn; on the
+  // battlefield a plaque says the current ones over the printed ones, as Arena does.
+  const pt = scan && !field ? undefined : stats(card);
+  const lit =
+    scan && card.lit !== undefined
+      ? card.text?.split("\n")[card.lit]
+      : undefined;
   const classes = [
     "card",
     `card-${variant}`,
     `frame-${frameKey(card)}`,
     card.colors.length > 1 && `accent-${card.colors[0]?.toLowerCase()}`,
+    scan && "card-scanned",
     pt && "card-with-pt",
-    card.ability && variant === "field" && "card-with-ability",
-    // Squeezed narrower than its type: a long name takes two lines.
-    em * 12 > width * 1.02 && "card-narrow",
+    card.ability && field && "card-with-ability",
     marks?.sick && "card-sick",
     marks?.token && "card-token",
     highlight && `card-${highlight}`,
@@ -339,6 +363,16 @@ export function Card({
       >
         {back ? (
           <BackField />
+        ) : scan ? (
+          <>
+            <img
+              className="card-scan"
+              src={scan}
+              alt={card.name}
+              draggable={false}
+            />
+            {lit && <AbilityPlate text={lit} />}
+          </>
         ) : (
           <div className="card-rim">
             <div className="card-name-bar">
@@ -372,9 +406,7 @@ export function Card({
             )}
           </div>
         )}
-        {card.ability && variant === "field" && (
-          <AbilityBadge ability={card.ability} />
-        )}
+        {card.ability && field && <AbilityBadge ability={card.ability} />}
         {marks && (marks.counters.length > 0 || marks.sick || marks.token) && (
           <span className="card-counters">
             {/* Marks that say what the frame and art also hint, apart from any art. */}
@@ -470,7 +502,7 @@ export function CardBack({
       className="card-back"
       style={{
         width,
-        height: width / ASPECT.full,
+        height: width / CARD_ASPECT,
         fontSize: width / 12,
         ...style,
       }}

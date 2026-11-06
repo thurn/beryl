@@ -162,12 +162,12 @@ function PlayerAndZones() {
           depth={{ x: -14, y: 18 }}
         />
       </At>
-      <At x={318} y={192}>
+      <At x={340} y={200}>
         <div style={{ transform: "skewX(-3deg)" }}>
           <LandStack
             card={SAMPLE.island}
             count={3}
-            width={122}
+            width={86}
             step={{ x: 0.13, y: 0.065 }}
           />
         </div>
@@ -214,15 +214,14 @@ function CaptionAt({
 function CardsAndStates() {
   return (
     <Panel n="04" title="Cards & states">
-      <At x={24} y={55}>
-        <Card card={SAMPLE.infernoTitan} variant="field" width={152} />
+      <At x={40} y={55}>
+        <Card card={SAMPLE.infernoTitan} variant="field" width={82} />
       </At>
-      {/* Shrunk as the table shrinks a tapped card, to stand as tall as it lay untapped. */}
-      <At x={226} y={70}>
-        <Card card={SAMPLE.mountain} variant="field" width={97} tapped />
+      <At x={204} y={78}>
+        <Card card={SAMPLE.mountain} variant="field" width={70} tapped />
       </At>
-      <At x={337} y={61}>
-        <Card card={SAMPLE.plains} variant="field" width={101} />
+      <At x={354} y={60}>
+        <Card card={SAMPLE.plains} variant="field" width={70} />
       </At>
       <CaptionAt x={263} y={176}>
         Tapped
@@ -230,19 +229,19 @@ function CardsAndStates() {
       <CaptionAt x={389} y={176}>
         Untapped
       </CaptionAt>
-      <At x={64} y={200}>
+      <At x={98} y={200}>
         <Card
           card={SAMPLE.balefulStrix}
           variant="field"
-          width={148}
+          width={82}
           highlight="source"
         />
       </At>
-      <At x={266} y={200}>
+      <At x={303} y={200}>
         <Card
           card={SAMPLE.balefulStrix}
           variant="field"
-          width={146}
+          width={82}
           highlight="target"
         />
       </At>
@@ -305,21 +304,21 @@ function CombatAndStack() {
   return (
     <Panel n="05" title="Combat & stack">
       <div className="combat-stack">
-        <At x={57} y={74}>
+        <At x={80} y={66}>
           <Card
             id="g-attacker"
             card={SAMPLE.beast}
             variant="field"
-            width={129}
+            width={80}
             combat="attacker"
           />
         </At>
-        <At x={307} y={72}>
+        <At x={330} y={60}>
           <Card
             id="g-blocker"
             card={SAMPLE.angel}
             variant="field"
-            width={126}
+            width={80}
             combat="blocker"
           />
         </At>
@@ -330,12 +329,12 @@ function CombatAndStack() {
           Blocker · rounded
         </CaptionAt>
         <div className="panel-rule" />
-        <At x={20} y={268}>
+        <At x={44} y={270}>
           <Card
             id="g-titan"
             card={SAMPLE.infernoTitan}
             variant="field"
-            width={119}
+            width={78}
           />
         </At>
         <At x={180} y={241}>
@@ -348,8 +347,8 @@ function CombatAndStack() {
             unit={16}
           />
         </At>
-        <At x={356} y={267}>
-          <Card id="g-beast" card={SAMPLE.beast} variant="field" width={116} />
+        <At x={360} y={270}>
+          <Card id="g-beast" card={SAMPLE.beast} variant="field" width={78} />
         </At>
         <CaptionAt x={121} y={422}>
           Gold: source → ability

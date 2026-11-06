@@ -21,10 +21,9 @@ import {
   type Transition,
 } from "motion/react";
 import {
-  ASPECT,
+  CARD_ASPECT,
   Card,
   CardBack,
-  typeUnit,
   type Highlight,
 } from "../components/Card";
 import { StackMarks } from "../components/Stack";
@@ -193,21 +192,20 @@ function CardElement({
     held !== undefined && (held.dragging || held.epoch === layer.epoch);
   useGlide(x, place.x, reduce, { holding });
   useGlide(y, place.y, reduce, { holding });
-  // A card changing looks, or tapping, is drawn at another type unit (a back, a full frame, a
-  // battlefield frame, a turned one): before that is painted, its scale makes up the
-  // difference, and then glides, so the card's size changes smoothly too. A crowded row
-  // squeezing its frames keeps their height, which the scale must not make up for.
-  const unit = typeUnit(place.width, place.height);
+  // A card changing looks, or tapping, is drawn at another width (a back, a whole card, a
+  // battlefield card): before that is painted, its scale makes up the difference, and then
+  // glides, so the card's size changes smoothly too.
+  const width = place.width;
   const frameKind = `${place.look}|${object.tapped}`;
-  const drawn = useRef({ unit, frameKind });
+  const drawn = useRef({ width, frameKind });
   useLayoutEffect(() => {
     const was = drawn.current;
-    drawn.current = { unit, frameKind };
-    if (was.unit !== unit && was.frameKind !== frameKind) {
-      scale.jump((scale.get() * was.unit) / unit);
+    drawn.current = { width, frameKind };
+    if (was.width !== width && was.frameKind !== frameKind) {
+      scale.jump((scale.get() * was.width) / width);
     }
-  }, [scale, unit, frameKind]);
-  useGlide(scale, place.scale, reduce, { restart: unit });
+  }, [scale, width, frameKind]);
+  useGlide(scale, place.scale, reduce, { restart: width });
   // A hand card is raised while hovered and while the pointer holds it; anything else dragged
   // straightens.
   const hand = place.look === "hand";
@@ -338,7 +336,7 @@ function CardElement({
             className="hand-hit"
             style={{
               width: place.width,
-              height: place.width / ASPECT.full + (raised ? lift : 0),
+              height: place.width / CARD_ASPECT + (raised ? lift : 0),
               top: raised ? -lift : 0,
             }}
           />
@@ -431,7 +429,6 @@ function Look({
       marks={field ? marksOf(object) : undefined}
       count={place.count}
       width={place.width}
-      height={field ? place.height : undefined}
       tapped={field && object.tapped}
       highlight={state.highlight}
       // A gold or cyan glow says more than the playable edge or the link's ring, which would

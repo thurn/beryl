@@ -1,7 +1,13 @@
 // The stack-item frame (a spell or ability on the stack) and the arrows that tie it to its source
 // (gold) and targets (cyan).
 import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
-import { CardArt, frameKey, type CardFace } from "./Card";
+import {
+  AbilityPlate,
+  CardArt,
+  CARD_ASPECT,
+  frameKey,
+  type CardFace,
+} from "./Card";
 import { useTextFit } from "./fit";
 import { RulesText } from "./Mana";
 import type { PaidCost } from "../generated/protocol";
@@ -28,7 +34,8 @@ export interface StackItemProps {
   id?: string;
 }
 
-/** A stack item: the source's name bar over a shield-shaped rules box. */
+/** A stack item: with art, its source's scan wearing a plate that says the item; without it,
+ * or until the scan loads, the source's name bar over a shield-shaped rules box. */
 export function StackItem({
   source,
   label,
@@ -40,6 +47,18 @@ export function StackItem({
   id,
 }: StackItemProps) {
   const nameRef = useTextFit(source.name);
+  if (showArt && source.scan) {
+    return (
+      <div
+        id={id}
+        className="stack-item stack-item-scanned"
+        style={{ width, height: width / CARD_ASPECT, fontSize: width / 12 }}
+      >
+        <img className="card-scan" src={source.scan} alt={source.name} />
+        <AbilityPlate label={label} text={text} />
+      </div>
+    );
+  }
   return (
     <div
       id={id}

@@ -12,7 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import {
-  ASPECT,
+  CARD_ASPECT,
   Card,
   MarkBadge,
   toneClass,
@@ -23,7 +23,7 @@ import { cardEntry, useCardArt, type CardFace } from "../cards";
 import { ManaSymbol } from "../components/Mana";
 import type { CardType, ObjectView, RefusalView } from "../generated/protocol";
 import type { CardState } from "./CardLayer";
-import { BLANK, printedFace, tone, useFace } from "./faces";
+import { BLANK, printedFace, SCAN, tone, useFace } from "./faces";
 import { STAGE, type Box, type PileLook, type ZonePile } from "./layout";
 
 /** A pile lying on the table as `look` says: its top card's top-left corner at the look's
@@ -53,7 +53,7 @@ export function Lying({
       </div>
     );
   }
-  const height = look.width / ASPECT.full + Math.max(0, look.depth.y);
+  const height = look.width / CARD_ASPECT + Math.max(0, look.depth.y);
   const drop = height * Math.tan((look.skew * Math.PI) / 180);
   return (
     <div
@@ -120,7 +120,7 @@ export function PileButton({
         style={{
           marginLeft: Math.max(0, -look.depth.x),
           width: look.width,
-          height: look.width / ASPECT.full,
+          height: look.width / CARD_ASPECT,
         }}
         aria-label={`${pileName(pile)}, ${cardCount(cards.length)}`}
         data-pile={pile.zone}
@@ -341,7 +341,7 @@ export function inspectorBox({
     left,
     top,
     right: left + width,
-    bottom: top + inner / ASPECT.full + 2 * INSPECT_PAD + INSPECT_ARTIST,
+    bottom: top + inner / CARD_ASPECT + 2 * INSPECT_PAD + INSPECT_ARTIST,
   };
 }
 
@@ -374,7 +374,7 @@ export function Inspect({
   refusal?: { reason: RefusalView; by?: string };
 }) {
   const name = object?.name;
-  const scan = useCardArt(name ?? "", undefined, "normal");
+  const scan = useCardArt(name ?? "", undefined, SCAN);
   const face = useFace(object ?? BLANK);
   if (!object || !name) return null;
   const entry = cardEntry(name);

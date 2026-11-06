@@ -11,7 +11,7 @@ import type {
   Step,
   ZoneName,
 } from "../generated/protocol";
-import { ASPECT } from "../components/Card";
+import { CARD_ASPECT } from "../components/Card";
 import { referenced, twins } from "./decisions";
 import type { Phase } from "../components/Controls";
 
@@ -39,8 +39,8 @@ const VANISHING = { x: STAGE.width / 2, y: -4400 };
 export const lean = (x: number, y: number) =>
   (Math.atan((x - VANISHING.x) / (y - VANISHING.y)) * 180) / Math.PI;
 
-export const CREATURE_WIDTH = 232;
-export const LAND_WIDTH = 180;
+export const CREATURE_WIDTH = 128;
+export const LAND_WIDTH = 100;
 /** Each copy beneath a land stack's top card, as a fraction of the card's width. */
 export const LAND_STEP = { x: 0.103, y: 0.022 };
 /** How far each card exiled by a permanent until it leaves (CR 610.3) peeks out from beneath
@@ -87,9 +87,6 @@ export interface Placement {
   look: Look;
   /** The frame's width before scaling. */
   width: number;
-  /** A battlefield frame's height before scaling, which a crowded row keeps as it squeezes
-   * the frame narrower than its usual shape (SQUEEZE). */
-  height?: number;
   /** The width it takes on the table before scaling: a tapped frame's turned height. */
   span: number;
   x: number;
@@ -116,8 +113,8 @@ export interface Box {
   bottom: number;
 }
 
-/** The box a placed card covers, its turn aside: a battlefield frame as wide as it takes
- * (`span`) and, tapped, as tall as its frame is wide (lying); any other a full card. Its lean
+/** The box a placed card covers, its turn aside: as wide as it takes (`span`) and, a tapped
+ * battlefield card, as tall as its frame is wide (lying); any other a whole card. Its lean
  * shears its near end sideways (Motion's skewX about its top-left corner). */
 export function footprint(p: Placement): Box {
   const field =
@@ -125,13 +122,8 @@ export function footprint(p: Placement): Box {
     p.look === "land" ||
     p.look === "beneath" ||
     p.look === "attached";
-  const frameHeight = p.height ?? p.width / ASPECT.field;
-  const height =
-    (!field
-      ? p.width / FULL_ASPECT
-      : p.span < p.width
-        ? p.width
-        : frameHeight) * p.scale;
+  const lies = field && p.span > p.width;
+  const height = (lies ? p.width : p.width / CARD_ASPECT) * p.scale;
   const shear = Math.tan((p.skew * Math.PI) / 180) * height;
   const right = p.x + p.span * p.scale;
   return {
@@ -149,9 +141,8 @@ const BACK_WIDTH = 105;
 /** Each side's rows, in stage pixels: its land piles from (x, y), filling rightward to
  * `LANDS_END`, and its other permanents' row at `y`, centered on the table. The rows lie clear
  * of one another, so a long row of permanents may pass over the land piles' side of the table.
- * Every row's cards are scaled by their depth (depthScale), keeping the field frame's shape; a
- * row of permanents too long for the table squeezes its frames narrower (SQUEEZE), then
- * shrinks, all its cards alike, so that none covers another's name or marks. */
+ * Every row's cards are scaled by their depth (depthScale); a row of permanents too long for
+ * the table shrinks, all its cards alike, so that none covers another's marks. */
 const ROWS: Record<
   Side,
   { lands: { x: number; y: number }; permanents: number }
@@ -164,10 +155,6 @@ const LANDS_END = 600;
 const LAND_GAP = 12;
 /** How far apart permanents stand, in frame widths. */
 const PERMANENT_GAP = 0.1;
-/** How narrow a crowded row of permanents squeezes its frames, as a fraction of their width,
- * before it shrinks them: about a whole card's shape, as tall as ever, so a crowded row keeps
- * its height and its names and marks their size (Card.tsx's `typeUnit`). */
-const SQUEEZE = 0.55;
 /** Where the permanents' rows may lie: centered on the table while they fit left of the
  * stack's column, sliding left when they don't, and shrinking when they still don't. The
  * stack and a prompt stand to the right, so neither moves a permanent by coming or going. A
@@ -279,7 +266,7 @@ const STACK_TOP = 175;
  * items alike, about its column's middle. */
 export function stackPlace(index: number, count: number, lifted = false) {
   const step = count > 1 ? Math.min(STACK.step, STACK.reach / (count - 1)) : 0;
-  const height = STACK.width / FULL_ASPECT;
+  const height = STACK.width / CARD_ASPECT;
   const foot = STACK.y - (lifted ? STACK_LIFT : 0) + height;
   const scale = Math.min(1, (foot - STACK_TOP) / (height + (count - 1) * step));
   const width = STACK.width * scale;
@@ -338,8 +325,6 @@ function turned(
     skew: 0,
   };
 }
-
-const FULL_ASPECT = 63 / 88;
 
 /** How far the hand sinks under a screen over the table (scry.png). */
 const HAND_TUCK = 67;
@@ -409,7 +394,7 @@ function handLifts(hand: Placement[], lands: Box[]): Placement[] {
 function heldPlacements(cards: ObjectView[]): Placement[] {
   const n = cards.length;
   const mid = (n - 1) / 2;
-  const height = BACK_WIDTH / FULL_ASPECT;
+  const height = BACK_WIDTH / CARD_ASPECT;
   const total = n * BACK_WIDTH - (n - 1) * 2;
   return cards.map((o, i) => ({
     slot: o.slot,
@@ -577,28 +562,16 @@ function piles(objects: ObjectView[], key: (o: ObjectView) => string) {
   return [...groups.values()];
 }
 
-/** How a battlefield frame `width` wide lies on the table, before depth scaling: its frame's
- * width, and the width it takes. Tapped, it turns a quarter (Card.tsx) whole, shrunk to stand
- * as tall as it otherwise would, so that its row keeps its height and never reaches into the
- * next; it takes its turned width. */
+/** How a battlefield card `width` wide lies on the table, before depth scaling: its frame's
+ * width, and the width it takes. Tapped, it turns a quarter (Card.tsx) whole and takes its
+ * turned width: lying on its side, it stands lower than its row and never reaches into the
+ * next. */
 function lying(width: number, tapped: boolean) {
-  const height = width / ASPECT.field;
-  return tapped
-    ? { frame: height, span: height / ASPECT.field }
-    : { frame: width, span: width };
+  return { frame: width, span: tapped ? width / CARD_ASPECT : width };
 }
 
-/** How a permanent's battlefield frame stands on the table, before depth scaling, in a row
- * `squeeze`d to that fraction of its frames' width: the frame's width and height, and the
- * width it takes. Upright, it is narrower and as tall; tapped, it turns as `lying` says, and
- * takes no more width than an upright one. */
-function standing(tapped: boolean, squeeze: number) {
-  const width = CREATURE_WIDTH * squeeze;
-  const height = CREATURE_WIDTH / ASPECT.field;
-  if (!tapped) return { frame: width, height, span: width };
-  const span = Math.min(lying(CREATURE_WIDTH, true).span, width);
-  return { frame: height, height: span, span };
-}
+/** How a permanent stands in its row, as `lying` says for a card `CREATURE_WIDTH` wide. */
+const standing = (tapped: boolean) => lying(CREATURE_WIDTH, tapped);
 
 /** One side's battlefield: land piles on the left, other permanents in the middle. A blocker
  * stands across the table from the attacker it blocks among the other side's placements
@@ -690,60 +663,41 @@ function battlefieldPlacements(
     if (pile) pile.push(o);
     else groups.push([o]);
   }
-  const height = CREATURE_WIDTH / ASPECT.field;
-  // Each group's width before scaling, its frames squeezed to `k` of their width: its top
-  // card's, each copy beneath it peeking out by a step of its frame's size, and the cards of
-  // `beneath` and `attached` tucked under it peeking out to either side (see below).
-  const unitStep = (o: ObjectView, k: number) => {
-    const unit = standing(o.tapped, k).frame;
-    return { x: unit * LAND_STEP.x, y: unit * LAND_STEP.y };
+  const height = CREATURE_WIDTH / CARD_ASPECT;
+  // Each group's width before scaling: its top card's, each copy beneath it peeking out by a
+  // step of its frame's size, and the cards of `beneath` and `attached` tucked under it
+  // peeking out to either side (see below).
+  const unitStep = {
+    x: CREATURE_WIDTH * LAND_STEP.x,
+    y: CREATURE_WIDTH * LAND_STEP.y,
   };
-  const peek =
-    (under: Map<number, ObjectView[]>, k: number) => (g: ObjectView[]) => {
-      const top = g[g.length - 1]!;
-      const n = under.get(top.slot)?.length ?? 0;
-      const tuckedWidth = CREATURE_WIDTH * k;
-      const narrower = (tuckedWidth - standing(top.tapped, k).span) / 2;
-      return n === 0 ? 0 : n * tuckedWidth * BENEATH_STEP.x + narrower;
-    };
-  const unitWidths = (k: number) =>
-    groups.map(
-      (g) =>
-        standing(g[0]!.tapped, k).span +
-        unitStep(g[0]!, k).x * (g.length - 1) +
-        peek(beneath, k)(g) +
-        peek(attached, k)(g),
-    );
-  const unitLength = (k: number) =>
-    unitWidths(k).reduce((a, w) => a + w, 0) +
-    PERMANENT_GAP * CREATURE_WIDTH * k * Math.max(0, groups.length - 1);
-  // A row too long for its room at its depth's scale first squeezes its frames, down to
-  // `SQUEEZE`, and only then shrinks, all its cards alike.
+  const peek = (under: Map<number, ObjectView[]>) => (g: ObjectView[]) => {
+    const top = g[g.length - 1]!;
+    const n = under.get(top.slot)?.length ?? 0;
+    const narrower = (CREATURE_WIDTH - standing(top.tapped).span) / 2;
+    return n === 0 ? 0 : n * CREATURE_WIDTH * BENEATH_STEP.x + narrower;
+  };
+  const unitWidths = groups.map(
+    (g) =>
+      standing(g[0]!.tapped).span +
+      unitStep.x * (g.length - 1) +
+      peek(beneath)(g) +
+      peek(attached)(g),
+  );
+  const unitLength =
+    unitWidths.reduce((a, w) => a + w, 0) +
+    PERMANENT_GAP * CREATURE_WIDTH * Math.max(0, groups.length - 1);
+  // A row too long for its room at its depth's scale shrinks, all its cards alike.
   const full = depthScale(rows.permanents);
-  const fits = (k: number) => unitLength(k) * full <= room.end - room.start;
-  let squeeze = 1;
-  if (!fits(1)) {
-    let [lo, hi] = [SQUEEZE, 1];
-    for (let i = 0; i < 20; i++) {
-      const mid = (lo + hi) / 2;
-      if (fits(mid)) lo = mid;
-      else hi = mid;
-    }
-    squeeze = lo;
-  }
-  const scale = Math.min(full, (room.end - room.start) / unitLength(squeeze));
-  const lies = (o: ObjectView) => standing(o.tapped, squeeze);
+  const scale = Math.min(full, (room.end - room.start) / unitLength);
   // A shrunken row keeps its edge toward its player where a full-size one has it, leaving the
   // lane between the rows, where combat and the stack's arrows run, as wide as it can be.
   const rowTop =
     rows.permanents + (side === "you" ? (full - scale) * height : 0);
-  const width = CREATURE_WIDTH * squeeze * scale;
-  const step = (o: ObjectView) => {
-    const { x, y } = unitStep(o, squeeze);
-    return { x: x * scale, y: y * scale };
-  };
-  const tucked = (g: ObjectView[]) => peek(beneath, squeeze)(g) * scale;
-  const widths = unitWidths(squeeze).map((w) => w * scale);
+  const width = CREATURE_WIDTH * scale;
+  const step = { x: unitStep.x * scale, y: unitStep.y * scale };
+  const tucked = (g: ObjectView[]) => peek(beneath)(g) * scale;
+  const widths = unitWidths.map((w) => w * scale);
   const gap = PERMANENT_GAP * width;
   const { start, end } = room;
   const xs = row(widths, gap, start, end, room.center);
@@ -785,20 +739,19 @@ function battlefieldPlacements(
     const left = lefts[k]! + tucked(group);
     group.forEach((o, i) => {
       const depth = group.length - 1 - i;
-      const x = left + i * step(o).x;
+      const x = left + i * step.x;
       const y =
         rowTop +
-        depth * step(o).y +
+        depth * step.y +
         (o.combat?.kind === "attacking" ? forward : 0);
       // Combat's creatures over their neighbors, so their marks show.
       const z = 40 + k * 8 + i + (o.combat ? 60 : 0);
-      const { frame, height: frameHeight, span } = lies(o);
+      const { frame, span } = standing(o.tapped);
       out.push({
         slot: o.slot,
         zone: o.zone,
         look: "field",
         width: frame,
-        height: frameHeight,
         span,
         opacity: 1,
         z,
@@ -809,7 +762,7 @@ function battlefieldPlacements(
       // the right, centered on the permanent. What is attached rises above what lies beneath,
       // `above` steps up, so that each name bar shows whole.
       const center = x + (span * scale) / 2;
-      const tuckedWidth = CREATURE_WIDTH * squeeze;
+      const tuckedWidth = CREATURE_WIDTH;
       const tuck = (
         under: ObjectView[] | undefined,
         look: "beneath" | "attached",
@@ -824,7 +777,6 @@ function battlefieldPlacements(
             zone: e.zone,
             look,
             width: tuckedWidth,
-            height,
             span: tuckedWidth,
             opacity: 1,
             z: z - up,

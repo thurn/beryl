@@ -1,12 +1,12 @@
 // A scry decision in the overlay shell, as in docs/ui_mockups/scry.png. Static for now: the
 // choice overlays bead wires it to decisions and drag ordering.
-import { ASPECT, Card, CardBack } from "../components/Card";
+import { CARD_ASPECT, Card, CardBack } from "../components/Card";
 import { Overlay } from "../components/Overlay";
 import { SAMPLE } from "./samples";
 
 /** Lays a card `width` wide in the tray with its center at (x, y), turned `turn` degrees. */
 function fanned(x: number, y: number, width: number, turn: number) {
-  const height = width / ASPECT.full;
+  const height = width / CARD_ASPECT;
   return {
     position: "absolute",
     left: x - width / 2,

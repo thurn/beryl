@@ -275,18 +275,6 @@
   margin: 0 -0.3em;
   padding: 0 0.26em;
 }
-/* A frame a crowded row squeezes (layout.ts) keeps its type's size: a long name wraps onto a
-   second line rather than shrinking, its bar growing to hold it. */
-.card-narrow .card-name-bar {
-  height: auto;
-  min-height: 1em;
-}
-.card-narrow .card-name {
-  max-height: 2.3em;
-  line-height: 1.08;
-  white-space: normal;
-  overflow-wrap: break-word;
-}
 .card-name {
   overflow: hidden;
   padding-bottom: 0.06em;
@@ -484,6 +472,96 @@
 }
 .card-sick .card-art {
   filter: saturate(0.25) brightness(0.72);
+}
+/* A card's scan in place of its frame (Card.tsx): the printed card itself, clipped to a card's
+   corners (3 mm on 63 by 88), over black for the corners of scans with rounder ones. */
+.card-scanned {
+  padding: 0;
+  border-radius: 4.8% / 3.4%;
+  background: #0b0a09;
+}
+.card-scan {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+.card-sick .card-scan {
+  filter: saturate(0.4) brightness(0.78);
+}
+/* A scan covers the frame a glow steeps in light, so the light falls over the scan's edge. */
+.card-scanned.card-source::after,
+.card-scanned.card-target::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.card-scanned.card-source::after {
+  box-shadow: var(--glow-gold-in);
+}
+.card-scanned.card-target::after {
+  box-shadow: var(--glow-cyan-in);
+}
+/* The plate over a scan's text box that says one ability (Card.tsx's AbilityPlate): parchment
+   in a dark rim, its label on a tab across its top edge. */
+.ability-plate {
+  position: absolute;
+  left: 5%;
+  right: 5%;
+  top: 56%;
+  bottom: 4.5%;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0.35em;
+  background: linear-gradient(180deg, #f8f2e2, #e6dcc4);
+  border: 0.08em solid #1b1712;
+  box-shadow:
+    inset 0 0 0 0.1em rgb(150 120 70 / 45%),
+    inset 0 0 0.6em rgb(90 60 20 / 18%),
+    0 0.08em 0.4em rgb(0 0 0 / 55%);
+  font-family: var(--font-card);
+  color: #141210;
+}
+.ability-plate-label {
+  align-self: center;
+  margin-top: 0.45em;
+  padding: 0.08em 0.6em 0.12em;
+  border-radius: 0.6em;
+  font: 650 0.62em/1.1 var(--font-card);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--type, #f2ead8);
+  background: linear-gradient(180deg, #3a3631, #1c1a17);
+  border: 0.08em solid var(--metal-bright, #c9a35c);
+  white-space: nowrap;
+}
+.ability-plate-text {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0.3em 0.55em;
+  font-weight: 560;
+  font-size: 0.74em;
+  line-height: 1.22;
+}
+.ability-plate-text p {
+  margin: auto 0;
+  white-space: pre-line;
+  font-size: calc(1em * var(--fit, 1));
+}
+/* An ability on the stack: its source's scan wearing the plate. */
+.stack-item.stack-item-scanned {
+  position: relative;
+  display: block;
+  aspect-ratio: auto;
+  padding: 0;
+  border-radius: 4.8% / 3.4%;
+  background: #0b0a09;
 }
 /* A token is framed in pewter where a card is framed in black, as no card is. */
 .card-token {

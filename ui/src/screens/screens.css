@@ -753,6 +753,8 @@
   position: absolute;
   inset: 12% -7% -16% -3%;
   z-index: -1;
+  /* A shadow, not the card: the pointer passes through it. */
+  pointer-events: none;
   background: radial-gradient(
     closest-side,
     rgb(0 0 0 / 46%),

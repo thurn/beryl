@@ -38,7 +38,7 @@ export const printedFace = (o: ObjectView, face: CardFace): CardFace =>
 const toughnessLeft = (o: ObjectView, toughness: number) =>
   String(Math.max(0, toughness - o.damage));
 
-/** The frame for object `o`, from its card art (useCardArt). On the battlefield a creature's
+/** The face for object `o`, from its card's scan (useCardArt). On the battlefield a creature's
  * toughness is drawn less its marked damage (toughnessLeft), and red then. */
 export function frameFace(o: ObjectView, art: CardArt): FrameFace {
   const face = art.face;
@@ -63,7 +63,7 @@ export function frameFace(o: ObjectView, art: CardArt): FrameFace {
         ? undefined
         : String(loyalty)
       : face.loyalty,
-    art: art.src,
+    scan: art.src,
     ability: ABILITIES.find(([pattern]) => pattern.test(text))?.[1],
   };
 }
@@ -127,9 +127,13 @@ export const faceDownFace = (o: ObjectView): FrameFace => ({
   typeLine: "",
 });
 
+/** The scan every card is drawn with: one size wherever it is, so each card downloads once,
+ * large enough for the stack and the inspector on a Retina screen. */
+export const SCAN = "large";
+
 /** The frame for object `o`, as the game draws it. */
 export function useFace(o: ObjectView): FrameFace {
-  const art = useCardArt(o.name ?? "");
+  const art = useCardArt(o.name ?? "", undefined, SCAN);
   if (art) return frameFace(o, art);
   return o.name === "" ? namelessFace(o) : unknownFace(o.name ?? "");
 }
@@ -141,7 +145,7 @@ export function useAbilityFace(
   source: ObjectView | undefined,
   blank: ObjectView,
 ): FrameFace {
-  const art = useCardArt(name);
+  const art = useCardArt(name, undefined, SCAN);
   return art ? frameFace(source ?? blank, art) : unknownFace(name);
 }
 

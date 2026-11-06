@@ -17,7 +17,12 @@ import {
   useMotionValue,
   useReducedMotion,
 } from "motion/react";
-import { ASPECT, Card, CardBack, type Highlight } from "../components/Card";
+import {
+  CARD_ASPECT,
+  Card,
+  CardBack,
+  type Highlight,
+} from "../components/Card";
 import { Overlay, type OverlayAction } from "../components/Overlay";
 import { RulesText } from "../components/Mana";
 import { LifeOrb } from "../components/Player";
@@ -192,7 +197,7 @@ function row(count: number, width: number, step: number): number[] {
 /** Where a tray card's top left goes for its center at `x`, raised by `lift`. */
 const corner = (x: number, width: number, lift = 0) => ({
   x: x - width / 2,
-  y: (TRAY.height - width / ASPECT.full) / 2 - lift,
+  y: (TRAY.height - width / CARD_ASPECT) / 2 - lift,
 });
 
 // --- Arranging: scry, Jace's put-back ---
@@ -316,7 +321,7 @@ function ArrangeChoice({
               style={{
                 position: "absolute",
                 left: b.dx - BACK_WIDTH / 2,
-                top: b.y - BACK_WIDTH / ASPECT.full / 2,
+                top: b.y - BACK_WIDTH / CARD_ASPECT / 2,
                 rotate: `${b.turn}deg`,
               }}
             />
@@ -328,9 +333,9 @@ function ArrangeChoice({
             className="choice-ghost"
             style={{
               left: center.get(ghost)! - FACE.width / 2,
-              top: FACE.y - FACE.width / ASPECT.full / 2,
+              top: FACE.y - FACE.width / CARD_ASPECT / 2,
               width: FACE.width,
-              height: FACE.width / ASPECT.full,
+              height: FACE.width / CARD_ASPECT,
             }}
           />
         ))}
@@ -426,7 +431,7 @@ function DraggableCard({
     y: e.clientY / stageScale,
   });
   const width = dragging ? HELD.width : FACE.width;
-  const height = width / ASPECT.full;
+  const height = width / CARD_ASPECT;
   const release = () => {
     drag.current = undefined;
     setDragging(false);

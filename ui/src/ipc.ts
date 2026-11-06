@@ -351,10 +351,13 @@ export const onGameUpdate = async (
 ) => (await transport()).listen("game-update", handler);
 
 /** Whether card images can load: inside the app, whose `beryl-art` scheme serves them, or in
- * a live browser (`?live=`), which loads them from Scryfall. A fixture browser (`just
- * ui-shots`) draws placeholders and never touches the network. */
+ * a live browser (`?live=`) or one asked to (`?art`), which load them from Scryfall. A fixture
+ * browser (`just ui-shots`) draws placeholders and never touches the network, unless its
+ * route asks for art, as when judging how real cards look. */
 export const artAvailable = () =>
-  "__TAURI_INTERNALS__" in window || liveBase() !== undefined;
+  "__TAURI_INTERNALS__" in window ||
+  liveBase() !== undefined ||
+  new URLSearchParams(window.location.search).has("art");
 
 // Card images come from the app's `beryl-art` URI scheme (rust/crates/beryl_app/src/art.rs),
 // which serves Scryfall's image paths from a disk cache and downloads misses.

@@ -1,7 +1,7 @@
 // Player and zones: life orbs, mana pools, player badges, the library, the graveyard and stacked
 // lands.
 import { useEffect, useState, type ReactNode } from "react";
-import { ASPECT, Card, CardBack, type CardFace } from "./Card";
+import { CARD_ASPECT, Card, CardBack, type CardFace } from "./Card";
 import { Tip } from "./Controls";
 import { ManaSymbol } from "./Mana";
 
@@ -500,7 +500,7 @@ function Pile({
               left: left + depth.x * k,
               top: depth.y * k,
               width,
-              height: width / ASPECT.full,
+              height: width / CARD_ASPECT,
             }}
           />
         );
@@ -583,7 +583,7 @@ export function FaceUpEdges({
       label={`${count} cards`}
       className="pile-face-up"
     >
-      <div style={{ width, height: width / ASPECT.full }} />
+      <div style={{ width, height: width / CARD_ASPECT }} />
     </Pile>
   );
 }

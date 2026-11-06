@@ -46,6 +46,8 @@ const recorded = (await readdir(fixtures))
     .map((f) => f.slice(0, -".json".length));
 
 const FIXTURE = "greedy-turn-9";
+/** A card's width over its height (Card.tsx's CARD_ASPECT). */
+const CARD_ASPECT = 63 / 88;
 const views = await load(FIXTURE);
 const [before, after] = views.slice(-2);
 
@@ -921,6 +923,8 @@ await check(
         await page.clock.runFor(2000);
         const handle = await page.$(back);
         const { width } = await handle.boundingBox();
+        const drawn = () => handle.evaluate((e) => e.offsetWidth);
+        const backWidth = await drawn();
         await page.clock.pauseAt(Date.now() + 60_000);
         await page.getByRole("button", { name: /^(Next|End Turn)/ }).click();
         // The views play back paced: a frame at a time until the card leaves the hand.
@@ -933,9 +937,10 @@ await check(
             `as it leaves the hand it is ${first.width} wide, as its back was ${width}`,
         );
         await page.clock.runFor(3000);
-        const landed = await handle.boundingBox();
+        // Then it is drawn at its new width, its scale no longer making up the difference (on
+        // the table it may come to about its back's size on screen).
         assert.ok(
-            Math.abs(landed.width - width) > 10,
+            Math.abs((await drawn()) - backWidth) > 10,
             "it then takes its new size",
         );
     },
@@ -1800,8 +1805,7 @@ assert.ok(
     faceDown.some((o) => o.tapped),
     "the blockers fixture has a tapped face-down permanent",
 );
-// The face-up permanents: a tapped one draws in a frame of its own size. Each row's frames
-// share a size (a crowded row squeezes all of them alike), and a tapped one stands as tall.
+// The face-up permanents: each row's cards share a size, and a tapped one lies on its side.
 const faceUp = blockersView.objects.filter(
     (o) =>
         o.zone === "battlefield" &&
@@ -1827,9 +1831,11 @@ await check(
                 `${o.slot} is drawn as a permanent`,
             );
             const [w, h] = await size(o);
+            // Turned a quarter from `like`, its footprint is `like`'s turned.
+            const [ww, hh] =
+                like.tapped === o.tapped ? [width, height] : [height, width];
             assert.ok(
-                (like.tapped !== o.tapped || Math.abs(w - width) <= 1) &&
-                    Math.abs(h - height) <= 1,
+                Math.abs(w - ww) <= 1 && Math.abs(h - hh) <= 1,
                 `${o.slot} is ${w} by ${h}, ${like.name} ${width} by ${height}`,
             );
             assert.equal(
@@ -1895,7 +1901,7 @@ await check(
                 });
             const what = `${o.name} (${o.tapped ? "tapped" : "untapped"})`;
             assert.ok(
-                Math.abs(frame - 1.3) < 0.01,
+                Math.abs(frame - CARD_ASPECT) < 0.01,
                 `${what}'s frame is ${frame} wide for its height`,
             );
             assert.ok(
@@ -1903,7 +1909,8 @@ await check(
                 `${what} is turned ${turn}°`,
             );
             assert.ok(
-                Math.abs(slot - (o.tapped ? 1 / 1.3 : 1.3)) < 0.01,
+                Math.abs(slot - (o.tapped ? 1 / CARD_ASPECT : CARD_ASPECT)) <
+                    0.01,
                 `${what} takes a footprint ${slot} wide for its height`,
             );
         }
@@ -4542,11 +4549,12 @@ await check(
     { ...crowdedRun(crowdedAt), fixture: "crowded-flip" },
 );
 
-/** Each permanent's name on the table, by its card, and its type's size on screen in window
- * pixels: its font's size by the scales its card and the stage are drawn at. */
-const nameSizes = (page) =>
+/** Each permanent's power and toughness (or loyalty) plaque on the table, by its card, and its
+ * numerals' size on screen in window pixels: their font's size by the scales its card and the
+ * stage are drawn at. A scan's printed text is too small to read there; the plaques are not. */
+const plaqueSizes = (page) =>
     page.$$eval(
-        '.card-el[data-zone="battlefield"]:not(.card-el-land) .card-name',
+        '.card-el[data-zone="battlefield"]:not(.card-el-land) .card-pt span',
         (names) => {
             const scale = (e) => {
                 const m = new DOMMatrix(getComputedStyle(e).transform);
@@ -4566,18 +4574,17 @@ const nameSizes = (page) =>
         },
     );
 
-// A crowded row squeezes its frames narrower, as tall as ever, before it shrinks them: the
-// rows keep their height, filling the table between them, and their names stay readable.
+// A crowded table's rows still fill the table between them, and their plaques stay readable.
 await check(
-    "a crowded table's names read at 10 px, its rows filling the room between them",
+    "a crowded table's plaques read at 14 px, its rows filling the room between them",
     async (page) => {
         await page.clock.runFor(2000);
-        const sizes = await nameSizes(page);
-        assert.ok(sizes.length >= 16, "both rows' names are drawn");
+        const sizes = await plaqueSizes(page);
+        assert.ok(sizes.length >= 8, "both rows' plaques are drawn");
         const small = sizes
-            .filter((n) => n.px < 10)
+            .filter((n) => n.px < 14)
             .map((n) => `${n.name} at ${n.px.toFixed(1)} px`);
-        assert.deepEqual(small, [], "names under 10 px");
+        assert.deepEqual(small, [], "plaques under 14 px");
         const { you, opponent } = await rows(page);
         const far = Math.max(...opponent.map((c) => c.box.y + c.box.height));
         const near = Math.min(...you.map((c) => c.box.y));
@@ -5029,17 +5036,22 @@ async function inspectorOf(page, name) {
 }
 
 /** A point of the element `selector` picks (the `nth`) where it is on top, so the pointer
- * reaches it: its middle if nothing covers that, else the first such point on a 10 px grid. */
+ * reaches it: its middle if nothing covers that, else the first such point on a 10 px grid.
+ * Whole pixels, where WebKit delivers the pointer: a fraction of a pixel inside a leaning
+ * card's edge may lie outside it there. */
 const visiblePoint = (page, selector, nth) =>
     page.evaluate(
         ([selector, nth]) => {
             const e = document.querySelectorAll(selector)[nth];
             const r = e.getBoundingClientRect();
             const on = (x, y) => e.contains(document.elementFromPoint(x, y));
-            const mid = { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+            const mid = {
+                x: Math.round(r.x + r.width / 2),
+                y: Math.round(r.y + r.height / 2),
+            };
             if (on(mid.x, mid.y)) return mid;
-            for (let y = r.top + 5; y < r.bottom; y += 10) {
-                for (let x = r.left + 5; x < r.right; x += 10) {
+            for (let y = Math.ceil(r.top) + 5; y < r.bottom; y += 10) {
+                for (let x = Math.ceil(r.left) + 5; x < r.right; x += 10) {
                     if (on(x, y)) return { x, y };
                 }
             }
