@@ -967,9 +967,20 @@ pub(crate) fn plans(
             kept.push(*p)?;
         }
     }
-    if pool.iter().any(|&n| n > 0) {
-        let all = kept;
-        kept.retain(|p| !all.iter().any(|q| floats_for_nothing(&sources, p, q)));
+    // Only a pool can leave mana floating that a source would make again: a source's own
+    // leftover mana is `wasteful`'s.
+    if kept.len() > 1 && pool.iter().any(|&n| n > 0) {
+        let mut dominated = 0u64;
+        for (i, p) in kept.iter().enumerate() {
+            if kept.iter().any(|q| floats_for_nothing(&sources, p, q)) {
+                dominated |= 1 << i;
+            }
+        }
+        let mut i = 0;
+        kept.retain(|_| {
+            i += 1;
+            dominated & (1 << (i - 1)) == 0
+        });
     }
     kept.as_mut_slice().sort_by_key(|p| {
         let floating: u32 = p.left.iter().map(|&n| u32::from(n)).sum();
