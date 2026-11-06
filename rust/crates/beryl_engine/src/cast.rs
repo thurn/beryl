@@ -29,12 +29,6 @@ use crate::state::{
 };
 use crate::table::GameTable;
 
-/// The face of an object as it is now.
-fn face_of(s: &State, t: &GameTable, slot: Slot) -> &'static Face {
-    let o = s.object(slot);
-    t.def(o.card).face(o.face)
-}
-
 /// The ability a stack entry resolves: an ability of its card's face, or a spell's spell
 /// ability, as the casting options paid for it make it (an overloaded spell's). A permanent
 /// spell with no targets has none.
@@ -83,10 +77,8 @@ pub(crate) fn sorcery_timing(s: &State, player: Seat) -> bool {
 
 /// Whether a permanent on the battlefield has a static ability with this rule.
 fn has_rule(s: &State, t: &GameTable, slot: Slot, rule: Rule) -> bool {
-    face_of(s, t, slot)
-        .abilities
-        .iter()
-        .any(|a| a.kind == AbilityKind::Static && a.rule == rule)
+    let o = s.object(slot);
+    t.facts(o.card, o.face).has_rule(rule)
 }
 
 /// Whether an opponent's permanent limits `player` to casting spells at sorcery speed, as
@@ -95,10 +87,15 @@ fn has_rule(s: &State, t: &GameTable, slot: Slot, rule: Rule) -> bool {
 /// allows or directs something to happen, and another effect states that it can't happen,
 /// the "can't" effect takes precedence."
 fn limited_to_sorcery_speed(s: &State, t: &GameTable, player: Seat) -> bool {
-    s.battlefield.iter().any(|&slot| {
-        s.controller(slot) == player.opponent()
-            && has_rule(s, t, slot, Rule::OpponentsCastAsSorceries)
-    })
+    // A permanent's derived characteristics, its controller among them, are at its place in
+    // the battlefield list.
+    s.battlefield
+        .iter()
+        .zip(s.derived.iter())
+        .any(|(&slot, d)| {
+            d.controller == player.opponent()
+                && has_rule(s, t, slot, Rule::OpponentsCastAsSorceries)
+        })
 }
 
 /// Whether `player` may cast this face at instant speed: an instant
@@ -686,25 +683,35 @@ fn activation_options(
     // Most objects have no activated ability; leaving them out before collapsing saves
     // comparing them. Whether one has is part of what collapsing compares (its card, face
     // and granted abilities), so the result is the same.
+    let activated = |slot: Slot| {
+        let o = s.object(slot);
+        t.facts(o.card, o.face).activated
+    };
     let objects: Bitboard = objects
         .iter()
         .filter(|&slot| {
-            face_of(s, t, slot)
-                .abilities
-                .iter()
-                .any(|a| a.kind == AbilityKind::Activated)
+            activated(slot) != 0
                 || (s.object(slot).zone == Zone::Battlefield
                     && s.derived(slot).granted.iter().any(Option::is_some))
         })
         .collect();
     for slot in collapse(s, objects).iter() {
-        let own = face_of(s, t, slot).abilities.len() as u8;
         let granted = if s.object(slot).zone == Zone::Battlefield {
             s.derived(slot).granted.len() as u8
         } else {
             0
         };
-        let abilities = (0..own)
+        // Of its own abilities, only the activated ones can be activated (CR 602.1), so the
+        // rest are not checked; granted ones are checked whatever they are.
+        let mut own = activated(slot);
+        let own = std::iter::from_fn(move || {
+            (own != 0).then(|| {
+                let i = own.trailing_zeros() as u8;
+                own &= own - 1;
+                i
+            })
+        });
+        let abilities = own
             .map(AbilityIx::Own)
             .chain((0..granted).map(AbilityIx::Granted));
         for ability in abilities {

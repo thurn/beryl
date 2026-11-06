@@ -1,7 +1,7 @@
 //! The static card table and the per-game table built from two decklists (architecture §6.4,
 //! decision D20).
 
-use crate::card::{CardDef, FACE_DOWN_COPY, FaceIx, Trigger};
+use crate::card::{AbilityKind, CardDef, FACE_DOWN_COPY, Face, FaceIx, Rule, Trigger};
 use crate::event::kind;
 use crate::ids::{CardIx, Seat};
 use crate::mana::ManaFace;
@@ -53,8 +53,8 @@ pub struct GameTable {
     listens: Vec<u16>,
     /// Every kind any card of the game listens to.
     listens_any: u16,
-    /// Per game index, what its first two faces make as mana sources.
-    mana_faces: Vec<[ManaFace; 2]>,
+    /// Per game index, the facts of its first two faces.
+    faces: Vec<[FaceFacts; 2]>,
     /// The game index of [`FACE_DOWN_COPY`].
     face_down_copy: CardIx,
 }
@@ -106,10 +106,10 @@ impl GameTable {
         let face_down_copy = CardIx::new((defs.len() - 1) as u8);
         let listens: Vec<u16> = defs.iter().map(|d| listens(d)).collect();
         let listens_any = listens.iter().fold(0, |a, &b| a | b);
-        let mana_faces = defs
+        let faces = defs
             .iter()
             .map(|d| {
-                let of = |i: usize| d.faces.get(i).map_or(ManaFace::Read, ManaFace::of);
+                let of = |i: usize| d.faces.get(i).map_or(FaceFacts::NONE, FaceFacts::of);
                 [of(0), of(1)]
             })
             .collect();
@@ -119,7 +119,7 @@ impl GameTable {
             decks: indices,
             listens,
             listens_any,
-            mana_faces,
+            faces,
             face_down_copy,
         })
     }
@@ -142,13 +142,13 @@ impl GameTable {
         self.listens[card.index()]
     }
 
-    /// What the face `face` of the card at `card` makes as a mana source; a face beyond the
-    /// first two, or face down, is read from the face itself.
-    pub(crate) fn mana_face(&self, card: CardIx, face: FaceIx) -> ManaFace {
-        self.mana_faces[card.index()]
-            .get(usize::from(face.get()))
-            .copied()
-            .unwrap_or(ManaFace::Read)
+    /// The facts of the face `face` of the card at `card`: found once per game for its first
+    /// two faces, and read from the face itself for any other, or face down.
+    pub(crate) fn facts(&self, card: CardIx, face: FaceIx) -> FaceFacts {
+        match self.faces[card.index()].get(usize::from(face.get())) {
+            Some(&facts) => facts,
+            None => FaceFacts::of(self.def(card).face(face)),
+        }
     }
 
     /// The event kinds any card of this game listens to.
@@ -178,6 +178,53 @@ impl GameTable {
     pub fn deck(&self, player: Seat) -> &[CardIx] {
         &self.decks[player.index()]
     }
+}
+
+/// What the engine's scans over every permanent read of a face, found once per game rather
+/// than from its abilities each time.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct FaceFacts {
+    /// What it makes as a mana source.
+    pub(crate) mana: ManaFace,
+    /// A bit per index of its activated abilities.
+    pub(crate) activated: u64,
+    /// A bit per [`Rule`] of its static abilities.
+    rules: u8,
+}
+
+impl FaceFacts {
+    /// No face: never read, as no object has it up.
+    const NONE: FaceFacts = FaceFacts {
+        mana: ManaFace::Read,
+        activated: 0,
+        rules: 0,
+    };
+
+    fn of(face: &Face) -> FaceFacts {
+        assert!(face.abilities.len() <= 64, "a face of at most 64 abilities");
+        let mut facts = FaceFacts {
+            mana: ManaFace::of(face),
+            activated: 0,
+            rules: 0,
+        };
+        for (i, a) in face.abilities.iter().enumerate() {
+            match a.kind {
+                AbilityKind::Activated => facts.activated |= 1 << i,
+                AbilityKind::Static => facts.rules |= rule_bit(a.rule),
+                _ => {}
+            }
+        }
+        facts
+    }
+
+    /// Whether one of its static abilities has `rule`.
+    pub(crate) fn has_rule(self, rule: Rule) -> bool {
+        self.rules & rule_bit(rule) != 0
+    }
+}
+
+fn rule_bit(rule: Rule) -> u8 {
+    1 << (rule as u8)
 }
 
 /// The event kinds a card's triggered abilities listen to, on any face.

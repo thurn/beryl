@@ -211,7 +211,7 @@ fn is_sacrificed(a: &Ability) -> bool {
 /// most five colors and {C}, two ranks each.
 const CONSUMED_RANK: u8 = 2 * KINDS as u8 + 2;
 
-/// What a face makes as a source, found once per game ([`GameTable::mana_face`]) for the
+/// What a face makes as a source, found once per game ([`GameTable::facts`]) for the
 /// many faces [`source`] reads: the cube's permanents are mostly not sources, or sources whose
 /// mana depends on nothing else.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -278,7 +278,7 @@ fn controlled(s: &State, player: Seat) -> impl Iterator<Item = Slot> + '_ {
 #[inline]
 fn source(s: &State, t: &GameTable, player: Seat, slot: Slot) -> Option<(u8, u8, bool, bool)> {
     let o = s.object(slot);
-    let mana = t.mana_face(o.card, o.face);
+    let mana = t.facts(o.card, o.face).mana;
     if mana == ManaFace::Not || s.controller(slot) != player || o.flags.has(ObjectFlags::TAPPED) {
         return None;
     }
