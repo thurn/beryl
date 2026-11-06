@@ -50,6 +50,9 @@ use beryl_engine::{
 use crate::Agent;
 use crate::rollout::{Candidate, Inline, Policy, RolloutPolicy, best};
 
+/// The most lands we cast Mana Crypt with.
+const CRYPT_LANDS: i32 = 3;
+
 /// The least value of a spell that is a major threat: worth the last counterspell, and worth
 /// tapping out for.
 const MAJOR: i32 = 60;
@@ -1222,9 +1225,24 @@ impl Expert<'_> {
     fn card_cast(&self, slot: Slot, name: &str, costs: Castings) -> Option<i32> {
         let sorcery_only = self.sorcery_only();
         Some(match name {
-            // Never: its coin flips, 3 damage on half our upkeeps, cost more life over these
-            // long games than its mana is worth, as for the rollout policy.
-            names::MANA_CRYPT => 0,
+            // Its coin flips, 3 damage on half our upkeeps, cost more life over these long
+            // games than its mana is worth, but while we are short of lands for the spells in
+            // hand.
+            names::MANA_CRYPT => {
+                let lands = self.lands(self.me()) as i32;
+                let stuck = self.hand(self.me()).iter().any(|s| {
+                    s != slot
+                        && !self.p.is_land(s)
+                        && self.obs().card(s).is_some_and(|c| {
+                            i32::from(self.p.t.def(c).front().cost.mana_value()) > lands + 1
+                        })
+                });
+                if lands <= CRYPT_LANDS && stuck && self.life() > 10 {
+                    990
+                } else {
+                    0
+                }
+            }
             names::TEFERI_TIME_RAVELER if self.counter_known(self.mana(self.me()) - 3) => 0,
             names::TEFERI_TIME_RAVELER => {
                 // Teferi first when more is to follow: once he resolves, nothing we cast this
