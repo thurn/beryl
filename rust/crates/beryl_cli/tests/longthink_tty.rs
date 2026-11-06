@@ -150,16 +150,19 @@ fn two_ctrl_cs_stop_at_once() {
     let mut args = vec!["--games", "1000"];
     args.extend(TINY);
     // Games long enough that the second press comes mid-game: one that ends before the
-    // second press is taken stops the run after it, and the test presses again.
+    // second press is taken stops the run after it, and the test presses again, in the same
+    // tiny arena. (Without it, the default arena's searches can outlast pty.py's deadline on
+    // a busy machine.)
     let budget = args.iter().position(|&a| a == "--budgets").unwrap() + 1;
     args[budget] = "18k";
+    let mut tries = 0;
     let (p, start) = loop {
         let start = games(&dir);
         let p = at_a_terminal(&dir, 2, &args, &[]);
-        if p.code != 0 {
+        tries += 1;
+        if p.code != 0 || tries == 5 {
             break (p, start);
         }
-        args.truncate(2);
     };
     assert_eq!(p.code, 130);
     let [_, [before, after]] = p.presses[..] else {
@@ -167,21 +170,30 @@ fn two_ctrl_cs_stop_at_once() {
     };
     assert_eq!((before, after), (games(&dir), games(&dir)));
     assert_clean_exit(&p, games(&dir) - start);
+    // The next runner resumes the game from its last logged decision. A press before the
+    // game's first leaves nothing to resume: the game starts over, as it should.
+    if let Some(line) = first_game_line(&dir) {
+        assert!(!line.ends_with("decision 0"), "{line}");
+    }
+}
 
+/// The resume line a runner of the run in `dir` begins its first game with, if it resumes
+/// one: read up to its first line but those of entrants opening, so at most one game.
+fn first_game_line(dir: &Path) -> Option<String> {
     let mut runner = Command::new(dir.join("beryl_cli"))
         .arg("longthink-run")
-        .arg(&dir)
+        .arg(dir)
         .stdout(Stdio::piped())
         .env_remove("BERYL_LONGTHINK_PANIC")
         .spawn()
         .unwrap();
-    let resumed = BufReader::new(runner.stdout.take().unwrap())
+    let first = BufReader::new(runner.stdout.take().unwrap())
         .lines()
         .map(Result::unwrap)
-        .find(|l| l.starts_with("↻ resumed"));
+        .find(|l| !l.starts_with('▸'));
     runner.kill().unwrap();
     runner.wait().unwrap();
-    assert!(resumed.is_some_and(|l| !l.ends_with("decision 0")));
+    first.filter(|l| l.starts_with("↻ resumed"))
 }
 
 /// A runner that crashes after one Ctrl-C is not restarted to play on: the stop was asked
