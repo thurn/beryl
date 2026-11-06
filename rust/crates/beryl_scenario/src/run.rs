@@ -453,8 +453,17 @@ impl Runner {
             .filter(|&&slot| self.s.object(slot).face == FaceIx::DOWN)
             .map(|&slot| self.name(slot))
             .collect();
+        let mut creatures = [0u8; 2];
+        if let Step::Decide(_) = step {
+            for &slot in self.s.battlefield() {
+                if self.s.derived(slot).types.contains(Types::CREATURE) {
+                    creatures[self.s.controller(slot).index()] += 1;
+                }
+            }
+        }
         Position {
             forced: std::mem::take(&mut self.forced),
+            creatures,
             flashback,
             face_down,
             turn: turn.number,
@@ -966,6 +975,22 @@ impl Live {
     /// with its action.
     pub fn picks(&self, d: &Decision) -> Vec<(Choice, Action)> {
         self.runner.picks(d)
+    }
+
+    /// The name of the object candidate `c` of `d` is or names, if it names one: what a
+    /// pick of a card would find it by.
+    pub fn name_of(&self, d: &Decision, c: Choice) -> Option<&'static str> {
+        let r = &self.runner;
+        d.candidates
+            .object(c)
+            .or_else(|| d.candidates.option(c).and_then(|o| r.named(o)))
+            .map(|slot| r.name(slot))
+    }
+
+    /// The name a scenario knows the object in `slot` by: its face up's, or its card's for a
+    /// face-down permanent.
+    pub fn name(&self, slot: Slot) -> &'static str {
+        self.runner.name(slot)
     }
 
     /// The actions run so far.

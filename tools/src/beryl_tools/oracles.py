@@ -35,6 +35,7 @@ from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 from . import cards, forge, paths, xmage
 
@@ -391,8 +392,60 @@ SIM_GAMES = 3
 DIVERGENCES: Path = paths.REPO / "data" / "oracle-divergences.json"
 
 
+# Generated scenarios the dump adds to the cards' own (architecture section 17.2): random
+# positions played by random choices, filed under the card "Generated".
+GENERATED = 100
+
+# Generated scenarios an oracle fails for a gap in its exporter rather than a difference in the
+# rules, by oracle and scenario, with the gap: reported as unsupported. An entry whose scenario
+# passes, or no longer fails, is stale and fails the run, so the list stays current; a change
+# to the generator renames what it covers.
+EXPORTER_GAPS: dict[tuple[str, str], str] = {
+    ("xmage", "Generated 9"): (
+        "Currency Converter's may-exile after a discard: XMage asks a choice the exporter "
+        "does not script"
+    ),
+    ("xmage", "Generated 14"): (
+        "Currency Converter's may-exile after a discard: XMage asks a choice the exporter "
+        "does not script"
+    ),
+    ("xmage", "Generated 55"): (
+        "Thirst for Discovery's two discards after declining the basic land, one of them a "
+        "basic land: the exporter scripts it as the basic land alone"
+    ),
+    ("forge", "Generated 55"): (
+        "Thirst for Discovery's two discards after declining the basic land, one of them a "
+        "basic land: the harness takes it as the basic land alone"
+    ),
+    ("xmage", "Generated 46"): (
+        "Elite Spellbinder's may-exile declined: the exporter scripts no answer XMage takes"
+    ),
+}
+
+
+def apply_gaps(oracle: str, result: dict[str, object]) -> list[str]:
+    """Reports the scenarios of `result` that `EXPORTER_GAPS` lists for `oracle` as unsupported,
+    recounting, and returns the stale entries: those whose scenario did not fail."""
+    scenarios = cast(list[dict[str, object]], result["scenarios"])
+    gaps = {name: why for (o, name), why in EXPORTER_GAPS.items() if o == oracle}
+    stale = set(gaps)
+    for s in scenarios:
+        why = gaps.get(cast(str, s["name"]))
+        if why is None or s["status"] != "fail":
+            continue
+        stale.discard(cast(str, s["name"]))
+        s["status"] = "unsupported"
+        s["reason"] = f"exporter gap: {why}"
+        s.pop("failures", None)
+        s.pop("failure", None)
+    for status in ("pass", "fail", "allowlisted", "unsupported"):
+        result[status] = sum(1 for s in scenarios if s["status"] == status)
+    result["stale_gaps"] = sorted(stale)
+    return sorted(stale)
+
+
 def dump_scenarios(path: Path, log: Path) -> list[dict[str, object]]:
-    """Every card scenario, as `beryl_scenario dump` writes them."""
+    """Every card scenario and the generated ones, as `beryl_scenario dump` writes them."""
     run(
         [
             "cargo",
@@ -405,6 +458,8 @@ def dump_scenarios(path: Path, log: Path) -> list[dict[str, object]]:
             "--",
             "dump",
             str(path),
+            "--generated",
+            str(GENERATED),
         ],
         log,
         paths.RUST,
@@ -543,6 +598,7 @@ def oracle(args: argparse.Namespace) -> int:
             sim_log = log_dir() / "forge-sim.log"
             sim_log.write_text("")
             results["forge"]["sim"] = sim_forge(sim_log, SIM_GAMES)
+            stale = [g for name, r in results.items() for g in apply_gaps(name, r)]
     except (StepFailed, RuntimeError, subprocess.CalledProcessError) as e:
         print(f"oracle: {e}", file=sys.stderr)
         return 1
@@ -555,7 +611,7 @@ def oracle(args: argparse.Namespace) -> int:
     }
     summary["report"] = str(report)
     print(json.dumps(summary, indent=2))
-    return 1 if any(r["fail"] for r in results.values()) else 0
+    return 1 if stale or any(r["fail"] for r in results.values()) else 0
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:

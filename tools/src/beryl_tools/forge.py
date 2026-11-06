@@ -296,14 +296,15 @@ def export(
             actions = cast(list[JsonObject], entry["actions"])
             trace = cast(list[JsonObject], entry.get("trace", []))
             for i, action in enumerate(actions):
-                # A target Beryl chose silently, the only legal one, before this action: the
-                # harness takes it where Forge offers more, such as Sink into Stupor's
-                # "target spell" offering a triggered ability too.
+                # A target or X Beryl chose silently, the only legal one, before this action:
+                # the harness takes it where Forge offers more, such as Sink into Stupor's
+                # "target spell" offering a triggered ability too, or would take X as 0, as
+                # for Thieving Skydiver's kicker {X} with one mana to pay it.
                 if i < len(trace):
                     steps.extend(
                         cast(JsonObject, step(forced))
                         for forced in cast(list[JsonObject], trace[i].get("forced", []))
-                        if forced["kind"] == "Target"
+                        if forced["kind"] in ("Target", "X")
                     )
                 flashback = (
                     cast(list[str], trace[i].get("flashback", []))

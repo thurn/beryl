@@ -294,6 +294,8 @@ class Position:
     forced: list[Json]
     flashback: list[str]
     face_down: list[str]
+    # How many creatures each seat controls.
+    creatures: list[int]
 
 
 @dataclass
@@ -468,6 +470,7 @@ class Exporter:
             forced=cast(list[Json], t["forced"]),
             flashback=cast(list[str], t.get("flashback", [])),
             face_down=cast(list[str], t.get("face_down", [])),
+            creatures=cast(list[int], t.get("creatures", [1, 1])),
         )
 
     def arrange(self) -> None:
@@ -590,6 +593,10 @@ class Exporter:
         searcher = caster
         if FORCED_SEARCHES[cast(str, top["name"])] == "opponent":
             searcher = "playerB" if caster == "playerA" else "playerA"
+            # Winds of Abandon's search counts the opponent's creatures it exiled: with none,
+            # XMage asks nothing either.
+            if p.creatures[1 - cast(int, top["controller"])] == 0:
+                return
         self.emit(f"addTarget({searcher}, TestPlayer.TARGET_SKIP);")
 
     def cast(self, action: Json, p: Position) -> None:

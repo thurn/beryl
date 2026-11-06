@@ -26,10 +26,12 @@ pub use record::{start, take};
 #[cfg(feature = "coverage")]
 mod record {
     use std::cell::RefCell;
-    use std::collections::HashSet;
+    use std::collections::BTreeSet;
 
+    // Write-only state the engine never reads: what a game did cannot depend on it, which
+    // the determinism test's ban on thread-locals is for (architecture §14).
     thread_local! {
-        static HITS: RefCell<Option<HashSet<usize>>> = const { RefCell::new(None) };
+        static HITS: RefCell<Option<BTreeSet<usize>>> = const { RefCell::new(None) };
     }
 
     pub(super) fn hit(address: usize) {
@@ -42,13 +44,13 @@ mod record {
 
     /// Starts recording on this thread, forgetting anything recorded before.
     pub fn start() {
-        HITS.set(Some(HashSet::new()));
+        HITS.set(Some(BTreeSet::new()));
     }
 
     /// Stops recording on this thread, and returns what was recorded since [`start`]: the
     /// addresses of the abilities and casting options exercised. Compare them with
     /// [`super::address`] of a card definition's parts.
-    pub fn take() -> HashSet<usize> {
+    pub fn take() -> BTreeSet<usize> {
         HITS.take().unwrap_or_default()
     }
 }

@@ -925,6 +925,19 @@ in under a minute once built, and writes its full report to
   toughness and counters, so an oracle compares more than the author asserted.
   Which mana sources paid and which cards a shuffle dealt are left out: the
   oracles choose and shuffle their own way.
+- The dump adds 100 generated scenarios (`beryl_cards::generate`, filed under
+  "Generated"): a seeded turn 3 main phase of random lands, permanents and cards
+  in hand from the cube, where player 0 takes one to three actions, either
+  player may respond, and some go to combat, each choice random. A `Live` runner
+  plays each action as it is chosen, so the script replays as written. The
+  generator avoids what the oracles' harnesses would read another way, rather
+  than rules: cards that trigger before the main phase, two cards of one name an
+  action could mean, and tap abilities of mana sources an oracle may have tapped
+  to pay.
+- A generated scenario an oracle fails for a gap in its exporter, not a rules
+  difference, is listed with the gap in `oracles.py`'s `EXPORTER_GAPS` and
+  reported as unsupported; an entry whose scenario no longer fails fails the
+  run.
 - A card an oracle does not implement, or a scenario outside its harness's
   vocabulary, is reported as unsupported, not failed.
 - A disagreement is a bug to investigate, and the Comprehensive Rules decide it.

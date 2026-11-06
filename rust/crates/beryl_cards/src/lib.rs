@@ -9,6 +9,7 @@ pub mod black;
 pub mod blue;
 pub mod colorless;
 pub mod decks;
+pub mod generate;
 pub mod multicolor;
 pub mod names;
 pub mod tokens;

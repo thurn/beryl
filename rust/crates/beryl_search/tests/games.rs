@@ -5,7 +5,7 @@
 
 mod common;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use beryl_engine::coverage;
@@ -62,7 +62,7 @@ fn random_games_keep_the_invariants() {
 
 /// What a long run reached: how often each kind of decision came up, and the abilities and
 /// casting options it never exercised, which random play needs help to find.
-fn report(games: u64, kinds: &HashMap<String, u64>, hits: &HashSet<usize>) {
+fn report(games: u64, kinds: &HashMap<String, u64>, hits: &BTreeSet<usize>) {
     let mut kinds: Vec<_> = kinds.iter().collect();
     kinds.sort_by_key(|&(k, n)| (std::cmp::Reverse(*n), k.clone()));
     println!("fuzz: {games} games; decisions by kind:");
