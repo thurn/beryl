@@ -3,6 +3,7 @@
 //! and its output piped, with no terminal at all.
 
 mod ansi;
+mod exe;
 
 use std::fs;
 use std::io::{BufRead, BufReader};
@@ -11,8 +12,13 @@ use std::process::{Command, Stdio};
 
 use ansi::Term;
 
-const BIN: &str = env!("CARGO_BIN_EXE_beryl_cli");
 const COLS: usize = 100;
+
+/// This crate's directory, as cargo sets it when it runs the test: `env!` would bake in the
+/// path of the checkout the test was compiled in (see `exe`).
+fn manifest() -> PathBuf {
+    PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR"))
+}
 
 /// An empty directory for test `name`.
 fn scratch(name: &str) -> PathBuf {
@@ -24,7 +30,7 @@ fn scratch(name: &str) -> PathBuf {
 
 /// `longthink` on run `dir`, configured by `config` if it is new, piped.
 fn piped(dir: &Path, args: &[&str]) -> std::process::Output {
-    Command::new(BIN)
+    Command::new(exe::beryl_cli())
         .arg("longthink")
         .args(["--run", dir.to_str().unwrap()])
         .args(args)
@@ -50,11 +56,13 @@ fn at_a_terminal(dir: &Path, presses: u32, args: &[&str], env: &[(&str, &str)]) 
     let out = dir.join("tty.out");
     let o = Command::new("python3")
         .arg("-I")
-        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/pty.py"))
+        .arg(manifest().join("tests/pty.py"))
         .arg(&out)
         .args(["40", &COLS.to_string(), &presses.to_string()])
         .arg(dir.join("games.jsonl"))
-        .args(["--", BIN, "longthink", "--run", dir.to_str().unwrap()])
+        .arg("--")
+        .arg(exe::beryl_cli())
+        .args(["longthink", "--run", dir.to_str().unwrap()])
         .args(args)
         .env("BERYL_CACHE", dir)
         .env("TERM", "xterm-256color")

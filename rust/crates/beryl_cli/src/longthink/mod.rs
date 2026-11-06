@@ -302,13 +302,15 @@ fn cache() -> PathBuf {
     }
 }
 
-/// The checkout this binary was built from.
+/// The checkout this binary was built in, four up from it in `rust/target/<profile>/`. Not
+/// `env!("CARGO_MANIFEST_DIR")`: a `rust/target` cloned into another worktree
+/// (`tools/src/beryl_tools/warm.py`) keeps binaries cargo counts as fresh, since it
+/// fingerprints workspace members by relative path, compiled with the old worktree's path.
 fn repo() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(3)
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.ancestors().nth(4).map(Path::to_path_buf))
         .expect("the checkout")
-        .to_path_buf()
 }
 
 /// The run directories under `root` and their numbers, oldest first: `run-001`, `run-002`,

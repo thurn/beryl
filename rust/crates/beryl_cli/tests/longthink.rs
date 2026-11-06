@@ -3,12 +3,13 @@
 //! uninterrupted run writes.
 
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
 use std::thread;
 use std::time::Duration;
 
-const BIN: &str = env!("CARGO_BIN_EXE_beryl_cli");
+mod exe;
 
 /// A ladder small enough for a test: rungs of 4 and 8 iterations, one tree, a pair each.
 const TINY: [&str; 10] = [
@@ -33,7 +34,7 @@ fn scratch(name: &str) -> PathBuf {
 }
 
 fn longthink(cache: &Path, args: &[&str]) -> Output {
-    Command::new(BIN)
+    Command::new(exe::beryl_cli())
         .arg("longthink")
         .args(args)
         .env("BERYL_CACHE", cache)
@@ -215,7 +216,7 @@ fn one_runner_per_run() {
 fn a_game_that_crashes_twice_is_skipped() {
     let dir = scratch("crash");
     tiny(&dir);
-    let o = Command::new(BIN)
+    let o = Command::new(exe::beryl_cli())
         .args(["longthink", "--run", dir.to_str().unwrap(), "--games", "2"])
         .env("BERYL_LONGTHINK_PANIC", "4-v-expert-p000-s0@5")
         .output()
@@ -298,4 +299,40 @@ fn no_arguments_start_or_resume_the_latest_run() {
     );
     let o = longthink(&cache, &["--games", "0"]);
     assert!(text(&o).contains("run-002 (0 games)"), "{}", text(&o));
+}
+
+/// A `rust/target` cloned into another checkout runs the binary beside it, not the one the
+/// test was compiled beside: a copy of this test binary, in a target of its own, spawns that
+/// target's `beryl_cli`, here a script that says where it is.
+#[test]
+fn a_moved_target_runs_its_own_binary() {
+    const MOVED: &str = "BERYL_MOVED_TARGET";
+    if std::env::var_os(MOVED).is_some() {
+        let o = Command::new(exe::beryl_cli()).output().unwrap();
+        assert_eq!(String::from_utf8_lossy(&o.stdout), "moved\n");
+        return;
+    }
+    let dir = scratch("moved");
+    let deps = dir.join("target/debug/deps");
+    fs::create_dir_all(&deps).unwrap();
+    let me = std::env::current_exe().unwrap();
+    let copy = deps.join(me.file_name().unwrap());
+    fs::copy(&me, &copy).unwrap();
+    let script = dir.join("target/debug/beryl_cli");
+    fs::write(&script, "#!/bin/sh\necho moved\n").unwrap();
+    let mut perms = fs::metadata(&script).unwrap().permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(&script, perms).unwrap();
+    let o = Command::new(&copy)
+        .args([
+            "--exact",
+            "a_moved_target_runs_its_own_binary",
+            "--nocapture",
+        ])
+        .env(MOVED, "1")
+        .output()
+        .unwrap();
+    assert!(o.status.success(), "{}", text(&o));
+    assert!(text(&o).contains("1 passed"), "{}", text(&o));
+    let _ = fs::remove_dir_all(&dir);
 }
