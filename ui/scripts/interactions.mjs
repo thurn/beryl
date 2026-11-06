@@ -944,12 +944,17 @@ await check(
         await page.clock.pauseAt(Date.now() + 60_000);
         await page.getByRole("button", { name: "Take Nothing" }).click();
         await page.waitForSelector(".table:not(.table-dimmed)");
-        const halt = page.getByRole("button", { name: "Continue" });
-        assert.ok(!(await halt.isVisible()), "the turn is still playing out");
+        // The turn plays out to the session's halt at the human's main: End Turn.
+        const halt = page.getByRole("button", { name: "End Turn" });
+        assert.ok(
+            !((await halt.isVisible()) && (await halt.isEnabled())),
+            "the turn is still playing out",
+        );
         await page.keyboard.press("Space");
         // The turn's last view at once, with nothing it did lost.
-        await halt.waitFor();
-        assert.ok(await halt.isEnabled(), "Continue is the turn button");
+        await page.waitForSelector(
+            "button:has-text('End Turn'):not([disabled])",
+        );
         await page.waitForSelector(
             `[data-slot="${opponentLand.slot}"][data-zone="battlefield"]`,
         );
@@ -961,7 +966,7 @@ await check(
         assert.equal((await chosen(page)).length, 1, "Space passed nothing");
         // The next press acts on it.
         await page.keyboard.press("Space");
-        assert.deepEqual((await chosen(page)).slice(1), [0], "continued");
+        assert.deepEqual((await chosen(page)).slice(1), [0], "ended the turn");
     },
     { fixture: "opponent-turn", at: lookAt + 1, ready: ".choice" },
 );
