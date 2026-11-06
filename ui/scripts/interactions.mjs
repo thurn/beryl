@@ -1066,7 +1066,7 @@ await check(
     },
 );
 
-// A table with tapped and untapped lands and creatures, and a card Aang's Iceberg exiled.
+// A table with tapped and untapped lands and creatures, and a card Portable Hole exiled.
 const beneathViews = await load("exiled-beneath");
 const beneathView = beneathViews.at(-1);
 const onField = beneathView.objects.filter((o) => o.zone === "battlefield");

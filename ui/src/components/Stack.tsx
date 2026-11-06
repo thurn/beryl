@@ -2,6 +2,7 @@
 // (gold) and targets (cyan).
 import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { CardArt, frameKey, type CardFace } from "./Card";
+import { useTextFit } from "./fit";
 import { RulesText } from "./Mana";
 import {
   retrace,
@@ -37,6 +38,7 @@ export function StackItem({
   unit,
   id,
 }: StackItemProps) {
+  const nameRef = useTextFit(source.name);
   return (
     <div
       id={id}
@@ -45,7 +47,9 @@ export function StackItem({
     >
       <div className="card-rim">
         <div className="card-name-bar">
-          <span className="card-name">{source.name}</span>
+          <span className="card-name" ref={nameRef}>
+            {source.name}
+          </span>
         </div>
         {showArt && <CardArt card={source} />}
         {label && <div className="card-type-bar">{label}</div>}
