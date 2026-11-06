@@ -295,7 +295,14 @@ fn source(
     d: &Derived,
 ) -> Option<(u8, u8, bool, bool)> {
     let o = s.object(slot);
+    // Looked up only past the table's facts, which most permanents stop at.
+    let face = || t.def(o.card).face(o.face);
     let mana = t.facts(o.card, o.face).mana;
+    // The table's facts stand in for reading the face: they must say what reading it would.
+    debug_assert!(
+        mana != ManaFace::Not || read_source(s, t, player, face()).is_none(),
+        "a face the table calls no source makes mana"
+    );
     if mana == ManaFace::Not || d.controller != player || o.flags.has(ObjectFlags::TAPPED) {
         return None;
     }
@@ -310,9 +317,25 @@ fn source(
         other,
     } = mana
     {
-        return Some((kinds, amount, other, false));
+        let plain = Some((kinds, amount, other, false));
+        debug_assert_eq!(
+            plain,
+            read_source(s, t, player, face()),
+            "a plain source's mana, as the table has it"
+        );
+        return plain;
     }
-    let face = t.def(o.card).face(o.face);
+    read_source(s, t, player, face())
+}
+
+/// What [`source`] finds, read from the face of an untapped source `player` controls that may
+/// tap for mana now.
+fn read_source(
+    s: &State,
+    t: &GameTable,
+    player: Seat,
+    face: &Face,
+) -> Option<(u8, u8, bool, bool)> {
     let mut kinds = 0;
     let mut amount = 0;
     // A source whose mana depends on other permanents, as Floodfarm Verge's {U}, is a class
