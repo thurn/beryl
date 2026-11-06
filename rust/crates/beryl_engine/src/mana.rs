@@ -97,7 +97,30 @@ impl Units {
     /// symbols, and the units cover the total. A source that makes several mana of one kind
     /// it chooses counts as several independent units, which the cube's colorless rocks are.
     pub(crate) fn pays(&self, cost: ManaCost) -> bool {
-        self.groups().pays(cost)
+        debug_assert_eq!(cost.x, 0, "X is announced before payment");
+        if self.total() < cost.total(0) {
+            return false;
+        }
+        let present = (0..KINDS)
+            .filter(|&k| cost.symbols[k] > 0)
+            .fold(0u8, |m, k| m | (1 << k));
+        let mut mask = present;
+        while mask != 0 {
+            let need: u32 = (0..KINDS)
+                .filter(|&k| mask & (1 << k) != 0)
+                .map(|k| u32::from(cost.symbols[k]))
+                .sum();
+            let cover: u32 = self
+                .nonempty()
+                .filter(|&(kinds, _)| kinds & mask != 0)
+                .map(|(_, n)| u32::from(n))
+                .sum();
+            if cover < need {
+                return false;
+            }
+            mask = (mask - 1) & present;
+        }
+        true
     }
 
     /// The units grouped by their set of kinds, the form [`Units::pays`] checks.
