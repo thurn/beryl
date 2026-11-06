@@ -1,9 +1,10 @@
 // Captures UI states with headless Playwright WebKit; `by ui-shots` (tools/) serves the UI and
 // runs this. Usage: node scripts/shots.mjs <base-url> <out-dir> <shots.json> [name...]
-// Prints each screenshot's path; exits non-zero if a page logs an error or never settles.
+// Prints each screenshot's path; exits non-zero if a page logs an error, cuts off text
+// (capture.mjs' clippedText) or never settles.
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { launch, openPage, settle } from "./capture.mjs";
+import { clippedText, launch, openPage, settle } from "./capture.mjs";
 
 const [base, out, list, ...only] = process.argv.slice(2);
 if (!base || !out || !list) {
@@ -41,6 +42,8 @@ try {
         }
         const path = join(out, `${shot.name}.png`);
         await page.screenshot({ path, fullPage: true });
+        for (const cut of await clippedText(page))
+            errors.push(`text cut: ${cut}`);
         if (errors.length) {
             failed = true;
             console.error(`ui-shots: ${shot.name}: ${errors.join("\n  ")}`);

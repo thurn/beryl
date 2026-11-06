@@ -313,6 +313,18 @@
       "height": 900
     },
     {
+      "name": "game-trigger-order",
+      "route": "/?fixture=choice-trigger-order#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-trigger-order-1280",
+      "route": "/?fixture=choice-trigger-order#/game",
+      "width": 1280,
+      "height": 800
+    },
+    {
       "name": "game-choice-pay",
       "route": "/?fixture=choice-pay#/game",
       "width": 1600,

@@ -44,3 +44,102 @@ export async function settle(page) {
         );
     });
 }
+
+/** `cutText` once the page has held still: Motion's JavaScript-driven springs are not among
+ * the animations `settle` waits for, so a cut is reported only if it is still there after a
+ * few more settles. On a page whose clock Playwright drives, call `cutText` instead. */
+export async function clippedText(page) {
+    let found = [];
+    for (let tries = 0; tries < 5; tries++) {
+        if (tries > 0) {
+            await page.waitForTimeout(200);
+            await settle(page);
+        }
+        found = await cutText(page);
+        if (!found.length) break;
+    }
+    return found;
+}
+
+/** Every visible text on the page that does not show in full: text overflowing its own
+ * element (an ellipsis, a scrollWidth past its clientWidth), or straddling the edge of an
+ * ancestor that clips it (overflow) or frames it (a border or a background), as a label
+ * wrapping out of a fixed-height pill. Text wholly outside a frame is a label beside it, and a
+ * line's glyph box may stand a little proud of its bar, so vertically only a fraction of a
+ * line counts. A scrolling ancestor ends the search, since text scrolled out of view is
+ * reachable, and so does a card's frame: a card may lie partly off the table or under another.
+ * Each is described by its text and how it is cut, for a failure message. */
+export function cutText(page) {
+    return page.evaluate(() => {
+        const CARD = ".card-slot, .card-back";
+        const scrolls = (v) => v === "auto" || v === "scroll";
+        const boxed = (s) =>
+            s.backgroundImage !== "none" ||
+            !/rgba\(.*, 0\)|transparent/.test(s.backgroundColor) ||
+            parseFloat(s.borderTopWidth) > 0 ||
+            parseFloat(s.borderBottomWidth) > 0;
+        /** Whether `t` crosses an edge of `b` along an axis by more than `slack`. */
+        const straddles = (t, b, [lo, hi], slack) =>
+            t[hi] > b[lo] + slack &&
+            t[lo] < b[hi] - slack &&
+            (t[lo] < b[lo] - slack || t[hi] > b[hi] + slack);
+        const found = [];
+        for (const el of document.querySelectorAll("#root *")) {
+            const nodes = [...el.childNodes].filter(
+                (n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim(),
+            );
+            if (!nodes.length || !el.getClientRects().length) continue;
+            const style = getComputedStyle(el);
+            if (style.visibility !== "visible") continue;
+            let shown = true;
+            for (let a = el; a && shown; a = a.parentElement) {
+                shown = parseFloat(getComputedStyle(a).opacity) > 0;
+            }
+            if (!shown) continue;
+            const text = nodes
+                .map((n) => n.textContent.trim())
+                .join(" ")
+                .slice(0, 80);
+            if (
+                style.display !== "inline" &&
+                el.scrollWidth > el.clientWidth + 1
+            ) {
+                found.push(`"${text}" overflows its box`);
+                continue;
+            }
+            const range = document.createRange();
+            range.setStartBefore(nodes[0]);
+            range.setEndAfter(nodes[nodes.length - 1]);
+            const t = range.getBoundingClientRect();
+            if (t.width === 0 || t.height === 0) continue;
+            const line = 0.3 * parseFloat(style.fontSize);
+            let framed = false;
+            for (
+                let a = el.parentElement;
+                a && a.id !== "root";
+                a = a.parentElement
+            ) {
+                const s = getComputedStyle(a);
+                const [x, y] = [s.overflowX, s.overflowY];
+                const clips = x !== "visible" || y !== "visible";
+                const frames = !framed && boxed(s);
+                if (clips || frames) {
+                    const b = a.getBoundingClientRect();
+                    const cut =
+                        (!scrolls(x) &&
+                            straddles(t, b, ["left", "right"], 1)) ||
+                        (!scrolls(y) &&
+                            straddles(t, b, ["top", "bottom"], line));
+                    if (cut) {
+                        const what = `${a.tagName.toLowerCase()}.${[...a.classList].join(".")}`;
+                        found.push(`"${text}" is cut by ${what}`);
+                        break;
+                    }
+                    framed ||= frames;
+                }
+                if (scrolls(x) || scrolls(y) || a.matches(CARD)) break;
+            }
+        }
+        return found;
+    });
+}

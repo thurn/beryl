@@ -12,9 +12,9 @@
 // `choice-*` fixtures end on decisions the choice overlays ask. Exits non-zero on the first
 // failed check or any page error.
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { launch } from "./capture.mjs";
+import { cutText, launch } from "./capture.mjs";
 
 const [base, fixtures] = process.argv.slice(2);
 if (!base || !fixtures) {
@@ -1633,6 +1633,54 @@ await check(
         assert.deepEqual(await chosen(page), [], "peeking answers nothing");
     },
     { fixture: "choice-pay", at: pay.views.length, ready: ".choice" },
+);
+
+// The trigger-order prompt (still asked under exact stops) names each trigger's source in full,
+// even the cube's longest names: `choice-trigger-order` stops on one between two creatures,
+// renamed here to the two longest names in the cube list, and no text on the page is cut.
+const cube = await readFile(
+    new URL("../../data/vintage-cube-2026-10-07.csv", import.meta.url),
+    "utf8",
+);
+const longest = cube
+    .split("\n")
+    .slice(1)
+    .map((line) => line.replace(/^[^,]*,/, "").replace(/^"(.*)"$/, "$1"))
+    .sort((a, b) => b.length - a.length)
+    .slice(0, 2);
+const order = await lastDecision("choice-trigger-order");
+const sources = order.decision.candidates.map(
+    (c) =>
+        order.views.at(-1).objects.find((o) => o.slot === c.option.source).name,
+);
+assert.equal(sources.length, 2, "the fixture orders two triggers");
+let renamed = await readFile(
+    join(fixtures, "choice-trigger-order.json"),
+    "utf8",
+);
+for (const [i, name] of sources.entries()) {
+    renamed = renamed.replaceAll(JSON.stringify(name).slice(1, -1), longest[i]);
+}
+await writeFile(join(fixtures, "choice-trigger-order-long.json"), renamed);
+await check(
+    "the trigger-order prompt shows the longest names in full",
+    async (page) => {
+        await page.clock.runFor(3000);
+        assert.deepEqual(await cutText(page), [], "no text is cut");
+        const choices = page.locator(".prompt-choices .button");
+        assert.deepEqual(
+            await choices.allTextContents(),
+            longest,
+            "each trigger is named by its source",
+        );
+        await choices.nth(1).click();
+        assert.deepEqual(await settled(page, 1), [1]);
+    },
+    {
+        fixture: "choice-trigger-order-long",
+        at: order.views.length,
+        ready: ".prompt",
+    },
 );
 
 // The stack's arrows (by-l1w.8): a spell aimed at a card beside the stack, an ability aimed at

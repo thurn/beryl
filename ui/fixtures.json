@@ -110,6 +110,14 @@
       "where": ["resolving Mana Tithe"]
     },
     {
+      "name": "choice-trigger-order",
+      "seed": 1,
+      "decks": ["wu-control", "wu-control"],
+      "agents": ["greedy", "greedy"],
+      "stops": "exact",
+      "until": "first triggerOrder decision for seat 0"
+    },
+    {
       "name": "hand-pair",
       "seed": 1,
       "decks": ["wu-control", "wu-control"],
