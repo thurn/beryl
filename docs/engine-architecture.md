@@ -487,8 +487,8 @@ The exact profile offers a choice only across **distinct consequences**:
 
 - A choice with one legal answer is applied silently, but for the target of a
   spell or ability a human casts or activates: a profile naming them
-  (`asks_targets`) asks it, so they choose it on the board and may still take
-  the cast back.
+  (`asks_targets`) asks it, so they choose it on the board and may take back a
+  cast begun at their priority.
 - A player with no legal action passes priority silently. In this cube that is
   rarer than it sounds: an uncracked fetchland, Wasteland, a manland, Lightning
   Bolt or Brainstorm is a legal action at almost every priority pass, so under

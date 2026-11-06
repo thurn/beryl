@@ -86,8 +86,9 @@ pub struct Profile {
     pub full_control: Option<Seat>,
     /// The player, if any, whose target for a spell they cast or an ability they activate is
     /// a decision even when only one is legal: a human, who chooses it on the board, as an
-    /// Arena player clicks it, and may still take the cast back rather than aim it at their
-    /// own permanent. The engine otherwise announces a lone legal target silently (§7.2).
+    /// Arena player clicks it, and may take a cast begun at their priority back rather than
+    /// aim it at their own permanent. The engine otherwise announces a lone legal target
+    /// silently (§7.2).
     ///
     /// - [CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c): "The player
     ///   announces their choice of an appropriate object or player for each target the spell
