@@ -429,24 +429,32 @@ pub(crate) fn still_legal(
 }
 
 /// What every check of one player's options reads, found once for all of them: the mana they
-/// could pay with, found at the first check that needs it, and whether an opponent limits them
-/// to sorcery speed.
+/// could pay with and whether an opponent limits them to sorcery speed, each found at the first
+/// check that needs it.
 struct Situation {
     player: Seat,
     /// None once found if more sources than [`Funds`] holds: a stall for whatever needed them.
     funds: OnceCell<Option<Funds>>,
     full: Cell<bool>,
-    sorcery_speed_only: bool,
+    sorcery_speed_only: OnceCell<bool>,
 }
 
 impl Situation {
-    fn of(s: &State, t: &GameTable, player: Seat) -> Situation {
+    fn of(player: Seat) -> Situation {
         Situation {
             player,
             funds: OnceCell::new(),
             full: Cell::new(false),
-            sorcery_speed_only: sorcery_speed_limiter(s, t, player).is_some(),
+            sorcery_speed_only: OnceCell::new(),
         }
+    }
+
+    /// Whether an opponent's permanent limits the player to sorcery speed: read only for a
+    /// face that could otherwise be cast at instant speed.
+    fn sorcery_speed_only(&self, s: &State, t: &GameTable) -> bool {
+        *self
+            .sorcery_speed_only
+            .get_or_init(|| sorcery_speed_limiter(s, t, self.player).is_some())
     }
 
     /// The player's funds. Most priority decisions offer nothing that costs mana, as an
@@ -471,7 +479,7 @@ impl Situation {
 
 /// Whether a face may be cast now, as far as its card types and the timing rules say: what
 /// [`refused`] checks first, which depends only on the face, so on the card.
-fn in_time(s: &State, now: &Situation, face: &Face, from: From) -> bool {
+fn in_time(s: &State, t: &GameTable, now: &Situation, face: &Face, from: From) -> bool {
     // CR 305.9: "If an object is both a land and another card type, it can be played only as
     // a land. It can't be cast as a spell." CR 712.11c: "Only the face that will be face up
     // on the stack is evaluated to determine if it can be cast."
@@ -480,11 +488,11 @@ fn in_time(s: &State, now: &Situation, face: &Face, from: From) -> bool {
     }
     match from {
         From::Priority => {
-            (instant_speed(s, face, now.player) && !now.sorcery_speed_only)
+            (instant_speed(s, face, now.player) && !now.sorcery_speed_only(s, t))
                 || sorcery_timing(s, now.player)
         }
         // During a resolution the stack is never empty, so a sorcery-speed limit forbids it.
-        From::Resolution { .. } => !now.sorcery_speed_only,
+        From::Resolution { .. } => !now.sorcery_speed_only(s, t),
     }
 }
 
@@ -506,7 +514,7 @@ fn refused(
 ) -> Option<Refusal> {
     let player = now.player;
     let face = t.def(s.object(slot).card).face(face_index);
-    if !in_time(s, now, face, from) {
+    if !in_time(s, t, now, face, from) {
         return Some(Refusal::Timing { by: None });
     }
     let (extra, free) = match from {
@@ -563,7 +571,7 @@ pub(crate) fn refusal(
     slot: Slot,
     land: Option<Refusal>,
 ) -> Result<Option<Refusal>, Full> {
-    let now = Situation::of(s, t, player);
+    let now = Situation::of(player);
     let def = t.def(s.object(slot).card);
     let flashback = permission(s, player, slot).is_some_and(|p| p.flashback);
     let mut most = land;
@@ -628,7 +636,7 @@ fn cast_options(
             let def = t.def(s.object(slot).card);
             def.face_ixs().any(|f| {
                 let face = def.face(f);
-                !face.transformed && in_time(s, now, face, from)
+                !face.transformed && in_time(s, t, now, face, from)
             })
         })
         .collect();
@@ -876,7 +884,7 @@ pub(crate) fn priority_options(
     player: Seat,
     out: &mut Fixed<Opt, 64>,
 ) -> Result<(), Full> {
-    let now = Situation::of(s, t, player);
+    let now = Situation::of(player);
     cast_options(s, t, &now, cast_sources(s, player), From::Priority, out)?;
     activation_options(s, t, &now, out)?;
     now.complete()?;
@@ -1573,7 +1581,7 @@ pub(crate) fn offer_options(
     if s.is_current(object) {
         let mut cards = Bitboard::EMPTY;
         cards.insert(object.slot);
-        let now = Situation::of(s, t, player);
+        let now = Situation::of(player);
         cast_options(s, t, &now, cards, From::Resolution { free }, &mut out)?;
         now.complete()?;
     }
