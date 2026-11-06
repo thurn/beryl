@@ -668,6 +668,20 @@ fn activation_options(
     let mine = s.zone(Seat::P0, Zone::Battlefield) | s.zone(Seat::P1, Zone::Battlefield);
     let objects = mine.iter().filter(|&slot| s.controller(slot) == player);
     let objects: Bitboard = objects.collect::<Bitboard>() | s.zone(player, Zone::Hand);
+    // Most objects have no activated ability; leaving them out before collapsing saves
+    // comparing them. Whether one has is part of what collapsing compares (its card, face
+    // and granted abilities), so the result is the same.
+    let objects: Bitboard = objects
+        .iter()
+        .filter(|&slot| {
+            face_of(s, t, slot)
+                .abilities
+                .iter()
+                .any(|a| a.kind == AbilityKind::Activated)
+                || (s.object(slot).zone == Zone::Battlefield
+                    && s.derived(slot).granted.iter().any(Option::is_some))
+        })
+        .collect();
     for slot in collapse(s, objects).iter() {
         let own = face_of(s, t, slot).abilities.len() as u8;
         let granted = if s.object(slot).zone == Zone::Battlefield {

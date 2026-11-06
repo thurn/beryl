@@ -652,6 +652,9 @@ fn enter_from_hand(
 /// at face-down cards in any other zone or face-down spells or permanents controlled by
 /// another player." Offering one of them, not both, would tell the other player.
 pub(crate) fn collapse(s: &State, candidates: Bitboard) -> Bitboard {
+    if candidates.count() < 2 {
+        return candidates;
+    }
     collapse_ordered(s, candidates.iter())
 }
 
@@ -669,12 +672,13 @@ fn collapse_ordered(s: &State, slots: impl Iterator<Item = Slot>) -> Bitboard {
         // The signature holds the card, so objects of other cards are told apart without
         // building theirs.
         let card = s.object(slot).card;
+        let mut own = None;
         if referenced.contains(slot)
             || s.object(slot).face == FaceIx::DOWN
             || !kept.iter().any(|k| {
                 !referenced.contains(k)
                     && s.object(k).card == card
-                    && signature(k) == signature(slot)
+                    && signature(k) == *own.get_or_insert_with(|| signature(slot))
             })
         {
             kept.insert(slot);

@@ -170,10 +170,19 @@ fn sacrificed_sources(
             // CR 302.6, as for the solver's sources.
             let sick = s.derived(slot).types.intersects(Types::CREATURE)
                 && o.flags.has(ObjectFlags::SUMMONING_SICK);
+            // Checked before collapsing, which compares the card and face this reads.
+            let sacrifices = || {
+                t.def(o.card)
+                    .face(o.face)
+                    .abilities
+                    .iter()
+                    .any(is_sacrificed)
+            };
             s.controller(slot) == player
                 && !o.flags.has(ObjectFlags::TAPPED)
                 && !exclude.contains(slot)
                 && !sick
+                && sacrifices()
         })
         .collect();
     let mut out = Fixed::new();
