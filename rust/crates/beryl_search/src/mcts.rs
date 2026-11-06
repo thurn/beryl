@@ -683,8 +683,8 @@ pub(crate) fn shows_the_same(a: Observation<'_>, b: Observation<'_>) -> bool {
 }
 
 /// The profile below a tree's root. The root decision was offered under the game's profile;
-/// below it the tree plays under the smart stops, with no player's passes asked and no mana
-/// floated ahead of a payment. The payment profile stays, so a payment in progress is never
+/// below it the tree plays under the smart stops, with no player's passes asked, no mana
+/// floated ahead of a payment and no activation offered that would do nothing. The payment profile stays, so a payment in progress is never
 /// asked under another.
 pub(crate) fn smart(s: &mut State) {
     s.set_profile(Profile {
@@ -693,7 +693,7 @@ pub(crate) fn smart(s: &mut State) {
         full_control: None,
         asks_targets: None,
         taps_mana: None,
-        hides_pointless: None,
+        hides_pointless: [true; 2],
         ..s.profile()
     });
 }

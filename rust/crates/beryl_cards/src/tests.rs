@@ -693,13 +693,14 @@ fn a_hidden_pointless_activation_is_left_out() {
                 })
         })
     };
-    assert!(!offers_return(Profile {
-        hides_pointless: Some(Seat::P0),
+    assert!(!offers_return(Profile::SMART));
+    assert!(offers_return(Profile::EXACT));
+    assert!(offers_return(Profile {
+        hides_pointless: [false, true],
         ..Profile::SMART
     }));
-    assert!(offers_return(Profile::SMART));
-    assert!(offers_return(Profile {
-        hides_pointless: Some(Seat::P1),
+    assert!(!offers_return(Profile {
+        hides_pointless: [true, false],
         ..Profile::SMART
     }));
 }

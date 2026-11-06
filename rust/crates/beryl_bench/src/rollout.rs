@@ -363,7 +363,7 @@ mod tests {
         let c = Corpus::new();
         let turns: Vec<u16> = c.positions.iter().map(|s| s.turn().number).collect();
         assert_eq!(turns, CUTS.repeat(2 * GAMES as usize));
-        assert_eq!(stable_hash(&c.positions), 7_271_115_709_002_695_589);
+        assert_eq!(stable_hash(&c.positions), 4_204_548_809_422_254_861);
     }
 
     /// Every rollout of the corpus answers every question as it always has and ends the same
@@ -393,9 +393,9 @@ mod tests {
         let answers: Vec<&[Choice]> = scripts.iter().map(|s| s.answers.as_slice()).collect();
         assert_eq!(
             (summary.decisions, summary.inline, summary.turns),
-            (13_845, 2_010, 1_679)
+            (13_623, 1_989, 1_666)
         );
-        assert_eq!(stable_hash(&(answers, ends)), 7_706_074_336_951_784_095);
+        assert_eq!(stable_hash(&(answers, ends)), 15_822_024_218_088_519_519);
     }
 
     /// The engine benchmark replays the rollouts the whole-rollout benchmark plays: the

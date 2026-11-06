@@ -884,21 +884,23 @@ fn without_floating(mut d: Decision) -> Decision {
 /// `profile` under the human's `stops`. Full control asks the human every priority they get,
 /// as Arena does, even where the engine would pass for them, and offers every activation;
 /// their opponent's passes stay silent. Under the smart stops, the human stops in the steps
-/// they chose, and the agent in the smart stops' own, as its search plays, and an activation
-/// that would do nothing isn't offered ([`Profile::hides_pointless`]). Whatever the stops, the
+/// they chose, and the agent in the smart stops' own, as its search plays, and neither is
+/// offered an activation that would do nothing ([`Profile::hides_pointless`]). Whatever the stops, the
 /// human picks each target of their own spells and abilities, even a lone one, so a click never
 /// aims a spell for them ([`Profile::asks_targets`]), and may tap their mana sources at
 /// priority, floating the mana, as an Arena player clicks a land ([`Profile::taps_mana`]).
 pub fn with_stops(profile: Profile, stops: StopsSetting, human: Seat) -> Profile {
     let mut step_stops = [StepStops::SMART; 2];
     step_stops[human.index()] = stops.step_stops();
+    let mut hides_pointless = profile.hides_pointless;
+    hides_pointless[human.index()] = !stops.full_control;
     Profile {
         stops: stops.stops(),
         step_stops,
         full_control: stops.full_control.then_some(human),
         asks_targets: Some(human),
         taps_mana: Some(human),
-        hides_pointless: (!stops.full_control).then_some(human),
+        hides_pointless,
         ..profile
     }
 }

@@ -186,11 +186,12 @@ pub struct Profile {
     ///   player's mana pool as unspent mana. Each player's mana pool empties at the end of each
     ///   step and phase".
     pub taps_mana: Option<Seat>,
-    /// The player, if any, who isn't offered activations that would do nothing
-    /// ([`crate::card::Needs`]): a human under the smart stops, who isn't stopped for them.
-    /// Full control offers them, as the rules do. Search and rollouts offer them too, so the
-    /// agents' moves don't depend on it.
-    pub hides_pointless: Option<Seat>,
+    /// By seat, whether the player isn't offered activations that would do nothing
+    /// ([`crate::card::Needs`]): everyone under the smart stops, search and rollouts included,
+    /// which then spend no effort on them, and a human not in full control. Full control and
+    /// the exact stops offer them, as the rules do: an activation that does nothing is still
+    /// legal ([CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022)).
+    pub hides_pointless: [bool; 2],
 }
 
 impl Profile {
@@ -204,7 +205,7 @@ impl Profile {
         full_control: None,
         asks_targets: None,
         taps_mana: None,
-        hides_pointless: None,
+        hides_pointless: [false; 2],
     };
     /// The smart stops, for search and, by default, for humans.
     pub const SMART: Profile = Profile {
@@ -216,7 +217,7 @@ impl Profile {
         full_control: None,
         asks_targets: None,
         taps_mana: None,
-        hides_pointless: None,
+        hides_pointless: [true; 2],
     };
 
     /// Whether `player`'s priority now is a decision, given they have a legal action.

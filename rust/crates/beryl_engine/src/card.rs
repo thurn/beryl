@@ -947,9 +947,9 @@ pub struct Ability {
 /// Activating such an ability is legal whatever it would do
 /// ([CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022): "To activate an ability is
 /// to put it onto the stack and pay its costs"), and paying its cost (tapping, say) still
-/// changes the game, so full control offers it. A human under the smart stops isn't offered
-/// it ([`crate::Profile::hides_pointless`]): every line stays legal, since a player may always
-/// pass instead ([CR 117.3d](https://yawgatog.com/resources/magic-rules/#R1173d)).
+/// changes the game, so full control and the exact stops offer it. No player under the smart
+/// stops is offered it, search and rollouts included ([`crate::Profile::hides_pointless`]):
+/// every line stays legal, since a player may always pass instead ([CR 117.3d](https://yawgatog.com/resources/magic-rules/#R1173d)).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Needs {
     /// Nothing: the effect may do something whatever the game.

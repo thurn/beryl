@@ -857,7 +857,7 @@ fn activation_options(
     let player = now.player;
     // Activations that would do nothing, left out for the player the profile hides them from,
     // where a card of the game has one.
-    let prunes = s.profile.hides_pointless == Some(player) && t.needy();
+    let prunes = s.profile.hides_pointless[player.index()] && t.needy();
     let mine = s.zone(Seat::P0, Zone::Battlefield) | s.zone(Seat::P1, Zone::Battlefield);
     let objects = mine.iter().filter(|&slot| s.controller(slot) == player);
     let objects: Bitboard = objects.collect::<Bitboard>() | s.zone(player, Zone::Hand);

@@ -30,5 +30,5 @@
 # the slack isn't banked for the next regression.
 
 benchmark = "rollout_counts::cube_rollout::rollouts::corpus"
-instructions = 436_754_038
+instructions = 429_022_809
 tolerance_percent = 1.0
