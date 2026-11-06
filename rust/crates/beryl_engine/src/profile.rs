@@ -69,6 +69,20 @@ pub struct Profile {
     pub limits: Limits,
     pub breakpoint: Option<Breakpoint>,
     pub payment: Payment,
+    /// The player, if any, whose every priority is a decision, even when passing is all they
+    /// can do: a human under full control, as on Arena, who sees each step and each spell
+    /// they receive priority over. A player receives priority whether or not they can act;
+    /// for everyone else the engine answers a lone pass silently (§7.2).
+    ///
+    /// - [CR 117.3a](https://yawgatog.com/resources/magic-rules/#R1173a): "The active player
+    ///   receives priority at the beginning of most steps and phases".
+    /// - [CR 117.3c](https://yawgatog.com/resources/magic-rules/#R1173c): "If a player has
+    ///   priority when they cast a spell, activate an ability, or take a special action, that
+    ///   player receives priority afterward."
+    /// - [CR 117.3d](https://yawgatog.com/resources/magic-rules/#R1173d): "If a player has
+    ///   priority and chooses not to take any actions, that player passes. ... the next
+    ///   player in turn order receives priority."
+    pub full_control: Option<Seat>,
 }
 
 impl Profile {
@@ -78,6 +92,7 @@ impl Profile {
         limits: Limits::DEFAULT,
         breakpoint: None,
         payment: Payment::KeepMostPayable,
+        full_control: None,
     };
     /// The smart stops, for search and, by default, for humans.
     pub const SMART: Profile = Profile {
@@ -85,6 +100,7 @@ impl Profile {
         limits: Limits::DEFAULT,
         breakpoint: None,
         payment: Payment::KeepMostPayable,
+        full_control: None,
     };
 
     /// Whether `player`'s priority now is a decision, given they have a legal action.
@@ -93,6 +109,12 @@ impl Profile {
             Stops::Exact | Stops::Forced => true,
             Stops::Smart => is_smart_stop(s, player),
         }
+    }
+
+    /// Whether `player`'s priority now is a decision even when passing is all they can do: at
+    /// the breakpoint, or under their full control.
+    pub(crate) fn asks_pass(self, turn: Turn, player: Seat) -> bool {
+        self.breaks_at(turn) || self.full_control == Some(player)
     }
 
     /// Whether the open priority is the active player's first in the breakpoint's step.

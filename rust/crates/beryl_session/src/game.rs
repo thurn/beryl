@@ -470,7 +470,7 @@ impl Game {
     fn change_stops(&mut self, stops: StopsSetting) {
         self.stops = stops;
         self.state
-            .set_profile(with_stops(self.state.profile(), stops));
+            .set_profile(with_stops(self.state.profile(), stops, self.human));
         self.replay.log.push(Entry::Stops(stops));
     }
 
@@ -577,9 +577,13 @@ fn trigger_to_stack(s: &State, t: &GameTable, d: &Decision) -> Choice {
     Choice(u8::try_from(last).expect("at most 64 candidates"))
 }
 
-pub(crate) fn with_stops(profile: Profile, stops: StopsSetting) -> Profile {
+/// `profile` under the human's `stops`. Full control asks the human every priority they get,
+/// as Arena does, even where the engine would pass for them; their opponent's passes stay
+/// silent.
+pub(crate) fn with_stops(profile: Profile, stops: StopsSetting, human: Seat) -> Profile {
     Profile {
         stops: stops.stops(),
+        full_control: (stops == StopsSetting::Exact).then_some(human),
         ..profile
     }
 }

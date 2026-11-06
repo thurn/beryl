@@ -83,6 +83,7 @@ impl Corpus {
                 s.set_profile(Profile {
                     stops: Stops::Smart,
                     breakpoint: None,
+                    full_control: None,
                     ..s.profile()
                 });
                 starts.push(s);

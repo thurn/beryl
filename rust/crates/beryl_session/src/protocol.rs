@@ -464,7 +464,8 @@ pub enum StopsSetting {
     /// The smart stops: main phases, combat after declarations, the opponent's end step, and
     /// whenever the stack is non-empty.
     Smart,
-    /// Every priority with a legal action.
+    /// Full control: every priority the viewer receives, even where passing is all they can
+    /// do.
     Exact,
 }
 

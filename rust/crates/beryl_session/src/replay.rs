@@ -82,7 +82,11 @@ impl ReplayFile {
                 },
             },
         )?;
-        let profile = with_stops(beryl_engine::Profile::SMART, self.stops);
+        let profile = with_stops(
+            beryl_engine::Profile::SMART,
+            self.stops,
+            self.start()?.human,
+        );
         let state = State::new(&table, self.seed, profile);
         Ok((table, state))
     }

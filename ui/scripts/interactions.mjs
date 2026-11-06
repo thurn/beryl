@@ -2200,6 +2200,29 @@ for (const fixture of recorded) {
     );
 }
 
+await check(
+    "the full-control toggle sends the session its new stops",
+    async (page) => {
+        const recorded = JSON.parse(
+            await readFile(join(fixtures, `${FIXTURE}.json`), "utf8"),
+        );
+        const session = recorded.messages.find(
+            (m) => m.kind === "response" && m.command === "start_game",
+        ).value;
+        await page.clock.runFor(2000);
+        await page.click('[aria-label="Settings"]');
+        const toggle = page.locator(".settings-toggle input");
+        assert.equal(await toggle.isChecked(), false, "smart stops at first");
+        await toggle.click();
+        const sent = await page.evaluate(() =>
+            window.berylFixture.calls
+                .filter((c) => c.command === "set_stops")
+                .map((c) => c.args.request),
+        );
+        assert.deepEqual(sent, [{ session, stops: "exact" }]);
+    },
+);
+
 await browser.close();
 if (errors.length) {
     failed = true;

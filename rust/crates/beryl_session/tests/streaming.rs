@@ -167,8 +167,10 @@ fn events_of(begin: &StartGame, log: &[Entry]) -> Vec<Event> {
             .collect::<Vec<_>>()
     });
     let t = GameTable::new(&CARDS, [decks[0].as_slice(), decks[1].as_slice()]).unwrap();
+    // The session's profile: full control asks the human even their passes.
     let profile = Profile {
         stops: begin.stops.stops(),
+        full_control: (begin.stops == StopsSetting::Exact).then_some(begin.human),
         ..Profile::SMART
     };
     let mut s = State::new(&t, begin.seed, profile);

@@ -488,6 +488,8 @@ fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
     let mut messages = vec![
         FixtureMessage::response(ipc::LIST_AGENTS, &agents()),
         FixtureMessage::response(ipc::START_GAME, &session),
+        // A stops change returns nothing; its view is the open decision's again.
+        FixtureMessage::response(ipc::SET_STOPS, &()),
     ];
     // The human's decisions still to record once the stop is reached.
     let mut left = None;
