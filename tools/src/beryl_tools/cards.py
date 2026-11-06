@@ -3,9 +3,9 @@ endpoint, plus the tokens and emblems the cards make (each card's `all_parts`), 
 data/cards.json: per card its printing, artist and per face the display text and image URLs.
 The app downloads the images themselves on demand (rust/crates/beryl_app/src/art.rs).
 
-The default list is both mirror decks' main decks and the basic lands; `--cube` takes the
-whole cube CSV. Scryfall picks each card's default printing; data/card-printings.csv pins another (name, set,
-collector_number). A printing with a name of its own, such as a Through the Omenpaths card
+The default list is the main decks of the mirror and of the Vintage deck before it, and the
+basic lands; `--cube` takes the whole cube CSV. Scryfall picks each card's default printing;
+data/card-printings.csv pins another (name, set, collector_number). A printing with a name of its own, such as a Through the Omenpaths card
 that Arena names differently from Scryfall's oracle, takes its printed name and text, so it
 is keyed by the name the engine knows. `--record FILE` saves the requests and responses,
 which the tests replay.
@@ -34,13 +34,13 @@ BATCH = 75
 # Scryfall asks for 50 to 100 ms between requests; take the top of that range.
 INTERVAL = 0.1
 DATA: Path = paths.REPO / "data"
+# The Milestone 1 mirror deck.
 DECK: Path = (
-    paths.REPO / "docs" / "sample-decks" / "2026-10-17-PrinceJools-wu-control.txt"
-)
-# The Arena mirror deck, whose cards are implemented alongside the deck above until the mirror
-# switch retires that one.
-MIRROR: Path = (
     paths.REPO / "docs" / "sample-decks" / "2025-11-18-17lands-cb8d5d5f-wu-control.txt"
+)
+# The mirror before it, whose implemented cards the UI fixtures still play.
+VINTAGE_DECK: Path = (
+    paths.REPO / "docs" / "sample-decks" / "2026-10-17-PrinceJools-wu-control.txt"
 )
 # The basic lands, which any deck may play.
 BASICS = ("Plains", "Island", "Swamp", "Mountain", "Forest")
@@ -73,8 +73,11 @@ def deck_names(path: Path) -> list[str]:
 
 
 def m1_names() -> list[str]:
-    """The cards of both mirror decks and the basic lands, each once."""
-    return list(dict.fromkeys(deck_names(DECK) + deck_names(MIRROR) + list(BASICS)))
+    """The cards of the Vintage and mirror decks and the basic lands, each once, in the order
+    tests/fixtures/scryfall-m1.json recorded them."""
+    return list(
+        dict.fromkeys(deck_names(VINTAGE_DECK) + deck_names(DECK) + list(BASICS))
+    )
 
 
 def cube_names(path: Path) -> list[str]:

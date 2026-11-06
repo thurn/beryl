@@ -12,8 +12,7 @@ from Through the Omenpaths (Ademi of the Silkchutes is Scryfall's Spectacular
 Spider-Man). Rules support, drafting and AI need only handle these cards. The
 mirror match target is
 `docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt`, a mythic
-drafter's deck from that run. The MTGO Vintage Cube list it replaced
-(`data/vintage-cube-2026-10-07.csv`) stays until the code moves over.
+drafter's deck from that run.
 
 All rules engine code must contain comments referencing the relevant portion of
 the Comprehensive Rules which they are implementing, linking to

@@ -7,13 +7,13 @@ way [benchmarking.md](benchmarking.md) describes.*
 This is the design of the Rust rules engine and of the boundaries that search,
 the desktop UI and drafting build on. It is not an implementation plan:
 milestone plans are Enact epics in beads, written against this document.
-Milestone 1 built the engine, the game UI and the first AI opponents for 29
-cards, a mirror match of the deck in
-`docs/sample-decks/2026-10-17-PrinceJools-wu-control.txt`. It built the
-structures described here, but only the mechanics those cards use. Drafting and
-the rest of the cube come in later milestones. The twenty-two decisions it rests
-on are marked **D1** to **D22** where they apply and listed again in the
-appendix.
+Milestone 1 built the engine, the game UI and the first AI opponents for a
+mirror match of the deck in
+`docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt`, a mythic
+drafter's WU Control deck from the cube's Arena run. It built the structures
+described here, but only the mechanics its cards use. Drafting and the rest of
+the cube come in later milestones. The twenty-two decisions it rests on are
+marked **D1** to **D22** where they apply and listed again in the appendix.
 
 ## 1. Goals
 
@@ -853,17 +853,17 @@ searcher optimistic, which is tuned, not fixed.
 
 ## 16. Crate map (D12)
 
-| Crate            | Holds                                                                                                                                                                 | Depends on                                     |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `beryl_engine`   | `State`, events, layers, mana, combat, turn structure, decisions, the Observation view and determinization, the `CardDef` types, `GameTable` and `EffectCtx`          | nothing in the workspace                       |
-| `beryl_cards`    | One file per card under color directories (so far the 29 WU Control cards), the generated `names` module, the static table, per-card scenarios, `beryl_scenario dump` | `beryl_engine`, `beryl_scenario`               |
-| `beryl_scenario` | Scenario value types, the strict runner, the JSON serialization                                                                                                       | `beryl_engine`                                 |
-| `beryl_search`   | The `Agent` trait, `RandomAgent`, the greedy agent that is also the rollout policy, the expert system, MCTS, evaluation                                               | `beryl_engine`                                 |
-| `beryl_session`  | `Sessions` and their threads, the `PlayerView` protocol and IPC names with generated TypeScript types, replay files                                                   | `beryl_cards`, `beryl_engine`, `beryl_search`  |
-| `beryl_cli`      | Headless games between agents, tournaments, transcripts, UI fixtures recorded from sessions                                                                           | `beryl_cards`, `beryl_search`, `beryl_session` |
-| `beryl_draft`    | Pack generation, draft state, the draft bot, deckbuilding (not yet created)                                                                                           | `beryl_cards`                                  |
-| `beryl_bench`    | Benchmark support and the `_counts`, `_abba` and `_timing` targets of the example and of the cube rollout benchmark                                                   | `beryl_cards`, `beryl_engine`, `beryl_search`  |
-| `beryl_app`      | The Tauri shell: IPC commands and events around `beryl_session`, the card-art cache                                                                                   | all of the above                               |
+| Crate            | Holds                                                                                                                                                                                      | Depends on                                     |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| `beryl_engine`   | `State`, events, layers, mana, combat, turn structure, decisions, the Observation view and determinization, the `CardDef` types, `GameTable` and `EffectCtx`                               | nothing in the workspace                       |
+| `beryl_cards`    | One file per card under color directories (so far the WU Control mirror's cards and a few more), the generated `names` module, the static table, per-card scenarios, `beryl_scenario dump` | `beryl_engine`, `beryl_scenario`               |
+| `beryl_scenario` | Scenario value types, the strict runner, the JSON serialization                                                                                                                            | `beryl_engine`                                 |
+| `beryl_search`   | The `Agent` trait, `RandomAgent`, the greedy agent that is also the rollout policy, the expert system, MCTS, evaluation                                                                    | `beryl_engine`                                 |
+| `beryl_session`  | `Sessions` and their threads, the `PlayerView` protocol and IPC names with generated TypeScript types, replay files                                                                        | `beryl_cards`, `beryl_engine`, `beryl_search`  |
+| `beryl_cli`      | Headless games between agents, tournaments, transcripts, UI fixtures recorded from sessions                                                                                                | `beryl_cards`, `beryl_search`, `beryl_session` |
+| `beryl_draft`    | Pack generation, draft state, the draft bot, deckbuilding (not yet created)                                                                                                                | `beryl_cards`                                  |
+| `beryl_bench`    | Benchmark support and the `_counts`, `_abba` and `_timing` targets of the example and of the cube rollout benchmark                                                                        | `beryl_cards`, `beryl_engine`, `beryl_search`  |
+| `beryl_app`      | The Tauri shell: IPC commands and events around `beryl_session`, the card-art cache                                                                                                        | all of the above                               |
 
 The engine knows no card and no card knows the engine's internals: cards use
 `EffectCtx` and the table types only. One card edit recompiles `beryl_cards`,

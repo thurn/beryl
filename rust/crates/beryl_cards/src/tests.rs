@@ -14,9 +14,9 @@ use crate::{CARDS, SCENARIOS, blue, decks, names};
 
 const CSV: &str = "data/arena-powered-cube-2025-10-30.csv";
 const BASIC_LANDS: [&str; 5] = ["Plains", "Island", "Swamp", "Mountain", "Forest"];
-/// Implemented cards the cube dropped, which `decks::WU_CONTROL` still plays. The mirror switch
-/// (epic by-0w2) deletes them, and this list with them.
-const RETIRED: [&str; 3] = [
+/// Implemented cards outside the cube, which `decks::VINTAGE_WU_CONTROL` plays. Beryl keeps
+/// every card it implements.
+const OUTSIDE_CUBE: [&str; 3] = [
     "Aang's Iceberg",
     "Swift Reconfiguration",
     "Sphinx of False Conclusions",
@@ -69,7 +69,7 @@ fn generate(csv: &str) -> String {
         "//! Every card name as a constant, so a misspelled card is a compile error.\n\
          //!\n\
          //! Generated from `data/arena-powered-cube-2025-10-30.csv`, the basic lands and the\n\
-         //! retired cards by the `names_are_current` test. Regenerate with\n\
+         //! implemented cards outside the cube by the `names_are_current` test. Regenerate with\n\
          //! `BERYL_UPDATE_NAMES=1 cargo test -p beryl_cards names_are_current`.\n\n",
     );
     let mut seen = std::collections::BTreeSet::new();
@@ -85,8 +85,8 @@ fn generate(csv: &str) -> String {
     for name in BASIC_LANDS {
         emit(&mut out, name);
     }
-    out.push_str("\n// Cards the cube dropped that the WU control deck still plays.\n");
-    for name in RETIRED {
+    out.push_str("\n// Implemented cards outside the cube.\n");
+    for name in OUTSIDE_CUBE {
         emit(&mut out, name);
     }
     out
@@ -119,11 +119,42 @@ fn constants_spell_names_plainly() {
     );
 }
 
+/// A decklist file's main deck: its `<count> <name>` lines up to the blank line before the
+/// sideboard.
+fn main_deck(path: &str) -> Vec<(u8, String)> {
+    let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(path)).unwrap();
+    text.lines()
+        .take_while(|line| !line.trim().is_empty())
+        .map(|line| {
+            let (count, name) = line.split_once(' ').expect("a <count> <name> line");
+            (count.parse().unwrap(), name.trim().to_string())
+        })
+        .collect()
+}
+
 #[test]
-fn the_wu_control_deck_is_forty_cards_of_twenty_nine_names() {
-    assert_eq!(decks::WU_CONTROL.len(), 29);
-    let total: u32 = decks::WU_CONTROL.iter().map(|&(n, _)| u32::from(n)).sum();
-    assert_eq!(total, 40);
+fn the_decks_are_forty_cards_matching_their_decklist_files() {
+    for (deck, path, names) in [
+        (
+            decks::WU_CONTROL,
+            "../../../docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt",
+            30,
+        ),
+        (
+            decks::VINTAGE_WU_CONTROL,
+            "../../../docs/sample-decks/2026-10-17-PrinceJools-wu-control.txt",
+            29,
+        ),
+    ] {
+        assert_eq!(deck.len(), names, "{path}");
+        let total: u32 = deck.iter().map(|&(n, _)| u32::from(n)).sum();
+        assert_eq!(total, 40, "{path}");
+        let mut ours: Vec<(u8, String)> = deck.iter().map(|&(n, c)| (n, c.to_string())).collect();
+        let mut theirs = main_deck(path);
+        ours.sort_unstable_by(|a, b| a.1.cmp(&b.1));
+        theirs.sort_unstable_by(|a, b| a.1.cmp(&b.1));
+        assert_eq!(ours, theirs, "{path}");
+    }
 }
 
 /// The UI draws a card, token or emblem from `data/cards.json` by the name the engine gives

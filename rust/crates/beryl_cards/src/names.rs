@@ -1,7 +1,7 @@
 //! Every card name as a constant, so a misspelled card is a compile error.
 //!
 //! Generated from `data/arena-powered-cube-2025-10-30.csv`, the basic lands and the
-//! retired cards by the `names_are_current` test. Regenerate with
+//! implemented cards outside the cube by the `names_are_current` test. Regenerate with
 //! `BERYL_UPDATE_NAMES=1 cargo test -p beryl_cards names_are_current`.
 
 pub const ADELINE_RESPLENDENT_CATHAR: &str = "Adeline, Resplendent Cathar";
@@ -552,7 +552,7 @@ pub const SWAMP: &str = "Swamp";
 pub const MOUNTAIN: &str = "Mountain";
 pub const FOREST: &str = "Forest";
 
-// Cards the cube dropped that the WU control deck still plays.
+// Implemented cards outside the cube.
 pub const AANGS_ICEBERG: &str = "Aang's Iceberg";
 pub const SWIFT_RECONFIGURATION: &str = "Swift Reconfiguration";
 pub const SPHINX_OF_FALSE_CONCLUSIONS: &str = "Sphinx of False Conclusions";

@@ -5,7 +5,7 @@
 use std::path::Path;
 use std::sync::mpsc::channel;
 
-use beryl_cards::decks::{WU_CONTROL, fuzz_deck};
+use beryl_cards::decks::{VINTAGE_WU_CONTROL, WU_CONTROL, fuzz_deck};
 use beryl_session::ipc::{self, Fixture, FixtureMessage};
 use beryl_session::protocol::{
     Candidate, CardType, Combat, Counter, Kind, ObjectView, Side, StackItem, Step, TargetRef,
@@ -27,7 +27,8 @@ struct Definitions {
 struct Definition {
     name: String,
     seed: u64,
-    /// Each seat's deck: `wu-control`, or `fuzz:<seed>` for a fuzz deck.
+    /// Each seat's deck: `wu-control` (the mirror), `vintage-wu-control` (the mirror before,
+    /// for cards outside the mirror) or `fuzz:<seed>` for a fuzz deck.
     decks: [String; 2],
     /// The agent playing each seat. The stopping condition's seat is the human's.
     agents: [String; 2],
@@ -524,6 +525,8 @@ fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
 fn deck(name: &str) -> Result<Vec<(u8, String)>, String> {
     let list = if name == "wu-control" {
         WU_CONTROL.to_vec()
+    } else if name == "vintage-wu-control" {
+        VINTAGE_WU_CONTROL.to_vec()
     } else if let Some(seed) = name.strip_prefix("fuzz:") {
         fuzz_deck(
             seed.parse()

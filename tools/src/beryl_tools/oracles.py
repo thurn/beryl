@@ -69,7 +69,7 @@ FORGE = Oracle(
 )
 ORACLES: tuple[Oracle, ...] = (XMAGE, FORGE)
 
-# The smoke's XMage test class, for a card in the Milestone 1 deck.
+# The smoke's XMage test class, for a card Beryl implements.
 XMAGE_SMOKE_TEST = "EliteSpellbinderTest"
 
 

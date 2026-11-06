@@ -78,7 +78,7 @@ fn the_hidden_search_decides_the_same_on_a_redeterminized_state() {
     let mut omniscient_differs = false;
     // The first position is one where what the omniscient search reads changes its rollouts'
     // results.
-    for (i, (s, d)) in positions(&t, [40, 5]).iter().enumerate() {
+    for (i, (s, d)) in positions(&t, [45, 5]).iter().enumerate() {
         let det = observe(s, &t, &mut Scratch::new(), d.player).determinize(&t, &mut rng);
         assert!(
             Slot::all().any(|slot| det.card(slot) != s.card(slot)),
