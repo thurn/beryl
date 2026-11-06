@@ -2022,14 +2022,14 @@ const menuSlots = [
 ]
     .filter(([, cs]) => cs.length > 1)
     .map(([slot]) => slot);
-const jace = menuView.objects.find(
+const sculptor = menuView.objects.find(
     (o) => o.name === "Jace, the Mind Sculptor" && o.zone === "battlefield",
 ).slot;
 const stupor = menuView.objects.find(
     (o) => o.name === "Sink into Stupor" && o.zone === "hand",
 ).slot;
 assert.ok(
-    menuSlots.includes(jace) && menuSlots.includes(stupor),
+    menuSlots.includes(sculptor) && menuSlots.includes(stupor),
     "Jace and Sink into Stupor each offer more than one thing",
 );
 await check(
@@ -2042,7 +2042,7 @@ await check(
             assert.ok(!text.includes("{"), `no braces in ${text}`);
             await page.keyboard.press("Escape");
         }
-        await page.click(`[data-slot="${jace}"]`);
+        await page.click(`[data-slot="${sculptor}"]`);
         const items = page.locator(".action-menu-item");
         assert.deepEqual(
             await items
