@@ -743,6 +743,16 @@ pub const BOARDS: &[Scenario] = &[
             Action::activate(P0, TEFERI_TIME_RAVELER, 2),
             Action::answer(P0, DecisionKind::TargetCount, Pick::Number { n: 1 }),
         ]),
+    // Oust with Jace, Vryn's Prodigy the only creature: its one legal target is the human's
+    // own, which they are still asked to choose.
+    Scenario::new("target-own")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[Permanent::new(JACE_VRYNS_PRODIGY), PLAINS_, ISLAND_])
+        .hand(P0, &[OUST])
+        .library(P0, LANDS)
+        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[Action::cast(P0, OUST)]),
     // Snapcaster Mage attacks a player who controls The Wandering Emperor, so the engine asks
     // what it attacks.
     Scenario::new("attack-past-walker")

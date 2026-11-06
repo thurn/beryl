@@ -651,6 +651,7 @@ fn smart(s: &mut State) {
         stops: Stops::Smart,
         breakpoint: None,
         full_control: None,
+        asks_targets: None,
         ..s.profile()
     });
 }

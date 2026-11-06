@@ -255,7 +255,9 @@ fn advance<const STEPS: bool>(
         };
         debug_assert!(!d.is_empty());
         let priority = d.kind == DecisionKind::Priority;
-        let forced = d.len() == 1 && (priority || s.profile.stops != Stops::Forced);
+        let forced = d.len() == 1
+            && (priority || s.profile.stops != Stops::Forced)
+            && !s.profile.asks_lone(s, &d);
         let silent = (forced || (priority && !s.profile.stops_for(s, d.player)))
             && !(priority && s.profile.asks_pass(s.turn, d.player));
         if silent {

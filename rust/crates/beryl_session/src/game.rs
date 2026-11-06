@@ -807,11 +807,13 @@ fn trigger_to_stack(s: &State, t: &GameTable, d: &Decision) -> Choice {
 
 /// `profile` under the human's `stops`. Full control asks the human every priority they get,
 /// as Arena does, even where the engine would pass for them; their opponent's passes stay
-/// silent.
+/// silent. Whatever the stops, the human picks each target of their own spells and abilities,
+/// even a lone one, so a click never aims a spell for them ([`Profile::asks_targets`]).
 pub fn with_stops(profile: Profile, stops: StopsSetting, human: Seat) -> Profile {
     Profile {
         stops: stops.stops(),
         full_control: (stops == StopsSetting::Exact).then_some(human),
+        asks_targets: Some(human),
         ..profile
     }
 }

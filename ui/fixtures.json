@@ -254,6 +254,11 @@
       "after": 1
     },
     {
+      "name": "target-own",
+      "board": "target-own",
+      "until": "first target decision for seat 0"
+    },
+    {
       "name": "attack-past-walker",
       "board": "attack-past-walker",
       "until": "first attackTarget decision for seat 0",

@@ -207,6 +207,7 @@ INTERACTION_FIXTURES = [
     "pay-life",
     "crowded",
     "target-up-to-one",
+    "target-own",
     "attack-past-walker",
     "choice-explore",
     "choice-loot",

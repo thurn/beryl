@@ -2,9 +2,10 @@
 //! §15).
 
 use crate::combat;
+use crate::decision::{Decision, DecisionKind};
 use crate::ids::Seat;
 use crate::observation::Observation;
-use crate::state::{State, Turn, TurnStep};
+use crate::state::{Pending, State, Turn, TurnStep};
 use crate::turn::any_attacking;
 
 /// Where players get priority as a decision.
@@ -83,6 +84,18 @@ pub struct Profile {
     ///   priority and chooses not to take any actions, that player passes. ... the next
     ///   player in turn order receives priority."
     pub full_control: Option<Seat>,
+    /// The player, if any, whose target for a spell they cast or an ability they activate is
+    /// a decision even when only one is legal: a human, who chooses it on the board, as an
+    /// Arena player clicks it, and may still take the cast back rather than aim it at their
+    /// own permanent. The engine otherwise announces a lone legal target silently (§7.2).
+    ///
+    /// - [CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c): "The player
+    ///   announces their choice of an appropriate object or player for each target the spell
+    ///   requires."
+    /// - [CR 601.2](https://yawgatog.com/resources/magic-rules/#R6012): if the casting cannot
+    ///   be completed, "the casting of the spell is illegal; the game returns to the moment
+    ///   before the casting of that spell was proposed".
+    pub asks_targets: Option<Seat>,
 }
 
 impl Profile {
@@ -93,6 +106,7 @@ impl Profile {
         breakpoint: None,
         payment: Payment::KeepMostPayable,
         full_control: None,
+        asks_targets: None,
     };
     /// The smart stops, for search and, by default, for humans.
     pub const SMART: Profile = Profile {
@@ -101,6 +115,7 @@ impl Profile {
         breakpoint: None,
         payment: Payment::KeepMostPayable,
         full_control: None,
+        asks_targets: None,
     };
 
     /// Whether `player`'s priority now is a decision, given they have a legal action.
@@ -115,6 +130,16 @@ impl Profile {
     /// the breakpoint, or under their full control.
     pub(crate) fn asks_pass(self, turn: Turn, player: Seat) -> bool {
         self.breaks_at(turn) || self.full_control == Some(player)
+    }
+
+    /// Whether `d`, a decision with one candidate, is still asked: a target of a spell its
+    /// player casts or an ability they activate, while [`Profile::asks_targets`] names them.
+    /// A triggered ability's lone target stays silent, as nothing can take it back
+    /// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d)).
+    pub(crate) fn asks_lone(self, s: &State, d: &Decision) -> bool {
+        d.kind == DecisionKind::Target
+            && self.asks_targets == Some(d.player)
+            && matches!(s.pending, Pending::Casting(c) if !c.triggered)
     }
 
     /// Whether the open priority is the active player's first in the breakpoint's step.

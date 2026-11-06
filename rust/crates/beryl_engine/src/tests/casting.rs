@@ -115,6 +115,70 @@ fn a_target_is_chosen_among_the_legal_ones() {
     assert_eq!(g.s.object(mine).zone, Zone::Battlefield);
 }
 
+/// A game whose profile asks `asks` for a lone target of their own cast
+/// ([`Profile::asks_targets`]).
+fn asking(asks: impl FnOnce(&Game) -> Option<crate::ids::Seat>) -> Game {
+    let mut g = Game::new(Profile::EXACT);
+    let asks_targets = asks(&g);
+    g.s.set_profile(Profile {
+        asks_targets,
+        ..Profile::EXACT
+    });
+    g
+}
+
+/// Answers the open decision with `opt` and plays on, under the profile alone, to the next.
+fn answer(g: &mut Game, opt: Opt) -> crate::Decision {
+    let d = g.decide();
+    let c = index_of(&d, opt).unwrap_or_else(|| panic!("{opt:?} not offered in {d:?}"));
+    crate::apply(&mut g.s, &g.t, &mut g.x, &mut crate::Replay, c);
+    g.decide()
+}
+
+#[test]
+fn a_lone_target_of_a_cast_is_asked_only_of_the_player_the_profile_names() {
+    for named in [false, true] {
+        let mut g = asking(|g| named.then_some(g.me));
+        let removal = g.give(g.me, "Test Removal", Zone::Hand);
+        g.give(g.me, "Test Land", Zone::Battlefield);
+        g.give(g.me, "Test Land", Zone::Battlefield);
+        let mine = g.give(g.me, "Test Bear", Zone::Battlefield);
+        let d = answer(&mut g, cast(removal));
+        if named {
+            // CR 601.2c: the player announces the target, here the only one, their own bear.
+            assert_eq!((d.kind, d.player, d.len()), (DecisionKind::Target, g.me, 1));
+            assert_eq!(super::cast::object_index(&d, mine), Some(Choice(0)));
+        } else {
+            // Announced silently, and resolved as both players can only pass.
+            assert_ne!(d.kind, DecisionKind::Target);
+            assert_eq!(g.s.object(mine).zone, Zone::Graveyard);
+        }
+    }
+    // Naming the other player asks this one nothing.
+    let mut g = asking(|g| Some(g.them));
+    let removal = g.give(g.me, "Test Removal", Zone::Hand);
+    g.give(g.me, "Test Land", Zone::Battlefield);
+    g.give(g.me, "Test Land", Zone::Battlefield);
+    let mine = g.give(g.me, "Test Bear", Zone::Battlefield);
+    assert_ne!(answer(&mut g, cast(removal)).kind, DecisionKind::Target);
+    assert_eq!(g.s.object(mine).zone, Zone::Graveyard);
+}
+
+#[test]
+fn a_lone_target_of_a_trigger_is_chosen_silently_even_for_the_player_the_profile_names() {
+    let mut g = asking(|g| Some(g.me));
+    let stinger = g.give(g.me, "Test Stinger", Zone::Hand);
+    g.give(g.me, "Test Land", Zone::Battlefield);
+    let bear = g.give(g.them, "Test Bear", Zone::Battlefield);
+    g.pick(cast(stinger));
+    g.pass_both();
+    assert_eq!(g.s.object(stinger).zone, Zone::Battlefield);
+    // CR 603.3d: the trigger goes on the stack aimed at the one opposing creature, unasked,
+    // and resolves as both players can only pass.
+    assert_ne!(g.decide().kind, DecisionKind::Target);
+    assert_eq!(g.s.object(bear).zone, Zone::Graveyard);
+}
+
 #[test]
 fn counter_unless_pays_asks_the_spells_controller_only_when_they_can_pay() {
     for can_pay in [false, true] {

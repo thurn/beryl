@@ -3647,6 +3647,52 @@ await check(
     upToRun,
 );
 
+// A click never aims a spell for the player (`target-own`: Oust, whose one legal target is
+// the human's own Jace, Vryn's Prodigy): the click starts the cast, the target is asked on the
+// board, and Escape takes the cast back.
+const own = await load("target-own");
+const [ownBefore, ownAfter] = own.slice(-2);
+const oust = ownBefore.objects.find((o) => o.name === "Oust").slot;
+const oustCast = ownBefore.status.decision.candidates.findIndex(
+    (c) => c.option.kind === "cast" && c.option.slot === oust,
+);
+const ownTarget = ownAfter.status.decision;
+assert.equal(ownTarget.kind, "target", "the fixture asks Oust's target");
+assert.deepEqual(
+    ownTarget.candidates.map((c) => c.label),
+    ["Jace, Vryn's Prodigy"],
+    "the human's own creature is the one target",
+);
+await check(
+    "a click on a spell with one target, the player's own, asks it",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.click(slotOf(oust));
+        const targeting = page.getByRole("dialog", {
+            name: "Choose a target for Oust",
+        });
+        await targeting.waitFor();
+        assert.ok(
+            await page.$(
+                `${slotOf(ownTarget.candidates[0].option.slot)} .card-target`,
+            ),
+            "the target glows",
+        );
+        await page.clock.runFor(2000);
+        assert.deepEqual(await chosen(page), [oustCast], "only the cast sent");
+        await page.keyboard.press("Escape");
+        await page.waitForSelector(`${slotOf(oust)}[data-zone="hand"]`);
+        assert.equal(await cancels(page), 1, "cancelled");
+        assert.equal(await targeting.count(), 0, "the target is not asked");
+        assert.deepEqual(await chosen(page), [oustCast]);
+    },
+    {
+        fixture: "target-own",
+        at: own.length - 1,
+        ready: `${slotOf(oust)}[data-zone="hand"]`,
+    },
+);
+
 // An attack on a player who controls a planeswalker (`attack-past-walker`: Snapcaster Mage
 // against The Wandering Emperor) attacks the player unasked: the engine's question of what it
 // attacks (CR 508.1b) is answered from the declaration.
