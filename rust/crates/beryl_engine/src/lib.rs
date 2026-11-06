@@ -41,7 +41,7 @@ pub use decision::{
     Answers, Ask, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, Replay, StallReason,
     Step,
 };
-pub use engine::{Counts, Scratch, apply, next, next_in_step, observe, view};
+pub use engine::{Counts, Scratch, apply, apply_decided, next, next_in_step, observe, view};
 pub use ids::{CardIx, Seat, Slot};
 pub use invariants::{At, Violation};
 pub use observation::Observation;

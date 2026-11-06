@@ -27,7 +27,7 @@ use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::state::{ObjectFlags, StackEntry};
 use beryl_engine::{
     Answers, Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome,
-    Scratch, Seat, Slot, State, Step, Zone, apply, next,
+    Scratch, Seat, Slot, State, Step, Zone, apply_decided, next,
 };
 
 use crate::values::{CardInfo, CardValues};
@@ -642,7 +642,7 @@ pub fn rollout(s: &mut State, t: &GameTable, x: &mut Scratch, policy: &RolloutPo
             Step::Over(outcome) => return outcome,
             Step::Decide(d) => {
                 let c = policy.choose(t, Observation::new(s, d.player), &d);
-                apply(s, t, x, &mut inline, c);
+                apply_decided(s, t, x, &mut inline, &d, c);
             }
         }
     }

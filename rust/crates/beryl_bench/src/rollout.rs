@@ -20,7 +20,7 @@ use beryl_cards::CARDS;
 use beryl_cards::decks::WU_CONTROL;
 use beryl_engine::{
     Answers, Choice, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch, State,
-    Step, Stops, apply, next, observe,
+    Step, Stops, apply, apply_decided, next, observe,
 };
 use beryl_search::{Agent, ExpertAgent, GreedyAgent, Inline, RolloutPolicy, rollout};
 
@@ -233,7 +233,7 @@ pub fn record(
                     summary.decisions += 1;
                     let c = policy.choose(t, Observation::new(&s, d.player), &d);
                     a.answers.push(c);
-                    apply(&mut s, t, &mut x, &mut a, c);
+                    apply_decided(&mut s, t, &mut x, &mut a, &d, c);
                 }
             }
         }
@@ -294,9 +294,9 @@ pub fn replay(t: &GameTable, scripts: &[Script], s: &mut State, x: &mut Scratch)
         let outcome = loop {
             match next(s, t, x, &mut a) {
                 Step::Over(outcome) => break outcome,
-                Step::Decide(_) => {
+                Step::Decide(d) => {
                     let c = *a.answers.next().expect("a scripted answer");
-                    apply(s, t, x, &mut a, c);
+                    apply_decided(s, t, x, &mut a, &d, c);
                 }
             }
         };

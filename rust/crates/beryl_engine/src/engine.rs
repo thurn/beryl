@@ -261,6 +261,31 @@ pub fn apply(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers,
     x.settle_counts();
 }
 
+/// Applies an answer to `d` as [`apply`] does, without building the decision again: `d` must
+/// be the decision `next` returned for this state, unchanged since, which debug builds check.
+/// The hot loops of search, which hold that decision, save rebuilding every option of it.
+pub fn apply_decided(
+    s: &mut State,
+    t: &GameTable,
+    x: &mut Scratch,
+    a: &mut dyn Answers,
+    d: &Decision,
+    c: Choice,
+) {
+    debug_assert!(s.outcome.is_none(), "apply after the game ended");
+    layers::refresh(s, t, &mut x.events);
+    #[cfg(debug_assertions)]
+    {
+        let work = x.events.work;
+        let built = decision(s, t, &mut x.events);
+        x.events.work = work;
+        debug_assert_eq!(built, Ok(*d), "a decision other than the open one");
+    }
+    debug_assert!(usize::from(c.0) < d.len(), "choice out of range");
+    perform_or_stall(s, t, x, a, d, c);
+    x.settle_counts();
+}
+
 #[cold]
 fn stall(s: &mut State, reason: StallReason) {
     s.outcome = Some(Outcome::Stalled(reason));
