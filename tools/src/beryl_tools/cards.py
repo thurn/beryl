@@ -5,7 +5,10 @@ The app downloads the images themselves on demand (rust/crates/beryl_app/src/art
 
 The default list is the Milestone 1 main deck; `--cube` takes the whole cube CSV. Scryfall
 picks each card's default printing; data/card-printings.csv pins another (name, set,
-collector_number). `--record FILE` saves the requests and responses, which the tests replay.
+collector_number). A printing with a name of its own, such as a Through the Omenpaths card
+that Arena names differently from Scryfall's oracle, takes its printed name and text, so it
+is keyed by the name the engine knows. `--record FILE` saves the requests and responses,
+which the tests replay.
 
 Scryfall's API guidelines, followed here: https://scryfall.com/docs/api
 """
@@ -34,7 +37,7 @@ DATA: Path = paths.REPO / "data"
 DECK: Path = (
     paths.REPO / "docs" / "sample-decks" / "2026-10-17-PrinceJools-wu-control.txt"
 )
-CUBE: Path = DATA / "vintage-cube-2026-10-07.csv"
+CUBE: Path = DATA / "arena-powered-cube-2025-10-30.csv"
 PRINTINGS: Path = DATA / "card-printings.csv"
 OUTPUT: Path = DATA / "cards.json"
 IMAGE_VERSIONS = ("art_crop", "normal", "large")
@@ -124,6 +127,8 @@ CARD_FIELDS: tuple[str, ...] = (
     "image_uris",
     "card_faces",
     "all_parts",
+    "printed_name",
+    "printed_text",
     *FACE_FIELDS,
 )
 PART_FIELDS = ("id", "component", "type_line")
@@ -191,15 +196,18 @@ def collection(post: Post, identifiers: list[Identifier]) -> list[Json]:
 def faces(card: Json) -> list[Json]:
     """Per face its display text and images. Single-faced cards keep these on the card;
     split and adventure faces share the card's single image and, sometimes, its colors.
+    A printing's own name and text, where Scryfall gives them, replace the oracle's.
     """
     raw = cast(list[Json], card.get("card_faces") or [card])
     out: list[Json] = []
     for face in raw:
         images = cast(Json, face.get("image_uris") or card["image_uris"])
-        entry: Json = {"name": face["name"]}
+        entry: Json = {"name": face.get("printed_name", face["name"])}
         for name in FACE_FIELDS:
             if name in face:
                 entry[name] = face[name]
+        if "printed_text" in face:
+            entry["oracle_text"] = face["printed_text"]
         entry["colors"] = face.get("colors", card.get("colors", []))
         entry["images"] = {v: images[v] for v in IMAGE_VERSIONS}
         out.append(entry)
@@ -207,15 +215,20 @@ def faces(card: Json) -> list[Json]:
 
 
 def entry(card: Json, **extra: object) -> Json:
+    out = faces(card)
+    printed = "printed_name" in card or any(
+        "printed_name" in f for f in cast(list[Json], card.get("card_faces", []))
+    )
+    name = " // ".join(str(f["name"]) for f in out) if printed else card["name"]
     return {
-        "name": card["name"],
+        "name": name,
         "scryfall_id": card["id"],
         "set": card["set"],
         "collector_number": card["collector_number"],
         "layout": card["layout"],
         "artist": card.get("artist", ""),
         **extra,
-        "faces": faces(card),
+        "faces": out,
     }
 
 

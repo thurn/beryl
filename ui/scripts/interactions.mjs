@@ -1678,7 +1678,7 @@ await check(
 // even the cube's longest names: `choice-trigger-order` stops on one between two creatures,
 // renamed here to the two longest names in the cube list, and no text on the page is cut.
 const cube = await readFile(
-    new URL("../../data/vintage-cube-2026-10-07.csv", import.meta.url),
+    new URL("../../data/arena-powered-cube-2025-10-30.csv", import.meta.url),
     "utf8",
 );
 const longest = cube

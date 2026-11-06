@@ -76,6 +76,45 @@ def test_lookups_go_in_batches_and_honor_pinned_printings() -> None:
     assert len(cast(list[cards.Json], data["cards"])) == 161
 
 
+def test_a_printing_s_own_name_and_text_replace_the_oracle_s() -> None:
+    images: dict[str, str] = {
+        v: "https://cards.scryfall.io/x.jpg" for v in cards.IMAGE_VERSIONS
+    }
+
+    def face(name: str, printed: str) -> cards.Json:
+        return {
+            "name": name,
+            "printed_name": printed,
+            "oracle_text": f"{name} can't be blocked.",
+            "printed_text": f"{printed} can't be blocked.",
+            "image_uris": images,
+        }
+
+    def post(url: str, body: cards.Json) -> cards.Json:
+        ids = cast(list[cards.Identifier], body["identifiers"])
+        if ids != [{"set": "om1", "collector_number": "30"}]:
+            return {"data": []}
+        card = {
+            "id": "osborn",
+            "name": "Norman Osborn // Green Goblin",
+            "set": "om1",
+            "collector_number": "30",
+            "layout": "modal_dfc",
+            "card_faces": [
+                face("Norman Osborn", "Goben"),
+                face("Green Goblin", "Fleem"),
+            ],
+        }
+        return {"data": [card]}
+
+    pinned = {"Goben": {"set": "om1", "collector_number": "30"}}
+    (card,) = cast(list[cards.Json], cards.build(["Goben"], pinned, post)["cards"])
+    assert card["name"] == "Goben // Fleem"
+    faces = cast(list[cards.Json], card["faces"])
+    assert [f["name"] for f in faces] == ["Goben", "Fleem"]
+    assert faces[0]["oracle_text"] == "Goben can't be blocked."
+
+
 def test_a_card_scryfall_cannot_find_fails_the_run() -> None:
     def post(url: str, body: cards.Json) -> cards.Json:
         return {"data": [], "not_found": body["identifiers"]}

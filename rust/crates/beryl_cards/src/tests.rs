@@ -12,8 +12,15 @@ use beryl_engine::{
 
 use crate::{CARDS, SCENARIOS, decks, names};
 
-const CSV: &str = "data/vintage-cube-2026-10-07.csv";
+const CSV: &str = "data/arena-powered-cube-2025-10-30.csv";
 const BASIC_LANDS: [&str; 5] = ["Plains", "Island", "Swamp", "Mountain", "Forest"];
+/// Implemented cards the cube dropped, which `decks::WU_CONTROL` still plays. The mirror switch
+/// (epic by-0w2) deletes them, and this list with them.
+const RETIRED: [&str; 3] = [
+    "Aang's Iceberg",
+    "Swift Reconfiguration",
+    "Sphinx of False Conclusions",
+];
 
 /// A card name as a Rust constant: "Jace, Vryn's Prodigy" is `JACE_VRYNS_PRODIGY`.
 fn constant(name: &str) -> String {
@@ -61,8 +68,8 @@ fn generate(csv: &str) -> String {
     let mut out = String::from(
         "//! Every card name as a constant, so a misspelled card is a compile error.\n\
          //!\n\
-         //! Generated from `data/vintage-cube-2026-10-07.csv` and the basic lands by the\n\
-         //! `names_are_current` test. Regenerate with\n\
+         //! Generated from `data/arena-powered-cube-2025-10-30.csv`, the basic lands and the\n\
+         //! retired cards by the `names_are_current` test. Regenerate with\n\
          //! `BERYL_UPDATE_NAMES=1 cargo test -p beryl_cards names_are_current`.\n\n",
     );
     let mut seen = std::collections::BTreeSet::new();
@@ -76,6 +83,10 @@ fn generate(csv: &str) -> String {
     }
     out.push_str("\n// The basic lands, which decks add at deckbuilding.\n");
     for name in BASIC_LANDS {
+        emit(&mut out, name);
+    }
+    out.push_str("\n// Cards the cube dropped that the WU control deck still plays.\n");
+    for name in RETIRED {
         emit(&mut out, name);
     }
     out
@@ -102,7 +113,10 @@ fn constants_spell_names_plainly() {
     assert_eq!(constant("Jace, Vryn's Prodigy"), "JACE_VRYNS_PRODIGY");
     assert_eq!(constant("Life // Death"), "LIFE_DEATH");
     assert_eq!(constant("Troll of Khazad-dûm"), "TROLL_OF_KHAZAD_DUM");
-    assert_eq!(names::PALANTIR_OF_ORTHANC, "Palantír of Orthanc");
+    assert_eq!(
+        names::KROXA_TITAN_OF_DEATHS_HUNGER,
+        "Kroxa, Titan of Death's Hunger"
+    );
 }
 
 #[test]

@@ -18,9 +18,9 @@ appendix.
 ## 1. Goals
 
 - **Exact rules for one card pool.** The 540 cards of the V1 cube in
-  `data/vintage-cube-2026-10-07.csv`, plus the five basic lands that decks add
-  at deckbuilding. Two players, 40-card decks, both decklists public (**D19**).
-  Nothing is approximated inside the engine.
+  `data/arena-powered-cube-2025-10-30.csv`, plus the five basic lands that decks
+  add at deckbuilding. Two players, 40-card decks, both decklists public
+  (**D19**). Nothing is approximated inside the engine.
 
 - **Search throughput.** The targets, in the `search` build (§18),
   single-threaded on a Super core, with caches hot, measured on the cube rollout
