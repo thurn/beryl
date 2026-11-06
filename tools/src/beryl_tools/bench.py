@@ -5,7 +5,9 @@
   `search` profile for this CPU (architecture §18) unless the arguments name a `--profile`.
 - `bench-count` runs the Gungraun (Valgrind) instruction-count benchmarks in a Lima Linux VM,
   creating and provisioning it on first use. Counts don't depend on load, so there's no check.
-  Every worktree builds into the VM's one target dir, so runs take turns under a lock in the VM.
+  Each worktree builds into a target dir of its own there: Cargo names a path package's
+  artifacts the same in every worktree and trusts mtimes, so a shared dir would let one
+  worktree link another's code. Runs take turns under a lock in the VM.
 - `count-gate`, slow CI's `counts` lane, counts one benchmark there and fails when it rises past
   the bar in `beryl_bench/count-gate.toml`.
 
@@ -33,10 +35,15 @@ MAX_BUSY_PERCENT = 10.0
 BUILD_PROCESSES = ("rustc", "cargo", "clippy-driver", "clang", "swift-frontend")
 
 VM = "beryl-bench"
-VM_TARGET = "$HOME/target"  # inside the VM; the checkout is mounted read-only
 VM_LOCK = "$HOME/bench-count.lock"  # held while a run provisions, builds and counts
-# One Gungraun home per worktree, so its "old" results are the worktree's own.
+# Inside the VM, which mounts the checkout read-only, each worktree has a target dir and a
+# Gungraun home named after it, so its artifacts and "old" results are its own.
+VM_TARGETS = "$HOME/targets"
 VM_GUNGRAUN = "$HOME/gungraun"
+# In a target dir, per profile: the checkout that last built it. Another checkout's sources may
+# be older than its artifacts, which Cargo would call fresh, so a new owner rebuilds the
+# workspace members.
+VM_OWNER = ".beryl-checkout"
 COUNT_BENCHES = ["--bench", "*_counts"]
 # A Cargo profile can't set the CPU, so the recipes building the `search` profile pass it.
 SEARCH_CPU = "-C target-cpu=apple-m4"
@@ -128,10 +135,20 @@ def cargo_bench(extra: list[str], *flags: str) -> list[str]:
     return ["cargo", "bench", "--locked", *flags, *extra]
 
 
+def named_profile(cargo: list[str]) -> str | None:
+    """The profile the cargo flags name, ignoring harness arguments after `--`."""
+    flags = cargo[: cargo.index("--")] if "--" in cargo else cargo
+    for i, a in enumerate(flags):
+        if a.startswith("--profile="):
+            return a.removeprefix("--profile=")
+        if a == "--profile" and i + 1 < len(flags):
+            return flags[i + 1]
+    return None
+
+
 def timing_build(extra: list[str]) -> tuple[list[str], dict[str, str]]:
     """The `search` profile and its CPU, unless the cargo flags name a profile of their own."""
-    cargo_flags = extra[: extra.index("--")] if "--" in extra else extra
-    if any(a == "--profile" or a.startswith("--profile=") for a in cargo_flags):
+    if named_profile(extra) is not None:
         return [], {}
     return ["--profile", "search"], {"RUSTFLAGS": SEARCH_CPU}
 
@@ -218,10 +235,42 @@ fi
 {script}"""
 
 
-def count_script(provision: str, cargo: list[str], worktree: str) -> str:
-    home = f"{VM_GUNGRAUN}/{shlex.quote(worktree)}"
-    env = f"CARGO_TARGET_DIR={VM_TARGET} GUNGRAUN_HOME={home}"
-    return locked(f"{provision}{env} {shlex.join(cargo)}\n")
+def worktree_names() -> list[str]:
+    """The names of this repository's worktrees, the main checkout's included."""
+    listing = output("git", "-C", str(paths.REPO), "worktree", "list", "--porcelain")
+    return [
+        Path(line.removeprefix("worktree ")).name
+        for line in listing.splitlines()
+        if line.startswith("worktree ")
+    ]
+
+
+def count_script(
+    provision: str, cargo: list[str], name: str, checkout: str, live: list[str]
+) -> str:
+    """Counts in `name`'s target dir and Gungraun home, as `checkout`'s build. A new target
+    dir starts as a copy of the gate's warm one; those of worktrees not in `live` go."""
+    target = f"{VM_TARGETS}/{shlex.quote(name)}"
+    home = f"{VM_GUNGRAUN}/{shlex.quote(name)}"
+    keep = " ".join(shlex.quote(n) for n in sorted({*live, name, GATE_NAME}))
+    owner = shlex.quote(checkout)
+    profile = shlex.quote(named_profile(cargo) or "bench")
+    stamp = f"{target}/{VM_OWNER}.{profile}"
+    prepare = f"""shopt -s nullglob
+keep=({keep})
+for dir in {VM_TARGETS}/* {VM_GUNGRAUN}/*; do
+  printf '%s\\n' "${{keep[@]}}" | grep -qxF -- "${{dir##*/}}" || rm -rf -- "$dir"
+done
+if [ ! -d {target} ] && [ -d {VM_TARGETS}/{GATE_NAME} ]; then
+  cp -a {VM_TARGETS}/{GATE_NAME} {target}
+fi
+if [ "$(cat {stamp} 2>/dev/null)" != {owner} ]; then
+  cargo clean --quiet --workspace --profile {profile} --target-dir {target}
+  mkdir -p {target} && printf '%s\\n' {owner} >{stamp}
+fi
+"""
+    env = f"CARGO_TARGET_DIR={target} GUNGRAUN_HOME={home}"
+    return locked(f"{provision}{prepare}{env} {shlex.join(cargo)}\n")
 
 
 def vm_ensure() -> int:
@@ -252,7 +301,11 @@ def bench_count(args: argparse.Namespace) -> int:
         return 2
     extra: list[str] = args.extra or COUNT_BENCHES
     script = count_script(
-        provision_script(toolchain(), runner), cargo_bench(extra), paths.REPO.name
+        provision_script(toolchain(), runner),
+        cargo_bench(extra),
+        paths.REPO.name,
+        str(paths.REPO),
+        worktree_names(),
     )
     return vm_shell(script)
 
@@ -261,8 +314,9 @@ def bench_count(args: argparse.Namespace) -> int:
 # GATE_FILE's comments.
 
 GATE_FILE: Path = paths.RUST / "crates" / "beryl_bench" / "count-gate.toml"
-# Its own Gungraun home, so CI's throwaway worktrees don't each leave one in the VM.
-GATE_HOME = "count-gate"
+# Its own target dir and Gungraun home, shared by CI's throwaway worktrees so the build stays
+# warm and they don't each leave one in the VM.
+GATE_NAME = "count-gate"
 
 
 @dataclass
@@ -335,7 +389,11 @@ def count_gate(args: argparse.Namespace) -> int:
         return 2
     gate = load_gate(GATE_FILE.read_text())
     script = count_script(
-        provision_script(toolchain(), runner), gate_cargo(gate), GATE_HOME
+        provision_script(toolchain(), runner),
+        gate_cargo(gate),
+        GATE_NAME,
+        str(paths.REPO),
+        worktree_names(),
     )
     run = subprocess.run(
         vm_command(script),

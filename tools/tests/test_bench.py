@@ -1,4 +1,6 @@
 import json
+import subprocess
+from pathlib import Path
 
 from beryl_tools import bench
 
@@ -89,11 +91,63 @@ def test_runner_version_comes_from_the_lockfile() -> None:
     assert bench.locked_version(lock, "gungraun-runner") is None
 
 
-def test_counting_holds_the_vm_lock_and_a_home_of_its_own() -> None:
-    script = bench.count_script("provision\n", ["cargo", "bench"], "by-1")
+def test_counting_holds_the_vm_lock_and_dirs_of_its_own() -> None:
+    script = bench.count_script(
+        "provision\n", ["cargo", "bench"], "by-1", "/repo/.worktrees/by-1", ["by-1"]
+    )
     lock, count = script.index("flock 9"), script.index("cargo bench")
-    assert lock < script.index("provision") < count
-    assert "GUNGRAUN_HOME=$HOME/gungraun/by-1 " in script
+    assert lock < script.index("provision") < script.index("cargo clean") < count
+    assert (
+        "CARGO_TARGET_DIR=$HOME/targets/by-1 GUNGRAUN_HOME=$HOME/gungraun/by-1 "
+        in script
+    )
+
+
+def run_count(home: Path, name: str, checkout: str, live: list[str]) -> list[str]:
+    """Runs the VM script on this machine with stub `flock` and `cargo` that log their
+    arguments, returning the cargo calls."""
+    bin = home / "bin"
+    bin.mkdir(exist_ok=True)
+    for tool in ("flock", "cargo"):
+        (bin / tool).write_text(f'#!/bin/sh\necho "$*" >>"$HOME/{tool}.log"\n')
+        (bin / tool).chmod(0o755)
+    (home / "cargo.log").write_text("")
+    script = bench.count_script("", ["cargo", "bench"], name, checkout, live)
+    env = {"HOME": str(home), "PATH": f"{bin}:/usr/bin:/bin"}
+    subprocess.run(["bash", "-c", script], env=env, check=True)
+    return (home / "cargo.log").read_text().splitlines()
+
+
+def test_target_dirs_rebuild_for_a_new_checkout_and_go_with_their_worktree(
+    tmp_path: Path,
+) -> None:
+    gate = bench.GATE_NAME
+    (tmp_path / "targets" / gate / "release").mkdir(parents=True)
+    (tmp_path / "targets" / "gone").mkdir()
+    (tmp_path / "gungraun" / "gone").mkdir(parents=True)
+
+    calls = run_count(tmp_path, gate, "/repo/a", ["a"])
+    assert calls[0].startswith("clean ") and "--profile bench" in calls[0]
+    assert run_count(tmp_path, gate, "/repo/a", ["a"]) == ["bench"]  # same owner: warm
+    assert run_count(tmp_path, gate, "/repo/b", ["a", "b"])[0].startswith("clean ")
+    assert not (tmp_path / "targets" / "gone").exists()
+    assert not (tmp_path / "gungraun" / "gone").exists()
+
+    # A worktree's first run copies the gate's warm dir, then rebuilds its own code.
+    assert run_count(tmp_path, "a", "/repo/a", ["a"])[0].startswith("clean ")
+    assert (tmp_path / "targets" / "a" / "release").is_dir()
+    assert run_count(tmp_path, "a", "/repo/a", ["a"]) == ["bench"]
+    assert sorted(p.name for p in (tmp_path / "targets").iterdir()) == ["a", gate]
+
+
+def test_a_new_owner_cleans_the_profile_it_builds() -> None:
+    def clean(cargo: list[str]) -> str:
+        script = bench.count_script("", cargo, "by-1", "/repo", [])
+        return next(line for line in script.splitlines() if "cargo clean" in line)
+
+    assert "--profile bench " in clean(["cargo", "bench", "--", "--profile", "x"])
+    assert "--profile search " in clean(["cargo", "bench", "--profile", "search"])
+    assert "--profile dev " in clean(["cargo", "bench", "--profile=dev"])
 
 
 GATE = bench.Gate("rollout_counts::cube_rollout::rollouts::corpus", 1_000_000, 1.0)
