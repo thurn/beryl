@@ -154,6 +154,10 @@ enum Condition {
     /// A permanent bears this mark and no other while another of the same name bears none, so
     /// the table shows the mark alone beside a plain twin.
     Marked(Mark),
+    /// The human may cast a card from exile.
+    CastableFromExile,
+    /// The human knows a card in the opponent's hand.
+    KnownOpponentsHand,
 }
 
 /// What the table draws on a permanent beyond its frame.
@@ -207,9 +211,10 @@ impl Condition {
     /// "blocking", "targeted trigger on the stack", "targeted spell on the stack", "player
     /// targeted on the stack", "ability targeting beside its source", "opponent's spell on
     /// the stack", "castable <card name>", "resolving <card name>", "casting <card name>",
-    /// "playable pair in hand", "exiled beneath a permanent", "attached across the table", or
-    /// "<mark> beside a twin" with the mark "+1/+1 counters", "damage", "summoning sickness"
-    /// or "story or time counters".
+    /// "playable pair in hand", "exiled beneath a permanent", "attached across the table",
+    /// "castable from exile", "known card in the opponent's hand", or "<mark> beside a twin"
+    /// with the mark "+1/+1 counters", "damage", "summoning sickness" or "story or time
+    /// counters".
     fn parse(text: &str) -> Result<Condition, String> {
         let condition = match text {
             "attacking" => Condition::Attacking,
@@ -226,6 +231,8 @@ impl Condition {
             "damage beside a twin" => Condition::Marked(Mark::Damage),
             "summoning sickness beside a twin" => Condition::Marked(Mark::Sick),
             "story or time counters beside a twin" => Condition::Marked(Mark::StoryOrTime),
+            "castable from exile" => Condition::CastableFromExile,
+            "known card in the opponent's hand" => Condition::KnownOpponentsHand,
             _ => {
                 if let Some(step) = text.strip_prefix("step ") {
                     Condition::Step(
@@ -344,6 +351,8 @@ impl Condition {
             }),
             Condition::AttachedAcross => attached_across(view),
             Condition::Marked(mark) => marked_beside_twin(view, *mark),
+            Condition::CastableFromExile => castable_from_exile(view),
+            Condition::KnownOpponentsHand => knows_opponents_hand(view),
         }
     }
 }
@@ -380,6 +389,26 @@ fn marked_beside_twin(view: &PlayerView, mark: Mark) -> bool {
                     && Mark::only(None, t)
             })
     })
+}
+
+/// Whether the human may cast a card from exile.
+fn castable_from_exile(view: &PlayerView) -> bool {
+    let Status::Deciding { decision } = &view.status else {
+        return false;
+    };
+    decision.candidates.iter().any(|c| {
+        matches!(c.option, Candidate::Cast { slot, .. } if view
+            .objects
+            .iter()
+            .any(|o| o.slot == slot && o.zone == ZoneName::Exile))
+    })
+}
+
+/// Whether the human knows a card in the opponent's hand.
+fn knows_opponents_hand(view: &PlayerView) -> bool {
+    view.objects
+        .iter()
+        .any(|o| o.zone == ZoneName::Hand && o.owner == Side::Opponent && o.name.is_some())
 }
 
 /// Whether the top of the stack is an ability of a permanent that targets another permanent
@@ -577,6 +606,14 @@ mod tests {
         assert_eq!(
             Condition::parse("damage beside a twin"),
             Ok(Condition::Marked(Mark::Damage))
+        );
+        assert_eq!(
+            Condition::parse("castable from exile"),
+            Ok(Condition::CastableFromExile)
+        );
+        assert_eq!(
+            Condition::parse("known card in the opponent's hand"),
+            Ok(Condition::KnownOpponentsHand)
         );
         assert_eq!(
             Condition::parse("ability targeting beside its source"),

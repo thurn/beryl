@@ -12,8 +12,9 @@
 // `choice-*` fixtures end on decisions the choice overlays ask. Exits non-zero on the first
 // failed check or any page error.
 import assert from "node:assert/strict";
-import { readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { slotOf as offeredSlot, twins } from "../src/game/decisions.ts";
 import { cutText, launch } from "./capture.mjs";
 
 const [base, fixtures] = process.argv.slice(2);
@@ -33,6 +34,11 @@ async function load(name) {
         .filter((m) => m.kind === "event")
         .map((m) => m.payload.view);
 }
+
+// Every fixture recorded for this run, before this script writes one of its own.
+const recorded = (await readdir(fixtures))
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => f.slice(0, -".json".length));
 
 const FIXTURE = "greedy-turn-9";
 const views = await load(FIXTURE);
@@ -87,12 +93,13 @@ async function check(
         at = views.length - 1,
         ready = `${card}[data-zone="hand"]`,
         viewport = { width: 1600, height: 900 },
+        reducedMotion = "no-preference",
     } = {},
 ) {
     const context = await browser.newContext({
         viewport,
         deviceScaleFactor: 1,
-        reducedMotion: "no-preference",
+        reducedMotion,
     });
     const page = await context.newPage();
     page.on("pageerror", (e) => errors.push(`${title}: ${e.message}`));
@@ -2011,6 +2018,185 @@ for (const fixture of ["arrow-spell", "arrow-ability", "arrow-player"]) {
                 .waitFor();
         },
         { fixture: "marks", at: marks.length, ready: ".card-counters" },
+    );
+}
+
+// A card the opponent's Elite Spellbinder exiled from the human's hand, which they may cast from
+// exile (`exile-cast`): its pile glows, its viewer offers it, and picking it there casts it.
+// The human also knows a card in the opponent's hand, one their Sink into Stupor returned there.
+const exileViews = await load("exile-cast");
+const exileView = exileViews.at(-1);
+const exileCast = exileView.status.decision.candidates.findIndex(
+    (c) =>
+        c.option.kind === "cast" &&
+        exileView.objects.find((o) => o.slot === c.option.slot)?.zone ===
+            "exile",
+);
+assert.ok(exileCast >= 0, "exile-cast offers a cast from exile");
+const exiledSlot = exileView.status.decision.candidates[exileCast].option.slot;
+const exiledName = nameIn(exileView, exiledSlot);
+const yourExile = '[data-pile="exile"][data-side="you"]';
+const exileRun = {
+    fixture: "exile-cast",
+    at: exileViews.length,
+    ready: yourExile,
+};
+
+await check(
+    "a card castable from exile is cast from its pile",
+    async (page) => {
+        // The pile glows once the decision is shown.
+        await until(page, `${yourExile}.pile-button-playable`);
+        await page.click(yourExile);
+        await page
+            .getByRole("dialog", { name: "Your exile" })
+            .locator(`[data-viewer-slot="${exiledSlot}"]`)
+            .click();
+        await page
+            .getByRole("dialog", { name: `Cast ${exiledName}` })
+            .getByRole("button", { name: "Cast", exact: true })
+            .click();
+        assert.deepEqual(
+            await chosen(page),
+            [exileCast],
+            `chose "${exileView.status.decision.candidates[exileCast].label}"`,
+        );
+    },
+    exileRun,
+);
+
+const theirHand = exileView.objects.filter(
+    (o) => o.zone === "hand" && o.owner === "opponent",
+);
+const knownCard = theirHand.find((o) => o.name !== null);
+assert.ok(knownCard, "exile-cast: the human knows a card in their hand");
+assert.ok(
+    theirHand.some((o) => o.name === null),
+    "exile-cast: the opponent holds a card the human does not know",
+);
+
+await check(
+    "a card you know in the opponent's hand lies face up",
+    async (page) => {
+        await page.clock.runFor(2000);
+        for (const o of theirHand) {
+            const back = await page.$(`${slotOf(o.slot)} .card-back`);
+            assert.equal(
+                !back,
+                o.name !== null,
+                `slot ${o.slot} (${o.name ?? "unknown"}) is ` +
+                    (back ? "a back" : "face up"),
+            );
+        }
+        // It peeks in from the top edge; hovering what shows of it shows it whole.
+        const box = await page.locator(slotOf(knownCard.slot)).boundingBox();
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height - 12);
+        await page.getByLabel(`${knownCard.name}, inspected`).waitFor();
+    },
+    exileRun,
+);
+
+// Every object an open decision offers something for has an element a player can see and point
+// at: the card on the table or in a choice's tray, a twin the engine offers it through, or the
+// button of the pile it lies in. Every exiled card can be seen the same way, if not pointed at
+// under a screen over the table. Checked at the last decision of every fixture, with motion
+// reduced so that nothing is caught halfway through fading in.
+for (const fixture of recorded) {
+    const fixtureViews = await load(fixture);
+    const last = fixtureViews.findLastIndex(
+        (v) => v.status.kind === "deciding",
+    );
+    if (last < 0) continue;
+    const view = fixtureViews[last];
+    const byId = new Map(view.objects.map((o) => [o.slot, o]));
+    const describe = (slot, why) =>
+        `slot ${slot} (${byId.get(slot)?.name ?? "unknown"}, ${why})`;
+    const wanted = [];
+    for (const c of view.status.decision.candidates) {
+        const slot = offeredSlot(c.option);
+        if (slot === undefined) continue;
+        const o = byId.get(slot);
+        const twinSlots = o
+            ? view.objects.filter((t) => twins(o, t)).map((t) => t.slot)
+            : [];
+        wanted.push({
+            what: describe(slot, `${c.option.kind} "${c.label}"`),
+            slots: [slot, ...twinSlots],
+            point: true,
+        });
+    }
+    for (const o of view.objects) {
+        if (o.zone === "exile") {
+            wanted.push({
+                what: describe(o.slot, "exiled"),
+                slots: [o.slot],
+                point: false,
+            });
+        }
+    }
+    const owners = Object.fromEntries(
+        view.objects.map((o) => [o.slot, o.owner]),
+    );
+    await check(
+        `${fixture}: what the decision offers and what is exiled can be seen`,
+        async (page) => {
+            await page.clock.runFor(5000);
+            const unseen = await page.evaluate(
+                ({ wanted, owners }) => {
+                    const seen = (el, point) => {
+                        for (let e = el; e; e = e.parentElement) {
+                            const style = getComputedStyle(e);
+                            if (Number(style.opacity) < 0.5) return false;
+                            if (style.visibility === "hidden") return false;
+                        }
+                        const r = el.getBoundingClientRect();
+                        if (r.width < 1 || r.height < 1) return false;
+                        // Some part of it lies on the screen, and, to be pointed at, is the
+                        // topmost thing there.
+                        for (let i = 1; i < 10; i++) {
+                            for (let j = 1; j < 10; j++) {
+                                const x = r.left + (r.width * i) / 10;
+                                const y = r.top + (r.height * j) / 10;
+                                if (x < 0 || y < 0) continue;
+                                if (x >= innerWidth || y >= innerHeight)
+                                    continue;
+                                if (!point) return true;
+                                const hit = document.elementFromPoint(x, y);
+                                if (hit && el.contains(hit)) return true;
+                            }
+                        }
+                        return false;
+                    };
+                    const shown = (slot, point) =>
+                        [
+                            ...document.querySelectorAll(
+                                `[data-slot="${slot}"]`,
+                            ),
+                        ].some((el) => {
+                            if (!el.classList.contains("card-el-pile")) {
+                                return seen(el, point);
+                            }
+                            const pile = document.querySelector(
+                                `[data-pile="${el.dataset.zone}"]` +
+                                    `[data-side="${owners[slot]}"]`,
+                            );
+                            return !!pile && seen(pile, point);
+                        });
+                    return wanted
+                        .filter((w) => !w.slots.some((s) => shown(s, w.point)))
+                        .map((w) => w.what);
+                },
+                { wanted, owners },
+            );
+            assert.deepEqual(unseen, [], "every one can be seen");
+        },
+        // The board draws its first view, the whole fixture's, once the fixture has loaded.
+        {
+            fixture,
+            at: last + 1,
+            ready: ".card-el:is(.card-el-hand, .card-el-land, .card-el-field)",
+            reducedMotion: "reduce",
+        },
     );
 }
 

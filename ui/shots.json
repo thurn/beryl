@@ -144,6 +144,19 @@
       "height": 900
     },
     {
+      "name": "game-exile-cast",
+      "route": "/?fixture=exile-cast#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-exile-pile",
+      "route": "/?fixture=exile-cast#/game",
+      "width": 1600,
+      "height": 900,
+      "click": "[data-pile=exile][data-side=you]"
+    },
+    {
       "name": "game-late",
       "route": "/?fixture=late-game#/game",
       "width": 1600,

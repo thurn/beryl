@@ -189,6 +189,7 @@ INTERACTION_FIXTURES = [
     "pay-other",
     "exiled-beneath",
     "attached-across",
+    "exile-cast",
     "arrow-spell",
     "arrow-ability",
     "arrow-player",
