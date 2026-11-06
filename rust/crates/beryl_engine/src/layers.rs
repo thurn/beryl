@@ -4,7 +4,7 @@
 use crate::card::{Affected, Colors, FaceIx, Modification, StaticCondition, Subtypes, Types};
 use crate::event::Sink;
 use crate::fixed::Fixed;
-use crate::ids::CardIx;
+use crate::ids::{CardIx, Slot};
 use crate::state::{Continuous, CounterKind, Derived, GrantRef, ObjectFlags, State, Zone};
 use crate::table::GameTable;
 use crate::trigger::face;
@@ -33,6 +33,25 @@ pub(crate) fn refresh(s: &mut State, t: &GameTable, sink: &mut Sink) {
         recompute(s, t);
         s.flags.derived_dirty = false;
     }
+}
+
+/// Whether a change in the number of `kind` counters on the object in `slot` can change its
+/// derived characteristics, so that the layers must run again. Only +1/+1 and -1/-1 counters
+/// modify power and toughness
+/// ([CR 613.4c](https://yawgatog.com/resources/magic-rules/#R6134c)): "Effects and counters
+/// that modify power and/or toughness ... are applied". Any other kind matters only to a
+/// static ability of its own that applies while it has some: loyalty, which planeswalkers
+/// gain and lose every turn, never does.
+pub(crate) fn counters_matter(s: &State, t: &GameTable, slot: Slot, kind: CounterKind) -> bool {
+    matches!(kind, CounterKind::PlusOne | CounterKind::MinusOne)
+        || s.object(slot).zone != Zone::Battlefield
+        || face(s, t, slot).abilities.iter().any(|a| {
+            a.layer.is_some_and(|spec| match spec.condition {
+                StaticCondition::Always => false,
+                StaticCondition::HasCounter(k) => k == kind,
+                StaticCondition::Impending => kind == CounterKind::Time,
+            })
+        })
 }
 
 /// Recomputes every permanent's characteristics from base

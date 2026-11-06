@@ -714,7 +714,9 @@ pub(crate) fn add_counters(
     }
     let n = s.object_mut(object.slot).counters.get_mut(kind);
     *n = n.saturating_add(amount);
-    s.flags.derived_dirty = true;
+    if layers::counters_matter(s, t, object.slot, kind) {
+        s.flags.derived_dirty = true;
+    }
     settle(
         s,
         t,
@@ -746,7 +748,9 @@ pub(crate) fn remove_counters(
         return Ok(());
     }
     *s.object_mut(object.slot).counters.get_mut(kind) -= amount;
-    s.flags.derived_dirty = true;
+    if layers::counters_matter(s, t, object.slot, kind) {
+        s.flags.derived_dirty = true;
+    }
     settle(
         s,
         t,
