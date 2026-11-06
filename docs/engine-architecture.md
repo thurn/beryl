@@ -1053,9 +1053,17 @@ experiment, not the default.
   rollout policy. A stall scores 0.5.
 - Nodes store choices only, and each iteration copies the root and replays its
   path.
-- Budgets are iteration counts, so a seed reproduces a move.
+- Budgets are iteration counts, and each search is seeded from the agent's seed
+  and the decision's index, so a seed reproduces a move and an agent rebuilt
+  midway through a game plays on as the one it replaces.
 - Independent trees run root-parallel on threads, and their root visit counts
-  are summed in a fixed order.
+  are summed in a fixed order. They grow in rounds and stop once no spending of
+  the iterations left could change the candidate visited most.
+- Priority with the player's own spell or ability on top of the stack passes
+  unsearched.
+- A decision asked straight after the one before, with no card but the chosen
+  one changing zones and nothing hidden learned, as the steps of casting a spell
+  follow one another, keeps the trees and searches on from the chosen child.
 - The hidden-information variant samples K determinizations from the searcher's
   Observation, one tree each. The omniscient variant runs the same search on the
   true state and is labeled as cheating wherever a human meets it.

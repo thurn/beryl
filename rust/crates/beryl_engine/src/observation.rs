@@ -96,6 +96,13 @@ impl<'a> Observation<'a> {
         self.state.turn()
     }
 
+    /// The decisions offered to either player this turn, the one being answered included:
+    /// with [`Observation::turn`]'s number, where in the game a decision stands. Search reads
+    /// it to tell two of its decisions asked one straight after the other.
+    pub fn decisions(&self) -> u16 {
+        self.root.budgets.decisions
+    }
+
     /// The player chosen to take the first turn; none while the coin flip's winner chooses.
     /// [CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031): "the players determine
     /// which one of them will choose who takes the first turn ... The player chosen to take

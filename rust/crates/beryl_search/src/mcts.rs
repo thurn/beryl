@@ -7,20 +7,33 @@
 //! - Tree nodes play under the smart stops (§15) and pause mid-resolution like the UI (§7.3);
 //!   rollouts answer inline. A rollout plays to the end of the game: a win scores 1 for the
 //!   winner, a draw or a stall 0.5 for both.
-//! - Budgets are iteration counts, and every random stream is seeded from the agent's own, so
-//!   a seed reproduces a move.
+//! - Budgets are iteration counts, and every random stream is seeded from the agent's seed and
+//!   the decision's index among its own, so a seed reproduces a move, and an agent rebuilt in
+//!   the middle of a game plays on as the one it replaces ([`Mcts::resumed`]).
 //! - Independent trees run root-parallel, each on its own thread with no shared mutable
 //!   state; their root visit counts are summed in tree order, so the move does not depend on
 //!   which thread finishes first. The omniscient search grows its trees on the true state,
 //!   each with its own random streams; the hidden one grows one per determinization of its
 //!   Observation (ensemble determinization).
+//!
+//! Three things cut what a decision spends without changing which move a seed makes:
+//!
+//! - The trees grow in rounds, and stop once no spending of the iterations left could change
+//!   the candidate visited most (the exact stop).
+//! - Priority with the deciding player's own spell or ability on top of the stack passes
+//!   unsearched: the expert never acts there.
+//! - A decision asked straight after the one before, as the steps of casting a spell follow
+//!   one another (CR 601.2), keeps the trees and starts from the chosen child's subtree: a
+//!   budget counts root visits, not fresh rollouts.
 
+use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
+use std::sync::{Barrier, Mutex};
 use std::thread;
 
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
-    Choice, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch, Seat, State, Step,
-    Stops, apply, next,
+    Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome, Profile,
+    Replay, Scratch, Seat, Slot, State, Step, Stops, apply, next, observe,
 };
 
 use crate::rollout::{RolloutPolicy, rollout};
@@ -29,7 +42,8 @@ use crate::rollout::{RolloutPolicy, rollout};
 /// on any machine.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Budget {
-    /// Iterations per decision, shared as evenly as they go among the trees.
+    /// Root visits per decision, shared as evenly as they go among the trees: fresh
+    /// rollouts, less what trees kept from the decision before bring.
     pub iterations: u32,
     /// Independent trees: the omniscient search's random streams, or the hidden search's
     /// determinizations.
@@ -50,6 +64,12 @@ impl Budget {
         trees: 18,
         parallel: true,
     };
+
+    /// Tree `i`'s share of the iterations.
+    fn share(self, i: u32) -> u32 {
+        let trees = self.trees.max(1);
+        self.iterations / trees + u32::from(i < self.iterations % trees)
+    }
 }
 
 impl Default for Budget {
@@ -72,88 +92,363 @@ pub enum Sight {
 /// and 43% at 1.4: the best of the three, though the intervals overlap.
 const EXPLORATION: f64 = 0.7;
 
+/// The rounds a tree's share is grown in, the exact stop checked after each. More stop
+/// sooner, at a wait for the slowest tree each.
+const ROUNDS: u32 = 16;
+
+/// What one searched decision found and spent, for a runner's log and as training data.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Search {
+    /// The decision's index among the agent's own, from 0, unsearched ones included.
+    pub decision: u32,
+    /// The decision whose fresh search planted the trees this one grew: `decision`, unless it
+    /// reused the trees of the decisions before it.
+    pub chain: u32,
+    /// The rollouts it ran.
+    pub rollouts: u32,
+    /// The root visits its trees brought from the decision before.
+    pub inherited: u32,
+    /// The root visits per candidate, summed across the trees, when the search stopped.
+    pub visits: Vec<u32>,
+    /// The rewards per candidate for the deciding player, summed likewise: divided by the
+    /// visits, each candidate's mean.
+    pub rewards: Vec<f64>,
+}
+
 /// The searching agent.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Mcts {
     table: GameTable,
     policy: RolloutPolicy,
     sight: Sight,
     budget: Budget,
-    rng: SplitMix64,
+    seed: u64,
+    /// The next decision's index among the agent's own.
+    decision: u32,
+    /// The last decision's trees, while its chosen child may root the next one's.
+    kept: Option<Kept>,
+    last: Option<Search>,
+}
+
+/// The trees of a decision just answered, and what reusing them for the next one requires.
+#[derive(Debug)]
+struct Kept {
+    trees: Vec<Tree>,
+    chain: u32,
+    choice: Choice,
+    /// The turn and the decisions offered in it when the decision was asked.
+    at: (u16, u16),
+    /// Each slot's incarnation, and whether the deciding player knew its card, then.
+    seen: Vec<(u16, bool)>,
+    /// The card the choice names, which it may move: the spell cast, the land played.
+    moves: Option<Slot>,
 }
 
 impl Mcts {
     pub fn new(t: &GameTable, sight: Sight, budget: Budget, seed: u64) -> Self {
+        Self::resumed(t, sight, budget, seed, 0)
+    }
+
+    /// The agent built from `seed` as it stands before its `decision`th decision (from 0),
+    /// for a game resumed midway: it plays on as the uninterrupted agent would, if it is
+    /// first asked the decision [`Mcts::resume_point`] named.
+    pub fn resumed(t: &GameTable, sight: Sight, budget: Budget, seed: u64, decision: u32) -> Self {
         Self {
             table: t.clone(),
             policy: RolloutPolicy::new(t),
             sight,
             budget,
-            rng: SplitMix64::new(seed),
+            seed,
+            decision,
+            kept: None,
+            last: None,
         }
     }
 
-    /// The root visit counts of every tree, summed, one per candidate of `d`.
-    pub fn visits(&mut self, obs: Observation<'_>, d: &Decision) -> Vec<u32> {
-        let trees = self.budget.trees.max(1);
-        let mut seeds = SplitMix64::new(self.rng.next_u64());
-        let jobs: Vec<(u64, u32)> = (0..trees)
-            .map(|i| {
-                let share =
-                    self.budget.iterations / trees + u32::from(i < self.budget.iterations % trees);
-                (seeds.next_u64(), share)
+    /// The search behind the last decision; none if it was answered without one.
+    pub fn last_search(&self) -> Option<&Search> {
+        self.last.as_ref()
+    }
+
+    /// The decision a rebuilt agent must be asked first, as [`Mcts::resumed`] builds it, to
+    /// play on as this one: the next, unless this agent keeps trees the next may reuse, then
+    /// the decision whose fresh search planted them, re-searched from there.
+    pub fn resume_point(&self) -> u32 {
+        self.kept.as_ref().map_or(self.decision, |k| k.chain)
+    }
+
+    /// The root visit counts of every tree, summed, one per candidate of `d`: what a fresh
+    /// search of the next decision on its full budget counts, with no stop. Changes nothing.
+    pub fn visits(&self, obs: Observation<'_>, d: &Decision) -> Vec<u32> {
+        let mut trees = self.plant(obs, d, self.decision);
+        self.grow(&mut trees, false);
+        totals(&trees).0
+    }
+
+    /// One tree per [`Budget::trees`], seeded from the agent's seed and the decision's index.
+    fn plant(&self, obs: Observation<'_>, d: &Decision, decision: u32) -> Vec<Tree> {
+        // The `decision`th output of the agent's stream, computed directly.
+        let mut seeds = SplitMix64::new(
+            SplitMix64::new(
+                self.seed
+                    .wrapping_add(u64::from(decision).wrapping_mul(0x9E37_79B9_7F4A_7C15)),
+            )
+            .next_u64(),
+        );
+        (0..self.budget.trees.max(1))
+            .map(|_| Tree::new(&self.table, self.sight, obs, d, seeds.next_u64()))
+            .collect()
+    }
+
+    /// Grows each tree to its share of root visits, in rounds; with `stop`, ends after the
+    /// round that settles the candidate visited most. Returns the rollouts run.
+    fn grow(&self, trees: &mut [Tree], stop: bool) -> u32 {
+        let mut plans: Vec<Plan> = (0..)
+            .zip(trees.iter())
+            .map(|(i, tree)| {
+                let share = self.budget.share(i);
+                Plan {
+                    left: share.saturating_sub(tree.visits()),
+                    slice: if stop {
+                        share.div_ceil(ROUNDS).max(1)
+                    } else {
+                        u32::MAX
+                    },
+                }
             })
             .collect();
-        let search = |&(seed, iterations): &(u64, u32)| {
-            Tree::search(
-                &self.table,
-                &self.policy,
-                self.sight,
-                obs,
-                d,
-                seed,
-                iterations,
-            )
-        };
-        let counts: Vec<Vec<u32>> = if self.budget.parallel && jobs.len() > 1 {
-            thread::scope(|scope| {
-                let handles: Vec<_> = jobs
-                    .iter()
-                    .map(|job| scope.spawn(move || search(job)))
-                    .collect();
-                handles
-                    .into_iter()
-                    .map(|h| h.join().expect("a search thread panicked"))
-                    .collect()
-            })
+        let before = plans.iter().map(|p| p.left).sum::<u32>();
+        let (t, policy) = (&self.table, &self.policy);
+        if self.budget.parallel && trees.len() > 1 {
+            grow_parallel(t, policy, trees, &mut plans, stop);
         } else {
-            jobs.iter().map(search).collect()
-        };
-        let mut total = vec![0; d.len()];
-        for tree in &counts {
-            for (sum, n) in total.iter_mut().zip(tree) {
-                *sum += n;
+            while !finished(
+                trees
+                    .iter()
+                    .map(Tree::counts)
+                    .zip(plans.iter().map(|p| p.left)),
+                stop,
+            ) {
+                for (tree, plan) in trees.iter_mut().zip(&mut plans) {
+                    tree.grow(t, policy, plan.take());
+                }
             }
         }
-        total
+        before - plans.iter().map(|p| p.left).sum::<u32>()
+    }
+
+    /// The trees of the last decision, moved down to its chosen child, if `d` may reuse them:
+    /// asked straight after it in the game, no other card changed zones and the player
+    /// learned nothing since, and every tree reached `d` there as the game did. Each tree
+    /// keeps its determinization, which nothing since has contradicted.
+    fn descend(&self, kept: Kept, obs: Observation<'_>, d: &Decision) -> Option<Vec<Tree>> {
+        // No decision, the other player's or an unsearched one of this player's, came between.
+        if (obs.turn().number, obs.decisions()) != (kept.at.0, kept.at.1.wrapping_add(1)) {
+            return None;
+        }
+        // CR 400.7: "An object that moves from one zone to another becomes a new object
+        // with no memory of or relation to its previous existence", so a new incarnation is
+        // a zone change.
+        for (slot, &(incarnation, knew)) in Slot::all().zip(&kept.seen) {
+            let o = obs.object(slot);
+            if obs.knows(slot) != knew || (o.incarnation != incarnation && kept.moves != Some(slot))
+            {
+                return None;
+            }
+        }
+        let mut trees = kept.trees;
+        for tree in &mut trees {
+            if !tree.descend(&self.table, kept.choice, obs, d) {
+                return None;
+            }
+        }
+        Some(trees)
+    }
+
+    /// Whether `d` is priority with the player's own spell or ability on top of the stack,
+    /// which they pass unsearched. Over 400 expert mirror games that was 27 of 159
+    /// decisions per seat a game, and the expert never acted there.
+    fn passes(obs: Observation<'_>, d: &Decision) -> bool {
+        d.kind == DecisionKind::Priority
+            && obs.stack().last().is_some_and(|e| e.controller == d.player)
     }
 }
 
 impl crate::Agent for Mcts {
     /// The candidate visited most across the trees, the first of equals. A decision with one
-    /// candidate is never searched.
+    /// candidate is never searched, nor is passing with one's own object on top of the stack.
     fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice {
+        let decision = self.decision;
+        self.decision += 1;
+        self.last = None;
+        let kept = self.kept.take();
         if d.len() < 2 {
             return Choice(0);
         }
-        let visits = self.visits(obs, d);
-        let mut best = 0;
-        for (i, &n) in visits.iter().enumerate() {
-            if n > visits[best] {
-                best = i;
-            }
+        if Self::passes(obs, d) {
+            debug_assert_eq!(d.candidates.option(Choice(0)), Some(Opt::Pass));
+            return Choice(0);
         }
-        Choice(best as u8)
+        let chain = kept.as_ref().map(|k| k.chain);
+        let (mut trees, chain) = match kept.and_then(|k| self.descend(k, obs, d)) {
+            Some(trees) => (trees, chain.expect("kept trees")),
+            None => (self.plant(obs, d, decision), decision),
+        };
+        let inherited = trees.iter().map(Tree::visits).sum();
+        let rollouts = self.grow(&mut trees, true);
+        let (visits, rewards) = totals(&trees);
+        let choice = Choice(leader(&visits) as u8);
+        self.last = Some(Search {
+            decision,
+            chain,
+            rollouts,
+            inherited,
+            visits,
+            rewards,
+        });
+        if trees.iter().all(|tree| tree.expanded(choice)) {
+            self.kept = Some(Kept {
+                trees,
+                chain,
+                choice,
+                at: (obs.turn().number, obs.decisions()),
+                seen: Slot::all()
+                    .map(|slot| (obs.object(slot).incarnation, obs.knows(slot)))
+                    .collect(),
+                moves: names(d, choice),
+            });
+        }
+        choice
+    }
+}
+
+/// What a tree has left to grow, and how much of it a round grows.
+#[derive(Clone, Copy, Debug)]
+struct Plan {
+    left: u32,
+    slice: u32,
+}
+
+impl Plan {
+    /// The iterations of the next round.
+    fn take(&mut self) -> u32 {
+        let n = self.left.min(self.slice);
+        self.left -= n;
+        n
+    }
+}
+
+/// [`Mcts::grow`] with each tree on its own thread. Between rounds every thread reads the
+/// same board of root visit counts, so all reach the same verdict on whether to go on.
+fn grow_parallel(
+    t: &GameTable,
+    policy: &RolloutPolicy,
+    trees: &mut [Tree],
+    plans: &mut [Plan],
+    stop: bool,
+) {
+    let board: Vec<Mutex<(Vec<u32>, u32)>> = trees
+        .iter()
+        .zip(plans.iter())
+        .map(|(tree, plan)| Mutex::new((tree.counts(), plan.left)))
+        .collect();
+    let barrier = Barrier::new(trees.len());
+    let failed = Mutex::new(None);
+    thread::scope(|scope| {
+        for ((tree, plan), slot) in trees.iter_mut().zip(plans.iter_mut()).zip(&board) {
+            let (board, barrier, failed) = (&board, &barrier, &failed);
+            scope.spawn(move || {
+                loop {
+                    *slot.lock().expect("a board slot") = (tree.counts(), plan.left);
+                    barrier.wait();
+                    let done = failed.lock().expect("the failure").is_some()
+                        || finished(
+                            board
+                                .iter()
+                                .map(|s| s.lock().expect("a board slot").clone()),
+                            stop,
+                        );
+                    // Every thread reads the board before any writes it again.
+                    barrier.wait();
+                    if done {
+                        break;
+                    }
+                    let n = plan.take();
+                    // A panicking tree still meets every barrier, so the others end with it
+                    // rather than wait for it forever.
+                    if let Err(e) = catch_unwind(AssertUnwindSafe(|| tree.grow(t, policy, n))) {
+                        failed.lock().expect("the failure").get_or_insert(e);
+                    }
+                }
+            });
+        }
+    });
+    if let Some(e) = failed.into_inner().expect("the failure") {
+        resume_unwind(e);
+    }
+}
+
+/// Whether trees with these root visit counts and iterations left are done: when none are
+/// left, or with `stop` once the candidate visited most is settled, since no candidate could
+/// overtake it even if every iteration left went its way. The first of equals wins, so one
+/// before the leader must stay strictly behind.
+fn finished(trees: impl Iterator<Item = (Vec<u32>, u32)>, stop: bool) -> bool {
+    let mut visits: Vec<u32> = Vec::new();
+    let mut left = 0;
+    for (counts, l) in trees {
+        visits.resize(counts.len(), 0);
+        for (sum, n) in visits.iter_mut().zip(counts) {
+            *sum += n;
+        }
+        left += l;
+    }
+    if left == 0 || !stop {
+        return left == 0;
+    }
+    let best = leader(&visits);
+    visits
+        .iter()
+        .enumerate()
+        .all(|(i, &n)| i == best || visits[best] >= n + left + u32::from(i < best))
+}
+
+/// The candidate visited most, the first of equals.
+fn leader(visits: &[u32]) -> usize {
+    let mut best = 0;
+    for (i, &n) in visits.iter().enumerate() {
+        if n > visits[best] {
+            best = i;
+        }
+    }
+    best
+}
+
+/// The root visits and rewards per candidate, summed across `trees` in order.
+fn totals(trees: &[Tree]) -> (Vec<u32>, Vec<f64>) {
+    let n = trees.first().map_or(0, |t| t.children().len());
+    let mut visits = vec![0; n];
+    let mut rewards = vec![0.0; n];
+    for tree in trees {
+        for ((v, r), child) in visits.iter_mut().zip(&mut rewards).zip(tree.children()) {
+            *v += child.visits;
+            *r += child.reward;
+        }
+    }
+    (visits, rewards)
+}
+
+/// The card a choice names, which answering it may move: the card cast, the land played,
+/// the source activated (a cost may sacrifice it), the object picked.
+fn names(d: &Decision, c: Choice) -> Option<Slot> {
+    match d.candidates {
+        Candidates::Objects(_) => d.candidates.object(c),
+        Candidates::Options(_) => match d.candidates.option(c)? {
+            Opt::Cast { slot, .. }
+            | Opt::PlayLand(slot)
+            | Opt::Activate { slot, .. }
+            | Opt::Object(slot) => Some(slot),
+            _ => None,
+        },
     }
 }
 
@@ -183,28 +478,22 @@ impl Node {
 }
 
 /// One tree and what growing it needs.
-struct Tree<'a> {
-    t: &'a GameTable,
-    policy: &'a RolloutPolicy,
+#[derive(Debug)]
+struct Tree {
     nodes: Vec<Node>,
+    /// The node of the decision being searched.
+    root: u32,
+    /// The position at the root: the true state or a determinization of it.
+    state: State,
     rng: SplitMix64,
     x: Scratch,
 }
 
-impl<'a> Tree<'a> {
-    /// Grows one tree for `iterations` from the position `obs` shows at decision `d`, and
-    /// returns its root children's visit counts.
-    fn search(
-        t: &'a GameTable,
-        policy: &'a RolloutPolicy,
-        sight: Sight,
-        obs: Observation<'_>,
-        d: &Decision,
-        seed: u64,
-        iterations: u32,
-    ) -> Vec<u32> {
+impl Tree {
+    /// A tree of one expanded root, for the position `obs` shows at decision `d`.
+    fn new(t: &GameTable, sight: Sight, obs: Observation<'_>, d: &Decision, seed: u64) -> Self {
         let mut rng = SplitMix64::new(seed);
-        let root = match sight {
+        let state = match sight {
             Sight::Omniscient => {
                 let mut s = *obs.unmasked_root();
                 s.reseed(rng.next_u64());
@@ -213,53 +502,85 @@ impl<'a> Tree<'a> {
             Sight::Hidden => obs.determinize(t, &mut rng),
         };
         let mut tree = Tree {
-            t,
-            policy,
             nodes: vec![Node::new(d.player)],
+            root: 0,
+            state,
             rng,
             x: Scratch::new(),
         };
         tree.expand(0, d);
+        tree
+    }
+
+    fn visits(&self) -> u32 {
+        self.nodes[self.root as usize].visits
+    }
+
+    fn children(&self) -> &[Node] {
+        let root = self.nodes[self.root as usize];
+        &self.nodes[root.first as usize..][..usize::from(root.children)]
+    }
+
+    fn counts(&self) -> Vec<u32> {
+        self.children().iter().map(|n| n.visits).collect()
+    }
+
+    /// Whether the root's child for `c` has children of its own, so it can root a search.
+    fn expanded(&self, c: Choice) -> bool {
+        self.children()[usize::from(c.0)].children > 0
+    }
+
+    fn grow(&mut self, t: &GameTable, policy: &RolloutPolicy, iterations: u32) {
         for _ in 0..iterations {
-            tree.iterate(&root);
+            self.iterate(t, policy);
         }
-        let root = tree.nodes[0];
-        tree.nodes[root.first as usize..][..usize::from(root.children)]
-            .iter()
-            .map(|n| n.visits)
-            .collect()
+    }
+
+    /// Moves the root down to its child for `c`, if the game there reaches `d` and shows
+    /// what `obs` shows of every slot.
+    fn descend(&mut self, t: &GameTable, c: Choice, obs: Observation<'_>, d: &Decision) -> bool {
+        let child = self.nodes[self.root as usize].first + u32::from(c.0);
+        let mut s = self.state;
+        self.x.counts.copied();
+        apply(&mut s, t, &mut self.x, &mut Replay, c);
+        smart(&mut s);
+        if next(&mut s, t, &mut self.x, &mut Replay) != Step::Decide(*d) {
+            return false;
+        }
+        let seen = observe(&s, t, &mut self.x, d.player);
+        if Slot::all().any(|slot| {
+            seen.object(slot).incarnation != obs.object(slot).incarnation
+                || seen.knows(slot) != obs.knows(slot)
+        }) {
+            return false;
+        }
+        self.state = s;
+        self.root = child;
+        true
     }
 
     /// One iteration: from a copy of the root, select by UCB1 down to a child not yet played,
     /// play it out, and score the game for every node on the way.
-    fn iterate(&mut self, root: &State) {
-        let mut s = *root;
+    fn iterate(&mut self, t: &GameTable, policy: &RolloutPolicy) {
+        let mut s = self.state;
         self.x.counts.copied();
         let mut path: [u32; 256] = [0; 256];
         let mut depth = 0;
-        let mut node = 0;
+        let mut node = self.root;
         let outcome = loop {
             let child = self.select(node);
             path[depth] = child;
             depth += 1;
             let choice = Choice((child - self.nodes[node as usize].first) as u8);
-            apply(&mut s, self.t, &mut self.x, &mut Replay, choice);
-            if node == 0 {
-                // The root decision was offered under the game's profile; below it the tree
-                // plays under the smart stops, with no player's passes asked. The payment
-                // profile stays, so a payment in progress is never asked under another.
-                s.set_profile(Profile {
-                    stops: Stops::Smart,
-                    breakpoint: None,
-                    full_control: None,
-                    ..s.profile()
-                });
+            apply(&mut s, t, &mut self.x, &mut Replay, choice);
+            if node == self.root {
+                smart(&mut s);
             }
             if self.nodes[child as usize].visits == 0 || depth == path.len() {
                 s.reseed(self.rng.next_u64());
-                break rollout(&mut s, self.t, &mut self.x, self.policy);
+                break rollout(&mut s, t, &mut self.x, policy);
             }
-            match next(&mut s, self.t, &mut self.x, &mut Replay) {
+            match next(&mut s, t, &mut self.x, &mut Replay) {
                 Step::Over(outcome) => break outcome,
                 Step::Decide(below) => {
                     if self.nodes[child as usize].children == 0 {
@@ -269,7 +590,7 @@ impl<'a> Tree<'a> {
                 }
             }
         };
-        self.nodes[0].visits += 1;
+        self.nodes[self.root as usize].visits += 1;
         for &n in &path[..depth] {
             let n = &mut self.nodes[n as usize];
             n.visits += 1;
@@ -314,6 +635,18 @@ impl<'a> Tree<'a> {
         }
         best.0
     }
+}
+
+/// The profile below a tree's root. The root decision was offered under the game's profile;
+/// below it the tree plays under the smart stops, with no player's passes asked. The payment
+/// profile stays, so a payment in progress is never asked under another.
+fn smart(s: &mut State) {
+    s.set_profile(Profile {
+        stops: Stops::Smart,
+        breakpoint: None,
+        full_control: None,
+        ..s.profile()
+    });
 }
 
 /// A finished game's reward for `player`: 1 for a win, 0 for a loss, 0.5 for a draw or a
