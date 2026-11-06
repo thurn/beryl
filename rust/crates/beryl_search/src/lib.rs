@@ -1,9 +1,11 @@
 //! The agents (architecture §19.1): everything that plays the game, behind one trait. The
 //! seeded [`RandomAgent`] fuzzes; the [`GreedyAgent`] is the [`RolloutPolicy`] search plays
-//! rollouts with; [`Mcts`] searches with it. [`AGENTS`] names every agent a game can be played
-//! against.
+//! rollouts with; [`Mcts`] searches with it; the [`ExpertAgent`] plays by hand-written rules,
+//! and the [`FrozenExpertAgent`] is a copy of it that never changes, the bar general agents
+//! are measured against. [`AGENTS`] names every agent a game can be played against.
 
 mod expert;
+mod frozen;
 mod mcts;
 mod rollout;
 mod values;
@@ -12,6 +14,7 @@ use beryl_engine::rng::SplitMix64;
 use beryl_engine::{Choice, Decision, GameTable, Observation};
 
 pub use expert::ExpertAgent;
+pub use frozen::FrozenExpertAgent;
 pub use mcts::{Budget, Mcts, Sight};
 pub use rollout::{COUNTER_MIN, Inline, REMOVAL_MIN, RolloutPolicy, rollout};
 pub use values::{CardInfo, CardValues};
@@ -108,6 +111,12 @@ pub static AGENTS: &[AgentInfo] = &[
         new: expert,
     },
     AgentInfo {
+        name: "expert-frozen",
+        title: "Frozen Expert",
+        description: "The expert as it stood when retuned for this deck, kept as a fixed bar",
+        new: expert_frozen,
+    },
+    AgentInfo {
         name: "mcts-omniscient",
         title: "Seer",
         description: "Cheats: searches the true game, your hand and its library order included",
@@ -131,6 +140,10 @@ fn greedy(t: &GameTable, _seed: u64, _budget: Budget) -> Box<dyn Agent + Send> {
 
 fn expert(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn Agent + Send> {
     Box::new(ExpertAgent::new(t, seed))
+}
+
+fn expert_frozen(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn Agent + Send> {
+    Box::new(FrozenExpertAgent::new(t, seed))
 }
 
 fn mcts_omniscient(t: &GameTable, seed: u64, budget: Budget) -> Box<dyn Agent + Send> {

@@ -1003,10 +1003,11 @@ Rules for the hot path:
 
 Milestone 1 ships five agents behind one trait, named in `beryl_search::AGENTS`:
 `random`, `greedy` (the rollout policy), `expert` (**D15**), and a basic MCTS as
-`mcts-omniscient` and `mcts-hidden`. The engine already provides what search
-needs: cheap copies, factored decisions inside the state, the `Observation` view
-and determinization, profiles, budgets, the state hash, per-thread `Scratch`,
-inline answers, and the inlined rollout loop.
+`mcts-omniscient` and `mcts-hidden`. A sixth, `expert-frozen`, is a fixed copy
+of the expert, the reference opponent of `docs/ai-strategy.md` §6. The engine
+already provides what search needs: cheap copies, factored decisions inside the
+state, the `Observation` view and determinization, profiles, budgets, the state
+hash, per-thread `Scratch`, inline answers, and the inlined rollout loop.
 
 ```rust
 pub trait Agent {

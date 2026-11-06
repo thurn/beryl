@@ -541,9 +541,9 @@ fn removal_aims_at_the_creature_that_kills_us() {
     assert_eq!(name(&t, &s, target), names::SPHINX_OF_FALSE_CONCLUSIONS);
 }
 
-/// Expert against random, seats alternated. The CLI's 200-game tournament measures the gate
-/// (at least 90%); this pins a smaller seeded sample, with room for its luck: 35 of 40, at 88%
-/// over 200, once the mulligan put its bottom picks after the keep.
+/// Expert against random, seats alternated. The CLI's 400-game tournament measures the gate
+/// (at least 97% in the cb8d5d5f mirror); this pins a smaller seeded sample, with room for its
+/// luck: 40 of 40, at 98.8% over 400, once retuned for the mirror's cards.
 #[test]
 fn expert_beats_random() {
     let t = mirror();
@@ -562,5 +562,5 @@ fn expert_beats_random() {
         let outcome = play(&t, &mut s, &mut Scratch::new(), &mut agents, |_, _| {});
         wins += u64::from(outcome == Outcome::Win(expert));
     }
-    assert!(wins * 10 >= games * 8, "expert won {wins} of {games}");
+    assert!(wins * 20 >= games * 19, "expert won {wins} of {games}");
 }

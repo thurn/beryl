@@ -1,22 +1,26 @@
 //! The expert system (Milestone 1 decision 6): prioritized rules with card knowledge for the
-//! WU Control mirror's 29 cards. It decides from its [`Observation`] only. It looks further
-//! in two places, on engine copies of a determinization: combat ([`combat`]), where it plays
-//! out the attacks and blocks it weighs, for combat math and lethal checks; and a payment
-//! plan, where it reads which sources each plan would tap.
+//! WU Control mirrors, cb8d5d5f's and the Vintage deck's before it. It decides from its
+//! [`Observation`] only. It looks further in two places, on engine copies of a
+//! determinization: combat ([`combat`]), where it plays out the attacks and blocks it weighs,
+//! for combat math and lethal checks; and a payment plan, where it reads which sources each
+//! plan would tap.
 //!
 //! The rules, in brief:
 //!
 //! - Counterspell discipline: counter a spell worth it, a softer counter only when its
-//!   controller can't pay (Mana Tithe first when that leaves too little for No More Lies),
-//!   the cheapest that works first; with one counter left, only a major threat. A minor
-//!   spell waits rather than tap the counter's mana.
-//! - Flash threats (Sphinx, Malcolm, The Wandering Emperor) wait for the opponent's end step
-//!   or attack, unless the opponent cannot counter now or we need the blocker; instant-speed
-//!   removal waits for an attacker or the end step unless its target is urgent. In response
-//!   to a wheel or to Elite Spellbinder's trigger, what we could cast is cast.
-//! - Teferi first, so nothing after him can be countered; Mana Crypt while the mana is
-//!   worth the life; Overlord in full unless blockers are needed now; a wheel only for card
-//!   advantage, never when winning or (but for a big gain) far behind; Strip Mine on an
+//!   controller can't pay (Mana Tithe first when that leaves too little for No More Lies) or,
+//!   for Reprieve, can't cast it again this turn, the cheapest that works first; with one
+//!   counter left, only a major threat. Subtlety answers a creature or planeswalker spell,
+//!   evoked only for one that would win. A minor spell waits rather than tap the counter's
+//!   mana.
+//! - Flash threats (Sphinx, Malcolm, The Wandering Emperor, Snapcaster Mage) and Thirst for
+//!   Discovery wait for the opponent's end step or attack, unless the opponent cannot
+//!   counter now or we need the blocker; instant-speed removal waits for an attacker or the
+//!   end step unless its target is urgent. In response to a wheel or to Elite Spellbinder's
+//!   trigger, what we could cast is cast.
+//! - Teferi first, so nothing after him can be countered; Mana Crypt only while short of lands
+//!   for the spells in hand; Overlord in full unless blockers are needed now; a wheel only for
+//!   card advantage, never when winning or (but for a big gain) far behind; Strip Mine on an
 //!   opponent short of lands; Thieving Skydiver kicked only for an artifact worth taking;
 //!   Swift Reconfiguration never on Jace, Vryn's Prodigy; Aang's Iceberg never on an
 //!   impending Overlord; Get Lost never on a Sphinx that would come back as a token; bounces
@@ -25,9 +29,11 @@
 //! - A counterspell we have seen, in their hand or in our Elite Spellbinder's exile, holds
 //!   back our major threats; facing No More Lies, a major threat goes first, while we can
 //!   still pay its {3}.
-//! - Planeswalkers are worth their loyalty, more near an ultimate. Ours: an ultimate when it
-//!   is there; protect the walker when the opponent's creatures threaten it, bounce a blocker
-//!   to open lethal, else grow or draw.
+//! - Planeswalkers are worth their loyalty, more near an ultimate, and a Jace, Wielder of
+//!   Mysteries near a win by decking most of all. Ours: an ultimate when it is there (Jace,
+//!   Wielder's only when it wins); protect the walker when the opponent's creatures threaten
+//!   it, bounce a blocker to open lethal, else grow or draw. No draw by choice once the
+//!   library runs low, and no milling an opponent whose Jace, Wielder could still win.
 //! - Dead on board, every removal and bounce aims at the creature that would kill us.
 //! - Everything else is the rollout policy's ([`RolloutPolicy`]), valuing permanents as the
 //!   expert does ([`appraise`]).
@@ -1617,12 +1623,11 @@ impl Expert<'_> {
         }
         let threshold = match name {
             names::SINK_INTO_STUPOR if face == FaceIx::FRONT => 50,
-            names::OUST => 35,
+            names::OUST | names::WINDS_OF_ABANDON => 35,
             names::GET_LOST => 50,
             names::AANGS_ICEBERG => 45,
             names::SWIFT_RECONFIGURATION => 40,
             names::PORTABLE_HOLE => 25,
-            names::WINDS_OF_ABANDON => 35,
             // Fractured Identity takes the permanent and gives us a copy: for a threat.
             names::FRACTURED_IDENTITY => 55,
             _ => return None,
@@ -2011,7 +2016,7 @@ impl Expert<'_> {
                     .max()
                     .unwrap_or(0);
                 let decking = !self.draw_safe(1) && target > 0;
-                if loyalty >= 3 && (target >= MAJOR || threatened >= loyalty + 1 || decking) {
+                if loyalty >= 3 && (target >= MAJOR || threatened > loyalty || decking) {
                     by_cost(-3)
                 } else {
                     by_cost(1)
@@ -2415,18 +2420,8 @@ impl Expert<'_> {
     /// opponent's attackers are declared, an attacker, the one dealing most when the attack
     /// is lethal, else the most valuable.
     fn target(&self, d: &Decision) -> Option<Choice> {
-        // A Mana Crypt about to kill us goes, to our own Aang's Iceberg or Teferi.
-        if let Some(crypt) = self.deadly_crypt()
-            && let Some(e) = self.obs().stack().last()
-            && e.controller == self.me()
-            && matches!(
-                self.p.t.def(e.card).name,
-                names::AANGS_ICEBERG | names::TEFERI_TIME_RAVELER
-            )
-            && let beryl_engine::Candidates::Objects(b) = d.candidates
-            && b.contains(crypt)
-        {
-            return Some(best(d, |c| Some(i32::from(c.object()? == crypt))));
+        if let Some(c) = self.crypt_target(d).or_else(|| self.mill_target(d)) {
+            return Some(c);
         }
         // The Wandering Emperor's +1 for lethal: on the attacker that gets past the blockers.
         if let Some(e) = self.obs().stack().last()
@@ -2437,19 +2432,6 @@ impl Expert<'_> {
             && b.contains(pump)
         {
             return Some(best(d, |c| Some(i32::from(c.object()? == pump))));
-        }
-        // Jace, Wielder of Mysteries' +1: "Target player mills two cards." Not the opponent
-        // while an empty library would win them the game; our own would win it for us.
-        if let Some(e) = self.obs().stack().last()
-            && e.controller == self.me()
-            && self.p.t.def(e.card).name == names::JACE_WIELDER_OF_MYSTERIES
-            && matches!(d.candidates, beryl_engine::Candidates::Options(_))
-        {
-            let mill_self = self.their_jace_live();
-            return Some(best(d, |c| match c.option() {
-                Some(Opt::Player(p)) => Some(i32::from((p == self.me()) == mill_self)),
-                _ => None,
-            }));
         }
         // Jace, Telepath Unbound's −3: the card worth casting again.
         if let Some(e) = self.obs().stack().last()
@@ -2533,6 +2515,40 @@ impl Expert<'_> {
             } else {
                 -self.value(slot)
             })
+        }))
+    }
+
+    /// A Mana Crypt about to kill us goes, to our own Aang's Iceberg or Teferi.
+    fn crypt_target(&self, d: &Decision) -> Option<Choice> {
+        let crypt = self.deadly_crypt()?;
+        let e = self.obs().stack().last()?;
+        if e.controller == self.me()
+            && matches!(
+                self.p.t.def(e.card).name,
+                names::AANGS_ICEBERG | names::TEFERI_TIME_RAVELER
+            )
+            && let beryl_engine::Candidates::Objects(b) = d.candidates
+            && b.contains(crypt)
+        {
+            return Some(best(d, |c| Some(i32::from(c.object()? == crypt))));
+        }
+        None
+    }
+
+    /// Jace, Wielder of Mysteries' +1: "Target player mills two cards." Not the opponent while
+    /// an empty library could win them the game; our own would win it for us.
+    fn mill_target(&self, d: &Decision) -> Option<Choice> {
+        let e = self.obs().stack().last()?;
+        if e.controller != self.me()
+            || self.p.t.def(e.card).name != names::JACE_WIELDER_OF_MYSTERIES
+            || !matches!(d.candidates, beryl_engine::Candidates::Options(_))
+        {
+            return None;
+        }
+        let mill_self = self.their_jace_live();
+        Some(best(d, |c| match c.option() {
+            Some(Opt::Player(p)) => Some(i32::from((p == self.me()) == mill_self)),
+            _ => None,
         }))
     }
 

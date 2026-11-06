@@ -123,7 +123,10 @@ of multi-card choices, pruning of dominated moves and weak rollout policies.
 
 - **A frozen reference opponent.** Freeze the current `expert` as a separate
   agent before tuning anything. Improving the live expert must not move the bar,
-  and every general-agent result is reported against the frozen copy.
+  and every general-agent result is reported against the frozen copy. That copy
+  is `expert-frozen`, frozen once retuned for the cb8d5d5f mirror: it beats
+  `greedy` 78% and `random` 99% over 400 games (seed 20261106). It carries its
+  own rollout policy and card values, and a test pins its moves.
 - **Paired, seat-alternated games.** Both seats play the same shuffle seeds. Use
   McNemar's test on discordant pairs, Wilson 95% intervals on rates, and at
   least 300 paired seeds per A/B. No conclusions from partial runs.

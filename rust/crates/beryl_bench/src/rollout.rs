@@ -1,6 +1,7 @@
 //! The cube rollout benchmark (architecture §18): the workload search runs, measured in its
 //! parts. A pinned corpus of mid-game WU Control mirror positions, cut from seeded games
-//! between `expert` agents and between `greedy` agents, is rolled out to the end of the game
+//! between `expert-frozen` agents, which tuning the live expert never moves, and between
+//! `greedy` agents, is rolled out to the end of the game
 //! under the rollout policy and the search profile (smart stops), each position several
 //! times from reseeded copies.
 //!
@@ -22,7 +23,7 @@ use beryl_engine::{
     Answers, Choice, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch, State,
     Step, Stops, apply, apply_decided, next, observe,
 };
-use beryl_search::{Agent, ExpertAgent, GreedyAgent, Inline, RolloutPolicy, rollout};
+use beryl_search::{Agent, FrozenExpertAgent, GreedyAgent, Inline, RolloutPolicy, rollout};
 
 /// The seed the corpus games are played from.
 pub const SEED: u64 = 0x00C0_FFEE;
@@ -57,8 +58,8 @@ impl Corpus {
                 let seed = SEED ^ (game << 1 | u64::from(expert));
                 let mut agents: [Box<dyn Agent>; 2] = if expert {
                     [
-                        Box::new(ExpertAgent::new(&table, seed)),
-                        Box::new(ExpertAgent::new(&table, !seed)),
+                        Box::new(FrozenExpertAgent::new(&table, seed)),
+                        Box::new(FrozenExpertAgent::new(&table, !seed)),
                     ]
                 } else {
                     [
@@ -360,7 +361,7 @@ mod tests {
         let c = Corpus::new();
         let turns: Vec<u16> = c.positions.iter().map(|s| s.turn().number).collect();
         assert_eq!(turns, CUTS.repeat(2 * GAMES as usize));
-        assert_eq!(stable_hash(&c.positions), 6_916_876_755_175_271_620);
+        assert_eq!(stable_hash(&c.positions), 12_958_604_318_748_991_495);
     }
 
     /// The engine benchmark replays the rollouts the whole-rollout benchmark plays: the
