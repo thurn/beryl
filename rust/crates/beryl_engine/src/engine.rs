@@ -193,7 +193,12 @@ fn advance<const STEPS: bool>(
     a: &mut dyn Answers,
     seen: (u16, TurnStep),
 ) -> Option<Step> {
+    // Whether a state-based check found nothing and priority has only been passed since,
+    // from one player to the other: a pass changes nothing the check reads, so the next
+    // check would find nothing again and is skipped, though still counted.
+    let mut settled = false;
     loop {
+        let unchanged = std::mem::take(&mut settled);
         if let Some(outcome) = s.outcome {
             return Some(Step::Over(outcome));
         }
@@ -208,7 +213,11 @@ fn advance<const STEPS: bool>(
             // CR 117.5: "Each time a player would get priority, the game first performs all
             // applicable state-based actions as a single event".
             x.counts.state_based_checks += 1;
-            match sba::check(s, t, &mut x.events) {
+            match if unchanged {
+                Ok(false)
+            } else {
+                sba::check(s, t, &mut x.events)
+            } {
                 Ok(true) => {
                     s.turn.cleanup_check = false;
                     continue;
@@ -233,9 +242,11 @@ fn advance<const STEPS: bool>(
         }
         if passes_silently(s) {
             x.counts.silent += 1;
+            let passes = s.turn.passes;
             if perform_priority(s, t, x, a, s.turn.priority, Opt::Pass).is_err() {
                 stall(s, StallReason::Capacity);
             }
+            settled = handed_over(s, passes);
             continue;
         }
         let Ok(d) = decision(s, t, &mut x.events) else {
@@ -249,7 +260,10 @@ fn advance<const STEPS: bool>(
             && !(priority && s.profile.asks_pass(s.turn, d.player));
         if silent {
             x.counts.silent += 1;
+            let passes = s.turn.passes;
             perform_or_stall(s, t, x, a, &d, Choice(0));
+            // A priority decision's first candidate is passing.
+            settled = priority && handed_over(s, passes);
             continue;
         }
         if s.budgets.decisions >= s.profile.limits.decisions_per_turn {
@@ -260,6 +274,15 @@ fn advance<const STEPS: bool>(
         x.counts.decisions += 1;
         return Some(Step::Decide(d));
     }
+}
+
+/// Whether the pass just made, with `passes` passes in succession before it, only handed
+/// priority to the other player
+/// ([CR 117.3d](https://yawgatog.com/resources/magic-rules/#R1173d)): "Then the next player
+/// in turn order receives priority." The first of two passes in succession resolves nothing
+/// and ends no step.
+fn handed_over(s: &State, passes: u8) -> bool {
+    passes == 0 && s.turn.passes == 1 && s.outcome.is_none() && s.pending == Pending::None
 }
 
 /// Whether the open decision is priority for a player away from a stop, who passes silently
