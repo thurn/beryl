@@ -166,6 +166,10 @@ enum Condition {
     ChangedToken,
     /// A permanent is controlled by the player who doesn't own it.
     Stolen,
+    /// The human has unspent mana (CR 106.4).
+    ManaFloating,
+    /// A spell or ability on the stack has an announced X above 0.
+    XOnStack,
 }
 
 /// What the table draws on a permanent beyond its frame.
@@ -221,8 +225,9 @@ impl Condition {
     /// the stack", "castable <card name>", "resolving <card name>", "casting <card name>",
     /// "playable pair in hand", "exiled beneath a permanent", "attached across the table",
     /// "castable from exile", "known card in the opponent's hand", "token twins", "changed
-    /// token", "stolen permanent", or "<mark> beside a twin" with the mark "+1/+1 counters",
-    /// "damage", "summoning sickness" or "story or time counters".
+    /// token", "stolen permanent", "mana floating", "X on the stack", or "<mark> beside a twin"
+    /// with the mark "+1/+1 counters", "damage", "summoning sickness" or "story or time
+    /// counters".
     fn parse(text: &str) -> Result<Condition, String> {
         let condition = match text {
             "attacking" => Condition::Attacking,
@@ -244,6 +249,8 @@ impl Condition {
             "token twins" => Condition::TokenTwins,
             "changed token" => Condition::ChangedToken,
             "stolen permanent" => Condition::Stolen,
+            "mana floating" => Condition::ManaFloating,
+            "X on the stack" => Condition::XOnStack,
             _ => {
                 if let Some(step) = text.strip_prefix("step ") {
                     Condition::Step(
@@ -346,6 +353,8 @@ impl Condition {
             Condition::TokenTwins => token_pairs(view).any(|(a, b)| plain_twins(view, a, b)),
             Condition::ChangedToken => changed_token(view),
             Condition::Stolen => stolen(view),
+            Condition::ManaFloating => mana_floating(view),
+            Condition::XOnStack => x_on_stack(view),
         }
     }
 }
@@ -374,6 +383,29 @@ fn playable_pair(view: &PlayerView) -> bool {
                     && o.name == card.name
             })
         })
+    })
+}
+
+/// Whether the human has unspent mana (CR 106.4).
+fn mana_floating(view: &PlayerView) -> bool {
+    let pool = view.players.you.mana;
+    [
+        pool.white,
+        pool.blue,
+        pool.black,
+        pool.red,
+        pool.green,
+        pool.colorless,
+    ]
+    .iter()
+    .any(|&n| n > 0)
+}
+
+/// Whether a spell or ability on the stack was announced with X above 0.
+fn x_on_stack(view: &PlayerView) -> bool {
+    view.stack.iter().any(|item| {
+        let (StackItem::Spell { x, .. } | StackItem::Ability { x, .. }) = item;
+        *x > 0
     })
 }
 
@@ -706,6 +738,11 @@ mod tests {
             Ok(Condition::ChangedToken)
         );
         assert_eq!(Condition::parse("stolen permanent"), Ok(Condition::Stolen));
+        assert_eq!(
+            Condition::parse("mana floating"),
+            Ok(Condition::ManaFloating)
+        );
+        assert_eq!(Condition::parse("X on the stack"), Ok(Condition::XOnStack));
         assert!(Condition::parse("step lunch").is_err());
         assert!(Condition::parse("raining").is_err());
     }

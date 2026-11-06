@@ -196,6 +196,8 @@ INTERACTION_FIXTURES = [
     "marks",
     "marks-damage",
     "tokens",
+    "mana-floating",
+    "stack-x",
 ]
 
 
