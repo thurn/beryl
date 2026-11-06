@@ -210,19 +210,30 @@ export function pileLook(
 /** The stack, spells and abilities alike, large at the right of the table as in
  * docs/ui_mockups/trigger_on_stack_with_target.png: the top item in front where the mockup
  * draws its trigger, each item beneath it peeking out above by its name bar, closer together
- * the taller the stack. */
+ * the taller the stack. `x` and `width` bound it; `y` is the top item's top at full size. */
 export const STACK = { x: 1205, y: 222, width: 295, step: 46, reach: 200 };
 
 /** How far the stack rises to clear the prompt below it, while one is open. */
 const STACK_LIFT = 90;
 
-/** Where the stack item at `index` (bottom first) of `count` is drawn, `lifted` or not. */
+/** How high the stack may reach: below the opponent's piles at the far right of the table,
+ * whose top cards and count badges end by y 160, with room for a pile of about 20 cards'
+ * thickness beneath. */
+const STACK_TOP = 175;
+
+/** Where the stack item at `index` (bottom first) of `count` is drawn, `lifted` or not. The top
+ * item's foot stays put; a stack too tall to fit under the opponent's piles shrinks, all its
+ * items alike, about its column's middle. */
 export function stackPlace(index: number, count: number, lifted = false) {
   const step = count > 1 ? Math.min(STACK.step, STACK.reach / (count - 1)) : 0;
+  const height = STACK.width / FULL_ASPECT;
+  const foot = STACK.y - (lifted ? STACK_LIFT : 0) + height;
+  const scale = Math.min(1, (foot - STACK_TOP) / (height + (count - 1) * step));
+  const width = STACK.width * scale;
   return {
-    x: STACK.x,
-    y: STACK.y - (lifted ? STACK_LIFT : 0) - (count - 1 - index) * step,
-    width: STACK.width,
+    x: STACK.x + (STACK.width - width) / 2,
+    y: foot - (height + (count - 1 - index) * step) * scale,
+    width,
   };
 }
 

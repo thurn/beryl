@@ -181,10 +181,7 @@ export function cutText(page) {
                         x <= b.right &&
                         y >= b.top &&
                         y <= b.bottom;
-                    // The stack, lifted over a prompt, may rise over the opponent's piles.
-                    const over =
-                        inside &&
-                        hit.closest(".card-layer .card-el:not(.card-el-stack)");
+                    const over = inside && hit.closest(".card-layer .card-el");
                     if (over && !over.contains(el)) {
                         found.push(
                             `"${text}" lies under ${over.dataset.card ?? "a card"}`,
