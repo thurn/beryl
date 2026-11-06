@@ -1882,12 +1882,18 @@ impl Expert<'_> {
                 .loyalty
                 .is_some_and(|l| loyalty + i32::from(l) >= 1 || l <= -8 || lethal)
         };
+        // Nor one that draws by choice when that could deck us, as Teferi, Hero of
+        // Dominaria's +1.
+        let draws = |i: u8| {
+            o.face == FaceIx::FRONT && self.p.values.get(card).draws(i) && !self.draw_safe(1)
+        };
         self.preferred_ability(slot)
-            .filter(|&i| keeps(i))
+            .filter(|&i| keeps(i) && !draws(i))
             .or_else(|| {
                 face.abilities
                     .iter()
-                    .position(|a| a.cost.loyalty.is_some_and(|l| l > 0))
+                    .enumerate()
+                    .position(|(i, a)| a.cost.loyalty.is_some_and(|l| l > 0) && !draws(i as u8))
                     .map(|i| i as u8)
             })
     }
@@ -1963,7 +1969,8 @@ impl Expert<'_> {
                     .map(|s| self.value(s) + self.killer_bonus(s))
                     .max()
                     .unwrap_or(0);
-                if loyalty >= 3 && (target >= MAJOR || threatened >= loyalty + 1) {
+                let decking = !self.draw_safe(1) && target > 0;
+                if loyalty >= 3 && (target >= MAJOR || threatened >= loyalty + 1 || decking) {
                     by_cost(-3)
                 } else {
                     by_cost(1)
@@ -2212,6 +2219,9 @@ impl Expert<'_> {
                         100
                     }
                     Some(names::SPARAS_HEADQUARTERS) if self.lands(self.me()) >= 5 => 90,
+                    // Anything else the rollout policy would do, as Currency Converter's loot,
+                    // with mana that would go unused.
+                    _ if min < 0 && self.p.action(o) > 0 => 50,
                     _ => 0,
                 }
             }
