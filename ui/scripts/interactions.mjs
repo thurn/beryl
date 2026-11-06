@@ -661,6 +661,25 @@ await check(
     { fixture: "opponent-turn", at: 22, ready: ".game-log-entry" },
 );
 
+/** Asserts that `button` takes a click anywhere along its middle, at 10, 30, 50, 70 and 90%
+ * of its width, with both of the opponent's piles on the table: nothing lies over it. */
+async function assertReachable(page, button) {
+    assert.equal(
+        await page.locator("[data-pile][data-side=opponent]").count(),
+        2,
+        "the opponent's graveyard and exile piles lie on the table",
+    );
+    const missed = await button.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return [10, 30, 50, 70, 90].flatMap((pct) => {
+            const x = r.left + (r.width * pct) / 100;
+            const hit = document.elementFromPoint(x, r.top + r.height / 2);
+            return el.contains(hit) ? [] : [`${pct}%: ${hit?.className}`];
+        });
+    });
+    assert.deepEqual(missed, [], "every point of the button reaches it");
+}
+
 /** Asserts that no permanent on the table covers a land: a long row of permanents may pass
  * over the land piles' side of the table, but in a row of its own. */
 async function assertClearOfLands(page) {
@@ -2249,6 +2268,17 @@ await check(
         );
     },
     { fixture: "choice-scry", at: scry.views.length, ready: tray(scryNext) },
+);
+
+// The opponent's piles lie at the top right, where "View Battlefield" was: the way back stays
+// clear of them.
+await check(
+    "a prompt's way back from the battlefield takes every click",
+    async (page) => {
+        await page.getByRole("button", { name: "View Battlefield" }).click();
+        await assertReachable(page, page.locator(".overlay-return"));
+    },
+    { fixture: "choice-scry", at: scry.views.length, ready: ".choice" },
 );
 
 // The scry's source, Aang's Iceberg, has four paragraphs of rules: they shrink to fit its box.
@@ -4604,7 +4634,9 @@ await check(
         );
         await result.getByRole("button", { name: "View battlefield" }).click();
         assert.equal(await result.count(), 0, "the battlefield shows");
-        await page.getByRole("button", { name: "Back to Defeat" }).click();
+        const back = page.getByRole("button", { name: "Back to Defeat" });
+        await assertReachable(page, back);
+        await back.click();
         await result.getByRole("button", { name: "New game" }).waitFor();
     },
     overAt,

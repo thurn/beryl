@@ -108,7 +108,8 @@ pub const BOARDS: &[Scenario] = &[
         .hand(P1, &[ISLAND, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS])
         .library(P1, LANDS),
     // The opponent attacks with Beza, the Bounding Spring into a human at 3 life with nothing
-    // to block it, and the game ends on its damage.
+    // to block it, and the game ends on its damage. The opponent has a graveyard and an exile
+    // pile, which the way back to the result must stay clear of.
     Scenario::new("game-over")
         .at(3, P0, TurnStep::PrecombatMain)
         .life(P0, 3)
@@ -118,6 +119,8 @@ pub const BOARDS: &[Scenario] = &[
             P1,
             &[Permanent::new(BEZA_THE_BOUNDING_SPRING), PLAINS_, ISLAND_],
         )
+        .graveyard(P1, &[STOCK_UP])
+        .exile(P1, &[MALCOLM_ALLURING_SCOUNDREL])
         .library(P1, LANDS)
         .actions(&[
             // The one creature that may attack ends the declaration.

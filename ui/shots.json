@@ -423,6 +423,13 @@
       "height": 1080
     },
     {
+      "name": "game-choice-scry-battlefield",
+      "route": "/?fixture=choice-scry#/game",
+      "width": 1600,
+      "height": 900,
+      "click": ".overlay-view"
+    },
+    {
       "name": "game-choice-jace",
       "route": "/?fixture=choice-jace#/game",
       "width": 1600,

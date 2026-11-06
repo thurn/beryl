@@ -654,15 +654,17 @@
   padding: 0 32px;
   font-size: 30px;
 }
-/* While the battlefield shows, the way back sits where "View Battlefield" was. */
+/* While the battlefield shows, the way back sits where the turn button does, which gives way to
+   it: the top right, where "View Battlefield" was, holds the opponent's piles. Over the hand. */
 .overlay-return {
   position: absolute;
-  top: 58px;
-  right: 54px;
-  z-index: 30;
-  height: 53px;
-  padding: 0 28px;
-  font-size: 26px;
+  top: 765px;
+  right: 39px;
+  z-index: 600;
+  min-width: 250px;
+  height: 48px;
+  padding: 0 21px;
+  font-size: 22px;
 }
 
 /* The table: a fixed stage scaled to the window. */
