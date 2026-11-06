@@ -661,10 +661,16 @@ class Exporter:
     def pay(self, who: str, p: Position, source: str | None) -> None:
         """Before a cast or activation at an empty stack, taps the mana sources Beryl's payment
         tapped, which are among the taps by the next position, less the activated `source`
-        itself. A payment with a source of several kinds of mana is left to XMage."""
-        if p.stack or self.index + 1 >= len(self.trace):
+        itself. A payment with a source of several kinds of mana is left to XMage. One that
+        sacrifices a Treasure is unsupported: XMage asks the color it makes, which the trace
+        doesn't record."""
+        if self.index + 1 >= len(self.trace):
             return
         taps = list(self.trace[self.index + 1].taps)
+        if "Treasure Token" in taps:
+            raise Unsupported("a payment with a Treasure, whose color XMage asks")
+        if p.stack:
+            return
         if source in taps:
             taps.remove(source)
         if any(name in MANA_CHOICES for name in taps):

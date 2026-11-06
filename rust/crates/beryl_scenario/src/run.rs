@@ -4,7 +4,7 @@ use std::fmt;
 
 use beryl_engine::card::{FaceIx, Types};
 use beryl_engine::event::Event;
-use beryl_engine::state::{CounterKind, ObjectFlags};
+use beryl_engine::state::{CounterKind, ObjectFlags, ObjectRef};
 use beryl_engine::{
     Breakpoint, CardTable, Choice, Decision, DecisionKind, GameTable, Opt, Outcome, Profile,
     Replay, Scratch, Seat, Slot, State, Step, Stops, Zone, apply, next,
@@ -82,6 +82,7 @@ fn walk(
         actions: scenario.actions,
         position: None,
         forced: Vec::new(),
+        permanents: Vec::new(),
     };
     let mut positions = Vec::with_capacity(scenario.actions.len());
     for i in 0..scenario.actions.len() {
@@ -212,6 +213,9 @@ struct Runner<'a> {
     position: Option<Step>,
     /// The forced answers since the last position, for [`trace`].
     forced: Vec<Forced>,
+    /// The permanents on the battlefield at the last position, by name: a tapped one that
+    /// has since left, as a Treasure sacrificed for mana, is named as it was.
+    permanents: Vec<(ObjectRef, &'static str)>,
 }
 
 impl Runner<'_> {
@@ -418,11 +422,26 @@ impl Runner<'_> {
         for e in self.x.events.drain() {
             match e {
                 Event::CoinFlip { player, won } => flips.push(CoinFlip { player, won }),
-                Event::Tap { object } => taps.push(object.slot),
+                Event::Tap { object } => taps.push(object),
                 _ => {}
             }
         }
-        let taps = taps.into_iter().map(|slot| self.name(slot)).collect();
+        let taps = taps
+            .into_iter()
+            .map(|object| {
+                let was = self.permanents.iter().find(|&&(r, _)| r == object);
+                match was {
+                    Some(&(_, name)) if !self.s.is_current(object) => name,
+                    _ => self.name(object.slot),
+                }
+            })
+            .collect();
+        self.permanents = self
+            .s
+            .battlefield()
+            .iter()
+            .map(|&slot| (self.s.object_ref(slot), self.name(slot)))
+            .collect();
         let turn = self.s.turn();
         let stack = self
             .s
