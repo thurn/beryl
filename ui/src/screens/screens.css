@@ -671,7 +671,9 @@
 .table {
   position: absolute;
   inset: 0;
-  overflow: hidden;
+  /* Clipped, never scrolled: a pointer or a script bringing a card into view must not slide the
+     whole table. */
+  overflow: clip;
   background: var(--tabletop);
   font-family: var(--font-serif);
 }
@@ -1255,6 +1257,15 @@
   gap: 6px;
   max-height: 260px;
   overflow-y: auto;
+}
+/* A long label wraps in its pill rather than run out of it. */
+.prompt-choices .button {
+  max-width: 100%;
+  height: auto;
+  min-height: 1.75em;
+  padding: 0.3em 1em;
+  line-height: 1.2;
+  text-align: center;
 }
 /* A card's candidates, listed where it was clicked or dropped. */
 .menu-scrim {

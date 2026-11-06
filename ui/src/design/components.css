@@ -262,6 +262,11 @@
   font-weight: 650;
   font-size: 0.8em;
 }
+/* A long type line shrinks to fit its bar, as a long name does (fit.ts). */
+.card-type-line {
+  overflow: hidden;
+  font-size: calc(1em * var(--fit, 1));
+}
 .card-art {
   display: block;
   flex: 1 1 0;
@@ -302,6 +307,10 @@
   font-weight: 500;
   font-size: 0.7em;
   line-height: 1.2;
+}
+/* The power and toughness plaque stands over the rules box's foot: the text ends above it. */
+.card-full.card-with-pt .card-rules {
+  padding-bottom: 1.1em;
 }
 .card-rules p {
   margin: 0;

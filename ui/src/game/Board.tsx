@@ -1068,8 +1068,12 @@ function Prompt({
   nameOf(slot: number): string;
   onPick(index: CandidateIndex): void;
 }) {
-  // A payment plan reads as what it taps, never as a number.
+  // A payment plan reads as what it taps, never as a number; a trigger as its source, since
+  // the title says what happens to it.
   const label = (c: DecisionView["candidates"][number]) => {
+    if (c.option.kind === "trigger" && c.option.source !== null) {
+      return nameOf(c.option.source);
+    }
     const taps = c.payments[0]?.taps;
     if (c.option.kind !== "plan" || !taps) return c.label;
     return taps.length > 0 ? `Tap ${tapList(taps.map(nameOf))}` : "Tap nothing";

@@ -182,6 +182,7 @@ export function Card({
 }: CardProps) {
   const height = width / ASPECT[variant];
   const nameRef = useTextFit(card.name);
+  const typeRef = useTextFit(card.typeLine);
   const rulesRef = useRulesFit(card.text);
   const pt = stats(card);
   const classes = [
@@ -189,6 +190,7 @@ export function Card({
     `card-${variant}`,
     `frame-${frameKey(card)}`,
     card.colors.length > 1 && `accent-${card.colors[0]?.toLowerCase()}`,
+    pt && "card-with-pt",
     highlight && `card-${highlight}`,
     combat && `card-${combat}`,
     className,
@@ -230,7 +232,11 @@ export function Card({
           <CardArt card={card} />
           {variant === "full" && (
             <>
-              <div className="card-type-bar">{card.typeLine}</div>
+              <div className="card-type-bar">
+                <span className="card-type-line" ref={typeRef}>
+                  {card.typeLine}
+                </span>
+              </div>
               <div className="card-rules">
                 {card.text && (
                   <p ref={rulesRef}>
