@@ -63,13 +63,23 @@ const TITHE_MIN: i32 = 35;
 /// The least a card on top of a library must be worth in hand to be kept there.
 const DRAW_MIN: i32 = 30;
 
-/// The removal spells: Oust, and those that take a permanent without giving life back.
+/// The library a Jace, Wielder of Mysteries wins from, near enough: at most this many cards.
+const JACE_LIBRARY: usize = 12;
+
+/// What a Jace, Wielder of Mysteries about to win is worth, before its loyalty.
+const JACE_WINS: i32 = 150;
+
+/// The removal spells: Oust, and those that take a permanent without giving life back (Winds
+/// of Abandon gives a basic land, cast for one target; overloaded, it is a sweeper).
 const REMOVAL: &[&str] = &[
     names::OUST,
     names::GET_LOST,
     names::AANGS_ICEBERG,
     names::SWIFT_RECONFIGURATION,
     names::SINK_INTO_STUPOR,
+    names::PORTABLE_HOLE,
+    names::WINDS_OF_ABANDON,
+    names::FRACTURED_IDENTITY,
 ];
 
 /// The Map tokens Get Lost creates, and the back face of Jace, Vryn's Prodigy.
@@ -198,6 +208,11 @@ pub(crate) fn appraise(p: &Policy<'_>, slot: Slot, base: i32) -> Option<i32> {
     let o = obs.object(slot);
     let controller = obs.controller(slot);
     let name = |s: Slot| obs.card(s).map(|c| p.t.def(c).name);
+    // Jace, Wielder of Mysteries on a short library is about to win: "If you would draw a
+    // card while your library has no cards in it, you win the game instead."
+    if name(slot) == Some(names::JACE_WIELDER_OF_MYSTERIES) && wins_by_decking(p, controller) {
+        return Some(JACE_WINS + 6 * i32::from(o.counters.loyalty));
+    }
     if obs.derived(slot).types.intersects(Types::PLANESWALKER) {
         let loyalty = i32::from(o.counters.loyalty);
         // One within three of its ultimate is about to win the game.
@@ -254,6 +269,12 @@ pub(crate) fn appraise(p: &Policy<'_>, slot: Slot, base: i32) -> Option<i32> {
         }
     }
     None
+}
+
+/// Whether `who`'s library is short enough that their Jace, Wielder of Mysteries would win
+/// within a few turns: its +1 draws one a turn, its −8 seven, and their draw step one.
+fn wins_by_decking(p: &Policy<'_>, who: Seat) -> bool {
+    p.obs.library(who).len() <= JACE_LIBRARY
 }
 
 /// Whether a permanent dying comes back as a token copy of itself: a Sphinx of False
@@ -398,9 +419,16 @@ impl Expert<'_> {
         let mana = self.mana(self.opp());
         let (white, blue) = self.colors_up(self.opp());
         // Mana Drain is {U}{U}, No More Lies {W}{U}, Mana Tithe {W}.
+        // Counterspell is {U}{U}, Reprieve {1}{W}.
         blue >= 2
             || (blue >= 1 && white >= 1 && mana >= 2)
-            || (white >= 1 && !self.seen(names::MANA_TITHE))
+            || (white >= 1 && mana >= 2 && self.in_game(names::REPRIEVE))
+            || (white >= 1 && self.in_game(names::MANA_TITHE) && !self.seen(names::MANA_TITHE))
+    }
+
+    /// Whether a card named `name` is in either deck of this game.
+    fn in_game(&self, name: &str) -> bool {
+        (0..self.p.t.len()).any(|i| self.p.t.def(beryl_engine::CardIx::new(i as u8)).name == name)
     }
 
     /// How many of a player's untapped sources make white, and how many blue (a dual land
@@ -425,9 +453,14 @@ impl Expert<'_> {
         match self.name(slot) {
             Some(names::PLAINS) => (true, false),
             Some(names::ISLAND | names::SINK_INTO_STUPOR) => (false, true),
-            Some(names::TUNDRA | names::SEACHROME_COAST | names::SPARAS_HEADQUARTERS) => {
-                (true, true)
-            }
+            // Floodfarm Verge makes {U} only with an Island or Plains out, as it nearly
+            // always has.
+            Some(
+                names::TUNDRA
+                | names::SEACHROME_COAST
+                | names::SPARAS_HEADQUARTERS
+                | names::FLOODFARM_VERGE,
+            ) => (true, true),
             _ => (false, false),
         }
     }
@@ -468,7 +501,7 @@ impl Expert<'_> {
     fn counter_known(&self, left: i32) -> bool {
         let (white, blue) = self.colors_up(self.opp());
         let counter = |s: Slot| match self.name(s) {
-            Some(names::MANA_DRAIN) => blue >= 2,
+            Some(names::MANA_DRAIN | names::COUNTERSPELL) => blue >= 2,
             Some(names::NO_MORE_LIES) => white >= 1 && blue >= 1 && left < 3,
             _ => false,
         };
@@ -604,7 +637,9 @@ impl Expert<'_> {
     fn counter_cost(&self, slot: Slot) -> Option<i32> {
         match self.name(slot)? {
             names::MANA_TITHE => Some(1),
-            names::MANA_DRAIN | names::NO_MORE_LIES => Some(2),
+            names::MANA_DRAIN | names::NO_MORE_LIES | names::COUNTERSPELL | names::REPRIEVE => {
+                Some(2)
+            }
             _ => None,
         }
     }
@@ -661,11 +696,14 @@ impl Expert<'_> {
     /// With something on the stack, counter the opponent's spell if it is worth it, by
     /// counterspell discipline; let everything else resolve.
     fn respond(&self, top: StackEntry, o: Opt) -> i32 {
-        let Opt::Cast { slot, face, .. } = o else {
+        let Opt::Cast { slot, face, costs } = o else {
             return 0;
         };
         if top.controller == self.me() {
             return 0;
+        }
+        if self.is(slot, names::SUBTLETY) {
+            return self.subtlety(&top, slot, costs);
         }
         if !top.is_spell() {
             // Elite Spellbinder's trigger is about to exile a card from our hand: what we
@@ -716,7 +754,17 @@ impl Expert<'_> {
             }
             // No More Lies: "Counter target spell unless its controller pays {3}."
             (Some(names::NO_MORE_LIES), _) if theirs < 3 && threat >= min => 290,
-            (Some(names::MANA_DRAIN), _) if threat >= min => 280,
+            (Some(names::MANA_DRAIN | names::COUNTERSPELL), _) if threat >= min => 280,
+            // Reprieve: "Return target spell to its owner's hand. Draw a card." A counter for
+            // tempo when its controller has not the mana to cast it again this turn, and a
+            // card either way.
+            (Some(names::REPRIEVE), _)
+                if threat >= min
+                    && theirs < i32::from(self.p.t.def(top.card).front().cost.mana_value())
+                    && self.draw_safe(1) =>
+            {
+                200
+            }
             // Sink into Stupor returns the spell to its owner's hand: a counter for tempo,
             // for a major threat when no counterspell can answer it, and only when its
             // controller has not the mana to cast it again this turn.
@@ -730,11 +778,38 @@ impl Expert<'_> {
         }
     }
 
+    /// The score of casting Subtlety, in full or for evoke, against the opponent's spell
+    /// `top`: "choose up to one target creature spell or planeswalker spell. Its owner puts
+    /// it on their choice of the top or bottom of their library." They draw it again, so it
+    /// is tempo, behind the counterspells: in full for a spell worth a counter, for evoke
+    /// (two cards for it) only for one that would win the game.
+    fn subtlety(&self, top: &StackEntry, slot: Slot, costs: Castings) -> i32 {
+        let types = self.p.t.def(top.card).face(top.face).types;
+        if !top.is_spell() || !types.intersects(Types::CREATURE.union(Types::PLANESWALKER)) {
+            return 0;
+        }
+        let threat = self.threat(top);
+        let Some(card) = self.obs().card(slot) else {
+            return 0;
+        };
+        let evoke = costs
+            .paid(self.p.t.def(card).front())
+            .any(|o| matches!(o, CastingOption::Evoke { .. }));
+        match evoke {
+            false if threat >= MAJOR => 160,
+            true if threat >= 2 * MAJOR || (threat >= MAJOR && self.dying()) => 120,
+            _ => 0,
+        }
+    }
+
     /// What letting an opponent's spell resolve would cost us: its value, or for a spell
     /// aimed at ours, the value of what it hits; for a wheel, what it gives them over us.
     fn threat(&self, e: &StackEntry) -> i32 {
         let def = self.p.t.def(e.card);
         let mut v = i32::from(self.p.values.get(e.card).value);
+        if def.name == names::JACE_WIELDER_OF_MYSTERIES && wins_by_decking(&self.p, e.controller) {
+            v = v.max(JACE_WINS);
+        }
         if self.p.values.get(e.card).wheel {
             let theirs = self.hand(self.opp()).count() as i32;
             let ours = self.hand(self.me()).count() as i32;
@@ -1033,7 +1108,11 @@ impl Expert<'_> {
         if let Some(v) = self.card_cast(slot, name, costs) {
             return v;
         }
-        if let Some(removal) = self.removal_score(slot, name, face, -1) {
+        // Overloaded, a removal spell is a sweeper, weighed as the rollout policy does.
+        let overloaded = costs
+            .paid(f)
+            .any(|o| matches!(o, CastingOption::Overload { .. }));
+        if !overloaded && let Some(removal) = self.removal_score(slot, name, face, -1) {
             // Instant-speed removal waits for an attacker or the end step unless its target
             // is urgent, Jace, Telepath Unbound's −3 lets us cast it this turn only, or the
             // opponent could not counter it now.
@@ -1058,7 +1137,7 @@ impl Expert<'_> {
             };
         }
         // Removal with nothing worth it waits.
-        if REMOVAL.contains(&name) || v <= 0 {
+        if (REMOVAL.contains(&name) && !overloaded) || v <= 0 {
             return 0;
         }
         let creature = f.types.intersects(Types::CREATURE);
@@ -1120,19 +1199,9 @@ impl Expert<'_> {
     fn card_cast(&self, slot: Slot, name: &str, costs: Castings) -> Option<i32> {
         let sorcery_only = self.sorcery_only();
         Some(match name {
-            // Free mana, until there are lands enough and the coin flips cost too much life.
-            names::MANA_CRYPT => {
-                // Nor with nothing else in hand to spend its mana on.
-                let lands = self.lands(self.me());
-                let spells = self
-                    .hand(self.me())
-                    .iter()
-                    .any(|s| s != slot && !self.p.is_land(s));
-                let late = lands >= 7
-                    || (lands >= 5 && (!spells || self.obs().player(self.me()).life <= 12));
-                // After the land drop, which leaves a mana to pay for Mana Tithe.
-                if late { 0 } else { 990 }
-            }
+            // Never: its coin flips, 3 damage on half our upkeeps, cost more life over these
+            // long games than its mana is worth, as for the rollout policy.
+            names::MANA_CRYPT => 0,
             names::TEFERI_TIME_RAVELER if self.counter_known(self.mana(self.me()) - 3) => 0,
             names::TEFERI_TIME_RAVELER => {
                 // Teferi first when more is to follow: once he resolves, nothing we cast this
@@ -1233,6 +1302,7 @@ impl Expert<'_> {
             && !self.hand(opp).is_empty()
             && (self.obs().player(opp).mana[ManaColor::White] > 0
                 || self.permanents(opp).any(|s| !self.tapped(s) && white(s)))
+            && self.in_game(names::MANA_TITHE)
             && !self.seen(names::MANA_TITHE)
     }
 
@@ -1356,16 +1426,11 @@ impl Expert<'_> {
 
     /// Whether `draws` draws by choice now leave a card for our next draw step, the draw from
     /// an empty library losing the game
-    /// ([CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b)); with five cards
-    /// or fewer left, only while we hold a wheel to shuffle our graveyard back in.
+    /// ([CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b)); once the library
+    /// runs low, only as the rollout policy may draw (a wheel in hand, or our Jace, Wielder
+    /// of Mysteries out).
     fn draw_safe(&self, draws: usize) -> bool {
-        let library = self.obs().library(self.me()).len();
-        let wheel = self.hand(self.me()).iter().any(|s| {
-            self.obs()
-                .card(s)
-                .is_some_and(|c| self.p.values.get(c).wheel)
-        });
-        library > draws && (library > 5 || wheel)
+        self.obs().library(self.me()).len() > draws && self.p.may_draw()
     }
 
     /// Whether our Jace, Vryn's Prodigy could loot now: "{T}: Draw a card, then discard a card."
@@ -1515,6 +1580,10 @@ impl Expert<'_> {
             names::GET_LOST => 50,
             names::AANGS_ICEBERG => 45,
             names::SWIFT_RECONFIGURATION => 40,
+            names::PORTABLE_HOLE => 25,
+            names::WINDS_OF_ABANDON => 35,
+            // Fractured Identity takes the permanent and gives us a copy: for a threat.
+            names::FRACTURED_IDENTITY => 55,
             _ => return None,
         };
         // Dead on board, any creature is worth removing.
@@ -1811,7 +1880,7 @@ impl Expert<'_> {
             face.abilities[usize::from(i)]
                 .cost
                 .loyalty
-                .is_some_and(|l| loyalty + i32::from(l) >= 1 || l <= -9 || lethal)
+                .is_some_and(|l| loyalty + i32::from(l) >= 1 || l <= -8 || lethal)
         };
         self.preferred_ability(slot)
             .filter(|&i| keeps(i))
@@ -1872,6 +1941,33 @@ impl Expert<'_> {
                     return by_cost(-1);
                 }
                 by_cost(1)
+            }
+            // −8: "Draw seven cards. Then if your library has no cards in it, you win the
+            // game." Only when it wins.
+            names::JACE_WIELDER_OF_MYSTERIES => {
+                if loyalty >= 8 && self.obs().library(self.me()).len() <= 7 {
+                    by_cost(-8)
+                } else {
+                    by_cost(1)
+                }
+            }
+            // −8 for the emblem; −3 puts a threat third from the top of its owner's library;
+            // +1 draws, unless that would deck us.
+            names::TEFERI_HERO_OF_DOMINARIA => {
+                if loyalty >= 8 {
+                    return by_cost(-8);
+                }
+                let target = self
+                    .permanents(self.opp())
+                    .filter(|&s| !self.has_type(s, Types::LAND))
+                    .map(|s| self.value(s) + self.killer_bonus(s))
+                    .max()
+                    .unwrap_or(0);
+                if loyalty >= 3 && (target >= MAJOR || threatened >= loyalty + 1) {
+                    by_cost(-3)
+                } else {
+                    by_cost(1)
+                }
             }
             JACE_TELEPATH_UNBOUND => {
                 if loyalty >= 9 {
@@ -2089,6 +2185,10 @@ impl Expert<'_> {
                     names::THE_WANDERING_EMPEROR => 500,
                     names::SPHINX_OF_FALSE_CONCLUSIONS => 480,
                     names::MALCOLM_ALLURING_SCOUNDREL => 450,
+                    names::SNAPCASTER_MAGE => 300,
+                    // "Draw three cards. Then discard two cards unless you discard an artifact
+                    // card."
+                    names::THIRST_FOR_DISCOVERY if self.draw_safe(3) => 200,
                     _ => 0,
                 }
             }
