@@ -312,7 +312,7 @@ export async function screenFaults(page) {
                 faults.push(`${what} drawn as ${e.dataset.card ?? "no card"}`);
             }
             if (o.zone !== "battlefield") continue;
-            const stats = text(e.querySelector(".card-pt"));
+            const stats = text(e.querySelector(".card-pt, .card-loyalty b"));
             const loyalty = o.counters.find((c) => c.kind === "loyalty");
             const want = o.pt
                 ? `${o.pt.power}/${Math.max(0, o.pt.toughness - o.damage)}`

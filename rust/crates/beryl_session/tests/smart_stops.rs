@@ -460,16 +460,16 @@ fn asked_after_trinket_mage(scenario: &Scenario, stops: StopsSetting) -> Vec<Kin
 }
 
 /// Declining Trinket Mage's search differs from finding nothing only by the shuffle, which
-/// changes nothing for a player who knows no card in their library: the smart stops search,
-/// and the search itself may find nothing. A player who knows cards there, as Stock Up's on
-/// the bottom, is asked, as exact stops ask everyone.
+/// costs a player nothing worth asking about unless they know the card they draw next: the
+/// smart stops search, and the search itself may find nothing. Cards known only on the
+/// bottom, as Stock Up's, are no reason to ask; exact stops ask everyone.
 #[test]
-fn smart_stops_search_a_library_the_human_knows_nothing_of() {
+fn smart_stops_search_a_library_whose_top_the_human_does_not_know() {
     let smart = asked_after_trinket_mage(&TRINKET, StopsSetting::SMART);
     assert!(!smart.contains(&Kind::YesNo), "{smart:?}");
     assert_eq!(smart.last(), Some(&Kind::ChooseUpTo));
-    let known = asked_after_trinket_mage(&STOCKED, StopsSetting::SMART);
-    assert!(known.contains(&Kind::YesNo), "{known:?}");
+    let bottom = asked_after_trinket_mage(&STOCKED, StopsSetting::SMART);
+    assert!(!bottom.contains(&Kind::YesNo), "{bottom:?}");
     let exact = asked_after_trinket_mage(&TRINKET, StopsSetting::EXACT);
     assert!(exact.contains(&Kind::YesNo), "{exact:?}");
 }

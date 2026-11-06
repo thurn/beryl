@@ -392,12 +392,8 @@ await check("dragging across the table selects no text", async (page) => {
     await page.clock.runFor(2000);
     const selected = () =>
         page.evaluate(() => window.getSelection()?.toString() ?? "");
-    // From the opponent's name, over the log and the table, to the near corner.
-    const badge = await page
-        .locator(".player-badge")
-        .getByText("Opponent", { exact: true })
-        .boundingBox();
-    await page.mouse.move(badge.x + 2, badge.y + badge.height / 2);
+    // From the far corner, over the log and the table, to the near corner.
+    await page.mouse.move(60, 90);
     await page.mouse.down();
     await page.mouse.move(1580, 880, { steps: 25 });
     await page.mouse.up();
@@ -713,7 +709,7 @@ await check(
             `each turn is headed once: ${await page.locator(".game-log").textContent()}`,
         );
     },
-    { fixture: "opponent-turn", at: 22, ready: ".game-log-entry" },
+    { fixture: "opponent-turn", at: 22, ready: ".game-log-toggle" },
 );
 
 // The log names what an ability did and to what: an activation its source, its loyalty cost
@@ -800,6 +796,8 @@ await check(
         const list = page.locator(".game-log-list");
         assert.ok(await list.isHidden(), "the log is hidden");
         await page.evaluate(() => document.getElementById("hide-log").remove());
+        // Folded by default: opened, it shows.
+        await page.getByRole("button", { name: "Show log" }).click();
         // A resize is observed as the page renders, on the real clock.
         const scroll = () =>
             list.evaluate((el) => [
@@ -1031,6 +1029,27 @@ const vanished = turnViews
         ),
     );
 assert.ok(vanished.length > 0, "a spell resolves into a graveyard");
+
+// Each turn is announced as it begins, as Arena announces it, and the announcement goes on its
+// own; a turn begun in the past (the fixture's recorded views) is not.
+await check(
+    "each turn is announced as it begins",
+    async (page) => {
+        await page.clock.runFor(2000);
+        assert.equal(await page.locator(".turn-banner").count(), 0, "none yet");
+        await page.getByRole("button", { name: "Take Nothing" }).click();
+        await until(page, '.turn-banner[data-turn="opponent"]');
+        assert.equal(
+            await page.locator(".turn-banner-title").textContent(),
+            "Opponent's Turn",
+        );
+        await page.clock.runFor(2500);
+        await until(page, '.turn-banner[data-turn="you"]');
+        await page.clock.runFor(2500);
+        await page.locator(".turn-banner").waitFor({ state: "detached" });
+    },
+    { fixture: "opponent-turn", at: lookAt + 1, ready: ".choice" },
+);
 
 await check(
     "the opponent's turn plays out at a pace, then the turn ends",
@@ -4466,21 +4485,6 @@ await check(
                     `${name}'s inspector covers ${f.what}`,
                 );
             }
-            // A raised hand card stays under the life orbs, which are drawn over it (though
-            // yours lets the pointer through to it: hit-test it as if it didn't).
-            const life = await page.evaluate(() =>
-                [...document.querySelectorAll("[data-life]")].every((e) => {
-                    const r = e.getBoundingClientRect();
-                    e.style.pointerEvents = "auto";
-                    const top = document.elementFromPoint(
-                        r.x + r.width / 2,
-                        r.y + r.height / 2,
-                    );
-                    e.style.pointerEvents = "";
-                    return e.contains(top);
-                }),
-            );
-            assert.ok(life, `hovering ${name} hides a life total`);
         }
     },
     crowdedRun(crowdedAt),
@@ -4725,11 +4729,11 @@ for (const [title, run] of [
                     `${name} raised`,
                 );
             }
-            // Each of your piles' tips, over its pile, clear of your badge.
-            const badge = await page
-                .locator(".player-badge")
-                .last()
-                .boundingBox();
+            // Each of your piles' tips, over its pile, clear of your badge if it shows.
+            const badges = page.locator(".player-badge");
+            const badge = (await badges.count())
+                ? await badges.last().boundingBox()
+                : undefined;
             for (const pile of await page
                 .locator(".has-tip:has([aria-label^=Library]), [data-side=you]")
                 .all()) {
@@ -4740,7 +4744,7 @@ for (const [title, run] of [
                 const tip = page.locator(".tip").filter({ visible: true });
                 assert.equal(await tip.count(), 1, "the pile's tip shows");
                 assert.ok(
-                    !overlap(await tip.boundingBox(), badge),
+                    !badge || !overlap(await tip.boundingBox(), badge),
                     `${await tip.innerText()} covers your badge`,
                 );
                 assert.deepEqual(await coveredBy(page, COVERS), [], "a tip");

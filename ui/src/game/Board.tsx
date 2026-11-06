@@ -41,7 +41,6 @@ import {
   LifeOrb,
   ManaPool,
   PlayerBadge,
-  Coin,
 } from "../components/Player";
 import {
   Arrows,
@@ -147,7 +146,7 @@ import {
   pileTip,
   ZoneViewer,
 } from "./Piles";
-import { Brand } from "./Stage";
+import { TurnBanner } from "./TurnBanner";
 
 export interface BoardProps {
   view: PlayerView;
@@ -309,17 +308,18 @@ export function Board({
   const cancellable = !waiting && !dimmed && decision?.cancellable === true;
   // The prompt or the cast step sits over the turn controls; the stack rises to clear it.
   const asking = prompting || castingNow !== undefined;
-  // The log folds away while the rows reach into its column; opened then, the rows give it room.
+  // The log stays folded to its button until opened; opened while the rows reach into its
+  // column, the rows give it room.
   const [logOpen, setLogOpen] = useState(false);
   const resting = useMemo(
     () => layout(shown, asking, dimmed),
     [shown, asking, dimmed],
   );
-  const logFolded = overLog(resting);
+  const crowdsLog = overLog(resting);
   const placements = useMemo(
     () =>
-      logFolded && logOpen ? layout(shown, asking, dimmed, true) : resting,
-    [resting, logFolded, logOpen, shown, asking, dimmed],
+      crowdsLog && logOpen ? layout(shown, asking, dimmed, true) : resting,
+    [resting, crowdsLog, logOpen, shown, asking, dimmed],
   );
   // The hovered card, unless it has since gone where it is not shown alone.
   const hoveredPlace =
@@ -879,21 +879,19 @@ export function Board({
 
         <div className="hud" style={{ left: 18, top: 62 }}>
           <PlayerBadge
-            name="Opponent"
             seat="opponent"
             activity={opponentActivity(view, waiting)}
             mulligans={early ? opponent.mulligans : 0}
           />
         </div>
         <div className="hud" style={{ left: 18, top: 704 }}>
-          <PlayerBadge name="You" mulligans={early ? you.mulligans : 0} />
+          <PlayerBadge mulligans={early ? you.mulligans : 0} />
         </div>
         <Life
           side="opponent"
           life={opponent.life}
           incoming={combatDamage("opponent")}
           active={active === "opponent"}
-          first={view.turn.starting === "opponent"}
           style={{ left: 670, top: 48 }}
           target={deciding ? can.players.get("opponent") : undefined}
           onPick={(act) => pick(act.index, act.then)}
@@ -903,7 +901,6 @@ export function Board({
           life={you.life}
           incoming={combatDamage("you")}
           active={active === "you"}
-          first={view.turn.starting === "you"}
           style={{ left: 670, top: 618 }}
           target={deciding ? can.players.get("you") : undefined}
           onPick={(act) => pick(act.index, act.then)}
@@ -926,11 +923,12 @@ export function Board({
 
         <GameLog
           log={log}
-          folded={logFolded}
+          folded
           open={logOpen}
           onToggle={() => setLogOpen((o) => !o)}
         />
         {live && <Announcements view={view} />}
+        <TurnBanner view={view} live={live} />
 
         {view.stack.map(
           (item, i) =>
@@ -1206,7 +1204,6 @@ export function Board({
       </div>
       {/* Outside the table, so it stays crisp over the dimmed table and any screen on it
           (scry.png). */}
-      <Brand />
     </>
   );
 }
@@ -1358,7 +1355,6 @@ function Life({
   life,
   incoming,
   active,
-  first,
   style,
   target,
   onPick,
@@ -1368,8 +1364,6 @@ function Life({
   /** In combat, before its damage: what the unblocked attackers will deal this player. */
   incoming?: number;
   active: boolean;
-  /** Their player takes, or took, the first turn: a coin by the orb says so. */
-  first: boolean;
   style: CSSProperties;
   target?: Act;
   onPick(act: Act): void;
@@ -1409,12 +1403,6 @@ function Life({
       />
       {incoming !== undefined && (
         <Incoming amount={incoming} lethal={incoming > 0 && incoming >= life} />
-      )}
-      {first && (
-        <span className="life-first has-tip" data-first={side}>
-          <Coin size={24} />
-          <Tip side={side === "you" ? "above" : "below"}>Played first</Tip>
-        </span>
       )}
     </motion.div>
   );

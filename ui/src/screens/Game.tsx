@@ -31,8 +31,8 @@ import { choiceOf, type Choice } from "../game/choices";
 import { follow, isOpening, twins, type Intent } from "../game/decisions";
 import { useFace } from "../game/faces";
 import { useHoverInspect, type HoverHandlers } from "../game/Piles";
-import { eventsHold, type Playback } from "../game/playback";
-import { Brand, Stage } from "../game/Stage";
+import { eventsHold, HOLD, type Playback } from "../game/playback";
+import { Stage } from "../game/Stage";
 import { sameStops, savedStops, saveStops } from "../game/stops";
 
 /** The agent that plays on the true state, hidden cards included. */
@@ -146,7 +146,6 @@ export function StartScreen({
   return (
     <Stage>
       <div className="table start-screen">
-        <Brand />
         <section className="start-panel">
           <h1 className="start-title">New Game</h1>
           <p className="start-subtitle">WU Control mirror</p>
@@ -244,9 +243,7 @@ export function GameScreen({
   if (resuming && !playback) {
     return (
       <Stage>
-        <div className="table start-screen">
-          <Brand />
-        </div>
+        <div className="table start-screen"></div>
       </Stage>
     );
   }
@@ -254,7 +251,6 @@ export function GameScreen({
     return (
       <Stage>
         <div className="table start-screen">
-          <Brand />
           <section className="start-panel" role="status">
             {starting ? (
               <>
@@ -370,6 +366,10 @@ function Playing({ playback }: { playback: Playback }) {
       // A pick that waits stays planned while the player answers the decisions before it.
       if (intent?.waits && decision && decision.kind !== "priority") {
         planned.current = [intent, ...rest];
+      } else if (decision && loneTarget(decision, view)) {
+        // A target with no alternative is taken for the player, as Arena takes it.
+        answer(0, []);
+        return;
       }
       setHeld(undefined);
       return;
@@ -741,7 +741,8 @@ function OpeningCard({
   );
 }
 
-/** The result over the table once the game has ended and its final events have played: shown
+/** The result over the table once the game has ended, its final events have played and the
+ * table has held a beat more (`HOLD.ending`), so the play that ended it is seen: shown
  * until the player puts it aside to see the battlefield, and back on asking. */
 function useResult(ended: boolean, live: boolean, view: PlayerView) {
   // A game that ended in the past (a reloaded page, a recording) shows its result at once.
@@ -752,7 +753,7 @@ function useResult(ended: boolean, live: boolean, view: PlayerView) {
     if (!ended) return;
     const timer = setTimeout(
       () => setState((s) => (s === "waiting" ? "shown" : s)),
-      live ? eventsHold(view) : 0,
+      live ? eventsHold(view) + HOLD.ending : 0,
     );
     return () => clearTimeout(timer);
     // Only a new view ends the game.
@@ -839,4 +840,20 @@ function ReasonIcon({ reason }: { reason: LossReason | "stall" }) {
       <path d={paths[reason]} />
     </svg>
   );
+}
+
+/** Whether `decision` asks for a target that only one choice answers (one object of each set of
+ * interchangeable ones, architecture §7.2), the opponent's or something they control, which
+ * there is nothing to ask about: as Counterspell's target with only their spell on the stack
+ * (it can't target itself, CR 115.5). A lone target of the player's own is still asked, as
+ * Oust's when their own creature is the only one: aiming at it unasked would hurt them. Full
+ * control asks anyway. */
+function loneTarget(decision: DecisionView, view: PlayerView): boolean {
+  if (view.stops.fullControl || decision.kind !== "target") return false;
+  if (decision.candidates.length !== 1) return false;
+  const option = decision.candidates[0]!.option;
+  if (option.kind === "player") return option.player === "opponent";
+  if (option.kind !== "object") return false;
+  const target = view.objects.find((o) => o.slot === option.slot);
+  return target?.controller === "opponent";
 }

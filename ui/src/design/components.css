@@ -405,6 +405,49 @@
 .card-full .card-pt {
   font-size: 0.8em;
 }
+/* Loyalty on the printed loyalty symbol (the Mana font's), where power and toughness would be:
+   pale with dark numerals, as printed. */
+.card-loyalty {
+  position: absolute;
+  right: 0.5em;
+  bottom: 0.2em;
+  display: grid;
+  place-items: center;
+  width: 4em;
+  height: 3.6em;
+  pointer-events: none;
+}
+.card-loyalty-glyph {
+  grid-area: 1 / 1;
+  font: normal 3.7em/1 Mana;
+  color: #ece6da;
+  filter: drop-shadow(0 0 0.04em #14110f)
+    drop-shadow(0 0.06em 0.12em rgb(0 0 0 / 70%));
+}
+.card-loyalty b {
+  grid-area: 1 / 1;
+  translate: 0 -0.05em;
+  font: 700 1.8em/1 var(--font-serif);
+  color: #1c1a19;
+}
+.card-full .card-loyalty {
+  font-size: 0.8em;
+}
+/* Summoning sickness (CR 302.6): a large moon over the text box, where it hides no art. */
+.card-sick-moon {
+  position: absolute;
+  left: 50%;
+  top: 70%;
+  translate: -50% -50%;
+  font-size: 1.7em;
+  pointer-events: none;
+}
+.card-sick-moon .mark-badge {
+  padding: 0 0.22em;
+  height: 1.7em;
+  width: 1.7em;
+  justify-content: center;
+}
 .card-pt b.stat-up {
   color: var(--stat-up-ink);
 }
@@ -413,8 +456,7 @@
 }
 
 /* A permanent's marks (Card.tsx): a dark badge along its foot, between the ability badge and
-   the plaque, wrapping upward: a token's coin, summoning sickness's moon (which also fades its
-   art), then one per kind of counter. */
+   the plaque, wrapping upward: a token's coin, then one per kind of counter. */
 .card-counters {
   position: absolute;
   left: 0.62em;
@@ -470,9 +512,6 @@
   --mark: #d6d2cc;
   fill-rule: evenodd;
 }
-.card-sick .card-art {
-  filter: saturate(0.25) brightness(0.72);
-}
 /* A card's scan in place of its frame (Card.tsx): the printed card itself, clipped to a card's
    corners (3 mm on 63 by 88), over black for the corners of scans with rounder ones. */
 .card-scanned {
@@ -487,10 +526,10 @@
   object-fit: cover;
   border-radius: inherit;
 }
-.card-sick .card-scan {
-  filter: saturate(0.4) brightness(0.78);
-}
-/* A scan covers the frame a glow steeps in light, so the light falls over the scan's edge. */
+/* A scan covers the frame a glow steeps in light, so the light falls over the scan's edge: a
+   line and a short falloff only. The -in glows' broad band steeps a drawn frame's thick black
+   border, but a scan's printed border is thin, so the band would tint its art and text box in a
+   box of its own. */
 .card-scanned.card-source::after,
 .card-scanned.card-target::after {
   content: "";
@@ -500,10 +539,14 @@
   pointer-events: none;
 }
 .card-scanned.card-source::after {
-  box-shadow: var(--glow-gold-in);
+  box-shadow:
+    inset 0 0 0 1px #fffbd0,
+    inset 0 0 3px 2px rgb(225 130 35 / 85%);
 }
 .card-scanned.card-target::after {
-  box-shadow: var(--glow-cyan-in);
+  box-shadow:
+    inset 0 0 0 1px #8cf4fa,
+    inset 0 0 4px 2px rgb(5 150 215 / 90%);
 }
 /* The plate over a scan's text box that says one ability (Card.tsx's AbilityPlate): parchment
    in a dark rim, its label on a tab across its top edge. */

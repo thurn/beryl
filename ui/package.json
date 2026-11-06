@@ -12,6 +12,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@fontsource-variable/cinzel": "^5.3.0",
     "@fontsource-variable/crimson-pro": "^5.3.0",
     "@fontsource-variable/open-sans": "^5.3.0",
     "@tauri-apps/api": "^2.12.4",

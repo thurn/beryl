@@ -17,8 +17,18 @@ import {
 import { learnNames, logLines, type LogEntry, type Names } from "./log";
 
 /** How long a view holds the screen before the next one, in milliseconds: a step passing
- * briefly, an action long enough to follow, a counter longest. */
-export const HOLD = { step: 300, action: 900, counter: 1600 };
+ * briefly, a new turn while it is announced, an action long enough to follow, a spell or ability the opponent puts on the stack
+ * long enough to read before it resolves unanswered, a counter longest; and the game's last
+ * view a beat more before the result covers it, so the play that ended it is seen. */
+export const HOLD = {
+  step: 300,
+  turn: 1100,
+  action: 900,
+  trigger: 1300,
+  stack: 2000,
+  counter: 1800,
+  ending: 1600,
+};
 
 /** The log keeps this many entries. */
 const LOG_LENGTH = 200;
@@ -40,12 +50,22 @@ export function eventsHold(view: PlayerView): number {
 function eventHold(e: GameEvent): number {
   switch (e.kind) {
     case "stepBegins":
+      // A new turn holds while it is announced (TurnBanner), before anything is played in it.
+      return e.step === "untap" ? HOLD.turn : HOLD.step;
     case "draw":
     case "tap":
     case "untap":
       return HOLD.step;
     case "zoneChange":
       return e.reason === "counter" ? HOLD.counter : HOLD.action;
+    // The player's own casts they just chose; the opponent's they have to read.
+    case "cast":
+      return e.controller === "opponent" ? HOLD.stack : HOLD.action;
+    case "ability":
+      if (e.item.kind !== "ability" || e.item.controller !== "opponent") {
+        return HOLD.action;
+      }
+      return e.item.triggered ? HOLD.trigger : HOLD.stack;
     default:
       return HOLD.action;
   }

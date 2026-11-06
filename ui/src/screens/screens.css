@@ -767,10 +767,10 @@
 .hud {
   position: absolute;
 }
-/* Over a raised hand card (CardLayer's RAISED_Z), which would hide your life total, but under
-   a dragged one. */
+/* Over the permanents and the hand at rest, under a hovered (CardLayer's RAISED_Z, 300) or
+   dragged hand card: the card in hand is what the player is reading. */
 .table .life {
-  z-index: 350;
+  z-index: 250;
 }
 /* Your orb takes the pointer only to be picked as a target: otherwise the top of a raised hand
    card under it stays at hand. (A drag only ever aims at the opponent's orb.) */
@@ -781,17 +781,7 @@
 .table .life-orb {
   --orb: calc(1px / 1.045);
 }
-/* The starting player's coin, beside their life total: hovering it says so, even on your orb. */
-.life-first {
-  position: absolute;
-  left: 194px;
-  top: 46px;
-  display: flex;
-  perspective: 200px;
-  pointer-events: auto;
-}
-/* In combat, the damage the unblocked attackers will deal, left of the life total as the coin is
-   right of it: a number, solid red when lethal. */
+/* In combat, the damage the unblocked attackers will deal, left of the life total: a number, solid red when lethal. */
 .life-incoming {
   position: absolute;
   left: 22px;
@@ -813,29 +803,6 @@
     inset 0 0 0 1px #ffb4a8,
     0 0 14px rgb(230 40 30 / 75%);
   color: #fff;
-}
-/* The brand at the top left (battlefield.png): the crest and a letterspaced wordmark in muted
-   gold, in stage pixels. */
-.brand {
-  position: absolute;
-  z-index: 30;
-  font-family: var(--font-serif);
-  left: 29.5px;
-  top: 8.5px;
-  display: flex;
-  align-items: center;
-  gap: 13px;
-  font-size: 17.5px;
-  line-height: 1;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: #8f7b5d;
-  -webkit-text-stroke: 0.35px currentColor;
-}
-.brand-crest {
-  width: 25px;
-  height: 40px;
-  color: #86704f;
 }
 /* The settings gear at the top right: brushed grey metal. */
 .gear {
@@ -978,8 +945,8 @@
 .game-log-counter {
   color: #ffab7c;
 }
-/* Spells that came and went in the view on screen, large beside the stack for a moment, each over
-   a pill saying who cast it or that it was countered; a countered one greyed under a stamp. */
+/* Spells that came and went in the view on screen, large beside the stack for a moment, each
+   wearing its caster's stack diamond; a countered one dimmed under a small ember mark. */
 .announcements {
   position: absolute;
   right: 100px;
@@ -991,43 +958,23 @@
 }
 .announced {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
   margin: 0;
   filter: drop-shadow(0 12px 22px rgb(0 0 0 / 50%));
 }
-.announced-label {
-  padding: 4px 16px;
-  border: 1.5px solid #a59e98;
-  border-radius: 999px;
-  background: #25201d;
-  font: 600 15px var(--font-sans);
-  letter-spacing: 0.04em;
-  color: var(--text);
-}
 .announced-countered .card {
-  filter: grayscale(0.7) brightness(0.7);
+  filter: saturate(0.35) brightness(0.62);
 }
-.announced-countered .announced-label {
-  border-color: var(--ember);
-  color: #ffab7c;
-}
-.announced-stamp {
+.announced-countered-mark {
   position: absolute;
-  left: 50%;
-  top: 30%;
-  translate: -50% -50%;
-  rotate: -16deg;
-  padding: 4px 14px;
-  border: 3px solid var(--ember);
-  border-radius: 6px;
-  background: rgb(20 14 10 / 72%);
-  font: 800 24px var(--font-sans);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ember);
+  right: -10px;
+  top: -12px;
+  width: 34px;
+  height: 34px;
+  fill: rgb(20 14 10 / 85%);
+  stroke: var(--ember);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 6px rgb(240 122 28 / 55%));
 }
 /* A step announcement over the battlefield (combat.png's "Combat / Blockers declared"): a gold
    title between ornamented rules over an italic detail, on a smoky shade, in the band between
@@ -1037,7 +984,7 @@
   position: absolute;
   /* Over the permanents (CardLayer), which a card peeking out above its row would otherwise
      lay over the detail; it takes no pointer, so they stay at hand. Under the life orbs. */
-  z-index: 340;
+  z-index: 240;
   left: 802px;
   top: 158px;
   width: 400px;
@@ -1381,13 +1328,12 @@
 .card-el-stack .card {
   --card-shadow: 0 3px 8px rgb(0 0 0 / 55%);
 }
-/* Something to play or activate: a thin pale-blue edge and a soft halo, quieter than a target's
-   cyan. */
+/* Something to play or activate: a crisp green outline, as Arena draws it, apart from a
+   target's cyan and a source's gold, with a faint halo so it reads on dark art. */
 .card-playable {
   box-shadow:
-    0 0 0 1px rgb(190 236 255 / 85%),
-    0 0 6px 2px rgb(120 200 255 / 55%),
-    0 0 18px 4px rgb(90 170 255 / 25%),
+    0 0 0 2px var(--playable),
+    0 0 6px 2px rgb(var(--playable-rgb) / 45%),
     var(--card-shadow, var(--shadow-card));
 }
 .stack-ability {
@@ -1848,9 +1794,8 @@
 }
 .pile-button-playable {
   box-shadow:
-    0 0 0 1px rgb(190 236 255 / 85%),
-    0 0 6px 2px rgb(120 200 255 / 55%),
-    0 0 18px 4px rgb(90 170 255 / 25%);
+    0 0 0 2px var(--playable),
+    0 0 6px 2px rgb(var(--playable-rgb) / 45%);
 }
 .pile-button-target {
   box-shadow: var(--glow-cyan);
@@ -2365,4 +2310,72 @@
 .mana-picker-item:focus-visible {
   background: rgb(233 173 74 / 22%);
   outline: none;
+}
+
+/* The turn's announcement (TurnBanner.tsx), across the middle of the table: a smoky band, two
+   rosettes of interlaced circles turning against each other, and the title in Cinzel, in the
+   player's cyan or the opponent's ember. Over the table and its cards, under any prompt. */
+.turn-banner {
+  --turn: var(--cyan);
+  --turn-glow: rgb(51 220 254 / 55%);
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 330px;
+  height: 240px;
+  z-index: 800;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.turn-banner-opponent {
+  --turn: var(--ember);
+  --turn-glow: rgb(240 122 28 / 55%);
+}
+.turn-banner > * {
+  grid-area: 1 / 1;
+}
+.turn-banner-band {
+  width: 100%;
+  height: 128px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(10 9 8 / 78%) 22%,
+    rgb(10 9 8 / 86%) 50%,
+    rgb(10 9 8 / 78%) 78%,
+    transparent
+  );
+  box-shadow:
+    0 -1px 0 color-mix(in srgb, var(--turn) 35%, transparent),
+    0 1px 0 color-mix(in srgb, var(--turn) 35%, transparent);
+}
+.turn-banner-rings {
+  width: 240px;
+  height: 240px;
+  overflow: visible;
+  fill: none;
+  stroke: var(--turn);
+  filter: drop-shadow(0 0 4px var(--turn-glow));
+}
+.turn-banner-ring-outer {
+  stroke-width: 0.7;
+  opacity: 0.55;
+}
+.turn-banner-ring-inner {
+  stroke-width: 0.9;
+  opacity: 0.4;
+}
+.turn-banner-rim {
+  stroke-width: 0.6;
+  opacity: 0.5;
+}
+.turn-banner-title {
+  font: 700 54px/1 var(--font-display);
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  color: #fbf3e2;
+  text-shadow:
+    0 0 18px var(--turn-glow),
+    0 2px 3px rgb(0 0 0 / 90%);
 }

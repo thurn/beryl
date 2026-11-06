@@ -389,19 +389,24 @@ export function Coin({
   );
 }
 
+/** A player's emblem beside what they are doing and their mulligans. The table names no one (whose
+ * side is plain from where it is), so there it shows only while it has something to say. */
 export function PlayerBadge({
   name,
   activity,
   mulligans = 0,
   seat = "you",
 }: {
-  name: string;
+  name?: string;
   activity?: string;
   /** Mulligans taken, shown as a badge once there are any. */
   mulligans?: number;
   /** Whose badge: its tip opens toward the middle of the table. */
   seat?: "you" | "opponent";
 }) {
+  if (name === undefined && activity === undefined && mulligans === 0) {
+    return null;
+  }
   return (
     <div className="player-badge">
       <svg className="player-badge-emblem" viewBox="-24 -24 48 48" aria-hidden>

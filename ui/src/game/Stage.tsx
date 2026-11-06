@@ -7,7 +7,6 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { Crest } from "../components/Card";
 import { STAGE } from "./layout";
 
 /** How many window pixels a stage pixel takes, for turning pointer motion into stage pixels. */
@@ -47,16 +46,6 @@ export function Stage({ children }: { children: ReactNode }) {
       <div className="stage" style={style}>
         <StageScale.Provider value={scale}>{children}</StageScale.Provider>
       </div>
-    </div>
-  );
-}
-
-/** The crest and wordmark at the top left. */
-export function Brand() {
-  return (
-    <div className="brand">
-      <Crest className="brand-crest" />
-      <span>Project Beryl</span>
     </div>
   );
 }

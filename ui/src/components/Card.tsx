@@ -1,8 +1,8 @@
 // A card: its Scryfall scan wherever one has loaded, else a frame drawn in its place (a name
 // bar colored by the card's colors, art, a P/T badge and, on the full frame, the type line and
 // rules box). Battlefield permanents (`field`) wear their marks over either: a P/T plaque inked
-// up or down against the printed values, a badge per kind of counter, summoning sickness as a
-// moon badge over faded art, a token's coin badge on its pewter frame and a stolen permanent's
+// up or down against the printed values or loyalty on its shield, a badge per kind of counter,
+// summoning sickness as a large moon over the text box, leaving the art clear, a token's coin badge on its pewter frame and a stolen permanent's
 // violet edge; the top card of a pile of identical ones wears their count. Tapping turns the
 // card whole, never reshaping it.
 import {
@@ -227,23 +227,30 @@ function useRulesFit(text: string | undefined) {
   return ref;
 }
 
-/** Power and toughness (or loyalty), numerals inked blue and the slash black as on the mockups,
- * or green when raised and red when lowered, as Arena inks them. */
+/** Power and toughness, numerals inked blue and the slash black as on the mockups, or green when
+ * raised and red when lowered, as Arena inks them. */
 function stats(card: CardFace): ReactNode {
-  if (card.power !== undefined && card.toughness !== undefined) {
-    return (
-      <span>
-        <b className={toneClass(card.powerTone)}>{card.power}</b>
-        <i>/</i>
-        <b className={toneClass(card.toughnessTone)}>{card.toughness}</b>
-      </span>
-    );
-  }
-  return card.loyalty !== undefined ? (
+  if (card.power === undefined || card.toughness === undefined) return;
+  return (
     <span>
-      <b>{card.loyalty}</b>
+      <b className={toneClass(card.powerTone)}>{card.power}</b>
+      <i>/</i>
+      <b className={toneClass(card.toughnessTone)}>{card.toughness}</b>
     </span>
-  ) : undefined;
+  );
+}
+
+/** A planeswalker's loyalty on the printed loyalty symbol, the shield its card prints it on
+ * ([CR 306.5b](https://yawgatog.com/resources/magic-rules/#R3065b)). */
+function Loyalty({ loyalty }: { loyalty: string }) {
+  return (
+    <span className="card-loyalty" role="img" aria-label={`Loyalty ${loyalty}`}>
+      <span className="card-loyalty-glyph" aria-hidden>
+        {"\ue628"}
+      </span>
+      <b aria-hidden>{loyalty}</b>
+    </span>
+  );
 }
 
 export const toneClass = (tone: StatTone | undefined) => tone && `stat-${tone}`;
@@ -318,6 +325,8 @@ export function Card({
   // A scan prints its own power and toughness, legible wherever a whole card is drawn; on the
   // battlefield a plaque says the current ones over the printed ones, as Arena does.
   const pt = scan && !field ? undefined : stats(card);
+  const loyalty =
+    (scan && !field) || pt !== undefined ? undefined : card.loyalty;
   const lit =
     scan && card.lit !== undefined
       ? card.text?.split("\n")[card.lit]
@@ -328,7 +337,7 @@ export function Card({
     `frame-${frameKey(card)}`,
     card.colors.length > 1 && `accent-${card.colors[0]?.toLowerCase()}`,
     scan && "card-scanned",
-    pt && "card-with-pt",
+    (pt || loyalty !== undefined) && "card-with-pt",
     card.ability && field && "card-with-ability",
     marks?.sick && "card-sick",
     marks?.token && "card-token",
@@ -408,11 +417,15 @@ export function Card({
           </div>
         )}
         {card.ability && field && <AbilityBadge ability={card.ability} />}
-        {marks && (marks.counters.length > 0 || marks.sick || marks.token) && (
+        {marks?.sick && (
+          <span className="card-sick-moon">
+            <MarkBadge icon="sick" label="Summoning sick" />
+          </span>
+        )}
+        {marks && (marks.counters.length > 0 || marks.token) && (
           <span className="card-counters">
             {/* Marks that say what the frame and art also hint, apart from any art. */}
             {marks.token && <MarkBadge icon="token" label="Token" />}
-            {marks.sick && <MarkBadge icon="sick" label="Summoning sick" />}
             {marks.counters.map((c) => (
               <MarkBadge
                 key={c.kind}
@@ -425,6 +438,7 @@ export function Card({
         )}
         {marks?.stolen && <span className="card-stolen-edge" />}
         {pt && <span className="card-pt">{pt}</span>}
+        {loyalty !== undefined && <Loyalty loyalty={loyalty} />}
         {count !== undefined && count > 1 && (
           <span className="card-count">×{count}</span>
         )}
