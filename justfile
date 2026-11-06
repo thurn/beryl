@@ -62,6 +62,11 @@ bench-count *args:
 cards *args:
     {{ by }} cards "$@"
 
+# 17lands games-in-hand win rates into data/card-quality.csv
+[group('data')]
+card-quality *args:
+    {{ by }} card-quality "$@"
+
 # Install Maven and JDK 21, fetch XMage and Forge at their pins and build them, in the cache
 [group('oracles')]
 oracle-setup:

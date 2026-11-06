@@ -16,10 +16,13 @@
 //! - `beryl_cli longthink [--status | --upgrade] [--new | --run DIR] [--games N]` starts the
 //!   long-think ladder or resumes it ([`longthink`], `just longthink`), and supervises
 //!   `beryl_cli longthink-run <dir> [--games N]`, the run's own copy of this binary playing it.
+//! - `beryl_cli eval-fit [--games N] [--seed N]` fits the board evaluation's weights on
+//!   seeded games and prints them ([`evalfit`]).
 //! - `beryl_cli serve [--port N]` serves the app's game commands over HTTP for a UI in a plain
 //!   browser to play live games through (`just ui-live`, [`serve`]).
 
 mod boards;
+mod evalfit;
 mod fixture;
 mod game;
 mod longthink;
@@ -39,6 +42,7 @@ const USAGE: &str = "usage:
       [--iterations N] [--trees K]
   beryl_cli record-fixture <definitions.json> <out-dir> [name...]
   beryl_cli longthink [--status | --upgrade] [--new | --run DIR] [--games N]
+  beryl_cli eval-fit [--games N] [--seed N]
   beryl_cli serve [--port N]";
 
 /// The port `serve` listens on unless told otherwise.
@@ -51,6 +55,7 @@ fn main() -> ExitCode {
             fixture::record_all(Path::new(definitions), Path::new(out), names)
         }
         [command, rest @ ..] if command == "longthink" => longthink::main(rest),
+        [command, rest @ ..] if command == "eval-fit" => evalfit::main(rest),
         [command, dir] if command == "longthink-run" => longthink::run(Path::new(dir), None),
         [command, dir, flag, n] if command == "longthink-run" && flag == "--games" => {
             number(flag, n).and_then(|n| longthink::run(Path::new(dir), Some(n)))

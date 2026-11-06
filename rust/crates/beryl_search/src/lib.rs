@@ -4,8 +4,10 @@
 //! and the [`FrozenExpertAgent`] is a copy of it that never changes, the bar general agents
 //! are measured against. [`AGENTS`] names every agent a game can be played against.
 
+mod eval;
 mod expert;
 mod frozen;
+mod long;
 mod mcts;
 mod rollout;
 mod values;
@@ -14,11 +16,13 @@ use beryl_engine::rng::SplitMix64;
 use beryl_engine::{Choice, Decision, GameTable, Observation};
 use serde::{Deserialize, Serialize};
 
+pub use eval::{FEATURES, Features, NAMES, WEIGHTS, evaluate, features, logit, sigmoid};
 pub use expert::ExpertAgent;
 pub use frozen::FrozenExpertAgent;
+pub use long::{EVAL_STEPS, Family, Leaf, LongSearch, Method, Settings, WORLD_STEPS};
 pub use mcts::{Budget, Mcts, Search, Sight, rollouts_run};
-pub use rollout::{COUNTER_MIN, Inline, REMOVAL_MIN, RolloutPolicy, rollout};
-pub use values::{CardInfo, CardValues};
+pub use rollout::{COUNTER_MIN, Inline, REMOVAL_MIN, RolloutPolicy, rollout, rollout_to};
+pub use values::{CardInfo, CardValues, Knowledge};
 
 /// A decision's index among one agent's own, from 0, unsearched ones included: not its index
 /// in the game, which counts both players' decisions.

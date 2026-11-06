@@ -179,6 +179,27 @@ impl<'a> Observation<'a> {
     /// seed does not leak. A paused resolution keeps what it showed the viewer known in the
     /// committed state, so it replays from here to the same question.
     pub fn determinize(&self, t: &GameTable, rng: &mut SplitMix64) -> State {
+        self.deal(t, rng, |_| false)
+    }
+
+    /// [`Self::determinize`] with every hand shown: only the libraries' unknown cards, and
+    /// any other card the viewer does not know outside a hand, are dealt at random. This is
+    /// half-cheating, for measuring what seeing the opponent's hand is worth: a hand is a
+    /// hidden zone ([CR 402.3](https://yawgatog.com/resources/magic-rules/#R4023): "A player
+    /// may arrange their hand in any convenient fashion and look at it as much as they
+    /// want. A player can't look at the cards in another player's hand but can see how many
+    /// cards are in that hand at any time."), and so is a library, whose order no player
+    /// knows ([CR 401.2](https://yawgatog.com/resources/magic-rules/#R4012): "Each library
+    /// must be kept in a single face-down pile. Players can't look at or change the order of
+    /// cards in a library.").
+    pub fn determinize_libraries(&self, t: &GameTable, rng: &mut SplitMix64) -> State {
+        let root = self.root;
+        self.deal(t, rng, |slot| root.object(slot).zone == Zone::Hand)
+    }
+
+    /// The root with each player's cards the viewer does not know, `shown` ones aside, dealt
+    /// at random from the rest of their decklist.
+    fn deal(&self, t: &GameTable, rng: &mut SplitMix64, shown: impl Fn(Slot) -> bool) -> State {
         let mut s = *self.root;
         for player in Seat::BOTH {
             let deck = t.deck(player);
@@ -190,7 +211,7 @@ impl<'a> Observation<'a> {
             let mut unknown: Fixed<Slot, DECK_SLOTS> = Fixed::new();
             for i in 0..deck.len() {
                 let slot = deck_slot(player, i);
-                if self.root.knows(self.viewer, slot) {
+                if self.root.knows(self.viewer, slot) || shown(slot) {
                     let card = s.object(slot).card;
                     let at = remainder
                         .position(card)

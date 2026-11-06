@@ -84,12 +84,15 @@ impl Default for Budget {
 }
 
 /// What the search may know of the game.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Sight {
     /// The true state, hidden cards and library order included: cheating.
     Omniscient,
     /// Only its Observation: each tree searches a determinization of it.
     Hidden,
+    /// Its Observation and every hand, the libraries dealt at random: half-cheating, to
+    /// measure what seeing the opponent's hand is worth apart from knowing the draws.
+    Hands,
 }
 
 /// The UCT exploration constant, for rewards in [0, 1]. Against the greedy agent, 72 games a
@@ -110,6 +113,11 @@ pub fn rollouts_run() -> u64 {
     ROLLOUTS.load(Ordering::Relaxed)
 }
 
+/// Counts one iteration for [`rollouts_run`].
+pub(crate) fn count_rollout() {
+    ROLLOUTS.fetch_add(1, Ordering::Relaxed);
+}
+
 /// What one searched decision found and spent, for a runner's log and as training data.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Search {
@@ -122,6 +130,9 @@ pub struct Search {
     pub rollouts: u32,
     /// The root visits its trees brought from the decision before.
     pub inherited: u32,
+    /// The engine steps it spent: every decision `next` returned or settled, in its trees
+    /// and their rollouts, and for the long-think searcher its worlds and evaluations.
+    pub work: u64,
     /// The root visits per candidate, summed across the trees, when the search stopped.
     pub visits: Vec<u32>,
     /// The rewards per candidate for the deciding player, summed likewise: divided by the
@@ -301,7 +312,9 @@ impl Agent for Mcts {
             None => (self.plant(obs, d, decision), decision),
         };
         let inherited = trees.iter().map(Tree::visits).sum();
+        let before: u64 = trees.iter().map(Tree::steps).sum();
         let rollouts = self.grow(&mut trees, true);
+        let work = trees.iter().map(Tree::steps).sum::<u64>() - before;
         let (visits, rewards) = totals(&trees);
         let choice = Choice(leader(&visits) as u8);
         self.last = Some(Search {
@@ -309,6 +322,7 @@ impl Agent for Mcts {
             chain,
             rollouts,
             inherited,
+            work,
             visits,
             rewards,
         });
@@ -515,6 +529,7 @@ impl Tree {
                 s
             }
             Sight::Hidden => obs.determinize(t, &mut rng),
+            Sight::Hands => obs.determinize_libraries(t, &mut rng),
         };
         let mut tree = Tree {
             nodes: vec![Node::new(d.player)],
@@ -529,6 +544,11 @@ impl Tree {
 
     fn visits(&self) -> u32 {
         self.nodes[self.root as usize].visits
+    }
+
+    /// The engine steps the tree's scratch has counted over its life.
+    fn steps(&self) -> u64 {
+        self.x.counts.decisions + self.x.counts.silent
     }
 
     fn children(&self) -> &[Node] {
@@ -652,7 +672,7 @@ impl Tree {
 
 /// Whether two views of a game show the same: the turn, the players, the stack, the
 /// waiting triggers and permissions, and every slot's object as far as the viewer knows it.
-fn shows_the_same(a: Observation<'_>, b: Observation<'_>) -> bool {
+pub(crate) fn shows_the_same(a: Observation<'_>, b: Observation<'_>) -> bool {
     a.turn() == b.turn()
         && Seat::BOTH.iter().all(|&p| a.player(p) == b.player(p))
         && a.stack() == b.stack()
@@ -665,7 +685,7 @@ fn shows_the_same(a: Observation<'_>, b: Observation<'_>) -> bool {
 /// The profile below a tree's root. The root decision was offered under the game's profile;
 /// below it the tree plays under the smart stops, with no player's passes asked. The payment
 /// profile stays, so a payment in progress is never asked under another.
-fn smart(s: &mut State) {
+pub(crate) fn smart(s: &mut State) {
     s.set_profile(Profile {
         stops: Stops::Smart,
         breakpoint: None,

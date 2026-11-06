@@ -60,6 +60,10 @@ impl Entrant {
                 sight: Sight::Omniscient,
                 ..
             } => "mcts-omniscient",
+            Entrant::Search {
+                sight: Sight::Hands,
+                ..
+            } => "mcts-hands",
             Entrant::Fixed(name) => name,
         }
     }

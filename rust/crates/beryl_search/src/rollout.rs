@@ -35,7 +35,7 @@ use beryl_engine::{
     Scratch, Seat, Slot, State, Step, Zone, apply_decided, next,
 };
 
-use crate::values::{CardInfo, CardValues};
+use crate::values::{CardInfo, CardValues, Knowledge};
 
 /// The least value of a permanent worth a removal spell or ability.
 pub const REMOVAL_MIN: i32 = 25;
@@ -84,9 +84,19 @@ impl Candidate {
 
 impl RolloutPolicy {
     pub fn new(t: &GameTable) -> RolloutPolicy {
+        Self::with(t, Knowledge::Tuned)
+    }
+
+    /// The policy with the card values of tier `knowledge`.
+    pub fn with(t: &GameTable, knowledge: Knowledge) -> RolloutPolicy {
         RolloutPolicy {
-            values: CardValues::new(t),
+            values: CardValues::with(t, knowledge),
         }
+    }
+
+    /// Its card values.
+    pub fn values(&self) -> &CardValues {
+        &self.values
     }
 
     /// The rules' view of one decision of `me`'s, for agents that build on them: with
@@ -788,10 +798,23 @@ impl Answers for Inline<'_> {
 /// Plays a game to its end under the rollout policy in both seats, every question answered
 /// inline: the rollout loop search runs (§19.1). It copies nothing and allocates nothing.
 pub fn rollout(s: &mut State, t: &GameTable, x: &mut Scratch, policy: &RolloutPolicy) -> Outcome {
+    rollout_to(s, t, x, policy, u16::MAX).expect("a game ends before turn 65535")
+}
+
+/// [`rollout`], cut off at the first decision of turn `turn` or later: the game's outcome if
+/// it ends before then, else none, the state left at that decision.
+pub fn rollout_to(
+    s: &mut State,
+    t: &GameTable,
+    x: &mut Scratch,
+    policy: &RolloutPolicy,
+    turn: u16,
+) -> Option<Outcome> {
     let mut inline = Inline { policy, t };
     loop {
         match next(s, t, x, &mut inline) {
-            Step::Over(outcome) => return outcome,
+            Step::Over(outcome) => return Some(outcome),
+            Step::Decide(_) if s.turn().number >= turn => return None,
             Step::Decide(d) => {
                 let c = policy.choose(t, Observation::new(s, d.player), &d);
                 apply_decided(s, t, x, &mut inline, &d, c);
