@@ -103,13 +103,6 @@
       "click": ".opening-hand .opening-card"
     },
     {
-      "name": "game-first-player",
-      "route": "/?fixture=greedy-turn-9&at=106#/game",
-      "width": 1600,
-      "height": 900,
-      "hover": ".life-first"
-    },
-    {
       "name": "game-castable",
       "route": "/?fixture=greedy-turn-9&at=106#/game",
       "width": 1600,
