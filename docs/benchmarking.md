@@ -42,11 +42,18 @@ just bench -p beryl_bench --bench example_timing
 
 - `just bench-count [cargo bench flags]` runs the Gungraun benchmarks (default
   `--bench '*_counts'`) in the `beryl-bench` Lima VM, creating it on first use.
+
 - `just bench [--force] [cargo bench flags] [-- harness flags]` builds, checks
   the machine is quiet, then times. `-- --quick` gives the ABBA harness 30
   rounds instead of 300; Criterion takes its own flags, such as
   `-- --save-baseline before`. It builds under the `search` profile with
   `-C target-cpu=apple-m4` unless the flags name a `--profile`.
+
+- `just count-gate` counts only `rollout_counts`' `rollouts` subject in the VM,
+  about 15 s once built, and fails when it runs more than the tolerance above
+  the bar in `rust/crates/beryl_bench/count-gate.toml`. It is slow CI's `counts`
+  lane, so a rule or card the WU Control mirror doesn't use can't slow it down
+  unnoticed. The file's comments say when the bar may rise.
 
 Name benchmark targets by kind: `<subject>_counts`, `<subject>_abba`,
 `<subject>_timing`.

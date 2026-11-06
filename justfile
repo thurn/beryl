@@ -57,6 +57,11 @@ bench *args:
 bench-count *args:
     {{ by }} bench-count "$@"
 
+# Fail when the rollout benchmark's instruction count rises past its bar (count-gate.toml)
+[group('bench')]
+count-gate:
+    {{ by }} count-gate
+
 # Look up card data on Scryfall into data/cards.json (--cube for the whole cube)
 [group('data')]
 cards *args:
@@ -120,7 +125,7 @@ test-py *args:
 check:
     {{ by }} check
 
-# Slow CI, or some of its lanes: repo, python, rust, ui, app, shots, oracle (budget 300 s)
+# Slow CI, or some of its lanes: repo, python, rust, ui, app, shots, ui-test, oracle, counts (budget 300 s)
 [group('checks')]
 ci *lanes:
     {{ by }} ci "$@"

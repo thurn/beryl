@@ -1,0 +1,34 @@
+# The instruction-count gate: slow CI's `counts` lane (`just count-gate`) runs
+# this benchmark under Callgrind in the `beryl-bench` VM and fails when it
+# executes more than `tolerance_percent` above `instructions`.
+#
+# Why: the corpus is WU Control mirror positions (docs/benchmarking.md). A rule
+# or card those decks don't use must cost them nothing: gate it behind a
+# `GameTable` capability bit or a per-state index, keep it out of line with
+# `#[cold]`, and keep its data out of `State` (architecture §6.4, §18). Counts
+# are exact, so the tolerance absorbs only inlining and layout drift from
+# unrelated code. The bar is the total since the last bump, so small rises add
+# up and fail together.
+#
+# Raise `instructions` only for one of these, named in the commit body with the
+# old and new counts:
+#
+# 1. The work changed, not its cost: a rules fix or card change alters what
+#    the corpus's rollouts do, so `rollouts_never_change` was updated in the
+#    same change. Check that `rollout_timing`'s decisions per rollout moved by
+#    about as much as the count did.
+# 2. A rule these decks really use got more exact, and its cost sits in that
+#    rule's own path, not in a path every game takes.
+# 3. A Rust toolchain or dependency bump (`rust-toolchain.toml`, `Cargo.lock`)
+#    moved the count with no engine change.
+#
+# Never a reason: a mechanic absent from these decks costs anything at all;
+# "it's under 2%"; room for work to come. Never raise `tolerance_percent` to
+# pass a change.
+#
+# Lower `instructions` whenever the gate reports a drop past the tolerance, so
+# the slack isn't banked for the next regression.
+
+benchmark = "rollout_counts::cube_rollout::rollouts::corpus"
+instructions = 436_754_038
+tolerance_percent = 1.0

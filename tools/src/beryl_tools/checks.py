@@ -6,8 +6,9 @@ started, and fails its lane.
 
 The fast check runs the lanes whose files changed since the branch left origin/staging. Slow
 CI runs every lane plus `app` (the debug app built and launched headless until its UI loads),
-`shots` (the screens rendered headless), `ui-test` (the game screen played headless) and
-`oracle` (the card scenarios checked against XMage and Forge).
+`shots` (the screens rendered headless), `ui-test` (the game screen played headless),
+`oracle` (the card scenarios checked against XMage and Forge) and `counts` (the rollout
+benchmark's instruction count held to its bar).
 """
 
 from __future__ import annotations
@@ -340,6 +341,13 @@ def oracle_lane() -> Lane:
     return Lane("oracle", warm=True).step("oracle", [*BY, "oracle"])
 
 
+def counts_lane() -> Lane:
+    """Counts the cube rollout benchmark's instructions in the bench VM (`by count-gate`) and
+    fails a rise past the bar in `beryl_bench/count-gate.toml`. The VM builds into its own
+    target dir, so it needs no warm clone."""
+    return Lane("counts").step("count-gate", [*BY, "count-gate"])
+
+
 def fast(args: argparse.Namespace) -> int:
     base = branch_base()
     changed: list[str] | None = changed_paths(base)
@@ -376,6 +384,7 @@ def slow(args: argparse.Namespace) -> int:
         "shots": shots_lane(),
         "ui-test": ui_test_lane(),
         "oracle": oracle_lane(),
+        "counts": counts_lane(),
     }
     chosen = args.lanes or list(lanes)
     unknown = set(chosen) - set(lanes)

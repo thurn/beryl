@@ -6,6 +6,8 @@
 - `bench-count` runs the Gungraun (Valgrind) instruction-count benchmarks in a Lima Linux VM,
   creating and provisioning it on first use. Counts don't depend on load, so there's no check.
   Every worktree builds into the VM's one target dir, so runs take turns under a lock in the VM.
+- `count-gate`, slow CI's `counts` lane, counts one benchmark there and fails when it rises past
+  the bar in `beryl_bench/count-gate.toml`.
 
 Extra arguments go to `cargo bench`: `by bench -p beryl_bench --bench example_abba`.
 """
@@ -13,6 +15,7 @@ Extra arguments go to `cargo bench`: `by bench -p beryl_bench --bench example_ab
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shlex
@@ -197,11 +200,12 @@ def vm_status() -> str | None:
     return None
 
 
+def vm_command(script: str) -> list[str]:
+    return ["limactl", "shell", "--workdir", str(paths.RUST), VM, "bash", "-lc", script]
+
+
 def vm_shell(script: str) -> int:
-    return subprocess.run(
-        ["limactl", "shell", "--workdir", str(paths.RUST), VM, "bash", "-lc", script],
-        check=False,
-    ).returncode
+    return subprocess.run(vm_command(script), check=False).returncode
 
 
 def locked(script: str) -> str:
@@ -253,6 +257,103 @@ def bench_count(args: argparse.Namespace) -> int:
     return vm_shell(script)
 
 
+# The instruction-count gate: slow CI's `counts` lane. Its bar, and when to move it, are in
+# GATE_FILE's comments.
+
+GATE_FILE: Path = paths.RUST / "crates" / "beryl_bench" / "count-gate.toml"
+# Its own Gungraun home, so CI's throwaway worktrees don't each leave one in the VM.
+GATE_HOME = "count-gate"
+
+
+@dataclass
+class Gate:
+    benchmark: str  # FILE::GROUP::FUNCTION::ID, as Gungraun filters and reports it
+    instructions: int
+    tolerance_percent: float
+
+
+def load_gate(text: str) -> Gate:
+    data = tomllib.loads(text)
+    return Gate(
+        benchmark=str(data["benchmark"]),
+        instructions=int(data["instructions"]),
+        tolerance_percent=float(data["tolerance_percent"]),
+    )
+
+
+def gate_cargo(gate: Gate) -> list[str]:
+    """Builds and counts only the gated benchmark, printing Gungraun's JSON summary."""
+    file = gate.benchmark.split("::")[0]
+    return cargo_bench(["--bench", file, "--", "--output-format=json", gate.benchmark])
+
+
+def counted(stdout: str, benchmark: str) -> int | None:
+    """The benchmark's instructions (Callgrind's `Ir`) from Gungraun's JSON lines."""
+    for line in stdout.splitlines():
+        if not line.startswith("{"):
+            continue
+        try:
+            summary = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if f"{summary.get('module_path')}::{summary.get('id')}" != benchmark:
+            continue
+        for profile in summary.get("profiles", []):
+            if profile.get("tool") == "Callgrind":
+                return int(profile["data"]["total"]["metrics"]["Ir"]["values"]["new"])
+    return None
+
+
+def judge(gate: Gate, measured: int) -> tuple[bool, str]:
+    """Fails a rise past the tolerance; a drop past it passes, asking for a lower bar."""
+    change = 100.0 * (measured - gate.instructions) / gate.instructions
+    said = f"{measured:,} instructions, {change:+.2f}% against the bar of {gate.instructions:,}"
+    if change > gate.tolerance_percent:
+        return False, (
+            f"{said}: over the {gate.tolerance_percent}% tolerance. Make the new cost free "
+            f"for these decks, or raise the bar only as {GATE_FILE.name} allows"
+        )
+    if change < -gate.tolerance_percent:
+        return (
+            True,
+            f"{said}: lower `instructions` in {GATE_FILE.name} to keep the gain",
+        )
+    return True, said
+
+
+def count_gate(args: argparse.Namespace) -> int:
+    if vm_status() is None:
+        # Creating it takes minutes, past CI's deadline.
+        log(f"no {VM} VM: run `just bench-count` once to create it")
+        return 2
+    code = vm_ensure()
+    if code != 0:
+        return code
+    runner = locked_version((paths.RUST / "Cargo.lock").read_text(), "gungraun")
+    if runner is None:
+        log("no gungraun in rust/Cargo.lock")
+        return 2
+    gate = load_gate(GATE_FILE.read_text())
+    script = count_script(
+        provision_script(toolchain(), runner), gate_cargo(gate), GATE_HOME
+    )
+    run = subprocess.run(
+        vm_command(script),
+        stdout=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    if run.returncode != 0:
+        return run.returncode
+    measured = counted(run.stdout, gate.benchmark)
+    if measured is None:
+        log(f"Gungraun reported no count for {gate.benchmark}")
+        return 2
+    ok, message = judge(gate, measured)
+    log(f"{gate.benchmark}: {message}")
+    return 0 if ok else 1
+
+
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser(
         "bench",
@@ -267,6 +368,11 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         allow_abbrev=False,
     )
     p.set_defaults(func=bench_count, passthrough=True)
+    p = sub.add_parser(
+        "count-gate",
+        help="fail when the gated benchmark's instruction count rises past its bar",
+    )
+    p.set_defaults(func=count_gate)
 
 
 if __name__ == "__main__":

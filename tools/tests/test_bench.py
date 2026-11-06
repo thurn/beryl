@@ -1,3 +1,5 @@
+import json
+
 from beryl_tools import bench
 
 TOP = """Processes: 812 total
@@ -92,3 +94,50 @@ def test_counting_holds_the_vm_lock_and_a_home_of_its_own() -> None:
     lock, count = script.index("flock 9"), script.index("cargo bench")
     assert lock < script.index("provision") < count
     assert "GUNGRAUN_HOME=$HOME/gungraun/by-1 " in script
+
+
+GATE = bench.Gate("rollout_counts::cube_rollout::rollouts::corpus", 1_000_000, 1.0)
+
+
+def test_the_gate_file_parses_and_names_a_counts_benchmark() -> None:
+    gate = bench.load_gate(bench.GATE_FILE.read_text())
+    assert gate.benchmark.split("::")[0].endswith("_counts")
+    assert gate.instructions > 0 and 0 < gate.tolerance_percent < 5
+
+
+def test_the_gate_counts_only_its_benchmark_as_json() -> None:
+    cmd = bench.gate_cargo(GATE)
+    assert cmd[cmd.index("--bench") + 1] == "rollout_counts"
+    harness = cmd[cmd.index("--") + 1 :]
+    assert harness == ["--output-format=json", GATE.benchmark]
+
+
+def summary(module_path: str, ir: int) -> str:
+    metrics = {"Ir": {"values": {"new": ir}}}
+    profile = {"tool": "Callgrind", "data": {"total": {"metrics": metrics}}}
+    return json.dumps(
+        {"module_path": module_path, "id": "corpus", "profiles": [profile]}
+    )
+
+
+def test_the_count_comes_from_the_gated_benchmark_summary() -> None:
+    out = "\n".join(
+        [
+            "provisioning noise",
+            summary("rollout_counts::cube_rollout::next_apply", 5),
+            "{not json",
+            summary("rollout_counts::cube_rollout::rollouts", 1_004_000),
+        ]
+    )
+    assert bench.counted(out, GATE.benchmark) == 1_004_000
+    assert bench.counted("nothing here\n", GATE.benchmark) is None
+
+
+def test_a_rise_past_the_tolerance_fails_and_a_drop_asks_for_a_lower_bar() -> None:
+    assert bench.judge(GATE, 1_010_000)[0]  # exactly at the tolerance
+    ok, message = bench.judge(GATE, 1_010_001)
+    assert not ok and "count-gate.toml" in message
+    ok, message = bench.judge(GATE, 980_000)
+    assert ok and "lower" in message
+    ok, message = bench.judge(GATE, 995_000)
+    assert ok and "lower" not in message
