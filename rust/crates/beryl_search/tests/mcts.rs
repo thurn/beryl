@@ -198,16 +198,6 @@ fn the_exact_stop_chooses_as_the_full_budget() {
     exact_stop_chooses_as_the_full_budget(48, 24, 6);
 }
 
-/// The acceptance run, at the budgets the long-think ladder starts at: `cargo test --release
-/// -p beryl_search --test mcts -- --ignored`.
-#[test]
-#[ignore = "minutes in release"]
-fn the_exact_stop_chooses_as_the_full_budget_at_1k_and_10k() {
-    for iterations in [1000, 10_000] {
-        exact_stop_chooses_as_the_full_budget(iterations, 200, 60);
-    }
-}
-
 /// One of the searching agent's decisions in a game, as it was asked and answered.
 struct Asked {
     state: State,
@@ -229,8 +219,9 @@ const REUSING: Budget = Budget {
 
 /// The end of seeded greedy mirror games played on by the hidden search in seat 0 against
 /// the greedy agent, from `from_end` decisions before the greedy game's last: every decision
-/// of the search's. Late positions make short rollouts.
-fn searched_game(t: &GameTable, seed: u64, from_end: usize) -> Vec<Asked> {
+/// of the search's, and the game indices of the greedy agent's actions, its decisions but
+/// passing priority. Late positions make short rollouts.
+fn searched_game(t: &GameTable, seed: u64, from_end: usize) -> (Vec<Asked>, Vec<usize>) {
     let mut starts = Vec::new();
     let mut s = State::new(t, seed, Profile::SMART);
     play(
@@ -245,6 +236,7 @@ fn searched_game(t: &GameTable, seed: u64, from_end: usize) -> Vec<Asked> {
     let mut greedy = GreedyAgent::new(t);
     let mut x = Scratch::new();
     let mut asked = Vec::new();
+    let mut acted = Vec::new();
     for index in 0.. {
         let Step::Decide(d) = next(&mut s, t, &mut x, &mut Replay) else {
             break;
@@ -263,11 +255,15 @@ fn searched_game(t: &GameTable, seed: u64, from_end: usize) -> Vec<Asked> {
             });
             c
         } else {
-            greedy.choose(obs, &d)
+            let c = greedy.choose(obs, &d);
+            if !(d.kind == DecisionKind::Priority && d.candidates.option(c) == Some(Opt::Pass)) {
+                acted.push(index);
+            }
+            c
         };
         apply(&mut s, t, &mut x, &mut Replay, c);
     }
-    asked
+    (asked, acted)
 }
 
 /// The slot a choice names, which it may move.
@@ -287,16 +283,16 @@ fn named(d: &Decision, c: Choice) -> Option<Slot> {
 /// The searching agent's games for the reuse tests: (seed, decisions before the end).
 const REUSE_GAMES: [(u64, usize); 1] = [(1, 24)];
 
-/// A decision reuses the trees of the one before only when the game asked it straight after,
-/// with no other player's decision between, no card but the one the choice named changing
-/// zones, and nothing hidden learned (CR 400.7: a zone change makes a new object, so a new
-/// incarnation).
+/// A decision reuses the trees of the one before only when no other player acted between,
+/// no card but the one the choice named changed zones, and nothing hidden was learned (CR
+/// 400.7: a zone change makes a new object, so a new incarnation). Another player's pass
+/// may come between: whether they could have done more is theirs to know.
 #[test]
 fn subtree_reuse_stays_within_one_action() {
     let t = mirror();
     let mut reused = 0;
     for (seed, from_end) in REUSE_GAMES {
-        let asked = searched_game(&t, seed, from_end);
+        let (asked, acted) = searched_game(&t, seed, from_end);
         for (k, pair) in (1..).zip(asked.windows(2)) {
             let [before, after] = pair else {
                 unreachable!()
@@ -307,7 +303,9 @@ fn subtree_reuse_stays_within_one_action() {
             let mut y = Scratch::new();
             let now = observe(&after.state, &t, &mut y, Seat::P0);
             let moves = named(&before.decision, before.choice);
-            let straight = after.index == before.index + 1
+            let straight = !acted
+                .iter()
+                .any(|&i| (before.index..after.index).contains(&i))
                 && Slot::all().all(|slot| {
                     was.knows(slot) == now.knows(slot)
                         && (was.object(slot).incarnation == now.object(slot).incarnation
@@ -334,7 +332,7 @@ fn a_rebuilt_agent_plays_on_as_the_uninterrupted_one() {
     let t = mirror();
     let mut inside_chain = false;
     for (seed, from_end) in REUSE_GAMES {
-        let asked = searched_game(&t, seed, from_end);
+        let (asked, _) = searched_game(&t, seed, from_end);
         for (k, a) in asked.iter().enumerate() {
             let r = a.resume_point as usize;
             let chain_ends = asked

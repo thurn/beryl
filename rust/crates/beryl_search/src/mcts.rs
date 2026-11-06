@@ -136,8 +136,6 @@ struct Kept {
     trees: Vec<Tree>,
     chain: u32,
     choice: Choice,
-    /// The turn and the decisions offered in it when the decision was asked.
-    at: (u16, u16),
     /// Each slot's incarnation, and whether the deciding player knew its card, then.
     seen: Vec<(u16, bool)>,
     /// The card the choice names, which it may move: the spell cast, the land played.
@@ -238,14 +236,14 @@ impl Mcts {
     }
 
     /// The trees of the last decision, moved down to its chosen child, if `d` may reuse them:
-    /// asked straight after it in the game, no other card changed zones and the player
-    /// learned nothing since, and every tree reached `d` there as the game did. Each tree
-    /// keeps its determinization, which nothing since has contradicted.
+    /// asked as this agent's next decision (any other of its own takes the kept trees), no
+    /// other card changed zones and the player learned nothing since, and every tree reached
+    /// `d` straight from that child, with no other player's decision between, showing what
+    /// the game shows. Each tree keeps its determinization, which nothing since has
+    /// contradicted. Whether the other player was offered a decision in the game is not
+    /// asked: with their passes silent when they have nothing to do, it would betray their
+    /// hand.
     fn descend(&self, kept: Kept, obs: Observation<'_>, d: &Decision) -> Option<Vec<Tree>> {
-        // No decision, the other player's or an unsearched one of this player's, came between.
-        if (obs.turn().number, obs.decisions()) != (kept.at.0, kept.at.1.wrapping_add(1)) {
-            return None;
-        }
         // CR 400.7: "An object that moves from one zone to another becomes a new object
         // with no memory of or relation to its previous existence", so a new incarnation is
         // a zone change.
@@ -311,7 +309,6 @@ impl crate::Agent for Mcts {
                 trees,
                 chain,
                 choice,
-                at: (obs.turn().number, obs.decisions()),
                 seen: Slot::all()
                     .map(|slot| (obs.object(slot).incarnation, obs.knows(slot)))
                     .collect(),
@@ -536,8 +533,9 @@ impl Tree {
         }
     }
 
-    /// Moves the root down to its child for `c`, if the game there reaches `d` and shows
-    /// what `obs` shows of every slot.
+    /// Moves the root down to its child for `c`, if the game there reaches `d` with no other
+    /// decision between and shows everything `obs` shows: had another player acted in the
+    /// game, a tapped permanent, a counter or an entry on the stack would differ.
     fn descend(&mut self, t: &GameTable, c: Choice, obs: Observation<'_>, d: &Decision) -> bool {
         let child = self.nodes[self.root as usize].first + u32::from(c.0);
         let mut s = self.state;
@@ -547,11 +545,7 @@ impl Tree {
         if next(&mut s, t, &mut self.x, &mut Replay) != Step::Decide(*d) {
             return false;
         }
-        let seen = observe(&s, t, &mut self.x, d.player);
-        if Slot::all().any(|slot| {
-            seen.object(slot).incarnation != obs.object(slot).incarnation
-                || seen.knows(slot) != obs.knows(slot)
-        }) {
+        if !shows_the_same(observe(&s, t, &mut self.x, d.player), obs) {
             return false;
         }
         self.state = s;
@@ -637,6 +631,18 @@ impl Tree {
     }
 }
 
+/// Whether two views of a game show the same: the turn, the players, the stack, the
+/// waiting triggers and permissions, and every slot's object as far as the viewer knows it.
+fn shows_the_same(a: Observation<'_>, b: Observation<'_>) -> bool {
+    a.turn() == b.turn()
+        && Seat::BOTH.iter().all(|&p| a.player(p) == b.player(p))
+        && a.stack() == b.stack()
+        && a.triggers() == b.triggers()
+        && a.permissions() == b.permissions()
+        && Slot::all()
+            .all(|slot| a.knows(slot) == b.knows(slot) && a.object(slot) == b.object(slot))
+}
+
 /// The profile below a tree's root. The root decision was offered under the game's profile;
 /// below it the tree plays under the smart stops, with no player's passes asked. The payment
 /// profile stays, so a payment in progress is never asked under another.
@@ -656,5 +662,59 @@ fn score(outcome: Outcome, player: Seat) -> f64 {
         Outcome::Win(winner) if winner == player => 1.0,
         Outcome::Win(_) => 0.0,
         Outcome::Draw | Outcome::Stalled(_) => 0.5,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{finished, leader};
+
+    /// Every way to hand `left` more root visits to the candidates of `visits`.
+    fn spendings(visits: &[u32], left: u32, out: &mut Vec<Vec<u32>>) {
+        match visits.split_first() {
+            None => out.push(Vec::new()),
+            Some((&first, [])) => out.push(vec![first + left]),
+            Some((&first, rest)) => {
+                for n in 0..=left {
+                    let mut tails = Vec::new();
+                    spendings(rest, left - n, &mut tails);
+                    out.extend(tails.into_iter().map(|mut tail| {
+                        tail.insert(0, first + n);
+                        tail
+                    }));
+                }
+            }
+        }
+    }
+
+    /// The exact stop ends a search exactly when every spending of the iterations left keeps
+    /// the candidate visited most, the first of equals, split across trees or not.
+    #[test]
+    fn the_exact_stop_ends_once_the_leader_is_settled() {
+        let mut stopped = 0;
+        for candidates in 2..=3 {
+            for code in 0..6u32.pow(candidates) {
+                let visits: Vec<u32> = (0..candidates).map(|i| code / 6u32.pow(i) % 6).collect();
+                for left in 0..6 {
+                    let mut all = Vec::new();
+                    spendings(&visits, left, &mut all);
+                    let settled = all.iter().all(|v| leader(v) == leader(&visits));
+                    let one = finished([(visits.clone(), left)].into_iter(), true);
+                    let halves: Vec<u32> = visits.iter().map(|n| n / 2).collect();
+                    let rest: Vec<u32> = visits.iter().zip(&halves).map(|(n, h)| n - h).collect();
+                    let two = finished(
+                        [(halves, left / 2), (rest, left - left / 2)].into_iter(),
+                        true,
+                    );
+                    assert_eq!((one, two), (settled, settled), "{visits:?}, {left} left");
+                    assert_eq!(
+                        finished([(visits.clone(), left)].into_iter(), false),
+                        left == 0
+                    );
+                    stopped += u32::from(settled && left > 0);
+                }
+            }
+        }
+        assert!(stopped > 0);
     }
 }
