@@ -364,6 +364,10 @@ pub struct CandidateView {
     /// abilities, mana abilities among them, its face lists before it, as
     /// [`StackItem::Ability`]'s `nth` counts them, so the UI finds the ability's paragraph.
     pub nth: Option<u8>,
+    /// For a candidate that announces one or more targets: what the first of them may be, one
+    /// of each set of interchangeable objects (§7.2), so the UI can take the count and the
+    /// target as one pick. None otherwise.
+    pub targets: Vec<TargetRef>,
 }
 
 /// One way a cast or activation is paid, found by playing it out on a copy of the game: the
@@ -963,6 +967,7 @@ fn decision_view(
                 payments: Vec::new(),
                 blocks: Vec::new(),
                 nth: None,
+                targets: Vec::new(),
             })
             .collect(),
         Candidates::Options(opts) => opts.iter().map(|&o| candidate(t, obs, o)).collect(),
@@ -991,6 +996,7 @@ fn halt_view(obs: Observation<'_>, id: DecisionId, stops: StopsSetting) -> Decis
             payments: Vec::new(),
             blocks: Vec::new(),
             nth: None,
+            targets: Vec::new(),
         }],
         resolving: None,
         ask: AskView::Plain,
@@ -1179,6 +1185,7 @@ fn candidate(t: &GameTable, obs: Observation<'_>, o: Opt) -> CandidateView {
         payments: Vec::new(),
         blocks: Vec::new(),
         nth: activation_nth(t, obs, o),
+        targets: Vec::new(),
     }
 }
 

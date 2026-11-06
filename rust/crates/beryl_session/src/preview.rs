@@ -2,17 +2,18 @@
 //! activation would tap, so the UI can light the permanents a payment taps before the player
 //! commits to it and tell payment plans apart by what they tap rather than by number; and which
 //! attackers a blocker may block, so the UI can take a whole block declaration in any order
-//! before it sends the engine's picks.
+//! before it sends the engine's picks; and what a count of targets lets the first target be, so
+//! the UI can take the count with the target.
 
 use beryl_engine::card::AbilityKind;
 use beryl_engine::state::{ObjectFlags, Pending};
 use beryl_engine::{
-    Candidates, Choice, Decision, DecisionKind, GameTable, Opt, Profile, Replay, Scratch, Slot,
-    State, Step, Stops, Zone, apply, next,
+    Candidates, Choice, Decision, DecisionKind, GameTable, Opt, Profile, Replay, Scratch, Seat,
+    Slot, State, Step, Stops, Zone, apply, next,
 };
 
 use crate::Status;
-use crate::protocol::{Payment, PlayerView};
+use crate::protocol::{Payment, PlayerView, Side, TargetRef};
 
 /// Adds to `view`, at the open decision `d` in `s`, the ways each candidate is paid
 /// ([`payments`]) and the attackers each blocker may block ([`blocks`]). They read the whole
@@ -20,14 +21,16 @@ use crate::protocol::{Payment, PlayerView};
 /// the attackers' public characteristics decide them.
 pub fn add_previews(view: &mut PlayerView, s: &State, t: &GameTable, d: &Decision) {
     if let Status::Deciding { decision } = &mut view.status {
-        for ((c, p), b) in decision
+        for (((c, p), b), targets) in decision
             .candidates
             .iter_mut()
             .zip(payments(s, t, d))
             .zip(blocks(s, t, d))
+            .zip(targets(s, t, d))
         {
             c.payments = p;
             c.blocks = b;
+            c.targets = targets;
         }
     }
 }
@@ -75,6 +78,57 @@ fn blocks(s: &State, t: &GameTable, d: &Decision) -> Vec<Vec<u8>> {
                     candidates: Candidates::Objects(attackers),
                     ..
                 }) => attackers.iter().map(Slot::get).collect(),
+                _ => Vec::new(),
+            }
+        })
+        .collect()
+}
+
+/// What the first target each candidate of `d`, the open decision in `s`, announces may be,
+/// in candidate order: none but for a count of targets above zero.
+///
+/// [CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c): "If the spell has a
+/// variable number of targets, the player announces how many targets they will choose before
+/// they announce those targets." The engine asks the targets as the picks after the count;
+/// identical objects are one candidate (§7.2).
+fn targets(s: &State, t: &GameTable, d: &Decision) -> Vec<Vec<TargetRef>> {
+    let Candidates::Options(opts) = &d.candidates else {
+        return vec![Vec::new(); d.len()];
+    };
+    let side = |p: Seat| {
+        if p == d.player {
+            Side::You
+        } else {
+            Side::Opponent
+        }
+    };
+    opts.iter()
+        .enumerate()
+        .map(|(i, &o)| {
+            if d.kind != DecisionKind::TargetCount || o == Opt::Number(0) {
+                return Vec::new();
+            }
+            let mut copy = forced(s);
+            let mut scratch = Scratch::new();
+            apply(&mut copy, t, &mut scratch, &mut Replay, choice(i));
+            match next(&mut copy, t, &mut scratch, &mut Replay) {
+                Step::Decide(Decision {
+                    kind: DecisionKind::Target,
+                    candidates,
+                    ..
+                }) => match candidates {
+                    Candidates::Objects(objects) => objects
+                        .iter()
+                        .map(|slot| TargetRef::Object { slot: slot.get() })
+                        .collect(),
+                    Candidates::Options(opts) => opts
+                        .iter()
+                        .filter_map(|o| match *o {
+                            Opt::Player(p) => Some(TargetRef::Player { player: side(p) }),
+                            _ => None,
+                        })
+                        .collect(),
+                },
                 _ => Vec::new(),
             }
         })
@@ -211,7 +265,7 @@ fn tapped(before: &State, after: &State, t: &GameTable) -> Vec<u8> {
 mod tests {
     use beryl_cards::{CARDS, names};
     use beryl_engine::TurnStep;
-    use beryl_engine::card::Castings;
+    use beryl_engine::card::{AbilityIx, Castings};
     use beryl_scenario::{P0, P1, Permanent, Scenario};
 
     use super::*;
@@ -458,6 +512,64 @@ mod tests {
                     names::OVERLORD_OF_THE_MISTMOORS,
                     vec![names::THUNDERTRAP_TRAINER]
                 ),
+            ]
+        );
+    }
+
+    #[test]
+    fn up_to_one_target_previews_what_the_target_may_be() {
+        const TEFERI: &[Permanent] = &[Permanent::new(names::TEFERI_TIME_RAVELER)];
+        const STAFF: &[Permanent] = &[Permanent::new(names::STAFF_OF_THE_STORYTELLER)];
+        let scenario = Scenario::new("targets")
+            .battlefield(P0, TEFERI)
+            .battlefield(P1, STAFF);
+        let (t, mut s) = beryl_scenario::position(&CARDS, &scenario).unwrap();
+        let named = |s: &State, slot: u8| t.def(s.card(Slot::new(slot))).name;
+        let mut scratch = Scratch::new();
+        // Teferi's −3, its third ability: "Return up to one target artifact, creature, or
+        // enchantment to its owner's hand."
+        let d = loop {
+            let Step::Decide(d) = next(&mut s, &t, &mut scratch, &mut Replay) else {
+                panic!("a decision");
+            };
+            if d.kind == DecisionKind::TargetCount {
+                break d;
+            }
+            let Candidates::Options(opts) = &d.candidates else {
+                panic!("options");
+            };
+            let minus = opts
+                .iter()
+                .position(
+                    |o| matches!(o, Opt::Activate { ability, .. } if *ability == AbilityIx::Own(2)),
+                )
+                .expect("Teferi's −3");
+            apply(&mut s, &t, &mut scratch, &mut Replay, choice(minus));
+        };
+        let Candidates::Options(opts) = &d.candidates else {
+            panic!("options");
+        };
+        let previews: Vec<_> = opts
+            .iter()
+            .zip(targets(&s, &t, &d))
+            .map(|(&o, targets)| {
+                let what: Vec<_> = targets
+                    .into_iter()
+                    .map(|target| match target {
+                        TargetRef::Object { slot } => named(&s, slot),
+                        TargetRef::Player { .. } => panic!("a player target"),
+                    })
+                    .collect();
+                (o, what)
+            })
+            .collect();
+        // No target names nothing; one target, the Staff, the only artifact, creature or
+        // enchantment.
+        assert_eq!(
+            previews,
+            [
+                (Opt::Number(0), vec![]),
+                (Opt::Number(1), vec![names::STAFF_OF_THE_STORYTELLER]),
             ]
         );
     }

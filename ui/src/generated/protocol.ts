@@ -230,7 +230,13 @@ blocks: Array<number>,
  * abilities, mana abilities among them, its face lists before it, as
  * [`StackItem::Ability`]'s `nth` counts them, so the UI finds the ability's paragraph.
  */
-nth: number | null, };
+nth: number | null, 
+/**
+ * For a candidate that announces one or more targets: what the first of them may be, one
+ * of each set of interchangeable objects (§7.2), so the UI can take the count and the
+ * target as one pick. None otherwise.
+ */
+targets: Array<TargetRef>, };
 
 export type Payment = { x: number | null, 
 /**
