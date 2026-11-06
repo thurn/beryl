@@ -1,18 +1,21 @@
 //! A player game that outgrows the `Small` layout goes on in `Large` (architecture §4.1):
 //! it never ends stalled for a capacity, and plays on to its end. One game per kind of
-//! capacity: a queue of the state, the object slots, a queue nested in a value, and a
-//! decision's options.
+//! capacity: a queue of the state, the object slots, a queue nested in a value, a decision's
+//! options, and the mana solver's sources and classes of sources.
 
 use std::collections::VecDeque;
 
 use beryl_cards::CARDS;
 use beryl_cards::names::{
-    COUNTERSPELL, ISLAND, OVERLORD_OF_THE_MISTMOORS, PLAINS, SNAPCASTER_MAGE, WINDS_OF_ABANDON,
+    COUNTERSPELL, ISLAND, OVERLORD_OF_THE_MISTMOORS, PLAINS, SNAPCASTER_MAGE, STRIP_MINE,
+    WINDS_OF_ABANDON,
 };
+use beryl_cards::tokens::TREASURE;
 use beryl_engine::card::{
     Ability, CardDef, Castings, Colors, Face, FaceIx, Flow, ManaCost, Trigger, Types,
 };
 use beryl_engine::effect::EffectCtx;
+use beryl_engine::event::TokenEntry;
 use beryl_engine::state::{ObjectFlags, Pending};
 use beryl_engine::{
     CardTable, Choice, Decision, DecisionKind, GameTable, Large, Layout, Observation, Opt, State,
@@ -334,4 +337,120 @@ fn a_decision_past_small_options_plays_on_in_large() {
         "the first trigger order offers every trigger"
     );
     assert!(game.large().is_some(), "the game went on in Large");
+}
+
+/// The permanents `P0` controls in `s`.
+fn controlled_by_p0(s: &State<Large>) -> usize {
+    s.battlefield()
+        .iter()
+        .filter(|&&slot| s.controller(slot) == P0)
+        .count()
+}
+
+const MINES_AND_ISLAND: [Permanent; 18] = {
+    let mut lands = [Permanent::new(STRIP_MINE); 18];
+    lands[17] = Permanent::new(ISLAND);
+    lands
+};
+
+/// Seventeen Strip Mines: each has an ability besides its mana ability, so each is a class of
+/// sources of its own, and with the Island more than a `Small` payment holds (16). Paying for
+/// the Snapcaster Mage, or only checking that it can be paid, considers them all.
+const STRIP_MINES: Scenario = Scenario::new("strip-mines")
+    .at(1, P0, TurnStep::PrecombatMain)
+    .battlefield(P0, &MINES_AND_ISLAND)
+    .hand(P0, &[SNAPCASTER_MAGE])
+    .library(P0, &[ISLAND; 3])
+    .battlefield(P1, &[Permanent::new(PLAINS)])
+    .library(P1, &[PLAINS; 2]);
+
+#[test]
+fn source_classes_past_small_play_on_in_large() {
+    let mut game = game(
+        &CARDS,
+        &STRIP_MINES,
+        |t| Script::new(t, &[Action::cast(P0, SNAPCASTER_MAGE)], false),
+        random,
+        StopsSetting::default(),
+    );
+    let mut most_permanents = 0;
+    let outcome = play(&mut game, |_, large| {
+        if let Some(s) = large {
+            most_permanents = most_permanents.max(controlled_by_p0(s));
+        }
+    });
+    assert!(
+        matches!(outcome, OutcomeView::Win { .. }),
+        "the game ends in a win, not a stall: {outcome:?}"
+    );
+    assert_eq!(
+        most_permanents, 19,
+        "the Snapcaster joined the Strip Mines and the Island"
+    );
+}
+
+/// How many Treasures the hoard makes: with the human's Islands, more untapped sources than
+/// any `Small` battlefield holds (128 permanents).
+const TREASURES: u8 = 90;
+
+/// A test card: "When this enters, create [`TREASURES`] Treasure tokens." No card of the cube
+/// makes so many at once; a larger card pool may.
+static HOARD: CardDef = CardDef {
+    name: "Hoard",
+    faces: &[Face {
+        cost: ManaCost::NONE,
+        types: Types::ARTIFACT,
+        colors: Colors::NONE,
+        abilities: &[Ability::triggered(Trigger::Enters, bodies!(hoard))],
+        ..Face::EMPTY
+    }],
+    tokens: &[&TREASURE],
+};
+
+#[allow(clippy::unnecessary_wraps)] // a body's signature
+fn hoard<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
+    ctx.create_tokens(&TREASURE, TREASURES, TokenEntry::default());
+    Ok(())
+}
+
+const HOARDER: Scenario = Scenario::new("hoarder")
+    .at(1, P0, TurnStep::PrecombatMain)
+    .battlefield(P0, &[Permanent::new(ISLAND); 40])
+    .hand(P0, &["Hoard", SNAPCASTER_MAGE])
+    .library(P0, &[ISLAND; 3])
+    .battlefield(P1, &[Permanent::new(PLAINS)])
+    .library(P1, &[PLAINS; 2]);
+
+#[test]
+fn sources_past_small_play_on_in_large() {
+    let cards: Vec<&'static CardDef> = vec![
+        &HOARD,
+        CARDS.get(SNAPCASTER_MAGE).unwrap(),
+        CARDS.get(ISLAND).unwrap(),
+        CARDS.get(PLAINS).unwrap(),
+    ];
+    let cards: &'static CardTable = Box::leak(Box::new(CardTable::new(cards.leak())));
+    let casts = [Action::cast(P0, "Hoard"), Action::cast(P0, SNAPCASTER_MAGE)];
+    let mut game = game(
+        cards,
+        &HOARDER,
+        |t| Script::new(t, &casts, false),
+        random,
+        StopsSetting::default(),
+    );
+    let mut most_permanents = 0;
+    let outcome = play(&mut game, |_, large| {
+        if let Some(s) = large {
+            most_permanents = most_permanents.max(controlled_by_p0(s));
+        }
+    });
+    assert!(
+        matches!(outcome, OutcomeView::Win { .. }),
+        "the game ends in a win, not a stall: {outcome:?}"
+    );
+    assert_eq!(
+        most_permanents,
+        40 + 1 + usize::from(TREASURES) + 1,
+        "the Snapcaster joined the Islands, the hoard and its Treasures"
+    );
 }

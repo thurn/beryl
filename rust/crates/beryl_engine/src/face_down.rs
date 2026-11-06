@@ -14,7 +14,7 @@ use crate::engine::collapse;
 use crate::event::{self, Entry, Reason, Sink};
 use crate::fixed::Full;
 use crate::ids::Seat;
-use crate::layout::{Layout, Queue};
+use crate::layout::{Layout, Queue, index};
 use crate::mana;
 use crate::profile::Payment;
 use crate::state::{Pending, State, Zone};
@@ -167,7 +167,7 @@ pub(crate) fn decision<L: Layout>(
         let plans = mana::plans(s, t, sink, player, remaining, Bitboard::EMPTY, false)?;
         let mut list: L::Queue<Opt<L>, 64> = Default::default();
         for i in 0..plans.len() {
-            list.push(Opt::Plan(i as u8))?;
+            list.push(Opt::Plan(index::<L>(i)))?;
         }
         (DecisionKind::PaymentPlan, list)
     };
@@ -192,8 +192,8 @@ pub(crate) fn perform<L: Layout>(
     let remaining = match option {
         Opt::Plan(i) => {
             let plans = mana::plans(s, t, sink, player, remaining, Bitboard::EMPTY, false)?;
-            let plan = plans.as_slice()[usize::from(i)];
-            mana::pay(s, t, sink, player, remaining, Bitboard::EMPTY, &plan)?;
+            let plan = &plans.as_slice()[Into::<usize>::into(i)];
+            mana::pay(s, t, sink, player, remaining, Bitboard::EMPTY, plan)?;
             ManaCost::NONE
         }
         option => mana::manual_pay(s, t, sink, player, remaining, option)?,

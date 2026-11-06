@@ -455,7 +455,7 @@ pub struct Payment {
     pub x: Option<u8>,
     /// The index of the payment plan among those the cast offers (they differ in what they
     /// consume or leave floating, architecture §10).
-    pub plan: Option<u8>,
+    pub plan: Option<u16>,
     /// Permanents, by slot.
     pub taps: Vec<u16>,
     /// For a payment at a value of X: the total mana cost that value makes, as Oracle text
@@ -527,7 +527,7 @@ pub enum Candidate {
         n: u8,
     },
     Plan {
-        index: u8,
+        index: u16,
     },
     Player {
         player: Side,
@@ -1469,7 +1469,10 @@ fn candidate<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) -> Ca
             (format!("Spend {symbol}"), Candidate::Pool { color })
         }
         Opt::Number(n) => (n.to_string(), Candidate::Number { n }),
-        Opt::Plan(index) => (format!("Payment {}", index + 1), Candidate::Plan { index }),
+        Opt::Plan(index) => {
+            let index = index.into();
+            (format!("Payment {}", index + 1), Candidate::Plan { index })
+        }
         Opt::Player(p) => (
             match side(obs, p) {
                 Side::You => "You",

@@ -292,7 +292,7 @@ pub enum Opt<L: Layout = Small> {
     /// A number: X, or how many targets.
     Number(u8),
     /// The `i`th payment plan.
-    Plan(u8),
+    Plan(L::Index),
     /// A player, as a target.
     Player(Seat),
     /// The object in this slot, among options that also offer [`Opt::Done`].

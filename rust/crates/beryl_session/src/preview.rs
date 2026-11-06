@@ -167,7 +167,7 @@ fn payments<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Vec<Vec<
                     ..Payment::default()
                 },
                 (DecisionKind::PaymentPlan, Opt::Plan(plan)) => Payment {
-                    plan: Some(plan),
+                    plan: Some(plan.into()),
                     ..Payment::default()
                 },
                 (DecisionKind::YesNo, Opt::Yes) if matches!(d.ask, Ask::UnlessPays { .. }) => {
@@ -239,7 +239,7 @@ fn walk<L: Layout>(
                 ..at.clone()
             }),
             (DecisionKind::PaymentPlan, Opt::Plan(plan)) if opts.len() > 1 => Some(Payment {
-                plan: Some(plan),
+                plan: Some(plan.into()),
                 ..at.clone()
             }),
             _ => None,
@@ -365,7 +365,7 @@ mod tests {
     }
 
     /// A payment as (X, plan, the names of the permanents it taps).
-    type Named = (Option<u8>, Option<u8>, Vec<&'static str>);
+    type Named = (Option<u8>, Option<u16>, Vec<&'static str>);
 
     /// A cast as (the card, whether with no optional cost).
     type Cast = Option<(&'static str, bool)>;

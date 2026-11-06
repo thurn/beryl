@@ -14,7 +14,7 @@ use crate::event::{self, Entry, Reason, Recipient, Sink, TokenEntry};
 use crate::filter::Filter;
 use crate::fixed::Full;
 use crate::ids::{CardIx, Seat};
-use crate::layout::{Layout, Queue, Small};
+use crate::layout::{Layout, Queue, Small, index};
 use crate::mana;
 use crate::observation::Observation;
 use crate::profile::{Payment, Stops};
@@ -466,7 +466,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         let plans = self.checked(r);
         let mut opts: L::Queue<Opt<L>, 64> = Default::default();
         for i in 0..plans.len() {
-            let _ = opts.push(Opt::Plan(i as u8));
+            let _ = opts.push(Opt::Plan(index::<L>(i)));
         }
         let Opt::Plan(i) = self.ask_options(
             player,
@@ -477,7 +477,6 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
         else {
             unreachable!("a plan");
         };
-        let plan = plans.as_slice()[usize::from(i)];
         let r = mana::pay(
             self.state,
             self.table,
@@ -485,7 +484,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             player,
             cost,
             Bitboard::EMPTY,
-            &plan,
+            &plans.as_slice()[Into::<usize>::into(i)],
         );
         self.checked(r);
         Ok(())

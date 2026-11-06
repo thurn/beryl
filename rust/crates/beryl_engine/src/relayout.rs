@@ -310,7 +310,7 @@ impl<L: Layout> Relayout for Opt<L> {
             },
             Opt::Pool(c) => Opt::Pool(c),
             Opt::Number(n) => Opt::Number(n),
-            Opt::Plan(n) => Opt::Plan(n),
+            Opt::Plan(i) => Opt::Plan(index::<M>(i.into())),
             Opt::Player(p) => Opt::Player(p),
             Opt::Object(s) => Opt::Object(slot(s)),
             Opt::TurnFaceUp(s) => Opt::TurnFaceUp(slot(s)),

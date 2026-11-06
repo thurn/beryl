@@ -272,7 +272,7 @@ pub enum Pick {
     DefendingPlayer,
     /// The `i`th payment plan.
     Plan {
-        i: u8,
+        i: u16,
     },
 }
 

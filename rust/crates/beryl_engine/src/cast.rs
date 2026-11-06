@@ -23,7 +23,7 @@ use crate::event::{self, Event, Reason, Sink};
 use crate::filter::{Filter, Whose};
 use crate::fixed::Full;
 use crate::ids::{CardIx, Seat, SlotId};
-use crate::layout::{Layout, Queue, Small, Table};
+use crate::layout::{Layout, Queue, Small, Table, index};
 use crate::mana::{self, Funds};
 use crate::profile::Payment;
 use crate::state::{
@@ -463,7 +463,8 @@ pub(crate) fn still_legal<L: Layout>(
 /// check that needs it.
 struct Situation<L: Layout = Small> {
     player: Seat,
-    /// None once found if more sources than [`Funds`] holds: a stall for whatever needed them.
+    /// None once found if more classes of sources than [`Funds`] holds: a stall for whatever
+    /// needed them.
     funds: OnceCell<Option<Funds<L>>>,
     full: Cell<bool>,
     sorcery_speed_only: OnceCell<bool>,
@@ -500,7 +501,7 @@ impl<L: Layout> Situation<L> {
         funds
     }
 
-    /// `Full` if a check needed more sources than [`Funds`] holds, so that its answer was
+    /// `Full` if a check needed more classes of sources than [`Funds`] holds, so that its answer was
     /// not found: the options listed stand only if this is `Ok`.
     fn complete(&self) -> Result<(), Full> {
         if self.full.get() { Err(Full) } else { Ok(()) }
@@ -1511,7 +1512,7 @@ pub(crate) fn decision<L: Layout>(
             )?;
             let mut list: L::Queue<Opt<L>, 64> = Default::default();
             for i in 0..plans.len() {
-                list.push(Opt::Plan(i as u8))?;
+                list.push(Opt::Plan(index::<L>(i)))?;
             }
             options(DecisionKind::PaymentPlan, list)
         }
@@ -1607,7 +1608,7 @@ pub(crate) fn perform<L: Layout>(
                 c.player,
                 cost,
                 Bitboard::EMPTY,
-                &plans.as_slice()[usize::from(i)],
+                &plans.as_slice()[Into::<usize>::into(i)],
             )?;
             return finish(s, t, sink, c);
         }

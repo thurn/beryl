@@ -220,7 +220,8 @@ entry's targets, a player's emblems, a paused resolution's choice record, a
 decision's options). So `ObjectRef`, `Decision`, `Opt`, `Pending` and `Event`
 take the layout as a parameter, and `Relayout` moves any of them to the other
 layout by slot number; the session keeps its own copies in `Large`. The mana
-solver's capacities (§10) are still `Small`'s in `Large`.
+solver (§10) grows too: in `Large` a payment holds any number of classes of
+interchangeable sources, plans and spent units.
 
 ### 4.2 Objects and slots
 
@@ -273,6 +274,8 @@ About 21 bytes, so the table is under 6 KiB.
   | Floating continuous effects   | 64       |
   | Targets per stack entry       | 8        |
   | Choice record per process     | 32       |
+  | Source classes per payment    | 16       |
+  | Payment plans offered         | 64       |
 
   The heaviest known users: Brain Freeze and Tendrils of Agony at storm 10 to 20
   for the stack, Sheoldred, the Apocalypse against a Wheel of Fortune for

@@ -510,7 +510,7 @@ impl Runner {
             Opt::No => Pick::No,
             Opt::Done => Pick::Done,
             Opt::Number(n) => Pick::Number { n },
-            Opt::Plan(i) => Pick::Plan { i },
+            Opt::Plan(i) => Pick::Plan { i: i.into() },
             Opt::Player(player) => Pick::Player { player },
             Opt::Defender(None) => Pick::DefendingPlayer,
             _ => return None,
@@ -1096,7 +1096,8 @@ fn pick_in<L: Layout>(t: &GameTable, s: &State<L>, d: &Decision<L>, pick: Pick) 
         Pick::Done => Opt::Done,
         Pick::Player { player } => Opt::Player(player),
         Pick::DefendingPlayer => Opt::Defender(None),
-        Pick::Plan { i } => Opt::Plan(i),
+        // A plan past what the layout's index names is no option.
+        Pick::Plan { i } => Opt::Plan(L::Index::try_from(usize::from(i)).ok()?),
     };
     option_index(d, |o| o == wanted)
 }
