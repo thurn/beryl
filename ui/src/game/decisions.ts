@@ -88,6 +88,18 @@ export function follow(
   return { intent, index, rest: plan.slice(i + 1) };
 }
 
+/** The objects a spell or ability on the stack names, a target or an ability's source. The
+ * engine never offers a target for its twin (architecture §7.2), and the table shows each
+ * apart, so its glow and arrow stay in view. */
+export function referenced(view: PlayerView): Set<number> {
+  const out = new Set<number>();
+  for (const item of view.stack) {
+    if (item.kind === "ability" && item.source !== null) out.add(item.source);
+    for (const t of item.targets) if (t.kind === "object") out.add(t.slot);
+  }
+  return out;
+}
+
 /** Whether two objects are interchangeable, as the engine offers one candidate for both
  * (architecture §7.2): the same card, or token, in the same zone and state, with the same
  * owner and types. */
@@ -162,10 +174,17 @@ export function interactions(view: PlayerView): Interactions {
   });
   // Interchangeable cards collapse to one candidate (architecture §7.2): of two basic lands
   // of a name in your hand the engine offers one, of two untapped Insect tokens one attacker.
-  // Either card offers it.
-  const offered = view.objects.filter((o) => bySlot.has(o.slot));
+  // Either card offers it, unless the stack names one of them.
+  const named = referenced(view);
+  const offered = view.objects.filter(
+    (o) => bySlot.has(o.slot) && !named.has(o.slot),
+  );
   for (const o of view.objects) {
-    if (bySlot.has(o.slot) || (o.zone !== "hand" && o.zone !== "battlefield")) {
+    if (
+      bySlot.has(o.slot) ||
+      named.has(o.slot) ||
+      (o.zone !== "hand" && o.zone !== "battlefield")
+    ) {
       continue;
     }
     const twin = offered.find((t) => twins(o, t));

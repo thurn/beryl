@@ -1,7 +1,7 @@
 // The card frame: a name bar colored by the card's colors, art, a P/T badge and, on the full
 // frame, the type line and rules box. Battlefield permanents use the compact `field` frame,
 // with their marks: a badge per kind of counter, P/T inked up or down against the printed
-// values, summoning sickness as faded art, a token's silver frame and a stolen permanent's
+// values, summoning sickness as faded art, a token's pewter frame and a stolen permanent's
 // violet edge; the top card of a pile of identical ones wears their count. Tapping turns
 // either frame whole, never reshaping it.
 import {

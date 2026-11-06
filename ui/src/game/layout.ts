@@ -12,6 +12,7 @@ import type {
   ZoneName,
 } from "../generated/protocol";
 import { ASPECT } from "../components/Card";
+import { referenced, twins } from "./decisions";
 import type { Phase } from "../components/Controls";
 
 /** The fixed stage the table is drawn on, scaled to fit the window (Stage.tsx). */
@@ -410,8 +411,8 @@ function settle(
   return xs;
 }
 
-/** Lands of one name (or identical permanents), stacked as Player.tsx's LandStack: copies
- * beneath peek out to the left and below. Callers key tapped and untapped copies apart. */
+/** Lands of one name, stacked as Player.tsx's LandStack: copies beneath peek out to the left
+ * and below. Callers key tapped and untapped copies apart. */
 function piles(objects: ObjectView[], key: (o: ObjectView) => string) {
   const groups = new Map<string, ObjectView[]>();
   for (const o of objects) {
@@ -449,6 +450,7 @@ function battlefieldPlacements(
   across: Placement[] = [],
   beneath: Map<number, ObjectView[]> = new Map(),
   attached: Map<number, ObjectView[]> = new Map(),
+  named: Set<number> = new Set(),
 ): Placement[] {
   const rows = ROWS[side];
   const lands = objects.filter((o) => o.types.includes("land"));
@@ -497,33 +499,31 @@ function battlefieldPlacements(
     });
   });
 
-  // Identical permanents with nothing on them share a pile, as lands do, the top card wearing
-  // their count, as Arena stacks them; everything else stands alone. They must be alike in all
-  // the table shows (Card.tsx's marks) and the inspector tells: a sick token and a ready one, a
-  // stolen one and its owner's, one an effect has made a Vehicle and a creature, never share
-  // one, nor do two face-down permanents, which may be different cards.
+  // Twins (decisions.ts) with nothing on them share a pile, as lands do, the top card wearing
+  // their count, as Arena stacks them; everything else stands alone. Twins are alike in all the
+  // table shows (Card.tsx's marks) and the inspector tells, so a sick token and a ready one, a
+  // stolen one and its owner's, or one an effect has made a Vehicle and a creature, never share
+  // one; and either offers what the engine offers for both, so a click on the top card does
+  // what the one beneath would. Face-down permanents, which may be different cards, and those
+  // the stack `named`, which must be seen and are offered alone, stand apart.
   const plain = (o: ObjectView) =>
-    o.name !== null &&
     o.facing === "up" &&
     o.counters.length === 0 &&
     o.damage === 0 &&
     !o.combat &&
     o.attachedTo === null &&
     !beneath.has(o.slot) &&
-    !attached.has(o.slot);
-  const groups = piles(others, (o) =>
-    plain(o)
-      ? JSON.stringify([
-          o.name,
-          o.token,
-          o.owner,
-          o.tapped,
-          o.summoningSick,
-          o.types,
-          o.pt,
-        ])
-      : `#${o.slot}`,
-  ).sort((a, b) => Number(!attacking(a[0]!)) - Number(!attacking(b[0]!)));
+    !attached.has(o.slot) &&
+    !named.has(o.slot);
+  const groups: ObjectView[][] = [];
+  for (const o of others) {
+    const pile = plain(o)
+      ? groups.find((g) => plain(g[0]!) && twins(g[0]!, o))
+      : undefined;
+    if (pile) pile.push(o);
+    else groups.push([o]);
+  }
+  groups.sort((a, b) => Number(!attacking(a[0]!)) - Number(!attacking(b[0]!)));
   const scale = depthScale(rows.permanents);
   const width = CREATURE_WIDTH * scale;
   const height = CREATURE_WIDTH / ASPECT.field;
@@ -755,6 +755,7 @@ export function layout(
     beneath.set(o.exiledBy, [...(beneath.get(o.exiledBy) ?? []), o]);
   }
   const attached = attachments(view);
+  const named = referenced(view);
   const behindHost = new Set([...attached.values()].flat().map((o) => o.slot));
 
   out.push(...handPlacements(owned("you", "hand"), tucked));
@@ -776,6 +777,7 @@ export function layout(
       across,
       beneath,
       attached,
+      named,
     );
   const yours = field("you", field("opponent"));
   out.push(...yours, ...field("opponent", yours));

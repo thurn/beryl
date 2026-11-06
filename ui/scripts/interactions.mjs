@@ -2198,6 +2198,78 @@ await check(
     tokenRun,
 );
 
+await check(
+    "a pile splits on any difference, and on a target",
+    async (page) => {
+        // The board's layout of variants of the fixture's view, by the page's own module.
+        const counts = await page.evaluate(
+            async ({ view, map }) => {
+                const { layout } = await import("/src/game/layout.ts");
+                // Each card of the pile of `map`'s copies that wears a count, with the count.
+                const counted = (v) =>
+                    [...layout(v).values()]
+                        .filter((p) => p.count !== undefined)
+                        .filter((p) =>
+                            v.objects.some(
+                                (o) => o.slot === p.slot && o.name === map.name,
+                            ),
+                        )
+                        .map((p) => p.count);
+                const vary = (change) => {
+                    const v = structuredClone(view);
+                    const copy = { ...structuredClone(map), slot: 250 };
+                    v.objects.push(copy);
+                    v.battlefield.push(copy.slot);
+                    change(
+                        v,
+                        v.objects.find((o) => o.slot === copy.slot),
+                    );
+                    return counted(v);
+                };
+                const aura = view.objects.find(
+                    (o) => o.zone === "battlefield" && o.attachedTo !== null,
+                ).slot;
+                return {
+                    fixture: counted(view),
+                    third: vary(() => {}),
+                    types: vary((_, o) => o.types.push("creature")),
+                    owner: vary((_, o) => (o.owner = "opponent")),
+                    tapped: vary((_, o) => (o.tapped = true)),
+                    enchanted: vary((v, o) => {
+                        v.objects.find((a) => a.slot === aura).attachedTo =
+                            o.slot;
+                    }),
+                    targeted: vary((v, o) =>
+                        v.stack.push({
+                            kind: "ability",
+                            source: null,
+                            ability: 0,
+                            granted: false,
+                            name: "Test",
+                            triggered: true,
+                            nth: 0,
+                            controller: "opponent",
+                            targets: [{ kind: "object", slot: o.slot }],
+                            x: 0,
+                        }),
+                    ),
+                };
+            },
+            { view: tokenView, map: offeredToken },
+        );
+        assert.deepEqual(counts, {
+            fixture: [2],
+            third: [3],
+            types: [2],
+            owner: [2],
+            tapped: [2],
+            enchanted: [2],
+            targeted: [2],
+        });
+    },
+    tokenRun,
+);
+
 // Every object an open decision offers something for has an element a player can see and point
 // at: the card on the table or in a choice's tray, a twin the engine offers it through, or the
 // button of the pile it lies in. Every exiled card can be seen the same way, if not pointed at
