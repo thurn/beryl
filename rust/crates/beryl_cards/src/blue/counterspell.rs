@@ -6,6 +6,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
 use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -19,7 +20,7 @@ pub static CARD: CardDef = CardDef {
         abilities: &[Ability {
             kind: AbilityKind::Spell,
             targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any)],
-            body: counter,
+            body: bodies!(counter),
             ..Ability::NONE
         }],
         ..Face::EMPTY
@@ -30,7 +31,7 @@ pub static CARD: CardDef = CardDef {
 /// [CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a): "To counter a spell or
 /// ability means to cancel it, removing it from the stack. It doesn't resolve and none of its
 /// effects occur. A countered spell is put into its owner's graveyard."
-fn counter(ctx: &mut EffectCtx) -> Flow {
+fn counter<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(spell) = ctx.target_object(0) {
         ctx.counter(spell, false);
     }

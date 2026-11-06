@@ -12,6 +12,7 @@ use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::Filter;
 use beryl_engine::{Ask, DecisionKind, TurnStep, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -23,7 +24,7 @@ const NONCREATURE_NONLAND: Filter = Filter::Not(&Filter::Types(Types::CREATURE.u
 /// show that card to all players for a brief time", and the rest to the bottom in a random
 /// order ([CR 401.4](https://yawgatog.com/resources/magic-rules/#R4014)): "That library's
 /// owner doesn't reveal the order in which the cards go into the library."
-fn dig(ctx: &mut EffectCtx) -> Flow {
+fn dig<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     let mut rest = ctx.top_of_library(you, 4);
     ctx.look_at(you, rest);
@@ -57,7 +58,7 @@ pub static CARD: CardDef = CardDef {
             Ability::offspring(),
             Ability {
                 may_pause: true,
-                ..Ability::triggered(Trigger::Enters, dig)
+                ..Ability::triggered(Trigger::Enters, bodies!(dig))
             },
         ],
         casting: &[CastingOption::Offspring(ManaCost::generic(4))],

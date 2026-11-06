@@ -9,6 +9,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
 use beryl_engine::{DecisionKind, TurnStep, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -23,10 +24,13 @@ pub static CARD: CardDef = CardDef {
             Ability {
                 kind: AbilityKind::Spell,
                 targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any)],
-                body: counter_and_delay,
+                body: bodies!(counter_and_delay),
                 ..Ability::NONE
             },
-            Ability::triggered(Trigger::Delayed(Delayed::YourNextMainPhase), add_colorless),
+            Ability::triggered(
+                Trigger::Delayed(Delayed::YourNextMainPhase),
+                bodies!(add_colorless),
+            ),
         ],
         ..Face::EMPTY
     }],
@@ -38,7 +42,7 @@ pub static CARD: CardDef = CardDef {
 /// number chosen for it while the object is on the stack." The second sentence creates a
 /// delayed triggered ability ([CR 603.7a](https://yawgatog.com/resources/magic-rules/#R6037a)):
 /// "Delayed triggered abilities are created during the resolution of spells or abilities".
-fn counter_and_delay(ctx: &mut EffectCtx) -> Flow {
+fn counter_and_delay<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let Some(spell) = ctx.target_object(0) else {
         return Ok(());
     };
@@ -50,7 +54,7 @@ fn counter_and_delay(ctx: &mut EffectCtx) -> Flow {
 
 /// [CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064): "When an effect instructs a
 /// player to add mana, that mana goes into a player's mana pool."
-fn add_colorless(ctx: &mut EffectCtx) -> Flow {
+fn add_colorless<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let amount = ctx.trigger().amount;
     ctx.add_mana(ctx.controller(), ManaColor::Colorless, amount);
     Ok(())

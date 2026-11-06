@@ -17,6 +17,7 @@ use beryl_engine::event::{Reason, TokenEntry};
 use beryl_engine::filter::Filter;
 use beryl_engine::state::{Continuous, CounterKind, Duration};
 use beryl_engine::{DecisionKind, TurnStep, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -44,13 +45,13 @@ pub static CARD: CardDef = CardDef {
                     TargetKind::Permanent,
                     Filter::Types(Types::CREATURE),
                 )],
-                body: counter_and_first_strike,
+                body: bodies!(counter_and_first_strike),
                 ..Ability::NONE
             },
             Ability {
                 kind: AbilityKind::Activated,
                 cost: Cost::loyalty(-1),
-                body: samurai,
+                body: bodies!(samurai),
                 ..Ability::NONE
             },
             Ability {
@@ -60,7 +61,7 @@ pub static CARD: CardDef = CardDef {
                     TargetKind::Permanent,
                     Filter::All(&[Filter::Types(Types::CREATURE), Filter::Tapped]),
                 )],
-                body: exile_and_gain,
+                body: bodies!(exile_and_gain),
                 ..Ability::NONE
             },
         ],
@@ -92,7 +93,7 @@ pub static SAMURAI: CardDef = CardDef {
 /// "+1: Put a +1/+1 counter on up to one target creature. It gains first strike until end of
 /// turn." [CR 702.7a](https://yawgatog.com/resources/magic-rules/#R7027a): "First strike is
 /// a static ability that modifies the rules for the combat damage step."
-fn counter_and_first_strike(ctx: &mut EffectCtx) -> Flow {
+fn counter_and_first_strike<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(creature) = ctx.target_object(0) {
         ctx.add_counters(creature, CounterKind::PlusOne, 1);
         ctx.add_effect(
@@ -107,7 +108,7 @@ fn counter_and_first_strike(ctx: &mut EffectCtx) -> Flow {
 /// "−1: Create a 2/2 white Samurai creature token with vigilance."
 /// [CR 111.2](https://yawgatog.com/resources/magic-rules/#R1112): "The player who creates a
 /// token is its owner. The token enters the battlefield under that player's control."
-fn samurai(ctx: &mut EffectCtx) -> Flow {
+fn samurai<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.create_tokens(&SAMURAI, 1, TokenEntry::default());
     Ok(())
 }
@@ -115,7 +116,7 @@ fn samurai(ctx: &mut EffectCtx) -> Flow {
 /// "−2: Exile target tapped creature. You gain 2 life."
 /// [CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a): "To exile an object,
 /// move it to the exile zone from wherever it is."
-fn exile_and_gain(ctx: &mut EffectCtx) -> Flow {
+fn exile_and_gain<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(creature) = ctx.target_object(0) {
         ctx.move_to(creature, Zone::Exile, Reason::Exile);
     }

@@ -11,6 +11,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::TokenEntry;
 use beryl_engine::{DecisionKind, Seat, State, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
 use crate::names;
@@ -35,7 +36,7 @@ pub static FISH: CardDef = CardDef {
 };
 
 /// How many permanents of `types` `player` controls.
-fn controls(s: &State, player: Seat, types: Types) -> usize {
+fn controls<L: Layout>(s: &State<L>, player: Seat, types: Types) -> usize {
     s.battlefield()
         .iter()
         .filter(|&&slot| s.controller(slot) == player && s.derived(slot).types.intersects(types))
@@ -48,7 +49,7 @@ fn controls(s: &State, player: Seat, types: Types) -> usize {
 /// the answer is determined only once, when the effect is applied." The "if"s are not right
 /// after the trigger condition, so none is an intervening "if" (CR 603.4): the ability always
 /// triggers. A tie is not "more".
-fn compare(ctx: &mut EffectCtx) -> Flow {
+fn compare<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     let them = you.opponent();
     if controls(ctx.state(), them, Types::LAND) > controls(ctx.state(), you, Types::LAND) {
@@ -57,11 +58,11 @@ fn compare(ctx: &mut EffectCtx) -> Flow {
     if ctx.state().player(them).life > ctx.state().player(you).life {
         ctx.gain_life(you, 4);
     }
-    let creatures = |s: &State, p| controls(s, p, Types::CREATURE);
+    let creatures = |s: &State<L>, p| controls(s, p, Types::CREATURE);
     if creatures(ctx.state(), them) > creatures(ctx.state(), you) {
         ctx.create_tokens(&FISH, 2, TokenEntry::default());
     }
-    let hand = |s: &State, p| s.zone(p, Zone::Hand).count();
+    let hand = |s: &State<L>, p| s.zone(p, Zone::Hand).count();
     if hand(ctx.state(), them) > hand(ctx.state(), you) {
         ctx.draw(you, 1);
     }
@@ -78,7 +79,7 @@ pub static CARD: CardDef = CardDef {
         colors: Colors::WHITE,
         power: Some(4),
         toughness: Some(5),
-        abilities: &[Ability::triggered(Trigger::Enters, compare)],
+        abilities: &[Ability::triggered(Trigger::Enters, bodies!(compare))],
         ..Face::EMPTY
     }],
     tokens: &[&TREASURE, &FISH],

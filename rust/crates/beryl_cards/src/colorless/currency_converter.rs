@@ -10,6 +10,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::{Reason, TokenEntry};
 use beryl_engine::{Ask, DecisionKind, TurnStep, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -39,7 +40,7 @@ pub static ROGUE: CardDef = CardDef {
 /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second ability
 /// refers only to cards in the exile zone that were put there as a result of an instruction
 /// to exile them in the first ability."
-fn exile_discarded(ctx: &mut EffectCtx) -> Flow {
+fn exile_discarded<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let Some(card) = ctx.trigger().object else {
         return Ok(());
     };
@@ -59,7 +60,7 @@ fn exile_discarded(ctx: &mut EffectCtx) -> Flow {
 
 /// Draws, then discards ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)):
 /// "The controller of the spell or ability follows its instructions in the order written."
-fn loot(ctx: &mut EffectCtx) -> Flow {
+fn loot<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     ctx.draw(you, 1);
     ctx.discard_a_card(you)?;
@@ -71,7 +72,7 @@ fn loot(ctx: &mut EffectCtx) -> Flow {
 /// modal double-faced card has only its front face's characteristics
 /// ([CR 712.8a](https://yawgatog.com/resources/magic-rules/#R7128a)), so Sink into Stupor is
 /// a nonland card.
-fn convert(ctx: &mut EffectCtx) -> Flow {
+fn convert<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let exiled = ctx.exiled_with_source();
     if exiled.is_empty() {
         return Ok(());
@@ -97,7 +98,7 @@ pub static CARD: CardDef = CardDef {
         abilities: &[
             Ability {
                 may_pause: true,
-                ..Ability::triggered(Trigger::YouDiscard, exile_discarded)
+                ..Ability::triggered(Trigger::YouDiscard, bodies!(exile_discarded))
             },
             Ability {
                 kind: AbilityKind::Activated,
@@ -106,14 +107,14 @@ pub static CARD: CardDef = CardDef {
                     ..Cost::TAP
                 },
                 may_pause: true,
-                body: loot,
+                body: bodies!(loot),
                 ..Ability::NONE
             },
             Ability {
                 kind: AbilityKind::Activated,
                 cost: Cost::TAP,
                 may_pause: true,
-                body: convert,
+                body: bodies!(convert),
                 needs: Needs::ExiledWithSource,
                 ..Ability::NONE
             },

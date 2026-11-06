@@ -7,6 +7,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
 use beryl_engine::{DecisionKind, Seat, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -20,7 +21,7 @@ pub static CARD: CardDef = CardDef {
         abilities: &[Ability {
             kind: AbilityKind::Spell,
             targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any)],
-            body: return_and_draw,
+            body: bodies!(return_and_draw),
             ..Ability::NONE
         }],
         ..Face::EMPTY
@@ -39,7 +40,7 @@ pub static CARD: CardDef = CardDef {
 /// A copy of a spell returned this way would cease to exist
 /// ([CR 704.5e](https://yawgatog.com/resources/magic-rules/#R7045e)): "If a copy of a spell
 /// is in a zone other than the stack, it ceases to exist." No card here copies a spell yet.
-fn return_and_draw(ctx: &mut EffectCtx) -> Flow {
+fn return_and_draw<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(spell) = ctx.target_object(0) {
         ctx.return_to_hand(spell);
     }

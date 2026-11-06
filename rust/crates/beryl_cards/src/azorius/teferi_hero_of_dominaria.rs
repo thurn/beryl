@@ -14,6 +14,7 @@ use beryl_engine::event::Reason;
 use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::state::CounterKind;
 use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -34,7 +35,7 @@ pub static CARD: CardDef = CardDef {
             Ability {
                 kind: AbilityKind::Activated,
                 cost: Cost::loyalty(1),
-                body: draw_and_delay,
+                body: bodies!(draw_and_delay),
                 ..Ability::NONE
             },
             Ability {
@@ -44,18 +45,21 @@ pub static CARD: CardDef = CardDef {
                     TargetKind::Permanent,
                     Filter::Not(&Filter::Types(Types::LAND)),
                 )],
-                body: third_from_the_top,
+                body: bodies!(third_from_the_top),
                 ..Ability::NONE
             },
             Ability {
                 kind: AbilityKind::Activated,
                 cost: Cost::loyalty(-8),
-                body: emblem,
+                body: bodies!(emblem),
                 ..Ability::NONE
             },
             Ability {
                 may_pause: true,
-                ..Ability::triggered(Trigger::Delayed(Delayed::NextEndStep), untap_two_lands)
+                ..Ability::triggered(
+                    Trigger::Delayed(Delayed::NextEndStep),
+                    bodies!(untap_two_lands),
+                )
             },
         ],
         ..Face::EMPTY
@@ -74,7 +78,7 @@ pub static EMBLEM: CardDef = CardDef {
                 TargetKind::Permanent,
                 Filter::Whose(Whose::Opponent),
             )],
-            ..Ability::triggered(Trigger::YouDraw, exile_target)
+            ..Ability::triggered(Trigger::YouDraw, bodies!(exile_target))
         }],
         ..Face::EMPTY
     }],
@@ -88,14 +92,14 @@ pub static EMBLEM: CardDef = CardDef {
 /// triggered ability creates a delayed triggered ability, the source of that delayed
 /// triggered ability is the same as the source of that other ability." It triggers whether or
 /// not Teferi is still on the battlefield, since it refers to no object.
-fn draw_and_delay(ctx: &mut EffectCtx) -> Flow {
+fn draw_and_delay<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.draw(ctx.controller(), 1);
     ctx.delay(UNTAP, 0);
     Ok(())
 }
 
 /// "Untap up to two lands": any lands, whoever controls them, chosen as it resolves.
-fn untap_two_lands(ctx: &mut EffectCtx) -> Flow {
+fn untap_two_lands<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.untap_up_to_lands(2)
 }
 
@@ -105,7 +109,7 @@ fn untap_two_lands(ctx: &mut EffectCtx) -> Flow {
 /// player to put a card into a library 'Nth from the top,' and that library has fewer than N
 /// cards in it, the player puts that card on the bottom of that library." It goes to its
 /// owner's library ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)).
-fn third_from_the_top(ctx: &mut EffectCtx) -> Flow {
+fn third_from_the_top<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(permanent) = ctx.target_object(0) {
         ctx.put_into_library(permanent, 2);
     }
@@ -116,7 +120,7 @@ fn third_from_the_top(ctx: &mut EffectCtx) -> Flow {
 /// [CR 114.2](https://yawgatog.com/resources/magic-rules/#R1142): "This means that [player]
 /// puts an emblem with [ability] into the command zone. The emblem is both owned and
 /// controlled by that player."
-fn emblem(ctx: &mut EffectCtx) -> Flow {
+fn emblem<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.create_emblem(ctx.controller(), &EMBLEM);
     Ok(())
 }
@@ -124,7 +128,7 @@ fn emblem(ctx: &mut EffectCtx) -> Flow {
 /// "Whenever you draw a card, exile target permanent an opponent controls."
 /// [CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a): "To exile an object,
 /// move it to the exile zone from wherever it is."
-fn exile_target(ctx: &mut EffectCtx) -> Flow {
+fn exile_target<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(permanent) = ctx.target_object(0) {
         ctx.move_to(permanent, Zone::Exile, Reason::Exile);
     }

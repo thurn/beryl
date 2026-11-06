@@ -8,6 +8,7 @@ use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::Filter;
 use beryl_engine::state::CounterKind;
+use beryl_engine::{Layout, bodies};
 use beryl_engine::{Seat, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
@@ -26,7 +27,7 @@ pub static CARD: CardDef = CardDef {
                 TargetKind::Permanent,
                 Filter::Not(&Filter::Types(Types::LAND)),
             )],
-            body: fracture,
+            body: bodies!(fracture),
             ..Ability::NONE
         }],
         ..Face::EMPTY
@@ -44,7 +45,7 @@ pub static CARD: CardDef = CardDef {
 /// So an exiled token, which ceases to exist, is copied all the same (CR 111.12). Each copy
 /// has the permanent's copiable values ([`EffectCtx::copiable_values`], CR 707.2): not its
 /// counters, so a planeswalker's copy enters with its printed loyalty (CR 306.5b).
-fn fracture(ctx: &mut EffectCtx) -> Flow {
+fn fracture<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let Some(permanent) = ctx.target_object(0) else {
         return Ok(());
     };

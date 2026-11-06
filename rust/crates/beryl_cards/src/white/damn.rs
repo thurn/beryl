@@ -9,6 +9,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
 use beryl_engine::{DecisionKind, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
 use crate::names;
@@ -18,7 +19,7 @@ const CREATURES: Filter = Filter::Types(Types::CREATURE);
 /// "Can't be regenerated" ([CR 701.19c](https://yawgatog.com/resources/magic-rules/#R70119c)):
 /// such effects "cause regeneration shields to not be applied." No card in the cube
 /// regenerates, so destroying is all it takes.
-fn destroy_target(ctx: &mut EffectCtx) -> Flow {
+fn destroy_target<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(creature) = ctx.target_object(0) {
         ctx.destroy(creature);
     }
@@ -30,7 +31,7 @@ fn destroy_target(ctx: &mut EffectCtx) -> Flow {
 /// ([CR 702.96b](https://yawgatog.com/resources/magic-rules/#R70296b)): "If a player
 /// chooses to pay the overload cost of a spell, that spell won't require any targets."
 /// The creatures are destroyed at once.
-fn destroy_each(ctx: &mut EffectCtx) -> Flow {
+fn destroy_each<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let s = ctx.state();
     let creatures = CREATURES.select(
         s,
@@ -56,12 +57,12 @@ pub static CARD: CardDef = CardDef {
             Ability {
                 kind: AbilityKind::Spell,
                 targets: &[TargetSpec::one(TargetKind::Permanent, CREATURES)],
-                body: destroy_target,
+                body: bodies!(destroy_target),
                 ..Ability::NONE
             },
             Ability {
                 kind: AbilityKind::Spell,
-                body: destroy_each,
+                body: bodies!(destroy_each),
                 ..Ability::NONE
             },
         ],

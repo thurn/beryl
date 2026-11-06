@@ -12,6 +12,7 @@ use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::TokenEntry;
 use beryl_engine::state::CounterKind;
 use beryl_engine::{DecisionKind, TurnStep};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -37,7 +38,7 @@ pub static INSECT: CardDef = CardDef {
 
 /// "Create two 2/1 white Insect creature tokens with flying": one event
 /// ([CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111)).
-fn two_insects(ctx: &mut EffectCtx) -> Flow {
+fn two_insects<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.create_tokens(&INSECT, 2, TokenEntry::default());
     Ok(())
 }
@@ -58,8 +59,8 @@ pub static CARD: CardDef = CardDef {
         abilities: &[
             Ability::impending(),
             Ability::impending_countdown(),
-            Ability::triggered(Trigger::Enters, two_insects),
-            Ability::triggered(Trigger::Attacks, two_insects),
+            Ability::triggered(Trigger::Enters, bodies!(two_insects)),
+            Ability::triggered(Trigger::Attacks, bodies!(two_insects)),
         ],
         casting: &[CastingOption::Impending {
             cost: ManaCost::new(2, [2, 0, 0, 0, 0, 0]),

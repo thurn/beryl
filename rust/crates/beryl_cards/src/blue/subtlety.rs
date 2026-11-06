@@ -10,6 +10,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
 use beryl_engine::{Ask, DecisionKind, Seat, TurnStep, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -20,7 +21,7 @@ use crate::names;
 /// corresponding zone." The trigger resolves whether or not Subtlety is still there, as after
 /// evoke's sacrifice ([CR 113.7a](https://yawgatog.com/resources/magic-rules/#R1137a)): "Once
 /// activated or triggered, an ability exists on the stack independently of its source."
-fn tuck(ctx: &mut EffectCtx) -> Flow {
+fn tuck<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let Some(spell) = ctx.target_object(0) else {
         return Ok(());
     };
@@ -51,7 +52,7 @@ pub static CARD: CardDef = CardDef {
                     Filter::Types(Types::CREATURE.union(Types::PLANESWALKER)),
                 )],
                 may_pause: true,
-                ..Ability::triggered(Trigger::Enters, tuck)
+                ..Ability::triggered(Trigger::Enters, bodies!(tuck))
             },
             Ability::evoke(),
         ],

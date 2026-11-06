@@ -9,6 +9,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::{DecisionKind, TurnStep, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
 use crate::names;
@@ -20,7 +21,7 @@ use crate::names;
 /// cost was paid, exile this card instead of putting it anywhere else any time it would leave
 /// the stack.'" The card is in its owner's graveyard, and its owner is the trigger's
 /// controller.
-fn grant(ctx: &mut EffectCtx) -> Flow {
+fn grant<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(card) = ctx.target_object(0) {
         ctx.grant_flashback(card, ctx.controller());
     }
@@ -48,7 +49,7 @@ pub static CARD: CardDef = CardDef {
                     Filter::Whose(Whose::You),
                 ]),
             )],
-            ..Ability::triggered(Trigger::Enters, grant)
+            ..Ability::triggered(Trigger::Enters, bodies!(grant))
         }],
         ..Face::EMPTY
     }],

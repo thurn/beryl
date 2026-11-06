@@ -12,6 +12,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
 use beryl_engine::{DecisionKind, TurnStep, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -41,7 +42,7 @@ pub static CARD: CardDef = CardDef {
             Ability {
                 kind: AbilityKind::Activated,
                 cost: Cost::loyalty(1),
-                body: sorceries_as_flash,
+                body: bodies!(sorceries_as_flash),
                 ..Ability::NONE
             },
             Ability {
@@ -55,7 +56,7 @@ pub static CARD: CardDef = CardDef {
                             .union(Types::ENCHANTMENT),
                     ),
                 )],
-                body: bounce_and_draw,
+                body: bodies!(bounce_and_draw),
                 ..Ability::NONE
             },
         ],
@@ -67,7 +68,7 @@ pub static CARD: CardDef = CardDef {
 /// "+1: Until your next turn, you may cast sorcery spells as though they had flash."
 /// [CR 702.8a](https://yawgatog.com/resources/magic-rules/#R7028a): "'Flash' means 'You may
 /// play this card any time you could cast an instant.'"
-fn sorceries_as_flash(ctx: &mut EffectCtx) -> Flow {
+fn sorceries_as_flash<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.allow_sorceries_as_flash(ctx.controller());
     Ok(())
 }
@@ -75,7 +76,7 @@ fn sorceries_as_flash(ctx: &mut EffectCtx) -> Flow {
 /// "−3: Return up to one target artifact, creature, or enchantment to its owner's hand. Draw
 /// a card." With no target chosen it still draws; with its one target illegal, it doesn't
 /// resolve at all ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)).
-fn bounce_and_draw(ctx: &mut EffectCtx) -> Flow {
+fn bounce_and_draw<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(permanent) = ctx.target_object(0) {
         ctx.return_to_hand(permanent);
     }

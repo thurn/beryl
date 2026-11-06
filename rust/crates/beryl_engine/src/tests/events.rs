@@ -21,15 +21,16 @@ use crate::{
     CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Outcome, Profile, Replay,
     Scratch, State, Step, apply, next,
 };
+use crate::{Layout, bodies, conditions};
 
 use super::{LAND, begin};
 
-fn gain_one(ctx: &mut EffectCtx) -> crate::card::Flow {
+fn gain_one<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
     ctx.gain_life(ctx.controller(), 1);
     Ok(())
 }
 
-fn draw_one(ctx: &mut EffectCtx) -> crate::card::Flow {
+fn draw_one<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
     ctx.draw(ctx.controller(), 1);
     Ok(())
 }
@@ -38,7 +39,7 @@ static GAIN_LAND: CardDef = CardDef {
     name: "Test Gain Land",
     faces: &[Face {
         types: Types::LAND,
-        abilities: &[Ability::triggered(Trigger::Enters, gain_one)],
+        abilities: &[Ability::triggered(Trigger::Enters, bodies!(gain_one))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -78,7 +79,7 @@ static SPRINGS: CardDef = CardDef {
     tokens: &[],
 };
 
-fn crypt_flip(ctx: &mut EffectCtx) -> crate::card::Flow {
+fn crypt_flip<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
     let you = ctx.controller();
     if !ctx.flip_coin(you) {
         ctx.deal_damage(Recipient::Player(you), 3);
@@ -93,7 +94,7 @@ static CRYPT_LAND: CardDef = CardDef {
         types: Types::LAND,
         abilities: &[Ability::triggered(
             Trigger::Step(TurnStep::Upkeep, Whose::You),
-            crypt_flip,
+            bodies!(crypt_flip),
         )],
         ..Face::EMPTY
     }],
@@ -106,7 +107,7 @@ static WATCHER: CardDef = CardDef {
         types: Types::LAND,
         abilities: &[Ability::triggered(
             Trigger::Step(TurnStep::Upkeep, Whose::Opponent),
-            gain_one,
+            bodies!(gain_one),
         )],
         ..Face::EMPTY
     }],
@@ -119,19 +120,19 @@ static ENDER: CardDef = CardDef {
         types: Types::LAND,
         abilities: &[Ability::triggered(
             Trigger::Step(TurnStep::End, Whose::You),
-            draw_one,
+            bodies!(draw_one),
         )],
         ..Face::EMPTY
     }],
     tokens: &[],
 };
 
-fn drain_delay(ctx: &mut EffectCtx) -> crate::card::Flow {
+fn drain_delay<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
     ctx.delay(1, 2);
     Ok(())
 }
 
-fn drain_mana(ctx: &mut EffectCtx) -> crate::card::Flow {
+fn drain_mana<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
     let amount = ctx.trigger().amount;
     ctx.add_mana(ctx.controller(), ManaColor::Colorless, amount);
     Ok(())
@@ -143,15 +144,18 @@ static DRAIN_LAND: CardDef = CardDef {
     faces: &[Face {
         types: Types::LAND,
         abilities: &[
-            Ability::triggered(Trigger::Enters, drain_delay),
-            Ability::triggered(Trigger::Delayed(Delayed::YourNextMainPhase), drain_mana),
+            Ability::triggered(Trigger::Enters, bodies!(drain_delay)),
+            Ability::triggered(
+                Trigger::Delayed(Delayed::YourNextMainPhase),
+                bodies!(drain_mana),
+            ),
         ],
         ..Face::EMPTY
     }],
     tokens: &[],
 };
 
-fn opponent_loses_one(ctx: &mut EffectCtx) -> crate::card::Flow {
+fn opponent_loses_one<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
     ctx.lose_life(ctx.controller().opponent(), 1);
     Ok(())
 }
@@ -159,13 +163,16 @@ fn opponent_loses_one(ctx: &mut EffectCtx) -> crate::card::Flow {
 static EMBLEM: CardDef = CardDef {
     name: "Test Emblem",
     faces: &[Face {
-        abilities: &[Ability::triggered(Trigger::YouCast, opponent_loses_one)],
+        abilities: &[Ability::triggered(
+            Trigger::YouCast,
+            bodies!(opponent_loses_one),
+        )],
         ..Face::EMPTY
     }],
     tokens: &[],
 };
 
-fn get_emblem(ctx: &mut EffectCtx) -> crate::card::Flow {
+fn get_emblem<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
     ctx.create_emblem(ctx.controller(), &EMBLEM);
     Ok(())
 }
@@ -174,7 +181,7 @@ static EMBLEM_LAND: CardDef = CardDef {
     name: "Test Emblem Land",
     faces: &[Face {
         types: Types::LAND,
-        abilities: &[Ability::triggered(Trigger::Enters, get_emblem)],
+        abilities: &[Ability::triggered(Trigger::Enters, bodies!(get_emblem))],
         ..Face::EMPTY
     }],
     tokens: &[&EMBLEM],
@@ -191,11 +198,11 @@ static BEAR: CardDef = CardDef {
     tokens: &[],
 };
 
-fn not_a_token(_: &State, _: &GameTable, tr: &PendingTrigger) -> bool {
+fn not_a_token<L: Layout>(_: &State<L>, _: &GameTable, tr: &PendingTrigger) -> bool {
     !tr.info.lki.token
 }
 
-fn copy_the_dead(ctx: &mut EffectCtx) -> crate::card::Flow {
+fn copy_the_dead<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
     let card = ctx.trigger().lki.card;
     ctx.create_tokens_of(card, 1, TokenEntry::default());
     Ok(())
@@ -210,8 +217,8 @@ static SPHINX: CardDef = CardDef {
         power: Some(3),
         toughness: Some(3),
         abilities: &[Ability {
-            condition: Some(not_a_token),
-            ..Ability::triggered(Trigger::Dies, copy_the_dead)
+            condition: Some(conditions!(not_a_token)),
+            ..Ability::triggered(Trigger::Dies, bodies!(copy_the_dead))
         }],
         ..Face::EMPTY
     }],
@@ -225,7 +232,7 @@ static TRAINER: CardDef = CardDef {
         types: Types::CREATURE,
         power: Some(3),
         toughness: Some(3),
-        abilities: &[Ability::triggered(Trigger::Enters, gain_one)],
+        abilities: &[Ability::triggered(Trigger::Enters, bodies!(gain_one))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -238,8 +245,8 @@ static RAIDER: CardDef = CardDef {
         power: Some(2),
         toughness: Some(2),
         abilities: &[
-            Ability::triggered(Trigger::Attacks, gain_one),
-            Ability::triggered(Trigger::CombatDamageToPlayer, draw_one),
+            Ability::triggered(Trigger::Attacks, bodies!(gain_one)),
+            Ability::triggered(Trigger::CombatDamageToPlayer, bodies!(draw_one)),
         ],
         ..Face::EMPTY
     }],
@@ -257,7 +264,7 @@ static HUMAN: CardDef = CardDef {
     tokens: &[],
 };
 
-fn human_attacking(ctx: &mut EffectCtx) -> crate::card::Flow {
+fn human_attacking<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
     ctx.create_tokens(
         &HUMAN,
         1,
@@ -284,7 +291,7 @@ static ADELINE: CardDef = CardDef {
                 condition: StaticCondition::Always,
                 modification: Modification::PowerIsCreaturesYouControl,
             }),
-            Ability::triggered(Trigger::YouAttack, human_attacking),
+            Ability::triggered(Trigger::YouAttack, bodies!(human_attacking)),
         ],
         ..Face::EMPTY
     }],
@@ -311,7 +318,7 @@ static MAP: CardDef = CardDef {
     tokens: &[],
 };
 
-fn two_insects(ctx: &mut EffectCtx) -> crate::card::Flow {
+fn two_insects<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
     ctx.create_tokens(&INSECT, 2, TokenEntry::default());
     Ok(())
 }
@@ -330,19 +337,19 @@ static OVERLORD: CardDef = CardDef {
                 condition: StaticCondition::HasCounter(CounterKind::Time),
                 modification: Modification::RemoveTypes(Types::CREATURE),
             }),
-            Ability::triggered(Trigger::Enters, two_insects),
+            Ability::triggered(Trigger::Enters, bodies!(two_insects)),
         ],
         ..Face::EMPTY
     }],
     tokens: &[&INSECT],
 };
 
-fn story_counter(ctx: &mut EffectCtx) -> crate::card::Flow {
+fn story_counter<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
     ctx.add_counters(ctx.source(), CounterKind::Story, 1);
     Ok(())
 }
 
-fn two_maps(ctx: &mut EffectCtx) -> crate::card::Flow {
+fn two_maps<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
     ctx.create_tokens(&MAP, 2, TokenEntry::default());
     Ok(())
 }
@@ -354,8 +361,14 @@ static STAFF: CardDef = CardDef {
     faces: &[Face {
         types: Types::ARTIFACT,
         abilities: &[
-            Ability::triggered(Trigger::YouCreateTokens(Types::CREATURE), story_counter),
-            Ability::triggered(Trigger::Delayed(Delayed::YourNextMainPhase), two_maps),
+            Ability::triggered(
+                Trigger::YouCreateTokens(Types::CREATURE),
+                bodies!(story_counter),
+            ),
+            Ability::triggered(
+                Trigger::Delayed(Delayed::YourNextMainPhase),
+                bodies!(two_maps),
+            ),
         ],
         ..Face::EMPTY
     }],
@@ -409,7 +422,7 @@ static RECONFIG: CardDef = CardDef {
     tokens: &[],
 };
 
-fn exile_an_opposing_creature(ctx: &mut EffectCtx) -> crate::card::Flow {
+fn exile_an_opposing_creature<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
     let them = ctx.controller().opponent();
     let s = ctx.state();
     let target = s
@@ -431,7 +444,7 @@ static ICEBERG: CardDef = CardDef {
         types: Types::ARTIFACT,
         abilities: &[Ability::triggered(
             Trigger::Enters,
-            exile_an_opposing_creature,
+            bodies!(exile_an_opposing_creature),
         )],
         ..Face::EMPTY
     }],
@@ -508,7 +521,7 @@ fn game_with_seed(seed: u64) -> (GameTable, State, Seat) {
 }
 
 /// A slot holding `name` in the player's library or hand.
-fn find(s: &State, t: &GameTable, player: Seat, name: &str) -> Slot {
+fn find<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, name: &str) -> Slot {
     (s.zone(player, Zone::Library) | s.zone(player, Zone::Hand))
         .iter()
         .find(|&slot| t.def(s.object(slot).card).name == name)
@@ -591,7 +604,7 @@ fn advance_to(
     }
 }
 
-fn types(s: &State, slot: Slot) -> Types {
+fn types<L: Layout>(s: &State<L>, slot: Slot) -> Types {
     s.derived(slot).types
 }
 
@@ -1370,7 +1383,7 @@ fn random_games_with_triggers_never_read_derived_dirty() {
     }
 }
 
-fn cathar_human(ctx: &mut EffectCtx) -> crate::card::Flow {
+fn cathar_human<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
     ctx.create_attacking_tokens(&HUMAN, 1)?;
     Ok(())
 }
@@ -1384,7 +1397,7 @@ static CATHAR: CardDef = CardDef {
         toughness: Some(1),
         abilities: &[Ability {
             may_pause: true,
-            ..Ability::triggered(Trigger::YouAttack, cathar_human)
+            ..Ability::triggered(Trigger::YouAttack, bodies!(cathar_human))
         }],
         ..Face::EMPTY
     }],
@@ -1465,7 +1478,7 @@ fn a_token_created_attacking_may_attack_a_planeswalker() {
     assert_eq!(s.object(cathar).combat, None);
 }
 
-fn steal_target(ctx: &mut EffectCtx) -> crate::card::Flow {
+fn steal_target<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> crate::card::Flow {
     if let Some(artifact) = ctx.target_object(0) {
         ctx.gain_control(artifact, Duration::Indefinite);
     }
@@ -1486,8 +1499,8 @@ static THIEF: CardDef = CardDef {
                 TargetKind::Permanent,
                 Filter::All(&[Filter::Types(Types::ARTIFACT), Filter::ManaValueAtMostX]),
             )],
-            condition: Some(crate::effect::kicked),
-            ..Ability::triggered(Trigger::Enters, steal_target)
+            condition: Some(conditions!(crate::effect::kicked)),
+            ..Ability::triggered(Trigger::Enters, bodies!(steal_target))
         }],
         casting: &[CastingOption::Kicker {
             cost: ManaCost::X,

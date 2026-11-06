@@ -11,12 +11,14 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use beryl_engine::coverage;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
-    CardIx, Choice, Counts, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch,
-    Seat, Slot, StallReason, State, Step, Zone, apply, next,
+    CardIx, Choice, Counts, Decision, GameTable, Large, Layout, Observation, Outcome, Profile,
+    Replay, Scratch, Seat, Slot, StallReason, State, Step, Zone, apply, next,
 };
 use beryl_search::{Agent, GreedyAgent, RandomAgent};
 use common::{agents, fingerprint, game, games, mirror, play};
 
+/// Every fourth game is played in the [`Large`] layout from its start, so the layout a game
+/// outgrowing [`Small`](beryl_engine::Small) goes on in is fuzzed too.
 #[test]
 fn random_games_keep_the_invariants() {
     let n = games(40);
@@ -24,28 +26,12 @@ fn random_games_keep_the_invariants() {
     let mut kinds: HashMap<String, u64> = HashMap::new();
     coverage::start();
     for seed in 0..n {
-        let (t, mut s) = game(seed);
-        let mut decisions = 0;
-        let outcome = play(
-            &t,
-            &mut s,
-            &mut Scratch::new(),
-            &mut agents(seed),
-            |s, d| {
-                decisions += 1;
-                *kinds.entry(format!("{:?}", d.kind)).or_default() += 1;
-                assert!(!d.is_empty(), "seed {seed}: {d:?}");
-                if let Err(v) = s.check_invariants(&t) {
-                    panic!("seed {seed}, decision {decisions}: {v:?}");
-                }
-                if let Err(v) = s.check_references(&t) {
-                    panic!("seed {seed}, decision {decisions}, a reference: {v:?}");
-                }
-            },
-        );
-        if let Err(v) = s.check_invariants(&t) {
-            panic!("seed {seed}, at the end: {v:?}");
-        }
+        let (t, s) = game(seed);
+        let outcome = if seed % 4 == 3 {
+            fuzz(&t, s.widen(), seed, &mut kinds)
+        } else {
+            fuzz(&t, s, seed, &mut kinds)
+        };
         match outcome {
             Outcome::Stalled(StallReason::Capacity) => panic!("seed {seed}: a capacity ran out"),
             Outcome::Stalled(_) => stalls += 1,
@@ -57,6 +43,61 @@ fn random_games_keep_the_invariants() {
     let hits = coverage::take();
     if std::env::var_os("BERYL_FUZZ_GAMES").is_some() {
         report(n, &kinds, &hits);
+    }
+}
+
+/// Plays game `seed` from `s` with random agents, checking the invariants at every decision
+/// and counting the decisions by kind.
+fn fuzz<L: Layout>(
+    t: &GameTable,
+    mut s: State<L>,
+    seed: u64,
+    kinds: &mut HashMap<String, u64>,
+) -> Outcome {
+    let mut decisions = 0;
+    let outcome = play(t, &mut s, &mut Scratch::new(), &mut agents(seed), |s, d| {
+        decisions += 1;
+        *kinds.entry(format!("{:?}", d.kind)).or_default() += 1;
+        assert!(!d.is_empty(), "seed {seed}: {d:?}");
+        if let Err(v) = s.check_invariants(t) {
+            panic!("seed {seed}, decision {decisions}: {v:?}");
+        }
+        if let Err(v) = s.check_references(t) {
+            panic!("seed {seed}, decision {decisions}, a reference: {v:?}");
+        }
+    });
+    if let Err(v) = s.check_invariants(t) {
+        panic!("seed {seed}, at the end: {v:?}");
+    }
+    outcome
+}
+
+/// Widening is lossless: a game widened into [`Large`] at its start offers every decision
+/// the [`Small`](beryl_engine::Small) game does, given the same answers, and stays the same
+/// game as the `Small` one widened, decision after decision.
+#[test]
+fn a_widened_game_plays_on_as_the_small_one() {
+    for seed in 0..4 {
+        let (t, mut small) = game(seed);
+        let mut large: State<Large> = small.widen();
+        let (mut xs, mut xl) = (Scratch::new(), Scratch::<Large>::new());
+        let mut agents = agents(seed);
+        let mut decisions = 0;
+        loop {
+            let step = next(&mut small, &t, &mut xs, &mut Replay);
+            assert_eq!(
+                next(&mut large, &t, &mut xl, &mut Replay),
+                step,
+                "seed {seed}"
+            );
+            assert!(small.widen() == large, "seed {seed}, decision {decisions}");
+            let Step::Decide(d) = step else { break };
+            let c = agents[d.player.index()].choose(Observation::new(&small, d.player), &d);
+            apply(&mut small, &t, &mut xs, &mut Replay, c);
+            apply(&mut large, &t, &mut xl, &mut Replay, c);
+            decisions += 1;
+        }
+        assert!(decisions > 40, "seed {seed}: a short game");
     }
 }
 

@@ -14,6 +14,7 @@ use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
 use beryl_engine::state::Zone;
 use beryl_engine::{DecisionKind, TurnStep};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -32,7 +33,7 @@ pub static CARD: CardDef = CardDef {
                     Filter::Not(&Filter::Types(Types::LAND)),
                 )
                 .other()],
-                ..Ability::triggered(Trigger::Enters, exile_until_this_leaves)
+                ..Ability::triggered(Trigger::Enters, bodies!(exile_until_this_leaves))
             },
             Ability {
                 kind: AbilityKind::Activated,
@@ -42,7 +43,7 @@ pub static CARD: CardDef = CardDef {
                     ..Cost::NONE
                 },
                 may_pause: true,
-                body: sacrifice_and_scry,
+                body: bodies!(sacrifice_and_scry),
                 ..Ability::NONE
             },
         ],
@@ -55,7 +56,7 @@ pub static CARD: CardDef = CardDef {
 /// battlefield" ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)). If the
 /// Iceberg has already left by the time this resolves, the permanent isn't exiled
 /// ([CR 610.3b](https://yawgatog.com/resources/magic-rules/#R6103b)).
-fn exile_until_this_leaves(ctx: &mut EffectCtx) -> Flow {
+fn exile_until_this_leaves<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(permanent) = ctx.target_object(0) {
         ctx.exile_until_source_leaves(permanent);
     }
@@ -64,7 +65,7 @@ fn exile_until_this_leaves(ctx: &mut EffectCtx) -> Flow {
 
 /// "Sacrifice this enchantment. If you do, scry 2." Its controller can sacrifice it only if
 /// it is still on the battlefield ([CR 701.21a](https://yawgatog.com/resources/magic-rules/#R70121a)).
-fn sacrifice_and_scry(ctx: &mut EffectCtx) -> Flow {
+fn sacrifice_and_scry<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let iceberg = ctx.source();
     if !ctx.state().is_current(iceberg)
         || ctx.state().object(iceberg.slot).zone != Zone::Battlefield

@@ -11,6 +11,7 @@ use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::{Ask, DecisionKind, TurnStep, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -21,7 +22,7 @@ use crate::names;
 /// increase ([CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f)): the total cost
 /// is the mana cost "plus all additional costs and cost increases". The card is nonland, so
 /// playing it is casting it.
-fn spellbind(ctx: &mut EffectCtx) -> Flow {
+fn spellbind<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let Some(them) = ctx.target_player(0) else {
         return Ok(());
     };
@@ -61,7 +62,7 @@ pub static CARD: CardDef = CardDef {
                 Filter::Whose(Whose::Opponent),
             )],
             may_pause: true,
-            ..Ability::triggered(Trigger::Enters, spellbind)
+            ..Ability::triggered(Trigger::Enters, bodies!(spellbind))
         }],
         ..Face::EMPTY
     }],

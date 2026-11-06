@@ -9,6 +9,7 @@ use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::Filter;
 use beryl_engine::{Ask, DecisionKind, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -23,7 +24,7 @@ const TRINKET: Filter = Filter::All(&[Filter::Types(Types::ARTIFACT), Filter::Ma
 /// library ..., randomize the cards within it so that no player knows their order." The card
 /// found is revealed ([CR 701.20a](https://yawgatog.com/resources/magic-rules/#R70120a)):
 /// "To reveal a card, show that card to all players for a brief time."
-fn tutor(ctx: &mut EffectCtx) -> Flow {
+fn tutor<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     if !ctx.choose_yes_no(you, Ask::MaySearch)? {
         return Ok(());
@@ -47,7 +48,7 @@ pub static CARD: CardDef = CardDef {
         toughness: Some(2),
         abilities: &[Ability {
             may_pause: true,
-            ..Ability::triggered(Trigger::Enters, tutor)
+            ..Ability::triggered(Trigger::Enters, bodies!(tutor))
         }],
         ..Face::EMPTY
     }],

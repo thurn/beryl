@@ -5,6 +5,7 @@ use beryl_engine::card::{Ability, CardDef, Face, Flow, ManaColor, ManaSet, Trigg
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Recipient;
 use beryl_engine::filter::Whose;
+use beryl_engine::{Layout, bodies};
 use beryl_engine::{TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
@@ -15,7 +16,7 @@ pub static CARD: CardDef = CardDef {
     faces: &[Face {
         types: Types::ARTIFACT,
         abilities: &[
-            Ability::triggered(Trigger::Step(TurnStep::Upkeep, Whose::You), flip),
+            Ability::triggered(Trigger::Step(TurnStep::Upkeep, Whose::You), bodies!(flip)),
             Ability::tap_for_mana(ManaSet {
                 colors: 1 << ManaColor::Colorless as u8,
                 amount: 2,
@@ -31,7 +32,7 @@ pub static CARD: CardDef = CardDef {
 /// noncombat damage from Mana Crypt, which makes its controller lose that much life
 /// ([CR 120.3a](https://yawgatog.com/resources/magic-rules/#R1203a)): "Damage dealt to a
 /// player by a source without infect causes that player to lose that much life."
-fn flip(ctx: &mut EffectCtx) -> Flow {
+fn flip<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     if !ctx.flip_coin(you) {
         ctx.deal_damage(Recipient::Player(you), 3);

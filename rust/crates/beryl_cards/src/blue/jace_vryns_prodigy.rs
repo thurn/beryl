@@ -18,6 +18,7 @@ use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::state::{Continuous, CounterKind, Duration};
 use beryl_engine::{DecisionKind, TurnStep, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -40,7 +41,7 @@ pub static CARD: CardDef = CardDef {
                 kind: AbilityKind::Activated,
                 cost: Cost::TAP,
                 may_pause: true,
-                body: loot_and_transform,
+                body: bodies!(loot_and_transform),
                 ..Ability::NONE
             }],
             ..Face::EMPTY
@@ -62,7 +63,7 @@ pub static CARD: CardDef = CardDef {
                         TargetKind::Permanent,
                         Filter::Types(Types::CREATURE),
                     )],
-                    body: weaken,
+                    body: bodies!(weaken),
                     ..Ability::NONE
                 },
                 Ability {
@@ -75,13 +76,13 @@ pub static CARD: CardDef = CardDef {
                             Filter::Whose(Whose::You),
                         ]),
                     )],
-                    body: recast,
+                    body: bodies!(recast),
                     ..Ability::NONE
                 },
                 Ability {
                     kind: AbilityKind::Activated,
                     cost: Cost::loyalty(-9),
-                    body: emblem,
+                    body: bodies!(emblem),
                     ..Ability::NONE
                 },
             ],
@@ -103,7 +104,7 @@ pub static EMBLEM: CardDef = CardDef {
                 TargetKind::Player,
                 Filter::Whose(Whose::Opponent),
             )],
-            ..Ability::triggered(Trigger::YouCast, mill_five)
+            ..Ability::triggered(Trigger::YouCast, bodies!(mill_five))
         }],
         ..Face::EMPTY
     }],
@@ -114,7 +115,7 @@ pub static EMBLEM: CardDef = CardDef {
 /// exile Jace, then return him to the battlefield transformed under his owner's control."
 /// The graveyard is counted after the discard, as the instructions are followed in order
 /// ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)).
-fn loot_and_transform(ctx: &mut EffectCtx) -> Flow {
+fn loot_and_transform<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     ctx.draw(you, 1);
     ctx.discard_a_card(you)?;
@@ -129,7 +130,7 @@ fn loot_and_transform(ctx: &mut EffectCtx) -> Flow {
 /// that modify power and/or toughness (but don't set power and/or toughness to a specific
 /// number or value) are applied." It lasts "as long as stated by the spell or ability creating
 /// it" ([CR 611.2a](https://yawgatog.com/resources/magic-rules/#R6112a)).
-fn weaken(ctx: &mut EffectCtx) -> Flow {
+fn weaken<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(creature) = ctx.target_object(0) {
         ctx.add_effect(
             creature,
@@ -146,7 +147,7 @@ fn weaken(ctx: &mut EffectCtx) -> Flow {
 /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), which "exile it instead"
 /// follows wherever it would go to the graveyard: resolving, countered or fizzling
 /// ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)).
-fn recast(ctx: &mut EffectCtx) -> Flow {
+fn recast<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(card) = ctx.target_object(0) {
         ctx.allow_cast(card, ctx.controller(), 0, true, true);
     }
@@ -157,7 +158,7 @@ fn recast(ctx: &mut EffectCtx) -> Flow {
 /// cards.'" [CR 114.2](https://yawgatog.com/resources/magic-rules/#R1142): "This means that
 /// [player] puts an emblem with [ability] into the command zone. The emblem is both owned and
 /// controlled by that player."
-fn emblem(ctx: &mut EffectCtx) -> Flow {
+fn emblem<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.create_emblem(ctx.controller(), &EMBLEM);
     Ok(())
 }
@@ -166,7 +167,7 @@ fn emblem(ctx: &mut EffectCtx) -> Flow {
 /// [CR 701.17a](https://yawgatog.com/resources/magic-rules/#R70117a): "For a player to mill a
 /// number of cards, that player puts that many cards from the top of their library into their
 /// graveyard."
-fn mill_five(ctx: &mut EffectCtx) -> Flow {
+fn mill_five<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(player) = ctx.target_player(0) {
         ctx.mill(player, 5);
     }

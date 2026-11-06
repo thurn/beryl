@@ -20,6 +20,7 @@ use crate::{
     CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile, Replay, Scratch,
     State, Step, apply, next,
 };
+use crate::{Layout, bodies};
 
 use super::{DUAL, LAND, begin};
 
@@ -30,14 +31,14 @@ const fn mana(generic: u8, w: u8, u: u8) -> ManaCost {
 const CREATURE: Filter = Filter::Types(Types::CREATURE);
 const LANDS: Filter = Filter::Types(Types::LAND);
 
-fn destroy_target(ctx: &mut EffectCtx) -> Flow {
+fn destroy_target<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(target) = ctx.target_object(0) {
         ctx.destroy(target);
     }
     Ok(())
 }
 
-fn bounce_target(ctx: &mut EffectCtx) -> Flow {
+fn bounce_target<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(target) = ctx.target_object(0) {
         ctx.move_to(target, Zone::Hand, Reason::Effect);
     }
@@ -45,7 +46,7 @@ fn bounce_target(ctx: &mut EffectCtx) -> Flow {
 }
 
 /// "Counter target spell unless its controller pays {1}."
-fn tithe(ctx: &mut EffectCtx) -> Flow {
+fn tithe<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let Some(spell) = ctx.target_object(0) else {
         return Ok(());
     };
@@ -57,7 +58,7 @@ fn tithe(ctx: &mut EffectCtx) -> Flow {
 }
 
 /// "Counter target spell. Exile it instead of putting it into its owner's graveyard."
-fn counter_exile(ctx: &mut EffectCtx) -> Flow {
+fn counter_exile<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(spell) = ctx.target_object(0) {
         ctx.counter(spell, true);
     }
@@ -65,7 +66,7 @@ fn counter_exile(ctx: &mut EffectCtx) -> Flow {
 }
 
 /// "Draw two cards, then put a card from your hand on top of your library."
-fn ponder(ctx: &mut EffectCtx) -> Flow {
+fn ponder<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     ctx.draw(you, 2);
     let hand = ctx.state().zone(you, Zone::Hand);
@@ -79,7 +80,7 @@ fn ponder(ctx: &mut EffectCtx) -> Flow {
 
 /// "You may cast target instant or sorcery card from your graveyard this turn. If that spell
 /// would be put into your graveyard, exile it instead."
-fn flashback(ctx: &mut EffectCtx) -> Flow {
+fn flashback<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(card) = ctx.target_object(0) {
         let you = ctx.controller();
         ctx.allow_cast(card, you, 0, true, true);
@@ -89,7 +90,7 @@ fn flashback(ctx: &mut EffectCtx) -> Flow {
 
 /// "Target instant or sorcery card in your graveyard gains flashback until end of turn. The
 /// flashback cost is equal to its mana cost."
-fn snapback(ctx: &mut EffectCtx) -> Flow {
+fn snapback<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(card) = ctx.target_object(0) {
         let you = ctx.controller();
         ctx.grant_flashback(card, you);
@@ -98,7 +99,7 @@ fn snapback(ctx: &mut EffectCtx) -> Flow {
 }
 
 /// "Return target spell to its owner's hand."
-fn bounce_spell(ctx: &mut EffectCtx) -> Flow {
+fn bounce_spell<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(spell) = ctx.target_object(0) {
         ctx.return_to_hand(spell);
     }
@@ -107,7 +108,7 @@ fn bounce_spell(ctx: &mut EffectCtx) -> Flow {
 
 /// "Look at target opponent's hand. You may exile a nonland card from it. For as long as that
 /// card remains exiled, its owner may cast it. A spell cast this way costs {2} more to cast."
-fn binder(ctx: &mut EffectCtx) -> Flow {
+fn binder<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let Some(opponent) = ctx.target_player(0) else {
         return Ok(());
     };
@@ -128,7 +129,7 @@ fn binder(ctx: &mut EffectCtx) -> Flow {
 }
 
 /// "Discard a card. You may cast it without paying its mana cost."
-fn loot_and_cast(ctx: &mut EffectCtx) -> Flow {
+fn loot_and_cast<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     let hand = ctx.state().zone(you, Zone::Hand);
     if hand.is_empty() {
@@ -145,13 +146,13 @@ fn loot_and_cast(ctx: &mut EffectCtx) -> Flow {
     Ok(())
 }
 
-fn sorceries_as_flash(ctx: &mut EffectCtx) -> Flow {
+fn sorceries_as_flash<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     ctx.allow_sorceries_as_flash(you);
     Ok(())
 }
 
-fn draw(ctx: &mut EffectCtx) -> Flow {
+fn draw<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     ctx.draw(you, 1);
     Ok(())
@@ -218,7 +219,7 @@ pub(crate) static STRIP: CardDef = CardDef {
                     ..Cost::NONE
                 },
                 targets: &[TargetSpec::one(TargetKind::Permanent, LANDS)],
-                body: destroy_target,
+                body: bodies!(destroy_target),
                 ..Ability::NONE
             },
         ],
@@ -260,7 +261,7 @@ pub(crate) static REMOVAL: CardDef = CardDef {
         abilities: &[Ability {
             kind: AbilityKind::Spell,
             targets: &[TargetSpec::one(TargetKind::Permanent, CREATURE)],
-            body: destroy_target,
+            body: bodies!(destroy_target),
             ..Ability::NONE
         }],
         ..Face::EMPTY
@@ -277,7 +278,7 @@ pub(crate) static TITHE: CardDef = CardDef {
             kind: AbilityKind::Spell,
             targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any)],
             may_pause: true,
-            body: tithe,
+            body: bodies!(tithe),
             ..Ability::NONE
         }],
         ..Face::EMPTY
@@ -293,7 +294,7 @@ pub(crate) static LIES: CardDef = CardDef {
         abilities: &[Ability {
             kind: AbilityKind::Spell,
             targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any)],
-            body: counter_exile,
+            body: bodies!(counter_exile),
             ..Ability::NONE
         }],
         ..Face::EMPTY
@@ -309,7 +310,7 @@ pub(crate) static PONDER: CardDef = CardDef {
         abilities: &[Ability {
             kind: AbilityKind::Spell,
             may_pause: true,
-            body: ponder,
+            body: bodies!(ponder),
             ..Ability::NONE
         }],
         ..Face::EMPTY
@@ -387,7 +388,7 @@ pub(crate) static STUPOR: CardDef = CardDef {
                     TargetKind::Permanent,
                     Filter::All(&[Filter::Not(&LANDS), Filter::Whose(Whose::Opponent)]),
                 )],
-                body: bounce_target,
+                body: bodies!(bounce_target),
                 ..Ability::NONE
             }],
             ..Face::EMPTY
@@ -416,14 +417,14 @@ pub(crate) static RAVELER: CardDef = CardDef {
             Ability {
                 kind: AbilityKind::Activated,
                 cost: Cost::loyalty(1),
-                body: sorceries_as_flash,
+                body: bodies!(sorceries_as_flash),
                 ..Ability::NONE
             },
             Ability {
                 kind: AbilityKind::Activated,
                 cost: Cost::loyalty(-3),
                 targets: &[TargetSpec::up_to_one(TargetKind::Permanent, CREATURE)],
-                body: bounce_target,
+                body: bodies!(bounce_target),
                 ..Ability::NONE
             },
         ],
@@ -448,7 +449,7 @@ pub(crate) static EMPEROR: CardDef = CardDef {
             Ability {
                 kind: AbilityKind::Activated,
                 cost: Cost::loyalty(1),
-                body: draw,
+                body: bodies!(draw),
                 ..Ability::NONE
             },
             Ability {
@@ -458,7 +459,7 @@ pub(crate) static EMPEROR: CardDef = CardDef {
                     TargetKind::Permanent,
                     Filter::All(&[CREATURE, Filter::Tapped]),
                 )],
-                body: destroy_target,
+                body: bodies!(destroy_target),
                 ..Ability::NONE
             },
         ],
@@ -481,7 +482,7 @@ pub(crate) static FLASHBACK: CardDef = CardDef {
                     Filter::Whose(Whose::You),
                 ]),
             )],
-            body: flashback,
+            body: bodies!(flashback),
             ..Ability::NONE
         }],
         ..Face::EMPTY
@@ -503,7 +504,7 @@ pub(crate) static SNAPBACK: CardDef = CardDef {
                     Filter::Whose(Whose::You),
                 ]),
             )],
-            body: snapback,
+            body: bodies!(snapback),
             ..Ability::NONE
         }],
         ..Face::EMPTY
@@ -519,7 +520,7 @@ pub(crate) static BOUNCE: CardDef = CardDef {
         abilities: &[Ability {
             kind: AbilityKind::Spell,
             targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any)],
-            body: bounce_spell,
+            body: bodies!(bounce_spell),
             ..Ability::NONE
         }],
         ..Face::EMPTY
@@ -539,7 +540,7 @@ pub(crate) static BINDER: CardDef = CardDef {
                 Filter::Whose(Whose::Opponent),
             )],
             may_pause: true,
-            body: binder,
+            body: bodies!(binder),
             ..Ability::NONE
         }],
         ..Face::EMPTY
@@ -555,7 +556,7 @@ pub(crate) static LOOTER: CardDef = CardDef {
         abilities: &[Ability {
             kind: AbilityKind::Spell,
             may_pause: true,
-            body: loot_and_cast,
+            body: bodies!(loot_and_cast),
             ..Ability::NONE
         }],
         ..Face::EMPTY
@@ -575,7 +576,7 @@ pub(crate) static STINGER: CardDef = CardDef {
                 TargetKind::Permanent,
                 Filter::All(&[CREATURE, Filter::Whose(Whose::Opponent)]),
             )],
-            ..Ability::triggered(Trigger::Enters, destroy_target)
+            ..Ability::triggered(Trigger::Enters, bodies!(destroy_target))
         }],
         ..Face::EMPTY
     }],

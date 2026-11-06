@@ -4,6 +4,7 @@
 use beryl_engine::card::{Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, Types};
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
+use beryl_engine::{Layout, bodies};
 
 use beryl_engine::{Bitboard, Seat, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
@@ -18,7 +19,7 @@ pub static CARD: CardDef = CardDef {
         colors: Colors::BLUE,
         abilities: &[Ability {
             kind: AbilityKind::Spell,
-            body: twist,
+            body: bodies!(twist),
             ..Ability::NONE
         }],
         ..Face::EMPTY
@@ -26,7 +27,7 @@ pub static CARD: CardDef = CardDef {
     tokens: &[],
 };
 
-fn twist(ctx: &mut EffectCtx) -> Flow {
+fn twist<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     wheel(ctx);
     Ok(())
 }
@@ -41,7 +42,7 @@ fn twist(ctx: &mut EffectCtx) -> Flow {
 /// makes any choices required, then the next player in turn order ... Then the actions happen
 /// simultaneously." No draw involves a choice, so the order changes nothing: a player who draws
 /// from an empty library loses as state-based actions are next checked either way (CR 704.5b).
-pub(crate) fn wheel(ctx: &mut EffectCtx) {
+pub(crate) fn wheel<L: Layout>(ctx: &mut EffectCtx<'_, L>) {
     let s = ctx.state();
     let active = s.turn().active;
     let players = [active, active.opponent()];

@@ -17,6 +17,7 @@ use beryl_engine::event::Reason;
 use beryl_engine::filter::Filter;
 use beryl_engine::state::CounterKind;
 use beryl_engine::{Ask, DecisionKind, TurnStep, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -38,14 +39,14 @@ pub static CARD: CardDef = CardDef {
                 cost: Cost::loyalty(2),
                 targets: TARGET_PLAYER,
                 may_pause: true,
-                body: fateseal,
+                body: bodies!(fateseal),
                 ..Ability::NONE
             },
             Ability {
                 kind: AbilityKind::Activated,
                 cost: Cost::loyalty(0),
                 may_pause: true,
-                body: brainstorm,
+                body: bodies!(brainstorm),
                 ..Ability::NONE
             },
             Ability {
@@ -55,14 +56,14 @@ pub static CARD: CardDef = CardDef {
                     TargetKind::Permanent,
                     Filter::Types(Types::CREATURE),
                 )],
-                body: bounce,
+                body: bodies!(bounce),
                 ..Ability::NONE
             },
             Ability {
                 kind: AbilityKind::Activated,
                 cost: Cost::loyalty(-12),
                 targets: TARGET_PLAYER,
-                body: exile_library,
+                body: bodies!(exile_library),
                 ..Ability::NONE
             },
         ],
@@ -76,7 +77,7 @@ pub static CARD: CardDef = CardDef {
 /// exception to [CR 401.2](https://yawgatog.com/resources/magic-rules/#R4012): "Players can't
 /// look at or change the order of cards in a library." Moving it within the library is no
 /// zone change, so it stays the same object.
-fn fateseal(ctx: &mut EffectCtx) -> Flow {
+fn fateseal<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let Some(player) = ctx.target_player(0) else {
         return Ok(());
     };
@@ -96,7 +97,7 @@ fn fateseal(ctx: &mut EffectCtx) -> Flow {
 /// order." Each card chosen goes on top of the one before, so the second is the top card.
 /// [CR 121.2](https://yawgatog.com/resources/magic-rules/#R1212): "If a player is instructed to
 /// draw multiple cards, that player performs that many individual card draws."
-fn brainstorm(ctx: &mut EffectCtx) -> Flow {
+fn brainstorm<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     ctx.draw(you, 3);
     for count in (1..=2).rev() {
@@ -115,7 +116,7 @@ fn brainstorm(ctx: &mut EffectCtx) -> Flow {
 /// [CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003): "If an object would go to
 /// any library, graveyard, or hand other than its owner's, it goes to its owner's
 /// corresponding zone."
-fn bounce(ctx: &mut EffectCtx) -> Flow {
+fn bounce<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(creature) = ctx.target_object(0) {
         ctx.return_to_hand(creature);
     }
@@ -127,7 +128,7 @@ fn bounce(ctx: &mut EffectCtx) -> Flow {
 /// "To exile an object, move it to the exile zone from wherever it is." Then
 /// [CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a): "To shuffle a library
 /// ... randomize the cards within it so that no player knows their order."
-fn exile_library(ctx: &mut EffectCtx) -> Flow {
+fn exile_library<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let Some(player) = ctx.target_player(0) else {
         return Ok(());
     };

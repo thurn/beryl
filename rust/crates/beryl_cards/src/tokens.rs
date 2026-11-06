@@ -1,5 +1,6 @@
 //! Predefined tokens more than one card creates.
 
+use beryl_engine::bodies;
 use beryl_engine::card::{
     Ability, AbilityKind, CardDef, Cost, Face, ManaSet, Subtype, Subtypes, Types,
 };
@@ -32,7 +33,7 @@ pub static TREASURE: CardDef = CardDef {
                 colors: 0b1_1111,
                 amount: 1,
             },
-            body: add_produced_mana,
+            body: bodies!(add_produced_mana),
             ..Ability::NONE
         }],
         ..Face::EMPTY

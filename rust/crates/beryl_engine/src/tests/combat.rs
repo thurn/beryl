@@ -14,6 +14,7 @@ use crate::{
     Ask, Candidates, CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile,
     Replay, Scratch, State, Step, TurnStep, apply, next, zone,
 };
+use crate::{Layout, bodies};
 
 /// A vanilla creature card with keywords.
 macro_rules! creature {
@@ -51,13 +52,13 @@ static WALKER: CardDef = CardDef {
 };
 
 #[allow(clippy::unnecessary_wraps)] // a body's signature
-fn gain_one(ctx: &mut EffectCtx) -> Flow {
+fn gain_one<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.gain_life(ctx.controller(), 1);
     Ok(())
 }
 
 #[allow(clippy::unnecessary_wraps)] // a body's signature
-fn gain_ten(ctx: &mut EffectCtx) -> Flow {
+fn gain_ten<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.gain_life(ctx.controller(), 10);
     Ok(())
 }
@@ -71,8 +72,8 @@ static RAIDER: CardDef = CardDef {
         power: Some(2),
         toughness: Some(2),
         abilities: &[
-            Ability::triggered(Trigger::Attacks, gain_one),
-            Ability::triggered(Trigger::CombatDamageToPlayer, gain_ten),
+            Ability::triggered(Trigger::Attacks, bodies!(gain_one)),
+            Ability::triggered(Trigger::CombatDamageToPlayer, bodies!(gain_ten)),
         ],
         ..Face::EMPTY
     }],
@@ -86,14 +87,14 @@ static RECRUIT: CardDef = CardDef {
         types: Types::CREATURE,
         power: Some(1),
         toughness: Some(1),
-        abilities: &[Ability::triggered(Trigger::Attacks, gain_one)],
+        abilities: &[Ability::triggered(Trigger::Attacks, bodies!(gain_one))],
         ..Face::EMPTY
     }],
     tokens: &[],
 };
 
 #[allow(clippy::unnecessary_wraps)] // a body's signature
-fn recruit(ctx: &mut EffectCtx) -> Flow {
+fn recruit<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.create_tokens(
         &RECRUIT,
         1,
@@ -113,7 +114,7 @@ static CAPTAIN: CardDef = CardDef {
         types: Types::CREATURE,
         power: Some(1),
         toughness: Some(1),
-        abilities: &[Ability::triggered(Trigger::YouAttack, recruit)],
+        abilities: &[Ability::triggered(Trigger::YouAttack, bodies!(recruit))],
         ..Face::EMPTY
     }],
     tokens: &[&RECRUIT],

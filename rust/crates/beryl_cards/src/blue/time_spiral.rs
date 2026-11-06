@@ -7,6 +7,7 @@ use beryl_engine::Zone;
 use beryl_engine::card::{Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, Types};
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::blue::timetwister::wheel;
@@ -21,7 +22,7 @@ pub static CARD: CardDef = CardDef {
         abilities: &[Ability {
             kind: AbilityKind::Spell,
             may_pause: true,
-            body: spiral,
+            body: bodies!(spiral),
             ..Ability::NONE
         }],
         ..Face::EMPTY
@@ -39,7 +40,7 @@ const LANDS: u8 = 6;
 ///
 /// "Up to six lands" are any lands, whoever controls them
 /// ([`EffectCtx::untap_up_to_lands`]).
-fn spiral(ctx: &mut EffectCtx) -> Flow {
+fn spiral<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.move_to(ctx.source(), Zone::Exile, Reason::Exile);
     wheel(ctx);
     ctx.untap_up_to_lands(LANDS)

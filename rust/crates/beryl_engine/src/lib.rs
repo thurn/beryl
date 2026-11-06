@@ -52,7 +52,7 @@ pub use engine::{
 };
 pub use ids::{CardIx, Seat, Slot};
 pub use invariants::{At, Violation};
-pub use layout::{Layout, Small};
+pub use layout::{Large, Layout, Small};
 pub use observation::Observation;
 pub use profile::{
     Breakpoint, NextStop, Payment, Profile, StepStops, Stops, can_declare_blockers, next_step_stop,

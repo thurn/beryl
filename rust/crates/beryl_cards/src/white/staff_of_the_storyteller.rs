@@ -12,6 +12,7 @@ use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::TokenEntry;
 use beryl_engine::state::CounterKind;
 use beryl_engine::{DecisionKind, TurnStep, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
 use crate::names;
@@ -23,8 +24,11 @@ pub static CARD: CardDef = CardDef {
         types: Types::ARTIFACT,
         colors: Colors::WHITE,
         abilities: &[
-            Ability::triggered(Trigger::Enters, spirit),
-            Ability::triggered(Trigger::YouCreateTokens(Types::CREATURE), story_counter),
+            Ability::triggered(Trigger::Enters, bodies!(spirit)),
+            Ability::triggered(
+                Trigger::YouCreateTokens(Types::CREATURE),
+                bodies!(story_counter),
+            ),
             Ability {
                 kind: AbilityKind::Activated,
                 cost: Cost {
@@ -33,7 +37,7 @@ pub static CARD: CardDef = CardDef {
                     remove: Some(CounterKind::Story),
                     ..Cost::NONE
                 },
-                body: beryl_engine::effect::draw_a_card,
+                body: bodies!(beryl_engine::effect::draw_a_card),
                 ..Ability::NONE
             },
         ],
@@ -64,7 +68,7 @@ pub static SPIRIT: CardDef = CardDef {
 /// "When this artifact enters, create a 1/1 white Spirit creature token with flying."
 /// [CR 111.2](https://yawgatog.com/resources/magic-rules/#R1112): "The player who creates a
 /// token is its owner. The token enters the battlefield under that player's control."
-fn spirit(ctx: &mut EffectCtx) -> Flow {
+fn spirit<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.create_tokens(&SPIRIT, 1, TokenEntry::default());
     Ok(())
 }
@@ -73,7 +77,7 @@ fn spirit(ctx: &mut EffectCtx) -> Flow {
 /// One event creating several tokens triggers it once
 /// ([CR 603.2c](https://yawgatog.com/resources/magic-rules/#R6032c)): "An ability triggers
 /// only once each time its trigger event occurs."
-fn story_counter(ctx: &mut EffectCtx) -> Flow {
+fn story_counter<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.add_counters(ctx.source(), CounterKind::Story, 1);
     Ok(())
 }

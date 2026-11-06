@@ -6,7 +6,7 @@
 
 use crate::filter::{Filter, Whose};
 use crate::ids::Seat;
-use crate::layout::{Body, Condition};
+use crate::layout::{Bodies, Conditions};
 use crate::state::{CounterKind, TurnStep};
 
 /// One card: its name and its faces.
@@ -915,7 +915,7 @@ pub struct Ability {
     pub produces: ManaSet,
     /// Whether the body may ask its controller a question mid-resolution (§7.3).
     pub may_pause: bool,
-    pub body: Body,
+    pub body: Bodies,
     /// Triggered abilities: the event they trigger on (§8.3).
     pub trigger: Trigger,
     /// Triggered abilities: an intervening "if" clause, checked when the ability triggers
@@ -923,7 +923,7 @@ pub struct Ability {
     /// ([CR 603.4](https://yawgatog.com/resources/magic-rules/#R6034)): "The ability triggers
     /// only if it is; otherwise it does nothing. If the ability triggers, it checks the
     /// stated condition again as it resolves."
-    pub condition: Option<Condition>,
+    pub condition: Option<Conditions>,
     /// Replacement abilities: the event they modify.
     pub replacement: Replacement,
     /// Static abilities: the continuous effect they generate on the battlefield (§9).
@@ -972,7 +972,7 @@ impl Ability {
         targets: &[],
         produces: ManaSet::NONE,
         may_pause: false,
-        body: crate::effect::nothing,
+        body: crate::bodies!(crate::effect::nothing),
         trigger: Trigger::None,
         condition: None,
         replacement: Replacement::None,
@@ -983,7 +983,7 @@ impl Ability {
     };
 
     /// A triggered ability.
-    pub const fn triggered(trigger: Trigger, body: Body) -> Ability {
+    pub const fn triggered(trigger: Trigger, body: Bodies) -> Ability {
         Ability {
             kind: AbilityKind::Triggered,
             trigger,
@@ -1020,7 +1020,7 @@ impl Ability {
                 discard_self: true,
                 ..Cost::NONE
             },
-            body: crate::effect::draw_a_card,
+            body: crate::bodies!(crate::effect::draw_a_card),
             ..Ability::NONE
         }
     }
@@ -1033,7 +1033,7 @@ impl Ability {
                 crew: n,
                 ..Cost::NONE
             },
-            body: crate::effect::becomes_artifact_creature,
+            body: crate::bodies!(crate::effect::becomes_artifact_creature),
             ..Ability::NONE
         }
     }
@@ -1044,8 +1044,11 @@ impl Ability {
     /// except it's 1/1." The face lists [`CastingOption::Offspring`] too.
     pub const fn offspring() -> Ability {
         Ability {
-            condition: Some(crate::effect::offspring_paid),
-            ..Ability::triggered(Trigger::Enters, crate::effect::offspring_copy)
+            condition: Some(crate::conditions!(crate::effect::offspring_paid)),
+            ..Ability::triggered(
+                Trigger::Enters,
+                crate::bodies!(crate::effect::offspring_copy),
+            )
         }
     }
 
@@ -1066,10 +1069,10 @@ impl Ability {
     /// time counter from it."
     pub const fn impending_countdown() -> Ability {
         Ability {
-            condition: Some(crate::effect::impending_counting_down),
+            condition: Some(crate::conditions!(crate::effect::impending_counting_down)),
             ..Ability::triggered(
                 Trigger::Step(TurnStep::End, Whose::You),
-                crate::effect::remove_a_time_counter,
+                crate::bodies!(crate::effect::remove_a_time_counter),
             )
         }
     }
@@ -1080,8 +1083,11 @@ impl Ability {
     /// lists [`CastingOption::Evoke`] too.
     pub const fn evoke() -> Ability {
         Ability {
-            condition: Some(crate::effect::evoked),
-            ..Ability::triggered(Trigger::Enters, crate::effect::sacrifice_itself)
+            condition: Some(crate::conditions!(crate::effect::evoked)),
+            ..Ability::triggered(
+                Trigger::Enters,
+                crate::bodies!(crate::effect::sacrifice_itself),
+            )
         }
     }
 
@@ -1100,7 +1106,7 @@ impl Ability {
             kind: AbilityKind::Mana,
             cost: Cost::TAP,
             produces,
-            body: crate::effect::add_produced_mana,
+            body: crate::bodies!(crate::effect::add_produced_mana),
             ..Ability::NONE
         }
     }

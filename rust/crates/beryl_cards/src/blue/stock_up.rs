@@ -5,6 +5,7 @@ use beryl_engine::card::{Ability, AbilityKind, CardDef, Colors, Face, Flow, Mana
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::{Ask, Bitboard, DecisionKind, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
 use crate::names;
@@ -18,7 +19,7 @@ pub static CARD: CardDef = CardDef {
         abilities: &[Ability {
             kind: AbilityKind::Spell,
             may_pause: true,
-            body: stock_up,
+            body: bodies!(stock_up),
             ..Ability::NONE
         }],
         ..Face::EMPTY
@@ -36,7 +37,7 @@ const TAKE: u8 = 2;
 /// more cards in a specific position in a library at the same time, the owner of those cards
 /// may arrange them in any order." With fewer than five cards in the library, the player
 /// looks at them all.
-fn stock_up(ctx: &mut EffectCtx) -> Flow {
+fn stock_up<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     let looked = ctx.top_of_library(you, LOOK);
     ctx.look_at(you, looked);

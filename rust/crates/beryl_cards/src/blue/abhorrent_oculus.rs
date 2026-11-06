@@ -8,6 +8,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Whose;
 use beryl_engine::{DecisionKind, TurnStep, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -17,7 +18,7 @@ use crate::names;
 /// at that were not manifested this way into your graveyard." The ability's controller does,
 /// whether or not Oculus is still there
 /// ([CR 113.7a](https://yawgatog.com/resources/magic-rules/#R1137a)).
-fn manifest_dread(ctx: &mut EffectCtx) -> Flow {
+fn manifest_dread<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     ctx.manifest_dread(you)
 }
@@ -45,7 +46,7 @@ pub static CARD: CardDef = CardDef {
             may_pause: true,
             ..Ability::triggered(
                 Trigger::Step(TurnStep::Upkeep, Whose::Opponent),
-                manifest_dread,
+                bodies!(manifest_dread),
             )
         }],
         exile_from_graveyard: 6,

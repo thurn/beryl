@@ -7,6 +7,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
 use beryl_engine::{Ask, DecisionKind, Seat, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, Ending, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -20,7 +21,7 @@ pub static CARD: CardDef = CardDef {
         abilities: &[Ability {
             kind: AbilityKind::Spell,
             may_pause: true,
-            body: draw_three_discard,
+            body: bodies!(draw_three_discard),
             ..Ability::NONE
         }],
         ..Face::EMPTY
@@ -44,7 +45,7 @@ const BASIC_LAND: Filter = Filter::All(&[
 /// notwithstanding ([CR 205.4c](https://yawgatog.com/resources/magic-rules/#R2054c)): "Any
 /// land that doesn't have this supertype is a nonbasic land, even if it has a basic land
 /// type."
-fn draw_three_discard(ctx: &mut EffectCtx) -> Flow {
+fn draw_three_discard<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     ctx.draw(you, 3);
     let hand = ctx.state().zone(you, Zone::Hand);

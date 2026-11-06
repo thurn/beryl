@@ -8,7 +8,8 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use beryl_cards::CARDS;
 use beryl_cards::decks::{WU_CONTROL, fuzz_deck};
 use beryl_engine::{
-    Decision, GameTable, Outcome, Profile, Replay, Scratch, State, Step, apply, next, observe,
+    Decision, GameTable, Layout, Outcome, Profile, Replay, Scratch, State, Step, apply, next,
+    observe,
 };
 use beryl_search::{Agent, RandomAgent};
 
@@ -38,12 +39,12 @@ pub fn agents(seed: u64) -> [RandomAgent; 2] {
 
 /// Plays a game to the end with `agents`, calling `watch` at every decision before it is
 /// answered.
-pub fn play(
+pub fn play<L: Layout>(
     t: &GameTable,
-    s: &mut State,
-    x: &mut Scratch,
-    agents: &mut [impl Agent; 2],
-    mut watch: impl FnMut(&State, &Decision),
+    s: &mut State<L>,
+    x: &mut Scratch<L>,
+    agents: &mut [impl Agent<L>; 2],
+    mut watch: impl FnMut(&State<L>, &Decision),
 ) -> Outcome {
     loop {
         match next(s, t, x, &mut Replay) {

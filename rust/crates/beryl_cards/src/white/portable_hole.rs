@@ -7,6 +7,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -26,7 +27,7 @@ pub static CARD: CardDef = CardDef {
                     Filter::ManaValueAtMost(2),
                 ]),
             )],
-            ..Ability::triggered(Trigger::Enters, exile_until_this_leaves)
+            ..Ability::triggered(Trigger::Enters, bodies!(exile_until_this_leaves))
         }],
         ..Face::EMPTY
     }],
@@ -39,7 +40,7 @@ pub static CARD: CardDef = CardDef {
 /// object to its previous zone." A target gone, or no longer matching, by resolution stops
 /// the ability ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)); a Hole
 /// gone first exiles nothing ([CR 610.3b](https://yawgatog.com/resources/magic-rules/#R6103b)).
-fn exile_until_this_leaves(ctx: &mut EffectCtx) -> Flow {
+fn exile_until_this_leaves<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(permanent) = ctx.target_object(0) {
         ctx.exile_until_source_leaves(permanent);
     }

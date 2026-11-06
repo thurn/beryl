@@ -9,12 +9,13 @@ use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::TokenEntry;
 use beryl_engine::state::{PendingTrigger, State};
 use beryl_engine::{DecisionKind, GameTable, TurnStep, Zone};
+use beryl_engine::{Layout, bodies, conditions};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
 
 /// "Draw a card, then discard a card."
-fn loot(ctx: &mut EffectCtx) -> Flow {
+fn loot<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     ctx.draw(you, 1);
     ctx.discard_a_card(you)?;
@@ -24,13 +25,13 @@ fn loot(ctx: &mut EffectCtx) -> Flow {
 /// "If it isn't a token", as it last existed on the battlefield
 /// ([CR 603.10a](https://yawgatog.com/resources/magic-rules/#R60310a)): "Some zone-change
 /// triggers look back in time."
-fn not_a_token(_: &State, _: &GameTable, tr: &PendingTrigger) -> bool {
+fn not_a_token<L: Layout>(_: &State<L>, _: &GameTable, tr: &PendingTrigger) -> bool {
     !tr.info.lki.token
 }
 
 /// "Create a token that's a copy of it": its copiable values are its card's
 /// ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)).
-fn copy_of_it(ctx: &mut EffectCtx) -> Flow {
+fn copy_of_it<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.create_tokens_of(ctx.trigger().lki.card, 1, TokenEntry::default());
     Ok(())
 }
@@ -48,11 +49,11 @@ pub static CARD: CardDef = CardDef {
         abilities: &[
             Ability {
                 may_pause: true,
-                ..Ability::triggered(Trigger::Attacks, loot)
+                ..Ability::triggered(Trigger::Attacks, bodies!(loot))
             },
             Ability {
-                condition: Some(not_a_token),
-                ..Ability::triggered(Trigger::Dies, copy_of_it)
+                condition: Some(conditions!(not_a_token)),
+                ..Ability::triggered(Trigger::Dies, bodies!(copy_of_it))
             },
         ],
         ..Face::EMPTY

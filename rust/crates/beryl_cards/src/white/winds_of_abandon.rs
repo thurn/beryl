@@ -13,6 +13,7 @@ use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::{DecisionKind, Seat, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -35,7 +36,7 @@ const BASIC_LANDS: Filter = Filter::All(&[
 /// ([CR 701.23b](https://yawgatog.com/resources/magic-rules/#R70123b)): "that player isn't
 /// required to find some or all of those cards". Who searches is each creature's controller
 /// as it last existed on the battlefield: in exile it has none.
-fn exile_and_fetch(ctx: &mut EffectCtx, creatures: Bitboard) -> Flow {
+fn exile_and_fetch<L: Layout>(ctx: &mut EffectCtx<'_, L>, creatures: Bitboard) -> Flow {
     let controlled = Seat::BOTH.map(|player| {
         creatures
             .iter()
@@ -62,7 +63,7 @@ fn exile_and_fetch(ctx: &mut EffectCtx, creatures: Bitboard) -> Flow {
 /// "Exile target creature you don't control"
 /// ([CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a)): "To exile an object,
 /// move it to the exile zone from wherever it is."
-fn exile_target(ctx: &mut EffectCtx) -> Flow {
+fn exile_target<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let Some(creature) = ctx.target_object(0) else {
         return Ok(());
     };
@@ -72,7 +73,7 @@ fn exile_target(ctx: &mut EffectCtx) -> Flow {
 /// Overloaded, "Exile each creature you don't control"
 /// ([CR 702.96a](https://yawgatog.com/resources/magic-rules/#R70296a)), with no target
 /// ([CR 702.96b](https://yawgatog.com/resources/magic-rules/#R70296b)).
-fn exile_each(ctx: &mut EffectCtx) -> Flow {
+fn exile_each<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let s = ctx.state();
     let theirs = THEIR_CREATURES.select(
         s,
@@ -94,13 +95,13 @@ pub static CARD: CardDef = CardDef {
                 kind: AbilityKind::Spell,
                 targets: &[TargetSpec::one(TargetKind::Permanent, THEIR_CREATURES)],
                 may_pause: true,
-                body: exile_target,
+                body: bodies!(exile_target),
                 ..Ability::NONE
             },
             Ability {
                 kind: AbilityKind::Spell,
                 may_pause: true,
-                body: exile_each,
+                body: bodies!(exile_each),
                 ..Ability::NONE
             },
         ],

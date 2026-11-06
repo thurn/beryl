@@ -2,7 +2,8 @@
 //!
 //! The engine is generic over the layout and resolves it at compile time, so no hot path asks
 //! which one it runs on. [`Small`] is the fixed-capacity layout search runs on: one flat
-//! `Copy` value, copied with one `memcpy` (decisions D3 and D4).
+//! `Copy` value, copied with one `memcpy` (decisions D3 and D4). [`Large`] grows its queues
+//! instead, so a game that outgrows `Small` goes on in it ([`State::widen`]).
 
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -11,7 +12,7 @@ use std::ops::{Index, IndexMut};
 use crate::card::{Ability, Flow};
 use crate::effect::EffectCtx;
 use crate::fixed::{Fixed, Full};
-use crate::state::{PendingTrigger, State};
+use crate::state::{Derived, PendingTrigger, SLOTS, State, Zones};
 use crate::table::GameTable;
 
 /// What a layout's arrays and queues hold.
@@ -76,6 +77,45 @@ pub type Body<L = Small> = for<'a, 'b> fn(&'b mut EffectCtx<'a, L>) -> Flow;
 /// A triggered ability's intervening "if" clause, read on a state of layout `L`.
 pub type Condition<L = Small> = fn(&State<L>, &GameTable, &PendingTrigger) -> bool;
 
+/// An ability's body as each layout runs it: one generic function, instantiated once per
+/// layout, since a card's static data can hold only concrete function pointers. Card files
+/// write [`bodies!`](crate::bodies) around the generic function.
+#[derive(Clone, Copy, Debug)]
+pub struct Bodies {
+    pub small: Body<Small>,
+    pub large: Body<Large>,
+}
+
+/// An intervening "if" clause as each layout reads it, as [`Bodies`]; card files write
+/// [`conditions!`](crate::conditions).
+#[derive(Clone, Copy, Debug)]
+pub struct Conditions {
+    pub small: Condition<Small>,
+    pub large: Condition<Large>,
+}
+
+/// [`Bodies`] of a function generic over the layout.
+#[macro_export]
+macro_rules! bodies {
+    ($body:expr) => {
+        $crate::layout::Bodies {
+            small: $body,
+            large: $body,
+        }
+    };
+}
+
+/// [`Conditions`] of a function generic over the layout.
+#[macro_export]
+macro_rules! conditions {
+    ($condition:expr) => {
+        $crate::layout::Conditions {
+            small: $condition,
+            large: $condition,
+        }
+    };
+}
+
 /// A storage layout for [`State`]: the types of its tables and queues. `N` is the capacity a
 /// fixed layout gives the table or queue.
 pub trait Layout: Copy + Debug + Default + Eq + Hash + Send + Sync + 'static {
@@ -109,12 +149,148 @@ impl Layout for Small {
 
     #[inline]
     fn body(ability: &Ability) -> Body<Self> {
-        ability.body
+        ability.body.small
     }
 
     #[inline]
     fn condition(ability: &Ability) -> Option<Condition<Self>> {
-        ability.condition
+        ability.condition.map(|c| c.small)
+    }
+}
+
+/// The layout a game outgrowing [`Small`] goes on in: its queues are `Vec`s, whose push never
+/// fails, and its tables have an entry for every slot, so the battlefield can hold every
+/// object. A [`State<Large>`] is `Clone`, not `Copy`. Slots and bitboards are [`Small`]'s, so
+/// it holds no more objects.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Large;
+
+impl Layout for Large {
+    type Queue<T: Item + Default, const N: usize> = Vec<T>;
+    type Table<T: Item, const N: usize> = PerSlot<T>;
+
+    fn clone_state(state: &State<Self>) -> State<Self> {
+        let State {
+            objects,
+            battlefield,
+            derived,
+            listening,
+            zones,
+            players,
+            turn,
+            stack,
+            triggers,
+            delayed,
+            effects,
+            permissions,
+            entered_x,
+            pending,
+            knowledge,
+            rng,
+            profile,
+            budgets,
+            flags,
+            outcome,
+        } = state;
+        State {
+            objects: objects.clone(),
+            battlefield: battlefield.clone(),
+            derived: derived.clone(),
+            listening: *listening,
+            zones: zones.clone(),
+            players: *players,
+            turn: *turn,
+            stack: stack.clone(),
+            triggers: triggers.clone(),
+            delayed: delayed.clone(),
+            effects: effects.clone(),
+            permissions: permissions.clone(),
+            entered_x: entered_x.clone(),
+            pending: *pending,
+            knowledge: *knowledge,
+            rng: *rng,
+            profile: *profile,
+            budgets: *budgets,
+            flags: *flags,
+            outcome: *outcome,
+        }
+    }
+
+    #[inline]
+    fn body(ability: &Ability) -> Body<Self> {
+        ability.body.large
+    }
+
+    #[inline]
+    fn condition(ability: &Ability) -> Option<Condition<Self>> {
+        ability.condition.map(|c| c.large)
+    }
+}
+
+impl State<Small> {
+    /// This game in the [`Large`] layout, losslessly: every slot keeps its number and object,
+    /// every queue its order, every player their knowledge, and the random streams their
+    /// place, so the game goes on exactly as it would have, past where `Small` runs out.
+    pub fn widen(&self) -> State<Large> {
+        let State {
+            objects,
+            battlefield,
+            derived,
+            listening,
+            zones,
+            players,
+            turn,
+            stack,
+            triggers,
+            delayed,
+            effects,
+            permissions,
+            entered_x,
+            pending,
+            knowledge,
+            rng,
+            profile,
+            budgets,
+            flags,
+            outcome,
+        } = self;
+        let mut wide_derived = PerSlot::filled(Derived::default());
+        wide_derived.0[..derived.len()].copy_from_slice(derived);
+        let Zones {
+            members,
+            stack: on_stack,
+            library,
+            graveyard,
+            next_timestamp,
+        } = zones;
+        State {
+            objects: PerSlot(objects.to_vec().into_boxed_slice()),
+            battlefield: battlefield.as_slice().to_vec(),
+            derived: wide_derived,
+            listening: *listening,
+            zones: Zones {
+                members: *members,
+                stack: *on_stack,
+                library: library.each_ref().map(|q| q.as_slice().to_vec()),
+                graveyard: graveyard.each_ref().map(|q| q.as_slice().to_vec()),
+                next_timestamp: *next_timestamp,
+            },
+            players: *players,
+            turn: *turn,
+            stack: stack.as_slice().to_vec(),
+            triggers: triggers.as_slice().to_vec(),
+            delayed: delayed.as_slice().to_vec(),
+            effects: effects.as_slice().to_vec(),
+            permissions: permissions.as_slice().to_vec(),
+            entered_x: entered_x.as_slice().to_vec(),
+            pending: *pending,
+            knowledge: *knowledge,
+            rng: *rng,
+            profile: *profile,
+            budgets: *budgets,
+            flags: *flags,
+            outcome: *outcome,
+        }
     }
 }
 
@@ -184,5 +360,73 @@ impl<T: Item, const N: usize> Table<T> for [T; N] {
     #[inline]
     fn as_mut_slice(&mut self) -> &mut [T] {
         self
+    }
+}
+
+impl<T: Item + Default> Queue<T> for Vec<T> {
+    fn as_slice(&self) -> &[T] {
+        self
+    }
+
+    fn as_mut_slice(&mut self) -> &mut [T] {
+        self
+    }
+
+    fn push(&mut self, item: T) -> Result<(), Full> {
+        Vec::push(self, item);
+        Ok(())
+    }
+
+    fn insert(&mut self, index: usize, item: T) -> Result<(), Full> {
+        Vec::insert(self, index, item);
+        Ok(())
+    }
+
+    fn pop(&mut self) -> Option<T> {
+        Vec::pop(self)
+    }
+
+    fn remove(&mut self, index: usize) -> T {
+        Vec::remove(self, index)
+    }
+
+    fn clear(&mut self) {
+        Vec::clear(self);
+    }
+
+    fn retain(&mut self, keep: impl FnMut(&T) -> bool) {
+        Vec::retain(self, keep);
+    }
+}
+
+/// [`Large`]'s table: an entry for every slot, on the heap.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PerSlot<T>(Box<[T]>);
+
+impl<T> Index<usize> for PerSlot<T> {
+    type Output = T;
+
+    fn index(&self, index: usize) -> &T {
+        &self.0[index]
+    }
+}
+
+impl<T> IndexMut<usize> for PerSlot<T> {
+    fn index_mut(&mut self, index: usize) -> &mut T {
+        &mut self.0[index]
+    }
+}
+
+impl<T: Item> Table<T> for PerSlot<T> {
+    fn filled(item: T) -> Self {
+        PerSlot(vec![item; SLOTS].into_boxed_slice())
+    }
+
+    fn as_slice(&self) -> &[T] {
+        &self.0
+    }
+
+    fn as_mut_slice(&mut self) -> &mut [T] {
+        &mut self.0
     }
 }

@@ -10,6 +10,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::state::CounterKind;
 use beryl_engine::{DecisionKind, TurnStep, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -24,7 +25,7 @@ use crate::names;
 /// resolved, his last-known chorus count would decide
 /// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)); the engine keeps no
 /// counters in last-known information, so the cast is then not offered.
-fn chorus(ctx: &mut EffectCtx) -> Flow {
+fn chorus<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     let malcolm = ctx.source();
     ctx.add_counters(malcolm, CounterKind::Chorus, 1);
@@ -57,7 +58,7 @@ pub static CARD: CardDef = CardDef {
         keywords: Keywords::FLASH.union(Keywords::FLYING),
         abilities: &[Ability {
             may_pause: true,
-            ..Ability::triggered(Trigger::CombatDamageToPlayer, chorus)
+            ..Ability::triggered(Trigger::CombatDamageToPlayer, bodies!(chorus))
         }],
         ..Face::EMPTY
     }],

@@ -12,6 +12,7 @@ use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
 use beryl_engine::state::CounterKind;
 use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, Ending, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -34,13 +35,13 @@ pub static CARD: CardDef = CardDef {
                 kind: AbilityKind::Activated,
                 cost: Cost::loyalty(1),
                 targets: &[TargetSpec::one(TargetKind::Player, Filter::Any)],
-                body: mill_two_and_draw,
+                body: bodies!(mill_two_and_draw),
                 ..Ability::NONE
             },
             Ability {
                 kind: AbilityKind::Activated,
                 cost: Cost::loyalty(-8),
-                body: draw_seven,
+                body: bodies!(draw_seven),
                 ..Ability::NONE
             },
         ],
@@ -54,7 +55,7 @@ pub static CARD: CardDef = CardDef {
 /// empty, Jace draws from an empty library and his controller wins instead.
 /// [CR 701.17b](https://yawgatog.com/resources/magic-rules/#R70117b): "A player can't mill a
 /// number of cards greater than the number of cards in their library."
-fn mill_two_and_draw(ctx: &mut EffectCtx) -> Flow {
+fn mill_two_and_draw<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(player) = ctx.target_player(0) {
         ctx.mill(player, 2);
     }
@@ -69,7 +70,7 @@ fn mill_two_and_draw(ctx: &mut EffectCtx) -> Flow {
 /// ([CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b)), by when the game is
 /// over ([CR 104.2b](https://yawgatog.com/resources/magic-rules/#R1042b)): "An effect may
 /// state that a player wins the game."
-fn draw_seven(ctx: &mut EffectCtx) -> Flow {
+fn draw_seven<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     ctx.draw(you, 7);
     if ctx.state().library(you).is_empty() {

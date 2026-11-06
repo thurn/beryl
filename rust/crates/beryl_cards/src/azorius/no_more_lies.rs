@@ -8,6 +8,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
 use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -22,7 +23,7 @@ pub static CARD: CardDef = CardDef {
             kind: AbilityKind::Spell,
             targets: &[TargetSpec::one(TargetKind::Spell, Filter::Any)],
             may_pause: true,
-            body: counter_unless_pays_three,
+            body: bodies!(counter_unless_pays_three),
             ..Ability::NONE
         }],
         ..Face::EMPTY
@@ -36,7 +37,7 @@ pub static CARD: CardDef = CardDef {
 /// may modify the meaning of earlier text (for example, ... 'Counter target spell. If that
 /// spell is countered this way, put it on top of its owner's library instead of into its
 /// owner's graveyard.')", so the countered spell goes straight to exile.
-fn counter_unless_pays_three(ctx: &mut EffectCtx) -> Flow {
+fn counter_unless_pays_three<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let Some(spell) = ctx.target_object(0) else {
         return Ok(());
     };

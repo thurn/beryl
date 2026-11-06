@@ -7,6 +7,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::filter::Filter;
 use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
 use crate::names;
@@ -23,7 +24,7 @@ pub static CARD: CardDef = CardDef {
                 TargetKind::Permanent,
                 Filter::Types(Types::CREATURE),
             )],
-            body: oust,
+            body: bodies!(oust),
             ..Ability::NONE
         }],
         ..Face::EMPTY
@@ -37,7 +38,7 @@ pub static CARD: CardDef = CardDef {
 /// the controller of a card that doesn't have one (because it's not a permanent or spell),
 /// use its owner instead." Owner and controller differ only for a stolen creature, which
 /// goes to its owner's library while its controller gains the life.
-fn oust(ctx: &mut EffectCtx) -> Flow {
+fn oust<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let Some(creature) = ctx.target_object(0) else {
         return Ok(());
     };

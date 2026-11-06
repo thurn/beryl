@@ -13,6 +13,7 @@ use beryl_engine::event::TokenEntry;
 use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::state::CounterKind;
 use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -34,7 +35,7 @@ pub static CARD: CardDef = CardDef {
                         .union(Types::PLANESWALKER),
                 ),
             )],
-            body: destroy_and_map,
+            body: bodies!(destroy_and_map),
             ..Ability::NONE
         }],
         ..Face::EMPTY
@@ -68,7 +69,7 @@ pub static MAP: CardDef = CardDef {
                 Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(Whose::You)]),
             )],
             may_pause: true,
-            body: explore,
+            body: bodies!(explore),
             ..Ability::NONE
         }],
         ..Face::EMPTY
@@ -83,7 +84,7 @@ pub static MAP: CardDef = CardDef {
 /// effect uses the current information of that object if it's in the public zone it was
 /// expected to be in; if it's no longer in that zone, ... the effect uses the object's last
 /// known information."
-fn destroy_and_map(ctx: &mut EffectCtx) -> Flow {
+fn destroy_and_map<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let Some(permanent) = ctx.target_object(0) else {
         return Ok(());
     };
@@ -94,7 +95,7 @@ fn destroy_and_map(ctx: &mut EffectCtx) -> Flow {
 }
 
 /// Explore ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)).
-fn explore(ctx: &mut EffectCtx) -> Flow {
+fn explore<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let Some(creature) = ctx.target_object(0) else {
         return Ok(());
     };

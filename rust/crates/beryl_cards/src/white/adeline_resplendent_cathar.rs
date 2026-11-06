@@ -9,6 +9,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::{DecisionKind, TurnStep};
+use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -35,7 +36,7 @@ pub static HUMAN: CardDef = CardDef {
 /// "Whenever you attack" ([CR 508.3d](https://yawgatog.com/resources/magic-rules/#R5083d)):
 /// it "triggers if one or more creatures that player controls are declared as attackers." One
 /// Human for the one opponent, attacking what its controller chooses (CR 508.4).
-fn human_attacking(ctx: &mut EffectCtx) -> Flow {
+fn human_attacking<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.create_attacking_tokens(&HUMAN, 1)?;
     Ok(())
 }
@@ -66,7 +67,7 @@ pub static CARD: CardDef = CardDef {
             }),
             Ability {
                 may_pause: true,
-                ..Ability::triggered(Trigger::YouAttack, human_attacking)
+                ..Ability::triggered(Trigger::YouAttack, bodies!(human_attacking))
             },
         ],
         ..Face::EMPTY

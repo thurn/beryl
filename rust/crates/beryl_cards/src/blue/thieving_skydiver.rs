@@ -11,6 +11,7 @@ use beryl_engine::effect::{self, EffectCtx};
 use beryl_engine::filter::Filter;
 use beryl_engine::state::Duration;
 use beryl_engine::{DecisionKind, TurnStep, Zone};
+use beryl_engine::{Layout, bodies, conditions};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::names;
@@ -18,7 +19,7 @@ use crate::names;
 /// "Gain control of target artifact": for as long as the effect lasts, which it doesn't say,
 /// so indefinitely ([CR 611.2b](https://yawgatog.com/resources/magic-rules/#R6112b)). No
 /// Equipment is among the cards, so attaching never comes up.
-fn steal(ctx: &mut EffectCtx) -> Flow {
+fn steal<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     if let Some(artifact) = ctx.target_object(0) {
         ctx.gain_control(artifact, Duration::Indefinite);
     }
@@ -41,8 +42,8 @@ pub static CARD: CardDef = CardDef {
                 TargetKind::Permanent,
                 Filter::All(&[Filter::Types(Types::ARTIFACT), Filter::ManaValueAtMostX]),
             )],
-            condition: Some(effect::kicked),
-            ..Ability::triggered(Trigger::Enters, steal)
+            condition: Some(conditions!(effect::kicked)),
+            ..Ability::triggered(Trigger::Enters, bodies!(steal))
         }],
         casting: &[CastingOption::Kicker {
             cost: ManaCost::X,
