@@ -56,7 +56,8 @@ fn recompute(s: &mut State, t: &GameTable) {
     s.effects
         .retain(|e| objects[e.affected.slot.index()].incarnation == e.affected.incarnation);
 
-    let mut list: Fixed<Apply, 192> = Fixed::new();
+    // Made at the first effect that applies: most recomputes have none, and the list is big.
+    let mut list: Option<Fixed<Apply, 192>> = None;
     for i in 0..s.battlefield.len() {
         let slot = s.battlefield.as_slice()[i];
         let o = *s.object(slot);
@@ -96,7 +97,7 @@ fn recompute(s: &mut State, t: &GameTable) {
             if let (true, Some(target)) = (applies, target) {
                 // A list longer than its capacity would need more effects than the cards
                 // can create at once.
-                let _ = list.push(Apply {
+                let _ = list.get_or_insert_with(Fixed::new).push(Apply {
                     layer: spec.modification.layer() as u8,
                     timestamp: o.timestamp,
                     order: n as u8,
@@ -116,7 +117,7 @@ fn recompute(s: &mut State, t: &GameTable) {
         }
         if let Some(target) = s.battlefield_position(e.affected.slot) {
             let source = s.object(e.source.slot);
-            let _ = list.push(Apply {
+            let _ = list.get_or_insert_with(Fixed::new).push(Apply {
                 layer: m.layer() as u8,
                 timestamp: e.timestamp,
                 order: 0,
@@ -126,13 +127,15 @@ fn recompute(s: &mut State, t: &GameTable) {
             });
         }
     }
-    list.as_mut_slice()
-        .sort_unstable_by_key(|a| (a.layer, a.timestamp, a.order, a.target));
     let len = s.battlefield.len();
-    for a in &list {
-        let Some(m) = a.modification else { continue };
-        let i = usize::from(a.target);
-        apply(&mut s.derived[..len], i, a.source, m);
+    if let Some(list) = &mut list {
+        list.as_mut_slice()
+            .sort_unstable_by_key(|a| (a.layer, a.timestamp, a.order, a.target));
+        for a in &*list {
+            let Some(m) = a.modification else { continue };
+            let i = usize::from(a.target);
+            apply(&mut s.derived[..len], i, a.source, m);
+        }
     }
     // Layer 7c: counters modify power and toughness
     // ([CR 613.4c](https://yawgatog.com/resources/magic-rules/#R6134c)): "Effects and counters

@@ -364,11 +364,11 @@ impl Policy<'_> {
         if info.never_cast {
             return 0;
         }
-        let drains = f
-            .abilities
-            .iter()
-            .enumerate()
-            .any(|(i, a)| a.kind == AbilityKind::Triggered && info.draws(i as u8));
+        let drains = info.draws != 0
+            && f.abilities
+                .iter()
+                .enumerate()
+                .any(|(i, a)| a.kind == AbilityKind::Triggered && info.draws(i as u8));
         if face == FaceIx::FRONT && drains && !self.may_draw() {
             return 0;
         }
