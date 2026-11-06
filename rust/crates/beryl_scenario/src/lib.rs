@@ -18,7 +18,7 @@ use beryl_engine::state::CounterKind;
 use beryl_engine::{CardTable, DecisionKind, Seat, TurnStep, Zone};
 use serde::{Serialize, Serializer};
 
-pub use run::{Failure, answer, describe, position, run, trace, visit};
+pub use run::{Failure, Live, answer, describe, position, run, trace, visit};
 
 /// The players, in seat order.
 pub const P0: Seat = Seat::P0;
@@ -600,7 +600,10 @@ fn optional_variant<T: std::fmt::Debug, S: Serializer>(
 struct Entry<'a> {
     card: &'a str,
     #[serde(flatten)]
-    scenario: &'a Scenario,
+    scenario: Scenario,
+    /// The index of the first of the actions the dump added: the snapshot's assertions.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    snapshot: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     trace: Option<Vec<Position>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -608,20 +611,24 @@ struct Entry<'a> {
 }
 
 /// The scenarios of every card, each played on `table`, as a JSON array of `{card, name,
-/// setup, actions, trace}` objects (`failure` in place of `trace` for a scenario Beryl fails):
-/// what `beryl_scenario dump` writes for the oracle exporters (§17.2).
+/// setup, actions, snapshot, trace}` objects (`failure` in place of `trace` for a scenario
+/// Beryl fails): what `beryl_scenario dump` writes for the oracle exporters (§17.2). Each
+/// scenario's actions end with the assertions of its final [`Live::snapshot`], so that an
+/// oracle compares the whole public position it ends in, not only what its author asserted.
 pub fn to_json(table: &'static CardTable, cards: &[(&str, &[Scenario])]) -> String {
     let entries: Vec<Entry> = cards
         .iter()
         .flat_map(|&(card, scenarios)| {
             scenarios.iter().map(move |scenario| {
-                let (trace, failure) = match trace(table, scenario) {
+                let (scenario, snapshot) = with_snapshot(table, scenario);
+                let (trace, failure) = match trace(table, &scenario) {
                     Ok(t) => (Some(t), None),
                     Err(e) => (None, Some(e.to_string())),
                 };
                 Entry {
                     card,
                     scenario,
+                    snapshot,
                     trace,
                     failure,
                 }
@@ -629,4 +636,36 @@ pub fn to_json(table: &'static CardTable, cards: &[(&str, &[Scenario])]) -> Stri
         })
         .collect();
     serde_json::to_string_pretty(&entries).expect("scenarios always serialize")
+}
+
+/// `scenario` with the assertions of its final snapshot after its own actions, and the index
+/// of the first; unchanged where Beryl fails it, which [`trace`] then reports. The longer list
+/// of actions is leaked: the dump is written once.
+fn with_snapshot(table: &'static CardTable, scenario: &Scenario) -> (Scenario, Option<usize>) {
+    let snapshot = || -> Result<Vec<Assertion>, String> {
+        let mut live = Live::new(table, scenario).map_err(|f| f.message)?;
+        // Assertions only check: the positions the others begin from are the same without.
+        for &action in scenario.actions {
+            if !matches!(action, Action::Assert { .. }) {
+                live.act(action)?;
+            }
+        }
+        live.snapshot()
+    };
+    match snapshot() {
+        Ok(facts) if !facts.is_empty() => {
+            let actions: Vec<Action> = scenario
+                .actions
+                .iter()
+                .copied()
+                .chain(facts.into_iter().map(Action::assert))
+                .collect();
+            let extended = Scenario {
+                actions: Vec::leak(actions),
+                ..*scenario
+            };
+            (extended, Some(scenario.actions.len()))
+        }
+        _ => (*scenario, None),
+    }
 }

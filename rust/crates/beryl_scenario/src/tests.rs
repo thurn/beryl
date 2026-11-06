@@ -391,7 +391,15 @@ fn the_dump_traces_where_each_action_began() {
     let trace = json[0]["trace"]
         .as_array()
         .unwrap_or_else(|| panic!("{}", json[0]["failure"]));
-    assert_eq!(trace.len(), 3);
+    // The scenario's three actions, then its final snapshot's assertions.
+    assert_eq!(json[0]["snapshot"], 3);
+    let actions = json[0]["actions"].as_array().unwrap();
+    assert_eq!(trace.len(), actions.len());
+    assert!(actions[3..].iter().all(|a| a["action"] == "Assert"));
+    assert!(actions[3..].contains(&serde_json::json!({
+        "action": "Assert",
+        "assertion": {"assert": "Controls", "player": 0, "card": B, "count": 1},
+    })));
     assert_eq!(trace[0]["turn"], 1);
     assert_eq!(trace[0]["step"], "PrecombatMain");
     assert_eq!(trace[0]["active"], 0);

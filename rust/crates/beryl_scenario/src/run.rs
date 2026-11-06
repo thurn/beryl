@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use beryl_engine::card::{FaceIx, Types};
+use beryl_engine::card::{AbilityKind, FaceIx, Types};
 use beryl_engine::event::Event;
 use beryl_engine::state::{CounterKind, ObjectFlags, ObjectRef};
 use beryl_engine::{
@@ -73,29 +73,29 @@ fn walk(
         action,
         message,
     };
-    let (t, s) = position(cards, scenario)?;
-    let mut runner = Runner {
-        t: &t,
-        s,
-        // Recording, for the coin flips each position reports.
-        x: Scratch::recording(),
-        actions: scenario.actions,
-        position: None,
-        forced: Vec::new(),
-        permanents: Vec::new(),
-    };
+    let mut runner = Runner::new(cards, scenario)?;
     let mut positions = Vec::with_capacity(scenario.actions.len());
-    for i in 0..scenario.actions.len() {
-        let step = runner.position(i).map_err(|m| fail(Some(i), m))?;
+    for (i, &action) in scenario.actions.iter().enumerate() {
+        runner.upcoming = upcoming(&scenario.actions[i..]);
+        let step = runner.position().map_err(|m| fail(Some(i), m))?;
         if let Step::Decide(d) = &step
-            && !matches!(scenario.actions[i], Action::Assert { .. })
+            && !matches!(action, Action::Assert { .. })
         {
-            visit(&t, &runner.s, d);
+            visit(&runner.t, &runner.s, d);
         }
         positions.push(runner.describe_position(&step));
-        runner.act(i).map_err(|m| fail(Some(i), m))?;
+        runner.act(action).map_err(|m| fail(Some(i), m))?;
     }
     Ok(positions)
+}
+
+/// The first of `actions` that is not an assertion: the one whose kind decides where the
+/// game stops before it.
+fn upcoming(actions: &[Action]) -> Option<Action> {
+    actions
+        .iter()
+        .copied()
+        .find(|a| !matches!(a, Action::Assert { .. }))
 }
 
 /// A scenario's starting position and the table it is played on, for tests that drive the
@@ -204,11 +204,13 @@ fn name_of(s: &State, t: &GameTable, slot: Slot) -> &'static str {
     }
 }
 
-struct Runner<'a> {
-    t: &'a GameTable,
+struct Runner {
+    t: GameTable,
     s: State,
     x: Scratch,
-    actions: &'static [Action],
+    /// The next action that is not an assertion, if any, which decides where the game stops
+    /// before it.
+    upcoming: Option<Action>,
     /// What `next` returned for the current state, or `None` after an `apply`.
     position: Option<Step>,
     /// The forced answers since the last position, for [`trace`].
@@ -218,22 +220,33 @@ struct Runner<'a> {
     permanents: Vec<(ObjectRef, &'static str)>,
 }
 
-impl Runner<'_> {
+impl Runner {
+    fn new(cards: &'static CardTable, scenario: &Scenario) -> Result<Runner, Failure> {
+        let (t, s) = position(cards, scenario)?;
+        Ok(Runner {
+            t,
+            s,
+            // Recording, for the coin flips each position reports.
+            x: Scratch::recording(),
+            upcoming: None,
+            position: None,
+            forced: Vec::new(),
+            permanents: Vec::new(),
+        })
+    }
+
     /// The current position: the open decision or the end of the game. When the next action
     /// that answers decisions is an advance, its target is a breakpoint, so the game stops
     /// there even where the engine would pass silently; when it is a resolution, the current
     /// step is, so the game stops as soon as the active player has priority again. Every new
     /// position must keep the state's invariants (§17.4), so a setup or a rules path that
     /// breaks one fails here.
-    fn position(&mut self, i: usize) -> Result<Step, String> {
+    fn position(&mut self) -> Result<Step, String> {
         if let Some(step) = self.position {
             return Ok(step);
         }
-        let upcoming = self.actions[i..]
-            .iter()
-            .find(|a| !matches!(a, Action::Assert { .. }));
-        let breakpoint = match upcoming {
-            Some(&Action::AdvanceTo { turn, step }) => Some(Breakpoint { turn, step }),
+        let breakpoint = match self.upcoming {
+            Some(Action::AdvanceTo { turn, step }) => Some(Breakpoint { turn, step }),
             // The active player's next priority in this step, after the resolution.
             Some(Action::Resolve) => {
                 let now = self.s.turn();
@@ -249,12 +262,12 @@ impl Runner<'_> {
             ..TRACED
         });
         loop {
-            let step = next(&mut self.s, self.t, &mut self.x, &mut Replay);
+            let step = next(&mut self.s, &self.t, &mut self.x, &mut Replay);
             self.s
-                .check_invariants(self.t)
+                .check_invariants(&self.t)
                 .map_err(|v| format!("an engine invariant broke: {v:?}"))?;
             self.s
-                .check_references(self.t)
+                .check_references(&self.t)
                 .map_err(|v| format!("the engine disagrees with a reference: {v:?}"))?;
             match step {
                 // A question with one answer, which the exact profile answers silently.
@@ -267,7 +280,7 @@ impl Runner<'_> {
                             answer: Action::answer(d.player, d.kind, pick),
                         });
                     }
-                    apply(&mut self.s, self.t, &mut self.x, &mut Replay, Choice(0));
+                    apply(&mut self.s, &self.t, &mut self.x, &mut Replay, Choice(0));
                 }
                 _ => {
                     self.position = Some(step);
@@ -277,36 +290,36 @@ impl Runner<'_> {
         }
     }
 
-    fn decision(&mut self, i: usize) -> Result<Decision, String> {
-        match self.position(i)? {
+    fn decision(&mut self) -> Result<Decision, String> {
+        match self.position()? {
             Step::Decide(d) => Ok(d),
             Step::Over(o) => Err(format!("the game is over ({o:?})")),
         }
     }
 
     fn answer(&mut self, c: Choice) {
-        apply(&mut self.s, self.t, &mut self.x, &mut Replay, c);
+        apply(&mut self.s, &self.t, &mut self.x, &mut Replay, c);
         self.position = None;
     }
 
-    fn act(&mut self, i: usize) -> Result<(), String> {
-        match self.actions[i] {
+    fn act(&mut self, action: Action) -> Result<(), String> {
+        match action {
             action @ (Action::PlayLand { player, .. }
             | Action::Cast { player, .. }
             | Action::Activate { player, .. }
             | Action::TurnFaceUp { player, .. }) => {
                 let what = taking(&action);
-                self.priority_option(i, player, &what, |r, o| takes(r.t, &r.s, &action, o))?;
+                self.priority_option(player, &what, |r, o| takes(&r.t, &r.s, &action, o))?;
             }
             Action::Resolve => {
                 // Waiting triggers go on the stack first.
-                self.decision(i)?;
+                self.decision()?;
                 let depth = self.s.stack().len();
                 let Some(&top) = self.s.stack().last() else {
                     return Err("nothing on the stack to resolve".to_string());
                 };
                 loop {
-                    let d = self.decision(i)?;
+                    let d = self.decision()?;
                     let stack = self.s.stack();
                     if stack.len() < depth || stack[depth - 1] != top {
                         return Ok(());
@@ -319,14 +332,14 @@ impl Runner<'_> {
                 }
             }
             Action::Answer { player, kind, pick } => {
-                let d = self.expect(i, player, kind)?;
+                let d = self.expect(player, kind)?;
                 let c = self
                     .pick(&d, pick)
                     .ok_or_else(|| format!("{pick:?} is not offered: {}", self.describe(&d)))?;
                 self.answer(c);
             }
             Action::AdvanceTo { turn, step } => loop {
-                let d = self.decision(i)?;
+                let d = self.decision()?;
                 let now = self.s.turn();
                 let here = (now.number, now.step as u8);
                 let target = (turn, step as u8);
@@ -348,7 +361,7 @@ impl Runner<'_> {
                 self.answer(pass);
             },
             Action::Assert { assertion } => {
-                let position = self.position(i)?;
+                let position = self.position()?;
                 self.check(&position, assertion)?;
             }
         }
@@ -359,12 +372,11 @@ impl Runner<'_> {
     /// saying that `what` is not offered.
     fn priority_option(
         &mut self,
-        i: usize,
         player: Seat,
         what: &str,
         wanted: impl Fn(&Self, Opt) -> bool,
     ) -> Result<(), String> {
-        let d = self.expect(i, player, DecisionKind::Priority)?;
+        let d = self.expect(player, DecisionKind::Priority)?;
         let c = option_index(&d, |o| wanted(self, o))
             .ok_or_else(|| format!("{what} is not offered: {}", self.describe(&d)))?;
         self.answer(c);
@@ -372,8 +384,8 @@ impl Runner<'_> {
     }
 
     /// The open decision, which must be `player`'s and of `kind`.
-    fn expect(&mut self, i: usize, player: Seat, kind: DecisionKind) -> Result<Decision, String> {
-        let d = self.decision(i)?;
+    fn expect(&mut self, player: Seat, kind: DecisionKind) -> Result<Decision, String> {
+        let d = self.decision()?;
         if d.player == player && d.kind == kind {
             Ok(d)
         } else {
@@ -457,7 +469,7 @@ impl Runner<'_> {
     }
 
     fn name(&self, slot: Slot) -> &'static str {
-        name_of(&self.s, self.t, slot)
+        name_of(&self.s, &self.t, slot)
     }
 
     fn named(&self, o: Opt) -> Option<Slot> {
@@ -466,7 +478,12 @@ impl Runner<'_> {
 
     /// The only answer to `d` as a pick, where the scenario vocabulary can name it.
     fn forced_pick(&self, d: &Decision) -> Option<Pick> {
-        let c = Choice(0);
+        self.pick_for(d, Choice(0))
+    }
+
+    /// The candidate `c` of `d` as a pick, where the scenario vocabulary can name it. The pick
+    /// may name an earlier candidate too, of the same name.
+    fn pick_for(&self, d: &Decision, c: Choice) -> Option<Pick> {
         if let Some(slot) = d.candidates.object(c) {
             return Some(Pick::Card {
                 card: self.name(slot),
@@ -493,7 +510,7 @@ impl Runner<'_> {
 
     /// The candidate of `d` that `pick` names.
     fn pick(&self, d: &Decision, pick: Pick) -> Option<Choice> {
-        pick_in(self.t, &self.s, d, pick)
+        pick_in(&self.t, &self.s, d, pick)
     }
 
     /// The permanents named `card` that `player` controls, in the order they entered.
@@ -513,7 +530,7 @@ impl Runner<'_> {
     }
 
     fn describe(&self, d: &Decision) -> String {
-        describe(self.t, &self.s, d)
+        describe(&self.t, &self.s, d)
     }
 
     /// The actual and expected values of an assertion about permanents.
@@ -685,6 +702,290 @@ impl Runner<'_> {
                 "{assertion:?}: expected {expected}, found {actual}"
             ))
         }
+    }
+}
+
+impl Runner {
+    /// Facts about the current position that a scenario's own assertions may leave out, so
+    /// that an oracle compares the whole public position (§17.2): both life totals; the size
+    /// of each hand, graveyard, exile and library, how many of each card the graveyards and
+    /// exiles hold, and how many of each card everyone knows a hand holds; how many
+    /// permanents of each name each player controls face up, and how many of them that make
+    /// no mana are tapped; the power and toughness of a creature alone of its name, card or
+    /// token, under its controller, and the counters on a permanent alone of its name; and
+    /// how many permanents of each card each player controls face down.
+    ///
+    /// Only a quiet position has a snapshot, a priority decision over an empty stack, which
+    /// every oracle stops at as Beryl does. Some facts are left out as choices or chance
+    /// rather than rules: which mana sources paid, which an oracle chooses its own way, and
+    /// cards drawn after a shuffle, which an oracle shuffles its own way.
+    fn snapshot(&mut self) -> Result<Vec<Assertion>, String> {
+        let quiet = matches!(self.position()?, Step::Decide(d) if d.kind == DecisionKind::Priority)
+            && self.s.stack().is_empty();
+        if !quiet {
+            return Ok(Vec::new());
+        }
+        let s = &self.s;
+        let mut out = Vec::new();
+        let count = |n: usize| u8::try_from(n).unwrap_or(u8::MAX);
+        for player in Seat::BOTH {
+            out.push(Assertion::Life {
+                player,
+                life: s.player(player).life,
+            });
+        }
+        for player in Seat::BOTH {
+            for zone in [Zone::Hand, Zone::Graveyard, Zone::Exile, Zone::Library] {
+                let slots: Vec<Slot> = s.zone(player, zone).iter().collect();
+                let names: Vec<&'static str> = slots.iter().map(|&slot| self.name(slot)).collect();
+                out.push(Assertion::Count {
+                    player,
+                    zone,
+                    card: None,
+                    count: count(names.len()),
+                });
+                if zone == Zone::Library {
+                    continue;
+                }
+                for card in distinct(&names) {
+                    // A card only its owner knows was drawn or searched for, and an oracle may
+                    // have found another.
+                    let public = slots
+                        .iter()
+                        .filter(|&&slot| self.name(slot) == card)
+                        .all(|&slot| Seat::BOTH.into_iter().all(|p| s.knows(p, slot)));
+                    if !public || card.is_empty() {
+                        continue;
+                    }
+                    out.push(Assertion::Count {
+                        player,
+                        zone,
+                        card: Some(card),
+                        count: count(names.iter().filter(|&&n| n == card).count()),
+                    });
+                }
+            }
+        }
+        for player in Seat::BOTH {
+            self.battlefield_facts(player, &mut out);
+        }
+        Ok(out)
+    }
+
+    /// The snapshot's facts about the permanents `player` controls.
+    fn battlefield_facts(&self, player: Seat, out: &mut Vec<Assertion>) {
+        let s = &self.s;
+        let count = |n: usize| u8::try_from(n).unwrap_or(u8::MAX);
+        let mine: Vec<Slot> = s
+            .battlefield()
+            .iter()
+            .copied()
+            .filter(|&slot| s.controller(slot) == player)
+            .collect();
+        let (down, up): (Vec<Slot>, Vec<Slot>) = mine
+            .into_iter()
+            .partition(|&slot| s.object(slot).face == FaceIx::DOWN);
+        let up_names: Vec<&'static str> = up.iter().map(|&slot| self.name(slot)).collect();
+        // A nameless permanent, as a face-down copy, has nothing an oracle could name it by.
+        for card in distinct(&up_names).into_iter().filter(|c| !c.is_empty()) {
+            let named: Vec<Slot> = up
+                .iter()
+                .copied()
+                .filter(|&slot| self.name(slot) == card)
+                .collect();
+            let flag = |slot: Slot, f: u32| s.object(slot).flags.has(f);
+            out.push(Assertion::Controls {
+                player,
+                card,
+                count: count(named.len()),
+            });
+            let makes_mana = named.iter().any(|&slot| {
+                let face = self.t.def(s.card(slot)).face(s.object(slot).face);
+                face.abilities.iter().any(|a| a.kind == AbilityKind::Mana)
+            });
+            if !makes_mana {
+                out.push(Assertion::Tapped {
+                    player,
+                    card,
+                    count: count(
+                        named
+                            .iter()
+                            .filter(|&&slot| flag(slot, ObjectFlags::TAPPED))
+                            .count(),
+                    ),
+                });
+            }
+            for token in [false, true] {
+                let kind: Vec<Slot> = named
+                    .iter()
+                    .copied()
+                    .filter(|&slot| flag(slot, ObjectFlags::TOKEN) == token)
+                    .collect();
+                if let [slot] = kind[..] {
+                    let d = s.derived(slot);
+                    if d.types.contains(Types::CREATURE) {
+                        out.push(Assertion::Pt {
+                            player,
+                            card,
+                            token,
+                            power: d.power,
+                            toughness: d.toughness,
+                        });
+                    }
+                }
+            }
+            if let [slot] = named[..] {
+                for kind in COUNTER_KINDS {
+                    let n = s.object(slot).counters.get(kind);
+                    if n > 0 {
+                        out.push(Assertion::Counters {
+                            player,
+                            card,
+                            kind,
+                            count: n,
+                        });
+                    }
+                }
+            }
+        }
+        let down_names: Vec<&'static str> = down.iter().map(|&slot| self.name(slot)).collect();
+        for card in distinct(&down_names) {
+            out.push(Assertion::FaceDown {
+                player,
+                card,
+                count: count(down_names.iter().filter(|&&n| n == card).count()),
+            });
+        }
+    }
+
+    /// The candidates of `d` that an action of the scenario vocabulary takes, each with that
+    /// action: one the runner, given the action, would answer `d` with.
+    fn picks(&self, d: &Decision) -> Vec<(Choice, Action)> {
+        let mut out = Vec::new();
+        for c in (0..d.len() as u8).map(Choice) {
+            let action = if d.kind == DecisionKind::Priority {
+                let Some(o) = d.candidates.option(c) else {
+                    continue;
+                };
+                let player = d.player;
+                let card = |slot| self.name(slot);
+                match o {
+                    Opt::Pass => Action::pass(player),
+                    Opt::PlayLand(slot) => Action::PlayLand {
+                        player,
+                        card: card(slot),
+                    },
+                    Opt::Cast { slot, face, costs } => Action::Cast {
+                        player,
+                        card: card(slot),
+                        face,
+                        costs,
+                    },
+                    Opt::Activate { slot, ability } => Action::Activate {
+                        player,
+                        card: card(slot),
+                        ability,
+                    },
+                    Opt::TurnFaceUp(slot) => Action::TurnFaceUp {
+                        player,
+                        card: card(slot),
+                    },
+                    _ => continue,
+                }
+            } else {
+                let Some(pick) = self.pick_for(d, c) else {
+                    continue;
+                };
+                Action::answer(d.player, d.kind, pick)
+            };
+            if answer(&self.t, &self.s, d, &action) == Some(c) {
+                out.push((c, action));
+            }
+        }
+        out
+    }
+}
+
+/// The counter kinds a permanent can have, in a snapshot's order.
+const COUNTER_KINDS: [CounterKind; 6] = [
+    CounterKind::PlusOne,
+    CounterKind::MinusOne,
+    CounterKind::Loyalty,
+    CounterKind::Time,
+    CounterKind::Story,
+    CounterKind::Chorus,
+];
+
+/// The distinct names among `names`, in their first order.
+fn distinct(names: &[&'static str]) -> Vec<&'static str> {
+    let mut out: Vec<&'static str> = Vec::new();
+    for &n in names {
+        if !out.contains(&n) {
+            out.push(n);
+        }
+    }
+    out
+}
+
+/// A scenario played one action at a time, for a generator that chooses each action from the
+/// position it begins at (§17.2). Assertions go last: an action's position depends on the
+/// next action that is not one.
+pub struct Live {
+    runner: Runner,
+    actions: Vec<Action>,
+}
+
+impl Live {
+    /// The setup of `scenario`, before any action; its own actions are not run.
+    pub fn new(cards: &'static CardTable, scenario: &Scenario) -> Result<Live, Failure> {
+        Ok(Live {
+            runner: Runner::new(cards, scenario)?,
+            actions: Vec::new(),
+        })
+    }
+
+    /// The position an action of the same kind as `next` would begin from: an advance or
+    /// a resolution stops the game where nothing else would.
+    pub fn position(&mut self, next: Action) -> Result<Step, String> {
+        if self.runner.position.is_none() {
+            self.runner.upcoming = upcoming(&[next]);
+        }
+        self.runner.position()
+    }
+
+    /// Runs `action` from the current position, keeping it in the script.
+    pub fn act(&mut self, action: Action) -> Result<(), String> {
+        self.runner.upcoming = upcoming(&[action]);
+        self.runner.position()?;
+        self.runner.act(action)?;
+        self.actions.push(action);
+        Ok(())
+    }
+
+    /// The candidates of `d`, the open decision, that the scenario vocabulary can take, each
+    /// with its action.
+    pub fn picks(&self, d: &Decision) -> Vec<(Choice, Action)> {
+        self.runner.picks(d)
+    }
+
+    /// The actions run so far.
+    pub fn actions(&self) -> &[Action] {
+        &self.actions
+    }
+
+    pub fn state(&self) -> &State {
+        &self.runner.s
+    }
+
+    pub fn table(&self) -> &GameTable {
+        &self.runner.t
+    }
+
+    /// Facts about the whole public position here, as assertions, for oracles to compare;
+    /// nothing once the game is over.
+    pub fn snapshot(&mut self) -> Result<Vec<Assertion>, String> {
+        self.runner.upcoming = None;
+        self.runner.snapshot()
     }
 }
 

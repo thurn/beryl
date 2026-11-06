@@ -919,6 +919,12 @@ unattended. `just oracle [cards]` exports the scenarios and runs them on both,
 in under a minute once built, and writes its full report to
 `oracles/logs/oracle.json` there; it is `just ci`'s `oracle` lane.
 
+- The dump ends each scenario that ends at a quiet position (priority over an
+  empty stack) with its snapshot: assertions of the whole public position, life,
+  zone sizes, the public cards of each zone, each permanent's control, power and
+  toughness and counters, so an oracle compares more than the author asserted.
+  Which mana sources paid and which cards a shuffle dealt are left out: the
+  oracles choose and shuffle their own way.
 - A card an oracle does not implement, or a scenario outside its harness's
   vocabulary, is reported as unsupported, not failed.
 - A disagreement is a bug to investigate, and the Comprehensive Rules decide it.
