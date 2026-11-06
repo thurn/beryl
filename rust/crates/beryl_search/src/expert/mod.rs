@@ -436,6 +436,17 @@ impl Expert<'_> {
         (0..self.p.t.len()).any(|i| self.p.t.def(beryl_engine::CardIx::new(i as u8)).name == name)
     }
 
+    /// Whether the opponent could win by drawing from an empty library: they control a Jace,
+    /// Wielder of Mysteries, or theirs is in the game and not yet in their graveyard or exile,
+    /// so that milling them may hand them the game.
+    fn their_jace_live(&self) -> bool {
+        let opp = self.opp();
+        let gone = (self.obs().zone(opp, Zone::Graveyard) | self.obs().zone(opp, Zone::Exile))
+            .iter()
+            .any(|s| self.is(s, names::JACE_WIELDER_OF_MYSTERIES));
+        self.p.wins_from_empty(opp) || (self.in_game(names::JACE_WIELDER_OF_MYSTERIES) && !gone)
+    }
+
     /// How many of a player's untapped sources make white, and how many blue (a dual land
     /// counts for both); floating mana counts too.
     fn colors_up(&self, who: Seat) -> (i32, i32) {
@@ -1143,6 +1154,13 @@ impl Expert<'_> {
         }
         // Removal with nothing worth it waits.
         if (REMOVAL.contains(&name) && !overloaded) || v <= 0 {
+            return 0;
+        }
+        // Subtlety's evoke is two cards for its enters ability, which answers only a spell.
+        if costs
+            .paid(f)
+            .any(|o| matches!(o, CastingOption::Evoke { .. }))
+        {
             return 0;
         }
         let creature = f.types.intersects(Types::CREATURE);
@@ -1982,7 +2000,9 @@ impl Expert<'_> {
                 }
             }
             JACE_TELEPATH_UNBOUND => {
-                if loyalty >= 9 {
+                // The −9 emblem mills the opponent five a spell: not toward their own Jace,
+                // Wielder of Mysteries.
+                if loyalty >= 9 && !self.their_jace_live() {
                     return by_cost(-9);
                 }
                 if loyalty >= 3 && self.flashback_worth() {
@@ -2407,7 +2427,7 @@ impl Expert<'_> {
             && self.p.t.def(e.card).name == names::JACE_WIELDER_OF_MYSTERIES
             && matches!(d.candidates, beryl_engine::Candidates::Options(_))
         {
-            let mill_self = self.p.wins_from_empty(self.opp());
+            let mill_self = self.their_jace_live();
             return Some(best(d, |c| match c.option() {
                 Some(Opt::Player(p)) => Some(i32::from((p == self.me()) == mill_self)),
                 _ => None,
