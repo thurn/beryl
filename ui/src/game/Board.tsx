@@ -50,6 +50,7 @@ import type {
   Kind,
   ObjectView,
   PlayerView,
+  RefusalView,
   Side,
   StackItem as StackItemView,
 } from "../generated/protocol";
@@ -212,6 +213,9 @@ export function Board({
   inert = false,
 }: BoardProps) {
   const [hovered, setHovered] = useState<number>();
+  // The hand card a click found nothing to do with, which the inspector says why of while
+  // the pointer stays on it.
+  const [refused, setRefused] = useState<number>();
   const [menu, setMenu] = useState<Menu>();
   const [casting, setCasting] = useState<Casting>();
   // The spell cast last and the permanents its payment taps.
@@ -277,6 +281,11 @@ export function Board({
     hoveredPlace?.look === "hidden" || hoveredPlace?.look === "pile"
       ? undefined
       : hoveredPlace;
+  // Why the refused card under the pointer can't be played, as the engine says.
+  const refusal =
+    deciding && refused === hovered
+      ? decision?.refused.find((r) => r.slot === refused)?.reason
+      : undefined;
   // A hovered card that a new view moves may leave the pointer, which then sends no event: once
   // it has glided to its new place, it stays inspected only if the pointer is still on it.
   const pointer = useRef<{ x: number; y: number }>(undefined);
@@ -548,6 +557,7 @@ export function Board({
     const acts = deciding ? can.bySlot.get(slot) : undefined;
     if (!acts) {
       setMenu(undefined);
+      setRefused(slot);
       return false;
     }
     const casts = castActs(acts);
@@ -878,7 +888,10 @@ export function Board({
           states={states}
           onClick={onClick}
           onDrop={onDrop}
-          onHover={setHovered}
+          onHover={(slot) => {
+            setHovered(slot);
+            setRefused((r) => (r === slot ? r : undefined));
+          }}
           onLift={setLifted}
         />
 
@@ -1022,6 +1035,7 @@ export function Board({
               targets,
             )}
             lit={menu?.pointed && litParagraph(menu.pointed, objects)}
+            refusal={menu ? undefined : refusal}
           />
         )}
 
@@ -1661,12 +1675,18 @@ function InspectAt({
   object,
   place,
   lit,
+  refusal,
 }: {
   view: PlayerView;
   object?: ObjectView;
   place: InspectPlace;
   lit?: number;
+  refusal?: RefusalView;
 }) {
+  const by =
+    refusal?.kind === "timing" && refusal.by !== null
+      ? view.objects.find((o) => o.slot === refusal.by)?.name
+      : undefined;
   return (
     <Inspect
       object={object}
@@ -1675,6 +1695,7 @@ function InspectAt({
       )}
       place={place}
       lit={lit}
+      refusal={refusal && { reason: refusal, by: by ?? undefined }}
     />
   );
 }

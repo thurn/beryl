@@ -15,7 +15,7 @@ use crate::card::{
     Ability, AbilityIx, AbilityKind, CastingOption, Castings, Colors, Face, FaceAbility, FaceIx,
     Keywords, ManaCost, Rule, TargetKind, TargetSpec, Timing, Types,
 };
-use crate::decision::{Ask, Candidates, Decision, DecisionKind, Opt};
+use crate::decision::{Ask, Candidates, Decision, DecisionKind, Opt, Refusal};
 use crate::engine::{collapse, collapse_in_order};
 use crate::event::{self, Event, Reason, Sink};
 use crate::filter::{Filter, Whose};
@@ -82,21 +82,22 @@ fn has_rule(s: &State, t: &GameTable, slot: Slot, rule: Rule) -> bool {
     t.may_have_rule(o.card, rule) && t.facts(o.card, o.face).has_rule(rule)
 }
 
-/// Whether an opponent's permanent limits `player` to casting spells at sorcery speed, as
-/// Teferi, Time Raveler does. A prohibition beats a permission
+/// The first of an opponent's permanents that limits `player` to casting spells at sorcery
+/// speed, as Teferi, Time Raveler does, if one does. A prohibition beats a permission
 /// ([CR 101.2](https://yawgatog.com/resources/magic-rules/#R1012)): "When a rule or effect
 /// allows or directs something to happen, and another effect states that it can't happen,
 /// the "can't" effect takes precedence."
-fn limited_to_sorcery_speed(s: &State, t: &GameTable, player: Seat) -> bool {
+fn sorcery_speed_limiter(s: &State, t: &GameTable, player: Seat) -> Option<Slot> {
     // A permanent's derived characteristics, its controller among them, are at its place in
     // the battlefield list.
     s.battlefield
         .iter()
         .zip(s.derived.iter())
-        .any(|(&slot, d)| {
+        .find(|&(&slot, d)| {
             d.controller == player.opponent()
                 && has_rule(s, t, slot, Rule::OpponentsCastAsSorceries)
         })
+        .map(|(&slot, _)| slot)
 }
 
 /// Whether `player` may cast this face at instant speed: an instant
@@ -425,11 +426,6 @@ pub(crate) fn still_legal(
     }
 }
 
-/// Whether `player` may cast the card in `slot` with this face and these casting options.
-///
-/// [CR 601.3](https://yawgatog.com/resources/magic-rules/#R6013): "A player can begin to cast
-/// a spell only if a rule or effect allows that player to cast it and no rule or effect
-/// prohibits that player from casting it."
 /// What every check of one player's options reads, found once for all of them: the mana they
 /// could pay with, and whether an opponent limits them to sorcery speed.
 struct Situation {
@@ -443,13 +439,13 @@ impl Situation {
         Ok(Situation {
             player,
             funds: Funds::of(s, t, player)?,
-            sorcery_speed_only: limited_to_sorcery_speed(s, t, player),
+            sorcery_speed_only: sorcery_speed_limiter(s, t, player).is_some(),
         })
     }
 }
 
 /// Whether a face may be cast now, as far as its card types and the timing rules say: what
-/// [`castable`] checks first, which depends only on the face, so on the card.
+/// [`refused`] checks first, which depends only on the face, so on the card.
 fn in_time(s: &State, now: &Situation, face: &Face, from: From) -> bool {
     // CR 305.9: "If an object is both a land and another card type, it can be played only as
     // a land. It can't be cast as a spell." CR 712.11c: "Only the face that will be face up
@@ -467,7 +463,14 @@ fn in_time(s: &State, now: &Situation, face: &Face, from: From) -> bool {
     }
 }
 
-fn castable(
+/// Why `player` may not cast the card in `slot` with this face and these casting options:
+/// the first check it fails, or none if they may. A timing refusal names no permanent here
+/// ([`refusal`] does).
+///
+/// [CR 601.3](https://yawgatog.com/resources/magic-rules/#R6013): "A player can begin to cast
+/// a spell only if a rule or effect allows that player to cast it and no rule or effect
+/// prohibits that player from casting it."
+fn refused(
     s: &State,
     t: &GameTable,
     now: &Situation,
@@ -475,11 +478,11 @@ fn castable(
     face_index: FaceIx,
     costs: Castings,
     from: From,
-) -> bool {
+) -> Option<Refusal> {
     let player = now.player;
     let face = t.def(s.object(slot).card).face(face_index);
     if !in_time(s, now, face, from) {
-        return false;
+        return Some(Refusal::Timing { by: None });
     }
     let (extra, free) = match from {
         From::Priority => (permission(s, player, slot).map_or(0, |p| p.extra), false),
@@ -496,13 +499,13 @@ fn castable(
         spell_cost(face, costs, x, extra, free),
         Bitboard::EMPTY,
     ) {
-        return false;
+        return Some(Refusal::Mana);
     }
     // CR 601.2h: the player pays the total cost, so the cards to exile must be there.
     if ExileCost::of(face, costs).is_some_and(|cost| !cost.payable(s, t, player, slot)) {
-        return false;
+        return Some(Refusal::Cost);
     }
-    targetable(
+    (!targetable(
         s,
         t,
         face.spell_ability_with(costs),
@@ -510,7 +513,63 @@ fn castable(
         Some(slot),
         0,
         None,
-    )
+    ))
+    .then_some(Refusal::Target)
+}
+
+/// How far a refusal's way of casting got through [`refused`]'s checks, which run in this
+/// order.
+fn progress(r: Refusal) -> u8 {
+    match r {
+        Refusal::Timing { .. } | Refusal::LandPlayed => 0,
+        Refusal::Mana => 1,
+        Refusal::Cost => 2,
+        Refusal::Target => 3,
+    }
+}
+
+/// Why `player` may not cast the card in `slot` at priority now: the refusal of the way of
+/// casting it, by face and casting options, that passes the most checks, or `land`, why they
+/// may not play it as a land, if that passes as many. None if one way is legal, or if the
+/// card has no face to cast and `land` is none.
+pub(crate) fn refusal(
+    s: &State,
+    t: &GameTable,
+    player: Seat,
+    slot: Slot,
+    land: Option<Refusal>,
+) -> Result<Option<Refusal>, Full> {
+    let now = Situation::of(s, t, player)?;
+    let def = t.def(s.object(slot).card);
+    let flashback = permission(s, player, slot).is_some_and(|p| p.flashback);
+    let mut most = land;
+    for f in def.face_ixs() {
+        let face = def.face(f);
+        if face.transformed || face.types.intersects(Types::LAND) {
+            continue;
+        }
+        for costs in option_sets(face, flashback) {
+            let Some(r) = refused(s, t, &now, slot, f, costs, From::Priority) else {
+                return Ok(None);
+            };
+            if most.is_none_or(|m| progress(r) > progress(m)) {
+                most = Some(r);
+            }
+        }
+    }
+    // Only sorcery speed, where a face could be cast at instant speed but for the limit.
+    if most == Some(Refusal::Timing { by: None }) {
+        let instant = def.face_ixs().any(|f| {
+            let face = def.face(f);
+            !face.transformed && instant_speed(s, face, player)
+        });
+        if instant {
+            most = Some(Refusal::Timing {
+                by: sorcery_speed_limiter(s, t, player),
+            });
+        }
+    }
+    Ok(most)
 }
 
 /// The cards `player` can cast at priority: their hand and the cards a permission names.
@@ -558,7 +617,7 @@ fn cast_options(
                 continue;
             }
             for costs in option_sets(face, free || flashback) {
-                if castable(s, t, now, slot, f, costs, from) {
+                if refused(s, t, now, slot, f, costs, from).is_none() {
                     out.push(Opt::Cast {
                         slot,
                         face: f,

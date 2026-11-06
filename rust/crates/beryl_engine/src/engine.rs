@@ -4,7 +4,8 @@
 use crate::bitboard::Bitboard;
 use crate::card::{FaceIx, Types};
 use crate::decision::{
-    Answers, Ask, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, StallReason, Step,
+    Answers, Ask, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, Refusal, StallReason,
+    Step,
 };
 use crate::event::{self, Entry, Event, Reason, Sink};
 use crate::fixed::{Fixed, Full};
@@ -489,6 +490,27 @@ fn land_face(s: &State, t: &GameTable, slot: Slot) -> Option<FaceIx> {
     let def = t.def(s.object(slot).card);
     def.face_ixs()
         .find(|&f| def.face(f).types.intersects(Types::LAND))
+}
+
+/// Why the viewer may neither cast the card in `slot`, from their hand, nor play it as a land
+/// at their priority now, for a client to say why it isn't offered: the first rule the most
+/// nearly legal way of playing it breaks. None if one way is legal. It reads what their
+/// priority's candidates do, so it tells them nothing they don't know.
+///
+/// [CR 305.1](https://yawgatog.com/resources/magic-rules/#R3051): "A player who has priority
+/// may play a land card from their hand during a main phase of their turn when the stack is
+/// empty." [CR 305.2](https://yawgatog.com/resources/magic-rules/#R3052): "A player can
+/// normally play one land during their turn".
+pub fn refusal(obs: Observation<'_>, t: &GameTable, slot: Slot) -> Option<Refusal> {
+    let (s, player) = (obs.shown(), obs.viewer());
+    let land = match land_face(s, t, slot) {
+        None => None,
+        Some(_) if turn::may_play_land(s, player) => return None,
+        Some(_) if cast::sorcery_timing(s, player) => Some(Refusal::LandPlayed),
+        Some(_) => Some(Refusal::Timing { by: None }),
+    };
+    // A full capacity leaves the reason unknown.
+    cast::refusal(s, t, player, slot, land).ok().flatten()
 }
 
 /// Answers a question of the casting machine, a paused resolution or a resolution's offer

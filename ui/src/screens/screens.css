@@ -1740,6 +1740,30 @@
   gap: 10px;
   margin-top: 10px;
 }
+/* Under the scan, why a refused hand card can't be played. */
+.inspect-refusal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font: 600 17px var(--font-sans);
+  color: var(--stat-down);
+  background: rgb(27 26 24 / 88%);
+  box-shadow: 0 6px 16px rgb(0 0 0 / 50%);
+}
+.inspect-refusal .refusal-glyph {
+  font: normal 20px/1 Mana;
+}
+.inspect-refusal .refusal-reticle {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
 /* Under the scan, a permanent's marks spelled out: its P/T against the printed one, then a
    badge per mark. */
 .inspect-marks {

@@ -18,7 +18,8 @@ import {
 } from "../components/Card";
 import { Tip } from "../components/Controls";
 import { cardEntry, useCardArt, type CardFace } from "../cards";
-import type { CardType, ObjectView } from "../generated/protocol";
+import { ManaSymbol } from "../components/Mana";
+import type { CardType, ObjectView, RefusalView } from "../generated/protocol";
 import type { CardState } from "./CardLayer";
 import { BLANK, printedFace, tone, useFace } from "./faces";
 import { STAGE, type Box, type PileLook, type ZonePile } from "./layout";
@@ -327,11 +328,15 @@ export function Inspect({
   place: { left, top, width = INSPECT_WIDTH },
   attached = [],
   lit,
+  refusal,
 }: {
   object?: ObjectView;
   place: InspectPlace;
   attached?: ObjectView[];
   lit?: number;
+  /** Why a hand card a click found nothing to do with can't be played, with the name of the
+   * card a timing refusal names. */
+  refusal?: { reason: RefusalView; by?: string };
 }) {
   const name = object?.name;
   const scan = useCardArt(name ?? "", undefined, "normal");
@@ -354,6 +359,7 @@ export function Inspect({
       ) : (
         <Card card={{ ...face, lit }} width={width - 2 * INSPECT_PAD} />
       )}
+      {refusal && <InspectRefusal {...refusal} />}
       {entry && <p className="inspect-artist">Illustrated by {entry.artist}</p>}
       {changed && (
         <p className="inspect-types" aria-label="Types now">
@@ -374,6 +380,49 @@ export function Inspect({
       )}
     </div>
   );
+}
+
+/** Why a card can't be played: an icon and a few words, naming the card that holds its
+ * controller to sorcery speed (by the part of its name before a comma). */
+function InspectRefusal({ reason, by }: { reason: RefusalView; by?: string }) {
+  const words =
+    reason.kind === "timing" && by
+      ? `Sorcery speed: ${by.split(",")[0]}`
+      : REFUSAL_WORDS[reason.kind];
+  return (
+    <p className="inspect-refusal" aria-label={`Can't play: ${words}`}>
+      <RefusalIcon kind={reason.kind} />
+      {words}
+    </p>
+  );
+}
+
+const REFUSAL_WORDS: Record<RefusalView["kind"], string> = {
+  timing: "Sorcery speed",
+  landPlayed: "Land played",
+  mana: "No mana",
+  cost: "Can't pay",
+  target: "No target",
+};
+
+/** A refusal's icon: the Mana font's sorcery and land symbols, a mana symbol, a reticle. */
+function RefusalIcon({ kind }: { kind: RefusalView["kind"] }) {
+  switch (kind) {
+    case "timing":
+      return <span className="refusal-glyph">{"\ue624"}</span>;
+    case "landPlayed":
+      return <span className="refusal-glyph">{"\ue622"}</span>;
+    case "mana":
+    case "cost":
+      return <ManaSymbol symbol="C" />;
+    case "target":
+      return (
+        <svg className="refusal-reticle" viewBox="0 0 16 16" aria-hidden>
+          <circle cx="8" cy="8" r="5.5" />
+          <path d="M8 0.5 V4.5 M8 11.5 V15.5 M0.5 8 H4.5 M11.5 8 H15.5" />
+        </svg>
+      );
+  }
 }
 
 /** The card types a type line names, in the protocol's order. */

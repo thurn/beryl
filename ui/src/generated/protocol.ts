@@ -224,11 +224,20 @@ halt: boolean,
  * activating from their priority, whose costs are not yet paid: the `cancel` command
  * takes it back.
  */
-cancellable: boolean, };
+cancellable: boolean, 
+/**
+ * At a priority, each card in the viewer's hand they may neither cast nor play as a land,
+ * and why: what the UI says of one a click finds nothing to do with.
+ */
+refused: Array<Refused>, };
 
 export type AskView = { "kind": "plain" } | { "kind": "scry", count: number, } | { "kind": "look", player: Side, zone: ZoneName, count: number, to: ZoneName, eligible: Array<number>, } | { "kind": "putBack", count: number, } | { "kind": "fateseal", player: Side, } | { "kind": "take", count: number, take: number, } | { "kind": "bottom", count: number, } | { "kind": "discardBasicLand", count: number, } | { "kind": "topOrBottom", card: number, } | { "kind": "explore" } | { "kind": "manifestDread" } | { "kind": "exileCards", zone: ZoneName, count: number, } | { "kind": "search", max: number, } | { "kind": "untap", max: number, } | { "kind": "crew", crew: number, left: number, } | { "kind": "waterbend", cost: string, } | { "kind": "unlessPays", cost: string, } | { "kind": "payLife", life: number, } | { "kind": "cleanup", count: number, };
 
 export type PassTo = { "kind": "resolve" } | { "kind": "combatDamage" } | { "kind": "step", step: Step, } | { "kind": "nextTurn" };
+
+export type Refused = { slot: number, reason: RefusalView, };
+
+export type RefusalView = { "kind": "timing", by: number | null, } | { "kind": "landPlayed" } | { "kind": "mana" } | { "kind": "cost" } | { "kind": "target" };
 
 export type CandidateView = { 
 /**

@@ -296,6 +296,23 @@ pub enum Outcome {
     Stalled(StallReason),
 }
 
+/// Why a player can't cast a card from their hand or play it as a land at priority now
+/// ([`crate::refusal`]): the first rule its most nearly legal way of playing it breaks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Refusal {
+    /// Only at sorcery speed, which it is not: an opponent's permanent `by` limits the player
+    /// to casting spells at sorcery speed, if the card could be cast now without it.
+    Timing { by: Option<Slot> },
+    /// A land, and the player has played their land this turn.
+    LandPlayed,
+    /// Its mana cost can't be paid.
+    Mana,
+    /// Another of its costs, such as cards to exile, can't be paid.
+    Cost,
+    /// A target it requires can't be chosen.
+    Target,
+}
+
 /// Which budget or capacity a stalled game exhausted.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StallReason {

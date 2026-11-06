@@ -2713,6 +2713,46 @@ await check(
     { fixture: "walker-low", at: lowViews.length, ready: ".turn-action" },
 );
 
+// A click on a hand card with nothing to offer (by-isv.23): the inspector says why, as the
+// engine does. In `menu-choices` Counterspell has no spell to counter.
+const refusedCard = menus.decision.refused.find(
+    (r) => nameOfSlot(menuView, r.slot) === "Counterspell",
+);
+assert.deepEqual(
+    refusedCard?.reason,
+    { kind: "target" },
+    "the view refuses Counterspell for want of a target",
+);
+await check(
+    "clicking a refused card shows why in the inspector",
+    async (page) => {
+        await page.clock.runFor(3000);
+        const counterspell = `[data-slot="${refusedCard.slot}"]`;
+        const inspect = page.locator(".inspect");
+        await page.hover(counterspell);
+        await page.getByLabel("Counterspell, inspected").waitFor();
+        assert.equal(
+            await inspect.locator(".inspect-refusal").count(),
+            0,
+            "hovering alone says nothing",
+        );
+        await page.click(counterspell);
+        assert.equal(
+            await inspect.locator(".inspect-refusal").innerText(),
+            "No target",
+        );
+        await page.hover(".turn-action");
+        await page.hover(counterspell);
+        await page.getByLabel("Counterspell, inspected").waitFor();
+        assert.equal(
+            await inspect.locator(".inspect-refusal").count(),
+            0,
+            "the reason goes once the pointer leaves",
+        );
+    },
+    { fixture: "menu-choices", at: menus.views.length, ready: ".turn-action" },
+);
+
 // A target prompt with two cards of one name (by-isv.8): `namesake-target` stops on a
 // target for Teferi, Hero of Dominaria with a Snapcaster Mage on each side. The prompt lists
 // neither; each glows on the table, on its side, and clicking one there picks it.

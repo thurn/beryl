@@ -38,12 +38,12 @@ mod zone;
 
 pub use bitboard::Bitboard;
 pub use decision::{
-    Answers, Ask, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, Replay, StallReason,
-    Step,
+    Answers, Ask, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, Refusal, Replay,
+    StallReason, Step,
 };
 pub use engine::{
     Counts, Scratch, apply, apply_decided, concede, next, next_in_step, observe, paused_events,
-    view,
+    refusal, view,
 };
 pub use ids::{CardIx, Seat, Slot};
 pub use invariants::{At, Violation};

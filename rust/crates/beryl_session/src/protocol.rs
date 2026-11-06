@@ -10,8 +10,8 @@ use beryl_engine::card::{
 use beryl_engine::event::{Event, Reason, Recipient};
 use beryl_engine::state::{CounterKind, MulliganStatus, ObjectFlags, StackEntry, TurnStep};
 use beryl_engine::{
-    Ask, Candidates, Decision, DecisionKind, GameTable, NextStop, Observation, Opt, Outcome, Seat,
-    Slot, StallReason, Stops, Zone, can_declare_blockers, next_stop,
+    Ask, Candidates, Decision, DecisionKind, GameTable, NextStop, Observation, Opt, Outcome,
+    Refusal, Seat, Slot, StallReason, Stops, Zone, can_declare_blockers, next_stop, refusal,
 };
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -283,6 +283,36 @@ pub struct DecisionView {
     /// activating from their priority, whose costs are not yet paid: the `cancel` command
     /// takes it back.
     pub cancellable: bool,
+    /// At a priority, each card in the viewer's hand they may neither cast nor play as a land,
+    /// and why: what the UI says of one a click finds nothing to do with.
+    pub refused: Vec<Refused>,
+}
+
+/// A card in the viewer's hand they may neither cast nor play as a land now.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct Refused {
+    pub slot: u8,
+    pub reason: RefusalView,
+}
+
+/// Why a card can't be played ([`Refusal`]), by public slot: the first rule its most nearly
+/// legal way of being played breaks.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum RefusalView {
+    /// Only at sorcery speed, which it is not. `by`: the opponent's permanent limiting the
+    /// viewer to sorcery speed, as Teferi, Time Raveler does, if the card could be cast now
+    /// but for it.
+    Timing { by: Option<u8> },
+    /// A land, and the viewer has played their land this turn.
+    LandPlayed,
+    /// Its mana cost can't be paid.
+    Mana,
+    /// Another of its costs, such as a card to exile, can't be paid.
+    Cost,
+    /// A target it requires can't be chosen.
+    Target,
 }
 
 /// What a decision asks ([`Ask`]), by public slot and relative to the viewer.
@@ -799,7 +829,7 @@ pub fn player_view(
             }
         }
         Moment::Halted(id) => Status::Deciding {
-            decision: halt_view(obs, id, stops),
+            decision: halt_view(t, obs, id, stops),
         },
         Moment::Thinking => Status::Thinking,
         Moment::Playing => Status::Playing,
@@ -1033,11 +1063,44 @@ fn decision_view(
         source: decision_source(obs, d, resolving),
         halt: false,
         cancellable: false,
+        refused: if d.kind == DecisionKind::Priority {
+            refused(t, obs)
+        } else {
+            Vec::new()
+        },
     }
 }
 
+/// The cards in the viewer's hand they may neither cast nor play as a land at their priority
+/// ([`DecisionView::refused`]).
+fn refused(t: &GameTable, obs: Observation<'_>) -> Vec<Refused> {
+    obs.zone(obs.viewer(), Zone::Hand)
+        .iter()
+        .filter_map(|slot| {
+            let reason = match refusal(obs, t, slot)? {
+                Refusal::Timing { by } => RefusalView::Timing {
+                    by: by.map(Slot::get),
+                },
+                Refusal::LandPlayed => RefusalView::LandPlayed,
+                Refusal::Mana => RefusalView::Mana,
+                Refusal::Cost => RefusalView::Cost,
+                Refusal::Target => RefusalView::Target,
+            };
+            Some(Refused {
+                slot: slot.get(),
+                reason,
+            })
+        })
+        .collect()
+}
+
 /// A halt ([`DecisionView::halt`]): priority with passing its one candidate.
-fn halt_view(obs: Observation<'_>, id: DecisionId, stops: StopsSetting) -> DecisionView {
+fn halt_view(
+    t: &GameTable,
+    obs: Observation<'_>,
+    id: DecisionId,
+    stops: StopsSetting,
+) -> DecisionView {
     DecisionView {
         id,
         kind: Kind::Priority,
@@ -1055,6 +1118,7 @@ fn halt_view(obs: Observation<'_>, id: DecisionId, stops: StopsSetting) -> Decis
         source: None,
         halt: true,
         cancellable: false,
+        refused: refused(t, obs),
     }
 }
 

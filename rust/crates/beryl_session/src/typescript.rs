@@ -11,8 +11,8 @@ use crate::protocol::{
     AskView, Candidate, CandidateIndex, CandidateView, CardType, Combat, Counter, CounterView,
     DecisionId, DecisionView, Declaration, Facing, GameEvent, Kind, LossReason, Mana, ManaPool,
     ObjectView, OutcomeView, PassTo, Payment, PlayerState, PlayerView, Players, PowerToughness,
-    SessionId, Side, StackItem, Stall, Status, Step, StopsSetting, TargetRef, TurnView, Why,
-    ZoneName,
+    RefusalView, Refused, SessionId, Side, StackItem, Stall, Status, Step, StopsSetting, TargetRef,
+    TurnView, Why, ZoneName,
 };
 use crate::{AgentView, GameUpdate, SessionError, StartRequest};
 
@@ -55,6 +55,8 @@ pub fn typescript() -> String {
         DecisionView::decl(&cfg),
         AskView::decl(&cfg),
         PassTo::decl(&cfg),
+        Refused::decl(&cfg),
+        RefusalView::decl(&cfg),
         CandidateView::decl(&cfg),
         Payment::decl(&cfg),
         Candidate::decl(&cfg),
