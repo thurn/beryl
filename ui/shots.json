@@ -201,14 +201,14 @@
     },
     {
       "name": "game-pile-tip",
-      "route": "/?fixture=choice-scry&at=520#/game",
+      "route": "/?fixture=choice-scry&at=1#/game",
       "width": 1600,
       "height": 900,
       "hover": "[data-pile=graveyard][data-side=you]"
     },
     {
       "name": "game-library-tip",
-      "route": "/?fixture=choice-scry&at=520#/game",
+      "route": "/?fixture=choice-scry&at=1#/game",
       "width": 1600,
       "height": 900,
       "hover": "[aria-label^=\"Library\"]"
@@ -247,7 +247,7 @@
     },
     {
       "name": "game-mana-floating",
-      "route": "/?fixture=mana-floating&at=32#/game",
+      "route": "/?fixture=mana-floating&at=2#/game",
       "width": 1600,
       "height": 900
     },

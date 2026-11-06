@@ -192,26 +192,20 @@
     },
     {
       "name": "mana-floating",
-      "seed": 2,
-      "decks": ["wu-control", "wu-control"],
-      "agents": ["greedy", "greedy"],
+      "board": "mana-floating",
       "until": "first priority decision for seat 0",
       "where": ["mana floating"],
       "after": 1
     },
     {
       "name": "stack-x",
-      "seed": 11,
-      "decks": ["vintage-wu-control", "vintage-wu-control"],
-      "agents": ["greedy", "greedy"],
+      "board": "stack-x",
       "until": "first priority decision for seat 0",
       "where": ["X on the stack"]
     },
     {
       "name": "menu-choices",
-      "seed": 4,
-      "decks": ["vintage-wu-control", "vintage-wu-control"],
-      "agents": ["greedy", "greedy"],
+      "board": "menu-choices",
       "until": "first priority decision for seat 0",
       "where": [
         "playable Sink into Stupor",
@@ -221,16 +215,12 @@
     },
     {
       "name": "pay-life",
-      "seed": 40,
-      "decks": ["vintage-wu-control", "vintage-wu-control"],
-      "agents": ["greedy", "greedy"],
+      "board": "pay-life",
       "until": "first payLife decision for seat 0"
     },
     {
       "name": "namesake-target",
-      "seed": 1,
-      "decks": ["wu-control", "wu-control"],
-      "agents": ["greedy", "greedy"],
+      "board": "namesake-target",
       "until": "first target decision for seat 0",
       "where": ["namesake candidates"]
     }

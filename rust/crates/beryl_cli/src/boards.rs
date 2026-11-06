@@ -29,13 +29,14 @@ const INSECT_TOKEN: &str = "Insect Token";
 /// Every board, by name.
 pub const BOARDS: &[Scenario] = &[
     // Aang's Iceberg is all the human uses; both players have cards in every pile, and the
-    // human a hand to fan out.
+    // human a hand to fan out and a creature that may attack.
     Scenario::new("choice-scry")
         .at(3, P0, TurnStep::PrecombatMain)
         .battlefield(
             P0,
             &[
                 Permanent::new(AANGS_ICEBERG),
+                Permanent::new(SNAPCASTER_MAGE),
                 Permanent::new(PLAINS),
                 Permanent::new(PLAINS),
                 Permanent::new(ISLAND),
@@ -59,7 +60,11 @@ pub const BOARDS: &[Scenario] = &[
         .graveyard(P1, &[SWIFT_RECONFIGURATION])
         .exile(P1, &[MALCOLM_ALLURING_SCOUNDREL])
         .library(P1, LANDS)
-        .actions(&[Action::activate(P0, AANGS_ICEBERG, 1)]),
+        .actions(&[
+            Action::activate(P0, AANGS_ICEBERG, 1),
+            // Lands pay the waterbend, not the Snapcaster Mage.
+            Action::answer(P0, DecisionKind::Waterbend, Pick::Done),
+        ]),
     // The human casts Thundertrap Trainer and takes nothing; in the opponent's turn they play
     // a land and Stock Up, and the human has nothing to do until their next main phase.
     Scenario::new("opponent-turn")
@@ -371,10 +376,19 @@ pub const BOARDS: &[Scenario] = &[
         .battlefield(P1, &[Permanent::new(SNAPCASTER_MAGE), ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[Action::cast(P0, PORTABLE_HOLE)]),
-    // Swift Reconfiguration on the opponent's Sphinx of False Conclusions.
+    // Swift Reconfiguration on the opponent's Sphinx of False Conclusions, beside the human's
+    // Teferi, Hero of Dominaria with two loyalty abilities to offer.
     Scenario::new("attached-across")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, &[Permanent::new(TRINKET_MAGE), PLAINS_, ISLAND_])
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(TRINKET_MAGE),
+                Permanent::new(TEFERI_HERO_OF_DOMINARIA),
+                PLAINS_,
+                ISLAND_,
+            ],
+        )
         .hand(P0, &[SWIFT_RECONFIGURATION, ISLAND])
         .library(P0, LANDS)
         .battlefield(
@@ -555,6 +569,74 @@ pub const BOARDS: &[Scenario] = &[
             Action::answer(P0, DecisionKind::X, Pick::Number { n: 1 }),
             choose(P0, DecisionKind::Target, MANA_CRYPT),
         ]),
+    // Mana Crypt pays for Currency Converter and leaves {C} floating at the human's priority;
+    // a land in hand keeps it theirs.
+    Scenario::new("mana-floating")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[Permanent::new(MANA_CRYPT)])
+        .hand(P0, &[CURRENCY_CONVERTER, ISLAND])
+        .library(P0, LANDS)
+        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[Action::cast(P0, CURRENCY_CONVERTER)]),
+    // Counterspell over a Thieving Skydiver kicked for X=1: a stack of both players' items,
+    // one with an X.
+    Scenario::new("stack-x")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[ISLAND_, ISLAND_, ISLAND_, PLAINS_, PLAINS_, PLAINS_])
+        .hand(P0, &[THIEVING_SKYDIVER, REPRIEVE])
+        .library(P0, LANDS)
+        .battlefield(P1, &[Permanent::new(MANA_CRYPT), ISLAND_, ISLAND_])
+        .hand(P1, &[COUNTERSPELL])
+        .library(P1, LANDS)
+        .actions(&[
+            cast_with_option(P0, THIEVING_SKYDIVER),
+            Action::answer(P0, DecisionKind::X, Pick::Number { n: 1 }),
+            Action::cast(P1, COUNTERSPELL),
+        ]),
+    // Jace, the Mind Sculptor's three affordable loyalty abilities, and Sink into Stupor both
+    // castable and playable as its land face.
+    Scenario::new("menu-choices")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(JACE_THE_MIND_SCULPTOR),
+                ISLAND_,
+                ISLAND_,
+                PLAINS_,
+            ],
+        )
+        .hand(P0, &[SINK_INTO_STUPOR, COUNTERSPELL])
+        .library(P0, LANDS)
+        .battlefield(P1, &[Permanent::new(SNAPCASTER_MAGE), ISLAND_, PLAINS_])
+        .library(P1, LANDS),
+    // Sink into Stupor played as Soporific Springs beside three untapped lands, with Jace, the
+    // Mind Sculptor the card a fourth would make castable.
+    Scenario::new("pay-life")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[ISLAND_, ISLAND_, PLAINS_])
+        .hand(P0, &[SINK_INTO_STUPOR, JACE_THE_MIND_SCULPTOR])
+        .library(P0, LANDS)
+        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[play_land(P0, SINK_INTO_STUPOR)]),
+    // Teferi, Hero of Dominaria's −3 with a Snapcaster Mage on each side.
+    Scenario::new("namesake-target")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(TEFERI_HERO_OF_DOMINARIA),
+                Permanent::new(SNAPCASTER_MAGE),
+                ISLAND_,
+                PLAINS_,
+            ],
+        )
+        .library(P0, LANDS)
+        .battlefield(P1, &[Permanent::new(SNAPCASTER_MAGE), ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[Action::activate(P0, TEFERI_HERO_OF_DOMINARIA, 1)]),
 ];
 
 /// A library to draw from for a few turns.

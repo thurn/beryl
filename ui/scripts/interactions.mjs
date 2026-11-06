@@ -2859,7 +2859,7 @@ const tableWords = (page) =>
 // the life totals and the turn button. Moving the piles' names and counts into their tips took
 // these from 15, 13, 11 and 8; no change adds standing words to the table.
 const WORD_BUDGETS = [
-    { fixture: "choice-scry", at: 520, budget: 7 },
+    { fixture: "choice-scry", at: pilesAt + 1, budget: 7 },
     { fixture: FIXTURE, at: 119, budget: 7 },
     { fixture: "stack-x", budget: 7 },
     { fixture: "mana-floating", at: floatingAt, budget: 8 },
@@ -2888,7 +2888,7 @@ await check(
     "hovering the tracker, a pile or a library says what the table shows",
     async (page) => {
         await page.clock.runFor(3000);
-        const view = (await load("choice-scry"))[519];
+        const view = pilesView;
         assert.equal(
             view.turn.step,
             "precombatMain",
@@ -2914,7 +2914,7 @@ await check(
     },
     {
         fixture: "choice-scry",
-        at: 520,
+        at: pilesAt + 1,
         ready: ".card-el:is(.card-el-hand, .card-el-land, .card-el-field)",
         reducedMotion: "reduce",
     },
