@@ -22,6 +22,9 @@ pub const START_GAME: &str = "start_game";
 pub const CHOOSE: &str = "choose";
 /// Switches the human's priority stops.
 pub const SET_STOPS: &str = "set_stops";
+/// Takes back the spell the human is casting, or the ability they are activating, before its
+/// costs are paid ([`crate::protocol::DecisionView::cancellable`]).
+pub const CANCEL: &str = "cancel";
 
 /// The event every view arrives on, carrying a [`GameUpdate`].
 pub const GAME_UPDATE: &str = "game-update";
@@ -41,6 +44,14 @@ pub struct ChooseRequest {
 pub struct SetStopsRequest {
     pub session: SessionId,
     pub stops: StopsSetting,
+}
+
+/// The [`CANCEL`] command's request.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CancelRequest {
+    /// The open decision the UI received, part of the cast.
+    pub decision: DecisionId,
 }
 
 /// What the app is.
@@ -126,6 +137,12 @@ pub(crate) fn typescript(cfg: &Config) -> String {
         (
             SET_STOPS,
             request(name::<SetStopsRequest>(cfg)),
+            name::<()>(cfg),
+            error.clone(),
+        ),
+        (
+            CANCEL,
+            request(name::<CancelRequest>(cfg)),
             name::<()>(cfg),
             error,
         ),

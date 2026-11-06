@@ -223,17 +223,36 @@ const probe = {
      * player's pointer would (Playwright's `hover` and `click` scroll their target into view
      * first, which moves the page). Returns the point, or null if none of it is on screen. */
     async pointAt(locator) {
-        const box = await locator.boundingBox();
-        const view = page.viewportSize();
-        if (!box || !view) return null;
-        const left = Math.max(box.x, 0);
-        const right = Math.min(box.x + box.width, view.width);
-        const top = Math.max(box.y, 0);
-        const bottom = Math.min(box.y + box.height, view.height);
-        if (right - left < 2 || bottom - top < 2) return null;
-        const point = { x: (left + right) / 2, y: (top + bottom) / 2 };
+        // The point nearest the middle of its box on screen where the element is what the
+        // pointer hits: in a fan, its strip rather than the neighbor over its middle.
+        const point = await locator
+            .evaluate((e) => {
+                const r = e.getBoundingClientRect();
+                const [left, right] = [
+                    Math.max(r.left, 0),
+                    Math.min(r.right, innerWidth),
+                ];
+                const [top, bottom] = [
+                    Math.max(r.top, 0),
+                    Math.min(r.bottom, innerHeight),
+                ];
+                if (right - left < 2 || bottom - top < 2) return null;
+                const mid = { x: (left + right) / 2, y: (top + bottom) / 2 };
+                let best = null;
+                for (let y = top + 1; y < bottom; y += 4) {
+                    for (let x = left + 1; x < right; x += 4) {
+                        if (!e.contains(document.elementFromPoint(x, y)))
+                            continue;
+                        const d = Math.hypot(x - mid.x, y - mid.y);
+                        if (!best || d < best.d) best = { x, y, d };
+                    }
+                }
+                return best ?? mid;
+            })
+            .catch(() => null);
+        if (!point) return null;
         await page.mouse.move(point.x, point.y);
-        return point;
+        return { x: point.x, y: point.y };
     },
 
     /** Elements matching `selector` that something else covers: at their center or at points

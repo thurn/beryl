@@ -20,7 +20,7 @@ import {
   type MotionValue,
   type Transition,
 } from "motion/react";
-import { Card, CardBack, type Highlight } from "../components/Card";
+import { ASPECT, Card, CardBack, type Highlight } from "../components/Card";
 import { StackMarks } from "../components/Stack";
 import type { ObjectView, Side } from "../generated/protocol";
 import { StageScale } from "./Stage";
@@ -68,12 +68,14 @@ export interface CardLayerProps {
   epoch: unknown;
   objects: ObjectView[];
   placements: Layout;
-  /** The card the pointer is over: a hand card rises out of the fan (RAISE), drawn inside its
-   * element, which keeps its place so that nothing else moves and the pointer keeps the card. */
+  /** The card the pointer is over: a hand card rises out of the fan (RAISE), drawn over the
+   * rest of the hand while its element keeps its place in the fan, so that nothing else moves
+   * and the pointer keeps the card. */
   hovered?: number;
   states: Map<number, CardState>;
-  /** A card was clicked (or tapped without dragging) at `at`. */
-  onClick(slot: number, at: Point): void;
+  /** A card was clicked (or tapped without dragging) at `at`; returns whether that did
+   * something. A hand card that offers nothing shakes. */
+  onClick(slot: number, at: Point): boolean;
   /** A dragged card was let go; returns whether that did something, so the card stays where
    * it was dropped until the next view moves it, rather than flying back to its place. */
   onDrop(slot: number, drop: Drop): boolean;
@@ -90,6 +92,8 @@ const SPRING: Transition = { type: "spring", stiffness: 210, damping: 28 };
 const RAISING: Transition = { type: "tween", duration: 0.14, ease: "easeOut" };
 /** A raised hand card is drawn over the rest of the hand. */
 const RAISED_Z = 300;
+/** A refused click's shake, side to side in stage pixels. */
+const SHAKE = [0, -7, 6, -4, 2, 0];
 
 export function CardLayer(props: CardLayerProps) {
   const { objects, placements } = props;
@@ -200,6 +204,12 @@ function CardElement({
   // Raised, the card turns back upright about its top center and rises straight up the screen,
   // inside its element, which stays turned in the fan.
   const raise = useRaise(lifted ? place.rotate : undefined, reduce);
+  // Hovered but not held, a raised hand card is drawn over the hand by a copy the pointer
+  // passes through (Ghost), while its element keeps the fan's order: each card's visible part
+  // in the fan is what the pointer hits, the raised card included, and above the fan the raised
+  // card's top, which its element reaches up to.
+  const ghosted = hand && raised && held === undefined;
+  const shake = useMotionValue(0);
   const drag = useRef<{ start: Point; from: Point; moved: boolean }>(undefined);
   // A card in a library is unseen, and one on a graveyard or exile pile is the pile's: the
   // pile's button opens it (Piles.tsx). Neither is pointed at alone.
@@ -246,7 +256,9 @@ function CardElement({
     if (!d) return;
     const at = stagePoint(e);
     if (!d.moved) {
-      layer.onClick(object.slot, at);
+      if (!layer.onClick(object.slot, at) && hand && !reduce) {
+        animate(shake, SHAKE, { duration: 0.32, ease: "easeInOut" });
+      }
       return;
     }
     layer.onLift?.(undefined);
@@ -270,41 +282,65 @@ function CardElement({
   ]
     .filter(Boolean)
     .join(" ");
+  const frame = { x, y, scale, rotate, skewX, opacity, originX: 0, originY: 0 };
   return (
-    <motion.div
-      className={classes}
-      data-slot={object.slot}
-      data-zone={object.zone}
-      data-card={object.name ?? undefined}
-      style={{
-        x,
-        y,
-        scale,
-        rotate,
-        skewX,
-        opacity,
-        originX: 0,
-        originY: 0,
-        zIndex: dragging ? 1000 : lifted ? RAISED_Z : place.z,
-      }}
-      exit={reduce ? undefined : { opacity: 0, transition: { duration: 0.3 } }}
-      onPointerDown={untouchable ? undefined : onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={() => {
-        if (drag.current?.moved) layer.onLift?.(undefined);
-        drag.current = undefined;
-        setHeld(undefined);
-      }}
-      onPointerEnter={() =>
-        !drag.current && !untouchable && layer.onHover(object.slot)
-      }
-      onPointerLeave={() => !drag.current && layer.onHover(undefined)}
-    >
-      <motion.div style={raise}>
-        <Look object={object} place={place} state={state} />
+    <>
+      <motion.div
+        className={classes}
+        data-slot={object.slot}
+        data-zone={object.zone}
+        data-card={object.name ?? undefined}
+        style={{
+          ...frame,
+          zIndex: dragging ? 1000 : lifted && !ghosted ? RAISED_Z : place.z,
+        }}
+        exit={
+          reduce ? undefined : { opacity: 0, transition: { duration: 0.3 } }
+        }
+        onPointerDown={untouchable ? undefined : onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={() => {
+          if (drag.current?.moved) layer.onLift?.(undefined);
+          drag.current = undefined;
+          setHeld(undefined);
+        }}
+        onPointerEnter={() =>
+          !drag.current && !untouchable && layer.onHover(object.slot)
+        }
+        onPointerLeave={() => !drag.current && layer.onHover(undefined)}
+      >
+        <motion.div
+          className={hand ? "card-look" : undefined}
+          style={{ ...raise, opacity: ghosted ? 0 : 1 }}
+        >
+          <motion.div style={{ x: shake }}>
+            <Look object={object} place={place} state={state} />
+          </motion.div>
+        </motion.div>
+        {hand && (
+          <div
+            className="hand-hit"
+            style={{
+              width: place.width,
+              height: place.width / ASPECT.full + (raised ? RAISE.lift : 0),
+              top: raised ? -RAISE.lift : 0,
+            }}
+          />
+        )}
       </motion.div>
-    </motion.div>
+      {ghosted && (
+        <motion.div
+          className={`${classes} card-ghost`}
+          aria-hidden
+          style={{ ...frame, zIndex: RAISED_Z }}
+        >
+          <motion.div style={raise}>
+            <Look object={object} place={place} state={state} ghost />
+          </motion.div>
+        </motion.div>
+      )}
+    </>
   );
 }
 
@@ -345,10 +381,13 @@ function Look({
   object,
   place,
   state,
+  ghost = false,
 }: {
   object: ObjectView;
   place: Placement;
   state: CardState;
+  /** A copy drawn over the card's element: the element keeps the id arrows find it by. */
+  ghost?: boolean;
 }) {
   const card = useFace(object);
   if (place.look === "hidden") return null;
@@ -362,7 +401,7 @@ function Look({
   const combat = field ? object.combat?.kind : undefined;
   const card_ = (
     <Card
-      id={cardId(object.slot)}
+      id={ghost ? undefined : cardId(object.slot)}
       card={card}
       combat={
         combat === "attacking"

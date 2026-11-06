@@ -20,7 +20,7 @@ use beryl_search::{Agent, Budget};
 
 use crate::preview;
 use crate::protocol::{
-    CandidateIndex, DecisionId, Moment, PlayerView, SessionId, StopsSetting, player_view,
+    CandidateIndex, DecisionId, Moment, PlayerView, SessionId, Status, StopsSetting, player_view,
 };
 use crate::replay::{Entry, ReplayFile};
 use crate::{SessionError, StartGame};
@@ -30,21 +30,39 @@ use crate::{SessionError, StartGame};
 pub struct OpenDecision {
     id: DecisionId,
     candidates: usize,
+    /// The human may take back the cast it is part of ([`Game::cancel`]).
+    cancellable: bool,
 }
 
 impl OpenDecision {
-    fn new(id: DecisionId, open: &Open) -> OpenDecision {
+    fn new(id: DecisionId, open: &Open, cancellable: bool) -> OpenDecision {
         OpenDecision {
             id,
             candidates: match open {
                 Open::Decision(d) => d.len(),
                 Open::Halt => 1,
             },
+            cancellable,
         }
     }
 
     pub fn id(self) -> DecisionId {
         self.id
+    }
+
+    /// Checks that the cast this decision, named `id`, is part of can be taken back.
+    pub fn cancel(self, id: DecisionId) -> Result<(), SessionError> {
+        if id != self.id {
+            return Err(SessionError::StaleDecision {
+                decision: id,
+                open: self.id,
+            });
+        }
+        if self.cancellable {
+            Ok(())
+        } else {
+            Err(SessionError::NotCancellable)
+        }
     }
 
     /// Checks that `index` answers this decision, named `id`.
@@ -102,6 +120,18 @@ enum At {
     Stopped,
 }
 
+/// The game as it stood at the human's priority before they began to cast a spell or activate
+/// an ability, kept until its costs are paid so that they can take it back ([`Game::cancel`]).
+#[derive(Clone, Debug)]
+struct BeforeCast {
+    state: State,
+    at: At,
+    answered: Option<Vec<StackEntry>>,
+    /// The length of the choice log then.
+    log: usize,
+    stops: StopsSetting,
+}
+
 /// A game in progress.
 pub struct Game {
     table: GameTable,
@@ -127,6 +157,8 @@ pub struct Game {
     stop: Arc<AtomicBool>,
     /// The engine's events the latest view reported.
     events: Vec<Event>,
+    /// Where the human's cast in progress began, while it can be taken back.
+    before_cast: Option<BeforeCast>,
 }
 
 impl Game {
@@ -169,6 +201,7 @@ impl Game {
             replay,
             stop: Arc::default(),
             events: Vec::new(),
+            before_cast: None,
         })
     }
 
@@ -225,7 +258,7 @@ impl Game {
                 (At::Human(id, open @ Open::Decision(_)), Entry::Choice(_))
                 | (At::Human(id, open @ Open::Halt), Entry::Halt) => {
                     let c = if let Entry::Choice(c) = entry { c } else { 0 };
-                    let answer = OpenDecision::new(id, &open)
+                    let answer = OpenDecision::new(id, &open, false)
                         .answer(id, CandidateIndex(c))
                         .map_err(|_| bad("a choice out of range"))?;
                     game.choose(answer);
@@ -267,9 +300,52 @@ impl Game {
     /// The human's open decision, if any.
     pub fn open(&self) -> Option<OpenDecision> {
         match &self.at {
-            At::Human(id, open) => Some(OpenDecision::new(*id, open)),
+            At::Human(id, open) => Some(OpenDecision::new(*id, open, self.cancellable())),
             _ => None,
         }
+    }
+
+    /// Whether the human's open decision is part of a spell they are casting or an ability
+    /// they are activating from their priority, whose costs are not yet paid: they may take
+    /// it back ([`Game::cancel`]).
+    fn cancellable(&self) -> bool {
+        self.before_cast.is_some()
+            && matches!(self.at, At::Human(_, Open::Decision(_)))
+            && matches!(self.state.pending(), Pending::Casting(_))
+    }
+
+    /// Takes back the spell the human is casting or the ability they are activating, before
+    /// its costs are paid, and returns the view of their priority again, as it was before they
+    /// began. The choice log forgets the cast, so a replay never sees it. Like a client's
+    /// cancel button, this follows the rule for a cast that cannot be completed
+    /// ([CR 601.2](https://yawgatog.com/resources/magic-rules/#R6012)): "the casting of the
+    /// spell is illegal; the game returns to the moment before the casting of that spell was
+    /// proposed".
+    pub fn cancel(&mut self) -> Result<PlayerView, SessionError> {
+        if self.open().is_none() {
+            return Err(SessionError::NotDeciding);
+        }
+        if !self.cancellable() {
+            return Err(SessionError::NotCancellable);
+        }
+        let before = self
+            .before_cast
+            .take()
+            .expect("a cancellable cast began somewhere");
+        self.state = before.state;
+        self.answered = before.answered;
+        self.replay.log.truncate(before.log);
+        self.stops = before.stops;
+        // The priority asked again is a new decision: an answer sent to the cast's is stale.
+        let At::Human(_, open) = before.at else {
+            unreachable!("a cast begins at the human's decision");
+        };
+        self.seq += 1;
+        self.at = At::Human(self.decision_id(), open);
+        self.scratch.events.drain();
+        // The view says nothing happened: the cast never was.
+        self.events.clear();
+        Ok(self.draw())
     }
 
     /// Checks `index` as an answer to the human's open decision `id`.
@@ -286,7 +362,21 @@ impl Game {
         };
         debug_assert_eq!(id, answer.id, "an answer names the open decision");
         match open {
-            Open::Decision(_) => self.apply(Entry::Choice(answer.choice.0)),
+            Open::Decision(d) => {
+                // A cast or an activation from priority can be taken back until it is paid for.
+                let before = (d.kind == DecisionKind::Priority).then(|| BeforeCast {
+                    state: self.state,
+                    at: self.at,
+                    answered: self.answered.clone(),
+                    log: self.replay.log.len(),
+                    stops: self.stops,
+                });
+                self.apply(Entry::Choice(answer.choice.0));
+                if let Some(before) = before {
+                    let casting = matches!(self.state.pending(), Pending::Casting(_));
+                    self.before_cast = casting.then_some(before);
+                }
+            }
             Open::Halt => self.replay.log.push(Entry::Halt),
         }
         self.answered = Some(self.state.stack().to_vec());
@@ -307,7 +397,7 @@ impl Game {
             }
             Open::Halt => 0,
         };
-        let answer = OpenDecision::new(id, &open)
+        let answer = OpenDecision::new(id, &open, false)
             .answer(id, CandidateIndex(c))
             .expect("an agent chooses a candidate");
         self.choose(answer);
@@ -365,6 +455,12 @@ impl Game {
                 &mut Replay,
                 self.seen,
             );
+            // Once a cast is complete, or another player decides, it can no longer be taken back.
+            if !matches!(step, Some(Step::Decide(d)) if d.player == self.human
+                && matches!(self.state.pending(), Pending::Casting(_)))
+            {
+                self.before_cast = None;
+            }
             self.at = match step {
                 None => {
                     let turn = self.state.turn();
@@ -525,6 +621,9 @@ impl Game {
         let mut view = player_view(&self.table, obs, moment, self.stops, &self.events);
         if let At::Human(_, Open::Decision(d)) = &self.at {
             preview::add_previews(&mut view, &self.state, &self.table, d);
+        }
+        if let Status::Deciding { decision } = &mut view.status {
+            decision.cancellable = self.cancellable();
         }
         view
     }

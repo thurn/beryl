@@ -78,6 +78,7 @@ pub fn run() {
             games::start_game = ipc::START_GAME,
             games::choose = ipc::CHOOSE,
             games::set_stops = ipc::SET_STOPS,
+            games::cancel = ipc::CANCEL,
         ])
         .register_asynchronous_uri_scheme_protocol(art::SCHEME, |ctx, request, responder| {
             let app = ctx.app_handle().clone();

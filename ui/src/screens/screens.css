@@ -667,6 +667,13 @@
   top: 50%;
   translate: -50% -50%;
   transform-origin: 50% 50%;
+  /* A drag across the table selects nothing; only what is typed in is text. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+.stage :is(input, textarea) {
+  user-select: text;
+  -webkit-user-select: text;
 }
 .table {
   position: absolute;
@@ -1186,6 +1193,18 @@
 .card-el-dragging {
   cursor: grabbing;
   filter: drop-shadow(0 18px 18px rgb(0 0 0 / 45%));
+}
+/* A hand card is hit where the fan shows it, never where its raised look covers its neighbors
+   (CardLayer.tsx): its look lets the pointer through to its hit box, and the copy drawn raised
+   over the hand is never hit. */
+.card-el-hand .card-look,
+.card-el.card-ghost,
+.card-ghost * {
+  pointer-events: none;
+}
+.hand-hit {
+  position: absolute;
+  left: 0;
 }
 /* The wrapper takes its card's size, so it is what the pointer and tests hit. */
 .card-el .on-table,

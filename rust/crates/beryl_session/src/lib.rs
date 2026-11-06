@@ -99,6 +99,8 @@ pub enum SessionError {
         index: CandidateIndex,
         candidates: usize,
     },
+    /// The open decision is not part of a cast the human may take back.
+    NotCancellable,
     /// The session's thread has ended.
     Ended,
     BadReplay {
@@ -135,6 +137,7 @@ impl fmt::Display for SessionError {
             SessionError::NoSuchCandidate { index, candidates } => {
                 write!(f, "candidate {} of {candidates}", index.0)
             }
+            SessionError::NotCancellable => write!(f, "nothing being cast can be taken back"),
             SessionError::Ended => write!(f, "the session has ended"),
             SessionError::BadReplay { reason } => write!(f, "not a replay: {reason}"),
             SessionError::Io { reason } => write!(f, "{reason}"),

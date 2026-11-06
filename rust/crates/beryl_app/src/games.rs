@@ -1,7 +1,7 @@
 //! The game commands: Tauri wrappers around [`Sessions`]. Views reach the UI as
 //! [`ipc::GAME_UPDATE`] events.
 
-use beryl_session::ipc::{ChooseRequest, SetStopsRequest};
+use beryl_session::ipc::{CancelRequest, ChooseRequest, SetStopsRequest};
 use beryl_session::{AgentView, SessionError, SessionId, Sessions, StartRequest, ipc};
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -34,6 +34,12 @@ pub fn start_game(
 #[allow(clippy::needless_pass_by_value)]
 pub fn choose(sessions: State<'_, Sessions>, request: ChooseRequest) -> Result<(), SessionError> {
     sessions.choose(request.decision, request.index)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+pub fn cancel(sessions: State<'_, Sessions>, request: CancelRequest) -> Result<(), SessionError> {
+    sessions.cancel(request.decision)
 }
 
 #[tauri::command]

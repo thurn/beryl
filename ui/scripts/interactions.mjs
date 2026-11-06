@@ -219,14 +219,178 @@ await check(
     },
 );
 
-await check("clicking a hand card opens its cast step", async (page) => {
+/** The `cancel` commands the page has sent. */
+const cancels = (page) =>
+    page.evaluate(
+        () =>
+            window.berylFixture.calls.filter((c) => c.command === "cancel")
+                .length,
+    );
+
+assert.equal(
+    decision.candidates[castIndex].payments.length,
+    1,
+    "the cast is paid one way: nothing for a cast step to ask",
+);
+await check(
+    "a click casts a card with nothing to choose, and Escape takes it back",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.click(card);
+        assert.deepEqual(
+            await chosen(page),
+            [castIndex],
+            `chose "${castLabel}"`,
+        );
+        await page.waitForSelector(`${card}[data-zone="stack"]`);
+        // It asks for its target; Escape takes the cast back, and the card is in hand again.
+        const targeting = page.getByRole("dialog", {
+            name: `Choose a target for ${name}`,
+        });
+        await targeting.waitFor();
+        await page.keyboard.press("Escape");
+        await page.waitForSelector(`${card}[data-zone="hand"]`);
+        assert.equal(await cancels(page), 1, "cancelled");
+        assert.equal(await targeting.count(), 0, "the target is not asked");
+        // Cast again, its prompt's Cancel button takes it back too.
+        await page.clock.runFor(2000);
+        await page.click(card);
+        await targeting
+            .getByRole("button", { name: "Cancel", exact: true })
+            .click();
+        await page.waitForSelector(`${card}[data-zone="hand"]`);
+        assert.equal(await cancels(page), 2, "cancelled again");
+        assert.deepEqual(await chosen(page), [castIndex, castIndex]);
+    },
+);
+
+await check("Space passes priority", async (page) => {
     await page.clock.runFor(2000);
-    await page.click(card);
-    const step = page.getByRole("dialog", { name: `Cast ${name}` });
-    await step.getByRole("button", { name: "Cast", exact: true }).click();
-    assert.deepEqual(await chosen(page), [castIndex], `chose "${castLabel}"`);
-    await page.waitForSelector(`${card}[data-zone="stack"]`);
+    await page.keyboard.press("Space");
+    const pass = decision.candidates.findIndex((c) => c.option.kind === "pass");
+    assert.deepEqual(await chosen(page), [pass], "passed");
 });
+
+await check(
+    "the turn button is reached by Tab, with a visible ring",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const turn = page.locator(".turn-action button");
+        for (let i = 0; i < 40; i++) {
+            if (await turn.evaluate((b) => b === document.activeElement)) break;
+            await page.keyboard.press("Tab");
+        }
+        assert.ok(
+            await turn.evaluate((b) => b === document.activeElement),
+            "Tab reaches the turn button",
+        );
+        const ring = await turn.evaluate(
+            (b) => getComputedStyle(b).outlineStyle,
+        );
+        assert.notEqual(ring, "none", "the focused turn button shows a ring");
+    },
+);
+
+await check("Escape closes the settings", async (page) => {
+    await page.clock.runFor(2000);
+    await page.getByRole("button", { name: "Settings" }).click();
+    const panel = page.locator(".settings");
+    await panel.waitFor();
+    await page.keyboard.press("Escape");
+    assert.equal(await panel.count(), 0, "closed");
+});
+
+await check("dragging across the table selects no text", async (page) => {
+    await page.clock.runFor(2000);
+    const selected = () =>
+        page.evaluate(() => window.getSelection()?.toString() ?? "");
+    // From the opponent's name, over the log and the table, to the near corner.
+    const badge = await page
+        .locator(".player-badge")
+        .getByText("Opponent", { exact: true })
+        .boundingBox();
+    await page.mouse.move(badge.x + 2, badge.y + badge.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(1580, 880, { steps: 25 });
+    await page.mouse.up();
+    assert.equal(await selected(), "", "nothing selected by a drag");
+    // A hand card picked up, carried over the log and put back.
+    const box = await page.locator(card).boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + 40);
+    await page.mouse.down();
+    await page.mouse.move(60, 300, { steps: 15 });
+    await page.mouse.move(box.x + box.width / 2, 880, { steps: 15 });
+    await page.mouse.up();
+    assert.equal(await selected(), "", "nothing selected by a card's drag");
+});
+
+await check(
+    "a click on the visible strip of each hand card acts on that card",
+    async (page) => {
+        await page.clock.runFor(2000);
+        // Each hand card's strip in the fan, at rest: where it is the card the pointer hits,
+        // as a row of points across the near edge.
+        const strips = await page.evaluate(() => {
+            const cards = [
+                ...document.querySelectorAll('.card-el-hand[data-zone="hand"]'),
+            ];
+            const y = innerHeight - 40;
+            const out = [];
+            for (const el of cards) {
+                const box = el.getBoundingClientRect();
+                const xs = [];
+                for (let x = Math.ceil(box.left); x < box.right; x += 2) {
+                    const hit = document.elementFromPoint(x, y);
+                    if (hit?.closest("[data-slot]") === el) xs.push(x);
+                }
+                out.push({ slot: Number(el.dataset.slot), xs, y });
+            }
+            return out.sort((a, b) => a.xs[0] - b.xs[0]);
+        });
+        assert.ok(strips.length >= 3, "a fan of cards");
+        // Every click is caught before the board hears of it, and the card it lands on noted.
+        await page.evaluate(() => {
+            window.hits = [];
+            for (const type of ["pointerdown", "pointerup", "click"]) {
+                window.addEventListener(
+                    type,
+                    (e) => {
+                        if (type === "pointerdown") {
+                            const el = e.target.closest?.("[data-slot]");
+                            window.hits.push(Number(el?.dataset.slot));
+                        }
+                        e.stopPropagation();
+                    },
+                    true,
+                );
+            }
+        });
+        const mid = ({ xs, y }) => ({ x: xs[xs.length >> 1], y });
+        for (const [i, strip] of strips.entries()) {
+            assert.ok(strip.xs.length > 4, `slot ${strip.slot} shows a strip`);
+            // With each neighbor raised, the edge of the strip next to it.
+            for (const n of [i - 1, i + 1]) {
+                const neighbor = strips[n];
+                if (!neighbor) continue;
+                const raised = mid(neighbor);
+                await page.mouse.move(raised.x, raised.y, { steps: 4 });
+                await page.clock.runFor(500);
+                const x =
+                    n < i ? strip.xs[0] + 4 : strip.xs[strip.xs.length - 1] - 4;
+                await page.mouse.move(x, strip.y, { steps: 4 });
+                await page.clock.runFor(500);
+                await page.mouse.down();
+                await page.mouse.up();
+                const hits = await page.evaluate(() => window.hits);
+                assert.equal(
+                    hits.at(-1),
+                    strip.slot,
+                    `a click on slot ${strip.slot}'s strip beside raised slot ${neighbor.slot}`,
+                );
+            }
+        }
+    },
+);
 
 await check("hovering a card shows it whole, with its artist", async (page) => {
     await page.clock.runFor(2000);
@@ -245,25 +409,29 @@ await check("hovering a card shows it whole, with its artist", async (page) => {
 });
 
 /** Where every card is drawn, by slot: the box of what its element draws (a raised hand card
- * rises inside its element), and whether a layout animation is moving its frame. */
+ * rises inside its element, which a copy over the hand shows), and whether a layout animation
+ * is moving its frame. */
 const drawn = (page) =>
     page.evaluate(() =>
         Object.fromEntries(
-            [...document.querySelectorAll(".card-el")].flatMap((e) => {
-                const look = e.firstElementChild;
-                if (!look) return [];
-                const r = look.getBoundingClientRect();
-                const frame = e.querySelector(".card-slot")?.style.transform;
-                return [
-                    [
-                        e.dataset.slot,
-                        {
-                            box: [r.left, r.top, r.right, r.bottom],
-                            animating: !!frame && frame !== "none",
-                        },
-                    ],
-                ];
-            }),
+            [...document.querySelectorAll(".card-el[data-slot]")].flatMap(
+                (e) => {
+                    const look = e.firstElementChild;
+                    if (!look) return [];
+                    const r = look.getBoundingClientRect();
+                    const frame =
+                        e.querySelector(".card-slot")?.style.transform;
+                    return [
+                        [
+                            e.dataset.slot,
+                            {
+                                box: [r.left, r.top, r.right, r.bottom],
+                                animating: !!frame && frame !== "none",
+                            },
+                        ],
+                    ];
+                },
+            ),
         ),
     );
 
@@ -1240,6 +1408,46 @@ await check(
     },
 );
 
+// A permanent with more than one use (a planeswalker's loyalty abilities) lists them where it
+// is clicked, each a button.
+const uses = new Map();
+attachedView.status.decision.candidates.forEach((c, index) => {
+    if (c.option.kind !== "activate") return;
+    uses.set(c.option.slot, [...(uses.get(c.option.slot) ?? []), index]);
+});
+const [walker, abilities] = [...uses].find(([, a]) => a.length > 1) ?? [];
+assert.ok(
+    walker !== undefined,
+    "the attached-across fixture offers two abilities",
+);
+await check(
+    "a card's menu lists its uses as buttons",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.click(`[data-slot="${walker}"]`);
+        const menu = page.locator(".action-menu");
+        const buttons = menu.getByRole("button");
+        assert.equal(await buttons.count(), abilities.length, "one per use");
+        const label =
+            attachedView.status.decision.candidates[abilities[1]].label;
+        await menu
+            .getByRole("button", {
+                name: label.slice(label.lastIndexOf(": ") + 2),
+            })
+            .click();
+        assert.deepEqual(
+            await chosen(page),
+            [abilities[1]],
+            `chose "${label}"`,
+        );
+    },
+    {
+        fixture: "attached-across",
+        at: (await load("attached-across")).length,
+        ready: `[data-slot="${walker}"]`,
+    },
+);
+
 /** Drags a hand card by `by`: hovered first, so it rises clear of its neighbors in the fan,
  * then picked up there. */
 async function dragFromHand(page, selector, by) {
@@ -1329,6 +1537,27 @@ await check(
         assert.deepEqual(await settled(page, 1), [
             playable.get(twin.name).index,
         ]);
+    },
+    {
+        fixture: "hand-pair",
+        at: pairViews.length,
+        ready: `[data-slot="${twin.slot}"][data-zone="hand"]`,
+    },
+);
+
+const landActs = pairView.status.decision.candidates.filter(
+    (c) => c.option.slot === playable.get(twin.name).option.slot,
+);
+assert.equal(landActs.length, 1, "the land's one use is to be played");
+await check(
+    "one click plays a land with one use",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.click(`[data-slot="${twin.slot}"]`);
+        assert.deepEqual(await settled(page, 1), [
+            playable.get(twin.name).index,
+        ]);
+        assert.equal(await page.locator(".action-menu").count(), 0, "no menu");
     },
     {
         fixture: "hand-pair",

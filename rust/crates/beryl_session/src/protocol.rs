@@ -273,6 +273,10 @@ pub struct DecisionView {
     /// their own precombat main phase (an end-turn button) and of the opponent's end step (a
     /// continue button), so the turn never moves on unseen.
     pub halt: bool,
+    /// The decision is part of a spell the viewer is casting or an ability they are
+    /// activating from their priority, whose costs are not yet paid: the `cancel` command
+    /// takes it back.
+    pub cancellable: bool,
 }
 
 /// What a decision asks ([`Ask`]), by public slot and relative to the viewer.
@@ -956,6 +960,7 @@ fn decision_view(
         pass_to: (d.kind == DecisionKind::Priority).then(|| pass_to(obs, stops)),
         source: decision_source(obs, d, resolving),
         halt: false,
+        cancellable: false,
     }
 }
 
@@ -975,6 +980,7 @@ fn halt_view(obs: Observation<'_>, id: DecisionId, stops: StopsSetting) -> Decis
         pass_to: Some(pass_to(obs, stops)),
         source: None,
         halt: true,
+        cancellable: false,
     }
 }
 

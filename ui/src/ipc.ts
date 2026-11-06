@@ -62,8 +62,10 @@ export interface FixtureCall {
 /** Replays a fixture: each command gets its recorded responses in order (the last one again
  * once they run out). Listeners get the recorded events in order: all of them at once, or,
  * given `at`, the first `at`, and then after each `choose` the views up to the next one the
- * player answers or the end, as if the app played on from the recorded answer. The events a
- * listener gets as it starts listening are past; those released by `choose` happen live.
+ * player answers or the end, as if the app played on from the recorded answer. A `cancel`
+ * goes back to the priority the cast began at, shown again with nothing happening in it, and
+ * the next `choose` plays the recording on from there. The events a listener gets as it
+ * starts listening are past; those released by `choose` and `cancel` happen live.
  * Every command is logged in `calls`. A fixture is the app's own recording, so its values are taken as their
  * commands' types. */
 export function fixtureTransport(
@@ -97,10 +99,48 @@ export function fixtureTransport(
       }
     });
   const calls: FixtureCall[] = [];
+  /** Takes back the cast the latest view is part of: its priority again, as it was. */
+  const cancel = () => {
+    const view = (i: number) =>
+      (events[i]?.payload as Events["game-update"] | undefined)?.view;
+    const latest = view(released - 1);
+    if (
+      latest?.status.kind !== "deciding" ||
+      !latest.status.decision.cancellable
+    ) {
+      return Promise.reject(
+        new CommandError("cancel", { kind: "notCancellable" }),
+      );
+    }
+    let at = released - 1;
+    while (at > 0) {
+      at -= 1;
+      const v = view(at);
+      if (
+        v?.status.kind === "deciding" &&
+        v.status.decision.kind === "priority"
+      )
+        break;
+    }
+    const update = events[at]!.payload as Events["game-update"];
+    released = at + 1;
+    queueMicrotask(() => {
+      for (const l of [...listeners]) {
+        if (l.event === "game-update" && listeners.has(l)) {
+          l.handler(
+            { ...update, view: { ...update.view, events: [] } } as never,
+            false,
+          );
+        }
+      }
+    });
+    return Promise.resolve(null);
+  };
   return {
     calls,
     invoke<C extends Command>(command: C, args: Args<C>): Promise<Result<C>> {
       calls.push({ command, args });
+      if (command === "cancel") return cancel() as Promise<Result<C>>;
       const queue = responses.get(command);
       if (!queue || queue.length === 0) {
         return Promise.reject(new Error(`fixture: no response for ${command}`));
@@ -283,6 +323,11 @@ export const choose = (decision: DecisionId, index: CandidateIndex) =>
 
 export const setStops = (session: SessionId, stops: StopsSetting) =>
   call("set_stops", { request: { session, stops } });
+
+/** Takes back the spell or ability being cast, whose open decision `decision` is part of
+ * (`DecisionView.cancellable`); the view of the priority it began at arrives again. */
+export const cancel = (decision: DecisionId) =>
+  call("cancel", { request: { decision } });
 
 export const onGameUpdate = async (
   handler: (update: Events["game-update"], past: boolean) => void,

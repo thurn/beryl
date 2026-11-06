@@ -25,7 +25,13 @@ decision: DecisionId, index: CandidateIndex, };
 
 export type SetStopsRequest = { session: SessionId, stops: StopsSetting, };
 
-export type SessionError = { "kind": "unknownAgent", name: string, } | { "kind": "unknownCard", name: string, } | { "kind": "deck", reason: string, } | { "kind": "staleSession", session: SessionId, } | { "kind": "notDeciding" } | { "kind": "staleDecision", decision: DecisionId, open: DecisionId, } | { "kind": "noSuchCandidate", index: CandidateIndex, candidates: number, } | { "kind": "ended" } | { "kind": "badReplay", reason: string, } | { "kind": "io", reason: string, };
+export type CancelRequest = { 
+/**
+ * The open decision the UI received, part of the cast.
+ */
+decision: DecisionId, };
+
+export type SessionError = { "kind": "unknownAgent", name: string, } | { "kind": "unknownCard", name: string, } | { "kind": "deck", reason: string, } | { "kind": "staleSession", session: SessionId, } | { "kind": "notDeciding" } | { "kind": "staleDecision", decision: DecisionId, open: DecisionId, } | { "kind": "noSuchCandidate", index: CandidateIndex, candidates: number, } | { "kind": "notCancellable" } | { "kind": "ended" } | { "kind": "badReplay", reason: string, } | { "kind": "io", reason: string, };
 
 export type GameUpdate = { 
 /**
@@ -192,7 +198,13 @@ source: number | null,
  * their own precombat main phase (an end-turn button) and of the opponent's end step (a
  * continue button), so the turn never moves on unseen.
  */
-halt: boolean, };
+halt: boolean, 
+/**
+ * The decision is part of a spell the viewer is casting or an ability they are
+ * activating from their priority, whose costs are not yet paid: the `cancel` command
+ * takes it back.
+ */
+cancellable: boolean, };
 
 export type AskView = { "kind": "plain" } | { "kind": "scry", count: number, } | { "kind": "look", player: Side, zone: ZoneName, count: number, to: ZoneName, eligible: Array<number>, } | { "kind": "putBack", count: number, } | { "kind": "fateseal", player: Side, } | { "kind": "take", count: number, take: number, } | { "kind": "bottom", count: number, } | { "kind": "discardBasicLand", count: number, } | { "kind": "topOrBottom", card: number, } | { "kind": "explore" } | { "kind": "manifestDread" } | { "kind": "exileCards", zone: ZoneName, count: number, } | { "kind": "untap", max: number, } | { "kind": "unlessPays", cost: string, } | { "kind": "payLife", life: number, } | { "kind": "cleanup", count: number, };
 
@@ -257,6 +269,7 @@ export type Commands = {
   start_game: { args: { request: StartRequest }; result: SessionId; error: SessionError };
   choose: { args: { request: ChooseRequest }; result: null; error: SessionError };
   set_stops: { args: { request: SetStopsRequest }; result: null; error: SessionError };
+  cancel: { args: { request: CancelRequest }; result: null; error: SessionError };
 };
 
 /** Each event's payload. */

@@ -7,6 +7,7 @@ import { Button } from "../components/Controls";
 import { Card } from "../components/Card";
 import { RulesText } from "../components/Mana";
 import {
+  cancel,
   choose,
   CommandError,
   listAgents,
@@ -134,13 +135,16 @@ const STALLS: Record<Stall, string> = {
 };
 
 /** A command's failure as the player should hear of it; none for an answer to a decision
- * that was answered already (a double click) or replaced. */
+ * that was answered already (a double click) or replaced, or a cast completed before it could
+ * be taken back. */
 function failure(e: unknown): string | undefined {
   if (!(e instanceof CommandError)) {
     return String(e);
   }
   const kind = e.error.kind;
-  return kind === "notDeciding" || kind === "staleDecision"
+  return kind === "notDeciding" ||
+    kind === "staleDecision" ||
+    kind === "notCancellable"
     ? undefined
     : e.message;
 }
@@ -225,6 +229,14 @@ function Playing({ playback }: { playback: Playback }) {
     planned.current = [...then, ...planned.current];
     choose(decision.id, index).catch(fail);
   };
+  /** Takes back the cast in progress, and any picks planned for it. */
+  const cancelCast = () => {
+    if (!decision?.cancellable || waiting) return;
+    setError(undefined);
+    setAnswered(view);
+    planned.current = [];
+    cancel(decision.id).catch(fail);
+  };
 
   // Each new decision takes the next planned pick, if it asks for it; otherwise the plan is
   // over (but for a pick that waits) and the player decides. The views of the game playing on
@@ -271,6 +283,7 @@ function Playing({ playback }: { playback: Playback }) {
         log={log}
         waiting={waiting}
         choose={answer}
+        cancel={cancelCast}
         setFullControl={(on) =>
           setStops(session, on ? "exact" : "smart").catch(fail)
         }

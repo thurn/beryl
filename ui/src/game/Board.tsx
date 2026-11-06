@@ -8,6 +8,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type ReactNode,
@@ -130,6 +131,9 @@ export interface BoardProps {
   waiting: boolean;
   /** Answers the open decision, and the decisions after it with `then`, as each arrives. */
   choose(index: CandidateIndex, then?: Intent[]): void;
+  /** Takes back the spell or ability being cast, at a decision that may
+   * (`DecisionView.cancellable`). */
+  cancel?(): void;
   /** Full control: stop at every priority (decision D13). */
   setFullControl(on: boolean): void;
   onLeave(): void;
@@ -171,6 +175,7 @@ export function Board({
   log,
   waiting,
   choose,
+  cancel,
   setFullControl,
   onLeave,
   dimmed = false,
@@ -218,6 +223,8 @@ export function Board({
     !isCombat(decision.kind) &&
     !isOpening(decision.kind);
   const castingNow = deciding ? casting : undefined;
+  // The cast under way, which the engine is asking about, can still be taken back.
+  const cancellable = deciding && decision?.cancellable === true;
   // The prompt or the cast step sits over the turn controls; the stack rises to clear it.
   const asking = prompting || castingNow !== undefined;
   const placements = useMemo(
@@ -257,6 +264,13 @@ export function Board({
   const setUp = (slot: number, casts: Act[]) => {
     setMenu(undefined);
     setCasting({ slot, casts, choice: firstChoice(casts[0]!) });
+  };
+  /** Casts from a click: at once, as a drop does, unless the cast step has a choice to offer:
+   * which cast, X, or which permanents pay. */
+  const castOrSetUp = (slot: number, casts: Act[]) => {
+    const choice = firstChoice(casts[0]!);
+    if (asksCastStep(casts) || plansOf(choice).length > 1) setUp(slot, casts);
+    else cast(choice);
   };
   /** A menu's pick: a cast goes to the cast step, with all of the card's casts. */
   const pickAct = (slot: number, act: Act) => {
@@ -377,7 +391,8 @@ export function Board({
     }
   }
 
-  const onClick = (slot: number, at: Point) => {
+  /** A click on the card in `slot`: what it offers, or nothing (false). */
+  const onClick = (slot: number, at: Point): boolean => {
     if (castingNow) {
       // A permanent another payment taps pays that way.
       const plan = plansOf(castingNow.choice).find((p) =>
@@ -388,26 +403,27 @@ export function Board({
           ...castingNow,
           choice: { ...castingNow.choice, plan: plan.plan ?? undefined },
         });
-        return;
+        return true;
       }
-      if (slot === castingNow.slot) return;
+      if (slot === castingNow.slot) return true;
       setCasting(undefined);
     }
     if (drafting) {
       setDraft(drafted(draft, slot));
-      return;
+      return true;
     }
     const acts = deciding ? can.bySlot.get(slot) : undefined;
     if (!acts) {
       setMenu(undefined);
-      return;
+      return false;
     }
     const casts = castActs(acts);
-    if (can.picking && acts.length === 1) {
+    if (casts.length > 0 && casts.length === acts.length) {
+      // A card that can only be cast is cast, or set up in the cast step.
+      castOrSetUp(slot, casts);
+    } else if (acts.length === 1) {
+      // One use acts on the click: a land is played, an ability activated, a target picked.
       pick(acts[0]!.index);
-    } else if (casts.length > 0 && casts.length === acts.length) {
-      // A card that can only be cast goes straight to the cast step.
-      setUp(slot, casts);
     } else {
       // One entry for all of a card's casts, which the cast step tells apart.
       const listed = acts.filter(
@@ -415,6 +431,7 @@ export function Board({
       );
       setMenu({ slot, at, acts: listed });
     }
+    return true;
   };
   const onDrop = (slot: number, { start, at, onto }: Drop) => {
     const acts = deciding ? (can.bySlot.get(slot) ?? []) : [];
@@ -503,6 +520,41 @@ export function Board({
     setDraft({ ...draft, attacks, selected: undefined });
   };
 
+  // The keyboard (Arena's): Space or Enter does the primary action, passing or confirming, and
+  // Escape takes back what was begun. A menu, the cast step and a pile's viewer close on
+  // Escape themselves; a focused button takes its own Space and Enter.
+  const onKey = useRef<(e: KeyboardEvent) => void>(undefined);
+  onKey.current = (e) => {
+    if (inert || e.defaultPrevented) return;
+    if (e.key === "Escape") {
+      if (settings) setSettings(false);
+      else if (cancellable && !menu && !castingNow && !viewed) cancel?.();
+      return;
+    }
+    if ((e.key !== " " && e.key !== "Enter") || e.repeat || menu || viewed) {
+      return;
+    }
+    const target = e.target instanceof Element ? e.target : null;
+    if (target?.closest("button, input, select, textarea, a")) return;
+    const { done, pass } = can;
+    let primary: (() => void) | undefined;
+    if (castingNow) primary = () => cast(castingNow.choice);
+    else if (drafting) primary = declare;
+    else if (declaring)
+      primary = done === undefined ? undefined : () => pick(done);
+    else if (deciding && decision?.kind === "priority" && pass !== undefined) {
+      primary = () => pick(pass);
+    }
+    if (!primary) return;
+    e.preventDefault();
+    primary();
+  };
+  useEffect(() => {
+    const listener = (e: KeyboardEvent) => onKey.current?.(e);
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  }, []);
+
   const nameOf = (slot: number) => objects.get(slot)?.name ?? "a card";
   const { you, opponent } = view.players;
   const active = view.turn.active;
@@ -532,6 +584,13 @@ export function Board({
       <div
         className={dimmed ? "table table-dimmed" : "table"}
         onPointerDown={() => setSettings(false)}
+        // A right-click takes back what was begun, as Escape does.
+        onContextMenu={(e) => {
+          e.preventDefault();
+          if (menu || inert) return;
+          if (castingNow) setCasting(undefined);
+          else if (cancellable) cancel?.();
+        }}
       >
         <div className="far-shade" />
         {(["opponent", "you"] as const).map((side) => {
@@ -710,6 +769,7 @@ export function Board({
             source={sourceName}
             nameOf={nameOf}
             onPick={pick}
+            onCancel={cancellable ? cancel : undefined}
           />
         )}
 
@@ -1129,11 +1189,14 @@ function Prompt({
   source,
   nameOf,
   onPick,
+  onCancel,
 }: {
   decision: DecisionView;
   source?: string;
   nameOf(slot: number): string;
   onPick(index: CandidateIndex): void;
+  /** Takes back the cast the decision is part of. */
+  onCancel?(): void;
 }) {
   // A payment plan reads as what it taps, never as a number; a trigger as its source, since
   // the title says what happens to it.
@@ -1160,6 +1223,13 @@ function Prompt({
           </Button>
         ))}
       </div>
+      {onCancel && (
+        <div className="cast-buttons">
+          <Button size="small" variant="secondary" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1189,7 +1259,8 @@ function ActionMenu({
       <div className="menu-scrim" onPointerDown={onClose} />
       <div
         className="action-menu"
-        role="menu"
+        role="group"
+        aria-label={title}
         style={
           bottom
             ? { left, bottom: 900 - menu.at.y + 8 }
@@ -1201,7 +1272,6 @@ function ActionMenu({
           <button
             key={a.index}
             type="button"
-            role="menuitem"
             className="action-menu-item"
             onClick={() => onPick(a)}
           >

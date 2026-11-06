@@ -108,6 +108,11 @@ impl Sessions {
         self.with(decision.session, |game| game.choose(decision, index))
     }
 
+    /// Takes back the cast the human's open decision `decision` is part of.
+    pub fn cancel(&self, decision: DecisionId) -> Result<(), SessionError> {
+        self.with(decision.session, |game| game.cancel(decision))
+    }
+
     /// Switches the human's priority stops in game `session`.
     pub fn set_stops(&self, session: SessionId, stops: StopsSetting) -> Result<(), SessionError> {
         self.with(session, |game| game.set_stops(stops))

@@ -24,6 +24,7 @@ pub(crate) struct GameSession {
 enum Command {
     Choose(Answer),
     SetStops(StopsSetting),
+    Cancel,
 }
 
 impl GameSession {
@@ -60,6 +61,17 @@ impl GameSession {
         *open = None;
         self.commands
             .send(Command::Choose(answer))
+            .map_err(|_| SessionError::Ended)
+    }
+
+    /// Takes back the cast the human's open decision `id` is part of ([`Game::cancel`]). It
+    /// returns at once; the view of their priority again arrives through `emit`.
+    pub(crate) fn cancel(&self, id: DecisionId) -> Result<(), SessionError> {
+        let mut open = self.open.lock().unwrap_or_else(PoisonError::into_inner);
+        open.ok_or(SessionError::NotDeciding)?.cancel(id)?;
+        *open = None;
+        self.commands
+            .send(Command::Cancel)
             .map_err(|_| SessionError::Ended)
     }
 
@@ -132,6 +144,15 @@ fn run(
                     game.choose(answer);
                     break;
                 }
+                // The session checked that the open decision can be taken back.
+                Command::Cancel => match game.cancel() {
+                    Ok(view) => {
+                        if publish(&game, view, true) {
+                            return;
+                        }
+                    }
+                    Err(e) => eprintln!("beryl_session: {e}"),
+                },
                 Command::SetStops(stops) => match game.set_stops(stops) {
                     Ok(view) => {
                         if publish(&game, view, false) {

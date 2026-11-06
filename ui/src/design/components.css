@@ -919,6 +919,11 @@
 .button:not(:disabled):hover {
   filter: brightness(1.08);
 }
+/* Reached by Tab: a bright ring clear of the button's own edge. */
+.button:focus-visible {
+  outline: 2px solid var(--metal-bright);
+  outline-offset: 3px;
+}
 .button:not(:disabled):active {
   transform: translateY(1px);
 }
