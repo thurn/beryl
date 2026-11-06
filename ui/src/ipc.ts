@@ -266,8 +266,9 @@ async function chooseTransport(): Promise<Transport> {
     return transport;
   }
   // `?fixture=<name>` replays /fixtures/<name>.json, which `beryl_cli record-fixture` writes
-  // and Vite serves from ui/public/fixtures, with the plain browser's responses to the commands
-  // it did not record; `&at=<n>` starts from its nth view and plays on as `choose` is called.
+  // and Vite serves from ui/public/fixtures (`by ui-test`'s pages fetch their own), with the
+  // plain browser's responses to the commands it did not record; `&at=<n>` starts from its nth
+  // view and plays on as `choose` is called.
   const params = new URLSearchParams(window.location.search);
   const name = params.get("fixture");
   if (!name) {

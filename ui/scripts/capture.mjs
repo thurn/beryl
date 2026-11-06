@@ -4,6 +4,21 @@ import { webkit } from "playwright";
 
 export const launch = () => webkit.launch();
 
+/** Runs the tasks it is handed at most `BERYL_UI_WORKERS` (default 4) at a time, each on its own
+ * browser context. Awaiting a hand-off waits for a free worker, not for the task, so a script
+ * reads on while its pages play; `drain` waits for every task. A task must not throw. */
+export function workers() {
+    const limit = Number(process.env.BERYL_UI_WORKERS) || 4;
+    const running = new Set();
+    const run = async (task) => {
+        while (running.size >= limit) await Promise.race(running);
+        const done = task().finally(() => running.delete(done));
+        running.add(done);
+    };
+    run.drain = () => Promise.all(running);
+    return run;
+}
+
 /** A page at `width`×`height` with device scale factor 1 and motion reduced, collecting the
  * page's errors and console errors into `errors`. */
 export async function openPage(browser, { width, height, scale = 1 }) {

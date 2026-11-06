@@ -4,8 +4,8 @@ sequence of timed steps, and print failed lanes last.
 
 The fast check runs the lanes whose files changed since the branch left origin/staging. Slow
 CI runs every lane plus `app` (the debug app built and launched headless until its UI loads),
-`shots` (the screens rendered and the game screen played headless) and `oracle` (the card
-scenarios checked against XMage and Forge).
+`shots` (the screens rendered headless), `ui-test` (the game screen played headless) and
+`oracle` (the card scenarios checked against XMage and Forge).
 """
 
 from __future__ import annotations
@@ -235,13 +235,14 @@ def app_lane() -> Lane:
 
 
 def shots_lane() -> Lane:
-    """Renders every screen in ui/shots.json headless and plays the game screen through a
-    fixture; a page error, a crash or a failed interaction fails it."""
-    return (
-        Lane("shots", warm=True)
-        .step("ui-shots", [*BY, "ui-shots"])
-        .step("ui-test", [*BY, "ui-test"])
-    )
+    """Renders every screen in ui/shots.json headless; a page error or a crash fails it."""
+    return Lane("shots", warm=True).step("ui-shots", [*BY, "ui-shots"])
+
+
+def ui_test_lane() -> Lane:
+    """Plays the game screen through fixtures it records apart from `shots`' (shots.py), so
+    the two run at once; a page error or a failed interaction fails it."""
+    return Lane("ui-test", warm=True).step("ui-test", [*BY, "ui-test"])
 
 
 def oracle_lane() -> Lane:
@@ -284,6 +285,7 @@ def slow(args: argparse.Namespace) -> int:
         "ui": ui_lane(),
         "app": app_lane(),
         "shots": shots_lane(),
+        "ui-test": ui_test_lane(),
         "oracle": oracle_lane(),
     }
     chosen = args.lanes or list(lanes)

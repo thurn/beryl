@@ -8,14 +8,14 @@
 // `opponent-turn` plays out an opponent's turn to the session's halts. The combat fixtures
 // `combat-declare` and `combat-double-block` end past the human's attack and block
 // declarations, which the page makes whole and sends one pick at a time. Animation is
-// measured on Playwright's clock, so the checks do not depend on the machine's speed. The
-// `choice-*` fixtures end on decisions the choice overlays ask. Exits non-zero on the first
-// failed check or any page error.
+// measured on Playwright's clock, so the checks do not depend on the machine's speed, nor on
+// how many run at once. The `choice-*` fixtures end on decisions the choice overlays ask. Exits
+// non-zero if a check fails or a page logs an error.
 import assert from "node:assert/strict";
 import { readdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { slotOf as offeredSlot, twins } from "../src/game/decisions.ts";
-import { cutText, launch } from "./capture.mjs";
+import { cutText, launch, workers } from "./capture.mjs";
 
 const [base, fixtures] = process.argv.slice(2);
 if (!base || !fixtures) {
@@ -84,7 +84,11 @@ const browser = await launch();
 const errors = [];
 let failed = false;
 
-/** Runs `body` on a fresh page of a fixture's first `at` views, once `ready` matches. */
+const queue = workers();
+
+/** Runs `body` on a fresh page of a fixture's first `at` views, once `ready` matches, alongside
+ * other checks (capture.mjs' workers): awaiting it waits only for a free worker. The page's
+ * fixtures come from `fixtures`, not from what Vite serves. */
 async function check(
     title,
     body,
@@ -96,30 +100,42 @@ async function check(
         reducedMotion = "no-preference",
     } = {},
 ) {
-    const context = await browser.newContext({
-        viewport,
-        deviceScaleFactor: 1,
-        reducedMotion,
+    await queue(async () => {
+        const context = await browser.newContext({
+            viewport,
+            deviceScaleFactor: 1,
+            reducedMotion,
+        });
+        await context.route("**/fixtures/*.json", (route) =>
+            route.fulfill({
+                path: join(
+                    fixtures,
+                    decodeURIComponent(
+                        basename(new URL(route.request().url()).pathname),
+                    ),
+                ),
+            }),
+        );
+        const page = await context.newPage();
+        page.on("pageerror", (e) => errors.push(`${title}: ${e.message}`));
+        page.on(
+            "console",
+            (m) => m.type() === "error" && errors.push(`${title}: ${m.text()}`),
+        );
+        try {
+            await page.clock.install();
+            const route = `/?fixture=${fixture}&at=${at}#/game`;
+            await page.goto(new URL(route, base).href, { waitUntil: "load" });
+            await page.waitForSelector(ready);
+            await body(page);
+            console.log(`ok: ${title}`);
+        } catch (e) {
+            failed = true;
+            console.error(`FAILED: ${title}\n${e.stack ?? e}`);
+        } finally {
+            await context.close();
+        }
     });
-    const page = await context.newPage();
-    page.on("pageerror", (e) => errors.push(`${title}: ${e.message}`));
-    page.on(
-        "console",
-        (m) => m.type() === "error" && errors.push(`${title}: ${m.text()}`),
-    );
-    try {
-        await page.clock.install();
-        const route = `/?fixture=${fixture}&at=${at}#/game`;
-        await page.goto(new URL(route, base).href, { waitUntil: "load" });
-        await page.waitForSelector(ready);
-        await body(page);
-        console.log(`ok: ${title}`);
-    } catch (e) {
-        failed = true;
-        console.error(`FAILED: ${title}\n${e.stack ?? e}`);
-    } finally {
-        await context.close();
-    }
 }
 
 await check(
@@ -2826,6 +2842,7 @@ await check(
     },
 );
 
+await queue.drain();
 await browser.close();
 if (errors.length) {
     failed = true;

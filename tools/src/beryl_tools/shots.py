@@ -4,7 +4,9 @@ routes listed in ui/shots.json with headless Playwright WebKit (ui/scripts/shots
 the paths. Pages run in a plain browser on the fixture transport (ui/src/ipc.ts).
 
 `ui-test` plays the game screen through a fixture the same way, dragging, clicking and hovering
-as a player would (ui/scripts/interactions.mjs).
+as a player would (ui/scripts/interactions.mjs). It records its fixtures into the cache instead,
+where its pages fetch them, so it runs alongside `ui-shots` (slow CI's `shots` and `ui-test`
+lanes).
 
 `ui-live` serves live games instead: `beryl_cli serve` runs the app's game commands, Vite serves
 the UI against it (`?live=`, src/ipc.ts), and ui/scripts/drive.mjs holds a headless WebKit page
@@ -103,13 +105,13 @@ def webkit_env() -> dict[str, str]:
     return env
 
 
-def record_fixtures(only: list[str] | None = None) -> int:
+def record_fixtures(into: Path = RECORDED, only: list[str] | None = None) -> int:
     """Plays the fixtures' seeded games (those named in `only`, or all) and records them into
-    RECORDED, fresh each run."""
-    shutil.rmtree(RECORDED, ignore_errors=True)
+    `into`, fresh each run."""
+    shutil.rmtree(into, ignore_errors=True)
     return subprocess.run(
         ["cargo", "run", "--quiet", "--package", "beryl_cli", "--"]
-        + ["record-fixture", str(FIXTURES), str(RECORDED)]
+        + ["record-fixture", str(FIXTURES), str(into)]
         + (only or []),
         cwd=paths.RUST,
         stdin=subprocess.DEVNULL,
@@ -202,13 +204,14 @@ INTERACTION_FIXTURES = [
 
 
 def ui_test(args: argparse.Namespace) -> int:
+    recorded = paths.cache_root() / "ui-test" / paths.REPO.name
     try:
         env = webkit_env()
-        code = record_fixtures(INTERACTION_FIXTURES)
+        code = record_fixtures(recorded, INTERACTION_FIXTURES)
         if code == 0:
             with served_ui(env) as url:
                 code = subprocess.run(
-                    ["node", "scripts/interactions.mjs", url, str(RECORDED)],
+                    ["node", "scripts/interactions.mjs", url, str(recorded)],
                     cwd=paths.UI,
                     env=env,
                     stdin=subprocess.DEVNULL,

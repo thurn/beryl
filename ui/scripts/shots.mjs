@@ -1,10 +1,10 @@
 // Captures UI states with headless Playwright WebKit; `by ui-shots` (tools/) serves the UI and
 // runs this. Usage: node scripts/shots.mjs <base-url> <out-dir> <shots.json> [name...]
-// Prints each screenshot's path; exits non-zero if a page logs an error, cuts off text
-// (capture.mjs' clippedText) or never settles.
+// Captures several at once (capture.mjs' workers) and prints each screenshot's path; exits
+// non-zero if a page logs an error, cuts off text (capture.mjs' clippedText) or never settles.
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { clippedText, launch, openPage, settle } from "./capture.mjs";
+import { clippedText, launch, openPage, settle, workers } from "./capture.mjs";
 
 const [base, out, list, ...only] = process.argv.slice(2);
 if (!base || !out || !list) {
@@ -22,11 +22,10 @@ if (unknown.length) {
     process.exit(2);
 }
 
-const browser = await launch();
-let failed = false;
-try {
-    for (const shot of chosen) {
-        const { context, page, errors } = await openPage(browser, shot);
+/** Captures `shot` into `out`, logging its errors; whether it had none. */
+async function capture(browser, shot) {
+    const { context, page, errors } = await openPage(browser, shot);
+    try {
         await page.goto(new URL(shot.route, base).href, { waitUntil: "load" });
         // A large fixture is still being fetched when the page first renders.
         if (shot.route.includes("fixture=")) {
@@ -53,13 +52,28 @@ try {
         await page.screenshot({ path, fullPage: true });
         for (const cut of await clippedText(page))
             errors.push(`text cut: ${cut}`);
-        if (errors.length) {
-            failed = true;
-            console.error(`ui-shots: ${shot.name}: ${errors.join("\n  ")}`);
-        }
         console.log(path);
+    } catch (e) {
+        errors.push(e.stack ?? String(e));
+    } finally {
         await context.close();
     }
+    if (errors.length) {
+        console.error(`ui-shots: ${shot.name}: ${errors.join("\n  ")}`);
+    }
+    return !errors.length;
+}
+
+const browser = await launch();
+const run = workers();
+let failed = false;
+try {
+    for (const shot of chosen) {
+        await run(async () => {
+            if (!(await capture(browser, shot))) failed = true;
+        });
+    }
+    await run.drain();
 } finally {
     await browser.close();
 }
