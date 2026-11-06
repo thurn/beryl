@@ -203,6 +203,7 @@ INTERACTION_FIXTURES = [
     "menu-choices",
     "namesake-target",
     "pay-life",
+    "crowded",
 ]
 
 

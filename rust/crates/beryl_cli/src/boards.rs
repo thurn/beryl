@@ -637,6 +637,57 @@ pub const BOARDS: &[Scenario] = &[
         .battlefield(P1, &[Permanent::new(SNAPCASTER_MAGE), ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[Action::activate(P0, TEFERI_HERO_OF_DOMINARIA, 1)]),
+    // A crowded table, nine and ten nonland permanents a side, among them planeswalkers, a pile
+    // of twins, counters and a tapped one: the opponent casts Stock Up, which the human may
+    // counter.
+    Scenario::new("crowded")
+        .at(4, P1, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(SNAPCASTER_MAGE),
+                Permanent::new(TRINKET_MAGE),
+                Permanent::new(JACE_VRYNS_PRODIGY),
+                Permanent::new(THUNDERTRAP_TRAINER),
+                Permanent::new(STAFF_OF_THE_STORYTELLER).counters(CounterKind::Story, 2),
+                Permanent::new(CURRENCY_CONVERTER).tapped(),
+                Permanent::new(MANA_CRYPT),
+                Permanent::new(JACE_THE_MIND_SCULPTOR),
+                Permanent::new(THE_WANDERING_EMPEROR),
+                ISLAND_,
+                ISLAND_,
+                ISLAND_,
+                PLAINS_,
+                PLAINS_,
+                Permanent::new(TUNDRA),
+            ],
+        )
+        .hand(P0, &[COUNTERSPELL, MANA_DRAIN, OUST, ISLAND])
+        .library(P0, LANDS)
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(BEZA_THE_BOUNDING_SPRING),
+                Permanent::new(SUBTLETY),
+                Permanent::new(TRINKET_MAGE),
+                Permanent::new(SNAPCASTER_MAGE),
+                Permanent::new(ELITE_SPELLBINDER),
+                Permanent::new(MALCOLM_ALLURING_SCOUNDREL),
+                Permanent::new(THIEVING_SKYDIVER),
+                Permanent::new(STAFF_OF_THE_STORYTELLER),
+                Permanent::new(STAFF_OF_THE_STORYTELLER),
+                Permanent::new(TEFERI_HERO_OF_DOMINARIA),
+                ISLAND_,
+                ISLAND_,
+                ISLAND_,
+                PLAINS_,
+                PLAINS_,
+                Permanent::new(SEACHROME_COAST),
+            ],
+        )
+        .hand(P1, &[STOCK_UP])
+        .library(P1, LANDS)
+        .actions(&[Action::cast(P1, STOCK_UP)]),
 ];
 
 /// A library to draw from for a few turns.

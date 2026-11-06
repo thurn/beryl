@@ -190,6 +190,10 @@ enum Condition {
     ManaFloating,
     /// A spell or ability on the stack has an announced X above 0.
     XOnStack,
+    /// Each player controls at least this many nonland permanents.
+    Crowded(usize),
+    /// The top of the stack is a spell.
+    SpellOnStack,
 }
 
 /// What the table draws on a permanent beyond its frame.
@@ -246,9 +250,9 @@ impl Condition {
     /// "namesake candidates", "resolving <card name>", "casting <card name>",
     /// "playable pair in hand", "exiled beneath a permanent", "attached across the table",
     /// "castable from exile", "known card in the opponent's hand", "token twins", "changed
-    /// token", "stolen permanent", "mana floating", "X on the stack", or "<mark> beside a twin"
-    /// with the mark "+1/+1 counters", "damage", "summoning sickness" or "story or time
-    /// counters".
+    /// token", "stolen permanent", "mana floating", "X on the stack", "spell on the stack", "<n>
+    /// nonland permanents a side", or "<mark> beside a twin" with the mark "+1/+1 counters",
+    /// "damage", "summoning sickness" or "story or time counters".
     fn parse(text: &str) -> Result<Condition, String> {
         let condition = match text {
             "attacking" => Condition::Attacking,
@@ -273,6 +277,7 @@ impl Condition {
             "mana floating" => Condition::ManaFloating,
             "X on the stack" => Condition::XOnStack,
             "namesake candidates" => Condition::NamesakeCandidates,
+            "spell on the stack" => Condition::SpellOnStack,
             _ => {
                 if let Some(step) = text.strip_prefix("step ") {
                     Condition::Step(
@@ -289,6 +294,8 @@ impl Condition {
                     Condition::Resolving(name.to_owned())
                 } else if let Some(name) = text.strip_prefix("casting ") {
                     Condition::Casting(name.to_owned())
+                } else if let Some(n) = text.strip_suffix(" nonland permanents a side") {
+                    Condition::Crowded(n.parse().map_err(|_| format!("bad count {n:?}"))?)
                 } else {
                     return Err(format!("{text:?}: no such condition"));
                 }
@@ -386,6 +393,18 @@ impl Condition {
             Condition::Stolen => stolen(view),
             Condition::ManaFloating => mana_floating(view),
             Condition::XOnStack => x_on_stack(view),
+            Condition::Crowded(n) => [Side::You, Side::Opponent].iter().all(|side| {
+                view.objects
+                    .iter()
+                    .filter(|o| {
+                        o.zone == ZoneName::Battlefield
+                            && o.controller == *side
+                            && !o.types.contains(&CardType::Land)
+                    })
+                    .count()
+                    >= *n
+            }),
+            Condition::SpellOnStack => matches!(view.stack.last(), Some(StackItem::Spell { .. })),
         }
     }
 }
@@ -871,6 +890,15 @@ mod tests {
             Ok(Condition::ManaFloating)
         );
         assert_eq!(Condition::parse("X on the stack"), Ok(Condition::XOnStack));
+        assert_eq!(
+            Condition::parse("8 nonland permanents a side"),
+            Ok(Condition::Crowded(8))
+        );
+        assert_eq!(
+            Condition::parse("spell on the stack"),
+            Ok(Condition::SpellOnStack)
+        );
+        assert!(Condition::parse("many nonland permanents a side").is_err());
         assert!(Condition::parse("step lunch").is_err());
         assert!(Condition::parse("raining").is_err());
     }
