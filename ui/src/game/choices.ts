@@ -571,7 +571,7 @@ function manifestDread(at: Situation): Pick {
   };
 }
 
-/** Cards from the graveyard to exile for a cost, as Abhorrent Oculus's "exile six cards from
+/** Cards from the graveyard to exile for a cost, as "exile six cards from
  * your graveyard" ([CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h)). The
  * engine asks for them from the bottom of the graveyard up, each above the one before, of
  * cards with one name the lowest, and takes them unasked once one answer is left: the plan
