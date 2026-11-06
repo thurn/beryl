@@ -36,24 +36,22 @@ const BASIC_LANDS: Filter = Filter::All(&[
 /// required to find some or all of those cards". Who searches is each creature's controller
 /// as it last existed on the battlefield: in exile it has none.
 fn exile_and_fetch(ctx: &mut EffectCtx, creatures: Bitboard) -> Flow {
-    let mut exiled = [0u8; 2];
-    for slot in creatures.iter() {
-        let player = ctx.state().controller(slot);
-        exiled[player.index()] += 1;
-    }
+    let controlled = Seat::BOTH.map(|player| {
+        creatures
+            .iter()
+            .filter(|&slot| ctx.state().controller(slot) == player)
+            .collect::<Bitboard>()
+    });
     ctx.move_all(creatures, Zone::Exile, Reason::Exile);
-    // A creature a replacement kept from exile was not "exiled this way".
-    for slot in creatures.iter() {
-        if ctx.state().object(slot).zone != Zone::Exile {
-            let player = ctx.state().object(slot).owner;
-            exiled[player.index()] = exiled[player.index()].saturating_sub(1);
-        }
-    }
     for player in Seat::BOTH {
-        let n = exiled[player.index()];
-        if n == 0 {
+        // A creature a replacement kept from exile was not "exiled this way".
+        let n = controlled[player.index()]
+            .iter()
+            .filter(|&slot| ctx.state().object(slot).zone == Zone::Exile)
+            .count();
+        let Ok(n @ 1..) = u8::try_from(n) else {
             continue;
-        }
+        };
         let found = ctx.search_library_up_to(player, BASIC_LANDS, n)?;
         ctx.put_onto_battlefield_tapped(found);
         ctx.shuffle(player);
