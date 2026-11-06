@@ -5,7 +5,7 @@
 // scope, whose return value comes back as JSON:
 //   page, context   the Playwright page (opened at <app-url>) and its context
 //   shot(name)      screenshots the page to <out-dir>/<n>-<name>.png and returns the path
-//   probe           the measuring helpers below (`act` and `compare` first)
+//   probe           the measuring helpers below (`act`, `compare` and `sweep` first)
 //   errors          the page's errors and console errors so far
 // Restart `by ui-live` to load a change to this file; changes under src/ reload in the page.
 // Motion is not reduced, unlike ui-shots: animation and layout shift are what a player sees.
@@ -56,7 +56,7 @@ const shot = async (name = "shot") => {
 /** What the probes describe an element as: its tag, data attributes, role and some text. */
 const DESCRIBE = `(e) => {
     const data = [...e.attributes]
-        .filter((a) => a.name.startsWith("data-") || a.name === "role" || a.name === "class")
+        .filter((a) => (a.name.startsWith("data-") && !a.name.startsWith("data-probe")) || a.name === "role" || a.name === "class")
         .map((a) => a.name + "=" + JSON.stringify(a.value.slice(0, 40)))
         .join(" ");
     const text = (e.innerText || e.getAttribute("aria-label") || "").trim().slice(0, 40);
@@ -71,13 +71,14 @@ const probe = {
     /** Starts recording where every element matching `selector` is, each frame. Call the
      * returned function after an action (it waits `ms` more first) for the elements that moved
      * or resized since recording began, worst first: how far and over how many frames. */
-    async motion(selector = TRACKED) {
+    async motion(selector = TRACKED, { exclude } = {}) {
         await page.evaluate(
-            ([selector, describe]) => {
+            ([selector, describe, exclude]) => {
                 const name = new Function(`return ${describe}`)();
                 const seen = new Map();
                 const frame = () => {
                     for (const e of document.querySelectorAll(selector)) {
+                        if (exclude && e.closest(exclude)) continue;
                         const r = e.getBoundingClientRect();
                         if (r.width === 0 && r.height === 0) continue;
                         let s = seen.get(e);
@@ -128,7 +129,7 @@ const probe = {
                 };
                 requestAnimationFrame(frame);
             },
-            [selector, DESCRIBE],
+            [selector, DESCRIBE, exclude],
         );
         return async (ms = 1000) => {
             await page.waitForTimeout(ms);
@@ -157,6 +158,65 @@ const probe = {
                 };
             }, DESCRIBE);
         };
+    },
+
+    /** Sweeps the pointer across every element `locator` matches, left to right, resting
+     * `dwell` ms on each as a player's pointer would. For each stop it reports what moved
+     * other than the hovered element, the one the pointer just left (which may settle back),
+     * and their contents, and what became covered that was not covered before the sweep.
+     * Only what is pointed at should change. */
+    async sweep(locator, { dwell = 400, selector = TRACKED } = {}) {
+        const count = await locator.count();
+        const items = [];
+        for (let i = 0; i < count; i += 1) {
+            const box = await locator.nth(i).boundingBox();
+            if (box) items.push({ i, x: box.x });
+        }
+        items.sort((a, b) => a.x - b.x);
+        await page.mouse.move(1, 1);
+        await page.waitForTimeout(dwell);
+        const coveredBefore = new Set(
+            (await probe.covered()).map((c) => c.element),
+        );
+        const stops = [];
+        let previous;
+        for (const { i } of items) {
+            const target = locator.nth(i);
+            await target.evaluate((e) =>
+                e.setAttribute("data-probe-hover", ""),
+            );
+            const stop = await probe.motion(selector, {
+                exclude: "[data-probe-hover]",
+            });
+            const point = await probe.pointAt(target);
+            const motion = await stop(dwell);
+            const covered = (await probe.covered()).filter(
+                (c) => !coveredBefore.has(c.element),
+            );
+            const name = await target.evaluate(
+                (e) =>
+                    e.getAttribute("data-card") ??
+                    e.getAttribute("aria-label") ??
+                    e.tagName.toLowerCase(),
+            );
+            await previous
+                ?.evaluate((e) => e.removeAttribute("data-probe-hover"))
+                .catch(() => undefined);
+            previous = target;
+            if (point && (motion.moved > 0 || covered.length > 0)) {
+                stops.push({
+                    hovered: name,
+                    othersMoved: motion.moved,
+                    worst: motion.worst.slice(0, 5),
+                    newlyCovered: covered.slice(0, 5),
+                });
+            }
+        }
+        await previous
+            ?.evaluate((e) => e.removeAttribute("data-probe-hover"))
+            .catch(() => undefined);
+        await page.mouse.move(1, 1);
+        return { swept: items.length, stopsWithSideEffects: stops };
     },
 
     /** Moves the mouse onto the visible part of `locator`'s element without scrolling, as a
@@ -365,13 +425,18 @@ const probe = {
      * paths, how long after the action the first view and the next decision arrived, what
      * moved meanwhile, the decision waited for, and the game events that arrived
      * (`probe.timeline` from the start of the action). */
-    async act(name, action, { samples = [100, 500, 2000], wait = true } = {}) {
+    async act(
+        name,
+        action,
+        { samples = [100, 500, 2000], wait = true, timeout = 120000 } = {},
+    ) {
+        const shots = { before: await shot(`${name}-before`) };
+        const stop = await probe.motion();
+        // Latencies count from here, after the setup, so they measure the UI alone.
         const [since, from] = await page.evaluate(() => [
             performance.now(),
             window.berylLive?.log.length ?? 0,
         ]);
-        const shots = { before: await shot(`${name}-before`) };
-        const stop = await probe.motion();
         // The gesture runs whole before any sample: a screenshot taken in the middle of a
         // drag can drop its pointer events. A failure ends the call once the motion probe
         // is stopped.
@@ -395,7 +460,7 @@ const probe = {
         let decision;
         if (wait) {
             decision = await probe
-                .decision(null, 60000, from)
+                .decision(null, timeout, from)
                 .catch((e) => ({ timeout: String(e).split("\n")[0] }));
             shots.after = await shot(`${name}-after`);
         }

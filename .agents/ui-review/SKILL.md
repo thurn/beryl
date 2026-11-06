@@ -13,6 +13,21 @@ You are judging the experience, not the code. Read `ui/src/` freely to learn
 what something is meant to do, but every finding must be something a player
 sees, waits through, or cannot do.
 
+## Running it
+
+- **Expect a long session.** A thorough review takes one to two hours, most of
+  it waiting on the searching agents.
+- **Two reviewers find much more than one.** Tested against a set of known
+  defects, a single review found about two thirds of them, and two
+  independent reviews with different seeds found about five sixths. For a full
+  audit, run two, each in its own checkout: `just ui-live` records fixtures into
+  the checkout, so two runs in one checkout collide.
+- **Reviews tend to check that something exists and stop there.** The misses
+  were things reviewers saw and called "shown" or "readable" without judging
+  how they looked. They also skipped checks that took manual work, such as
+  hover sweeps and multi-blocks. The rules below about verdicts, helpers and
+  the ledger exist to close those gaps.
+
 ## The bar
 
 Measure the UI against three references and report every gap:
@@ -88,12 +103,20 @@ curl -s "$DRIVE" -d 'await page.getByRole("button", {name: "Start", exact: true}
 
 - `probe.act(name, action, {samples?, wait?})` is how to take every action. It
   takes a screenshot before, runs `action` (an async function), takes
-  screenshots 100 ms, 500 ms and 2 s after it ends, waits for the next decision and takes
-  one more. It returns the screenshot paths, what moved, the decision, and the
-  game events that arrived meanwhile. Read the screenshots it returns.
+  screenshots 100 ms, 500 ms and 2 s after it ends, waits for the next decision
+  (up to `timeout`, 120 s by default) and takes one more. It returns the
+  screenshot paths, the latency to the first view and to the decision
+  (`firstViewMs`, `decisionMs`), what moved, and the game events that arrived
+  meanwhile. Read the screenshots it returns, and quote its latencies rather
+  than timing things yourself.
 - `probe.compare(name, [locators or selectors])` crops each element and lays
   the crops side by side in one labelled image. Use it to judge whether states
   can be told apart, or whether things that should look alike do.
+- `probe.sweep(locator, {dwell?})` moves the pointer slowly across every element
+  the locator matches, left to right, the way a player browses a row. For each
+  stop it reports anything other than the hovered card that moved, and anything
+  that became covered. Run it on every row of cards: your hand, each
+  battlefield row, the stack and each pile.
 - `shot(name)` saves a screenshot and returns its path. Read the PNG to see it.
   Take one before and after every action, and more during waits.
 - `probe.pointAt(locator)` moves the mouse onto the visible part of an element
@@ -129,6 +152,20 @@ Recorded fixtures reach rare states quickly: `/?fixture=<name>&at=<n>#/game`,
 named in `ui/fixtures.json`. Use them only for states that live play does not
 reach. They replay views with no real timing, so judge flow and timing live.
 
+Practical notes from earlier reviews:
+
+- **Locators.** Use `exact: true` with role names, or the cards' `data-card`
+  and `data-slot` attributes. Loose names match card text too. Menu entries may
+  not be exposed as buttons by role, so `page.locator("button", {hasText})`
+  can find what `getByRole` misses.
+- **Slow agents.** A searching agent can take several minutes per decision.
+  Your shell tool may time out before `curl` returns, so for long waits pass
+  `{wait: false}` to `probe.act`, then poll `probe.decision(null, 100000)`.
+- **Time on the slow agent.** You do not need to finish a game against the
+  slowest agent by hand. Play it until you have measured its waits on each
+  kind of moment (the opening, your turn, its turn, a response), then finish
+  coverage with faster opponents.
+
 ## Coverage
 
 Keep a ledger as you go and do not stop until it is full:
@@ -138,13 +175,25 @@ Keep a ledger as you go and do not stop until it is full:
   fixture), answer it at least two different ways, and note how it was asked.
 - **Every piece of state.** `ObjectView`, `PlayerView` and `StackItem` in the
   same file list what the engine tells the UI. For every field of those types,
-  find how the screen shows it. If you cannot find it, that is a finding. Being
-  drawn is not enough: record for each field whether a player could read it at
-  a glance, citing a `probe.compare` image of objects that differ in it. Give a
-  verdict, not "shown".
+  find how the screen shows it. If you cannot find it, that is a finding. For
+  each field that is drawn, give the verdict that **Legible state** below asks
+  for, citing a `probe.compare` image. "Shown" and "readable" are not
+  verdicts.
+- **Every routine action.** Count the gestures and prompts each of these takes,
+  and compare each count with Arena's:
+  - play a land;
+  - cast a plain spell, and each kind of spell with an extra choice that your
+    decks offer (X, kicker or another optional cost, modes, targets);
+  - activate an ability;
+  - attack with one creature and with several;
+  - block with one creature, and with two on one attacker;
+  - pass the turn.
 - **Every multi-pick.** Meet each decision that takes several picks with at
-  least three eligible choices. Set the state up in play, or use a fixture from
-  `ui/fixtures.json` that names it.
+  least three eligible choices. That includes assigning several of your
+  creatures to one of theirs, as when two block one attacker. Set the state up
+  in play, or use a fixture from `ui/fixtures.json` that names it.
+- **Every row swept.** Run `probe.sweep` on each row of cards, in an early
+  state and on a crowded board.
 - **Every opponent.** The start screen lists agents. Play at least one full game
   against the default and one against the slowest, searching agent. Waiting on
   the AI is part of the experience.
@@ -215,22 +264,28 @@ everywhere it could occur, not just at the first place you think of.
   board or the card they are about, cut-off text, and prompts the client could
   answer itself (one sensible answer, or answers that make no difference).
   Compare each with conventions.md.
-- **Stillness.** Run the motion probe while you sweep the pointer slowly across
-  every row of cards (your hand, each battlefield row, each pile), and around
-  each new view. Only what you point at, or what changed in the game, should
-  move. If other elements move or the page scrolls, report the measured
-  distances.
+- **Stillness.** `probe.sweep` each row of cards, and watch `probe.act`'s
+  motion report around each new view. Only what you point at, or what changed
+  in the game, should move. If other elements move, get covered, or the page
+  scrolls, report the measured distances.
 - **Reachability.** Run `probe.covered()` in several states, especially with a
   full hand and a busy board. Every zone and every card must be visible or
   reachable, and every pile (graveyard, exile, library count) must open for
   browsing where the rules let a player look.
-- **Legible state.** For each piece of state in the coverage ledger, find two
-  objects that differ only in that state. Crop both from a screenshot at normal
-  size and compare. Could a player tell them apart at a glance, across the
-  table? A state's indicator must not obscure the card's identity. Every
-  relation between objects that the protocol carries (each field that names
-  another object) must be readable from a still frame on a crowded board,
-  however the UI draws it.
+- **Legible state.** Judge how each state is drawn, not only whether it is.
+  For each state in the coverage ledger, `probe.compare` the same card, or an
+  identical one, with and without it, at the size it has on the table. Your
+  verdict must answer three questions:
+  1. What exactly distinguishes the two?
+  2. Would a player see that difference at a glance from across the table,
+     even in a pile of similar cards?
+  3. Is the card drawn faithfully in both states, with its art, frame and
+     proportions intact?
+
+  Then compare with how Arena shows the same state. A weaker or stranger signal
+  than Arena's is a finding. Every relation between objects that the protocol
+  carries (each field that names another object) must be readable from a still
+  frame on a crowded board, however the UI draws it.
 - **Layout.** Measure each region's alignment, spacing and symmetry against its
   container and its counterpart, rather than eyeballing. Nothing on the game
   screen should scroll.
@@ -266,5 +321,14 @@ Give each finding:
 - the screenshot paths
 
 Merge findings that share a root cause, but list every place it shows up. End
-with the coverage ledger: decision kinds met (live or by fixture), state
-checked, agents played, and anything you could not reach.
+with the coverage ledger:
+- decision kinds met (live or by fixture);
+- the verdict for each piece of state;
+- the gesture and prompt count for each routine action, next to Arena's;
+- multi-picks met, with their eligible counts;
+- rows swept;
+- agents played;
+- anything you could not reach, and why.
+
+Do not count a harness failure (a crashed driver, a gesture the harness
+dropped) as a UI defect. Report it separately.

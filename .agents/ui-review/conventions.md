@@ -60,8 +60,9 @@ cites a known failure in Arena, MTGO, Forge or XMage.
 
 - **Ways to cast** (`priority` cast with face and costs): does each way show its
   cost? Expected: Force of Will offers "{3}{U}{U}" and "Exile a blue card, pay 1
-  life"; kicked and unkicked, and each face, are separate choices; can it be
-  cancelled until paid?
+  life". Choosing how to cast (kicked or not, which face, which cost) and any X
+  happen in one step, shown with the card, not as a menu followed by more
+  prompts. Can it be cancelled until paid?
 - **Free casts** (`castOffer`): is the card shown large, with its zone and the
   waived cost stated ("Cast Ancestral Recall from exile without paying its
   cost?")?
