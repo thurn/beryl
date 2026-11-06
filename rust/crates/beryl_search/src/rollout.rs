@@ -319,13 +319,19 @@ impl Policy<'_> {
         }
     }
 
-    /// Keep a hand of two to five lands, and any hand of five cards or fewer.
+    /// Keep a hand of two to five lands, and any hand of five cards or fewer, judging the hand
+    /// left once a card per mulligan taken goes to the bottom: the least worth keeping, as
+    /// [`DecisionKind::PutOnBottom`] picks them.
     pub(crate) fn keep(&self) -> bool {
-        let hand = self.obs.zone(self.me, Zone::Hand);
-        let lands = hand.iter().filter(|&slot| self.is_land(slot)).count();
-        // A kept hand loses a card to the bottom for each mulligan taken.
-        let kept = hand.count().saturating_sub(u32::from(self.obs.player(self.me).mulligans));
-        kept <= 5 || (2..=5).contains(&lands)
+        let mut kept = self.obs.zone(self.me, Zone::Hand);
+        for _ in 0..self.obs.player(self.me).mulligans {
+            match kept.iter().min_by_key(|&slot| self.in_hand(slot)) {
+                Some(least) => kept.remove(least),
+                None => break,
+            }
+        }
+        let lands = kept.iter().filter(|&slot| self.is_land(slot)).count();
+        kept.count() <= 5 || (2..=5).contains(&lands)
     }
 
     /// The score of a priority action or a cast offer; 0 is passing.

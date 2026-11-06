@@ -109,6 +109,9 @@ pub struct TurnView {
     pub priority: Side,
     /// Who takes the first turn (CR 103.1); none while the coin flip's winner chooses.
     pub starting: Option<Side>,
+    /// Who won the coin flip that chose who chooses, in a game begun by one: the session's to
+    /// say ([`crate::Game`]), as the position no longer holds it.
+    pub flip_winner: Option<Side>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -785,6 +788,7 @@ pub fn player_view(
             step: turn.step.into(),
             priority: side(obs, turn.priority),
             starting: obs.starting_player().map(|p| side(obs, p)),
+            flip_winner: None,
         },
         players,
         battlefield: slots(obs.battlefield().iter().copied()),
@@ -1451,6 +1455,16 @@ fn outcome_view(obs: Observation<'_>, o: Outcome) -> OutcomeView {
     }
 }
 
+/// What damage was dealt to, as the viewer names it.
+fn recipient(obs: Observation<'_>, to: Recipient) -> TargetRef {
+    match to {
+        Recipient::Player(player) => TargetRef::Player {
+            player: side(obs, player),
+        },
+        Recipient::Permanent(o) => TargetRef::Object { slot: o.slot.get() },
+    }
+}
+
 /// An engine event as the viewer of `obs` is told it. Engine events name objects by slot and
 /// carry no identity, and this takes no table: anything an event says about a card must come
 /// from `obs`, which the information independence test redeals.
@@ -1475,12 +1489,7 @@ fn game_event(obs: Observation<'_>, e: &Event) -> GameEvent {
             combat,
         } => GameEvent::Damage {
             source: source.slot.get(),
-            to: match to {
-                Recipient::Player(player) => TargetRef::Player {
-                    player: side(player),
-                },
-                Recipient::Permanent(o) => TargetRef::Object { slot: o.slot.get() },
-            },
+            to: recipient(obs, to),
             amount,
             combat,
         },

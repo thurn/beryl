@@ -177,6 +177,7 @@ def ui_shots(args: argparse.Namespace) -> int:
 # The fixtures ui/scripts/interactions.mjs plays.
 INTERACTION_FIXTURES = [
     "greedy-turn-9",
+    "opening-bottom",
     "opponent-turn",
     "combat-declare",
     "combat-double-block",

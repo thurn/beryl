@@ -256,7 +256,9 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
                 if let Some(d) = &d {
                     add_previews(&mut theirs, &det, t, d);
                 }
-                // Whether a cast can be taken back is the session's to say, not the position's.
+                // Who won the opening flip, and whether a cast can be taken back, are the
+                // session's to say, not the position's.
+                theirs.turn.flip_winner = view.turn.flip_winner;
                 if let (Status::Deciding { decision: a }, Status::Deciding { decision: b }) =
                     (&mut theirs.status, &view.status)
                 {

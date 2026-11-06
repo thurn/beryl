@@ -90,7 +90,12 @@ number: number, active: Side, step: Step, priority: Side,
 /**
  * Who takes the first turn (CR 103.1); none while the coin flip's winner chooses.
  */
-starting: Side | null, };
+starting: Side | null, 
+/**
+ * Who won the coin flip that chose who chooses, in a game begun by one: the session's to
+ * say ([`crate::Game`]), as the position no longer holds it.
+ */
+flipWinner: Side | null, };
 
 export type Players = { you: PlayerState, opponent: PlayerState, };
 
@@ -115,6 +120,8 @@ graveyard: Array<number>,
  * The emblems' names.
  */
 emblems: Array<string>, };
+
+export type Declaration = "undeclared" | "willMulligan" | "kept";
 
 export type ManaPool = { white: number, blue: number, black: number, red: number, green: number, colorless: number, };
 

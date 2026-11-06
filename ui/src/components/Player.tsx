@@ -2,6 +2,7 @@
 // lands.
 import { useEffect, useState, type ReactNode } from "react";
 import { ASPECT, Card, CardBack, type CardFace } from "./Card";
+import { Tip } from "./Controls";
 import { ManaSymbol } from "./Mana";
 
 // The life orb, drawn in docs/ui_mockups pixels about the orb's center. Two silver blades sweep
@@ -348,12 +349,45 @@ export function ManaPool({ pool, pulse = 0 }: { pool: Pool; pulse?: number }) {
 
 /** A player's name on a dark band behind a nested brass diamond, and under it what they are
  * doing, if anything: the opponent thinking or taking their turn. */
+/** The coin of the flip that settles who plays first, which then marks the starting player: a
+ * gold disc bearing a 1, drawn by its style as the icon it is, not text. It lands with a flip as
+ * it appears, or keeps spinning while the flip's winner chooses. */
+export function Coin({
+  spinning = false,
+  size = 44,
+  className,
+}: {
+  spinning?: boolean;
+  size?: number;
+  className?: string;
+}) {
+  return (
+    <span
+      className={[
+        "coin",
+        spinning ? "coin-spinning" : "coin-landing",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      style={{ width: size, height: size, fontSize: size * 0.56 }}
+      aria-hidden
+    />
+  );
+}
+
 export function PlayerBadge({
   name,
   activity,
+  mulligans = 0,
+  seat = "you",
 }: {
   name: string;
   activity?: string;
+  /** Mulligans taken, shown as a badge once there are any. */
+  mulligans?: number;
+  /** Whose badge: its tip opens toward the middle of the table. */
+  seat?: "you" | "opponent";
 }) {
   return (
     <div className="player-badge">
@@ -391,6 +425,19 @@ export function PlayerBadge({
           </small>
         )}
       </span>
+      {mulligans > 0 && (
+        <span
+          className="player-badge-mulligans has-tip"
+          tabIndex={0}
+          data-mulligans={mulligans}
+        >
+          <i className="player-badge-mulligans-card" aria-hidden />
+          <span>{mulligans}</span>
+          <Tip side={seat === "you" ? "above" : "below"}>
+            {mulligans === 1 ? "1 mulligan" : `${mulligans} mulligans`}
+          </Tip>
+        </span>
+      )}
     </div>
   );
 }

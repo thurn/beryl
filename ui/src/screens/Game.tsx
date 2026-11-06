@@ -4,7 +4,8 @@
 // the open decision through `choose`.
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../components/Controls";
-import { Card } from "../components/Card";
+import { Card, CardBack } from "../components/Card";
+import { Coin } from "../components/Player";
 import { RulesText } from "../components/Mana";
 import {
   cancel,
@@ -23,7 +24,7 @@ import {
 import { Board } from "../game/Board";
 import { ChoiceOverlay } from "../game/ChoiceOverlay";
 import { choiceOf, type Choice } from "../game/choices";
-import { follow, isOpening, type Intent } from "../game/decisions";
+import { follow, isOpening, twins, type Intent } from "../game/decisions";
 import { useFace } from "../game/faces";
 import { useHoverInspect, type HoverHandlers } from "../game/Piles";
 import type { Playback } from "../game/playback";
@@ -31,9 +32,36 @@ import { Brand, Stage } from "../game/Stage";
 
 /** The agent that plays on the true state, hidden cards included. */
 const CHEATING = "mcts-omniscient";
+/** The opponent offered first: strong, and quick to answer. */
+const DEFAULT_AGENT = "expert";
+/** Where the start screen remembers the last opponent and seed. */
+const LAST_GAME = "beryl.lastGame";
+
+/** The opponent and seed of the last game started here, if the browser kept them. */
+function lastGame(): { agent?: string; seed?: string } {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(LAST_GAME) ?? "{}");
+    if (typeof saved !== "object" || saved === null) return {};
+    const { agent, seed } = saved as Record<string, unknown>;
+    return {
+      agent: typeof agent === "string" ? agent : undefined,
+      seed: typeof seed === "string" ? seed : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+function rememberGame(agent: string, seed: string) {
+  try {
+    localStorage.setItem(LAST_GAME, JSON.stringify({ agent, seed }));
+  } catch {
+    // Storage may be blocked; the start screen then offers the defaults.
+  }
+}
 
 /** Picks the opponent and an optional seed, and starts the game; or returns to the game in
- * progress. */
+ * progress. Enter does what the primary button does. */
 export function StartScreen({
   inProgress,
   onStart,
@@ -43,31 +71,59 @@ export function StartScreen({
 }) {
   const [agents, setAgents] = useState<AgentView[]>([]);
   const [agent, setAgent] = useState<string>();
-  const [seed, setSeed] = useState("");
+  const [seed, setSeed] = useState(() => lastGame().seed ?? "");
   const [error, setError] = useState<string>();
   const [pending, setPending] = useState(false);
   useEffect(() => {
     listAgents().then((list) => {
       setAgents(list);
-      setAgent((a) => a ?? list[0]?.name);
+      const offered = (name?: string) =>
+        list.find((a) => a.name === name)?.name;
+      setAgent(
+        (a) =>
+          a ??
+          offered(lastGame().agent) ??
+          offered(DEFAULT_AGENT) ??
+          list[0]?.name,
+      );
     });
   }, []);
   const seedValue = seed.trim() === "" ? undefined : Number(seed);
   const seedOk =
     seedValue === undefined ||
     (Number.isInteger(seedValue) && seedValue >= 0 && seedValue < 2 ** 32);
+  const startable = agent !== undefined && seedOk && !pending;
+  const starting = useRef(false);
   const start = () => {
-    if (!agent) return;
+    if (!agent || !startable || starting.current) return;
+    starting.current = true;
+    rememberGame(agent, seed.trim());
     setPending(true);
     setError(undefined);
     onStart(agent, seedValue).then(
       () => (window.location.hash = "#/game"),
       (e: unknown) => {
+        starting.current = false;
         setPending(false);
         setError(String(e));
       },
     );
   };
+  // Enter takes the primary button from anywhere on the screen but a button, which Enter
+  // presses: back to the game in progress, else a new one.
+  const onEnter = useRef<(e: KeyboardEvent) => void>(undefined);
+  onEnter.current = (e) => {
+    if (e.key !== "Enter" || e.repeat) return;
+    if (e.target instanceof Element && e.target.closest("button")) return;
+    e.preventDefault();
+    if (inProgress) window.location.hash = "#/game";
+    else start();
+  };
+  useEffect(() => {
+    const listener = (e: KeyboardEvent) => onEnter.current?.(e);
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  }, []);
   return (
     <Stage>
       <div className="table start-screen">
@@ -87,7 +143,7 @@ export function StartScreen({
                   onChange={() => setAgent(a.name)}
                 />
                 <span className="start-agent-name">
-                  {a.name}
+                  {a.title}
                   {a.name === CHEATING && (
                     <em className="start-cheating">cheating: sees your hand</em>
                   )}
@@ -115,7 +171,7 @@ export function StartScreen({
             )}
             <Button
               variant={inProgress ? "secondary" : "primary"}
-              disabled={!agent || !seedOk || pending}
+              disabled={!startable}
               onClick={start}
             >
               {pending ? "Starting…" : inProgress ? "New Game" : "Start"}
@@ -272,8 +328,26 @@ function Playing({ playback }: { playback: Playback }) {
     setHeld(choice);
     answer(index, rest);
   };
+  /** Sends the picks the opening planned, the first now and the rest as they are asked. */
+  const planOpening = (picks: Intent[]) => {
+    if (!decision) return;
+    const { index, rest } = follow(decision, picks);
+    if (index !== undefined) answer(index, rest);
+  };
   const peeking = choice !== undefined && peek === choice.key;
-  const opening = decision && isOpening(decision.kind) && !waiting;
+  // Before the first turn the opening stays over the table, the opponent's decisions too.
+  const opening =
+    view.turn.number === 0 &&
+    status.kind !== "over" &&
+    status.kind !== "stopped";
+  // A pick still planned answers the decision it waits for: the player has nothing to do.
+  const openDecision =
+    decision &&
+    isOpening(decision.kind) &&
+    !waiting &&
+    planned.current.length === 0
+      ? decision
+      : undefined;
   const over =
     (status.kind === "over" || status.kind === "stopped") && showOver;
   return (
@@ -292,7 +366,14 @@ function Playing({ playback }: { playback: Playback }) {
         dimmed={opening || over || (choice !== undefined && !peeking)}
         inert={choice !== undefined}
       />
-      {opening && <Opening view={view} decision={decision} onPick={answer} />}
+      {opening && (
+        <Opening
+          view={view}
+          decision={openDecision}
+          onPick={answer}
+          onPlan={planOpening}
+        />
+      )}
       {choice && !peeking && (
         <ChoiceOverlay
           key={choice.key}
@@ -327,62 +408,169 @@ function Playing({ playback }: { playback: Playback }) {
   );
 }
 
-/** The opening decisions over the dimmed table: play or draw, keep or mulligan, and the
- * cards to put on the bottom, with the hand laid out to read. */
+/** The starting hand size (CR 103.5). */
+const STARTING_HAND = 7;
+/** How long the coin spins once the opponent wins the flip, however soon they choose. */
+const FLIP_MS = 1500;
+
+/** The opening over the dimmed table, from the coin flip until both hands are kept: who plays
+ * first, keep or mulligan, and the cards to put on the bottom, which fill slots and go back on
+ * a click until confirmed. While the opponent decides it shows where the player stands: a hand
+ * they mulliganed lies face down. */
 function Opening({
   view,
-  decision,
+  decision: asked,
   onPick,
+  onPlan,
 }: {
   view: PlayerView;
-  decision: DecisionView;
+  /** The decision the player may answer now; none while the game goes on without them. */
+  decision?: DecisionView;
   onPick(index: CandidateIndex): void;
+  onPlan(picks: Intent[]): void;
 }) {
-  const hand = view.objects.filter(
+  const { you } = view.players;
+  const { flipWinner } = view.turn;
+  // When the opponent won the flip, the coin spins a while before it shows their choice, made
+  // at once or not, as the opening first shows: before anyone has declared.
+  const [spinning, setSpinning] = useState(
+    () =>
+      flipWinner === "opponent" &&
+      you.mulligans === 0 &&
+      you.mulligan === "undeclared",
+  );
+  useEffect(() => {
+    if (!spinning) return;
+    const spin = window.setTimeout(() => setSpinning(false), FLIP_MS);
+    return () => window.clearTimeout(spin);
+  }, [spinning]);
+  const starting = spinning ? null : view.turn.starting;
+  const decision = spinning ? undefined : asked;
+  const kind = decision?.kind;
+  // The cards picked for the bottom, kept as they were: those sent are gone from the hand.
+  const [bottom, setBottom] = useState<ObjectView[]>([]);
+  const inHand = view.objects.filter(
     (o) => o.zone === "hand" && o.owner === "you",
   );
-  const picks = new Map(
-    decision.candidates.flatMap((c, i) =>
-      c.option.kind === "object" ? [[c.option.slot, i] as const] : [],
-    ),
-  );
-  const buttons = decision.candidates.flatMap((c, i) =>
-    c.option.kind === "object" ? [] : [{ label: c.label, index: i }],
-  );
-  const mulligans = view.players.you.mulligans;
-  // The hand's cards are small to fit seven: hovering one shows it whole.
+  const hand = inHand.filter((o) => !bottom.some((b) => b.slot === o.slot));
+  const unsent = bottom.filter((b) => inHand.some((o) => o.slot === b.slot));
+  // One card per mulligan goes on the bottom; any already there count.
+  const toBottom =
+    kind === "putOnBottom"
+      ? Math.max(1, inHand.length - (STARTING_HAND - you.mulligans))
+      : 0;
+  const slots = Math.max(toBottom, bottom.length);
+  // The cards are small to fit seven: hovering one shows it whole.
   const [inspector, inspect] = useHoverInspect();
-  const [title, instruction] =
-    decision.kind === "playOrDraw"
-      ? ["Play or draw?", "Choose whether to take the first turn."]
-      : decision.kind === "keepOrMulligan"
-        ? [
-            "Opening hand",
-            mulligans === 0
-              ? "Keep these seven, or shuffle them away and draw seven more."
-              : `Mulligan ${mulligans}: keep these and put ${mulligans} on the bottom, or mulligan again.`,
-          ]
-        : [
-            "Put a card on the bottom",
-            "Choose a card to put on the bottom of your library.",
-          ];
+  const picking = kind === "putOnBottom";
+  // A card clicked moves out from under the pointer, which never leaves it: its inspector goes.
+  const toggle = (o: ObjectView) => {
+    inspect(o).onPointerLeave();
+    setBottom((picked) =>
+      picked.some((b) => b.slot === o.slot)
+        ? picked.filter((b) => b.slot !== o.slot)
+        : picked.length < toBottom
+          ? [...picked, o]
+          : picked,
+    );
+  };
+  const confirm = () =>
+    onPlan(
+      unsent.map((o) => ({
+        kind: "putOnBottom",
+        wants: (c) => c.kind === "object" && c.slot === o.slot,
+        // The engine offers one of interchangeable cards (architecture §7.2): its slot fills
+        // with the card that went.
+        alike: (c) => {
+          if (c.kind !== "object") return false;
+          const other = inHand.find((h) => h.slot === c.slot);
+          return other !== undefined && twins(other, o);
+        },
+        picked: (c) => {
+          const sent =
+            c.kind === "object" && inHand.find((h) => h.slot === c.slot);
+          if (!sent || sent.slot === o.slot) return;
+          // A twin picked too trades places with it.
+          setBottom((picked) =>
+            picked.map((b) =>
+              b.slot === o.slot ? sent : b.slot === sent.slot ? o : b,
+            ),
+          );
+        },
+      })),
+    );
+  const title =
+    starting === null
+      ? flipWinner === "you"
+        ? "You won the flip"
+        : "Opponent won the flip"
+      : picking
+        ? "Put on the bottom"
+        : you.mulligan === "willMulligan"
+          ? "Mulligan"
+          : you.mulligans === 0
+            ? "Opening hand"
+            : `Mulligan to ${STARTING_HAND - you.mulligans}`;
+  const buttons =
+    decision && !picking
+      ? decision.candidates.map((c, i) => ({ label: c.label, index: i }))
+      : [];
+  const facedown = you.mulligan === "willMulligan";
   return (
     <div className="opening" role="dialog" aria-label={title}>
       <div className="overlay-backdrop" />
-      <h2 className="opening-title">{title}</h2>
-      <p className="opening-instruction">{instruction}</p>
-      <div className="opening-hand">
-        {hand.map((o) => (
-          <OpeningCard
-            key={o.slot}
-            object={o}
-            pick={picks.get(o.slot)}
-            onPick={onPick}
-            hover={inspect(o)}
-          />
-        ))}
+      <div className="opening-coin" data-starting={starting ?? undefined}>
+        <Coin key={starting ?? "spinning"} spinning={starting === null} />
+        {starting && (
+          <span className="opening-coin-label">
+            {starting === "you" ? "On the play" : "On the draw"}
+          </span>
+        )}
       </div>
+      <h2 className="opening-title">{title}</h2>
+      <div className="opening-hand">
+        {starting !== null &&
+          hand.map((o) =>
+            facedown ? (
+              <CardBack key={o.slot} width={176} />
+            ) : (
+              <OpeningCard
+                key={o.slot}
+                object={o}
+                hover={inspect(o)}
+                onPick={
+                  picking && bottom.length < toBottom
+                    ? () => toggle(o)
+                    : undefined
+                }
+              />
+            ),
+          )}
+      </div>
+      {slots > 0 && (
+        <div className="opening-slots" aria-label="Bottom of your library">
+          {Array.from({ length: slots }, (_, i) => {
+            const o = bottom[i];
+            return o ? (
+              <OpeningCard
+                key={o.slot}
+                object={o}
+                hover={inspect(o)}
+                width={120}
+                onPick={picking ? () => toggle(o) : undefined}
+              />
+            ) : (
+              <i key={`empty-${i}`} className="opening-slot" />
+            );
+          })}
+        </div>
+      )}
       <div className="opening-buttons">
+        {picking && (
+          <Button disabled={unsent.length !== toBottom} onClick={confirm}>
+            Done
+          </Button>
+        )}
         {buttons.map((b, i) => (
           <Button
             key={b.index}
@@ -392,6 +580,13 @@ function Opening({
             {b.label}
           </Button>
         ))}
+        {!decision && (
+          <i className="working-dots opening-waiting" role="status">
+            <i />
+            <i />
+            <i />
+          </i>
+        )}
       </div>
       {inspector}
     </div>
@@ -400,30 +595,30 @@ function Opening({
 
 function OpeningCard({
   object,
-  pick,
+  width = 176,
   onPick,
   hover,
 }: {
   object: ObjectView;
-  pick?: CandidateIndex;
-  onPick(index: CandidateIndex): void;
+  width?: number;
+  onPick?(): void;
   hover: HoverHandlers;
 }) {
   const face = useFace(object);
-  const name = object.name ?? "";
   return (
     <button
       type="button"
       className="opening-card"
-      disabled={pick === undefined}
-      data-card={name}
-      onClick={() => pick !== undefined && onPick(pick)}
+      disabled={!onPick}
+      data-card={object.name ?? ""}
+      data-slot={object.slot}
+      onClick={onPick}
       {...hover}
     >
       <Card
         card={face}
-        width={176}
-        highlight={pick === undefined ? undefined : "target"}
+        width={width}
+        highlight={onPick ? "target" : undefined}
       />
     </button>
   );

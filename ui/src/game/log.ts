@@ -151,7 +151,10 @@ export function logLines(view: PlayerView, names: Names): LogLine[] {
         say(e.player, `${who(e.player)} gained control of ${name(e.slot)}`);
         return;
       case "coinFlip":
-        say(e.player, `${who(e.player)} ${e.won ? "won" : "lost"} a coin flip`);
+        say(
+          e.player,
+          `${who(e.player)} ${e.won ? "won" : "lost"} ${name(e.source)}'s coin flip`,
+        );
         return;
       case "lose":
         say(e.player, `${who(e.player)} lost the game`);

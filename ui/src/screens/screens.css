@@ -763,6 +763,15 @@
 .table .life-orb {
   --orb: calc(1px / 1.045);
 }
+/* The starting player's coin, beside their life total: hovering it says so, even on your orb. */
+.life-first {
+  position: absolute;
+  left: 194px;
+  top: 46px;
+  display: flex;
+  perspective: 200px;
+  pointer-events: auto;
+}
 /* The brand at the top left (battlefield.png): the crest and a letterspaced wordmark in muted
    gold, in stage pixels. */
 .brand {
@@ -1802,8 +1811,42 @@
 }
 .opening-buttons {
   display: flex;
+  align-items: center;
   gap: 18px;
+  min-height: 52px;
   margin-top: 40px;
+}
+.opening-waiting {
+  font-size: 34px;
+  color: var(--gold);
+}
+/* Above the title: the flip's coin, and once it lands, whether the player is on the play. */
+.opening-coin {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 52px;
+  margin-bottom: 14px;
+  perspective: 300px;
+  font: 600 22px var(--font-serif);
+  color: var(--gold);
+  text-shadow: 0 1px 3px rgb(0 0 0 / 80%);
+}
+.opening-title {
+  margin-bottom: 30px;
+}
+/* The cards for the bottom of the library: one slot per mulligan, filled as they are picked. */
+.opening-slots {
+  display: flex;
+  gap: 12px;
+  margin-top: 26px;
+}
+.opening-slot {
+  width: 120px;
+  height: calc(120px * 88 / 63);
+  border: 2px dashed var(--gold-soft);
+  border-radius: 8px;
+  background: rgb(14 11 10 / 45%);
 }
 .game-over {
   padding-top: 260px;
@@ -1924,6 +1967,8 @@
 }
 .start-seed input[aria-invalid="true"] {
   border-color: var(--ember);
+  outline-color: var(--ember);
+  color: var(--ember);
 }
 .start-buttons {
   display: flex;

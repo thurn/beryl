@@ -98,6 +98,7 @@ async function check(
         ready = `${card}[data-zone="hand"]`,
         viewport = { width: 1600, height: 900 },
         reducedMotion = "no-preference",
+        hash = "#/game",
     } = {},
 ) {
     await queue(async () => {
@@ -124,7 +125,7 @@ async function check(
         );
         try {
             await page.clock.install();
-            const route = `/?fixture=${fixture}&at=${at}#/game`;
+            const route = `/?fixture=${fixture}&at=${at}${hash}`;
             await page.goto(new URL(route, base).href, { waitUntil: "load" });
             await page.waitForSelector(ready);
             await body(page);
@@ -2250,7 +2251,7 @@ for (const [fixture, primary, kind] of [
 }
 
 // The trigger-order prompt (still asked under exact stops) names each trigger's source in full,
-// even the cube's longest names: `choice-trigger-order` stops on one between two creatures,
+// even the cube's longest names: `choice-trigger-order` stops on one between two permanents,
 // renamed here to the two longest names in the cube list, and no text on the page is cut.
 const cube = await readFile(
     new URL("../../data/arena-powered-cube-2025-10-30.csv", import.meta.url),
@@ -3799,6 +3800,95 @@ await check(
         at: tapBend.views.length,
         ready: ".prompt-cost",
     },
+);
+
+// The opening: `opening-bottom` ends on the human's first card to put on the bottom after two
+// mulligans and a keep. The picks fill two slots and go back on a click; nothing is sent until
+// both are chosen and confirmed, and then the first goes at once.
+const openingViews = await load("opening-bottom");
+const bottoming = openingViews.at(-1);
+assert.equal(bottoming.status.decision.kind, "putOnBottom");
+assert.equal(bottoming.players.you.mulligans, 2, "two cards go on the bottom");
+await check(
+    "cards for the bottom toggle in their slots until confirmed",
+    async (page) => {
+        const hand = page.locator(".opening-hand .opening-card");
+        const slotted = page.locator(".opening-slots .opening-card");
+        const done = page.getByRole("button", { name: "Done" });
+        assert.equal(await page.locator(".opening-slot").count(), 2);
+        const first = await hand.first().getAttribute("data-slot");
+        await hand.first().click();
+        assert.equal(await slotted.count(), 1, "a pick fills a slot");
+        assert.equal(await done.isDisabled(), true, "one slot is still empty");
+        await slotted.first().click();
+        assert.equal(await slotted.count(), 0, "a second click takes it back");
+        assert.equal(await hand.count(), 7);
+        await hand.nth(2).click();
+        await hand.nth(4).click();
+        assert.equal(await slotted.count(), 2);
+        assert.equal(await done.isEnabled(), true);
+        assert.deepEqual(await chosen(page), [], "nothing sent before Done");
+        await done.click();
+        const [sent] = await settled(page, 1);
+        const option = bottoming.status.decision.candidates[sent].option;
+        const picked = await slotted.first().getAttribute("data-slot");
+        const name = (slot) =>
+            bottoming.objects.find((o) => o.slot === Number(slot)).name;
+        assert.notEqual(picked, first, "the card taken back stays in hand");
+        assert.equal(name(option.slot), name(picked), "the first pick is sent");
+    },
+    {
+        fixture: "opening-bottom",
+        at: openingViews.length,
+        ready: ".opening-slot",
+    },
+);
+
+// The start screen: Enter starts the game, and the opponent picked is offered again after a
+// reload.
+const startCalls = (page) =>
+    page.evaluate(() =>
+        window.berylFixture.calls.filter((c) => c.command === "start_game"),
+    );
+await check(
+    "Enter on the start screen starts a game",
+    async (page) => {
+        await page.keyboard.press("Enter");
+        await page.waitForURL(/#\/game$/);
+        assert.equal((await startCalls(page)).length, 1);
+    },
+    { at: 0, hash: "#/", ready: ".start-agent input:checked" },
+);
+await check(
+    "Enter with a game in progress returns to it",
+    async (page) => {
+        await page.getByRole("button", { name: "Return to Game" }).waitFor();
+        await page.keyboard.press("Enter");
+        await page.waitForURL(/#\/game$/);
+        assert.equal((await startCalls(page)).length, 0, "no new game");
+    },
+    { at: 50, hash: "#/", ready: ".start-agent input:checked" },
+);
+await check(
+    "the start screen remembers the last opponent across a reload",
+    async (page) => {
+        const checked = () =>
+            page.locator(".start-agent input:checked").getAttribute("value");
+        const other = await page
+            .locator(".start-agent input:not(:checked)")
+            .first()
+            .getAttribute("value");
+        await page.locator(`.start-agent input[value="${other}"]`).check();
+        await page.getByRole("button", { name: "Start", exact: true }).click();
+        await page.waitForURL(/#\/game$/);
+        const [call] = await startCalls(page);
+        assert.equal(call.args.request.agent, other);
+        await page.evaluate(() => (window.location.hash = "#/"));
+        await page.reload();
+        await page.waitForSelector(".start-agent input:checked");
+        assert.equal(await checked(), other, "the last opponent is picked");
+    },
+    { at: 0, hash: "#/", ready: ".start-agent input:checked" },
 );
 
 await queue.drain();

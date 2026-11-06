@@ -58,15 +58,35 @@
     },
     {
       "name": "game-mulligan",
-      "route": "/?fixture=greedy-turn-9&at=2#/game",
+      "route": "/?fixture=greedy-turn-9&at=4#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-opponent-flip",
+      "route": "/?fixture=opening-bottom&at=1#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-mulligan-wait",
+      "route": "/?fixture=opening-bottom&at=5#/game",
       "width": 1600,
       "height": 900
     },
     {
       "name": "game-bottom",
-      "route": "/?fixture=first-target&at=4#/game",
+      "route": "/?fixture=opening-bottom#/game",
       "width": 1600,
-      "height": 900
+      "height": 900,
+      "click": ".opening-hand .opening-card"
+    },
+    {
+      "name": "game-first-player",
+      "route": "/?fixture=greedy-turn-9&at=106#/game",
+      "width": 1600,
+      "height": 900,
+      "hover": ".life-first"
     },
     {
       "name": "game-castable",
@@ -96,10 +116,10 @@
     },
     {
       "name": "game-pay-plans",
-      "route": "/?fixture=pay-other&at=143#/game",
+      "route": "/?fixture=pay-other&at=94#/game",
       "width": 1600,
       "height": 900,
-      "click": "[data-zone=hand][data-card='Staff of the Storyteller']"
+      "click": "[data-zone=hand][data-card='Jace, Wielder of Mysteries']"
     },
     {
       "name": "game-main",

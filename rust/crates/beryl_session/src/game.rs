@@ -21,7 +21,8 @@ use beryl_search::{Agent, Budget};
 
 use crate::preview;
 use crate::protocol::{
-    CandidateIndex, DecisionId, Moment, PlayerView, SessionId, Status, StopsSetting, player_view,
+    CandidateIndex, DecisionId, Moment, PlayerView, SessionId, Side, Status, StopsSetting,
+    player_view,
 };
 use crate::replay::{Entry, ReplayFile};
 use crate::{Prepared, SessionError, StartGame};
@@ -163,6 +164,9 @@ pub struct Game {
     paused: Vec<Event>,
     /// Where the human's cast in progress began, while it can be taken back.
     before_cast: Option<BeforeCast>,
+    /// The coin flip's winner, who chooses who takes the first turn
+    /// ([CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031)), in a game begun by one.
+    flip_winner: Option<Seat>,
 }
 
 impl Game {
@@ -231,6 +235,10 @@ impl Game {
         agent: Box<dyn Agent + Send>,
     ) -> Game {
         let turn = state.turn();
+        let flip_winner = match state.pending() {
+            Pending::PlayOrDraw { chooser } => Some(*chooser),
+            _ => None,
+        };
         Game {
             seen: (turn.number, turn.step),
             answered: None,
@@ -250,6 +258,7 @@ impl Game {
             events: Vec::new(),
             paused: Vec::new(),
             before_cast: None,
+            flip_winner,
         }
     }
 
@@ -699,6 +708,13 @@ impl Game {
             self.human,
         );
         let mut view = player_view(&self.table, obs, moment, self.stops, &self.events);
+        view.turn.flip_winner = self.flip_winner.map(|p| {
+            if p == self.human {
+                Side::You
+            } else {
+                Side::Opponent
+            }
+        });
         if let At::Human(_, Open::Decision(d)) = &self.at {
             preview::add_previews(&mut view, &self.state, &self.table, d);
         }

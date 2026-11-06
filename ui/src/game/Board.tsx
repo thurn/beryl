@@ -37,6 +37,7 @@ import {
   LifeOrb,
   ManaPool,
   PlayerBadge,
+  Coin,
 } from "../components/Player";
 import {
   Arrows,
@@ -633,6 +634,8 @@ export function Board({
   const nameOf = (slot: number) => objects.get(slot)?.name ?? "a card";
   const { you, opponent } = view.players;
   const active = view.turn.active;
+  // The mulligans taken show until each player has had a turn, while hand sizes still tell.
+  const early = view.turn.number <= 2;
   const sourceName =
     top &&
     (top.kind === "spell"
@@ -718,16 +721,19 @@ export function Board({
         <div className="hud" style={{ left: 18, top: 62 }}>
           <PlayerBadge
             name="Opponent"
+            seat="opponent"
             activity={opponentActivity(view, waiting)}
+            mulligans={early ? opponent.mulligans : 0}
           />
         </div>
         <div className="hud" style={{ left: 18, top: 704 }}>
-          <PlayerBadge name="You" />
+          <PlayerBadge name="You" mulligans={early ? you.mulligans : 0} />
         </div>
         <Life
           side="opponent"
           life={opponent.life}
           active={active === "opponent"}
+          first={view.turn.starting === "opponent"}
           style={{ left: 670, top: 48 }}
           target={deciding ? can.players.get("opponent") : undefined}
           onPick={(act) => pick(act.index, act.then)}
@@ -736,6 +742,7 @@ export function Board({
           side="you"
           life={you.life}
           active={active === "you"}
+          first={view.turn.starting === "you"}
           style={{ left: 670, top: 618 }}
           target={deciding ? can.players.get("you") : undefined}
           onPick={(act) => pick(act.index, act.then)}
@@ -1067,6 +1074,7 @@ function Life({
   side,
   life,
   active,
+  first,
   style,
   target,
   onPick,
@@ -1074,6 +1082,8 @@ function Life({
   side: Side;
   life: number;
   active: boolean;
+  /** Their player takes, or took, the first turn: a coin by the orb says so. */
+  first: boolean;
   style: CSSProperties;
   target?: Act;
   onPick(act: Act): void;
@@ -1111,6 +1121,12 @@ function Life({
         seat={side === "opponent" ? "opponent" : "you"}
         anchor={lifeId(side)}
       />
+      {first && (
+        <span className="life-first has-tip" data-first={side}>
+          <Coin size={24} />
+          <Tip side={side === "you" ? "above" : "below"}>Played first</Tip>
+        </span>
+      )}
     </motion.div>
   );
 }
@@ -1231,15 +1247,17 @@ function boardArrows(view: PlayerView): ArrowSpec[] {
   return out;
 }
 
-/** The result of a coin flip, while the view it happened in shows. */
+/** The result of a coin flip, while the view it happened in shows: the card that flipped it,
+ * and who won or lost. */
 function coinFlipBanner(
   view: PlayerView,
 ): { title: string; detail: string } | undefined {
   const flip = view.events.find((e) => e.kind === "coinFlip");
   if (flip?.kind !== "coinFlip") return undefined;
-  const who = flip.player === "you" ? "You" : "Your opponent";
+  const source = view.objects.find((o) => o.slot === flip.source)?.name;
+  const who = flip.player === "you" ? "You" : "Opponent";
   return {
-    title: "Coin Flip",
+    title: source ?? "Coin flip",
     detail: `${who} ${flip.won ? "won" : "lost"} the flip`,
   };
 }
