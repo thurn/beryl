@@ -393,17 +393,7 @@ impl Condition {
             Condition::Stolen => stolen(view),
             Condition::ManaFloating => mana_floating(view),
             Condition::XOnStack => x_on_stack(view),
-            Condition::Crowded(n) => [Side::You, Side::Opponent].iter().all(|side| {
-                view.objects
-                    .iter()
-                    .filter(|o| {
-                        o.zone == ZoneName::Battlefield
-                            && o.controller == *side
-                            && !o.types.contains(&CardType::Land)
-                    })
-                    .count()
-                    >= *n
-            }),
+            Condition::Crowded(n) => crowded(view, *n),
             Condition::SpellOnStack => matches!(view.stack.last(), Some(StackItem::Spell { .. })),
         }
     }
@@ -584,6 +574,21 @@ fn changed_token(view: &PlayerView) -> bool {
             || [a, b]
                 .iter()
                 .any(|o| o.attached_to.is_some() || bears_attachment(view, o))
+    })
+}
+
+/// Whether each player controls at least `n` nonland permanents.
+fn crowded(view: &PlayerView, n: usize) -> bool {
+    [Side::You, Side::Opponent].iter().all(|side| {
+        view.objects
+            .iter()
+            .filter(|o| {
+                o.zone == ZoneName::Battlefield
+                    && o.controller == *side
+                    && !o.types.contains(&CardType::Land)
+            })
+            .count()
+            >= n
     })
 }
 
