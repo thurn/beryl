@@ -482,13 +482,13 @@ fn cast_sources(s: &State, player: Seat) -> Bitboard {
 fn cast_options(
     s: &State,
     t: &GameTable,
-    player: Seat,
+    now: &Situation,
     cards: Bitboard,
     from: From,
     out: &mut Fixed<Opt, 64>,
 ) -> Result<(), Full> {
+    let player = now.player;
     let free = matches!(from, From::Resolution { free: true });
-    let now = Situation::of(s, t, player)?;
     for slot in collapse(s, cards).iter() {
         let def = t.def(s.object(slot).card);
         let flashback =
@@ -499,7 +499,7 @@ fn cast_options(
                 continue;
             }
             for costs in option_sets(face, free || flashback) {
-                if castable(s, t, &now, slot, f, costs, from) {
+                if castable(s, t, now, slot, f, costs, from) {
                     out.push(Opt::Cast {
                         slot,
                         face: f,
@@ -672,9 +672,10 @@ fn benders(s: &State, player: Seat) -> Bitboard {
 fn activation_options(
     s: &State,
     t: &GameTable,
-    player: Seat,
+    now: &Situation,
     out: &mut Fixed<Opt, 64>,
 ) -> Result<(), Full> {
+    let player = now.player;
     let mine = s.zone(Seat::P0, Zone::Battlefield) | s.zone(Seat::P1, Zone::Battlefield);
     let objects = mine.iter().filter(|&slot| s.controller(slot) == player);
     let objects: Bitboard = objects.collect::<Bitboard>() | s.zone(player, Zone::Hand);
@@ -692,7 +693,6 @@ fn activation_options(
                     && s.derived(slot).granted.iter().any(Option::is_some))
         })
         .collect();
-    let now = Situation::of(s, t, player)?;
     for slot in collapse(s, objects).iter() {
         let own = face_of(s, t, slot).abilities.len() as u8;
         let granted = if s.object(slot).zone == Zone::Battlefield {
@@ -704,7 +704,7 @@ fn activation_options(
             .map(AbilityIx::Own)
             .chain((0..granted).map(AbilityIx::Granted));
         for ability in abilities {
-            if activatable(s, t, &now, slot, ability) {
+            if activatable(s, t, now, slot, ability) {
                 out.push(Opt::Activate { slot, ability })?;
             }
         }
@@ -720,8 +720,9 @@ pub(crate) fn priority_options(
     player: Seat,
     out: &mut Fixed<Opt, 64>,
 ) -> Result<(), Full> {
-    cast_options(s, t, player, cast_sources(s, player), From::Priority, out)?;
-    activation_options(s, t, player, out)?;
+    let now = Situation::of(s, t, player)?;
+    cast_options(s, t, &now, cast_sources(s, player), From::Priority, out)?;
+    activation_options(s, t, &now, out)?;
     mana::sacrifice_options(s, t, player, out)?;
     if s.profile.payment == Payment::Manual {
         mana::standalone_options(s, t, player, out)?;
@@ -1376,7 +1377,8 @@ pub(crate) fn offer_options(
     if s.is_current(object) {
         let mut cards = Bitboard::EMPTY;
         cards.insert(object.slot);
-        cast_options(s, t, player, cards, From::Resolution { free }, &mut out)?;
+        let now = Situation::of(s, t, player)?;
+        cast_options(s, t, &now, cards, From::Resolution { free }, &mut out)?;
     }
     Ok(out)
 }

@@ -61,30 +61,55 @@ impl Units {
     /// symbols, and the units cover the total. A source that makes several mana of one kind
     /// it chooses counts as several independent units, which the cube's colorless rocks are.
     pub(crate) fn pays(&self, cost: ManaCost) -> bool {
+        self.groups().pays(cost)
+    }
+
+    /// The units grouped by their set of kinds, the form [`Units::pays`] checks.
+    fn groups(&self) -> Groups {
+        let mut g = Groups {
+            total: self.total(),
+            by_kinds: [(0, 0); 1 << KINDS],
+            len: 0,
+        };
+        for (kinds, &n) in self.0.iter().enumerate() {
+            if n > 0 {
+                g.by_kinds[g.len] = (kinds as u8, u32::from(n));
+                g.len += 1;
+            }
+        }
+        g
+    }
+}
+
+/// Units grouped by their set of kinds, with their total: what [`Units::pays`] reads, kept by
+/// [`Funds`] for the many checks of one decision.
+#[derive(Clone, Copy, Debug)]
+struct Groups {
+    total: u32,
+    by_kinds: [(u8, u32); 1 << KINDS],
+    len: usize,
+}
+
+impl Groups {
+    /// [`Units::pays`].
+    fn pays(&self, cost: ManaCost) -> bool {
         debug_assert_eq!(cost.x, 0, "X is announced before payment");
-        if self.total() < cost.total(0) {
+        if self.total < cost.total(0) {
             return false;
         }
         // Only sets of kinds the cost has symbols of can fail the condition: adding a kind
-        // with no symbols adds no need. Units are grouped by their set of kinds first.
+        // with no symbols adds no need.
         let present = (0..KINDS)
             .filter(|&k| cost.symbols[k] > 0)
             .fold(0u8, |m, k| m | (1 << k));
-        let mut groups = [(0u8, 0u32); 1 << KINDS];
-        let mut len = 0;
-        for (kinds, &n) in self.0.iter().enumerate() {
-            if n > 0 {
-                groups[len] = (kinds as u8, u32::from(n));
-                len += 1;
-            }
-        }
+        let groups = &self.by_kinds[..self.len];
         let mut mask = present;
         while mask != 0 {
             let need: u32 = (0..KINDS)
                 .filter(|&k| mask & (1 << k) != 0)
                 .map(|k| u32::from(cost.symbols[k]))
                 .sum();
-            let cover: u32 = groups[..len]
+            let cover: u32 = groups
                 .iter()
                 .filter(|&&(kinds, _)| kinds & mask != 0)
                 .map(|&(_, n)| n)
@@ -329,6 +354,10 @@ pub(crate) struct Funds {
     pool: [u8; KINDS],
     /// Each source's slot, kinds of mana and amount.
     sources: Fixed<(Slot, u8, u8), 128>,
+    /// The sources' slots.
+    slots: Bitboard,
+    /// What all of them and the pool can pay, for the checks that exclude none.
+    all: Groups,
 }
 
 impl Funds {
@@ -345,10 +374,14 @@ impl Funds {
                 }
             }
         }
-        Ok(Funds {
+        let mut funds = Funds {
             pool: s.player(player).mana.amounts(),
             sources,
-        })
+            slots: sources.iter().map(|&(slot, _, _)| slot).collect(),
+            all: Units::NONE.groups(),
+        };
+        funds.all = funds.units(Bitboard::EMPTY).groups();
+        Ok(funds)
     }
 
     /// The units the pool and the sources but those in `exclude` make, as [`available`].
@@ -367,7 +400,12 @@ impl Funds {
 
     /// Whether the player can pay `cost` with none of `exclude`, as [`payable`].
     pub(crate) fn pays(&self, cost: ManaCost, exclude: Bitboard) -> bool {
-        self.units(exclude).pays(cost)
+        debug_assert_eq!(cost.x, 0, "X is announced before payment");
+        if (exclude & self.slots).is_empty() {
+            self.all.pays(cost)
+        } else {
+            self.units(exclude).pays(cost)
+        }
     }
 
     /// The untapped sources but those in `exclude`.
