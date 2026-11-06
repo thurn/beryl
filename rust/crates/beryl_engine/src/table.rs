@@ -1,7 +1,7 @@
 //! The static card table and the per-game table built from two decklists (architecture §6.4,
 //! decision D20).
 
-use crate::card::{AbilityKind, CardDef, FACE_DOWN_COPY, Face, FaceIx, Rule, Trigger};
+use crate::card::{AbilityKind, CardDef, FACE_DOWN, FACE_DOWN_COPY, Face, FaceIx, Rule, Trigger};
 use crate::event::kind;
 use crate::ids::{CardIx, Seat};
 use crate::mana::ManaFace;
@@ -55,6 +55,8 @@ pub struct GameTable {
     listens_any: u16,
     /// Per game index, the facts of its first two faces.
     faces: Vec<[FaceFacts; 2]>,
+    /// Per game index, the [`Rule`]s any of its faces, or face down, has.
+    rules: Vec<u8>,
     /// The game index of [`FACE_DOWN_COPY`].
     face_down_copy: CardIx,
 }
@@ -113,6 +115,11 @@ impl GameTable {
                 [of(0), of(1)]
             })
             .collect();
+        let down = FaceFacts::of(&FACE_DOWN).rules;
+        let rules = defs
+            .iter()
+            .map(|d| d.faces.iter().fold(down, |r, f| r | FaceFacts::of(f).rules))
+            .collect();
         Ok(Self {
             cards,
             defs,
@@ -120,6 +127,7 @@ impl GameTable {
             listens,
             listens_any,
             faces,
+            rules,
             face_down_copy,
         })
     }
@@ -149,6 +157,12 @@ impl GameTable {
             Some(&facts) => facts,
             None => FaceFacts::of(self.def(card).face(face)),
         }
+    }
+
+    /// Whether some face of the card at `card` has a static ability with `rule`: so whether it
+    /// can, whichever face is up.
+    pub(crate) fn may_have_rule(&self, card: CardIx, rule: Rule) -> bool {
+        self.rules[card.index()] & rule_bit(rule) != 0
     }
 
     /// The event kinds any card of this game listens to.

@@ -76,9 +76,10 @@ pub(crate) fn sorcery_timing(s: &State, player: Seat) -> bool {
 }
 
 /// Whether a permanent on the battlefield has a static ability with this rule.
+#[inline]
 fn has_rule(s: &State, t: &GameTable, slot: Slot, rule: Rule) -> bool {
     let o = s.object(slot);
-    t.facts(o.card, o.face).has_rule(rule)
+    t.may_have_rule(o.card, rule) && t.facts(o.card, o.face).has_rule(rule)
 }
 
 /// Whether an opponent's permanent limits `player` to casting spells at sorcery speed, as
