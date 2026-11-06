@@ -22,7 +22,7 @@ fn new_game() -> Game {
         decks: [owned(WU_CONTROL), owned(WU_CONTROL)],
         human: Seat::P0,
         opponent: "random".to_owned(),
-        stops: StopsSetting::Smart,
+        stops: StopsSetting::SMART,
     };
     Game::new(&CARDS, &start, SESSION).unwrap()
 }
@@ -132,13 +132,13 @@ fn a_cast_taken_back_at_its_target_returns_to_priority_as_it_was() {
     // keeps the new stops, recorded at the priority.
     let targeting = answer(&mut game, &again, cast);
     assert!(deciding(&targeting).unwrap().cancellable);
-    game.set_stops(StopsSetting::Exact).unwrap();
+    game.set_stops(StopsSetting::EXACT).unwrap();
     let again = game.cancel().unwrap();
-    assert_eq!(again.stops, StopsSetting::Exact);
+    assert_eq!(again.stops, StopsSetting::EXACT);
     assert_eq!(game.replay().log[..log.len()], log[..]);
     assert_eq!(
         game.replay().log[log.len()..],
-        [Entry::Stops(StopsSetting::Exact)]
+        [Entry::Stops(StopsSetting::EXACT)]
     );
 
     // Cast again and see it through: once its costs are paid, it stays cast.

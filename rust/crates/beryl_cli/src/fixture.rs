@@ -755,7 +755,7 @@ fn start(
     human: Seat,
     progress: &Shared,
 ) -> Result<SessionId, String> {
-    let stops = def.stops.unwrap_or(StopsSetting::Smart);
+    let stops = def.stops.unwrap_or(StopsSetting::SMART);
     let started: Result<SessionId, SessionError> =
         match (&def.board, def.seed, &def.decks, &def.agents) {
             (None, Some(seed), Some(decks), Some(agents)) => sessions.start_game(

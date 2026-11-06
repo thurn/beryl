@@ -23,6 +23,7 @@ import {
   type PlayerView,
   type SessionId,
   type Stall,
+  type StopsSetting,
 } from "../ipc";
 import { Board } from "../game/Board";
 import { ChoiceOverlay } from "../game/ChoiceOverlay";
@@ -32,6 +33,7 @@ import { useFace } from "../game/faces";
 import { useHoverInspect, type HoverHandlers } from "../game/Piles";
 import { eventsHold, type Playback } from "../game/playback";
 import { Brand, Stage } from "../game/Stage";
+import { sameStops, savedStops, saveStops } from "../game/stops";
 
 /** The agent that plays on the true state, hidden cards included. */
 const CHEATING = "mcts-omniscient";
@@ -332,6 +334,25 @@ function Playing({ playback }: { playback: Playback }) {
     cancel(decision.id).catch(fail);
   };
 
+  // The stops the player chose, here or in an earlier game, until the game holds them: the
+  // session takes a change only at the player's decision, so one made while the opponent acts
+  // waits for it, and a new game takes up the last game's.
+  const [chosen, setChosen] = useState<StopsSetting | undefined>(savedStops);
+  const stops = chosen ?? view.stops;
+  const chooseStops = (next: StopsSetting) => {
+    saveStops(next);
+    setChosen(next);
+  };
+  useEffect(() => {
+    if (!chosen || !decision || waiting || sameStops(chosen, view.stops))
+      return;
+    setStops(session, chosen).catch((e: unknown) => {
+      // A decision answered meanwhile: the next one takes them.
+      const message = failure(e);
+      if (message) setError(message);
+    });
+  }, [view, chosen, waiting]);
+
   // Each new decision takes the next planned pick, if it asks for it; otherwise the plan is
   // over (but for a pick that waits) and the player decides. The views of the game playing on
   // in between keep a plan with picks to come, and the overlay that made it; with none left,
@@ -398,9 +419,8 @@ function Playing({ playback }: { playback: Playback }) {
         onSkip={behind ? skip : undefined}
         choose={answer}
         cancel={cancelCast}
-        setFullControl={(on) =>
-          setStops(session, on ? "exact" : "smart").catch(fail)
-        }
+        stops={stops}
+        setStops={chooseStops}
         onLeave={() => (window.location.hash = "#/")}
         onConcede={
           ended

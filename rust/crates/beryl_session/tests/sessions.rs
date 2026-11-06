@@ -75,7 +75,7 @@ fn a_scripted_human_plays_a_whole_game_and_its_replay_reproduces_it() {
         .start_game(
             &StartGame {
                 decks: [owned(WU_CONTROL), owned(WU_CONTROL)],
-                ..start(11, StopsSetting::Smart)
+                ..start(11, StopsSetting::SMART)
             },
             None,
         )
@@ -93,10 +93,10 @@ fn a_scripted_human_plays_a_whole_game_and_its_replay_reproduces_it() {
         decisions += 1;
         // Halfway through, the human asks for every priority, which the replay must record.
         if decisions == 20 {
-            sessions.set_stops(session, StopsSetting::Exact).unwrap();
+            sessions.set_stops(session, StopsSetting::EXACT).unwrap();
             let again = views.recv().unwrap().view;
             assert_eq!(decision(&again).id, decision(&view).id);
-            assert_eq!(again.stops, StopsSetting::Exact);
+            assert_eq!(again.stops, StopsSetting::EXACT);
         }
         let (id, index) = script(&view);
         let candidates = decision(&view).candidates.len();
@@ -187,7 +187,7 @@ fn the_latest_view_of_the_game_in_progress_is_kept_for_a_reloaded_ui() {
     let sessions = Sessions::new(None, move |u| sent.send(u).unwrap());
     assert_eq!(sessions.current(), None, "no game");
     let first = sessions
-        .start_game(&start(2, StopsSetting::Smart), None)
+        .start_game(&start(2, StopsSetting::SMART), None)
         .unwrap();
     let view = to_decision(&views);
     // The session waits on the human, so nothing follows the decision.
@@ -200,7 +200,7 @@ fn the_latest_view_of_the_game_in_progress_is_kept_for_a_reloaded_ui() {
 
     // A new game's views replace the old game's.
     let second = sessions
-        .start_game(&start(3, StopsSetting::Smart), None)
+        .start_game(&start(3, StopsSetting::SMART), None)
         .unwrap();
     assert!(sessions.current().is_none_or(|u| u.session == second));
     let view = loop {
@@ -220,7 +220,7 @@ fn a_concession_ends_the_game_in_defeat_and_its_replay_reproduces_it() {
     let (sent, views) = channel();
     let sessions = Sessions::new(Some(dir.clone()), move |u| sent.send(u).unwrap());
     let session = sessions
-        .start_game(&start(4, StopsSetting::Smart), None)
+        .start_game(&start(4, StopsSetting::SMART), None)
         .unwrap();
     let mut view = to_decision(&views);
     for _ in 0..10 {
@@ -260,7 +260,7 @@ fn a_concession_ends_the_game_in_defeat_and_its_replay_reproduces_it() {
 
 #[test]
 fn a_concession_is_taken_where_the_game_waits_on_a_decision() {
-    let mut game = Game::new(&CARDS, &start(6, StopsSetting::Exact), SESSION).unwrap();
+    let mut game = Game::new(&CARDS, &start(6, StopsSetting::EXACT), SESSION).unwrap();
     let mut seen = (false, false);
     loop {
         let view = game
@@ -309,7 +309,7 @@ fn a_concession_is_taken_where_the_game_waits_on_a_decision() {
 
 #[test]
 fn a_replay_cut_at_a_decision_resumes_there() {
-    let mut game = Game::new(&CARDS, &start(3, StopsSetting::Exact), SESSION).unwrap();
+    let mut game = Game::new(&CARDS, &start(3, StopsSetting::EXACT), SESSION).unwrap();
     let mut view = to_human(&mut game);
     for _ in 0..30 {
         view = play(&mut game, &view);
@@ -320,7 +320,7 @@ fn a_replay_cut_at_a_decision_resumes_there() {
 
 #[test]
 fn a_stopped_game_lets_the_agent_decide_no_more() {
-    let mut game = Game::new(&CARDS, &start(7, StopsSetting::Exact), SESSION).unwrap();
+    let mut game = Game::new(&CARDS, &start(7, StopsSetting::EXACT), SESSION).unwrap();
     let mut view = to_human(&mut game);
     // Play to a decision whose answer hands the agent the next one, found on a replayed copy.
     let agent_decides_next = |game: &Game, view: &PlayerView| {
@@ -353,9 +353,9 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
     let mut events = 0;
     for seed in 0..6 {
         let stops = if seed % 2 == 0 {
-            StopsSetting::Smart
+            StopsSetting::SMART
         } else {
-            StopsSetting::Exact
+            StopsSetting::EXACT
         };
         let mut game = Game::new(&CARDS, &start(seed, stops), SESSION).unwrap();
         while let Some(view) = game.next_view() {

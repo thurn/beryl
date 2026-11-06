@@ -223,39 +223,45 @@ const PHASES: { phase: Phase; label: string; icon: ReactNode }[] = [
 ];
 
 /** The turn's phases, the current one lit gold. The compact variant sits on the table above
- * the pass button: smaller, with no pill or arrows, and a gold rule under the current phase. */
+ * the pass button: smaller, with no pill or arrows, and a gold rule under the current phase.
+ * Given `stops`, it shows a turn's phase stops, each phase with one lit and pipped, the others
+ * dimmed, and a click on a phase sets or clears its stop (`onStop`). */
 export function PhaseTracker({
   current,
   step,
   compact = false,
   now,
+  stops,
+  onStop,
+  whose,
+  className,
 }: {
-  current: Phase;
+  current?: Phase;
   /** The current step, which picks combat's icon among its steps' (COMBAT_STEPS). */
   step?: Step;
   compact?: boolean;
   /** What the current phase's tip says, such as "Turn 9 · Blockers"; its label otherwise. */
   now?: string;
+  /** The phases with a stop. */
+  stops?: Set<Phase>;
+  onStop?: (phase: Phase) => void;
+  /** Whose turn the row stands for, before each phase's label in its tip. */
+  whose?: string;
+  className?: string;
 }) {
   return (
     <ol
-      className={
-        compact ? "phase-tracker phase-tracker-compact" : "phase-tracker"
-      }
+      className={[
+        "phase-tracker",
+        compact && "phase-tracker-compact",
+        stops && "phase-tracker-stops",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
     >
-      {PHASES.map(({ phase, label, icon }, i) => (
-        <li
-          key={phase}
-          className={
-            phase === current ? "phase phase-current has-tip" : "phase has-tip"
-          }
-        >
-          <Tip side="above">{(phase === current && now) || label}</Tip>
-          {i > 0 && !compact && (
-            <svg className="phase-arrow" viewBox="0 0 9 11" aria-hidden>
-              <path d="M0.5 0.5 L8.5 5.5 L0.5 10.5 Z" />
-            </svg>
-          )}
+      {PHASES.map(({ phase, label, icon }, i) => {
+        const glyph = (
           <svg
             className="phase-icon"
             viewBox="0 0 24 24"
@@ -264,8 +270,45 @@ export function PhaseTracker({
           >
             {(phase === current && step && COMBAT_STEPS[step]) || icon}
           </svg>
-        </li>
-      ))}
+        );
+        const stopped = stops?.has(phase);
+        return (
+          <li
+            key={phase}
+            className={[
+              "phase has-tip",
+              phase === current && "phase-current",
+              stopped === true && "phase-stop",
+              stopped === false && "phase-no-stop",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
+            <Tip side="above">
+              {(phase === current && now) ||
+                (whose ? `${whose} ${label.toLowerCase()}` : label)}
+            </Tip>
+            {i > 0 && !compact && (
+              <svg className="phase-arrow" viewBox="0 0 9 11" aria-hidden>
+                <path d="M0.5 0.5 L8.5 5.5 L0.5 10.5 Z" />
+              </svg>
+            )}
+            {onStop ? (
+              <button
+                type="button"
+                className="phase-toggle"
+                aria-pressed={stopped}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => onStop(phase)}
+              >
+                {glyph}
+              </button>
+            ) : (
+              glyph
+            )}
+          </li>
+        );
+      })}
     </ol>
   );
 }

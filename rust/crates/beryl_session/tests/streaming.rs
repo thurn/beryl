@@ -71,7 +71,7 @@ fn the_first_view_comes_before_the_agent_decides_anything() {
         let decks = [owned(WU_CONTROL), owned(WU_CONTROL)];
         let mut game = Game::new(
             &CARDS,
-            &start(seed, decks, human, StopsSetting::Smart),
+            &start(seed, decks, human, StopsSetting::SMART),
             SESSION,
         )
         .unwrap();
@@ -93,9 +93,9 @@ fn the_first_view_comes_before_the_agent_decides_anything() {
 fn each_step_and_each_agent_decision_has_a_view_and_each_event_one_view() {
     for seed in 0..4 {
         let stops = if seed % 2 == 0 {
-            StopsSetting::Smart
+            StopsSetting::SMART
         } else {
-            StopsSetting::Exact
+            StopsSetting::EXACT
         };
         let decks = [owned(&fuzz_deck(seed)), owned(&fuzz_deck(seed ^ 1 << 40))];
         let game_start = start(seed, decks, Seat::P0, stops);
@@ -163,7 +163,7 @@ fn each_step_and_each_agent_decision_has_a_view_and_each_event_one_view() {
 #[test]
 fn a_loot_reports_its_draw_before_it_asks_for_the_discard() {
     let decks = [owned(VINTAGE_WU_CONTROL), owned(VINTAGE_WU_CONTROL)];
-    let mut begin = start(1, decks, Seat::P0, StopsSetting::Smart);
+    let mut begin = start(1, decks, Seat::P0, StopsSetting::SMART);
     begin.opponent = "greedy".to_owned();
     let mut game = Game::new(&CARDS, &begin, SESSION).unwrap();
     game.set_stand_in("greedy").unwrap();
@@ -225,7 +225,7 @@ fn events_of(begin: &StartGame, log: &[Entry]) -> Vec<Event> {
 #[test]
 fn smart_stops_halt_a_human_with_no_plays_at_their_main_phase_only() {
     let decks = [no_plays(), owned(WU_CONTROL)];
-    let game_start = start(3, decks, Seat::P0, StopsSetting::Smart);
+    let game_start = start(3, decks, Seat::P0, StopsSetting::SMART);
     let mut game = Game::new(&CARDS, &game_start, SESSION).unwrap();
     let mut views = Vec::new();
     let mut resumed = 0;
@@ -259,7 +259,7 @@ fn exact_stops_halt_nowhere() {
     let decks = [no_plays(), owned(WU_CONTROL)];
     let mut game = Game::new(
         &CARDS,
-        &start(3, decks, Seat::P0, StopsSetting::Exact),
+        &start(3, decks, Seat::P0, StopsSetting::EXACT),
         SESSION,
     )
     .unwrap();
@@ -274,7 +274,7 @@ fn a_human_who_can_play_stops_at_their_main_phase() {
         let decks = [owned(WU_CONTROL), owned(WU_CONTROL)];
         let mut game = Game::new(
             &CARDS,
-            &start(seed, decks, Seat::P1, StopsSetting::Smart),
+            &start(seed, decks, Seat::P1, StopsSetting::SMART),
             SESSION,
         )
         .unwrap();

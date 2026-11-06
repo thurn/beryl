@@ -53,6 +53,7 @@ import type {
   RefusalView,
   Side,
   StackItem as StackItemView,
+  StopsSetting,
 } from "../generated/protocol";
 import {
   CardLayer,
@@ -102,6 +103,7 @@ import {
   type CastChoice,
 } from "./casting";
 import { CastStep } from "./CastStep";
+import { stoppedPhases, togglePhase } from "./stops";
 import { tablePick } from "./tablePick";
 import {
   combatBanner,
@@ -161,8 +163,10 @@ export interface BoardProps {
   /** Takes back the spell or ability being cast, at a decision that may
    * (`DecisionView.cancellable`). */
   cancel?(): void;
-  /** Full control: stop at every priority (decision D13). */
-  setFullControl(on: boolean): void;
+  /** The player's stops (decision D13), as last chosen: the view's until a change arrives. */
+  stops: StopsSetting;
+  /** Changes the player's stops: full control, or a phase stop (stops.ts). */
+  setStops(stops: StopsSetting): void;
   onLeave(): void;
   /** Concedes the game; none once it is over. */
   onConcede?: () => void;
@@ -210,7 +214,8 @@ export function Board({
   onSkip,
   choose,
   cancel,
-  setFullControl,
+  stops,
+  setStops,
   onLeave,
   onConcede,
   dimmed = false,
@@ -385,7 +390,7 @@ export function Board({
    * auto-tapper does, the way the session ranks first. */
   const stepsIn = (casts: Act[]) =>
     asksCastStep(casts) ||
-    (view.stops === "exact" && plansOf(firstChoice(casts[0]!)).length > 1);
+    (view.stops.fullControl && plansOf(firstChoice(casts[0]!)).length > 1);
   /** Casts from a click: at once, as a drop does, unless the cast step has a choice to
    * offer. */
   const castOrSetUp = (slot: number, casts: Act[]) => {
@@ -971,18 +976,39 @@ export function Board({
         {/* Under a screen over the table, the turn's controls give way (scry.png). */}
         {!inert && (
           <div className="turn-controls">
-            {view.stops === "exact" && (
+            {stops.fullControl && (
               <span className="full-control has-tip">
                 <FullControlIcon />
                 <Tip side="above">Full control</Tip>
               </span>
             )}
-            <PhaseTracker
-              current={phaseOf(view.turn.step)}
-              step={view.turn.step}
-              compact
-              now={`Turn ${view.turn.number} · ${STEP_NAMES[view.turn.step]}`}
-            />
+            {/* As on Arena, a row of phase stops for each player's turns, the opponent's
+                toward them; the current phase lights in the active player's row. */}
+            {(["opponent", "you"] as const).map((side) => {
+              const key = side === "you" ? "yours" : "theirs";
+              return (
+                <PhaseTracker
+                  key={side}
+                  className={`phase-row-${side}`}
+                  current={
+                    view.turn.active === side
+                      ? phaseOf(view.turn.step)
+                      : undefined
+                  }
+                  step={view.turn.step}
+                  compact
+                  now={`Turn ${view.turn.number} · ${STEP_NAMES[view.turn.step]}`}
+                  whose={side === "you" ? "Your" : "Opponent's"}
+                  stops={stoppedPhases(stops[key])}
+                  onStop={(phase) =>
+                    setStops({
+                      ...stops,
+                      [key]: togglePhase(stops[key], phase),
+                    })
+                  }
+                />
+              );
+            })}
             {drafting ? (
               <Declare
                 kind={drafting}
@@ -1141,9 +1167,10 @@ export function Board({
             <label className="settings-toggle">
               <input
                 type="checkbox"
-                checked={view.stops === "exact"}
-                disabled={!deciding}
-                onChange={(e) => setFullControl(e.target.checked)}
+                checked={stops.fullControl}
+                onChange={(e) =>
+                  setStops({ ...stops, fullControl: e.target.checked })
+                }
               />
               <span>
                 Full control

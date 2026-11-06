@@ -14,8 +14,8 @@ use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{ObjectFlags, Pending, StackEntry};
 use beryl_engine::{
     Ask, Candidates, CardTable, Choice, Decision, DecisionKind, GameTable, Observation, Opt,
-    Outcome, Profile, Replay, Scratch, Seat, State, Step, TurnStep, Zone, apply, next_in_step,
-    observe, paused_events, view,
+    Outcome, Profile, Replay, Scratch, Seat, State, Step, StepStops, TurnStep, Zone, apply,
+    next_in_step, observe, paused_events, view,
 };
 use beryl_search::{Agent, Budget};
 
@@ -602,7 +602,7 @@ impl Game {
     /// the stops and the human's answers, so a replay finds each again; the replay records
     /// each as an [`Entry::Auto`].
     fn auto_answer(&self, d: &Decision) -> Option<Choice> {
-        if self.stops != StopsSetting::Smart {
+        if self.stops.full_control {
             return None;
         }
         match d.kind {
@@ -687,8 +687,8 @@ impl Game {
     }
 
     /// Whether the human is halted as the step that just began, a session-level stop the
-    /// engine knows nothing of: under the smart stops, at their own precombat main phase,
-    /// unless the engine offers them a decision there before anything else is decided. The
+    /// engine knows nothing of: under the smart stops, at their own precombat main phase while
+    /// it is one of their stops ([`StopsSetting::yours`]), unless the engine offers them a decision there before anything else is decided. The
     /// game would otherwise pass through it unseen whenever the human can do nothing but
     /// pass, and their turn would end without them. The opponent's turn plays on to theirs
     /// unhalted, as on Arena: the engine stops the human at its end step only when they can
@@ -696,8 +696,10 @@ impl Game {
     /// again; the agent never sees them.
     fn halts(&mut self) -> bool {
         let turn = self.state.turn();
-        let halting_step = turn.step == TurnStep::PrecombatMain && turn.active == self.human;
-        if self.stops != StopsSetting::Smart || !halting_step {
+        let halting_step = turn.step == TurnStep::PrecombatMain
+            && turn.active == self.human
+            && self.stops.yours.has(TurnStep::PrecombatMain);
+        if self.stops.full_control || !halting_step {
             return false;
         }
         let mut ahead = self.state;
@@ -856,12 +858,16 @@ fn trigger_to_stack(s: &State, t: &GameTable, d: &Decision) -> Choice {
 
 /// `profile` under the human's `stops`. Full control asks the human every priority they get,
 /// as Arena does, even where the engine would pass for them; their opponent's passes stay
-/// silent. Whatever the stops, the human picks each target of their own spells and abilities,
+/// silent. Under the smart stops, the human stops in the steps they chose, and the agent in
+/// the smart stops' own, as its search plays. Whatever the stops, the human picks each target of their own spells and abilities,
 /// even a lone one, so a click never aims a spell for them ([`Profile::asks_targets`]).
 pub fn with_stops(profile: Profile, stops: StopsSetting, human: Seat) -> Profile {
+    let mut step_stops = [StepStops::SMART; 2];
+    step_stops[human.index()] = stops.step_stops();
     Profile {
         stops: stops.stops(),
-        full_control: (stops == StopsSetting::Exact).then_some(human),
+        step_stops,
+        full_control: stops.full_control.then_some(human),
         asks_targets: Some(human),
         ..profile
     }

@@ -11,7 +11,8 @@ use beryl_engine::event::{Event, Reason, Recipient};
 use beryl_engine::state::{CounterKind, MulliganStatus, ObjectFlags, StackEntry, TurnStep};
 use beryl_engine::{
     Ask, Candidates, Decision, DecisionKind, GameTable, NextStop, Observation, Opt, Outcome,
-    Refusal, Seat, Slot, StallReason, Stops, Zone, can_declare_blockers, next_stop, refusal,
+    Refusal, Seat, Slot, StallReason, StepStops, Stops, Zone, can_declare_blockers, next_step_stop,
+    next_stop, refusal,
 };
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -567,23 +568,111 @@ pub enum LossReason {
 
 /// Where the viewer gets priority (architecture §15, decision D13).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub enum StopsSetting {
-    /// The smart stops: the viewer's own main phases, the opponent's attack, blocks, the
-    /// opponent's end step, and an opponent's doings on the stack, wherever the viewer can
-    /// act; and their own precombat main phase in any case.
-    Smart,
+#[serde(rename_all = "camelCase", default)]
+pub struct StopsSetting {
     /// Full control: every priority the viewer receives, even where passing is all they can
-    /// do.
-    Exact,
+    /// do. Otherwise the smart stops: wherever the viewer can act, an opponent's doings on the
+    /// stack and the steps below; and their own precombat main phase in any case, while it is
+    /// one of them.
+    pub full_control: bool,
+    /// The steps of the viewer's own turns where they stop with the stack empty, as Arena's
+    /// phase stops: by default their main phases, and combat once creatures attack.
+    #[ts(as = "Vec<Step>")]
+    pub yours: StepSet,
+    /// The steps of the opponent's turns where the viewer stops with the stack empty: by
+    /// default combat once creatures attack, and the end step.
+    #[ts(as = "Vec<Step>")]
+    pub theirs: StepSet,
 }
 
 impl StopsSetting {
+    /// The smart stops' default steps.
+    pub const SMART: StopsSetting = StopsSetting {
+        full_control: false,
+        yours: StepSet::of(&[
+            TurnStep::PrecombatMain,
+            TurnStep::DeclareAttackers,
+            TurnStep::DeclareBlockers,
+            TurnStep::PostcombatMain,
+        ]),
+        theirs: StepSet::of(&[
+            TurnStep::DeclareAttackers,
+            TurnStep::DeclareBlockers,
+            TurnStep::End,
+        ]),
+    };
+    /// Full control.
+    pub const EXACT: StopsSetting = StopsSetting {
+        full_control: true,
+        ..StopsSetting::SMART
+    };
+
     pub fn stops(self) -> Stops {
-        match self {
-            StopsSetting::Smart => Stops::Smart,
-            StopsSetting::Exact => Stops::Exact,
+        if self.full_control {
+            Stops::Exact
+        } else {
+            Stops::Smart
         }
+    }
+
+    /// The steps as the engine holds them for the viewer.
+    pub fn step_stops(self) -> StepStops {
+        TurnStep::ALL
+            .into_iter()
+            .fold(StepStops::NONE, |stops, step| {
+                stops.with(step, true, self.yours.has(step)).with(
+                    step,
+                    false,
+                    self.theirs.has(step),
+                )
+            })
+    }
+}
+
+impl Default for StopsSetting {
+    fn default() -> StopsSetting {
+        StopsSetting::SMART
+    }
+}
+
+/// A set of steps of the turn, which the wire carries as a list of [`Step`]s.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct StepSet(u16);
+
+impl StepSet {
+    pub const fn of(steps: &[TurnStep]) -> StepSet {
+        let mut bits = 0;
+        let mut i = 0;
+        while i < steps.len() {
+            bits |= 1 << steps[i] as u16;
+            i += 1;
+        }
+        StepSet(bits)
+    }
+
+    pub const fn has(self, step: TurnStep) -> bool {
+        self.0 & (1 << step as u16) != 0
+    }
+
+    pub fn steps(self) -> impl Iterator<Item = TurnStep> {
+        TurnStep::ALL
+            .into_iter()
+            .filter(move |&step| self.has(step))
+    }
+}
+
+impl Serialize for StepSet {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(self.steps().map(Step::from))
+    }
+}
+
+impl<'de> Deserialize<'de> for StepSet {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<StepSet, D::Error> {
+        let steps = Vec::<Step>::deserialize(deserializer)?;
+        Ok(StepSet(steps.into_iter().fold(0, |bits, step| {
+            bits | 1 << TurnStep::from(step) as u16
+        })))
     }
 }
 
@@ -691,6 +780,14 @@ macro_rules! mirror {
             fn from(v: $engine) -> Self {
                 match v {
                     $(<$engine>::$variant => $name::$variant),*
+                }
+            }
+        }
+
+        impl From<$name> for $engine {
+            fn from(v: $name) -> Self {
+                match v {
+                    $($name::$variant => <$engine>::$variant),*
                 }
             }
         }
@@ -1231,16 +1328,17 @@ fn ask_view(obs: Observation<'_>, ask: Ask) -> AskView {
 
 /// [`DecisionView::pass_to`]: the engine's [`next_stop`], less the declare blockers step for a
 /// defender with nothing to block with under the smart stops. The session passes them through
-/// it, as no creature blocks ([`crate::Game`]), on to their next stop: the end step, as the
-/// postcombat main phase is the active player's.
+/// it, as no creature blocks ([`crate::Game`]), on to their next stop after it: by default the
+/// end step, as the postcombat main phase is the active player's.
 fn pass_to(obs: Observation<'_>, stops: StopsSetting) -> PassTo {
-    let next = match next_stop(obs, stops.stops()) {
+    let step_stops = stops.step_stops();
+    let next = match next_stop(obs, stops.stops(), step_stops) {
         NextStop::Step(TurnStep::DeclareBlockers)
-            if stops == StopsSetting::Smart
+            if !stops.full_control
                 && obs.turn().active != obs.viewer()
                 && !can_declare_blockers(obs) =>
         {
-            NextStop::Step(TurnStep::End)
+            next_step_stop(obs, step_stops, TurnStep::DeclareBlockers)
         }
         next => next,
     };

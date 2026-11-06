@@ -51,7 +51,10 @@ pub use engine::{
 pub use ids::{CardIx, Seat, Slot};
 pub use invariants::{At, Violation};
 pub use observation::Observation;
-pub use profile::{Breakpoint, NextStop, Payment, Profile, Stops, can_declare_blockers, next_stop};
+pub use profile::{
+    Breakpoint, NextStop, Payment, Profile, StepStops, Stops, can_declare_blockers, next_step_stop,
+    next_stop,
+};
 pub use state::{State, TurnStep, Zone};
 pub use table::{CardTable, Decklist, GameTable, TableError};
 

@@ -27,7 +27,7 @@ fn paid(name: &str) -> Vec<Vec<PaidCost>> {
                 t,
                 Observation::new(s, viewer),
                 Moment::Thinking,
-                StopsSetting::Smart,
+                StopsSetting::SMART,
                 &[],
             );
             if let Some(StackItem::Spell { paid, .. }) = view.stack.last() {

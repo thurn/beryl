@@ -23,6 +23,80 @@ pub enum Stops {
     Forced,
 }
 
+/// The steps where a player gets priority as a decision under the smart stops while the stack
+/// is empty, on their own turns and on their opponent's: the smart stops' steps by default
+/// (§15), which a human may change, as an Arena player sets phase stops. A stop in the declare
+/// attackers or declare blockers step holds only once creatures attack, as a player gets no
+/// priority in a combat that has no attack to answer
+/// ([CR 508.8](https://yawgatog.com/resources/magic-rules/#R5088): "If no creatures are
+/// declared as attackers or put onto the battlefield attacking, skip the declare blockers and
+/// combat damage steps").
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct StepStops {
+    /// One bit per step of the player's own turns, by [`TurnStep`] order.
+    own: u16,
+    /// One bit per step of the opponent's turns.
+    theirs: u16,
+}
+
+impl StepStops {
+    /// No step: priority only while the stack holds something.
+    pub const NONE: StepStops = StepStops { own: 0, theirs: 0 };
+    /// The smart stops' steps (§15): "their own main phases, after attackers and after
+    /// blockers are declared, the opponent's end step".
+    pub const SMART: StepStops = StepStops {
+        own: bit(TurnStep::PrecombatMain)
+            | bit(TurnStep::DeclareAttackers)
+            | bit(TurnStep::DeclareBlockers)
+            | bit(TurnStep::PostcombatMain),
+        theirs: bit(TurnStep::DeclareAttackers)
+            | bit(TurnStep::DeclareBlockers)
+            | bit(TurnStep::End),
+    };
+
+    /// Whether the player stops in `step` of their own turn (`own`) or their opponent's.
+    pub const fn has(self, step: TurnStep, own: bool) -> bool {
+        (if own { self.own } else { self.theirs }) & bit(step) != 0
+    }
+
+    /// These stops, with `step` of the player's own turns (`own`) or their opponent's a stop
+    /// or not (`on`).
+    #[must_use]
+    pub const fn with(self, step: TurnStep, own: bool, on: bool) -> StepStops {
+        const fn set(bits: u16, step: TurnStep, on: bool) -> u16 {
+            if on {
+                bits | bit(step)
+            } else {
+                bits & !bit(step)
+            }
+        }
+        if own {
+            StepStops {
+                own: set(self.own, step, on),
+                theirs: self.theirs,
+            }
+        } else {
+            StepStops {
+                own: self.own,
+                theirs: set(self.theirs, step, on),
+            }
+        }
+    }
+
+    /// Whether a player who is the active player (`active`) or not stops in `step` with the
+    /// stack empty, with creatures attacking (`attacking`, asked only for a combat step).
+    fn stops_in(self, step: TurnStep, active: bool, attacking: impl FnOnce() -> bool) -> bool {
+        self.has(step, active)
+            && (!matches!(step, TurnStep::DeclareAttackers | TurnStep::DeclareBlockers)
+                || attacking())
+    }
+}
+
+/// [`StepStops`]' bit for `step`.
+const fn bit(step: TurnStep) -> u16 {
+    1 << step as u16
+}
+
 /// The budgets whose exhaustion is `Outcome::Stalled` (architecture §12.3).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Limits {
@@ -67,6 +141,8 @@ pub enum Payment {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Profile {
     pub stops: Stops,
+    /// Each seat's steps under the smart stops, by seat index.
+    pub step_stops: [StepStops; 2],
     pub limits: Limits,
     pub breakpoint: Option<Breakpoint>,
     pub payment: Payment,
@@ -103,6 +179,7 @@ impl Profile {
     /// Everything the rules offer, less what §7.2 settles silently.
     pub const EXACT: Profile = Profile {
         stops: Stops::Exact,
+        step_stops: [StepStops::SMART; 2],
         limits: Limits::DEFAULT,
         breakpoint: None,
         payment: Payment::KeepMostPayable,
@@ -112,6 +189,7 @@ impl Profile {
     /// The smart stops, for search and, by default, for humans.
     pub const SMART: Profile = Profile {
         stops: Stops::Smart,
+        step_stops: [StepStops::SMART; 2],
         limits: Limits::DEFAULT,
         breakpoint: None,
         payment: Payment::KeepMostPayable,
@@ -123,7 +201,7 @@ impl Profile {
     pub(crate) fn stops_for(self, s: &State, player: Seat) -> bool {
         match self.stops {
             Stops::Exact | Stops::Forced => true,
-            Stops::Smart => is_smart_stop(s, player),
+            Stops::Smart => is_smart_stop(s, player, self.step_stops[player.index()]),
         }
     }
 
@@ -155,20 +233,10 @@ impl Profile {
 }
 
 /// The smart stops (§15): "their own main phases, after attackers and after blockers are
-/// declared, the opponent's end step, and whenever the stack is non-empty."
-fn is_smart_stop(s: &State, player: Seat) -> bool {
-    !s.stack.is_empty() || smart_stop_in(s.turn.step, s.turn.active == player, any_attacking(s))
-}
-
-/// Whether a player gets priority at a smart stop in `step` with an empty stack, as the
-/// active player or not, with creatures attacking or not.
-fn smart_stop_in(step: TurnStep, active: bool, attacking: bool) -> bool {
-    match step {
-        TurnStep::PrecombatMain | TurnStep::PostcombatMain => active,
-        TurnStep::DeclareAttackers | TurnStep::DeclareBlockers => attacking,
-        TurnStep::End => !active,
-        _ => false,
-    }
+/// declared, the opponent's end step, and whenever the stack is non-empty", with the steps
+/// the player's `steps` name in place of those.
+fn is_smart_stop(s: &State, player: Seat, steps: StepStops) -> bool {
+    !s.stack.is_empty() || steps.stops_in(s.turn.step, s.turn.active == player, || any_attacking(s))
 }
 
 /// Where passing priority now takes the viewer, as the pass button says (decision D13).
@@ -186,10 +254,10 @@ pub enum NextStop {
 
 /// Where passing priority now takes the viewer of `obs` under `stops`, if the other player
 /// passes too: the resolution of the top of the stack; combat damage once blockers are
-/// declared; under smart stops, the next step of the turn that is one of the viewer's
+/// declared; under smart stops, the next step of the turn that is one of the viewer's `step_stops`
 /// ([`is_smart_stop`]), counting the combat in which the viewer, as the active player, can
 /// declare attackers; otherwise the next step.
-pub fn next_stop(obs: Observation<'_>, stops: Stops) -> NextStop {
+pub fn next_stop(obs: Observation<'_>, stops: Stops, step_stops: StepStops) -> NextStop {
     let s = obs.shown();
     if !s.stack.is_empty() {
         return NextStop::Resolve;
@@ -208,11 +276,20 @@ pub fn next_stop(obs: Observation<'_>, stops: Stops) -> NextStop {
     if stops != Stops::Smart {
         return NextStop::Step(later.min().unwrap_or(TurnStep::Untap));
     }
+    next_step_stop(obs, step_stops, step)
+}
+
+/// The next step of the turn after `after` that is one of the viewer's `steps` under the smart
+/// stops with the stack empty, counting the combat in which the viewer, as the active player,
+/// can declare attackers.
+pub fn next_step_stop(obs: Observation<'_>, steps: StepStops, after: TurnStep) -> NextStop {
+    let s = obs.shown();
     let active = s.turn.active == obs.viewer();
-    let declares = active && step < TurnStep::BeginningOfCombat && combat::can_declare_attackers(s);
-    for l in later {
-        if (l == TurnStep::BeginningOfCombat && declares)
-            || smart_stop_in(l, active, attacking || declares)
+    let declares =
+        active && s.turn.step < TurnStep::BeginningOfCombat && combat::can_declare_attackers(s);
+    let attacking = declares || any_attacking(s);
+    for l in TurnStep::ALL.into_iter().filter(|&l| l > after) {
+        if (l == TurnStep::BeginningOfCombat && declares) || steps.stops_in(l, active, || attacking)
         {
             return NextStop::Step(l);
         }

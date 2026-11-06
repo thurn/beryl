@@ -9,7 +9,7 @@ use beryl_cards::names::{
 use beryl_engine::TurnStep;
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_search::Budget;
-use beryl_session::protocol::{Candidate, Kind, PassTo, Side, Step};
+use beryl_session::protocol::{Candidate, Kind, PassTo, Side, Step, StepSet};
 use beryl_session::{CandidateIndex, Game, Prepared, Seat, SessionId, Status, StopsSetting};
 
 const SESSION: SessionId = SessionId(1);
@@ -182,13 +182,13 @@ fn priority_in(asked: &[Stop], active: Side, step: Step) -> usize {
 /// without stopping them at its end step; full control stops them there.
 #[test]
 fn nothing_to_do_at_the_opponents_end_step_does_not_stop_there() {
-    let smart = stops_in(&NOTHING_AT_INSTANT_SPEED, StopsSetting::Smart);
+    let smart = stops_in(&NOTHING_AT_INSTANT_SPEED, StopsSetting::SMART);
     assert!(
         smart.iter().all(|s| s.active == Side::You),
         "stopped in the opponent's turn: {smart:?}"
     );
     assert_eq!(priority_in(&smart, Side::You, Step::PrecombatMain), 1);
-    let exact = stops_in(&NOTHING_AT_INSTANT_SPEED, StopsSetting::Exact);
+    let exact = stops_in(&NOTHING_AT_INSTANT_SPEED, StopsSetting::EXACT);
     assert_eq!(priority_in(&exact, Side::Opponent, Step::End), 1);
 }
 
@@ -196,7 +196,7 @@ fn nothing_to_do_at_the_opponents_end_step_does_not_stop_there() {
 /// main phase, where they could cast it; full control stops them in each combat step.
 #[test]
 fn holding_flash_does_not_stop_each_combat_step_of_ones_own_turn() {
-    let smart = stops_in(&ATTACK_HOLDING_FLASH, StopsSetting::Smart);
+    let smart = stops_in(&ATTACK_HOLDING_FLASH, StopsSetting::SMART);
     assert!(
         smart.iter().any(|s| s.kind == Kind::Attacker),
         "never attacked: {smart:?}"
@@ -216,7 +216,7 @@ fn holding_flash_does_not_stop_each_combat_step_of_ones_own_turn() {
     assert_passes_land_where_named(&smart);
     // The opponent's end step, where flashing in the Emperor is the play.
     assert_eq!(priority_in(&smart, Side::Opponent, Step::End), 1);
-    let exact = stops_in(&ATTACK_HOLDING_FLASH, StopsSetting::Exact);
+    let exact = stops_in(&ATTACK_HOLDING_FLASH, StopsSetting::EXACT);
     for step in [Step::DeclareAttackers, Step::DeclareBlockers] {
         assert!(in_combat(&exact, step) > 0, "full control passed {step:?}");
     }
@@ -232,9 +232,9 @@ fn ones_own_trigger_resolves_without_ones_priority() {
             .filter(|s| s.active == Side::You && s.step == Step::Upkeep && s.stack)
             .count()
     };
-    let smart = stops_in(&CRYPT_HOLDING_FLASH, StopsSetting::Smart);
+    let smart = stops_in(&CRYPT_HOLDING_FLASH, StopsSetting::SMART);
     assert_eq!(on_trigger(&smart), 0, "stopped at the trigger: {smart:?}");
-    let exact = stops_in(&CRYPT_HOLDING_FLASH, StopsSetting::Exact);
+    let exact = stops_in(&CRYPT_HOLDING_FLASH, StopsSetting::EXACT);
     assert!(on_trigger(&exact) > 0, "full control passed the trigger");
 }
 
@@ -242,7 +242,7 @@ fn ones_own_trigger_resolves_without_ones_priority() {
 /// attackers, but not after declaring no blockers.
 #[test]
 fn holding_flash_stops_after_the_opponents_attack() {
-    let smart = stops_against(&DEFEND_HOLDING_FLASH, StopsSetting::Smart, "greedy");
+    let smart = stops_against(&DEFEND_HOLDING_FLASH, StopsSetting::SMART, "greedy");
     let attacked = |s: &Stop| s.active == Side::Opponent && s.step == Step::DeclareAttackers;
     assert!(
         smart
@@ -256,4 +256,55 @@ fn holding_flash_stops_after_the_opponents_attack() {
         "stopped after no blocks: {smart:?}"
     );
     assert_passes_land_where_named(&smart);
+}
+
+/// The smart stops with the human's phase stops changed: `step` of the opponent's turns a stop
+/// or not (`on`).
+fn their_stop(step: TurnStep, on: bool) -> StopsSetting {
+    let mut steps: Vec<TurnStep> = StopsSetting::SMART.theirs.steps().collect();
+    steps.retain(|&s| s != step);
+    if on {
+        steps.push(step);
+    }
+    StopsSetting {
+        theirs: StepSet::of(&steps),
+        ..StopsSetting::SMART
+    }
+}
+
+/// A phase stop on the opponent's upkeep gives the human, holding a flash card, priority
+/// there; one cleared from the opponent's end step passes it by. The pass button names each
+/// stop the human lands at.
+#[test]
+fn phase_stops_move_the_opponents_turn_stops() {
+    let upkeep = stops_in(&ATTACK_HOLDING_FLASH, their_stop(TurnStep::Upkeep, true));
+    assert_eq!(priority_in(&upkeep, Side::Opponent, Step::Upkeep), 1);
+    assert_eq!(priority_in(&upkeep, Side::Opponent, Step::End), 1);
+    assert_passes_land_where_named(&upkeep);
+
+    let no_end = stops_in(&ATTACK_HOLDING_FLASH, their_stop(TurnStep::End, false));
+    assert!(
+        no_end.iter().all(|s| s.active == Side::You),
+        "stopped in the opponent's turn: {no_end:?}"
+    );
+    assert_passes_land_where_named(&no_end);
+}
+
+/// With their own precombat main phase cleared, the human is neither halted nor stopped
+/// there, and plays their land in the second main phase instead.
+#[test]
+fn a_cleared_main_phase_stop_passes_it_by() {
+    let stops = StopsSetting {
+        yours: StepSet::of(&[TurnStep::PostcombatMain]),
+        ..StopsSetting::SMART
+    };
+    let asked = stops_in(&NOTHING_AT_INSTANT_SPEED, stops);
+    assert!(
+        asked
+            .iter()
+            .all(|s| !(s.active == Side::You && s.step == Step::PrecombatMain)),
+        "stopped in main 1: {asked:?}"
+    );
+    assert_eq!(priority_in(&asked, Side::You, Step::PostcombatMain), 1);
+    assert_passes_land_where_named(&asked);
 }

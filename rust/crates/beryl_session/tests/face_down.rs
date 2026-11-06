@@ -36,7 +36,7 @@ fn seen() -> [ObjectView; 2] {
                 t,
                 Observation::new(s, viewer),
                 Moment::Thinking,
-                StopsSetting::Smart,
+                StopsSetting::SMART,
                 &[],
             );
             v.objects.into_iter().find(|o| o.facing == Facing::Down)
@@ -97,7 +97,7 @@ fn a_copy_of_a_face_down_permanent_is_a_face_up_nameless_two_two() {
     for viewer in Seat::BOTH {
         let obs = Observation::new(&s, viewer);
         assert_eq!(obs.card(copy), Some(t.face_down_copy()), "{viewer:?}");
-        let view = player_view(&t, obs, Moment::Thinking, StopsSetting::Smart, &[]);
+        let view = player_view(&t, obs, Moment::Thinking, StopsSetting::SMART, &[]);
         let o = view
             .objects
             .iter()

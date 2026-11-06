@@ -1170,6 +1170,10 @@
   left: 1337px;
   top: 706px;
 }
+/* The opponent's turns' phase stops, over yours. */
+.turn-controls .phase-row-opponent {
+  top: 664px;
+}
 /* Full control's stop sign, left of the turn button, while it is on. */
 .full-control {
   right: 301px;
@@ -1192,7 +1196,7 @@
 /* A declaration's shortcuts, over the phase tracker. */
 .combat-actions {
   right: 39px;
-  top: 650px;
+  top: 612px;
   width: 250px;
   display: flex;
   justify-content: center;

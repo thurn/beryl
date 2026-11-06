@@ -2687,9 +2687,9 @@ const clicked = otherTaps.find(
 // Under full control (Arena's), a click opens the cast step to choose the payment.
 const exactFixture = (
     await readFile(join(fixtures, "pay-other.json"), "utf8")
-).replaceAll('"stops":"smart"', '"stops":"exact"');
+).replaceAll('"fullControl":false', '"fullControl":true');
 assert.ok(
-    exactFixture.includes('"stops":"exact"'),
+    exactFixture.includes('"fullControl":true'),
     "pay-other names its stops",
 );
 await writeFile(join(fixtures, "pay-other-exact.json"), exactFixture);
@@ -4038,7 +4038,44 @@ await check(
                 .filter((c) => c.command === "set_stops")
                 .map((c) => c.args.request),
         );
-        assert.deepEqual(sent, [{ session, stops: "exact" }]);
+        const smart = {
+            yours: [
+                "precombatMain",
+                "declareAttackers",
+                "declareBlockers",
+                "postcombatMain",
+            ],
+            theirs: ["declareAttackers", "declareBlockers", "end"],
+        };
+        assert.deepEqual(sent, [
+            { session, stops: { fullControl: true, ...smart } },
+        ]);
+    },
+);
+
+await check(
+    "a phase icon sets and clears a stop in that player's turns",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const end = ".phase-row-opponent .phase:last-child";
+        const upkeep = ".phase-row-opponent .phase:first-child";
+        assert.ok(await page.locator(`${end}.phase-stop`).count());
+        assert.ok(await page.locator(`${upkeep}.phase-no-stop`).count());
+        await page.click(`${end} .phase-toggle`);
+        await page.click(`${upkeep} .phase-toggle`);
+        assert.ok(await page.locator(`${end}.phase-no-stop`).count());
+        assert.ok(await page.locator(`${upkeep}.phase-stop`).count());
+        const sent = await page.evaluate(() =>
+            window.berylFixture.calls
+                .filter((c) => c.command === "set_stops")
+                .map((c) => c.args.request.stops.theirs),
+        );
+        assert.deepEqual(sent.at(-1), [
+            "declareAttackers",
+            "declareBlockers",
+            "upkeep",
+            "draw",
+        ]);
     },
 );
 

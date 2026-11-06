@@ -65,7 +65,7 @@ fn at_decisions(scenario: &Scenario) -> Vec<Vec<Seen>> {
                 t,
                 obs,
                 Moment::Deciding(ID, d, None),
-                StopsSetting::Smart,
+                StopsSetting::SMART,
                 &[],
             );
             all.push(seen(&v));
@@ -91,7 +91,7 @@ fn at_halt(scenario: &Scenario) -> Vec<Seen> {
         &t,
         Observation::new(&s, Seat::P0),
         Moment::Deciding(ID, &d, None),
-        StopsSetting::Smart,
+        StopsSetting::SMART,
         &[],
     );
     seen(&v)

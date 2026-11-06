@@ -110,7 +110,7 @@ fn play_switching(game: &mut Game, mut switch: Option<StopsSetting>) -> Seen {
 fn full_control_gives_priority_over_every_opponent_spell_in_either_turn() {
     let mut in_turn = [0, 0];
     for seed in 0..4 {
-        let seen = play(&mut new_game(seed, StopsSetting::Exact));
+        let seen = play(&mut new_game(seed, StopsSetting::EXACT));
         for e in &seen.theirs {
             assert!(
                 seen.answered.iter().any(|(a, _)| a == e),
@@ -130,13 +130,13 @@ fn full_control_gives_priority_over_every_opponent_spell_in_either_turn() {
 
 #[test]
 fn full_control_stops_in_every_step_of_the_opponents_turn() {
-    assert_every_step(&play(&mut new_game(0, StopsSetting::Exact)));
+    assert_every_step(&play(&mut new_game(0, StopsSetting::EXACT)));
 }
 
 #[test]
 fn switching_to_full_control_mid_game_stops_in_every_step() {
-    let mut game = new_game(0, StopsSetting::Smart);
-    assert_every_step(&play_switching(&mut game, Some(StopsSetting::Exact)));
+    let mut game = new_game(0, StopsSetting::SMART);
+    assert_every_step(&play_switching(&mut game, Some(StopsSetting::EXACT)));
 }
 
 /// The human had priority in each step of each of the opponent's turns that has one.
@@ -162,7 +162,7 @@ fn assert_every_step(seen: &Seen) {
 
 #[test]
 fn smart_stops_pass_where_the_human_can_only_pass() {
-    let seen = play(&mut new_game(0, StopsSetting::Smart));
+    let seen = play(&mut new_game(0, StopsSetting::SMART));
     assert!(
         seen.their_steps
             .iter()

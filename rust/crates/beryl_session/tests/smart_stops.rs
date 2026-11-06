@@ -179,7 +179,7 @@ fn a_humans_own_spell_resolves_without_their_priority_under_smart_stops_only() {
     let mut resolved = 0;
     let mut own_priorities = [0, 0];
     for seed in 0..3 {
-        for (i, stops) in [StopsSetting::Smart, StopsSetting::Exact]
+        for (i, stops) in [StopsSetting::SMART, StopsSetting::EXACT]
             .into_iter()
             .enumerate()
         {
@@ -205,7 +205,7 @@ fn an_opponents_response_gives_the_human_priority() {
     // A response leaving the stack from above the human's spell is rare: play seeds until one
     // has (seed 34, once the mulligan put its bottom picks after the keep).
     for seed in 0..64 {
-        let mut game = new_game(seed, get_lost(), StopsSetting::Smart);
+        let mut game = new_game(seed, get_lost(), StopsSetting::SMART);
         let (views, asked) = play(&mut game);
         let theirs = |e: &StackEntry| e.controller != HUMAN;
         for a in asked.iter().filter(|a| priority_on_a_stack(a)) {
@@ -242,7 +242,7 @@ fn smart_stops_order_the_humans_triggers_and_exact_stops_ask() {
     let mut orders_asked = [0, 0];
     let (mut offspring, mut autos) = (0, 0);
     for seed in 0..4 {
-        for (i, stops) in [StopsSetting::Smart, StopsSetting::Exact]
+        for (i, stops) in [StopsSetting::SMART, StopsSetting::EXACT]
             .into_iter()
             .enumerate()
         {
@@ -252,7 +252,7 @@ fn smart_stops_order_the_humans_triggers_and_exact_stops_ask() {
                 .iter()
                 .filter(|a| kind(&a.view) == Kind::TriggerOrder)
                 .count();
-            if stops == StopsSetting::Smart {
+            if stops == StopsSetting::SMART {
                 offspring += offspring_first(&asked);
                 autos += game
                     .replay()
@@ -370,9 +370,9 @@ fn asked_after_waterbend(stops: StopsSetting) -> Vec<Kind> {
 /// tap the creature for some of it (CR 701.67a).
 #[test]
 fn smart_stops_pay_a_waterbend_with_mana_when_mana_can() {
-    assert!(!asked_after_waterbend(StopsSetting::Smart).contains(&Kind::Waterbend));
+    assert!(!asked_after_waterbend(StopsSetting::SMART).contains(&Kind::Waterbend));
     assert_eq!(
-        asked_after_waterbend(StopsSetting::Exact).first(),
+        asked_after_waterbend(StopsSetting::EXACT).first(),
         Some(&Kind::Waterbend)
     );
 }
@@ -465,11 +465,11 @@ fn asked_after_trinket_mage(scenario: &Scenario, stops: StopsSetting) -> Vec<Kin
 /// the bottom, is asked, as exact stops ask everyone.
 #[test]
 fn smart_stops_search_a_library_the_human_knows_nothing_of() {
-    let smart = asked_after_trinket_mage(&TRINKET, StopsSetting::Smart);
+    let smart = asked_after_trinket_mage(&TRINKET, StopsSetting::SMART);
     assert!(!smart.contains(&Kind::YesNo), "{smart:?}");
     assert_eq!(smart.last(), Some(&Kind::ChooseUpTo));
-    let known = asked_after_trinket_mage(&STOCKED, StopsSetting::Smart);
+    let known = asked_after_trinket_mage(&STOCKED, StopsSetting::SMART);
     assert!(known.contains(&Kind::YesNo), "{known:?}");
-    let exact = asked_after_trinket_mage(&TRINKET, StopsSetting::Exact);
+    let exact = asked_after_trinket_mage(&TRINKET, StopsSetting::EXACT);
     assert!(exact.contains(&Kind::YesNo), "{exact:?}");
 }

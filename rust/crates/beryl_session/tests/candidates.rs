@@ -30,7 +30,7 @@ fn candidates(card: &str) -> Vec<(CandidateView, Option<String>)> {
                 t,
                 Observation::new(view(s, t, &mut x), d.player),
                 Moment::Deciding(id, d, resolving),
-                StopsSetting::Smart,
+                StopsSetting::SMART,
                 &[],
             );
             let Status::Deciding { decision } = v.status else {

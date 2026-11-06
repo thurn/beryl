@@ -304,7 +304,24 @@ export type Stall = "decisionsPerTurn" | "turns" | "stateBasedIterations" | "cap
 
 export type LossReason = "life" | "library" | "effect" | "concede";
 
-export type StopsSetting = "smart" | "exact";
+export type StopsSetting = { 
+/**
+ * Full control: every priority the viewer receives, even where passing is all they can
+ * do. Otherwise the smart stops: wherever the viewer can act, an opponent's doings on the
+ * stack and the steps below; and their own precombat main phase in any case, while it is
+ * one of them.
+ */
+fullControl: boolean, 
+/**
+ * The steps of the viewer's own turns where they stop with the stack empty, as Arena's
+ * phase stops: by default their main phases, and combat once creatures attack.
+ */
+yours: Array<Step>, 
+/**
+ * The steps of the opponent's turns where the viewer stops with the stack empty: by
+ * default combat once creatures attack, and the end step.
+ */
+theirs: Array<Step>, };
 
 export type GameEvent = { "kind": "zoneChange", slot: number, from: ZoneName, to: ZoneName, reason: Why, } | { "kind": "damage", source: number, to: TargetRef, amount: number, combat: boolean, } | { "kind": "draw", player: Side, cards: number, } | { "kind": "lifeGain", player: Side, amount: number, } | { "kind": "lifeLoss", player: Side, amount: number, } | { "kind": "countersAdded", slot: number, counter: Counter, amount: number, } | { "kind": "countersRemoved", slot: number, counter: Counter, amount: number, } | { "kind": "tap", slot: number, } | { "kind": "untap", slot: number, } | { "kind": "tokensCreated", controller: Side, tokens: Array<number>, } | { "kind": "cast", slot: number, controller: Side, } | { "kind": "ability", item: StackItem, 
 /**

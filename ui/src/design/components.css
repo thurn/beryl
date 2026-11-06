@@ -1253,6 +1253,42 @@
   filter: drop-shadow(0 1px 1px rgb(0 0 0 / 70%));
 }
 
+/* Phase stops: a phase with one is lit and pipped gold, one without dimmed; each is a button
+   that sets or clears it. */
+.phase-toggle {
+  display: flex;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.phase-tracker-stops .phase-icon {
+  transition: opacity 120ms;
+}
+.phase-tracker-stops .phase-no-stop .phase-icon {
+  opacity: 0.35;
+}
+.phase-tracker-stops .phase-no-stop .phase-toggle:hover .phase-icon {
+  opacity: 0.7;
+}
+.phase-tracker-stops .phase-current .phase-icon {
+  opacity: 1;
+}
+.phase-tracker-stops .phase-stop::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  right: -3px;
+  width: 5px;
+  height: 5px;
+  z-index: 1;
+  border-radius: 50%;
+  background: #ffd27a;
+  box-shadow: 0 0 3px 1px rgb(245 130 30 / 60%);
+  pointer-events: none;
+}
+
 /* The compact tracker on the table, in stage pixels: the same icons, smaller, evenly spaced
    over a thin rule with no pill or arrows. The current one glows as in the full tracker, and
    the rule under it turns gold. */

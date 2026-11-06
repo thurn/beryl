@@ -38,7 +38,7 @@ impl StartRequest {
             decks: [deck.clone(), deck],
             human: Seat::P0,
             opponent: self.agent.clone(),
-            stops: StopsSetting::Smart,
+            stops: StopsSetting::SMART,
         }
     }
 }

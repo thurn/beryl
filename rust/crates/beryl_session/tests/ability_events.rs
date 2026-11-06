@@ -54,7 +54,7 @@ fn events(
         &t,
         Observation::new(&s, viewer),
         Moment::Thinking,
-        StopsSetting::Smart,
+        StopsSetting::SMART,
         x.events.events(),
     );
     let slots: Vec<(String, u8)> = view
