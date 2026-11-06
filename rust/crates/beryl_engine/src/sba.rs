@@ -7,7 +7,7 @@ use crate::event::{self, Entry, Event, Reason, Sink};
 use crate::fixed::Full;
 use crate::ids::{Seat, Slot};
 use crate::layers;
-use crate::state::{ObjectFlags, Pending, State, Zone, token_slots};
+use crate::state::{ObjectFlags, Pending, State, TOKEN_POOL, Zone};
 use crate::table::GameTable;
 use crate::turn::apnap;
 use crate::zone;
@@ -100,11 +100,17 @@ fn doomed(s: &State) -> (Bitboard, Bitboard) {
             graveyard.insert(slot);
         }
     }
-    let tokens = token_slots()
-        .filter(|&slot| {
-            let o = s.object(slot);
-            o.flags.has(ObjectFlags::TOKEN) && !matches!(o.zone, Zone::Battlefield | Zone::Nowhere)
-        })
+    // The zones' memberships hold everything off the battlefield and in a zone, so the
+    // token slots need no scan.
+    let mut away = s.zones.stack;
+    for player in Seat::BOTH {
+        for zone in [Zone::Library, Zone::Hand, Zone::Graveyard, Zone::Exile] {
+            away |= s.zone(player, zone);
+        }
+    }
+    let tokens = (away & TOKEN_POOL)
+        .iter()
+        .filter(|&slot| s.object(slot).flags.has(ObjectFlags::TOKEN))
         .collect();
     (graveyard, tokens)
 }

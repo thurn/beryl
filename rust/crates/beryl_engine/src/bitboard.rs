@@ -132,6 +132,12 @@ mod tests {
     }
 
     #[test]
+    fn the_token_pool_is_the_token_slots() {
+        let slots: Bitboard = crate::state::token_slots().collect();
+        assert_eq!(crate::state::TOKEN_POOL, slots);
+    }
+
+    #[test]
     fn slots_iterate_in_ascending_order_across_words() {
         let b = set(&[254, 3, 64, 0, 130]);
         assert_eq!(slots(b), vec![0, 3, 64, 130, 254]);

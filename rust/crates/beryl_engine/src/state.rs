@@ -35,6 +35,10 @@ pub(crate) fn token_slots() -> impl Iterator<Item = Slot> {
     (TOKEN_SLOTS..SLOTS as u8).map(Slot::new)
 }
 
+/// [`token_slots`] as a set.
+pub(crate) const TOKEN_POOL: Bitboard =
+    Bitboard([0, !0 << (TOKEN_SLOTS - 64), !0, !0 >> (256 - SLOTS)]);
+
 /// Where an object is. Objects in [`Zone::Nowhere`] are unused slots.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[repr(u8)]
