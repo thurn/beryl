@@ -210,7 +210,7 @@ fn one_runner_per_run() {
 }
 
 /// A runner that panics is restarted; a game that panics twice at one decision is recorded
-/// as crashed, where, and skipped. `--status` then prints the summary and plays nothing.
+/// as crashed, where, and skipped. `--status` then prints the ladder and plays nothing.
 #[test]
 fn a_game_that_crashes_twice_is_skipped() {
     let dir = scratch("crash");
@@ -235,8 +235,19 @@ fn a_game_that_crashes_twice_is_skipped() {
     let logs = fs::read_dir(dir.join("logs")).unwrap().count();
     let o = longthink(&dir, &["--run", dir.to_str().unwrap(), "--status"]);
     assert!(o.status.success(), "{}", text(&o));
+    let status = String::from_utf8_lossy(&o.stdout);
+    assert!(status.contains("2 games   1 crashed"), "{status}");
+    assert!(
+        status
+            .lines()
+            .any(|l| l.starts_with("4  ") && l.contains("2/2")),
+        "{status}"
+    );
+    assert!(
+        !status.contains('\x1b') && !status.contains("decision"),
+        "{status}"
+    );
     let summary = fs::read_to_string(dir.join("summary.txt")).unwrap();
-    assert_eq!(String::from_utf8_lossy(&o.stdout), summary);
     assert!(summary.contains("crashed: 4-v-expert-p000-s0"), "{summary}");
     assert_eq!(fs::read_to_string(dir.join("games.jsonl")).unwrap(), games);
     assert_eq!(fs::read_dir(dir.join("logs")).unwrap().count(), logs);

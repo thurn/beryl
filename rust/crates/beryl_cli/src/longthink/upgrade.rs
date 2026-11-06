@@ -131,7 +131,14 @@ impl Check<'_> {
             until,
         };
         let key = &spec.key;
-        match game::play(self.t, &g, self.build, lines, |_| {}, |_, _| Ok(())) {
+        match game::play(
+            self.t,
+            &g,
+            self.build,
+            lines,
+            |_, _, _| {},
+            |_, _, _| Ok(()),
+        ) {
             Ok(played) if until.is_none() => Ok(Some(played)),
             Ok(_) => Err(format!("{key}: the game ends before decision {until:?}")),
             Err(Stop::Reached(_)) if until.is_some() => Ok(None),

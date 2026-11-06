@@ -25,8 +25,12 @@
 //! - A decision asked straight after the one before, as the steps of casting a spell follow
 //!   one another (CR 601.2), keeps the trees and starts from the chosen child's subtree: a
 //!   budget counts root visits, not fresh rollouts.
+//!
+//! Every rollout bumps a process-wide counter ([`rollouts_run`]) for a progress display. The
+//! search only ever adds to it, relaxed, so it orders nothing and decides nothing.
 
 use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Barrier, Mutex};
 use std::thread;
 
@@ -95,6 +99,15 @@ const EXPLORATION: f64 = 0.7;
 /// The rounds a tree's share is grown in, the exact stop checked after each. More stop
 /// sooner, at a wait for the slowest tree each.
 const ROUNDS: u32 = 16;
+
+/// The rollouts every search in the process has run.
+static ROLLOUTS: AtomicU64 = AtomicU64::new(0);
+
+/// The rollouts every search in this process has run so far, as a decision's trees grow: a
+/// progress display reads the difference across a decision.
+pub fn rollouts_run() -> u64 {
+    ROLLOUTS.load(Ordering::Relaxed)
+}
 
 /// What one searched decision found and spent, for a runner's log and as training data.
 #[derive(Clone, Debug, PartialEq)]
@@ -530,6 +543,7 @@ impl Tree {
     fn grow(&mut self, t: &GameTable, policy: &RolloutPolicy, iterations: u32) {
         for _ in 0..iterations {
             self.iterate(t, policy);
+            ROLLOUTS.fetch_add(1, Ordering::Relaxed);
         }
     }
 

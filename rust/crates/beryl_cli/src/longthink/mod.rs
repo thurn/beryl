@@ -21,12 +21,16 @@
 //!   resumed game replays through, and `transcripts/<game>.txt`;
 //! - `crashes.jsonl`, where the runner was when it panicked;
 //! - `summary.txt`, rewritten after every game and rebuilt when missing.
+//!
+//! The runner shows the run on a live panel ([`term`]), which `--status` prints once.
 
 mod files;
 mod game;
+mod panel;
 mod run;
 mod schedule;
 mod summary;
+mod term;
 mod upgrade;
 
 use std::collections::BTreeMap;
@@ -34,6 +38,7 @@ use std::fs;
 use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use beryl_search::Budget;
 use serde::{Deserialize, Serialize};
@@ -243,7 +248,13 @@ pub fn main(args: &[String]) -> Result<(), String> {
     };
     let started = dir.join("config.json").exists();
     if status {
-        print!("{}", summary(&dir)?);
+        summary(&dir)?;
+        term::status(
+            &run::run_name(&dir),
+            config(&dir)?,
+            files::read(&dir.join("games.jsonl"))?,
+            run::clock(&dir)?,
+        );
         return Ok(());
     }
     let code = code_ids(&repo());
@@ -417,8 +428,13 @@ fn code_ids(repo: &Path) -> Option<BTreeMap<String, String>> {
     ids
 }
 
-/// Runs the run's own binary until it finishes, restarting it when it crashes.
+/// Runs the run's own binary until it finishes, restarting it when it crashes. The terminal
+/// is the runner's: Ctrl-C is its to answer, and stops this only through it, but a runner
+/// that crashes after one is not restarted, since its stop was asked for.
 fn supervise(dir: &Path, games: Option<u32>) -> Result<(), String> {
+    static ASKED: AtomicBool = AtomicBool::new(false);
+    ctrlc::set_handler(|| ASKED.store(true, Ordering::Relaxed))
+        .map_err(|e| format!("taking Ctrl-C: {e}"))?;
     let bin = dir.join("beryl_cli");
     let finished = || files::read::<GameRecord>(&dir.join("games.jsonl")).map(|g| g.len());
     let mut crashes = 0;
@@ -435,6 +451,9 @@ fn supervise(dir: &Path, games: Option<u32>) -> Result<(), String> {
         if status.success() {
             return Ok(());
         }
+        if status.code() == Some(term::STOPPED) {
+            std::process::exit(term::STOPPED);
+        }
         // A panic exits with 101, or aborts under the search profile; so might a fault.
         let abnormal = status.code() == Some(101)
             || status
@@ -442,6 +461,10 @@ fn supervise(dir: &Path, games: Option<u32>) -> Result<(), String> {
                 .is_some_and(|s| [4, 5, 6, 10, 11].contains(&s));
         if !abnormal {
             return Err(format!("the runner stopped: {status}"));
+        }
+        if ASKED.load(Ordering::Relaxed) {
+            eprintln!("the runner crashed ({status}) after a stop was asked for");
+            return Ok(());
         }
         let now = finished()?;
         crashes = if now > before { 1 } else { crashes + 1 };

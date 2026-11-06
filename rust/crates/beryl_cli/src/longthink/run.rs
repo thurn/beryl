@@ -7,11 +7,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use beryl_engine::{Decision, State};
 use serde::{Deserialize, Serialize};
 
 use super::files::{self, Log};
 use super::game::{self, Game, Line, Played};
 use super::schedule::{self, Config, Matchup, Tally};
+use super::term::Display;
 use super::{ClockRecord, DecisionRecord, GameRecord, Spec, Verdict, summary};
 use crate::game::mirror;
 
@@ -32,7 +34,7 @@ struct Keyed {
     game: String,
 }
 
-/// Plays run `dir` until it holds `total` games, or forever.
+/// Plays run `dir` until it holds `total` games, or forever, or a stop is asked for.
 pub fn run(dir: &Path, total: Option<u32>) -> Result<(), String> {
     let _lock = files::lock(dir)?;
     let c = super::config(dir)?;
@@ -41,6 +43,7 @@ pub fn run(dir: &Path, total: Option<u32>) -> Result<(), String> {
     // A stop between a game's commit and the summary's rewrite leaves it behind.
     write_summary(dir, &c, &games)?;
     record_panics();
+    let out = Display::start(&run_name(dir), &c, &games, clock(dir)?)?;
     // A fault injected for the supervisor's tests: panic at decision N of game K, "K@N".
     let inject: Option<(String, usize)> =
         std::env::var("BERYL_LONGTHINK_PANIC").ok().and_then(|v| {
@@ -50,15 +53,16 @@ pub fn run(dir: &Path, total: Option<u32>) -> Result<(), String> {
     for sub in ["logs", "transcripts"] {
         fs::create_dir_all(dir.join(sub)).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
-    while total.is_none_or(|n| games.len() < n as usize) {
+    while total.is_none_or(|n| games.len() < n as usize) && !out.stopping() {
         let m = schedule::next(&c, |m| tally(&c, &games, m));
         let spec = Spec::new(&c, m.rung, m.against, played(&games, m));
         let path = dir.join("logs").join(format!("{}.jsonl", spec.key));
         files::repair(&path)?;
         let logged: Vec<Line> = files::read(&path)?;
-        let record = if let Some(at) = crashed_twice(dir, &spec.key)? {
-            crashed(&spec, &logged, at)
+        let (record, seconds) = if let Some(at) = crashed_twice(dir, &spec.key)? {
+            (crashed(&spec, &logged, at), None)
         } else {
+            out.begin(&spec, logged.len());
             *PLAYING.lock().expect("the position") =
                 Some((dir.to_owned(), spec.key.clone(), logged.len()));
             let mut log = Log::open(&path)?;
@@ -68,7 +72,8 @@ pub fn run(dir: &Path, total: Option<u32>) -> Result<(), String> {
                 from: game::resume_points(&logged),
                 until: None,
             };
-            let asking = |i: usize| {
+            let asking = |i: usize, s: &State, d: &Decision| {
+                out.asking(i, s, d);
                 if let Some((_, _, at)) = PLAYING.lock().expect("the position").as_mut() {
                     *at = i;
                 }
@@ -81,22 +86,43 @@ pub fn run(dir: &Path, total: Option<u32>) -> Result<(), String> {
             };
             // Only a search is worth a sync: a power cut costs the answers since the last
             // one, which replay recomputes at engine speed.
-            let played = game::play(&t, &g, &game::build, &logged, asking, |_, line| {
-                log.write(line, line.search.is_some())
+            let played = game::play(&t, &g, &game::build, &logged, asking, |_, line, label| {
+                log.write(line, line.search.is_some())?;
+                out.answered(line, label);
+                Ok(())
             })
             .map_err(|e| format!("{}: {e:?}", spec.key))?;
             *PLAYING.lock().expect("the position") = None;
-            commit(dir, &spec, &played)?
+            (commit(dir, &spec, &played)?, Some(seconds(&played)))
         };
         Log::open(&dir.join("games.jsonl"))?.append(&record)?;
-        println!(
-            "{}: {:?} on turn {}, {} rollouts",
-            record.game, record.outcome, record.turns, record.rollouts
-        );
+        out.finished(&record, seconds);
         games.push(record);
         write_summary(dir, &c, &games)?;
     }
+    out.close();
     Ok(())
+}
+
+/// Run `dir`'s name: its directory's.
+pub fn run_name(dir: &Path) -> String {
+    dir.file_name().map_or_else(
+        || dir.display().to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    )
+}
+
+/// Each committed game's wall seconds.
+pub fn clock(dir: &Path) -> Result<HashMap<String, f64>, String> {
+    Ok(files::read::<ClockRecord>(&dir.join("clock.jsonl"))?
+        .into_iter()
+        .map(|r| (r.game, r.seconds))
+        .collect())
+}
+
+/// A game's wall seconds: the time its decisions took.
+fn seconds(played: &Played) -> f64 {
+    played.lines.iter().map(|l| l.ms).sum::<u64>() as f64 / 1000.0
 }
 
 /// The committed games, after cutting what an uncommitted game left in the other logs: one
@@ -166,6 +192,7 @@ fn record_panics() {
                 let _ = log.append(&crash);
             }
         }
+        super::term::restore();
         default(info);
     }));
 }
@@ -249,7 +276,7 @@ fn commit(dir: &Path, spec: &Spec, played: &Played) -> Result<GameRecord, String
     decisions.sync()?;
     Log::open(&dir.join("clock.jsonl"))?.append(&ClockRecord {
         game: spec.key.clone(),
-        seconds: played.lines.iter().map(|l| l.ms).sum::<u64>() as f64 / 1000.0,
+        seconds: seconds(played),
     })?;
     let rung = &spec.entrants[usize::from(spec.seat)];
     Ok(GameRecord {
@@ -276,15 +303,7 @@ fn commit(dir: &Path, spec: &Spec, played: &Played) -> Result<GameRecord, String
 
 /// Rewrites summary.txt from the logs, and returns it.
 pub fn write_summary(dir: &Path, c: &Config, games: &[GameRecord]) -> Result<String, String> {
-    let seconds: HashMap<String, f64> = files::read::<ClockRecord>(&dir.join("clock.jsonl"))?
-        .into_iter()
-        .map(|r| (r.game, r.seconds))
-        .collect();
-    let name = dir.file_name().map_or_else(
-        || dir.display().to_string(),
-        |n| n.to_string_lossy().into_owned(),
-    );
-    let text = summary::text(&name, c, games, &seconds);
+    let text = summary::text(&run_name(dir), c, games, &clock(dir)?);
     files::write_whole(&dir.join("summary.txt"), text.as_bytes())?;
     Ok(text)
 }

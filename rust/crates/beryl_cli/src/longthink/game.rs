@@ -215,16 +215,17 @@ pub struct Game<'a> {
     pub until: Option<usize>,
 }
 
-/// Plays `g` to its end through the `logged` answers, calling `answered` with each new
-/// decision's index and line before it is applied, and `asking` before an agent is asked a
-/// decision not in the log.
+/// Plays `g` to its end through the `logged` answers, calling `asking` with the index, the
+/// position and the decision before an agent is asked one not in the log, and `answered`
+/// with each new decision's index, line and the transcript's label of its answer before it
+/// is applied.
 pub fn play(
     t: &GameTable,
     g: &Game<'_>,
     build: &Build<'_>,
     logged: &[Line],
-    mut asking: impl FnMut(usize),
-    mut answered: impl FnMut(usize, &Line) -> Result<(), String>,
+    mut asking: impl FnMut(usize, &State, &Decision),
+    mut answered: impl FnMut(usize, &Line, &str) -> Result<(), String>,
 ) -> Result<Played, Stop> {
     let seeds = seat_seeds(g.seed);
     let mut players = Vec::with_capacity(2);
@@ -266,8 +267,8 @@ pub fn play(
         }
         let happened: Vec<Event> = x.events.drain().collect();
         let player = &mut players[seat];
-        let line = match logged {
-            Some(l) if player.replays() => l.clone(),
+        let (line, new) = match logged {
+            Some(l) if player.replays() => (l.clone(), false),
             Some(l) => {
                 let now = player.ask(observe(&s, t, &mut x, d.player), &d).choice;
                 if now != l.choice {
@@ -277,17 +278,18 @@ pub fn play(
                         now,
                     });
                 }
-                l.clone()
+                (l.clone(), false)
             }
             None => {
-                asking(i);
-                let line = player.ask(observe(&s, t, &mut x, d.player), &d);
-                answered(i, &line)?;
-                line
+                asking(i, view(&s, t, &mut x), &d);
+                (player.ask(observe(&s, t, &mut x, d.player), &d), true)
             }
         };
         let c = Choice(line.choice);
-        transcript.decision(t, view(&s, t, &mut x), &d, c, &happened);
+        let label = transcript.decision(t, view(&s, t, &mut x), &d, c, &happened);
+        if new {
+            answered(i, &line, &label)?;
+        }
         apply(&mut s, t, &mut x, &mut Replay, c);
         lines.push(line);
     };

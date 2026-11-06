@@ -45,7 +45,7 @@ impl Transcript {
     }
 
     /// Records decision `d` and its answer `c`, after what `happened` since the previous
-    /// decision, opening a new turn first if one began.
+    /// decision, opening a new turn first if one began. Returns the answer's label.
     pub fn decision(
         &mut self,
         t: &GameTable,
@@ -53,7 +53,7 @@ impl Transcript {
         d: &Decision,
         c: Choice,
         happened: &[Event],
-    ) {
+    ) -> String {
         // What happened before a new turn's untap step belongs to the turn before.
         let split = happened
             .iter()
@@ -75,7 +75,7 @@ impl Transcript {
         }
         self.events(t, s, &happened[split..]);
         self.remember(t, s);
-        let labels: Vec<String> = match &d.candidates {
+        let mut labels: Vec<String> = match &d.candidates {
             Candidates::Objects(b) => b.iter().map(|slot| candidate(t, s, slot)).collect(),
             Candidates::Options(o) => o.iter().map(|&o| option(t, s, o)).collect(),
         };
@@ -87,6 +87,7 @@ impl Transcript {
             labels.join(" | "),
             labels[usize::from(c.0)],
         );
+        labels.swap_remove(usize::from(c.0))
     }
 
     /// Both players at the start of a turn.
