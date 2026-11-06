@@ -145,8 +145,9 @@ the cb8d5d5f mirror:
   a covariance, so any two compare with a margin.
 - **The next game is the most informative per engine step.** For each pair of
   open entrants it weighs the drop in each search's rating variance by its
-  chance of being the best overall and in its family, over what the two cost.
-  Fixed agents are references, never targets.
+  chance of being the best overall, the best fair one and the best in its
+  family, over what the two cost. A fair search sees what a player sees; the
+  cheats bound what search can do. Fixed agents are references, never targets.
 - **A family grows** from 1M, 3M, 10M and 30M steps by ×3 while its last step up
   gained rating with 80% confidence. 30M is about 80,000 mid-game rollouts a
   decision. Same seeds in every matchup, so entrants compare pair by pair.

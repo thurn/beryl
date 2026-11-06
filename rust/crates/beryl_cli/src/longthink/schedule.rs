@@ -16,8 +16,10 @@
 //!   games would bring (a Kalman update on their difference, through the rating pool's
 //!   covariance), each weighted by how much that rating matters, over what the two cost a
 //!   game. A search's rating matters by its chance of being the best of all the entrants,
-//!   plus that of being the best of its family, plus [`FLOOR`], so every curve keeps filling
-//!   in slowly while the contenders for the top are resolved. A fixed agent's own rating
+//!   plus that of being the best fair one (seeing only what a player sees: the cheats would
+//!   otherwise take every game spent on the top), plus that of being the best of its family,
+//!   plus [`FLOOR`], so every curve keeps filling in slowly while the contenders for the top
+//!   are resolved. A fixed agent's own rating
 //!   matters not at all: it is a reference the searches are measured against, and its games
 //!   cost a thousandth of a search's, so precision on it alone would buy every game.
 
@@ -46,17 +48,17 @@ pub struct Config {
 /// The families a new run plays: the WU Control mirror's agent as Milestone 1 left it
 /// (`pimc18/hidden/rollout/tuned`), and from information-set search with full rollouts, one
 /// axis changed at a time: how many worlds, what it sees, how a leaf is scored, and where card
-/// values come from.
-pub const FAMILIES: [&str; 11] = [
+/// values come from. Seeing only the hands is left out, a split of what hiding costs that the
+/// omniscient twins already bound, and so are leaves scored by the evaluation alone, the
+/// weakest at every budget to 10M in the first runs: `cut2` keeps evaluated leaves here.
+pub const FAMILIES: [&str; 9] = [
     "pimc18/hidden/rollout/tuned",
     "pimc72/hidden/rollout/tuned",
     "pimc288/hidden/rollout/tuned",
     "pimc18/omniscient/rollout/tuned",
     "ismcts18/hidden/rollout/tuned",
-    "ismcts18/hands/rollout/tuned",
     "ismcts18/omniscient/rollout/tuned",
     "ismcts18/hidden/cut2/tuned",
-    "ismcts18/hidden/eval/tuned",
     "ismcts18/hidden/rollout/17l",
     "ismcts18/hidden/rollout/estimate",
 ];
@@ -237,11 +239,11 @@ pub fn next(c: &Config, r: &Ratings, games: usize, busy: &[Matchup]) -> Matchup 
     let weight: Vec<f64> = open
         .iter()
         .zip(&best)
-        .map(|(e, &(o, f))| {
+        .map(|(e, chance)| {
             if c.fixed.contains(e) {
                 0.0
             } else {
-                FLOOR + o + f
+                FLOOR + chance.overall + chance.fair + chance.family
             }
         })
         .collect();

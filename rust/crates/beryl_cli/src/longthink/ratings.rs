@@ -13,6 +13,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use beryl_engine::rng::SplitMix64;
+use beryl_search::{Family, Sight};
 
 use super::schedule::{Config, family_of};
 use super::{GameRecord, Verdict};
@@ -189,11 +190,11 @@ impl Ratings {
             .unwrap_or(0)
     }
 
-    /// Each of `among`'s chance of the best rating among them, and of the best in its
-    /// family, from draws of the ratings seeded by `seed`, correlated as the pool's
-    /// covariance says: two entrants that have played each other often differ by a known
-    /// margin, however uncertain each is against the anchor.
-    pub fn best(&self, among: &[String], seed: u64) -> Vec<(f64, f64)> {
+    /// Each of `among`'s chances of the best rating among them, among the fair ones and in
+    /// its family ([`Chances`]), from draws of the ratings seeded by `seed`, correlated as the
+    /// pool's covariance says: two entrants that have played each other often differ by a
+    /// known margin, however uncertain each is against the anchor.
+    pub fn best(&self, among: &[String], seed: u64) -> Vec<Chances> {
         if among.is_empty() {
             return Vec::new();
         }
@@ -206,7 +207,10 @@ impl Ratings {
         let means: Vec<f64> = among.iter().map(|e| self.get(e).0).collect();
         let mut rng = SplitMix64::new(seed);
         let families: Vec<&str> = among.iter().map(|e| family_of(e)).collect();
+        let fair: Vec<bool> = among.iter().map(|e| is_fair(e)).collect();
+        let any_fair = fair.contains(&true);
         let mut overall = vec![0u32; n];
+        let mut fairest = vec![0u32; n];
         let mut in_family = vec![0u32; n];
         let mut z = vec![0.0; n];
         let mut draw = vec![0.0; n];
@@ -219,6 +223,9 @@ impl Ratings {
             }
             let top = argmax(&draw, |_| true);
             overall[top] += 1;
+            if any_fair {
+                fairest[argmax(&draw, |i| fair[i])] += 1;
+            }
             let mut counted = BTreeSet::new();
             for &f in &families {
                 if counted.insert(f) {
@@ -227,14 +234,12 @@ impl Ratings {
                 }
             }
         }
-        overall
-            .iter()
-            .zip(&in_family)
-            .map(|(&o, &f)| {
-                (
-                    f64::from(o) / f64::from(DRAWS),
-                    f64::from(f) / f64::from(DRAWS),
-                )
+        let share = |k: u32| f64::from(k) / f64::from(DRAWS);
+        (0..n)
+            .map(|i| Chances {
+                overall: share(overall[i]),
+                fair: share(fairest[i]),
+                family: share(in_family[i]),
             })
             .collect()
     }
@@ -269,6 +274,26 @@ fn cholesky(a: &[Vec<f64>]) -> Vec<Vec<f64>> {
 }
 
 /// The index of the largest of `xs` that `keep` keeps, the first of equals.
+/// An entrant's chances of the best rating, from [`Ratings::best`].
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Chances {
+    /// Among all of them.
+    pub overall: f64,
+    /// Among the fair ones ([`is_fair`]); none for a cheat.
+    pub fair: f64,
+    /// Among its family.
+    pub family: f64,
+}
+
+/// Whether an entrant plays from what a player sees: a fixed agent, or a search whose sight
+/// is hidden. One that sees the hands or everything cheats, a bound on what search can do
+/// rather than an agent to play.
+pub fn is_fair(e: &str) -> bool {
+    family_of(e)
+        .parse::<Family>()
+        .map_or(true, |f| f.sight == Sight::Hidden)
+}
+
 fn argmax(xs: &[f64], keep: impl Fn(usize) -> bool) -> usize {
     let mut best: Option<usize> = None;
     for (i, &x) in xs.iter().enumerate() {
@@ -500,7 +525,41 @@ mod tests {
         let (gap, sd) = r.diff(a, b);
         assert!(sa > 3.0 * sd && gap > 2.0 * sd, "{sa} {gap} {sd}");
         let best = r.best(&[a.to_owned(), b.to_owned()], 1);
-        assert!(best[0].0 > 0.97, "{best:?}");
+        assert!(best[0].overall > 0.97, "{best:?}");
+    }
+
+    /// A search that sees everything can be the best of all, never the best fair one: that
+    /// goes to the best search that sees only what a player sees, and a fixed agent is fair.
+    #[test]
+    fn a_cheat_is_never_the_best_fair_entrant() {
+        use crate::longthink::schedule::Matchup;
+        let c = Config {
+            families: Vec::new(),
+            fixed: vec!["expert".to_owned()],
+            anchor: "expert".to_owned(),
+            budgets: vec![1_000],
+            threads: 1,
+            seed: 0,
+        };
+        let (hidden, cheat) = (
+            "ismcts2/hidden/rollout/tuned@1k",
+            "ismcts2/omniscient/rollout/tuned@1k",
+        );
+        assert!(is_fair(hidden) && is_fair("expert") && !is_fair(cheat));
+        let mut games = Vec::new();
+        // Each matchup's first side by name, the hidden search and then the expert, wins a
+        // quarter: the cheat beats the hidden search, which beats the expert.
+        for m in [Matchup::new(hidden, cheat), Matchup::new("expert", hidden)] {
+            for g in 0..200 {
+                let v = if g < 50 { Verdict::Win } else { Verdict::Loss };
+                games.push(GameRecord::example(&m, g, v));
+            }
+        }
+        let r = Ratings::new(&c, &games, &HashMap::new(), &[]);
+        let all = ["expert", hidden, cheat].map(str::to_owned);
+        let best = r.best(&all, 1);
+        assert!(best[2].overall > 0.97 && best[2].fair == 0.0, "{best:?}");
+        assert!(best[1].fair > 0.97, "{best:?}");
     }
 
     #[test]

@@ -2,7 +2,7 @@
 //! rebuilt whenever it is missing.
 //!
 //! - The table: every entrant by rating, with its 95% margin, games, score, chance of being
-//!   the best of all, engine steps a searched decision and minutes a game.
+//!   the best of all and of the fair ones, engine steps a searched decision and minutes a game.
 //! - Sight: at each budget where a hidden search has a twin that sees the hands or
 //!   everything, what seeing is worth in Elo.
 //! - Families: each one's Elo per tripling of the budget.
@@ -12,7 +12,7 @@ use std::fmt::Write;
 
 use beryl_search::{Family, Sight};
 
-use super::ratings::{Ratings, climb, climb_text};
+use super::ratings::{Chances, Ratings, climb, climb_text, is_fair};
 use super::schedule::{Config, budget_of, family_of, open};
 use super::{GameRecord, Verdict, rung_name};
 
@@ -54,17 +54,17 @@ pub fn text(
     let width = all.iter().map(String::len).max().unwrap_or(0).max(7);
     let _ = writeln!(
         out,
-        "{:<width$} {:>6} {:>5} {:>6} {:>13} {:>6} {:>9} {:>6}",
-        "entrant", "elo", "95%", "games", "w-d-l", "best", "steps/dec", "min"
+        "{:<width$} {:>6} {:>5} {:>6} {:>13} {:>6} {:>6} {:>9} {:>6}",
+        "entrant", "elo", "95%", "games", "w-d-l", "best", "fair", "steps/dec", "min"
     );
-    for (e, &overall) in all.iter().zip(&best) {
+    for (e, chance) in all.iter().zip(&best) {
         let (m, s) = r.get(e);
         let t = r.tally(e);
         let rated = t.scored() > 0 || *e == c.anchor;
         let steps = (t.searched > 0).then(|| t.work as f64 / t.searched as f64);
         let _ = writeln!(
             out,
-            "{e:<width$} {:>6} {:>5} {:>6} {:>13} {:>5.0}% {:>9} {:>6}",
+            "{e:<width$} {:>6} {:>5} {:>6} {:>13} {:>5.0}% {:>6} {:>9} {:>6}",
             if rated {
                 format!("{m:+.0}")
             } else {
@@ -77,7 +77,12 @@ pub fn text(
             },
             t.games,
             format!("{}-{}-{}", t.wins, t.draws, t.losses),
-            100.0 * overall,
+            100.0 * chance.overall,
+            if is_fair(e) {
+                format!("{:.0}%", 100.0 * chance.fair)
+            } else {
+                "-".to_owned()
+            },
             steps.map_or("-".to_owned(), short),
             t.mean_seconds()
                 .map_or("-".to_owned(), |s| format!("{:.1}", s / 60.0)),
@@ -115,9 +120,9 @@ pub fn text(
     out
 }
 
-/// Each of `all`'s chance of being the best among those that have scored a game: none for
+/// Each of `all`'s chances of being the best among those that have scored a game: none for
 /// one that has not, whose rating is the prior's.
-pub fn best(r: &Ratings, all: &[String], seed: usize) -> Vec<f64> {
+pub fn best(r: &Ratings, all: &[String], seed: usize) -> Vec<Chances> {
     let scored: Vec<String> = all
         .iter()
         .filter(|e| r.tally(e).scored() > 0)
@@ -129,7 +134,7 @@ pub fn best(r: &Ratings, all: &[String], seed: usize) -> Vec<f64> {
             scored
                 .iter()
                 .position(|s| s == e)
-                .map_or(0.0, |i| chances[i].0)
+                .map_or_else(Chances::default, |i| chances[i])
         })
         .collect()
 }

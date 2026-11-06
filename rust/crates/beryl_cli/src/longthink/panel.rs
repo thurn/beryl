@@ -4,7 +4,7 @@
 //!
 //! - a header: the run, its uptime, its games and whether a stop was asked for;
 //! - the board: a row per entrant, best first, with its Elo and 95% margin, games, its chance
-//!   of being the best, its mean minutes a game and `◀` on the sides of the game being
+//!   of being the best and the best fair one, its mean minutes a game and `◀` on the sides of the game being
 //!   played; then the last 10 results;
 //! - now: each game being played and the decision it is asking.
 
@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::fmt::Write;
 
 use super::game::GameDecision;
-use super::ratings::Ratings;
+use super::ratings::{Ratings, is_fair};
 use super::schedule::{Config, Matchup};
 use super::summary::{best, ranked};
 use super::{GameRecord, Verdict, rung_name};
@@ -43,6 +43,8 @@ pub struct Row {
     pub games: u32,
     /// Its chance of being the best of all.
     pub best: f64,
+    /// Its chance of being the best fair entrant; none for a cheat.
+    pub fair: Option<f64>,
     /// Mean wall seconds a game.
     pub seconds: Option<f64>,
     pub playing: bool,
@@ -84,14 +86,15 @@ pub fn board(
     let best = best(&r, &all, games.len());
     all.iter()
         .zip(best)
-        .map(|(e, overall)| {
+        .map(|(e, chance)| {
             let t = r.tally(e);
             let (m, s) = r.get(e);
             Row {
                 name: e.clone(),
                 elo: (t.scored() > 0 || *e == c.anchor).then_some((m, 1.96 * s)),
                 games: t.games,
-                best: overall,
+                best: chance.overall,
+                fair: is_fair(e).then_some(chance.fair),
                 seconds: t.mean_seconds(),
                 playing: playing.iter().any(|p| p.a == *e || p.b == *e),
             }
@@ -180,8 +183,8 @@ fn rows(f: &Frame, color: bool) -> (Vec<String>, String) {
         .max()
         .unwrap_or(0);
     let columns = format!(
-        "{:nw$}  {:>5} {:>4}  {:>5}  {:<6} {:>5}",
-        "", "elo", "95%", "games", "best", "min"
+        "{:nw$}  {:>5} {:>4}  {:>5}  {:<6} {:<6} {:>5}",
+        "", "elo", "95%", "games", "best", "fair", "min"
     );
     let rows = f
         .rows
@@ -191,10 +194,11 @@ fn rows(f: &Frame, color: bool) -> (Vec<String>, String) {
                 (format!("{m:+.0}"), format!("±{s:.0}"))
             });
             let line = format!(
-                "{:nw$}  {elo:>5} {margin:>4}  {:>5}  {:<6} {:>5}{}",
+                "{:nw$}  {elo:>5} {margin:>4}  {:>5}  {:<6} {:<6} {:>5}{}",
                 r.name,
                 r.games,
                 bar(r.best, 6),
+                r.fair.map_or_else(|| "-".to_owned(), |f| bar(f, 6)),
                 r.seconds.map_or(String::new(), clock),
                 if r.playing { "  ◀" } else { "" },
             );
@@ -421,10 +425,10 @@ mod tests {
         let expected = "\
 ────────────────────────────────────────────────────────────────
 longthink run-001   up 6h12m   60 games   ⏸ after this game
-                                   elo  95%  games  best     min
-ismcts2/hidden/rollout/tuned@3k   +141 ±161     20  █████▊  1:05  ◀
-expert                              +0   ±0     60  ▎       0:36  ◀
-ismcts2/hidden/rollout/tuned@1k   -186 ±122     40          0:21
+                                   elo  95%  games  best   fair     min
+ismcts2/hidden/rollout/tuned@3k   +141 ±161     20  █████▊ █████▊  1:05  ◀
+expert                              +0   ±0     60  ▎      ▎       0:36  ◀
+ismcts2/hidden/rollout/tuned@1k   -186 ±122     40                 0:21
 ismcts2/hidden/rollout/tuned@9k                  0
 last 10  ●●○●●●○●●◐
 ────────────────────────────────────────────────────────────────
