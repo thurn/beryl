@@ -21,6 +21,7 @@ use crate::effect::EffectCtx;
 use crate::event::{self, Sink};
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot};
+use crate::layout::{Layout, Queue, Table};
 use crate::state::{Derived, ObjectFlags, PendingTrigger, State, Zone};
 use crate::table::GameTable;
 
@@ -219,7 +220,7 @@ fn is_simple(a: &Ability) -> bool {
 /// control" a kind of permanent needs one on the battlefield
 /// ([CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025)): "A player can't begin to
 /// activate an ability that's prohibited from being activated."
-fn allowed(s: &State, t: &GameTable, a: &Ability, player: Seat) -> bool {
+fn allowed<L: Layout>(s: &State<L>, t: &GameTable, a: &Ability, player: Seat) -> bool {
     a.only_if_you_control.is_none_or(|f| {
         s.battlefield()
             .iter()
@@ -297,7 +298,10 @@ fn has_other_ability(face: &Face) -> bool {
 
 /// The permanents `player` controls, in battlefield order: read from their derived
 /// characteristics, which are at their places in the battlefield list.
-fn controlled(s: &State, player: Seat) -> impl Iterator<Item = (Slot, &Derived)> + '_ {
+fn controlled<L: Layout>(
+    s: &State<L>,
+    player: Seat,
+) -> impl Iterator<Item = (Slot, &Derived)> + '_ {
     debug_assert!(!s.flags.derived_dirty, "derived read while dirty");
     s.battlefield
         .iter()
@@ -310,8 +314,8 @@ fn controlled(s: &State, player: Seat) -> impl Iterator<Item = (Slot, &Derived)>
 /// characteristics are `d`, is one: the kinds of mana, how much, whether it has another
 /// ability, and whether making it sacrifices the source.
 #[inline]
-fn source(
-    s: &State,
+fn source<L: Layout>(
+    s: &State<L>,
     t: &GameTable,
     player: Seat,
     slot: Slot,
@@ -353,8 +357,8 @@ fn source(
 
 /// What [`source`] finds, read from the face of an untapped source `player` controls that may
 /// tap for mana now.
-fn read_source(
-    s: &State,
+fn read_source<L: Layout>(
+    s: &State<L>,
     t: &GameTable,
     player: Seat,
     face: &Face,
@@ -395,8 +399,8 @@ fn read_source(
 
 impl Sources {
     /// The untapped sources `player` controls, but those in `exclude`.
-    pub(crate) fn of(
-        s: &State,
+    pub(crate) fn of<L: Layout>(
+        s: &State<L>,
         t: &GameTable,
         player: Seat,
         exclude: Bitboard,
@@ -492,8 +496,8 @@ impl Sources {
 
 /// Everything `player` could pay mana with now: their pool and untapped sources, but those
 /// in `exclude`.
-pub(crate) fn available(
-    s: &State,
+pub(crate) fn available<L: Layout>(
+    s: &State<L>,
     t: &GameTable,
     player: Seat,
     exclude: Bitboard,
@@ -521,7 +525,7 @@ pub(crate) struct Funds {
 const MAX_SOURCES: usize = 128;
 
 impl Funds {
-    pub(crate) fn of(s: &State, t: &GameTable, player: Seat) -> Result<Funds, Full> {
+    pub(crate) fn of<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Result<Funds, Full> {
         let mut units = Units::NONE;
         for (k, &n) in s.player(player).mana.amounts().iter().enumerate() {
             units.add(1 << k, u16::from(n));
@@ -556,7 +560,13 @@ impl Funds {
 
     /// Whether the player can pay `cost` with none of `exclude`, as [`payable`]. `s` is the
     /// state the funds were found in.
-    pub(crate) fn pays(&self, s: &State, t: &GameTable, cost: ManaCost, exclude: Bitboard) -> bool {
+    pub(crate) fn pays<L: Layout>(
+        &self,
+        s: &State<L>,
+        t: &GameTable,
+        cost: ManaCost,
+        exclude: Bitboard,
+    ) -> bool {
         debug_assert_eq!(cost.x, 0, "X is announced before payment");
         let excluded = exclude & self.slots;
         if excluded.is_empty() {
@@ -578,8 +588,8 @@ impl Funds {
 }
 
 /// The payability prefilter: whether `player` can pay `cost` at all.
-pub(crate) fn payable(
-    s: &State,
+pub(crate) fn payable<L: Layout>(
+    s: &State<L>,
     t: &GameTable,
     player: Seat,
     cost: ManaCost,
@@ -807,7 +817,7 @@ struct Later {
 
 /// The costs a payment should keep payable (§10): the mana costs of the player's cards in
 /// hand and the activation costs of their permanents' abilities, each once.
-fn later_costs(s: &State, t: &GameTable, player: Seat) -> Fixed<Later, 32> {
+fn later_costs<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Fixed<Later, 32> {
     let mut later: Fixed<Later, 32> = Fixed::new();
     let mut add = |l: Later| {
         if !later.iter().any(|&x| x == l) {
@@ -886,8 +896,8 @@ fn still_payable(sources: &Sources, plan: &Plan, later: &[Later]) -> (u32, usize
 /// a plan that sacrifices more is offered only when it keeps strictly more later costs payable
 /// than every plan sacrificing fewer. Under [`crate::profile::Payment::Greedy`] it is the
 /// first plan in greedy order of those sacrificing the fewest, alone.
-pub(crate) fn plans(
-    s: &State,
+pub(crate) fn plans<L: Layout>(
+    s: &State<L>,
     t: &GameTable,
     sink: &mut Sink,
     player: Seat,
@@ -998,8 +1008,8 @@ pub(crate) fn plans(
 ///
 /// [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the
 /// total cost. ... Partial payments are not allowed."
-pub(crate) fn pay(
-    s: &mut State,
+pub(crate) fn pay<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     player: Seat,
@@ -1138,8 +1148,8 @@ fn assign(cost: ManaCost, units: &[(u8, Option<Slot>, u8)]) -> Fixed<Option<usiz
 /// [CR 605.3b](https://yawgatog.com/resources/magic-rules/#R6053b): "An activated mana
 /// ability doesn't go on the stack, so it can't be targeted, countered, or otherwise
 /// responded to. Rather, it resolves immediately after it is activated."
-pub(crate) fn activate(
-    s: &mut State,
+pub(crate) fn activate<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     slot: Slot,
@@ -1179,7 +1189,7 @@ pub(crate) fn activate(
     ctx.mana = color;
     crate::coverage::hit(ability);
     // A mana ability never asks a question.
-    let _ = (ability.body)(&mut ctx);
+    let _ = L::body(ability)(&mut ctx);
     ctx.finish()
 }
 
@@ -1201,8 +1211,8 @@ fn helps(remaining: ManaCost, kind: usize) -> bool {
 
 /// Manual payment (the `manual_mana` flag): the floating mana and the sources, one per
 /// class, whose next unit pays toward `remaining` and leaves the rest payable.
-pub(crate) fn manual_options(
-    s: &State,
+pub(crate) fn manual_options<L: Layout>(
+    s: &State<L>,
     t: &GameTable,
     player: Seat,
     remaining: ManaCost,
@@ -1247,8 +1257,8 @@ pub(crate) fn manual_options(
 }
 
 /// Performs a manual payment option, returning what remains to pay.
-pub(crate) fn manual_pay(
-    s: &mut State,
+pub(crate) fn manual_pay<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     player: Seat,
@@ -1278,7 +1288,12 @@ pub(crate) fn manual_pay(
 /// (§7.2), not of each class of sources: a player taps the permanent they mean, an Island
 /// rather than the Mox Sapphire that makes the same mana. A list these would fill takes as
 /// many as fit: tapping ahead is never needed, as a payment taps for itself.
-pub(crate) fn standalone_options(s: &State, t: &GameTable, player: Seat, out: &mut Fixed<Opt, 64>) {
+pub(crate) fn standalone_options<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    out: &mut Fixed<Opt, 64>,
+) {
     let sources: Bitboard = controlled(s, player)
         .filter(|&(slot, d)| source(s, t, player, slot, d).is_some())
         .map(|(slot, _)| slot)

@@ -14,6 +14,7 @@ use crate::engine::collapse;
 use crate::event::{self, Entry, Reason, Sink};
 use crate::fixed::{Fixed, Full};
 use crate::ids::{Seat, Slot};
+use crate::layout::Layout;
 use crate::mana;
 use crate::profile::Payment;
 use crate::state::{Pending, State, Zone};
@@ -36,8 +37,8 @@ use crate::table::GameTable;
 /// which all players can see the cards' faces, except for those cards that some rule or effect
 /// specifically allow to be face down." Its controller may look at it (CR 708.5); the other
 /// player knows it only if they already did.
-pub(crate) fn manifest(
-    s: &mut State,
+pub(crate) fn manifest<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     slot: Slot,
@@ -75,7 +76,7 @@ pub(crate) fn manifest(
 /// turns up ([CR 712.15a](https://yawgatog.com/resources/magic-rules/#R71215a)): "If it's
 /// turned face up, it will have its front face up." No creature card in the cube costs {0},
 /// so a cost of nothing is no mana cost.
-fn face_up_cost(s: &State, t: &GameTable, slot: Slot) -> Option<ManaCost> {
+fn face_up_cost<L: Layout>(s: &State<L>, t: &GameTable, slot: Slot) -> Option<ManaCost> {
     let front = t.def(s.card(slot)).front();
     (front.types.contains(Types::CREATURE) && !front.cost.is_zero()).then(|| front.cost.with_x(0))
 }
@@ -85,8 +86,8 @@ fn face_up_cost(s: &State, t: &GameTable, slot: Slot) -> Option<ManaCost> {
 /// ([CR 116.2b](https://yawgatog.com/resources/magic-rules/#R1162b)): "Turning a face-down
 /// creature face up is a special action. A player can take this action any time they have
 /// priority."
-pub(crate) fn face_up_options(
-    s: &State,
+pub(crate) fn face_up_options<L: Layout>(
+    s: &State<L>,
     t: &GameTable,
     player: Seat,
     out: &mut Fixed<Opt, 64>,
@@ -112,8 +113,8 @@ pub(crate) fn face_up_options(
 ///
 /// [CR 116.3](https://yawgatog.com/resources/magic-rules/#R1163): "If a player takes a special
 /// action, that player receives priority afterward."
-pub(crate) fn begin_turning_face_up(
-    s: &mut State,
+pub(crate) fn begin_turning_face_up<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     player: Seat,
@@ -149,8 +150,8 @@ pub(crate) fn begin_turning_face_up(
 
 /// The question of a permanent being turned face up: a payment plan, or under manual
 /// payment the next source (§10).
-pub(crate) fn decision(
-    s: &State,
+pub(crate) fn decision<L: Layout>(
+    s: &State<L>,
     t: &GameTable,
     sink: &mut Sink,
     slot: Slot,
@@ -179,8 +180,8 @@ pub(crate) fn decision(
 }
 
 /// Applies an answer to the question of a permanent being turned face up.
-pub(crate) fn perform(
-    s: &mut State,
+pub(crate) fn perform<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     slot: Slot,
@@ -217,7 +218,7 @@ pub(crate) fn perform(
 /// Every player has seen it (CR 701.40b), and it gets a new timestamp
 /// ([CR 613.7f](https://yawgatog.com/resources/magic-rules/#R6137f)): "A permanent receives a
 /// new timestamp each time it turns face up or face down."
-fn turn_face_up(s: &mut State, slot: Slot) {
+fn turn_face_up<L: Layout>(s: &mut State<L>, slot: Slot) {
     let timestamp = s.zones.next_timestamp;
     s.zones.next_timestamp = timestamp.wrapping_add(1);
     let o = s.object_mut(slot);

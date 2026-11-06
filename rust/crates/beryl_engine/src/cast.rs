@@ -23,6 +23,7 @@ use crate::event::{self, Event, Reason, Sink};
 use crate::filter::{Filter, Whose};
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot};
+use crate::layout::{Layout, Queue, Table};
 use crate::mana::{self, Funds};
 use crate::profile::Payment;
 use crate::state::{
@@ -50,7 +51,11 @@ fn entry_ability_of(t: &GameTable, entry: &StackEntry) -> &'static Ability {
 /// The card, face and ability a stack entry records for activating ability `ability` of the
 /// permanent in `slot`: one of its own, or one granted to it, which is printed on the
 /// granting card's front face (§9).
-fn activated(s: &State, slot: Slot, ability: AbilityIx) -> Option<(CardIx, FaceIx, FaceAbility)> {
+fn activated<L: Layout>(
+    s: &State<L>,
+    slot: Slot,
+    ability: AbilityIx,
+) -> Option<(CardIx, FaceIx, FaceAbility)> {
     let o = s.object(slot);
     match ability {
         AbilityIx::Own(i) => Some((o.card, o.face, FaceAbility::Own(i))),
@@ -68,7 +73,7 @@ fn activated(s: &State, slot: Slot, ability: AbilityIx) -> Option<(CardIx, FaceI
 /// ([CR 307.1](https://yawgatog.com/resources/magic-rules/#R3071)): "A player who has
 /// priority may cast a sorcery card from their hand during a main phase of their turn when the
 /// stack is empty."
-pub(crate) fn sorcery_timing(s: &State, player: Seat) -> bool {
+pub(crate) fn sorcery_timing<L: Layout>(s: &State<L>, player: Seat) -> bool {
     player == s.turn.active
         && matches!(
             s.turn.step,
@@ -79,7 +84,7 @@ pub(crate) fn sorcery_timing(s: &State, player: Seat) -> bool {
 
 /// Whether a permanent on the battlefield has a static ability with this rule.
 #[inline]
-fn has_rule(s: &State, t: &GameTable, slot: Slot, rule: Rule) -> bool {
+fn has_rule<L: Layout>(s: &State<L>, t: &GameTable, slot: Slot, rule: Rule) -> bool {
     let o = s.object(slot);
     let has = t.may_have_rule(o.card, rule) && t.facts(o.card, o.face).has_rule(rule);
     #[cfg(feature = "coverage")]
@@ -99,7 +104,7 @@ fn has_rule(s: &State, t: &GameTable, slot: Slot, rule: Rule) -> bool {
 /// ([CR 101.2](https://yawgatog.com/resources/magic-rules/#R1012)): "When a rule or effect
 /// allows or directs something to happen, and another effect states that it can't happen,
 /// the "can't" effect takes precedence."
-fn sorcery_speed_limiter(s: &State, t: &GameTable, player: Seat) -> Option<Slot> {
+fn sorcery_speed_limiter<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Option<Slot> {
     // A permanent's derived characteristics, its controller among them, are at its place in
     // the battlefield list.
     s.battlefield
@@ -116,14 +121,14 @@ fn sorcery_speed_limiter(s: &State, t: &GameTable, player: Seat) -> Option<Slot>
 /// ([CR 117.1a](https://yawgatog.com/resources/magic-rules/#R1171a)), a face with flash
 /// ([CR 702.8a](https://yawgatog.com/resources/magic-rules/#R7028a)), or a sorcery while an
 /// effect lets them cast sorceries as though they had flash.
-fn instant_speed(s: &State, face: &Face, player: Seat) -> bool {
+fn instant_speed<L: Layout>(s: &State<L>, face: &Face, player: Seat) -> bool {
     face.types.intersects(Types::INSTANT)
         || face.keywords.contains(Keywords::FLASH)
         || (face.types.intersects(Types::SORCERY) && s.player(player).sorceries_as_flash)
 }
 
 /// The permission that lets `player` cast the card in `slot`, if one does.
-fn permission(s: &State, player: Seat, slot: Slot) -> Option<CastPermission> {
+fn permission<L: Layout>(s: &State<L>, player: Seat, slot: Slot) -> Option<CastPermission> {
     s.permissions
         .iter()
         .copied()
@@ -185,7 +190,7 @@ impl ExileCost {
 
     /// Whether `player` has the cards to pay it, the spell in `itself` aside: its caster
     /// moves it to the stack before paying (CR 601.2a), so it can't pay for itself.
-    fn payable(self, s: &State, t: &GameTable, player: Seat, itself: Slot) -> bool {
+    fn payable<L: Layout>(self, s: &State<L>, t: &GameTable, player: Seat, itself: Slot) -> bool {
         match self {
             ExileCost::Hand(colors) => !hand_cards(s, t, player, colors, itself).is_empty(),
             ExileCost::Graveyard(n) => {
@@ -198,7 +203,13 @@ impl ExileCost {
 }
 
 /// The cards in `player`'s hand other than `itself` of one of `colors`.
-fn hand_cards(s: &State, t: &GameTable, player: Seat, colors: Colors, itself: Slot) -> Bitboard {
+fn hand_cards<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    colors: Colors,
+    itself: Slot,
+) -> Bitboard {
     let mut hand = s.zone(player, Zone::Hand);
     hand.remove(itself);
     hand.iter()
@@ -211,7 +222,7 @@ fn hand_cards(s: &State, t: &GameTable, player: Seat, colors: Colors, itself: Sl
 /// `c.left - 1` still to choose after, the lowest of interchangeable ones, which leaves every
 /// choice the others would. So every set of cards is one sequence of answers, and a graveyard
 /// with no more cards than the cost exiles asks nothing.
-fn exile_choices(s: &State, t: &GameTable, c: &Casting) -> Bitboard {
+fn exile_choices<L: Layout>(s: &State<L>, t: &GameTable, c: &Casting) -> Bitboard {
     let entry = top(s);
     let face = t.def(entry.card).face(entry.face);
     let itself = entry.object.expect("a spell's card").slot;
@@ -284,7 +295,7 @@ fn player_matches(filter: Filter, player: Seat, you: Seat) -> bool {
 }
 
 /// The spells on the stack, as objects.
-fn spells(s: &State) -> Bitboard {
+fn spells<L: Layout>(s: &State<L>) -> Bitboard {
     s.stack
         .iter()
         .filter_map(StackEntry::spell)
@@ -292,7 +303,7 @@ fn spells(s: &State) -> Bitboard {
         .collect()
 }
 
-fn in_zone(s: &State, zone: Zone) -> Bitboard {
+fn in_zone<L: Layout>(s: &State<L>, zone: Zone) -> Bitboard {
     s.zone(Seat::P0, zone) | s.zone(Seat::P1, zone)
 }
 
@@ -303,8 +314,8 @@ fn in_zone(s: &State, zone: Zone) -> Bitboard {
 /// it will have left the zone it is in when its targets are chosen. `x` is the value of X of
 /// the spell or ability. `source` is an ability's source, which "another target" can't
 /// choose.
-fn candidates(
-    s: &State,
+fn candidates<L: Layout>(
+    s: &State<L>,
     t: &GameTable,
     spec: &TargetSpec,
     you: Seat,
@@ -322,8 +333,8 @@ fn candidates(
 
 /// What [`candidates`] chooses from: the players a spec can choose, or the objects its filter
 /// is still to pass on.
-fn domain(
-    s: &State,
+fn domain<L: Layout>(
+    s: &State<L>,
     spec: &TargetSpec,
     you: Seat,
     itself: Option<Slot>,
@@ -353,8 +364,8 @@ fn domain(
 
 /// Whether [`candidates`] holds at least `spec.count` targets, found without testing the
 /// filter on more objects than that takes.
-fn enough_candidates(
-    s: &State,
+fn enough_candidates<L: Layout>(
+    s: &State<L>,
     t: &GameTable,
     spec: &TargetSpec,
     you: Seat,
@@ -388,8 +399,8 @@ impl TargetSet {
 /// Whether every required target can be chosen
 /// ([CR 115.3](https://yawgatog.com/resources/magic-rules/#R1153)): "The same target can't be
 /// chosen multiple times for any one instance of the word "target" on a spell or ability."
-fn targetable(
-    s: &State,
+fn targetable<L: Layout>(
+    s: &State<L>,
     t: &GameTable,
     ability: Option<&Ability>,
     you: Seat,
@@ -414,8 +425,8 @@ fn source_of(entry: &StackEntry) -> Option<Slot> {
 /// longer in the zone it was in when it was targeted is illegal. Other changes to the game
 /// state may cause a target to no longer be legal". A zone change gives the object a new
 /// incarnation, so a stale reference is illegal.
-pub(crate) fn still_legal(
-    s: &State,
+pub(crate) fn still_legal<L: Layout>(
+    s: &State<L>,
     t: &GameTable,
     entry: &StackEntry,
     ability: &Ability,
@@ -461,7 +472,7 @@ impl Situation {
 
     /// Whether an opponent's permanent limits the player to sorcery speed: read only for a
     /// face that could otherwise be cast at instant speed.
-    fn sorcery_speed_only(&self, s: &State, t: &GameTable) -> bool {
+    fn sorcery_speed_only<L: Layout>(&self, s: &State<L>, t: &GameTable) -> bool {
         *self
             .sorcery_speed_only
             .get_or_init(|| sorcery_speed_limiter(s, t, self.player).is_some())
@@ -469,7 +480,7 @@ impl Situation {
 
     /// The player's funds. Most priority decisions offer nothing that costs mana, as an
     /// opponent's turn with no instant in hand, so the source scan waits until a check needs it.
-    fn funds(&self, s: &State, t: &GameTable) -> Option<&Funds> {
+    fn funds<L: Layout>(&self, s: &State<L>, t: &GameTable) -> Option<&Funds> {
         let funds = self
             .funds
             .get_or_init(|| Funds::of(s, t, self.player).ok())
@@ -489,7 +500,13 @@ impl Situation {
 
 /// Whether a face may be cast now, as far as its card types and the timing rules say: what
 /// [`refused`] checks first, which depends only on the face, so on the card.
-fn in_time(s: &State, t: &GameTable, now: &Situation, face: &Face, from: From) -> bool {
+fn in_time<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    now: &Situation,
+    face: &Face,
+    from: From,
+) -> bool {
     // CR 305.9: "If an object is both a land and another card type, it can be played only as
     // a land. It can't be cast as a spell." CR 712.11c: "Only the face that will be face up
     // on the stack is evaluated to determine if it can be cast."
@@ -513,8 +530,8 @@ fn in_time(s: &State, t: &GameTable, now: &Situation, face: &Face, from: From) -
 /// [CR 601.3](https://yawgatog.com/resources/magic-rules/#R6013): "A player can begin to cast
 /// a spell only if a rule or effect allows that player to cast it and no rule or effect
 /// prohibits that player from casting it."
-fn refused(
-    s: &State,
+fn refused<L: Layout>(
+    s: &State<L>,
     t: &GameTable,
     now: &Situation,
     slot: Slot,
@@ -574,8 +591,8 @@ fn progress(r: Refusal) -> u8 {
 /// casting it, by face and casting options, that passes the most checks, or `land`, why they
 /// may not play it as a land, if that passes as many. None if one way is legal, or if the
 /// card has no face to cast and `land` is none.
-pub(crate) fn refusal(
-    s: &State,
+pub(crate) fn refusal<L: Layout>(
+    s: &State<L>,
     t: &GameTable,
     player: Seat,
     slot: Slot,
@@ -616,9 +633,9 @@ pub(crate) fn refusal(
 }
 
 /// The cards `player` can cast at priority: their hand and the cards a permission names.
-fn cast_sources(s: &State, player: Seat) -> Bitboard {
+fn cast_sources<L: Layout>(s: &State<L>, player: Seat) -> Bitboard {
     let mut cards = s.zone(player, Zone::Hand);
-    for p in &s.permissions {
+    for p in s.permissions.iter() {
         if p.player == player && s.is_current(p.object) {
             cards.insert(p.object.slot);
         }
@@ -627,8 +644,8 @@ fn cast_sources(s: &State, player: Seat) -> Bitboard {
 }
 
 /// Appends the spells `player` can cast now, by card, face and casting options.
-fn cast_options(
-    s: &State,
+fn cast_options<L: Layout>(
+    s: &State<L>,
     t: &GameTable,
     now: &Situation,
     cards: Bitboard,
@@ -686,7 +703,7 @@ fn spent_by_cost(slot: Slot, a: &Ability) -> Bitboard {
 /// The other untapped creatures `player` controls, which may crew the Vehicle in `vehicle`
 /// (CR 702.122a). Summoning sickness doesn't stop them: tapping them is a cost of the
 /// Vehicle's ability, not an ability of theirs with {T} (CR 302.6).
-fn crew_candidates(s: &State, player: Seat, vehicle: Slot) -> Bitboard {
+fn crew_candidates<L: Layout>(s: &State<L>, player: Seat, vehicle: Slot) -> Bitboard {
     s.battlefield()
         .iter()
         .copied()
@@ -700,12 +717,12 @@ fn crew_candidates(s: &State, player: Seat, vehicle: Slot) -> Bitboard {
 }
 
 /// A creature's power counted toward a crew cost; less than 0 counts as 0.
-fn power_of(s: &State, slot: Slot) -> u8 {
+fn power_of<L: Layout>(s: &State<L>, slot: Slot) -> u8 {
     u8::try_from(s.derived(slot).power.max(0)).unwrap_or(0)
 }
 
 /// The total power of the creatures that could crew the Vehicle in `vehicle`.
-fn crew_power(s: &State, player: Seat, vehicle: Slot) -> u32 {
+fn crew_power<L: Layout>(s: &State<L>, player: Seat, vehicle: Slot) -> u32 {
     crew_candidates(s, player, vehicle)
         .iter()
         .map(|slot| u32::from(power_of(s, slot)))
@@ -716,7 +733,13 @@ fn crew_power(s: &State, player: Seat, vehicle: Slot) -> u32 {
 ///
 /// [CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025): "A player can't begin to
 /// activate an ability that's prohibited from being activated."
-fn activatable(s: &State, t: &GameTable, now: &Situation, slot: Slot, ability: AbilityIx) -> bool {
+fn activatable<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    now: &Situation,
+    slot: Slot,
+    ability: AbilityIx,
+) -> bool {
     let player = now.player;
     let o = s.object(slot);
     let Some((card, face, index)) = activated(s, slot, ability) else {
@@ -797,8 +820,8 @@ fn activatable(s: &State, t: &GameTable, now: &Situation, slot: Slot, ability: A
 /// its generic mana (CR 701.67a), with none of `exclude`. Tapping one that makes no mana now
 /// pays as much as it ever can, so those pay first; a mana source pays at least as much
 /// tapped for mana, so it never needs to.
-fn waterbend_payable(
-    s: &State,
+fn waterbend_payable<L: Layout>(
+    s: &State<L>,
     t: &GameTable,
     funds: &Funds,
     player: Seat,
@@ -817,7 +840,7 @@ fn waterbend_payable(
 /// The untapped artifacts and creatures `player` controls, which may each pay for one
 /// generic mana of a waterbend cost (CR 701.67a). Summoning sickness doesn't stop them:
 /// tapping them is a cost of the ability, not an ability of theirs with {T} (CR 302.6).
-fn benders(s: &State, player: Seat) -> Bitboard {
+fn benders<L: Layout>(s: &State<L>, player: Seat) -> Bitboard {
     s.battlefield()
         .iter()
         .copied()
@@ -835,7 +858,7 @@ fn benders(s: &State, player: Seat) -> Bitboard {
 /// declares ([`Needs`]): its cost would be paid and its effect find nothing to act on. The
 /// activation is still legal (CR 602.2); [`Profile::hides_pointless`](crate::Profile) says
 /// who isn't offered it.
-pub fn pointless(s: &State, t: &GameTable, slot: Slot, ability: AbilityIx) -> bool {
+pub fn pointless<L: Layout>(s: &State<L>, t: &GameTable, slot: Slot, ability: AbilityIx) -> bool {
     let Some((card, face, index)) = activated(s, slot, ability) else {
         return false;
     };
@@ -848,8 +871,8 @@ pub fn pointless(s: &State, t: &GameTable, slot: Slot, ability: AbilityIx) -> bo
 
 /// Appends the abilities `player` can activate now. CR 117.1b: "A player may activate an
 /// activated ability any time they have priority."
-fn activation_options(
-    s: &State,
+fn activation_options<L: Layout>(
+    s: &State<L>,
     t: &GameTable,
     now: &Situation,
     out: &mut Fixed<Opt, 64>,
@@ -906,8 +929,8 @@ fn activation_options(
 }
 
 /// Appends the priority actions casting and activation add: spells and abilities.
-pub(crate) fn priority_options(
-    s: &State,
+pub(crate) fn priority_options<L: Layout>(
+    s: &State<L>,
     t: &GameTable,
     player: Seat,
     out: &mut Fixed<Opt, 64>,
@@ -928,8 +951,8 @@ pub(crate) fn priority_options(
 /// [CR 712.11b](https://yawgatog.com/resources/magic-rules/#R71211b): "A player casting a modal
 /// double-faced card ... chooses which face they are casting before putting it onto the
 /// stack."
-pub(crate) fn begin_cast(
-    s: &mut State,
+pub(crate) fn begin_cast<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     player: Seat,
@@ -982,8 +1005,8 @@ pub(crate) fn begin_cast(
 /// [CR 602.2a](https://yawgatog.com/resources/magic-rules/#R6022a): "That ability is created
 /// on the stack as an object that's not a card. It becomes the topmost object on the stack.
 /// ... Its controller is the player who activated the ability."
-pub(crate) fn begin_activate(
-    s: &mut State,
+pub(crate) fn begin_activate<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     player: Seat,
@@ -1031,7 +1054,11 @@ pub(crate) fn begin_activate(
 /// casting a spell listed in rules 601.2c-d. If a choice is required when the triggered
 /// ability goes on the stack but no legal choices can be made for it, ... the ability is
 /// simply removed from the stack."
-pub(crate) fn target_trigger(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<(), Full> {
+pub(crate) fn target_trigger<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink,
+) -> Result<(), Full> {
     let entry = top(s);
     let Some(ability) = entry_ability(t, &entry) else {
         return Ok(());
@@ -1066,14 +1093,14 @@ pub(crate) fn target_trigger(s: &mut State, t: &GameTable, sink: &mut Sink) -> R
     advance(s, t, sink, c)
 }
 
-fn top(s: &State) -> StackEntry {
+fn top<L: Layout>(s: &State<L>) -> StackEntry {
     *s.stack
         .as_slice()
         .last()
         .expect("the spell or ability being cast")
 }
 
-fn top_mut(s: &mut State) -> &mut StackEntry {
+fn top_mut<L: Layout>(s: &mut State<L>) -> &mut StackEntry {
     s.stack
         .as_mut_slice()
         .last_mut()
@@ -1103,7 +1130,7 @@ fn total_cost(t: &GameTable, entry: &StackEntry, c: &Casting) -> ManaCost {
 /// [CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f): "The total cost is the
 /// mana cost or alternative cost (as determined in rule 601.2b), plus all additional costs and
 /// cost increases, and minus all cost reductions."
-pub fn cost_being_cast(s: &State, t: &GameTable, x: u8) -> Option<ManaCost> {
+pub fn cost_being_cast<L: Layout>(s: &State<L>, t: &GameTable, x: u8) -> Option<ManaCost> {
     match s.pending {
         Pending::Casting(c) => Some(total_cost(t, &StackEntry { x, ..top(s) }, &c)),
         _ => None,
@@ -1120,7 +1147,12 @@ fn spent_by_entry(t: &GameTable, entry: &StackEntry) -> Bitboard {
 }
 
 /// Moves the machine on to its next question, or finishes.
-fn advance(s: &mut State, t: &GameTable, sink: &mut Sink, mut c: Casting) -> Result<(), Full> {
+fn advance<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink,
+    mut c: Casting,
+) -> Result<(), Full> {
     loop {
         match c.step {
             CastStep::X
@@ -1174,8 +1206,8 @@ fn advance(s: &mut State, t: &GameTable, sink: &mut Sink, mut c: Casting) -> Res
 /// total cost. First, they pay all costs that don't involve random elements or moving objects
 /// from the library to a public zone, in any order." The solver never taps a source that pays
 /// with itself (`spent_by_entry`), so paying these first changes nothing.
-fn begin_payment(
-    s: &mut State,
+fn begin_payment<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     mut c: Casting,
@@ -1230,7 +1262,11 @@ fn begin_payment(
 /// The answers of a waterbend step (CR 701.67a): tap one more artifact or creature, while the
 /// rest stays payable, or pay what is left with mana, when it can be. Interchangeable ones are
 /// one answer (§7.2). Empty when no artifact or creature can help.
-fn waterbend_options(s: &State, t: &GameTable, c: &Casting) -> Result<Fixed<Opt, 64>, Full> {
+fn waterbend_options<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    c: &Casting,
+) -> Result<Fixed<Opt, 64>, Full> {
     let mut out = Fixed::new();
     let entry = top(s);
     let cost = total_cost(t, &entry, c);
@@ -1259,7 +1295,12 @@ fn waterbend_options(s: &State, t: &GameTable, c: &Casting) -> Result<Fixed<Opt,
 }
 
 /// Pays the mana of the total cost: by plan, or one source at a time under manual payment.
-fn pay_mana(s: &mut State, t: &GameTable, sink: &mut Sink, mut c: Casting) -> Result<(), Full> {
+fn pay_mana<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink,
+    mut c: Casting,
+) -> Result<(), Full> {
     let entry = top(s);
     let cost = total_cost(t, &entry, &c);
     match s.profile.payment {
@@ -1303,7 +1344,12 @@ fn pay_mana(s: &mut State, t: &GameTable, sink: &mut Sink, mut c: Casting) -> Re
 /// controller had priority before casting it, they get priority." CR 608.2g: after a spell
 /// cast during a resolution, "no player receives priority"; the resolution it was cast in is
 /// over by now, so the active player receives priority (CR 117.3b).
-fn finish(s: &mut State, t: &GameTable, sink: &mut Sink, c: Casting) -> Result<(), Full> {
+fn finish<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink,
+    c: Casting,
+) -> Result<(), Full> {
     s.pending = Pending::None;
     s.turn.priority = if c.resolving { s.turn.active } else { c.player };
     s.turn.passes = 0;
@@ -1345,7 +1391,7 @@ fn ability_event(entry: &StackEntry) -> Event {
 }
 
 /// The X values the payment can still cover, from the least allowed.
-fn x_options(s: &State, t: &GameTable, c: &Casting) -> Result<Fixed<Opt, 64>, Full> {
+fn x_options<L: Layout>(s: &State<L>, t: &GameTable, c: &Casting) -> Result<Fixed<Opt, 64>, Full> {
     let entry = top(s);
     let face = t.def(entry.card).face(entry.face);
     let least = if entry.is_spell() {
@@ -1368,7 +1414,7 @@ fn x_options(s: &State, t: &GameTable, c: &Casting) -> Result<Fixed<Opt, 64>, Fu
 
 /// The objects or players the current target spec can still choose: not one already chosen
 /// for it.
-fn target_options(s: &State, t: &GameTable, c: &Casting) -> TargetSet {
+fn target_options<L: Layout>(s: &State<L>, t: &GameTable, c: &Casting) -> TargetSet {
     let entry = top(s);
     let spec = &specs(t, &entry)[usize::from(c.spec)];
     let itself = entry.spell().map(|r| r.slot);
@@ -1393,8 +1439,8 @@ fn target_options(s: &State, t: &GameTable, c: &Casting) -> TargetSet {
 }
 
 /// The open question of the machine.
-pub(crate) fn decision(
-    s: &State,
+pub(crate) fn decision<L: Layout>(
+    s: &State<L>,
     t: &GameTable,
     sink: &mut Sink,
     c: &Casting,
@@ -1495,8 +1541,8 @@ pub(crate) fn decision(
 }
 
 /// Applies an answer to the machine's question: an option, or an object for a target.
-pub(crate) fn perform(
-    s: &mut State,
+pub(crate) fn perform<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     mut c: Casting,
@@ -1600,8 +1646,8 @@ pub(crate) fn perform(
 
 /// The options of a resolution's offer to cast a card (CR 608.2g): not casting it, then each
 /// way of casting it.
-pub(crate) fn offer_options(
-    s: &State,
+pub(crate) fn offer_options<L: Layout>(
+    s: &State<L>,
     t: &GameTable,
     object: ObjectRef,
     player: Seat,
@@ -1621,8 +1667,8 @@ pub(crate) fn offer_options(
 
 /// Removes a spell from the stack to its owner's graveyard, or to exile when `exile` or its
 /// entry says so. Returns whether it was there.
-pub(crate) fn counter(
-    s: &mut State,
+pub(crate) fn counter<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     spell: ObjectRef,
@@ -1637,15 +1683,15 @@ pub(crate) fn counter(
 
 /// Removes a spell's entry from the stack, if it is there, for an effect that moves the
 /// spell's card elsewhere.
-pub(crate) fn take_spell(s: &mut State, spell: ObjectRef) -> Option<StackEntry> {
+pub(crate) fn take_spell<L: Layout>(s: &mut State<L>, spell: ObjectRef) -> Option<StackEntry> {
     let i = s.stack.iter().position(|e| e.spell() == Some(spell))?;
     Some(s.stack.remove(i))
 }
 
 /// Puts a spell that leaves the stack without becoming a permanent into its owner's
 /// graveyard, or exile when `exile` or its entry says so.
-pub(crate) fn leave_stack(
-    s: &mut State,
+pub(crate) fn leave_stack<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     entry: &StackEntry,
@@ -1671,9 +1717,9 @@ pub(crate) fn leave_stack(
 /// remainder of the process for activating an ability is identical to the process for casting a
 /// spell listed in rules 601.2b-i"). A Strip Mine targeting itself is sacrificed and its ability
 /// does nothing; targeting its twin destroys the twin.
-pub(crate) fn referenced(s: &State) -> Bitboard {
+pub(crate) fn referenced<L: Layout>(s: &State<L>) -> Bitboard {
     let mut b = Bitboard::EMPTY;
-    for e in &s.stack {
+    for e in s.stack.iter() {
         if let Some(source) = e.object.filter(|_| !e.is_spell()) {
             b.insert(source.slot);
         }
@@ -1683,7 +1729,7 @@ pub(crate) fn referenced(s: &State) -> Bitboard {
             }
         }
     }
-    for p in &s.permissions {
+    for p in s.permissions.iter() {
         b.insert(p.object.slot);
     }
     b

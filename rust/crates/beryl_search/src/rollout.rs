@@ -22,6 +22,7 @@
 //! - Say yes to every "may" and every "unless pays"; keep the cards worth most, and scry to
 //!   the bottom only the cards not worth drawing.
 
+use beryl_engine::Layout;
 use std::cell::Cell;
 
 use beryl_engine::card::{
@@ -103,13 +104,13 @@ impl RolloutPolicy {
 
     /// The rules' view of one decision of `me`'s, for agents that build on them: with
     /// `expert`, valuing permanents as the expert does.
-    pub(crate) fn view<'a>(
+    pub(crate) fn view<'a, L: Layout>(
         &'a self,
         t: &'a GameTable,
-        obs: Observation<'a>,
+        obs: Observation<'a, L>,
         me: Seat,
         expert: bool,
-    ) -> Policy<'a> {
+    ) -> Policy<'a, L> {
         Policy {
             values: &self.values,
             t,
@@ -121,15 +122,20 @@ impl RolloutPolicy {
     }
 
     /// The policy's answer to `d`, seen by `d.player` in `obs`.
-    pub fn choose(&self, t: &GameTable, obs: Observation<'_>, d: &Decision) -> Choice {
+    pub fn choose<L: Layout>(
+        &self,
+        t: &GameTable,
+        obs: Observation<'_, L>,
+        d: &Decision,
+    ) -> Choice {
         self.decide(t, obs, d, false)
     }
 
     /// The policy's answer to `d`, with `expert`, valuing permanents as the expert does.
-    pub(crate) fn decide(
+    pub(crate) fn decide<L: Layout>(
         &self,
         t: &GameTable,
-        obs: Observation<'_>,
+        obs: Observation<'_, L>,
         d: &Decision,
         expert: bool,
     ) -> Choice {
@@ -139,10 +145,10 @@ impl RolloutPolicy {
     /// The policy's answer to `d` as a search's rollout plays it: each candidate drawn with
     /// a weight of exp(score / temperature) ([`Softmax`]) wherever the rules score candidates
     /// by value, so that two rollouts from one position need not play the same game.
-    pub fn choose_soft(
+    pub fn choose_soft<L: Layout>(
         &self,
         t: &GameTable,
-        obs: Observation<'_>,
+        obs: Observation<'_, L>,
         d: &Decision,
         soft: &mut Softmax<'_>,
     ) -> Choice {
@@ -152,10 +158,10 @@ impl RolloutPolicy {
     /// The rules' answer to `d`, its scores made a choice by `pick`. The decisions scored
     /// yes or no (mulligans, play or draw, a "may") and the numbers chosen are always the
     /// best: their scores are flags, not values a temperature could weigh.
-    fn decide_by(
+    fn decide_by<L: Layout>(
         &self,
         t: &GameTable,
-        obs: Observation<'_>,
+        obs: Observation<'_, L>,
         d: &Decision,
         expert: bool,
         pick: &mut Pick<'_, '_>,
@@ -372,10 +378,10 @@ fn for_each(d: &Decision, mut f: impl FnMut(usize, Candidate)) {
 }
 
 /// One decision's view, for the rules above.
-pub(crate) struct Policy<'a> {
+pub(crate) struct Policy<'a, L: Layout> {
     pub(crate) values: &'a CardValues,
     pub(crate) t: &'a GameTable,
-    pub(crate) obs: Observation<'a>,
+    pub(crate) obs: Observation<'a, L>,
     pub(crate) me: Seat,
     /// Whether permanents are valued as the expert values them ([`crate::expert`]).
     pub(crate) expert: bool,
@@ -383,7 +389,7 @@ pub(crate) struct Policy<'a> {
     may_draw: Cell<Option<bool>>,
 }
 
-impl Policy<'_> {
+impl<L: Layout> Policy<'_, L> {
     pub(crate) fn info(&self, slot: Slot) -> Option<CardInfo> {
         self.obs.card(slot).map(|card| self.values.get(card))
     }
@@ -905,28 +911,38 @@ pub struct Inline<'a> {
     pub t: &'a GameTable,
 }
 
-impl Answers for Inline<'_> {
+impl<L: Layout> Answers<L> for Inline<'_> {
     fn inline(&self) -> bool {
         true
     }
 
-    fn answer(&mut self, obs: Observation<'_>, d: &Decision) -> Option<Choice> {
+    fn answer(&mut self, obs: Observation<'_, L>, d: &Decision) -> Option<Choice> {
         Some(self.policy.choose(self.t, obs, d))
     }
 }
 
 /// Plays a game to its end under the rollout policy in both seats, every question answered
 /// inline: the rollout loop search runs (§19.1). It copies nothing and allocates nothing.
-pub fn rollout(s: &mut State, t: &GameTable, x: &mut Scratch, policy: &RolloutPolicy) -> Outcome {
+///
+/// Never inlined, so a caller's frame stays apart from the loop's: inlined into
+/// `beryl_bench::rollout::counted_rollout`, it left Callgrind unable to follow that frame,
+/// and the rollout benchmark counted half the work.
+#[inline(never)]
+pub fn rollout<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    x: &mut Scratch<L>,
+    policy: &RolloutPolicy,
+) -> Outcome {
     rollout_to(s, t, x, policy, u16::MAX).expect("a game ends before turn 65535")
 }
 
 /// [`rollout`], cut off at the first decision of turn `turn` or later: the game's outcome if
 /// it ends before then, else none, the state left at that decision.
-pub fn rollout_to(
-    s: &mut State,
+pub fn rollout_to<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
-    x: &mut Scratch,
+    x: &mut Scratch<L>,
     policy: &RolloutPolicy,
     turn: u16,
 ) -> Option<Outcome> {
@@ -938,10 +954,10 @@ pub fn rollout_to(
 
 /// [`rollout_to`] with every decision, inline ones too, drawn by `soft`
 /// ([`RolloutPolicy::choose_soft`]).
-pub fn soft_rollout_to(
-    s: &mut State,
+pub fn soft_rollout_to<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
-    x: &mut Scratch,
+    x: &mut Scratch<L>,
     policy: &RolloutPolicy,
     soft: &mut Softmax<'_>,
     turn: u16,
@@ -953,10 +969,10 @@ pub fn soft_rollout_to(
 }
 
 /// [`soft_rollout_to`] to the end of the game.
-pub fn soft_rollout(
-    s: &mut State,
+pub fn soft_rollout<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
-    x: &mut Scratch,
+    x: &mut Scratch<L>,
     policy: &RolloutPolicy,
     soft: &mut Softmax<'_>,
 ) -> Outcome {
@@ -964,13 +980,13 @@ pub fn soft_rollout(
 }
 
 /// The rollout loop: `answers` answers inline, `choose` every decision `next` returns.
-fn play_out<A: Answers>(
-    s: &mut State,
+fn play_out<A: Answers<L>, L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
-    x: &mut Scratch,
+    x: &mut Scratch<L>,
     answers: &mut A,
     turn: u16,
-    mut choose: impl FnMut(&mut A, Observation<'_>, &Decision) -> Choice,
+    mut choose: impl FnMut(&mut A, Observation<'_, L>, &Decision) -> Choice,
 ) -> Option<Outcome> {
     loop {
         match next(s, t, x, answers) {
@@ -991,12 +1007,12 @@ struct SoftInline<'a, 'r> {
     soft: &'a mut Softmax<'r>,
 }
 
-impl Answers for SoftInline<'_, '_> {
+impl<L: Layout> Answers<L> for SoftInline<'_, '_> {
     fn inline(&self) -> bool {
         true
     }
 
-    fn answer(&mut self, obs: Observation<'_>, d: &Decision) -> Option<Choice> {
+    fn answer(&mut self, obs: Observation<'_, L>, d: &Decision) -> Option<Choice> {
         Some(self.policy.choose_soft(self.t, obs, d, self.soft))
     }
 }

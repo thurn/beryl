@@ -1,5 +1,5 @@
-//! The game state: one flat `Copy` value with fixed capacities and no heap (architecture §4,
-//! decisions D3 and D4).
+//! The game state, stored as its [`Layout`] says: in [`Small`], one flat `Copy` value with
+//! fixed capacities and no heap (architecture §4, decisions D3 and D4).
 
 use crate::bitboard::Bitboard;
 use crate::card::{
@@ -9,6 +9,7 @@ use crate::card::{
 use crate::decision::{Decision, Outcome};
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot};
+use crate::layout::{Layout, Queue, Small};
 use crate::profile::Profile;
 use crate::rng::Rng;
 
@@ -333,18 +334,20 @@ pub struct GrantRef {
 }
 
 /// Zone membership and the zones whose order the rules read (architecture §4.3).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct Zones {
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Zones<L: Layout = Small> {
     /// Membership by owner, indexed by `Zone as usize` for the owned zones.
     pub members: [[Bitboard; Zone::OWNED]; 2],
     pub stack: Bitboard,
     /// Bottom first: the top card is the last.
-    pub library: [Fixed<Slot, DECK_SLOTS>; 2],
+    pub library: [L::Queue<Slot, DECK_SLOTS>; 2],
     /// Bottom first: the top card is the last.
-    pub graveyard: [Fixed<Slot, DECK_SLOTS>; 2],
+    pub graveyard: [L::Queue<Slot, DECK_SLOTS>; 2],
     /// The next battlefield timestamp.
     pub next_timestamp: u16,
 }
+
+impl Copy for Zones<Small> {}
 
 /// Where a player is in the London mulligan (CR 103.5).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -809,33 +812,34 @@ pub struct Flags {
     pub derived_dirty: bool,
 }
 
-/// The whole game, copied with one `memcpy` (architecture §4.1).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct State {
-    pub(crate) objects: [Object; SLOTS],
+/// The whole game, stored as its [`Layout`] says: as [`Small`], copied with one `memcpy`
+/// (architecture §4.1).
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct State<L: Layout = Small> {
+    pub(crate) objects: L::Table<Object, SLOTS>,
     /// Slots on the battlefield, in the order they entered.
-    pub(crate) battlefield: Fixed<Slot, BATTLEFIELD>,
+    pub(crate) battlefield: L::Queue<Slot, BATTLEFIELD>,
     /// Layer results, by battlefield index.
-    pub(crate) derived: [Derived; BATTLEFIELD],
+    pub(crate) derived: L::Table<Derived, BATTLEFIELD>,
     /// The kinds of event the permanents on the battlefield have triggered abilities for
     /// ([`crate::table::GameTable::listens`] of each), found with the layer results and
     /// current while they are.
     pub(crate) listening: u16,
-    pub(crate) zones: Zones,
+    pub(crate) zones: Zones<L>,
     pub(crate) players: [Player; 2],
     pub(crate) turn: Turn,
-    pub(crate) stack: Fixed<StackEntry, 64>,
-    pub(crate) triggers: Fixed<PendingTrigger, 64>,
+    pub(crate) stack: L::Queue<StackEntry, 64>,
+    pub(crate) triggers: L::Queue<PendingTrigger, 64>,
     /// Delayed triggered abilities waiting for their moment (CR 603.7), which their
     /// ability's [`crate::card::Trigger::Delayed`] names.
-    pub(crate) delayed: Fixed<PendingTrigger, 32>,
-    pub(crate) effects: Fixed<FloatingEffect, 64>,
-    pub(crate) permissions: Fixed<CastPermission, 8>,
+    pub(crate) delayed: L::Queue<PendingTrigger, 32>,
+    pub(crate) effects: L::Queue<FloatingEffect, 64>,
+    pub(crate) permissions: L::Queue<CastPermission, 8>,
     /// The value of X the spells that became these permanents were cast with, for their
     /// enters abilities ([CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)):
     /// "the value of X for that ability is the same as the value of X for that spell". Only
     /// a nonzero X is kept, and only while the permanent stays.
-    pub(crate) entered_x: Fixed<(ObjectRef, u8), 8>,
+    pub(crate) entered_x: L::Queue<(ObjectRef, u8), 8>,
     pub(crate) pending: Pending,
     /// `knowledge[p]` holds the slots whose identity player `p` knows (architecture §13).
     pub(crate) knowledge: [Bitboard; 2],
@@ -846,9 +850,20 @@ pub struct State {
     pub(crate) outcome: Option<Outcome>,
 }
 
-const _: () = assert!(size_of::<State>() <= 20 * 1024);
+const _: () = assert!(size_of::<State<Small>>() <= 20 * 1024);
 
-impl State {
+// A `Copy` type's `Clone` should be `*self`, which `Small::clone_state` is.
+#[allow(clippy::expl_impl_clone_on_copy)]
+impl<L: Layout> Clone for State<L> {
+    #[inline]
+    fn clone(&self) -> Self {
+        L::clone_state(self)
+    }
+}
+
+impl Copy for State<Small> {}
+
+impl<L: Layout> State<L> {
     pub fn object(&self, slot: Slot) -> &Object {
         &self.objects[slot.index()]
     }

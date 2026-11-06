@@ -19,17 +19,18 @@ use crate::engine::Scratch;
 use crate::event::{self, Entry, Event, Reason, Sink};
 use crate::fixed::{Fixed, Full};
 use crate::ids::Seat;
+use crate::layout::{Layout, Queue};
 use crate::state::{
     CounterKind, ObjectFlags, Pending, PendingTrigger, Resolving, StackEntry, State, Zone,
 };
 use crate::table::GameTable;
 
 /// Resolves the top of the stack, or continues a paused resolution with its record.
-pub(crate) fn resolve(
-    s: &mut State,
+pub(crate) fn resolve<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
-    x: &mut Scratch,
-    a: &mut dyn Answers,
+    x: &mut Scratch<L>,
+    a: &mut dyn Answers<L>,
 ) -> Result<(), Full> {
     let entry = *s.stack.as_slice().last().expect("a stack entry to resolve");
     let ability = entry_ability(t, &entry);
@@ -63,7 +64,7 @@ pub(crate) fn resolve(
     let mark = sink.len();
     match run(spare, t, sink, Some(a), record.as_slice(), entry, ability)? {
         None => {
-            *s = *spare;
+            s.clone_from(spare);
             x.counts.copied();
         }
         Some(question) => {
@@ -86,7 +87,7 @@ pub(crate) fn resolve(
 /// A slot keeps its identity through the moves of a run, so a card seen there is the card the
 /// committed state holds in that slot, unless something random dealt identities anew (a
 /// shuffle, a random order); then only a slot that is still the same object counts.
-fn keep_what_was_seen(s: &mut State, run: &State) {
+fn keep_what_was_seen<L: Layout>(s: &mut State<L>, run: &State<L>) {
     let random = run.rng != s.rng;
     for p in Seat::BOTH {
         let gained = run.knowledge[p.index()] & !s.knowledge[p.index()];
@@ -102,12 +103,12 @@ fn keep_what_was_seen(s: &mut State, run: &State) {
 /// Replays a paused resolution into the scratch state up to its question, so a viewer sees
 /// the position the question is asked in (§7.3): the cards Brainstorm drew, for example. Its
 /// events go to `seen` if given, and are not kept otherwise.
-pub(crate) fn replay_to_question<'a>(
-    s: &State,
+pub(crate) fn replay_to_question<'a, L: Layout>(
+    s: &State<L>,
     t: &GameTable,
-    x: &'a mut Scratch,
+    x: &'a mut Scratch<L>,
     seen: Option<&mut Vec<Event>>,
-) -> Result<&'a State, Full> {
+) -> Result<&'a State<L>, Full> {
     let Pending::Resolving(r) = s.pending else {
         unreachable!("a paused resolution");
     };
@@ -128,7 +129,12 @@ pub(crate) fn replay_to_question<'a>(
 /// ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "If all its targets, for
 /// every instance of the word "target," are now illegal, the spell or ability doesn't
 /// resolve." One that chose no targets is not targeted (CR 115.6) and resolves.
-fn fizzles(s: &State, t: &GameTable, entry: &StackEntry, ability: Option<&Ability>) -> bool {
+fn fizzles<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    entry: &StackEntry,
+    ability: Option<&Ability>,
+) -> bool {
     let Some(ability) = ability else {
         return false;
     };
@@ -143,11 +149,16 @@ fn fizzles(s: &State, t: &GameTable, entry: &StackEntry, ability: Option<&Abilit
 /// ([CR 603.4](https://yawgatog.com/resources/magic-rules/#R6034)): "If the ability triggers,
 /// it checks the stated condition again as it resolves. If the condition isn't true at that
 /// time, the ability is removed from the stack and does nothing."
-fn condition_fails(s: &State, t: &GameTable, entry: &StackEntry, ability: &Ability) -> bool {
+fn condition_fails<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    entry: &StackEntry,
+    ability: &Ability,
+) -> bool {
     if ability.kind != AbilityKind::Triggered {
         return false;
     }
-    let Some(condition) = ability.condition else {
+    let Some(condition) = L::condition(ability) else {
         return false;
     };
     let Some(FaceAbility::Own(index)) = entry.ability else {
@@ -166,11 +177,11 @@ fn condition_fails(s: &State, t: &GameTable, entry: &StackEntry, ability: &Abili
 
 /// Resolves `entry`, the top of `s`'s stack, answering from `record` and then `answers`.
 /// Returns the question it paused at, if it did.
-fn run(
-    s: &mut State,
+fn run<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
-    mut answers: Option<&mut dyn Answers>,
+    mut answers: Option<&mut dyn Answers<L>>,
     record: &[u8],
     entry: StackEntry,
     ability: Option<&'static Ability>,
@@ -193,10 +204,10 @@ fn run(
         let mut offer = None;
         // An instant or sorcery without a spell ability does nothing.
         if let Some(ability) = ability {
-            let answers = answers.as_mut().map(|a| &mut **a as &mut dyn Answers);
+            let answers = answers.as_mut().map(|a| &mut **a as &mut dyn Answers<L>);
             let mut ctx = EffectCtx::resolving(s, t, sink, answers, record, entry, ability);
             crate::coverage::hit(ability);
-            let flow = (ability.body)(&mut ctx);
+            let flow = L::body(ability)(&mut ctx);
             let question = ctx.question;
             offer = ctx.offer;
             ctx.finish()?;
@@ -240,8 +251,8 @@ fn run(
 /// was targeting." [CR 712.13](https://yawgatog.com/resources/magic-rules/#R71213): "a
 /// resolving double-faced spell that becomes a permanent is put onto the battlefield with the
 /// same face up that was face up on the stack."
-fn enter_battlefield(
-    s: &mut State,
+fn enter_battlefield<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     entry: &StackEntry,

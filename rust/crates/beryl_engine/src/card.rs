@@ -4,11 +4,10 @@
 //! Every type here is `'static` table data shared by all threads. `State` never holds one;
 //! it stores game-table indices (§6.4) and ability indices instead.
 
-use crate::effect::EffectCtx;
 use crate::filter::{Filter, Whose};
 use crate::ids::Seat;
-use crate::state::{CounterKind, PendingTrigger, State, TurnStep};
-use crate::table::GameTable;
+use crate::layout::{Body, Condition};
+use crate::state::{CounterKind, TurnStep};
 
 /// One card: its name and its faces.
 #[derive(Debug)]
@@ -916,7 +915,7 @@ pub struct Ability {
     pub produces: ManaSet,
     /// Whether the body may ask its controller a question mid-resolution (§7.3).
     pub may_pause: bool,
-    pub body: fn(&mut EffectCtx) -> Flow,
+    pub body: Body,
     /// Triggered abilities: the event they trigger on (§8.3).
     pub trigger: Trigger,
     /// Triggered abilities: an intervening "if" clause, checked when the ability triggers
@@ -924,7 +923,7 @@ pub struct Ability {
     /// ([CR 603.4](https://yawgatog.com/resources/magic-rules/#R6034)): "The ability triggers
     /// only if it is; otherwise it does nothing. If the ability triggers, it checks the
     /// stated condition again as it resolves."
-    pub condition: Option<fn(&State, &GameTable, &PendingTrigger) -> bool>,
+    pub condition: Option<Condition>,
     /// Replacement abilities: the event they modify.
     pub replacement: Replacement,
     /// Static abilities: the continuous effect they generate on the battlefield (§9).
@@ -984,7 +983,7 @@ impl Ability {
     };
 
     /// A triggered ability.
-    pub const fn triggered(trigger: Trigger, body: fn(&mut EffectCtx) -> Flow) -> Ability {
+    pub const fn triggered(trigger: Trigger, body: Body) -> Ability {
         Ability {
             kind: AbilityKind::Triggered,
             trigger,

@@ -4,6 +4,7 @@
 use crate::bitboard::Bitboard;
 use crate::card::FaceIx;
 use crate::ids::{Seat, Slot};
+use crate::layout::{Layout, Queue};
 use crate::state::{DECK_SLOTS, Object, ObjectFlags, Pending, State, TOKEN_SLOTS, Zone};
 use crate::table::GameTable;
 
@@ -30,7 +31,7 @@ fn check(ok: bool, what: &'static str, at: Option<At>) -> Result<(), Violation> 
     }
 }
 
-impl State {
+impl<L: Layout> State<L> {
     /// Checks the invariants that hold whenever `next` has returned: zone bitboards and lists
     /// agree with the objects' zones, no object is in two zones, every stack reference names
     /// a live incarnation, knowledge covers the public zones, off-battlefield objects carry no
@@ -211,7 +212,7 @@ impl State {
             "the battlefield index lists a slot off the battlefield",
             None,
         )?;
-        for e in &self.stack {
+        for e in self.stack.iter() {
             if e.is_spell() {
                 check(
                     e.object.is_some_and(|r| {

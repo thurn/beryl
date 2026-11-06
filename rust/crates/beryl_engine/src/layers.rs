@@ -5,6 +5,7 @@ use crate::card::{Affected, Colors, FaceIx, Modification, StaticCondition, Subty
 use crate::event::Sink;
 use crate::fixed::Fixed;
 use crate::ids::{CardIx, Slot};
+use crate::layout::{Layout, Queue, Table};
 use crate::state::{Continuous, CounterKind, Derived, GrantRef, ObjectFlags, State, Zone};
 use crate::table::GameTable;
 use crate::trigger::face;
@@ -27,7 +28,7 @@ struct Apply {
 /// Recomputes `derived` if anything changed since the last recompute. Every chokepoint that
 /// mutates a layer input sets `derived_dirty`, and every path that reads `derived` after one
 /// calls this first, so reads never see stale values and never recompute.
-pub(crate) fn refresh(s: &mut State, t: &GameTable, sink: &mut Sink) {
+pub(crate) fn refresh<L: Layout>(s: &mut State<L>, t: &GameTable, sink: &mut Sink) {
     if s.flags.derived_dirty {
         sink.work.layer_recomputes += 1;
         recompute(s, t);
@@ -40,7 +41,7 @@ pub(crate) fn refresh(s: &mut State, t: &GameTable, sink: &mut Sink) {
 /// ([CR 708.2a](https://yawgatog.com/resources/magic-rules/#R7082a)): it has "no text, no
 /// name, no subtypes, and no mana cost". So it counts for nothing, and masking or
 /// determinizing its hidden identity leaves this unchanged.
-pub(crate) fn listening(s: &State, t: &GameTable) -> u16 {
+pub(crate) fn listening<L: Layout>(s: &State<L>, t: &GameTable) -> u16 {
     s.battlefield
         .iter()
         .map(|&slot| s.object(slot))
@@ -55,7 +56,12 @@ pub(crate) fn listening(s: &State, t: &GameTable) -> u16 {
 /// that modify power and/or toughness ... are applied". Any other kind matters only to a
 /// static ability of its own that applies while it has some: loyalty, which planeswalkers
 /// gain and lose every turn, never does.
-pub(crate) fn counters_matter(s: &State, t: &GameTable, slot: Slot, kind: CounterKind) -> bool {
+pub(crate) fn counters_matter<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: Slot,
+    kind: CounterKind,
+) -> bool {
     matches!(kind, CounterKind::PlusOne | CounterKind::MinusOne)
         || s.object(slot).zone != Zone::Battlefield
         || face(s, t, slot).abilities.iter().any(|a| {
@@ -82,7 +88,7 @@ pub(crate) fn counters_matter(s: &State, t: &GameTable, slot: Slot, kind: Counte
 /// characteristic-defining abilities first" (CR 613.3) holds by the layer order. No two of the
 /// cards' effects in one layer depend on each other
 /// ([CR 613.8](https://yawgatog.com/resources/magic-rules/#R6138)), so timestamps decide.
-fn recompute(s: &mut State, t: &GameTable) {
+fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
     // Effects on an object that left its zone end: that object no longer exists (CR 400.7).
     let objects = &s.objects;
     s.effects
@@ -143,7 +149,7 @@ fn recompute(s: &mut State, t: &GameTable) {
             }
         }
     }
-    for e in &s.effects {
+    for e in s.effects.iter() {
         let Continuous::Layer(m) = e.effect else {
             continue;
         };
@@ -169,7 +175,7 @@ fn recompute(s: &mut State, t: &GameTable) {
         for a in &*list {
             let Some(m) = a.modification else { continue };
             let i = usize::from(a.target);
-            apply(&mut s.derived[..len], i, a.source, m);
+            apply(&mut s.derived.as_mut_slice()[..len], i, a.source, m);
         }
     }
     // Layer 7c: counters modify power and toughness

@@ -5,6 +5,7 @@ use crate::bitboard::Bitboard;
 use crate::card::{AbilityIx, Castings, FaceIx, ManaColor, ManaCost};
 use crate::fixed::Fixed;
 use crate::ids::{Seat, Slot};
+use crate::layout::{Layout, Small};
 use crate::observation::Observation;
 use crate::state::Zone;
 
@@ -341,7 +342,7 @@ pub enum StallReason {
 /// runs once on the committed state and never pauses. Any other source pauses: the body runs
 /// on a scratch copy, and a question the choice record cannot answer becomes the next
 /// decision.
-pub trait Answers {
+pub trait Answers<L: Layout = Small> {
     /// Whether this source answers every question inline.
     fn inline(&self) -> bool {
         false
@@ -349,15 +350,15 @@ pub trait Answers {
 
     /// Answers `d`, observed by `d.player`. Asked only of an inline source, which must
     /// answer.
-    fn answer(&mut self, obs: Observation<'_>, d: &Decision) -> Option<Choice>;
+    fn answer(&mut self, obs: Observation<'_, L>, d: &Decision) -> Option<Choice>;
 }
 
 /// The answer source for tree nodes and the UI: the engine answers from the choice record in
 /// the state, and pauses when it runs out.
 pub struct Replay;
 
-impl Answers for Replay {
-    fn answer(&mut self, _obs: Observation<'_>, _d: &Decision) -> Option<Choice> {
+impl<L: Layout> Answers<L> for Replay {
+    fn answer(&mut self, _obs: Observation<'_, L>, _d: &Decision) -> Option<Choice> {
         None
     }
 }

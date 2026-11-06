@@ -13,6 +13,7 @@ use crate::event::Sink;
 use crate::ids::{Seat, Slot};
 use crate::invariants::{At, Violation};
 use crate::layers;
+use crate::layout::{Layout, Queue, Table};
 use crate::mana::{self, Funds};
 use crate::state::{ObjectFlags, State, Zone};
 use crate::table::GameTable;
@@ -44,7 +45,7 @@ const PROBES: &[ManaCost] = &[
     ManaCost::new(2, [1, 1, 0, 0, 0, 0]),
 ];
 
-impl State {
+impl<L: Layout> State<L> {
     /// Checks the engine's fast paths against their reference implementations. It holds
     /// wherever [`State::check_invariants`] does, and checks nothing once the game is over.
     pub fn check_references(&self, t: &GameTable) -> Result<(), Violation> {
@@ -65,7 +66,7 @@ impl State {
     /// A chokepoint that changes a layer input without marking the results dirty leaves them
     /// stale, which this sees and the dirty flag cannot.
     fn check_layers(&self, t: &GameTable) -> Result<(), Violation> {
-        let mut fresh = *self;
+        let mut fresh = self.clone();
         fresh.flags.derived_dirty = true;
         layers::refresh(&mut fresh, t, &mut Sink::default());
         let n = self.battlefield.len();
@@ -159,7 +160,7 @@ impl State {
 /// ability with the tap symbol or the untap symbol in its activation cost can't be activated
 /// unless the creature has been under its controller's control continuously since their most
 /// recent turn began."
-fn reference_units(s: &State, t: &GameTable, player: Seat) -> Option<Vec<u8>> {
+fn reference_units<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Option<Vec<u8>> {
     let mut units = Vec::new();
     for (k, &n) in s.player(player).mana.amounts().iter().enumerate() {
         units.extend(std::iter::repeat_n(1u8 << k, usize::from(n)));
@@ -199,7 +200,12 @@ fn reference_units(s: &State, t: &GameTable, player: Seat) -> Option<Vec<u8>> {
 
 /// Whether `player` meets a mana ability's "Activate only if you control" condition
 /// ([CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025)).
-fn controls(s: &State, t: &GameTable, player: Seat, a: &crate::card::Ability) -> bool {
+fn controls<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    a: &crate::card::Ability,
+) -> bool {
     a.only_if_you_control.is_none_or(|f| {
         s.battlefield()
             .iter()

@@ -4,11 +4,12 @@ use crate::bitboard::Bitboard;
 use crate::event::Sink;
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot};
+use crate::layout::{Layout, Table};
 use crate::profile::Profile;
 use crate::rng::Rng;
 use crate::state::{
-    BATTLEFIELD, Budgets, DECK_SLOTS, Derived, Flags, ManaPool, MulliganStatus, Object, Pending,
-    Player, SLOTS, State, Turn, TurnStep, Zone, Zones, deck_slot,
+    Budgets, DECK_SLOTS, Derived, Flags, ManaPool, MulliganStatus, Object, Pending, Player, State,
+    Turn, TurnStep, Zone, Zones, deck_slot,
 };
 use crate::table::GameTable;
 use crate::{turn, zone};
@@ -43,7 +44,7 @@ impl State {
     /// [CR 103.3](https://yawgatog.com/resources/magic-rules/#R1033): "each player shuffles
     /// their deck so that the cards are in a random order."
     pub fn new(t: &GameTable, seed: u64, profile: Profile) -> State {
-        let mut s = State::empty(profile);
+        let mut s: State = State::empty(profile);
         s.rng = Rng::new(seed);
         for player in Seat::BOTH {
             let mut cards: Fixed<CardIx, DECK_SLOTS> = Fixed::new();
@@ -71,19 +72,21 @@ impl State {
         s.pending = Pending::PlayOrDraw { chooser };
         s
     }
+}
 
+impl<L: Layout> State<L> {
     /// A state with no objects, before the game begins.
-    pub(crate) fn empty(profile: Profile) -> State {
+    pub(crate) fn empty(profile: Profile) -> State<L> {
         State {
-            objects: [Object::EMPTY; SLOTS],
-            battlefield: Fixed::new(),
-            derived: [Derived::default(); BATTLEFIELD],
+            objects: Table::filled(Object::EMPTY),
+            battlefield: Default::default(),
+            derived: Table::filled(Derived::default()),
             listening: 0,
             zones: Zones {
                 members: [[Bitboard::EMPTY; Zone::OWNED]; 2],
                 stack: Bitboard::EMPTY,
-                library: [Fixed::new(); 2],
-                graveyard: [Fixed::new(); 2],
+                library: Default::default(),
+                graveyard: Default::default(),
                 next_timestamp: 0,
             },
             players: [new_player(); 2],
@@ -97,12 +100,12 @@ impl State {
                 cleanup_check: false,
                 attacked: false,
             },
-            stack: Fixed::new(),
-            triggers: Fixed::new(),
-            delayed: Fixed::new(),
-            effects: Fixed::new(),
-            permissions: Fixed::new(),
-            entered_x: Fixed::new(),
+            stack: Default::default(),
+            triggers: Default::default(),
+            delayed: Default::default(),
+            effects: Default::default(),
+            permissions: Default::default(),
+            entered_x: Default::default(),
             pending: Pending::None,
             knowledge: [Bitboard::EMPTY; 2],
             rng: Rng::new(0),
@@ -121,8 +124,8 @@ impl State {
 ///
 /// [CR 103.5](https://yawgatog.com/resources/magic-rules/#R1035): "Each player draws a number
 /// of cards equal to their starting hand size, which is normally seven."
-pub(crate) fn set_starting_player(
-    s: &mut State,
+pub(crate) fn set_starting_player<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     starting: Seat,
@@ -137,14 +140,14 @@ pub(crate) fn set_starting_player(
 }
 
 /// The players in turn order from the starting player.
-pub(crate) fn turn_order(s: &State) -> [Seat; 2] {
+pub(crate) fn turn_order<L: Layout>(s: &State<L>) -> [Seat; 2] {
     [s.turn.starting_player, s.turn.starting_player.opponent()]
 }
 
 /// Records a keep or mulligan declaration. A player who keeps after taking mulligans then
 /// puts that many cards on the bottom ([`keep`]).
-pub(crate) fn declare(
-    s: &mut State,
+pub(crate) fn declare<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     player: Seat,
@@ -168,7 +171,7 @@ pub(crate) fn declare(
 /// the bottom only once they keep, as Arena and tournament play do. Nothing anyone can see
 /// differs: a hand mulliganed again is shuffled away whole, bottomed cards included, and the
 /// bottomed cards are hidden either way.
-fn keep(s: &mut State, player: Seat) {
+fn keep<L: Layout>(s: &mut State<L>, player: Seat) {
     let hand = zone::hand_size(s, player) as u8;
     let p = s.player_mut(player);
     p.mulligan = MulliganStatus::Kept;
@@ -176,8 +179,8 @@ fn keep(s: &mut State, player: Seat) {
 }
 
 /// Puts one card from a player's hand on the bottom of their library after a mulligan.
-pub(crate) fn put_on_bottom(
-    s: &mut State,
+pub(crate) fn put_on_bottom<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     player: Seat,
@@ -200,7 +203,11 @@ pub(crate) fn put_on_bottom(
 /// the bottom of their library in any order. ... This process is then repeated until no
 /// player takes a mulligan. A player can take mulligans until their opening hand would be zero
 /// cards, after which they may not take further mulligans."
-fn advance_mulligans(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<(), Full> {
+fn advance_mulligans<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink,
+) -> Result<(), Full> {
     let order = turn_order(s);
     loop {
         for &p in &order {
@@ -242,7 +249,7 @@ fn advance_mulligans(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<()
 }
 
 /// Who answers the open mulligan question, and whether it is a bottom pick.
-pub(crate) fn mulligan_question(s: &State) -> (Seat, bool) {
+pub(crate) fn mulligan_question<L: Layout>(s: &State<L>) -> (Seat, bool) {
     let order = turn_order(s);
     if let Some(&p) = order.iter().find(|&&p| s.player(p).to_bottom > 0) {
         return (p, true);

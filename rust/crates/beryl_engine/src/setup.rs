@@ -6,10 +6,11 @@
 use crate::card::FaceIx;
 use crate::fixed::Full;
 use crate::ids::{Seat, Slot};
+use crate::layout::{Layout, Queue};
 use crate::state::{CounterKind, MulliganStatus, ObjectFlags, Pending, State, TurnStep, Zone};
 use crate::zone;
 
-impl State {
+impl<L: Layout> State<L> {
     /// Skips the start of the game and puts it at `step` of turn `turn`, with `active` the
     /// active player and holding priority, and both opening hands kept. The step's turn-based
     /// actions are not performed: the game is already in it. Call it on a new state, before

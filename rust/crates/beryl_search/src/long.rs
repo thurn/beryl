@@ -39,6 +39,7 @@
 //! decision asked straight after the last, with nothing learned between, keeps its trees,
 //! as `Mcts` does; their visits count toward the budget at what they cost.
 
+use beryl_engine::{Layout, Small};
 use std::collections::hash_map::DefaultHasher;
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -207,21 +208,21 @@ impl FromStr for Family {
 
 /// The long-think searching agent.
 #[derive(Debug)]
-pub struct LongSearch {
+pub struct LongSearch<L: Layout = Small> {
     table: GameTable,
     policy: RolloutPolicy,
     settings: Settings,
     seed: u64,
     /// The next decision's index among the agent's own.
     decision: AgentDecision,
-    kept: Option<Kept>,
+    kept: Option<Kept<L>>,
     last: Option<Search>,
 }
 
 /// The trees of a decision just answered, while the next may reuse them.
 #[derive(Debug)]
-struct Kept {
-    trees: Vec<Tree>,
+struct Kept<L: Layout> {
+    trees: Vec<Tree<L>>,
     chain: AgentDecision,
     choice: Choice,
     /// Each slot's incarnation, and whether the deciding player knew its card, then.
@@ -230,7 +231,7 @@ struct Kept {
     moves: Option<Slot>,
 }
 
-impl LongSearch {
+impl<L: Layout> LongSearch<L> {
     pub fn new(t: &GameTable, settings: Settings, seed: u64) -> Self {
         Self::resumed(t, settings, seed, AgentDecision(0))
     }
@@ -250,7 +251,12 @@ impl LongSearch {
     }
 
     /// The trees for decision `d`, seeded from the agent's seed and the decision's index.
-    fn plant(&self, obs: Observation<'_>, d: &Decision, decision: AgentDecision) -> Vec<Tree> {
+    fn plant(
+        &self,
+        obs: Observation<'_, L>,
+        d: &Decision,
+        decision: AgentDecision,
+    ) -> Vec<Tree<L>> {
         let mut seeds = SplitMix64::new(
             SplitMix64::new(
                 self.seed
@@ -281,7 +287,12 @@ impl LongSearch {
     /// The kept trees moved down to the chosen child, if `d` may reuse them: as
     /// [`crate::Mcts`]'s, no card changed zones and the player learned nothing since, and for
     /// a fixed world, it reached `d` straight from that child showing what the game shows.
-    fn descend(&self, kept: Kept, obs: Observation<'_>, d: &Decision) -> Option<Vec<Tree>> {
+    fn descend(
+        &self,
+        kept: Kept<L>,
+        obs: Observation<'_, L>,
+        d: &Decision,
+    ) -> Option<Vec<Tree<L>>> {
         // CR 400.7: "An object that moves from one zone to another becomes a new object
         // with no memory of or relation to its previous existence", so a new incarnation is
         // a zone change.
@@ -303,7 +314,7 @@ impl LongSearch {
 
     /// Grows `trees` on decision `d` to the budget, in rounds, until the leader is settled.
     /// Returns the iterations run and the work they spent.
-    fn grow(&self, trees: &mut [Tree]) -> (u64, u64) {
+    fn grow(&self, trees: &mut [Tree<L>]) -> (u64, u64) {
         let n = trees.len() as u64;
         let work = self.settings.work;
         let shares: Vec<u64> = (0..n).map(|i| work / n + u64::from(i < work % n)).collect();
@@ -347,14 +358,14 @@ impl LongSearch {
 
 /// Grows each tree to its target on `threads` threads, each taking the next tree not yet
 /// grown: a tree's growth depends on nothing but itself, so neither does the move.
-fn grow_parallel(
+fn grow_parallel<L: Layout>(
     t: &GameTable,
     policy: &RolloutPolicy,
-    trees: &mut [Tree],
+    trees: &mut [Tree<L>],
     targets: &[u64],
     threads: usize,
 ) {
-    let queue: Vec<Mutex<&mut Tree>> = trees.iter_mut().map(Mutex::new).collect();
+    let queue: Vec<Mutex<&mut Tree<L>>> = trees.iter_mut().map(Mutex::new).collect();
     let taken = AtomicUsize::new(0);
     thread::scope(|scope| {
         for _ in 0..threads {
@@ -373,7 +384,12 @@ fn grow_parallel(
 /// iteration the remaining work buys, at what this decision's iterations have cost each
 /// tree, went its way. Equals are told apart by their mean, so every other must stay
 /// strictly behind.
-fn settled(trees: &[Tree], shares: &[u64], credit: &[u64], start: &[(u64, u64)]) -> bool {
+fn settled<L: Layout>(
+    trees: &[Tree<L>],
+    shares: &[u64],
+    credit: &[u64],
+    start: &[(u64, u64)],
+) -> bool {
     let mut left = 0u64;
     for ((tree, &share), (&credit, &(w0, i0))) in
         trees.iter().zip(shares).zip(credit.iter().zip(start))
@@ -418,7 +434,7 @@ fn leader(visits: &[u32], rewards: &[f64]) -> usize {
 
 /// The root visits and rewards per candidate of the root decision, summed across `trees` in
 /// order.
-fn totals(trees: &[Tree]) -> (Vec<u32>, Vec<f64>) {
+fn totals<L: Layout>(trees: &[Tree<L>]) -> (Vec<u32>, Vec<f64>) {
     let n = trees.first().map_or(0, |t| t.decision.len());
     let mut visits = vec![0; n];
     let mut rewards = vec![0.0; n];
@@ -447,10 +463,10 @@ fn names(d: &Decision, c: Choice) -> Option<Slot> {
     }
 }
 
-impl Agent for LongSearch {
+impl<L: Layout> Agent<L> for LongSearch<L> {
     /// The candidate visited most across the trees, of equals the best by mean. A decision with one
     /// candidate is never searched, nor is passing with one's own object on top of the stack.
-    fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice {
+    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision) -> Choice {
         let decision = self.decision;
         self.decision = decision.next();
         self.last = None;
@@ -535,7 +551,7 @@ impl Node {
 
 /// One tree.
 #[derive(Debug)]
-struct Tree {
+struct Tree<L: Layout> {
     nodes: Vec<Node>,
     root: u32,
     /// The root decision.
@@ -544,14 +560,14 @@ struct Tree {
     root_keys: Vec<u64>,
     /// A fixed world's state at the root; for a resampling tree, the true state, which each
     /// iteration deals a world from as `sight` allows.
-    state: State,
+    state: State<L>,
     viewer: Seat,
     family: Family,
     resample: bool,
     /// The slots the searcher knew at the first root, whose options key by slot.
     known: Bitboard,
     rng: SplitMix64,
-    x: Scratch,
+    x: Scratch<L>,
     /// Engine steps and iterations over the tree's life.
     work: u64,
     iterations: u64,
@@ -559,18 +575,18 @@ struct Tree {
     extra: u64,
 }
 
-impl Tree {
+impl<L: Layout> Tree<L> {
     fn new(
         t: &GameTable,
         family: Family,
-        obs: Observation<'_>,
+        obs: Observation<'_, L>,
         d: &Decision,
         known: Bitboard,
         resample: bool,
         seed: u64,
     ) -> Self {
         let mut rng = SplitMix64::new(seed);
-        let truth = *obs.unmasked_root();
+        let truth = obs.unmasked_root().clone();
         let mut tree = Tree {
             nodes: vec![Node::new(0, d.player)],
             root: 0,
@@ -597,13 +613,13 @@ impl Tree {
     }
 
     /// A world for an iteration: from the true root, what the sight keeps and the rest dealt.
-    fn deal(&self, t: &GameTable, rng: &mut SplitMix64) -> State {
+    fn deal(&self, t: &GameTable, rng: &mut SplitMix64) -> State<L> {
         let obs = Observation::new(&self.state, self.viewer);
         match self.family.sight {
             Sight::Hidden => obs.determinize(t, rng),
             Sight::Hands => obs.determinize_libraries(t, rng),
             Sight::Omniscient => {
-                let mut s = self.state;
+                let mut s = self.state.clone();
                 s.reseed(rng.next_u64());
                 s
             }
@@ -659,7 +675,7 @@ impl Tree {
     }
 
     /// Moves the root down to its child for `c`, if `d` may follow it.
-    fn descend(&mut self, t: &GameTable, c: Choice, obs: Observation<'_>, d: &Decision) -> bool {
+    fn descend(&mut self, t: &GameTable, c: Choice, obs: Observation<'_, L>, d: &Decision) -> bool {
         let Some(child) = self.child(self.root, self.root_keys[usize::from(c.0)]) else {
             return false;
         };
@@ -671,9 +687,9 @@ impl Tree {
             if d.kind == DecisionKind::Priority {
                 return false;
             }
-            self.state = *obs.unmasked_root();
+            self.state = obs.unmasked_root().clone();
         } else {
-            let mut s = self.state;
+            let mut s = self.state.clone();
             self.x.counts.copied();
             apply(&mut s, t, &mut self.x, &mut Replay, c);
             smart(&mut s);
@@ -702,7 +718,7 @@ impl Tree {
     /// library or a face-down pile of cards, randomize the cards within it so that no player
     /// knows their order") is shuffled by the world's random streams, not the game's, and a
     /// card the viewer does not know may land anywhere.
-    fn keeps_to(&self, s: &State, truth: &State) -> bool {
+    fn keeps_to(&self, s: &State<L>, truth: &State<L>) -> bool {
         let shown = |slot: Slot| match self.family.sight {
             Sight::Hidden => false,
             Sight::Hands => truth.object(slot).zone == Zone::Hand,
@@ -743,7 +759,7 @@ impl Tree {
             self.extra += WORLD_STEPS;
             s
         } else {
-            self.state
+            self.state.clone()
         };
         self.x.counts.copied();
         self.extra += ITERATION_STEPS;
@@ -851,7 +867,7 @@ impl Tree {
     }
 
     /// A new node's score for the first seat, from `s` just after its action.
-    fn leaf(&mut self, s: &mut State, t: &GameTable, policy: &RolloutPolicy) -> f64 {
+    fn leaf(&mut self, s: &mut State<L>, t: &GameTable, policy: &RolloutPolicy) -> f64 {
         let mut soft = Softmax {
             rng: &mut self.rng,
             temperature: ROLLOUT_TEMPERATURE,
@@ -899,7 +915,7 @@ fn value(outcome: Outcome) -> f64 {
 /// characteristics of the card"), a land played, a permanent turned face up. Any other card
 /// it cannot see (a face-down permanent, a card picked from a library it cannot see) keys by
 /// its slot, so the searcher never plans on a card it would not know.
-fn keys(world: &State, d: &Decision, known: Bitboard, viewer: Seat) -> Vec<u64> {
+fn keys<L: Layout>(world: &State<L>, d: &Decision, known: Bitboard, viewer: Seat) -> Vec<u64> {
     let mut bases = Vec::with_capacity(d.len());
     for i in 0..d.len() {
         let c = Choice(i as u8);

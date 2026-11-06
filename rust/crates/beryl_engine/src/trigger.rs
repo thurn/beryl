@@ -7,6 +7,7 @@ use crate::filter::Whose;
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot};
 use crate::layers;
+use crate::layout::{Layout, Queue};
 use crate::state::{
     Lki, ObjectFlags, ObjectRef, PendingTrigger, StackEntry, State, TriggerInfo, TurnStep, Zone,
 };
@@ -14,7 +15,7 @@ use crate::table::GameTable;
 use crate::turn::apnap;
 
 /// The printed face of a permanent, or of the card a token copies.
-pub(crate) fn face(s: &State, t: &GameTable, slot: Slot) -> &'static Face {
+pub(crate) fn face<L: Layout>(s: &State<L>, t: &GameTable, slot: Slot) -> &'static Face {
     let o = s.object(slot);
     t.def(o.card).face(o.face)
 }
@@ -32,7 +33,11 @@ pub(crate) fn ability(t: &GameTable, card: CardIx, face: FaceIx, ability: u8) ->
 /// [CR 603.2](https://yawgatog.com/resources/magic-rules/#R6032): "Whenever a game event or
 /// game state matches a triggered ability's trigger event, that ability automatically
 /// triggers."
-pub(crate) fn match_event(s: &mut State, t: &GameTable, e: &Event) -> Result<(), Full> {
+pub(crate) fn match_event<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    e: &Event,
+) -> Result<(), Full> {
     let k = e.kind();
     if k == 0 {
         return Ok(());
@@ -116,8 +121,8 @@ fn face_abilities(
 }
 
 /// Whether a trigger of a source controlled by `you` fires on `e`, and with what.
-fn fires(
-    s: &State,
+fn fires<L: Layout>(
+    s: &State<L>,
     trigger: Trigger,
     this: Option<Slot>,
     you: Seat,
@@ -203,8 +208,8 @@ fn whose_turn(whose: Whose, you: Seat, active: Seat) -> bool {
 ///
 /// [CR 700.4](https://yawgatog.com/resources/magic-rules/#R7004): "The term dies means 'is
 /// put into a graveyard from the battlefield.'"
-pub(crate) fn match_leaving(
-    s: &mut State,
+pub(crate) fn match_leaving<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     slot: Slot,
     to: Zone,
@@ -234,7 +239,7 @@ pub(crate) fn match_leaving(
 }
 
 /// A permanent's last-known information, from its current characteristics.
-pub(crate) fn lki(s: &State, slot: Slot) -> Lki {
+pub(crate) fn lki<L: Layout>(s: &State<L>, slot: Slot) -> Lki {
     let d = s.derived(slot);
     let o = s.object(slot);
     Lki {
@@ -252,8 +257,8 @@ pub(crate) fn lki(s: &State, slot: Slot) -> Lki {
 /// occurs, the ability checks whether the stated condition is true. The ability triggers
 /// only if it is; otherwise it does nothing."
 #[allow(clippy::too_many_arguments)]
-fn enqueue(
-    s: &mut State,
+fn enqueue<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     source: Option<ObjectRef>,
     card: CardIx,
@@ -270,7 +275,7 @@ fn enqueue(
         controller,
         info,
     };
-    if let Some(condition) = self::ability(t, card, face, ability).condition
+    if let Some(condition) = L::condition(self::ability(t, card, face, ability))
         && !condition(s, t, &pending)
     {
         return Ok(());
@@ -280,7 +285,12 @@ fn enqueue(
 
 /// Fires the delayed triggers waiting for this step, each once
 /// ([CR 603.7b](https://yawgatog.com/resources/magic-rules/#R6037b)).
-fn fire_delayed(s: &mut State, t: &GameTable, step: TurnStep, active: Seat) -> Result<(), Full> {
+fn fire_delayed<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    step: TurnStep,
+    active: Seat,
+) -> Result<(), Full> {
     let mut i = 0;
     while i < s.delayed.len() {
         let d = s.delayed.as_slice()[i];
@@ -308,7 +318,7 @@ fn fire_delayed(s: &mut State, t: &GameTable, step: TurnStep, active: Seat) -> R
 /// [CR 603.3b](https://yawgatog.com/resources/magic-rules/#R6033b): "each player, in APNAP
 /// order, puts each triggered ability they control ... on the stack in any order they
 /// choose."
-pub(crate) fn next_to_stack(s: &State) -> Option<(Seat, Fixed<u8, 64>)> {
+pub(crate) fn next_to_stack<L: Layout>(s: &State<L>) -> Option<(Seat, Fixed<u8, 64>)> {
     let player = apnap(s)
         .into_iter()
         .find(|&p| s.triggers.iter().any(|tr| tr.controller == p))?;
@@ -327,7 +337,7 @@ pub(crate) fn next_to_stack(s: &State) -> Option<(Seat, Fixed<u8, 64>)> {
 
 /// Triggers of the same ability from interchangeable sources, on the same event with
 /// interchangeable objects, lead to the same game whatever their order (§7.2).
-fn equivalent(s: &State, a: &PendingTrigger, b: &PendingTrigger) -> bool {
+fn equivalent<L: Layout>(s: &State<L>, a: &PendingTrigger, b: &PendingTrigger) -> bool {
     let interchangeable = |x: Option<ObjectRef>, y: Option<ObjectRef>| match (x, y) {
         (Some(x), Some(y)) => {
             x == y || crate::zone::signature(s, x.slot) == crate::zone::signature(s, y.slot)
@@ -344,8 +354,8 @@ fn equivalent(s: &State, a: &PendingTrigger, b: &PendingTrigger) -> bool {
 /// ([CR 603.3](https://yawgatog.com/resources/magic-rules/#R6033)): "The ability becomes the
 /// topmost object on the stack."
 /// Then its targets are chosen, through the casting machine (CR 603.3d).
-pub(crate) fn put_on_stack(
-    s: &mut State,
+pub(crate) fn put_on_stack<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     index: u8,
@@ -367,6 +377,6 @@ pub(crate) fn put_on_stack(
 }
 
 /// Creates a delayed triggered ability ([CR 603.7](https://yawgatog.com/resources/magic-rules/#R6037)).
-pub(crate) fn delay(s: &mut State, trigger: PendingTrigger) -> Result<(), Full> {
+pub(crate) fn delay<L: Layout>(s: &mut State<L>, trigger: PendingTrigger) -> Result<(), Full> {
     s.delayed.push(trigger)
 }

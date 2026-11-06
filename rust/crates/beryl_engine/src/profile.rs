@@ -4,6 +4,7 @@
 use crate::combat;
 use crate::decision::{Decision, DecisionKind};
 use crate::ids::Seat;
+use crate::layout::{Layout, Queue};
 use crate::observation::Observation;
 use crate::state::{Pending, State, Turn, TurnStep};
 use crate::turn::any_attacking;
@@ -221,7 +222,7 @@ impl Profile {
     };
 
     /// Whether `player`'s priority now is a decision, given they have a legal action.
-    pub(crate) fn stops_for(self, s: &State, player: Seat) -> bool {
+    pub(crate) fn stops_for<L: Layout>(self, s: &State<L>, player: Seat) -> bool {
         match self.stops {
             Stops::Exact | Stops::Forced => true,
             Stops::Smart => is_smart_stop(s, player, self.step_stops[player.index()]),
@@ -244,7 +245,7 @@ impl Profile {
     /// player casts or an ability they activate, while [`Profile::asks_targets`] names them.
     /// A triggered ability's lone target stays silent, as nothing can take it back
     /// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d)).
-    pub(crate) fn asks_lone(self, s: &State, d: &Decision) -> bool {
+    pub(crate) fn asks_lone<L: Layout>(self, s: &State<L>, d: &Decision) -> bool {
         d.kind == DecisionKind::Target
             && self.asks_targets == Some(d.player)
             && matches!(s.pending, Pending::Casting(c) if !c.triggered)
@@ -264,7 +265,7 @@ impl Profile {
 /// The smart stops (§15): "their own main phases, after attackers and after blockers are
 /// declared, the opponent's end step, and whenever the stack is non-empty", with the steps
 /// the player's `steps` name in place of those.
-fn is_smart_stop(s: &State, player: Seat, steps: StepStops) -> bool {
+fn is_smart_stop<L: Layout>(s: &State<L>, player: Seat, steps: StepStops) -> bool {
     !s.stack.is_empty() || steps.stops_in(s.turn.step, s.turn.active == player, || any_attacking(s))
 }
 
@@ -286,7 +287,11 @@ pub enum NextStop {
 /// declared; under smart stops, the next step of the turn that is one of the viewer's `step_stops`
 /// ([`is_smart_stop`]), counting the combat in which the viewer, as the active player, can
 /// declare attackers; otherwise the next step.
-pub fn next_stop(obs: Observation<'_>, stops: Stops, step_stops: StepStops) -> NextStop {
+pub fn next_stop<L: Layout>(
+    obs: Observation<'_, L>,
+    stops: Stops,
+    step_stops: StepStops,
+) -> NextStop {
     let s = obs.shown();
     if !s.stack.is_empty() {
         return NextStop::Resolve;
@@ -311,7 +316,11 @@ pub fn next_stop(obs: Observation<'_>, stops: Stops, step_stops: StepStops) -> N
 /// The next step of the turn after `after` that is one of the viewer's `steps` under the smart
 /// stops with the stack empty, counting the combat in which the viewer, as the active player,
 /// can declare attackers.
-pub fn next_step_stop(obs: Observation<'_>, steps: StepStops, after: TurnStep) -> NextStop {
+pub fn next_step_stop<L: Layout>(
+    obs: Observation<'_, L>,
+    steps: StepStops,
+    after: TurnStep,
+) -> NextStop {
     let s = obs.shown();
     let active = s.turn.active == obs.viewer();
     let declares =
@@ -328,6 +337,6 @@ pub fn next_step_stop(obs: Observation<'_>, steps: StepStops, after: TurnStep) -
 
 /// Whether the defending player in the position `obs` shows has a creature that can block
 /// now, so that declaring blockers would be a decision of theirs.
-pub fn can_declare_blockers(obs: Observation<'_>) -> bool {
+pub fn can_declare_blockers<L: Layout>(obs: Observation<'_, L>) -> bool {
     combat::can_declare_blockers(obs.shown())
 }

@@ -10,6 +10,7 @@
 //! plan's creature stands for any of its kind.
 
 use beryl_cards::names;
+use beryl_engine::Layout;
 use beryl_engine::card::{Keywords, Types};
 use beryl_engine::state::ObjectFlags;
 use beryl_engine::{
@@ -47,10 +48,10 @@ pub(super) struct Plan {
 }
 
 /// The combat simulator for one decision of `me`'s.
-pub(super) struct Sim<'a> {
+pub(super) struct Sim<'a, L: Layout> {
     pub t: &'a GameTable,
     pub policy: &'a RolloutPolicy,
-    pub x: &'a mut Scratch,
+    pub x: &'a mut Scratch<L>,
     pub me: Seat,
     pub plan: &'a mut Plan,
     /// Whether this simulates the other side's blocks inside one of our attacks, so that
@@ -58,9 +59,9 @@ pub(super) struct Sim<'a> {
     pub nested: bool,
 }
 
-impl Sim<'_> {
+impl<L: Layout> Sim<'_, L> {
     /// The answer to a combat decision in the determinized position `start`.
-    pub fn choose(&mut self, start: &State, d: &Decision) -> Choice {
+    pub fn choose(&mut self, start: &State<L>, d: &Decision) -> Choice {
         let turn = start.turn().number;
         if self.plan.turn != turn {
             *self.plan = Plan {
@@ -136,7 +137,7 @@ impl Sim<'_> {
 
     /// The attacks worth weighing: each attacker alone and each pair together, at the player
     /// or a planeswalker, and every attacker at the player, the lethal check.
-    fn attack_plans(&self, start: &State, d: &Decision) -> Vec<Vec<Declare>> {
+    fn attack_plans(&self, start: &State<L>, d: &Decision) -> Vec<Vec<Declare>> {
         // A creature without power deals nothing, and Jace would rather loot.
         let attackers = offered(start, d, |o| match o {
             Opt::Attack(slot) if start.derived(slot).power > 0 => Some(slot),
@@ -196,7 +197,7 @@ impl Sim<'_> {
 
     /// Whether an untapped creature of the opponent's could block `attacker`, kill it and
     /// survive.
-    fn dies_for_nothing(&self, s: &State, attacker: Slot) -> bool {
+    fn dies_for_nothing(&self, s: &State<L>, attacker: Slot) -> bool {
         let left =
             |slot: Slot| i16::from(s.derived(slot).toughness) - i16::from(s.object(slot).damage);
         s.battlefield().iter().any(|&b| {
@@ -211,7 +212,7 @@ impl Sim<'_> {
 
     /// Just enough power at each of the opponent's planeswalkers to kill it, the most
     /// valuable first: the weakest attacker that kills it alone, or the strongest together.
-    fn walker_kills(&self, s: &State, attackers: &[Slot]) -> Vec<Declare> {
+    fn walker_kills(&self, s: &State<L>, attackers: &[Slot]) -> Vec<Declare> {
         let p = self
             .policy
             .view(self.t, Observation::new(s, self.me), self.me, true);
@@ -244,7 +245,7 @@ impl Sim<'_> {
 
     /// The blocks worth weighing: each blocker on each attacker it could block, two blockers
     /// on one attacker or on two, and the cheapest chump blocks that keep us alive.
-    fn block_plans(&self, start: &State, d: &Decision) -> Vec<Vec<Declare>> {
+    fn block_plans(&self, start: &State<L>, d: &Decision) -> Vec<Vec<Declare>> {
         let blockers = offered(start, d, |o| match o {
             Opt::Block(slot) => Some(slot),
             _ => None,
@@ -273,7 +274,7 @@ impl Sim<'_> {
 
     /// Chump blocks, the cheapest blocker in front of the strongest attacker it can block,
     /// until what gets through no longer kills us.
-    fn chumps(&self, s: &State, blockers: &[Slot], attackers: &[Slot]) -> Vec<Declare> {
+    fn chumps(&self, s: &State<L>, blockers: &[Slot], attackers: &[Slot]) -> Vec<Declare> {
         let p = self
             .policy
             .view(self.t, Observation::new(s, self.me), self.me, true);
@@ -298,7 +299,7 @@ impl Sim<'_> {
     }
 
     /// What the creature just declared attacks, or blocks, with no plan to follow.
-    fn follow_up(&mut self, start: &State, d: &Decision) -> Choice {
+    fn follow_up(&mut self, start: &State<L>, d: &Decision) -> Choice {
         let candidates: Vec<Opt> = match &d.candidates {
             Candidates::Options(o) => o.iter().copied().collect(),
             Candidates::Objects(b) => b.iter().map(Opt::Object).collect(),
@@ -315,7 +316,7 @@ impl Sim<'_> {
 
     /// What an attacker could attack: the player, then each planeswalker the opponent
     /// controls.
-    fn defenders(&self, s: &State) -> Vec<Option<Slot>> {
+    fn defenders(&self, s: &State<L>) -> Vec<Option<Slot>> {
         let mut out = vec![None];
         out.extend(
             s.battlefield()
@@ -337,7 +338,7 @@ impl Sim<'_> {
     /// that gains more unblocked is taken; when either decides the game, the worse alone.
     fn weigh(
         &mut self,
-        start: &State,
+        start: &State<L>,
         d: &Decision,
         plan: &[Declare],
         pending: Option<Opt>,
@@ -362,12 +363,12 @@ impl Sim<'_> {
     /// The opponent blocks as planned with `blocks`, else not at all.
     fn run(
         &mut self,
-        start: &State,
+        start: &State<L>,
         plan: &[Declare],
         mut pending: Option<Opt>,
         blocks: bool,
     ) -> i32 {
-        let mut s = *start;
+        let mut s = start.clone();
         self.x.counts.copied();
         let turn = s.turn().number;
         let mut inline = Inline {
@@ -440,7 +441,7 @@ impl Sim<'_> {
     /// A position's score for us: the permanents' values on each side, other than lands,
     /// and life, which counts for more as it runs low, Mana Crypt's flips counted; and the
     /// damage the opponent's creatures could swing back with next turn past our blockers.
-    fn score(&self, s: &State, ours: bool) -> i32 {
+    fn score(&self, s: &State<L>, ours: bool) -> i32 {
         match s.outcome() {
             Some(Outcome::Win(p)) if p == self.me => return DECIDED,
             Some(Outcome::Win(_)) => return -DECIDED,
@@ -506,7 +507,7 @@ impl Sim<'_> {
     /// After our attack, what the opponent's The Wandering Emperor takes on their turn: "−2:
     /// Exile target tapped creature", our most valuable attacker still tapped, while she has
     /// the loyalty to survive it (at 2 she trades herself for it).
-    fn exiled_next(&self, s: &State, p: &crate::rollout::Policy<'_>, ours: bool) -> i32 {
+    fn exiled_next(&self, s: &State<L>, p: &crate::rollout::Policy<'_, L>, ours: bool) -> i32 {
         let emperor = s.battlefield().iter().any(|&w| {
             s.controller(w) != self.me
                 && self.t.def(s.card(w)).name == names::THE_WANDERING_EMPEROR
@@ -539,7 +540,7 @@ fn life(l: i16) -> i32 {
 /// creatures blocking one of them it could block, the strongest first: our untapped ones, or
 /// with `untap`, all of them. With `fragile`, the opponent removes one of our blockers first,
 /// as they will when one more blocker is all that keeps us alive.
-fn swing_back(s: &State, me: Seat, untap: bool, fragile: bool) -> i32 {
+fn swing_back<L: Layout>(s: &State<L>, me: Seat, untap: bool, fragile: bool) -> i32 {
     let creature = |slot: Slot| s.derived(slot).types.intersects(Types::CREATURE);
     let flies = |slot: Slot, k: Keywords| s.derived(slot).keywords.intersects(k);
     let mut attackers: Vec<(i32, bool)> = s
@@ -581,7 +582,7 @@ fn swing_back(s: &State, me: Seat, untap: bool, fragile: bool) -> i32 {
 /// The choice that makes declaration `want` at decision `d`: its creature, or one
 /// interchangeable with it; for [`Declare::Every`], any attacker with power. `None` when it
 /// is no longer legal.
-fn declare(s: &State, d: &Decision, want: Declare) -> Option<Choice> {
+fn declare<L: Layout>(s: &State<L>, d: &Decision, want: Declare) -> Option<Choice> {
     let Candidates::Options(options) = &d.candidates else {
         return None;
     };
@@ -607,7 +608,7 @@ fn follow_up(d: Declare) -> Opt {
 
 /// Every creature of ours a decision's options could declare: the ones it names, and those
 /// interchangeable with one, which the engine offers as the same option (§7.2).
-fn offered(s: &State, d: &Decision, pick: impl Fn(Opt) -> Option<Slot>) -> Vec<Slot> {
+fn offered<L: Layout>(s: &State<L>, d: &Decision, pick: impl Fn(Opt) -> Option<Slot>) -> Vec<Slot> {
     let Candidates::Options(options) = &d.candidates else {
         return Vec::new();
     };
@@ -624,7 +625,7 @@ fn offered(s: &State, d: &Decision, pick: impl Fn(Opt) -> Option<Slot>) -> Vec<S
 }
 
 /// Whether two creatures are interchangeable: the same card, the same power and toughness.
-fn like(s: &State, a: Slot, b: Slot) -> bool {
+fn like<L: Layout>(s: &State<L>, a: Slot, b: Slot) -> bool {
     a == b
         || (s.controller(a) == s.controller(b)
             && s.card(a) == s.card(b)
@@ -637,13 +638,13 @@ fn like(s: &State, a: Slot, b: Slot) -> bool {
 /// Whether `blocker` could block `attacker`, by evasion
 /// ([CR 702.9b](https://yawgatog.com/resources/magic-rules/#R7029b)): "A creature with
 /// flying can't be blocked except by creatures with flying and/or reach."
-fn can_block(s: &State, blocker: Slot, attacker: Slot) -> bool {
+fn can_block<L: Layout>(s: &State<L>, blocker: Slot, attacker: Slot) -> bool {
     let has = |slot: Slot, k: Keywords| s.derived(slot).keywords.intersects(k);
     !has(attacker, Keywords::FLYING) || has(blocker, Keywords::FLYING.union(Keywords::REACH))
 }
 
 /// The opponent's creatures attacking `me`.
-fn attacking(s: &State, me: Seat) -> Vec<Slot> {
+fn attacking<L: Layout>(s: &State<L>, me: Seat) -> Vec<Slot> {
     s.battlefield()
         .iter()
         .copied()

@@ -14,6 +14,7 @@ use crate::event::{self, Entry, Reason, Recipient, Sink, TokenEntry};
 use crate::filter::Filter;
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot};
+use crate::layout::{Layout, Queue, Small};
 use crate::mana;
 use crate::observation::Observation;
 use crate::profile::{Payment, Stops};
@@ -29,14 +30,14 @@ use crate::{layers, trigger};
 /// What a body runs against: the working state and tables, the event sink, the stack entry
 /// resolving (its source, controller, targets, X and what triggered it), and where its
 /// questions are answered (§3, §7.3).
-pub struct EffectCtx<'a> {
-    pub(crate) state: &'a mut State,
+pub struct EffectCtx<'a, L: Layout = Small> {
+    pub(crate) state: &'a mut State<L>,
     pub(crate) table: &'a GameTable,
     pub(crate) sink: &'a mut Sink,
     pub(crate) entry: StackEntry,
     pub(crate) ability: &'static Ability,
     /// Where questions go: an inline source answers them, anything else pauses the body.
-    answers: Option<&'a mut dyn Answers>,
+    answers: Option<&'a mut dyn Answers<L>>,
     /// The answers given so far to this resolution's questions, and how many this run of
     /// the body has used.
     record: &'a [u8],
@@ -52,11 +53,11 @@ pub struct EffectCtx<'a> {
     pub(crate) full: bool,
 }
 
-impl<'a> EffectCtx<'a> {
+impl<'a, L: Layout> EffectCtx<'a, L> {
     /// The context for a triggered ability's body, with no answer source: a question pauses
     /// it.
     pub(crate) fn new(
-        state: &'a mut State,
+        state: &'a mut State<L>,
         table: &'a GameTable,
         sink: &'a mut Sink,
         trigger: &PendingTrigger,
@@ -77,10 +78,10 @@ impl<'a> EffectCtx<'a> {
     /// The context for the body of the spell or ability `entry`, answering from `record`
     /// and then `answers`.
     pub(crate) fn resolving(
-        state: &'a mut State,
+        state: &'a mut State<L>,
         table: &'a GameTable,
         sink: &'a mut Sink,
-        answers: Option<&'a mut dyn Answers>,
+        answers: Option<&'a mut dyn Answers<L>>,
         record: &'a [u8],
         entry: StackEntry,
         ability: &'static Ability,
@@ -127,7 +128,7 @@ impl<'a> EffectCtx<'a> {
     }
 
     /// The state as it is now, to read.
-    pub fn state(&self) -> &State {
+    pub fn state(&self) -> &State<L> {
         self.state
     }
 
@@ -1364,7 +1365,7 @@ impl<'a> EffectCtx<'a> {
 /// and subtypes ([CR 205.1b](https://yawgatog.com/resources/magic-rules/#R2051b)): "Some
 /// effects state that an object becomes an 'artifact creature'; these effects also allow the
 /// object to retain all of its prior card types and subtypes."
-pub fn becomes_artifact_creature(ctx: &mut EffectCtx) -> Flow {
+pub fn becomes_artifact_creature<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.add_effect(
         ctx.source(),
         Continuous::Layer(Modification::AddTypes(
@@ -1378,7 +1379,7 @@ pub fn becomes_artifact_creature(ctx: &mut EffectCtx) -> Flow {
 /// The body of a mana ability: add what it produces, of the kind its activator chose
 /// ([CR 106.3](https://yawgatog.com/resources/magic-rules/#R1063)): "A spell or ability that
 /// produces mana instructs a player to add that mana."
-pub fn add_produced_mana(ctx: &mut EffectCtx) -> Flow {
+pub fn add_produced_mana<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let produces = ctx.ability.produces;
     debug_assert!(produces.includes(ctx.mana));
     ctx.add_mana(ctx.controller(), ctx.mana, produces.amount);
@@ -1386,12 +1387,12 @@ pub fn add_produced_mana(ctx: &mut EffectCtx) -> Flow {
 }
 
 /// The body of an ability that does nothing when it resolves, such as a static ability.
-pub fn nothing(_: &mut EffectCtx) -> Flow {
+pub fn nothing<L: Layout>(_: &mut EffectCtx<'_, L>) -> Flow {
     Ok(())
 }
 
 /// "Draw a card."
-pub fn draw_a_card(ctx: &mut EffectCtx) -> Flow {
+pub fn draw_a_card<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.draw(ctx.controller(), 1);
     Ok(())
 }
@@ -1400,7 +1401,7 @@ pub fn draw_a_card(ctx: &mut EffectCtx) -> Flow {
 /// intervening "if" of its enters ability (CR 603.4). The mark is set as the permanent enters
 /// and never changes while it stays; once it has left, the answer is what it was as the
 /// ability triggered, and it triggered only if the cost was paid.
-fn entered_with(s: &State, tr: &PendingTrigger, flag: u32) -> bool {
+fn entered_with<L: Layout>(s: &State<L>, tr: &PendingTrigger, flag: u32) -> bool {
     match tr.source {
         Some(r) if s.is_current(r) => s.object(r.slot).flags.has(flag),
         _ => true,
@@ -1410,12 +1411,12 @@ fn entered_with(s: &State, tr: &PendingTrigger, flag: u32) -> bool {
 /// "If it was kicked" ([CR 702.33d](https://yawgatog.com/resources/magic-rules/#R70233d)):
 /// "If a spell's controller declares the intention to pay any of that spell's kicker costs,
 /// that spell has been 'kicked.'"
-pub fn kicked(s: &State, _: &GameTable, tr: &PendingTrigger) -> bool {
+pub fn kicked<L: Layout>(s: &State<L>, _: &GameTable, tr: &PendingTrigger) -> bool {
     entered_with(s, tr, ObjectFlags::KICKED)
 }
 
 /// Offspring's "if its offspring cost was paid" (CR 702.175a).
-pub fn offspring_paid(s: &State, _: &GameTable, tr: &PendingTrigger) -> bool {
+pub fn offspring_paid<L: Layout>(s: &State<L>, _: &GameTable, tr: &PendingTrigger) -> bool {
     entered_with(s, tr, ObjectFlags::OFFSPRING)
 }
 
@@ -1423,7 +1424,7 @@ pub fn offspring_paid(s: &State, _: &GameTable, tr: &PendingTrigger) -> bool {
 /// copiable values are its card's ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)),
 /// with the 1/1 exception of [CR 707.9b](https://yawgatog.com/resources/magic-rules/#R7079b),
 /// whether or not it is still on the battlefield.
-pub fn offspring_copy(ctx: &mut EffectCtx) -> Flow {
+pub fn offspring_copy<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.create_tokens_of(
         ctx.entry.card,
         1,
@@ -1436,20 +1437,24 @@ pub fn offspring_copy(ctx: &mut EffectCtx) -> Flow {
 }
 
 /// Evoke's "if its evoke cost was paid" (CR 702.74a).
-pub fn evoked(s: &State, _: &GameTable, tr: &PendingTrigger) -> bool {
+pub fn evoked<L: Layout>(s: &State<L>, _: &GameTable, tr: &PendingTrigger) -> bool {
     entered_with(s, tr, ObjectFlags::EVOKED)
 }
 
 /// Evoke's "its controller sacrifices it" (CR 702.74a): the permanent the ability belongs to,
 /// if it is still that object on the battlefield.
-pub fn sacrifice_itself(ctx: &mut EffectCtx) -> Flow {
+pub fn sacrifice_itself<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.sacrifice(ctx.source());
     Ok(())
 }
 
 /// Impending's "if this permanent's impending cost was paid and it has a time counter on it"
 /// (CR 702.176a), on the permanent itself.
-pub fn impending_counting_down(s: &State, _: &GameTable, tr: &PendingTrigger) -> bool {
+pub fn impending_counting_down<L: Layout>(
+    s: &State<L>,
+    _: &GameTable,
+    tr: &PendingTrigger,
+) -> bool {
     tr.source.is_some_and(|r| {
         let o = s.object(r.slot);
         s.is_current(r)
@@ -1459,7 +1464,7 @@ pub fn impending_counting_down(s: &State, _: &GameTable, tr: &PendingTrigger) ->
 }
 
 /// Impending's "remove a time counter from it" (CR 702.176a).
-pub fn remove_a_time_counter(ctx: &mut EffectCtx) -> Flow {
+pub fn remove_a_time_counter<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     ctx.remove_counters(ctx.source(), CounterKind::Time, 1);
     Ok(())
 }

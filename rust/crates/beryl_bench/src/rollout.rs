@@ -16,6 +16,7 @@
 //! [`Summary`] gives the counts to divide by: rollouts, decisions and turns.
 
 use std::hash::{Hash, Hasher};
+use std::hint::black_box;
 
 use beryl_cards::CARDS;
 use beryl_cards::decks::WU_CONTROL;
@@ -327,9 +328,22 @@ pub fn roll(
     let mut sum = 0;
     for start in starts {
         *s = *start;
-        sum += score(rollout(s, t, x, policy), s);
+        sum += score(counted_rollout(s, t, x, policy), s);
     }
     sum
+}
+
+/// [`rollout`], out of line: `rollout_counts` counts from this function's entry. `rollout`
+/// itself is generic, so the corpus's games compile another copy of it into `beryl_search`,
+/// and Callgrind, which finds the entry by name, would count that copy's calls too.
+#[inline(never)]
+pub fn counted_rollout(
+    s: &mut State,
+    t: &GameTable,
+    x: &mut Scratch,
+    policy: &RolloutPolicy,
+) -> Outcome {
+    black_box(rollout(s, t, x, policy))
 }
 
 /// A hash of a value that never changes between runs or releases: 64-bit FNV-1a over what

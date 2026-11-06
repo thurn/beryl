@@ -3,6 +3,7 @@
 use crate::bitboard::Bitboard;
 use crate::card::{Subtype, Supertypes, Types};
 use crate::ids::{Seat, Slot};
+use crate::layout::Layout;
 use crate::state::{ObjectFlags, State, Zone};
 use crate::table::GameTable;
 
@@ -41,13 +42,20 @@ pub enum Filter {
 
 impl Filter {
     /// Whether the object in `slot` passes, evaluated for player `you`, where X is 0.
-    pub fn matches(&self, s: &State, t: &GameTable, slot: Slot, you: Seat) -> bool {
+    pub fn matches<L: Layout>(&self, s: &State<L>, t: &GameTable, slot: Slot, you: Seat) -> bool {
         self.matches_x(s, t, slot, you, 0)
     }
 
     /// Whether the object in `slot` passes, evaluated for player `you` and the value `x` of
     /// X.
-    pub fn matches_x(&self, s: &State, t: &GameTable, slot: Slot, you: Seat, x: u8) -> bool {
+    pub fn matches_x<L: Layout>(
+        &self,
+        s: &State<L>,
+        t: &GameTable,
+        slot: Slot,
+        you: Seat,
+        x: u8,
+    ) -> bool {
         let o = s.object(slot);
         let face = || t.def(o.card).face(o.face);
         let derived = || (o.zone == Zone::Battlefield).then(|| s.derived(slot));
@@ -101,14 +109,20 @@ impl Filter {
     }
 
     /// The members of `within` that pass, where X is 0.
-    pub fn select(&self, s: &State, t: &GameTable, within: Bitboard, you: Seat) -> Bitboard {
+    pub fn select<L: Layout>(
+        &self,
+        s: &State<L>,
+        t: &GameTable,
+        within: Bitboard,
+        you: Seat,
+    ) -> Bitboard {
         self.select_x(s, t, within, you, 0)
     }
 
     /// The members of `within` that pass, for the value `x` of X.
-    pub fn select_x(
+    pub fn select_x<L: Layout>(
         &self,
-        s: &State,
+        s: &State<L>,
         t: &GameTable,
         within: Bitboard,
         you: Seat,

@@ -12,6 +12,7 @@ use crate::card::{AbilityKind, FaceAbility, FaceIx, Replacement, Types};
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot};
 use crate::layers;
+use crate::layout::{Layout, Queue};
 use crate::state::{
     Continuous, CounterKind, ObjectFlags, ObjectRef, State, TARGETS, Target, TurnStep, Zone,
     token_slots,
@@ -299,7 +300,12 @@ pub(crate) struct Entry {
 /// Executes the remaining steps of the pipeline for an event its primitive has executed:
 /// a layer refresh so nothing reads `derived` dirty, trigger matching (§8.2, step 5), and
 /// the sink.
-pub(crate) fn settle(s: &mut State, t: &GameTable, sink: &mut Sink, e: Event) -> Result<(), Full> {
+pub(crate) fn settle<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink,
+    e: Event,
+) -> Result<(), Full> {
     layers::refresh(s, t, sink);
     trigger::match_event(s, t, &e)?;
     sink.push(e);
@@ -307,8 +313,8 @@ pub(crate) fn settle(s: &mut State, t: &GameTable, sink: &mut Sink, e: Event) ->
 }
 
 /// Moves one object.
-pub(crate) fn move_one(
-    s: &mut State,
+pub(crate) fn move_one<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     slot: Slot,
@@ -344,8 +350,8 @@ pub(crate) fn move_one(
 ///    more simultaneous batch ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)):
 ///    "A second one-shot effect is created immediately after the specified event. This
 ///    second one-shot effect returns the object to its previous zone."
-pub(crate) fn move_batch(
-    s: &mut State,
+pub(crate) fn move_batch<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     objects: Bitboard,
@@ -358,8 +364,8 @@ pub(crate) fn move_batch(
 
 /// [`move_batch`] to a place in a library other than the top.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn move_batch_to(
-    s: &mut State,
+pub(crate) fn move_batch_to<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     objects: Bitboard,
@@ -461,7 +467,7 @@ pub(crate) fn move_batch_to(
 /// create is "exile it instead" of a graveyard, and no two of them can apply to one event
 /// differently, so the ordering of [CR 616.1](https://yawgatog.com/resources/magic-rules/#R6161)
 /// never becomes a choice.
-fn destination(s: &State, slot: Slot, to: Zone) -> Zone {
+fn destination<L: Layout>(s: &State<L>, slot: Slot, to: Zone) -> Zone {
     let r = s.object_ref(slot);
     let exiled = to == Zone::Graveyard
         && s.effects
@@ -471,7 +477,7 @@ fn destination(s: &State, slot: Slot, to: Zone) -> Zone {
 }
 
 /// The objects exiled until the permanent in `slot` leaves the battlefield.
-fn exiled_until(s: &State, slot: Slot) -> Bitboard {
+fn exiled_until<L: Layout>(s: &State<L>, slot: Slot) -> Bitboard {
     (s.zone(Seat::P0, Zone::Exile) | s.zone(Seat::P1, Zone::Exile))
         .iter()
         .filter(|&x| {
@@ -488,7 +494,12 @@ fn exiled_until(s: &State, slot: Slot) -> Bitboard {
 /// ([CR 306.5b](https://yawgatog.com/resources/magic-rules/#R3065b)): "A planeswalker has the
 /// intrinsic ability 'This permanent enters with a number of loyalty counters on it equal to
 /// its printed loyalty number.'"
-fn enter_replacements(s: &State, t: &GameTable, slot: Slot, mut entry: Entry) -> Entry {
+fn enter_replacements<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: Slot,
+    mut entry: Entry,
+) -> Entry {
     let o = s.object(slot);
     let face = t.def(o.card).face(entry.face);
     let controller = entry.controller.unwrap_or(o.owner);
@@ -532,8 +543,8 @@ fn enter_replacements(s: &State, t: &GameTable, slot: Slot, mut entry: Entry) ->
 /// ([CR 119.4](https://yawgatog.com/resources/magic-rules/#R1194)): "If a player pays life,
 /// the payment is subtracted from their life total; in other words, the player loses that
 /// much life."
-fn pay_life_to_enter(
-    s: &mut State,
+fn pay_life_to_enter<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     slot: Slot,
@@ -565,8 +576,8 @@ pub(crate) fn life_to_enter(t: &GameTable, card: CardIx, face: FaceIx) -> Option
 /// A player loses life ([CR 119.3](https://yawgatog.com/resources/magic-rules/#R1193)): "If an
 /// effect causes a player to gain life or lose life, that player's life total is adjusted
 /// accordingly."
-pub(crate) fn lose_life(
-    s: &mut State,
+pub(crate) fn lose_life<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     player: Seat,
@@ -577,8 +588,8 @@ pub(crate) fn lose_life(
 }
 
 /// A player gains life (CR 119.3).
-pub(crate) fn gain_life(
-    s: &mut State,
+pub(crate) fn gain_life<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     player: Seat,
@@ -599,8 +610,8 @@ pub(crate) fn gain_life(
 /// there are no cards in the affected player's library." Winning ends the game at once
 /// ([CR 104.2b](https://yawgatog.com/resources/magic-rules/#R1042b)): "An effect may state
 /// that a player wins the game." The draws left are never made.
-pub(crate) fn draw(
-    s: &mut State,
+pub(crate) fn draw<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     player: Seat,
@@ -638,7 +649,7 @@ pub(crate) fn draw(
 
 /// Whether `player` controls a permanent whose replacement effect has them win rather than
 /// draw from an empty library.
-fn wins_instead_of_drawing(s: &State, t: &GameTable, player: Seat) -> bool {
+fn wins_instead_of_drawing<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> bool {
     let replacing = s
         .battlefield()
         .iter()
@@ -663,8 +674,8 @@ fn wins_instead_of_drawing(s: &State, t: &GameTable, player: Seat) -> bool {
 /// [CR 120.3e](https://yawgatog.com/resources/magic-rules/#R1203e): "Damage dealt to a
 /// creature by a source with neither wither nor infect causes that much damage to be marked on
 /// that creature."
-pub(crate) fn deal_damage(
-    s: &mut State,
+pub(crate) fn deal_damage<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     source: ObjectRef,
@@ -706,8 +717,8 @@ pub(crate) fn deal_damage(
 
 /// Puts counters on a permanent
 /// ([CR 122.6](https://yawgatog.com/resources/magic-rules/#R1226)).
-pub(crate) fn add_counters(
-    s: &mut State,
+pub(crate) fn add_counters<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     object: ObjectRef,
@@ -735,8 +746,8 @@ pub(crate) fn add_counters(
 }
 
 /// Removes up to `amount` counters of a kind from a permanent.
-pub(crate) fn remove_counters(
-    s: &mut State,
+pub(crate) fn remove_counters<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     object: ObjectRef,
@@ -776,8 +787,8 @@ pub(crate) fn remove_counters(
 /// [CR 701.26b](https://yawgatog.com/resources/magic-rules/#R70126b): "To untap a permanent,
 /// rotate it back to the upright position from a sideways position. Only tapped permanents
 /// can be untapped."
-pub(crate) fn set_tapped(
-    s: &mut State,
+pub(crate) fn set_tapped<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     object: ObjectRef,
@@ -822,8 +833,8 @@ pub struct TokenEntry {
 ///
 /// The tokens take free slots from the shared pool (architecture §4.2) and enter as one
 /// event; then one `TokensCreated` event follows for "whenever you create one or more".
-pub(crate) fn create_tokens(
-    s: &mut State,
+pub(crate) fn create_tokens<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     controller: Seat,

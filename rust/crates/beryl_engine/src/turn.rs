@@ -5,6 +5,7 @@ use crate::event::{self, Event, Reason, Sink};
 use crate::fixed::Full;
 use crate::ids::{Seat, Slot};
 use crate::layers;
+use crate::layout::{Layout, Queue};
 use crate::state::{Duration, ManaPool, ObjectFlags, Pending, State, TurnStep, Zone};
 use crate::table::GameTable;
 use crate::{combat, zone};
@@ -15,12 +16,12 @@ pub(crate) const MAX_HAND_SIZE: u32 = 7;
 
 /// The players in APNAP order ([CR 101.4](https://yawgatog.com/resources/magic-rules/#R1014)):
 /// "the active player ... makes any choices required, then the next player in turn order".
-pub(crate) fn apnap(s: &State) -> [Seat; 2] {
+pub(crate) fn apnap<L: Layout>(s: &State<L>) -> [Seat; 2] {
     [s.turn.active, s.turn.active.opponent()]
 }
 
 /// Whether any creature is attacking.
-pub(crate) fn any_attacking(s: &State) -> bool {
+pub(crate) fn any_attacking<L: Layout>(s: &State<L>) -> bool {
     s.battlefield
         .iter()
         .any(|&slot| s.object(slot).flags.has(ObjectFlags::ATTACKING))
@@ -29,7 +30,11 @@ pub(crate) fn any_attacking(s: &State) -> bool {
 /// Begins the next turn: the starting player's first, then alternating
 /// ([CR 103.8](https://yawgatog.com/resources/magic-rules/#R1038)): "The starting player takes
 /// their first turn."
-pub(crate) fn begin_turn(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<(), Full> {
+pub(crate) fn begin_turn<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink,
+) -> Result<(), Full> {
     if s.turn.number >= s.profile.limits.turns {
         s.outcome = Some(Outcome::Stalled(StallReason::Turns));
         return Ok(());
@@ -81,8 +86,8 @@ pub(crate) fn begin_turn(s: &mut State, t: &GameTable, sink: &mut Sink) -> Resul
 /// [CR 500.6](https://yawgatog.com/resources/magic-rules/#R5006): "When a phase or step
 /// begins, any abilities that trigger 'at the beginning of' that phase or step trigger. They
 /// are put on the stack the next time a player would receive priority."
-pub(crate) fn begin_step(
-    s: &mut State,
+pub(crate) fn begin_step<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     step: TurnStep,
@@ -121,7 +126,7 @@ pub(crate) fn begin_step(
 /// ([CR 502.3](https://yawgatog.com/resources/magic-rules/#R5023)): "the active player
 /// determines which permanents they control will untap. Then they untap them all
 /// simultaneously."
-fn untap(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<(), Full> {
+fn untap<L: Layout>(s: &mut State<L>, t: &GameTable, sink: &mut Sink) -> Result<(), Full> {
     let active = s.turn.active;
     let mut i = 0;
     while i < s.battlefield.len() {
@@ -141,7 +146,11 @@ fn untap(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<(), Full> {
 ///
 /// [CR 500.5](https://yawgatog.com/resources/magic-rules/#R5005): "As a step or phase ends ...
 /// any unspent mana left in a player's mana pool empties."
-pub(crate) fn end_step(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<(), Full> {
+pub(crate) fn end_step<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink,
+) -> Result<(), Full> {
     for p in &mut s.players {
         p.mana = ManaPool::default();
     }
@@ -183,7 +192,7 @@ pub(crate) fn end_step(s: &mut State, t: &GameTable, sink: &mut Sink) -> Result<
 /// hand contains more cards than their maximum hand size (normally seven), they discard enough
 /// cards to reduce their hand size to that number." The discards are decisions, one card at a
 /// time; [`finish_cleanup`] follows them.
-fn cleanup(s: &mut State) {
+fn cleanup<L: Layout>(s: &mut State<L>) {
     if zone::hand_size(s, s.turn.active) > MAX_HAND_SIZE {
         s.pending = Pending::Discard;
     } else {
@@ -195,8 +204,8 @@ fn cleanup(s: &mut State) {
 ///
 /// [CR 701.9a](https://yawgatog.com/resources/magic-rules/#R7019a): "To discard a card, move
 /// it from its owner's hand to that player's graveyard."
-pub(crate) fn cleanup_discard(
-    s: &mut State,
+pub(crate) fn cleanup_discard<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     slot: Slot,
@@ -220,7 +229,7 @@ pub(crate) fn cleanup_discard(
 /// be put onto the stack ... If so, ... the active player gets priority." That check runs
 /// where every priority check runs, in `next`; `cleanup_check` tells it to end the turn
 /// instead when nothing happens.
-fn finish_cleanup(s: &mut State) {
+fn finish_cleanup<L: Layout>(s: &mut State<L>) {
     for i in 0..s.battlefield.len() {
         let slot = s.battlefield.as_slice()[i];
         s.object_mut(slot).damage = 0;
@@ -251,7 +260,7 @@ fn finish_cleanup(s: &mut State) {
 ///
 /// [CR 305.2](https://yawgatog.com/resources/magic-rules/#R3052): "A player can normally play
 /// one land during their turn".
-pub(crate) fn may_play_land(s: &State, player: Seat) -> bool {
+pub(crate) fn may_play_land<L: Layout>(s: &State<L>, player: Seat) -> bool {
     player == s.turn.active
         && matches!(
             s.turn.step,
@@ -262,6 +271,6 @@ pub(crate) fn may_play_land(s: &State, player: Seat) -> bool {
 }
 
 /// The cards in a player's hand.
-pub(crate) fn hand(s: &State, player: Seat) -> crate::bitboard::Bitboard {
+pub(crate) fn hand<L: Layout>(s: &State<L>, player: Seat) -> crate::bitboard::Bitboard {
     s.zone(player, Zone::Hand)
 }

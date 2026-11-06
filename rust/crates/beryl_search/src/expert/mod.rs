@@ -40,6 +40,7 @@
 
 mod combat;
 
+use beryl_engine::{Layout, Small};
 use std::cell::OnceCell;
 
 use beryl_cards::names;
@@ -101,16 +102,16 @@ const JACE_TELEPATH_UNBOUND: &str = "Jace, Telepath Unbound";
 
 /// The expert, for one game: the table, the rollout policy it builds on and falls back to,
 /// and the stream and working memory its combat simulations use.
-pub struct ExpertAgent {
+pub struct ExpertAgent<L: Layout = Small> {
     table: GameTable,
     policy: RolloutPolicy,
     rng: SplitMix64,
-    x: Scratch,
+    x: Scratch<L>,
     plan: combat::Plan,
 }
 
-impl ExpertAgent {
-    pub fn new(t: &GameTable, seed: u64) -> ExpertAgent {
+impl<L: Layout> ExpertAgent<L> {
+    pub fn new(t: &GameTable, seed: u64) -> ExpertAgent<L> {
         ExpertAgent {
             table: t.clone(),
             policy: RolloutPolicy::new(t),
@@ -121,8 +122,8 @@ impl ExpertAgent {
     }
 }
 
-impl Agent for ExpertAgent {
-    fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice {
+impl<L: Layout> Agent<L> for ExpertAgent<L> {
+    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision) -> Choice {
         let t = &self.table;
         let e = Expert::new(self.policy.view(t, obs, d.player, true));
         match d.kind {
@@ -181,7 +182,7 @@ impl Agent for ExpertAgent {
                         return None;
                     };
                     // What each plan leaves untapped: a look at the payment, not ahead.
-                    let mut s = start;
+                    let mut s = start.clone();
                     apply(&mut s, t, x, &mut inline, Choice(i));
                     let after = Expert::new(self.policy.view(
                         t,
@@ -216,7 +217,7 @@ impl Agent for ExpertAgent {
 /// one about to die counts for less than one about to ultimate; a permanent the other side's
 /// Swift Reconfiguration has made a Vehicle no one will crew is worth little, as is a Mana
 /// Crypt whose controller no longer needs the mana it costs them life for.
-pub(crate) fn appraise(p: &Policy<'_>, slot: Slot, base: i32) -> Option<i32> {
+pub(crate) fn appraise<L: Layout>(p: &Policy<'_, L>, slot: Slot, base: i32) -> Option<i32> {
     let obs = p.obs;
     let o = obs.object(slot);
     let controller = obs.controller(slot);
@@ -287,14 +288,14 @@ pub(crate) fn appraise(p: &Policy<'_>, slot: Slot, base: i32) -> Option<i32> {
 /// Whether a library is short enough that `who`'s Jace, Wielder of Mysteries would win within
 /// a few turns: their own, which its +1 draws from one a turn, its −8 seven and their draw
 /// step one; or their opponent's, which its +1 mills two a turn.
-fn wins_by_decking(p: &Policy<'_>, who: Seat) -> bool {
+fn wins_by_decking<L: Layout>(p: &Policy<'_, L>, who: Seat) -> bool {
     p.obs.library(who).len() <= JACE_LIBRARY || p.obs.library(who.opponent()).len() <= JACE_MILLS
 }
 
 /// Whether a permanent dying comes back as a token copy of itself: a Sphinx of False
 /// Conclusions that is not a token ("When this creature dies, if it isn't a token, create a
 /// token that's a copy of it").
-fn returns_as_token(p: &Policy<'_>, slot: Slot) -> bool {
+fn returns_as_token<L: Layout>(p: &Policy<'_, L>, slot: Slot) -> bool {
     p.obs
         .card(slot)
         .is_some_and(|c| p.t.def(c).name == names::SPHINX_OF_FALSE_CONCLUSIONS)
@@ -317,14 +318,14 @@ enum Timing {
 }
 
 /// One decision's view, for the rules above.
-struct Expert<'a> {
-    p: Policy<'a>,
+struct Expert<'a, L: Layout> {
+    p: Policy<'a, L>,
     /// [`Expert::lethal_blockers`], worked out once.
     lethal: OnceCell<Option<Vec<Slot>>>,
 }
 
-impl<'a> Expert<'a> {
-    fn new(p: Policy<'a>) -> Expert<'a> {
+impl<'a, L: Layout> Expert<'a, L> {
+    fn new(p: Policy<'a, L>) -> Expert<'a, L> {
         Expert {
             p,
             lethal: OnceCell::new(),
@@ -332,8 +333,8 @@ impl<'a> Expert<'a> {
     }
 }
 
-impl Expert<'_> {
-    fn obs(&self) -> Observation<'_> {
+impl<L: Layout> Expert<'_, L> {
+    fn obs(&self) -> Observation<'_, L> {
         self.p.obs
     }
 

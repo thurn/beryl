@@ -41,14 +41,15 @@ fn policy(w: Workload) -> u64 {
     black_box(rollout::decide(&w.table, black_box(&w.samples), &w.policy))
 }
 
-// Counted from `rollout` itself, not this function: the setup's own rollouts leave Callgrind's
+// Counted from `counted_rollout`, not this function: the setup's own rollouts leave Callgrind's
 // call stack thinking a `rollout` is still running, so entering one here would unwind past
-// this function and stop collection. The copies left out are `copy`'s.
+// this function and stop collection. Not from generic `rollout` either, whose other copy the
+// setup runs. The copies left out are `copy`'s.
 #[cfg(target_os = "linux")]
 #[library_benchmark(
     config = LibraryBenchmarkConfig::default().tool(
         Callgrind::default().entry_point(EntryPoint::Custom(
-            "beryl_search::rollout::rollout".to_owned()
+            "beryl_bench::rollout::counted_rollout".to_owned()
         ))
     )
 )]

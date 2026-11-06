@@ -10,6 +10,7 @@ use crate::decision::{
 use crate::event::{self, Entry, Event, Reason, Sink};
 use crate::fixed::{Fixed, Full};
 use crate::ids::{Seat, Slot};
+use crate::layout::{Layout, Queue, Small};
 use crate::observation::Observation;
 use crate::profile::{Profile, Stops};
 use crate::state::{Pending, State, TurnStep, Zone};
@@ -20,13 +21,13 @@ use crate::{cast, combat, face_down, layers, mana, resolve, sba, start, trigger,
 /// the spare state transactional replay runs bodies on (§7.3), allocated once so the hot
 /// path never allocates.
 #[derive(Debug)]
-pub struct Scratch {
+pub struct Scratch<L: Layout = Small> {
     pub counts: Counts,
     pub events: Sink,
-    spare: Box<State>,
+    spare: Box<State<L>>,
 }
 
-impl Default for Scratch {
+impl<L: Layout> Default for Scratch<L> {
     fn default() -> Self {
         Self {
             counts: Counts::default(),
@@ -36,7 +37,7 @@ impl Default for Scratch {
     }
 }
 
-impl Scratch {
+impl<L: Layout> Scratch<L> {
     /// Working memory whose sink drops events, as search wants.
     pub fn new() -> Self {
         Self::default()
@@ -51,8 +52,8 @@ impl Scratch {
     }
 
     /// The spare state, a copy of `s`, and the sink, for a run of a body on a copy.
-    pub(crate) fn copy_to_spare(&mut self, s: &State) -> (&mut State, &mut Sink) {
-        *self.spare = *s;
+    pub(crate) fn copy_to_spare(&mut self, s: &State<L>) -> (&mut State<L>, &mut Sink) {
+        (*self.spare).clone_from(s);
         self.counts.copied();
         (&mut self.spare, &mut self.events)
     }
@@ -61,7 +62,7 @@ impl Scratch {
 /// The position a player sees the open decision in. That is the state itself, except while
 /// a resolution is paused (§7.3): the committed state is then the one before the resolution
 /// began, so the paused body is replayed into scratch up to its question.
-pub fn view<'a>(s: &'a State, t: &GameTable, x: &'a mut Scratch) -> &'a State {
+pub fn view<'a, L: Layout>(s: &'a State<L>, t: &GameTable, x: &'a mut Scratch<L>) -> &'a State<L> {
     if matches!(s.pending, Pending::Resolving(_))
         && let Ok(paused) = resolve::replay_to_question(s, t, x, None)
     {
@@ -76,7 +77,7 @@ pub fn view<'a>(s: &'a State, t: &GameTable, x: &'a mut Scratch) -> &'a State {
 /// game." Their opponent, the one player left, wins
 /// ([CR 104.2a](https://yawgatog.com/resources/magic-rules/#R1042a)): "A player still in the
 /// game wins the game if that player's opponents have all left the game."
-pub fn concede(s: &mut State, x: &mut Scratch, player: Seat) {
+pub fn concede<L: Layout>(s: &mut State<L>, x: &mut Scratch<L>, player: Seat) {
     if s.outcome.is_none() {
         sba::end_game(s, &mut x.events, player);
     }
@@ -86,7 +87,7 @@ pub fn concede(s: &mut State, x: &mut Scratch, player: Seat) {
 /// [`view`]'s position shows done: the card a loot draws before it asks for the discard, the
 /// card an explore reveals before it asks where it goes. None while no resolution is paused.
 /// They are executed again, and so emitted, once the answers let the body finish.
-pub fn paused_events(s: &State, t: &GameTable, x: &mut Scratch) -> Vec<Event> {
+pub fn paused_events<L: Layout>(s: &State<L>, t: &GameTable, x: &mut Scratch<L>) -> Vec<Event> {
     let mut seen = Vec::new();
     if matches!(s.pending, Pending::Resolving(_)) {
         let _ = resolve::replay_to_question(s, t, x, Some(&mut seen));
@@ -96,12 +97,12 @@ pub fn paused_events(s: &State, t: &GameTable, x: &mut Scratch) -> Vec<Event> {
 
 /// What `viewer` sees of the open decision: [`view`]'s position, rooted at the committed
 /// state `s` so a search can play on from it.
-pub fn observe<'a>(
-    s: &'a State,
+pub fn observe<'a, L: Layout>(
+    s: &'a State<L>,
     t: &GameTable,
-    x: &'a mut Scratch,
+    x: &'a mut Scratch<L>,
     viewer: Seat,
-) -> Observation<'a> {
+) -> Observation<'a, L> {
     Observation::paused(view(s, t, x), s, viewer)
 }
 
@@ -134,7 +135,7 @@ impl Counts {
     }
 }
 
-impl Scratch {
+impl<L: Layout> Scratch<L> {
     /// Moves the work the sink counted into the counts.
     fn settle_counts(&mut self) {
         let work = std::mem::take(&mut self.events.work);
@@ -155,8 +156,13 @@ impl Scratch {
 /// abilities that are waiting to be put on the stack are put on the stack, then the check is
 /// repeated." Waiting triggers come before priority as decisions of their own, one pick at a
 /// time ([`DecisionKind::TriggerOrder`]).
-pub fn next(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers) -> Step {
-    let step = advance::<false>(s, t, x, a, (s.turn.number, s.turn.step));
+pub fn next<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    x: &mut Scratch<L>,
+    a: &mut dyn Answers<L>,
+) -> Step {
+    let step = advance::<false, L>(s, t, x, a, (s.turn.number, s.turn.step));
     x.settle_counts();
     step.expect("`next` stops only at a decision or the end of the game")
 }
@@ -174,24 +180,24 @@ pub fn next(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers) 
 /// untap step is never seen on its own, as it ends at once
 /// ([CR 502.4](https://yawgatog.com/resources/magic-rules/#R5024)): "No player receives
 /// priority during the untap step".
-pub fn next_in_step(
-    s: &mut State,
+pub fn next_in_step<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
-    x: &mut Scratch,
-    a: &mut dyn Answers,
+    x: &mut Scratch<L>,
+    a: &mut dyn Answers<L>,
     seen: (u16, TurnStep),
 ) -> Option<Step> {
-    let step = advance::<true>(s, t, x, a, seen);
+    let step = advance::<true, L>(s, t, x, a, seen);
     x.settle_counts();
     step
 }
 
 /// The engine loop; with `STEPS`, it returns `None` once the turn is past `seen`.
-fn advance<const STEPS: bool>(
-    s: &mut State,
+fn advance<const STEPS: bool, L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
-    x: &mut Scratch,
-    a: &mut dyn Answers,
+    x: &mut Scratch<L>,
+    a: &mut dyn Answers<L>,
     seen: (u16, TurnStep),
 ) -> Option<Step> {
     // Whether a state-based check found nothing and priority has only been passed since,
@@ -284,13 +290,13 @@ fn advance<const STEPS: bool>(
 /// ([CR 117.3d](https://yawgatog.com/resources/magic-rules/#R1173d)): "Then the next player
 /// in turn order receives priority." The first of two passes in succession resolves nothing
 /// and ends no step.
-fn handed_over(s: &State, passes: u8) -> bool {
+fn handed_over<L: Layout>(s: &State<L>, passes: u8) -> bool {
     passes == 0 && s.turn.passes == 1 && s.outcome.is_none() && s.pending == Pending::None
 }
 
 /// Whether the open decision is priority for a player away from a stop, who passes silently
 /// whatever else they could do, so `next` passes without listing their options.
-fn passes_silently(s: &State) -> bool {
+fn passes_silently<L: Layout>(s: &State<L>) -> bool {
     s.pending == Pending::None
         && s.triggers.is_empty()
         && !s.profile.stops_for(s, s.turn.priority)
@@ -298,7 +304,13 @@ fn passes_silently(s: &State) -> bool {
 }
 
 /// Applies an answer to the decision `next` returned for this state.
-pub fn apply(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers, c: Choice) {
+pub fn apply<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    x: &mut Scratch<L>,
+    a: &mut dyn Answers<L>,
+    c: Choice,
+) {
     debug_assert!(s.outcome.is_none(), "apply after the game ended");
     layers::refresh(s, t, &mut x.events);
     match decision(s, t, &mut x.events) {
@@ -314,11 +326,11 @@ pub fn apply(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers,
 /// Applies an answer to `d` as [`apply`] does, without building the decision again: `d` must
 /// be the decision `next` returned for this state, unchanged since, which debug builds check.
 /// The hot loops of search, which hold that decision, save rebuilding every option of it.
-pub fn apply_decided(
-    s: &mut State,
+pub fn apply_decided<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
-    x: &mut Scratch,
-    a: &mut dyn Answers,
+    x: &mut Scratch<L>,
+    a: &mut dyn Answers<L>,
     d: &Decision,
     c: Choice,
 ) {
@@ -337,15 +349,15 @@ pub fn apply_decided(
 }
 
 #[cold]
-fn stall(s: &mut State, reason: StallReason) {
+fn stall<L: Layout>(s: &mut State<L>, reason: StallReason) {
     s.outcome = Some(Outcome::Stalled(reason));
 }
 
-fn perform_or_stall(
-    s: &mut State,
+fn perform_or_stall<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
-    x: &mut Scratch,
-    a: &mut dyn Answers,
+    x: &mut Scratch<L>,
+    a: &mut dyn Answers<L>,
     d: &Decision,
     c: Choice,
 ) {
@@ -356,7 +368,11 @@ fn perform_or_stall(
 
 /// The open decision, a pure function of the state, so `apply` recomputes rather than
 /// remembers it. The sink only counts the payment solver's runs.
-pub(crate) fn decision(s: &State, t: &GameTable, sink: &mut Sink) -> Result<Decision, Full> {
+pub(crate) fn decision<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    sink: &mut Sink,
+) -> Result<Decision, Full> {
     // Each arm returns its result as it is, so a decision is built once, in place.
     match s.pending {
         Pending::None => match trigger::next_to_stack(s) {
@@ -455,7 +471,7 @@ fn options(player: Seat, kind: DecisionKind, opts: &[Opt]) -> Result<Decision, F
 ///
 /// [CR 117.1](https://yawgatog.com/resources/magic-rules/#R1171): "The player with priority
 /// may cast spells, activate abilities, and take special actions."
-fn priority_decision(s: &State, t: &GameTable) -> Result<Decision, Full> {
+fn priority_decision<L: Layout>(s: &State<L>, t: &GameTable) -> Result<Decision, Full> {
     let player = s.turn.priority;
     // Built in place: the list is most of a decision's size.
     let mut d = Decision {
@@ -506,7 +522,7 @@ fn only_pass(d: &Decision) -> bool {
 /// ([CR 712.12](https://yawgatog.com/resources/magic-rules/#R71212)): "A player playing a
 /// modal double-faced card ... as a land chooses one of its faces that's a land before putting
 /// it onto the battlefield." The cube's modal double-faced cards have one land face at most.
-fn land_face(s: &State, t: &GameTable, slot: Slot) -> Option<FaceIx> {
+fn land_face<L: Layout>(s: &State<L>, t: &GameTable, slot: Slot) -> Option<FaceIx> {
     let def = t.def(s.object(slot).card);
     def.face_ixs()
         .find(|&f| def.face(f).types.intersects(Types::LAND))
@@ -521,7 +537,7 @@ fn land_face(s: &State, t: &GameTable, slot: Slot) -> Option<FaceIx> {
 /// may play a land card from their hand during a main phase of their turn when the stack is
 /// empty." [CR 305.2](https://yawgatog.com/resources/magic-rules/#R3052): "A player can
 /// normally play one land during their turn".
-pub fn refusal(obs: Observation<'_>, t: &GameTable, slot: Slot) -> Option<Refusal> {
+pub fn refusal<L: Layout>(obs: Observation<'_, L>, t: &GameTable, slot: Slot) -> Option<Refusal> {
     let (s, player) = (obs.shown(), obs.viewer());
     let land = match land_face(s, t, slot) {
         None => None,
@@ -535,11 +551,11 @@ pub fn refusal(obs: Observation<'_>, t: &GameTable, slot: Slot) -> Option<Refusa
 
 /// Answers a question of the casting machine, a paused resolution or a resolution's offer
 /// to cast, if one is open.
-fn perform_machine(
-    s: &mut State,
+fn perform_machine<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
-    x: &mut Scratch,
-    a: &mut dyn Answers,
+    x: &mut Scratch<L>,
+    a: &mut dyn Answers<L>,
     d: &Decision,
     c: Choice,
 ) -> Option<Result<(), Full>> {
@@ -578,11 +594,11 @@ fn perform_machine(
 }
 
 /// Takes a priority action.
-fn perform_priority(
-    s: &mut State,
+fn perform_priority<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
-    x: &mut Scratch,
-    a: &mut dyn Answers,
+    x: &mut Scratch<L>,
+    a: &mut dyn Answers<L>,
     player: Seat,
     option: Opt,
 ) -> Result<(), Full> {
@@ -608,11 +624,11 @@ fn perform_priority(
     }
 }
 
-fn perform(
-    s: &mut State,
+fn perform<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
-    x: &mut Scratch,
-    a: &mut dyn Answers,
+    x: &mut Scratch<L>,
+    a: &mut dyn Answers<L>,
     d: &Decision,
     c: Choice,
 ) -> Result<(), Full> {
@@ -709,7 +725,12 @@ fn perform(
 ///
 /// [CR 117.3b](https://yawgatog.com/resources/magic-rules/#R1173b): "The active player
 /// receives priority after a spell or ability (other than a mana ability) resolves."
-fn pass(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers) -> Result<(), Full> {
+fn pass<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    x: &mut Scratch<L>,
+    a: &mut dyn Answers<L>,
+) -> Result<(), Full> {
     s.turn.passes += 1;
     if s.turn.passes < 2 {
         s.turn.priority = s.turn.priority.opponent();
@@ -738,8 +759,8 @@ fn pass(s: &mut State, t: &GameTable, x: &mut Scratch, a: &mut dyn Answers) -> R
 /// [CR 119.4](https://yawgatog.com/resources/magic-rules/#R1194): "If a cost or effect allows
 /// a player to pay an amount of life greater than 0, the player may do so only if their life
 /// total is greater than or equal to the amount of the payment."
-fn play_land(
-    s: &mut State,
+fn play_land<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     player: Seat,
@@ -758,8 +779,8 @@ fn play_land(
     }
 }
 
-fn enter_from_hand(
-    s: &mut State,
+fn enter_from_hand<L: Layout>(
+    s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink,
     slot: Slot,
@@ -792,7 +813,7 @@ fn enter_from_hand(
 /// controller ([CR 708.5](https://yawgatog.com/resources/magic-rules/#R7085)): "You can't look
 /// at face-down cards in any other zone or face-down spells or permanents controlled by
 /// another player." Offering one of them, not both, would tell the other player.
-pub(crate) fn collapse(s: &State, candidates: Bitboard) -> Bitboard {
+pub(crate) fn collapse<L: Layout>(s: &State<L>, candidates: Bitboard) -> Bitboard {
     if candidates.count() < 2 {
         return candidates;
     }
@@ -801,11 +822,11 @@ pub(crate) fn collapse(s: &State, candidates: Bitboard) -> Bitboard {
 
 /// [`collapse`] keeping the first of interchangeable objects in the order of `slots`
 /// rather than the lowest slot.
-pub(crate) fn collapse_in_order(s: &State, slots: &[Slot]) -> Bitboard {
+pub(crate) fn collapse_in_order<L: Layout>(s: &State<L>, slots: &[Slot]) -> Bitboard {
     collapse_ordered(s, slots.iter().copied())
 }
 
-fn collapse_ordered(s: &State, slots: impl Iterator<Item = Slot>) -> Bitboard {
+fn collapse_ordered<L: Layout>(s: &State<L>, slots: impl Iterator<Item = Slot>) -> Bitboard {
     let signature = |slot: Slot| zone::signature(s, slot);
     // Found only once two candidates are of one card: until then every one is kept, named by
     // a reference or not.

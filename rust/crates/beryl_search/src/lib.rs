@@ -14,6 +14,7 @@ mod values;
 
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{Choice, Decision, GameTable, Observation};
+use beryl_engine::{Layout, Small};
 use serde::{Deserialize, Serialize};
 
 pub use eval::{FEATURES, Features, NAMES, WEIGHTS, evaluate, features, logit, sigmoid};
@@ -42,8 +43,8 @@ impl AgentDecision {
 }
 
 /// A player: answers decisions from what its seat can see.
-pub trait Agent {
-    fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice;
+pub trait Agent<L: Layout = Small> {
+    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision) -> Choice;
 
     /// The search behind the last answer; none if it was answered without one, or by an
     /// agent that does not search.
@@ -60,8 +61,8 @@ pub trait Agent {
 }
 
 /// A boxed agent, as the registry builds them, plays like the agent inside.
-impl<T: Agent + ?Sized> Agent for Box<T> {
-    fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice {
+impl<L: Layout, T: Agent<L> + ?Sized> Agent<L> for Box<T> {
+    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision) -> Choice {
         (**self).choose(obs, d)
     }
 
@@ -89,8 +90,8 @@ impl RandomAgent {
     }
 }
 
-impl Agent for RandomAgent {
-    fn choose(&mut self, _obs: Observation<'_>, d: &Decision) -> Choice {
+impl<L: Layout> Agent<L> for RandomAgent {
+    fn choose(&mut self, _obs: Observation<'_, L>, d: &Decision) -> Choice {
         Choice(self.rng.below(d.len() as u64) as u8)
     }
 }
@@ -113,8 +114,8 @@ impl GreedyAgent {
     }
 }
 
-impl Agent for GreedyAgent {
-    fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice {
+impl<L: Layout> Agent<L> for GreedyAgent {
+    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision) -> Choice {
         self.policy.choose(&self.table, obs, d)
     }
 }

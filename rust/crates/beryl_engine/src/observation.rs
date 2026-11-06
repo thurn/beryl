@@ -6,6 +6,7 @@ use crate::card::FaceIx;
 use crate::filter::Filter;
 use crate::fixed::Fixed;
 use crate::ids::{CardIx, Seat, Slot};
+use crate::layout::{Layout, Small};
 use crate::rng::SplitMix64;
 use crate::state::{
     CastPermission, DECK_SLOTS, Derived, Object, Pending, PendingTrigger, Player, StackEntry,
@@ -22,15 +23,15 @@ use crate::table::GameTable;
 /// state as its root, the position search plays on from; [`crate::observe`] builds such a
 /// view.
 #[derive(Clone, Copy)]
-pub struct Observation<'a> {
-    state: &'a State,
-    root: &'a State,
+pub struct Observation<'a, L: Layout = Small> {
+    state: &'a State<L>,
+    root: &'a State<L>,
     viewer: Seat,
 }
 
-impl<'a> Observation<'a> {
+impl<'a, L: Layout> Observation<'a, L> {
     /// The view of a committed state, which is its own root.
-    pub fn new(state: &'a State, viewer: Seat) -> Self {
+    pub fn new(state: &'a State<L>, viewer: Seat) -> Self {
         Self {
             state,
             root: state,
@@ -40,7 +41,7 @@ impl<'a> Observation<'a> {
 
     /// The view of `shown`, the position a paused resolution's question is asked in, whose
     /// committed state is `root`.
-    pub(crate) fn paused(shown: &'a State, root: &'a State, viewer: Seat) -> Self {
+    pub(crate) fn paused(shown: &'a State<L>, root: &'a State<L>, viewer: Seat) -> Self {
         Self {
             state: shown,
             root,
@@ -49,7 +50,7 @@ impl<'a> Observation<'a> {
     }
 
     /// The position shown, for the engine's own reads of public facts about it.
-    pub(crate) fn shown(&self) -> &'a State {
+    pub(crate) fn shown(&self) -> &'a State<L> {
         self.state
     }
 
@@ -167,7 +168,7 @@ impl<'a> Observation<'a> {
     /// omniscient search, which is labeled as cheating wherever a human meets it, does
     /// (architecture §19.1). The information-independence test holds every other agent to the
     /// masked accessors.
-    pub fn unmasked_root(&self) -> &'a State {
+    pub fn unmasked_root(&self) -> &'a State<L> {
         self.root
     }
 
@@ -178,7 +179,7 @@ impl<'a> Observation<'a> {
     /// order of every zone are kept; the game's random streams are reseeded from `rng`, so its
     /// seed does not leak. A paused resolution keeps what it showed the viewer known in the
     /// committed state, so it replays from here to the same question.
-    pub fn determinize(&self, t: &GameTable, rng: &mut SplitMix64) -> State {
+    pub fn determinize(&self, t: &GameTable, rng: &mut SplitMix64) -> State<L> {
         self.deal(t, rng, |_| false)
     }
 
@@ -192,15 +193,15 @@ impl<'a> Observation<'a> {
     /// knows ([CR 401.2](https://yawgatog.com/resources/magic-rules/#R4012): "Each library
     /// must be kept in a single face-down pile. Players can't look at or change the order of
     /// cards in a library.").
-    pub fn determinize_libraries(&self, t: &GameTable, rng: &mut SplitMix64) -> State {
+    pub fn determinize_libraries(&self, t: &GameTable, rng: &mut SplitMix64) -> State<L> {
         let root = self.root;
         self.deal(t, rng, |slot| root.object(slot).zone == Zone::Hand)
     }
 
     /// The root with each player's cards the viewer does not know, `shown` ones aside, dealt
     /// at random from the rest of their decklist.
-    fn deal(&self, t: &GameTable, rng: &mut SplitMix64, shown: impl Fn(Slot) -> bool) -> State {
-        let mut s = *self.root;
+    fn deal(&self, t: &GameTable, rng: &mut SplitMix64, shown: impl Fn(Slot) -> bool) -> State<L> {
+        let mut s = self.root.clone();
         for player in Seat::BOTH {
             let deck = t.deck(player);
             let mut remainder: Fixed<CardIx, DECK_SLOTS> = Fixed::new();

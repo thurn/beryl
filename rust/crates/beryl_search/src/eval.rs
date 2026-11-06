@@ -7,6 +7,7 @@
 //! It reads a full state: a determinization's or the true one. Search calls it at a leaf,
 //! where the state is a world it sampled, so reading hands there is no cheating.
 
+use beryl_engine::Layout;
 use beryl_engine::card::Types;
 use beryl_engine::{Seat, State, Zone};
 
@@ -46,7 +47,7 @@ pub const WEIGHTS: [f64; FEATURES] = [
 const LIBRARY_SHORT: usize = 5;
 
 /// Player `p`'s features in `s`.
-pub fn features(s: &State, values: &CardValues, p: Seat) -> Features {
+pub fn features<L: Layout>(s: &State<L>, values: &CardValues, p: Seat) -> Features {
     let mut f = [0.0; FEATURES];
     f[0] = f64::from(s.player(p).life.clamp(-10, 40));
     let hand = s.zone(p, Zone::Hand);
@@ -78,7 +79,7 @@ pub fn features(s: &State, values: &CardValues, p: Seat) -> Features {
 
 /// The weighted difference of the two players' features, first seat less second: the
 /// log-odds the first seat wins.
-pub fn logit(s: &State, values: &CardValues, weights: &[f64; FEATURES]) -> f64 {
+pub fn logit<L: Layout>(s: &State<L>, values: &CardValues, weights: &[f64; FEATURES]) -> f64 {
     let [a, b] = Seat::BOTH.map(|p| features(s, values, p).0);
     a.iter()
         .zip(&b)
@@ -88,7 +89,7 @@ pub fn logit(s: &State, values: &CardValues, weights: &[f64; FEATURES]) -> f64 {
 }
 
 /// The chance the first seat wins `s`.
-pub fn evaluate(s: &State, values: &CardValues) -> f64 {
+pub fn evaluate<L: Layout>(s: &State<L>, values: &CardValues) -> f64 {
     sigmoid(logit(s, values, &WEIGHTS))
 }
 

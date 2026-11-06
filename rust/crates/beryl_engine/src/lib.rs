@@ -2,8 +2,9 @@
 //! these docs refer to it.
 //!
 //! The engine is a state machine that never calls the AI: [`next`] advances a [`State`] until
-//! a player must decide or the game ends, and [`apply`] consumes one [`Choice`]. The state is
-//! one flat `Copy` value; the cards live in shared read-only tables ([`CardTable`],
+//! a player must decide or the game ends, and [`apply`] consumes one [`Choice`]. The engine is
+//! generic over the state's storage [`Layout`]; in [`Small`], the one search runs on, the
+//! state is one flat `Copy` value. The cards live in shared read-only tables ([`CardTable`],
 //! [`GameTable`]). Players see the game only through an [`Observation`].
 //!
 //! Rules code cites the Comprehensive Rules at <https://yawgatog.com/resources/magic-rules/>.
@@ -23,6 +24,7 @@ pub mod fixed;
 pub mod ids;
 mod invariants;
 mod layers;
+pub mod layout;
 mod mana;
 pub mod observation;
 pub mod profile;
@@ -50,6 +52,7 @@ pub use engine::{
 };
 pub use ids::{CardIx, Seat, Slot};
 pub use invariants::{At, Violation};
+pub use layout::{Layout, Small};
 pub use observation::Observation;
 pub use profile::{
     Breakpoint, NextStop, Payment, Profile, StepStops, Stops, can_declare_blockers, next_step_stop,
