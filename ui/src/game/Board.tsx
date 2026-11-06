@@ -1745,6 +1745,17 @@ interface MenuEntry {
   labelled?: boolean;
 }
 
+/** What an ability whose cost is `cost` does, where only a keyword's reminder text says it:
+ * cycling's "({3}, Discard this card: Draw a card.)". */
+function reminded(paragraphs: string[], cost: string): string | undefined {
+  for (const p of paragraphs) {
+    for (const [, said] of p.matchAll(/\(([^)]*)\)/g)) {
+      if (said!.startsWith(`${cost}: `)) return said!.slice(cost.length + 2);
+    }
+  }
+  return undefined;
+}
+
 /** The lines of a card's menu: each candidate, by its cost and effect (an activation's from
  * its paragraph, a cast's the card's mana cost), and a planeswalker's unaffordable loyalty
  * abilities among them, in the order its rules text lists them. */
@@ -1767,7 +1778,7 @@ function menuEntries(
       if (said === undefined) {
         return cost === undefined
           ? { act, effect: act.label, labelled: true }
-          : { act, cost, effect: "" };
+          : { act, cost, effect: reminded(paragraphs, cost) ?? "" };
       }
       return {
         act,

@@ -85,10 +85,9 @@ export function castName(act: Act, card: string): string {
 }
 
 /** What a cast named `cast` (castName's) adds, in its card's words: the paragraphs that name
- * its keyword besides the keyword's own (Thieving Skydiver's "if it was kicked"), or else
- * that one's reminder text (overload's "change "target" in its text to "each""), or else that
- * paragraph (Subtlety's "Evoke—Exile a blue card from your hand."). None for the card cast as
- * printed. */
+ * its keyword besides the keyword's own ("if it was kicked"), or else that one's reminder text
+ * (overload's "change "target" in its text to "each""), or else that paragraph ("Evoke—Exile a
+ * blue card from your hand."). None for the card cast as printed. */
 export function castParagraphs(text: string, cast: string): string[] {
   const keyword = /^[A-Z][a-z]+/.exec(cast)?.[0];
   if (!keyword || cast === "Cast") return [];

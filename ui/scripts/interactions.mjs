@@ -1980,6 +1980,31 @@ await check(
     { fixture: "cast-kicker", at: kickViews.length - 1, ready: skydiver },
 );
 
+// Spara's Headquarters in the same hand is played or cycled: cycling's effect, which only its
+// reminder text says, is in its menu line.
+const spara = kickBefore.objects.find(
+    (o) => o.name === "Spara's Headquarters" && o.zone === "hand",
+).slot;
+await check(
+    "a menu line says what an ability does from its reminder text",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.click(`[data-slot="${spara}"]`);
+        assert.deepEqual(
+            await page
+                .locator(".action-menu-effect:not(.action-menu-label)")
+                .allTextContents(),
+            ["Draw a card."],
+            "cycling draws",
+        );
+    },
+    {
+        fixture: "cast-kicker",
+        at: kickViews.length - 1,
+        ready: `[data-slot="${spara}"]`,
+    },
+);
+
 // Subtlety, cast for its mana or with evoke, whose exile from the hand is asked as a cost while
 // the cast can still be taken back.
 const evokeViews = await load("cast-evoke");
