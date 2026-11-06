@@ -62,6 +62,9 @@ pub static CARDS: CardTable = CardTable::new(&[
     &white::winds_of_abandon::CARD,
     &blue::subtlety::CARD,
     &blue::snapcaster_mage::CARD,
+    &azorius::teferi_hero_of_dominaria::CARD,
+    &blue::jace_wielder_of_mysteries::CARD,
+    &azorius::fractured_identity::CARD,
 ]);
 
 /// Every card's scenarios (architecture §17.1), by card name.
@@ -157,6 +160,18 @@ pub static SCENARIOS: &[(&str, &[Scenario])] = &[
     (names::WINDS_OF_ABANDON, white::winds_of_abandon::SCENARIOS),
     (names::SUBTLETY, blue::subtlety::SCENARIOS),
     (names::SNAPCASTER_MAGE, blue::snapcaster_mage::SCENARIOS),
+    (
+        names::TEFERI_HERO_OF_DOMINARIA,
+        azorius::teferi_hero_of_dominaria::SCENARIOS,
+    ),
+    (
+        names::JACE_WIELDER_OF_MYSTERIES,
+        blue::jace_wielder_of_mysteries::SCENARIOS,
+    ),
+    (
+        names::FRACTURED_IDENTITY,
+        azorius::fractured_identity::SCENARIOS,
+    ),
 ];
 
 #[cfg(test)]

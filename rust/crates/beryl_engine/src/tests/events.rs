@@ -127,7 +127,7 @@ static ENDER: CardDef = CardDef {
 };
 
 fn drain_delay(ctx: &mut EffectCtx) -> crate::card::Flow {
-    ctx.delay(1, Delayed::YourNextMainPhase, 2);
+    ctx.delay(1, 2);
     Ok(())
 }
 
@@ -144,7 +144,7 @@ static DRAIN_LAND: CardDef = CardDef {
         types: Types::LAND,
         abilities: &[
             Ability::triggered(Trigger::Enters, drain_delay),
-            Ability::triggered(Trigger::Delayed, drain_mana),
+            Ability::triggered(Trigger::Delayed(Delayed::YourNextMainPhase), drain_mana),
         ],
         ..Face::EMPTY
     }],
@@ -355,7 +355,7 @@ static STAFF: CardDef = CardDef {
         types: Types::ARTIFACT,
         abilities: &[
             Ability::triggered(Trigger::YouCreateTokens(Types::CREATURE), story_counter),
-            Ability::triggered(Trigger::Delayed, two_maps),
+            Ability::triggered(Trigger::Delayed(Delayed::YourNextMainPhase), two_maps),
         ],
         ..Face::EMPTY
     }],

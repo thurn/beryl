@@ -5,7 +5,7 @@
 //! look-back trigger matching with last-known information, execution, a layer refresh, then
 //! trigger matching and the sink; every other event is executed by its primitive and then
 //! [`settle`]d the same way. The cube's other replacement and prevention effects (damage,
-//! draws) arrive with the cards that create them; none of the Milestone 1 cards does.
+//! most draws) arrive with the cards that create them.
 
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityKind, FaceIx, Replacement, Types};
@@ -155,6 +155,7 @@ pub(crate) mod kind {
     pub const CAST: u16 = 1 << 5;
     pub const DIES: u16 = 1 << 6;
     pub const DISCARD: u16 = 1 << 7;
+    pub const DRAW: u16 = 1 << 8;
 }
 
 impl Event {
@@ -174,6 +175,7 @@ impl Event {
             Event::StepBegins { .. } => kind::STEP,
             Event::TokensCreated { .. } => kind::TOKENS,
             Event::Cast { .. } => kind::CAST,
+            Event::Draw { .. } => kind::DRAW,
             _ => 0,
         }
     }
@@ -470,7 +472,8 @@ fn enter_replacements(s: &State, t: &GameTable, slot: Slot, mut entry: Entry) ->
             continue;
         }
         match ability.replacement {
-            Replacement::None => {}
+            // Not about entering: the draw machinery reads it.
+            Replacement::None | Replacement::WinInsteadOfDrawingFromEmptyLibrary => {}
             Replacement::EntersTapped => entry.tapped = true,
             Replacement::EntersTappedUnlessFewLands(n) => {
                 // Not yet on the battlefield, so every land counted is another land.
@@ -561,7 +564,15 @@ pub(crate) fn gain_life(
 
 /// A player draws cards, one at a time
 /// ([CR 121.2](https://yawgatog.com/resources/magic-rules/#R1212)): "If a player is instructed
-/// to draw multiple cards, that player performs that many individual card draws."
+/// to draw multiple cards, that player performs that many individual card draws." The event
+/// counts the cards actually drawn, if any.
+///
+/// Each draw from an empty library is offered to Jace, Wielder of Mysteries' replacement
+/// first ([CR 614.11](https://yawgatog.com/resources/magic-rules/#R61411)): "Some effects
+/// replace card draws. These effects are applied even if no cards could be drawn because
+/// there are no cards in the affected player's library." Winning ends the game at once
+/// ([CR 104.2b](https://yawgatog.com/resources/magic-rules/#R1042b)): "An effect may state
+/// that a player wins the game." The draws left are never made.
 pub(crate) fn draw(
     s: &mut State,
     t: &GameTable,
@@ -569,8 +580,46 @@ pub(crate) fn draw(
     player: Seat,
     cards: u8,
 ) -> Result<(), Full> {
-    zone::draw_n(s, player, cards)?;
-    settle(s, t, sink, Event::Draw { player, cards })
+    let mut drawn = 0;
+    let mut wins = false;
+    for _ in 0..cards {
+        if s.library(player).is_empty() {
+            if wins_instead_of_drawing(s, t, player) {
+                wins = true;
+                break;
+            }
+        } else {
+            drawn += 1;
+        }
+        zone::draw(s, player)?;
+    }
+    if drawn > 0 {
+        settle(
+            s,
+            t,
+            sink,
+            Event::Draw {
+                player,
+                cards: drawn,
+            },
+        )?;
+    }
+    if wins {
+        crate::sba::end_game(s, sink, player.opponent());
+    }
+    Ok(())
+}
+
+/// Whether `player` controls a permanent whose replacement effect has them win rather than
+/// draw from an empty library.
+fn wins_instead_of_drawing(s: &State, t: &GameTable, player: Seat) -> bool {
+    s.battlefield().iter().any(|&slot| {
+        s.controller(slot) == player
+            && trigger::face(s, t, slot)
+                .abilities
+                .iter()
+                .any(|a| a.replacement == Replacement::WinInsteadOfDrawingFromEmptyLibrary)
+    })
 }
 
 /// Deals damage ([CR 120.3](https://yawgatog.com/resources/magic-rules/#R1203)).
@@ -722,6 +771,11 @@ pub struct TokenEntry {
     pub attacking: bool,
     /// A copy that is 1/1 by exception (an offspring token, CR 707.9b).
     pub one_one: bool,
+    /// The face up of a copy of a double-faced permanent
+    /// ([CR 707.8a](https://yawgatog.com/resources/magic-rules/#R7078a)): "If the token is a
+    /// copy of a double-faced permanent with its back face up, the token enters the
+    /// battlefield with its back face up."
+    pub face: FaceIx,
 }
 
 /// Creates `count` tokens of the game-table card `card` under `controller`'s control.
@@ -767,6 +821,7 @@ pub(crate) fn create_tokens(
         Entry {
             tapped: how.tapped,
             attacking: how.attacking,
+            face: how.face,
             ..Entry::default()
         },
     )?;

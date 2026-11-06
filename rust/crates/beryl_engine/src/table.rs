@@ -156,7 +156,7 @@ fn listens(def: &CardDef) -> u16 {
     for face in def.faces {
         for ability in face.abilities {
             mask |= match ability.trigger {
-                Trigger::None | Trigger::Delayed => 0,
+                Trigger::None | Trigger::Delayed(_) => 0,
                 Trigger::Enters => kind::ENTERS,
                 Trigger::Dies => kind::DIES,
                 Trigger::Attacks | Trigger::YouAttack => kind::ATTACK,
@@ -165,6 +165,7 @@ fn listens(def: &CardDef) -> u16 {
                 Trigger::YouCreateTokens(_) => kind::TOKENS,
                 Trigger::YouCast => kind::CAST,
                 Trigger::YouDiscard => kind::DISCARD,
+                Trigger::YouDraw => kind::DRAW,
             };
         }
     }

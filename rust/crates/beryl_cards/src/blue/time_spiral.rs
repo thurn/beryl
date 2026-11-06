@@ -1,13 +1,12 @@
 //! Time Spiral. {4}{U}{U} Sorcery. "Exile Time Spiral. Each player shuffles their hand and
 //! graveyard into their library, then draws seven cards. You untap up to six lands."
 
+use beryl_engine::DecisionKind;
 use beryl_engine::Seat;
 use beryl_engine::Zone;
 use beryl_engine::card::{Ability, AbilityKind, CardDef, Colors, Face, Flow, ManaCost, Types};
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
-use beryl_engine::filter::Filter;
-use beryl_engine::{Ask, DecisionKind};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
 use crate::blue::timetwister::wheel;
@@ -38,28 +37,12 @@ const LANDS: u8 = 6;
 /// Exiled first, Time Spiral is not shuffled away, and it is not put into a graveyard as the
 /// final part of its resolution (CR 608.2n): it is no longer on the stack.
 ///
-/// "Up to six lands" are any lands, whoever controls them. Untapping an untapped land does
-/// nothing ([CR 701.26b](https://yawgatog.com/resources/magic-rules/#R70126b)): "Only tapped
-/// permanents can be untapped", so only tapped lands are offered.
+/// "Up to six lands" are any lands, whoever controls them
+/// ([`EffectCtx::untap_up_to_lands`]).
 fn spiral(ctx: &mut EffectCtx) -> Flow {
     ctx.move_to(ctx.source(), Zone::Exile, Reason::Exile);
     wheel(ctx);
-    let s = ctx.state();
-    let tapped = Filter::All(&[Filter::Types(Types::LAND), Filter::Tapped]);
-    let lands = tapped.select(
-        s,
-        ctx.table(),
-        s.zone(Seat::P0, Zone::Battlefield) | s.zone(Seat::P1, Zone::Battlefield),
-        ctx.controller(),
-    );
-    for slot in ctx
-        .choose_up_to(ctx.controller(), lands, LANDS, Ask::Untap { max: LANDS })?
-        .iter()
-    {
-        let land = ctx.state().object_ref(slot);
-        ctx.untap(land);
-    }
-    Ok(())
+    ctx.untap_up_to_lands(LANDS)
 }
 
 /// Six lands to cast it with, all tapped by the casting.

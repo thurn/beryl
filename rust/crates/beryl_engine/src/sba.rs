@@ -122,12 +122,30 @@ fn doomed(s: &State) -> (Bitboard, Bitboard) {
 /// remaining in a game lose simultaneously, the game is a draw."
 fn check_losses(s: &mut State, sink: &mut Sink) -> bool {
     let lost = s.players.map(|p| p.life <= 0 || p.drew_from_empty);
-    s.outcome = match lost {
-        [false, false] => return false,
-        [true, true] => Some(Outcome::Draw),
-        [true, false] => Some(Outcome::Win(Seat::P1)),
-        [false, true] => Some(Outcome::Win(Seat::P0)),
-    };
+    if lost == [false, false] {
+        return false;
+    }
+    end(s, sink, lost);
+    true
+}
+
+/// Ends the game as `loser` loses it, as their opponent wins it by an effect
+/// ([CR 104.2b](https://yawgatog.com/resources/magic-rules/#R1042b)): "An effect may state
+/// that a player wins the game." In a two-player game that is one ending
+/// ([CR 104.2a](https://yawgatog.com/resources/magic-rules/#R1042a)): "A player still in the
+/// game wins the game if that player's opponents have all left the game."
+pub(crate) fn end_game(s: &mut State, sink: &mut Sink, loser: Seat) {
+    let mut lost = [false; 2];
+    lost[loser.index()] = true;
+    end(s, sink, lost);
+}
+
+fn end(s: &mut State, sink: &mut Sink, lost: [bool; 2]) {
+    s.outcome = Some(match lost {
+        [true, false] => Outcome::Win(Seat::P1),
+        [false, true] => Outcome::Win(Seat::P0),
+        _ => Outcome::Draw,
+    });
     for player in Seat::BOTH {
         sink.push(if lost[player.index()] {
             Event::Lose { player }
@@ -135,7 +153,6 @@ fn check_losses(s: &mut State, sink: &mut Sink) -> bool {
             Event::Win { player }
         });
     }
-    true
 }
 
 fn is_legendary(s: &State, slot: Slot) -> bool {

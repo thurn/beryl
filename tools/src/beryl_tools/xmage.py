@@ -106,6 +106,11 @@ ABILITIES: dict[tuple[str, str], str] = {
     ("Jace, the Mind Sculptor", "Own 1"): "0:",
     ("Jace, the Mind Sculptor", "Own 2"): "-1:",
     ("Jace, the Mind Sculptor", "Own 3"): "-12:",
+    ("Jace, Wielder of Mysteries", "Own 1"): "+1:",
+    ("Jace, Wielder of Mysteries", "Own 2"): "-8:",
+    ("Teferi, Hero of Dominaria", "Own 0"): "+1:",
+    ("Teferi, Hero of Dominaria", "Own 1"): "-3:",
+    ("Teferi, Hero of Dominaria", "Own 2"): "-8:",
     ("Teferi, Time Raveler", "Own 1"): "+1:",
     ("Teferi, Time Raveler", "Own 2"): "-3:",
     ("The Wandering Emperor", "Own 1"): "+1:",
@@ -167,8 +172,10 @@ TARGETS_IN_CAST = ("Sink into Stupor",)
 # Questions XMage asks before a choice Beryl makes directly, by the resolving card and Beryl's
 # decision kind, with the answer that leaves the choice to Beryl's picks.
 ASKED_FIRST: dict[tuple[str, str], str] = {
-    # "Include your tapped lands to untap?", XMage's shortcut for untapping them all.
+    # "Include your tapped lands to untap?", XMage's shortcut for untapping them all, asked
+    # only when its controller has no more tapped lands than it untaps.
     ("Time Spiral", "ChooseUpTo"): "No",
+    ("Teferi, Hero of Dominaria", "ChooseUpTo"): "No",
 }
 
 # Abilities where Beryl asks whether to choose a card and then which: whether XMage asks the yes
@@ -397,11 +404,23 @@ class Exporter:
             self.reach(p.turn, p.step)
             if action["action"] != "Answer":
                 self.end_scry()
+            self.simultaneous_emblem_triggers(p)
             self.act(action, p)
         self.end_scry()
         if self.take_pending is not None:
             raise Unsupported(f"{self.take_pending} putting cards into a hand unasked")
         self.stop()
+
+    @staticmethod
+    def simultaneous_emblem_triggers(p: Position) -> None:
+        """An emblem's triggers on one event, such as Teferi, Hero of Dominaria's for each card
+        of a multiple draw, go on the stack together: XMage asks their order, which Beryl, with
+        the triggers equivalent (architecture section 7.2), never asks, and an emblem names no
+        card to answer with."""
+        names = [cast(str, item["name"]) for item in p.stack if not item["spell"]]
+        for name in set(names):
+            if name.endswith(" Emblem") and names.count(name) > 1:
+                raise Unsupported(f"ordering {name}'s simultaneous triggers")
 
     def unasked(self, p: Position) -> None:
         """For each `UNLESS_PAYS` counterspell that left the stack without Beryl asking its

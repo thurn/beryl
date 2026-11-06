@@ -1069,9 +1069,15 @@ pub enum Trigger {
     /// ([CR 701.9a](https://yawgatog.com/resources/magic-rules/#R7019a)): "To discard a card,
     /// move it from its owner's hand to that player's graveyard."
     YouDiscard,
+    /// "Whenever you draw a card": once for each card drawn (CR 603.2c), each draw one event
+    /// of its own ([CR 121.2](https://yawgatog.com/resources/magic-rules/#R1212)): "If a
+    /// player is instructed to draw multiple cards, that player performs that many individual
+    /// card draws." A draw that a replacement effect replaced never happens
+    /// ([CR 614.6](https://yawgatog.com/resources/magic-rules/#R6146)), so it triggers nothing.
+    YouDraw,
     /// A delayed triggered ability (CR 603.7): never matched against events, but created by
-    /// a body with the moment it waits for.
-    Delayed,
+    /// a body, to wait for the moment its text names.
+    Delayed(Delayed),
 }
 
 /// The moment a delayed triggered ability waits for. It triggers once, the next time that
@@ -1084,9 +1090,12 @@ pub enum Delayed {
     /// precombat or postcombat main phase.
     #[default]
     YourNextMainPhase,
+    /// "At the beginning of the next end step" (Teferi, Hero of Dominaria): whoever's turn it
+    /// is ([CR 513.1a](https://yawgatog.com/resources/magic-rules/#R5131a)).
+    NextEndStep,
 }
 
-/// A replacement effect of a permanent's own static ability that modifies how it enters
+/// A replacement effect of a permanent's own static ability: most modify how it enters
 /// ([CR 614.1c](https://yawgatog.com/resources/magic-rules/#R6141c)): "Effects that read
 /// '[This permanent] enters with . . . ,' 'As [this permanent] enters . . . ,' or '[This
 /// permanent] enters as . . . ' are replacement effects."
@@ -1104,6 +1113,12 @@ pub enum Replacement {
     /// "As this enters, you may pay N life. If you don't, it enters tapped." (Soporific
     /// Springs) Whoever puts it onto the battlefield asks its controller first.
     EntersTappedUnlessPayLife(u8),
+    /// "If you would draw a card while your library has no cards in it, you win the game
+    /// instead." (Jace, Wielder of Mysteries) Not a way of entering: a draw replacement
+    /// ([CR 121.6a](https://yawgatog.com/resources/magic-rules/#R1216a)): "An effect that
+    /// replaces a card draw is applied even if no cards could be drawn because there are no
+    /// cards in the affected player's library."
+    WinInsteadOfDrawingFromEmptyLibrary,
 }
 
 /// A static ability's continuous effect: what it affects, when, and how (§9).

@@ -7,8 +7,7 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, CardDef, Delayed, FaceAbility, FaceIx, Flow, ManaColor, ManaCost, Modification, Pause,
-    Types,
+    Ability, CardDef, FaceAbility, FaceIx, Flow, ManaColor, ManaCost, Modification, Pause, Types,
 };
 use crate::cast;
 use crate::decision::{Answers, Ask, Candidates, Choice, Decision, DecisionKind, Opt, StallReason};
@@ -225,13 +224,17 @@ impl<'a> EffectCtx<'a> {
 
     /// Asks a question (§7.3). A question with one answer is answered silently, except under
     /// [`Stops::Forced`]. Otherwise the choice record answers it, or an inline source does, or
-    /// the body pauses here.
+    /// the body pauses here. Once the game is over, as when a player won it mid-resolution,
+    /// the body asks nothing more.
     fn ask(&mut self, d: &Decision) -> Result<Choice, Pause> {
         debug_assert!(
             self.ability.may_pause,
             "a body asked a question without declaring may_pause"
         );
         debug_assert!(!d.is_empty(), "a question with no answer");
+        if self.state.outcome.is_some() {
+            return Err(Pause);
+        }
         if d.len() == 1 && self.state.profile.stops != Stops::Forced {
             return Ok(Choice(0));
         }
@@ -1067,6 +1070,39 @@ impl<'a> EffectCtx<'a> {
         self.tokens(self.entry.controller, card, count, how)
     }
 
+    /// Creates `count` tokens that are copies of the card with this game index under
+    /// `player`'s control, as Fractured Identity's "Each player other than its controller
+    /// creates a token that's a copy of it" (CR 111.2, 707.2).
+    pub fn create_tokens_of_for(
+        &mut self,
+        player: Seat,
+        card: CardIx,
+        count: u8,
+        how: TokenEntry,
+    ) -> Bitboard {
+        self.tokens(player, card, count, how)
+    }
+
+    /// The copiable values of a permanent, for tokens that copy it: its card, and how such a
+    /// token enters ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)): "the
+    /// copy acquires the copiable values of the original object's characteristics ... Other
+    /// effects (including type-changing and text-changing effects), status, counters, and
+    /// stickers are not copied." A token's are those its own creation defined
+    /// ([CR 111.3](https://yawgatog.com/resources/magic-rules/#R1113)), including a copy's
+    /// 1/1 exception ([CR 707.9b](https://yawgatog.com/resources/magic-rules/#R7079b)): "The
+    /// final set of values for that characteristic becomes part of the copiable values of the
+    /// copy." A double-faced permanent's copy has both faces, the same one up
+    /// ([CR 707.8a](https://yawgatog.com/resources/magic-rules/#R7078a)).
+    pub fn copiable_values(&self, object: ObjectRef) -> (CardIx, TokenEntry) {
+        let o = self.state.object(object.slot);
+        let how = TokenEntry {
+            one_one: o.flags.has(ObjectFlags::ONE_ONE),
+            face: o.face,
+            ..TokenEntry::default()
+        };
+        (o.card, how)
+    }
+
     fn tokens(&mut self, player: Seat, card: CardIx, count: u8, how: TokenEntry) -> Bitboard {
         let created =
             event::create_tokens(self.state, self.table, self.sink, player, card, count, how);
@@ -1192,9 +1228,10 @@ impl<'a> EffectCtx<'a> {
     }
 
     /// Creates a delayed triggered ability: the ability at `ability` on this ability's card,
-    /// triggering once at `at`, controlled by this ability's controller, carrying `amount`
+    /// triggering once at the moment its [`crate::card::Trigger::Delayed`] names, controlled
+    /// by this ability's controller, carrying `amount`
     /// ([CR 603.7](https://yawgatog.com/resources/magic-rules/#R6037)).
-    pub fn delay(&mut self, ability: u8, at: Delayed, amount: u8) {
+    pub fn delay(&mut self, ability: u8, amount: u8) {
         let trigger = PendingTrigger {
             source: self.entry.object,
             card: self.entry.card,
@@ -1206,8 +1243,41 @@ impl<'a> EffectCtx<'a> {
                 ..TriggerInfo::default()
             },
         };
-        let r = trigger::delay(self.state, trigger, at);
+        let r = trigger::delay(self.state, trigger);
         self.check(r);
+    }
+
+    /// `player` wins the game ([CR 104.2b](https://yawgatog.com/resources/magic-rules/#R1042b)):
+    /// "An effect may state that a player wins the game." The game ends at once; the body
+    /// asks nothing more.
+    pub fn win_game(&mut self, player: Seat) {
+        if self.state.outcome.is_none() {
+            crate::sba::end_game(self.state, self.sink, player.opponent());
+        }
+    }
+
+    /// This ability's controller untaps up to `n` lands of their choice, whoever controls
+    /// them, as Teferi, Hero of Dominaria's "untap up to two lands". Untapping an untapped
+    /// land does nothing ([CR 701.26b](https://yawgatog.com/resources/magic-rules/#R70126b)):
+    /// "Only tapped permanents can be untapped", so only tapped lands are offered.
+    pub fn untap_up_to_lands(&mut self, n: u8) -> Flow {
+        let you = self.entry.controller;
+        let tapped = Filter::All(&[Filter::Types(Types::LAND), Filter::Tapped]);
+        let s = &*self.state;
+        let lands = tapped.select(
+            s,
+            self.table,
+            s.zone(Seat::P0, Zone::Battlefield) | s.zone(Seat::P1, Zone::Battlefield),
+            you,
+        );
+        for slot in self
+            .choose_up_to(you, lands, n, Ask::Untap { max: n })?
+            .iter()
+        {
+            let land = self.state.object_ref(slot);
+            self.untap(land);
+        }
+        Ok(())
     }
 
     /// Flips a coin and returns whether the player won the flip

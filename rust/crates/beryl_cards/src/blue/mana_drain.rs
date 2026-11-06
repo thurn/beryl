@@ -26,7 +26,7 @@ pub static CARD: CardDef = CardDef {
                 body: counter_and_delay,
                 ..Ability::NONE
             },
-            Ability::triggered(Trigger::Delayed, add_colorless),
+            Ability::triggered(Trigger::Delayed(Delayed::YourNextMainPhase), add_colorless),
         ],
         ..Face::EMPTY
     }],
@@ -44,7 +44,7 @@ fn counter_and_delay(ctx: &mut EffectCtx) -> Flow {
     };
     let value = ctx.spell_mana_value(spell).unwrap_or(0);
     ctx.counter(spell, false);
-    ctx.delay(1, Delayed::YourNextMainPhase, value);
+    ctx.delay(1, value);
     Ok(())
 }
 

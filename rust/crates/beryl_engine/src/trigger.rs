@@ -48,7 +48,9 @@ pub(crate) fn match_event(s: &mut State, t: &GameTable, e: &Event) -> Result<(),
             let face = s.object(slot).face;
             for (a, ability) in face_abilities(t, card, face) {
                 if let Some(info) = fires(s, ability.trigger, Some(slot), controller, e) {
-                    enqueue(s, t, Some(source), card, face, a, controller, info)?;
+                    for _ in 0..times(ability.trigger, e) {
+                        enqueue(s, t, Some(source), card, face, a, controller, info)?;
+                    }
                 }
             }
         }
@@ -60,16 +62,30 @@ pub(crate) fn match_event(s: &mut State, t: &GameTable, e: &Event) -> Result<(),
                 }
                 for (a, ability) in face_abilities(t, card, FaceIx::FRONT) {
                     if let Some(info) = fires(s, ability.trigger, None, player, e) {
-                        enqueue(s, t, None, card, FaceIx::FRONT, a, player, info)?;
+                        for _ in 0..times(ability.trigger, e) {
+                            enqueue(s, t, None, card, FaceIx::FRONT, a, player, info)?;
+                        }
                     }
                 }
             }
         }
     }
     if let Event::StepBegins { step, active } = *e {
-        fire_delayed(s, step, active)?;
+        fire_delayed(s, t, step, active)?;
     }
     Ok(())
+}
+
+/// How many times a trigger that fires on `e` triggers: once for each card of a draw event,
+/// whose cards are individual draws
+/// ([CR 603.2c](https://yawgatog.com/resources/magic-rules/#R6032c)): "An ability triggers
+/// only once each time its trigger event occurs. However, it can trigger repeatedly if one
+/// event contains multiple occurrences."
+fn times(trigger: Trigger, e: &Event) -> u8 {
+    match (trigger, *e) {
+        (Trigger::YouDraw, Event::Draw { cards, .. }) => cards,
+        _ => 1,
+    }
 }
 
 fn face_abilities(
@@ -154,6 +170,7 @@ fn fires(
                 ..
             },
         ) if s.object(object.slot).owner == you => Some(info(Some(object), you, 0)),
+        (Trigger::YouDraw, Event::Draw { player, .. }) if player == you => Some(info(None, you, 0)),
         _ => None,
     }
 }
@@ -249,19 +266,21 @@ fn enqueue(
 
 /// Fires the delayed triggers waiting for this step, each once
 /// ([CR 603.7b](https://yawgatog.com/resources/magic-rules/#R6037b)).
-fn fire_delayed(s: &mut State, step: TurnStep, active: Seat) -> Result<(), Full> {
+fn fire_delayed(s: &mut State, t: &GameTable, step: TurnStep, active: Seat) -> Result<(), Full> {
     let mut i = 0;
     while i < s.delayed.len() {
         let d = s.delayed.as_slice()[i];
-        let due = match d.at {
-            Delayed::YourNextMainPhase => {
+        let due = match ability(t, d.card, d.face, d.ability).trigger {
+            Trigger::Delayed(Delayed::YourNextMainPhase) => {
                 matches!(step, TurnStep::PrecombatMain | TurnStep::PostcombatMain)
-                    && active == d.trigger.controller
+                    && active == d.controller
             }
+            Trigger::Delayed(Delayed::NextEndStep) => step == TurnStep::End,
+            _ => unreachable!("a delayed trigger's ability is a delayed one"),
         };
         if due {
             s.delayed.remove(i);
-            s.triggers.push(d.trigger)?;
+            s.triggers.push(d)?;
         } else {
             i += 1;
         }
@@ -334,6 +353,6 @@ pub(crate) fn put_on_stack(
 }
 
 /// Creates a delayed triggered ability ([CR 603.7](https://yawgatog.com/resources/magic-rules/#R6037)).
-pub(crate) fn delay(s: &mut State, trigger: PendingTrigger, at: Delayed) -> Result<(), Full> {
-    s.delayed.push(crate::state::DelayedTrigger { trigger, at })
+pub(crate) fn delay(s: &mut State, trigger: PendingTrigger) -> Result<(), Full> {
+    s.delayed.push(trigger)
 }
