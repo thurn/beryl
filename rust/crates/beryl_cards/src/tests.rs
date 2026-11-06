@@ -482,3 +482,60 @@ fn a_copy_of_a_face_down_permanent_hides_its_card() {
         "{d:?}"
     );
 }
+
+/// Turning a face-down permanent face up (CR 116.2b) asks how to pay its mana cost when the
+/// payments differ in what they leave floating, and turns it face up once paid: two Islands,
+/// or an Island and Mana Crypt with {C} left over. Not an oracle scenario: the exporters script
+/// no payment plans.
+#[test]
+fn turning_face_up_asks_for_a_payment_plan() {
+    use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+    const PLAN: Scenario = Scenario::new("A face-down Snapcaster Mage turns up with Mana Crypt")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(names::SNAPCASTER_MAGE).face_down(),
+                Permanent::new(names::ISLAND),
+                Permanent::new(names::ISLAND),
+                Permanent::new(names::MANA_CRYPT),
+            ],
+        )
+        .library(P0, &[names::PLAINS])
+        .library(P1, &[names::PLAINS])
+        .actions(&[
+            Action::TurnFaceUp {
+                player: P0,
+                card: names::SNAPCASTER_MAGE,
+            },
+            Action::assert(Assertion::Decision {
+                player: P0,
+                kind: DecisionKind::PaymentPlan,
+                candidates: 2,
+            }),
+            Action::answer(P0, DecisionKind::PaymentPlan, Pick::Plan { i: 1 }),
+            Action::assert(Assertion::FaceDown {
+                player: P0,
+                card: names::SNAPCASTER_MAGE,
+                count: 0,
+            }),
+            Action::assert(Assertion::Tapped {
+                player: P0,
+                card: names::MANA_CRYPT,
+                count: 1,
+            }),
+            Action::assert(Assertion::Tapped {
+                player: P0,
+                card: names::ISLAND,
+                count: 1,
+            }),
+            Action::assert(Assertion::Pt {
+                player: P0,
+                card: names::SNAPCASTER_MAGE,
+                token: false,
+                power: 2,
+                toughness: 1,
+            }),
+        ]);
+    beryl_scenario::run(&CARDS, &PLAN).unwrap_or_else(|e| panic!("{e}"));
+}
