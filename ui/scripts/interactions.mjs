@@ -4274,11 +4274,31 @@ const coveredBy = (page, by) =>
  * a raised hand card. */
 const COVERS = "[data-life], .tip, .game-log, .hand-hit";
 
+// The opponent holding nine cards: their fan's outer backs, which its turn lifts, still show.
+await derive(FIXTURE, "held-nine", 105, (v) => {
+    const held = v.objects.filter(
+        (o) => o.owner === "opponent" && o.zone === "hand",
+    );
+    const more = Array.from({ length: 9 - held.length }, (_, i) => ({
+        ...held[0],
+        slot: 9100 + i,
+    }));
+    return { ...v, objects: [...v.objects, ...more] };
+});
 for (const [title, run] of [
     ["a crowded table", crowdedRun(crowdedAt)],
     [
         "a full opposing hand",
         {
+            at: 106,
+            ready: ".card-el-held",
+            reducedMotion: "reduce",
+        },
+    ],
+    [
+        "nine cards in the opposing hand",
+        {
+            fixture: "held-nine",
             at: 106,
             ready: ".card-el-held",
             reducedMotion: "reduce",
@@ -4290,6 +4310,14 @@ for (const [title, run] of [
         async (page) => {
             await page.clock.runFor(2000);
             assert.deepEqual(await coveredBy(page, COVERS), [], "at rest");
+            // Each of the opponent's backs reaches well into the window, to be counted.
+            const feet = await page.$$eval(".card-el-held", (backs) =>
+                backs.map((e) => Math.round(e.getBoundingClientRect().bottom)),
+            );
+            assert.ok(
+                feet.every((y) => y >= 24),
+                `the backs end at ${feet.join(", ")}`,
+            );
             // Each hand card raised in turn, the pointer at its top.
             for (const card of await page.locator(".card-el-hand").all()) {
                 const box = await card.boundingBox();

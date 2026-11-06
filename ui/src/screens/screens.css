@@ -696,10 +696,11 @@
 .table {
   position: absolute;
   inset: 0;
-  isolation: isolate;
   font-family: var(--font-serif);
 }
-/* The cloth reaches the window's edges, under everything on the table and dimmed with it. */
+/* The cloth reaches the window's edges, under everything on the stage, and is dimmed with the
+   table (its filter then holds the cloth). The table forms no layer of its own otherwise, so
+   what it raises, as a dragged card or a menu, still rises over the brand beside it. */
 .table::before {
   content: "";
   position: absolute;

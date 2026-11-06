@@ -193,16 +193,20 @@ function CardElement({
     held !== undefined && (held.dragging || held.epoch === layer.epoch);
   useGlide(x, place.x, reduce, { holding });
   useGlide(y, place.y, reduce, { holding });
-  // A card changing looks is drawn at another type unit (a back, a full frame, a battlefield
-  // frame): before that is painted, its scale makes up the difference, and then glides, so the
-  // card's size changes smoothly too.
+  // A card changing looks, or tapping, is drawn at another type unit (a back, a full frame, a
+  // battlefield frame, a turned one): before that is painted, its scale makes up the
+  // difference, and then glides, so the card's size changes smoothly too. A crowded row
+  // squeezing its frames keeps their height, which the scale must not make up for.
   const unit = typeUnit(place.width, place.height);
-  const drawnUnit = useRef(unit);
+  const frameKind = `${place.look}|${object.tapped}`;
+  const drawn = useRef({ unit, frameKind });
   useLayoutEffect(() => {
-    if (drawnUnit.current === unit) return;
-    scale.jump((scale.get() * drawnUnit.current) / unit);
-    drawnUnit.current = unit;
-  }, [scale, unit]);
+    const was = drawn.current;
+    drawn.current = { unit, frameKind };
+    if (was.unit !== unit && was.frameKind !== frameKind) {
+      scale.jump((scale.get() * was.unit) / unit);
+    }
+  }, [scale, unit, frameKind]);
   useGlide(scale, place.scale, reduce, { restart: unit });
   // A hand card is raised while hovered and while the pointer holds it; anything else dragged
   // straightens.

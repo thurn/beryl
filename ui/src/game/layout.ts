@@ -370,8 +370,11 @@ function handPlacements(cards: ObjectView[], tucked: boolean): Placement[] {
 }
 
 /** How far the opponent's hand reaches down the stage: above their life orb's top (y 48),
- * which would otherwise cover the middle backs' feet, so each back can be counted. */
+ * which would otherwise cover the middle backs' feet, so each back can be counted. Its arc
+ * rises toward the ends no more than `HELD_RISE`, so that the outer backs of a large hand, which
+ * their turn already lifts, stay in sight. */
 const HELD_FOOT = 44;
+const HELD_RISE = 16;
 
 /** How far each hand card in `hand` may rise (RAISE) without the raised card, or the reach of
  * its element that keeps the pointer on it, coming over any of your lands' `lands` boxes: a
@@ -421,7 +424,7 @@ function heldPlacements(cards: ObjectView[]): Placement[] {
       HELD_FOOT - height,
       (i - mid) * -4.2,
       [BACK_WIDTH / 2, height / 2],
-      -((i - mid) ** 2) * 3.5,
+      -Math.min((i - mid) ** 2 * 3.5, HELD_RISE),
     ),
   }));
 }
