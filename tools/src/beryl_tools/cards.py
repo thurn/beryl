@@ -37,6 +37,11 @@ DATA: Path = paths.REPO / "data"
 DECK: Path = (
     paths.REPO / "docs" / "sample-decks" / "2026-10-17-PrinceJools-wu-control.txt"
 )
+# The Arena mirror deck, whose cards are implemented alongside the deck above until the mirror
+# switch retires that one.
+MIRROR: Path = (
+    paths.REPO / "docs" / "sample-decks" / "2025-11-18-17lands-cb8d5d5f-wu-control.txt"
+)
 CUBE: Path = DATA / "arena-powered-cube-2025-10-30.csv"
 PRINTINGS: Path = DATA / "card-printings.csv"
 OUTPUT: Path = DATA / "cards.json"
@@ -63,6 +68,11 @@ def deck_names(path: Path) -> list[str]:
             break
         names.append(line.split(" ", 1)[1].strip())
     return names
+
+
+def m1_names() -> list[str]:
+    """The cards of both mirror decks, each once."""
+    return list(dict.fromkeys(deck_names(DECK) + deck_names(MIRROR)))
 
 
 def cube_names(path: Path) -> list[str]:
@@ -294,7 +304,7 @@ def render(data: Json) -> str:
 
 
 def cards(args: argparse.Namespace) -> int:
-    names = cube_names(CUBE) if args.cube else deck_names(DECK)
+    names = cube_names(CUBE) if args.cube else m1_names()
     log: list[Json] = []
     if args.replay:
         post = replaying(Path(args.replay))
@@ -315,7 +325,7 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         "cards", help="look up card data on Scryfall into data/cards.json"
     )
     p.add_argument(
-        "--cube", action="store_true", help="the whole cube, not the M1 deck"
+        "--cube", action="store_true", help="the whole cube, not the M1 decks"
     )
     p.add_argument("--output", default=str(OUTPUT))
     # A replay records nothing, so --record with it would overwrite FILE with an empty log.

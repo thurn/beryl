@@ -18,8 +18,8 @@ def test_the_recording_regenerates_the_data_file(tmp_path: Path) -> None:
     assert out.read_bytes() == cards.OUTPUT.read_bytes()
 
     data = json.loads(out.read_text())
-    deck = set(cards.deck_names(cards.DECK))
-    assert len(deck) == 29
+    deck = set(cards.m1_names())
+    assert len(deck) == 46
     assert {c["faces"][0]["name"] for c in data["cards"]} == deck
     tokens = {
         (t["name"], t["faces"][0].get("power"), t["faces"][0].get("toughness"))

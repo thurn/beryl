@@ -25,6 +25,32 @@
       ]
     },
     {
+      "name": "Abhorrent Oculus",
+      "scryfall_id": "d2705b43-a94a-44c0-8740-82e0b296820c",
+      "set": "dsk",
+      "collector_number": "42",
+      "layout": "normal",
+      "artist": "Bryan Sola",
+      "faces": [
+        {
+          "name": "Abhorrent Oculus",
+          "mana_cost": "{2}{U}",
+          "type_line": "Creature — Eye",
+          "oracle_text": "As an additional cost to cast this spell, exile six cards from your graveyard.\nFlying\nAt the beginning of each opponent's upkeep, manifest dread. (Look at the top two cards of your library. Put one onto the battlefield face down as a 2/2 creature and the other into your graveyard. Turn it face up any time for its mana cost if it's a creature card.)",
+          "power": "5",
+          "toughness": "5",
+          "colors": [
+            "U"
+          ],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/d/2/d2705b43-a94a-44c0-8740-82e0b296820c.jpg?1783909500",
+            "normal": "https://cards.scryfall.io/normal/front/d/2/d2705b43-a94a-44c0-8740-82e0b296820c.jpg?1783909500",
+            "large": "https://cards.scryfall.io/large/front/d/2/d2705b43-a94a-44c0-8740-82e0b296820c.jpg?1783909500"
+          }
+        }
+      ]
+    },
+    {
       "name": "Adeline, Resplendent Cathar",
       "scryfall_id": "1de30c12-2011-495a-be25-f7a46b23e142",
       "set": "tdc",
@@ -51,6 +77,102 @@
       ]
     },
     {
+      "name": "Beza, the Bounding Spring",
+      "scryfall_id": "fc310a26-b6a0-4e42-98ab-bdfd7b06cb63",
+      "set": "blb",
+      "collector_number": "2",
+      "layout": "normal",
+      "artist": "Martin Wittfooth",
+      "faces": [
+        {
+          "name": "Beza, the Bounding Spring",
+          "mana_cost": "{2}{W}{W}",
+          "type_line": "Legendary Creature — Elemental Elk",
+          "oracle_text": "When Beza enters, create a Treasure token if an opponent controls more lands than you. You gain 4 life if an opponent has more life than you. Create two 1/1 blue Fish creature tokens if an opponent controls more creatures than you. Draw a card if an opponent has more cards in hand than you.",
+          "power": "4",
+          "toughness": "5",
+          "colors": [
+            "W"
+          ],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/f/c/fc310a26-b6a0-4e42-98ab-bdfd7b06cb63.jpg?1783910866",
+            "normal": "https://cards.scryfall.io/normal/front/f/c/fc310a26-b6a0-4e42-98ab-bdfd7b06cb63.jpg?1783910866",
+            "large": "https://cards.scryfall.io/large/front/f/c/fc310a26-b6a0-4e42-98ab-bdfd7b06cb63.jpg?1783910866"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Counterspell",
+      "scryfall_id": "4f616706-ec97-4923-bb1e-11a69fbaa1f8",
+      "set": "dsc",
+      "collector_number": "114",
+      "layout": "normal",
+      "artist": "Zack Stella",
+      "faces": [
+        {
+          "name": "Counterspell",
+          "mana_cost": "{U}{U}",
+          "type_line": "Instant",
+          "oracle_text": "Counter target spell.",
+          "colors": [
+            "U"
+          ],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/4/f/4f616706-ec97-4923-bb1e-11a69fbaa1f8.jpg?1783909630",
+            "normal": "https://cards.scryfall.io/normal/front/4/f/4f616706-ec97-4923-bb1e-11a69fbaa1f8.jpg?1783909630",
+            "large": "https://cards.scryfall.io/large/front/4/f/4f616706-ec97-4923-bb1e-11a69fbaa1f8.jpg?1783909630"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Currency Converter",
+      "scryfall_id": "f91b18ef-ac8a-4d4c-9586-b101681d33e2",
+      "set": "frc",
+      "collector_number": "55",
+      "layout": "normal",
+      "artist": "Sean Murray",
+      "faces": [
+        {
+          "name": "Currency Converter",
+          "mana_cost": "{1}",
+          "type_line": "Artifact",
+          "oracle_text": "Whenever you discard a card, you may exile that card from your graveyard.\n{2}, {T}: Draw a card, then discard a card.\n{T}: Put a card exiled with this artifact into its owner's graveyard. If it's a land card, create a Treasure token. If it's a nonland card, create a 2/2 black Rogue creature token.",
+          "colors": [],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/f/9/f91b18ef-ac8a-4d4c-9586-b101681d33e2.jpg?1789599836",
+            "normal": "https://cards.scryfall.io/normal/front/f/9/f91b18ef-ac8a-4d4c-9586-b101681d33e2.jpg?1789599836",
+            "large": "https://cards.scryfall.io/large/front/f/9/f91b18ef-ac8a-4d4c-9586-b101681d33e2.jpg?1789599836"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Damn",
+      "scryfall_id": "84056124-1a6f-4274-bee2-74cf0debddb5",
+      "set": "lcc",
+      "collector_number": "191",
+      "layout": "normal",
+      "artist": "Lucas Graciano",
+      "faces": [
+        {
+          "name": "Damn",
+          "mana_cost": "{B}{B}",
+          "type_line": "Sorcery",
+          "oracle_text": "Destroy target creature. A creature destroyed this way can't be regenerated.\nOverload {2}{W}{W} (You may cast this spell for its overload cost. If you do, change \"target\" in its text to \"each.\")",
+          "colors": [
+            "B"
+          ],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/8/4/84056124-1a6f-4274-bee2-74cf0debddb5.jpg?1783913875",
+            "normal": "https://cards.scryfall.io/normal/front/8/4/84056124-1a6f-4274-bee2-74cf0debddb5.jpg?1783913875",
+            "large": "https://cards.scryfall.io/large/front/8/4/84056124-1a6f-4274-bee2-74cf0debddb5.jpg?1783913875"
+          }
+        }
+      ]
+    },
+    {
       "name": "Elite Spellbinder",
       "scryfall_id": "9d3a7998-ccac-45ad-a4e9-3a2cb057f63b",
       "set": "stx",
@@ -72,6 +194,53 @@
             "art_crop": "https://cards.scryfall.io/art_crop/front/9/d/9d3a7998-ccac-45ad-a4e9-3a2cb057f63b.jpg?1783927390",
             "normal": "https://cards.scryfall.io/normal/front/9/d/9d3a7998-ccac-45ad-a4e9-3a2cb057f63b.jpg?1783927390",
             "large": "https://cards.scryfall.io/large/front/9/d/9d3a7998-ccac-45ad-a4e9-3a2cb057f63b.jpg?1783927390"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Floodfarm Verge",
+      "scryfall_id": "d53ed0db-1199-44b3-8eda-8189dfcf53d1",
+      "set": "dsk",
+      "collector_number": "259",
+      "layout": "normal",
+      "artist": "Randy Gallegos",
+      "faces": [
+        {
+          "name": "Floodfarm Verge",
+          "mana_cost": "",
+          "type_line": "Land",
+          "oracle_text": "{T}: Add {W}.\n{T}: Add {U}. Activate only if you control a Plains or an Island.",
+          "colors": [],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/d/5/d53ed0db-1199-44b3-8eda-8189dfcf53d1.jpg?1783909428",
+            "normal": "https://cards.scryfall.io/normal/front/d/5/d53ed0db-1199-44b3-8eda-8189dfcf53d1.jpg?1783909428",
+            "large": "https://cards.scryfall.io/large/front/d/5/d53ed0db-1199-44b3-8eda-8189dfcf53d1.jpg?1783909428"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Fractured Identity",
+      "scryfall_id": "70f852d6-3506-4968-9b95-d4cdb02109ca",
+      "set": "trc",
+      "collector_number": "475",
+      "layout": "normal",
+      "artist": "Borja Pindado",
+      "faces": [
+        {
+          "name": "Fractured Identity",
+          "mana_cost": "{3}{W}{U}",
+          "type_line": "Sorcery",
+          "oracle_text": "Exile target nonland permanent. Each player other than its controller creates a token that's a copy of it.",
+          "colors": [
+            "U",
+            "W"
+          ],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/7/0/70f852d6-3506-4968-9b95-d4cdb02109ca.jpg?1793111920",
+            "normal": "https://cards.scryfall.io/normal/front/7/0/70f852d6-3506-4968-9b95-d4cdb02109ca.jpg?1793111920",
+            "large": "https://cards.scryfall.io/large/front/7/0/70f852d6-3506-4968-9b95-d4cdb02109ca.jpg?1793111920"
           }
         }
       ]
@@ -159,6 +328,31 @@
             "art_crop": "https://cards.scryfall.io/art_crop/back/0/2/02d6d693-f1f3-4317-bcc0-c21fa8490d38.jpg?1783938353",
             "normal": "https://cards.scryfall.io/normal/back/0/2/02d6d693-f1f3-4317-bcc0-c21fa8490d38.jpg?1783938353",
             "large": "https://cards.scryfall.io/large/back/0/2/02d6d693-f1f3-4317-bcc0-c21fa8490d38.jpg?1783938353"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Jace, Wielder of Mysteries",
+      "scryfall_id": "6adb7d73-4482-4930-8497-cffd169b57e2",
+      "set": "war",
+      "collector_number": "54",
+      "layout": "normal",
+      "artist": "Anna Steinbauer",
+      "faces": [
+        {
+          "name": "Jace, Wielder of Mysteries",
+          "mana_cost": "{1}{U}{U}{U}",
+          "type_line": "Legendary Planeswalker — Jace",
+          "oracle_text": "If you would draw a card while your library has no cards in it, you win the game instead.\n+1: Target player mills two cards. Draw a card.\n−8: Draw seven cards. Then if your library has no cards in it, you win the game.",
+          "loyalty": "4",
+          "colors": [
+            "U"
+          ],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/6/a/6adb7d73-4482-4930-8497-cffd169b57e2.jpg?1783933463",
+            "normal": "https://cards.scryfall.io/normal/front/6/a/6adb7d73-4482-4930-8497-cffd169b57e2.jpg?1783933463",
+            "large": "https://cards.scryfall.io/large/front/6/a/6adb7d73-4482-4930-8497-cffd169b57e2.jpg?1783933463"
           }
         }
       ]
@@ -382,6 +576,54 @@
       ]
     },
     {
+      "name": "Portable Hole",
+      "scryfall_id": "80fca8c0-ae3e-439e-b202-228b9f360e9a",
+      "set": "afr",
+      "collector_number": "33",
+      "layout": "normal",
+      "artist": "John Stanko",
+      "faces": [
+        {
+          "name": "Portable Hole",
+          "mana_cost": "{W}",
+          "type_line": "Artifact",
+          "oracle_text": "When this artifact enters, exile target nonland permanent an opponent controls with mana value 2 or less until this artifact leaves the battlefield.",
+          "colors": [
+            "W"
+          ],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/8/0/80fca8c0-ae3e-439e-b202-228b9f360e9a.jpg?1783926525",
+            "normal": "https://cards.scryfall.io/normal/front/8/0/80fca8c0-ae3e-439e-b202-228b9f360e9a.jpg?1783926525",
+            "large": "https://cards.scryfall.io/large/front/8/0/80fca8c0-ae3e-439e-b202-228b9f360e9a.jpg?1783926525"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reprieve",
+      "scryfall_id": "1bd3fa8a-6c50-4f7f-9ae3-0810eec5e3db",
+      "set": "ltr",
+      "collector_number": "26",
+      "layout": "normal",
+      "artist": "Justyna Dura",
+      "faces": [
+        {
+          "name": "Reprieve",
+          "mana_cost": "{1}{W}",
+          "type_line": "Instant",
+          "oracle_text": "Return target spell to its owner's hand.\nDraw a card.",
+          "colors": [
+            "W"
+          ],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/1/b/1bd3fa8a-6c50-4f7f-9ae3-0810eec5e3db.jpg?1783916330",
+            "normal": "https://cards.scryfall.io/normal/front/1/b/1bd3fa8a-6c50-4f7f-9ae3-0810eec5e3db.jpg?1783916330",
+            "large": "https://cards.scryfall.io/large/front/1/b/1bd3fa8a-6c50-4f7f-9ae3-0810eec5e3db.jpg?1783916330"
+          }
+        }
+      ]
+    },
+    {
       "name": "Seachrome Coast",
       "scryfall_id": "9ed7441f-f624-49c8-8611-d9bba0e441ac",
       "set": "one",
@@ -435,6 +677,32 @@
             "art_crop": "https://cards.scryfall.io/art_crop/back/5/3/5358b87a-1a29-426d-b165-40c97da2c14d.jpg?1783911236",
             "normal": "https://cards.scryfall.io/normal/back/5/3/5358b87a-1a29-426d-b165-40c97da2c14d.jpg?1783911236",
             "large": "https://cards.scryfall.io/large/back/5/3/5358b87a-1a29-426d-b165-40c97da2c14d.jpg?1783911236"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Snapcaster Mage",
+      "scryfall_id": "22b36ad5-bf4d-436a-9c3c-fa4acd0052fe",
+      "set": "inr",
+      "collector_number": "478",
+      "layout": "normal",
+      "artist": "Volkan Baǵa",
+      "faces": [
+        {
+          "name": "Snapcaster Mage",
+          "mana_cost": "{1}{U}",
+          "type_line": "Creature — Human Wizard",
+          "oracle_text": "Flash\nWhen this creature enters, target instant or sorcery card in your graveyard gains flashback until end of turn. The flashback cost is equal to its mana cost. (You may cast that card from your graveyard for its flashback cost. Then exile it.)",
+          "power": "2",
+          "toughness": "1",
+          "colors": [
+            "U"
+          ],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/2/2/22b36ad5-bf4d-436a-9c3c-fa4acd0052fe.jpg?1783907976",
+            "normal": "https://cards.scryfall.io/normal/front/2/2/22b36ad5-bf4d-436a-9c3c-fa4acd0052fe.jpg?1783907976",
+            "large": "https://cards.scryfall.io/large/front/2/2/22b36ad5-bf4d-436a-9c3c-fa4acd0052fe.jpg?1783907976"
           }
         }
       ]
@@ -512,6 +780,30 @@
       ]
     },
     {
+      "name": "Stock Up",
+      "scryfall_id": "0a786855-6eb4-42c0-a528-4842db46809d",
+      "set": "dft",
+      "collector_number": "67",
+      "layout": "normal",
+      "artist": "Izzy",
+      "faces": [
+        {
+          "name": "Stock Up",
+          "mana_cost": "{2}{U}",
+          "type_line": "Sorcery",
+          "oracle_text": "Look at the top five cards of your library. Put two of them into your hand and the rest on the bottom of your library in any order.",
+          "colors": [
+            "U"
+          ],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/0/a/0a786855-6eb4-42c0-a528-4842db46809d.jpg?1783907902",
+            "normal": "https://cards.scryfall.io/normal/front/0/a/0a786855-6eb4-42c0-a528-4842db46809d.jpg?1783907902",
+            "large": "https://cards.scryfall.io/large/front/0/a/0a786855-6eb4-42c0-a528-4842db46809d.jpg?1783907902"
+          }
+        }
+      ]
+    },
+    {
       "name": "Strip Mine",
       "scryfall_id": "f57fd4c9-0004-4f71-a30f-2720943f57ca",
       "set": "vma",
@@ -529,6 +821,32 @@
             "art_crop": "https://cards.scryfall.io/art_crop/front/f/5/f57fd4c9-0004-4f71-a30f-2720943f57ca.jpg?1783939218",
             "normal": "https://cards.scryfall.io/normal/front/f/5/f57fd4c9-0004-4f71-a30f-2720943f57ca.jpg?1783939218",
             "large": "https://cards.scryfall.io/large/front/f/5/f57fd4c9-0004-4f71-a30f-2720943f57ca.jpg?1783939218"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Subtlety",
+      "scryfall_id": "701256d5-1389-48b7-9581-d6037209bd06",
+      "set": "mh2",
+      "collector_number": "67",
+      "layout": "normal",
+      "artist": "Anastasia Ovchinnikova",
+      "faces": [
+        {
+          "name": "Subtlety",
+          "mana_cost": "{2}{U}{U}",
+          "type_line": "Creature — Elemental Incarnation",
+          "oracle_text": "Flash\nFlying\nWhen this creature enters, choose up to one target creature spell or planeswalker spell. Its owner puts it on their choice of the top or bottom of their library.\nEvoke—Exile a blue card from your hand.",
+          "power": "3",
+          "toughness": "3",
+          "colors": [
+            "U"
+          ],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/7/0/701256d5-1389-48b7-9581-d6037209bd06.jpg?1783926869",
+            "normal": "https://cards.scryfall.io/normal/front/7/0/701256d5-1389-48b7-9581-d6037209bd06.jpg?1783926869",
+            "large": "https://cards.scryfall.io/large/front/7/0/701256d5-1389-48b7-9581-d6037209bd06.jpg?1783926869"
           }
         }
       ]
@@ -553,6 +871,32 @@
             "art_crop": "https://cards.scryfall.io/art_crop/front/9/7/975dcfab-0281-4fee-92aa-021ea6c524c7.jpg?1783923997",
             "normal": "https://cards.scryfall.io/normal/front/9/7/975dcfab-0281-4fee-92aa-021ea6c524c7.jpg?1783923997",
             "large": "https://cards.scryfall.io/large/front/9/7/975dcfab-0281-4fee-92aa-021ea6c524c7.jpg?1783923997"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Teferi, Hero of Dominaria",
+      "scryfall_id": "5d10b752-d9cb-419d-a5c4-d4ee1acb655e",
+      "set": "dom",
+      "collector_number": "207",
+      "layout": "normal",
+      "artist": "Chris Rallis",
+      "faces": [
+        {
+          "name": "Teferi, Hero of Dominaria",
+          "mana_cost": "{3}{W}{U}",
+          "type_line": "Legendary Planeswalker — Teferi",
+          "oracle_text": "+1: Draw a card. At the beginning of the next end step, untap up to two lands.\n−3: Put target nonland permanent into its owner's library third from the top.\n−8: You get an emblem with \"Whenever you draw a card, exile target permanent an opponent controls.\"",
+          "loyalty": "4",
+          "colors": [
+            "U",
+            "W"
+          ],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/5/d/5d10b752-d9cb-419d-a5c4-d4ee1acb655e.jpg?1783934963",
+            "normal": "https://cards.scryfall.io/normal/front/5/d/5d10b752-d9cb-419d-a5c4-d4ee1acb655e.jpg?1783934963",
+            "large": "https://cards.scryfall.io/large/front/5/d/5d10b752-d9cb-419d-a5c4-d4ee1acb655e.jpg?1783934963"
           }
         }
       ]
@@ -635,6 +979,30 @@
       ]
     },
     {
+      "name": "Thirst for Discovery",
+      "scryfall_id": "1ea179e9-9c0d-46c1-9ee8-60be68e1f79c",
+      "set": "vow",
+      "collector_number": "85",
+      "layout": "normal",
+      "artist": "Dominik Mayer",
+      "faces": [
+        {
+          "name": "Thirst for Discovery",
+          "mana_cost": "{2}{U}",
+          "type_line": "Instant",
+          "oracle_text": "Draw three cards. Then discard two cards unless you discard a basic land card.",
+          "colors": [
+            "U"
+          ],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/1/e/1ea179e9-9c0d-46c1-9ee8-60be68e1f79c.jpg?1783924880",
+            "normal": "https://cards.scryfall.io/normal/front/1/e/1ea179e9-9c0d-46c1-9ee8-60be68e1f79c.jpg?1783924880",
+            "large": "https://cards.scryfall.io/large/front/1/e/1ea179e9-9c0d-46c1-9ee8-60be68e1f79c.jpg?1783924880"
+          }
+        }
+      ]
+    },
+    {
       "name": "Thundertrap Trainer",
       "scryfall_id": "9cf3af94-b7c8-415c-a5a1-d89967fd0bba",
       "set": "blb",
@@ -709,6 +1077,32 @@
       ]
     },
     {
+      "name": "Trinket Mage",
+      "scryfall_id": "9a7800f7-95cd-4f5c-b054-4afad8924367",
+      "set": "ddu",
+      "collector_number": "41",
+      "layout": "normal",
+      "artist": "Scott Chou",
+      "faces": [
+        {
+          "name": "Trinket Mage",
+          "mana_cost": "{2}{U}",
+          "type_line": "Creature — Human Wizard",
+          "oracle_text": "When this creature enters, you may search your library for an artifact card with mana value 1 or less, reveal that card, put it into your hand, then shuffle.",
+          "power": "2",
+          "toughness": "2",
+          "colors": [
+            "U"
+          ],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/9/a/9a7800f7-95cd-4f5c-b054-4afad8924367.jpg?1783935075",
+            "normal": "https://cards.scryfall.io/normal/front/9/a/9a7800f7-95cd-4f5c-b054-4afad8924367.jpg?1783935075",
+            "large": "https://cards.scryfall.io/large/front/9/a/9a7800f7-95cd-4f5c-b054-4afad8924367.jpg?1783935075"
+          }
+        }
+      ]
+    },
+    {
       "name": "Tundra",
       "scryfall_id": "efd35cb4-862d-4699-a197-b744989b3ceb",
       "set": "vma",
@@ -729,6 +1123,30 @@
           }
         }
       ]
+    },
+    {
+      "name": "Winds of Abandon",
+      "scryfall_id": "3bb17913-fe4d-4acd-9b75-71f5a90f898b",
+      "set": "mh1",
+      "collector_number": "37",
+      "layout": "normal",
+      "artist": "Noah Bradley",
+      "faces": [
+        {
+          "name": "Winds of Abandon",
+          "mana_cost": "{1}{W}",
+          "type_line": "Sorcery",
+          "oracle_text": "Exile target creature you don't control. For each creature exiled this way, its controller searches their library for a basic land card. Those players put those cards onto the battlefield tapped, then shuffle.\nOverload {4}{W}{W} (You may cast this spell for its overload cost. If you do, change \"target\" in its text to \"each.\")",
+          "colors": [
+            "W"
+          ],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/3/b/3bb17913-fe4d-4acd-9b75-71f5a90f898b.jpg?1783933150",
+            "normal": "https://cards.scryfall.io/normal/front/3/b/3bb17913-fe4d-4acd-9b75-71f5a90f898b.jpg?1783933150",
+            "large": "https://cards.scryfall.io/large/front/3/b/3bb17913-fe4d-4acd-9b75-71f5a90f898b.jpg?1783933150"
+          }
+        }
+      ]
     }
   ],
   "tokens": [
@@ -740,6 +1158,7 @@
       "layout": "token",
       "artist": "Nicky Barkla",
       "made_by": [
+        "Fractured Identity",
         "Sphinx of False Conclusions"
       ],
       "faces": [
@@ -753,6 +1172,35 @@
             "art_crop": "https://cards.scryfall.io/art_crop/front/2/1/2115c141-f2fb-4bfd-a8b5-2943bad9f418.jpg?1793363498",
             "normal": "https://cards.scryfall.io/normal/front/2/1/2115c141-f2fb-4bfd-a8b5-2943bad9f418.jpg?1793363498",
             "large": "https://cards.scryfall.io/large/front/2/1/2115c141-f2fb-4bfd-a8b5-2943bad9f418.jpg?1793363498"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Fish Token",
+      "scryfall_id": "de0d6700-49f0-4233-97ba-cef7821c30ed",
+      "set": "tblb",
+      "collector_number": "7",
+      "layout": "token",
+      "artist": "Rhonda Libbey",
+      "made_by": [
+        "Beza, the Bounding Spring"
+      ],
+      "faces": [
+        {
+          "name": "Fish Token",
+          "mana_cost": "",
+          "type_line": "Token Creature — Fish",
+          "oracle_text": "",
+          "power": "1",
+          "toughness": "1",
+          "colors": [
+            "U"
+          ],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/d/e/de0d6700-49f0-4233-97ba-cef7821c30ed.jpg?1783909771",
+            "normal": "https://cards.scryfall.io/normal/front/d/e/de0d6700-49f0-4233-97ba-cef7821c30ed.jpg?1783909771",
+            "large": "https://cards.scryfall.io/large/front/d/e/de0d6700-49f0-4233-97ba-cef7821c30ed.jpg?1783909771"
           }
         }
       ]
@@ -866,6 +1314,35 @@
       ]
     },
     {
+      "name": "Rogue Token",
+      "scryfall_id": "0526330e-40eb-4c5f-b0f5-5489839e5f44",
+      "set": "tfrc",
+      "collector_number": "7",
+      "layout": "token",
+      "artist": "Maria Poliakova",
+      "made_by": [
+        "Currency Converter"
+      ],
+      "faces": [
+        {
+          "name": "Rogue Token",
+          "mana_cost": "",
+          "type_line": "Token Creature — Rogue",
+          "oracle_text": "",
+          "power": "2",
+          "toughness": "2",
+          "colors": [
+            "B"
+          ],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/0/5/0526330e-40eb-4c5f-b0f5-5489839e5f44.jpg?1789737431",
+            "normal": "https://cards.scryfall.io/normal/front/0/5/0526330e-40eb-4c5f-b0f5-5489839e5f44.jpg?1789737431",
+            "large": "https://cards.scryfall.io/large/front/0/5/0526330e-40eb-4c5f-b0f5-5489839e5f44.jpg?1789737431"
+          }
+        }
+      ]
+    },
+    {
       "name": "Samurai Token",
       "scryfall_id": "f68e5337-6e44-4f8f-a102-2f97b433beea",
       "set": "tneo",
@@ -924,6 +1401,31 @@
       ]
     },
     {
+      "name": "Teferi, Hero of Dominaria Emblem",
+      "scryfall_id": "b82ac152-5df1-46c9-98e9-ad5585f7e799",
+      "set": "tdom",
+      "collector_number": "16",
+      "layout": "emblem",
+      "artist": "Chris Rallis",
+      "made_by": [
+        "Teferi, Hero of Dominaria"
+      ],
+      "faces": [
+        {
+          "name": "Teferi, Hero of Dominaria Emblem",
+          "mana_cost": "",
+          "type_line": "Emblem — Teferi",
+          "oracle_text": "Whenever you draw a card, exile target permanent an opponent controls.",
+          "colors": [],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/b/8/b82ac152-5df1-46c9-98e9-ad5585f7e799.jpg?1783934929",
+            "normal": "https://cards.scryfall.io/normal/front/b/8/b82ac152-5df1-46c9-98e9-ad5585f7e799.jpg?1783934929",
+            "large": "https://cards.scryfall.io/large/front/b/8/b82ac152-5df1-46c9-98e9-ad5585f7e799.jpg?1783934929"
+          }
+        }
+      ]
+    },
+    {
       "name": "Thundertrap Trainer",
       "scryfall_id": "80bcbe35-7764-4c75-b954-cbba11372dec",
       "set": "tblb",
@@ -948,6 +1450,56 @@
             "art_crop": "https://cards.scryfall.io/art_crop/front/8/0/80bcbe35-7764-4c75-b954-cbba11372dec.jpg?1783909769",
             "normal": "https://cards.scryfall.io/normal/front/8/0/80bcbe35-7764-4c75-b954-cbba11372dec.jpg?1783909769",
             "large": "https://cards.scryfall.io/large/front/8/0/80bcbe35-7764-4c75-b954-cbba11372dec.jpg?1783909769"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Treasure Token",
+      "scryfall_id": "03992f88-7a15-4234-9bed-b7617d7ff09c",
+      "set": "tfra",
+      "collector_number": "15",
+      "layout": "token",
+      "artist": "Alayna Danner",
+      "made_by": [
+        "Currency Converter"
+      ],
+      "faces": [
+        {
+          "name": "Treasure Token",
+          "mana_cost": "",
+          "type_line": "Token Artifact — Treasure",
+          "oracle_text": "{T}, Sacrifice this token: Add one mana of any color.",
+          "colors": [],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/0/3/03992f88-7a15-4234-9bed-b7617d7ff09c.jpg?1789735245",
+            "normal": "https://cards.scryfall.io/normal/front/0/3/03992f88-7a15-4234-9bed-b7617d7ff09c.jpg?1789735245",
+            "large": "https://cards.scryfall.io/large/front/0/3/03992f88-7a15-4234-9bed-b7617d7ff09c.jpg?1789735245"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Treasure Token",
+      "scryfall_id": "ff0357fb-d90c-49c7-b16a-8b52ac686c3b",
+      "set": "tblb",
+      "collector_number": "29",
+      "layout": "token",
+      "artist": "Aaron Miller",
+      "made_by": [
+        "Beza, the Bounding Spring"
+      ],
+      "faces": [
+        {
+          "name": "Treasure Token",
+          "mana_cost": "",
+          "type_line": "Token Artifact — Treasure",
+          "oracle_text": "{T}, Sacrifice this token: Add one mana of any color.",
+          "colors": [],
+          "images": {
+            "art_crop": "https://cards.scryfall.io/art_crop/front/f/f/ff0357fb-d90c-49c7-b16a-8b52ac686c3b.jpg?1783909762",
+            "normal": "https://cards.scryfall.io/normal/front/f/f/ff0357fb-d90c-49c7-b16a-8b52ac686c3b.jpg?1783909762",
+            "large": "https://cards.scryfall.io/large/front/f/f/ff0357fb-d90c-49c7-b16a-8b52ac686c3b.jpg?1783909762"
           }
         }
       ]
