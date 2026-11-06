@@ -384,6 +384,72 @@ function row(
   });
 }
 
+/** A row's groups `settle`d about the pinned ones, those with a left to `face`: the order of
+ * the groups, by index, and each one's left in that order. Pinned groups stand in the order of
+ * the middles they `want`, and the rest in their own order between them. Where the row has no
+ * room for them all where they want to stand, the rest give way to whichever side of each pinned
+ * group leaves the pinned ones nearest the lefts they face; otherwise, and between equals, each
+ * stands before the first pinned group whose middle its own is left of. It tries every such
+ * split, so its cost grows with the pinned groups' count as a power, which blocks keep small. */
+function arrange(
+  wants: number[],
+  face: (number | undefined)[],
+  widths: number[],
+  gap: number,
+  start: number,
+  end: number,
+): { order: number[]; lefts: number[] } {
+  const middle = (i: number) => wants[i]! + widths[i]! / 2;
+  const pinned = face.map((f) => f !== undefined);
+  const ids = wants.map((_, i) => i);
+  const fixed = ids
+    .filter((i) => pinned[i])
+    .sort((a, b) => middle(a) - middle(b));
+  const free = ids.filter((i) => !pinned[i]);
+  // How many of the rest stand before each pinned group, by their middles.
+  const natural = fixed.map(
+    (f) => free.filter((i) => middle(i) < middle(f)).length,
+  );
+  let best: { order: number[]; lefts: number[]; off: number; moved: number };
+  // Each way of splitting the rest about the pinned groups, keeping both in order: `before[j]`
+  // of the rest stand before fixed[j].
+  const visit = (before: number[]) => {
+    if (before.length < fixed.length) {
+      for (let n = before.at(-1) ?? 0; n <= free.length; n++) {
+        visit([...before, n]);
+      }
+      return;
+    }
+    const order = [
+      ...fixed.flatMap((f, k) => [
+        ...free.slice(k === 0 ? 0 : before[k - 1], before[k]),
+        f,
+      ]),
+      ...free.slice(before.at(-1) ?? 0),
+    ];
+    const lefts = settle(
+      order.map((i) => wants[i]!),
+      order.map((i) => widths[i]!),
+      gap,
+      start,
+      end,
+      order.map((i) => pinned[i]!),
+    );
+    const off = Math.round(
+      order.reduce(
+        (a, i, k) => a + Math.abs(lefts[k]! - (face[i] ?? lefts[k]!)),
+        0,
+      ),
+    );
+    const moved = before.reduce((a, n, k) => a + Math.abs(n - natural[k]!), 0);
+    if (!best || off < best.off || (off === best.off && moved < best.moved)) {
+      best = { order, lefts, off, moved };
+    }
+  };
+  visit([]);
+  return best!;
+}
+
 /** Moves a row's groups, in order, as near as they can be to the lefts they `want`, spaced at
  * least as `row` would space them and inside `start` to `end`: each group not `pinned` first
  * gives way leftward to its right neighbor, then each is pushed right of its left neighbor, then
@@ -579,7 +645,10 @@ function battlefieldPlacements(
     if (attacker === null || !attackers.has(attacker)) continue;
     blocking.set(attacker, [...(blocking.get(attacker) ?? []), o.slot]);
   }
+  // Each also faces its attacker straight across, which is where it stands when its row is too
+  // full to lean it.
   const wants = new Map<number, number>();
+  const faces = new Map<number, number>();
   for (const [attacker, blockers] of blocking) {
     const a = attackers.get(attacker)!;
     // Across the table, a little toward its middle, as combat.png's perspective draws it.
@@ -588,17 +657,17 @@ function battlefieldPlacements(
     blockers.forEach((slot, i) => {
       const offset = (i - (blockers.length - 1) / 2) * width * 1.04;
       wants.set(slot, center - width / 2 + offset);
+      faces.set(slot, below - width / 2 + offset);
     });
   }
   const wanted = groups.map((g, i) => wants.get(g[0]!.slot) ?? xs[i]!);
-  const order = groups.map((_, i) => i).sort((a, b) => wanted[a]! - wanted[b]!);
-  const lefts = settle(
-    order.map((g) => wanted[g]!),
-    order.map((g) => widths[g]!),
+  const { order, lefts } = arrange(
+    wanted,
+    groups.map((g) => faces.get(g[0]!.slot)),
+    widths,
     gap,
     start,
     end,
-    order.map((g) => wants.has(groups[g]![0]!.slot)),
   );
   const forward = side === "you" ? -ADVANCE : ADVANCE;
   order.forEach((g, k) => {

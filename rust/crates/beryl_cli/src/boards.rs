@@ -110,15 +110,15 @@ pub const BOARDS: &[Scenario] = &[
         .library(P0, LANDS)
         .hand(P1, &[ISLAND, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS])
         .library(P1, LANDS),
-    // Five permanents a side: the human's quiet turn, then Trinket Mage blocks Beza, each
-    // first in their row.
+    // Five permanents a side: the human's quiet turn, then Trinket Mage, second in its row,
+    // blocks Beza, first in hers.
     Scenario::new("combat-blockers")
         .at(3, P0, TurnStep::PrecombatMain)
         .battlefield(
             P0,
             &[
-                Permanent::new(TRINKET_MAGE),
                 Permanent::new(SNAPCASTER_MAGE),
+                Permanent::new(TRINKET_MAGE),
                 Permanent::new(JACE_VRYNS_PRODIGY),
                 Permanent::new(STAFF_OF_THE_STORYTELLER),
                 Permanent::new(CURRENCY_CONVERTER),
