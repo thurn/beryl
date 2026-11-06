@@ -207,6 +207,13 @@ fn advance<const STEPS: bool>(
                 }
             }
         }
+        if passes_silently(s) {
+            x.counts.silent += 1;
+            if perform_priority(s, t, x, a, s.turn.priority, Opt::Pass).is_err() {
+                stall(s, StallReason::Capacity);
+            }
+            continue;
+        }
         let Ok(d) = decision(s, t, &mut x.events) else {
             stall(s, StallReason::Capacity);
             continue;
@@ -229,6 +236,15 @@ fn advance<const STEPS: bool>(
         x.counts.decisions += 1;
         return Some(Step::Decide(d));
     }
+}
+
+/// Whether the open decision is priority for a player away from a stop, who passes silently
+/// whatever else they could do, so `next` passes without listing their options.
+fn passes_silently(s: &State) -> bool {
+    s.pending == Pending::None
+        && s.triggers.is_empty()
+        && !s.profile.stops_for(s, s.turn.priority)
+        && !s.profile.breaks_at(s.turn)
 }
 
 /// Applies an answer to the decision `next` returned for this state.
