@@ -188,6 +188,7 @@ fn makes(name: &str) -> (&'static [usize], u8) {
         "Test Dual" => (&[W, U], 1),
         "Test Crypt" => (&[C], 2),
         "Test Strip" => (&[C], 1),
+        "Test Treasure" => (&[W, U, 2, 3, 4], 1),
         _ => unreachable!("{name} is no source"),
     }
 }
@@ -211,13 +212,14 @@ fn brute_force_pays(cost: ManaCost, pool: [u8; 6], sources: &[&str]) -> bool {
 
 #[test]
 fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
-    const SOURCES: [&str; 6] = [
+    const SOURCES: [&str; 7] = [
         "Test Land",
         "Test Island",
         "Test Dual",
         "Test Crypt",
         "Test Strip",
         "Test HQ",
+        "Test Treasure",
     ];
     let mut rng = SplitMix64::new(17);
     let mut payable_positions = 0;
@@ -263,12 +265,8 @@ fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
             )
             .unwrap();
             assert_eq!(!plans.is_empty(), payable, "{context}");
-            for (i, plan) in plans.iter().enumerate() {
-                assert!(
-                    plans.as_slice()[..i].iter().all(|p| p.left != plan.left),
-                    "two plans leave {:?}: {context}",
-                    plan.left
-                );
+            let mut outcomes = Vec::new();
+            for plan in &plans {
                 let mut paid = g.s;
                 mana::pay(
                     &mut paid,
@@ -280,14 +278,28 @@ fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
                     plan,
                 )
                 .unwrap();
-                // CR 601.2h: the cost is paid in full, and only from the mana the tapped
-                // sources made and the pool held.
+                // CR 601.2h: the cost is paid in full, and only from the mana the tapped and
+                // sacrificed sources made and the pool held.
+                let used = |slot: Slot| {
+                    paid.object(slot).flags.has(ObjectFlags::TAPPED)
+                        || paid.object(slot).zone == Zone::Graveyard
+                };
                 let made: u32 = slots
                     .iter()
                     .zip(&names)
-                    .filter(|&(&slot, _)| paid.object(slot).flags.has(ObjectFlags::TAPPED))
+                    .filter(|&(&slot, _)| used(slot))
                     .map(|(_, name)| u32::from(makes(name).1))
                     .sum();
+                let sacrificed = slots
+                    .iter()
+                    .filter(|&&slot| paid.object(slot).zone == Zone::Graveyard)
+                    .count();
+                assert!(
+                    !outcomes.contains(&(plan.left, sacrificed)),
+                    "two plans leave {:?} and sacrifice {sacrificed}: {context}",
+                    plan.left
+                );
+                outcomes.push((plan.left, sacrificed));
                 let before: u32 = pool.iter().map(|&n| u32::from(n)).sum();
                 let after: u32 = paid
                     .player(g.me)
@@ -303,4 +315,130 @@ fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
         payable_positions += usize::from(payable);
     }
     assert!(payable_positions > 50, "only {payable_positions} payable");
+}
+
+/// The options of the open priority decision.
+fn priority_options(g: &mut Game) -> Vec<Opt> {
+    let d = g.decide();
+    assert_eq!(d.kind, DecisionKind::Priority);
+    (0..d.len())
+        .filter_map(|i| d.candidates.option(crate::Choice(i as u8)))
+        .collect()
+}
+
+#[test]
+fn a_treasure_adds_no_priority_option_of_its_own() {
+    for payment in [Payment::KeepMostPayable, Payment::Greedy] {
+        let mut g = Game::new(Profile {
+            payment,
+            ..Profile::EXACT
+        });
+        // A {1}{W}{U} spell, which a Plains and a Treasure can't pay.
+        g.give(g.me, "Test Raveler", Zone::Hand);
+        g.give(g.me, "Test Land", Zone::Battlefield);
+        let without = priority_options(&mut g);
+        g.give(g.me, "Test Treasure", Zone::Battlefield);
+        assert_eq!(priority_options(&mut g), without, "{payment:?}");
+    }
+}
+
+#[test]
+fn a_spell_payable_only_with_a_treasure_sacrifices_it_as_it_is_cast() {
+    for payment in [Payment::KeepMostPayable, Payment::Greedy] {
+        let mut g = Game::new(Profile {
+            payment,
+            ..Profile::EXACT
+        });
+        let bear = g.give(g.me, "Test Bear", Zone::Hand);
+        let land = g.give(g.me, "Test Land", Zone::Battlefield);
+        let treasure = g.give(g.me, "Test Treasure", Zone::Battlefield);
+        assert!(
+            !priority_options(&mut g)
+                .iter()
+                .any(|o| matches!(o, Opt::Mana { .. })),
+            "{payment:?}"
+        );
+        // {1}{W}: the Plains pays {W}, the Treasure {1}, with no question.
+        g.pick(cast(bear));
+        assert_eq!(g.s.object(bear).zone, Zone::Stack, "{payment:?}");
+        assert!(tapped(&g, land), "{payment:?}");
+        assert_eq!(g.s.object(treasure).zone, Zone::Graveyard, "{payment:?}");
+        assert_eq!(g.s.player(g.me).mana, ManaPool::default(), "{payment:?}");
+    }
+}
+
+#[test]
+fn a_spell_payable_from_lands_keeps_the_treasure() {
+    for payment in [Payment::KeepMostPayable, Payment::Greedy] {
+        let mut g = Game::new(Profile {
+            payment,
+            ..Profile::EXACT
+        });
+        let bear = g.give(g.me, "Test Bear", Zone::Hand);
+        let treasure = g.give(g.me, "Test Treasure", Zone::Battlefield);
+        g.give(g.me, "Test Land", Zone::Battlefield);
+        g.give(g.me, "Test Island", Zone::Battlefield);
+        g.pick(cast(bear));
+        assert_eq!(g.s.object(bear).zone, Zone::Stack, "{payment:?}");
+        assert_eq!(g.s.object(treasure).zone, Zone::Battlefield, "{payment:?}");
+        assert!(!tapped(&g, treasure), "{payment:?}");
+    }
+}
+
+#[test]
+fn sacrificing_a_treasure_is_offered_when_it_keeps_more_payable() {
+    let mut g = Game::new(Profile::EXACT);
+    let bear = g.give(g.me, "Test Bear", Zone::Hand);
+    g.give(g.me, "Test Land", Zone::Battlefield);
+    let strip = g.give(g.me, "Test Strip", Zone::Battlefield);
+    let treasure = g.give(g.me, "Test Treasure", Zone::Battlefield);
+    g.pick(cast(bear));
+    // {1}{W}: the Strip pays {1} at the cost of its own ability, or the Treasure does at the
+    // cost of itself. Keeping the Treasure comes first.
+    let d = g.decide();
+    assert_eq!(d.kind, DecisionKind::PaymentPlan);
+    assert_eq!(d.len(), 2);
+    g.pick(Opt::Plan(1));
+    assert_eq!(g.s.object(treasure).zone, Zone::Graveyard);
+    assert!(!tapped(&g, strip));
+    assert_eq!(g.s.object(bear).zone, Zone::Stack);
+}
+
+#[test]
+fn the_greedy_payment_spends_the_strip_before_the_treasure() {
+    let mut g = Game::new(Profile {
+        payment: Payment::Greedy,
+        ..Profile::EXACT
+    });
+    let bear = g.give(g.me, "Test Bear", Zone::Hand);
+    g.give(g.me, "Test Land", Zone::Battlefield);
+    let strip = g.give(g.me, "Test Strip", Zone::Battlefield);
+    let treasure = g.give(g.me, "Test Treasure", Zone::Battlefield);
+    g.pick(cast(bear));
+    assert_eq!(g.s.object(bear).zone, Zone::Stack);
+    assert!(tapped(&g, strip));
+    assert_eq!(g.s.object(treasure).zone, Zone::Battlefield);
+}
+
+#[test]
+fn manual_payment_offers_the_treasure_as_a_source() {
+    let mut g = Game::new(Profile {
+        payment: Payment::Manual,
+        ..Profile::EXACT
+    });
+    let bear = g.give(g.me, "Test Bear", Zone::Hand);
+    g.give(g.me, "Test Land", Zone::Battlefield);
+    let treasure = g.give(g.me, "Test Treasure", Zone::Battlefield);
+    // CR 605.3a: a standalone activation, at priority, under manual payment.
+    assert!(priority_options(&mut g).contains(&Opt::Mana {
+        slot: treasure,
+        color: ManaColor::Blue,
+    }));
+    g.pick(cast(bear));
+    g.pick(Opt::Mana {
+        slot: treasure,
+        color: ManaColor::Blue,
+    });
+    assert_eq!(g.s.object(treasure).zone, Zone::Graveyard);
+    assert_eq!(g.s.object(bear).zone, Zone::Stack);
 }

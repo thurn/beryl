@@ -182,6 +182,27 @@ pub(crate) static CRYPT: CardDef = CardDef {
     }],
 };
 
+/// A Treasure, as a card: "{T}, Sacrifice this artifact: Add one mana of any color."
+/// ([CR 111.10a](https://yawgatog.com/resources/magic-rules/#R11110a)).
+pub(crate) static TREASURE: CardDef = CardDef {
+    name: "Test Treasure",
+    tokens: &[],
+    faces: &[Face {
+        types: Types::ARTIFACT,
+        abilities: &[Ability {
+            cost: Cost {
+                sacrifice_self: true,
+                ..Cost::TAP
+            },
+            ..Ability::tap_for_mana(ManaSet {
+                colors: 0b1_1111,
+                amount: 1,
+            })
+        }],
+        ..Face::EMPTY
+    }],
+};
+
 pub(crate) static STRIP: CardDef = CardDef {
     name: "Test Strip",
     tokens: &[],
@@ -561,9 +582,9 @@ pub(crate) static STINGER: CardDef = CardDef {
 };
 
 pub(crate) static CAST_CARDS: CardTable = CardTable::new(&[
-    &LAND, &ISLAND, &DUAL, &CRYPT, &STRIP, &HQ, &BEAR, &REMOVAL, &TITHE, &LIES, &PONDER, &FLASHER,
-    &DIVER, &TRAINER, &OVERLORD, &STUPOR, &RAVELER, &EMPEROR, &FLASHBACK, &BINDER, &LOOTER,
-    &STINGER, &SNAPBACK, &BOUNCE,
+    &LAND, &ISLAND, &DUAL, &CRYPT, &TREASURE, &STRIP, &HQ, &BEAR, &REMOVAL, &TITHE, &LIES, &PONDER,
+    &FLASHER, &DIVER, &TRAINER, &OVERLORD, &STUPOR, &RAVELER, &EMPEROR, &FLASHBACK, &BINDER,
+    &LOOTER, &STINGER, &SNAPBACK, &BOUNCE,
 ]);
 
 /// Every test card, two of most, and lands.
@@ -572,6 +593,7 @@ pub(crate) const EVERYTHING: &Decklist = &[
     (6, "Test Island"),
     (2, "Test Dual"),
     (1, "Test Crypt"),
+    (2, "Test Treasure"),
     (1, "Test Strip"),
     (1, "Test HQ"),
     (2, "Test Bear"),

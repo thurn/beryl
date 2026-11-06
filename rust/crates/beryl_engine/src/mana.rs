@@ -6,19 +6,21 @@
 //! pay costs immediately, or it can stay in the player's mana pool as unspent mana."
 //!
 //! The solver works over **sources**: permanents whose mana abilities cost only {T} and do
-//! nothing but add mana, the lands and rocks of the cube. Sources that make the same mana and
-//! have no other ability are interchangeable, so they form a **class**, and a plan says how
-//! many of each class it taps and how much floating mana of each kind it spends. Plans that
-//! leave the same mana floating differ only in which sources they tap: the solver picks one.
-//! Plans that leave different mana floating are a decision.
+//! nothing but add mana, the lands and rocks of the cube, and those whose mana ability costs
+//! {T} and sacrificing them, the Treasures. Sources that make the same mana and have no other
+//! ability are interchangeable, so they form a **class**, and a plan says how many of each
+//! class it taps and how much floating mana of each kind it spends. Plans that leave the same
+//! mana floating and sacrifice as many sources differ only in which sources they tap: the
+//! solver picks one. Plans that leave different mana floating are a decision, and so is
+//! sacrificing more, when it keeps more later costs payable (§10).
 
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, AbilityKind, Cost, ManaColor, ManaCost, ManaSet, Types};
+use crate::card::{Ability, AbilityKind, Cost, ManaColor, ManaCost, Types};
 use crate::decision::Opt;
 use crate::effect::EffectCtx;
 use crate::event::{self, Sink};
 use crate::fixed::{Fixed, Full};
-use crate::ids::{Seat, Slot};
+use crate::ids::{CardIx, Seat, Slot};
 use crate::state::{ObjectFlags, PendingTrigger, State, Zone};
 use crate::table::GameTable;
 
@@ -150,10 +152,13 @@ struct Class {
     /// The kinds of mana each makes, a bit per [`ManaColor`].
     kinds: u8,
     amount: u8,
-    /// The flexibility rank (§10): fewer kinds first, then sources with no other ability.
-    /// Lower ranks are tapped first.
+    /// The flexibility rank (§10): fewer kinds first, then sources with no other ability,
+    /// and sources a plan consumes last. Lower ranks are tapped first.
     rank: u8,
     members: Bitboard,
+    /// Whether tapping one for mana also sacrifices it: a plan's taps of this class are the
+    /// permanents it consumes (§10).
+    consumed: bool,
 }
 
 impl Class {
@@ -188,8 +193,8 @@ fn allowed(s: &State, t: &GameTable, a: &Ability, player: Seat) -> bool {
 /// Whether an ability is a mana ability whose whole cost is {T} and sacrificing its source,
 /// as a Treasure's ([CR 111.10a](https://yawgatog.com/resources/magic-rules/#R11110a)):
 /// "{T}, Sacrifice this token: Add one mana of any color." Spending the permanent is a
-/// resource a plan consumes (§10), so the solver never does it on its own: the player
-/// activates it, at priority or while paying.
+/// resource a plan consumes (§10): the solver taps such a source only when the cost needs it,
+/// or when sacrificing it keeps more later costs payable.
 fn is_sacrificed(a: &Ability) -> bool {
     a.kind == AbilityKind::Mana
         && a.cost
@@ -199,52 +204,14 @@ fn is_sacrificed(a: &Ability) -> bool {
             }
 }
 
-/// The untapped permanents `player` controls, but those in `exclude`, that a mana ability
-/// sacrifices, one of each interchangeable group (§7.2), with the mana that ability makes.
-fn sacrificed_sources(
-    s: &State,
-    t: &GameTable,
-    player: Seat,
-    exclude: Bitboard,
-) -> Result<Fixed<(Slot, ManaSet), 64>, Full> {
-    let candidates: Bitboard = s
-        .battlefield()
-        .iter()
-        .copied()
-        .filter(|&slot| {
-            let o = s.object(slot);
-            // CR 302.6, as for the solver's sources.
-            let sick = s.derived(slot).types.intersects(Types::CREATURE)
-                && o.flags.has(ObjectFlags::SUMMONING_SICK);
-            // Checked before collapsing, which compares the card and face this reads.
-            let sacrifices = || {
-                t.def(o.card)
-                    .face(o.face)
-                    .abilities
-                    .iter()
-                    .any(is_sacrificed)
-            };
-            s.controller(slot) == player
-                && !o.flags.has(ObjectFlags::TAPPED)
-                && !exclude.contains(slot)
-                && !sick
-                && sacrifices()
-        })
-        .collect();
-    let mut out = Fixed::new();
-    for slot in crate::engine::collapse(s, candidates).iter() {
-        let o = s.object(slot);
-        let face = t.def(o.card).face(o.face);
-        if let Some(a) = face.abilities.iter().find(|a| is_sacrificed(a)) {
-            out.push((slot, a.produces))?;
-        }
-    }
-    Ok(out)
-}
+/// The rank of every class a plan consumes, above any other source's: kinds count for at
+/// most five colors and {C}, two ranks each.
+const CONSUMED_RANK: u8 = 2 * KINDS as u8 + 2;
 
 /// What an untapped source `player` controls makes, if the permanent in `slot` is one: the
-/// kinds of mana, how much, and whether it has another ability.
-fn source(s: &State, t: &GameTable, player: Seat, slot: Slot) -> Option<(u8, u8, bool)> {
+/// kinds of mana, how much, whether it has another ability, and whether making it sacrifices
+/// the source.
+fn source(s: &State, t: &GameTable, player: Seat, slot: Slot) -> Option<(u8, u8, bool, bool)> {
     let o = s.object(slot);
     if s.controller(slot) != player || o.flags.has(ObjectFlags::TAPPED) {
         return None;
@@ -272,7 +239,16 @@ fn source(s: &State, t: &GameTable, player: Seat, slot: Slot) -> Option<(u8, u8,
         amount = a.produces.amount;
     }
     if kinds == 0 {
-        return None;
+        // A Treasure: its one mana ability sacrifices it.
+        let a = face
+            .abilities
+            .iter()
+            .find(|a| is_sacrificed(a) && allowed(s, t, a, player))?;
+        debug_assert!(
+            a.produces.amount == 1 || a.produces.colors.is_power_of_two(),
+            "a source of several mana makes one kind"
+        );
+        return Some((a.produces.colors, a.produces.amount, false, true));
     }
     debug_assert!(
         amount == 1 || kinds.is_power_of_two(),
@@ -285,7 +261,7 @@ fn source(s: &State, t: &GameTable, player: Seat, slot: Slot) -> Option<(u8, u8,
                 && !is_simple(a)
                 && !a.cost.discard_self
         });
-    Some((kinds, amount, other))
+    Some((kinds, amount, other, false))
 }
 
 impl Sources {
@@ -301,16 +277,36 @@ impl Sources {
             if exclude.contains(slot) {
                 continue;
             }
-            let Some((kinds, amount, other)) = source(s, t, player, slot) else {
+            let Some((kinds, amount, other, consumed)) = source(s, t, player, slot) else {
                 continue;
             };
+            if consumed {
+                debug_assert!(!other);
+                let class = Class {
+                    kinds,
+                    amount,
+                    rank: CONSUMED_RANK,
+                    members: Bitboard::single(slot),
+                    consumed: true,
+                };
+                // Only permanents of one card are interchangeable when spending one: the
+                // payment sacrifices whichever comes first.
+                let same = |c: &Class| {
+                    c.consumed && c.members.iter().next().map(|m| s.card(m)) == Some(s.card(slot))
+                };
+                if let Some(i) = classes.iter().position(same) {
+                    classes.as_mut_slice()[i].members.insert(slot);
+                } else {
+                    classes.push(class)?;
+                }
+                continue;
+            }
             let rank = (kinds.count_ones() as u8) * 2 + u8::from(other);
             // A source with another ability is a class of its own: tapping it for mana
             // costs that ability, so it is never interchangeable.
-            if let Some(i) = classes
-                .iter()
-                .position(|c| !other && c.kinds == kinds && c.amount == amount && c.rank == rank)
-            {
+            if let Some(i) = classes.iter().position(|c| {
+                !other && !c.consumed && c.kinds == kinds && c.amount == amount && c.rank == rank
+            }) {
                 classes.as_mut_slice()[i].members.insert(slot);
             } else {
                 let mut members = Bitboard::EMPTY;
@@ -320,6 +316,7 @@ impl Sources {
                     amount,
                     rank,
                     members,
+                    consumed: false,
                 })?;
             }
         }
@@ -343,6 +340,16 @@ impl Sources {
             u.add(c.kinds, u16::from(c.amount) * u16::from(c.count() - taps));
         }
         u
+    }
+
+    /// How many sources a plan sacrifices.
+    fn sacrificed(&self, plan: &Plan) -> u8 {
+        self.classes()
+            .iter()
+            .zip(&plan.taps)
+            .filter(|(c, _)| c.consumed)
+            .map(|(_, &n)| n)
+            .sum()
     }
 
     /// Whether the source in `slot` is tapped by a plan.
@@ -386,12 +393,14 @@ impl Funds {
         let mut sources = Fixed::new();
         // The classes [`Sources::of`] would form, so that more than it holds is `Full` here
         // too.
-        let mut classes: Fixed<(u8, u8, bool), CLASSES> = Fixed::new();
+        let mut classes: Fixed<(u8, u8, bool, Option<CardIx>), CLASSES> = Fixed::new();
         for &slot in s.battlefield() {
-            if let Some((kinds, amount, other)) = source(s, t, player, slot) {
+            if let Some((kinds, amount, other, consumed)) = source(s, t, player, slot) {
                 sources.push((slot, kinds, amount))?;
-                if other || !classes.iter().any(|&c| c == (kinds, amount, false)) {
-                    classes.push((kinds, amount, other))?;
+                // Sources a plan consumes are a class per card.
+                let class = (kinds, amount, other, consumed.then(|| s.card(slot)));
+                if other || !classes.iter().any(|&c| c == class) {
+                    classes.push(class)?;
                 }
             }
         }
@@ -709,9 +718,12 @@ fn still_payable(sources: &Sources, plan: &Plan, later: &[Later]) -> (u32, usize
     })
 }
 
-/// The plans a payment of `cost` offers, at most one per distinct floating remainder, in
-/// order of the least mana left floating. Under [`crate::profile::Payment::Greedy`] it is
-/// the first plan in greedy order alone.
+/// The plans a payment of `cost` offers, at most one per distinct floating remainder and
+/// number of sources sacrificed, in order of the fewest sacrificed, then the least mana left
+/// floating. Sacrificing a source is a plan's own outcome (§10), but almost always a waste:
+/// a plan that sacrifices more is offered only when it keeps strictly more later costs payable
+/// than every plan sacrificing fewer. Under [`crate::profile::Payment::Greedy`] it is the
+/// first plan in greedy order of those sacrificing the fewest, alone.
 pub(crate) fn plans(
     s: &State,
     t: &GameTable,
@@ -726,10 +738,17 @@ pub(crate) fn plans(
     let pool = s.player(player).mana.amounts();
     let mut out: Fixed<Plan, 64> = Fixed::new();
     if greedy {
+        let mut best: Option<(u8, Plan)> = None;
         each_plan(cost, pool, &sources, &mut |p| {
-            let _ = out.push(*p);
-            false
+            let sacrificed = sources.sacrificed(p);
+            if best.is_none_or(|(fewest, _)| sacrificed < fewest) {
+                best = Some((sacrificed, *p));
+            }
+            sacrificed > 0
         });
+        if let Some((_, p)) = best {
+            out.push(p)?;
+        }
         return Ok(out);
     }
     let later = later_costs(s, t, player);
@@ -737,7 +756,11 @@ pub(crate) fn plans(
     let mut full = false;
     each_plan(cost, pool, &sources, &mut |p| {
         let score = still_payable(&sources, p, later.as_slice());
-        match out.iter().position(|q| q.left == p.left) {
+        let sacrificed = sources.sacrificed(p);
+        match out
+            .iter()
+            .position(|q| q.left == p.left && sources.sacrificed(q) == sacrificed)
+        {
             // The first plan of a remainder taps the least flexible sources; a later one
             // replaces it only by keeping more costs payable.
             Some(i) => {
@@ -755,14 +778,26 @@ pub(crate) fn plans(
     if full {
         return Err(Full);
     }
-    out.as_mut_slice().sort_by_key(|p| {
+    let mut kept: Fixed<Plan, 64> = Fixed::new();
+    for (p, &score) in out.iter().zip(scores.iter()) {
+        let sacrificed = sources.sacrificed(p);
+        let dominated = out
+            .iter()
+            .zip(scores.iter())
+            .any(|(q, &other)| sources.sacrificed(q) < sacrificed && other >= score);
+        if !dominated {
+            kept.push(*p)?;
+        }
+    }
+    kept.as_mut_slice().sort_by_key(|p| {
         let floating: u32 = p.left.iter().map(|&n| u32::from(n)).sum();
-        (floating, p.left)
+        (sources.sacrificed(p), floating, p.left)
     });
-    Ok(out)
+    Ok(kept)
 }
 
-/// Pays `cost` by `plan`: taps its sources for the mana it needs and spends it.
+/// Pays `cost` by `plan`: taps its sources for the mana it needs, sacrificing those whose
+/// ability says so, and spends it.
 ///
 /// [CR 601.2g](https://yawgatog.com/resources/magic-rules/#R6012g): "If the total cost
 /// includes a mana payment, the player then has a chance to activate mana abilities ... Mana
@@ -1014,23 +1049,6 @@ pub(crate) fn manual_options(
             }
         }
     }
-    for &(slot, produces) in &sacrificed_sources(s, t, player, exclude)? {
-        for kind in (0..KINDS).filter(|&k| produces.colors & (1 << k) != 0) {
-            if !helps(remaining, kind) {
-                continue;
-            }
-            let mut rest = remaining;
-            pay_unit(&mut rest, kind);
-            let mut after = pool;
-            after[kind] += produces.amount - 1;
-            if sources.units(after, &[0; CLASSES]).pays(rest) {
-                out.push(Opt::Mana {
-                    slot,
-                    color: ManaColor::ALL[kind],
-                })?;
-            }
-        }
-    }
     Ok(out)
 }
 
@@ -1054,28 +1072,6 @@ pub(crate) fn manual_pay(
     s.player_mut(player).mana[color] -= 1;
     pay_unit(&mut remaining, color.index());
     Ok(remaining)
-}
-
-/// The activations of mana abilities that sacrifice their source, offered at priority under
-/// any payment profile: one for each kind of mana each can make
-/// ([CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a)): "A player may activate
-/// an activated mana ability whenever they have priority". The solver never spends them
-/// (§10), so mana a payment needs from one floats first.
-pub(crate) fn sacrifice_options(
-    s: &State,
-    t: &GameTable,
-    player: Seat,
-    out: &mut Fixed<Opt, 64>,
-) -> Result<(), Full> {
-    for &(slot, produces) in &sacrificed_sources(s, t, player, Bitboard::EMPTY)? {
-        for kind in (0..KINDS).filter(|&k| produces.colors & (1 << k) != 0) {
-            out.push(Opt::Mana {
-                slot,
-                color: ManaColor::ALL[kind],
-            })?;
-        }
-    }
-    Ok(())
 }
 
 /// The standalone mana activations offered at priority under manual payment

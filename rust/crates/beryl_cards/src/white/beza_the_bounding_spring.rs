@@ -193,32 +193,46 @@ pub const SCENARIOS: &[Scenario] = &[
             controls_count(P0, TREASURE_TOKEN, 0),
             life(P0, 20),
         ]),
-    // A Treasure is sacrificed for one mana of any color, here the first of the five: {W}
-    // (CR 111.10a).
-    Scenario::new("Beza's Treasure sacrificed for mana")
-        // The Plains to play keeps P0 deciding, the mana unspent.
-        .hand(P0, &[BEZA, names::PLAINS])
+    // A Treasure pays for a spell as it is cast, sacrificed for one mana of any color
+    // (CR 111.10a): P0 counters Get Lost with Counterspell from an Island and Beza's Treasure.
+    // The Treasure offers no activation of its own (§10): P0 may pass or counter.
+    Scenario::new("Beza's Treasure pays for Counterspell")
+        .hand(P0, &[BEZA, names::COUNTERSPELL, names::ISLAND])
         .battlefield(P0, PLAINS)
         .library(P0, &[names::ISLAND])
         .battlefield(P1, &[PLAIN, PLAIN, PLAIN, PLAIN, PLAIN])
+        .hand(P1, &[names::GET_LOST])
         .library(P1, &[names::ISLAND])
         .actions(&[
             Action::cast(P0, BEZA),
             Action::Resolve,
             Action::Resolve,
             controls_count(P0, TREASURE_TOKEN, 1),
-            Action::answer(
-                P0,
-                DecisionKind::Priority,
-                Pick::Card {
-                    card: TREASURE_TOKEN,
-                },
-            ),
+            // With nothing to cast, P0's priority is no decision: the Treasure adds none.
+            Action::PlayLand {
+                player: P0,
+                card: names::ISLAND,
+            },
+            Action::cast(P1, names::GET_LOST),
+            Action::assert(Assertion::Decision {
+                player: P0,
+                kind: DecisionKind::Priority,
+                candidates: 2,
+            }),
+            Action::cast(P0, names::COUNTERSPELL),
             controls_count(P0, TREASURE_TOKEN, 0),
             Action::assert(Assertion::Mana {
                 player: P0,
-                color: ManaColor::White,
-                amount: 1,
+                color: ManaColor::Blue,
+                amount: 0,
             }),
+            Action::Resolve,
+            Action::assert(Assertion::Count {
+                player: P1,
+                zone: Zone::Graveyard,
+                card: Some(names::GET_LOST),
+                count: 1,
+            }),
+            controls_count(P0, BEZA, 1),
         ]),
 ];

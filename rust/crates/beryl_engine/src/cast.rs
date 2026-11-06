@@ -723,7 +723,6 @@ pub(crate) fn priority_options(
     let now = Situation::of(s, t, player)?;
     cast_options(s, t, &now, cast_sources(s, player), From::Priority, out)?;
     activation_options(s, t, &now, out)?;
-    mana::sacrifice_options(s, t, player, out)?;
     if s.profile.payment == Payment::Manual {
         mana::standalone_options(s, t, player, out)?;
     }
