@@ -203,11 +203,10 @@
       "height": 900
     },
     {
-      "name": "game-exile-pile",
-      "route": "/?fixture=exile-cast#/game",
+      "name": "game-flashback",
+      "route": "/?fixture=flashback#/game",
       "width": 1600,
-      "height": 900,
-      "click": "[data-pile=exile][data-side=you]"
+      "height": 900
     },
     {
       "name": "game-late",
@@ -340,9 +339,9 @@
       "width": 1600,
       "height": 900,
       "click": [
-        "[data-slot='121']",
-        "[data-slot='10']",
         "[data-slot='120']",
+        "[data-slot='10']",
+        "[data-slot='121']",
         "[data-slot='12']"
       ]
     },

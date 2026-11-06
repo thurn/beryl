@@ -154,6 +154,12 @@
       "where": ["castable from exile", "known card in the opponent's hand"]
     },
     {
+      "name": "flashback",
+      "board": "flashback",
+      "until": "first priority decision for seat 0",
+      "where": ["castable from the graveyard"]
+    },
+    {
       "name": "pay-default",
       "board": "pay-default",
       "until": "first paymentPlan decision for seat 0",

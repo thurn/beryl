@@ -429,15 +429,14 @@ export function Board({
   const states = new Map<number, CardState>();
   if (deciding) {
     for (const [slot, acts] of can.bySlot) {
-      const o = objects.get(slot);
       const single = can.picking && acts.length === 1;
       states.set(slot, {
         highlight: single ? "target" : undefined,
         // Every untapped source can tap for mana at priority, which no glow need say.
         playable: !single && !tapsOnly(acts),
+        // A card in your hand fan, or one it holds because you can play it from elsewhere.
         draggable:
-          (o?.zone === "hand" &&
-            o.owner === "you" &&
+          (placements.get(slot)?.look === "hand" &&
             playActs(acts).length > 0) ||
           acts.some(
             (a) => a.option.kind === "attack" || a.option.kind === "block",
@@ -620,14 +619,24 @@ export function Board({
       if (slot === castingNow.slot) return true;
       setCasting(undefined);
     }
+    // A pile of identical permanents is taken from the top, whichever of its cards is
+    // clicked, as the engine takes the lowest slot of interchangeable ones, which lies on top.
+    const pile = placements.get(slot)?.pile ?? [slot];
     if (drafting) {
-      setDraft(drafted(draft, slot));
+      setDraft(drafted(draft, pile[0]!));
       return true;
     }
     if (picking) {
       if (!picking.eligible.has(slot)) return false;
+      // Picked, its pile gives back its deepest pick; otherwise its topmost card not yet
+      // picked is picked, so a pile's picks are always its top cards.
+      const mates = pile.filter((s) => picking.eligible.has(s));
       const next = new Set(picked);
-      if (!next.delete(slot) && next.size < picking.max) next.add(slot);
+      if (picked.has(slot)) {
+        next.delete([...mates].reverse().find((s) => picked.has(s))!);
+      } else if (next.size < picking.max) {
+        next.add(mates.find((s) => !picked.has(s))!);
+      }
       setPicks({ view, picked: next });
       return true;
     }
@@ -701,7 +710,7 @@ export function Board({
       return inHand;
     }
     const acts = deciding ? (can.bySlot.get(slot) ?? []) : [];
-    if (objects.get(slot)?.zone === "hand") {
+    if (placements.get(slot)?.look === "hand") {
       const plays = inHand ? [] : playActs(acts);
       const casts = castActs(plays);
       if (casts.length > 0 && casts.length === plays.length && stepsIn(casts)) {

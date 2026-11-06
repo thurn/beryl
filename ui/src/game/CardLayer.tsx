@@ -460,6 +460,9 @@ function Look({
     return <CardBack width={place.width} />;
   }
   const combat = field ? object.combat?.kind : undefined;
+  // A card your hand fan holds because you can play it from where it lies (a graveyard, exile):
+  // its own outline, apart from the hand's playable edge.
+  const elsewhere = place.look === "hand" && object.zone !== "hand";
   const card_ = (
     <Card
       id={ghost ? undefined : cardId(object.slot)}
@@ -482,7 +485,8 @@ function Look({
       // hide it.
       className={
         [
-          state.playable && !state.highlight && "card-playable",
+          state.playable && !state.highlight && !elsewhere && "card-playable",
+          elsewhere && !state.highlight && "card-elsewhere",
           state.paying && "card-paying",
           state.linked && !state.highlight && !state.paying && "card-linked",
           under && "card-under",

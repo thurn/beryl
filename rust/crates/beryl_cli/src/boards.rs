@@ -459,6 +459,20 @@ pub const BOARDS: &[Scenario] = &[
             Action::cast(P0, SINK_INTO_STUPOR),
             Action::answer(P1, DecisionKind::YesNo, Pick::Yes),
         ]),
+    // Snapcaster Mage gives the human's Thirst for Discovery flashback: castable from the
+    // graveyard, it waits in their hand fan, while Counterspell stays in the pile.
+    Scenario::new("flashback")
+        .at(4, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[ISLAND_, ISLAND_, ISLAND_, ISLAND_, ISLAND_, PLAINS_])
+        .hand(P0, &[SNAPCASTER_MAGE, ISLAND])
+        .graveyard(P0, &[COUNTERSPELL, THIRST_FOR_DISCOVERY])
+        .library(P0, LANDS)
+        .battlefield(P1, &[PLAINS_, ISLAND_])
+        .library(P1, LANDS)
+        .actions(&[
+            Action::cast(P0, SNAPCASTER_MAGE),
+            choose(P0, DecisionKind::Target, THIRST_FOR_DISCOVERY),
+        ]),
     // Counterspell aimed at the human's Trinket Mage, which the human may save.
     Scenario::new("arrow-spell")
         .at(3, P0, TurnStep::PrecombatMain)

@@ -178,8 +178,8 @@ enum Condition {
     /// A permanent bears this mark and no other while another of the same name bears none, so
     /// the table shows the mark alone beside a plain twin.
     Marked(Mark),
-    /// The human may cast a card from exile.
-    CastableFromExile,
+    /// The human may cast a card from exile, or from their graveyard.
+    CastableFrom(ZoneName),
     /// The human knows a card in the opponent's hand.
     KnownOpponentsHand,
     /// Two tokens one player controls are alike in all the table shows, so it piles them.
@@ -254,11 +254,11 @@ impl Condition {
     /// the stack", "castable <card name>", "playable <card name>", "abilities of <card name>",
     /// "namesake candidates", "resolving <card name>", "casting <card name>",
     /// "playable pair in hand", "exiled beneath a permanent", "exiled with a permanent",
-    /// "attached across the table",
-    /// "castable from exile", "known card in the opponent's hand", "token twins", "changed
-    /// token", "token beside its card", "stolen permanent", "mana floating", "X on the stack",
-    /// "spell on the stack", "<n> nonland permanents a side", or "<mark> beside a twin" with the
-    /// mark "+1/+1 counters", "damage", "summoning sickness" or "story or time counters".
+    /// "attached across the table", "castable from exile", "castable from the graveyard",
+    /// "known card in the opponent's hand", "token twins", "changed token", "token beside its
+    /// card", "stolen permanent", "mana floating", "X on the stack", "spell on the stack",
+    /// "<n> nonland permanents a side", or "<mark> beside a twin" with the mark "+1/+1
+    /// counters", "damage", "summoning sickness" or "story or time counters".
     fn parse(text: &str) -> Result<Condition, String> {
         let condition = match text {
             "attacking" => Condition::Attacking,
@@ -276,7 +276,8 @@ impl Condition {
             "damage beside a twin" => Condition::Marked(Mark::Damage),
             "summoning sickness beside a twin" => Condition::Marked(Mark::Sick),
             "story or time counters beside a twin" => Condition::Marked(Mark::StoryOrTime),
-            "castable from exile" => Condition::CastableFromExile,
+            "castable from exile" => Condition::CastableFrom(ZoneName::Exile),
+            "castable from the graveyard" => Condition::CastableFrom(ZoneName::Graveyard),
             "known card in the opponent's hand" => Condition::KnownOpponentsHand,
             "token twins" => Condition::TokenTwins,
             "changed token" => Condition::ChangedToken,
@@ -402,7 +403,7 @@ impl Condition {
             }),
             Condition::AttachedAcross => attached_across(view),
             Condition::Marked(mark) => marked_beside_twin(view, *mark),
-            Condition::CastableFromExile => castable_from_exile(view),
+            Condition::CastableFrom(zone) => castable_from(view, *zone),
             Condition::KnownOpponentsHand => knows_opponents_hand(view),
             Condition::TokenTwins => token_pairs(view).any(|(a, b)| plain_twins(view, a, b)),
             Condition::ChangedToken => changed_token(view),
@@ -630,8 +631,8 @@ fn stolen(view: &PlayerView) -> bool {
         .any(|o| o.zone == ZoneName::Battlefield && o.controller != o.owner)
 }
 
-/// Whether the human may cast a card from exile.
-fn castable_from_exile(view: &PlayerView) -> bool {
+/// Whether the human may cast a card from `zone`.
+fn castable_from(view: &PlayerView, zone: ZoneName) -> bool {
     let Status::Deciding { decision } = &view.status else {
         return false;
     };
@@ -639,7 +640,7 @@ fn castable_from_exile(view: &PlayerView) -> bool {
         matches!(c.option, Candidate::Cast { slot, .. } if view
             .objects
             .iter()
-            .any(|o| o.slot == slot && o.zone == ZoneName::Exile))
+            .any(|o| o.slot == slot && o.zone == zone))
     })
 }
 
@@ -909,7 +910,7 @@ mod tests {
         );
         assert_eq!(
             Condition::parse("castable from exile"),
-            Ok(Condition::CastableFromExile)
+            Ok(Condition::CastableFrom(ZoneName::Exile))
         );
         assert_eq!(
             Condition::parse("known card in the opponent's hand"),

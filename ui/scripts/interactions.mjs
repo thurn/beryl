@@ -585,7 +585,7 @@ for (const [title, target] of [
     );
 }
 
-// A quiet table with a row of permanents a side: nothing on the stack, no combat.
+// A quiet table with a row of creatures a side: nothing on the stack, no combat.
 const quietViews = await load("combat-blockers");
 const nonlands = (view, side) =>
     view.objects.filter(
@@ -594,13 +594,16 @@ const nonlands = (view, side) =>
             o.controller === side &&
             !o.types.includes("land"),
     );
+// The creatures' row (layout.ts ROWS): the other permanents stand behind it, beside the lands.
+const creatures = (view, side) =>
+    nonlands(view, side).filter((o) => o.types.includes("creature"));
 const quiet = quietViews.findIndex(
     (v) =>
         v.status.decision?.kind === "priority" &&
         v.stack.length === 0 &&
         !v.objects.some((o) => o.combat) &&
-        nonlands(v, "you").length >= 3 &&
-        nonlands(v, "opponent").length >= 3,
+        creatures(v, "you").length >= 3 &&
+        creatures(v, "opponent").length >= 3,
 );
 assert.ok(quiet >= 0, "the blockers fixture has a quiet, crowded table");
 for (const viewport of [
@@ -626,7 +629,7 @@ for (const viewport of [
                 );
             for (const side of ["you", "opponent"]) {
                 const whose = side === "you" ? "your" : "the opponent's";
-                const row = await boxes(nonlands(quietViews[quiet], side));
+                const row = await boxes(creatures(quietViews[quiet], side));
                 assert.ok(row.length > 0, `${whose} row is empty`);
                 const left = Math.min(...row.map((b) => b.x));
                 const right = Math.max(...row.map((b) => b.x + b.width));
@@ -645,7 +648,7 @@ for (const viewport of [
         {
             fixture: "combat-blockers",
             at: quiet + 1,
-            ready: `[data-slot="${nonlands(quietViews[quiet], "you")[0].slot}"]`,
+            ready: `[data-slot="${creatures(quietViews[quiet], "you")[0].slot}"]`,
             viewport,
         },
     );
@@ -653,7 +656,26 @@ for (const viewport of [
 
 // On a table whose rows reach into the log's column, the log folds to a button rather than lie
 // half hidden under the permanents; the button opens it whole, the rows making room for it, and
-// closes it again.
+// closes it again. The crowded table's other permanents, animated, make its creature rows that
+// long.
+const longViews = await load("crowded");
+const longAt = longViews.findIndex(
+    (v) => v.status.decision?.kind === "priority",
+);
+await derive("crowded", "crowded-animated", longAt, (v) => ({
+    ...v,
+    objects: v.objects.map((o) =>
+        o.zone === "battlefield" &&
+        !o.types.includes("land") &&
+        !o.types.includes("creature")
+            ? {
+                  ...o,
+                  types: [...o.types, "creature"],
+                  pt: { power: 1, toughness: 1 },
+              }
+            : o,
+    ),
+}));
 await check(
     "the log folds away from a crowded table and opens beside it",
     async (page) => {
@@ -685,15 +707,7 @@ await check(
         await page.getByRole("button", { name: "Hide log" }).click();
         assert.ok(await list.isHidden(), "the button folds it again");
     },
-    {
-        fixture: "combat-double-block",
-        // The table as the block declaration begins.
-        at:
-            (await load("combat-double-block")).findIndex(
-                (v) => v.status.decision?.kind === "blocker",
-            ) + 1,
-        ready: ".game-log-toggle",
-    },
+    { fixture: "crowded-animated", at: longAt + 1, ready: ".game-log-toggle" },
 );
 
 // A fixture's history reaches the log once, however often the screen starts listening (React's
@@ -1264,6 +1278,40 @@ function recordedDeclaration(views, kinds) {
 }
 
 const slotOf = (slot) => `[data-slot="${slot}"]`;
+/** Clicks the card in `slot` where it shows, nearest its middle and well inside its edges: a
+ * copy beneath a pile's top card shows only its edge. */
+async function clickShown(page, slot) {
+    const box = await page.locator(slotOf(slot)).boundingBox();
+    const at = await page.evaluate(
+        ({ slot, box }) => {
+            const points = [];
+            for (let y = box.y + 12; y < box.y + box.height - 12; y += 4) {
+                for (let x = box.x + 6; x < box.x + box.width - 6; x += 2) {
+                    points.push({ x, y });
+                }
+            }
+            const middle = {
+                x: box.x + box.width / 2,
+                y: box.y + box.height / 2,
+            };
+            points.sort(
+                (a, b) =>
+                    Math.hypot(a.x - middle.x, a.y - middle.y) -
+                    Math.hypot(b.x - middle.x, b.y - middle.y),
+            );
+            return (
+                points.find(
+                    ({ x, y }) =>
+                        document.elementFromPoint(x, y)?.closest("[data-slot]")
+                            ?.dataset.slot === String(slot),
+                ) ?? null
+            );
+        },
+        { slot, box },
+    );
+    assert.ok(at, `slot ${slot} shows`);
+    await page.mouse.click(at.x, at.y);
+}
 /** Whether the card in `slot` shows `role` ("attacker" or "blocker") on the table. */
 const shows = async (page, slot, role) =>
     Boolean(await page.$(`${slotOf(slot)} .card-${role}`));
@@ -1282,6 +1330,28 @@ const declaredAttackers = attackRecord.declared.objects
     .map((o) => o.slot);
 const insects = named(attackView, "Insect Token");
 assert.equal(insects.length, 2, "two Insect tokens");
+// The twin the engine offers lies on top of their pile; the other only peeks out beneath it.
+const [insectTop, insectBeneath] = insects.sort((a, b) => a - b);
+/** Clicks each creature of `slots` in turn to attack: a click on any card of a pile of twins
+ * takes its top card, the lowest slot of those not yet attacking, which each click checks
+ * attacks. Returns the attackers taken. */
+async function declareByClicks(page, slots) {
+    const taken = [];
+    for (const slot of slots) {
+        const self = attackView.objects.find((o) => o.slot === slot);
+        const top = Math.min(
+            ...attackView.objects
+                .filter((o) => o.slot === slot || twins(self, o))
+                .map((o) => o.slot)
+                .filter((s) => !taken.includes(s)),
+        );
+        await clickShown(page, slot);
+        await page.clock.runFor(500);
+        assert.ok(await shows(page, top, "attacker"), `${top} attacks`);
+        taken.push(top);
+    }
+    return taken;
+}
 assert.deepEqual(
     [...declaredAttackers].sort((a, b) => a - b),
     [
@@ -1335,17 +1405,15 @@ await check(
     "attackers picked in any order are declared together",
     async (page) => {
         await page.clock.runFor(2000);
-        // The twin the engine does not offer first, then the rest from right to left.
-        const order = [
-            insects[1],
+        // The edge of the twin beneath the pile's top card, which takes the top card, then the
+        // rest from right to left, the other twin standing alone by then.
+        const declaring = await declareByClicks(page, [
+            insectBeneath,
             ...[...declaredAttackers]
-                .filter((s) => s !== insects[1])
+                .filter((s) => s !== insectTop)
                 .sort((a, b) => b - a),
-        ];
-        for (const slot of order) {
-            await page.click(slotOf(slot));
-            await page.clock.runFor(500);
-        }
+        ]);
+        assert.equal(declaring[0], insectTop, "the pile's top attacks first");
         // Changing one's mind: a second click takes an attacker back, a third returns it.
         const malcolm = named(attackView, "Malcolm, Alluring Scoundrel")[0];
         await page.click(slotOf(malcolm));
@@ -1353,7 +1421,7 @@ await check(
         assert.ok(!(await shows(page, malcolm, "attacker")), "taken back");
         await page.click(slotOf(malcolm));
         await page.clock.runFor(500);
-        for (const slot of declaredAttackers) {
+        for (const slot of declaring) {
             assert.ok(await shows(page, slot, "attacker"), `${slot} attacks`);
         }
         assert.deepEqual(await chosen(page), [], "nothing is sent yet");
@@ -1670,16 +1738,13 @@ await check(
     "the human's attack on the opponent ends on their life orb",
     async (page) => {
         await page.clock.runFor(2000);
-        // The twin the engine does not offer first, as a player could, then the rest.
-        for (const slot of [
-            insects[1],
-            ...declaredAttackers.filter((s) => s !== insects[1]),
-        ]) {
-            await page.click(slotOf(slot));
-            await page.clock.runFor(500);
-        }
+        // The twins' pile, then the rest.
+        const declaring = await declareByClicks(page, [
+            insectTop,
+            ...declaredAttackers.filter((s) => s !== insectTop),
+        ]);
         await page.clock.runFor(2000);
-        await assertAimedAtPlayer(page, declaredAttackers, "opponent");
+        await assertAimedAtPlayer(page, declaring, "opponent");
     },
     attackRun,
 );
@@ -3690,7 +3755,7 @@ for (const fixture of ["arrow-spell", "arrow-ability", "arrow-player"]) {
 }
 
 // A card the opponent's Elite Spellbinder exiled from the human's hand, which they may cast from
-// exile (`exile-cast`): its pile glows, its viewer offers it, and picking it there casts it.
+// exile (`exile-cast`): it waits in their hand fan, outlined apart, and a click there casts it.
 // The human also knows a card in the opponent's hand, one their Sink into Stupor returned there.
 const exileViews = await load("exile-cast");
 const exileView = exileViews.at(-1);
@@ -3706,19 +3771,19 @@ const yourExile = '[data-pile="exile"][data-side="you"]';
 const exileRun = {
     fixture: "exile-cast",
     at: exileViews.length,
-    ready: yourExile,
+    ready: `${slotOf(exiledSlot)}.card-el-hand`,
 };
 
 await check(
-    "a card castable from exile is cast from its pile",
+    "a card castable from exile waits in the hand fan and is cast from there",
     async (page) => {
-        // The pile glows once the decision is shown.
-        await until(page, `${yourExile}.pile-button-playable`);
-        await page.click(yourExile);
-        await page
-            .getByRole("dialog", { name: "Your exile" })
-            .locator(`[data-viewer-slot="${exiledSlot}"]`)
-            .click();
+        await page.clock.runFor(2000);
+        assert.ok(
+            await page.$(`${slotOf(exiledSlot)} .card-elsewhere`),
+            "it is outlined apart from the hand's own cards",
+        );
+        assert.equal(await page.$(yourExile), null, "its exile pile is gone");
+        await page.click(slotOf(exiledSlot));
         // With nothing to choose, the pick casts it at once.
         assert.deepEqual(
             await chosen(page),
@@ -3845,7 +3910,9 @@ await check(
         }
         assert.equal(counted.length, 1, "one card of the pile is counted");
         const top = counted[0];
-        assert.notEqual(top, offeredToken.slot, "the offered token is beneath");
+        // The engine offers the lowest slot of twins, which lies on top, so what a choice takes
+        // from a pile leaves it from the top.
+        assert.equal(top, offeredToken.slot, "the offered token is on top");
         const box = await page.locator(slotOf(top)).boundingBox();
         const at = center(box);
         const hit = await page.evaluate(
@@ -5484,10 +5551,19 @@ await check(
         await page
             .getByRole("button", { name: picked(ownTapped.length) })
             .waitFor();
-        // A land let go glows to be picked again.
+        // A land let go glows to be picked again: of a pile, the deepest of its picks, so a
+        // pile's picks stay its top cards.
         const mine = await uncovered(page, ownTapped);
         await page.click(slotOf(mine));
-        assert.ok((await glowing(page, "target")).includes(mine));
+        const letGo = (await glowing(page, "target")).filter((slot) =>
+            ownTapped.includes(slot),
+        );
+        assert.equal(letGo.length, 1, "one of the human's lands is let go");
+        assert.equal(
+            nameIn(untapView, letGo[0]),
+            nameIn(untapView, mine),
+            "the land let go is of the clicked land's pile",
+        );
         const theirs = await uncovered(page, theirTapped);
         await page.click(slotOf(theirs));
         assert.ok((await glowing(page, "source")).includes(theirs));
@@ -5499,7 +5575,7 @@ await check(
         assert.equal(o.kind, "object", "a land is untapped first");
         assert.ok(
             ownTapped
-                .filter((slot) => slot !== mine)
+                .filter((slot) => slot !== letGo[0])
                 .some(
                     (slot) =>
                         nameIn(untapView, slot) === nameIn(untapView, o.slot),

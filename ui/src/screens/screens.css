@@ -1336,6 +1336,15 @@
     0 0 6px 2px rgb(var(--playable-rgb) / 45%),
     var(--card-shadow, var(--shadow-card));
 }
+/* A card the hand fan holds because it can be played from a graveyard or exile: a purple edge
+   and halo, as the playable edge is drawn. */
+.card-elsewhere {
+  box-shadow:
+    0 0 0 1px rgb(226 196 255 / 90%),
+    0 0 6px 2px rgb(176 112 255 / 65%),
+    0 0 18px 4px rgb(140 70 240 / 35%),
+    var(--card-shadow, var(--shadow-card));
+}
 .stack-ability {
   transform-origin: 0 0;
 }
