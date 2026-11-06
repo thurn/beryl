@@ -1,9 +1,9 @@
-//! One ladder game, resumable at any decision. Every decision's answer is logged as it is
+//! One arena game, resumable at any decision. Every decision's answer is logged as it is
 //! made; a resumed game replays from its seed through the logged answers at engine speed and
 //! asks its agents again only where the log ends.
 //!
 //! A search keeps no running state a replay could lose: its trees are seeded from the
-//! agent's seed and the decision's index ([`Mcts::resumed`]). Its logged answers are taken
+//! agent's seed and the decision's index ([`LongSearch::resumed`]). Its logged answers are taken
 //! as they stand up to the point its last logged line says a rebuilt agent must start
 //! from: the next decision, or, inside a chain of decisions reusing one search's trees, the
 //! decision that planted them, re-searched from there to the same answers. Every other
@@ -19,7 +19,7 @@ use beryl_engine::{
     Choice, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch, State, Step,
     apply, next, observe, view,
 };
-use beryl_search::{Agent, AgentDecision, Budget, Mcts, Search, Sight, agent};
+use beryl_search::{Agent, AgentDecision, Budget, LongSearch, Search, Settings, agent};
 use serde::{Deserialize, Serialize};
 
 use crate::game::seat_seeds;
@@ -39,50 +39,29 @@ impl fmt::Display for GameDecision {
     }
 }
 
-/// An agent in a ladder game.
+/// An agent in an arena game.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Entrant {
-    /// The search, at a budget.
-    Search { sight: Sight, budget: Budget },
+    /// The long-think search, with its settings.
+    Search(Settings),
     /// An agent of the registry that does not search, by name.
     Fixed(String),
 }
 
 impl Entrant {
-    /// Its name in the registry.
-    pub fn name(&self) -> &str {
-        match self {
-            Entrant::Search {
-                sight: Sight::Hidden,
-                ..
-            } => "mcts-hidden",
-            Entrant::Search {
-                sight: Sight::Omniscient,
-                ..
-            } => "mcts-omniscient",
-            Entrant::Search {
-                sight: Sight::Hands,
-                ..
-            } => "mcts-hands",
-            Entrant::Fixed(name) => name,
-        }
-    }
-
-    /// A search's budget.
-    pub fn budget(&self) -> Option<Budget> {
-        match self {
-            Entrant::Search { budget, .. } => Some(*budget),
-            Entrant::Fixed(_) => None,
-        }
-    }
-
-    /// How a transcript names it.
+    /// Its name in the arena: `ismcts18/hidden/rollout/17l@3M`, or the fixed agent's.
     pub fn label(&self) -> String {
         match self {
-            Entrant::Search { budget, .. } => {
-                format!("{} {}", self.name(), super::rung_name(budget.iterations))
-            }
+            Entrant::Search(s) => format!("{}@{}", s.family, super::rung_name(s.work)),
             Entrant::Fixed(name) => name.clone(),
+        }
+    }
+
+    /// A search's budget, in engine steps a decision.
+    pub fn budget(&self) -> Option<u64> {
+        match self {
+            Entrant::Search(s) => Some(s.work),
+            Entrant::Fixed(_) => None,
         }
     }
 }
@@ -110,6 +89,9 @@ pub struct Searched {
     pub chain: AgentDecision,
     pub rollouts: u32,
     pub inherited: u32,
+    /// The engine steps it spent.
+    #[serde(default)]
+    pub work: u64,
     pub visits: Vec<u32>,
     pub rewards: Vec<f64>,
 }
@@ -175,7 +157,7 @@ impl Seated {
 pub type Build<'a> =
     dyn Fn(&GameTable, &Entrant, u64, AgentDecision) -> Result<Box<dyn Agent>, String> + 'a;
 
-/// The agents as the registry builds them; a search as [`Mcts::resumed`] rebuilds it.
+/// The agents as the registry builds them; a search as [`LongSearch::resumed`] rebuilds it.
 pub fn build(
     t: &GameTable,
     e: &Entrant,
@@ -183,9 +165,7 @@ pub fn build(
     from: AgentDecision,
 ) -> Result<Box<dyn Agent>, String> {
     match e {
-        Entrant::Search { sight, budget } => {
-            Ok(Box::new(Mcts::resumed(t, *sight, *budget, seed, from)))
-        }
+        Entrant::Search(settings) => Ok(Box::new(LongSearch::resumed(t, *settings, seed, from))),
         Entrant::Fixed(name) => {
             let info = agent(name).ok_or_else(|| format!("no agent is named {name:?}"))?;
             Ok((info.new)(t, seed, Budget::DEFAULT))
@@ -271,7 +251,7 @@ pub fn play(
         players.push(Seated {
             agent: build(t, e, seed, start)?,
             seat: players.len() as u8,
-            search: matches!(e, Entrant::Search { .. }).then_some(Progress {
+            search: matches!(e, Entrant::Search(_)).then_some(Progress {
                 from,
                 asked: AgentDecision(0),
             }),
@@ -368,6 +348,7 @@ fn searched(s: &Search) -> Searched {
         chain: s.chain,
         rollouts: s.rollouts,
         inherited: s.inherited,
+        work: s.work,
         visits: s.visits.clone(),
         rewards: s.rewards.clone(),
     }

@@ -115,7 +115,7 @@ Tournaments are expensive: a game involving an MCTS agent at
 holds the whole machine for about 20 minutes and a full round robin for over 2
 hours. `just tournament` and `just play` run under `nice -n 10` so other
 sessions' checks keep their CPU. Wardens rerun only the pairings that gate
-acceptance, never reported-only ones. `just longthink`, the long-think ladder
+acceptance, never reported-only ones. `just longthink`, the long-think arena
 (`docs/ai-strategy.md` §5), holds the machine for days: with no arguments it
 starts or resumes the run in `$BERYL_CACHE/longthink`, any stop costs at most
 the decision being searched, and `--status` prints where it stands.

@@ -1,14 +1,16 @@
-//! The long-think ladder (the by-2l8 epic): an open-ended tournament of the hidden search at
-//! budgets tripling rung by rung, against a fixed opponent, which any stop costs at most the
-//! decision being searched.
+//! The long-think arena (docs/ai-strategy.md §5): an open-ended tournament of search
+//! families at budgets that grow while they climb, every entrant in one rating pool, the
+//! next game always the one that teaches the most per engine step ([`schedule`]), which any
+//! stop costs at most the decision being searched.
 //!
-//! `beryl_cli longthink` (`just longthink`) starts the ladder in a new run directory under
+//! `beryl_cli longthink` (`just longthink`) starts the arena in a new run directory under
 //! `$BERYL_CACHE/longthink`, or resumes the latest, and supervises the runner: the binary
 //! the run was started with, copied into its directory, so later commits never change a
 //! run's agents. A runner that crashes is restarted and resumes. `--games N` stops once the
 //! run holds N games, however many sessions it took; `--status` prints the summary;
-//! `--upgrade` adopts the current code if it plays identically ([`upgrade`]); `--new` and
-//! `--run DIR` start a new run, or resume any. Its files:
+//! `--upgrade` adopts the current code if it plays identically ([`upgrade`]); `--add FAMILY`
+//! adds a family to a run; `--new` and `--run DIR` start a new run, or resume any. Its
+//! files:
 //!
 //! - `config.json`, the run's settings ([`Config`]), and `code.json`, the git tree ids of the
 //!   crates that decide how the run plays, when the binary was built;
@@ -27,9 +29,9 @@
 mod files;
 mod game;
 mod panel;
+mod ratings;
 mod run;
 mod schedule;
-mod standings;
 mod summary;
 mod term;
 mod upgrade;
@@ -41,17 +43,17 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use beryl_search::{AgentDecision, Budget, Sight};
+use beryl_search::{AgentDecision, Family, Settings};
 use serde::{Deserialize, Serialize};
 
 use game::{Entrant, GameDecision};
 pub use run::run;
-use schedule::{Against, Config, Matchup};
+use schedule::{Config, Matchup, budget_of};
 
 /// The crates whose code decides how a run plays.
 const CRATES: [&str; 3] = ["beryl_engine", "beryl_cards", "beryl_search"];
 
-/// How a finished game went for the rung's agent.
+/// How a finished game went for its first side.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Verdict {
@@ -63,30 +65,49 @@ pub enum Verdict {
     Crashed,
 }
 
+impl Verdict {
+    /// How it went for the other side.
+    pub fn flipped(self) -> Verdict {
+        match self {
+            Verdict::Win => Verdict::Loss,
+            Verdict::Loss => Verdict::Win,
+            other => other,
+        }
+    }
+}
+
 /// A line of `games.jsonl`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GameRecord {
     pub game: String,
-    #[serde(flatten)]
-    pub matchup: Matchup,
-    pub iterations: u32,
+    /// The matchup's sides, by name.
+    pub a: String,
+    pub b: String,
     pub pair: u32,
     pub seed: u64,
-    /// The seat of the rung's agent.
+    /// The seat of `a`.
     pub seat: u8,
+    /// How it went for `a`.
     pub outcome: Verdict,
     pub turns: u16,
     pub decisions: u32,
-    /// Decisions searched, by either seat, and the rollouts they spent.
-    pub searched: u32,
-    pub rollouts: u64,
-    /// What the searched decisions' budgets allowed, the rollouts they would have spent
-    /// with no exact stop and no subtree reuse.
-    #[serde(default)]
-    pub budget: u64,
+    /// For `a` and `b`: decisions searched, the iterations they ran and the engine steps
+    /// they spent.
+    pub searched: [u32; 2],
+    pub iterations: [u64; 2],
+    pub work: [u64; 2],
     /// The decision a crashed game crashed at.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub crashed_at: Option<GameDecision>,
+}
+
+impl GameRecord {
+    pub fn matchup(&self) -> Matchup {
+        Matchup {
+            a: self.a.clone(),
+            b: self.b.clone(),
+        }
+    }
 }
 
 /// A line of `decisions.jsonl`.
@@ -95,14 +116,17 @@ pub struct DecisionRecord {
     pub game: String,
     pub decision: GameDecision,
     pub seat: u8,
+    /// The entrant, by name.
     pub agent: String,
-    pub iterations: u32,
+    /// Its budget, in engine steps.
+    pub budget: u64,
     pub choice: u8,
     /// The decision's index among the agent's own, and that of the decision whose search
     /// planted the trees it grew.
     pub agent_decision: AgentDecision,
     pub chain: AgentDecision,
-    pub rollouts: u32,
+    pub iterations: u32,
+    pub work: u64,
     pub inherited: u32,
     pub visits: Vec<u32>,
     /// Each candidate's mean reward for the deciding player; none if never visited.
@@ -116,13 +140,27 @@ pub struct ClockRecord {
     pub seconds: f64,
 }
 
-/// A budget, short: 3k, 1M.
-pub fn rung_name(iterations: u32) -> String {
-    match iterations {
+/// A budget, short: 300k, 3M, 1G.
+pub fn rung_name(n: u64) -> String {
+    match n {
         0 => "0".to_owned(),
+        n if n % 1_000_000_000 == 0 => format!("{}G", n / 1_000_000_000),
         n if n % 1_000_000 == 0 => format!("{}M", n / 1_000_000),
         n if n % 1_000 == 0 => format!("{}k", n / 1_000),
         n => n.to_string(),
+    }
+}
+
+/// Entrant `name` as a run with `c` plays it.
+pub fn entrant(c: &Config, name: &str) -> Result<Entrant, String> {
+    match name.rsplit_once('@') {
+        Some((family, _)) => Ok(Entrant::Search(Settings {
+            family: family.parse::<Family>()?,
+            work: budget_of(name).ok_or_else(|| format!("{name:?}: no budget"))?,
+            threads: c.threads,
+        })),
+        None if beryl_search::agent(name).is_some() => Ok(Entrant::Fixed(name.to_owned())),
+        None => Err(format!("no agent is named {name:?}")),
     }
 }
 
@@ -133,78 +171,73 @@ pub struct Spec {
     pub matchup: Matchup,
     pub pair: u32,
     pub seed: u64,
-    /// The seat of the rung's agent.
+    /// The seat of the matchup's first side.
     pub seat: u8,
     /// The agents, by seat.
     pub entrants: [Entrant; 2],
 }
 
 impl Spec {
-    /// Game `g` of matchup `m`: pair `g / 2`, the rung's agent in seat `g % 2`.
-    pub fn new(c: &Config, m: Matchup, g: u32) -> Spec {
-        let Matchup { rung, against } = m;
-        let search = |sight, rung: usize| Entrant::Search {
-            sight,
-            budget: Budget {
-                iterations: c.iterations(rung),
-                trees: c.trees,
-                parallel: true,
-            },
-        };
-        let opponent = Entrant::Fixed(c.opponent.clone());
-        let (a, b) = match against {
-            Against::Opponent => (search(Sight::Hidden, rung), opponent),
-            Against::Omniscient => (search(Sight::Omniscient, rung), opponent),
-            Against::Below => (search(Sight::Hidden, rung), search(Sight::Hidden, rung - 1)),
-        };
+    /// Game `g` of matchup `m`: pair `g / 2`, its first side in seat `g % 2`.
+    pub fn new(c: &Config, m: &Matchup, g: u32) -> Result<Spec, String> {
+        let (a, b) = (entrant(c, &m.a)?, entrant(c, &m.b)?);
         let (pair, seat) = (g / 2, (g % 2) as u8);
-        Spec {
-            key: format!("{}-p{pair:03}-s{seat}", m.key(c)),
-            matchup: m,
+        Ok(Spec {
+            key: format!("{}-p{pair:04}-s{seat}", m.key()),
+            matchup: m.clone(),
             pair,
             seed: crate::tournament::game_seed(c.seed, 0, pair),
             seat,
             entrants: if seat == 0 { [a, b] } else { [b, a] },
-        }
+        })
+    }
+
+    /// The seat of side `side`: 0 for the matchup's first, 1 for its second.
+    pub fn seat_of(&self, side: usize) -> usize {
+        usize::from(self.seat) ^ side
     }
 }
 
 #[cfg(test)]
 impl GameRecord {
-    /// Game `g` of matchup `m`, ended `outcome` for the rung's agent.
-    fn example(m: Matchup, g: u32, outcome: Verdict) -> GameRecord {
+    /// Game `g` of matchup `m`, ended `outcome` for its first side.
+    pub fn example(m: &Matchup, g: u32, outcome: Verdict) -> GameRecord {
+        let work = |e: &str| budget_of(e).map_or(0, |b| b * 60);
         GameRecord {
-            game: format!("{}-{:?}-{g}", m.rung, m.against),
-            matchup: m,
-            iterations: 0,
+            game: format!("{}-{g}", m.key()),
+            a: m.a.clone(),
+            b: m.b.clone(),
             pair: g / 2,
             seed: 0,
             seat: (g % 2) as u8,
             outcome,
             turns: 20,
             decisions: 300,
-            searched: 130,
-            rollouts: 1,
-            budget: 0,
+            searched: [60, 60],
+            iterations: [600, 600],
+            work: [work(&m.a), work(&m.b)],
             crashed_at: None,
         }
     }
 }
 
 const USAGE: &str =
-    "usage: beryl_cli longthink [--status | --upgrade] [--new | --run DIR] [--games N]
-  a new run also takes: [--rungs N,N,...] [--cheap N] [--pairs N] [--trees K]
-      [--opponent NAME] [--seed N]";
+    "usage: beryl_cli longthink [--status | --upgrade | --add FAMILY] [--new | --run DIR]
+      [--games N]
+  a new run also takes: [--families F,F,...] [--fixed NAME,NAME,...] [--anchor NAME]
+      [--budgets N,N,...] [--threads K] [--seed N]";
 
-/// `beryl_cli longthink`: starts the ladder or resumes it, and supervises it.
+/// `beryl_cli longthink`: starts the arena or resumes it, and supervises it.
 pub fn main(args: &[String]) -> Result<(), String> {
     let mut new = false;
     let mut status = false;
     let mut upgrade = false;
+    let mut add: Vec<String> = Vec::new();
     let mut at: Option<PathBuf> = None;
     let mut games: Option<u32> = None;
     let mut c = Config::default();
     let mut configured = false;
+    let list = |v: String| -> Vec<String> { v.split(',').map(str::to_owned).collect() };
     let mut args = args.iter();
     while let Some(arg) = args.next() {
         let mut value = || {
@@ -216,33 +249,29 @@ pub fn main(args: &[String]) -> Result<(), String> {
             "--new" => new = true,
             "--status" => status = true,
             "--upgrade" => upgrade = true,
+            "--add" => add.push(value()?),
             "--run" => at = Some(PathBuf::from(value()?)),
             "--games" => games = Some(crate::number(arg, &value()?)?),
             flag => {
                 configured = true;
                 match flag {
-                    "--rungs" => {
-                        c.rungs = value()?
+                    "--families" => c.families = list(value()?),
+                    "--fixed" => c.fixed = list(value()?),
+                    "--anchor" => c.anchor = value()?,
+                    "--budgets" => {
+                        c.budgets = value()?
                             .split(',')
-                            .map(|n| crate::number(arg, n))
+                            .map(|n| schedule::parse_work(n).ok_or(format!("{arg}: {n:?}")))
                             .collect::<Result<_, _>>()?;
                     }
-                    "--cheap" => c.cheap = crate::number(arg, &value()?)?,
-                    "--pairs" => c.pairs = crate::number(arg, &value()?)?,
-                    "--trees" => c.trees = crate::number(arg, &value()?)?,
-                    "--opponent" => c.opponent = value()?,
+                    "--threads" => c.threads = crate::number(arg, &value()?)?,
                     "--seed" => c.seed = crate::number(arg, &value()?)?,
                     _ => return Err(format!("unknown argument {flag}\n{USAGE}")),
                 }
             }
         }
     }
-    if c.rungs.is_empty() || c.rungs.contains(&0) || c.pairs == 0 || c.trees == 0 {
-        return Err("rungs, pairs and trees must be positive".to_owned());
-    }
-    if beryl_search::agent(&c.opponent).is_none() {
-        return Err(format!("no agent is named {:?}", c.opponent));
-    }
+    check(&c)?;
     let root = cache().join("longthink");
     let dir = match at {
         Some(dir) => dir,
@@ -289,10 +318,49 @@ pub fn main(args: &[String]) -> Result<(), String> {
         start(&dir, &c, code.as_ref())?;
         println!("new run {}", dir.display());
     }
+    if !add.is_empty() {
+        add_families(&dir, &add)?;
+    }
     if upgrade {
         return upgrade::adopt(&dir, code.as_ref());
     }
     supervise(&dir, games)
+}
+
+/// Whether `c` names agents and families that exist, and positive budgets and threads.
+fn check(c: &Config) -> Result<(), String> {
+    if c.budgets.is_empty() || c.budgets.contains(&0) || c.threads == 0 {
+        return Err("budgets and threads must be positive".to_owned());
+    }
+    for f in &c.families {
+        f.parse::<Family>()?;
+    }
+    for name in &c.fixed {
+        if beryl_search::agent(name).is_none() {
+            return Err(format!("no agent is named {name:?}"));
+        }
+    }
+    if !c.fixed.contains(&c.anchor) {
+        return Err(format!("the anchor {:?} is not a fixed agent", c.anchor));
+    }
+    Ok(())
+}
+
+/// Adds `families` to run `dir`'s settings, those it lacks: the arena opens them at once.
+fn add_families(dir: &Path, families: &[String]) -> Result<(), String> {
+    let mut c = config(dir)?;
+    for f in families {
+        let parsed: Family = f.parse()?;
+        let name = parsed.to_string();
+        if c.families.contains(&name) {
+            println!("{name} already plays");
+        } else {
+            println!("added {name}");
+            c.families.push(name);
+        }
+    }
+    let json = serde_json::to_string_pretty(&c).map_err(|e| e.to_string())? + "\n";
+    files::write_whole(&dir.join("config.json"), json.as_bytes())
 }
 
 /// The per-machine cache: `$BERYL_CACHE`, else `~/Library/Caches/beryl`.
@@ -489,29 +557,32 @@ fn supervise(dir: &Path, games: Option<u32>) -> Result<(), String> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn rungs_have_short_names() {
-        let names: Vec<String> = [3_000, 10_000, 1_000_000, 3_000_000, 16, 1_500]
-            .map(rung_name)
-            .into();
-        assert_eq!(names, ["3k", "10k", "1M", "3M", "16", "1500"]);
-    }
-
-    /// A pair is one seed, the rung's agent in each seat in turn; every rung plays the same
+    /// A pair is one seed, each side in each seat in turn; every matchup plays the same
     /// seeds.
     #[test]
     fn a_pair_plays_one_seed_from_both_seats() {
         let c = Config::default();
-        let at = |rung, against| Matchup { rung, against };
-        let [a, b] = [0, 1].map(|g| Spec::new(&c, at(0, Against::Opponent), g));
+        let m = Matchup::new("expert-frozen", "ismcts18/hidden/rollout/17l@1M");
+        let [a, b] = [0, 1].map(|g| Spec::new(&c, &m, g).unwrap());
         assert_eq!((a.seed, a.seat, b.seat), (b.seed, 0, 1));
         assert_eq!(a.entrants[0], b.entrants[1]);
-        assert_eq!(a.key, "3k-v-expert-frozen-p000-s0");
-        let up = Spec::new(&c, at(2, Against::Below), 1);
-        assert_eq!((up.seed, up.key.as_str()), (a.seed, "30k-v-10k-p000-s1"));
-        assert_ne!(Spec::new(&c, at(0, Against::Opponent), 2).seed, a.seed);
-        let omniscient = Spec::new(&c, at(1, Against::Omniscient), 0);
-        assert_eq!(omniscient.key, "omniscient-10k-v-expert-frozen-p000-s0");
+        assert_eq!(
+            a.key,
+            "expert-frozen~ismcts18.hidden.rollout.17l@1M-p0000-s0"
+        );
+        let other = Spec::new(&c, &Matchup::new("greedy", "expert-frozen"), 1).unwrap();
+        assert_eq!(other.seed, a.seed);
+        assert_ne!(Spec::new(&c, &m, 2).unwrap().seed, a.seed);
+        assert_eq!(b.seat_of(0), 1);
+        assert!(entrant(&c, "nobody").is_err() && entrant(&c, "pimc0/x@1M").is_err());
+    }
+
+    #[test]
+    fn rungs_have_short_names() {
+        let names: Vec<String> = [3_000, 10_000, 1_000_000, 3_000_000, 2_000_000_000, 1_500]
+            .map(rung_name)
+            .into();
+        assert_eq!(names, ["3k", "10k", "1M", "3M", "2G", "1500"]);
     }
 
     /// A new run is numbered after the latest, gaps or not, so plain `longthink` resumes it.

@@ -120,23 +120,40 @@ of multi-card choices, pruning of dominated moves and weak rollout policies.
 5. **Leave the WU mirror.** Measure on cube decks the evaluator was never tuned
    on.
 
-**A long-think reference agent** runs beside these steps. An agent known to be
-strong, however slow, is a teacher and a yardstick for steps 3 and 4.
-`just longthink` plays `mcts-hidden` against `expert-frozen` in the cb8d5d5f
-mirror at 3k, 10k, 30k, 100k, 300k and 1M rollouts per decision, then x3 a rung,
-with 18 trees:
+**The long-think arena** runs beside these steps. It asks what the strongest
+agent is with unlimited CPU, how much hidden information costs it, and whether
+full rollouts beat board evaluation when search runs long. An agent known to be
+strong, however slow, is also a teacher and a yardstick for steps 3 and 4.
+`just longthink` plays search families against each other and `expert-frozen` in
+the cb8d5d5f mirror:
 
-- Each rung plays 30 seat-alternated seed pairs before the next opens, then
-  keeps adding pairs. Every rung has the same seeds, so rungs compare pair by
-  pair. It is the budget half of step 1, at scale.
-- A rung that beats the expert 85%+ also plays the rung below it, an Elo chain.
-  `mcts-omniscient` also plays the expert at the top rung's budget, to show
-  whether hidden information has become the bottleneck.
-- Every searched decision's root visits and mean rewards go to the run's
-  `decisions.jsonl`, as training data.
-- It has no end and no pre-registered bar: the summary streams, and we stop when
-  we have learned enough. The exact stop and subtree reuse of
-  engine-architecture.md §19.1 save about 30% of its rollouts.
+- **A family** varies one axis of `beryl_search::LongSearch` at a time. The
+  method is PIMC with N fixed worlds or ISMCTS with a fresh world every
+  iteration. Sight is hidden, the hands or everything. A leaf is a full greedy
+  rollout, one cut off after k turns and evaluated, or the evaluation alone.
+  Card values are an estimate, 17lands' games-in-hand win rate or hand-tuned.
+- **Budgets are engine steps** a decision: every decision `next` returns or
+  settles, plus a world dealt and an evaluation in steps' time. A mid-game
+  rollout is about 360 steps and an evaluation one, so every leaf compares at
+  matched CPU, and a seed still reproduces a move on any machine.
+- **Every entrant shares one Bradley-Terry rating pool**, the anchor at 0, with
+  a covariance, so any two compare with a margin.
+- **The next game is the most informative per engine step.** For each pair of
+  open entrants it weighs the drop in each search's rating variance by its
+  chance of being the best overall and in its family, over what the two cost.
+  Fixed agents are references, never targets.
+- **A family grows** from 1M, 3M and 10M steps by ×3 while its last step up
+  gained rating with 80% confidence. Same seeds in every matchup, so entrants
+  compare pair by pair.
+- Every searched decision's root visits and mean rewards go to
+  `decisions.jsonl`, as training data. `--add FAMILY` adds a family to a running
+  arena. It has no end and no pre-registered bar: the summary streams, and we
+  stop when we have learned enough.
+
+The evaluation is `beryl_search::evaluate`: a logistic function of each side's
+life, cards, lands, permanents, power, loyalty and library, fitted by
+`beryl_cli eval-fit` on seeded games. 17lands' card quality comes from
+`just card-quality`.
 
 ## 6. How we prove it works
 

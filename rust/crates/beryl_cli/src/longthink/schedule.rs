@@ -1,299 +1,371 @@
-//! Which game the ladder plays next: a pure function of the run's configuration and the games
+//! Which game the arena plays next: a pure function of the run's configuration and the games
 //! it has finished, so a resumed run picks up the very game a stop interrupted.
 //!
-//! - Rungs are budgets, in iterations per decision: the configured ones, then x3 each.
-//! - Every game is one of a seed pair: the same deal played twice, the rung's agent taking
-//!   each seat in turn. Pair `p` has the same seed on every rung, so rungs compare pair by
-//!   pair, and a matchup finishes a pair before anything else is played.
-//! - The cheap rungs play first, one after another, each finishing its pairs.
-//! - Then each rung above them opens when the one below it has its pairs against the
-//!   opponent. The newest rung and the one below it alternate a seed pair at a time, so the
-//!   one below keeps adding pairs while the newest catches up.
-//! - A rung that beats the opponent 85%+ over its first pairs also plays the rung below it
-//!   (an Elo chain): the opponent no longer resolves its strength. The highest rung that has
-//!   its pairs also plays the omniscient search at its budget against the opponent, as a
-//!   diagnostic of whether hidden information is what holds it back.
+//! - An entrant is a fixed agent (`expert-frozen`), or a search family at a budget of
+//!   engine steps a decision (`ismcts18/hidden/rollout/17l@3M`). Each family opens at the
+//!   first of the configured budgets; the next opens once the last has played
+//!   [`OPEN_GAMES`] games, and past the configured ones, ×3 each, only while the last step
+//!   up still gained rating with 80% confidence. So a family that stops climbing stops
+//!   growing, and one that resumes climbing grows again.
+//! - Every game is one of a seed pair: the same deal twice, each side taking each seat in
+//!   turn. Pair `p` has the same seed in every matchup, so entrants compare pair by pair,
+//!   and a matchup finishes a pair before anything else is played.
+//! - Otherwise the next pair is the one that buys the most information per engine step:
+//!   for each pair of open entrants, the drop in the variance of each side's rating that two
+//!   games would bring (a Kalman update on their difference, through the rating pool's
+//!   covariance), each weighted by how much that rating matters, over what the two cost a
+//!   game. A search's rating matters by its chance of being the best of all the entrants,
+//!   plus that of being the best of its family, plus [`FLOOR`], so every curve keeps filling
+//!   in slowly while the contenders for the top are resolved. A fixed agent's own rating
+//!   matters not at all: it is a reference the searches are measured against, and its games
+//!   cost a thousandth of a search's, so precision on it alone would buy every game.
 
 use serde::{Deserialize, Serialize};
 
+use super::ratings::{K, Ratings};
 use super::rung_name;
-use super::standings::Standings;
 
-/// A run's settings, fixed when it starts.
+/// A run's settings, fixed when it starts but for families added since (`--add`).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Config {
-    /// The first rungs, in iterations per decision; each one after them triples the last.
-    pub rungs: Vec<u32>,
-    /// How many of the first rungs are cheap, played to their pairs before any other.
-    pub cheap: usize,
-    /// Seed pairs a rung plays against an opponent before the next rung opens.
-    pub pairs: u32,
-    /// The search's independent trees.
-    pub trees: u32,
-    /// The agent every rung plays.
-    pub opponent: String,
+    /// The search families, as `beryl_search::Family` prints them.
+    pub families: Vec<String>,
+    /// The agents of the registry that play without searching.
+    pub fixed: Vec<String>,
+    /// The fixed agent rated 0.
+    pub anchor: String,
+    /// The first budgets, in engine steps a decision; each after them triples the last.
+    pub budgets: Vec<u64>,
+    /// The threads a search grows its trees on; the moves do not depend on it.
+    pub threads: u32,
     /// The seed the pairs' seeds derive from.
     pub seed: u64,
 }
 
+/// The families a new run plays: the WU Control mirror's agent as Milestone 1 left it
+/// (`pimc18/hidden/rollout/tuned`), and from information-set search with full rollouts, one
+/// axis changed at a time: how many worlds, what it sees, how a leaf is scored, and where card
+/// values come from.
+pub const FAMILIES: [&str; 11] = [
+    "pimc18/hidden/rollout/tuned",
+    "pimc72/hidden/rollout/tuned",
+    "pimc288/hidden/rollout/tuned",
+    "pimc18/omniscient/rollout/tuned",
+    "ismcts18/hidden/rollout/tuned",
+    "ismcts18/hands/rollout/tuned",
+    "ismcts18/omniscient/rollout/tuned",
+    "ismcts18/hidden/cut2/tuned",
+    "ismcts18/hidden/eval/tuned",
+    "ismcts18/hidden/rollout/17l",
+    "ismcts18/hidden/rollout/estimate",
+];
+
 impl Default for Config {
-    /// The long-think ladder: 3k to 1M rollouts per decision and on, 30 pairs a rung, 18
-    /// trees, against the frozen expert.
+    /// The long-think arena: [`FAMILIES`] from 1M engine steps a decision (about 2,800
+    /// mid-game rollouts) up, the frozen expert and greedy, 18 threads.
     fn default() -> Self {
         Config {
-            rungs: vec![3_000, 10_000, 30_000, 100_000, 300_000, 1_000_000],
-            cheap: 3,
-            pairs: 30,
-            trees: 18,
-            opponent: "expert-frozen".to_owned(),
+            families: FAMILIES.map(str::to_owned).to_vec(),
+            fixed: vec!["expert-frozen".to_owned(), "greedy".to_owned()],
+            anchor: "expert-frozen".to_owned(),
+            budgets: vec![1_000_000, 3_000_000, 10_000_000],
+            threads: 18,
             seed: 0,
         }
     }
 }
 
 impl Config {
-    /// Rung `i`'s iterations per decision.
-    pub fn iterations(&self, i: usize) -> u32 {
-        let last = self.rungs.len() - 1;
-        if i <= last {
-            self.rungs[i]
+    /// Budget `k`'s engine steps a decision.
+    pub fn budget(&self, k: usize) -> u64 {
+        let last = self.budgets.len() - 1;
+        if k <= last {
+            self.budgets[k]
         } else {
-            self.rungs[last].saturating_mul(3u32.saturating_pow((i - last) as u32))
+            self.budgets[last].saturating_mul(3u64.saturating_pow((k - last) as u32))
         }
+    }
+
+    /// Family `f` at budget `k`, as an entrant's name.
+    pub fn entrant(&self, f: &str, k: usize) -> String {
+        format!("{f}@{}", rung_name(self.budget(k)))
     }
 }
 
-/// Who a rung's agent plays.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Against {
-    /// The hidden search against the configured opponent.
-    Opponent,
-    /// The omniscient search at the rung's budget against the configured opponent.
-    Omniscient,
-    /// The hidden search against the hidden search one rung down.
-    Below,
+/// An entrant's family: its name before the budget, or a fixed agent's name.
+pub fn family_of(e: &str) -> &str {
+    e.rsplit_once('@').map_or(e, |(f, _)| f)
 }
 
-/// A rung and who it plays.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+/// Two entrants who play, `a` first by name.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Matchup {
-    pub rung: usize,
-    pub against: Against,
+    pub a: String,
+    pub b: String,
 }
 
 impl Matchup {
-    /// The matchup's sides, as every view names them: the rung's agent (`3k`, `omniscient
-    /// 3k`) and who it plays (`expert-frozen`, `1k`).
-    pub fn sides(&self, c: &Config) -> (String, String) {
-        let r = rung_name(c.iterations(self.rung));
-        match self.against {
-            Against::Opponent => (r, c.opponent.clone()),
-            Against::Omniscient => (format!("omniscient {r}"), c.opponent.clone()),
-            Against::Below => (r, rung_name(c.iterations(self.rung - 1))),
+    pub fn new(x: &str, y: &str) -> Matchup {
+        let (a, b) = if x <= y { (x, y) } else { (y, x) };
+        Matchup {
+            a: a.to_owned(),
+            b: b.to_owned(),
         }
     }
 
-    /// The matchup's name: `3k v expert-frozen`.
-    pub fn label(&self, c: &Config) -> String {
-        let (a, b) = self.sides(c);
-        format!("{a} v {b}")
+    /// `a v b`.
+    pub fn label(&self) -> String {
+        format!("{} v {}", self.a, self.b)
     }
 
-    /// The prefix of its games' keys: `3k-v-expert-frozen`.
-    pub fn key(&self, c: &Config) -> String {
-        self.label(c).replace(' ', "-")
+    /// The prefix of its games' keys, fit for a file name: `a~b`, slashes as dots.
+    pub fn key(&self) -> String {
+        format!("{}~{}", self.a, self.b).replace('/', ".")
     }
 }
 
-/// The share of the first pairs' games a rung must score against the opponent to play the
-/// rung below it as well.
-pub const CHAIN_AT: f64 = 0.85;
+/// Games the last open budget of a family plays before the next opens.
+pub const OPEN_GAMES: u32 = 16;
 
-/// The matchup whose next game the ladder plays.
-pub fn next(c: &Config, s: &Standings) -> Matchup {
-    let pair = 2 * c.pairs;
-    let games = |rung, against| s.get(Matchup { rung, against }).games;
+/// The confidence a step up the budget must have gained rating with for a family to grow
+/// past its configured budgets.
+pub const CLIMBING: f64 = 0.8;
+
+/// What every rating's precision is worth, whatever its chance of being best.
+pub const FLOOR: f64 = 0.05;
+
+/// What a fixed agent's game is taken to cost, in engine steps: its games take milliseconds.
+const FIXED_COST: f64 = 50_000.0;
+
+/// Searched decisions a seat makes in a game, for the cost of an entrant not yet played.
+const SEARCHED: f64 = 66.0;
+
+/// The entrants open after these ratings: every fixed agent, then each family's budgets up
+/// to its last open one.
+pub fn open(c: &Config, r: &Ratings) -> Vec<String> {
+    let mut out = c.fixed.clone();
+    for f in &c.families {
+        let mut k = 0;
+        loop {
+            let e = c.entrant(f, k);
+            out.push(e.clone());
+            if r.tally(&e).games < OPEN_GAMES {
+                break;
+            }
+            let more = k + 1 < c.budgets.len()
+                || k > 0 && {
+                    let (gain, sd) = r.diff(&e, &c.entrant(f, k - 1));
+                    sd > 0.0 && phi(gain / sd) >= CLIMBING
+                };
+            if !more {
+                break;
+            }
+            k += 1;
+        }
+    }
+    out
+}
+
+/// The standard normal distribution function.
+pub fn phi(z: f64) -> f64 {
+    0.5 * (1.0 + erf(z / std::f64::consts::SQRT_2))
+}
+
+/// The error function, to 1.5e-7 (Abramowitz and Stegun 7.1.26).
+fn erf(x: f64) -> f64 {
+    let t = 1.0 / (1.0 + 0.327_591_1 * x.abs());
+    let y = 1.0
+        - (((((1.061_405_429 * t - 1.453_152_027) * t) + 1.421_413_741) * t - 0.284_496_736) * t
+            + 0.254_829_592)
+            * t
+            * (-x * x).exp();
+    if x >= 0.0 { y } else { -y }
+}
+
+/// What an entrant's game costs, in engine steps: its mean, or for one not yet played, its
+/// budget for each searched decision of a seat.
+pub fn cost(c: &Config, r: &Ratings, e: &str) -> f64 {
+    if c.fixed.iter().any(|f| f == e) {
+        return FIXED_COST;
+    }
+    r.tally(e).work_per_game().map_or_else(
+        || budget_of(e).map_or(FIXED_COST, |b| b as f64 * SEARCHED),
+        |w| w.max(FIXED_COST),
+    )
+}
+
+/// A search entrant's budget, from its name.
+pub fn budget_of(e: &str) -> Option<u64> {
+    let (_, b) = e.rsplit_once('@')?;
+    parse_work(b)
+}
+
+/// A budget as [`rung_name`] prints it, read back: `300k`, `3M`, `1G`.
+pub fn parse_work(s: &str) -> Option<u64> {
+    let (digits, scale) = match s.as_bytes().last()? {
+        b'k' => (&s[..s.len() - 1], 1_000),
+        b'M' => (&s[..s.len() - 1], 1_000_000),
+        b'G' => (&s[..s.len() - 1], 1_000_000_000),
+        _ => (s, 1),
+    };
+    digits.parse::<u64>().ok()?.checked_mul(scale)
+}
+
+/// The matchup whose next game the arena plays, after `games` (whose ratings `r` are).
+pub fn next(c: &Config, r: &Ratings, games: usize) -> Matchup {
     // A matchup finishes the pair it began.
-    for rung in 0..=top(c, s) {
-        for against in [Against::Opponent, Against::Omniscient, Against::Below] {
-            if games(rung, against) % 2 == 1 {
-                return Matchup { rung, against };
+    let names = r.names();
+    for a in names {
+        for b in names {
+            if a < b && r.played(a, b) % 2 == 1 {
+                return Matchup::new(a, b);
             }
         }
     }
-    let chains = |rung: usize| {
-        let t = s.get(Matchup {
-            rung,
-            against: Against::Opponent,
-        });
-        rung > 0
-            && t.games >= pair
-            && t.first.scored() > 0
-            && t.first.points() >= CHAIN_AT * f64::from(t.first.scored())
-    };
-    // What a rung plays on its turn: whichever of its matchups has played least, the
-    // opponent first among equals.
-    let turn = |rung: usize, omniscient: bool| {
-        let mut options = vec![Against::Opponent];
-        if omniscient {
-            options.push(Against::Omniscient);
-        }
-        if chains(rung) {
-            options.push(Against::Below);
-        }
-        let against = options
-            .into_iter()
-            .min_by_key(|&a| games(rung, a))
-            .expect("the opponent");
-        Matchup { rung, against }
-    };
-    for rung in 0..c.cheap {
-        let m = turn(rung, false);
-        if games(rung, m.against) < pair {
-            return m;
-        }
-    }
-    let top = top(c, s);
-    if top == c.cheap {
-        return Matchup {
-            rung: top,
-            against: Against::Opponent,
-        };
-    }
-    // The rung below the newest had its pairs, all against the opponent, when the newest
-    // opened; since then the two have taken turns.
-    let pairs_of = |rung: usize| {
-        [Against::Opponent, Against::Omniscient, Against::Below]
-            .iter()
-            .map(|&a| games(rung, a) / 2)
-            .sum::<u32>()
-    };
-    if pairs_of(top - 1) - c.pairs <= pairs_of(top) {
-        turn(top - 1, true)
-    } else {
-        Matchup {
-            rung: top,
-            against: Against::Opponent,
-        }
-    }
-}
-
-/// The newest open rung: the lowest above the cheap ones short of its pairs against the
-/// opponent, or the cheap ones' last while they play.
-fn top(c: &Config, s: &Standings) -> usize {
-    let done = |rung| {
-        s.get(Matchup {
-            rung,
-            against: Against::Opponent,
+    let open = open(c, r);
+    let best = r.best(&open, games as u64);
+    let weight: Vec<f64> = open
+        .iter()
+        .zip(&best)
+        .map(|(e, &(o, f))| {
+            if c.fixed.contains(e) {
+                0.0
+            } else {
+                FLOOR + o + f
+            }
         })
-        .games
-            >= 2 * c.pairs
-    };
-    if (0..c.cheap).any(|rung| !done(rung)) {
-        return c.cheap.saturating_sub(1);
+        .collect();
+    let costs: Vec<f64> = open.iter().map(|e| cost(c, r, e)).collect();
+    let mut choice = (0, 1, f64::NEG_INFINITY);
+    for i in 0..open.len() {
+        for j in i + 1..open.len() {
+            let (x, y) = (&open[i], &open[j]);
+            let (d, _) = r.diff(x, y);
+            let p = 1.0 / (1.0 + (-K * d).exp());
+            let info = 2.0 * K * K * p * (1.0 - p);
+            let (vx, cxy) = r.var_cov(x, y);
+            let (vy, _) = r.var_cov(y, x);
+            let var_d = (vx + vy - 2.0 * cxy).max(0.0);
+            let shrink = info / (1.0 + info * var_d);
+            let gain =
+                weight[i] * (vx - cxy).powi(2) * shrink + weight[j] * (vy - cxy).powi(2) * shrink;
+            let value = gain / (costs[i] + costs[j]);
+            if value > choice.2 {
+                choice = (i, j, value);
+            }
+        }
     }
-    let mut rung = c.cheap;
-    while done(rung) {
-        rung += 1;
-    }
-    rung
+    Matchup::new(&open[choice.0], &open[choice.1])
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
     use crate::longthink::{GameRecord, Verdict};
 
-    /// Plays `games` games of the schedule, game `g` of matchup `m` ending
-    /// `outcome(m, g)` for the rung's agent, and returns the matchups in the order played.
-    fn play(c: &Config, games: usize, outcome: impl Fn(Matchup, u32) -> Verdict) -> Vec<Matchup> {
-        let mut s = Standings::default();
-        let mut played = Vec::new();
-        for _ in 0..games {
-            let m = next(c, &s);
-            let g = s.get(m).games;
-            s.record(c, &GameRecord::example(m, g, outcome(m, g)), None);
-            played.push(m);
-        }
-        played
-    }
-
     fn config() -> Config {
         Config {
-            rungs: vec![1, 3, 10],
-            cheap: 2,
-            pairs: 2,
-            trees: 1,
-            opponent: "expert".to_owned(),
+            families: vec!["ismcts2/hidden/rollout/tuned".to_owned()],
+            fixed: vec!["expert".to_owned(), "greedy".to_owned()],
+            anchor: "expert".to_owned(),
+            budgets: vec![1_000, 3_000],
+            threads: 1,
             seed: 0,
         }
     }
 
-    /// Each game's matchup, a pair (two games) to a letter: `o` the opponent, `s` the
-    /// omniscient search, `b` the rung below, after the rung's index.
-    fn pairs(played: &[Matchup]) -> String {
-        played
-            .chunks(2)
-            .map(|p| {
-                assert_eq!(p[0], p[1], "a pair is played through");
-                let a = match p[0].against {
-                    Against::Opponent => 'o',
-                    Against::Omniscient => 's',
-                    Against::Below => 'b',
-                };
-                format!("{}{a}", p[0].rung)
-            })
-            .collect::<Vec<_>>()
-            .join(" ")
+    /// Plays `n` games of the schedule, game `g` of matchup `m` ending `outcome(m, g)` for
+    /// its first side, and returns the matchups in the order played.
+    fn play(
+        c: &Config,
+        n: usize,
+        outcome: impl Fn(&Matchup, u32) -> Verdict,
+    ) -> (Vec<Matchup>, Vec<GameRecord>) {
+        let mut games: Vec<GameRecord> = Vec::new();
+        let mut played = Vec::new();
+        for _ in 0..n {
+            let r = Ratings::new(c, &games, &HashMap::new(), &[]);
+            let m = next(c, &r, games.len());
+            let g = r.played(&m.a, &m.b);
+            games.push(GameRecord::example(&m, g, outcome(&m, g)));
+            played.push(m);
+        }
+        (played, games)
     }
 
     #[test]
-    fn rungs_triple_after_the_configured_ones() {
+    fn budgets_triple_after_the_configured_ones() {
         let c = config();
-        let rungs: Vec<u32> = (0..5).map(|i| c.iterations(i)).collect();
-        assert_eq!(rungs, [1, 3, 10, 30, 90]);
-    }
-
-    /// Cheap rungs first, each to its pairs; then each rung above them opens when the one
-    /// below has its pairs, and the two alternate a pair at a time, the one below cycling
-    /// through the opponent and the omniscient diagnostic.
-    #[test]
-    fn cheap_rungs_first_then_new_rungs_alternate_with_the_one_below() {
-        let played = play(&config(), 32, |_, _| Verdict::Draw);
+        let b: Vec<u64> = (0..4).map(|k| c.budget(k)).collect();
+        assert_eq!(b, [1_000, 3_000, 9_000, 27_000]);
+        assert_eq!(c.entrant("f", 2), "f@9k");
+        assert_eq!(budget_of("a/b/c/d@9k"), Some(9_000));
+        assert_eq!(family_of("a/b/c/d@9k"), "a/b/c/d");
         assert_eq!(
-            pairs(&played),
-            "0o 0o 1o 1o 2o 2o 2s 3o 2s 3o 3s 4o 3s 4o 4s 5o"
+            [parse_work("3M"), parse_work("12"), parse_work("x")],
+            [Some(3_000_000), Some(12), None]
         );
     }
 
-    /// A rung that scores 85% over its first pairs against the opponent also plays the
-    /// rung below it; one that scores less, here 75%, never does.
+    /// Pairs are played through, and the first games go to the entrants nothing is known
+    /// about yet, against something cheap.
     #[test]
-    fn a_rung_that_beats_the_opponent_plays_the_rung_below() {
-        let played = play(&config(), 24, |m, g| {
-            if m.rung == 1 || g % 4 != 3 {
-                Verdict::Win
-            } else {
-                Verdict::Loss
-            }
-        });
-        assert_eq!(pairs(&played), "0o 0o 1o 1o 1b 1b 2o 2o 2s 3o 2s 3o");
-        let strong = play(&config(), 24, |_, _| Verdict::Win);
-        assert_eq!(pairs(&strong), "0o 0o 1o 1o 1b 1b 2o 2o 2s 3o 2b 3o");
+    fn pairs_are_finished_and_the_unknown_go_first() {
+        let c = config();
+        let (played, _) = play(&c, 12, |_, _| Verdict::Draw);
+        for p in played.chunks(2) {
+            assert_eq!(p[0], p[1], "{played:?}");
+        }
+        assert!(
+            played
+                .iter()
+                .all(|m| m.a.contains('@') || m.b.contains('@')),
+            "fixed agents never play each other alone: {played:?}"
+        );
     }
 
-    /// The schedule is a function of the finished games alone, so a run stopped mid-pair
-    /// resumes the very game it stopped in.
+    /// A family's next budget opens once the last has its games; past the configured ones,
+    /// only while the step up gains rating.
     #[test]
-    fn a_pair_begun_is_finished_first() {
+    fn a_family_grows_while_it_climbs() {
         let c = config();
-        let m = Matchup {
-            rung: 1,
-            against: Against::Opponent,
+        let f = &c.families[0];
+        let strong = |m: &Matchup, _| {
+            // The higher budget wins; a search beats a fixed agent.
+            let rank = |e: &str| budget_of(e).unwrap_or(0);
+            if rank(&m.a) > rank(&m.b) {
+                Verdict::Win
+            } else if rank(&m.a) < rank(&m.b) {
+                Verdict::Loss
+            } else {
+                Verdict::Draw
+            }
         };
-        let mut half = Standings::default();
-        half.record(&c, &GameRecord::example(m, 0, Verdict::Win), None);
-        assert_eq!(next(&c, &half), m);
+        let (_, games) = play(&c, 400, strong);
+        let r = Ratings::new(&c, &games, &HashMap::new(), &[]);
+        let opened = open(&c, &r);
+        assert!(opened.contains(&c.entrant(f, 2)), "{opened:?}");
+        let (_, flat) = play(&c, 400, |_, _| Verdict::Draw);
+        let r = Ratings::new(&c, &flat, &HashMap::new(), &[]);
+        let opened = open(&c, &r);
+        assert!(opened.contains(&c.entrant(f, 1)), "{opened:?}");
+        assert!(!opened.contains(&c.entrant(f, 2)), "{opened:?}");
+    }
+
+    #[test]
+    fn the_normal_distribution_function() {
+        assert!((phi(0.0) - 0.5).abs() < 1e-7);
+        assert!((phi(1.959_964) - 0.975).abs() < 1e-6);
+        assert!((phi(-1.0) - 0.158_655).abs() < 1e-6);
+    }
+
+    #[test]
+    fn matchups_name_themselves() {
+        let m = Matchup::new("pimc18/hidden/rollout/tuned@1M", "expert-frozen");
+        assert_eq!(m.a, "expert-frozen");
+        assert_eq!(m.key(), "expert-frozen~pimc18.hidden.rollout.tuned@1M");
+        assert_eq!(m.label(), "expert-frozen v pimc18/hidden/rollout/tuned@1M");
     }
 }

@@ -1,6 +1,6 @@
-//! The long-think runner from outside, as `just longthink` runs it: tiny ladders of a few
-//! games at 4 iterations a decision, stopped every way a run can be, must end with the logs an
-//! uninterrupted run writes.
+//! The long-think runner from outside, as `just longthink` runs it: tiny arenas of a few
+//! games at 1,500 engine steps a decision, stopped every way a run can be, must end with the
+//! logs an uninterrupted run writes.
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -11,19 +11,24 @@ use std::time::Duration;
 
 mod exe;
 
-/// A ladder small enough for a test: rungs of 4 and 8 iterations, one tree, a pair each.
+/// An arena small enough for a test: one search at a few rollouts a decision, one tree,
+/// against the expert.
 const TINY: [&str; 10] = [
-    "--rungs",
-    "4,8",
-    "--cheap",
-    "1",
-    "--pairs",
-    "1",
-    "--trees",
-    "1",
-    "--opponent",
+    "--families",
+    "ismcts1/hidden/rollout/tuned",
+    "--fixed",
     "expert",
+    "--anchor",
+    "expert",
+    "--budgets",
+    "1500",
+    "--threads",
+    "1",
 ];
+
+/// The tiny arena's one search, and the key of its first game.
+const SEARCH: &str = "ismcts1/hidden/rollout/tuned@1500";
+const FIRST: &str = "expert~ismcts1.hidden.rollout.tuned@1500-p0000-s0";
 
 /// An empty directory for test `name`.
 fn scratch(name: &str) -> PathBuf {
@@ -211,14 +216,14 @@ fn one_runner_per_run() {
 }
 
 /// A runner that panics is restarted; a game that panics twice at one decision is recorded
-/// as crashed, where, and skipped. `--status` then prints the ladder and plays nothing.
+/// as crashed, where, and skipped. `--status` then prints the board and plays nothing.
 #[test]
 fn a_game_that_crashes_twice_is_skipped() {
     let dir = scratch("crash");
     tiny(&dir);
     let o = Command::new(exe::beryl_cli())
         .args(["longthink", "--run", dir.to_str().unwrap(), "--games", "2"])
-        .env("BERYL_LONGTHINK_PANIC", "4-v-expert-p000-s0@5")
+        .env("BERYL_LONGTHINK_PANIC", format!("{FIRST}@5"))
         .output()
         .unwrap();
     assert!(o.status.success(), "{}", text(&o));
@@ -241,7 +246,7 @@ fn a_game_that_crashes_twice_is_skipped() {
     assert!(
         status
             .lines()
-            .any(|l| l.starts_with("4  ") && l.contains("2/2")),
+            .any(|l| l.starts_with(SEARCH) && l.split_whitespace().any(|c| c == "2")),
         "{status}"
     );
     assert!(
@@ -249,12 +254,12 @@ fn a_game_that_crashes_twice_is_skipped() {
         "{status}"
     );
     let summary = fs::read_to_string(dir.join("summary.txt")).unwrap();
-    assert!(summary.contains("crashed: 4-v-expert-p000-s0"), "{summary}");
+    assert!(summary.contains(&format!("crashed: {FIRST}")), "{summary}");
     assert_eq!(fs::read_to_string(dir.join("games.jsonl")).unwrap(), games);
     assert_eq!(fs::read_dir(dir.join("logs")).unwrap().count(), logs);
 }
 
-/// With no arguments the ladder starts in an empty cache and resumes when run again; it says
+/// With no arguments the arena starts in an empty cache and resumes when run again; it says
 /// when the code differs from the run's, and `--new` starts another.
 #[test]
 fn no_arguments_start_or_resume_the_latest_run() {
@@ -262,7 +267,7 @@ fn no_arguments_start_or_resume_the_latest_run() {
     let o = longthink(&cache, &["--status"]);
     assert!(!o.status.success(), "{}", text(&o));
     let run = cache.join("longthink/run-001");
-    // `--games 0` plays nothing: the default ladder is far too dear for a test.
+    // `--games 0` plays nothing: the default arena is far too dear for a test.
     let o = longthink(&cache, &["--games", "0"]);
     assert!(
         text(&o).contains(&format!("new run {}", run.display())),

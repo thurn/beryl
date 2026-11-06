@@ -13,9 +13,10 @@
 //!   and boards a definitions file describes and writes, for each, the stream of messages the UI's
 //!   fixture transport replays (`ui/src/ipc.ts`) to `<out-dir>/<name>.json`. `just ui-shots`
 //!   runs it over `ui/fixtures.json`, so fixtures are generated, never committed.
-//! - `beryl_cli longthink [--status | --upgrade] [--new | --run DIR] [--games N]` starts the
-//!   long-think ladder or resumes it ([`longthink`], `just longthink`), and supervises
-//!   `beryl_cli longthink-run <dir> [--games N]`, the run's own copy of this binary playing it.
+//! - `beryl_cli longthink [--status | --upgrade | --add FAMILY] [--new | --run DIR] [--games
+//!   N]` starts the long-think arena or resumes it ([`longthink`], `just longthink`), and
+//!   supervises `beryl_cli longthink-run <dir> [--games N]`, the run's own copy of this
+//!   binary playing it.
 //! - `beryl_cli eval-fit [--games N] [--seed N]` fits the board evaluation's weights on
 //!   seeded games and prints them ([`evalfit`]).
 //! - `beryl_cli serve [--port N]` serves the app's game commands over HTTP for a UI in a plain
@@ -41,7 +42,7 @@ const USAGE: &str = "usage:
   beryl_cli tournament <agent>... [--games N] [--seed N] [--json FILE] [--check]
       [--iterations N] [--trees K]
   beryl_cli record-fixture <definitions.json> <out-dir> [name...]
-  beryl_cli longthink [--status | --upgrade] [--new | --run DIR] [--games N]
+  beryl_cli longthink [--status | --upgrade | --add FAMILY] [--new | --run DIR] [--games N]
   beryl_cli eval-fit [--games N] [--seed N]
   beryl_cli serve [--port N]";
 

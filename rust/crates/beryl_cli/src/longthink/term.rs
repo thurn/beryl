@@ -24,6 +24,7 @@ use beryl_engine::{Decision, State, Zone};
 use super::game::{GameDecision, Line};
 use super::panel::{self, Frame, Now};
 use super::schedule::{Config, Matchup};
+
 use super::{GameRecord, Spec, Verdict};
 
 /// Shows the cursor.
@@ -114,10 +115,10 @@ struct Playing {
     matchup: Matchup,
     label: String,
     pair: u32,
-    /// The seat of the rung's agent.
+    /// The seat of the matchup's first side.
     seat: u8,
     /// Each seat's search budget, if it searches.
-    budgets: [Option<u32>; 2],
+    budgets: [Option<u64>; 2],
     asked: Option<Asked>,
     /// This game's searched budgets, and what the exact stop left of them.
     planned: u64,
@@ -129,10 +130,10 @@ struct Playing {
 struct Asked {
     decision: GameDecision,
     turn: u16,
-    /// The rung's agent's, then its opponent's.
+    /// The matchup's first side's, then its second's.
     life: [i16; 2],
     hand: [u32; 2],
-    budget: Option<u32>,
+    budget: Option<u64>,
     /// When it was asked, and the process's rollouts then.
     at: Instant,
     rollouts: u64,
@@ -140,11 +141,11 @@ struct Asked {
 
 impl Board {
     fn frame(&self, at: Instant, rollouts: u64) -> Frame {
-        let (rows, climb) = panel::ladder(
+        let rows = panel::board(
             &self.config,
             &self.games,
             &self.seconds,
-            self.playing.as_ref().map(|p| p.matchup),
+            self.playing.as_ref().map(|p| &p.matchup),
         );
         let now = self.playing.as_ref().and_then(|p| {
             let a = p.asked.as_ref()?;
@@ -166,19 +167,12 @@ impl Board {
             self,
             Some(at.duration_since(self.started).as_secs_f64()),
             rows,
-            climb,
             now,
         )
     }
 }
 
-fn status_frame(
-    b: &Board,
-    up: Option<f64>,
-    rows: Vec<panel::Row>,
-    climb: Option<(f64, f64)>,
-    now: Option<Now>,
-) -> Frame {
+fn status_frame(b: &Board, up: Option<f64>, rows: Vec<panel::Row>, now: Option<Now>) -> Frame {
     let tail = b.games.len().saturating_sub(10);
     Frame {
         run: b.run.clone(),
@@ -191,7 +185,6 @@ fn status_frame(
             .count(),
         stopping: b.stopping,
         rows,
-        climb,
         last: b.games[tail..].iter().map(|g| g.outcome).collect(),
         now,
     }
@@ -209,7 +202,7 @@ fn modes() -> (bool, bool) {
     (live, color)
 }
 
-/// `--status`: the header and the ladder, once.
+/// `--status`: the header and the board, once.
 pub fn status(run: &str, config: Config, games: Vec<GameRecord>, seconds: HashMap<String, f64>) {
     let b = Board {
         run: run.to_owned(),
@@ -221,8 +214,8 @@ pub fn status(run: &str, config: Config, games: Vec<GameRecord>, seconds: HashMa
         stopping: false,
         logs: Vec::new(),
     };
-    let (rows, climb) = panel::ladder(&b.config, &b.games, &b.seconds, None);
-    let frame = status_frame(&b, None, rows, climb, None);
+    let rows = panel::board(&b.config, &b.games, &b.seconds, None);
+    let frame = status_frame(&b, None, rows, None);
     let (live, color) = modes();
     let (width, _) = if live { size() } else { (usize::MAX, 0) };
     for line in panel::render(&frame, width, usize::MAX, live && color) {
@@ -349,12 +342,15 @@ impl Display {
     /// Game `spec` begins, with `logged` decisions already made.
     pub fn begin(&self, spec: &Spec, logged: usize) {
         let mut b = self.shared.board();
-        let matchup = spec.matchup;
-        let label = matchup.label(&b.config);
+        let matchup = spec.matchup.clone();
+        let label = matchup.label();
         let seat = if spec.seat == 0 { 'A' } else { 'B' };
         let mut lines = Vec::new();
-        if !b.games.iter().any(|g| g.matchup == matchup) && logged == 0 {
-            lines.push(format!("▸ {label} opens"));
+        for side in [&matchup.a, &matchup.b] {
+            let new = !b.games.iter().any(|g| g.a == *side || g.b == *side);
+            if new && logged == 0 {
+                lines.push(format!("▸ {side} opens"));
+            }
         }
         if logged > 0 {
             lines.push(format!(
@@ -367,7 +363,7 @@ impl Display {
             label,
             pair: spec.pair,
             seat: spec.seat,
-            budgets: [0, 1].map(|s| spec.entrants[s].budget().map(|b| b.iterations)),
+            budgets: [0, 1].map(|s| spec.entrants[s].budget()),
             asked: None,
             planned: 0,
             unspent: 0,
@@ -402,8 +398,8 @@ impl Display {
         let mut b = self.shared.board();
         let Some(p) = b.playing.as_mut() else { return };
         if let (Some(s), Some(budget)) = (&line.search, p.budgets[usize::from(line.seat)]) {
-            p.planned += u64::from(budget);
-            p.unspent += u64::from(budget.saturating_sub(s.rollouts + s.inherited));
+            p.planned += budget;
+            p.unspent += budget.saturating_sub(s.work);
             p.prev = Some(label.to_owned());
         }
     }
@@ -411,20 +407,17 @@ impl Display {
     /// Game `g` is committed, after `seconds` of play if it was played.
     pub fn finished(&self, g: &GameRecord, seconds: Option<f64>) {
         let mut b = self.shared.board();
-        let line = panel::game_line(&b.config, g, seconds, self.shared.color);
+        let line = panel::game_line(g, seconds, self.shared.color);
         if let Some(s) = seconds {
             b.seconds.insert(g.game.clone(), s);
         }
         b.games.push(g.clone());
         b.playing = None;
-        let target = 2 * b.config.pairs;
-        let done = b.games.iter().filter(|x| x.matchup == g.matchup).count() == target as usize;
-        let label = g.matchup.label(&b.config);
         // Plain output has no panel: a table every 10 games stands for it.
         let table = (!self.shared.live && b.games.len().is_multiple_of(10)).then(|| {
-            let (rows, climb) = panel::ladder(&b.config, &b.games, &b.seconds, None);
+            let rows = panel::board(&b.config, &b.games, &b.seconds, None);
             panel::render(
-                &status_frame(&b, None, rows, climb, None),
+                &status_frame(&b, None, rows, None),
                 usize::MAX,
                 usize::MAX,
                 false,
@@ -432,9 +425,6 @@ impl Display {
         });
         drop(b);
         self.log(line);
-        if done {
-            self.log(format!("■ {label} {target}/{target}"));
-        }
         for line in table.into_iter().flatten() {
             self.log(line);
         }
@@ -484,27 +474,14 @@ mod ansi;
 mod tests {
     use super::ansi::Term;
     use super::*;
-    use crate::longthink::schedule::Against;
 
-    fn game(rung: usize, n: u32, outcome: Verdict) -> GameRecord {
-        GameRecord {
-            game: format!("{rung}-{n}"),
-            matchup: Matchup {
-                rung,
-                against: Against::Opponent,
-            },
-            iterations: 0,
-            pair: n / 2,
-            seed: 0,
-            seat: (n % 2) as u8,
-            outcome,
-            turns: 12,
-            decisions: 200,
-            searched: 90,
-            rollouts: 0,
-            budget: 0,
-            crashed_at: None,
-        }
+    fn matchup(k: usize) -> Matchup {
+        let budget = ["1k", "3k", "9k"][k];
+        Matchup::new("expert", &format!("ismcts2/hidden/rollout/tuned@{budget}"))
+    }
+
+    fn game(k: usize, n: u32, outcome: Verdict) -> GameRecord {
+        GameRecord::example(&matchup(k), n, outcome)
     }
 
     /// Frames that grow and shrink, with log lines between some of them, leave on screen
@@ -513,9 +490,12 @@ mod tests {
     #[test]
     fn redraws_leave_the_log_and_the_last_frame() {
         let c = Config {
-            rungs: vec![3_000, 10_000],
-            opponent: "expert".to_owned(),
-            ..Config::default()
+            families: vec!["ismcts2/hidden/rollout/tuned".to_owned()],
+            fixed: vec!["expert".to_owned()],
+            anchor: "expert".to_owned(),
+            budgets: vec![1_000, 3_000],
+            threads: 1,
+            seed: 0,
         };
         for width in [40, 100] {
             let mut b = Board {
@@ -533,14 +513,11 @@ mod tests {
             for k in 0..13u32 {
                 if k % 3 == 0 {
                     b.playing = Some(Playing {
-                        matchup: Matchup {
-                            rung: (k / 6) as usize,
-                            against: Against::Opponent,
-                        },
-                        label: "3k v expert".to_owned(),
+                        matchup: matchup((k / 6) as usize),
+                        label: matchup((k / 6) as usize).label(),
                         pair: k / 2,
                         seat: 0,
-                        budgets: [Some(3_000), None],
+                        budgets: [None, Some(3_000)],
                         asked: Some(Asked {
                             decision: GameDecision(k as usize),
                             turn: 3,
@@ -560,10 +537,7 @@ mod tests {
                 let mut logs = Vec::new();
                 if k % 4 == 1 {
                     let g = game((k / 6) as usize, k, Verdict::Win);
-                    logs.push(panel::fit(
-                        &panel::game_line(&c, &g, Some(61.0), true),
-                        width,
-                    ));
+                    logs.push(panel::fit(&panel::game_line(&g, Some(61.0), true), width));
                     b.games.push(g);
                 }
                 if k == 7 {
@@ -579,7 +553,7 @@ mod tests {
             }
             // The run's end: its last game logged, and the panel without a game in it.
             let g = game(2, 13, Verdict::Loss);
-            let logs = vec![panel::fit(&panel::game_line(&c, &g, None, true), width)];
+            let logs = vec![panel::fit(&panel::game_line(&g, None, true), width)];
             b.games.push(g);
             b.playing = None;
             let frame = panel::render(&b.frame(b.started, 1_234), width, 30, true);
@@ -594,7 +568,7 @@ mod tests {
             assert_eq!(t.row, expected.len());
             assert!(t.cursor_shown);
             assert!(
-                expected.last().unwrap().starts_with("Elo/×3"),
+                expected.last().unwrap().starts_with("last "),
                 "{expected:?}"
             );
             assert!(expected.iter().any(|l| l.contains('⏸')));

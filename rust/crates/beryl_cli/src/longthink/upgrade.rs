@@ -1,8 +1,8 @@
 //! `--upgrade`: adopts this binary into a run only if it plays as the run's own does, so
 //! speed work reaches a running ladder without mixing results. Every logged game must replay
 //! through its log to the same transcript, every agent asked again for real answering as
-//! logged, and a sample of the cheapest rung's fresh searches, searched again at their
-//! budgets and seeds, must choose as they did.
+//! logged, and a sample of the cheapest entrant's searches, searched again at their budgets
+//! and seeds, must choose as they did.
 
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
@@ -12,8 +12,8 @@ use beryl_engine::GameTable;
 
 use super::files;
 use super::game::{self, Build, Game, GameDecision, Line, Played, Resume, Stop};
-use super::schedule::{self, Config};
-use super::standings::Standings;
+use super::ratings::Ratings;
+use super::schedule::{self, Config, budget_of};
 use super::{GameRecord, Spec, Verdict};
 use crate::game::mirror;
 
@@ -56,9 +56,9 @@ pub fn verify(t: &GameTable, dir: &Path, c: &Config, build: &Build<'_>) -> Resul
         }
     }
     // The game being played, as far as it has gone.
-    let standings = Standings::new(c, &games, &HashMap::new());
-    let m = schedule::next(c, &standings);
-    let next = Spec::new(c, m, standings.get(m).games);
+    let ratings = Ratings::new(c, &games, &HashMap::new(), &[]);
+    let m = schedule::next(c, &ratings, games.len());
+    let next = Spec::new(c, &m, ratings.played(&m.a, &m.b))?;
     let lines = check.log(&next.key)?;
     if !lines.is_empty() {
         check.replay(
@@ -68,15 +68,24 @@ pub fn verify(t: &GameTable, dir: &Path, c: &Config, build: &Build<'_>) -> Resul
             Some(GameDecision(lines.len())),
         )?;
     }
-    // Searches of the cheapest rung, evenly spaced, each searched again: one that reused
-    // the trees of the decisions before it from the fresh search that planted them, so a
-    // change to how trees are kept is caught too.
-    let cheapest = scored().map(|g| g.matchup.rung).min();
+    // Searches of the cheapest searching entrant, evenly spaced, each searched again: one
+    // that reused the trees of the decisions before it from the fresh search that planted
+    // them, so a change to how trees are kept is caught too.
+    let cheapest = scored()
+        .flat_map(|g| [&g.a, &g.b])
+        .filter(|e| budget_of(e).is_some())
+        .min_by_key(|e| (budget_of(e), e.as_str()))
+        .cloned();
     let mut searches = Vec::new();
-    for g in scored().filter(|g| Some(g.matchup.rung) == cheapest) {
+    for g in scored() {
+        let Some(e) = &cheapest else { break };
+        let spec = check.spec(g)?;
         for (i, line) in check.log(&g.game)?.iter().enumerate() {
-            if let Some(s) = &line.search {
-                searches.push((g, i, usize::from(line.seat), s.chain));
+            let seat = usize::from(line.seat);
+            if let Some(s) = &line.search
+                && spec.entrants[seat].label() == *e
+            {
+                searches.push((g, i, seat, s.chain));
             }
         }
     }
@@ -115,7 +124,7 @@ impl Check<'_> {
 
     /// The finished game `g`, as this code names it.
     fn spec(&self, g: &GameRecord) -> Result<Spec, String> {
-        let spec = Spec::new(self.c, g.matchup, 2 * g.pair + u32::from(g.seat));
+        let spec = Spec::new(self.c, &g.matchup(), 2 * g.pair + u32::from(g.seat))?;
         if spec.key == g.game {
             Ok(spec)
         } else {
@@ -219,20 +228,20 @@ mod tests {
         }
     }
 
-    /// Two games of a tiny ladder, played in-process.
+    /// Four games of a tiny arena, played in-process.
     fn tiny_run(name: &str) -> (std::path::PathBuf, Config) {
         let dir = std::env::temp_dir().join(format!("beryl-upgrade-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let c = Config {
-            rungs: vec![4, 8],
-            cheap: 1,
-            pairs: 1,
-            trees: 1,
-            opponent: "expert".to_owned(),
+            families: vec!["ismcts1/hidden/rollout/tuned".to_owned()],
+            fixed: vec!["expert".to_owned()],
+            anchor: "expert".to_owned(),
+            budgets: vec![1_500],
+            threads: 1,
             seed: 0,
         };
         super::super::start(&dir, &c, None).unwrap();
-        super::super::run::run(&dir, Some(2)).unwrap();
+        super::super::run::run(&dir, Some(4)).unwrap();
         (dir, c)
     }
 
@@ -244,19 +253,22 @@ mod tests {
         let (dir, c) = tiny_run("verify");
         let t = mirror();
         let ok = verify(&t, &dir, &c, &game::build).unwrap();
-        assert!(ok.starts_with("2 games replayed"), "{ok}");
+        assert!(ok.starts_with("4 games replayed"), "{ok}");
         let opponent = |t: &GameTable, e: &Entrant, seed, from| {
             let inner = game::build(t, e, seed, from)?;
             Ok(match e {
                 Entrant::Fixed(_) => Box::new(Off { inner, choices: 0 }) as Box<dyn Agent>,
-                Entrant::Search { .. } => inner,
+                Entrant::Search(_) => inner,
             })
         };
         let e = verify(&t, &dir, &c, &opponent).unwrap_err();
-        assert!(e.starts_with("4-v-expert-p000-s0 decision "), "{e}");
+        assert!(
+            e.contains("decision ") && e.contains("logged candidate"),
+            "{e}"
+        );
         let search = |t: &GameTable, e: &Entrant, seed: u64, from| {
             let seed = match e {
-                Entrant::Search { .. } => !seed,
+                Entrant::Search(_) => !seed,
                 Entrant::Fixed(_) => seed,
             };
             game::build(t, e, seed, from)
@@ -279,7 +291,7 @@ mod tests {
         let reuse = |t: &GameTable, e: &Entrant, seed, from| {
             let inner = game::build(t, e, seed, from)?;
             Ok(match e {
-                Entrant::Search { .. } => Box::new(Reuses { inner }) as Box<dyn Agent>,
+                Entrant::Search(_) => Box::new(Reuses { inner }) as Box<dyn Agent>,
                 Entrant::Fixed(_) => inner,
             })
         };

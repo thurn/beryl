@@ -1,4 +1,4 @@
-//! The long-think panel at a terminal, as `just longthink` shows it: tiny ladders in a
+//! The long-think panel at a terminal, as `just longthink` shows it: tiny arenas in a
 //! pseudo-terminal (`pty.py`, Python's standard `pty`), stopped by Ctrl-C once and twice;
 //! and its output piped, with no terminal at all.
 
@@ -107,17 +107,21 @@ fn assert_clean_exit(p: &Pressed, played: usize) {
 }
 
 const TINY: [&str; 10] = [
-    "--rungs",
-    "4,8",
-    "--cheap",
-    "1",
-    "--pairs",
-    "1",
-    "--trees",
-    "1",
-    "--opponent",
+    "--families",
+    "ismcts1/hidden/rollout/tuned",
+    "--fixed",
     "expert",
+    "--anchor",
+    "expert",
+    "--budgets",
+    "1500",
+    "--threads",
+    "1",
 ];
+
+/// The tiny arena's one search, and the key of its first game.
+const SEARCH: &str = "ismcts1/hidden/rollout/tuned@1500";
+const FIRST: &str = "expert~ismcts1.hidden.rollout.tuned@1500-p0000-s0";
 
 /// One Ctrl-C finishes the game being played, then exits, leaving a run that goes on.
 #[test]
@@ -147,7 +151,8 @@ fn two_ctrl_cs_stop_at_once() {
     args.extend(TINY);
     // Games long enough that the second press comes mid-game: one that ends before the
     // second press is taken stops the run after it, and the test presses again.
-    args[3] = "48,96";
+    let budget = args.iter().position(|&a| a == "--budgets").unwrap() + 1;
+    args[budget] = "18k";
     let (p, start) = loop {
         let start = games(&dir);
         let p = at_a_terminal(&dir, 2, &args, &[]);
@@ -186,8 +191,9 @@ fn a_crash_after_one_ctrl_c_still_stops() {
     let dir = scratch("crash");
     let mut args = vec!["--games", "4"];
     args.extend(TINY);
-    // The first game's decision 150 comes most of the way through it.
-    let panic = [("BERYL_LONGTHINK_PANIC", "4-v-expert-p000-s0@150")];
+    // The first game's decision 100 of 125 comes most of the way through it.
+    let at = format!("{FIRST}@100");
+    let panic = [("BERYL_LONGTHINK_PANIC", at.as_str())];
     let p = at_a_terminal(&dir, 1, &args, &panic);
     assert_eq!(p.code, 0);
     assert!(
@@ -198,37 +204,23 @@ fn a_crash_after_one_ctrl_c_still_stops() {
     assert_eq!(games(&dir), 0);
 }
 
-/// Piped, the runner writes no escapes: a line per game and a ladder table every 10 games.
+/// Piped, the runner writes no escapes: a line per game and a board every 10 games.
 #[test]
 fn piped_output_is_plain() {
     let dir = scratch("piped");
-    let o = piped(
-        &dir,
-        &[
-            "--games",
-            "0",
-            "--rungs",
-            "4",
-            "--cheap",
-            "1",
-            "--pairs",
-            "5",
-            "--trees",
-            "1",
-            "--opponent",
-            "expert",
-        ],
-    );
+    let mut args = vec!["--games", "0"];
+    args.extend(TINY);
+    let o = piped(&dir, &args);
     assert!(o.status.success());
     // Nine games already played, so the next makes ten.
     let mut nine = String::new();
     for g in 0..9u32 {
         nine.push_str(
             &serde_json::json!({
-                "game": format!("4-v-expert-p{:03}-s{}", g / 2, g % 2),
-                "rung": 0, "iterations": 4, "against": "opponent", "pair": g / 2, "seed": 1,
-                "seat": g % 2, "outcome": "win", "turns": 10, "decisions": 100,
-                "searched": 40, "rollouts": 160,
+                "game": format!("expert~ismcts1.hidden.rollout.tuned@1500-p{:04}-s{}", g / 2, g % 2),
+                "a": "expert", "b": SEARCH, "pair": g / 2, "seed": 1, "seat": g % 2,
+                "outcome": "win", "turns": 10, "decisions": 100, "searched": [0, 40],
+                "iterations": [0, 160], "work": [0, 60_000],
             })
             .to_string(),
         );
@@ -242,16 +234,17 @@ fn piped_output_is_plain() {
     let lines: Vec<&str> = out.lines().collect();
     let game = lines
         .iter()
-        .position(|l| l.contains("4 v expert  s4·B"))
+        .position(|l| l.contains(&format!("expert v {SEARCH}  s4·B")))
         .expect(&out);
-    assert!(lines[game + 1..].contains(&"■ 4 v expert 10/10"), "{out}");
     let table = lines
         .iter()
         .position(|l| l.starts_with("longthink "))
         .expect(&out);
     assert!(table > game, "{out}");
     assert!(
-        lines[table + 2].starts_with("4  ") && lines[table + 2].contains("10/10"),
+        lines[table..]
+            .iter()
+            .any(|l| l.starts_with(SEARCH) && l.split_whitespace().any(|c| c == "10")),
         "{out}"
     );
 }

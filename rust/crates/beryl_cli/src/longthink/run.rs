@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 
 use super::files::{self, Log};
 use super::game::{self, Game, GameDecision, Line, Played};
+use super::ratings::Ratings;
 use super::schedule::{self, Config};
-use super::standings::Standings;
 use super::term::Display;
 use super::{ClockRecord, DecisionRecord, GameRecord, Spec, Verdict, summary};
 use crate::game::mirror;
@@ -44,9 +44,8 @@ pub fn run(dir: &Path, total: Option<u32>) -> Result<(), String> {
     // A stop between a game's commit and the summary's rewrite leaves it behind.
     write_summary(dir, &c, &games)?;
     record_panics();
-    let clock = clock(dir)?;
-    let mut standings = Standings::new(&c, &games, &clock);
-    let out = Display::start(&run_name(dir), &c, &games, clock)?;
+    let mut clock = clock(dir)?;
+    let out = Display::start(&run_name(dir), &c, &games, clock.clone())?;
     // A fault injected for the supervisor's tests: panic at decision N of game K, "K@N".
     let inject: Option<(String, GameDecision)> =
         std::env::var("BERYL_LONGTHINK_PANIC").ok().and_then(|v| {
@@ -57,8 +56,11 @@ pub fn run(dir: &Path, total: Option<u32>) -> Result<(), String> {
         fs::create_dir_all(dir.join(sub)).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
     while total.is_none_or(|n| games.len() < n as usize) && !out.stopping() {
-        let m = schedule::next(&c, &standings);
-        let spec = Spec::new(&c, m, standings.get(m).games);
+        // The settings again, for families added since the runner started.
+        let c = super::config(dir)?;
+        let ratings = Ratings::new(&c, &games, &clock, &[]);
+        let m = schedule::next(&c, &ratings, games.len());
+        let spec = Spec::new(&c, &m, ratings.played(&m.a, &m.b))?;
         let path = dir.join("logs").join(format!("{}.jsonl", spec.key));
         files::repair(&path)?;
         let logged: Vec<Line> = files::read(&path)?;
@@ -100,7 +102,9 @@ pub fn run(dir: &Path, total: Option<u32>) -> Result<(), String> {
         };
         Log::open(&dir.join("games.jsonl"))?.append(&record)?;
         out.finished(&record, seconds);
-        standings.record(&c, &record, seconds);
+        if let Some(s) = seconds {
+            clock.insert(record.game.clone(), s);
+        }
         games.push(record);
         write_summary(dir, &c, &games)?;
     }
@@ -189,34 +193,41 @@ fn crashed_twice(dir: &Path, key: &str) -> Result<Option<GameDecision>, String> 
 }
 
 fn crashed(spec: &Spec, logged: &[Line], at: GameDecision) -> GameRecord {
-    let searches = || logged.iter().filter_map(|l| l.search.as_ref());
+    let (searched, iterations, work) = spent(spec, logged);
     GameRecord {
         game: spec.key.clone(),
-        matchup: spec.matchup,
-        iterations: spec.entrants[usize::from(spec.seat)]
-            .budget()
-            .map_or(0, |b| b.iterations),
+        a: spec.matchup.a.clone(),
+        b: spec.matchup.b.clone(),
         pair: spec.pair,
         seed: spec.seed,
         seat: spec.seat,
         outcome: Verdict::Crashed,
         turns: 0,
         decisions: logged.len() as u32,
-        searched: searches().count() as u32,
-        rollouts: searches().map(|s| u64::from(s.rollouts)).sum(),
-        budget: budget(spec, logged),
+        searched,
+        iterations,
+        work,
         crashed_at: Some(at),
     }
 }
 
-/// What the budgets of the searched decisions of `lines` allowed.
-fn budget(spec: &Spec, lines: &[Line]) -> u64 {
-    lines
-        .iter()
-        .filter(|l| l.search.is_some())
-        .filter_map(|l| spec.entrants[usize::from(l.seat)].budget())
-        .map(|b| u64::from(b.iterations))
-        .sum()
+/// For each side, `a` then `b`: the decisions of `lines` it searched, their iterations and
+/// the engine steps they spent.
+fn spent(spec: &Spec, lines: &[Line]) -> ([u32; 2], [u64; 2], [u64; 2]) {
+    let (mut searched, mut iterations, mut work) = ([0; 2], [0; 2], [0; 2]);
+    for side in 0..2 {
+        let seat = spec.seat_of(side) as u8;
+        for s in lines
+            .iter()
+            .filter(|l| l.seat == seat)
+            .filter_map(|l| l.search.as_ref())
+        {
+            searched[side] += 1;
+            iterations[side] += u64::from(s.rollouts);
+            work[side] += s.work;
+        }
+    }
+    (searched, iterations, work)
 }
 
 /// Writes a finished game's transcript, searched decisions and wall time, and returns the
@@ -227,26 +238,23 @@ fn commit(dir: &Path, spec: &Spec, played: &Played) -> Result<GameRecord, String
         played.transcript.as_bytes(),
     )?;
     let mut decisions = Log::open(&dir.join("decisions.jsonl"))?;
-    let mut searched = 0;
-    let mut rollouts = 0;
     for (i, line) in played.lines.iter().enumerate() {
         let Some(s) = &line.search else { continue };
         let e = &spec.entrants[usize::from(line.seat)];
-        searched += 1;
-        rollouts += u64::from(s.rollouts);
         // One sync for the game's lines, before the line that commits it: each costs
-        // milliseconds, as much as a cheap rung's search.
+        // milliseconds, as much as a cheap budget's search.
         decisions.write(
             &DecisionRecord {
                 game: spec.key.clone(),
                 decision: GameDecision(i),
                 seat: line.seat,
-                agent: e.name().to_owned(),
-                iterations: e.budget().map_or(0, |b| b.iterations),
+                agent: e.label(),
+                budget: e.budget().unwrap_or(0),
                 choice: line.choice,
                 agent_decision: s.decision,
                 chain: s.chain,
-                rollouts: s.rollouts,
+                iterations: s.rollouts,
+                work: s.work,
                 inherited: s.inherited,
                 visits: s.visits.clone(),
                 mean: s
@@ -264,16 +272,17 @@ fn commit(dir: &Path, spec: &Spec, played: &Played) -> Result<GameRecord, String
         game: spec.key.clone(),
         seconds: seconds(played),
     })?;
-    let rung = &spec.entrants[usize::from(spec.seat)];
+    let (searched, iterations, work) = spent(spec, &played.lines);
+    let a = spec.seat_of(0);
     Ok(GameRecord {
         game: spec.key.clone(),
-        matchup: spec.matchup,
-        iterations: rung.budget().map_or(0, |b| b.iterations),
+        a: spec.matchup.a.clone(),
+        b: spec.matchup.b.clone(),
         pair: spec.pair,
         seed: spec.seed,
         seat: spec.seat,
         outcome: match played.outcome {
-            beryl_engine::Outcome::Win(w) if w.index() == usize::from(spec.seat) => Verdict::Win,
+            beryl_engine::Outcome::Win(w) if w.index() == a => Verdict::Win,
             beryl_engine::Outcome::Win(_) => Verdict::Loss,
             beryl_engine::Outcome::Draw => Verdict::Draw,
             beryl_engine::Outcome::Stalled(_) => Verdict::Stalled,
@@ -281,8 +290,8 @@ fn commit(dir: &Path, spec: &Spec, played: &Played) -> Result<GameRecord, String
         turns: played.turns,
         decisions: played.lines.len() as u32,
         searched,
-        rollouts,
-        budget: budget(spec, &played.lines),
+        iterations,
+        work,
         crashed_at: None,
     })
 }
@@ -312,25 +321,28 @@ mod tests {
         serde_json::from_str(line).unwrap()
     }
 
-    /// Lines of each file a run writes, as the runner wrote them before the decision indices
-    /// were typed, read and written again unchanged: a run started by that binary resumes.
+    /// Lines of each file a run writes, read and written again unchanged: a log line from
+    /// before searches counted their work still reads, as having spent none.
     #[test]
     fn run_files_keep_their_format() {
         let logs = [
             r#"{"seat":0,"choice":0,"ms":0}"#,
-            r#"{"seat":1,"choice":0,"resume":2,"search":{"decision":3,"chain":2,"rollouts":2,"inherited":2,"visits":[2,1],"rewards":[2.0,0.0]},"ms":27}"#,
+            r#"{"seat":1,"choice":0,"resume":2,"search":{"decision":3,"chain":2,"rollouts":2,"inherited":2,"work":700,"visits":[2,1],"rewards":[2.0,0.0]},"ms":27}"#,
         ];
         for line in logs {
             assert_eq!(again::<Line>(line), json(line));
         }
+        let old = r#"{"seat":1,"choice":0,"search":{"decision":3,"chain":2,"rollouts":2,"inherited":2,"visits":[2,1],"rewards":[2.0,0.0]},"ms":27}"#;
+        let read: Line = serde_json::from_str(old).unwrap();
+        assert_eq!(read.search.map(|s| s.work), Some(0));
         let games = [
-            r#"{"game":"4-v-expert-p000-s1","rung":0,"iterations":4,"against":"opponent","pair":0,"seed":12035550249420947055,"seat":1,"outcome":"loss","turns":14,"decisions":127,"searched":22,"rollouts":63,"budget":88}"#,
-            r#"{"game":"4-v-expert-p000-s0","rung":0,"iterations":4,"against":"opponent","pair":0,"seed":12035550249420947055,"seat":0,"outcome":"crashed","turns":0,"decisions":5,"searched":2,"rollouts":6,"budget":8,"crashed_at":5}"#,
+            r#"{"game":"expert~greedy-p0000-s1","a":"expert","b":"greedy","pair":0,"seed":12035550249420947055,"seat":1,"outcome":"loss","turns":14,"decisions":127,"searched":[0,0],"iterations":[0,0],"work":[0,0]}"#,
+            r#"{"game":"expert~x@1k-p0000-s0","a":"expert","b":"x@1k","pair":0,"seed":12035550249420947055,"seat":0,"outcome":"crashed","turns":0,"decisions":5,"searched":[0,2],"iterations":[0,6],"work":[0,2100],"crashed_at":5}"#,
         ];
         for line in games {
             assert_eq!(again::<GameRecord>(line), json(line));
         }
-        let decision = r#"{"game":"4-v-expert-p000-s0","decision":7,"seat":0,"agent":"mcts-hidden","iterations":4,"choice":0,"agent_decision":4,"chain":4,"rollouts":4,"inherited":0,"visits":[1,0,1,0,1,1],"mean":[0.0,null,0.0,null,0.0,0.0]}"#;
+        let decision = r#"{"game":"expert~x@1k-p0000-s0","decision":7,"seat":0,"agent":"x@1k","budget":1000,"choice":0,"agent_decision":4,"chain":4,"iterations":4,"work":1040,"inherited":0,"visits":[1,0,1,0,1,1],"mean":[0.0,null,0.0,null,0.0,0.0]}"#;
         assert_eq!(again::<DecisionRecord>(decision), json(decision));
         let crash = r#"{"game":"4-v-expert-p000-s0","decision":5,"message":"panicked at crates/beryl_cli/src/longthink/run.rs:84:21:\ninjected at decision 5 of 4-v-expert-p000-s0"}"#;
         assert_eq!(again::<Crash>(crash), json(crash));
