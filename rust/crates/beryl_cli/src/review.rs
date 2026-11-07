@@ -14,7 +14,7 @@ use beryl_engine::event::Event;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{Choice, Profile, Replay, Scratch, Seat, Small, State, Step};
 use beryl_engine::{apply, next, observe, view};
-use beryl_search::{Agent, Budget, Family, GameAgent, LongSearch, Settings, Widening, agent};
+use beryl_search::{Agent, Budget, GameAgent, agent};
 use beryl_session::replay::Entry;
 use beryl_session::{ReplayFile, with_stops};
 
@@ -56,20 +56,13 @@ fn searcher(
     if let Some(info) = agent(name) {
         return Ok((info.new)(t, seed, Budget::DEFAULT));
     }
-    let bad = || format!("no agent {name:?}: a registered agent or family@budget");
-    let (family, budget) = name.split_once('@').ok_or_else(bad)?;
-    let family: Family = family.parse()?;
-    let work = crate::anchor_replay::parse_work(budget).ok_or_else(bad)?;
     let threads = std::thread::available_parallelism()
         .map_or(1, |n| u32::try_from(n.get()).unwrap_or(u32::MAX));
-    let settings = Settings {
-        family,
-        work,
-        threads,
-    };
-    Ok(Box::new(Widening::new(LongSearch::<Small>::new(
-        t, settings, seed,
-    ))))
+    game::entrant(t, name, seed, threads).unwrap_or_else(|| {
+        Err(format!(
+            "no agent {name:?}: a registered agent or family@budget"
+        ))
+    })
 }
 
 fn review(path: &Path, searcher_name: Option<&str>) -> Result<String, String> {

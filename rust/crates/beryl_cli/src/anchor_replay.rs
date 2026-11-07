@@ -30,7 +30,7 @@ use beryl_engine::{
 use beryl_search::{ANCHOR_ERRORS, Family, LongSearch, RolloutPolicy, Settings, guarded};
 use serde::Deserialize;
 
-use crate::game::mirror;
+use crate::game::{mirror, parse_work};
 use crate::transcript::Transcript;
 
 /// The margins reported, in mean reward.
@@ -207,17 +207,6 @@ fn replay(
     Ok(report(
         entrant, played, searched, &differs, &fresh, examples,
     ))
-}
-
-/// A budget, as longthink names it: 300k, 3M, 1G.
-pub fn parse_work(s: &str) -> Option<u64> {
-    let (digits, scale) = match s.as_bytes().last()? {
-        b'k' => (&s[..s.len() - 1], 1_000),
-        b'M' => (&s[..s.len() - 1], 1_000_000),
-        b'G' => (&s[..s.len() - 1], 1_000_000_000),
-        _ => (s, 1),
-    };
-    digits.parse::<u64>().ok()?.checked_mul(scale)
 }
 
 /// Fresh leads, by index into `differs`, for `n` of the decisions the widest margin switches,

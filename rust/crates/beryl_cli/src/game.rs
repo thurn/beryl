@@ -5,9 +5,9 @@ use beryl_cards::CARDS;
 use beryl_cards::decks::WU_CONTROL;
 use beryl_engine::event::Event;
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::{GameTable, Outcome, Profile, Replay, Scratch, State, Step};
+use beryl_engine::{GameTable, Outcome, Profile, Replay, Scratch, Small, State, Step};
 use beryl_engine::{apply, next, observe, view};
-use beryl_search::{Agent, Budget, agent};
+use beryl_search::{Agent, Budget, Family, GameAgent, LongSearch, Settings, Widening, agent};
 
 use crate::transcript::Transcript;
 
@@ -41,6 +41,10 @@ pub fn agents(
     let seeds = seat_seeds(seed);
     let build = |seat: usize| {
         let name = names[seat];
+        // Games may run one to a core, so a long-think entrant searches on one thread.
+        if let Some(built) = entrant(t, name, seeds[seat], 1) {
+            return built.map(|a| a as Box<dyn Agent + Send>);
+        }
         let info = agent(name).ok_or_else(|| {
             let known: Vec<&str> = beryl_search::AGENTS.iter().map(|a| a.name).collect();
             format!("no agent is named {name:?} (agents: {})", known.join(", "))
@@ -48,6 +52,42 @@ pub fn agents(
         Ok::<_, String>((info.new)(t, seeds[seat], budget))
     };
     Ok([build(0)?, build(1)?])
+}
+
+/// A long-think entrant, named as longthink names them (`family@budget`, as
+/// `pimc18/omniscient/rollout/tuned/anchor+mid@3M`), for a game from `seed`, searching on
+/// `threads`; none if `name` is not of that form.
+pub fn entrant(
+    t: &GameTable,
+    name: &str,
+    seed: u64,
+    threads: u32,
+) -> Option<Result<Box<dyn GameAgent + Send>, String>> {
+    let (family, budget) = name.split_once('@')?;
+    let built = family.parse::<Family>().and_then(|family| {
+        let work = parse_work(budget).ok_or_else(|| format!("{name:?}: no budget {budget:?}"))?;
+        let settings = Settings {
+            family,
+            work,
+            threads,
+        };
+        Ok(
+            Box::new(Widening::new(LongSearch::<Small>::new(t, settings, seed)))
+                as Box<dyn GameAgent + Send>,
+        )
+    });
+    Some(built)
+}
+
+/// A budget in engine steps, as longthink names it: 300k, 3M, 1G.
+pub fn parse_work(s: &str) -> Option<u64> {
+    let (digits, scale) = match s.as_bytes().last()? {
+        b'k' => (&s[..s.len() - 1], 1_000),
+        b'M' => (&s[..s.len() - 1], 1_000_000),
+        b'G' => (&s[..s.len() - 1], 1_000_000_000),
+        _ => (s, 1),
+    };
+    digits.parse::<u64>().ok()?.checked_mul(scale)
 }
 
 /// Plays game `seed` to its end, under the smart stops, searching agents with `budget`. With

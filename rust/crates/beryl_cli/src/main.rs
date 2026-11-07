@@ -45,12 +45,14 @@ use transcript::Transcript;
 const USAGE: &str = "usage:
   beryl_cli play <agent> <agent> [--seed N] [--out FILE] [--iterations N] [--trees K]
   beryl_cli tournament <agent>... [--games N] [--seed N] [--json FILE] [--check]
-      [--iterations N] [--trees K]
+      [--paired] [--iterations N] [--trees K]
+      (an agent is a registered one or a long-think entrant, family@budget)
   beryl_cli record-fixture <definitions.json> <out-dir> [name...]
   beryl_cli longthink [--status | --upgrade | --add FAMILY] [--new | --run DIR] [--games N]
   beryl_cli eval-fit [--games N] [--seed N]
   beryl_cli serve [--port N]
-  beryl_cli review <replay.json> [--out FILE]";
+  beryl_cli review <replay.json> [--agent NAME] [--out FILE]
+  beryl_cli anchor-replay <run-dir> <entrant> [--examples N] [--recheck N] [--guarded]";
 
 /// The port `serve` listens on unless told otherwise.
 const DEFAULT_PORT: u16 = 1421;
@@ -98,6 +100,7 @@ struct Flags {
     out: Option<String>,
     json: Option<String>,
     check: bool,
+    paired: bool,
     budget: Budget,
 }
 
@@ -117,6 +120,7 @@ impl Flags {
                 "--out" => f.out = Some(value()?),
                 "--json" => f.json = Some(value()?),
                 "--check" => f.check = true,
+                "--paired" => f.paired = true,
                 "--iterations" => f.budget.iterations = number(arg, &value()?)?,
                 "--trees" => f.budget.trees = number(arg, &value()?)?,
                 flag if flag.starts_with("--") => {
@@ -159,7 +163,14 @@ fn tournament(f: &Flags) -> Result<(), String> {
     if f.agents.is_empty() {
         return Err(format!("tournament takes at least one agent\n{USAGE}"));
     }
-    let results = tournament::run(&f.agents, f.games.unwrap_or(100), f.seed, f.budget, f.check)?;
+    let results = tournament::run(
+        &f.agents,
+        f.games.unwrap_or(100),
+        f.seed,
+        f.budget,
+        f.check,
+        f.paired,
+    )?;
     print!("{}", tournament::table(&results));
     if let Some(path) = &f.json {
         let json = serde_json::to_string_pretty(&results).map_err(|e| e.to_string())?;
