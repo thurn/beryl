@@ -214,14 +214,28 @@ export type LiveEntry =
     }
   | { at: number; kind: "event"; event: keyof Events; payload: unknown };
 
+/** A message a spec page (screens/Specs.tsx) hands the frame playing one of its moments: an
+ * event from the page's one stream, which carries every frame's. */
+export interface RelayedEvent {
+  kind: "beryl-relay";
+  event: keyof Events;
+  payload: unknown;
+}
+
 /** The app's commands and events from `beryl_cli serve` at `base`, so a plain browser plays
- * live games with the app's real timing (`just ui-live`). Every message is logged in `log`. */
-export function liveTransport(base: string): Transport & { log: LiveEntry[] } {
+ * live games with the app's real timing (`just ui-live`). Every message is logged in `log`.
+ * A `relayed` page hears its events from the page framing it rather than a stream of its own
+ * (`RelayedEvent`). */
+export function liveTransport(
+  base: string,
+  relayed = false,
+): Transport & { log: LiveEntry[] } {
   const log: LiveEntry[] = [];
-  const events = new EventSource(`${base}/events`);
-  // The server subscribes the stream before it answers: once open, no view is missed.
+  const events = relayed ? undefined : new EventSource(`${base}/events`);
+  // The server subscribes the stream before it answers: once open, no view is missed. The
+  // framing page's stream is open before it frames anything.
   const opened = new Promise<void>((resolve) => {
-    if (events.readyState === EventSource.OPEN) resolve();
+    if (!events || events.readyState === EventSource.OPEN) resolve();
     else events.addEventListener("open", () => resolve(), { once: true });
   });
   return {
@@ -253,15 +267,27 @@ export function liveTransport(base: string): Transport & { log: LiveEntry[] } {
       handler: (payload: Events[E], past: boolean) => void,
     ) {
       // Live events are never past: each happens as the page sees it.
-      const listener = (e: MessageEvent<string>) => {
-        const payload = JSON.parse(e.data) as Events[E];
+      const hear = (payload: Events[E]) => {
         log.push({ at: performance.now(), kind: "event", event, payload });
         handler(payload, false);
       };
-      events.addEventListener(event, listener);
+      if (!events) {
+        const relay = (e: MessageEvent<RelayedEvent>) => {
+          if (e.origin !== window.location.origin) return;
+          if (e.data?.kind === "beryl-relay" && e.data.event === event) {
+            hear(e.data.payload as Events[E]);
+          }
+        };
+        window.addEventListener("message", relay);
+        return () => window.removeEventListener("message", relay);
+      }
+      const stream = events;
+      const listener = (e: MessageEvent<string>) =>
+        hear(JSON.parse(e.data) as Events[E]);
+      stream.addEventListener(event, listener);
       // A command sent once listening (`current_game`) sees no view slip past.
       await opened;
-      return () => events.removeEventListener(event, listener);
+      return () => stream.removeEventListener(event, listener);
     },
   };
 }
@@ -291,7 +317,10 @@ async function chooseTransport(): Promise<Transport> {
   }
   const live = liveBase();
   if (live) {
-    const transport = liveTransport(live);
+    const relayed =
+      window.parent !== window &&
+      new URLSearchParams(window.location.search).has("relay");
+    const transport = liveTransport(live, relayed);
     (window as { berylLive?: unknown }).berylLive = transport;
     return transport;
   }

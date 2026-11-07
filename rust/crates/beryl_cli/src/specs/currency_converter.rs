@@ -141,10 +141,12 @@ const fn jace(name: &'static str) -> Scenario {
         )
 }
 
+/// Thirst for Discovery's table, a land in hand keeping the turn's stops after it: not a
+/// basic one, which Thirst would ask about discarding.
 const fn thirst(name: &'static str) -> Scenario {
     table(name, 5, P0, TurnStep::PrecombatMain)
         .battlefield(P0, THIRST_TABLE)
-        .hand(P0, &[THIRST_FOR_DISCOVERY])
+        .hand(P0, &[THIRST_FOR_DISCOVERY, SEACHROME_COAST])
         .library(
             P0,
             &[TUNDRA, JACE_THE_MIND_SCULPTOR, COUNTERSPELL, ISLAND, PLAINS],

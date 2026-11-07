@@ -338,6 +338,16 @@ export function usePlayback(): {
   useEffect(() => {
     (window as { berylBehind?: boolean }).berylBehind = queue.length > 0;
   }, [queue]);
+  // A spec page framing the game shows it once it has a view (screens/Specs.tsx).
+  const showing = shown !== undefined;
+  useEffect(() => {
+    if (showing && window.parent !== window) {
+      window.parent.postMessage(
+        { kind: "beryl-shown" },
+        window.location.origin,
+      );
+    }
+  }, [showing]);
   useEffect(() => {
     if (queue.length === 0) return;
     const timer = setTimeout(

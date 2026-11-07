@@ -1,11 +1,12 @@
 // The spec pages: `/specs` lists the cards that have one, and `/specs/<card>` scrolls through
 // every moment of play a card's UI must get right, each a live game from `beryl_cli
 // specs-serve` (rust/crates/beryl_cli/src/specs), proxied by Vite under /spec-api. A moment's
-// game runs in a frame of its own only while it is near the viewport: each holds an event
-// stream open, and a browser allows a host only a few connections. Replay starts it afresh,
-// which plays its actions out again.
-import { useEffect, useRef, useState } from "react";
+// game runs in a frame of its own from when it first nears the viewport, and stays; the page
+// hands every frame its views from one event stream. Replay starts it afresh, which plays its
+// actions out again.
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cardEntry } from "../cards";
+import type { RelayedEvent } from "../ipc";
 import "./specs.css";
 
 /** Where Vite proxies the spec server (vite.config.ts). */
@@ -92,7 +93,37 @@ function SpecIndex({ specs }: { specs: SpecListing[] }) {
   );
 }
 
+/** A page's frames by their instance's key on the spec server, each handed its views. */
+type Frames = Map<string, Window>;
+
 function SpecPage({ spec }: { spec: SpecListing }) {
+  // One event stream for the page, named for it, which carries every frame's views
+  // (`specs-serve`'s /stream): a frame holding its own would use up the few connections a
+  // browser allows a host, and frames would have to leave as others came.
+  const page = useMemo(() => Math.random().toString(36).slice(2, 10), []);
+  const frames = useRef<Frames>(new Map());
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const stream = new EventSource(`${API}/stream/${page}`);
+    stream.addEventListener("open", () => setOpen(true));
+    stream.addEventListener("game-update", (e) => {
+      const { instance, update } = JSON.parse(
+        (e as MessageEvent<string>).data,
+      ) as {
+        instance: string;
+        update: unknown;
+      };
+      const relayed: RelayedEvent = {
+        kind: "beryl-relay",
+        event: "game-update",
+        payload: update,
+      };
+      frames.current
+        .get(instance)
+        ?.postMessage(relayed, window.location.origin);
+    });
+    return () => stream.close();
+  }, [page]);
   return (
     <div className="specs specs-page">
       <nav className="specs-nav">
@@ -110,36 +141,76 @@ function SpecPage({ spec }: { spec: SpecListing }) {
       </nav>
       <main className="specs-moments">
         {spec.moments.map((m) => (
-          <MomentView key={m.name} slug={spec.slug} moment={m} />
+          <MomentView
+            key={m.name}
+            slug={spec.slug}
+            moment={m}
+            page={page}
+            open={open}
+            frames={frames.current}
+          />
         ))}
       </main>
     </div>
   );
 }
 
-/** Whether `ref`'s element is within a screen of the viewport. */
-function useNear(ref: React.RefObject<HTMLElement | null>): boolean {
-  const [near, setNear] = useState(false);
+/** Whether `ref`'s element has come within a screen of the viewport: once it has, it stays. */
+function useReached(ref: React.RefObject<HTMLElement | null>): boolean {
+  const [reached, setReached] = useState(false);
   useEffect(() => {
     const element = ref.current;
-    if (!element) return;
+    if (!element || reached) return;
     const observer = new IntersectionObserver(
-      ([entry]) => setNear(entry?.isIntersecting ?? false),
-      { rootMargin: "50% 0px" },
+      ([entry]) => entry?.isIntersecting && setReached(true),
+      { rootMargin: "100% 0px" },
     );
     observer.observe(element);
     return () => observer.disconnect();
-  }, [ref]);
-  return near;
+  }, [ref, reached]);
+  return reached;
 }
 
-function MomentView({ slug, moment }: { slug: string; moment: MomentListing }) {
-  const frame = useRef<HTMLDivElement>(null);
-  const near = useNear(frame);
+function MomentView({
+  slug,
+  moment,
+  page,
+  open,
+  frames,
+}: {
+  slug: string;
+  moment: MomentListing;
+  page: string;
+  open: boolean;
+  frames: Frames;
+}) {
+  const holder = useRef<HTMLDivElement>(null);
+  const reached = useReached(holder);
   // Each instance is a game of its own; a new one replays the moment.
-  const [instance, setInstance] = useState(() => Date.now());
-  const live = `${window.location.origin}${API}/m/${slug}/${moment.name}/${instance}`;
-  const src = `/?live=${encodeURIComponent(live)}#/game`;
+  const [n, setN] = useState(0);
+  const key = `${slug}/${moment.name}/${page}.${n}`;
+  const live = `${window.location.origin}${API}/m/${key}`;
+  const src = `/?live=${encodeURIComponent(live)}&relay#/game`;
+  // Hidden until it shows its first view, over a placeholder.
+  const [shown, setShown] = useState<string>();
+  const frame = useRef<HTMLIFrameElement>(null);
+  useEffect(() => {
+    const onMessage = (e: MessageEvent<{ kind?: string }>) => {
+      if (
+        e.source === frame.current?.contentWindow &&
+        e.data?.kind === "beryl-shown"
+      ) {
+        setShown(key);
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [key]);
+  const mount = (iframe: HTMLIFrameElement | null) => {
+    frame.current = iframe;
+    if (iframe?.contentWindow) frames.set(key, iframe.contentWindow);
+    else frames.delete(key);
+  };
   return (
     <section className="specs-moment" id={moment.name}>
       <header className="specs-moment-head">
@@ -151,13 +222,13 @@ function MomentView({ slug, moment }: { slug: string; moment: MomentListing }) {
             className="specs-icon-button"
             title={moment.plays ? "Replay" : "Restart"}
             aria-label={moment.plays ? "Replay" : "Restart"}
-            onClick={() => setInstance(Date.now())}
+            onClick={() => setN((x) => x + 1)}
           >
             ↻
           </button>
           <a
             className="specs-icon-button"
-            href={`/?live=${encodeURIComponent(`${live}-full`)}#/game`}
+            href={`/?live=${encodeURIComponent(`${window.location.origin}${API}/m/${slug}/${moment.name}/${page}-full-${n}`)}#/game`}
             target="_blank"
             rel="noreferrer"
             title="Open full size"
@@ -167,8 +238,15 @@ function MomentView({ slug, moment }: { slug: string; moment: MomentListing }) {
           </a>
         </div>
       </header>
-      <div className="specs-frame" ref={frame}>
-        {near && <iframe key={instance} src={src} title={moment.title} />}
+      <div
+        className={
+          shown === key ? "specs-frame" : "specs-frame specs-frame-loading"
+        }
+        ref={holder}
+      >
+        {reached && open && (
+          <iframe key={key} ref={mount} src={src} title={moment.title} />
+        )}
       </div>
     </section>
   );
