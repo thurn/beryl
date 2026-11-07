@@ -143,6 +143,8 @@ the decisions being searched, `--status` prints where it stands, and
 - When launching more than one subagent at a time, please always use Sonnet.
 - When designing a UI, reduce the amount of words you put on screen by at least
   50%.
+- It's fine to file your own beads outside a specified enact role, but please
+  offer to fix them inline in that case, don't just throw them onto the backlog.
 
 ## Conventions
 
