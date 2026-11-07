@@ -17,7 +17,7 @@ use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use beryl_session::ipc::{
-    self, AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, SetStopsRequest,
+    self, AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, SetStopsRequest, UndoRequest,
 };
 use beryl_session::{GameUpdate, Sessions, StartRequest, agents};
 use serde::Deserialize;
@@ -168,6 +168,10 @@ fn invoke(sessions: &Sessions, command: &str, args: Value) -> Value {
         ipc::CANCEL => answer(
             request::<CancelRequest>(args)
                 .and_then(|r| sessions.cancel(r.decision).map_err(|e| json!(e))),
+        ),
+        ipc::UNDO => answer(
+            request::<UndoRequest>(args)
+                .and_then(|r| sessions.undo(r.decision).map_err(|e| json!(e))),
         ),
         ipc::CONCEDE => answer(
             request::<ConcedeRequest>(args)

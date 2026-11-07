@@ -815,6 +815,16 @@ impl<L: Layout> Agent<L> for LongSearch<L> {
     fn resume_point(&self) -> Option<AgentDecision> {
         Some(self.kept.as_ref().map_or(self.decision, |k| k.chain))
     }
+
+    fn next_decision(&self) -> Option<AgentDecision> {
+        Some(self.decision)
+    }
+
+    fn rewind(&mut self, to: AgentDecision) {
+        self.decision = to;
+        self.kept = None;
+        self.last = None;
+    }
 }
 
 /// One node: an action, by its key, and the games through it.

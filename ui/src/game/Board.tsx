@@ -171,6 +171,9 @@ export interface BoardProps {
   /** Takes back the spell or ability being cast, at a decision that may
    * (`DecisionView.cancellable`). */
   cancel?(): void;
+  /** Goes back to the start of the player's turn, at a decision that may
+   * (`DecisionView.undo`). */
+  undo?(): void;
   /** The player's stops (decision D13), as last chosen: the view's until a change arrives. */
   stops: StopsSetting;
   /** Changes the player's stops: full control, or a phase stop (stops.ts). */
@@ -238,6 +241,7 @@ export function Board({
   onSkip,
   choose,
   cancel,
+  undo,
   stops,
   setStops,
   onLeave,
@@ -1225,6 +1229,9 @@ export function Board({
           />
         )}
 
+        {!inert && !waiting && undo && decision?.undo && (
+          <UndoButton peeked={decision.undo === "peeked"} onUndo={undo} />
+        )}
         {/* Like the turn's controls, the gear gives way to a screen over the table. */}
         {!inert && (
           <button
@@ -1390,6 +1397,48 @@ const INSPECT_MIN_WIDTH = 230;
 /** Right of the life orbs (x 670 to 930), left of the stack (STACK.x), and below the
  * opponent's orb and above yours (y 159 and 618), with room for the artist's line. */
 const BETWEEN_ORBS_AND_STACK = { left: 940, top: 172, width: 258 };
+
+/** Left of the gear: goes back to the start of the player's turn. Once they have seen a card
+ * since that they did not know there, a red eye says so, and hovering says what it means. */
+function UndoButton({
+  peeked,
+  onUndo,
+}: {
+  peeked: boolean;
+  onUndo: () => void;
+}) {
+  const label = peeked ? "Undo turn, having seen hidden cards" : "Undo turn";
+  return (
+    <button
+      type="button"
+      className={peeked ? "undo-button undo-peeked" : "undo-button"}
+      aria-label={label}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={onUndo}
+    >
+      <svg className="undo-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          className="undo-arrow"
+          d="M8.5 4.5 4 9l4.5 4.5M4 9h10a5.5 5.5 0 0 1 0 11h-4"
+        />
+        {peeked && (
+          <g className="undo-eye">
+            <path d="M12.5 17.5c1.6-2.6 3.8-3.9 5.75-3.9s4.15 1.3 5.75 3.9c-1.6 2.6-3.8 3.9-5.75 3.9s-4.15-1.3-5.75-3.9Z" />
+            <circle cx="18.25" cy="17.5" r="1.7" />
+          </g>
+        )}
+      </svg>
+      <span className="undo-tip" role="tooltip">
+        <span>Undo turn</span>
+        {peeked && (
+          <span className="undo-tip-peeked">
+            You've seen hidden cards since
+          </span>
+        )}
+      </span>
+    </button>
+  );
+}
 
 /** The settings gear at the top right. */
 function Gear() {

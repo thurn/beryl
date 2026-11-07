@@ -12,18 +12,19 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use beryl_engine::event::Event;
 use beryl_engine::layout::Queue;
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::state::{ObjectFlags, Pending, StackEntry, Turn};
+use beryl_engine::state::{DECK_SLOTS, ObjectFlags, Pending, StackEntry, Turn};
 use beryl_engine::{
-    Ask, Candidates, CardTable, Choice, Decision, DecisionKind, GameTable, Large, Layout, Limits,
-    Observation, Opt, Outcome, Profile, Relayout, Replay, Scratch, Seat, Small, StallReason, State,
-    Step, StepStops, TurnStep, apply, next_in_step, observe, paused_events, view,
+    Ask, Candidates, CardIx, CardTable, Choice, Decision, DecisionKind, GameTable, Large, Layout,
+    Limits, Observation, Opt, Outcome, Profile, Relayout, Replay, Scratch, Seat, SlotId, Small,
+    StallReason, State, Step, StepStops, TurnStep, apply, next_in_step, observe, paused_events,
+    view,
 };
-use beryl_search::{Budget, GameAgent};
+use beryl_search::{Agent, AgentDecision, Budget, GameAgent};
 
 use crate::preview;
 use crate::protocol::{
     CandidateIndex, DecisionId, Moment, PlayerView, SessionId, Side, Status, StopsSetting,
-    player_view,
+    UndoView, player_view,
 };
 use crate::replay::{Entry, ReplayFile};
 use crate::{Prepared, SessionError, StartGame};
@@ -35,10 +36,12 @@ pub struct OpenDecision {
     candidates: usize,
     /// The human may take back the cast it is part of ([`Game::cancel`]).
     cancellable: bool,
+    /// The human may go back to the start of their turn ([`Game::undo`]).
+    undoable: bool,
 }
 
 impl OpenDecision {
-    fn new(id: DecisionId, open: &Open, cancellable: bool) -> OpenDecision {
+    fn new(id: DecisionId, open: &Open, cancellable: bool, undoable: bool) -> OpenDecision {
         OpenDecision {
             id,
             candidates: match open {
@@ -46,6 +49,7 @@ impl OpenDecision {
                 Open::Halt => 1,
             },
             cancellable,
+            undoable,
         }
     }
 
@@ -65,6 +69,22 @@ impl OpenDecision {
             Ok(())
         } else {
             Err(SessionError::NotCancellable)
+        }
+    }
+
+    /// Checks that the human may go back from this decision, named `id`, to the start of their
+    /// turn.
+    pub fn undo(self, id: DecisionId) -> Result<(), SessionError> {
+        if id != self.id {
+            return Err(SessionError::StaleDecision {
+                decision: id,
+                open: self.id,
+            });
+        }
+        if self.undoable {
+            Ok(())
+        } else {
+            Err(SessionError::NothingToUndo)
         }
     }
 
@@ -158,6 +178,7 @@ fn ran_out<L: Layout>(s: &State<L>) -> bool {
 }
 
 /// A copy of the game's state, in the layout it was in.
+#[derive(Clone)]
 enum Snapshot {
     Small(Box<State<Small>>),
     Large(Box<State<Large>>),
@@ -330,6 +351,65 @@ struct BeforeCast {
     stops: StopsSetting,
 }
 
+/// The game as it stood at the human's first decision or halt of their latest turn, which
+/// they may go back to ([`Game::undo`]) until their next turn begins. A copy of the state, so
+/// going back is exact, and its random streams with it: the shuffles and other random events
+/// to come fall as they did, so going back takes a play back without dealing the luck again.
+/// What a player learned since is theirs to keep, and the view says so ([`UndoView::Peeked`]).
+struct TurnStart {
+    turn: u16,
+    state: Snapshot,
+    /// The open decision there.
+    at: At,
+    step: (u16, TurnStep),
+    answered: Option<Vec<StackEntry<Large>>>,
+    /// The length of the choice log when the game last stood here.
+    log: usize,
+    /// The agent's next decision then, if it can go back to it ([`Agent::rewind`]).
+    agent: Option<AgentDecision>,
+    /// For each card of both decks (`deck_slots`): its card there, and whether the human
+    /// knew it.
+    known: Vec<(CardIx, bool)>,
+    /// The cards there the human did not know, sorted.
+    hidden: Vec<CardIx>,
+    /// The human has been shown a card since that they did not know there ([`Self::note`]).
+    peeked: bool,
+}
+
+impl TurnStart {
+    /// Notes what `shown`, a position the human is shown, tells them that they did not know
+    /// at the start of the turn: a card they now know in a slot they did not know there, or a
+    /// card that a shuffle has since moved, where it went, which the same shuffle would send
+    /// it to again. Basic lands make the second conservative: seeing one says no more than
+    /// that some unknown slot held one.
+    fn note<L: Layout>(&mut self, shown: &State<L>, t: &GameTable, human: Seat) {
+        if self.peeked {
+            return;
+        }
+        self.peeked = deck_slots(t)
+            .zip(&self.known)
+            .any(|(slot, &(card, known))| {
+                let slot = L::Slot::from_index(slot);
+                if !shown.knows(human, slot) {
+                    return false;
+                }
+                let now = shown.card(slot);
+                if now == card {
+                    !known
+                } else {
+                    self.hidden.binary_search(&now).is_ok()
+                }
+            });
+    }
+}
+
+/// The slot index of every card of both decks, the first seat's first.
+fn deck_slots(t: &GameTable) -> impl Iterator<Item = usize> + '_ {
+    Seat::BOTH
+        .into_iter()
+        .flat_map(move |p| (0..t.deck(p).len()).map(move |i| p.index() * DECK_SLOTS + i))
+}
+
 /// A game in progress.
 pub struct Game {
     table: GameTable,
@@ -361,6 +441,8 @@ pub struct Game {
     paused: Vec<Event<Large>>,
     /// Where the human's cast in progress began, while it can be taken back.
     before_cast: Option<BeforeCast>,
+    /// Where the human's latest turn began, which they may go back to.
+    turn_start: Option<TurnStart>,
     /// The coin flip's winner, who chooses who takes the first turn
     /// ([CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031)), in a game begun by one.
     flip_winner: Option<Seat>,
@@ -453,6 +535,7 @@ impl Game {
             events: Vec::new(),
             paused: Vec::new(),
             before_cast: None,
+            turn_start: None,
             flip_winner,
         }
     }
@@ -493,6 +576,7 @@ impl Game {
                 if matches!(game.at, At::Playing) {
                     // A step began, and live play went on after its view.
                     game.board.drain_events();
+                    game.note_shown();
                     continue;
                 }
             }
@@ -501,6 +585,7 @@ impl Game {
             };
             // Live play's view here took the events so far.
             game.board.drain_events();
+            game.note_shown();
             match (game.at.clone(), entry) {
                 (At::Agent(d), Entry::Choice(c)) if usize::from(c) < d.len() => {
                     game.apply(entry);
@@ -510,10 +595,14 @@ impl Game {
                 (At::Human(id, open @ Open::Decision(_)), Entry::Choice(_))
                 | (At::Human(id, open @ Open::Halt), Entry::Halt) => {
                     let c = if let Entry::Choice(c) = entry { c } else { 0 };
-                    let answer = OpenDecision::new(id, &open, false)
+                    let answer = OpenDecision::new(id, &open, false, false)
                         .answer(id, CandidateIndex(c))
                         .map_err(|_| bad("a choice out of range"))?;
                     game.choose(answer);
+                }
+                (At::Human(..), Entry::Undo) => {
+                    game.undo()
+                        .map_err(|_| bad("an undo with nothing to go back to"))?;
                 }
                 (At::Agent(_) | At::Human(..), Entry::Concede) => {
                     game.concede();
@@ -557,7 +646,12 @@ impl Game {
     /// The human's open decision, if any.
     pub fn open(&self) -> Option<OpenDecision> {
         match &self.at {
-            At::Human(id, open) => Some(OpenDecision::new(*id, open, self.cancellable())),
+            At::Human(id, open) => Some(OpenDecision::new(
+                *id,
+                open,
+                self.cancellable(),
+                self.undoable(),
+            )),
             _ => None,
         }
     }
@@ -617,6 +711,126 @@ impl Game {
         Ok(self.draw())
     }
 
+    /// Whether the human, at their open decision, may go back to where their latest turn began
+    /// ([`Game::undo`]): something was decided since, not only their stops changed.
+    fn undoable(&self) -> bool {
+        matches!(self.at, At::Human(..))
+            && self.turn_start.as_ref().is_some_and(|start| {
+                self.replay.log[start.log..]
+                    .iter()
+                    .any(|e| !matches!(e, Entry::Stops(_)))
+            })
+    }
+
+    /// Goes back to the human's first decision or halt of their latest turn, at their open
+    /// decision, and returns the view of it again: the turn so far, or the opponent's turn
+    /// after it, never happened. The state is a copy, random streams and all, so what comes
+    /// next falls as it did unless the players play differently; the agent goes back to the
+    /// same place among its own decisions where it can ([`Agent::rewind`]). This is no rule of
+    /// the game: it is a practice tool, and the view says when the human saw a card since that
+    /// they did not know there ([`UndoView::Peeked`]). The choice log keeps the turn taken
+    /// back, then an [`Entry::Undo`], so a replay goes back the same way.
+    pub fn undo(&mut self) -> Result<PlayerView, SessionError> {
+        if self.open().is_none() {
+            return Err(SessionError::NotDeciding);
+        }
+        if !self.undoable() {
+            return Err(SessionError::NothingToUndo);
+        }
+        let start = self
+            .turn_start
+            .as_mut()
+            .expect("an undoable game has a turn start");
+        self.board.restore(start.state.clone());
+        self.answered.clone_from(&start.answered);
+        self.seen = start.step;
+        self.before_cast = None;
+        self.replay.log.push(Entry::Undo);
+        start.peeked = false;
+        start.log = self.replay.log.len();
+        let (open, agent) = (start.at.clone(), start.agent);
+        if let Some(to) = agent {
+            match self.board {
+                Boards::Small(_) => Agent::<Small>::rewind(&mut *self.agent, to),
+                Boards::Large(_) => Agent::<Large>::rewind(&mut *self.agent, to),
+            }
+        }
+        // Stops changed since stay changed. The log has them already, and a replay goes back
+        // with the same ones.
+        self.board
+            .set_profile(with_stops(self.board.profile(), self.stops, self.human));
+        // What the view there reported of a paused resolution, as it was reported then.
+        self.paused = on_board!(&mut self.board, b => {
+            paused_events(&b.state, &self.table, &mut b.scratch)
+                .iter()
+                .map(Relayout::relayout)
+                .collect()
+        });
+        let At::Human(_, open) = open else {
+            unreachable!("a turn start is at the human's decision");
+        };
+        // The decision asked again is a new one: an answer sent to an earlier one is stale.
+        self.seq += 1;
+        self.at = At::Human(self.decision_id(), open);
+        self.board.drain_events();
+        self.events.clear();
+        let mut view = self.draw();
+        view.undone = true;
+        Ok(view)
+    }
+
+    /// Keeps the position as the start of the human's turn, if it is the first decision or
+    /// halt of theirs in a turn of theirs.
+    fn note_turn_start(&mut self) {
+        let turn = self.board.turn();
+        let number = turn.number;
+        if !matches!(self.at, At::Human(..))
+            || number == 0
+            || turn.active != self.human
+            || self.turn_start.as_ref().is_some_and(|t| t.turn == number)
+        {
+            return;
+        }
+        let known: Vec<(CardIx, bool)> = on_board!(&self.board, b => deck_slots(&self.table)
+            .map(|i| {
+                let slot = SlotId::from_index(i);
+                (b.state.card(slot), b.state.knows(self.human, slot))
+            })
+            .collect());
+        let agent = match self.board {
+            Boards::Small(_) => Agent::<Small>::next_decision(&*self.agent),
+            Boards::Large(_) => Agent::<Large>::next_decision(&*self.agent),
+        };
+        let mut hidden: Vec<CardIx> = known
+            .iter()
+            .filter(|(_, known)| !known)
+            .map(|&(card, _)| card)
+            .collect();
+        hidden.sort_unstable();
+        self.turn_start = Some(TurnStart {
+            turn: number,
+            state: self.board.snapshot(),
+            at: self.at.clone(),
+            step: self.seen,
+            answered: self.answered.clone(),
+            log: self.replay.log.len(),
+            agent,
+            known,
+            hidden,
+            peeked: false,
+        });
+    }
+
+    /// Notes what the human is shown in the position now ([`TurnStart::note`]), as a view
+    /// would: a replay calls it where live play built one.
+    fn note_shown(&mut self) {
+        if let Some(start) = &mut self.turn_start {
+            on_board!(&mut self.board, b => {
+                start.note(view(&b.state, &self.table, &mut b.scratch), &self.table, self.human);
+            });
+        }
+    }
+
     /// Checks `index` as an answer to the human's open decision `id`.
     pub fn answer(&self, id: DecisionId, index: CandidateIndex) -> Result<Answer, SessionError> {
         self.open()
@@ -666,7 +880,7 @@ impl Game {
             }),
             Open::Halt => 0,
         };
-        let answer = OpenDecision::new(id, &open, false)
+        let answer = OpenDecision::new(id, &open, false, false)
             .answer(id, CandidateIndex(c))
             .expect("an agent chooses a candidate");
         self.choose(answer);
@@ -787,6 +1001,7 @@ impl Game {
                 }
                 Some(Step::Decide(d)) => At::Agent(d),
             };
+            self.note_turn_start();
             return;
         }
     }
@@ -991,7 +1206,11 @@ impl Game {
                 },
                 (At::Stopped, _) => Moment::Stopped,
             };
-            let obs = Observation::new(view(&b.state, &self.table, &mut b.scratch), self.human);
+            let shown = view(&b.state, &self.table, &mut b.scratch);
+            if let Some(start) = &mut self.turn_start {
+                start.note(shown, &self.table, self.human);
+            }
+            let obs = Observation::new(shown, self.human);
             let mut view = player_view(&self.table, obs, moment, self.stops, &events);
             if let Some(d) = &decision {
                 preview::add_previews(&mut view, &b.state, &self.table, d);
@@ -1007,6 +1226,13 @@ impl Game {
         });
         if let Status::Deciding { decision } = &mut view.status {
             decision.cancellable = self.cancellable();
+            decision.undo = self.undoable().then(|| {
+                if self.turn_start.as_ref().is_some_and(|t| t.peeked) {
+                    UndoView::Peeked
+                } else {
+                    UndoView::Clean
+                }
+            });
         }
         view
     }

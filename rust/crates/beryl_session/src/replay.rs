@@ -40,6 +40,9 @@ pub enum Entry {
     Auto(u16),
     /// The human conceded, at the open decision, theirs or the agent's.
     Concede,
+    /// The human went back from their open decision to the start of their turn
+    /// ([`crate::Game::undo`]): the entries since it began were taken back.
+    Undo,
 }
 
 impl ReplayFile {

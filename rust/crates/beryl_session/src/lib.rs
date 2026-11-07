@@ -119,6 +119,8 @@ pub enum SessionError {
     },
     /// The open decision is not part of a cast the human may take back.
     NotCancellable,
+    /// Nothing was decided since the start of the human's latest turn, or none has begun.
+    NothingToUndo,
     /// The session's thread has ended.
     Ended,
     BadReplay {
@@ -156,6 +158,7 @@ impl fmt::Display for SessionError {
                 write!(f, "candidate {} of {candidates}", index.0)
             }
             SessionError::NotCancellable => write!(f, "nothing being cast can be taken back"),
+            SessionError::NothingToUndo => write!(f, "nothing since the turn began to take back"),
             SessionError::Ended => write!(f, "the session has ended"),
             SessionError::BadReplay { reason } => write!(f, "not a replay: {reason}"),
             SessionError::Io { reason } => write!(f, "{reason}"),

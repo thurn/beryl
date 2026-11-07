@@ -31,9 +31,15 @@ export type CancelRequest = {
  */
 decision: DecisionId, };
 
+export type UndoRequest = { 
+/**
+ * The open decision the UI received.
+ */
+decision: DecisionId, };
+
 export type ConcedeRequest = { session: SessionId, };
 
-export type SessionError = { "kind": "unknownAgent", name: string, } | { "kind": "unknownCard", name: string, } | { "kind": "deck", reason: string, } | { "kind": "staleSession", session: SessionId, } | { "kind": "notDeciding" } | { "kind": "staleDecision", decision: DecisionId, open: DecisionId, } | { "kind": "noSuchCandidate", index: CandidateIndex, candidates: number, } | { "kind": "notCancellable" } | { "kind": "ended" } | { "kind": "badReplay", reason: string, } | { "kind": "io", reason: string, };
+export type SessionError = { "kind": "unknownAgent", name: string, } | { "kind": "unknownCard", name: string, } | { "kind": "deck", reason: string, } | { "kind": "staleSession", session: SessionId, } | { "kind": "notDeciding" } | { "kind": "staleDecision", decision: DecisionId, open: DecisionId, } | { "kind": "noSuchCandidate", index: CandidateIndex, candidates: number, } | { "kind": "notCancellable" } | { "kind": "nothingToUndo" } | { "kind": "ended" } | { "kind": "badReplay", reason: string, } | { "kind": "io", reason: string, };
 
 export type GameUpdate = { 
 /**
@@ -78,7 +84,12 @@ stops: StopsSetting,
 /**
  * What happened since the previous view, oldest first, for animation.
  */
-events: Array<GameEvent>, };
+events: Array<GameEvent>, 
+/**
+ * The game went back to the start of the viewer's turn (`undo`): what happened since that
+ * view never did.
+ */
+undone: boolean, };
 
 export type Status = { "kind": "deciding", decision: DecisionView, } | { "kind": "thinking" } | { "kind": "playing" } | { "kind": "stopped" } | { "kind": "over", outcome: OutcomeView, };
 
@@ -240,6 +251,11 @@ halt: boolean,
  */
 cancellable: boolean, 
 /**
+ * Whether the `undo` command can go back to the start of the viewer's latest turn, and
+ * how; none with nothing decided since.
+ */
+undo: UndoView | null, 
+/**
  * At a priority, each card in the viewer's hand they may neither cast nor play as a land,
  * and why: what the UI says of one a click finds nothing to do with.
  */
@@ -250,6 +266,8 @@ export type AskView = { "kind": "plain" } | { "kind": "scry", count: number, } |
 export type PassTo = { "kind": "resolve" } | { "kind": "combatDamage" } | { "kind": "step", step: Step, } | { "kind": "nextTurn" };
 
 export type Refused = { slot: number, reason: RefusalView, };
+
+export type UndoView = "clean" | "peeked";
 
 export type RefusalView = { "kind": "timing", by: number | null, } | { "kind": "landPlayed" } | { "kind": "mana" } | { "kind": "cost" } | { "kind": "target" };
 
@@ -366,6 +384,7 @@ export type Commands = {
   choose: { args: { request: ChooseRequest }; result: null; error: SessionError };
   set_stops: { args: { request: SetStopsRequest }; result: null; error: SessionError };
   cancel: { args: { request: CancelRequest }; result: null; error: SessionError };
+  undo: { args: { request: UndoRequest }; result: null; error: SessionError };
   concede: { args: { request: ConcedeRequest }; result: null; error: SessionError };
   current_game: { args: Record<string, never>; result: GameUpdate | null; error: never };
 };

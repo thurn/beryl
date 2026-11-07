@@ -156,6 +156,12 @@ export function fixtureTransport(
     invoke<C extends Command>(command: C, args: Args<C>): Promise<Result<C>> {
       calls.push({ command, args });
       if (command === "cancel") return cancel() as Promise<Result<C>>;
+      // A recording holds one line of play: there is no turn start to go back to.
+      if (command === "undo") {
+        return Promise.reject(
+          new CommandError("undo", { kind: "nothingToUndo" }),
+        );
+      }
       const queue = responses.get(command);
       if (!queue || queue.length === 0) {
         return Promise.reject(new Error(`fixture: no response for ${command}`));
@@ -353,6 +359,11 @@ export const setStops = (session: SessionId, stops: StopsSetting) =>
  * (`DecisionView.cancellable`); the view of the priority it began at arrives again. */
 export const cancel = (decision: DecisionId) =>
   call("cancel", { request: { decision } });
+
+/** Goes back from the open decision `decision` to the start of the human's latest turn
+ * (`DecisionView.undo`); the view of it arrives again. */
+export const undo = (decision: DecisionId) =>
+  call("undo", { request: { decision } });
 
 /** The human concedes game `session`; the view of its end arrives at the next decision. */
 export const concede = (session: SessionId) =>

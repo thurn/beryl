@@ -25,6 +25,9 @@ pub const SET_STOPS: &str = "set_stops";
 /// Takes back the spell the human is casting, or the ability they are activating, before its
 /// costs are paid ([`crate::protocol::DecisionView::cancellable`]).
 pub const CANCEL: &str = "cancel";
+/// Goes back to the start of the human's latest turn
+/// ([`crate::protocol::DecisionView::undo`]).
+pub const UNDO: &str = "undo";
 /// The human concedes the game in progress.
 pub const CONCEDE: &str = "concede";
 /// The latest view of the game in progress ([`crate::Sessions::current`]), which a reloaded UI
@@ -56,6 +59,14 @@ pub struct SetStopsRequest {
 #[serde(rename_all = "camelCase")]
 pub struct CancelRequest {
     /// The open decision the UI received, part of the cast.
+    pub decision: DecisionId,
+}
+
+/// The [`UNDO`] command's request.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct UndoRequest {
+    /// The open decision the UI received.
     pub decision: DecisionId,
 }
 
@@ -155,6 +166,12 @@ pub(crate) fn typescript(cfg: &Config) -> String {
         (
             CANCEL,
             request(name::<CancelRequest>(cfg)),
+            name::<()>(cfg),
+            error.clone(),
+        ),
+        (
+            UNDO,
+            request(name::<UndoRequest>(cfg)),
             name::<()>(cfg),
             error.clone(),
         ),

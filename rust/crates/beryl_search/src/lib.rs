@@ -61,6 +61,17 @@ pub trait Agent<L: Layout = Small> {
     fn resume_point(&self) -> Option<AgentDecision> {
         None
     }
+
+    /// Its next decision's index among its own, to go back to with [`Agent::rewind`]; none
+    /// for an agent that cannot go back, which plays on from where it is.
+    fn next_decision(&self) -> Option<AgentDecision> {
+        None
+    }
+
+    /// Goes back to stand before its own decision `to`, which [`Agent::next_decision`] named,
+    /// as a game taken back to there does: it forgets what it kept from the decisions since,
+    /// and searches each again from the same seed it had.
+    fn rewind(&mut self, _to: AgentDecision) {}
 }
 
 /// A boxed agent, as the registry builds them, plays like the agent inside.
@@ -75,6 +86,14 @@ impl<L: Layout, T: Agent<L> + ?Sized> Agent<L> for Box<T> {
 
     fn resume_point(&self) -> Option<AgentDecision> {
         (**self).resume_point()
+    }
+
+    fn next_decision(&self) -> Option<AgentDecision> {
+        (**self).next_decision()
+    }
+
+    fn rewind(&mut self, to: AgentDecision) {
+        (**self).rewind(to);
     }
 }
 
@@ -117,6 +136,14 @@ impl<A: Widen> Agent<Small> for Widening<A> {
     fn resume_point(&self) -> Option<AgentDecision> {
         self.small.resume_point()
     }
+
+    fn next_decision(&self) -> Option<AgentDecision> {
+        self.small.next_decision()
+    }
+
+    fn rewind(&mut self, to: AgentDecision) {
+        self.small.rewind(to);
+    }
 }
 
 impl<A: Widen> Agent<Large> for Widening<A> {
@@ -135,6 +162,22 @@ impl<A: Widen> Agent<Large> for Widening<A> {
         match &self.large {
             Some(large) => large.resume_point(),
             None => self.small.resume_point(),
+        }
+    }
+
+    fn next_decision(&self) -> Option<AgentDecision> {
+        match &self.large {
+            Some(large) => large.next_decision(),
+            None => self.small.next_decision(),
+        }
+    }
+
+    /// A game taken back to before it outgrew [`Small`] goes on in [`Large`] all the same, so
+    /// the agent widened rewinds, if there is one yet; else the small one, which it widens from.
+    fn rewind(&mut self, to: AgentDecision) {
+        match &mut self.large {
+            Some(large) => large.rewind(to),
+            None => self.small.rewind(to),
         }
     }
 }

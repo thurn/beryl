@@ -163,6 +163,11 @@ impl Sessions {
         self.with(decision.session, |game| game.cancel(decision))
     }
 
+    /// Goes back from the human's open decision `decision` to the start of their turn.
+    pub fn undo(&self, decision: DecisionId) -> Result<(), SessionError> {
+        self.with(decision.session, |game| game.undo(decision))
+    }
+
     /// Switches the human's priority stops in game `session`.
     pub fn set_stops(&self, session: SessionId, stops: StopsSetting) -> Result<(), SessionError> {
         self.with(session, |game| game.set_stops(stops))

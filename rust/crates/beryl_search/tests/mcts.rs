@@ -359,3 +359,31 @@ fn a_rebuilt_agent_plays_on_as_the_uninterrupted_one() {
     }
     assert!(inside_chain, "a rebuild inside a reuse chain");
 }
+
+/// An agent rewound to one of its own decisions, as a game taken back is, searches it again
+/// from the seed it had there: a decision searched fresh the first time gets the same move.
+#[test]
+fn a_rewound_agent_searches_a_decision_again_as_it_did() {
+    let t = mirror();
+    let (seed, from_end) = REUSE_GAMES[0];
+    let (asked, _) = searched_game(&t, seed, from_end);
+    let fresh: Vec<usize> = (0..asked.len())
+        .filter(|&k| asked[k].resume_point == AgentDecision(k as u32))
+        .collect();
+    assert!(fresh.len() > 1, "fresh searches to go back to");
+    let mut agent = Mcts::new(&t, Sight::Hidden, REUSING, seed);
+    let mut x = Scratch::new();
+    for (k, a) in asked.iter().enumerate() {
+        agent.choose(observe(&a.state, &t, &mut x, Seat::P0), &a.decision);
+        assert_eq!(agent.next_decision(), Some(AgentDecision(k as u32 + 1)));
+    }
+    for &k in fresh.iter().rev() {
+        agent.rewind(AgentDecision(k as u32));
+        let a = &asked[k];
+        assert_eq!(
+            agent.choose(observe(&a.state, &t, &mut x, Seat::P0), &a.decision),
+            a.choice,
+            "rewound to decision {k}"
+        );
+    }
+}

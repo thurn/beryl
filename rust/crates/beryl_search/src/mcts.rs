@@ -382,6 +382,16 @@ impl<L: Layout> Agent<L> for Mcts<L> {
     fn resume_point(&self) -> Option<AgentDecision> {
         Some(self.kept.as_ref().map_or(self.decision, |k| k.chain))
     }
+
+    fn next_decision(&self) -> Option<AgentDecision> {
+        Some(self.decision)
+    }
+
+    fn rewind(&mut self, to: AgentDecision) {
+        self.decision = to;
+        self.kept = None;
+        self.last = None;
+    }
 }
 
 /// What a tree has left to grow, and how much of it a round grows.

@@ -28,6 +28,7 @@ enum Command {
     Choose(Answer),
     SetStops(StopsSetting),
     Cancel,
+    Undo,
     /// Wakes the thread waiting on the human to take their concession.
     Concede,
 }
@@ -82,6 +83,17 @@ impl GameSession {
         *open = None;
         self.commands
             .send(Command::Cancel)
+            .map_err(|_| SessionError::Ended)
+    }
+
+    /// Goes back from the human's open decision `id` to the start of their turn
+    /// ([`Game::undo`]). It returns at once; the view of it again arrives through `emit`.
+    pub(crate) fn undo(&self, id: DecisionId) -> Result<(), SessionError> {
+        let mut open = self.open.lock().unwrap_or_else(PoisonError::into_inner);
+        open.ok_or(SessionError::NotDeciding)?.undo(id)?;
+        *open = None;
+        self.commands
+            .send(Command::Undo)
             .map_err(|_| SessionError::Ended)
     }
 
@@ -180,6 +192,15 @@ fn run(
                     break;
                 }
                 // The session checked that the open decision can be taken back.
+                // The session checked that the open decision can go back.
+                Command::Undo => match game.undo() {
+                    Ok(view) => {
+                        if publish(&game, view, true) {
+                            return;
+                        }
+                    }
+                    Err(e) => eprintln!("beryl_session: {e}"),
+                },
                 Command::Cancel => match game.cancel() {
                     Ok(view) => {
                         if publish(&game, view, true) {

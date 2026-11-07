@@ -42,6 +42,9 @@ pub struct PlayerView {
     pub stops: StopsSetting,
     /// What happened since the previous view, oldest first, for animation.
     pub events: Vec<GameEvent>,
+    /// The game went back to the start of the viewer's turn (`undo`): what happened since that
+    /// view never did.
+    pub undone: bool,
 }
 
 /// Where the game stands for the viewer.
@@ -310,9 +313,24 @@ pub struct DecisionView {
     /// activating from their priority, whose costs are not yet paid: the `cancel` command
     /// takes it back.
     pub cancellable: bool,
+    /// Whether the `undo` command can go back to the start of the viewer's latest turn, and
+    /// how; none with nothing decided since.
+    pub undo: Option<UndoView>,
     /// At a priority, each card in the viewer's hand they may neither cast nor play as a land,
     /// and why: what the UI says of one a click finds nothing to do with.
     pub refused: Vec<Refused>,
+}
+
+/// Going back to the start of the viewer's turn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum UndoView {
+    /// The viewer has seen nothing since that they did not know there.
+    Clean,
+    /// The viewer has since seen a card they did not know there: in a hand, or where it lies in
+    /// a library, which stays where it is when they go back, as the shuffles to come fall the
+    /// same. Going back is allowed; this says it is with that knowledge.
+    Peeked,
 }
 
 /// A card in the viewer's hand they may neither cast nor play as a land now.
@@ -999,6 +1017,7 @@ pub fn player_view<L: Layout>(
         stack,
         stops,
         events: events.iter().map(|e| game_event(t, obs, e)).collect(),
+        undone: false,
     }
 }
 
@@ -1233,6 +1252,7 @@ fn decision_view<L: Layout>(
         source: decision_source(obs, d, resolving),
         halt: false,
         cancellable: false,
+        undo: None,
         refused: if d.kind == DecisionKind::Priority {
             refused(t, obs)
         } else {
@@ -1288,6 +1308,7 @@ fn halt_view<L: Layout>(
         source: None,
         halt: true,
         cancellable: false,
+        undo: None,
         refused: refused(t, obs),
     }
 }

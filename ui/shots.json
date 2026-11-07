@@ -149,6 +149,20 @@
       "height": 900
     },
     {
+      "name": "game-undo-tip",
+      "route": "/?fixture=greedy-turn-9&at=-1#/game",
+      "width": 1600,
+      "height": 900,
+      "hover": ".undo-button"
+    },
+    {
+      "name": "game-undo-peeked-tip",
+      "route": "/?fixture=arrow-spell#/game",
+      "width": 1600,
+      "height": 900,
+      "hover": ".undo-button"
+    },
+    {
       "name": "game-tracker-tip",
       "route": "/?fixture=greedy-turn-9&at=-1#/game",
       "width": 1600,

@@ -168,6 +168,9 @@ interface State {
   until: number;
   queue: GameUpdate[];
   log: LogEntry[];
+  /** The key of the last log entry before the player's latest turn began: an undo goes back
+   * to there. */
+  turnStart?: number;
   names: Names;
   /** A game was asked to start and its first view has not arrived. */
   starting: boolean;
@@ -199,14 +202,20 @@ function show(
   live: boolean,
   now: number,
 ): State {
-  let { names, log } = state;
-  const added: LogEntry[] = [];
-  let key = log.at(-1)?.key ?? -1;
+  let { names, log, turnStart } = state;
+  // Keys only grow, past entries an undo took back too.
+  let key = Math.max(log.at(-1)?.key ?? -1, turnStart ?? -1);
   for (const u of updates) {
-    names = learnNames(names, u.view);
-    for (const line of logLines(u.view, names)) {
-      added.push({ ...line, key: ++key });
+    // What happened since the turn began never did.
+    if (u.view.undone && turnStart !== undefined) {
+      const kept = turnStart;
+      log = log.filter((e) => e.key <= kept);
     }
+    names = learnNames(names, u.view);
+    const lines = logLines(u.view, names);
+    if (lines.length)
+      log = [...log, ...lines.map((l) => ({ ...l, key: ++key }))];
+    if (startsTurn(u.view)) turnStart = key;
   }
   const last = updates.at(-1)!;
   // The views passed over lend the one shown their events, so it animates all of them.
@@ -223,8 +232,20 @@ function show(
     live,
     until: now + (live ? holdOf(last) : 0),
     names,
-    log: added.length ? [...log, ...added].slice(-LOG_LENGTH) : log,
+    turnStart,
+    log: log === state.log ? log : log.slice(-LOG_LENGTH),
   };
+}
+
+/** Whether `view` is where the player's turn began, which an undo goes back to: their first
+ * decision of a turn of theirs, with nothing to take back yet. */
+function startsTurn(view: PlayerView): boolean {
+  return (
+    view.status.kind === "deciding" &&
+    !view.status.decision.undo &&
+    view.turn.active === "you" &&
+    view.turn.number > 0
+  );
 }
 
 function reduce(state: State, action: Action): State {

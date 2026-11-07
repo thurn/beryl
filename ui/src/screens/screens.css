@@ -2394,3 +2394,67 @@
     0 0 18px var(--turn-glow),
     0 2px 3px rgb(0 0 0 / 90%);
 }
+/* Left of the gear, in its brushed metal: back to the start of the player's turn. A red eye
+   marks an undo made having seen hidden cards since. */
+.undo-button {
+  position: absolute;
+  right: 72px;
+  top: 0;
+  width: 56px;
+  height: 72px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.undo-icon {
+  position: absolute;
+  right: 6px;
+  top: 18px;
+  width: 34px;
+  overflow: visible;
+  filter: drop-shadow(0 1px 0 rgb(255 255 255 / 12%))
+    drop-shadow(0 2px 3px rgb(0 0 0 / 45%));
+}
+.undo-arrow {
+  fill: none;
+  stroke: #737172;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.undo-button:hover .undo-arrow {
+  stroke: #9a9899;
+}
+.undo-eye path {
+  fill: #d8332a;
+  stroke: rgb(24 22 21 / 85%);
+  stroke-width: 0.8;
+}
+.undo-eye circle {
+  fill: #1b1110;
+}
+.undo-tip {
+  position: absolute;
+  right: 0;
+  top: 64px;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgb(14 13 12 / 92%);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 50%);
+  color: #e8e2d6;
+  font-size: 13px;
+  text-align: right;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.undo-button:hover .undo-tip,
+.undo-button:focus-visible .undo-tip {
+  display: flex;
+}
+.undo-tip-peeked {
+  color: #ff8a80;
+}

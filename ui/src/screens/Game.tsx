@@ -9,6 +9,7 @@ import { Coin } from "../components/Player";
 import { RulesText } from "../components/Mana";
 import {
   cancel,
+  undo,
   choose,
   CommandError,
   concede,
@@ -225,7 +226,8 @@ function failure(e: unknown): string | undefined {
   const kind = e.error.kind;
   return kind === "notDeciding" ||
     kind === "staleDecision" ||
-    kind === "notCancellable"
+    kind === "notCancellable" ||
+    kind === "nothingToUndo"
     ? undefined
     : e.message;
 }
@@ -330,6 +332,16 @@ function Playing({ playback }: { playback: Playback }) {
     cancel(decision.id).catch(fail);
   };
 
+  /** Goes back to the start of the player's turn, dropping any picks planned. */
+  const undoTurn = () => {
+    if (!decision?.undo || waiting) return;
+    setError(undefined);
+    setAnswered(view);
+    planned.current = [];
+    setPeek(undefined);
+    undo(decision.id).catch(fail);
+  };
+
   // The stops the player chose, here or in an earlier game, until the game holds them: the
   // session takes a change only at the player's decision, so one made while the opponent acts
   // waits for it, and a new game takes up the last game's.
@@ -419,6 +431,7 @@ function Playing({ playback }: { playback: Playback }) {
         onSkip={behind ? skip : undefined}
         choose={answer}
         cancel={cancelCast}
+        undo={undoTurn}
         stops={stops}
         setStops={chooseStops}
         onLeave={() => (window.location.hash = "#/")}

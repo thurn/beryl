@@ -79,6 +79,7 @@ pub fn run() {
             games::choose = ipc::CHOOSE,
             games::set_stops = ipc::SET_STOPS,
             games::cancel = ipc::CANCEL,
+            games::undo = ipc::UNDO,
             games::concede = ipc::CONCEDE,
             games::current_game = ipc::CURRENT_GAME,
         ])
