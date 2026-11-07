@@ -1436,17 +1436,13 @@
   color: var(--gold);
   white-space: nowrap;
 }
-/* Combat and stack lines over the cards on the table and the stack's items, whose edges their
-   dots and heads overlap (trigger_on_stack_with_target.png), under menus. */
+/* Every arrow, combat and stack, over all the cards on the table and the stack's items, under
+   menus. */
 .board-arrows {
   position: absolute;
   inset: 0;
   z-index: 450;
   pointer-events: none;
-}
-/* Attacks at a player: under every card on the table (layout.ts' z from 10). */
-.board-arrows-under {
-  z-index: 5;
 }
 /* Combat marks face the other side: the opponent's attackers wear their chevron below, your
    blockers their arc above. */

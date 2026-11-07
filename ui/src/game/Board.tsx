@@ -866,7 +866,6 @@ export function Board({
       ? passButton(view, decision.passTo)
       : { label: "Pass", caption: "" };
   const arrows = useMemo(() => boardArrows(shown), [shown]);
-  const attacks = useMemo(() => attackLines(shown), [shown]);
   const announcement = combatBanner(view) ?? coinFlipBanner(view);
   const banner = announcement;
   // A combat declaration is finished with the turn button, where priority is passed.
@@ -1031,9 +1030,6 @@ export function Board({
             ),
         )}
 
-        <div className="board-arrows board-arrows-under">
-          <Arrows arrows={attacks} follow />
-        </div>
         <div className="board-arrows">
           <Arrows arrows={arrows} follow avoid={AVOID} />
         </div>
@@ -1531,78 +1527,34 @@ const AVOID = ".card-el .card-slot, .stack-item, .life-orb, .game-log";
 /** The element id of the oval of a player's life orb. */
 const lifeId = (side: Side) => `${side}-life-orb`;
 
-/** The lines under the table's cards: each unblocked attacker's at a player, a hairline out of
- * its chevron's apex into that player's life orb, so the chevron does not seem to point at
- * whatever stands across from it. Under the cards, they do not cross the block lines and cards
- * between, only leave the attacker and land on the orb. */
-function attackLines(view: PlayerView): ArrowSpec[] {
-  const objects = new Map(view.objects.map((o) => [o.slot, o]));
-  return view.battlefield.flatMap((slot): ArrowSpec[] => {
-    const combat = objects.get(slot)?.combat;
-    if (combat?.kind !== "attacking") return [];
-    if (combat.blocked || combat.planeswalker !== null) return [];
-    const up = objects.get(slot)?.controller === "you";
-    return [
-      {
-        from: `${cardId(slot)}-mark`,
-        to: lifeId(up ? "opponent" : "you"),
-        tone: "gold",
-        fromSide: up ? "top" : "bottom",
-        toSide: "facing",
-        bend: 0,
-        start: "none",
-        fine: true,
-      },
-    ];
-  });
-}
-
-/** The lines over the table (decision D10): each blocked attacker's to its blockers and each
- * attacker's at a planeswalker to it (combat.png), and for the top of the stack, a gold line
- * from an ability's source and a cyan one to each target (trigger_on_stack_with_target.png).
- * An attacker at a player draws its line under the cards (`attackLines`). */
+/** Every arrow over the table, all routed alike (decision D10): each attacker's, red, at the
+ * player or planeswalker it attacks, each blocker's, gold, at the attacker it blocks, and for
+ * the top of the stack, a gold one from an ability's source and a cyan one to each target
+ * (trigger_on_stack_with_target.png). */
 function boardArrows(view: PlayerView): ArrowSpec[] {
   const objects = new Map(view.objects.map((o) => [o.slot, o]));
   const out: ArrowSpec[] = [];
   for (const slot of view.battlefield) {
     const o = objects.get(slot);
-    if (o?.combat?.kind !== "attacking") continue;
-    // The opponent's attackers come down the table toward you; yours go up it.
-    const up = o.controller === "you";
-    const blockers = view.battlefield.filter((b) => {
-      const c = objects.get(b)?.combat;
-      return c?.kind === "blocking" && c.attacker === slot;
-    });
-    // A block is a straight link over both cards, from the attacker's middle to the blocker's,
-    // a dot on each: a pair reads as one even where the rows could not set them face to face,
-    // where a line between their edges would hide among the combat marks.
-    for (const b of blockers) {
+    const combat = o?.combat;
+    if (combat?.kind === "blocking" && combat.attacker !== null) {
       out.push({
         from: cardId(slot),
-        to: cardId(b),
+        to: cardId(combat.attacker),
         tone: "gold",
-        bend: 0,
-        fromSide: "center",
-        toSide: "center",
-        start: "dot",
-        end: "dot",
       });
     }
-    const walker = o.combat.planeswalker;
-    if (o.combat.blocked || walker === null) continue;
-    // Out of its chevron's apex and into the planeswalker it attacks, wherever that stands.
+    // A blocked attacker's damage goes to its blockers, not at whatever it attacked.
+    if (combat?.kind !== "attacking" || combat.blocked) continue;
     out.push({
-      from: `${cardId(slot)}-mark`,
-      to: cardId(walker),
-      tone: "gold",
-      fromSide: up ? "top" : "bottom",
-      toSide: "facing",
-      start: "none",
-      fine: true,
+      from: cardId(slot),
+      to:
+        combat.planeswalker !== null
+          ? cardId(combat.planeswalker)
+          : lifeId(o?.controller === "you" ? "opponent" : "you"),
+      tone: "red",
     });
   }
-  // The top of the stack's lines are routed round the cards on the table (AVOID): the source's
-  // first, then each target's, kept apart from it.
   const top = view.stack.length - 1;
   const item = view.stack[top];
   if (item) {

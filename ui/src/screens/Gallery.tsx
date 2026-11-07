@@ -271,33 +271,9 @@ function CardsAndStates() {
 function CombatAndStack() {
   const arrows = useMemo<ArrowSpec[]>(
     () => [
-      {
-        from: "g-attacker",
-        to: "g-blocker",
-        tone: "gold",
-        end: "dot",
-        bend: 0,
-        fromSide: "right",
-        toSide: "left",
-      },
-      {
-        from: "g-titan",
-        to: "g-trigger",
-        tone: "gold",
-        fromSide: "right",
-        toSide: { x: 0.02, y: 0.64 },
-        leave: [24, 0],
-        arrive: [24, 0],
-      },
-      {
-        from: "g-trigger",
-        to: "g-beast",
-        tone: "cyan",
-        fromSide: { x: 1, y: 0.55 },
-        toSide: { x: 0, y: 0.51 },
-        leave: [14, -20],
-        arrive: [18, 0],
-      },
+      { from: "g-attacker", to: "g-blocker", tone: "red" },
+      { from: "g-titan", to: "g-trigger", tone: "gold" },
+      { from: "g-trigger", to: "g-beast", tone: "cyan" },
     ],
     [],
   );
