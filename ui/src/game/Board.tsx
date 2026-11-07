@@ -1544,14 +1544,19 @@ function boardArrows(view: PlayerView): ArrowSpec[] {
         tone: "gold",
       });
     }
-    // A blocked attacker's damage goes to its blockers, not at whatever it attacked.
-    if (combat?.kind !== "attacking" || combat.blocked) continue;
+    // An attack on a planeswalker draws an arrow to it. One at the player draws none: the
+    // attacker's chevron and the damage badge on the orb say it, and a fan of arrows into one
+    // orb only crowds the table. A blocked attacker's damage goes to its blockers.
+    if (
+      combat?.kind !== "attacking" ||
+      combat.blocked ||
+      combat.planeswalker === null
+    ) {
+      continue;
+    }
     out.push({
       from: cardId(slot),
-      to:
-        combat.planeswalker !== null
-          ? cardId(combat.planeswalker)
-          : lifeId(o?.controller === "you" ? "opponent" : "you"),
+      to: cardId(combat.planeswalker),
       tone: "red",
     });
   }

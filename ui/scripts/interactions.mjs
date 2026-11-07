@@ -1515,10 +1515,10 @@ await check(
     "blockers paired with attackers in any order are declared together",
     async (page) => {
         await page.clock.runFor(2000);
-        assert.equal(
-            await page.locator(".step-banner").count(),
-            0,
-            "no banner says what to click",
+        assert.doesNotMatch(
+            (await page.locator(".table").innerText()) ?? "",
+            /click/i,
+            "nothing says what to click",
         );
         // From the last blocker to the first: each, then its attacker.
         const pairs = [...declaredBlocks].sort(([a], [b]) => b - a);
@@ -1671,39 +1671,20 @@ const combatLines = (page, layer) =>
         }),
     );
 
-/** Asserts that each of `attackers` (slots) not blocked draws a line out of its chevron that
- * ends on `side`'s life orb, clear of every card on the table: an attack on a player points
- * at them, not at whatever stands across from the attacker. */
-async function assertAimedAtPlayer(page, attackers, side) {
+/** Asserts that none of `attackers` (slots), each attacking a player, draws a line: the chevron
+ * and the damage badge on the orb say an attack on a player, without a fan of arrows into it. */
+async function assertNoLineAtPlayer(page, attackers) {
     const lines = await combatLines(page, ".board-arrows");
-    const orb = await page.locator(`#${side}-life-orb`).boundingBox();
-    const cards = await page.$$eval(
-        '.card-el[data-zone="battlefield"] .card-slot',
-        (es) =>
-            es.map((e) => {
-                const r = e.getBoundingClientRect();
-                return { x: r.x, y: r.y, width: r.width, height: r.height };
-            }),
-    );
-    const inside = ([x, y], b, m) =>
-        x > b.x - m &&
-        x < b.x + b.width + m &&
-        y > b.y - m &&
-        y < b.y + b.height + m;
     for (const slot of attackers) {
-        const line = lines.find((l) => l.from === `card-${slot}`);
-        assert.ok(line, `attacker ${slot} draws a line`);
-        assert.equal(line.to, `${side}-life-orb`, `${slot} aims at ${side}`);
-        assert.ok(inside(line.end, orb, 4), `${slot}'s line ends on the orb`);
         assert.ok(
-            !cards.some((b) => inside(line.end, b, 0)),
-            `${slot}'s line ends clear of the cards`,
+            !lines.some((l) => l.from === `card-${slot}`),
+            `attacker ${slot} draws no line`,
         );
     }
 }
 
 await check(
-    "an attack on a player ends on that player's life orb",
+    "an attack on a player draws no line, blocked or not",
     async (page) => {
         await page.clock.runFor(2000);
         // The opponent's attackers, none blocked yet, at the human.
@@ -1715,19 +1696,14 @@ await check(
             )
             .map((o) => o.slot);
         assert.ok(attacking.length >= 3, "three attackers at the human");
-        await assertAimedAtPlayer(page, attacking, "you");
-        // Blocked, an attacker's line goes to its blockers instead.
+        await assertNoLineAtPlayer(page, attacking);
         for (const [blocker, attacker] of declaredBlocks) {
             await page.click(slotOf(blocker));
             await page.click(slotOf(attacker));
         }
         await page.clock.runFor(2000);
         const blocked = new Set(declaredBlocks.values());
-        await assertAimedAtPlayer(
-            page,
-            attacking.filter((a) => !blocked.has(a)),
-            "you",
-        );
+        await assertNoLineAtPlayer(page, attacking);
         const lines = await combatLines(page, ".board-arrows");
         for (const a of blocked) {
             assert.ok(
@@ -1740,7 +1716,7 @@ await check(
 );
 
 await check(
-    "the human's attack on the opponent ends on their life orb",
+    "the human's attack on the opponent draws no line",
     async (page) => {
         await page.clock.runFor(2000);
         // The twins' pile, then the rest.
@@ -1749,7 +1725,7 @@ await check(
             ...declaredAttackers.filter((s) => s !== insectTop),
         ]);
         await page.clock.runFor(2000);
-        await assertAimedAtPlayer(page, declaring, "opponent");
+        await assertNoLineAtPlayer(page, declaring);
     },
     attackRun,
 );
@@ -3672,9 +3648,18 @@ for (const fixture of ["arrow-spell", "arrow-ability", "arrow-player"]) {
             ]) {
                 const [o, twin] = pair(marks, mark);
                 const shown = await el(page, o)
-                    .locator(".card-counters .mark-badge")
+                    .locator(".card-counters .mark-badge, .card-pt-counter")
                     .evaluateAll((bs) =>
-                        bs.map((b) => [b.className, b.textContent]),
+                        bs.map((b) =>
+                            b.classList.contains("card-pt-counter")
+                                ? [
+                                      b.textContent.startsWith("+")
+                                          ? "mark-plusOne"
+                                          : "mark-minusOne",
+                                      b.textContent.slice(1),
+                                  ]
+                                : [b.className, b.textContent],
+                        ),
                     );
                 for (const c of o.counters.filter((c) =>
                     kinds.includes(c.kind),
