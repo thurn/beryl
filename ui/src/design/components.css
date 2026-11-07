@@ -1527,6 +1527,10 @@
       transparent
     );
 }
+/* Without an instruction the header is its title over one rule. */
+.overlay-bare::after {
+  display: none;
+}
 .overlay-title {
   position: absolute;
   inset: -6px 0 auto;

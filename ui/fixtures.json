@@ -397,6 +397,11 @@
       "after": 1
     },
     {
+      "name": "target-player",
+      "board": "target-player",
+      "until": "first target decision for seat 0"
+    },
+    {
       "name": "waterbend-tap",
       "board": "waterbend-tap",
       "until": "first waterbend decision for seat 0"

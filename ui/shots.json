@@ -139,7 +139,8 @@
       "route": "/?fixture=cast-evoke&at=1#/game",
       "width": 1600,
       "height": 900,
-      "click": ["[data-zone=hand][data-card='Subtlety']", ".cast-pill >> nth=1"]
+      "click": "[data-zone=hand][data-card='Subtlety']",
+      "hover": ".prompt .button >> nth=-1"
     },
     {
       "name": "game-main",
@@ -420,6 +421,18 @@
     {
       "name": "game-arrow-ability",
       "route": "/?fixture=arrow-ability#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-target-up-to-one",
+      "route": "/?fixture=target-up-to-one#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-target-player",
+      "route": "/?fixture=target-player#/game",
       "width": 1600,
       "height": 900
     },

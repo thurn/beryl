@@ -543,6 +543,17 @@ pub const BOARDS: &[Scenario] = &[
             Action::activate(P1, JACE_WIELDER_OF_MYSTERIES, 1),
             Action::answer(P1, DecisionKind::Target, Pick::Player { player: P0 }),
         ]),
+    // The human's Jace, Wielder of Mysteries asks which player its +1 targets.
+    Scenario::new("target-player")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[Permanent::new(JACE_WIELDER_OF_MYSTERIES), ISLAND_, PLAINS_],
+        )
+        .library(P0, LANDS)
+        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[Action::activate(P0, JACE_WIELDER_OF_MYSTERIES, 1)]),
     // Twins with one mark between them: +1/+1 counters, a story counter, and a Thieving
     // Skydiver just cast beside one that has been there.
     Scenario::new("marks")

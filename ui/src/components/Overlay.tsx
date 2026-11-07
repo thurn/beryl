@@ -50,7 +50,11 @@ export function Overlay({
     >
       <div className="overlay-backdrop" />
       <div className="overlay-main">
-        <header className="overlay-header">
+        <header
+          className={
+            instruction ? "overlay-header" : "overlay-header overlay-bare"
+          }
+        >
           <h2 className="overlay-title">{title}</h2>
           {instruction && <p className="overlay-instruction">{instruction}</p>}
         </header>

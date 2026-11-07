@@ -27,7 +27,7 @@ import {
 } from "../ipc";
 import { Board } from "../game/Board";
 import { ChoiceOverlay } from "../game/ChoiceOverlay";
-import { choiceOf, type Choice } from "../game/choices";
+import { choiceOf, floats, type Choice } from "../game/choices";
 import { follow, isOpening, twins, type Intent } from "../game/decisions";
 import { useFace } from "../game/faces";
 import { useHoverInspect, type HoverHandlers } from "../game/Piles";
@@ -435,7 +435,12 @@ function Playing({ playback }: { playback: Playback }) {
                   }
                 })
         }
-        dimmed={opening || over || (choice !== undefined && !peeking)}
+        // A question in the floating prompt leaves the table lit.
+        dimmed={
+          opening ||
+          over ||
+          (choice !== undefined && !floats(choice) && !peeking)
+        }
         inert={choice !== undefined}
       />
       {opening && (

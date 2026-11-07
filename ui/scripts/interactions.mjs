@@ -2408,17 +2408,16 @@ await check(
         });
         await step.waitFor();
         assert.deepEqual(await chosen(page), [], "the drop asks first");
-        await step.getByRole("radio", { name: /^Kicker/ }).click();
         for (let x = xs[0].option.n; x < wantX; x++) {
             await step.getByRole("button", { name: "Increase X" }).click();
         }
         assert.equal(
             await step.locator(".cast-x-value").textContent(),
-            String(wantX),
+            `X=${wantX}`,
         );
         const taps = kickCasts[kicked].payments.find((p) => p.x === wantX).taps;
         assert.deepEqual(await lit(page), ascending(taps), "lit to pay");
-        await step.getByRole("button", { name: "Cast", exact: true }).click();
+        await step.getByRole("button", { name: /^Kicker/ }).click();
         assert.deepEqual(
             await settled(page, 2),
             [kicked, xs.findIndex((c) => c.option.n === wantX)],
@@ -2467,10 +2466,10 @@ await check(
     async (page) => {
         await page.clock.runFor(2000);
         // Each label with its symbols as braces.
-        const said = await page.$$eval(
-            ".choice .overlay-actions button:not(:last-child)",
-            (bs) =>
-                bs.map((b) => {
+        const said = await page.$$eval(".prompt button", (bs) =>
+            bs
+                .filter((b) => b.textContent !== "Cancel")
+                .map((b) => {
                     const copy = b.cloneNode(true);
                     for (const img of copy.querySelectorAll("[role=img]")) {
                         img.replaceWith(img.getAttribute("aria-label"));
@@ -2488,7 +2487,7 @@ await check(
             "{1}{U} kicked with X",
         );
     },
-    { fixture: "cast-kicker", at: kickViews.length, ready: ".choice" },
+    { fixture: "cast-kicker", at: kickViews.length, ready: ".prompt" },
 );
 
 // Subtlety, cast for its mana or with evoke, whose exile from the hand is asked as a cost while
@@ -2499,6 +2498,9 @@ const evoked = evokeCasts.findIndex(
     (c) => c.option.kind === "cast" && c.option.costs.length > 0,
 );
 assert.ok(evoked >= 0, "the evoke fixture offers the evoked cast");
+const plainCast = evokeCasts.findIndex(
+    (c) => c.option.kind === "cast" && c.option.costs.length === 0,
+);
 const exiling = evokeViews.at(-1).status.decision;
 assert.equal(exiling.kind, "exileCost");
 assert.ok(exiling.cancellable, "the exile is asked while the cast is unpaid");
@@ -2558,24 +2560,28 @@ await check(
         );
         // Let go on the battlefield, it is cast as the step had it.
         await page.click(subtlety);
-        await step.getByRole("radio", { name: /^Evoke/ }).click();
         await dragHandCardTo(page, subtlety, { x: 800, y: 380 });
-        assert.deepEqual(await settled(page, 1), [evoked], "cast with evoke");
+        assert.deepEqual(
+            await settled(page, 1),
+            [plainCast],
+            "cast as the step had it",
+        );
     },
     evokeFixture,
 );
 
-// Each cast in the cast step says its cost, in symbols, and the card's words for what it adds.
+// Each cast in the cast step is a button that says its cost, in symbols, and casts; the step
+// says nothing else.
 await check(
-    "the cast step's casts say their costs and what they add",
+    "the cast step's casts are buttons that say their costs",
     async (page) => {
         await page.clock.runFor(2000);
         await page.click(subtlety);
         const step = page.getByRole("dialog", { name: "Cast Subtlety" });
         await step.waitFor();
-        const plain = step.getByRole("radio", { name: /^Cast/ });
         assert.deepEqual(
-            await plain
+            await step
+                .getByRole("button", { name: /^Cast/ })
                 .locator("[role=img]")
                 .evaluateAll((es) =>
                     es.map((e) => e.getAttribute("aria-label")),
@@ -2583,13 +2589,12 @@ await check(
             ["{2}", "{U}", "{U}"],
             "the card's mana cost",
         );
-        assert.equal(await step.locator(".cast-said").count(), 0);
-        await step.getByRole("radio", { name: /^Evoke/ }).click();
-        assert.deepEqual(
-            await step.locator(".cast-said").allTextContents(),
-            ["Evoke\u2014Exile a blue card from your hand."],
-            "evoke's paragraph",
-        );
+        const words = await step
+            .getByRole("button")
+            .evaluateAll((es) => es.map((e) => e.firstChild.textContent));
+        assert.deepEqual(words.slice(-1), ["Cancel"]);
+        assert.equal(words.length, 3, "a button for each cast, and Cancel");
+        assert.equal(await step.locator("p").count(), 0, "no prose");
     },
     evokeFixture,
 );
@@ -2602,10 +2607,7 @@ await check(
             await page.clock.runFor(2000);
             await page.click(subtlety);
             const step = page.getByRole("dialog", { name: "Cast Subtlety" });
-            await step.getByRole("radio", { name: /^Evoke/ }).click();
-            await step
-                .getByRole("button", { name: "Cast", exact: true })
-                .click();
+            await step.getByRole("button", { name: /^Evoke/ }).click();
             await overlay.waitFor();
         };
         const takenBack = async (n) => {
@@ -2772,7 +2774,7 @@ await check(
         );
         await page.click(`[data-slot="${clicked}"]`);
         assert.deepEqual(await lit(page), byChoice.tapped, "the clicked way");
-        await step.getByRole("button", { name: "Cast", exact: true }).click();
+        await step.getByRole("button", { name: /^Cast/ }).click();
         // The decisions before the payment (its targets) are the player's, on the board.
         const picks = [byChoice.castIndex];
         for (const v of byChoice.between) {
@@ -3309,9 +3311,9 @@ await check(
 
 // Paying life for a land (by-isv.8): `pay-life` stops as Sink into Stupor is played as
 // Soporific Springs with three untapped lands, Jace, the Mind Sculptor in hand the one card
-// the fourth would make castable. The prompt shows the land face over the player's life orb
-// and defaults to paying; with Jace renamed Counterspell, nothing wants the mana this turn
-// and it defaults to entering tapped.
+// the fourth would make castable. The floating prompt names the land over its buttons and
+// defaults to paying; with Jace renamed Counterspell, nothing wants the mana this turn and it
+// defaults to entering tapped.
 const payLife = await lastDecision("pay-life");
 const answerOf = (kind) =>
     payLife.decision.candidates.findIndex((c) => c.option.kind === kind);
@@ -3324,48 +3326,41 @@ await writeFile(
 );
 for (const [fixture, primary, kind] of [
     ["pay-life", "Pay 3 Life", "yes"],
-    ["pay-life-unwanted", "Enter Tapped", "no"],
+    ["pay-life-unwanted", "Tapped", "no"],
 ]) {
     await check(
         `paying life for a land defaults by whether its mana is wanted (${fixture})`,
         async (page) => {
             await page.clock.runFor(2000);
             assert.equal(
-                await page.locator(".overlay-aside .card-name").textContent(),
+                await page.locator(".prompt-title").textContent(),
                 "Soporific Springs",
-                "the land face",
+                "the land named",
             );
-            assert.equal(
-                await page
-                    .locator(".choice-life .life-orb-total")
-                    .textContent(),
-                String(payLife.views.at(-1).players.you.life),
-            );
-            const confirm = page.locator(".overlay-confirm");
+            assert.equal(await page.$(".overlay"), null, "the table stays lit");
+            const confirm = page.locator(".prompt .button-primary");
             assert.equal(await confirm.textContent(), primary);
             await confirm.click();
             assert.deepEqual(await settled(page, 1), [answerOf(kind)]);
         },
-        { fixture, at: payLife.views.length, ready: ".choice" },
+        { fixture, at: payLife.views.length, ready: ".prompt" },
     );
 }
 
-// The trigger-order prompt (still asked under exact stops) shows each trigger by its source and
-// the paragraph that says it, unnumbered until picked; picking the one that resolves first puts
-// the other on the stack, the first going on after it unasked.
+// The trigger-order prompt (still asked under exact stops) shows each trigger by its source,
+// unnumbered until picked, and says what it does only of two from one source; picking the one
+// that resolves first puts the other on the stack, the first going on after it unasked.
 const order = await lastDecision("choice-trigger-order");
 await check(
-    "the trigger-order prompt says each trigger and picks what resolves first",
+    "the trigger-order prompt names each trigger and picks what resolves first",
     async (page) => {
         await page.clock.runFor(3000);
-        const texts = await page
-            .locator(".prompt-trigger-text")
-            .allTextContents();
-        assert.equal(texts.length, 2, "both triggers say what they do");
-        assert.ok(
-            texts.every((t) => /^(When|Whenever|At)\b/.test(t)),
-            `each is its trigger's paragraph: ${texts}`,
+        assert.equal(
+            await page.locator(".prompt-trigger-text").count(),
+            0,
+            "two sources need no words",
         );
+        assert.equal(await page.locator(".prompt-trigger").count(), 2);
         assert.equal(
             await page.locator(".prompt-title").textContent(),
             "Resolve first",
@@ -5158,18 +5153,17 @@ const visiblePoint = (page, selector, nth) =>
         [selector, nth],
     );
 
-// A prompt's cards show whole on hover, beside its instruction, options and cards, never over
-// them, on an opaque inspector (by-isv.17): a look at the top four and X.
+// A prompt's cards show whole on hover, beside its title, options and cards, never over
+// them, on an opaque inspector (by-isv.17): a look at the top four.
 for (const [fixture, at] of [
     ["choice-look", (await load("choice-look")).length],
-    ["cast-kicker", kickViews.length],
 ]) {
     await check(
         `hovering a card in ${fixture}'s prompt keeps its inspector off the prompt`,
         async (page) => {
             await page.clock.runFor(2000);
             const prompt = await page.$$eval(
-                ".overlay-main :is(.overlay-title, .overlay-instruction, button, .shown-card)",
+                ".overlay-main :is(.overlay-title, button, .shown-card)",
                 (els) =>
                     els.map((e) => {
                         const r = e.getBoundingClientRect();
@@ -5309,7 +5303,7 @@ await check(
         assert.match(await prompt.innerText(), /Choose a target/);
         assert.deepEqual(
             await prompt.locator(".prompt-choices button").allInnerTexts(),
-            ["No Target"],
+            ["No Target", "Cancel"],
             "no count is asked",
         );
         await page.click(slotOf(aimed));
@@ -5645,7 +5639,7 @@ const thirstRun = {
     ready: ".prompt",
 };
 const discardButton = (page) =>
-    page.locator(".prompt .cast-buttons .button", { hasText: "Discard" });
+    page.locator(".prompt .prompt-row .button", { hasText: "Discard" });
 await check(
     "Thirst's basic land is discarded from the hand in two clicks",
     async (page) => {
@@ -5798,9 +5792,8 @@ await check(
     { fixture: "choice-cleanup", at: cleanup.views.length, ready: tray(extra) },
 );
 
-// Every choice overlay the fixtures hold keeps its words in their places: the instruction
-// between the header's two rules, the title above the first, each label in its button. A
-// picker of cards always says what to do; a question's buttons may say it alone.
+// Every choice overlay the fixtures hold keeps its words in their places: the title above
+// the header's first rule, each label in its button.
 for (const fixture of [
     "choice-scry",
     "choice-jace",
@@ -5809,7 +5802,6 @@ for (const fixture of [
     "choice-search",
     "choice-thirst",
     "choice-cleanup",
-    "pay-life",
 ]) {
     const { views } = await lastDecision(fixture);
     await check(
@@ -5822,14 +5814,10 @@ for (const fixture of [
                     .querySelector(".choice .overlay-header")
                     .getBoundingClientRect();
                 const out = [];
-                const picker = document.querySelector(".choice-pick") !== null;
                 const within = (selector, top, bottom) => {
                     const e = document.querySelector(`.choice ${selector}`);
                     const text = e?.textContent.trim() ?? "";
-                    if (!text) {
-                        if (picker) out.push(`${selector} is empty`);
-                        return;
-                    }
+                    if (!text) return;
                     const r = e.getBoundingClientRect();
                     if (
                         r.top < header.top + top - 1 ||
@@ -5839,9 +5827,8 @@ for (const fixture of [
                             `${selector} "${text}" spans ${r.top - header.top}..${r.bottom - header.top}`,
                         );
                 };
-                // The header's rules lie 68 and 131 pixels down (components.css).
+                // The header's first rule lies 68 pixels down (components.css).
                 within(".overlay-title", -8, 68);
-                within(".overlay-instruction", 70, 131);
                 for (const b of document.querySelectorAll(".choice button")) {
                     if (
                         b.scrollWidth > b.clientWidth + 1 ||

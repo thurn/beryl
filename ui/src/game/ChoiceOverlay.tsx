@@ -1,7 +1,8 @@
 // A choose-or-order decision over the dimmed table, in the overlay of docs/ui_mockups/scry.png
 // (decision D10): the cards in a tray, picked by clicking or ordered by dragging (each drag has
 // a click fallback), the source card at the right, and "View Battlefield" to peek under it.
-// The overlay says the whole choice; `onPlan` gets the picks that answer it (game/choices.ts).
+// A question of no cards is the floating prompt instead (game/FloatPrompt.tsx), over the
+// undimmed table. `onPlan` gets the picks that answer the choice (game/choices.ts).
 import {
   createContext,
   useContext,
@@ -23,14 +24,22 @@ import {
   CardBack,
   type Highlight,
 } from "../components/Card";
+import { Button } from "../components/Controls";
 import { Overlay, type OverlayAction } from "../components/Overlay";
 import { RulesText } from "../components/Mana";
-import { LifeOrb } from "../components/Player";
 import type { ObjectView, PlayerView } from "../generated/protocol";
 import { StageScale } from "./Stage";
-import type { Arrange, Ask, Choice, Pick, Source } from "./choices";
+import {
+  floats,
+  type Arrange,
+  type Ask,
+  type Choice,
+  type Pick,
+  type Source,
+} from "./choices";
 import type { Intent } from "./decisions";
 import { useFace } from "./faces";
+import { FloatPrompt, PromptRow } from "./FloatPrompt";
 import { INSPECT_PAD, useHoverInspect, type HoverHandlers } from "./Piles";
 
 export interface ChoiceOverlayProps {
@@ -47,8 +56,9 @@ export interface ChoiceOverlayProps {
 
 export function ChoiceOverlay(props: ChoiceOverlayProps) {
   const { choice } = props;
+  if (floats(choice)) return <AskFloat {...props} choice={choice} />;
   // Its cards are small: hovering one shows it whole, over the source card's column, clear of
-  // the instruction, the choice and its buttons.
+  // the title, the choice and its buttons.
   const [inspector, inspect] = useHoverInspect(SIDE);
   return (
     <Inspecting.Provider value={inspect}>
@@ -82,7 +92,7 @@ const TRAY = { width: 1000, height: 468 };
 const CARD_WIDTH = 220;
 const SPRING = { type: "spring", stiffness: 260, damping: 30 } as const;
 
-/** The shell around a tray: title, instruction, source card, buttons. */
+/** The shell around a tray: title, source card, buttons. */
 function Shell({
   view,
   choice,
@@ -121,9 +131,6 @@ function Shell({
     <Overlay
       className={`choice choice-${choice.kind}`}
       title={<RulesText text={choice.title} />}
-      instruction={
-        choice.instruction && <RulesText text={choice.instruction} />
-      }
       aside={source && <SourceCard view={view} source={source} />}
       actions={
         onCancel
@@ -616,11 +623,6 @@ function AskChoice({
         onClick: () => onPlan(a.plan),
       }))}
     >
-      {choice.life !== undefined && (
-        <div className="scry-zone choice-zone choice-life" data-choice="ask">
-          <LifeOrb life={choice.life} />
-        </div>
-      )}
       {choice.cards.length > 0 && (
         <div className="scry-zone choice-zone" data-choice="ask">
           {choice.cards.map((slot, i) => {
@@ -640,5 +642,52 @@ function AskChoice({
         </div>
       )}
     </Shell>
+  );
+}
+
+// --- Asking, floating: pay life, yes or no, X, cast it ---
+
+/** A question of no cards: its title over a button per answer and, while it can be taken
+ * back, Cancel. Escape cancels. */
+function AskFloat({
+  busy,
+  choice,
+  onPlan,
+  onCancel,
+}: ChoiceOverlayProps & { choice: Ask }) {
+  useEffect(() => {
+    if (!onCancel || busy) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !e.defaultPrevented) onCancel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel, busy]);
+  return (
+    <FloatPrompt label={choice.title} title={<RulesText text={choice.title} />}>
+      <PromptRow>
+        {choice.answers.map((a, i) => (
+          <Button
+            key={i}
+            size="small"
+            variant={i === 0 ? "primary" : "secondary"}
+            disabled={busy}
+            onClick={() => onPlan(a.plan)}
+          >
+            <RulesText text={a.label} />
+          </Button>
+        ))}
+        {onCancel && (
+          <Button
+            size="small"
+            variant="secondary"
+            disabled={busy}
+            onClick={onCancel}
+          >
+            Cancel
+          </Button>
+        )}
+      </PromptRow>
+    </FloatPrompt>
   );
 }

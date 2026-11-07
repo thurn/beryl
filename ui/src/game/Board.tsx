@@ -109,6 +109,7 @@ import {
   type CastChoice,
 } from "./casting";
 import { CastStep } from "./CastStep";
+import { FloatPrompt, PromptRow } from "./FloatPrompt";
 import { stoppedPhases, togglePhase } from "./stops";
 import { tablePick } from "./tablePick";
 import {
@@ -1154,9 +1155,8 @@ export function Board({
             name={objects.get(castingNow.slot)?.name ?? "a card"}
             casts={castingNow.casts}
             choice={castingNow.choice}
-            nameOf={nameOf}
             onChoose={(choice) => setCasting({ ...castingNow, choice })}
-            onCast={() => cast(castingNow.choice)}
+            onCast={cast}
             onCancel={() => setCasting(undefined)}
           />
         )}
@@ -1735,8 +1735,11 @@ function Prompt({
     ? []
     : decision.candidates
         .map((c, index) => ({ c, index, label: label(c) }))
-        .filter(
-          ({ c }) => c.option.kind !== "object" || !onTable(c.option.slot),
+        .filter(({ c }) =>
+          // Players are picked on their life orbs, which light for them.
+          c.option.kind === "player"
+            ? false
+            : c.option.kind !== "object" || !onTable(c.option.slot),
         );
   // Up to one target asks for the target, which the board takes with its count; the prompt
   // offers none.
@@ -1752,8 +1755,10 @@ function Prompt({
   // The card a "you may" would move, shown as the question's subject.
   const subject = ask.kind === "mayMove" ? objects.get(ask.card) : undefined;
   if (subject) faces.unshift({ object: subject });
-  const buttons = listed.filter(({ c }) => c.option.kind !== "object");
   const ordering = decision.kind === "triggerOrder";
+  const buttons = ordering
+    ? []
+    : listed.filter(({ c }) => c.option.kind !== "object");
   const [order, setOrder] = useState<CandidateIndex[]>([]);
   const title = ordering
     ? order.length === 0
@@ -1764,15 +1769,22 @@ function Prompt({
         source,
       );
   return (
-    <div className="prompt" role="dialog" aria-label={title}>
-      <h2 className="prompt-title">
-        {title}
-        {ask.kind === "waterbend" && (
-          <span className="prompt-cost">
-            <CostText text={ask.cost} />
-          </span>
-        )}
-      </h2>
+    <FloatPrompt
+      label={title}
+      title={
+        <>
+          {/* The source of a target is on the stack, with its arrow. */}
+          <RulesText
+            text={decision.kind === "target" ? prompt(decision) : title}
+          />
+          {ask.kind === "waterbend" && (
+            <span className="prompt-cost">
+              <CostText text={ask.cost} />
+            </span>
+          )}
+        </>
+      }
+    >
       {ask.kind === "crew" && (
         <CrewMeter
           ask={ask}
@@ -1808,29 +1820,20 @@ function Prompt({
               ))}
             </div>
           )}
-          {buttons.length > 0 && (
-            <div className="prompt-choices">
-              {buttons.map((b) => (
-                <Button
-                  key={b.index}
-                  size="small"
-                  variant="secondary"
-                  onClick={() => onPick(b.index)}
-                >
-                  <RulesText text={b.label} />
-                </Button>
-              ))}
-            </div>
-          )}
         </>
       )}
-      {(onCancel || confirm) && (
-        <div className="cast-buttons">
-          {onCancel && (
-            <Button size="small" variant="secondary" onClick={onCancel}>
-              Cancel
+      {(buttons.length > 0 || onCancel || confirm) && (
+        <PromptRow>
+          {buttons.map((b, i) => (
+            <Button
+              key={b.index}
+              size="small"
+              variant={i === 0 && !confirm ? "primary" : "secondary"}
+              onClick={() => onPick(b.index)}
+            >
+              <RulesText text={b.label} />
             </Button>
-          )}
+          ))}
           {confirm && (
             <Button
               size="small"
@@ -1840,9 +1843,14 @@ function Prompt({
               {confirm.label}
             </Button>
           )}
-        </div>
+          {onCancel && (
+            <Button size="small" variant="secondary" onClick={onCancel}>
+              Cancel
+            </Button>
+          )}
+        </PromptRow>
       )}
-    </div>
+    </FloatPrompt>
   );
 }
 
@@ -1917,6 +1925,10 @@ function TriggerOrder({
   onPlan(plan: Intent[]): void;
 }) {
   const triggers = decision.candidates.map((c, index) => ({ c, index }));
+  const sourceOf = (c: DecisionView["candidates"][number]) =>
+    c.option.kind === "trigger" ? c.option.source : undefined;
+  const twin = (c: DecisionView["candidates"][number]) =>
+    decision.candidates.some((d) => d !== c && sourceOf(d) === sourceOf(c));
   const choose = (index: CandidateIndex) => {
     const next = [...order, index];
     if (next.length < triggers.length - 1) onOrder(next);
@@ -1928,7 +1940,10 @@ function TriggerOrder({
         const source = c.option.kind === "trigger" ? c.option.source : null;
         const name = source === null ? c.label : nameOf(source);
         const text = faceEntry(name)?.oracle_text ?? "";
-        const at = abilityParagraph(text, true, c.nth ?? 0);
+        // A trigger says what it does only to tell it from another of its source's.
+        const at = twin(c)
+          ? abilityParagraph(text, true, c.nth ?? 0)
+          : undefined;
         const n = order.indexOf(index);
         return (
           <li key={index}>

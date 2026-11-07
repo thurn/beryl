@@ -1,11 +1,10 @@
 // Casting a card in one step. The engine asks a cast one pick at a time: which cast (with
 // kicker or another optional or alternative cost, each its own candidate, architecture §7.2),
 // then X, then a payment plan where plans differ in what they consume. The cast step takes the
-// cast, its X and its payment together, shows what the payment taps, and plans the picks that
+// cast, its X and its payment together, lights what the payment taps, and plans the picks that
 // say them, which the game screen sends as each decision arrives. Pure functions of the acts.
 import type { Payment } from "../generated/protocol";
 import type { Act, Intent } from "./decisions";
-import { withoutReminder } from "./faces";
 
 /** What a cast step has settled: the cast, its X if it asks one, and its payment plan if the
  * player chose one over the engine's default. */
@@ -84,23 +83,9 @@ export function castName(act: Act, card: string): string {
   return extra.charAt(0).toUpperCase() + extra.slice(1);
 }
 
-/** What a cast named `cast` (castName's) adds, in its card's words: the paragraphs that name
- * its keyword besides the keyword's own ("if it was kicked"), or else that one's reminder text
- * (overload's "change "target" in its text to "each""), or else that paragraph ("Evoke—Exile a
- * blue card from your hand."). None for the card cast as printed. */
-export function castParagraphs(text: string, cast: string): string[] {
-  const keyword = /^[A-Z][a-z]+/.exec(cast)?.[0];
-  if (!keyword || cast === "Cast") return [];
-  const stem = new RegExp(`\\b${keyword.replace(/(er|e)$/, "")}`, "i");
-  const named = text.split("\n").filter((p) => stem.test(p));
-  const own = named.find((p) => p.startsWith(keyword));
-  const others = named.filter((p) => p !== own).map(withoutReminder);
-  if (others.length > 0 || own === undefined) return others;
-  return [/\(([^)]*)\)/.exec(own)?.[1] ?? own];
-}
-
 /** Names of permanents as a list that counts repeats: two lands of one name and an artifact
- * read "2 <land>s, <artifact>". */
+ * read "2 <land>s, <artifact>". For a payment plan the engine asks about outside the cast
+ * step. */
 export function tapList(names: string[]): string {
   const counts = new Map<string, number>();
   for (const n of names) counts.set(n, (counts.get(n) ?? 0) + 1);

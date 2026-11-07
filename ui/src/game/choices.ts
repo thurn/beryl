@@ -14,7 +14,6 @@ import type {
   Side,
   StackItem,
 } from "../generated/protocol";
-import { abilityText } from "./faces";
 import { optionsMatch, type Intent } from "./decisions";
 
 /** The card at the overlay's right: what asks the choice. A card by name alone when the view
@@ -29,7 +28,6 @@ interface Common {
    * made has been sent. */
   key: number;
   title: string;
-  instruction: string;
   source?: Source;
 }
 
@@ -64,16 +62,20 @@ export interface Pick extends Common {
   plan(picked: number[]): Intent[];
 }
 
-/** A question with an answer per button, the first the default, over the cards it is about
- * or, for a question of life, the player's life orb. */
+/** A question with an answer per button, the first the default, over the cards it is about;
+ * asked of no card, it is the floating prompt's (`floats`). */
 export interface Ask extends Common {
   kind: "ask";
   cards: number[];
   answers: { label: string; plan: Intent[] }[];
-  life?: number;
 }
 
 export type Choice = Arrange | Pick | Ask;
+
+/** Whether a choice is asked in the floating prompt over the table, as a title and a row of
+ * buttons, rather than in the overlay over the dimmed table: a question with no cards. */
+export const floats = (choice: Choice): choice is Ask =>
+  choice.kind === "ask" && choice.cards.length === 0;
 
 /** What the open decision asks, as the overlay shows it; none for a decision made on the board
  * (priority, targets, combat, mana) or on the opening screen. */
@@ -197,8 +199,6 @@ const NUMBERS = [
 const inWords = (n: number) => NUMBERS[n] ?? String(n);
 const capitalized = (word: string) =>
   word.charAt(0).toUpperCase() + word.slice(1);
-/** A player's, from the viewer's side. */
-const whose = (side: Side) => (side === "you" ? "your" : "your opponent's");
 
 /** The view around a decision, with the lookups the choices share. */
 class Situation {
@@ -242,14 +242,6 @@ class Situation {
           ? undefined
           : this.name(slot);
     return name ? { slot, name } : undefined;
-  }
-
-  /** The source's rules text: an ability's own paragraph, or the spell's text. */
-  get sourceText(): string {
-    const r = this.resolving;
-    const name = this.source?.name;
-    const text = (name && cardEntry(name)?.faces[0]?.oracle_text) || "";
-    return r?.kind === "ability" ? abilityText(text, r.triggered, r.nth) : text;
   }
 
   /** Whether the land being played, untapped, would let the viewer cast another card in
@@ -361,9 +353,6 @@ function scry(at: Situation, { count }: AskOf<"scry">): Arrange {
     kind: "arrange",
     key: at.key,
     title: "Scry",
-    instruction: ordering
-      ? "Drag cards to put them on top of your library in order."
-      : "Drag cards to put them on the top or bottom of your library.",
     source: at.source,
     labels: ["Bottom", "Top"],
     left: [],
@@ -394,7 +383,6 @@ function putBack(at: Situation, { count }: AskOf<"putBack">): Arrange {
     kind: "arrange",
     key: at.key,
     title: "Put Back",
-    instruction: `Drag ${need === 1 ? "a card" : `${inWords(need)} cards`} from your hand onto your library, top card rightmost.`,
     source: at.source,
     labels: ["Hand", "Top"],
     left: hand,
@@ -417,10 +405,6 @@ function takeAndBottom(at: Situation, count: number, take: number): Arrange {
     kind: "arrange",
     key: at.key,
     title: `Top ${capitalized(inWords(count))}`,
-    instruction:
-      need > 0
-        ? `Drag ${need === 1 ? "a card" : `${inWords(need)} cards`} to your hand. Order the rest for the bottom.`
-        : "Drag cards to order them on the bottom of your library.",
     source: at.source,
     labels: ["Bottom", "Hand"],
     left: [...shown].reverse(),
@@ -445,7 +429,6 @@ function fateseal(at: Situation, { player }: AskOf<"fateseal">): Ask {
     kind: "ask",
     key: at.key,
     title: "Top of Library",
-    instruction: `You may put the top card of ${whose(player)} library on the bottom.`,
     source: at.source,
     cards: top === undefined ? [] : [top],
     answers: [
@@ -461,7 +444,6 @@ function topOrBottom(at: Situation, { card }: AskOf<"topOrBottom">): Ask {
     kind: "ask",
     key: at.key,
     title: "Top or Bottom?",
-    instruction: "Put it into your library.",
     source: at.source,
     cards: [card],
     answers: [
@@ -495,11 +477,6 @@ function look(at: Situation, ask: AskOf<"look">): Pick {
     kind: "pick",
     key: at.key,
     title,
-    instruction: taking
-      ? "You may put a highlighted card into your hand."
-      : to === "exile"
-        ? "You may exile a highlighted card."
-        : "You may choose a highlighted card.",
     source: at.source,
     cards,
     pickable,
@@ -532,7 +509,6 @@ function explore(at: Situation): Ask {
     kind: "ask",
     key: at.key,
     title: "Revealed",
-    instruction: "",
     source: at.source,
     cards: top === undefined ? [] : [top],
     answers: [
@@ -553,7 +529,6 @@ function search(at: Situation, { max }: AskOf<"search">): Pick {
     kind: "pick",
     key: at.key,
     title: "Search",
-    instruction: `Choose up to ${inWords(max)}.`,
     source: at.source,
     cards,
     pickable: cards,
@@ -576,7 +551,6 @@ function maySearch(at: Situation): Ask {
     kind: "ask",
     key: at.key,
     title: "Search?",
-    instruction: "",
     source: at.source,
     cards: [],
     answers: [
@@ -591,7 +565,6 @@ function chooseObject(at: Situation): Pick {
     kind: "pick",
     key: at.key,
     title: "Choose a Card",
-    instruction: at.sourceText || "Choose a card.",
     source: at.source,
     cards: at.offered,
     pickable: at.offered,
@@ -615,12 +588,6 @@ function discard(at: Situation, cleanup?: number): Pick {
     kind: "pick",
     key: at.key,
     title: "Discard",
-    instruction:
-      cleanup !== undefined
-        ? `Down to ${inWords(hand.length - count)}.`
-        : pickable.length < hand.length
-          ? "Discard a highlighted card."
-          : "Discard a card.",
     source: cleanup === undefined ? at.source : undefined,
     cards: hand,
     pickable,
@@ -640,7 +607,6 @@ function manifestDread(at: Situation): Pick {
     kind: "pick",
     key: at.key,
     title: "Manifest Dread",
-    instruction: "Manifest one. The other goes to your graveyard.",
     source: at.source,
     cards,
     pickable: at.offeredAmong(cards),
@@ -663,7 +629,6 @@ function graveyardExile(at: Situation, count: number): Pick {
     kind: "pick",
     key: at.key,
     title: "Exile",
-    instruction: `Choose ${inWords(count)} cards to exile.`,
     source: at.source,
     cards: [...graveyard].reverse(),
     pickable: graveyard,
@@ -707,7 +672,6 @@ function exileCost(at: Situation): Pick {
     kind: "pick",
     key: at.key,
     title: "Exile",
-    instruction: "Choose a card to exile.",
     source: at.source,
     cards: hand,
     pickable: at.offeredAmong(hand),
@@ -730,7 +694,6 @@ function legendRule(at: Situation): Pick {
     kind: "pick",
     key: at.key,
     title: "Legend Rule",
-    instruction: "Choose the legend to keep. The other goes to your graveyard.",
     cards,
     pickable: cards,
     min: 1,
@@ -741,26 +704,22 @@ function legendRule(at: Situation): Pick {
   };
 }
 
-/** "As this land enters, you may pay N life. If you don't, it enters tapped": the land as it
- * is played, a double-faced card's land face ([CR 712.12](https://yawgatog.com/resources/magic-rules/#R71212)),
- * over the player's life orb. Paying is the default only when the land's mana would make a
- * card in hand castable this turn that the untapped lands cannot. */
+/** "As this land enters, you may pay N life. If you don't, it enters tapped": asked of the
+ * land by name. Paying is the default only when the land's mana would make a card in hand
+ * castable this turn that the untapped lands cannot. */
 function payLife(at: Situation, { life }: AskOf<"payLife">): Ask {
   const name = at.source?.name;
   const land = name ? landFace(name) : undefined;
   const pay = { label: `Pay ${life} Life`, plan: [yes("payLife")] };
-  const tapped = { label: "Enter Tapped", plan: [no("payLife")] };
+  const tapped = { label: "Tapped", plan: [no("payLife")] };
   return {
     kind: "ask",
     key: at.key,
-    title: `Pay ${life} Life?`,
-    instruction: "",
-    source: land ? { name: land.name } : at.source,
+    title: land?.name ?? name ?? `Pay ${life} Life?`,
     cards: [],
     answers: at.untappedLandWanted(at.source?.slot)
       ? [pay, tapped]
       : [tapped, pay],
-    life: at.view.players.you.life,
   };
 }
 
@@ -769,7 +728,6 @@ function yesNo(at: Situation): Ask {
     kind: "ask",
     key: at.key,
     title: at.resolvingName ?? "Choose",
-    instruction: at.sourceText || "Yes or no?",
     source: at.source,
     cards: [],
     answers: at.answers((_, label) => label),
@@ -788,8 +746,7 @@ function castOffer(at: Situation): Ask {
     kind: "ask",
     key: at.key,
     title: name ? `Cast ${name}?` : "Cast It?",
-    instruction: "You may cast it now without paying its mana cost.",
-    cards: slot === undefined ? [] : [slot],
+    cards: [],
     answers: at.answers((o, label) =>
       o.kind === "pass"
         ? "Don't Cast"
@@ -808,7 +765,6 @@ function chooseX(at: Situation): Ask {
     kind: "ask",
     key: at.key,
     title: "Choose X",
-    instruction: "",
     source: at.source,
     cards: [],
     answers: at.decision.candidates.map((c) => {
