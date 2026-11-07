@@ -237,7 +237,7 @@ pub static AGENTS: &[AgentInfo] = &[
         new: mcts_hidden,
     },
     AgentInfo {
-        name: "pimc18-omniscient-30m-anchor-mid",
+        name: "pimc18-omniscient-30m-anchor",
         title: "Deep Seer",
         description: "Cheats as the Seer does, thinking seconds a move",
         new: deep_seer,
@@ -249,7 +249,7 @@ pub static AGENTS: &[AgentInfo] = &[
 pub static RETIRED: &[AgentInfo] = &[AgentInfo {
     name: "pimc18-omniscient-30m",
     title: "Deep Seer, unanchored",
-    description: "Deep Seer before it deferred to the obvious move when unsure",
+    description: "Deep Seer before it held spells it was unsure of",
     new: deep_seer_unanchored,
 }];
 
@@ -287,18 +287,19 @@ fn mcts_hidden(t: &GameTable, seed: u64, budget: Budget) -> Box<dyn GameAgent + 
     )))
 }
 
-/// `pimc18/omniscient/rollout/tuned/anchor+mid@30M`: the long-think arena's leading family
-/// in run-003, anchored to greedy's answer and letting greedy answer the questions below its
-/// roots (epic by-7wl), so that it no longer plays moves its search cannot tell from the
-/// obvious one, as the unanchored one Ousted its own token. 30M engine steps a decision
-/// whatever `budget` says, on every core. Its moves do not depend on the threads.
+/// `pimc18/omniscient/rollout/tuned/anchor@30M`: the long-think arena's leading family in
+/// run-003, anchored (epic by-7wl) so that it casts no spell greedy would hold unless its
+/// search is sure, as the unanchored one cast Oust on its own token. Re-searching that game,
+/// the anchor changed that move alone. `mid` is left to the arena: there it changed 16 of the
+/// game's 62 searched moves and did not lift Jace's 0. 30M engine steps a decision whatever
+/// `budget` says, on every core. Its moves do not depend on the threads.
 fn deep_seer(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
     deep(
         t,
         seed,
         Options {
             anchor: true,
-            mid: true,
+            mid: false,
         },
     )
 }
