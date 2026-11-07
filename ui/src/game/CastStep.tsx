@@ -96,6 +96,7 @@ export function CastStep({
           const c = choiceFor(a);
           const face =
             a.option.kind === "cast" ? card?.faces[a.option.face] : undefined;
+          const label = castName(a, name);
           return (
             <Button
               key={a.index}
@@ -105,8 +106,14 @@ export function CastStep({
               onClick={() => (selects ? onChoose(c) : onCast(c))}
             >
               <CastLabel
-                label={castName(a, name)}
-                cost={paymentOf(c)?.cost || face?.mana_cost || undefined}
+                label={label}
+                // Only the plain cast falls back to the printed cost: an alternative one paid
+                // without mana (Evoke by exiling a card) shows none.
+                cost={
+                  paymentOf(c)?.cost ||
+                  (label === "Cast" ? face?.mana_cost : undefined) ||
+                  undefined
+                }
               />
             </Button>
           );
