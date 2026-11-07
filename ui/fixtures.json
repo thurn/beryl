@@ -86,6 +86,13 @@
       "where": ["opponent's spell on the stack", "castable Counterspell"]
     },
     {
+      "name": "stack-bounce",
+      "board": "stack-bounce",
+      "until": "first priority decision for seat 0 from turn 4",
+      "where": ["opponent's spell on the stack"],
+      "after": 2
+    },
+    {
       "name": "choice-scry",
       "board": "choice-scry",
       "until": "first chooseUpTo decision for seat 0",

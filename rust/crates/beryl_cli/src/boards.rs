@@ -287,6 +287,21 @@ pub const BOARDS: &[Scenario] = &[
             Action::cast(P1, SNAPCASTER_MAGE),
             choose(P1, DecisionKind::Target, NO_MORE_LIES),
         ]),
+    // The opponent casts Stock Up and the human answers with Reprieve, which returns it to the
+    // opponent's hand and draws a card.
+    Scenario::new("stack-bounce")
+        .at(4, P1, TurnStep::PrecombatMain)
+        .battlefield(P0, &[ISLAND_, ISLAND_, PLAINS_])
+        .hand(P0, &[REPRIEVE])
+        .library(P0, LANDS)
+        .battlefield(P1, &[ISLAND_, ISLAND_, PLAINS_, PLAINS_])
+        .hand(P1, &[STOCK_UP])
+        .library(P1, LANDS)
+        .actions(&[
+            Action::cast(P1, STOCK_UP),
+            Action::cast(P0, REPRIEVE),
+            choose(P0, DecisionKind::Target, STOCK_UP),
+        ]),
     // No More Lies exiles the human's Jace, Wielder of Mysteries, who declines to pay; in the
     // opponent's turn the human holds Counterspell over their Stock Up.
     Scenario::new("stack-counter")

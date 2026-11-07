@@ -1001,6 +1001,7 @@ export function Board({
 
         <CardLayer
           epoch={view}
+          events={view.events}
           objects={shown.objects}
           placements={placements}
           hovered={hovered}

@@ -966,21 +966,6 @@
   margin: 0;
   filter: drop-shadow(0 12px 22px rgb(0 0 0 / 50%));
 }
-.announced-countered .card {
-  filter: saturate(0.35) brightness(0.62);
-}
-.announced-countered-mark {
-  position: absolute;
-  right: -10px;
-  top: -12px;
-  width: 34px;
-  height: 34px;
-  fill: rgb(20 14 10 / 85%);
-  stroke: var(--ember);
-  stroke-width: 2.2;
-  stroke-linecap: round;
-  filter: drop-shadow(0 0 6px rgb(240 122 28 / 55%));
-}
 /* A step announcement over the battlefield (combat.png's "Combat / Blockers declared"): a gold
    title between ornamented rules over an italic detail, on a smoky shade, in the band between
    the opponent's life orb and their permanents. Laid out from its center line; the shade's box

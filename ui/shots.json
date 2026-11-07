@@ -400,6 +400,12 @@
       "height": 900
     },
     {
+      "name": "game-bounce",
+      "route": "/?fixture=stack-bounce#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
       "name": "game-counter",
       "route": "/?fixture=stack-counter#/game",
       "width": 1600,

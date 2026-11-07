@@ -14,6 +14,7 @@ import {
   type GameUpdate,
   type PlayerView,
 } from "../ipc";
+import { withResolving } from "./decisions";
 import { learnNames, logLines, type LogEntry, type Names } from "./log";
 
 /** How long a view holds the screen before the next one, in milliseconds: a step passing
@@ -28,6 +29,12 @@ export const HOLD = {
   stack: 2000,
   counter: 1800,
   ending: 1600,
+  /** A spell or ability resolving against another spell, held on the stack with its arrow to
+   * its target before the target is hit. */
+  resolving: 900,
+  /** The spell it hit, struck (CardLayer's shake) and then carried to its zone, in a view of
+   * its own so that the eye follows it. */
+  hit: 1500,
 };
 
 /** The log keeps this many entries. */
@@ -40,6 +47,75 @@ export function holdFor(view: PlayerView): number {
   const { kind } = view.status;
   if (kind !== "thinking" && kind !== "playing") return 0;
   return eventsHold(view);
+}
+
+/** Holds of the views `beats` made, which their events would not give. */
+const BEAT_HOLDS = new WeakMap<GameUpdate, number>();
+
+/** How long `update` stays: its beat's hold, or `holdFor` its view. */
+function holdOf(update: GameUpdate): number {
+  return BEAT_HOLDS.get(update) ?? holdFor(update.view);
+}
+
+/** `update` as the beats a player can follow when it counters or bounces a spell: the spell
+ * resolving against it shown on the stack with its arrow, then the target struck and carried
+ * to its owner's hand, graveyard or exile while the resolving spell stays on the stack, and
+ * only then the view itself, in which that spell goes to its graveyard and what follows (a
+ * card drawn) plays. `before`, the view last shown or queued, says what the stack held; with
+ * no such pair it is one beat. */
+export function beats(
+  before: GameUpdate | undefined,
+  update: GameUpdate,
+): GameUpdate[] {
+  if (!before) return [update];
+  const { view } = update;
+  const hit = view.events.find(
+    (e) =>
+      e.kind === "zoneChange" &&
+      e.from === "stack" &&
+      e.to !== "battlefield" &&
+      e.reason !== "resolve" &&
+      e.reason !== "cast" &&
+      e.reason !== "play",
+  );
+  if (hit?.kind !== "zoneChange") return [update];
+  const was = withResolving(before.view);
+  const at = was.stack.findIndex(
+    (item) => item.kind === "spell" && item.slot === hit.slot,
+  );
+  const target = view.objects.find((o) => o.slot === hit.slot);
+  if (at < 0 || !target || at + 1 >= was.stack.length) return [update];
+  // The table as it was before the hit, with nothing for the player to answer.
+  const first: PlayerView = {
+    ...was,
+    status: { kind: "playing" },
+    events: [],
+  };
+  const owner = was.players[target.owner];
+  const second: PlayerView = {
+    ...first,
+    objects: was.objects.map((o) => (o.slot === hit.slot ? target : o)),
+    stack: was.stack.filter((_, i) => i !== at),
+    players:
+      hit.to === "graveyard"
+        ? {
+            ...was.players,
+            [target.owner]: {
+              ...owner,
+              graveyard: [...owner.graveyard, hit.slot],
+            },
+          }
+        : was.players,
+    events: [hit],
+  };
+  const rest: GameUpdate = {
+    ...update,
+    view: { ...view, events: view.events.filter((e) => e !== hit) },
+  };
+  const out = [{ ...update, view: first }, { ...update, view: second }, rest];
+  BEAT_HOLDS.set(out[0]!, HOLD.resolving);
+  BEAT_HOLDS.set(out[1]!, HOLD.hit);
+  return out;
 }
 
 /** How long `view`'s events take to play out, in milliseconds. */
@@ -145,7 +221,7 @@ function show(
     ...state,
     shown: update,
     live,
-    until: now + (live ? holdFor(update.view) : 0),
+    until: now + (live ? holdOf(last) : 0),
     names,
     log: added.length ? [...log, ...added].slice(-LOG_LENGTH) : log,
   };
@@ -174,10 +250,18 @@ function reduce(state: State, action: Action): State {
           now,
         );
       }
+      const parts = past
+        ? [update]
+        : beats(state.queue.at(-1) ?? shown, update);
       if (state.queue.length === 0 && (past || now >= state.until)) {
-        return show(state, [update], !past, now);
+        return show(
+          { ...state, queue: parts.slice(1) },
+          [parts[0]!],
+          !past,
+          now,
+        );
       }
-      return { ...state, queue: [...state.queue, update] };
+      return { ...state, queue: [...state.queue, ...parts] };
     }
     case "advance": {
       if (state.queue.length === 0) return state;
@@ -185,7 +269,7 @@ function reduce(state: State, action: Action): State {
       const taken: GameUpdate[] = [];
       do {
         taken.push(queue.shift()!);
-      } while (queue.length > 0 && holdFor(taken.at(-1)!.view) === 0);
+      } while (queue.length > 0 && holdOf(taken.at(-1)!) === 0);
       return show({ ...state, queue }, taken, true, action.now);
     }
     case "skip":

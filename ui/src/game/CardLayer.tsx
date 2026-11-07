@@ -28,7 +28,12 @@ import {
   type Highlight,
 } from "../components/Card";
 import { StackMarks } from "../components/Stack";
-import type { ObjectView, PaidCost, Side } from "../generated/protocol";
+import type {
+  GameEvent,
+  ObjectView,
+  PaidCost,
+  Side,
+} from "../generated/protocol";
 import { StageScale } from "./Stage";
 import { faceDownFace, marksOf, useFace } from "./faces";
 import { RAISE, type Layout, type Placement } from "./layout";
@@ -75,6 +80,9 @@ export interface CardLayerProps {
   /** Changes with each view shown (the view itself will do): a card left where it was dropped
    * to be played stays there until the epoch changes, then goes to its placement. */
   epoch: unknown;
+  /** What happened in the view shown: a spell it took off the stack other than by resolving
+   * (countered, bounced, exiled) is struck, then carried to where it went. */
+  events?: GameEvent[];
   objects: ObjectView[];
   placements: Layout;
   /** The card the pointer is over: a hand card rises out of the fan (RAISE), drawn over the
@@ -97,10 +105,23 @@ export interface CardLayerProps {
 const DRAG_THRESHOLD = 6;
 
 const SPRING: Transition = { type: "spring", stiffness: 210, damping: 28 };
+/** A struck spell shakes in place, then crosses the table at a pace the eye follows. */
+const STRUCK_SHAKE = [0, -12, 10, -8, 6, -3, 0];
+const STRUCK_FOR = 0.45;
+const CARRIED: Transition = {
+  type: "tween",
+  duration: 0.75,
+  ease: [0.4, 0, 0.2, 1],
+  delay: STRUCK_FOR,
+};
+/** A struck spell stays over the table until it has arrived, in ms. */
+const CARRIED_FOR = (STRUCK_FOR + 0.75) * 1000 + 50;
 /** A hand card rises and settles back quickly and without bounce. */
 const RAISING: Transition = { type: "tween", duration: 0.14, ease: "easeOut" };
 /** A raised hand card is drawn over the rest of the hand. */
 const RAISED_Z = 300;
+/** A struck spell is carried over everything else on the table. */
+const FLYING_Z = 900;
 /** A refused click's shake, side to side in stage pixels. */
 const SHAKE = [0, -7, 6, -4, 2, 0];
 
@@ -143,6 +164,18 @@ export function CardLayer(props: CardLayerProps) {
   }));
   // The board builds each card's state afresh on every render: one equal to the last keeps
   // the last's identity.
+  const struck = new Set(
+    (props.events ?? []).flatMap((e) =>
+      e.kind === "zoneChange" &&
+      e.from === "stack" &&
+      e.to !== "battlefield" &&
+      e.reason !== "resolve" &&
+      e.reason !== "cast" &&
+      e.reason !== "play"
+        ? [e.slot]
+        : [],
+    ),
+  );
   const states = useRef(new Map<number, CardState>());
   const stateOf = (slot: number) => {
     const given = props.states.get(slot) ?? NO_STATE;
@@ -164,6 +197,7 @@ export function CardLayer(props: CardLayerProps) {
                 place={place}
                 state={stateOf(o.slot)}
                 raised={props.hovered === o.slot}
+                struck={struck.has(o.slot)}
                 epoch={props.epoch}
                 callbacks={callbacks}
                 appearing={shown.current}
@@ -215,6 +249,7 @@ const CardElement = memo(function CardElement({
   place,
   state,
   raised,
+  struck,
   epoch,
   callbacks: layer,
   appearing,
@@ -223,6 +258,7 @@ const CardElement = memo(function CardElement({
   place: Placement;
   state: CardState;
   raised: boolean;
+  struck: boolean;
   epoch: unknown;
   callbacks: Callbacks;
   appearing: boolean;
@@ -242,8 +278,12 @@ const CardElement = memo(function CardElement({
   // dropped card is let go with the view it was played on, whatever the engine did with it (a
   // twin of it may be the card played), and from then on is drawn as if never held.
   const holding = held !== undefined && (held.dragging || held.epoch === epoch);
-  useGlide(x, place.x, reduce, { holding });
-  useGlide(y, place.y, reduce, { holding });
+  // A struck spell leaves the stack for where it went: after its shake, slowly, over the
+  // table.
+  const carried = struck && place.look !== "stack";
+  const how = carried ? CARRIED : SPRING;
+  useGlide(x, place.x, reduce, { holding, how });
+  useGlide(y, place.y, reduce, { holding, how });
   // A card changing looks, or tapping, is drawn at another width (a back, a whole card, a
   // battlefield card): before that is painted, its scale makes up the difference, and then
   // glides, so the card's size changes smoothly too.
@@ -257,7 +297,7 @@ const CardElement = memo(function CardElement({
       scale.jump((scale.get() * was.width) / width);
     }
   }, [scale, width, frameKind]);
-  useGlide(scale, place.scale, reduce, { restart: width });
+  useGlide(scale, place.scale, reduce, { restart: width, how });
   // A hand card is raised while hovered and while the pointer holds it; anything else dragged
   // straightens.
   const hand = place.look === "hand";
@@ -305,6 +345,26 @@ const CardElement = memo(function CardElement({
     grip,
   });
   const shake = useMotionValue(0);
+  const flash = useMotionValue("brightness(1)");
+  const [flying, setFlying] = useState(false);
+  useEffect(() => {
+    if (!carried || reduce) return;
+    const controls = [
+      animate(shake, STRUCK_SHAKE, {
+        duration: STRUCK_FOR,
+        ease: "easeInOut",
+      }),
+      animate(flash, ["brightness(1)", "brightness(2.4)", "brightness(1)"], {
+        duration: STRUCK_FOR,
+      }),
+    ];
+    setFlying(true);
+    const timer = setTimeout(() => setFlying(false), CARRIED_FOR);
+    return () => {
+      controls.forEach((c) => c.stop());
+      clearTimeout(timer);
+    };
+  }, [carried, reduce, shake, flash]);
   const drag = useRef<{ start: Point; from: Point; moved: boolean }>(undefined);
   // A card in a library is unseen, and one on a graveyard or exile pile is the pile's: the
   // pile's button opens it (Piles.tsx). Neither is pointed at alone.
@@ -395,7 +455,13 @@ const CardElement = memo(function CardElement({
         data-card={object.name ?? undefined}
         style={{
           ...frame,
-          zIndex: dragging ? 1000 : lifted && !ghosted ? RAISED_Z : place.z,
+          zIndex: dragging
+            ? 1000
+            : flying
+              ? FLYING_Z
+              : lifted && !ghosted
+                ? RAISED_Z
+                : place.z,
         }}
         exit={
           reduce ? undefined : { opacity: 0, transition: { duration: 0.3 } }
@@ -417,7 +483,7 @@ const CardElement = memo(function CardElement({
           className={hand ? "card-look" : undefined}
           style={{ ...raise, opacity: ghosted ? 0 : 1 }}
         >
-          <motion.div style={{ x: shake }}>
+          <motion.div style={{ x: shake, filter: flash }}>
             <div className="card-body" ref={body}>
               <Look object={object} place={place} state={state} />
               <span className="card-shade" ref={shade} />

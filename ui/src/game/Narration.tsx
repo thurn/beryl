@@ -104,12 +104,12 @@ interface Announced {
   object: ObjectView;
   /** Who cast it, when its casting is in the same view: the stack's diamond in their color. */
   caster?: Side;
-  countered: boolean;
 }
 
-/** The spells `view`'s events took off the stack into a graveyard or exile, as they resolved
- * or were countered, oldest first: those would otherwise flash by unseen. Permanents that
- * resolve are seen arriving on the battlefield. */
+/** The spells `view`'s events took off the stack into a graveyard or exile as they resolved,
+ * oldest first: those would otherwise flash by unseen. Permanents that resolve are seen
+ * arriving on the battlefield, and a spell countered or bounced is seen carried to where it
+ * goes (CardLayer). */
 export function announced(view: PlayerView): Announced[] {
   const objects = new Map(view.objects.map((o) => [o.slot, o]));
   const cast = new Map(
@@ -122,7 +122,7 @@ export function announced(view: PlayerView): Announced[] {
     if (
       e.kind !== "zoneChange" ||
       e.from !== "stack" ||
-      (e.reason !== "resolve" && e.reason !== "counter") ||
+      e.reason !== "resolve" ||
       (e.to !== "graveyard" && e.to !== "exile")
     ) {
       continue;
@@ -132,7 +132,6 @@ export function announced(view: PlayerView): Announced[] {
     out.push({
       object,
       caster: cast.get(e.slot),
-      countered: e.reason === "counter",
     });
   }
   return out.slice(-3);
@@ -172,32 +171,17 @@ export function Announcements({ view }: { view: PlayerView }) {
   );
 }
 
-/** An announced spell, wordless: its caster's diamond as on the stack, and a countered one
- * dimmed under a small ember mark. */
+/** An announced spell, wordless: its caster's diamond as on the stack. */
 function AnnouncedCard({ item }: { item: Announced }) {
   const face = useFace(item.object);
   return (
-    <figure
-      className={item.countered ? "announced announced-countered" : "announced"}
-      data-card={item.object.name}
-      aria-label={item.countered ? `${item.object.name} countered` : undefined}
-    >
+    <figure className="announced" data-card={item.object.name}>
       <Card card={face} width={196} />
       {item.caster && (
         <span
           className={`stack-controller stack-controller-${item.caster}`}
           aria-hidden
         />
-      )}
-      {item.countered && (
-        <svg
-          className="announced-countered-mark"
-          viewBox="0 0 20 20"
-          aria-hidden
-        >
-          <circle cx="10" cy="10" r="7" />
-          <path d="M5 15 L15 5" />
-        </svg>
       )}
     </figure>
   );
