@@ -8,7 +8,7 @@ use crate::event::Sink;
 use crate::ids::Slot;
 use crate::mana::{self, Units};
 use crate::rng::SplitMix64;
-use crate::state::{ManaPool, ObjectFlags, Zone};
+use crate::state::{ManaPool, ObjectFlags, TurnStep, Zone};
 use crate::{DecisionKind, Opt, Payment, Profile};
 
 fn tapped(g: &Game, slot: Slot) -> bool {
@@ -94,6 +94,100 @@ fn strip_or_dual(payment: Payment) -> (bool, bool) {
 fn the_exact_payment_keeps_the_most_costs_payable() {
     // Tapping the Strip would cost its own ability; the dual has no other use.
     assert_eq!(strip_or_dual(Payment::KeepMostPayable), (false, true));
+}
+
+/// Casts a {1}{U} flash creature on the opponent's end step with a Plains and three
+/// Islands, holding a {U}{U} sorcery and a {1}{W} instant, `g.me` tapping their own mana if
+/// `human`, and says whether the Plains stayed untapped.
+fn flash_keeps_the_plains(human: bool) -> bool {
+    let mut g = Game::new(Profile::EXACT);
+    if human {
+        g.s.set_profile(tapping(&g));
+    }
+    let flasher = g.give(g.me, "Test Flasher", Zone::Hand);
+    g.give(g.me, "Test Sage", Zone::Hand);
+    g.give(g.me, "Test Removal", Zone::Hand);
+    let plains = g.give(g.me, "Test Land", Zone::Battlefield);
+    for _ in 0..3 {
+        g.give(g.me, "Test Island", Zone::Battlefield);
+    }
+    g.at(g.them, TurnStep::End);
+    g.s.turn.priority = g.me;
+    g.pick(cast(flasher));
+    assert_eq!(g.s.object(flasher).zone, Zone::Stack);
+    !tapped(&g, plains)
+}
+
+#[test]
+fn a_human_payment_on_the_opponents_turn_keeps_only_instants_payable() {
+    // Two Islands left would keep the {U}{U} sorcery payable, which can't be cast before the
+    // lands untap; the Plains and an Island keep the {1}{W} instant.
+    assert!(flash_keeps_the_plains(true));
+}
+
+#[test]
+fn only_the_human_payment_looks_ahead() {
+    // Search's payments keep the costs in hand payable whatever their timing, as cheaply as
+    // a rollout needs.
+    assert!(!flash_keeps_the_plains(false));
+}
+
+#[test]
+fn a_human_payment_keeps_two_copies_of_a_card_payable_together() {
+    // A Plains and the dual left pay one of the {U} instants; an Island and the dual both.
+    let mut g = Game::new(Profile::EXACT);
+    g.s.set_profile(tapping(&g));
+    let bear = g.give(g.me, "Test Bear", Zone::Hand);
+    g.give(g.me, "Test Lies", Zone::Hand);
+    g.give(g.me, "Test Lies", Zone::Hand);
+    let island = g.give(g.me, "Test Island", Zone::Battlefield);
+    g.give(g.me, "Test Land", Zone::Battlefield);
+    g.give(g.me, "Test Land", Zone::Battlefield);
+    let dual = g.give(g.me, "Test Dual", Zone::Battlefield);
+    g.pick(cast(bear));
+    assert_eq!(g.s.object(bear).zone, Zone::Stack);
+    assert!(!tapped(&g, island) && !tapped(&g, dual));
+}
+
+/// Casts a {1}{U} creature in `g.me`'s main phase with a Plains and two Islands, holding an
+/// Island to play, a {1}{W} creature and a {U} sorcery, `g.me` tapping their own mana, and
+/// says whether the Plains stayed untapped.
+fn main_phase_keeps_the_plains(lands_played: u8) -> bool {
+    let mut g = Game::new(Profile::EXACT);
+    g.s.set_profile(tapping(&g));
+    let diver = g.give(g.me, "Test Diver", Zone::Hand);
+    g.give(g.me, "Test Island", Zone::Hand);
+    g.give(g.me, "Test Bear", Zone::Hand);
+    g.give(g.me, "Test Ponder", Zone::Hand);
+    let plains = g.give(g.me, "Test Land", Zone::Battlefield);
+    g.give(g.me, "Test Island", Zone::Battlefield);
+    g.give(g.me, "Test Island", Zone::Battlefield);
+    g.s.player_mut(g.me).lands_played = lands_played;
+    g.pick(cast(diver));
+    assert_eq!(g.s.object(diver).zone, Zone::Stack);
+    !tapped(&g, plains)
+}
+
+#[test]
+fn a_human_payment_counts_the_land_still_to_be_played() {
+    // The Plains and the Island to play cast the {1}{W} creature; two Islands only the {U}.
+    assert!(main_phase_keeps_the_plains(0));
+    // With the land played, an Island left keeps the sorcery and the Plains nothing.
+    assert!(!main_phase_keeps_the_plains(1));
+}
+
+#[test]
+fn a_human_payment_taps_lands_before_a_mana_creature() {
+    // CR 508.1a: an untapped creature may still attack, so even the dual taps first.
+    let mut g = Game::new(Profile::EXACT);
+    g.s.set_profile(tapping(&g));
+    let bear = g.give(g.me, "Test Bear", Zone::Hand);
+    let elf = g.give(g.me, "Test Elf", Zone::Battlefield);
+    g.give(g.me, "Test Land", Zone::Battlefield);
+    g.give(g.me, "Test Dual", Zone::Battlefield);
+    g.pick(cast(bear));
+    assert_eq!(g.s.object(bear).zone, Zone::Stack);
+    assert!(!tapped(&g, elf));
 }
 
 #[test]

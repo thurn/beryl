@@ -15,14 +15,16 @@
 //! sacrificing more, when it keeps more later costs payable (§10).
 
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, AbilityKind, Cost, Face, ManaColor, ManaCost, Types};
+use crate::card::{
+    Ability, AbilityKind, Cost, Face, Keywords, ManaColor, ManaCost, Replacement, Timing, Types,
+};
 use crate::decision::Opt;
 use crate::effect::EffectCtx;
 use crate::event::{self, Sink};
 use crate::fixed::Full;
 use crate::ids::{CardIx, Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
-use crate::state::{Derived, ObjectFlags, PendingTrigger, State, Zone};
+use crate::state::{Derived, ObjectFlags, PendingTrigger, State, TurnStep, Zone};
 use crate::table::GameTable;
 
 /// The kinds of mana, W U B R G and C, as [`ManaColor`] indices.
@@ -930,12 +932,342 @@ fn still_payable<L: Layout>(
     })
 }
 
+/// What the rest of the turn may ask of the mana a payment leaves (§10): the costs the player
+/// might still pay before their sources untap, each once with how many of the player's cards
+/// or abilities have it (two Lightning Bolts can both be cast), and the mana of each land they
+/// might still play untapped, each distinct one once.
+#[derive(Clone, Debug, Default)]
+struct Ahead<L: Layout = Small> {
+    later: L::Queue<Later<L>, 32>,
+    copies: L::Queue<u8, 32>,
+    /// A land's kinds of mana and how much it makes.
+    lands: L::Queue<(u8, u8), 8>,
+}
+
+impl<L: Layout> Ahead<L> {
+    fn add(&mut self, cost: ManaCost, taps: Option<L::Slot>) {
+        let l = Later {
+            cost: cost.with_x(0),
+            taps,
+        };
+        if let Some(i) = self.later.iter().position(|&x| x == l) {
+            let n = &mut self.copies.as_mut_slice()[i];
+            *n = n.saturating_add(1);
+        } else if self.later.push(l).is_ok() {
+            let _ = self.copies.push(1);
+        }
+        // Past a fixed layout's capacity, the rest are not considered: a heuristic, not a rule.
+    }
+}
+
+/// Whether `player` may still act at sorcery speed before their sources next untap: it is
+/// their turn, short of its end step, so a main phase may still come with the stack empty.
+///
+/// - [CR 307.1](https://yawgatog.com/resources/magic-rules/#R3071): "A player who has priority
+///   may cast a sorcery card from their hand during a main phase of their turn when the stack
+///   is empty."
+/// - [CR 502.3](https://yawgatog.com/resources/magic-rules/#R5023): "the active player
+///   determines which permanents they control will untap. Then they untap them all
+///   simultaneously."
+fn sorcery_window<L: Layout>(s: &State<L>, player: Seat) -> bool {
+    s.turn.active == player && s.turn.step <= TurnStep::PostcombatMain
+}
+
+/// Whether `player` may cast `face` at instant speed, as casting decides: an instant
+/// ([CR 117.1a](https://yawgatog.com/resources/magic-rules/#R1171a)), a face with flash
+/// ([CR 702.8a](https://yawgatog.com/resources/magic-rules/#R7028a)), or a sorcery while an
+/// effect lets them cast sorceries as though they had flash. Kept apart from casting's own
+/// check, which the hot priority path inlines.
+fn instant_speed<L: Layout>(s: &State<L>, face: &Face, player: Seat) -> bool {
+    face.types.intersects(Types::INSTANT)
+        || face.keywords.contains(Keywords::FLASH)
+        || (face.types.intersects(Types::SORCERY) && s.player(player).sorceries_as_flash)
+}
+
+/// Whether a land `player` plays now enters untapped, by its face's replacement abilities, as
+/// [`event`] decides as it enters
+/// ([CR 614.1c](https://yawgatog.com/resources/magic-rules/#R6141c)): "Effects that read
+/// '[This permanent] enters with . . . ,' 'As [this permanent] enters . . . ,' or '[This
+/// permanent] enters as . . . ' are replacement effects." One that asks for life enters
+/// untapped if the player pays, which is theirs to choose.
+fn enters_untapped<L: Layout>(s: &State<L>, player: Seat, face: &Face) -> bool {
+    face.abilities
+        .iter()
+        .filter(|a| a.kind == AbilityKind::Replacement)
+        .all(|a| match a.replacement {
+            Replacement::EntersTapped => false,
+            Replacement::EntersTappedUnlessFewLands(n) => {
+                // As [`event`] counts them: every land is another land.
+                s.battlefield()
+                    .iter()
+                    .filter(|&&p| {
+                        let d = s.derived(p);
+                        d.controller == player && d.types.contains(Types::LAND)
+                    })
+                    .count()
+                    <= usize::from(n)
+            }
+            _ => true,
+        })
+}
+
+/// What the rest of the turn may ask of `player`'s mana (§10): the mana costs of the cards in
+/// their hand and those they may cast under a permission, and the activation costs of their
+/// permanents' abilities, those that need sorcery speed only while [`sorcery_window`] allows;
+/// and the lands in their hand, while they may still play one this turn.
+///
+/// [CR 305.2](https://yawgatog.com/resources/magic-rules/#R3052): "A player can normally play
+/// one land during their turn".
+fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
+    let mut ahead: Ahead<L> = Ahead::default();
+    let sorcery = sorcery_window(s, player);
+    let land_drop = sorcery && s.player(player).lands_played < 1;
+    // A transforming card's back face is never cast: "A double-faced spell is cast with its
+    // front face up by default" ([CR 712.11](https://yawgatog.com/resources/magic-rules/#R71211)).
+    // A land is played, not cast ([CR 305.1](https://yawgatog.com/resources/magic-rules/#R3051)).
+    let castable = |face: &Face| {
+        !face.transformed
+            && !face.types.intersects(Types::LAND)
+            && (sorcery || instant_speed(s, face, player))
+    };
+    let activatable = |a: &Ability| sorcery || a.timing == Timing::Instant;
+    for slot in s.zone(player, Zone::Hand).iter() {
+        let card = s.object(slot).card;
+        let def = t.def(card);
+        for f in def.face_ixs() {
+            let face = def.face(f);
+            if castable(face) {
+                ahead.add(face.cost, None);
+            }
+            if land_drop
+                && !face.transformed
+                && face.types.intersects(Types::LAND)
+                && enters_untapped(s, player, face)
+                && let ManaFace::Plain { kinds, amount, .. } = t.facts(card, f).mana
+                && !ahead.lands.iter().any(|&l| l == (kinds, amount))
+            {
+                let _ = ahead.lands.push((kinds, amount));
+            }
+            for a in face.abilities {
+                if a.kind == AbilityKind::Activated && a.cost.discard_self && activatable(a) {
+                    ahead.add(a.cost.mana, None);
+                }
+            }
+        }
+    }
+    for p in s.permissions.iter() {
+        if p.player != player || !s.is_current(p.object) {
+            continue;
+        }
+        for face in t.def(s.object(p.object.slot).card).faces {
+            if castable(face) {
+                let cost = face.cost;
+                ahead.add(
+                    ManaCost {
+                        generic: cost.generic.saturating_add(p.extra),
+                        ..cost
+                    },
+                    None,
+                );
+            }
+        }
+    }
+    for &slot in s.battlefield() {
+        let o = s.object(slot);
+        if s.controller(slot) != player || o.flags.has(ObjectFlags::TAPPED) {
+            continue;
+        }
+        for a in t.def(o.card).face(o.face).abilities {
+            if a.kind == AbilityKind::Activated && !a.is_loyalty() && activatable(a) {
+                ahead.add(a.cost.mana, a.cost.tap.then_some(slot));
+            }
+        }
+    }
+    ahead
+}
+
+/// What a plan leaves the rest of the turn, best first (§10). First, the most mana that later
+/// costs payable together spend, then their colored and colorless symbols: an auto-tapper
+/// keeps a Counterspell and a Brainstorm castable together rather than either alone, and
+/// {U}{U} for Mana Drain rather than {1}{W} for Get Lost and {W} for Oust, of which the two
+/// lands left would cast only one anyway. Then, of the costs payable each alone, the most
+/// symbols of any one, how many, and their symbols in all: a cost hungry for colors is the
+/// one a careless payment strands; a generic one is paid from whatever is left. Last, how
+/// many creatures stay untapped, free to attack or block
+/// ([CR 508.1a](https://yawgatog.com/resources/magic-rules/#R5081a): "The chosen creatures
+/// must be untapped"), so a dual taps before a mana creature when nothing else tells them
+/// apart.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct Outlook {
+    together: u32,
+    together_symbols: u32,
+    most: u32,
+    payable: u32,
+    all: u32,
+    creatures: u32,
+}
+
+/// How many payability checks [`Lookahead::together`] makes at most for one plan: a heuristic
+/// bound on a search that grows with the subsets of the hand.
+const TOGETHER_CHECKS: u32 = 128;
+
+/// The search for what a plan leaves, over its leftover mana and the costs ahead.
+struct Lookahead<'a, L: Layout> {
+    sources: &'a Sources<L>,
+    plan: &'a Plan<L>,
+    later: &'a [Later<L>],
+    copies: &'a [u8],
+}
+
+impl<L: Layout> Lookahead<'_, L> {
+    /// `units` less the mana of the permanent `l` taps for its cost, or none if the plan taps
+    /// it: a permanent tapping for an ability cannot also make mana for it.
+    fn without(&self, units: Units, l: &Later<L>) -> Option<Units> {
+        let Some(slot) = l.taps else {
+            return Some(units);
+        };
+        if self.sources.taps_slot(&self.plan.taps, slot) {
+            return None;
+        }
+        let mut u = units;
+        if let Some(c) = self
+            .sources
+            .classes()
+            .iter()
+            .find(|c| c.members.contains(slot))
+        {
+            u.take(c.kinds, u16::from(c.amount));
+        }
+        Some(u)
+    }
+
+    /// The outlook with `units` to pay with.
+    fn outlook(&self, units: Units) -> Outlook {
+        let mut out = Outlook::default();
+        for l in self.later {
+            if self.without(units, l).is_some_and(|u| u.pays(l.cost)) {
+                let symbols = symbols(l.cost);
+                out.most = out.most.max(symbols);
+                out.payable += 1;
+                out.all += symbols;
+            }
+        }
+        let mut used: L::Queue<u8, 32> = Default::default();
+        for _ in self.later {
+            let _ = used.push(0);
+        }
+        let mut best = (0, 0);
+        let mut checks = TOGETHER_CHECKS;
+        self.together(
+            0,
+            ManaCost::NONE,
+            units,
+            Bitboard::EMPTY,
+            used.as_mut_slice(),
+            &mut best,
+            &mut checks,
+        );
+        (out.together, out.together_symbols) = best;
+        out
+    }
+
+    /// Extends `sum`, costs payable together from `units`, by those from `start` on, keeping
+    /// in `best` the most mana and then symbols of any such set. `tapping` holds the
+    /// permanents the set's abilities tap, `used` how many of each cost's copies it pays.
+    #[allow(clippy::too_many_arguments)]
+    fn together(
+        &self,
+        start: usize,
+        sum: ManaCost,
+        units: Units,
+        tapping: Bitboard<L::Slot>,
+        used: &mut [u8],
+        best: &mut (u32, u32),
+        checks: &mut u32,
+    ) {
+        *best = (*best).max((sum.total(0), symbols(sum)));
+        for (i, l) in self.later.iter().enumerate().skip(start) {
+            // A cost of no mana spends none, and a permanent taps once.
+            if l.cost.total(0) == 0
+                || used[i] >= self.copies[i]
+                || l.taps.is_some_and(|slot| tapping.contains(slot))
+            {
+                continue;
+            }
+            let Some(u) = self.without(units, l) else {
+                continue;
+            };
+            let mut next = sum;
+            next.generic = next.generic.saturating_add(l.cost.generic);
+            for (n, &k) in next.symbols.iter_mut().zip(&l.cost.symbols) {
+                *n = n.saturating_add(k);
+            }
+            if next.total(0) > u.total() {
+                continue;
+            }
+            if *checks == 0 {
+                return;
+            }
+            *checks -= 1;
+            if !u.pays(next) {
+                continue;
+            }
+            let mut tapping = tapping;
+            if let Some(slot) = l.taps {
+                tapping.insert(slot);
+            }
+            used[i] += 1;
+            self.together(i, next, u, tapping, used, best, checks);
+            used[i] -= 1;
+        }
+    }
+}
+
+/// A cost's colored and colorless symbols.
+fn symbols(cost: ManaCost) -> u32 {
+    cost.symbols.iter().map(|&k| u32::from(k)).sum()
+}
+
+/// What `plan` leaves the rest of the turn ([`Outlook`]): with its leftover mana, and with
+/// that of the best land the player may still play.
+fn outlook<L: Layout>(
+    sources: &Sources<L>,
+    plan: &Plan<L>,
+    ahead: &Ahead<L>,
+    creatures: &Taps<L>,
+) -> Outlook {
+    let look = Lookahead {
+        sources,
+        plan,
+        later: ahead.later.as_slice(),
+        copies: ahead.copies.as_slice(),
+    };
+    let units = sources.units(plan.left, &plan.taps);
+    let mut best = look.outlook(units);
+    for &(kinds, amount) in ahead.lands.iter() {
+        let mut u = units;
+        u.add(kinds, u16::from(amount));
+        best = best.max(look.outlook(u));
+    }
+    // [`pay`] taps a class's other members before its creatures.
+    best.creatures = sources
+        .classes()
+        .iter()
+        .zip(plan.taps.iter().zip(creatures.iter()))
+        .map(|(c, (&taps, &n))| u32::from(n.min(c.count() - taps)))
+        .sum();
+    best
+}
+
 /// The plans a payment of `cost` offers, at most one per distinct floating remainder and
 /// number of sources sacrificed, in order of the fewest sacrificed, then the least mana left
 /// floating. Sacrificing a source is a plan's own outcome (§10), but almost always a waste:
 /// a plan that sacrifices more is offered only when it keeps strictly more later costs payable
 /// than every plan sacrificing fewer. Under [`crate::profile::Payment::Greedy`] it is the
 /// first plan in greedy order of those sacrificing the fewest, alone.
+///
+/// The human's payment ([`crate::Profile::taps_mana`]) offers the same plans, each tapping
+/// the sources [`looking_ahead`] picks.
 pub(crate) fn plans<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -1027,7 +1359,55 @@ pub(crate) fn plans<L: Layout>(
         let floating: u32 = p.left.iter().map(|&n| u32::from(n)).sum();
         (sources.sacrificed(p), floating, p.left)
     });
+    if s.profile.taps_mana == Some(player) {
+        looking_ahead(s, t, player, cost, &sources, kept.as_mut_slice())?;
+    }
     Ok(kept)
+}
+
+/// The human's payment ([`crate::Profile::taps_mana`]): each of the plans `kept` offers, as
+/// another player's, replaced by the way to pay `cost` leaving the same remainder and
+/// sacrificing as many sources whose [`Outlook`] over the rest of the turn is best. Which
+/// plans a payment offers stays the same under either profile, so a decision offered to the
+/// human reads the same to a search that clears it; only which sources each taps changes.
+#[cold]
+#[inline(never)]
+fn looking_ahead<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    cost: ManaCost,
+    sources: &Sources<L>,
+    kept: &mut [Plan<L>],
+) -> Result<(), Full> {
+    let ahead = ahead(s, t, player);
+    let mut creatures: Taps<L> = Table::filled(0);
+    for (i, c) in sources.classes().iter().enumerate() {
+        creatures[i] = c
+            .members
+            .iter()
+            .filter(|&m| s.derived(m).types.intersects(Types::CREATURE))
+            .count() as u8;
+    }
+    let mut best: L::Queue<Outlook, 64> = Default::default();
+    for k in kept.iter() {
+        best.push(outlook(sources, k, &ahead, &creatures))?;
+    }
+    each_plan(cost, s.player(player).mana.amounts(), sources, &mut |p| {
+        let sacrificed = sources.sacrificed(p);
+        if let Some(i) = kept
+            .iter()
+            .position(|k| k.left == p.left && sources.sacrificed(k) == sacrificed)
+        {
+            let o = outlook(sources, p, &ahead, &creatures);
+            if o > best.as_slice()[i] {
+                best.as_mut_slice()[i] = o;
+                kept[i] = p.clone();
+            }
+        }
+        true
+    });
+    Ok(())
 }
 
 /// Pays `cost` by `plan`: taps its sources for the mana it needs, sacrificing those whose
@@ -1066,8 +1446,11 @@ pub(crate) fn pay<L: Layout>(
             units.push((1 << k, None, 1))?;
         }
     }
+    let human = s.profile.taps_mana == Some(player);
     for (i, c) in sources.classes().iter().enumerate() {
-        let tapped: L::Queue<L::Slot, 64> = {
+        let tapped: L::Queue<L::Slot, 64> = if human {
+            human_taps(s, c, plan.taps[i])?
+        } else {
             let mut v: L::Queue<L::Slot, 64> = Default::default();
             for slot in c.members.iter().take(usize::from(plan.taps[i])) {
                 v.push(slot)?;
@@ -1101,6 +1484,25 @@ pub(crate) fn pay<L: Layout>(
     }
     debug_assert_eq!(s.player(player).mana.amounts(), plan.left);
     Ok(())
+}
+
+/// The `n` members of class `c` the human's payment taps: its creatures last, free to attack
+/// or block as long as they can ([`Outlook`]).
+#[cold]
+#[inline(never)]
+fn human_taps<L: Layout>(s: &State<L>, c: &Class<L>, n: u8) -> Result<L::Queue<L::Slot, 64>, Full> {
+    let creature = |m: L::Slot| s.derived(m).types.intersects(Types::CREATURE);
+    let mut v: L::Queue<L::Slot, 64> = Default::default();
+    for slot in c
+        .members
+        .iter()
+        .filter(|&m| !creature(m))
+        .chain(c.members.iter().filter(|&m| creature(m)))
+        .take(usize::from(n))
+    {
+        v.push(slot)?;
+    }
+    Ok(v)
 }
 
 /// One augmenting-path step of [`assign`]: finds a unit slot for symbol `sym`.

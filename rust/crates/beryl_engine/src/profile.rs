@@ -214,7 +214,9 @@ pub struct Profile {
     /// before casting to choose its mana over the payment the engine would pick, as an Arena
     /// player clicks one. For everyone else tapping ahead of a payment is dominated by tapping
     /// during it (§10), so nothing is offered, and a priority whose only actions are these is
-    /// still answered as a lone pass.
+    /// still answered as a lone pass. Their payments also pick which sources to tap by looking
+    /// ahead over the rest of their turn (§10), as a player would, at a cost search's
+    /// rollouts don't pay.
     ///
     /// - [CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a): "A player may
     ///   activate an activated mana ability whenever they have priority".

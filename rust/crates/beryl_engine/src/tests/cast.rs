@@ -170,6 +170,36 @@ pub(crate) static ISLAND: CardDef = CardDef {
     }],
 };
 
+/// A mana creature: "{T}: Add {W}."
+pub(crate) static ELF: CardDef = CardDef {
+    name: "Test Elf",
+    tokens: &[],
+    faces: &[Face {
+        cost: mana(0, 1, 0),
+        types: Types::CREATURE,
+        power: Some(1),
+        toughness: Some(1),
+        abilities: &[Ability::tap_for_mana(ManaSet::one(ManaColor::White))],
+        ..Face::EMPTY
+    }],
+};
+
+/// A sorcery of {U}{U} that draws a card.
+pub(crate) static SAGE: CardDef = CardDef {
+    name: "Test Sage",
+    tokens: &[],
+    faces: &[Face {
+        cost: mana(0, 0, 2),
+        types: Types::SORCERY,
+        abilities: &[Ability {
+            kind: AbilityKind::Spell,
+            body: bodies!(draw),
+            ..Ability::NONE
+        }],
+        ..Face::EMPTY
+    }],
+};
+
 pub(crate) static CRYPT: CardDef = CardDef {
     name: "Test Crypt",
     tokens: &[],
@@ -585,7 +615,7 @@ pub(crate) static STINGER: CardDef = CardDef {
 pub(crate) static CAST_CARDS: CardTable = CardTable::new(&[
     &LAND, &ISLAND, &DUAL, &CRYPT, &TREASURE, &STRIP, &HQ, &BEAR, &REMOVAL, &TITHE, &LIES, &PONDER,
     &FLASHER, &DIVER, &TRAINER, &OVERLORD, &STUPOR, &RAVELER, &EMPEROR, &FLASHBACK, &BINDER,
-    &LOOTER, &STINGER, &SNAPBACK, &BOUNCE,
+    &LOOTER, &STINGER, &SNAPBACK, &BOUNCE, &ELF, &SAGE,
 ]);
 
 /// Every test card, two of most, and lands.
@@ -600,7 +630,7 @@ pub(crate) const EVERYTHING: &Decklist = &[
     (2, "Test Bear"),
     (2, "Test Removal"),
     (2, "Test Tithe"),
-    (1, "Test Lies"),
+    (2, "Test Lies"),
     (2, "Test Ponder"),
     (1, "Test Flasher"),
     (1, "Test Diver"),
@@ -615,6 +645,8 @@ pub(crate) const EVERYTHING: &Decklist = &[
     (1, "Test Stinger"),
     (1, "Test Snapback"),
     (1, "Test Bounce"),
+    (1, "Test Elf"),
+    (1, "Test Sage"),
 ];
 
 /// A game of [`EVERYTHING`] mirrors, with empty hands, set up position by position.

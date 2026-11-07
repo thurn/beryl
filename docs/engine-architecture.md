@@ -709,6 +709,12 @@ What becomes a decision:
     no restriction. Payment taps the least flexible sources that cover the
     colors, in tens of nanoseconds. It always pays legally and occasionally taps
     a source wanted later in the turn.
+- **The human's payment** (`Profile::taps_mana`) offers the same plans, but
+  picks each one's taps by looking ahead over the rest of their turn: the most
+  mana of later costs payable together (two copies of a card count twice), only
+  instant-speed costs once no main phase is left before their untap step, the
+  land they may still play, and creatures tapped last. Search clears the seat
+  below the root, so rollouts never pay for it.
 - A decision is offered when plans differ in consumed resources: permanents
   sacrificed, life paid, cards exiled for delve, counters removed, restricted
   mana spent, floating mana left over.
