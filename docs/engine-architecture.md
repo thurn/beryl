@@ -698,17 +698,18 @@ What becomes a decision:
 - Among plans that differ only in which lands or rocks are tapped, the solver
   picks one and offers nothing. It picks by one of two heuristics, the only ones
   inside the exact surface, named as such (**D7**):
-  - **At tree nodes and in the exact profile**, the plan that leaves the largest
-    set of still-payable costs. That is a search over distinct plans. On a
-    mid-game cube mana base, say five lands, a Mox and Sol Ring, a three-mana
-    spell has 10 to 20, and testing the other costs against each is an estimated
-    0.5 to 1.5 µs per cast, growing combinatorially with Moxen, Signets,
-    Talismans and dual lands.
-  - **In rollouts**, greedily. Each mana source carries a flexibility rank in
-    the per-game table (§6.4): fewest colors first, then no other ability, then
-    no restriction. Payment taps the least flexible sources that cover the
-    colors, in tens of nanoseconds. It always pays legally and occasionally taps
-    a source wanted later in the turn.
+  - **Wherever search or a player pays**, at tree nodes, in rollouts and in the
+    exact profile alike, the plan that leaves the largest set of still-payable
+    costs. That is a search over distinct plans. On a mid-game cube mana base,
+    say five lands, a Mox and Sol Ring, a three-mana spell has 10 to 20, and
+    testing the other costs against each is an estimated 0.5 to 1.5 µs per cast,
+    growing combinatorially with Moxen, Signets, Talismans and dual lands.
+  - **Under `Payment::Greedy`**, greedily. Each mana source carries a
+    flexibility rank in the per-game table (§6.4): fewest colors first, then no
+    other ability, then no restriction. Payment taps the least flexible sources
+    that cover the colors, in tens of nanoseconds. It always pays legally and
+    occasionally taps a source wanted later in the turn. No profile selects it,
+    rollouts included: only tests and the reference check run it.
 - **The human's payment** (`Profile::taps_mana`) offers the same plans, but
   picks each one's taps by looking ahead over the rest of their turn: the most
   mana of later costs payable together (two copies of a card count twice), only
@@ -881,8 +882,8 @@ and in rollouts, shrink it:
   before a draw, are lost unless the stop set adds them.
 - The default damage division, all triggers ordered by rule, X capped, and
   attacks on the player only.
-- In rollouts only, greedy mana taps (§10) and mid-resolution choices answered
-  inline by the rollout policy (§7.3).
+- In rollouts only, mid-resolution choices answered inline by the rollout policy
+  (§7.3).
 
 Every profile is sound in the sense that any line it produces is a legal line of
 the real game; it may miss options, which is a search-quality question, not a
@@ -1241,7 +1242,7 @@ matchup.
 | D4  | u8 slots, 256 objects, decks to 60, generous queues, about 17 to 20 KiB; copies 170 ns or less                                                             | Fits L1 on both core types; token and storm decks do not stall; emblems as a bitmask; a 20 KiB copy measured 167 ns and rollouts copy once, so a leaner layout buys little           |
 | D5  | Base plus derived arrays, full recompute when dirty, pairwise 613.8 test                                                                                   | Reads are array loads; the cube has few active effects; incremental schemes are where layer bugs live                                                                                |
 | D6  | Offer only distinct consequences                                                                                                                           | One surface for the UI and search, which search profiles only restrict; branching never multiplies by outcome-neutral factors                                                        |
-| D7  | Mana solver picks taps (greedily in rollouts, keeping the most costs payable at tree nodes), offers resource trade-offs, `manual_mana` flag                | Payability needs a solver anyway; sacrifices and life are real decisions; tap choice rarely is; searching tap plans costs about 1 µs a cast                                          |
+| D7  | Mana solver picks taps (keeping the most costs payable, in rollouts too; the human's payments look ahead), offers resource trade-offs, `manual_mana` flag  | Payability needs a solver anyway; sacrifices and life are real decisions; tap choice rarely is; searching tap plans costs about 1 µs a cast                                          |
 | D8  | Sequential combat picks with legality-aware candidates; division by distinct outcomes                                                                      | Whole-declaration decisions are combinatorial; defenders and divisions are real decisions                                                                                            |
 | D9  | Engine-tracked knowledge over public slots; shuffles rebind identities; Observation as a borrowed view                                                     | The chokepoints are in the engine; every engine that tracked knowledge elsewhere leaked; a masked copy per decision would cost over 10% of the budget                                |
 | D10 | Typed `Event` enum for about 30 kinds, per-kind indexes, set-carrying events                                                                               | One replacement and trigger protocol; everything-is-an-event is slow; per-primitive hooks drift                                                                                      |

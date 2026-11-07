@@ -163,9 +163,10 @@ pub struct Breakpoint {
 pub enum Payment {
     /// Among plans that differ only in which sources are tapped, the one that keeps the most
     /// of the player's other costs payable; plans that differ in what they consume are a
-    /// decision. For tree nodes and the exact profile.
+    /// decision. For tree nodes, rollouts and the exact profile alike.
     KeepMostPayable,
-    /// Tap the least flexible sources that pay, and offer nothing. For rollouts.
+    /// Tap the least flexible sources that pay, and offer nothing: cheaper, but no profile
+    /// selects it, rollouts included; tests and the reference check run it.
     Greedy,
     /// Every tap and every floating mana spent is a decision, and mana abilities may be
     /// activated on their own: the `manual_mana` flag, for a human who wants it.
