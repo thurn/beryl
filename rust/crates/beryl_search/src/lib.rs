@@ -242,6 +242,12 @@ pub static AGENTS: &[AgentInfo] = &[
         description: "Cheats as the Seer does, thinking seconds a move",
         new: deep_seer,
     },
+    AgentInfo {
+        name: "pimc72-hidden-30m-anchor",
+        title: "Deep Searcher",
+        description: "Guesses at the cards it cannot see, thinking seconds a move",
+        new: deep_searcher,
+    },
 ];
 
 /// Agents no longer offered, kept buildable by name so that games recorded against them
@@ -297,26 +303,56 @@ fn deep_seer(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + S
     deep(
         t,
         seed,
-        Options {
-            anchor: true,
-            mid: false,
-        },
+        Method::Pimc { worlds: 18 },
+        Sight::Omniscient,
+        ANCHORED,
     )
 }
+
+/// `pimc72/hidden/rollout/tuned/anchor@30M`: Deep Seer without the cheat, from the long-think
+/// arena's strongest fair family in run-003 (72 worlds dealt from what it can see), anchored
+/// as Deep Seer is. 30M engine steps a decision whatever `budget` says, on every core.
+fn deep_searcher(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
+    deep(
+        t,
+        seed,
+        Method::Pimc { worlds: 72 },
+        Sight::Hidden,
+        ANCHORED,
+    )
+}
+
+/// The options of the deep searches offered: the anchor alone.
+const ANCHORED: Options = Options {
+    anchor: true,
+    mid: false,
+};
 
 /// `pimc18/omniscient/rollout/tuned@30M`, Deep Seer as docs/incidents/2026-11-06-deep-seer-misplays.md
 /// found it.
 fn deep_seer_unanchored(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
-    deep(t, seed, Options::default())
+    deep(
+        t,
+        seed,
+        Method::Pimc { worlds: 18 },
+        Sight::Omniscient,
+        Options::default(),
+    )
 }
 
-/// `pimc18/omniscient/rollout/tuned` with `options` at 30M engine steps a decision, on every
-/// core.
-fn deep(t: &GameTable, seed: u64, options: Options) -> Box<dyn GameAgent + Send> {
+/// A long-think search of full rollouts and tuned card values by `method` and `sight`, with
+/// `options`, at 30M engine steps a decision, on every core.
+fn deep(
+    t: &GameTable,
+    seed: u64,
+    method: Method,
+    sight: Sight,
+    options: Options,
+) -> Box<dyn GameAgent + Send> {
     let settings = Settings {
         family: Family {
-            method: Method::Pimc { worlds: 18 },
-            sight: Sight::Omniscient,
+            method,
+            sight,
             leaf: Leaf::Rollout,
             knowledge: Knowledge::Tuned,
             options,
