@@ -1,0 +1,247 @@
+//! `beryl_cli specs-serve`: the specs' moments over HTTP, each page instance its own live game,
+//! for the spec page (`just specs`). It speaks `serve`'s protocol under a prefix per instance,
+//! so the game screen's live transport (`?live=<prefix>`, `ui/src/ipc.ts`) plays a moment as
+//! it plays an app game:
+//!
+//! - `GET /specs` lists the specs and their moments.
+//! - `/m/<card>/<moment>/<instance>/events` and `/m/<card>/<moment>/<instance>/invoke/<cmd>`
+//!   are `serve`'s two routes for one instance of a moment, started by its first request.
+//!
+//! A moment's setup plays before the page sees anything: `current_game` answers with the first
+//! view after it, the one the page shows at once. The views of the moment's own actions are
+//! held until then and sent a beat later, so the page animates them from that view on; a new
+//! instance (the page's replay button) plays them again.
+
+use std::net::{TcpListener, TcpStream};
+use std::sync::mpsc::{RecvTimeoutError, Sender, channel};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
+use std::time::{Duration, Instant};
+
+use beryl_session::ipc;
+use beryl_session::{GameUpdate, Sessions};
+use serde_json::{Value, json};
+
+use super::{Phase, find, listing};
+use crate::serve::{CORS, invoke, read_request, respond};
+
+/// How many instances live at once; the least recently used goes first. A page mounts only
+/// the moments near the viewport.
+const INSTANCES: usize = 16;
+/// How long `current_game` waits for a moment's setup.
+const SETUP: Duration = Duration::from_secs(20);
+/// The beat between the page showing a moment and its actions playing out.
+const BEAT: Duration = Duration::from_millis(900);
+/// How often an idle event stream is pinged, which finds a page gone.
+const PING: Duration = Duration::from_secs(5);
+
+/// One instance's views, as its game emits them.
+#[derive(Default)]
+struct Feed {
+    views: Vec<GameUpdate>,
+    /// The first view after the setup: what the page shows at once.
+    start: Option<usize>,
+    /// Whether views past the start go to the streams yet.
+    released: bool,
+    streams: Vec<Sender<String>>,
+}
+
+type SharedFeed = Arc<(Mutex<Feed>, Condvar)>;
+
+struct Instance {
+    key: String,
+    /// Keeps the game running; dropped, it stops.
+    sessions: Sessions,
+    feed: SharedFeed,
+    used: Instant,
+}
+
+type Instances = Arc<Mutex<Vec<Instance>>>;
+
+fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Serves the specs on `127.0.0.1:port` until the process is killed.
+pub fn serve(port: u16) -> Result<(), String> {
+    let listener =
+        TcpListener::bind(("127.0.0.1", port)).map_err(|e| format!("port {port}: {e}"))?;
+    println!("beryl_cli: serving specs on http://127.0.0.1:{port}");
+    let instances: Instances = Arc::default();
+    for connection in listener.incoming() {
+        let Ok(connection) = connection else { continue };
+        let instances = Arc::clone(&instances);
+        std::thread::spawn(move || {
+            if let Err(e) = handle(connection, &instances) {
+                eprintln!("beryl_cli: {e}");
+            }
+        });
+    }
+    Ok(())
+}
+
+fn handle(mut stream: TcpStream, instances: &Instances) -> Result<(), String> {
+    let (method, path, body) = read_request(&stream)?;
+    if method == "OPTIONS" {
+        return respond(&mut stream, "204 No Content", "");
+    }
+    if method == "GET" && path == "/specs" {
+        let body = serde_json::to_string(&listing()).map_err(|e| e.to_string())?;
+        return respond(&mut stream, "200 OK", &body);
+    }
+    let Some(rest) = path.strip_prefix("/m/") else {
+        return respond(&mut stream, "404 Not Found", "{}");
+    };
+    let mut parts = rest.splitn(4, '/');
+    let (Some(card), Some(name), Some(id), Some(route)) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return respond(&mut stream, "404 Not Found", "{}");
+    };
+    let key = format!("{card}/{name}/{id}");
+    let (sessions_feed, error) = match instance(instances, &key, card, name) {
+        Ok(found) => (Some(found), None),
+        Err(e) => (None, Some(e)),
+    };
+    let Some(feed) = sessions_feed else {
+        let error = error.unwrap_or_default();
+        eprintln!("beryl_cli: {key}: {error}");
+        let body = json!({ "err": { "kind": "spec", "message": error } });
+        return respond(&mut stream, "200 OK", &body.to_string());
+    };
+    match (method.as_str(), route) {
+        ("GET", "events") => events(stream, &feed),
+        ("POST", command) if command.starts_with("invoke/") => {
+            let command = &command["invoke/".len()..];
+            let args: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
+            let answer = match command {
+                ipc::CURRENT_GAME => current(&feed),
+                // The moment is the game: the page never starts another.
+                ipc::START_GAME | ipc::CONCEDE => json!({ "ok": null }),
+                ipc::LIST_AGENTS => json!({ "ok": [] }),
+                _ => {
+                    let list = lock(instances);
+                    let Some(i) = list.iter().find(|i| i.key == key) else {
+                        return respond(&mut stream, "200 OK", "{\"err\":{\"kind\":\"ended\"}}");
+                    };
+                    invoke(&i.sessions, command, args)
+                }
+            };
+            respond(&mut stream, "200 OK", &answer.to_string())
+        }
+        _ => respond(&mut stream, "404 Not Found", "{}"),
+    }
+}
+
+/// The instance `key` names, started from the moment if new.
+fn instance(
+    instances: &Instances,
+    key: &str,
+    card: &str,
+    name: &str,
+) -> Result<SharedFeed, String> {
+    let mut list = lock(instances);
+    if let Some(i) = list.iter_mut().find(|i| i.key == key) {
+        i.used = Instant::now();
+        return Ok(Arc::clone(&i.feed));
+    }
+    let (_, moment) = find(card, name).ok_or_else(|| format!("no moment {card}/{name}"))?;
+    let feed: SharedFeed = Arc::default();
+    let emitted = Arc::clone(&feed);
+    let (sessions, _) = super::start(moment, move |update, phase| {
+        let (feed, ready) = &*emitted;
+        let mut f = lock(feed);
+        f.views.push(update.clone());
+        if f.start.is_none() && phase != Phase::Setup {
+            f.start = Some(f.views.len() - 1);
+            ready.notify_all();
+        } else if f.released {
+            broadcast(&mut f, &update);
+        }
+    })?;
+    if list.len() >= INSTANCES
+        && let Some(oldest) = list
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, i)| i.used)
+            .map(|(n, _)| n)
+    {
+        list.swap_remove(oldest);
+    }
+    list.push(Instance {
+        key: key.to_owned(),
+        sessions,
+        feed: Arc::clone(&feed),
+        used: Instant::now(),
+    });
+    Ok(feed)
+}
+
+fn broadcast(feed: &mut Feed, update: &GameUpdate) {
+    let Ok(data) = serde_json::to_string(update) else {
+        return;
+    };
+    let message = format!("event: {}\ndata: {data}\n\n", ipc::GAME_UPDATE);
+    feed.streams.retain(|s| s.send(message.clone()).is_ok());
+}
+
+/// The view the page shows at once, once the setup is done; then, a beat later, the views
+/// since go to its streams.
+fn current(feed: &SharedFeed) -> Value {
+    let (lockable, ready) = &**feed;
+    let deadline = Instant::now() + SETUP;
+    let mut f = lock(lockable);
+    while f.start.is_none() {
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return json!({ "err": { "kind": "spec", "message": "the setup never finished" } });
+        }
+        f = ready
+            .wait_timeout(f, left)
+            .unwrap_or_else(PoisonError::into_inner)
+            .0;
+    }
+    let start = f.start.unwrap_or_default();
+    let mut shown = f.views[start].clone();
+    // Shown at once, it animates nothing.
+    shown.view.events.clear();
+    if !f.released {
+        let feed = Arc::clone(feed);
+        std::thread::spawn(move || {
+            std::thread::sleep(BEAT);
+            let mut f = lock(&feed.0);
+            if f.released {
+                return;
+            }
+            f.released = true;
+            let later = f.views.split_off(start + 1);
+            for update in &later {
+                broadcast(&mut f, update);
+            }
+        });
+    }
+    json!({ "ok": shown })
+}
+
+/// The instance's views from now on, pinged while idle, until the page goes away.
+fn events(mut stream: TcpStream, feed: &SharedFeed) -> Result<(), String> {
+    use std::io::Write;
+    let (sent, received) = channel();
+    lock(&feed.0).streams.push(sent);
+    write!(
+        stream,
+        "HTTP/1.1 200 OK\r\n{CORS}Content-Type: text/event-stream\r\nCache-Control: no-cache\r\n\r\n"
+    )
+    .map_err(|e| e.to_string())?;
+    stream.flush().map_err(|e| e.to_string())?;
+    loop {
+        let message = match received.recv_timeout(PING) {
+            Ok(message) => message,
+            Err(RecvTimeoutError::Timeout) => ": ping\n\n".to_owned(),
+            Err(RecvTimeoutError::Disconnected) => break,
+        };
+        if stream.write_all(message.as_bytes()).is_err() || stream.flush().is_err() {
+            break;
+        }
+    }
+    Ok(())
+}

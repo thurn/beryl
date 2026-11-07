@@ -751,6 +751,7 @@ pub(crate) fn smart<L: Layout>(s: &mut State<L>) {
         asks_targets: None,
         taps_mana: None,
         hides_pointless: [true; 2],
+        quiet_pointless: None,
         ..s.profile()
     });
 }

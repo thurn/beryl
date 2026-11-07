@@ -2,6 +2,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { MotionConfig } from "motion/react";
 import { appInfo, uiReady } from "./ipc";
 import { Gallery } from "./screens/Gallery";
+import { Specs } from "./screens/Specs";
 import { GameScreen, StartScreen } from "./screens/Game";
 import { usePlayback } from "./game/playback";
 
@@ -13,6 +14,16 @@ const subscribe = (onChange: () => void) => {
 const route = () => window.location.hash.replace(/^#/, "") || "/";
 
 export function App() {
+  // The spec pages live at real paths, served by Vite (`just specs`).
+  const page = window.location.pathname;
+  return page === "/specs" || page.startsWith("/specs/") ? (
+    <Specs path={page} />
+  ) : (
+    <Main />
+  );
+}
+
+function Main() {
   const path = useSyncExternalStore(subscribe, route);
   // Listening from the start, so a game's first view is never missed.
   const { playback, starting, resuming, start } = usePlayback();

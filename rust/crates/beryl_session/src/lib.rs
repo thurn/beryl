@@ -53,7 +53,14 @@ pub struct Prepared {
     pub opponent: Box<dyn GameAgent + Send>,
     /// The agent answering the human's decisions in their place.
     pub stand_in: Box<dyn GameAgent + Send>,
+    /// Once this says so, the stand-in stops and the human answers their own decisions from
+    /// there on (a spec's moment, played live from where its script ends). None keeps the
+    /// stand-in to the end.
+    pub hand_over: Option<HandOver>,
 }
+
+/// Whether a stand-in should hand the human's decisions back to them ([`Prepared::hand_over`]).
+pub type HandOver = Box<dyn Fn() -> bool + Send>;
 
 /// An agent a human can play against.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]

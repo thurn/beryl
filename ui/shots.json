@@ -566,7 +566,7 @@
       "width": 1600,
       "height": 900,
       "click": "[data-zone=battlefield][data-card='Jace, the Mind Sculptor']",
-      "hover": ".action-menu-item >> nth=2"
+      "hover": ".ability-choice >> nth=2"
     },
     {
       "name": "game-converter-may-exile",
@@ -588,7 +588,7 @@
       "height": 900,
       "click": [
         "[data-zone=battlefield][data-card='Currency Converter']",
-        ".action-menu-item >> nth=1"
+        ".ability-choice >> nth=1"
       ]
     },
     {

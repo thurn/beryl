@@ -1212,6 +1212,15 @@ pub struct Progress {
     pub failure: Option<String>,
     /// Each seat's next action, while any is left.
     pub next: [Option<Action>; 2],
+    /// How many actions the two scripts have taken.
+    pub taken: usize,
+}
+
+impl Progress {
+    /// Whether both scripts have taken all their actions.
+    pub fn done(&self) -> bool {
+        self.next.iter().all(Option::is_none)
+    }
 }
 
 pub type Shared = Arc<Mutex<Progress>>;
@@ -1222,7 +1231,8 @@ pub fn lock(progress: &Shared) -> std::sync::MutexGuard<'_, Progress> {
 }
 
 /// An agent answering one seat's decisions from a board's actions for that seat, in order, by
-/// the scenario vocabulary: each action answers the first decision it fits. Short of its next
+/// the scenario vocabulary: each action answers the first decision it fits once the actions
+/// listed before it, both seats', have been taken. Short of its next
 /// action, the seat passes priority, pays by the first payment plan, and answers a question
 /// with one answer; any other decision is the script's failure. Once its actions are taken,
 /// it passes priority and takes the first candidate of anything else. Its view is the true
@@ -1230,7 +1240,8 @@ pub fn lock(progress: &Shared) -> std::sync::MutexGuard<'_, Progress> {
 pub struct Scripted {
     table: GameTable,
     seat: Seat,
-    script: VecDeque<Action>,
+    /// The seat's actions, each with its place among both seats' actions.
+    script: VecDeque<(usize, Action)>,
     progress: Shared,
 }
 
@@ -1243,8 +1254,18 @@ impl Scripted {
         table: &GameTable,
         progress: Shared,
     ) -> Result<Scripted, String> {
+        Scripted::with_actions(board.actions, seat, table, progress)
+    }
+
+    /// `seat`'s part of `actions`, played on `table`, as [`Scripted::new`] takes a board's.
+    pub fn with_actions<'a>(
+        actions: impl IntoIterator<Item = &'a Action>,
+        seat: Seat,
+        table: &GameTable,
+        progress: Shared,
+    ) -> Result<Scripted, String> {
         let mut script = VecDeque::new();
-        for action in board.actions {
+        for (at, action) in actions.into_iter().enumerate() {
             match *action {
                 Action::PlayLand { player, .. }
                 | Action::Cast { player, .. }
@@ -1252,13 +1273,13 @@ impl Scripted {
                 | Action::TurnFaceUp { player, .. }
                 | Action::Answer { player, .. } => {
                     if player == seat {
-                        script.push_back(*action);
+                        script.push_back((at, *action));
                     }
                 }
                 _ => return Err(format!("{action:?}: a board's action answers one decision")),
             }
         }
-        lock(&progress).next[seat.index()] = script.front().copied();
+        lock(&progress).next[seat.index()] = script.front().map(|&(_, a)| a);
         Ok(Scripted {
             table: table.clone(),
             seat,
@@ -1271,8 +1292,14 @@ impl Scripted {
 impl<L: Layout> Agent<L> for Scripted {
     fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
         let s = obs.unmasked_root();
-        let next = self.script.front().copied();
-        if let Some(action) = next {
+        let next = self.script.front().map(|&(_, a)| a);
+        // An action waits for the other seat's actions before it: a response is cast once
+        // what it answers is on the stack.
+        let due = self
+            .script
+            .front()
+            .is_some_and(|&(at, _)| lock(&self.progress).taken >= at);
+        if let Some(action) = next.filter(|_| due) {
             let kind = match action {
                 Action::Answer { kind, .. } => kind,
                 _ => DecisionKind::Priority,
@@ -1281,7 +1308,10 @@ impl<L: Layout> Agent<L> for Scripted {
                 && let Some(c) = beryl_scenario::answer(&self.table, s, d, &action)
             {
                 self.script.pop_front();
-                lock(&self.progress).next[self.seat.index()] = self.script.front().copied();
+                let mut progress = lock(&self.progress);
+                progress.next[self.seat.index()] = self.script.front().map(|&(_, a)| a);
+                progress.taken += 1;
+                drop(progress);
                 return c;
             }
         }

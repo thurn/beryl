@@ -228,6 +228,15 @@ pub struct Profile {
     /// the exact stops offer them, as the rules do: an activation that does nothing is still
     /// legal ([CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022)).
     pub hides_pointless: [bool; 2],
+    /// The player, if any, offered activations that would do nothing without their stopping
+    /// for them: a human under the smart stops, who may still tap Currency Converter with
+    /// nothing exiled, as the rules allow ([CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022):
+    /// "To activate an ability is to put it onto the stack and pay its costs"), but whose turn
+    /// should not halt on an action no strong player would take. A priority whose only actions
+    /// besides passing are these (and mana abilities on their own, [`Profile::taps_mana`]) is
+    /// answered as a lone pass, as the smart stops answer one where passing is all a player can
+    /// do ([CR 117.3d](https://yawgatog.com/resources/magic-rules/#R1173d)).
+    pub quiet_pointless: Option<Seat>,
 }
 
 impl Profile {
@@ -242,6 +251,7 @@ impl Profile {
         asks_targets: None,
         taps_mana: None,
         hides_pointless: [false; 2],
+        quiet_pointless: None,
     };
     /// The smart stops, for search and, by default, for humans.
     pub const SMART: Profile = Profile {
@@ -254,6 +264,7 @@ impl Profile {
         asks_targets: None,
         taps_mana: None,
         hides_pointless: [true; 2],
+        quiet_pointless: None,
     };
 
     /// Whether `player`'s priority now is a decision, given they have a legal action.

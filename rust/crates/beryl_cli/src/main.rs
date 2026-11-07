@@ -24,6 +24,9 @@
 //!   writes its transcript, with the agent's search at each of its decisions ([`review`]).
 //! - `beryl_cli serve [--port N]` serves the app's game commands over HTTP for a UI in a plain
 //!   browser to play live games through (`just ui-live`, [`serve`]).
+//! - `beryl_cli specs-serve [--port N]` serves the cards' specs, each moment a live game, for
+//!   the spec page (`just specs`, [`specs::serve`]); `beryl_cli specs-check [card...]` plays
+//!   each moment headless and checks what it expects ([`specs`]).
 
 mod agreement;
 mod anchor_replay;
@@ -34,6 +37,7 @@ mod game;
 mod longthink;
 mod review;
 mod serve;
+mod specs;
 mod tournament;
 mod transcript;
 
@@ -52,12 +56,16 @@ const USAGE: &str = "usage:
   beryl_cli longthink [--status | --upgrade | --add FAMILY] [--new | --run DIR] [--games N]
   beryl_cli eval-fit [--games N] [--seed N]
   beryl_cli serve [--port N]
+  beryl_cli specs-serve [--port N]
+  beryl_cli specs-check [card...]
   beryl_cli review <replay.json> [--agent NAME] [--out FILE]
   beryl_cli anchor-replay <run-dir> <entrant> [--examples N] [--recheck N] [--guarded]
   beryl_cli agreement <run-dir> <entrant> [--positions N] [--budget B]";
 
 /// The port `serve` listens on unless told otherwise.
 const DEFAULT_PORT: u16 = 1421;
+/// The port `specs-serve` listens on unless told otherwise.
+const SPECS_PORT: u16 = 1422;
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -79,6 +87,11 @@ fn main() -> ExitCode {
         [command, flag, port] if command == "serve" && flag == "--port" => {
             number(flag, port).and_then(serve::serve)
         }
+        [command] if command == "specs-serve" => specs::serve::serve(SPECS_PORT),
+        [command, flag, port] if command == "specs-serve" && flag == "--port" => {
+            number(flag, port).and_then(specs::serve::serve)
+        }
+        [command, cards @ ..] if command == "specs-check" => specs::check_all(cards),
         [command, rest @ ..] if command == "play" => Flags::parse(rest).and_then(|f| play(&f)),
         [command, rest @ ..] if command == "tournament" => {
             Flags::parse(rest).and_then(|f| tournament(&f))

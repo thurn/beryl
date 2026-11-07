@@ -131,9 +131,31 @@ impl Until {
 /// A condition on the view a recording stops at, so a fixture can stop at a state rather
 /// than only at a kind of decision.
 #[derive(Debug, PartialEq)]
-enum Condition {
+pub(crate) enum Condition {
     /// The turn is at this step.
     Step(Step),
+    /// It is this turn.
+    Turn(u16),
+    /// It is the human's turn (true) or the opponent's.
+    YourTurn(bool),
+    /// The human's open decision is of this kind.
+    Decision(Kind),
+    /// The human's open decision asks this ([`beryl_session::protocol::AskView`]'s kind, as
+    /// the protocol names it: "mayMove").
+    Ask(String),
+    /// The human's open decision has this many candidates.
+    Candidates(usize),
+    /// A permanent of this name the human controls is tapped.
+    Tapped(String),
+    /// The human controls this many permanents of this name.
+    Controls(usize, String),
+    /// The human's priority offers activating the ability at this index of a permanent of
+    /// this name ([`Candidate::Activate`]).
+    Offers(String, u8),
+    /// This many cards lie in exile "exiled with" a permanent of this name.
+    ExiledWithCard(usize, String),
+    /// The condition does not hold.
+    Not(Box<Condition>),
     /// Some creature is attacking.
     Attacking,
     /// Some creature is blocking.
@@ -205,7 +227,7 @@ enum Condition {
 
 /// What the table draws on a permanent beyond its frame.
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum Mark {
+pub(crate) enum Mark {
     /// +1/+1 counters on a creature.
     PlusOne,
     /// Damage marked on a creature (CR 120.3).
@@ -261,8 +283,36 @@ impl Condition {
     /// card", "stolen permanent", "mana floating", "X on the stack", "spell on the stack",
     /// "emblems a side", "<n> nonland permanents a side", or "<mark> beside a twin" with the
     /// mark "+1/+1 counters", "damage", "summoning sickness" or "story or time counters".
-    fn parse(text: &str) -> Result<Condition, String> {
+    /// Specs add "turn <n>", "your turn", "their turn", "decision <kind>", "ask <kind>",
+    /// "<n> candidates", "tapped <card>", "controls <n> <card>", "offers <card> ability <n>",
+    /// "<n> exiled with <card>" and "not <condition>".
+    pub(crate) fn parse(text: &str) -> Result<Condition, String> {
+        if let Some(rest) = text.strip_prefix("not ") {
+            return Ok(Condition::Not(Box::new(Condition::parse(rest)?)));
+        }
+        if let Some((n, card)) = text.split_once(" exiled with ")
+            && let Ok(n) = n.parse()
+        {
+            return Ok(Condition::ExiledWithCard(n, card.to_owned()));
+        }
+        if let Some(rest) = text.strip_prefix("offers ")
+            && let Some((card, n)) = rest.rsplit_once(" ability ")
+        {
+            return Ok(Condition::Offers(card.to_owned(), number(text, n)?));
+        }
+        if let Some(rest) = text.strip_prefix("controls ")
+            && let Some((n, card)) = rest.split_once(' ')
+        {
+            return Ok(Condition::Controls(number(text, n)?, card.to_owned()));
+        }
+        if let Some(n) = text.strip_suffix(" candidates")
+            && let Ok(n) = n.parse()
+        {
+            return Ok(Condition::Candidates(n));
+        }
         let condition = match text {
+            "your turn" => Condition::YourTurn(true),
+            "their turn" => Condition::YourTurn(false),
             "attacking" => Condition::Attacking,
             "blocking" => Condition::Blocking,
             "targeted trigger on the stack" => Condition::TargetedTrigger,
@@ -291,7 +341,18 @@ impl Condition {
             "spell on the stack" => Condition::SpellOnStack,
             "emblems a side" => Condition::Emblems,
             _ => {
-                if let Some(step) = text.strip_prefix("step ") {
+                if let Some(n) = text.strip_prefix("turn ") {
+                    Condition::Turn(number(text, n)?)
+                } else if let Some(kind) = text.strip_prefix("decision ") {
+                    Condition::Decision(
+                        serde_json::from_value(json!(kind))
+                            .map_err(|_| format!("no decision kind is named {kind:?}"))?,
+                    )
+                } else if let Some(kind) = text.strip_prefix("ask ") {
+                    Condition::Ask(kind.to_owned())
+                } else if let Some(card) = text.strip_prefix("tapped ") {
+                    Condition::Tapped(card.to_owned())
+                } else if let Some(step) = text.strip_prefix("step ") {
                     Condition::Step(
                         serde_json::from_value(json!(step))
                             .map_err(|_| format!("no step is named {step:?}"))?,
@@ -316,7 +377,7 @@ impl Condition {
         Ok(condition)
     }
 
-    fn holds(&self, view: &PlayerView) -> bool {
+    pub(crate) fn holds(&self, view: &PlayerView) -> bool {
         let name = |slot: u16| {
             view.objects
                 .iter()
@@ -324,6 +385,16 @@ impl Condition {
                 .and_then(|o| o.name.as_deref())
         };
         match self {
+            Condition::Not(_)
+            | Condition::Turn(_)
+            | Condition::YourTurn(_)
+            | Condition::Decision(_)
+            | Condition::Ask(_)
+            | Condition::Candidates(_)
+            | Condition::Tapped(_)
+            | Condition::Controls(..)
+            | Condition::Offers(..)
+            | Condition::ExiledWithCard(..) => self.holds_for_spec(view),
             Condition::Step(step) => view.turn.step == *step,
             Condition::Attacking => view
                 .objects
@@ -403,6 +474,50 @@ impl Condition {
             Condition::Crowded(n) => crowded(view, *n),
             Condition::SpellOnStack => matches!(view.stack.last(), Some(StackItem::Spell { .. })),
             Condition::Emblems => emblems_a_side(view),
+        }
+    }
+    /// Whether one of the conditions specs add holds.
+    fn holds_for_spec(&self, view: &PlayerView) -> bool {
+        let name = |slot: u16| {
+            view.objects
+                .iter()
+                .find(|o| o.slot == slot)
+                .and_then(|o| o.name.as_deref())
+        };
+        let decision = match &view.status {
+            Status::Deciding { decision } => Some(decision),
+            _ => None,
+        };
+        match self {
+            Condition::Not(c) => !c.holds(view),
+            Condition::Turn(n) => view.turn.number == *n,
+            Condition::YourTurn(yours) => (view.turn.active == Side::You) == *yours,
+            Condition::Decision(kind) => decision.is_some_and(|d| d.kind == *kind && !d.halt),
+            Condition::Ask(kind) => decision.is_some_and(|d| {
+                serde_json::to_value(&d.ask)
+                    .ok()
+                    .and_then(|v| v.get("kind").cloned())
+                    == Some(json!(kind))
+            }),
+            Condition::Candidates(n) => decision.is_some_and(|d| d.candidates.len() == *n),
+            Condition::Tapped(card) => mine(view, card).any(|o| o.tapped),
+            Condition::Controls(n, card) => mine(view, card).count() == *n,
+            Condition::Offers(card, ability) => candidates(view).any(|c| {
+                matches!(c.option, Candidate::Activate { slot, ability: a, granted: false }
+                    if a == *ability && name(slot) == Some(card.as_str()))
+            }),
+            Condition::ExiledWithCard(n, card) => view
+                .objects
+                .iter()
+                .filter(|o| o.zone == ZoneName::Battlefield && o.name.as_deref() == Some(card))
+                .any(|host| {
+                    view.objects
+                        .iter()
+                        .filter(|o| o.zone == ZoneName::Exile && o.exiled_with == Some(host.slot))
+                        .count()
+                        == *n
+                }),
+            _ => unreachable!("not a spec's condition"),
         }
     }
 }
@@ -800,6 +915,7 @@ fn start(
                 sessions.start_prepared(Prepared {
                     opponent: agent(human.opponent())?,
                     stand_in: agent(human)?,
+                    hand_over: None,
                     table,
                     state,
                     human,
@@ -825,6 +941,19 @@ fn deck(name: &str) -> Result<Vec<(u8, String)>, String> {
         return Err(format!("no deck is named {name:?}"));
     };
     Ok(list.into_iter().map(|(n, c)| (n, c.to_owned())).collect())
+}
+
+fn number<T: std::str::FromStr>(text: &str, n: &str) -> Result<T, String> {
+    n.parse().map_err(|_| format!("{text:?}: bad number {n:?}"))
+}
+
+/// The permanents named `card` the human controls.
+fn mine<'a>(view: &'a PlayerView, card: &'a str) -> impl Iterator<Item = &'a ObjectView> {
+    view.objects.iter().filter(move |o| {
+        o.zone == ZoneName::Battlefield
+            && o.controller == Side::You
+            && o.name.as_deref() == Some(card)
+    })
 }
 
 #[cfg(test)]

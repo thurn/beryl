@@ -60,11 +60,27 @@ fn lock(streams: &Streams) -> std::sync::MutexGuard<'_, Vec<Sender<String>>> {
 }
 
 /// The headers every response carries: the UI is served from another port.
-const CORS: &str = "Access-Control-Allow-Origin: *\r\n\
+pub(crate) const CORS: &str = "Access-Control-Allow-Origin: *\r\n\
                     Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n\
                     Access-Control-Allow-Headers: Content-Type\r\n";
 
 fn handle(stream: TcpStream, sessions: &Sessions, streams: &Streams) -> Result<(), String> {
+    let (method, path, body) = read_request(&stream)?;
+    let mut stream = stream;
+    match (method.as_str(), path.as_str()) {
+        ("OPTIONS", _) => respond(&mut stream, "204 No Content", ""),
+        ("GET", "/events") => events(stream, streams),
+        ("POST", path) if path.starts_with("/invoke/") => {
+            let args: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
+            let answer = invoke(sessions, &path["/invoke/".len()..], args);
+            respond(&mut stream, "200 OK", &answer.to_string())
+        }
+        _ => respond(&mut stream, "404 Not Found", "{}"),
+    }
+}
+
+/// A request's method, path and body.
+pub(crate) fn read_request(stream: &TcpStream) -> Result<(String, String, Vec<u8>), String> {
     let mut reader = BufReader::new(stream.try_clone().map_err(|e| e.to_string())?);
     let mut line = String::new();
     reader.read_line(&mut line).map_err(|e| e.to_string())?;
@@ -86,20 +102,10 @@ fn handle(stream: TcpStream, sessions: &Sessions, streams: &Streams) -> Result<(
     }
     let mut body = vec![0; length];
     reader.read_exact(&mut body).map_err(|e| e.to_string())?;
-    let mut stream = stream;
-    match (method, path) {
-        ("OPTIONS", _) => respond(&mut stream, "204 No Content", ""),
-        ("GET", "/events") => events(stream, streams),
-        ("POST", path) if path.starts_with("/invoke/") => {
-            let args: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
-            let answer = invoke(sessions, &path["/invoke/".len()..], args);
-            respond(&mut stream, "200 OK", &answer.to_string())
-        }
-        _ => respond(&mut stream, "404 Not Found", "{}"),
-    }
+    Ok((method.to_owned(), path.to_owned(), body))
 }
 
-fn respond(stream: &mut TcpStream, status: &str, body: &str) -> Result<(), String> {
+pub(crate) fn respond(stream: &mut TcpStream, status: &str, body: &str) -> Result<(), String> {
     write!(
         stream,
         "HTTP/1.1 {status}\r\n{CORS}Content-Type: application/json\r\n\
@@ -135,7 +141,7 @@ struct Request<T> {
 }
 
 /// Runs `command` as `beryl_app` would: `{"ok": result}` or `{"err": error}`.
-fn invoke(sessions: &Sessions, command: &str, args: Value) -> Value {
+pub(crate) fn invoke(sessions: &Sessions, command: &str, args: Value) -> Value {
     fn request<T: for<'de> Deserialize<'de>>(args: Value) -> Result<T, Value> {
         serde_json::from_value::<Request<T>>(args)
             .map(|r| r.request)

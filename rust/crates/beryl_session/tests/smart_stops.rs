@@ -327,6 +327,7 @@ fn asked_after_waterbend(stops: StopsSetting) -> Vec<Kind> {
         Prepared {
             opponent: (random.new)(&table, 1, Budget::DEFAULT),
             stand_in: (random.new)(&table, 2, Budget::DEFAULT),
+            hand_over: None,
             table,
             state,
             human: HUMAN,
@@ -405,6 +406,7 @@ fn asked_after_trinket_mage(scenario: &Scenario, stops: StopsSetting) -> Vec<Kin
         Prepared {
             opponent: (random.new)(&table, 1, Budget::DEFAULT),
             stand_in: (random.new)(&table, 2, Budget::DEFAULT),
+            hand_over: None,
             table,
             state,
             human: HUMAN,

@@ -2458,3 +2458,64 @@
 .undo-tip-peeked {
   color: #ff8a80;
 }
+
+/* The ability chooser (game/AbilityChooser.tsx): a permanent's abilities side by side
+   mid-table over a dimmed table, as the stack draws them. */
+.chooser-scrim {
+  background: rgb(10 8 6 / 45%);
+}
+.ability-chooser {
+  position: absolute;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
+  pointer-events: none;
+}
+.ability-choice {
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  pointer-events: auto;
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    filter 120ms ease;
+}
+.ability-choice:enabled:hover,
+.ability-choice:enabled:focus-visible {
+  transform: translateY(-8px);
+  box-shadow: var(--glow-gold);
+  outline: none;
+}
+.ability-choice:disabled {
+  cursor: default;
+  filter: grayscale(0.85) brightness(0.55);
+}
+
+/* A "you may" move's answers, where the turn button stands (Board.tsx' MayMoveActions). */
+.may-actions {
+  position: absolute;
+  right: 39px;
+  top: 765px;
+  width: 250px;
+  display: flex;
+  gap: 10px;
+}
+.may-actions .button-secondary {
+  border-color: transparent;
+  background: #6f6963;
+  color: var(--type);
+}
+.may-actions .button {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 52px;
+  padding: 0 12px;
+  font-size: 20px;
+  font-weight: 700;
+}

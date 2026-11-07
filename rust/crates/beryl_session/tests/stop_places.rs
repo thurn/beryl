@@ -113,6 +113,7 @@ fn stops_against(scenario: &Scenario, stops: StopsSetting, agent: &str) -> Vec<S
         Prepared {
             opponent: (opponent.new)(&table, 1, Budget::DEFAULT),
             stand_in: (random.new)(&table, 2, Budget::DEFAULT),
+            hand_over: None,
             table,
             state,
             human: HUMAN,

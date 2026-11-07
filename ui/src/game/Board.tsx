@@ -74,6 +74,7 @@ import {
   isCombat,
   isOpening,
   playActs,
+  moveVerb,
   prompt,
   slotOf,
   triggerPlan,
@@ -115,6 +116,7 @@ import { tablePick } from "./tablePick";
 import {
   combatBanner,
   exiledWith,
+  held,
   footprint,
   layout,
   linked,
@@ -132,6 +134,11 @@ import {
   type Placement,
   type ZonePile,
 } from "./layout";
+import {
+  AbilityChooser,
+  abilityChoices,
+  type AbilityChoice,
+} from "./AbilityChooser";
 import type { LogEntry } from "./log";
 import {
   actingLabel,
@@ -214,16 +221,12 @@ const tapsOnly = (acts: Act[]) =>
   acts.length > 0 && acts.every((a) => a.option.kind === "mana");
 
 /** A menu of a card's candidates, open at a point on the stage; `pointed`, the one under
- * the pointer. A planeswalker's lists its loyalty abilities it cannot activate too, as
- * `unaffordable` paragraphs of its rules text. */
+ * the pointer. A permanent's abilities are chosen in the ability chooser instead. */
 interface Menu {
   slot: number;
   at: Point;
   acts: Act[];
-  unaffordable?: number[];
   pointed?: Act;
-  /** How many cards in exile are linked to the card, for an entry that shows them. */
-  exiled?: number;
 }
 
 /** A card's cast being set up in the cast step. */
@@ -256,6 +259,11 @@ export function Board({
   // the pointer stays on it.
   const [refused, setRefused] = useState<number>();
   const [menu, setMenu] = useState<Menu>();
+  // The permanent whose activated abilities are being chosen among.
+  const [chooser, setChooser] = useState<{
+    slot: number;
+    choices: AbilityChoice[];
+  }>();
   const [casting, setCasting] = useState<Casting>();
   // The spell cast last and the permanents its payment taps.
   const [paid, setPaid] = useState<{ slot: number; taps: number[] }>();
@@ -400,6 +408,7 @@ export function Board({
   // A new view closes whatever was open on the old one, and starts any declaration afresh.
   useEffect(() => {
     setMenu(undefined);
+    setChooser(undefined);
     setCasting(undefined);
     setDraft(emptyDraft());
     setPointedOff(undefined);
@@ -457,7 +466,8 @@ export function Board({
             playActs(acts).length > 0) ||
           acts.some(
             (a) => a.option.kind === "attack" || a.option.kind === "block",
-          ),
+          ) ||
+          abilityChoices(objects.get(slot), acts) !== undefined,
       });
     }
   }
@@ -658,42 +668,29 @@ export function Board({
       return true;
     }
     const acts = deciding ? can.bySlot.get(slot) : undefined;
-    // The cards exiled with a permanent are a click away: shown at once when the permanent
-    // has nothing else to do, listed with what it does at a priority.
-    const exiled =
-      objects.get(slot)?.zone === "battlefield"
-        ? exiledWith(view, slot).length
-        : 0;
+    // A card peeking out from behind the permanent holding it in exile opens them all.
+    const clicked = objects.get(slot);
+    const host = clicked && held(clicked, new Set(view.battlefield));
+    if (!acts && host !== undefined) {
+      viewExiled(host);
+      return true;
+    }
     if (!acts) {
-      if (exiled > 0) {
-        viewExiled(slot);
-        return true;
-      }
       setMenu(undefined);
       setRefused(slot);
       return false;
     }
-    const listsExiled = exiled > 0 && decision?.kind === "priority";
     const casts = castActs(acts);
-    const walker = loyaltyMenu(objects.get(slot), acts);
-    if (walker) {
-      // A loyalty ability, which cannot be taken back once its cost is paid, is chosen from
-      // all of them, even when only one can be activated.
-      setMenu({
-        slot,
-        at,
-        acts,
-        unaffordable: walker,
-        exiled: listsExiled ? exiled : undefined,
-      });
-    } else if (
-      !listsExiled &&
-      casts.length > 0 &&
-      casts.length === acts.length
-    ) {
+    const choices = abilityChoices(clicked, acts);
+    if (choices) {
+      // A permanent's abilities are chosen from all of them, even when only one can be
+      // activated: activating is always the card, then the ability.
+      setMenu(undefined);
+      setChooser({ slot, choices });
+    } else if (casts.length > 0 && casts.length === acts.length) {
       // A card that can only be cast is cast, or set up in the cast step.
       castOrSetUp(slot, casts);
-    } else if (!listsExiled && acts.length === 1) {
+    } else if (acts.length === 1) {
       // One use acts on the click: a land is played, an ability activated, a target picked.
       pick(acts[0]!.index, acts[0]!.then);
     } else {
@@ -701,12 +698,7 @@ export function Board({
       const listed = acts.filter(
         (a) => a.option.kind !== "cast" || a === casts[0],
       );
-      setMenu({
-        slot,
-        at,
-        acts: listed,
-        exiled: listsExiled ? exiled : undefined,
-      });
+      setMenu({ slot, at, acts: listed });
     }
     return true;
   };
@@ -746,6 +738,12 @@ export function Board({
         );
         setMenu({ slot, at, acts: listed });
       }
+      return false;
+    }
+    // A permanent with abilities to choose among, dragged out, chooses as a click does.
+    const choices = abilityChoices(objects.get(slot), acts);
+    if (choices && Math.hypot(at.x - start.x, at.y - start.y) >= FORWARD / 2) {
+      setChooser({ slot, choices });
       return false;
     }
     // A creature dragged in a declaration joins it, as clicking would, and goes to its new
@@ -821,7 +819,8 @@ export function Board({
     if (e.defaultPrevented) return;
     if (e.key === "Escape") {
       if (settings && !inert) setSettings(false);
-      else if (cancellable && !menu && !castingNow && !viewed) cancel?.();
+      else if (cancellable && !menu && !chooser && !castingNow && !viewed)
+        cancel?.();
       return;
     }
     if (inert) return;
@@ -1092,6 +1091,8 @@ export function Board({
               />
             ) : declaring ? (
               <Finish decision={declaring} done={finish} onPick={pick} />
+            ) : prompting && decision?.ask.kind === "mayMove" ? (
+              <MayMoveActions decision={decision} onPick={pick} />
             ) : decision?.kind === "priority" || waiting ? (
               <div className="turn-action">
                 {/* In the cast step, its Cast is the one primary action. */}
@@ -1133,8 +1134,14 @@ export function Board({
             nameOf={nameOf}
             objects={objects}
             onTable={(slot) => {
+              // A card peeking out from behind a permanent is chosen in the prompt, whole.
               const look = placements.get(slot)?.look;
-              return look !== undefined && look !== "hidden" && look !== "pile";
+              return (
+                look !== undefined &&
+                look !== "hidden" &&
+                look !== "pile" &&
+                look !== "beneath"
+              );
             }}
             onPick={pick}
             onPlan={(plan) => {
@@ -1172,29 +1179,43 @@ export function Board({
             objects={objects}
             onPick={(act) => pickAct(menu.slot, act)}
             onPoint={(act) => setMenu({ ...menu, pointed: act })}
-            onView={() => viewExiled(menu.slot)}
             onClose={() => setMenu(undefined)}
+          />
+        )}
+
+        {chooser && objects.get(chooser.slot) && deciding && (
+          <AbilityChooser
+            object={objects.get(chooser.slot)!}
+            choices={chooser.choices}
+            onPick={(act) => {
+              setChooser(undefined);
+              pickAct(chooser.slot, act);
+            }}
+            onClose={() => setChooser(undefined)}
           />
         )}
 
         {/* The card the pointer is on or, while its menu points at an ability, the card that
             ability's paragraph lit. */}
-        {(menu?.pointed ?? (inspected && !menu)) && !castingNow && !dimmed && (
-          <InspectAt
-            view={view}
-            object={pointedObject(
-              objects.get(menu?.slot ?? inspected!.slot),
-              menu?.pointed,
-            )}
-            place={inspectorPlace(
-              menu ? menu.at.x : inspected!.x,
-              view.stack.length > 0 || asking,
-              targets,
-            )}
-            lit={menu?.pointed && litParagraph(menu.pointed, objects)}
-            refusal={menu ? undefined : refusal}
-          />
-        )}
+        {(menu?.pointed ?? (inspected && !menu)) &&
+          !chooser &&
+          !castingNow &&
+          !dimmed && (
+            <InspectAt
+              view={view}
+              object={pointedObject(
+                objects.get(menu?.slot ?? inspected!.slot),
+                menu?.pointed,
+              )}
+              place={inspectorPlace(
+                menu ? menu.at.x : inspected!.x,
+                view.stack.length > 0 || asking,
+                targets,
+              )}
+              lit={menu?.pointed && litParagraph(menu.pointed, objects)}
+              refusal={menu ? undefined : refusal}
+            />
+          )}
 
         {pointedEmblem !== undefined && !menu && !dimmed && (
           <Inspect
@@ -1731,6 +1752,30 @@ function Finish({
   );
 }
 
+/** A "you may" move's answers where the turn button stands: declining, in grey, and the
+ * move, in the primary color, named by what it does ("Exile"). */
+function MayMoveActions({
+  decision,
+  onPick,
+}: {
+  decision: DecisionView;
+  onPick(index: CandidateIndex): void;
+}) {
+  const { ask } = decision;
+  const at = (kind: "yes" | "no") =>
+    decision.candidates.findIndex((c) => c.option.kind === kind);
+  const [yes, no] = [at("yes"), at("no")];
+  if (ask.kind !== "mayMove" || yes < 0 || no < 0) return null;
+  return (
+    <div className="may-actions">
+      <Button variant="secondary" onClick={() => onPick(no)}>
+        Decline
+      </Button>
+      <Button onClick={() => onPick(yes)}>{moveVerb(ask.to)}</Button>
+    </div>
+  );
+}
+
 /** A decision other than priority: what it asks, with a button for each candidate but the
  * cards picked on the table, where each glows with its side and state in view; a card off the
  * table, as one in a graveyard, shows its face. */
@@ -1805,9 +1850,11 @@ function Prompt({
   const subject = ask.kind === "mayMove" ? objects.get(ask.card) : undefined;
   if (subject) faces.unshift({ object: subject });
   const ordering = decision.kind === "triggerOrder";
-  const buttons = ordering
-    ? []
-    : listed.filter(({ c }) => c.option.kind !== "object");
+  // A "you may" move is answered where the turn button stands (MayMoveActions).
+  const buttons =
+    ordering || ask.kind === "mayMove"
+      ? []
+      : listed.filter(({ c }) => c.option.kind !== "object");
   const [order, setOrder] = useState<CandidateIndex[]>([]);
   const title = ordering
     ? order.length === 0
@@ -1816,6 +1863,7 @@ function Prompt({
     : prompt(
         skip === undefined ? decision : { ...decision, kind: "target" },
         source,
+        subject?.zone,
       );
   return (
     <FloatPrompt
@@ -2113,37 +2161,6 @@ function litParagraph(
   return text ? abilityParagraph(text, false, act.nth) : undefined;
 }
 
-/** A loyalty ability's paragraph: its loyalty cost, then a colon
- * ([CR 606.4](https://yawgatog.com/resources/magic-rules/#R6064): "The cost to activate a
- * loyalty ability of a permanent is to put on or remove from that permanent a certain number
- * of loyalty counters, as shown by the loyalty symbol in the ability's cost"). */
-const LOYALTY = /^[+\u2212-]?(\d+|X): /;
-
-/** For a planeswalker whose activations are all a click offers, the paragraphs of its rules
- * text that say the loyalty abilities it cannot activate now, for its menu to show disabled;
- * otherwise none, and the click does what it does for any card. */
-function loyaltyMenu(
-  o: ObjectView | undefined,
-  acts: Act[],
-): number[] | undefined {
-  if (
-    !o?.name ||
-    o.zone !== "battlefield" ||
-    !o.types.includes("planeswalker") ||
-    !acts.every((a) => a.option.kind === "activate")
-  ) {
-    return undefined;
-  }
-  const text = faceEntry(o.name)?.oracle_text;
-  if (!text) return undefined;
-  const offered = new Set(
-    acts.map((a) => a.nth !== null && abilityParagraph(text, false, a.nth)),
-  );
-  return text
-    .split("\n")
-    .flatMap((p, i) => (LOYALTY.test(p) && !offered.has(i) ? [i] : []));
-}
-
 /** One line of a card's menu: what it costs, in symbols, and what it does, from its
  * paragraph or else (`labelled`) the candidate's label; a loyalty ability the planeswalker
  * cannot activate has no candidate. `at` is its paragraph in the card's rules text. */
@@ -2167,8 +2184,7 @@ function reminded(paragraphs: string[], cost: string): string | undefined {
 }
 
 /** The lines of a card's menu: each candidate, by its cost and effect (an activation's from
- * its paragraph, a cast's the card's mana cost), and a planeswalker's unaffordable loyalty
- * abilities among them, in the order its rules text lists them. */
+ * its paragraph, a cast's the card's mana cost). */
 function menuEntries(
   menu: Menu,
   objects: Map<number, ObjectView>,
@@ -2211,18 +2227,7 @@ function menuEntries(
     }
     return { act, effect: act.label, labelled: true };
   });
-  for (const at of menu.unaffordable ?? []) {
-    const p = paragraphs[at]!;
-    const colon = p.indexOf(": ");
-    entries.push({
-      at,
-      cost: p.slice(0, colon),
-      effect: withoutReminder(p.slice(colon + 2)),
-    });
-  }
-  return menu.unaffordable
-    ? entries.sort((a, b) => (a.at ?? -1) - (b.at ?? -1))
-    : entries;
+  return entries;
 }
 
 /** What a card offers, listed where it was clicked or dropped, each by what it costs and
@@ -2233,7 +2238,6 @@ function ActionMenu({
   objects,
   onPick,
   onPoint,
-  onView,
   onClose,
 }: {
   menu: Menu;
@@ -2241,8 +2245,6 @@ function ActionMenu({
   objects: Map<number, ObjectView>;
   onPick(act: Act): void;
   onPoint(act: Act | undefined): void;
-  /** Shows the cards exiled with the card. */
-  onView(): void;
   onClose(): void;
 }) {
   useEffect(() => {
@@ -2323,13 +2325,6 @@ function ActionMenu({
               )}
             </button>
           ),
-        )}
-        {menu.exiled !== undefined && (
-          <button type="button" className="action-menu-item" onClick={onView}>
-            <span className="action-menu-effect action-menu-label">
-              View exiled ({menu.exiled})
-            </span>
-          </button>
         )}
       </div>
     </>

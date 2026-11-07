@@ -704,3 +704,58 @@ fn a_hidden_pointless_activation_is_left_out() {
         ..Profile::SMART
     }));
 }
+
+/// A player offered pointless activations quietly may still tap Currency Converter with nothing
+/// exiled, but it makes no stop of its own: with nothing else to do, their turn plays on to
+/// their next one, where a drawn land stops them. Once a card is exiled with it, it does stop
+/// them (CR 602.2, CR 117.3d).
+#[test]
+fn a_quiet_pointless_activation_makes_no_stop() {
+    use beryl_engine::card::AbilityIx;
+    use beryl_scenario::{P0, P1, Permanent, Scenario};
+    const SETUP: Scenario = Scenario::new("Currency Converter alone")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[Permanent::new(names::CURRENCY_CONVERTER)])
+        .library(P0, &[names::PLAINS, names::PLAINS])
+        .library(P1, &[names::PLAINS, names::PLAINS]);
+    // The turn and step of P0's first priority decision, and whether it offered the {T}.
+    let first_stop = |profile: Profile| {
+        let (t, mut s) = beryl_scenario::position(&CARDS, &SETUP).unwrap();
+        s.set_profile(profile);
+        let converter = permanent_named(&t, &s, names::CURRENCY_CONVERTER);
+        let mut x = Scratch::new();
+        loop {
+            let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) else {
+                panic!("a decision");
+            };
+            if d.player == Seat::P0 && d.kind == DecisionKind::Priority {
+                let offered = (0..d.len() as u16).any(|i| {
+                    d.candidates.option(Choice(i))
+                        == Some(Opt::Activate {
+                            slot: converter,
+                            ability: AbilityIx::Own(2),
+                        })
+                });
+                return (s.turn().number, s.turn().step, offered);
+            }
+            apply(&mut s, &t, &mut x, &mut Replay, Choice(0));
+        }
+    };
+    let offered = Profile {
+        hides_pointless: [false, true],
+        ..Profile::SMART
+    };
+    assert_eq!(
+        first_stop(offered),
+        (3, TurnStep::PrecombatMain, true),
+        "offered loudly, it stops"
+    );
+    assert_eq!(
+        first_stop(Profile {
+            quiet_pointless: Some(Seat::P0),
+            ..offered
+        }),
+        (5, TurnStep::PrecombatMain, true),
+        "offered quietly, the turn plays on to a drawn land"
+    );
+}

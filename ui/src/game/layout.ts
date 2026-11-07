@@ -48,11 +48,11 @@ export const CREATURE_WIDTH = 128;
 export const LAND_WIDTH = 100;
 /** Each copy beneath a land stack's top card, as a fraction of the card's width. */
 export const LAND_STEP = { x: 0.103, y: 0.022 };
-/** How far each card exiled by a permanent until it leaves (CR 610.3) peeks out from beneath
- * it, up and to the left, as a fraction of the permanent's untapped width and height: its whole
- * name bar shows, where a copy beneath a pile's top card peeks out down and to the left. Each
- * Aura or Equipment attached to a permanent peeks out from behind it as far, up and to the
- * right. */
+/** How far each card a permanent holds in exile peeks out from behind it, down and to the left,
+ * as a fraction of the permanent's untapped width and height: what it exiled until it leaves
+ * (CR 610.3) and what its abilities find "exiled with" it (CR 607.2a). A click on one opens
+ * them all. Each Aura or Equipment attached to a permanent peeks out from behind it as far, up
+ * and to the right. */
 export const BENEATH_STEP = { x: 0.3, y: 0.17 };
 
 /** The hand's cards: each card's top center lies on an arc over the near edge, and the fan
@@ -78,7 +78,7 @@ export type Look =
   | "held" // the opponent's hand: a back, or the face of a card you know
   | "field" // a battlefield frame: nonland permanents
   | "land" // a battlefield frame in a land pile
-  | "beneath" // a battlefield frame tucked beneath the permanent that exiled it
+  | "beneath" // a battlefield frame tucked behind the permanent holding it in exile
   | "attached" // a battlefield frame tucked behind the permanent it is attached to
   | "stack" // a full frame on the stack
   | "pile" // a full frame on a graveyard or exile pile, which the pile's button covers
@@ -1024,19 +1024,17 @@ function permanentRow(
         pile: pileOf(group),
         ...onTable(x, y, span, 0, scale),
       });
-      // Untapped, each a step further up and to the left, or for what is attached to it to
-      // the right, centered on the permanent. What is attached rises above what lies beneath,
-      // `above` steps up, so that each name bar shows whole.
+      // Untapped, each a step further down and to the left, or for what is attached to it up
+      // and to the right, centered on the permanent.
       const center = x + (span * scale) / 2;
       const tuck = (
         under: ObjectView[] | undefined,
         look: "beneath" | "attached",
         toward: -1 | 1,
-        above = 0,
       ) =>
         under?.forEach((e, j) => {
           const n = j + 1;
-          const up = above + n;
+          const up = toward * n;
           out.push({
             slot: e.slot,
             zone: e.zone,
@@ -1044,7 +1042,7 @@ function permanentRow(
             width: frameWidth,
             span: frameWidth,
             opacity: 1,
-            z: z - up,
+            z: z - n,
             ...onTable(
               center +
                 (toward * n * frameWidth * BENEATH_STEP.x - frameWidth / 2) *
@@ -1056,9 +1054,8 @@ function permanentRow(
             ),
           });
         });
-      const exiled = beneath.get(o.slot);
-      tuck(exiled, "beneath", -1);
-      tuck(attached.get(o.slot), "attached", 1, exiled?.length);
+      tuck(beneath.get(o.slot), "beneath", -1);
+      tuck(attached.get(o.slot), "attached", 1);
     });
   });
   return out;
@@ -1140,6 +1137,20 @@ export interface ZonePile {
   look: PileLook;
 }
 
+/** The permanent among `onField` holding the card `o` in exile, drawn behind it: the one that
+ * exiled it until it leaves (CR 610.3), or else the one whose abilities find it "exiled with"
+ * it (CR 607.2a). */
+export function held(
+  o: ObjectView,
+  onField: ReadonlySet<number>,
+): number | undefined {
+  if (o.zone !== "exile") return undefined;
+  for (const host of [o.exiledBy, o.exiledWith]) {
+    if (host !== null && onField.has(host)) return host;
+  }
+  return undefined;
+}
+
 /** The cards in exile linked to the permanent in `slot`: those it exiled until it leaves
  * (CR 610.3) and those its abilities find "exiled with" it (CR 607.2a). */
 export function exiledWith(view: PlayerView, slot: number): ObjectView[] {
@@ -1163,7 +1174,7 @@ export function zonePiles(view: PlayerView): ZonePile[] {
         o.owner === side &&
         o.zone === "exile" &&
         !inHand.has(o.slot) &&
-        !(o.exiledBy !== null && holding.has(o.exiledBy)),
+        !held(o, holding),
     );
     return [
       { zone: "graveyard" as const, cards: graveyard },
@@ -1206,13 +1217,13 @@ export function layout(
   // What you can play from outside your hand waits at the right of your hand fan.
   const elsewhere = playableElsewhere(view).flatMap((s) => bySlot.get(s) ?? []);
   const inHand = new Set(elsewhere.map((o) => o.slot));
-  // The cards each permanent exiled until it leaves (CR 610.3), by the permanent's slot.
+  // The cards each permanent holds in exile, by the permanent's slot.
   const beneath = new Map<number, ObjectView[]>();
+  const onField = new Set(view.battlefield);
   for (const o of objects) {
-    if (o.zone !== "exile" || o.exiledBy === null || inHand.has(o.slot)) {
-      continue;
-    }
-    beneath.set(o.exiledBy, [...(beneath.get(o.exiledBy) ?? []), o]);
+    const host = held(o, onField);
+    if (host === undefined || inHand.has(o.slot)) continue;
+    beneath.set(host, [...(beneath.get(host) ?? []), o]);
   }
   const attached = attachments(view);
   const named = referenced(view);

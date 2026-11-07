@@ -37,6 +37,11 @@ ui-test:
 ui-live *args:
     {{ by }} ui-live "$@"
 
+# The cards' spec pages, each moment a live game, until interrupted (card slugs; --shots, --check, --port N)
+[group('app')]
+specs *args:
+    {{ by }} specs "$@"
+
 # The release Beryl.app, under rust/target/tauri/release/bundle/macos
 [group('app')]
 bundle:

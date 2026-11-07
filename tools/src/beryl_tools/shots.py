@@ -121,9 +121,9 @@ def record_fixtures(into: Path = RECORDED, only: list[str] | None = None) -> int
 
 
 @contextmanager
-def served_ui(env: dict[str, str]) -> Iterator[str]:
-    """Serves ui/ with Vite on a free port for the duration; yields its base URL."""
-    port = free_port()
+def served_ui(env: dict[str, str], port: int | None = None) -> Iterator[str]:
+    """Serves ui/ with Vite on `port`, or a free one, for the duration; yields its base URL."""
+    port = port or free_port()
     url = f"http://127.0.0.1:{port}/"
     with tempfile.TemporaryFile() as log:
         server = subprocess.Popen(

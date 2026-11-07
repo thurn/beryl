@@ -333,6 +333,11 @@ export function usePlayback(): {
   }, []);
   // The next queued view takes over once the one shown has had its time.
   const { queue, until, shown } = state;
+  // Whether views wait to be shown, for a capture that waits for the table to settle
+  // (`by specs --shots`).
+  useEffect(() => {
+    (window as { berylBehind?: boolean }).berylBehind = queue.length > 0;
+  }, [queue]);
   useEffect(() => {
     if (queue.length === 0) return;
     const timer = setTimeout(

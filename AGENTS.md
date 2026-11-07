@@ -99,7 +99,10 @@ Cheapest first. Agents never open a window: `just dev` refuses to for them.
    `just fuzz` plays random games at length.
 2. UI: `cd ui && npm run typecheck`. `just ui-shots [names]` screenshots UI
    states headless and prints their paths; `just ui-test` plays the game screen
-   through a fixture.
+   through a fixture. A card's spec (`/specs/<card>`, the `specs` skill) shows
+   each of its UI moments as a live game: `just specs --check` and
+   `just specs --shots` test and screenshot them, and `just specs` serves the
+   pages for a human.
 3. The app: `just smoke` builds the debug app and launches it with no window and
    no Dock icon until the UI reports over IPC that it loaded (about a second
    once built). It fails on a build error or a UI that never loads.

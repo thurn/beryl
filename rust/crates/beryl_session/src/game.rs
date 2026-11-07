@@ -27,7 +27,7 @@ use crate::protocol::{
     UndoView, player_view,
 };
 use crate::replay::{Entry, ReplayFile};
-use crate::{Prepared, SessionError, StartGame};
+use crate::{HandOver, Prepared, SessionError, StartGame};
 
 /// The human's open decision, as a session records it: the one place an answer is checked.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -419,6 +419,8 @@ pub struct Game {
     agent: Box<dyn GameAgent + Send>,
     /// An agent answering the human's decisions in their place, if any.
     stand_in: Option<Box<dyn GameAgent + Send>>,
+    /// When the stand-in hands the human's decisions back to them, if ever.
+    hand_over: Option<HandOver>,
     at: At,
     /// The turn and step the latest view began, or the game's first.
     seen: (u16, TurnStep),
@@ -490,6 +492,7 @@ impl Game {
             stops,
             opponent,
             stand_in,
+            hand_over,
         } = prepared;
         state.set_profile(with_stops(Profile::SMART, stops, human));
         let replay = ReplayFile {
@@ -502,6 +505,7 @@ impl Game {
         };
         let mut game = Game::assemble(table, &state, replay, human, session, opponent);
         game.stand_in = Some(stand_in);
+        game.hand_over = hand_over;
         game
     }
 
@@ -528,6 +532,7 @@ impl Game {
             session,
             agent,
             stand_in: None,
+            hand_over: None,
             at: At::Playing,
             seq: 0,
             replay,
@@ -869,6 +874,10 @@ impl Game {
     /// ([`Game::set_stand_in`]) and a decision is open; it goes on from a halt. Returns
     /// whether it answered.
     pub fn answer_by_stand_in(&mut self) -> bool {
+        if self.hand_over.as_ref().is_some_and(|h| h()) {
+            self.stand_in = None;
+            self.hand_over = None;
+        }
         let (At::Human(id, open), Some(stand_in)) = (self.at.clone(), self.stand_in.as_mut())
         else {
             return false;
@@ -1313,8 +1322,9 @@ fn without_floating<L: Layout>(mut d: Decision<L>) -> Decision<L> {
 /// `profile` under the human's `stops`. Full control asks the human every priority they get,
 /// as Arena does, even where the engine would pass for them, and offers every activation;
 /// their opponent's passes stay silent. Under the smart stops, the human stops in the steps
-/// they chose, and the agent in the smart stops' own, as its search plays, and neither is
-/// offered an activation that would do nothing ([`Profile::hides_pointless`]). Whatever the stops, the
+/// they chose, and the agent in the smart stops' own, as its search plays. The agent is not
+/// offered an activation that would do nothing ([`Profile::hides_pointless`]); the human is,
+/// but it makes no stop of its own ([`Profile::quiet_pointless`]). Whatever the stops, the
 /// human picks each target of their own spells and abilities, even a lone one, so a click never
 /// aims a spell for them ([`Profile::asks_targets`]), and may tap their mana sources at
 /// priority, floating the mana, as an Arena player clicks a land ([`Profile::taps_mana`]). The
@@ -1323,8 +1333,10 @@ fn without_floating<L: Layout>(mut d: Decision<L>) -> Decision<L> {
 pub fn with_stops(profile: Profile, stops: StopsSetting, human: Seat) -> Profile {
     let mut step_stops = [StepStops::SMART; 2];
     step_stops[human.index()] = stops.step_stops();
+    // The human is offered every activation; under the smart stops, those that would do
+    // nothing make no stop of their own (Profile::quiet_pointless).
     let mut hides_pointless = profile.hides_pointless;
-    hides_pointless[human.index()] = !stops.full_control;
+    hides_pointless[human.index()] = false;
     Profile {
         stops: stops.stops(),
         step_stops,
@@ -1332,6 +1344,7 @@ pub fn with_stops(profile: Profile, stops: StopsSetting, human: Seat) -> Profile
         asks_targets: Some(human),
         taps_mana: Some(human),
         hides_pointless,
+        quiet_pointless: (!stops.full_control).then_some(human),
         limits: Limits::PLAYER,
         ..profile
     }

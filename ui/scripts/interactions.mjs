@@ -1995,8 +1995,8 @@ await check(
             await host.boundingBox(),
         ];
         assert.ok(
-            mine.x < theirs.x && mine.y < theirs.y,
-            `${exiled.name} peeks out up and to the left of what exiled it`,
+            mine.x < theirs.x && mine.y > theirs.y,
+            `${exiled.name} peeks out down and to the left of what exiled it`,
         );
         const z = (l) => l.evaluate((e) => Number(getComputedStyle(e).zIndex));
         assert.ok((await z(under)) < (await z(host)), "it lies beneath");
@@ -2093,8 +2093,8 @@ await check(
     },
 );
 
-// A permanent with more than one use (a planeswalker's loyalty abilities) lists them where it
-// is clicked, each a button, beside those it cannot use now (Teferi's −8), disabled.
+// A permanent with more than one ability (a planeswalker's loyalty abilities) opens the ability
+// chooser, each a button, beside those it cannot use now (Teferi's −8), disabled.
 const uses = new Map();
 attachedView.status.decision.candidates.forEach((c, index) => {
     if (c.option.kind !== "activate") return;
@@ -2106,11 +2106,11 @@ assert.ok(
     "the attached-across fixture offers two abilities",
 );
 await check(
-    "a card's menu lists its uses as buttons",
+    "a permanent's abilities are chosen among as buttons",
     async (page) => {
         await page.clock.runFor(2000);
         await page.click(`[data-slot="${walker}"]`);
-        const menu = page.locator(".action-menu");
+        const menu = page.locator(".ability-chooser");
         const buttons = menu.locator("button:enabled");
         assert.equal(await buttons.count(), abilities.length, "one per use");
         assert.equal(
@@ -3115,43 +3115,41 @@ assert.ok(
     "Jace and Sink into Stupor each offer more than one thing",
 );
 await check(
-    "menus draw costs as symbols and light the ability pointed at",
+    "menus and choosers draw costs as symbols",
     async (page) => {
         await page.clock.runFor(3000);
         for (const slot of menuSlots) {
             await page.click(`[data-slot="${slot}"]`);
-            const text = await page.locator(".action-menu").textContent();
+            const text = await page
+                .locator(".action-menu, .ability-chooser")
+                .textContent();
             assert.ok(!text.includes("{"), `no braces in ${text}`);
             await page.keyboard.press("Escape");
         }
         await page.click(`[data-slot="${sculptor}"]`);
-        const items = page.locator(".action-menu-item");
+        const choices = page.locator(".ability-choice");
         assert.deepEqual(
-            await items
-                .locator(".loyalty-cost")
-                .evaluateAll((es) =>
-                    es.map((e) => e.getAttribute("aria-label")),
-                ),
-            ["+2", "0", "\u22121", "\u221212"],
-            "each loyalty ability by its symbol",
-        );
-        assert.deepEqual(
-            await items.evaluateAll((es) => es.map((e) => e.disabled)),
-            [false, false, false, true],
-            "the −12 shown, disabled",
+            await choices.evaluateAll((es) =>
+                es.map((e) => [
+                    e.getAttribute("aria-label").split(":")[0],
+                    e.disabled,
+                ]),
+            ),
+            [
+                ["+2", false],
+                ["0", false],
+                ["\u22121", false],
+                ["\u221212", true],
+            ],
+            "each loyalty ability, the −12 disabled",
         );
         assert.match(
-            await items.nth(1).locator(".action-menu-effect").textContent(),
-            /^Draw three cards/,
+            await choices.nth(1).textContent(),
+            /Draw three cards/,
             "each says what it does",
         );
-        await items.nth(2).hover();
-        assert.match(
-            await page.locator(".inspect .rules-lit").textContent(),
-            /^\u22121: Return target creature/,
-            "pointing at −1 lights its paragraph",
-        );
         await page.keyboard.press("Escape");
+        const items = page.locator(".action-menu-item");
         await page.click(`[data-slot="${stupor}"]`);
         assert.deepEqual(
             await items.locator(".action-menu-label").allTextContents(),
@@ -3179,7 +3177,7 @@ await check(
 );
 
 // Teferi, Time Raveler at 1 loyalty can activate only its +1: a loyalty ability cannot be
-// taken back, so the click still opens the menu, the −3 shown disabled.
+// taken back, so the click still opens the chooser, the −3 shown disabled.
 const lowViews = await load("walker-low");
 const lowView = lowViews.at(-1);
 const raveler = lowView.objects.find(
@@ -3190,17 +3188,15 @@ const ravelerActs = lowView.status.decision.candidates.flatMap((c, i) =>
 );
 assert.equal(ravelerActs.length, 1, "Teferi offers its +1 alone");
 await check(
-    "a planeswalker's click opens its menu, unaffordable abilities disabled",
+    "a planeswalker's click opens its chooser, unaffordable abilities disabled",
     async (page) => {
         await page.clock.runFor(3000);
         await page.click(`[data-slot="${raveler}"]`);
-        const items = page.locator(".action-menu-item");
+        const items = page.locator(".ability-choice");
         assert.deepEqual(
             await items.evaluateAll((es) =>
                 es.map((e) => [
-                    e
-                        .querySelector(".loyalty-cost")
-                        ?.getAttribute("aria-label"),
+                    e.getAttribute("aria-label").split(":")[0],
                     e.disabled,
                 ]),
             ),

@@ -316,8 +316,26 @@ const MOVES: Partial<Record<ZoneName, string>> = {
   battlefield: "Put onto battlefield",
 };
 
+/** The button that makes a "you may" move to `to`: "Exile". */
+export const moveVerb = (to: ZoneName) => MOVES[to] ?? "Move";
+
+/** A "you may" move's question, of a card in your `from` zone: "Exile that card from your
+ * graveyard?" */
+function mayMoveQuestion(to: ZoneName, from?: ZoneName): string {
+  const where = from && from !== "battlefield" ? ` from your ${from}` : "";
+  if (to === "exile") return `Exile that card${where}?`;
+  const into =
+    to === "battlefield" ? "onto the battlefield" : `into your ${to}`;
+  return `Put that card ${into}${where}?`;
+}
+
 /** The prompt's title: what the decision asks, and for whom when there is a source. */
-export function prompt(decision: DecisionView, source?: string): string {
+export function prompt(
+  decision: DecisionView,
+  source?: string,
+  /** The zone the card a "you may" move would move lies in. */
+  from?: ZoneName,
+): string {
   const { ask } = decision;
   switch (ask.kind) {
     case "untap":
@@ -327,7 +345,7 @@ export function prompt(decision: DecisionView, source?: string): string {
     case "discardBasicLand":
       return `Discard a basic land or ${ask.count} cards`;
     case "mayMove":
-      return `${MOVES[ask.to] ?? "Move"}?`;
+      return mayMoveQuestion(ask.to, from);
   }
   const asked = PROMPTS[decision.kind] ?? "Choose";
   return source && decision.kind === "target"

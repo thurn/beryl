@@ -262,7 +262,7 @@ fn advance<const STEPS: bool, L: Layout>(
         };
         debug_assert!(!d.is_empty());
         let priority = d.kind == DecisionKind::Priority;
-        let forced = (d.len() == 1 || (s.profile.floats_for(d.player) && only_pass(&d)))
+        let forced = (d.len() == 1 || only_idle(s, t, &d))
             && (priority || s.profile.stops != Stops::Forced)
             && !s.profile.asks_lone(s, &d);
         let silent = (forced || (priority && !s.profile.stops_for(s, d.player)))
@@ -516,14 +516,25 @@ fn priority_decision<L: Layout>(s: &State<L>, t: &GameTable) -> Result<Decision<
 /// mana that nothing else can spend now changes nothing
 /// ([CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064): "Each player's mana pool
 /// empties at the end of each step and phase").
-fn only_pass<L: Layout>(d: &Decision<L>) -> bool {
-    d.kind == DecisionKind::Priority
-        && match &d.candidates {
-            Candidates::Options(list) => list
-                .iter()
-                .all(|o| matches!(o, Opt::Pass | Opt::Mana { .. })),
-            Candidates::Objects(_) => false,
-        }
+///
+/// So is a priority whose other actions are activations that would do nothing, for the player
+/// offered them quietly ([`crate::Profile::quiet_pointless`]): paying a cost for no effect is
+/// legal ([CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022)), but no reason to stop.
+fn only_idle<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> bool {
+    let floats = s.profile.floats_for(d.player);
+    let quiet = s.profile.quiet_pointless == Some(d.player);
+    if d.kind != DecisionKind::Priority || !(floats || quiet) {
+        return false;
+    }
+    match &d.candidates {
+        Candidates::Options(list) => list.iter().all(|o| match *o {
+            Opt::Pass => true,
+            Opt::Mana { .. } => floats,
+            Opt::Activate { slot, ability } => quiet && cast::pointless(s, t, slot, ability),
+            _ => false,
+        }),
+        Candidates::Objects(_) => false,
+    }
 }
 
 /// The first face of a card that is a land, which is the face it is played with
