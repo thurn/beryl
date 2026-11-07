@@ -233,6 +233,12 @@ pub static AGENTS: &[AgentInfo] = &[
         description: "Searches many guesses at the cards it cannot see, playing each out greedily",
         new: mcts_hidden,
     },
+    AgentInfo {
+        name: "pimc18-omniscient-30m",
+        title: "Deep Seer",
+        description: "Cheats as the Seer does, thinking seconds a move: the long-think arena's best",
+        new: deep_seer,
+    },
 ];
 
 fn random(_t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
@@ -267,6 +273,24 @@ fn mcts_hidden(t: &GameTable, seed: u64, budget: Budget) -> Box<dyn GameAgent + 
         budget,
         seed,
     )))
+}
+
+/// `pimc18/omniscient/rollout/tuned@30M`, the long-think arena's leader in run-003: 30M
+/// engine steps a decision whatever `budget` says, on every core. Its moves do not depend on
+/// the threads.
+fn deep_seer(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
+    let settings = Settings {
+        family: Family {
+            method: Method::Pimc { worlds: 18 },
+            sight: Sight::Omniscient,
+            leaf: Leaf::Rollout,
+            knowledge: Knowledge::Tuned,
+        },
+        work: 30_000_000,
+        threads: std::thread::available_parallelism()
+            .map_or(1, |n| u32::try_from(n.get()).unwrap_or(u32::MAX)),
+    };
+    Box::new(Widening::new(LongSearch::<Small>::new(t, settings, seed)))
 }
 
 /// The agent registered under `name`.

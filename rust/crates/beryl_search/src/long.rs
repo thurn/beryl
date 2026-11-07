@@ -39,7 +39,7 @@
 //! decision asked straight after the last, with nothing learned between, keeps its trees,
 //! as `Mcts` does; their visits count toward the budget at what they cost.
 
-use beryl_engine::{Layout, SlotId, Small};
+use beryl_engine::{Large, Layout, SlotId, Small};
 use std::collections::hash_map::DefaultHasher;
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -59,7 +59,7 @@ use crate::eval::evaluate;
 use crate::mcts::{shows_the_same, smart};
 use crate::rollout::{RolloutPolicy, Softmax, soft_rollout, soft_rollout_to};
 use crate::values::Knowledge;
-use crate::{Agent, AgentDecision, Search, Sight};
+use crate::{Agent, AgentDecision, Search, Sight, Widen};
 
 /// How the search treats what it cannot see.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -460,6 +460,24 @@ fn names<L: Layout>(d: &Decision<L>, c: Choice) -> Option<L::Slot> {
             | Opt::Object(slot) => Some(slot),
             _ => None,
         },
+    }
+}
+
+/// The same search in [`Large`], at the same place among its own decisions. The trees it kept
+/// hold `Small` states, so they are dropped: its next search plants fresh ones.
+impl Widen for LongSearch<Small> {
+    type Large = LongSearch<Large>;
+
+    fn widen(&self) -> LongSearch<Large> {
+        LongSearch {
+            table: self.table.clone(),
+            policy: self.policy.clone(),
+            settings: self.settings,
+            seed: self.seed,
+            decision: self.decision,
+            kept: None,
+            last: None,
+        }
     }
 }
 
