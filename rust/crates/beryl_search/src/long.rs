@@ -412,13 +412,14 @@ impl<L: Layout> LongSearch<L> {
     /// With greedy's answer `anchor`, the first [`FREE_ROUNDS`] grow as ever; then, if the
     /// leader is not greedy's answer and `guards` it, the rest of the work goes to the two
     /// alone, so that the choice between them is not made against a starved estimate.
-    /// Returns the iterations run and the work they spent.
+    /// Returns the iterations run, the work they spent and the candidate checked against
+    /// greedy's answer that way, if one was.
     fn grow(
         &self,
         trees: &mut [Tree<L>],
         anchor: Option<Choice>,
         guards: impl Fn(Choice) -> bool,
-    ) -> (u64, u64) {
+    ) -> (u64, u64, Option<Choice>) {
         let n = trees.len() as u64;
         let work = self.settings.work;
         let shares: Vec<u64> = (0..n).map(|i| work / n + u64::from(i < work % n)).collect();
@@ -435,6 +436,7 @@ impl<L: Layout> LongSearch<L> {
             start: &start,
             threads: (self.settings.threads.max(1) as usize).min(trees.len()),
         };
+        let mut checked = None;
         match anchor {
             None => self.rounds(trees, &plan, 1..=ROUNDS, true),
             Some(g) => {
@@ -453,15 +455,17 @@ impl<L: Layout> LongSearch<L> {
                     for tree in trees.iter_mut() {
                         tree.allowed = None;
                     }
+                    checked = Some(Choice(b as u16));
                 }
             }
         }
-        trees
+        let (iterations, work) = trees
             .iter()
             .zip(&start)
             .fold((0, 0), |(i, w), (tree, &(w0, i0))| {
                 (i + tree.iterations - i0, w + tree.work - w0)
-            })
+            });
+        (iterations, work, checked)
     }
 
     /// For research: grows fresh trees on decision `d` for the whole budget with their roots
@@ -769,13 +773,16 @@ impl<L: Layout> Agent<L> for LongSearch<L> {
             .options
             .anchor
             .then(|| self.policy.choose(&self.table, obs, d));
-        let guards = |b: Choice| greedy.is_some_and(|g| guarded(d, g, b));
-        let (iterations, work) = self.grow(&mut trees, greedy, guards);
+        let guards = |b: Choice| greedy.is_some_and(|g| guarded(&self.policy, obs, d, g, b));
+        let (iterations, work, checked) = self.grow(&mut trees, greedy, guards);
         let (visits, rewards) = totals(&trees);
         let best = Choice(leader(&visits, &rewards) as u16);
-        let anchor = greedy
-            .filter(|_| guards(best))
-            .map(|g| check(&trees, best, g));
+        // The candidate checked against greedy's answer after the two had the last of the work
+        // to themselves, whichever then has more visits; else the leader, if guarded.
+        let anchor = greedy.and_then(|g| {
+            let search = checked.or(guards(best).then_some(best))?;
+            Some(check(&trees, search, g))
+        });
         let choice = anchor.map_or(best, |a| a.played());
         self.last = Some(Search {
             decision,
@@ -1221,17 +1228,31 @@ impl<L: Layout> Tree<L> {
 }
 
 /// Whether an anchored search ([`Options::anchor`]) plays greedy's answer `greedy` to
-/// decision `d` over its own choice `search` unless that choice leads clearly: a spell the
-/// search would cast where greedy would pass, as Deep Seer once cast Oust on its own token.
-/// Not spending a card on a coin flip is nearly free. Elsewhere greedy's answers cost: in
-/// run-003's games of the leading family at 10M steps, searched again from fresh seeds, the
-/// search's own choice led greedy's answer by about 0.003 at other priority decisions (some
-/// 20 a game) and by about 0.002 at targets, objects and the other questions (some 13 a game),
-/// so guarding those would cost 0.04 to 0.07 a game.
-pub fn guarded<L: Layout>(d: &Decision<L>, greedy: Choice, search: Choice) -> bool {
+/// decision `d`, seen in `obs`, over its own choice `search` unless that choice leads
+/// clearly: a spell the search would cast where greedy would pass, as Deep Seer once cast
+/// Oust on its own token. Not spending a card on a coin flip is nearly free. Elsewhere
+/// greedy's answers cost: in run-003's games of the leading family at 10M steps, searched
+/// again from fresh seeds, the search's own choice led greedy's answer by about 0.003 at other
+/// priority decisions (some 20 a game) and by about 0.002 at targets, objects and the other
+/// questions (some 13 a game), so guarding those would cost 0.04 to 0.07 a game.
+///
+/// Not a card `policy` is told never to cast ([`crate::CardInfo::never_cast`], Mana Crypt):
+/// greedy passes on it by tuning for its own play, not judgment, and the search keeps its say.
+/// Those were half the switches of the fair `pimc72/hidden/rollout/tuned@30M` (by-bzy).
+pub fn guarded<L: Layout>(
+    policy: &RolloutPolicy,
+    obs: Observation<'_, L>,
+    d: &Decision<L>,
+    greedy: Choice,
+    search: Choice,
+) -> bool {
+    let held = |slot: L::Slot| {
+        obs.card(slot)
+            .is_none_or(|card| !policy.values().get(card).never_cast)
+    };
     d.kind == DecisionKind::Priority
         && d.candidates.option(greedy) == Some(Opt::Pass)
-        && matches!(d.candidates.option(search), Some(Opt::Cast { .. }))
+        && matches!(d.candidates.option(search), Some(Opt::Cast { slot, .. }) if held(slot))
 }
 
 /// Whether a family with [`Options::mid`] lets greedy answer decisions of `kind` below the
@@ -1403,6 +1424,7 @@ fn with_slot<L: Layout>(opt: Opt<L>, to: L::Slot) -> Opt<L> {
 mod tests {
     use beryl_cards::CARDS;
     use beryl_cards::decks::WU_CONTROL;
+    use beryl_cards::names;
     use beryl_engine::{Profile, Slot};
 
     use super::*;
@@ -1649,13 +1671,25 @@ mod tests {
             mid: false,
         };
         let (mut searched, mut checked) = (0, 0);
-        for (i, (s, d)) in positions(&t, 2).into_iter().take(16).enumerate() {
+        // Where the guard can act: greedy passes, and a spell it would hold is on offer.
+        let holds = |s: &State, d: &Decision, x: &mut Scratch| {
+            let obs = observe(s, &t, x, d.player);
+            let g = policy.choose(&t, obs, d);
+            (0..d.len()).any(|i| guarded(&policy, obs, d, g, Choice(i as u16)))
+        };
+        let mut scratch = Scratch::new();
+        let chosen: Vec<(State, Decision)> = (2..12)
+            .flat_map(|seed| positions(&t, seed))
+            .filter(|(s, d)| holds(s, d, &mut scratch))
+            .take(16)
+            .collect();
+        for (i, (s, d)) in chosen.into_iter().enumerate() {
             let obs = observe(&s, &t, &mut x, d.player);
             let mut anchored = LongSearch::<Small>::new(&t, settings(anchor), i as u64);
             let mut plain = LongSearch::<Small>::new(&t, settings(Options::default()), i as u64);
             let c = anchored.choose(obs, &d);
             let free = plain.choose(obs, &d);
-            assert_eq!(plain.last_search().map(|s| s.anchor), Some(None));
+            assert!(plain.last_search().is_none_or(|s| s.anchor.is_none()));
             let Some(search) = anchored.last_search() else {
                 continue;
             };
@@ -1663,14 +1697,14 @@ mod tests {
             let greedy = policy.choose(&t, obs, &d);
             if let Some(a) = search.anchor {
                 assert_eq!(a.greedy, greedy);
-                assert!(guarded(&d, greedy, a.search));
+                assert!(guarded(&policy, obs, &d, greedy, a.search));
                 assert_eq!(c, a.played());
                 if c != greedy {
                     assert!(a.lead > ANCHOR_MARGIN && a.lead > ANCHOR_ERRORS * a.error);
                 }
                 checked += 1;
             } else {
-                assert!(c == greedy || !guarded(&d, greedy, c));
+                assert!(c == greedy || !guarded(&policy, obs, &d, greedy, c));
                 assert_eq!(c, free, "unguarded, it plays as the plain search");
             }
         }
@@ -1694,5 +1728,47 @@ mod tests {
         );
         assert!((discounted(0.8, 5) - (0.5 + 0.3 * TURN_DISCOUNT.powi(5))).abs() < 1e-12);
         assert!(discounted(0.8, 5) < value(win, 5));
+    }
+
+    /// A spell greedy is told never to cast (Mana Crypt) is not guarded: greedy passes on it
+    /// by tuning, not judgment. Any other spell greedy passes on is.
+    #[test]
+    fn the_anchor_does_not_hold_what_greedy_never_casts() {
+        let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
+        let policy = RolloutPolicy::new(&t);
+        let mut x = Scratch::new();
+        let (mut never, mut other) = (0, 0);
+        for seed in 0..40 {
+            let mut s = State::new(&t, seed, Profile::SMART);
+            loop {
+                let d = match next(&mut s, &t, &mut x, &mut Replay) {
+                    Step::Over(_) => break,
+                    Step::Decide(d) => d,
+                };
+                let obs = observe(&s, &t, &mut x, d.player);
+                let g = policy.choose(&t, obs, &d);
+                if d.kind == DecisionKind::Priority && d.candidates.option(g) == Some(Opt::Pass) {
+                    for i in 0..d.len() {
+                        let c = Choice(i as u16);
+                        if let Some(Opt::Cast { slot, .. }) = d.candidates.option(c) {
+                            let crypt = obs
+                                .card(slot)
+                                .is_some_and(|card| t.def(card).name == names::MANA_CRYPT);
+                            assert_eq!(guarded(&policy, obs, &d, g, c), !crypt);
+                            if crypt {
+                                never += 1;
+                            } else {
+                                other += 1;
+                            }
+                        }
+                    }
+                }
+                apply(&mut s, &t, &mut x, &mut Replay, g);
+            }
+            if never > 0 && other > 0 {
+                break;
+            }
+        }
+        assert!(never > 0 && other > 0, "Mana Crypt {never}, others {other}");
     }
 }

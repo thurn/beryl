@@ -126,8 +126,9 @@ fn replay(
     let played = walk(dir, entrant, |game, s, d, choice, search, names| {
         searched += 1;
         let mut x = Scratch::new();
-        let greedy = policy.choose(&t, observe(s, &t, &mut x, d.player), d);
-        let counted = !only_guarded || guarded(d, greedy, Choice(choice));
+        let obs = observe(s, &t, &mut x, d.player);
+        let greedy = policy.choose(&t, obs, d);
+        let counted = !only_guarded || guarded(&policy, obs, d, greedy, Choice(choice));
         if greedy.0 != choice && counted {
             let mean = |c: u16| {
                 let v = f64::from(search.visits[usize::from(c)]);
