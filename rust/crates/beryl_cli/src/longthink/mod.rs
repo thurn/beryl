@@ -8,8 +8,10 @@
 //! the run was started with, copied into its directory, so later commits never change a
 //! run's agents. A runner that crashes is restarted and resumes. `--games N` stops once the
 //! run holds N games, however many sessions it took; `--status` prints the summary;
-//! `--upgrade` adopts the current code if it plays identically ([`upgrade`]); `--add FAMILY`
-//! adds a family to a run; `--new` and `--run DIR` start a new run, or resume any;
+//! `--upgrade` adopts the current code if it plays identically ([`upgrade`]), and a runner
+//! playing moves to it before its next decision; `--add FAMILY` adds a family to a run, once
+//! the run's binary says it can play it (with `--upgrade`, after the adopt); `--new` and
+//! `--run DIR` start a new run, or resume any;
 //! `--power light` leaves the machine room for other work, `--power full` takes it all,
 //! even while it plays ([`run::Power`]). Its files:
 //!
@@ -49,11 +51,33 @@ use beryl_search::{AgentDecision, Family, Settings};
 use serde::{Deserialize, Serialize};
 
 use game::{Entrant, GameDecision};
-pub use run::run;
 use schedule::{Config, Matchup, budget_of};
 
 /// The crates whose code decides how a run plays.
 const CRATES: [&str; 3] = ["beryl_engine", "beryl_cards", "beryl_search"];
+
+/// The hidden subcommand that asks a run's binary whether it can play a family.
+pub const CHECK_FAMILY: &str = "longthink-check-family";
+
+/// The exit code of a runner that stopped because the run's binary was replaced: its
+/// supervisor starts the new one.
+const UPGRADED: i32 = 75;
+
+/// `beryl_cli longthink-run <dir> [--games N]`: the runner, which exits with [`UPGRADED`]
+/// when it stops for an upgrade.
+pub fn runner(dir: &Path, total: Option<u32>) -> Result<(), String> {
+    if run::run(dir, total)? == run::Ended::Upgraded {
+        std::process::exit(UPGRADED);
+    }
+    Ok(())
+}
+
+/// `beryl_cli longthink-check-family <family>`: prints the family's name as this binary's
+/// runner reads it ([`entrant`]), or fails if it cannot.
+pub fn check_family(family: &str) -> Result<(), String> {
+    println!("{}", family.parse::<Family>()?);
+    Ok(())
+}
 
 /// How a finished game went for its first side.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -320,11 +344,16 @@ pub fn main(args: &[String]) -> Result<(), String> {
         start(&dir, &c, code.as_ref())?;
         println!("new run {}", dir.display());
     }
+    // The adopt first, so a family only the adopted binary plays is added once it is the
+    // run's, and none if it is refused.
+    if upgrade {
+        upgrade::adopt(&dir, code.as_ref())?;
+    }
     if !add.is_empty() {
         add_families(&dir, &add)?;
     }
     if upgrade {
-        return upgrade::adopt(&dir, code.as_ref());
+        return Ok(());
     }
     if let Some(p) = power
         && powered(&dir, p)?
@@ -404,21 +433,63 @@ fn check(c: &Config) -> Result<(), String> {
     Ok(())
 }
 
-/// Adds `families` to run `dir`'s settings, those it lacks: the arena opens them at once.
+/// Adds `families` to run `dir`'s settings, those it lacks, all or none: the arena opens
+/// them from its next game. Each must be one the run's own binary can play, and a runner
+/// playing must be one that never plays a game with a binary older than the run's.
 fn add_families(dir: &Path, families: &[String]) -> Result<(), String> {
     let mut c = config(dir)?;
+    let mut new = Vec::new();
     for f in families {
-        let parsed: Family = f.parse()?;
-        let name = parsed.to_string();
-        if c.families.contains(&name) {
+        let name = f.parse::<Family>()?.to_string();
+        if c.families.contains(&name) || new.contains(&name) {
             println!("{name} already plays");
         } else {
-            println!("added {name}");
-            c.families.push(name);
+            vouched(dir, &name)?;
+            new.push(name);
         }
+    }
+    if new.is_empty() {
+        return Ok(());
+    }
+    // A runner that does not stop for an upgrade may be playing the binary the run had
+    // before, which may lack them.
+    if let Some(lock) = files::holder(dir)?
+        && !follows(&lock)
+    {
+        return Err(format!(
+            "{} is played by a runner from before live upgrades (process {}), which may lack \
+             {}: stop it (Ctrl-C), start it again, then add",
+            run::run_name(dir),
+            lock.lines().next().unwrap_or_default(),
+            new.join(", ")
+        ));
+    }
+    for name in new {
+        println!("added {name}");
+        c.families.push(name);
     }
     let json = serde_json::to_string_pretty(&c).map_err(|e| e.to_string())? + "\n";
     files::write_whole(&dir.join("config.json"), json.as_bytes())
+}
+
+/// Whether run `dir`'s own binary, which plays its games, can play family `name`: asked, so
+/// one from before it could be asked vouches for none.
+fn vouched(dir: &Path, name: &str) -> Result<(), String> {
+    let bin = dir.join("beryl_cli");
+    let answer = Command::new(&bin).args([CHECK_FAMILY, name]).output();
+    match answer {
+        Ok(o) if o.status.success() && String::from_utf8_lossy(&o.stdout).trim() == name => Ok(()),
+        _ => Err(format!(
+            "{}'s binary cannot play {name}: adopt this code first (--upgrade, which can \
+             come with --add)",
+            run::run_name(dir)
+        )),
+    }
+}
+
+/// Whether the runner whose lock file reads `lock` stops for an upgrade ([`run::FOLLOWS`]).
+fn follows(lock: &str) -> bool {
+    lock.lines().any(|l| l == run::FOLLOWS)
 }
 
 /// The per-machine cache: `$BERYL_CACHE`, else `~/Library/Caches/beryl`.
@@ -563,9 +634,10 @@ fn code_ids(repo: &Path) -> Option<BTreeMap<String, String>> {
     ids
 }
 
-/// Runs the run's own binary until it finishes, restarting it when it crashes. The terminal
-/// is the runner's: Ctrl-C is its to answer, and stops this only through it, but a runner
-/// that crashes after one is not restarted, since its stop was asked for.
+/// Runs the run's own binary until it finishes, restarting it when it crashes, and starting
+/// the new one when `--upgrade` replaces it. The terminal is the runner's: Ctrl-C is its to
+/// answer, and stops this only through it, but a runner that crashes or stops for an upgrade
+/// after one is not restarted, since its stop was asked for.
 fn supervise(dir: &Path, games: Option<u32>) -> Result<(), String> {
     static ASKED: AtomicBool = AtomicBool::new(false);
     ctrlc::set_handler(|| ASKED.store(true, Ordering::Relaxed))
@@ -580,6 +652,7 @@ fn supervise(dir: &Path, games: Option<u32>) -> Result<(), String> {
         if let Some(n) = games {
             runner.args(["--games", &n.to_string()]);
         }
+        let launched = files::stamp(&bin);
         let status = runner
             .status()
             .map_err(|e| format!("{}: {e}", bin.display()))?;
@@ -588,6 +661,15 @@ fn supervise(dir: &Path, games: Option<u32>) -> Result<(), String> {
         }
         if status.code() == Some(term::STOPPED) {
             std::process::exit(term::STOPPED);
+        }
+        // Stopped for an upgrade, or failed after one: perhaps at a family only the new
+        // binary plays.
+        if status.code() == Some(UPGRADED) || files::stamp(&bin) != launched {
+            if ASKED.load(Ordering::Relaxed) {
+                return Ok(());
+            }
+            eprintln!("the run's binary was upgraded; starting it");
+            continue;
         }
         // A panic exits with 101, or aborts under the search profile; so might a fault.
         let abnormal = status.code() == Some(101)

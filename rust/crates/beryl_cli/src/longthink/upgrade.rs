@@ -27,6 +27,18 @@ pub fn adopt(dir: &Path, code: Option<&BTreeMap<String, String>>) -> Result<(), 
         .map_err(|e| format!("not adopted: {e}; --new starts a run on this code"))?;
     super::adopt_binary(dir, code)?;
     println!("adopted: {checked}");
+    if let Some(lock) = files::holder(dir)? {
+        println!(
+            "{} {}",
+            super::run::run_name(dir),
+            if super::follows(&lock) {
+                "moves to it before its next decision"
+            } else {
+                "is played by a runner from before live upgrades, which plays on with its \
+                 old binary until it is restarted"
+            }
+        );
+    }
     Ok(())
 }
 
@@ -161,7 +173,7 @@ impl Check<'_> {
             &g,
             self.build,
             lines,
-            |_, _, _| {},
+            |_, _, _| Ok(()),
             |_, _, _| Ok(()),
         ) {
             Ok(played) if until.is_none() => Ok(Some(played)),

@@ -1,7 +1,8 @@
 //! The runner: plays the run's games, as many at a time as its [`Power`] says, each search
 //! on every core it allows, in the order the schedule gives, logging each decision as it is
 //! made and committing each finished game, so that whatever stops it costs at most the
-//! decisions being searched.
+//! decisions being searched. Once `--upgrade` replaces the run's binary, it stops before its
+//! next decision ([`Ended::Upgraded`]), for its supervisor to start the adopted one.
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -17,7 +18,7 @@ use std::time::Duration;
 use beryl_engine::{Decision, GameTable, State};
 use serde::{Deserialize, Serialize};
 
-use super::files::{self, Log};
+use super::files::{self, Log, Stamp};
 use super::game::{self, Game, GameDecision, Line, Played};
 use super::ratings::Ratings;
 use super::schedule::{self, Config};
@@ -104,6 +105,20 @@ static PANICKED: AtomicBool = AtomicBool::new(false);
 /// How often an idle slot looks for a game.
 const IDLE: Duration = Duration::from_millis(500);
 
+/// The note a runner adds to the run's lock ([`files::holder`]): it stops once the run's
+/// binary is replaced, so it never plays a game with a binary older than the run's.
+pub const FOLLOWS: &str = "follows upgrades";
+
+/// Why the runner stopped.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ended {
+    /// The run holds its games, or a stop was asked for.
+    Done,
+    /// The run's binary was replaced: the runner stopped before its next decision, and
+    /// the games it was playing resume from their logs.
+    Upgraded,
+}
+
 /// A line of `crashes.jsonl`.
 #[derive(Debug, Serialize, Deserialize)]
 struct Crash {
@@ -130,10 +145,11 @@ struct Slots {
     failed: Option<String>,
 }
 
-/// A game played out, or skipped for crashing twice.
+/// A game played out, skipped for crashing twice, or stopped for an upgrade.
 enum Finished {
     Played(Played),
     Crashed(GameRecord),
+    Paused,
 }
 
 /// What every slot reads.
@@ -144,12 +160,18 @@ struct Runner<'a> {
     out: &'a Display,
     /// A fault injected for the supervisor's tests: panic at decision N of game K, "K@N".
     inject: Option<(String, GameDecision)>,
+    /// The run's binary when the runner started, and whether it has been replaced since.
+    binary: Option<Stamp>,
+    upgraded: AtomicBool,
     slots: Mutex<Slots>,
 }
 
-/// Plays run `dir` until it holds `total` games, or forever, or a stop is asked for.
-pub fn run(dir: &Path, total: Option<u32>) -> Result<(), String> {
-    let _lock = files::lock(dir)?;
+/// Plays run `dir` until it holds `total` games, or forever, or a stop is asked for, or its
+/// binary is replaced.
+pub fn run(dir: &Path, total: Option<u32>) -> Result<Ended, String> {
+    let mut lock = files::lock(dir)?;
+    let binary = files::stamp(&dir.join("beryl_cli"));
+    lock.note(FOLLOWS)?;
     let c = super::config(dir)?;
     let t = mirror();
     let games = recover(dir)?;
@@ -172,6 +194,8 @@ pub fn run(dir: &Path, total: Option<u32>) -> Result<(), String> {
         t: &t,
         out: &out,
         inject,
+        binary,
+        upgraded: AtomicBool::new(false),
         slots: Mutex::new(Slots {
             games,
             clock,
@@ -190,9 +214,14 @@ pub fn run(dir: &Path, total: Option<u32>) -> Result<(), String> {
             });
         }
     });
+    let upgraded = runner.upgraded.into_inner();
     let failed = runner.slots.into_inner().expect("the slots").failed;
     out.close();
-    failed.map_or(Ok(()), Err)
+    match failed {
+        Some(e) => Err(e),
+        None if upgraded => Ok(Ended::Upgraded),
+        None => Ok(Ended::Done),
+    }
 }
 
 impl Runner<'_> {
@@ -200,8 +229,23 @@ impl Runner<'_> {
         self.slots.lock().expect("the slots")
     }
 
+    /// Whether the run's binary was replaced since the runner started: once it is, the
+    /// runner starts no game and asks no decision.
+    fn upgraded(&self) -> bool {
+        if self.upgraded.load(Ordering::Relaxed) {
+            return true;
+        }
+        if files::stamp(&self.dir.join("beryl_cli")) == self.binary {
+            return false;
+        }
+        if !self.upgraded.swap(true, Ordering::Relaxed) {
+            self.out.log("⇪ binary upgraded: moving to it".to_owned());
+        }
+        true
+    }
+
     /// Slot `slot`'s work: a game at a time while the power allows the slot one, until the
-    /// run is done or stopping.
+    /// run is done, stopping or upgraded.
     fn serve(&self, slot: usize) -> Result<(), String> {
         loop {
             let spec = {
@@ -213,12 +257,13 @@ impl Runner<'_> {
                     || s.failed.is_some()
                     || self.out.stopping()
                     || PANICKED.load(Ordering::Relaxed)
+                    || self.upgraded()
                 {
                     return Ok(());
                 }
                 let p = power(self.dir);
                 if slot < p.games() {
-                    Some(self.claim(&mut s, p)?)
+                    self.claim(&mut s, p)?
                 } else {
                     None
                 }
@@ -236,6 +281,8 @@ impl Runner<'_> {
                     (commit(self.dir, &spec, &played)?, Some(seconds(&played)))
                 }
                 Finished::Crashed(record) => (record, None),
+                // Left in its log, which the next runner resumes first.
+                Finished::Paused => continue,
             };
             Log::open(&self.dir.join("games.jsonl"))?.append(&record)?;
             self.out.finished(&record, seconds);
@@ -248,10 +295,16 @@ impl Runner<'_> {
     }
 
     /// The next game to play, now being played: one a stop left unfinished, else the
-    /// schedule's, the matchup's first game neither committed nor being played.
-    fn claim(&self, s: &mut Slots, p: Power) -> Result<Spec, String> {
-        // The settings again, for families added since the runner started.
+    /// schedule's, the matchup's first game neither committed nor being played. None if the
+    /// run's binary was replaced.
+    fn claim(&self, s: &mut Slots, p: Power) -> Result<Option<Spec>, String> {
+        // The settings again, for families added since the runner started. `--add` takes a
+        // family only once the run's binary can play it, so the binary is checked after
+        // them: one replaced to bring a family this runner lacks is seen.
         let mut c = super::config(self.dir)?;
+        if self.upgraded() {
+            return Ok(None);
+        }
         c.threads = p.threads(c.threads);
         let spec = if let Some(spec) = s.left.pop().and_then(|key| Spec::parse(&c, &key)) {
             spec
@@ -271,7 +324,7 @@ impl Runner<'_> {
             Spec::new(&c, &m, g)?
         };
         s.playing.push(spec.clone());
-        Ok(spec)
+        Ok(Some(spec))
     }
 
     /// Plays game `spec` from where its log ends, or skips it if it crashed twice.
@@ -298,6 +351,9 @@ impl Runner<'_> {
             until: None,
         };
         let asking = |i: GameDecision, s: &State, d: &Decision| {
+            if self.upgraded() {
+                return Err(game::Stop::Reached(i));
+            }
             self.out.asking(&spec.key, i, s, d);
             PLAYING.with_borrow_mut(|p| {
                 if let Some((_, _, at)) = p.as_mut() {
@@ -311,6 +367,7 @@ impl Runner<'_> {
             {
                 panic!("injected at decision {i} of {}", spec.key);
             }
+            Ok(())
         };
         // Only a search is worth a sync: a power cut costs the answers since the last one,
         // which replay recomputes at engine speed.
@@ -325,10 +382,14 @@ impl Runner<'_> {
                 self.out.answered(&spec.key, line, label);
                 Ok(())
             },
-        )
-        .map_err(|e| format!("{}: {e:?}", spec.key))?;
+        );
+        let finished = match played {
+            Ok(played) => Finished::Played(played),
+            Err(game::Stop::Reached(_)) => Finished::Paused,
+            Err(e) => return Err(format!("{}: {e:?}", spec.key)),
+        };
         PLAYING.with_borrow_mut(|p| *p = None);
-        Ok(Finished::Played(played))
+        Ok(finished)
     }
 }
 

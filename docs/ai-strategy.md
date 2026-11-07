@@ -157,8 +157,10 @@ the cb8d5d5f mirror:
   plays the same game either way.
 - Every searched decision's root visits and mean rewards go to
   `decisions.jsonl`, as training data. `--add FAMILY` adds a family to a running
-  arena. It has no end and no pre-registered bar: the summary streams, and we
-  stop when we have learned enough.
+  arena once the run's binary can play it; one needing new code comes after
+  `--upgrade`, whose binary the runner moves to before its next decision. It has
+  no end and no pre-registered bar: the summary streams, and we stop when we
+  have learned enough.
 
 The evaluation is `beryl_search::evaluate`: a logistic function of each side's
 life, cards, lands, permanents, power, loyalty and library, fitted by

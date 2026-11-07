@@ -1,10 +1,11 @@
 //! The run directory's crash-safe files: append-only JSONL, each line flushed and fsynced
 //! before the next is written, whose torn last line (a power cut mid-write) is dropped when
-//! read; files rewritten whole through a temporary file and a rename; and the lock that
-//! keeps one runner per run.
+//! read; files rewritten whole through a temporary file and a rename; the lock that keeps
+//! one runner per run; and the stamp that tells when a file was replaced.
 
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{Read, Seek, SeekFrom, Write};
+use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 
 use serde::Serialize;
@@ -141,7 +142,15 @@ pub fn write_whole(path: &Path, contents: &[u8]) -> Result<(), String> {
 
 /// The run's lock, held while this process plays it.
 pub struct Lock {
-    _file: File,
+    file: File,
+}
+
+impl Lock {
+    /// Adds `note` to the lock file, under the holder's process id, for others to read
+    /// ([`holder`]).
+    pub fn note(&mut self, note: &str) -> Result<(), String> {
+        writeln!(self.file, "{note}").map_err(|e| format!("noting the lock: {e}"))
+    }
 }
 
 /// Takes the exclusive lock on run directory `dir`, or names the process that holds it.
@@ -160,7 +169,7 @@ pub fn lock(dir: &Path) -> Result<Lock, String> {
             file.set_len(0).map_err(at)?;
             file.seek(SeekFrom::Start(0)).map_err(at)?;
             writeln!(file, "{}", std::process::id()).map_err(at)?;
-            Ok(Lock { _file: file })
+            Ok(Lock { file })
         }
         Err(TryLockError::WouldBlock) => {
             let mut holder = String::new();
@@ -168,11 +177,54 @@ pub fn lock(dir: &Path) -> Result<Lock, String> {
             Err(format!(
                 "{} is already being played by process {}",
                 dir.display(),
-                holder.trim()
+                holder.lines().next().unwrap_or_default()
             ))
         }
         Err(TryLockError::Error(e)) => Err(at(e)),
     }
+}
+
+/// The lock file of run directory `dir` while a process holds it: its process id, then the
+/// notes it added. None while no process does.
+pub fn holder(dir: &Path) -> Result<Option<String>, String> {
+    let path = dir.join("lock");
+    let at = |e: std::io::Error| format!("{}: {e}", path.display());
+    let mut file = match File::open(&path) {
+        Ok(file) => file,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(at(e)),
+    };
+    match file.try_lock() {
+        // Free: closing the file lets it go again.
+        Ok(()) => Ok(None),
+        Err(TryLockError::WouldBlock) => {
+            let mut text = String::new();
+            file.read_to_string(&mut text).map_err(at)?;
+            Ok(Some(text))
+        }
+        Err(TryLockError::Error(e)) => Err(at(e)),
+    }
+}
+
+/// Which file is at a path, and which version of it: a file renamed into place over
+/// another, or rewritten, has a new stamp.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Stamp {
+    dev: u64,
+    ino: u64,
+    len: u64,
+    mtime: (i64, i64),
+}
+
+/// The stamp of the file at `path`, none if there is none.
+pub fn stamp(path: &Path) -> Option<Stamp> {
+    let m = fs::metadata(path).ok()?;
+    Some(Stamp {
+        dev: m.dev(),
+        ino: m.ino(),
+        len: m.len(),
+        mtime: (m.mtime(), m.mtime_nsec()),
+    })
 }
 
 #[cfg(test)]
@@ -221,13 +273,33 @@ mod tests {
         keep_lines(&dir.join("missing"), 0).unwrap();
     }
 
+    /// A second lock names the first holder; the holder's notes read back while it holds
+    /// the lock, and nothing once it lets go.
     #[test]
     fn a_second_lock_names_the_first_holder() {
         let dir = scratch("lock");
-        let held = lock(&dir).unwrap();
+        assert_eq!(holder(&dir).unwrap(), None);
+        let mut held = lock(&dir).unwrap();
+        held.note("a note").unwrap();
         let e = lock(&dir).err().unwrap();
-        assert!(e.contains(&std::process::id().to_string()), "{e}");
+        let pid = std::process::id().to_string();
+        assert!(e.ends_with(&format!("process {pid}")), "{e}");
+        assert_eq!(holder(&dir).unwrap(), Some(format!("{pid}\na note\n")));
         drop(held);
+        assert_eq!(holder(&dir).unwrap(), None);
         lock(&dir).unwrap();
+    }
+
+    /// A file renamed into place over another changes the stamp, even with the same bytes.
+    #[test]
+    fn a_replaced_file_has_a_new_stamp() {
+        let dir = scratch("stamp");
+        let path = dir.join("bin");
+        assert_eq!(stamp(&path), None);
+        fs::write(&path, "same").unwrap();
+        let first = stamp(&path).unwrap();
+        assert_eq!(stamp(&path), Some(first));
+        write_whole(&path, b"same").unwrap();
+        assert_ne!(stamp(&path), Some(first));
     }
 }

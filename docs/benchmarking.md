@@ -84,9 +84,9 @@ and `rollouts_never_change` every corpus rollout's answers and ending.
   19%), then the mana solver's source scan (`mana::source`, about 9%).
 - **A speed-up that keeps every answer** reaches a running long-think arena:
   `just longthink --upgrade` adopts the new binary only once the run's games
-  replay identically and a sample of its searches choose as they did. A change
-  that moves any answer re-pins `rollouts_never_change` and needs
-  `just longthink --new`.
+  replay identically and a sample of its searches choose as they did, and the
+  runner moves to it before its next decision. A change that moves any answer
+  re-pins `rollouts_never_change` and needs `just longthink --new`.
 
 ## Determinism
 

@@ -3,6 +3,7 @@
 //! logs an uninterrupted run writes.
 
 use std::fs;
+use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
@@ -117,6 +118,18 @@ fn assert_same(a: &Path, b: &Path) {
     assert_eq!(names(&a), names(&b));
     for ((name, x), (_, y)) in a.iter().zip(&b) {
         assert!(x == y, "{name} differs");
+    }
+}
+
+/// Waits until process `pid` holds run `dir`'s lock: its first line names it.
+fn playing(dir: &Path, pid: &str) {
+    while fs::read_to_string(dir.join("lock"))
+        .unwrap_or_default()
+        .lines()
+        .next()
+        != Some(pid)
+    {
+        thread::sleep(Duration::from_millis(1));
     }
 }
 
@@ -239,13 +252,7 @@ fn one_runner_per_run() {
     tiny(&dir);
     let first = runner(&dir, 1000).spawn().unwrap();
     let pid = first.id().to_string();
-    while fs::read_to_string(dir.join("lock"))
-        .unwrap_or_default()
-        .trim()
-        != pid
-    {
-        thread::sleep(Duration::from_millis(1));
-    }
+    playing(&dir, &pid);
     let o = longthink(&dir, &["--run", dir.to_str().unwrap()]);
     kill(first);
     assert!(!o.status.success());
@@ -260,13 +267,7 @@ fn a_family_added_to_a_run_being_played() {
     tiny(&dir);
     let first = runner(&dir, 1000).spawn().unwrap();
     let pid = first.id().to_string();
-    while fs::read_to_string(dir.join("lock"))
-        .unwrap_or_default()
-        .trim()
-        != pid
-    {
-        thread::sleep(Duration::from_millis(1));
-    }
+    playing(&dir, &pid);
     let family = "ismcts1/hidden/cut1/tuned";
     let o = longthink(&dir, &["--run", dir.to_str().unwrap(), "--add", family]);
     kill(first);
@@ -274,6 +275,105 @@ fn a_family_added_to_a_run_being_played() {
     assert!(text(&o).contains("from its next game"), "{}", text(&o));
     let config = fs::read_to_string(dir.join("config.json")).unwrap();
     assert!(config.contains(family), "{config}");
+}
+
+/// `--add` asks the run's own binary whether it can play the family, and refuses one it
+/// cannot, as one from before it could be asked cannot vouch for any, saying to upgrade
+/// first. It refuses too while a runner from before live upgrades plays, which may lack it.
+/// With `--upgrade`, in either order, the adopt comes first: refused, it adds nothing.
+#[test]
+fn a_family_the_runs_binary_cannot_play_is_refused() {
+    let dir = scratch("refused");
+    tiny(&dir);
+    let at = dir.to_str().unwrap();
+    let family = "ismcts1/hidden/cut1/tuned";
+    let config = || fs::read_to_string(dir.join("config.json")).unwrap();
+    let before = config();
+    let bin = dir.join("beryl_cli");
+    let real = dir.join("beryl_cli.real");
+    fs::rename(&bin, &real).unwrap();
+    for script in [
+        "echo 'usage: beryl_cli play ...' >&2; exit 1",
+        "echo 'beryl_cli: no leaf is named cut1' >&2; exit 1",
+        "echo ismcts1/hidden/rollout/tuned",
+    ] {
+        fs::write(&bin, format!("#!/bin/sh\n{script}\n")).unwrap();
+        fs::set_permissions(&bin, fs::Permissions::from_mode(0o755)).unwrap();
+        let o = longthink(&dir, &["--run", at, "--add", family]);
+        assert!(!o.status.success(), "{}", text(&o));
+        assert!(text(&o).contains("cannot play") && text(&o).contains("--upgrade"));
+        assert_eq!(config(), before);
+    }
+    fs::rename(&real, &bin).unwrap();
+
+    // A lock held without the note a runner that follows upgrades adds to it.
+    let mut lock = fs::File::create(dir.join("lock")).unwrap();
+    lock.try_lock().unwrap();
+    lock.write_all(b"4242\n").unwrap();
+    let o = longthink(&dir, &["--run", at, "--add", family]);
+    assert!(!o.status.success(), "{}", text(&o));
+    assert!(
+        text(&o).contains("process 4242") && text(&o).contains("start it again"),
+        "{}",
+        text(&o)
+    );
+    assert_eq!(config(), before);
+    drop(lock);
+
+    // A game this code names otherwise, which no adopt gets past.
+    let bogus = r#"{"game":"bogus","a":"expert","b":"expert","pair":0,"seed":0,"seat":0,"outcome":"win","turns":1,"decisions":1,"searched":[0,0],"iterations":[0,0],"work":[0,0]}"#;
+    fs::write(dir.join("games.jsonl"), format!("{bogus}\n")).unwrap();
+    for flags in [
+        ["--upgrade", "--add", family],
+        ["--add", family, "--upgrade"],
+    ] {
+        let o = longthink(&dir, &[&["--run", at][..], &flags].concat());
+        assert!(!o.status.success(), "{}", text(&o));
+        assert!(text(&o).contains("not adopted"), "{}", text(&o));
+        assert_eq!(config(), before);
+    }
+}
+
+/// `--upgrade` while the arena plays moves its runner to the adopted binary before its next
+/// decision, without a restart, and the run ends as an uninterrupted one.
+#[test]
+fn an_upgrade_moves_the_runner_playing() {
+    let whole = scratch("upgrade-whole");
+    tiny(&whole);
+    finish(&whole, 1);
+    let live = scratch("upgrade-live");
+    tiny(&live);
+    let at = live.to_str().unwrap();
+    let arena = Command::new(exe::beryl_cli())
+        .args(["longthink", "--run", at, "--games", "1"])
+        .env_remove("BERYL_LONGTHINK_PANIC")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    while progress(&live) == 0 {
+        thread::sleep(Duration::from_millis(1));
+    }
+    // Held still while the binary is replaced, so the game has decisions left to move with.
+    let pid = fs::read_to_string(live.join("lock")).unwrap();
+    let pid = pid.lines().next().unwrap();
+    let signal = |s: &str| {
+        let sent = Command::new("kill").args([s, pid]).status().unwrap();
+        assert!(sent.success(), "kill {s} {pid}: {sent}");
+    };
+    signal("-STOP");
+    let o = longthink(&live, &["--run", at, "--upgrade"]);
+    signal("-CONT");
+    assert!(o.status.success(), "{}", text(&o));
+    assert!(text(&o).contains("moves to it"), "{}", text(&o));
+    let o = arena.wait_with_output().unwrap();
+    assert!(o.status.success(), "{}", text(&o));
+    assert!(
+        text(&o).contains("binary upgraded") && text(&o).contains("binary was upgraded"),
+        "{}",
+        text(&o)
+    );
+    assert_same(&whole, &live);
 }
 
 /// A runner that panics is restarted; a game that panics twice at one decision is recorded

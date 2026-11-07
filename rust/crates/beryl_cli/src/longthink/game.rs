@@ -192,7 +192,8 @@ pub enum Stop {
         logged: u16,
         now: u16,
     },
-    /// Replay reached decision `until`, as asked.
+    /// The game stopped before decision `i`, as asked: at `until`, or where `asking` said
+    /// to. It resumes from its log.
     Reached(GameDecision),
     Failed(String),
 }
@@ -229,15 +230,15 @@ pub struct Game<'a> {
 }
 
 /// Plays `g` to its end through the `logged` answers, calling `asking` with the index, the
-/// position and the decision before an agent is asked one not in the log, and `answered`
-/// with each new decision's index, line and the transcript's label of its answer before it
-/// is applied.
+/// position and the decision before an agent is asked one not in the log, which stops the
+/// game there if it returns an error, and `answered` with each new decision's index, line
+/// and the transcript's label of its answer before it is applied.
 pub fn play(
     t: &GameTable,
     g: &Game<'_>,
     build: &Build<'_>,
     logged: &[Line],
-    mut asking: impl FnMut(GameDecision, &State, &Decision),
+    mut asking: impl FnMut(GameDecision, &State, &Decision) -> Result<(), Stop>,
     mut answered: impl FnMut(GameDecision, &Line, &str) -> Result<(), String>,
 ) -> Result<Played, Stop> {
     let seeds = seat_seeds(g.seed);
@@ -311,7 +312,7 @@ pub fn play(
                 )));
             }
             None => {
-                asking(i, view(&s, t, &mut x), &d);
+                asking(i, view(&s, t, &mut x), &d)?;
                 (player.ask(observe(&s, t, &mut x, d.player), &d), true)
             }
         };

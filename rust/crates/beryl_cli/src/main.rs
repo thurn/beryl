@@ -16,7 +16,8 @@
 //! - `beryl_cli longthink [--status | --upgrade | --add FAMILY] [--new | --run DIR] [--games
 //!   N]` starts the long-think arena or resumes it ([`longthink`], `just longthink`), and
 //!   supervises `beryl_cli longthink-run <dir> [--games N]`, the run's own copy of this
-//!   binary playing it.
+//!   binary playing it, which `beryl_cli longthink-check-family <family>` asks whether it
+//!   can play a family.
 //! - `beryl_cli eval-fit [--games N] [--seed N]` fits the board evaluation's weights on
 //!   seeded games and prints them ([`evalfit`]).
 //! - `beryl_cli review <replay.json> [--out FILE]` replays an app game's replay file and
@@ -62,10 +63,11 @@ fn main() -> ExitCode {
         [command, rest @ ..] if command == "longthink" => longthink::main(rest),
         [command, rest @ ..] if command == "eval-fit" => evalfit::main(rest),
         [command, rest @ ..] if command == "review" => review::main(rest),
-        [command, dir] if command == "longthink-run" => longthink::run(Path::new(dir), None),
+        [command, dir] if command == "longthink-run" => longthink::runner(Path::new(dir), None),
         [command, dir, flag, n] if command == "longthink-run" && flag == "--games" => {
-            number(flag, n).and_then(|n| longthink::run(Path::new(dir), Some(n)))
+            number(flag, n).and_then(|n| longthink::runner(Path::new(dir), Some(n)))
         }
+        [command, family] if command == longthink::CHECK_FAMILY => longthink::check_family(family),
         [command] if command == "serve" => serve::serve(DEFAULT_PORT),
         [command, flag, port] if command == "serve" && flag == "--port" => {
             number(flag, port).and_then(serve::serve)
