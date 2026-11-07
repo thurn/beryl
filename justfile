@@ -103,6 +103,12 @@ fuzz games="10000":
 play *args:
     RUSTFLAGS="{{ search_cpu }}" nice -n 10 cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- play "$@"
 
+# An app game's transcript with the agent's search at each of its decisions, at low priority (REPLAY.json, --out FILE)
+[group('agents')]
+[no-cd]
+review *args:
+    RUSTFLAGS="{{ search_cpu }}" nice -n 10 cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- review "$@"
+
 # A round robin between agents, games in parallel at low priority (--games N, --seed N, --json FILE, --check)
 [group('agents')]
 [no-cd]

@@ -36,6 +36,11 @@ impl Transcript {
         }
     }
 
+    /// Adds a line of the reader's own.
+    pub fn note(&mut self, line: &str) {
+        let _ = writeln!(self.text, "{line}");
+    }
+
     pub fn text(&self) -> &str {
         &self.text
     }

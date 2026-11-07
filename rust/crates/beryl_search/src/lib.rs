@@ -236,7 +236,7 @@ pub static AGENTS: &[AgentInfo] = &[
     AgentInfo {
         name: "pimc18-omniscient-30m",
         title: "Deep Seer",
-        description: "Cheats as the Seer does, thinking seconds a move: the long-think arena's best",
+        description: "Cheats as the Seer does, thinking seconds a move",
         new: deep_seer,
     },
 ];
@@ -275,7 +275,7 @@ fn mcts_hidden(t: &GameTable, seed: u64, budget: Budget) -> Box<dyn GameAgent + 
     )))
 }
 
-/// `pimc18/omniscient/rollout/tuned@30M`, the long-think arena's leader in run-003: 30M
+/// `pimc18/omniscient/rollout/tuned@30M`, the long-think arena's leading family in run-003: 30M
 /// engine steps a decision whatever `budget` says, on every core. Its moves do not depend on
 /// the threads.
 fn deep_seer(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
