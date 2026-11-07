@@ -1,0 +1,377 @@
+//! `beryl_cli anchor-replay <run-dir> <entrant> [--examples N]`: what anchoring a long-think
+//! entrant to greedy's answer (`beryl_search::Options::anchor`, epic by-7wl) would have
+//! changed in a run's games, from their logs alone, searching nothing. Each game replays from
+//! its seed through its logged answers; at each of the entrant's searched decisions, greedy's
+//! answer is set beside the search's root visits and means. For each margin it reports how
+//! often the anchor would have played greedy's answer instead and what the search itself
+//! estimates that costs: the sum, over those decisions, of its choice's mean less greedy's.
+//!
+//! The logs keep each candidate's visits and rewards summed over the trees, not tree by tree,
+//! so the noise term here is a binomial standard error from the visits: an approximation of
+//! the anchor's own, which reads the spread across the trees.
+//!
+//! That estimate of the cost is biased upward: the search's choice is the candidate it
+//! visited most, which leads greedy's answer even where the two are worth the same. With
+//! `--recheck N`, N of the decisions switched are searched again from a fresh seed at the
+//! entrant's budget, the whole of it split between the two candidates
+//! (`LongSearch::duel`), and the cost is estimated again from those leads, which carry no
+//! such bias.
+//!
+//! With `--guarded`, only the decisions an anchored search guards (`beryl_search::guarded`)
+//! count; without it, every decision where greedy's answer differs.
+
+use std::fmt::Write as _;
+use std::fs;
+use std::path::Path;
+
+use beryl_engine::{
+    Choice, Decision, DecisionKind, Profile, Replay, Scratch, State, Step, apply, next, observe,
+};
+use beryl_search::{ANCHOR_ERRORS, Family, LongSearch, RolloutPolicy, Settings, guarded};
+use serde::Deserialize;
+
+use crate::game::mirror;
+use crate::transcript::Transcript;
+
+/// The margins reported, in mean reward.
+const MARGINS: [f64; 5] = [0.0, 0.005, 0.01, 0.02, 0.04];
+
+/// The most the anchor may cost a game, by the search's own estimate, at the margin
+/// recommended.
+const COST_MAX: f64 = 0.01;
+
+/// The fields of a `games.jsonl` line this reads.
+#[derive(Deserialize)]
+struct GameLine {
+    game: String,
+    a: String,
+    b: String,
+    seed: u64,
+    /// The seat of `a`.
+    seat: u8,
+    outcome: String,
+}
+
+/// The fields of a game log's line this reads.
+#[derive(Deserialize)]
+struct LogLine {
+    seat: u8,
+    choice: u16,
+    search: Option<Searched>,
+}
+
+#[derive(Deserialize)]
+struct Searched {
+    visits: Vec<u32>,
+    rewards: Vec<f64>,
+}
+
+/// One searched decision where greedy's answer differs from the search's choice.
+struct Differs {
+    game: String,
+    state: State,
+    decision: Decision,
+    search: Choice,
+    greedy: Choice,
+    /// The search's choice's mean less greedy's, and the binomial standard error of that
+    /// difference; none if the search never visited greedy's answer.
+    lead: Option<(f64, f64)>,
+    /// The decision as a transcript shows it, with both candidates' visits and means.
+    line: String,
+}
+
+pub fn main(args: &[String]) -> Result<(), String> {
+    let usage = || {
+        "usage: beryl_cli anchor-replay <run-dir> <entrant> [--examples N] [--recheck N] \
+         [--guarded]"
+            .to_owned()
+    };
+    let [dir, entrant, flags @ ..] = args else {
+        return Err(usage());
+    };
+    let (mut examples, mut recheck) = (12, 0);
+    let only_guarded = flags.iter().any(|f| f == "--guarded");
+    let flags: Vec<&String> = flags.iter().filter(|f| *f != "--guarded").collect();
+    for pair in flags.chunks(2) {
+        let n = pair.get(1).and_then(|n| n.parse().ok()).ok_or_else(usage)?;
+        match pair[0].as_str() {
+            "--examples" => examples = n,
+            "--recheck" => recheck = n,
+            _ => return Err(usage()),
+        }
+    }
+    print!(
+        "{}",
+        replay(Path::new(dir), entrant, examples, recheck, only_guarded)?
+    );
+    Ok(())
+}
+
+fn replay(
+    dir: &Path,
+    entrant: &str,
+    examples: usize,
+    recheck: usize,
+    only_guarded: bool,
+) -> Result<String, String> {
+    let bad = || format!("{entrant:?} is no long-think entrant (family@budget)");
+    let (family, budget) = entrant.split_once('@').ok_or_else(bad)?;
+    let family: Family = family.parse()?;
+    let work = parse_work(budget).ok_or_else(bad)?;
+    let t = mirror();
+    let policy = RolloutPolicy::with(&t, family.knowledge);
+    let games = fs::read_to_string(dir.join("games.jsonl"))
+        .map_err(|e| format!("{}: {e}", dir.join("games.jsonl").display()))?;
+    let (mut played, mut searched) = (0u32, 0u32);
+    let mut differs = Vec::new();
+    for g in games.lines().map(serde_json::from_str::<GameLine>) {
+        let g = g.map_err(|e| format!("games.jsonl: {e}"))?;
+        let seat = if g.a == entrant {
+            g.seat
+        } else if g.b == entrant {
+            1 - g.seat
+        } else {
+            continue;
+        };
+        if g.outcome == "crashed" {
+            continue;
+        }
+        played += 1;
+        let path = dir.join("logs").join(format!("{}.jsonl", g.game));
+        let log = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let names = if seat == 0 {
+            [entrant, "opponent"]
+        } else {
+            ["opponent", entrant]
+        };
+        let mut s = State::new(&t, g.seed, Profile::SMART);
+        let mut x = Scratch::new();
+        for line in log.lines().map(serde_json::from_str::<LogLine>) {
+            let line = line.map_err(|e| format!("{}: {e}", path.display()))?;
+            let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) else {
+                return Err(format!("{}: the game ended before its log", g.game));
+            };
+            if d.player.index() != usize::from(line.seat) || usize::from(line.choice) >= d.len() {
+                return Err(format!("{}: the log no longer fits the game", g.game));
+            }
+            if let Some(search) = line.search.filter(|_| line.seat == seat) {
+                searched += 1;
+                let greedy = policy.choose(&t, observe(&s, &t, &mut x, d.player), &d);
+                let counted = !only_guarded || guarded(&d, greedy, Choice(line.choice));
+                if greedy.0 != line.choice && counted {
+                    let mean = |c: u16| {
+                        let v = f64::from(search.visits[usize::from(c)]);
+                        (v > 0.0).then(|| (search.rewards[usize::from(c)] / v, v))
+                    };
+                    let lead = mean(line.choice)
+                        .zip(mean(greedy.0))
+                        .map(|((mc, vc), (mg, vg))| {
+                            let var = |m: f64, v: f64| m * (1.0 - m) / v;
+                            (mc - mg, (var(mc, vc) + var(mg, vg)).sqrt())
+                        });
+                    let mut transcript = Transcript::new(names);
+                    transcript.decision(&t, &s, &d, Choice(line.choice), &[]);
+                    let shown = transcript.text().lines().last().unwrap_or_default().trim();
+                    let label = |c: u16| {
+                        mean(c).map_or("unvisited".to_owned(), |(m, v)| format!("{v} {m:.3}"))
+                    };
+                    differs.push(Differs {
+                        game: g.game.clone(),
+                        state: s,
+                        decision: d,
+                        search: Choice(line.choice),
+                        greedy,
+                        lead,
+                        line: format!(
+                            "{:?}: {shown}  search [{}] {}  greedy [{}] {}",
+                            d.kind,
+                            line.choice,
+                            label(line.choice),
+                            greedy.0,
+                            label(greedy.0)
+                        ),
+                    });
+                }
+            }
+            apply(&mut s, &t, &mut x, &mut Replay, Choice(line.choice));
+        }
+    }
+    let threads = std::thread::available_parallelism()
+        .map_or(1, |n| u32::try_from(n.get()).unwrap_or(u32::MAX));
+    let settings = Settings {
+        family,
+        work,
+        threads,
+    };
+    let fresh = rechecked(&t, settings, &differs, recheck);
+    Ok(report(
+        entrant, played, searched, &differs, &fresh, examples,
+    ))
+}
+
+/// A budget, as longthink names it: 300k, 3M, 1G.
+pub fn parse_work(s: &str) -> Option<u64> {
+    let (digits, scale) = match s.as_bytes().last()? {
+        b'k' => (&s[..s.len() - 1], 1_000),
+        b'M' => (&s[..s.len() - 1], 1_000_000),
+        b'G' => (&s[..s.len() - 1], 1_000_000_000),
+        _ => (s, 1),
+    };
+    digits.parse::<u64>().ok()?.checked_mul(scale)
+}
+
+/// Fresh leads, by index into `differs`, for `n` of the decisions the widest margin switches,
+/// spread evenly over them: each the search's choice's lead over greedy's answer from a new
+/// seed, the budget split between the two.
+fn rechecked(
+    t: &beryl_engine::GameTable,
+    settings: Settings,
+    differs: &[Differs],
+    n: usize,
+) -> Vec<(usize, f64)> {
+    let widest = MARGINS[MARGINS.len() - 1];
+    let switched: Vec<usize> = (0..differs.len())
+        .filter(|&i| switches(&differs[i], widest))
+        .collect();
+    if n == 0 || switched.is_empty() {
+        return Vec::new();
+    }
+    let step = (switched.len() as f64 / n as f64).max(1.0);
+    let mut x = Scratch::new();
+    (0..n.min(switched.len()))
+        .map(|k| switched[(k as f64 * step) as usize])
+        .map(|i| {
+            let d = &differs[i];
+            let search = LongSearch::new(t, settings, 0x5EED_A11C ^ i as u64);
+            let obs = observe(&d.state, t, &mut x, d.decision.player);
+            let duel = search.duel(obs, &d.decision, d.search, d.greedy);
+            eprintln!(
+                "rechecked {}: lead {:+.4} ± {:.4}",
+                i, duel.lead, duel.error
+            );
+            (i, duel.lead)
+        })
+        .collect()
+}
+
+/// Whether the anchor would play greedy's answer over the search's choice at `margin`.
+fn switches(d: &Differs, margin: f64) -> bool {
+    d.lead
+        .is_none_or(|(lead, error)| lead <= margin.max(ANCHOR_ERRORS * error))
+}
+
+fn report(
+    entrant: &str,
+    played: u32,
+    searched: u32,
+    differs: &[Differs],
+    fresh: &[(usize, f64)],
+    examples: usize,
+) -> String {
+    let mut out = String::new();
+    let games = f64::from(played.max(1));
+    let share = |n: usize| 100.0 * n as f64 / f64::from(searched.max(1));
+    let _ = writeln!(
+        out,
+        "{entrant}: {played} games, {searched} searched decisions; greedy's answer differs \
+         at {} ({:.1}%), {} of them unvisited",
+        differs.len(),
+        share(differs.len()),
+        differs.iter().filter(|d| d.lead.is_none()).count()
+    );
+    let _ = writeln!(
+        out,
+        "\nmargin  switched        a game  logged cost a game (net, gross)  fresh cost a game"
+    );
+    let mut recommended = None;
+    for margin in MARGINS {
+        let switched: Vec<&Differs> = differs.iter().filter(|d| switches(d, margin)).collect();
+        let leads = switched.iter().filter_map(|d| d.lead.map(|(l, _)| l));
+        let net: f64 = leads.clone().sum::<f64>() / games;
+        let gross: f64 = leads.map(|l| l.max(0.0)).sum::<f64>() / games;
+        let sample: Vec<f64> = fresh
+            .iter()
+            .filter(|&&(i, _)| switches(&differs[i], margin))
+            .map(|&(_, lead)| lead)
+            .collect();
+        let per_game = switched.len() as f64 / games;
+        let fresh_cost = if sample.is_empty() {
+            "-".to_owned()
+        } else {
+            let (mean, error) = mean_and_error(&sample);
+            format!(
+                "{:+.4} ± {:.4} ({} rechecked)",
+                per_game * mean,
+                per_game * error,
+                sample.len()
+            )
+        };
+        let _ = writeln!(
+            out,
+            "{margin:<6}  {:>5} ({:>4.1}%)  {per_game:>6.1}  {net:+.4}, {gross:.4}  \
+             {fresh_cost}",
+            switched.len(),
+            share(switched.len()),
+        );
+        if gross <= COST_MAX {
+            recommended = Some(margin);
+        }
+    }
+    let _ = writeln!(
+        out,
+        "\nrecommended margin by the logged cost (the largest costing at most {COST_MAX} a \
+         game, gross): {}",
+        recommended.map_or("none".to_owned(), |m| m.to_string())
+    );
+    let margin = 0.01;
+    let _ = writeln!(out, "\nswitched at {margin}, by kind:");
+    let mut kinds: Vec<(DecisionKind, usize, Vec<f64>)> = Vec::new();
+    for (i, d) in differs.iter().enumerate() {
+        if !switches(d, margin) {
+            continue;
+        }
+        let k = d.decision.kind;
+        let at = kinds.iter().position(|e| e.0 == k).unwrap_or_else(|| {
+            kinds.push((k, 0, Vec::new()));
+            kinds.len() - 1
+        });
+        kinds[at].1 += 1;
+        kinds[at]
+            .2
+            .extend(fresh.iter().filter(|e| e.0 == i).map(|e| e.1));
+    }
+    kinds.sort_by_key(|e| std::cmp::Reverse(e.1));
+    for (kind, n, leads) in kinds {
+        let fresh = if leads.is_empty() {
+            String::new()
+        } else {
+            let (mean, error) = mean_and_error(&leads);
+            format!("  fresh lead {mean:+.4} ± {error:.4} over {}", leads.len())
+        };
+        let _ = writeln!(
+            out,
+            "  {kind:?}: {n} ({:.1} a game){fresh}",
+            n as f64 / games
+        );
+    }
+    let _ = writeln!(out, "\nswitched at {margin}, the first {examples}:");
+    for d in differs
+        .iter()
+        .filter(|d| switches(d, margin))
+        .take(examples)
+    {
+        let _ = writeln!(out, "  {}  {}", d.game, d.line.trim());
+    }
+    out
+}
+
+/// The mean of `xs` and its standard error.
+fn mean_and_error(xs: &[f64]) -> (f64, f64) {
+    let n = xs.len() as f64;
+    let mean = xs.iter().sum::<f64>() / n;
+    if xs.len() < 2 {
+        return (mean, 0.0);
+    }
+    let variance = xs.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / (n - 1.0);
+    (mean, (variance / n).sqrt())
+}

@@ -25,6 +25,7 @@
 //! - `beryl_cli serve [--port N]` serves the app's game commands over HTTP for a UI in a plain
 //!   browser to play live games through (`just ui-live`, [`serve`]).
 
+mod anchor_replay;
 mod boards;
 mod evalfit;
 mod fixture;
@@ -63,6 +64,7 @@ fn main() -> ExitCode {
         [command, rest @ ..] if command == "longthink" => longthink::main(rest),
         [command, rest @ ..] if command == "eval-fit" => evalfit::main(rest),
         [command, rest @ ..] if command == "review" => review::main(rest),
+        [command, rest @ ..] if command == "anchor-replay" => anchor_replay::main(rest),
         [command, dir] if command == "longthink-run" => longthink::runner(Path::new(dir), None),
         [command, dir, flag, n] if command == "longthink-run" && flag == "--games" => {
             number(flag, n).and_then(|n| longthink::runner(Path::new(dir), Some(n)))

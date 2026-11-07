@@ -1,8 +1,10 @@
-//! `beryl_cli review <replay.json> [--out FILE]`: an app game's transcript, with the agent's
-//! search at each of its decisions. The replay file's log answers every decision; the agent,
-//! rebuilt from the game's seed as the app built it, searches each of its own again, so its
-//! root visits and mean rewards show why it chose as it did. A search that chooses other than
-//! the log did is marked: the agent's code changed since the game, or the replay drifted.
+//! `beryl_cli review <replay.json> [--agent NAME] [--out FILE]`: an app game's transcript,
+//! with the agent's search at each of its decisions. The replay file's log answers every
+//! decision; the agent, rebuilt from the game's seed as the app built it, searches each of its
+//! own again, so its root visits and mean rewards show why it chose as it did. A search that
+//! chooses other than the log did is marked: the agent's code changed since the game, the
+//! replay drifted, or `--agent` named another agent to search in its place, a registered one
+//! or a long-think entrant (`pimc18/omniscient/rollout/tuned/anchor+mid@30M`).
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -12,7 +14,7 @@ use beryl_engine::event::Event;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{Choice, Profile, Replay, Scratch, Seat, Small, State, Step};
 use beryl_engine::{apply, next, observe, view};
-use beryl_search::{Agent, Budget, agent};
+use beryl_search::{Agent, Budget, Family, GameAgent, LongSearch, Settings, Widening, agent};
 use beryl_session::replay::Entry;
 use beryl_session::{ReplayFile, with_stops};
 
@@ -20,12 +22,22 @@ use crate::game;
 use crate::transcript::Transcript;
 
 pub fn main(args: &[String]) -> Result<(), String> {
-    let (path, out) = match args {
-        [path] => (path, None),
-        [path, flag, out] if flag == "--out" => (path, Some(out)),
-        _ => return Err("usage: beryl_cli review <replay.json> [--out FILE]".to_owned()),
+    let usage = || "usage: beryl_cli review <replay.json> [--agent NAME] [--out FILE]".to_owned();
+    let [path, flags @ ..] = args else {
+        return Err(usage());
     };
-    let text = review(Path::new(path))?;
+    let (mut out, mut searcher) = (None, None);
+    for pair in flags.chunks(2) {
+        let [flag, value] = pair else {
+            return Err(usage());
+        };
+        match flag.as_str() {
+            "--out" => out = Some(value),
+            "--agent" => searcher = Some(value.as_str()),
+            _ => return Err(usage()),
+        }
+    }
+    let text = review(Path::new(path), searcher)?;
     if let Some(out) = out {
         std::fs::write(out, text).map_err(|e| format!("{out}: {e}"))
     } else {
@@ -34,7 +46,33 @@ pub fn main(args: &[String]) -> Result<(), String> {
     }
 }
 
-fn review(path: &Path) -> Result<String, String> {
+/// The agent `name` names for a game from `seed`: a registered agent, or a long-think entrant
+/// (`family@budget`) searching on every core.
+fn searcher(
+    t: &beryl_engine::GameTable,
+    name: &str,
+    seed: u64,
+) -> Result<Box<dyn GameAgent + Send>, String> {
+    if let Some(info) = agent(name) {
+        return Ok((info.new)(t, seed, Budget::DEFAULT));
+    }
+    let bad = || format!("no agent {name:?}: a registered agent or family@budget");
+    let (family, budget) = name.split_once('@').ok_or_else(bad)?;
+    let family: Family = family.parse()?;
+    let work = crate::anchor_replay::parse_work(budget).ok_or_else(bad)?;
+    let threads = std::thread::available_parallelism()
+        .map_or(1, |n| u32::try_from(n.get()).unwrap_or(u32::MAX));
+    let settings = Settings {
+        family,
+        work,
+        threads,
+    };
+    Ok(Box::new(Widening::new(LongSearch::<Small>::new(
+        t, settings, seed,
+    ))))
+}
+
+fn review(path: &Path, searcher_name: Option<&str>) -> Result<String, String> {
     let file = ReplayFile::load(path).map_err(|e| format!("{}: {e:?}", path.display()))?;
     let mirror: Vec<(u8, String)> = WU_CONTROL
         .iter()
@@ -46,15 +84,15 @@ fn review(path: &Path) -> Result<String, String> {
     let human = Seat::try_new(file.human).ok_or("no such human seat")?;
     let bot = human.opponent();
     let t = game::mirror();
-    let info = agent(&file.opponent).ok_or_else(|| format!("no agent {:?}", file.opponent))?;
+    let name = searcher_name.unwrap_or(&file.opponent);
     // As `beryl_session`'s `Game::new`: the agent draws from its own stream.
-    let mut opponent = (info.new)(&t, SplitMix64::new(file.seed).next_u64(), Budget::DEFAULT);
+    let mut opponent = searcher(&t, name, SplitMix64::new(file.seed).next_u64())?;
     let mut s = State::new(&t, file.seed, with_stops(Profile::SMART, file.stops, human));
     let mut x = Scratch::recording();
     let names = if human == Seat::P0 {
-        ["human", file.opponent.as_str()]
+        ["human", name]
     } else {
-        [file.opponent.as_str(), "human"]
+        [name, "human"]
     };
     let mut transcript = Transcript::new(names);
     let mut log = file.log.iter();
@@ -88,6 +126,16 @@ fn review(path: &Path) -> Result<String, String> {
                     for (i, (&v, &r)) in search.visits.iter().zip(&search.rewards).enumerate() {
                         let mean = if v == 0 { 0.0 } else { r / f64::from(v) };
                         let _ = write!(line, " [{i}] {v} {mean:.3}");
+                    }
+                    if let Some(a) = search.anchor {
+                        let _ = write!(
+                            line,
+                            "  greedy [{}] lead {:+.3} ± {:.3}{}",
+                            a.greedy.0,
+                            a.lead,
+                            a.error,
+                            if a.overrides() { " overridden" } else { "" }
+                        );
                     }
                     let _ = write!(
                         line,

@@ -131,7 +131,10 @@ the cb8d5d5f mirror:
   method is PIMC with N fixed worlds or ISMCTS with a fresh world every
   iteration. Sight is hidden, the hands or everything. A leaf is a full rollout,
   one cut off after k turns and evaluated, or the evaluation alone. Card values
-  are an estimate, 17lands' games-in-hand win rate or hand-tuned.
+  are an estimate, 17lands' games-in-hand win rate or hand-tuned. Options
+  (by-7wl) may follow: `anchor` plays greedy's answer unless the search's own
+  choice leads it clearly, tree by tree; `mid` lets greedy answer the questions
+  asked below the root while casting or resolving.
 - **Rollouts draw their moves** by a softmax over the greedy policy's scores, at
   a temperature as strong as greedy. A greedy rollout always plays the same game
   from a position, so in a world the search knows it would exploit one line of

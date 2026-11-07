@@ -95,10 +95,11 @@ pub struct Family {
 /// default: a family named without them plays as it always has.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Options {
-    /// Greedy's answer is the root's default. The search's own choice replaces it only by a
-    /// clear lead ([`ANCHOR_MARGIN`], [`ANCHOR_ERRORS`]), measured tree by tree after the last
-    /// quarter of the work goes to the two alone. Most of a search's choices lead the
-    /// runner-up by less than noise; there, a sensible default beats a coin flip.
+    /// Where [`guarded`], greedy's answer is the root's default. The search's own choice
+    /// replaces it only by a clear lead ([`ANCHOR_MARGIN`], [`ANCHOR_ERRORS`]), measured tree
+    /// by tree after the last quarter of the work goes to the two alone. Most of a search's
+    /// choices lead the runner-up by less than noise; there, a sensible default beats a coin
+    /// flip.
     pub anchor: bool,
     /// Below the root, greedy answers the questions asked while casting or resolving
     /// ([`answered_by_policy`]), so an option followed by a wide choice is not valued as if
@@ -147,7 +148,11 @@ const FREE_ROUNDS: u64 = ROUNDS * 3 / 4;
 /// The least lead in mean reward over greedy's answer that lets an anchored search play its
 /// own choice instead. Below it, the rollouts' small differences are not trusted however
 /// many there are: the Deep Seer incident's Oust on its own token led passing by 0.006.
-pub const ANCHOR_MARGIN: f64 = 0.01;
+/// Measured by `beryl_cli anchor-replay --guarded` over run-003's games of
+/// `pimc18/omniscient/rollout/tuned@10M` (42 games, 2026-11-07), every decision it would
+/// switch searched again from a fresh seed: at 0.02 the anchor switches 0.4 decisions a game
+/// at a cost of 0.005 ± 0.001 a game by the search's own estimate; at 0.04, 0.7 for 0.013.
+pub const ANCHOR_MARGIN: f64 = 0.02;
 
 /// The standard errors, across the trees, by which an anchored search's lead over greedy's
 /// answer must clear zero.
@@ -387,10 +392,15 @@ impl<L: Layout> LongSearch<L> {
 
     /// Grows `trees` on decision `d` to the budget, in rounds, until the leader is settled.
     /// With greedy's answer `anchor`, the first [`FREE_ROUNDS`] grow as ever; then, if the
-    /// leader is not greedy's answer, the rest of the work goes to the two alone, so that
-    /// the choice between them is not made against a starved estimate. Returns the
-    /// iterations run and the work they spent.
-    fn grow(&self, trees: &mut [Tree<L>], anchor: Option<Choice>) -> (u64, u64) {
+    /// leader is not greedy's answer and `guards` it, the rest of the work goes to the two
+    /// alone, so that the choice between them is not made against a starved estimate.
+    /// Returns the iterations run and the work they spent.
+    fn grow(
+        &self,
+        trees: &mut [Tree<L>],
+        anchor: Option<Choice>,
+        guards: impl Fn(Choice) -> bool,
+    ) -> (u64, u64) {
         let n = trees.len() as u64;
         let work = self.settings.work;
         let shares: Vec<u64> = (0..n).map(|i| work / n + u64::from(i < work % n)).collect();
@@ -413,7 +423,7 @@ impl<L: Layout> LongSearch<L> {
                 self.rounds(trees, &plan, 1..=FREE_ROUNDS, true);
                 let (visits, rewards) = totals(trees);
                 let (b, g) = (leader(&visits, &rewards), usize::from(g.0));
-                if b == g {
+                if b == g || !guards(Choice(b as u16)) {
                     if !settled(trees, &shares, &credit, &start) {
                         self.rounds(trees, &plan, FREE_ROUNDS + 1..=ROUNDS, true);
                     }
@@ -434,6 +444,37 @@ impl<L: Layout> LongSearch<L> {
             .fold((0, 0), |(i, w), (tree, &(w0, i0))| {
                 (i + tree.iterations - i0, w + tree.work - w0)
             })
+    }
+
+    /// For research: grows fresh trees on decision `d` for the whole budget with their roots
+    /// held to candidates `a` and `b`, and returns `a`'s lead over `b` tree by tree, as an
+    /// anchored search checks it (`a` as its choice, `b` as greedy's answer). Unlike the lead
+    /// a search reports for the candidate it visited most, it carries no bias from having
+    /// been chosen. Keeps nothing.
+    pub fn duel(
+        &self,
+        obs: Observation<'_, L>,
+        d: &Decision<L>,
+        a: Choice,
+        b: Choice,
+    ) -> AnchorCheck {
+        let mut trees = self.plant(obs, d, self.decision);
+        let n = trees.len() as u64;
+        let work = self.settings.work;
+        let shares: Vec<u64> = (0..n).map(|i| work / n + u64::from(i < work % n)).collect();
+        let credit = vec![0; trees.len()];
+        let start: Vec<(u64, u64)> = trees.iter().map(|t| (t.work, t.iterations)).collect();
+        for tree in &mut trees {
+            tree.allowed = Some([usize::from(a.0), usize::from(b.0)]);
+        }
+        let plan = Plan {
+            shares: &shares,
+            credit: &credit,
+            start: &start,
+            threads: (self.settings.threads.max(1) as usize).min(trees.len()),
+        };
+        self.rounds(&mut trees, &plan, 1..=ROUNDS, false);
+        check(&trees, a, b)
     }
 
     /// Grows `trees` through `rounds` of `plan`, each to its share of the work so far, and
@@ -710,10 +751,13 @@ impl<L: Layout> Agent<L> for LongSearch<L> {
             .options
             .anchor
             .then(|| self.policy.choose(&self.table, obs, d));
-        let (iterations, work) = self.grow(&mut trees, greedy);
+        let guards = |b: Choice| greedy.is_some_and(|g| guarded(d, g, b));
+        let (iterations, work) = self.grow(&mut trees, greedy, guards);
         let (visits, rewards) = totals(&trees);
         let best = Choice(leader(&visits, &rewards) as u16);
-        let anchor = greedy.map(|g| check(&trees, best, g));
+        let anchor = greedy
+            .filter(|_| guards(best))
+            .map(|g| check(&trees, best, g));
         let choice = anchor.map_or(best, |a| a.played());
         self.last = Some(Search {
             decision,
@@ -1146,6 +1190,20 @@ impl<L: Layout> Tree<L> {
     }
 }
 
+/// Whether an anchored search ([`Options::anchor`]) plays greedy's answer `greedy` to
+/// decision `d` over its own choice `search` unless that choice leads clearly: a spell the
+/// search would cast where greedy would pass, as Deep Seer once cast Oust on its own token.
+/// Not spending a card on a coin flip is nearly free. Elsewhere greedy's answers cost: in
+/// run-003's games of the leading family at 10M steps, searched again from fresh seeds, the
+/// search's own choice led greedy's answer by about 0.003 at other priority decisions (some
+/// 20 a game) and by about 0.002 at targets, objects and the other questions (some 13 a game),
+/// so guarding those would cost 0.04 to 0.07 a game.
+pub fn guarded<L: Layout>(d: &Decision<L>, greedy: Choice, search: Choice) -> bool {
+    d.kind == DecisionKind::Priority
+        && d.candidates.option(greedy) == Some(Opt::Pass)
+        && matches!(d.candidates.option(search), Some(Opt::Cast { .. }))
+}
+
 /// Whether a family with [`Options::mid`] lets greedy answer decisions of `kind` below the
 /// root. Those asked while casting or activating
 /// ([CR 601.2](https://yawgatog.com/resources/magic-rules/#R6012): "To cast a spell is to
@@ -1409,7 +1467,7 @@ mod tests {
         assert!(check(0.05, 0.01, 18).overrides());
         assert!(!check(0.05, 0.03, 18).overrides(), "within the noise");
         assert!(
-            check(0.02, 0.5, 1).overrides(),
+            check(0.03, 0.5, 1).overrides(),
             "one tree: the margin alone"
         );
         assert!(!check(0.5, 0.0, 0).overrides(), "no tree visited both");
@@ -1533,8 +1591,8 @@ mod tests {
         met
     }
 
-    /// An anchored search plays greedy's answer unless its own choice leads it clearly, and
-    /// records its check; a plain search records none.
+    /// An anchored search plays greedy's answer where it guards it, unless its own choice
+    /// leads clearly, and records its check; elsewhere it plays as the plain search does.
     #[test]
     fn an_anchored_search_plays_greedy_unless_clearly_beaten() {
         let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
@@ -1552,27 +1610,33 @@ mod tests {
             anchor: true,
             mid: false,
         };
-        let (mut checked, mut overridden) = (0, 0);
-        for (i, (s, d)) in positions(&t, 2).into_iter().take(12).enumerate() {
+        let (mut searched, mut checked) = (0, 0);
+        for (i, (s, d)) in positions(&t, 2).into_iter().take(16).enumerate() {
             let obs = observe(&s, &t, &mut x, d.player);
             let mut anchored = LongSearch::<Small>::new(&t, settings(anchor), i as u64);
+            let mut plain = LongSearch::<Small>::new(&t, settings(Options::default()), i as u64);
             let c = anchored.choose(obs, &d);
+            let free = plain.choose(obs, &d);
+            assert_eq!(plain.last_search().map(|s| s.anchor), Some(None));
             let Some(search) = anchored.last_search() else {
                 continue;
             };
-            let a = search.anchor.expect("an anchored search's check");
-            assert_eq!(a.greedy, policy.choose(&t, obs, &d));
-            assert_eq!(c, a.played());
-            if c != a.greedy {
-                assert!(a.lead > ANCHOR_MARGIN && a.lead > ANCHOR_ERRORS * a.error);
-                overridden += 1;
+            searched += 1;
+            let greedy = policy.choose(&t, obs, &d);
+            if let Some(a) = search.anchor {
+                assert_eq!(a.greedy, greedy);
+                assert!(guarded(&d, greedy, a.search));
+                assert_eq!(c, a.played());
+                if c != greedy {
+                    assert!(a.lead > ANCHOR_MARGIN && a.lead > ANCHOR_ERRORS * a.error);
+                }
+                checked += 1;
+            } else {
+                assert!(c == greedy || !guarded(&d, greedy, c));
+                assert_eq!(c, free, "unguarded, it plays as the plain search");
             }
-            checked += 1;
-            let mut plain = LongSearch::<Small>::new(&t, settings(Options::default()), i as u64);
-            plain.choose(obs, &d);
-            assert_eq!(plain.last_search().map(|s| s.anchor), Some(None));
         }
-        assert!(checked > 3, "{checked} searched");
-        assert!(overridden < checked, "greedy never played");
+        assert!(searched > 3, "{searched} searched");
+        assert!(checked > 0, "no guarded decision met");
     }
 }
