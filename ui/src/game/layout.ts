@@ -157,8 +157,8 @@ const BACK_WIDTH = 105;
  * animated land or a crewed Vehicle stands with the creatures. The rows lie clear of one
  * another, so a long row of creatures may pass over the land side of the table. Every row's
  * cards are scaled by their depth (depthScale). */
-/** Where each side's life orb begins (Board.tsx's Life, with its wings): the lands end left of
- * it. */
+/** Where each side's life orb and its phase stops begin (Board.tsx's Life, screens.css
+ * .phase-tracker-compact): the lands end left of them. */
 const ORB_LEFT = 664;
 const ROWS: Record<
   Side,
@@ -181,14 +181,14 @@ const ROWS: Record<
     permanents: 235,
     others: { x: 998, end: 1180, width: 110 },
   },
-  // Right of your orb, left of the stack's column and the prompt; your library and graveyard
+  // Right of your orb and its phase stops (which end at 975), left of the stack's column and the prompt; your library and graveyard
   // lie behind the row, in the near left corner.
   you: {
     back: 570,
     lands: 111,
     landsEnd: ORB_LEFT - 14,
     permanents: 408,
-    others: { x: 940, end: 1196, width: 92 },
+    others: { x: 988, end: 1196, width: 92 },
   },
 };
 /** The least scale, as a fraction of its depth's, the back row's other permanents may shrink to
