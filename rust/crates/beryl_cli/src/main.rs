@@ -25,6 +25,7 @@
 //! - `beryl_cli serve [--port N]` serves the app's game commands over HTTP for a UI in a plain
 //!   browser to play live games through (`just ui-live`, [`serve`]).
 
+mod agreement;
 mod anchor_replay;
 mod boards;
 mod evalfit;
@@ -52,7 +53,8 @@ const USAGE: &str = "usage:
   beryl_cli eval-fit [--games N] [--seed N]
   beryl_cli serve [--port N]
   beryl_cli review <replay.json> [--agent NAME] [--out FILE]
-  beryl_cli anchor-replay <run-dir> <entrant> [--examples N] [--recheck N] [--guarded]";
+  beryl_cli anchor-replay <run-dir> <entrant> [--examples N] [--recheck N] [--guarded]
+  beryl_cli agreement <run-dir> <entrant> [--positions N] [--budget B]";
 
 /// The port `serve` listens on unless told otherwise.
 const DEFAULT_PORT: u16 = 1421;
@@ -67,6 +69,7 @@ fn main() -> ExitCode {
         [command, rest @ ..] if command == "eval-fit" => evalfit::main(rest),
         [command, rest @ ..] if command == "review" => review::main(rest),
         [command, rest @ ..] if command == "anchor-replay" => anchor_replay::main(rest),
+        [command, rest @ ..] if command == "agreement" => agreement::main(rest),
         [command, dir] if command == "longthink-run" => longthink::runner(Path::new(dir), None),
         [command, dir, flag, n] if command == "longthink-run" && flag == "--games" => {
             number(flag, n).and_then(|n| longthink::runner(Path::new(dir), Some(n)))

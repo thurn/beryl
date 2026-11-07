@@ -60,10 +60,11 @@ struct LogLine {
     search: Option<Searched>,
 }
 
+/// A logged search's root: each candidate's visits and summed rewards.
 #[derive(Deserialize)]
-struct Searched {
-    visits: Vec<u32>,
-    rewards: Vec<f64>,
+pub struct Searched {
+    pub visits: Vec<u32>,
+    pub rewards: Vec<f64>,
 }
 
 /// One searched decision where greedy's answer differs from the search's choice.
@@ -120,10 +121,72 @@ fn replay(
     let work = parse_work(budget).ok_or_else(bad)?;
     let t = mirror();
     let policy = RolloutPolicy::with(&t, family.knowledge);
+    let mut searched = 0u32;
+    let mut differs = Vec::new();
+    let played = walk(dir, entrant, |game, s, d, choice, search, names| {
+        searched += 1;
+        let mut x = Scratch::new();
+        let greedy = policy.choose(&t, observe(s, &t, &mut x, d.player), d);
+        let counted = !only_guarded || guarded(d, greedy, Choice(choice));
+        if greedy.0 != choice && counted {
+            let mean = |c: u16| {
+                let v = f64::from(search.visits[usize::from(c)]);
+                (v > 0.0).then(|| (search.rewards[usize::from(c)] / v, v))
+            };
+            let lead = mean(choice)
+                .zip(mean(greedy.0))
+                .map(|((mc, vc), (mg, vg))| {
+                    let var = |m: f64, v: f64| m * (1.0 - m) / v;
+                    (mc - mg, (var(mc, vc) + var(mg, vg)).sqrt())
+                });
+            let mut transcript = Transcript::new(names);
+            transcript.decision(&t, s, d, Choice(choice), &[]);
+            let shown = transcript.text().lines().last().unwrap_or_default().trim();
+            let label =
+                |c: u16| mean(c).map_or("unvisited".to_owned(), |(m, v)| format!("{v} {m:.3}"));
+            differs.push(Differs {
+                game: game.to_owned(),
+                state: *s,
+                decision: *d,
+                search: Choice(choice),
+                greedy,
+                lead,
+                line: format!(
+                    "{:?}: {shown}  search [{choice}] {}  greedy [{}] {}",
+                    d.kind,
+                    label(choice),
+                    greedy.0,
+                    label(greedy.0)
+                ),
+            });
+        }
+    })?;
+    let threads = std::thread::available_parallelism()
+        .map_or(1, |n| u32::try_from(n.get()).unwrap_or(u32::MAX));
+    let settings = Settings {
+        family,
+        work,
+        threads,
+    };
+    let fresh = rechecked(&t, settings, &differs, recheck);
+    Ok(report(
+        entrant, played, searched, &differs, &fresh, examples,
+    ))
+}
+
+/// Replays each of the run's games `entrant` played from its seed through its log, calling
+/// `visit` at each of the entrant's searched decisions with the game, the state, the decision,
+/// the logged answer, the search's root visits and rewards, and the seats' names for a
+/// transcript. Returns the games walked; crashed ones are skipped.
+pub fn walk(
+    dir: &Path,
+    entrant: &str,
+    mut visit: impl FnMut(&str, &State, &Decision, u16, &Searched, [&str; 2]),
+) -> Result<u32, String> {
+    let t = mirror();
     let games = fs::read_to_string(dir.join("games.jsonl"))
         .map_err(|e| format!("{}: {e}", dir.join("games.jsonl").display()))?;
-    let (mut played, mut searched) = (0u32, 0u32);
-    let mut differs = Vec::new();
+    let mut played = 0;
     for g in games.lines().map(serde_json::from_str::<GameLine>) {
         let g = g.map_err(|e| format!("games.jsonl: {e}"))?;
         let seat = if g.a == entrant {
@@ -154,59 +217,13 @@ fn replay(
             if d.player.index() != usize::from(line.seat) || usize::from(line.choice) >= d.len() {
                 return Err(format!("{}: the log no longer fits the game", g.game));
             }
-            if let Some(search) = line.search.filter(|_| line.seat == seat) {
-                searched += 1;
-                let greedy = policy.choose(&t, observe(&s, &t, &mut x, d.player), &d);
-                let counted = !only_guarded || guarded(&d, greedy, Choice(line.choice));
-                if greedy.0 != line.choice && counted {
-                    let mean = |c: u16| {
-                        let v = f64::from(search.visits[usize::from(c)]);
-                        (v > 0.0).then(|| (search.rewards[usize::from(c)] / v, v))
-                    };
-                    let lead = mean(line.choice)
-                        .zip(mean(greedy.0))
-                        .map(|((mc, vc), (mg, vg))| {
-                            let var = |m: f64, v: f64| m * (1.0 - m) / v;
-                            (mc - mg, (var(mc, vc) + var(mg, vg)).sqrt())
-                        });
-                    let mut transcript = Transcript::new(names);
-                    transcript.decision(&t, &s, &d, Choice(line.choice), &[]);
-                    let shown = transcript.text().lines().last().unwrap_or_default().trim();
-                    let label = |c: u16| {
-                        mean(c).map_or("unvisited".to_owned(), |(m, v)| format!("{v} {m:.3}"))
-                    };
-                    differs.push(Differs {
-                        game: g.game.clone(),
-                        state: s,
-                        decision: d,
-                        search: Choice(line.choice),
-                        greedy,
-                        lead,
-                        line: format!(
-                            "{:?}: {shown}  search [{}] {}  greedy [{}] {}",
-                            d.kind,
-                            line.choice,
-                            label(line.choice),
-                            greedy.0,
-                            label(greedy.0)
-                        ),
-                    });
-                }
+            if let Some(search) = line.search.as_ref().filter(|_| line.seat == seat) {
+                visit(&g.game, &s, &d, line.choice, search, names);
             }
             apply(&mut s, &t, &mut x, &mut Replay, Choice(line.choice));
         }
     }
-    let threads = std::thread::available_parallelism()
-        .map_or(1, |n| u32::try_from(n.get()).unwrap_or(u32::MAX));
-    let settings = Settings {
-        family,
-        work,
-        threads,
-    };
-    let fresh = rechecked(&t, settings, &differs, recheck);
-    Ok(report(
-        entrant, played, searched, &differs, &fresh, examples,
-    ))
+    Ok(played)
 }
 
 /// Fresh leads, by index into `differs`, for `n` of the decisions the widest margin switches,
