@@ -28,7 +28,7 @@ use std::cell::Cell;
 
 use beryl_engine::card::{
     Ability, AbilityIx, AbilityKind, CardDef, CastingOption, Castings, Face, FaceAbility, FaceIx,
-    Keywords, Replacement, TargetKind, TargetSpec, Types,
+    Keywords, Replacement, TargetKind, TargetSpec, Trigger, Types,
 };
 use beryl_engine::filter::{Filter, Whose};
 use beryl_engine::state::{ObjectFlags, StackEntry};
@@ -548,8 +548,29 @@ impl<L: Layout> Policy<'_, L> {
         match f.spell_ability_with(costs) {
             Some(a) if face == FaceIx::FRONT && info.draws(index_of(f, a)) && !self.may_draw() => 0,
             Some(a) => self.worth_targeting(a, info.friendly(index_of(f, a)), v),
-            None => v,
+            None => self.enters_worth(f, info, v),
         }
+    }
+
+    /// `v` for a permanent spell, or 0 for a noncreature one whose targeted enters trigger
+    /// would find nothing worth it: Portable Hole cast onto a board with no nonland permanent of
+    /// mana value 2 or less exiles nothing, for the trigger is removed from the stack
+    /// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d)): "If no legal targets
+    /// can be chosen, the ability is removed from the stack." A creature keeps its body.
+    fn enters_worth(&self, f: &Face, info: CardInfo, v: i32) -> i32 {
+        if f.types.intersects(Types::CREATURE) {
+            return v;
+        }
+        f.abilities
+            .iter()
+            .filter(|a| {
+                a.kind == AbilityKind::Triggered
+                    && a.trigger == Trigger::Enters
+                    && !a.targets.is_empty()
+            })
+            .fold(v, |v, a| {
+                self.worth_targeting(a, info.friendly(index_of(f, a)), v)
+            })
     }
 
     pub(crate) fn activate(&self, slot: L::Slot, i: u8) -> i32 {
@@ -1115,5 +1136,42 @@ mod tests {
             let cold = soft_rollout(&mut start.clone(), &t, &mut x, &policy, &mut soft);
             assert_eq!(greedy, cold, "seed {seed}");
         }
+    }
+
+    /// Greedy casts Portable Hole only with something its enters trigger could exile: a
+    /// nonland permanent of the opponent's with mana value 2 or less. Deep Searcher, anchored to
+    /// greedy, once cast it onto a board of one land.
+    #[test]
+    fn greedy_holds_a_portable_hole_with_nothing_to_exile() {
+        let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
+        let policy = RolloutPolicy::new(&t);
+        let hole = beryl_cards::white::portable_hole::CARD.faces[0].abilities[0].targets[0];
+        let mut x = Scratch::new();
+        let (mut cast, mut held) = (0, 0);
+        for seed in 0..60 {
+            let mut s = State::new(&t, seed, Profile::SMART);
+            while let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) {
+                let obs = observe(&s, &t, &mut x, d.player);
+                let target = obs.battlefield().iter().any(|&slot| {
+                    obs.controller(slot) != d.player && obs.matches(&t, &hole.filter, slot)
+                });
+                let is_hole = |c: Choice| {
+                    matches!(d.candidates.option(c), Some(Opt::Cast { slot, .. })
+                        if obs.card(slot).is_some_and(|card| t.def(card).name == beryl_cards::names::PORTABLE_HOLE))
+                };
+                let g = policy.choose(&t, obs, &d);
+                if is_hole(g) {
+                    assert!(
+                        target,
+                        "seed {seed}: Portable Hole cast with nothing to exile"
+                    );
+                    cast += 1;
+                } else if !target && (0..d.len()).any(|i| is_hole(Choice(i as u16))) {
+                    held += 1;
+                }
+                apply(&mut s, &t, &mut x, &mut Replay, g);
+            }
+        }
+        assert!(cast > 0 && held > 0, "cast {cast}, held {held}");
     }
 }
