@@ -237,12 +237,21 @@ pub static AGENTS: &[AgentInfo] = &[
         new: mcts_hidden,
     },
     AgentInfo {
-        name: "pimc18-omniscient-30m",
+        name: "pimc18-omniscient-30m-anchor-mid",
         title: "Deep Seer",
         description: "Cheats as the Seer does, thinking seconds a move",
         new: deep_seer,
     },
 ];
+
+/// Agents no longer offered, kept buildable by name so that games recorded against them
+/// still replay and review as they were played.
+pub static RETIRED: &[AgentInfo] = &[AgentInfo {
+    name: "pimc18-omniscient-30m",
+    title: "Deep Seer, unanchored",
+    description: "Deep Seer before it deferred to the obvious move when unsure",
+    new: deep_seer_unanchored,
+}];
 
 fn random(_t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
     Box::new(RandomAgent::new(seed))
@@ -278,17 +287,38 @@ fn mcts_hidden(t: &GameTable, seed: u64, budget: Budget) -> Box<dyn GameAgent + 
     )))
 }
 
-/// `pimc18/omniscient/rollout/tuned@30M`, the long-think arena's leading family in run-003: 30M
-/// engine steps a decision whatever `budget` says, on every core. Its moves do not depend on
-/// the threads.
+/// `pimc18/omniscient/rollout/tuned/anchor+mid@30M`: the long-think arena's leading family
+/// in run-003, anchored to greedy's answer and letting greedy answer the questions below its
+/// roots (epic by-7wl), so that it no longer plays moves its search cannot tell from the
+/// obvious one, as the unanchored one Ousted its own token. 30M engine steps a decision
+/// whatever `budget` says, on every core. Its moves do not depend on the threads.
 fn deep_seer(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
+    deep(
+        t,
+        seed,
+        Options {
+            anchor: true,
+            mid: true,
+        },
+    )
+}
+
+/// `pimc18/omniscient/rollout/tuned@30M`, Deep Seer as docs/incidents/2026-11-06-deep-seer-misplays.md
+/// found it.
+fn deep_seer_unanchored(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
+    deep(t, seed, Options::default())
+}
+
+/// `pimc18/omniscient/rollout/tuned` with `options` at 30M engine steps a decision, on every
+/// core.
+fn deep(t: &GameTable, seed: u64, options: Options) -> Box<dyn GameAgent + Send> {
     let settings = Settings {
         family: Family {
             method: Method::Pimc { worlds: 18 },
             sight: Sight::Omniscient,
             leaf: Leaf::Rollout,
             knowledge: Knowledge::Tuned,
-            options: Options::default(),
+            options,
         },
         work: 30_000_000,
         threads: std::thread::available_parallelism()
@@ -297,7 +327,7 @@ fn deep_seer(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + S
     Box::new(Widening::new(LongSearch::<Small>::new(t, settings, seed)))
 }
 
-/// The agent registered under `name`.
+/// The agent registered under `name`, offered or retired.
 pub fn agent(name: &str) -> Option<&'static AgentInfo> {
-    AGENTS.iter().find(|a| a.name == name)
+    AGENTS.iter().chain(RETIRED).find(|a| a.name == name)
 }
