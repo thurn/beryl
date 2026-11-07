@@ -44,7 +44,7 @@
     },
     {
       "name": "combat-attackers",
-      "seed": 4,
+      "seed": 8,
       "decks": ["wu-control", "wu-control"],
       "agents": ["greedy", "greedy"],
       "until": "first blocker decision for seat 0"
