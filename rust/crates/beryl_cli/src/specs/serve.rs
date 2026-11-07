@@ -6,6 +6,7 @@
 //! - `GET /specs` lists the specs and their moments.
 //! - `/m/<card>/<moment>/<instance>/events` and `/m/<card>/<moment>/<instance>/invoke/<cmd>`
 //!   are `serve`'s two routes for one instance of a moment, started by its first request.
+//! - `POST /m/<card>/<moment>/<instance>/play` plays out the moment's own actions.
 //! - `GET /stream/<page>` is one event stream for a whole page: every view of each instance
 //!   named `<page>.<n>`, as a `game-update` event of `{"instance": key, "update": view}`. A
 //!   browser allows a host only about six open connections, so a page of moments shares one
@@ -13,8 +14,10 @@
 //!
 //! A moment's setup plays before the page sees anything: `current_game` answers with the first
 //! view after it, the one the page shows at once. The views of the moment's own actions are
-//! held until then and sent a beat later, so the page animates them from that view on; a new
-//! instance (the page's replay button) plays them again.
+//! held until the viewer asks for them (`play`, or acting on the game in the frame), so the page
+//! animates them from that view on, when the viewer is watching; a new instance (the page's
+//! replay button) plays them again. An instance outside a page (a full-size frame, or a
+//! headless screenshot) has no play button, so it sends them a beat after its first view.
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -35,7 +38,7 @@ use crate::serve::{CORS, invoke, read_request, respond};
 const INSTANCES: usize = 64;
 /// How long `current_game` waits for a moment's setup.
 const SETUP: Duration = Duration::from_secs(20);
-/// The beat between the page showing a moment and its actions playing out.
+/// The beat between a moment outside a page showing and its actions playing out.
 const BEAT: Duration = Duration::from_millis(900);
 /// How often an idle event stream is pinged, which finds a page gone.
 const PING: Duration = Duration::from_secs(5);
@@ -129,6 +132,10 @@ fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result
     };
     match (method.as_str(), route) {
         ("GET", "events") => events(stream, &feed),
+        ("POST", "play") => {
+            release(&feed);
+            respond(&mut stream, "200 OK", "{\"ok\":null}")
+        }
         ("POST", command) if command.starts_with("invoke/") => {
             let command = &command["invoke/".len()..];
             let args: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
@@ -138,6 +145,10 @@ fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result
                 ipc::START_GAME | ipc::CONCEDE => json!({ "ok": null }),
                 ipc::LIST_AGENTS => json!({ "ok": [] }),
                 _ => {
+                    // The viewer acts on the game: it plays on from where it truly is.
+                    if matches!(command, ipc::CHOOSE | ipc::CANCEL | ipc::UNDO) {
+                        release(&feed);
+                    }
                     let list = lock(instances);
                     let Some(i) = list.iter().find(|i| i.key == key) else {
                         return respond(&mut stream, "200 OK", "{\"err\":{\"kind\":\"ended\"}}");
@@ -224,8 +235,8 @@ fn broadcast(feed: &mut Feed, update: &GameUpdate) {
     }
 }
 
-/// The view the page shows at once, once the setup is done; then, a beat later, the views
-/// since go to its streams.
+/// The view the page shows at once, once the setup is done. Outside a page, the views since
+/// go to its streams a beat later.
 fn current(feed: &SharedFeed) -> Value {
     let (lockable, ready) = &**feed;
     let deadline = Instant::now() + SETUP;
@@ -244,22 +255,29 @@ fn current(feed: &SharedFeed) -> Value {
     let mut shown = f.views[start].clone();
     // Shown at once, it animates nothing.
     shown.view.events.clear();
-    if !f.released {
+    if !f.released && f.page.is_none() {
         let feed = Arc::clone(feed);
         std::thread::spawn(move || {
             std::thread::sleep(BEAT);
-            let mut f = lock(&feed.0);
-            if f.released {
-                return;
-            }
-            f.released = true;
-            let later = f.views.split_off(start + 1);
-            for update in &later {
-                broadcast(&mut f, update);
-            }
+            release(&feed);
         });
     }
     json!({ "ok": shown })
+}
+
+/// Sends the views held since the first one shown to the instance's streams, once its setup
+/// is done; later views go as they come.
+fn release(feed: &SharedFeed) {
+    let mut f = lock(&feed.0);
+    let Some(start) = f.start else { return };
+    if f.released {
+        return;
+    }
+    f.released = true;
+    let later = f.views.split_off(start + 1);
+    for update in &later {
+        broadcast(&mut f, update);
+    }
 }
 
 /// The instance's views from now on, pinged while idle, until the page goes away.

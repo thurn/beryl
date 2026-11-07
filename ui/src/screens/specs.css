@@ -169,9 +169,14 @@
   cursor: pointer;
 }
 
-.specs-icon-button:hover {
+.specs-icon-button:hover:not(:disabled) {
   border-color: var(--gold);
   color: var(--gold);
+}
+
+.specs-icon-button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .specs-frame {

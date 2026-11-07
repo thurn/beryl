@@ -121,13 +121,18 @@ def record_fixtures(into: Path = RECORDED, only: list[str] | None = None) -> int
 
 
 @contextmanager
-def served_ui(env: dict[str, str], port: int | None = None) -> Iterator[str]:
-    """Serves ui/ with Vite on `port`, or a free one, for the duration; yields its base URL."""
+def served_ui(
+    env: dict[str, str], port: int | None = None, preview: bool = False
+) -> Iterator[str]:
+    """Serves ui/ with Vite on `port`, or a free one, for the duration; yields its base URL.
+    `preview` serves the production build in ui/dist (`vite preview`) instead of the dev server.
+    """
     port = port or free_port()
     url = f"http://127.0.0.1:{port}/"
+    mode = ["preview", "--strictPort"] if preview else []
     with tempfile.TemporaryFile() as log:
         server = subprocess.Popen(
-            [str(NPM_BIN / "vite"), "--host", "127.0.0.1", "--port", str(port)],
+            [str(NPM_BIN / "vite"), *mode, "--host", "127.0.0.1", "--port", str(port)],
             cwd=paths.UI,
             env=env,
             stdin=subprocess.DEVNULL,

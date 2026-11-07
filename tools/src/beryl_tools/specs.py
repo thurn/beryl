@@ -3,6 +3,7 @@
 server under /spec-api, and prints the pages' URLs until interrupted. `--shots` instead
 screenshots every moment headless into the cache (ui/scripts/specs.mjs) and prints the paths,
 for an agent to judge; `--check` plays every moment headless and checks what it expects.
+`--release` builds `beryl_cli` optimized and serves the UI's production build.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ import time
 from pathlib import Path
 
 from . import paths, warm
-from .shots import UiError, free_port, port_free, served_ui, webkit_env
+from .shots import NPM_BIN, UiError, free_port, port_free, served_ui, webkit_env
 
 
 def out_dir() -> Path:
@@ -25,10 +26,12 @@ def out_dir() -> Path:
     return paths.cache_root() / "spec-shots" / paths.REPO.name
 
 
-def build() -> Path | None:
-    """Builds beryl_cli; returns its binary, or None if the build failed."""
+def build(release: bool) -> Path | None:
+    """Builds beryl_cli, optimized if `release`; returns its binary, or None if the build
+    failed."""
+    profile = ["--release"] if release else []
     built = subprocess.run(
-        ["cargo", "build", "--quiet", "--package", "beryl_cli"],
+        ["cargo", "build", "--quiet", *profile, "--package", "beryl_cli"],
         cwd=paths.RUST,
         stdin=subprocess.DEVNULL,
         check=False,
@@ -36,12 +39,25 @@ def build() -> Path | None:
     if built.returncode != 0:
         print("specs: building beryl_cli failed", file=sys.stderr)
         return None
-    return paths.RUST / "target" / "debug" / "beryl_cli"
+    return paths.RUST / "target" / ("release" if release else "debug") / "beryl_cli"
+
+
+def build_ui() -> bool:
+    """Builds the UI's production bundle into ui/dist, for `vite preview`."""
+    built = subprocess.run(
+        [str(NPM_BIN / "vite"), "build", "--logLevel", "warn"],
+        cwd=paths.UI,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
+    if built.returncode != 0:
+        print("specs: building the UI failed", file=sys.stderr)
+    return built.returncode == 0
 
 
 def specs(args: argparse.Namespace) -> int:
     warm.ensure()
-    binary = build()
+    binary = build(args.release)
     if binary is None:
         return 1
     if args.check:
@@ -52,6 +68,8 @@ def specs(args: argparse.Namespace) -> int:
         ).returncode
     if args.port and not port_free(args.port):
         print(f"specs: port {args.port} is in use", file=sys.stderr)
+        return 1
+    if args.release and not build_ui():
         return 1
     spec_port = free_port()
     server = subprocess.Popen(
@@ -67,7 +85,7 @@ def specs(args: argparse.Namespace) -> int:
             out = out_dir()
             shutil.rmtree(out, ignore_errors=True)
             out.mkdir(parents=True)
-            with served_ui(env) as url:
+            with served_ui(env, preview=args.release) as url:
                 return subprocess.run(
                     ["node", "scripts/specs.mjs", url, str(out), *args.cards],
                     cwd=paths.UI,
@@ -76,7 +94,7 @@ def specs(args: argparse.Namespace) -> int:
                     check=False,
                 ).returncode
         env = {**os.environ, "BERYL_SPECS_PORT": str(spec_port)}
-        with served_ui(env, args.port or None) as url:
+        with served_ui(env, args.port or None, preview=args.release) as url:
             base = url.replace("127.0.0.1", "localhost")
             print(f"specs: {base}specs", flush=True)
             for card in args.cards:
@@ -104,5 +122,10 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     )
     p.add_argument(
         "--check", action="store_true", help="play every moment headless and check it"
+    )
+    p.add_argument(
+        "--release",
+        action="store_true",
+        help="optimized beryl_cli and the UI's production build",
     )
     p.set_defaults(func=specs)

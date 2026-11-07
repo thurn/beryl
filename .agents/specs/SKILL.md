@@ -23,8 +23,8 @@ test.
 - A `Moment` is:
   - `board`: a `Scenario` (the human is seat 0). Its `.actions(...)` are the
     **setup**, played before the page shows anything.
-  - `.play(...)`: actions played out **as the viewer watches**, animated. The
-    replay button plays them again. Use it for what must be seen happening: a
+  - `.play(...)`: actions played out, animated, **when the viewer presses
+    play**. The replay button starts the moment over. Use it for what must be seen happening: a
     counter, a bounce, a token appearing.
   - `.expect(...)`: conditions on the human's **first live decision** once all
     actions are taken, in the fixture vocabulary (`fixture.rs`'s
@@ -66,7 +66,7 @@ for each of these that applies. Most cards need 6 to 15.
    and to the left), cards it makes playable from exile or the graveyard, what
    it puts into a graveyard.
 7. **The stack.** Responses to it and from it: countered, bounced in response,
-   its targets gone, its source gone. The replay button is for these.
+   its targets gone, its source gone. The play button is for these.
 8. **The other side.** The same card in the opponent's hands, where its view
    differs (a prompt the human only watches, a target on their permanent).
 9. **Edges a player hits.** Empty hand, no legal target, nothing to choose,

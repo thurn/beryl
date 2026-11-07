@@ -2,8 +2,8 @@
 // every moment of play a card's UI must get right, each a live game from `beryl_cli
 // specs-serve` (rust/crates/beryl_cli/src/specs), proxied by Vite under /spec-api. A moment's
 // game runs in a frame of its own from when it first nears the viewport, and stays; the page
-// hands every frame its views from one event stream. Replay starts it afresh, which plays its
-// actions out again.
+// hands every frame its views from one event stream. A moment that plays actions out holds
+// them until its play button; replay starts it afresh, holding them again.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cardEntry } from "../cards";
 import type { RelayedEvent } from "../ipc";
@@ -193,6 +193,9 @@ function MomentView({
   const src = `/?live=${encodeURIComponent(live)}&relay#/game`;
   // Hidden until it shows its first view, over a placeholder.
   const [shown, setShown] = useState<string>();
+  // The instance whose actions have been asked to play out.
+  const [played, setPlayed] = useState<string>();
+  const waiting = moment.plays && played !== key;
   const frame = useRef<HTMLIFrameElement>(null);
   useEffect(() => {
     const onMessage = (e: MessageEvent<{ kind?: string }>) => {
@@ -217,15 +220,31 @@ function MomentView({
         <h2>{moment.title}</h2>
         <p>{moment.look}</p>
         <div className="specs-moment-actions">
-          <button
-            type="button"
-            className="specs-icon-button"
-            title={moment.plays ? "Replay" : "Restart"}
-            aria-label={moment.plays ? "Replay" : "Restart"}
-            onClick={() => setN((x) => x + 1)}
-          >
-            ↻
-          </button>
+          {waiting ? (
+            <button
+              type="button"
+              className="specs-icon-button"
+              title="Play"
+              aria-label="Play"
+              disabled={shown !== key}
+              onClick={() => {
+                setPlayed(key);
+                void fetch(`${API}/m/${key}/play`, { method: "POST" });
+              }}
+            >
+              ▶
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="specs-icon-button"
+              title={moment.plays ? "Replay" : "Restart"}
+              aria-label={moment.plays ? "Replay" : "Restart"}
+              onClick={() => setN((x) => x + 1)}
+            >
+              ↻
+            </button>
+          )}
           <a
             className="specs-icon-button"
             href={`/?live=${encodeURIComponent(`${window.location.origin}${API}/m/${slug}/${moment.name}/${page}-full-${n}`)}#/game`}

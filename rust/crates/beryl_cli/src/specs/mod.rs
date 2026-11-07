@@ -1,7 +1,7 @@
 //! Specs: for one card, every moment of play its UI must get right, each a real game state the
 //! spec page (`/specs/<card>`, `just specs`) opens live and fully playable. A moment is a
 //! board, the actions that set it up before the page shows it, the actions it then plays out
-//! as the viewer watches (a replay button plays them again), and what must hold of the
+//! when the viewer presses play (a replay button starts it over), and what must hold of the
 //! viewer's first live decision after that, which a test checks.
 //!
 //! The `specs` skill (`.agents/specs/SKILL.md`) says which moments a card needs.
@@ -39,7 +39,7 @@ pub struct Moment {
     pub look: &'static str,
     /// The game, the human in seat 0: its actions set the moment up before the page shows it.
     pub board: Scenario,
-    /// The actions it plays out once shown, as the viewer watches.
+    /// The actions it plays out once shown, when the viewer presses play.
     pub play: &'static [Action],
     /// What must hold of the human's first decision once both have been taken, in the fixture
     /// conditions' words ([`Condition::parse`]).
