@@ -571,6 +571,7 @@ fn commit(dir: &Path, spec: &Spec, played: &Played) -> Result<GameRecord, String
                     .zip(&s.rewards)
                     .map(|(&v, &r)| (v > 0).then(|| r / f64::from(v)))
                     .collect(),
+                anchor: s.anchor,
             },
             false,
         )?;

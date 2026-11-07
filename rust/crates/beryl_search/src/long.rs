@@ -88,6 +88,22 @@ pub struct Family {
     pub sight: Sight,
     pub leaf: Leaf,
     pub knowledge: Knowledge,
+    pub options: Options,
+}
+
+/// What a family adds to the plain search, each switchable on its own (epic by-7wl). None by
+/// default: a family named without them plays as it always has.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Options {
+    /// Greedy's answer is the root's default. The search's own choice replaces it only by a
+    /// clear lead ([`ANCHOR_MARGIN`], [`ANCHOR_ERRORS`]), measured tree by tree after the last
+    /// quarter of the work goes to the two alone. Most of a search's choices lead the
+    /// runner-up by less than noise; there, a sensible default beats a coin flip.
+    pub anchor: bool,
+    /// Below the root, greedy answers the questions asked while casting or resolving
+    /// ([`answered_by_policy`]), so an option followed by a wide choice is not valued as if
+    /// that choice were made at random.
+    pub mid: bool,
 }
 
 /// A searcher's settings.
@@ -124,11 +140,25 @@ const EXPLORATION: f64 = 0.7;
 /// The rounds a decision's work is spent in, the stop checked after each.
 const ROUNDS: u64 = 16;
 
+/// The rounds an anchored search grows freely before the rest goes to its choice and
+/// greedy's alone.
+const FREE_ROUNDS: u64 = ROUNDS * 3 / 4;
+
+/// The least lead in mean reward over greedy's answer that lets an anchored search play its
+/// own choice instead. Below it, the rollouts' small differences are not trusted however
+/// many there are: the Deep Seer incident's Oust on its own token led passing by 0.006.
+pub const ANCHOR_MARGIN: f64 = 0.01;
+
+/// The standard errors, across the trees, by which an anchored search's lead over greedy's
+/// answer must clear zero.
+pub const ANCHOR_ERRORS: f64 = 2.0;
+
 /// No node.
 const NONE: u32 = u32::MAX;
 
 impl fmt::Display for Family {
-    /// `ismcts18/hidden/rollout/17l`: method, sight, leaf, knowledge.
+    /// `ismcts18/hidden/rollout/17l`: method, sight, leaf, knowledge, then any options, as
+    /// `pimc18/omniscient/rollout/tuned/anchor+mid`.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.method {
             Method::Pimc { worlds } => write!(f, "pimc{worlds}")?,
@@ -150,7 +180,13 @@ impl fmt::Display for Family {
             Leaf::Cutoff { turns } => write!(f, "cut{turns}")?,
             Leaf::Eval => write!(f, "eval")?,
         }
-        write!(f, "/{knowledge}")
+        write!(f, "/{knowledge}")?;
+        let options = self.options.to_name();
+        if options.is_empty() {
+            Ok(())
+        } else {
+            write!(f, "/{options}")
+        }
     }
 }
 
@@ -160,14 +196,38 @@ impl FromStr for Family {
     fn from_str(s: &str) -> Result<Family, String> {
         let bad = || {
             format!(
-                "{s:?} is no family: method/sight/leaf/knowledge, as ismcts18/hidden/rollout/17l \
-                 (pimcN or ismctsN; hidden, hands or omniscient; rollout, cutN or eval; \
-                 estimate, 17l or tuned)"
+                "{s:?} is no family: method/sight/leaf/knowledge[/options], as \
+                 ismcts18/hidden/rollout/17l (pimcN or ismctsN; hidden, hands or omniscient; \
+                 rollout, cutN or eval; estimate, 17l or tuned; anchor, mid or anchor+mid)"
             )
         };
         let parts: Vec<&str> = s.split('/').collect();
-        let [method, sight, leaf, knowledge] = parts[..] else {
+        let (&[method, sight, leaf, knowledge], options) = parts.split_at(4.min(parts.len()))
+        else {
             return Err(bad());
+        };
+        let options = match options {
+            [] => Options::default(),
+            [named] => {
+                let mut o = Options::default();
+                for name in named.split('+') {
+                    let flag = match name {
+                        "anchor" => &mut o.anchor,
+                        "mid" => &mut o.mid,
+                        _ => return Err(bad()),
+                    };
+                    if *flag {
+                        return Err(bad());
+                    }
+                    *flag = true;
+                }
+                // One spelling per family, so that a name read back prints as it was given.
+                if o.to_name() != *named {
+                    return Err(bad());
+                }
+                o
+            }
+            _ => return Err(bad()),
         };
         let count = |rest: &str| rest.parse::<u16>().ok().filter(|&n| n > 0);
         let method = if let Some(n) = method.strip_prefix("pimc").and_then(count) {
@@ -202,7 +262,20 @@ impl FromStr for Family {
             sight,
             leaf,
             knowledge,
+            options,
         })
+    }
+}
+
+impl Options {
+    /// The options as a family's name spells them: `anchor`, `mid` or `anchor+mid`; empty
+    /// for none.
+    fn to_name(self) -> String {
+        [(self.anchor, "anchor"), (self.mid, "mid")]
+            .into_iter()
+            .filter_map(|(on, name)| on.then_some(name))
+            .collect::<Vec<_>>()
+            .join("+")
     }
 }
 
@@ -313,8 +386,11 @@ impl<L: Layout> LongSearch<L> {
     }
 
     /// Grows `trees` on decision `d` to the budget, in rounds, until the leader is settled.
-    /// Returns the iterations run and the work they spent.
-    fn grow(&self, trees: &mut [Tree<L>]) -> (u64, u64) {
+    /// With greedy's answer `anchor`, the first [`FREE_ROUNDS`] grow as ever; then, if the
+    /// leader is not greedy's answer, the rest of the work goes to the two alone, so that
+    /// the choice between them is not made against a starved estimate. Returns the
+    /// iterations run and the work they spent.
+    fn grow(&self, trees: &mut [Tree<L>], anchor: Option<Choice>) -> (u64, u64) {
         let n = trees.len() as u64;
         let work = self.settings.work;
         let shares: Vec<u64> = (0..n).map(|i| work / n + u64::from(i < work % n)).collect();
@@ -325,26 +401,31 @@ impl<L: Layout> LongSearch<L> {
             .map(|(tree, &share)| (u64::from(tree.visits()) * tree.cost()).min(share))
             .collect();
         let start: Vec<(u64, u64)> = trees.iter().map(|t| (t.work, t.iterations)).collect();
-        let threads = (self.settings.threads.max(1) as usize).min(trees.len());
-        let (table, policy) = (&self.table, &self.policy);
-        for round in 1..=ROUNDS {
-            let targets: Vec<u64> = shares
-                .iter()
-                .zip(&credit)
-                .zip(&start)
-                .map(|((&share, &credit), &(work, _))| {
-                    (work + (share * round / ROUNDS)).saturating_sub(credit)
-                })
-                .collect();
-            if threads <= 1 {
-                for (tree, &target) in trees.iter_mut().zip(&targets) {
-                    tree.grow_to(table, policy, target);
+        let plan = Plan {
+            shares: &shares,
+            credit: &credit,
+            start: &start,
+            threads: (self.settings.threads.max(1) as usize).min(trees.len()),
+        };
+        match anchor {
+            None => self.rounds(trees, &plan, 1..=ROUNDS, true),
+            Some(g) => {
+                self.rounds(trees, &plan, 1..=FREE_ROUNDS, true);
+                let (visits, rewards) = totals(trees);
+                let (b, g) = (leader(&visits, &rewards), usize::from(g.0));
+                if b == g {
+                    if !settled(trees, &shares, &credit, &start) {
+                        self.rounds(trees, &plan, FREE_ROUNDS + 1..=ROUNDS, true);
+                    }
+                } else {
+                    for tree in trees.iter_mut() {
+                        tree.allowed = Some([b, g]);
+                    }
+                    self.rounds(trees, &plan, FREE_ROUNDS + 1..=ROUNDS, false);
+                    for tree in trees.iter_mut() {
+                        tree.allowed = None;
+                    }
                 }
-            } else {
-                grow_parallel(table, policy, trees, &targets, threads);
-            }
-            if round < ROUNDS && settled(trees, &shares, &credit, &start) {
-                break;
             }
         }
         trees
@@ -354,6 +435,125 @@ impl<L: Layout> LongSearch<L> {
                 (i + tree.iterations - i0, w + tree.work - w0)
             })
     }
+
+    /// Grows `trees` through `rounds` of `plan`, each to its share of the work so far, and
+    /// with `stop`, no further once the leader is settled.
+    fn rounds(
+        &self,
+        trees: &mut [Tree<L>],
+        plan: &Plan<'_>,
+        rounds: std::ops::RangeInclusive<u64>,
+        stop: bool,
+    ) {
+        let (table, policy) = (&self.table, &self.policy);
+        for round in rounds {
+            let targets: Vec<u64> = plan
+                .shares
+                .iter()
+                .zip(plan.credit)
+                .zip(plan.start)
+                .map(|((&share, &credit), &(work, _))| {
+                    (work + (share * round / ROUNDS)).saturating_sub(credit)
+                })
+                .collect();
+            if plan.threads <= 1 {
+                for (tree, &target) in trees.iter_mut().zip(&targets) {
+                    tree.grow_to(table, policy, target);
+                }
+            } else {
+                grow_parallel(table, policy, trees, &targets, plan.threads);
+            }
+            if stop && round < ROUNDS && settled(trees, plan.shares, plan.credit, plan.start) {
+                break;
+            }
+        }
+    }
+}
+
+/// How a decision's work is shared among its trees: each tree's share, the credit its kept
+/// visits bring, its work and iterations when the decision began, and the threads.
+struct Plan<'a> {
+    shares: &'a [u64],
+    credit: &'a [u64],
+    start: &'a [(u64, u64)],
+    threads: usize,
+}
+
+/// An anchored search's check of its choice against greedy's answer.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AnchorCheck {
+    /// Greedy's answer.
+    pub greedy: Choice,
+    /// The search's own choice: the candidate visited most.
+    pub search: Choice,
+    /// The search's choice's mean reward less greedy's, averaged over the trees that visited
+    /// both, and the standard error of that average across them.
+    pub lead: f64,
+    pub error: f64,
+    /// The trees the lead was averaged over.
+    pub trees: u16,
+}
+
+impl AnchorCheck {
+    /// Whether the search's choice leads greedy's answer clearly enough to be played instead:
+    /// by [`ANCHOR_MARGIN`], and by [`ANCHOR_ERRORS`] standard errors where more than one tree
+    /// measured it.
+    #[must_use]
+    pub fn overrides(&self) -> bool {
+        let noise = if self.trees > 1 {
+            ANCHOR_ERRORS * self.error
+        } else {
+            0.0
+        };
+        self.search != self.greedy && self.trees > 0 && self.lead > ANCHOR_MARGIN.max(noise)
+    }
+
+    /// The candidate an anchored search plays.
+    #[must_use]
+    pub fn played(&self) -> Choice {
+        if self.overrides() {
+            self.search
+        } else {
+            self.greedy
+        }
+    }
+}
+
+/// The check of choice `search` against greedy's answer `greedy` across `trees`.
+fn check<L: Layout>(trees: &[Tree<L>], search: Choice, greedy: Choice) -> AnchorCheck {
+    let leads: Vec<f64> = trees
+        .iter()
+        .filter_map(|tree| {
+            let mean = |c: Choice| {
+                let n = tree.child(tree.root, tree.root_keys[usize::from(c.0)])?;
+                let n = &tree.nodes[n as usize];
+                (n.visits > 0).then(|| n.reward / f64::from(n.visits))
+            };
+            Some(mean(search)? - mean(greedy)?)
+        })
+        .collect();
+    let (lead, error) = mean_and_error(&leads);
+    AnchorCheck {
+        greedy,
+        search,
+        lead,
+        error,
+        trees: u16::try_from(leads.len()).unwrap_or(u16::MAX),
+    }
+}
+
+/// The mean of `xs` and its standard error: 0 for both when empty, the error 0 for one.
+fn mean_and_error(xs: &[f64]) -> (f64, f64) {
+    let n = xs.len() as f64;
+    if xs.is_empty() {
+        return (0.0, 0.0);
+    }
+    let mean = xs.iter().sum::<f64>() / n;
+    if xs.len() < 2 {
+        return (mean, 0.0);
+    }
+    let variance = xs.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / (n - 1.0);
+    (mean, (variance / n).sqrt())
 }
 
 /// Grows each tree to its target on `threads` threads, each taking the next tree not yet
@@ -503,9 +703,18 @@ impl<L: Layout> Agent<L> for LongSearch<L> {
             None => (self.plant(obs, d, decision), decision),
         };
         let inherited = trees.iter().map(Tree::visits).sum();
-        let (iterations, work) = self.grow(&mut trees);
+        // Greedy's answer from what the player sees, never from a world the search dealt.
+        let greedy = self
+            .settings
+            .family
+            .options
+            .anchor
+            .then(|| self.policy.choose(&self.table, obs, d));
+        let (iterations, work) = self.grow(&mut trees, greedy);
         let (visits, rewards) = totals(&trees);
-        let choice = Choice(leader(&visits, &rewards) as u16);
+        let best = Choice(leader(&visits, &rewards) as u16);
+        let anchor = greedy.map(|g| check(&trees, best, g));
+        let choice = anchor.map_or(best, |a| a.played());
         self.last = Some(Search {
             decision,
             chain,
@@ -514,6 +723,7 @@ impl<L: Layout> Agent<L> for LongSearch<L> {
             work,
             visits,
             rewards,
+            anchor,
         });
         if trees.iter().all(|tree| tree.expanded(choice)) {
             self.kept = Some(Kept {
@@ -591,6 +801,8 @@ struct Tree<L: Layout> {
     iterations: u64,
     /// Steps charged beyond the scratch's counts: worlds and evaluations.
     extra: u64,
+    /// While an anchored search checks its choice, the two root candidates it plays.
+    allowed: Option<[usize; 2]>,
 }
 
 impl<L: Layout> Tree<L> {
@@ -620,6 +832,7 @@ impl<L: Layout> Tree<L> {
             work: 0,
             iterations: 0,
             extra: 0,
+            allowed: None,
         };
         if !resample {
             tree.state = tree.deal(t, &mut rng);
@@ -798,7 +1011,17 @@ impl<L: Layout> Tree<L> {
             } else {
                 keys(&s, &d, self.known, self.viewer)
             };
-            let (child, choice) = self.select(node, &keys, d.player);
+            let (child, choice) = match self.allowed {
+                Some(pair) if at_root => {
+                    let (child, Choice(i)) = self.select(node, &pair.map(|i| keys[i]), d.player);
+                    (child, Choice(pair[usize::from(i)] as u16))
+                }
+                _ if !at_root && self.family.options.mid && answered_by_policy(d.kind) => {
+                    let c = policy.choose(t, Observation::new(&s, d.player), &d);
+                    (self.only(node, keys[usize::from(c.0)], d.player), c)
+                }
+                _ => self.select(node, &keys, d.player),
+            };
             if at_root {
                 self.root_keys = keys;
             }
@@ -837,18 +1060,7 @@ impl<L: Layout> Tree<L> {
     fn select(&mut self, node: u32, keys: &[u64], mover: Seat) -> (u32, Choice) {
         let mut children = Vec::with_capacity(keys.len());
         for &k in keys {
-            let c = if let Some(c) = self.child(node, k) {
-                c
-            } else {
-                let c = self.nodes.len() as u32;
-                let mut n = Node::new(k, mover);
-                n.sibling = self.nodes[node as usize].first;
-                self.nodes.push(n);
-                self.nodes[node as usize].first = c;
-                c
-            };
-            self.nodes[c as usize].avail += 1;
-            children.push(c);
+            children.push(self.only(node, k, mover));
         }
         let fresh = children
             .iter()
@@ -890,6 +1102,22 @@ impl<L: Layout> Tree<L> {
         (children[best.0], Choice(best.0 as u16))
     }
 
+    /// The child of `node` for the action `key`, added if it lacks one, counted as available.
+    fn only(&mut self, node: u32, key: u64, mover: Seat) -> u32 {
+        let c = if let Some(c) = self.child(node, key) {
+            c
+        } else {
+            let c = self.nodes.len() as u32;
+            let mut n = Node::new(key, mover);
+            n.sibling = self.nodes[node as usize].first;
+            self.nodes.push(n);
+            self.nodes[node as usize].first = c;
+            c
+        };
+        self.nodes[c as usize].avail += 1;
+        c
+    }
+
     /// A new node's score for the first seat, from `s` just after its action.
     fn leaf(&mut self, s: &mut State<L>, t: &GameTable, policy: &RolloutPolicy) -> f64 {
         let mut soft = Softmax {
@@ -915,6 +1143,47 @@ impl<L: Layout> Tree<L> {
                 }
             },
         }
+    }
+}
+
+/// Whether a family with [`Options::mid`] lets greedy answer decisions of `kind` below the
+/// root. Those asked while casting or activating
+/// ([CR 601.2](https://yawgatog.com/resources/magic-rules/#R6012): "To cast a spell is to
+/// take it from where it is ... put it on the stack, and pay its costs"), while resolving
+/// ([CR 608.2](https://yawgatog.com/resources/magic-rules/#R6082)), and the small
+/// bookkeeping choices like them, are: as tree nodes, each child tried once in random order
+/// and averaged, they price the option before them as if they were answered at random.
+/// Turns, priority and combat stay the tree's: they are the choices it searches for. Every
+/// kind is named, so a new one must be decided here.
+fn answered_by_policy(kind: DecisionKind) -> bool {
+    match kind {
+        DecisionKind::Target
+        | DecisionKind::TargetCount
+        | DecisionKind::X
+        | DecisionKind::PaymentPlan
+        | DecisionKind::ManaPayment
+        | DecisionKind::CastOffer
+        | DecisionKind::YesNo
+        | DecisionKind::ChooseObject
+        | DecisionKind::ChooseUpTo
+        | DecisionKind::ExileCost
+        | DecisionKind::Crew
+        | DecisionKind::Waterbend
+        // Discarding to hand size, the order of one's own triggers, the legend to keep and a
+        // land's life payment are as wide or as minor, and greedy answers them sensibly.
+        | DecisionKind::Discard
+        | DecisionKind::TriggerOrder
+        | DecisionKind::LegendRule
+        | DecisionKind::PayLife => true,
+        DecisionKind::Priority
+        | DecisionKind::PlayOrDraw
+        | DecisionKind::KeepOrMulligan
+        | DecisionKind::PutOnBottom
+        | DecisionKind::Attacker
+        | DecisionKind::AttackTarget
+        | DecisionKind::Blocker
+        | DecisionKind::BlockTarget
+        | DecisionKind::DamageDivision => false,
     }
 }
 
@@ -1101,16 +1370,209 @@ mod tests {
             "pimc18/hidden/rollout/tuned",
             "ismcts18/hands/cut2/17l",
             "ismcts4/omniscient/eval/estimate",
+            "pimc18/omniscient/rollout/tuned/anchor",
+            "pimc18/omniscient/rollout/tuned/mid",
+            "pimc72/hidden/rollout/tuned/anchor+mid",
         ] {
             let f: Family = s.parse().unwrap();
             assert_eq!(f.to_string(), s);
         }
+        let plain: Family = "pimc18/hidden/rollout/tuned".parse().unwrap();
+        assert_eq!(plain.options, Options::default());
         for bad in [
             "pimc0/hidden/rollout/tuned",
             "mcts/hidden/rollout/tuned",
             "pimc1/x/y",
+            "pimc18/hidden/rollout/tuned/",
+            "pimc18/hidden/rollout/tuned/mid+anchor",
+            "pimc18/hidden/rollout/tuned/anchor+anchor",
+            "pimc18/hidden/rollout/tuned/deep",
+            "pimc18/hidden/rollout/tuned/anchor/mid",
         ] {
             assert!(bad.parse::<Family>().is_err(), "{bad}");
         }
+    }
+
+    /// The anchor yields to the search's choice only for a lead past both the margin and the
+    /// noise across the trees.
+    #[test]
+    fn the_anchor_yields_only_to_a_clear_lead() {
+        let check = |lead, error, trees| AnchorCheck {
+            greedy: Choice(0),
+            search: Choice(1),
+            lead,
+            error,
+            trees,
+        };
+        // The Deep Seer incident's Oust on its own token led passing by 0.006.
+        assert!(!check(0.006, 0.001, 18).overrides());
+        assert!(check(0.05, 0.01, 18).overrides());
+        assert!(!check(0.05, 0.03, 18).overrides(), "within the noise");
+        assert!(
+            check(0.02, 0.5, 1).overrides(),
+            "one tree: the margin alone"
+        );
+        assert!(!check(0.5, 0.0, 0).overrides(), "no tree visited both");
+        assert_eq!(check(0.05, 0.01, 18).played(), Choice(1));
+        assert_eq!(check(0.006, 0.001, 18).played(), Choice(0));
+        let agreed = AnchorCheck {
+            search: Choice(0),
+            ..check(0.5, 0.0, 18)
+        };
+        assert_eq!(agreed.played(), Choice(0));
+        let (mean, error) = mean_and_error(&[0.1, 0.3]);
+        assert!((mean - 0.2).abs() < 1e-12 && (error - 0.1).abs() < 1e-12);
+        assert_eq!(mean_and_error(&[0.4]), (0.4, 0.0));
+        assert_eq!(mean_and_error(&[]), (0.0, 0.0));
+    }
+
+    /// A family of one omniscient world with `options`, for tests.
+    fn family(options: Options) -> Family {
+        Family {
+            method: Method::Pimc { worlds: 1 },
+            sight: Sight::Omniscient,
+            leaf: Leaf::Rollout,
+            knowledge: Knowledge::Tuned,
+            options,
+        }
+    }
+
+    /// The priority decisions of a greedy mirror game from `seed` that offer a spell or an
+    /// ability, each with the state it was asked in: where a search's root actions lead to
+    /// questions asked while casting or resolving.
+    fn positions(t: &GameTable, seed: u64) -> Vec<(State, Decision)> {
+        let policy = RolloutPolicy::new(t);
+        let mut s = State::new(t, seed, Profile::SMART);
+        let mut x = Scratch::new();
+        let mut out = Vec::new();
+        loop {
+            let d = match next(&mut s, t, &mut x, &mut Replay) {
+                Step::Over(_) => break,
+                Step::Decide(d) => d,
+            };
+            let acts = (0..d.len()).any(|i| {
+                matches!(
+                    d.candidates.option(Choice(i as u16)),
+                    Some(Opt::Cast { .. } | Opt::Activate { .. })
+                )
+            });
+            if d.kind == DecisionKind::Priority && acts {
+                out.push((s, d));
+            }
+            let c = policy.choose(t, observe(&s, t, &mut x, d.player), &d);
+            apply(&mut s, t, &mut x, &mut Replay, c);
+        }
+        out
+    }
+
+    /// With `mid`, a question asked below the root while casting or resolving has one child in
+    /// a fixed world, greedy's answer, while the root still tries every candidate.
+    #[test]
+    fn mid_lets_greedy_answer_below_the_root() {
+        let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
+        let policy = RolloutPolicy::new(&t);
+        let mut x = Scratch::new();
+        let mid = family(Options {
+            anchor: false,
+            mid: true,
+        });
+        let mut answered = 0;
+        for (s, d) in positions(&t, 1).into_iter().take(10) {
+            let obs = observe(&s, &t, &mut x, d.player);
+            let known: Bitboard = Slot::all().filter(|&q| obs.knows(q)).collect();
+            let mut tree = Tree::new(&t, mid, obs, &d, known, false, 7);
+            tree.grow_to(&t, &policy, 10_000);
+            assert_eq!(tree.root_children().iter().flatten().count(), d.len());
+            answered += walk(&t, &tree, tree.root, &tree.state, &d, 0);
+        }
+        assert!(answered > 0, "no question below the root was met");
+    }
+
+    /// Walks `tree` a few levels below `node`, reached in `s` at decision `d`: every node at a
+    /// question greedy answers has at most one child. Returns how many it met.
+    fn walk(
+        t: &GameTable,
+        tree: &Tree<Small>,
+        node: u32,
+        s: &State,
+        d: &Decision,
+        depth: u8,
+    ) -> u32 {
+        if depth == 4 {
+            return 0;
+        }
+        let keys = keys(s, d, tree.known, tree.viewer);
+        let mut met = 0;
+        let mut c = tree.nodes[node as usize].first;
+        while c != NONE {
+            let n = tree.nodes[c as usize];
+            let i = keys
+                .iter()
+                .position(|&k| k == n.key)
+                .expect("a child's action");
+            let (mut s, mut x) = (*s, Scratch::new());
+            apply(&mut s, t, &mut x, &mut Replay, Choice(i as u16));
+            if node == tree.root {
+                smart(&mut s);
+            }
+            if let Step::Decide(below) = next(&mut s, t, &mut x, &mut Replay) {
+                if n.first != NONE && answered_by_policy(below.kind) {
+                    let mut children = 0;
+                    let mut g = n.first;
+                    while g != NONE {
+                        children += 1;
+                        g = tree.nodes[g as usize].sibling;
+                    }
+                    assert_eq!(children, 1, "{:?} below the root", below.kind);
+                    met += 1;
+                }
+                met += walk(t, tree, c, &s, &below, depth + 1);
+            }
+            c = n.sibling;
+        }
+        met
+    }
+
+    /// An anchored search plays greedy's answer unless its own choice leads it clearly, and
+    /// records its check; a plain search records none.
+    #[test]
+    fn an_anchored_search_plays_greedy_unless_clearly_beaten() {
+        let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
+        let policy = RolloutPolicy::new(&t);
+        let mut x = Scratch::new();
+        let settings = |options| Settings {
+            family: Family {
+                method: Method::Pimc { worlds: 2 },
+                ..family(options)
+            },
+            work: 8_000,
+            threads: 1,
+        };
+        let anchor = Options {
+            anchor: true,
+            mid: false,
+        };
+        let (mut checked, mut overridden) = (0, 0);
+        for (i, (s, d)) in positions(&t, 2).into_iter().take(12).enumerate() {
+            let obs = observe(&s, &t, &mut x, d.player);
+            let mut anchored = LongSearch::<Small>::new(&t, settings(anchor), i as u64);
+            let c = anchored.choose(obs, &d);
+            let Some(search) = anchored.last_search() else {
+                continue;
+            };
+            let a = search.anchor.expect("an anchored search's check");
+            assert_eq!(a.greedy, policy.choose(&t, obs, &d));
+            assert_eq!(c, a.played());
+            if c != a.greedy {
+                assert!(a.lead > ANCHOR_MARGIN && a.lead > ANCHOR_ERRORS * a.error);
+                overridden += 1;
+            }
+            checked += 1;
+            let mut plain = LongSearch::<Small>::new(&t, settings(Options::default()), i as u64);
+            plain.choose(obs, &d);
+            assert_eq!(plain.last_search().map(|s| s.anchor), Some(None));
+        }
+        assert!(checked > 3, "{checked} searched");
+        assert!(overridden < checked, "greedy never played");
     }
 }

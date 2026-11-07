@@ -157,6 +157,21 @@ pub struct DecisionRecord {
     pub visits: Vec<u32>,
     /// Each candidate's mean reward for the deciding player; none if never visited.
     pub mean: Vec<Option<f64>>,
+    /// An anchored family's check of its choice against greedy's answer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub anchor: Option<AnchorRecord>,
+}
+
+/// An anchored search's check, as `decisions.jsonl` records it ([`beryl_search::AnchorCheck`]):
+/// greedy's answer, the search's own choice, its lead in mean reward over greedy's averaged
+/// over the trees that visited both, and the lead's standard error across them.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AnchorRecord {
+    pub greedy: u16,
+    pub search: u16,
+    pub lead: f64,
+    pub error: f64,
+    pub trees: u16,
 }
 
 /// A line of `clock.jsonl`.

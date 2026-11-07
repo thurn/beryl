@@ -25,6 +25,8 @@ use serde::{Deserialize, Serialize};
 use crate::game::seat_seeds;
 use crate::transcript::Transcript;
 
+use super::AnchorRecord;
+
 /// A decision's index in the game, from 0, counting both players' decisions: not its index
 /// among the deciding agent's own ([`AgentDecision`]).
 #[derive(
@@ -94,6 +96,9 @@ pub struct Searched {
     pub work: u64,
     pub visits: Vec<u32>,
     pub rewards: Vec<f64>,
+    /// An anchored family's check of its choice against greedy's answer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub anchor: Option<AnchorRecord>,
 }
 
 /// How much of a search's play a game takes from its log.
@@ -352,5 +357,12 @@ fn searched(s: &Search) -> Searched {
         work: s.work,
         visits: s.visits.clone(),
         rewards: s.rewards.clone(),
+        anchor: s.anchor.map(|a| AnchorRecord {
+            greedy: a.greedy.0,
+            search: a.search.0,
+            lead: a.lead,
+            error: a.error,
+            trees: a.trees,
+        }),
     }
 }

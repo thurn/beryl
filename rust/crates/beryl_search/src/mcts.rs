@@ -139,6 +139,8 @@ pub struct Search {
     /// The rewards per candidate for the deciding player, summed likewise: divided by the
     /// visits, each candidate's mean.
     pub rewards: Vec<f64>,
+    /// For an anchored long-think search, its check of its choice against greedy's answer.
+    pub anchor: Option<crate::long::AnchorCheck>,
 }
 
 /// The searching agent.
@@ -355,6 +357,7 @@ impl<L: Layout> Agent<L> for Mcts<L> {
             work,
             visits,
             rewards,
+            anchor: None,
         });
         if trees.iter().all(|tree| tree.expanded(choice)) {
             self.kept = Some(Kept {

@@ -20,7 +20,10 @@ use serde::{Deserialize, Serialize};
 pub use eval::{FEATURES, Features, NAMES, WEIGHTS, evaluate, features, logit, sigmoid};
 pub use expert::ExpertAgent;
 pub use frozen::FrozenExpertAgent;
-pub use long::{EVAL_STEPS, Family, Leaf, LongSearch, Method, Settings, WORLD_STEPS};
+pub use long::{
+    ANCHOR_ERRORS, ANCHOR_MARGIN, AnchorCheck, EVAL_STEPS, Family, Leaf, LongSearch, Method,
+    Options, Settings, WORLD_STEPS,
+};
 pub use mcts::{Budget, Mcts, Search, Sight, rollouts_run};
 pub use rollout::{
     COUNTER_MIN, Inline, REMOVAL_MIN, RolloutPolicy, Softmax, rollout, rollout_to, soft_rollout,
@@ -285,6 +288,7 @@ fn deep_seer(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + S
             sight: Sight::Omniscient,
             leaf: Leaf::Rollout,
             knowledge: Knowledge::Tuned,
+            options: Options::default(),
         },
         work: 30_000_000,
         threads: std::thread::available_parallelism()
