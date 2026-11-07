@@ -112,8 +112,20 @@
   text-decoration: none;
 }
 
-.specs-toc a:hover {
+.specs-toc a:hover,
+.specs-toc-them:hover {
   color: var(--gold);
+}
+
+.specs-toc-them {
+  display: block;
+  margin-top: 16px;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
 }
 
 .specs-moments {
@@ -171,39 +183,23 @@
   cursor: default;
 }
 
-/* The two seats, side by side: yours, then theirs. */
-.specs-seats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.specs-seat-look {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin: 0 0 8px;
+.specs-moment-head p {
+  grid-row: 2;
+  margin: 2px 0 0;
   color: var(--text-dim);
   font-size: 14px;
 }
 
-.specs-seat-name {
-  flex: none;
-  color: var(--gold);
-  font-size: 12px;
+/* The opponent's seat: every moment again, below yours. */
+.specs-section-head {
+  max-width: 1600px;
+  margin: 96px auto 32px;
+  padding-top: 24px;
+  border-top: 1px solid rgb(255 255 255 / 8%);
+  font-family: var(--font-display);
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.specs-seat-full {
-  margin-left: auto;
-  color: var(--text-faint);
-  text-decoration: none;
-}
-
-.specs-seat-full:hover {
   color: var(--gold);
+  scroll-margin-top: 24px;
 }
 
 .specs-frame {

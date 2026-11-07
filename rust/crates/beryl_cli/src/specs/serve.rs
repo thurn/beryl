@@ -8,20 +8,21 @@
 //!   `/m/<card>/<moment>/<view>/<instance>/invoke/<cmd>` are `serve`'s two routes for one
 //!   instance of a moment seen from `<view>` (`yours` or `theirs`, [`super::View`]), started
 //!   by its first request.
-//! - `POST /m/<card>/<moment>/<view>/<instance>/play` plays out the moment's own actions.
+//! - `POST /m/<card>/<moment>/<view>/<instance>/play` plays out what the instance holds.
+//! - `GET /m/<card>/<moment>/<view>/<instance>/held` says whether it holds anything to play.
 //! - `GET /stream/<page>` is one event stream for a whole page: every view of each instance
 //!   named `<page>.<n>`, as a `game-update` event of `{"instance": key, "update": view}`. A
 //!   browser allows a host only about six open connections, so a page of moments shares one
 //!   stream and hands each frame its views, rather than each frame holding its own.
 //!
 //! A moment's setup plays before the page sees anything: `current_game` answers with the first
-//! view after it, the one the page shows at once. The views of the moment's own actions are
-//! held until the viewer asks for them (`play`, or acting on the game in the frame), so the page
-//! animates them from that view on, when the viewer is watching; a new instance (the page's
-//! replay button) plays them again. An instance outside a page (a full-size frame, or a
-//! headless screenshot), or of a moment with nothing to play, has no play button, so it sends
-//! them a beat after its first view: seen from the opponent's seat, the game plays on to the
-//! viewer's first decision.
+//! view after it, the one the page shows at once. The views after it, of the moment's own
+//! actions and of the game playing on to the viewer's first decision (as it does from the
+//! opponent's seat), are held until the viewer asks for them (`play`, or acting on the game in
+//! the frame), so the page animates them from that view on, when the viewer is watching; a new
+//! instance (the page's replay button) plays them again. An instance outside a page (a
+//! full-size frame, or a headless screenshot) has no play button, so it sends them a beat after
+//! its first view.
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -31,7 +32,7 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 use beryl_session::ipc;
-use beryl_session::{GameUpdate, Sessions};
+use beryl_session::{GameUpdate, Sessions, Status};
 use serde_json::{Value, json};
 
 use super::{Phase, View, find, listing};
@@ -145,6 +146,10 @@ fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result
         ("POST", "play") => {
             release(&feed);
             respond(&mut stream, "200 OK", "{\"ok\":null}")
+        }
+        ("GET", "held") => {
+            let answer = json!({ "ok": holds(&lock(&feed.0)) });
+            respond(&mut stream, "200 OK", &answer.to_string())
         }
         ("POST", command) if command.starts_with("invoke/") => {
             let command = &command["invoke/".len()..];
@@ -268,7 +273,7 @@ fn current(feed: &SharedFeed) -> Value {
     let mut shown = f.views[start].clone();
     // Shown at once, it animates nothing.
     shown.view.events.clear();
-    if !f.released && (f.page.is_none() || !f.plays) {
+    if !f.released && f.page.is_none() {
         let feed = Arc::clone(feed);
         std::thread::spawn(move || {
             std::thread::sleep(BEAT);
@@ -276,6 +281,15 @@ fn current(feed: &SharedFeed) -> Value {
         });
     }
     json!({ "ok": shown })
+}
+
+/// Whether the instance, its first view shown, holds views to play: its moment's own actions,
+/// or a game that goes on without the viewer, not yet waiting on their decision.
+fn holds(f: &Feed) -> bool {
+    !f.released
+        && f.start.is_some_and(|start| {
+            f.plays || !matches!(f.views[start].view.status, Status::Deciding { .. })
+        })
 }
 
 /// Sends the views held since the first one shown to the instance's streams, once its setup

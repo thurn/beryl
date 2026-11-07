@@ -10,7 +10,7 @@ play a card's UI must get right. Each moment is a real game, live and fully
 playable in the page: the engine behind it is the app's. Scrolling a spec is QA
 testing the card.
 
-Every moment shows twice, side by side and played in step: from your seat and
+Every moment shows twice: from your seat, then again at the bottom of the page
 from the opponent's (**Them**), the same game with the viewer across the table.
 What the opponent sees of a card counts as much as what its controller sees:
 which ability went on the stack, which card a choice took and where it went,

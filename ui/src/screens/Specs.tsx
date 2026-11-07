@@ -2,9 +2,10 @@
 // every moment of play a card's UI must get right, each a live game from `beryl_cli
 // specs-serve` (rust/crates/beryl_cli/src/specs), proxied by Vite under /spec-api. A moment's
 // game runs in a frame of its own from when it first nears the viewport, and stays; the page
-// hands every frame its views from one event stream. Each moment shows twice, side by side: from
-// your seat and from the opponent's, the same game played in step. A moment that plays actions
-// out holds them until its play button, which plays both; replay starts both afresh.
+// hands every frame its views from one event stream. Each moment shows twice: from your seat,
+// then again in the page's second half from the opponent's. Whatever would play after a frame's
+// first view (the moment's own actions, or the game going on to the viewer's first decision)
+// waits for its play button; replay starts it afresh.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cardEntry } from "../cards";
 import type { RelayedEvent } from "../ipc";
@@ -137,21 +138,30 @@ function SpecPage({ spec }: { spec: SpecListing }) {
         <ol className="specs-toc">
           {spec.moments.map((m) => (
             <li key={m.name}>
-              <a href={`#${m.name}`}>{m.title}</a>
+              <a href={`#${anchor(m, "yours")}`}>{m.title}</a>
             </li>
           ))}
         </ol>
+        <a href="#theirs" className="specs-toc-them">
+          Them
+        </a>
       </nav>
       <main className="specs-moments">
-        {spec.moments.map((m) => (
-          <MomentView
-            key={m.name}
-            slug={spec.slug}
-            moment={m}
-            page={page}
-            open={open}
-            frames={frames.current}
-          />
+        {VIEWS.map((view) => (
+          <div key={view} id={view}>
+            {view === "theirs" && <h1 className="specs-section-head">Them</h1>}
+            {spec.moments.map((m) => (
+              <MomentView
+                key={m.name}
+                slug={spec.slug}
+                moment={m}
+                view={view}
+                page={page}
+                open={open}
+                frames={frames.current}
+              />
+            ))}
+          </div>
         ))}
       </main>
     </div>
@@ -178,35 +188,75 @@ function useReached(ref: React.RefObject<HTMLElement | null>): boolean {
 const VIEWS = ["yours", "theirs"] as const;
 type View = (typeof VIEWS)[number];
 
+/** A moment's place on the page, from one seat. */
+function anchor(moment: MomentListing, view: View): string {
+  return view === "yours" ? moment.name : `${moment.name}-theirs`;
+}
+
+/** One moment from one seat: what to look for, and its live game. */
 function MomentView({
   slug,
   moment,
+  view,
   page,
   open,
   frames,
 }: {
   slug: string;
   moment: MomentListing;
+  view: View;
   page: string;
   open: boolean;
   frames: Frames;
 }) {
   const holder = useRef<HTMLDivElement>(null);
   const reached = useReached(holder);
-  // Each instance is a game of its own; a new one replays the moment, from both seats.
+  // Each instance is a game of its own; a new one replays the moment.
   const [n, setN] = useState(0);
-  const instance = `${page}.${n}`;
-  const key = (view: View) => `${slug}/${moment.name}/${view}/${instance}`;
-  // The views that have shown their first view, by instance.
-  const [shown, setShown] = useState<Record<string, true>>({});
-  // The instance whose actions have been asked to play out.
+  const key = `${slug}/${moment.name}/${view}/${page}.${n}`;
+  const live = `${window.location.origin}${API}/m/${key}`;
+  const src = `/?live=${encodeURIComponent(live)}&relay#/game`;
+  const full = `${slug}/${moment.name}/${view}/${page}-full-${n}`;
+  // Hidden until it shows its first view, over a placeholder.
+  const [shown, setShown] = useState<string>();
+  // Whether it holds views to play, by instance, asked once it has shown.
+  const [held, setHeld] = useState<Record<string, boolean>>({});
+  // The instance whose held views have been asked to play out.
   const [played, setPlayed] = useState<string>();
-  const waiting = moment.plays && played !== instance;
-  const ready = VIEWS.every((v) => shown[key(v)]);
+  useEffect(() => {
+    if (shown !== key || held[key] !== undefined) return;
+    void fetch(`${API}/m/${key}/held`)
+      .then((r) => r.json() as Promise<{ ok?: boolean }>)
+      .then(
+        (r) => r.ok === true,
+        () => false,
+      )
+      .then((holds) => setHeld((h) => ({ ...h, [key]: holds })));
+  }, [shown, key, held]);
+  const waiting = held[key] !== false && played !== key;
+  const frame = useRef<HTMLIFrameElement>(null);
+  useEffect(() => {
+    const onMessage = (e: MessageEvent<{ kind?: string }>) => {
+      if (
+        e.source === frame.current?.contentWindow &&
+        e.data?.kind === "beryl-shown"
+      ) {
+        setShown(key);
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [key]);
+  const mount = (iframe: HTMLIFrameElement | null) => {
+    frame.current = iframe;
+    if (iframe?.contentWindow) frames.set(key, iframe.contentWindow);
+    else frames.delete(key);
+  };
   return (
-    <section className="specs-moment" id={moment.name}>
+    <section className="specs-moment" id={anchor(moment, view)}>
       <header className="specs-moment-head">
         <h2>{moment.title}</h2>
+        <p>{view === "yours" ? moment.look : moment.theirs}</p>
         <div className="specs-moment-actions">
           {waiting ? (
             <button
@@ -214,12 +264,10 @@ function MomentView({
               className="specs-icon-button"
               title="Play"
               aria-label="Play"
-              disabled={!ready}
+              disabled={held[key] === undefined}
               onClick={() => {
-                setPlayed(instance);
-                for (const v of VIEWS) {
-                  void fetch(`${API}/m/${key(v)}/play`, { method: "POST" });
-                }
+                setPlayed(key);
+                void fetch(`${API}/m/${key}/play`, { method: "POST" });
               }}
             >
               ▶
@@ -228,104 +276,35 @@ function MomentView({
             <button
               type="button"
               className="specs-icon-button"
-              title={moment.plays ? "Replay" : "Restart"}
-              aria-label={moment.plays ? "Replay" : "Restart"}
+              title={played === key ? "Replay" : "Restart"}
+              aria-label={played === key ? "Replay" : "Restart"}
               onClick={() => setN((x) => x + 1)}
             >
               ↻
             </button>
           )}
+          <a
+            className="specs-icon-button"
+            href={`/?live=${encodeURIComponent(`${window.location.origin}${API}/m/${full}`)}#/game`}
+            target="_blank"
+            rel="noreferrer"
+            title="Open full size"
+            aria-label="Open full size"
+          >
+            ↗
+          </a>
         </div>
       </header>
-      <div className="specs-seats" ref={holder}>
-        {VIEWS.map((view) => (
-          <Seat
-            key={view}
-            view={view}
-            look={view === "yours" ? moment.look : moment.theirs}
-            title={moment.title}
-            instanceKey={key(view)}
-            full={`${slug}/${moment.name}/${view}/${page}-full-${n}`}
-            mounted={reached && open}
-            shown={!!shown[key(view)]}
-            onShown={() => setShown((s) => ({ ...s, [key(view)]: true }))}
-            frames={frames}
-          />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-/** One seat's frame of a moment: what to look for there, and its live game. */
-function Seat({
-  view,
-  look,
-  title,
-  instanceKey,
-  full,
-  mounted,
-  shown,
-  onShown,
-  frames,
-}: {
-  view: View;
-  look: string;
-  title: string;
-  instanceKey: string;
-  full: string;
-  mounted: boolean;
-  shown: boolean;
-  onShown: () => void;
-  frames: Frames;
-}) {
-  const live = `${window.location.origin}${API}/m/${instanceKey}`;
-  const src = `/?live=${encodeURIComponent(live)}&relay#/game`;
-  const frame = useRef<HTMLIFrameElement>(null);
-  const shownRef = useRef(onShown);
-  shownRef.current = onShown;
-  useEffect(() => {
-    const onMessage = (e: MessageEvent<{ kind?: string }>) => {
-      if (
-        e.source === frame.current?.contentWindow &&
-        e.data?.kind === "beryl-shown"
-      ) {
-        shownRef.current();
-      }
-    };
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [instanceKey]);
-  const mount = (iframe: HTMLIFrameElement | null) => {
-    frame.current = iframe;
-    if (iframe?.contentWindow) frames.set(instanceKey, iframe.contentWindow);
-    else frames.delete(instanceKey);
-  };
-  return (
-    <div className="specs-seat">
-      <p className="specs-seat-look">
-        <span className="specs-seat-name">
-          {view === "yours" ? "You" : "Them"}
-        </span>
-        {look}
-        <a
-          className="specs-seat-full"
-          href={`/?live=${encodeURIComponent(`${window.location.origin}${API}/m/${full}`)}#/game`}
-          target="_blank"
-          rel="noreferrer"
-          title="Open full size"
-          aria-label="Open full size"
-        >
-          ↗
-        </a>
-      </p>
       <div
-        className={shown ? "specs-frame" : "specs-frame specs-frame-loading"}
+        className={
+          shown === key ? "specs-frame" : "specs-frame specs-frame-loading"
+        }
+        ref={holder}
       >
-        {mounted && (
-          <iframe key={instanceKey} ref={mount} src={src} title={title} />
+        {reached && open && (
+          <iframe key={key} ref={mount} src={src} title={moment.title} />
         )}
       </div>
-    </div>
+    </section>
   );
 }
