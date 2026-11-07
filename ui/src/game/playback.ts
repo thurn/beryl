@@ -14,6 +14,7 @@ import {
   type GameUpdate,
   type PlayerView,
 } from "../ipc";
+import type { ObjectView } from "../generated/protocol";
 import { withResolving } from "./decisions";
 import { learnNames, logLines, type LogEntry, type Names } from "./log";
 
@@ -35,6 +36,9 @@ export const HOLD = {
   /** The spell it hit, struck (CardLayer's shake) and then carried to its zone, in a view of
    * its own so that the eye follows it. */
   hit: 1500,
+  /** A card drawn and put elsewhere by the same resolution (a loot's discard), shown arriving
+   * in its owner's hand before it leaves. */
+  drawn: 700,
 };
 
 /** The log keeps this many entries. */
@@ -57,17 +61,74 @@ function holdOf(update: GameUpdate): number {
   return BEAT_HOLDS.get(update) ?? holdFor(update.view);
 }
 
+/** `update` as the beats a player can follow: a card drawn and put elsewhere by one
+ * resolution first arrives in its owner's hand ([`drawnBeat`]), and a spell countered or
+ * bounced is struck before it goes ([`hitBeats`]). `before`, the view last shown or queued,
+ * says where things were; with none it is one beat. */
+export function beats(
+  before: GameUpdate | undefined,
+  update: GameUpdate,
+): GameUpdate[] {
+  if (!before) return [update];
+  const drawn = drawnBeat(before, update);
+  return drawn ? [drawn, ...hitBeats(drawn, update)] : hitBeats(before, update);
+}
+
+/** The beat of the cards `update` draws and puts elsewhere before it shows them (a loot's
+ * draw and discard), arriving in their owner's hand: a card goes from library to graveyard by
+ * way of the hand, where the eye expects it, rather than straight across, which on the
+ * opponent's side is a hop between neighboring piles. Face down when the viewer doesn't know
+ * it. None if `update` draws nothing it moves on. */
+function drawnBeat(
+  before: GameUpdate,
+  update: GameUpdate,
+): GameUpdate | undefined {
+  const { view } = update;
+  const was = withResolving(before.view);
+  const from = new Map(was.objects.map((o) => [o.slot, o]));
+  const passed = new Set(
+    view.events.flatMap((e) =>
+      e.kind === "zoneChange" &&
+      e.from === "hand" &&
+      from.get(e.slot)?.zone === "library"
+        ? [e.slot]
+        : [],
+    ),
+  );
+  if (passed.size === 0) return undefined;
+  const now = new Map(view.objects.map((o) => [o.slot, o]));
+  const inHand = (o: ObjectView): ObjectView => {
+    const seen = o.owner === "you" ? (now.get(o.slot) ?? o) : o;
+    return { ...seen, zone: "hand" };
+  };
+  const players = { ...was.players };
+  for (const side of ["you", "opponent"] as const) {
+    players[side] = {
+      ...was.players[side],
+      library: was.players[side].library.filter((s) => !passed.has(s)),
+    };
+  }
+  const drawn: GameUpdate = {
+    ...update,
+    view: {
+      ...was,
+      status: { kind: "playing" },
+      objects: was.objects.map((o) => (passed.has(o.slot) ? inHand(o) : o)),
+      players,
+      events: [],
+    },
+  };
+  BEAT_HOLDS.set(drawn, HOLD.drawn);
+  return drawn;
+}
+
 /** `update` as the beats a player can follow when it counters or bounces a spell: the spell
  * resolving against it shown on the stack with its arrow, then the target struck and carried
  * to its owner's hand, graveyard or exile while the resolving spell stays on the stack, and
  * only then the view itself, in which that spell goes to its graveyard and what follows (a
  * card drawn) plays. `before`, the view last shown or queued, says what the stack held; with
  * no such pair it is one beat. */
-export function beats(
-  before: GameUpdate | undefined,
-  update: GameUpdate,
-): GameUpdate[] {
-  if (!before) return [update];
+function hitBeats(before: GameUpdate, update: GameUpdate): GameUpdate[] {
   const { view } = update;
   const hit = view.events.find(
     (e) =>
