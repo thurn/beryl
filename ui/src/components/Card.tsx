@@ -318,6 +318,13 @@ export function Card({
   const height = width / CARD_ASPECT;
   const field = variant === "field";
   const em = typeUnit(width, field);
+  const countOf = (kind: CounterMark) =>
+    marks?.counters.find((c) => c.kind === kind)?.count ?? 0;
+  const ptCounters = countOf("plusOne") - countOf("minusOne");
+  const otherCounters =
+    marks?.counters.filter(
+      (c) => c.kind !== "plusOne" && c.kind !== "minusOne",
+    ) ?? [];
   const scan = back ? undefined : card.scan;
   const nameRef = useTextFit(card.name);
   const typeRef = useTextFit(card.typeLine);
@@ -422,11 +429,22 @@ export function Card({
             <MarkBadge icon="sick" label="Summoning sick" />
           </span>
         )}
-        {marks && (marks.counters.length > 0 || marks.token) && (
+        {/* +1/+1 and -1/-1 counters, as on Arena: their net count in a disc inset at the
+            top right of the art. */}
+        {ptCounters !== 0 && (
+          <span
+            className={`card-pt-counter ${ptCounters > 0 ? "stat-up" : "stat-down"}`}
+            role="img"
+            aria-label={`${Math.abs(ptCounters)} ${ptCounters > 0 ? "+1/+1" : "-1/-1"} counters`}
+          >
+            {ptCounters > 0 ? `+${ptCounters}` : `\u2212${-ptCounters}`}
+          </span>
+        )}
+        {marks && (otherCounters.length > 0 || marks.token) && (
           <span className="card-counters">
             {/* Marks that say what the frame and art also hint, apart from any art. */}
             {marks.token && <MarkBadge icon="token" label="Token" />}
-            {marks.counters.map((c) => (
+            {otherCounters.map((c) => (
               <MarkBadge
                 key={c.kind}
                 icon={c.kind}

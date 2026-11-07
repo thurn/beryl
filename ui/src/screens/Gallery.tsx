@@ -129,10 +129,10 @@ function PlayerAndZones() {
   return (
     <Panel n="03" title="Player & zones">
       <At x={0} y={50}>
-        <LifeOrb life={22} active wings={0.7} />
+        <LifeOrb life={22} active />
       </At>
       <At x={141} y={51}>
-        <LifeOrb life={17} seat="opponent" wings={0.7} />
+        <LifeOrb life={17} seat="opponent" />
       </At>
       <CaptionAt x={98} y={133}>
         Active

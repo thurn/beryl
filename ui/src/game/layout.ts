@@ -60,8 +60,8 @@ export const HAND = {
   width: 182,
   spacing: 172,
   top: 726.5,
-  sag: 9,
-  turn: 5.9,
+  sag: 6,
+  turn: 4,
   bias: 0.6,
 };
 
@@ -259,7 +259,7 @@ export const PILES = {
  * from it the more of its side shows: the camera looks at the far table more nearly level. */
 const NADIR = { x: STAGE.width / 2, y: 1500 };
 /** How far each card beneath a pile's top card lies toward `NADIR`, as a fraction of the way. */
-const CARD_RISE = 0.0008;
+const CARD_RISE = 0.0011;
 
 /** How a pile of cards looks on the table. */
 export interface PileLook {

@@ -148,7 +148,7 @@ const COMBAT_STEPS: Partial<Record<Step, ReactNode>> = {
 const PHASES: { phase: Phase; label: string; icon: ReactNode }[] = [
   {
     phase: "beginning",
-    label: "Beginning",
+    label: "Upkeep",
     icon: (
       <>
         <rect

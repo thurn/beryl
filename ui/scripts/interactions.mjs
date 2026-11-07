@@ -1455,10 +1455,10 @@ await check(
 );
 
 await check(
-    "Attack with All picks every creature that may attack; Clear none",
+    "Attack All picks every creature that may attack; Clear none",
     async (page) => {
         await page.clock.runFor(2000);
-        await page.getByRole("button", { name: "Attack with All" }).click();
+        await page.getByRole("button", { name: "Attack All" }).click();
         await page.clock.runFor(500);
         await page.getByText(`${mayAttack.length} attacking`).waitFor();
         await page.getByRole("button", { name: "Clear" }).click();
@@ -1515,20 +1515,16 @@ await check(
     "blockers paired with attackers in any order are declared together",
     async (page) => {
         await page.clock.runFor(2000);
-        const banner = page.locator(".step-banner-detail");
         assert.equal(
-            await banner.textContent(),
-            "Click a creature to block with",
+            await page.locator(".step-banner").count(),
+            0,
+            "no banner says what to click",
         );
         // From the last blocker to the first: each, then its attacker.
         const pairs = [...declaredBlocks].sort(([a], [b]) => b - a);
         for (const [blocker, attacker] of pairs) {
             await page.click(slotOf(blocker));
             await page.clock.runFor(500);
-            assert.equal(
-                await banner.textContent(),
-                `Click the attacker ${nameIn(blockView, blocker)} blocks`,
-            );
             assert.ok(
                 await page.$(`${slotOf(attacker)} .card-target`),
                 "the attackers it may block glow",
@@ -4959,7 +4955,7 @@ for (const viewport of [
             await at("opponent-first-strike", 11);
             await at("combat-declare", attackRecord.at);
             await at("combat-declare", attackRecord.at, () =>
-                page.getByRole("button", { name: "Attack with All" }).click(),
+                page.getByRole("button", { name: "Attack All" }).click(),
             );
             const says = seen.map((s) => s.says);
             assert.equal(new Set(says).size, seen.length, says.join(" | "));

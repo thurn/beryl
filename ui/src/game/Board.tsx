@@ -868,15 +868,7 @@ export function Board({
   const arrows = useMemo(() => boardArrows(shown), [shown]);
   const attacks = useMemo(() => attackLines(shown), [shown]);
   const announcement = combatBanner(view) ?? coinFlipBanner(view);
-  // While a declaration is made, the banner says what to click; any other is an announcement,
-  // which shows for a moment.
-  const banner = drafting
-    ? {
-        title: "Combat",
-        detail: instruction(drafting, draft, walkers.length > 0, nameOf),
-        lasting: true,
-      }
-    : announcement && { ...announcement, lasting: false };
+  const banner = announcement;
   // A combat declaration is finished with the turn button, where priority is passed.
   const declaring =
     deciding && decision && isCombat(decision.kind) ? decision : undefined;
@@ -985,12 +977,7 @@ export function Board({
         </div>
 
         {banner && (
-          <StepBanner
-            key={
-              banner.lasting ? "lasting" : `${banner.title}|${banner.detail}`
-            }
-            {...banner}
-          />
+          <StepBanner key={`${banner.title}|${banner.detail}`} {...banner} />
         )}
 
         <GameLog log={log} folded open={logOpen} onToggle={toggleLog} />
@@ -1060,8 +1047,8 @@ export function Board({
                 <Tip side="above">Full control</Tip>
               </span>
             )}
-            {/* As on Arena, a row of phase stops for each player's turns, the opponent's
-                toward them; the current phase lights in the active player's row. */}
+            {/* As on Arena, a row of phase stops for each player's turns about their life
+                orb; the current phase lights in the active player's row. */}
             {(["opponent", "you"] as const).map((side) => {
               const key = side === "you" ? "yours" : "theirs";
               return (
@@ -1314,24 +1301,14 @@ const GLIDE_MS = 700;
 const BANNER_MS = 2500;
 
 /** A step announcement over the battlefield, such as "Combat" over "Blockers declared", between
- * the opponent's life orb and their permanents: it fades away after a moment unless `lasting`
- * (a declaration's instruction). */
-function StepBanner({
-  title,
-  detail,
-  lasting = false,
-}: {
-  title: string;
-  detail: string;
-  lasting?: boolean;
-}) {
+ * the opponent's life orb and their permanents: it fades away after a moment. */
+function StepBanner({ title, detail }: { title: string; detail: string }) {
   const reduce = useReducedMotion() ?? false;
   const [shown, setShown] = useState(true);
   useEffect(() => {
-    if (lasting) return;
     const timer = setTimeout(() => setShown(false), BANNER_MS);
     return () => clearTimeout(timer);
-  }, [lasting]);
+  }, []);
   return (
     <AnimatePresence>
       {shown && (
@@ -1699,12 +1676,12 @@ function Declare({
     <>
       <div className="combat-actions">
         {everyone && (
-          <Button variant="secondary" size="small" onClick={onAll}>
-            Attack with All
+          <Button variant="secondary" onClick={onAll}>
+            Attack All
           </Button>
         )}
         {n > 0 && (
-          <Button variant="secondary" size="small" onClick={onClear}>
+          <Button variant="secondary" onClick={onClear}>
             Clear
           </Button>
         )}
@@ -1715,24 +1692,6 @@ function Declare({
       </div>
     </>
   );
-}
-
-/** What to do next in a declaration, for the step banner. */
-function instruction(
-  kind: "attacker" | "blocker",
-  draft: Draft,
-  walkers: boolean,
-  nameOf: (slot: number) => string,
-): string {
-  const selected = draft.selected;
-  if (kind === "attacker") {
-    return walkers && selected !== undefined
-      ? `Click a planeswalker for ${nameOf(selected)} to attack`
-      : "Click creatures to attack with them";
-  }
-  return selected === undefined
-    ? "Click a creature to block with"
-    : `Click the attacker ${nameOf(selected)} blocks`;
 }
 
 /** The turn button at the rest of combat's decisions, which the engine asks only where a

@@ -455,6 +455,31 @@
   color: var(--stat-down-ink);
 }
 
+/* A permanent's +1/+1 or -1/-1 counters (Card.tsx): their count in a disc inset at the top
+   right of the art. */
+.card-pt-counter {
+  position: absolute;
+  top: 2.3em;
+  right: 0.55em;
+  min-width: 2.1em;
+  height: 2.1em;
+  padding: 0 0.3em;
+  display: grid;
+  place-items: center;
+  border-radius: 1.05em;
+  font: 700 1.25em/1 var(--font-sans);
+  color: #fff;
+  background: radial-gradient(circle at 50% 30%, #3a3631, #141210);
+  border: 0.12em solid currentColor;
+  box-shadow: 0 0.08em 0.3em rgb(0 0 0 / 70%);
+  pointer-events: none;
+}
+.card-pt-counter.stat-up {
+  color: var(--stat-up);
+}
+.card-pt-counter.stat-down {
+  color: var(--stat-down);
+}
 /* A permanent's marks (Card.tsx): a dark badge along its foot, between the ability badge and
    the plaque, wrapping upward: a token's coin, then one per kind of counter. */
 .card-counters {
@@ -1272,21 +1297,6 @@
   width: 100%;
   height: 100%;
   overflow: visible;
-}
-/* Light blades outlined dark over darker steel struts. */
-.life-orb-blade {
-  stroke: #1a1410;
-  stroke-width: 1.2;
-}
-.life-orb-blade-dark {
-  fill: #34302c;
-  stroke: #12100e;
-  stroke-width: 1;
-}
-.life-orb-arch {
-  fill: none;
-  stroke: #24211f;
-  stroke-width: 9;
 }
 /* The ring glows only along the rim, over a shadow. */
 .life-orb-ring {

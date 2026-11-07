@@ -6,45 +6,10 @@ import { CARD_ASPECT, Card, CardArt, CardBack, type CardFace } from "./Card";
 import { Tip } from "./Controls";
 import { ManaSymbol } from "./Mana";
 
-// The life orb, drawn in docs/ui_mockups pixels about the orb's center. Two silver blades sweep
-// out from each side of a dark oval toward its player's edge of the table, over darker struts
-// and a dark arch; a gold ring underlines the oval on the same side. The opponent's orb is yours
-// mirrored top to bottom, still lit from the top of the screen. The active player's orb flares.
+// The life orb, drawn in docs/ui_mockups pixels about the orb's center: a dark oval with a gold
+// ring underlining it toward its player's edge of the table. The opponent's orb is yours mirrored
+// top to bottom, still lit from the top of the screen. The active player's orb flares.
 
-type Point = readonly [number, number];
-
-/** A curved blade `width` thick at its root, its tip cut square. */
-function blade(root: Point, control: Point, tip: Point, width: number) {
-  const [dx, dy] = [tip[0] - root[0], tip[1] - root[1]];
-  const length = Math.hypot(dx, dy);
-  const [nx, ny] = [(-dy / length) * (width / 2), (dx / length) * (width / 2)];
-  const p = (x: number, y: number) => `${x.toFixed(1)} ${y.toFixed(1)}`;
-  return (
-    `M${p(root[0] + nx, root[1] + ny)} Q${p(control[0] + nx, control[1] + ny)} ` +
-    `${p(tip[0] + nx * 0.6, tip[1] + ny * 0.6)} ` +
-    `L${p(tip[0] - nx * 0.5, tip[1] - ny * 0.5)} ` +
-    `Q${p(control[0] - nx, control[1] - ny)} ${p(root[0] - nx, root[1] - ny)} Z`
-  );
-}
-
-/** How a light blade is shaded, root to tip, warm tan from its root. */
-const TONES = {
-  tan: ["#7a6450", "#958877", "#b3aa9f"],
-  pale: ["#8c765c", "#ada290", "#c6bfb3"],
-} as const;
-
-/** One side's blades (the left; the right is mirrored), as they sweep down for you: steel
- * struts behind light blades. Each blade runs from its root at the oval, the top right of its
- * box, where its tone starts, to its tip. */
-const LIGHT = [
-  { d: blade([-46, -5], [-96, 1], [-124, 37], 9.5), tone: "tan" },
-  { d: blade([-42, 13], [-78, 14], [-109, 48], 9), tone: "pale" },
-] as const;
-const DARK = [
-  blade([-45, 8], [-84, 14], [-114, 47], 5),
-  blade([-46, 25], [-71, 33], [-95, 63], 5),
-];
-const ARCH = "M-98 70 Q-64 30 0 30 Q64 30 98 70";
 const RING = "M-44 16 A49 41 0 0 0 44 16";
 
 /** The core: a cushion, a rounded oval with flattened sides, `rx` by `ry` about (0, `cy`), a
@@ -85,22 +50,17 @@ const RAYS = [
   })
   .join(" ");
 
-/** A life total in a dark oval on silver blades; the active player's flares gold. */
+/** A life total in a dark oval; the active player's flares gold. */
 export function LifeOrb({
   life,
   active = false,
   seat = "you",
-  wings = 1,
   anchor,
 }: {
   life: number;
   active?: boolean;
-  /** Whose orb: the blades sweep toward that player's edge, down for you and up for the
-   * opponent. */
+  /** Whose orb: its ring underlines the side toward that player's edge. */
   seat?: "you" | "opponent";
-  /** How far the blades reach, as a fraction of their full span: shorter where space is
-   * tight. */
-  wings?: number;
   /** The element id of the oval, which arrows meet. */
   anchor?: string;
 }) {
@@ -108,40 +68,10 @@ export function LifeOrb({
   // from flip with it, keeping it on top; their ids carry the seat so two orbs can share a page.
   const down = seat === "you" ? 1 : -1;
   const id = (name: string) => `orb-${name}-${seat}`;
-  const side = (
-    <>
-      {DARK.map((d) => (
-        <path key={d} className="life-orb-blade-dark" d={d} />
-      ))}
-      {[...LIGHT].reverse().map(({ d, tone }) => (
-        <path
-          key={d}
-          className="life-orb-blade"
-          d={d}
-          fill={`url(#orb-blade-${tone})`}
-          filter={`url(#${id("bevel")})`}
-        />
-      ))}
-    </>
-  );
   return (
     <div className={`life-orb${active ? " life-orb-active" : ""}`}>
       <svg className="life-orb-art" viewBox="-136 -57 272 116" aria-hidden>
         <defs>
-          {Object.entries(TONES).map(([tone, [root, mid, tip]]) => (
-            <linearGradient
-              key={tone}
-              id={`orb-blade-${tone}`}
-              x1="1"
-              y1="0"
-              x2="0"
-              y2="1"
-            >
-              <stop offset="0" stopColor={root} />
-              <stop offset="0.45" stopColor={mid} />
-              <stop offset="1" stopColor={tip} />
-            </linearGradient>
-          ))}
           <linearGradient
             id={id("rim")}
             x1="0"
@@ -169,28 +99,6 @@ export function LifeOrb({
           <filter id="orb-blur" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur stdDeviation="3" />
           </filter>
-          {/* Metal catching the light along its upper edges. */}
-          <filter id={id("bevel")} x="-10%" y="-10%" width="120%" height="120%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="1.2" result="b" />
-            <feSpecularLighting
-              in="b"
-              surfaceScale="3"
-              specularConstant="0.9"
-              specularExponent="16"
-              lightingColor="#ffffff"
-              result="s"
-            >
-              <feDistantLight azimuth={180 + 90 * down} elevation="40" />
-            </feSpecularLighting>
-            <feComposite in="s" in2="SourceAlpha" operator="in" result="lit" />
-            <feComposite
-              in="SourceGraphic"
-              in2="lit"
-              operator="arithmetic"
-              k2="1"
-              k3="0.45"
-            />
-          </filter>
           <filter
             id={id("shadow")}
             x="-20%"
@@ -212,32 +120,8 @@ export function LifeOrb({
               <ellipse cx="0" cy="-2" rx="62" ry="50" filter="url(#orb-blur)" />
               <path d={RAYS} filter="url(#orb-blur)" />
               <path d={RAYS} fill="url(#orb-ray)" />
-              {/* White-hot flares where the rim meets the blades, in a golden haze. */}
-              {[-1, 1].map((side) => (
-                <g key={side} filter="url(#orb-blur)">
-                  <ellipse
-                    cx={side * 66}
-                    cy="-12"
-                    rx="26"
-                    ry="7"
-                    fill="#ffb028"
-                  />
-                  <ellipse
-                    cx={side * 60}
-                    cy="-12"
-                    rx="16"
-                    ry="2.5"
-                    fill="#fff6d0"
-                  />
-                </g>
-              ))}
             </g>
           )}
-          <path className="life-orb-arch" d={ARCH} />
-          <g filter={`url(#${id("shadow")})`} transform={`scale(${wings})`}>
-            {side}
-            <g transform="scale(-1 1)">{side}</g>
-          </g>
           {active && (
             <path
               className="life-orb-halo"
@@ -539,7 +423,7 @@ function Pile({
   label: string;
   className?: string;
 }) {
-  const edges = Math.min(12, Math.ceil(count / 3));
+  const edges = Math.min(20, Math.ceil(count / 2));
   const left = Math.max(0, -depth.x);
   return (
     <div

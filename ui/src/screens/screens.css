@@ -781,11 +781,12 @@
 .table .life-orb {
   --orb: calc(1px / 1.045);
 }
-/* In combat, the damage the unblocked attackers will deal, left of the life total: a number, solid red when lethal. */
+/* In combat, the damage the unblocked attackers will deal, a badge on the rim of the life orb
+   toward the table: a number, solid red when lethal. */
 .life-incoming {
   position: absolute;
-  left: 22px;
-  top: 44px;
+  left: calc(50% + 30px);
+  top: 6px;
   min-width: 44px;
   padding: 3px 8px;
   border-radius: 999px;
@@ -796,6 +797,10 @@
   text-align: center;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
+}
+/* The opponent's on the lower rim of their orb, toward the table. */
+.life[data-life="opponent"] .life-incoming {
+  top: 82px;
 }
 .life-incoming-lethal {
   background: #b3261e;
@@ -1113,13 +1118,30 @@
 .turn-controls > * {
   position: absolute;
 }
+/* Each player's phase stops about their life orb, as on Arena: the beginning and first main
+   phase left of it, combat, the second main phase and the end right of it. */
 .turn-controls .phase-tracker-compact {
-  left: 1337px;
-  top: 706px;
+  left: 677px;
+  top: 656px;
+  z-index: 251;
+  display: grid;
+  grid-template-columns: repeat(2, 26px) 118px repeat(3, 26px);
+  column-gap: 10px;
 }
-/* The opponent's turns' phase stops, over yours. */
+.turn-controls .phase-tracker-compact .phase:nth-child(3) {
+  grid-column-start: 4;
+}
+.turn-controls .phase-tracker-compact .phase-icon {
+  width: 26px;
+  height: 26px;
+}
+/* The rule and groove run under each group, not behind the orb. */
+.turn-controls .phase-tracker-compact::before,
+.turn-controls .phase-tracker-compact::after {
+  display: none;
+}
 .turn-controls .phase-row-opponent {
-  top: 664px;
+  top: 89px;
 }
 /* Full control's stop sign, left of the turn button, while it is on. */
 .full-control {
@@ -1140,14 +1162,22 @@
   stroke-width: 2.6;
   stroke-linecap: round;
 }
-/* A declaration's shortcuts, over the phase tracker. */
+/* A declaration's shortcuts over the turn button, as wide as it, splitting it evenly. */
 .combat-actions {
   right: 39px;
-  top: 612px;
+  top: 705px;
   width: 250px;
   display: flex;
-  justify-content: center;
   gap: 10px;
+}
+.combat-actions .button {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 44px;
+  padding: 0 12px;
+  font-size: 18px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 .turn-action {
   right: 39px;

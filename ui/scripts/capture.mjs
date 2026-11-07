@@ -322,7 +322,14 @@ export async function screenFaults(page) {
             }
             for (const c of o.counters) {
                 if (c.kind === "loyalty") continue;
-                const badge = text(e.querySelector(`.mark-${c.kind} b`));
+                // +1/+1 and -1/-1 counters show as one signed count in a disc.
+                const signed = { plusOne: "+", minusOne: "\u2212" }[c.kind];
+                const badge = signed
+                    ? text(e.querySelector(".card-pt-counter"))?.replace(
+                          signed,
+                          "",
+                      )
+                    : text(e.querySelector(`.mark-${c.kind} b`));
                 if (badge !== String(c.count)) {
                     faults.push(
                         `${what} shows ${badge} ${c.kind} counters for ${c.count}`,
