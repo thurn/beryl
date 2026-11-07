@@ -366,6 +366,163 @@ forever, and the stack, trigger queue and tokens can overflow fixed capacities.
   identical iterations are one decision.
 - Detect repeated state hashes for loops nobody can stop.
 
+## Beyond the cube
+
+Famous rules problems no cube card raises, grouped by the design assumption each
+one breaks. Most fit the principles above: a game-start flag keeps them free
+when absent, and the heavy ones live only in `Large`. Four would change the
+design itself: merged objects, subgames, naming a card and secret simultaneous
+choices.
+
+Out of scope for good: Un-cards, dexterity cards (Chaos Orb), ante, and Arena's
+digital-only Alchemy mechanics (perpetual, seek, conjure, spellbooks).
+
+### 17. One object made of several cards
+
+**Examples:** mutate (Gemrazer, Nethroi); meld (Bruna and Gisela into Brisela,
+Voice of Nightmares).
+
+**Why it's hard:** Beryl assumes one slot is one object. A mutated permanent has
+the top card's characteristics plus every ability of the cards under it, and its
+mana value and other values come from the pile. When it leaves the battlefield,
+each card moves separately, and each card's leave and arrive triggers see its
+own card.
+
+**Plan:** The top card holds a "merged with" bitboard of the slots beneath it.
+Layers read abilities across the pile; a zone change moves every slot in it as
+one simultaneous event. Only decks containing a merging card ever set the field.
+
+### 18. Games within and after the game
+
+**Examples:** Shahrazad (a subgame played with the players' libraries); Karn
+Liberated (restart the game, keeping the cards it exiled).
+
+**Why it's hard:** The state is one flat game. A subgame pauses the main game,
+plays a complete game from its libraries, then resumes with the loser losing
+half their life. A restart rebuilds the game but carries some cards over.
+
+**Plan:** A restart is a new game built from part of the old one: draw new slot
+permutations and move the exiled cards in. A subgame needs a nested state, so it
+lives only in `Large`, which can hold a stack of games, or stays unsupported.
+
+### 19. Controlling another player
+
+**Examples:** Mindslaver, Emrakul, the Promised End, Word of Command.
+
+**Why it's hard:** One player makes every decision the other would make for a
+turn, and sees what that player could see, including their hand. The controller
+cannot concede for them. The search's objective for those decisions flips: play
+the opponent's turn as badly as the rules allow.
+
+**Plan:** The engine change is small: a `decider(seat)` mapping that every
+`Decision` goes through, and an `Observation` that unions both players'
+knowledge for the controller. The cost is in search, which must handle a turn
+whose decisions serve the other side.
+
+### 20. Answers from an open-ended set
+
+**Examples:** naming a card (Pithing Needle, Meddling Mage, Cabal Therapy);
+secret simultaneous choices (Menacing Ogre's "each player secretly chooses a
+number").
+
+**Why it's hard:** Every answer is a `Choice(u8)` among listed candidates, but
+the legal names are every card ever printed. Secret choices must hide the first
+player's answer from the second, and turn search into a simultaneous-move game
+whose best strategy is mixed.
+
+**Plan:**
+
+- By D6, every name outside both decklists has the same consequences, so the
+  exact candidates are the game table's names plus one "any other name". The AI
+  names from its belief about the opponent's deck, drawn from the cube's names,
+  through a two-level pick.
+- A secret choice is stored in `pending` with a knowledge bit that hides it
+  until the reveal. Search samples a mixed strategy rather than maximizing.
+
+### 21. Permanents treated as though they don't exist
+
+**Examples:** phasing (Teferi's Protection, Oubliette, Slip Out the Back).
+
+**Why it's hard:** A phased-out permanent stays on the battlefield without
+changing zones, yet almost every rule ignores it. Its attachments phase out
+indirectly, it keeps counters and identity, and phasing in triggers nothing that
+looks for entering.
+
+**Plan:** The object flags already have "phased out". Keep the battlefield
+bitboard without phased-out permanents, so every filter ignores them for free,
+and a second bitboard for the phased-out ones, which only the untap step reads.
+
+### 22. Zones outside the game
+
+**Examples:** wishes (Burning Wish, Karn, the Great Creator), learn and lessons,
+companions; Conspiracy's draft-matters cards (Cogwork Librarian, Lore Seeker).
+
+**Why it's hard:** These read a sideboard the state doesn't have. In cube draft
+it is the unused part of each player's pool. Draft-matters cards change the
+draft itself, not the game.
+
+**Plan:** A per-player sideboard zone with fixed slots beside the deck's, within
+the 255. Draft-matters cards belong to the draft crate, not the engine.
+
+### 23. Rewriting a card's whole text
+
+**Examples:** Volrath's Shapeshifter, which has the full text of the top card of
+your graveyard whenever that card is a creature card.
+
+**Why it's hard:** Beryl writes card behavior as Rust functions. The
+Shapeshifter must run another card's bodies as its own, from a reference that
+changes with the graveyard, while keeping one ability of its own.
+
+**Plan:** Bodies are generic over the card they run for, so a "borrowed text"
+mode in the characteristics function can point at another card's definition.
+Recompute the borrowed text with the layers whenever the graveyard's top
+changes.
+
+### 24. Mandatory loops, ending the turn and countering abilities
+
+**Examples:** Worldgorger Dragon with Animate Dead and no way out; Time Stop and
+Sundial of the Infinite; Stifle.
+
+**Why it's hard:**
+
+- A loop of mandatory actions makes the game a draw, which differs from running
+  out of budget.
+- Ending the turn exiles everything on the stack, removes combat and skips to
+  cleanup; anything that triggers there gives players priority again.
+- Countering an ability makes triggered and activated abilities on the stack,
+  delayed triggers included, into targets.
+
+**Plan:** Detect a repeated state hash with no decision between repeats and
+return a draw. Ending the turn is a turn-structure primitive. Stack entries
+become a target kind, filtered by entry kind.
+
+### 25. Prevention shields and banding
+
+**Examples:** Circle of Protection: Red ("the next time a red source of your
+choice would deal damage to you this turn"), "prevent the next 3 damage"
+shields; banding and "bands with other".
+
+**Why it's hard:** A shield is a floating replacement effect that remembers a
+source chosen in advance and a remaining amount, used up as it prevents damage.
+Banding changes who divides combat damage: the player whose creature has banding
+assigns damage dealt to it, not the attacking player.
+
+**Plan:** Floating effects get a mutable amount and a chosen-source field, both
+inside the fixed-size entry. Banding is a change to combat declaration and the
+damage division decision, behind a game-start flag.
+
+### 26. Many small player and game mechanics
+
+**Examples:** the monarch, initiative and dungeons, day and night, the Ring
+tempts you, speed.
+
+**Why it's hard:** Each is easy: a few bytes of per-player or per-game state
+plus triggers at step boundaries. The cost is their number, and that each adds
+listeners to step events.
+
+**Plan:** A field each in `Player` or `Turn`, with triggers in the existing
+step-boundary index, so absent mechanics cost nothing.
+
 ## Sequencing
 
 Finish the layers first: they block the most powerful cube cards today, and
@@ -393,9 +550,11 @@ mechanism absent.
      Phantasmal Image.
    - Gate: Breach with Lion's Eye Diamond finishes inside its budget.
 4. **Beyond the cube.**
-   - Builds: text-changing effects, the same-layer dependency test.
+   - Builds: text-changing effects, the same-layer dependency test, then types
+     17 to 26 as the cards that need them arrive.
    - Unlocks: cards outside the cube; the classic interaction corpus.
-   - Gate: Humility with Opalescence and Blood Moon with Urborg pass.
+   - Gate: Humility with Opalescence and Blood Moon with Urborg pass; each later
+     type gates on its own classic interaction.
 
 The types already designed (LKI, mid-resolution choices, mana classes, combat)
 grow card by card alongside these phases.
@@ -421,7 +580,8 @@ saying how its class could be prevented, ideally through the type system.
 ## Open questions
 
 - **Scope beyond the cube.** Build text changes and same-layer dependencies now,
-  or wait for the first card that needs them?
+  or wait for the first card that needs them? Which of types 17 to 26, if any,
+  are worth their design changes?
 - **Dirty-flag granularity.** How often does equipment keep layers dirty all
   game? Measure before splitting the flag per layer.
 - **Batched events.** Is splitting a batched draw only when a per-card listener
