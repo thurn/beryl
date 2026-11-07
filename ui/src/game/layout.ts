@@ -191,11 +191,13 @@ const ROWS: Record<
     others: { x: 988, end: 1196, width: 92 },
   },
 };
-/** The least scale, as a fraction of its depth's, the back row's other permanents may shrink to
- * before they crowd one another instead. */
-const OTHERS_LEAST = 0.3;
-/** The same for its mana. */
-const MANA_LEAST = 0.3;
+/** The least zoom the battlefield may take (`battlefieldZoom`) before its rows crowd their cards
+ * together instead. */
+const ZOOM_LEAST = 0.3;
+/** The least zoom the back row's other permanents, in their narrow room right of the orb, may
+ * pull the whole battlefield down to: past it, they zoom out further alone, so a few
+ * planeswalkers don't shrink every land and creature on the table. */
+const OTHERS_PULL = 0.8;
 /** Lands of different names stand this far apart before depth scaling, and the tapped ones
  * stand this far from the untapped ones. */
 const LAND_GAP = 12;
@@ -608,15 +610,18 @@ function lying(width: number, tapped: boolean) {
 
 /** A row of permanents other than lands: how wide each card's frame is before scaling, where
  * the row's top lies at its depth's full scale, the room it may take, centered on `center`
- * while it fits there or laid from `start`, and the least scale it may shrink to before its
- * groups crowd one another instead (`row`). */
+ * while it fits there or laid from `start`, and the battlefield's zoom, by which its depth's
+ * scale is multiplied (`battlefieldZoom`). */
 interface RowSpec {
   width: number;
   y: number;
   start: number;
   end: number;
   center?: number;
-  least: number;
+  zoom: number;
+  /** Whether a zoomed-out row keeps its edge toward the lane between the creatures' rows, as
+   * they do, rather than toward its player. */
+  lane?: boolean;
 }
 
 /** Whether a permanent is drawn in its side's creatures' row: a creature, as its types say after
@@ -649,34 +654,29 @@ const topLowest = (pile: ObjectView[]) =>
 const pileOf = (pile: ObjectView[]) =>
   pile.length > 1 ? pile.map((o) => o.slot).reverse() : undefined;
 
-/** One side's battlefield, as MTG Arena lays it out (ROWS): land piles on the left behind the
- * creatures' row, other permanents smaller on the right behind it. A blocker stands across the
- * table from the attacker it blocks among the other side's placements `across`, as combat.png
- * does, an attacker's blockers side by side about its center, so a block reads as a short line;
- * the rest of the row makes room. An attacker keeps its place in the row, standing out of it
- * toward the other side, so declaring one moves no other. The cards each permanent exiled until
- * it leaves (`beneath`, by its slot) lie tucked under it, peeking out to its left, and the Auras
- * and Equipment attached to it (`attached`, by its slot, whoever controls them, which `objects`
- * leaves out) behind it, peeking out to its right; its row makes room for both. Each tapped card
- * takes its turned width (`lying`). */
-function battlefieldPlacements(
-  side: Side,
+/** One side's permanents as the table groups them (`battlefieldPlacements`): its creatures'
+ * row, its back row's other permanents, and its mana's piles, untapped first (`untapped` of
+ * them) and then tapped. */
+interface SideGroups {
+  creatures: ObjectView[][];
+  others: ObjectView[][];
+  landPiles: ObjectView[][];
+  untapped: number;
+}
+
+/** Groups one side's permanents `objects` into piles. Twins (decisions.ts) with nothing on them
+ * share a pile, the top card wearing their count, as Arena stacks them; everything else stands
+ * alone. Twins are alike in all the table shows (Card.tsx's marks), so a sick token and a ready
+ * one, a stolen one and its owner's, or two planeswalkers of different loyalty, never share
+ * one: a pile hides nothing a player would want to read. Face-down permanents, which may be
+ * different cards, and those the stack `named`, which must be seen and are offered alone, stand
+ * apart. */
+function sideGroups(
   objects: ObjectView[],
-  across: Placement[] = [],
-  beneath: Map<number, ObjectView[]> = new Map(),
-  attached: Map<number, ObjectView[]> = new Map(),
-  named: Set<number> = new Set(),
-  logOpen = false,
-): Placement[] {
-  const rows = ROWS[side];
-  const room = { ...ROOM, start: logOpen ? BESIDE_LOG : ROOM.start };
-  const out: Placement[] = [];
-  // Twins (decisions.ts) with nothing on them share a pile, the top card wearing their count,
-  // as Arena stacks them; everything else stands alone. Twins are alike in all the table shows
-  // (Card.tsx's marks), so a sick token and a ready one, a stolen one and its owner's, or
-  // two planeswalkers of different loyalty, never share one: a pile hides nothing a player
-  // would want to read. Face-down permanents, which may be different cards, and those the stack
-  // `named`, which must be seen and are offered alone, stand apart.
+  beneath: Map<number, ObjectView[]>,
+  attached: Map<number, ObjectView[]>,
+  named: Set<number>,
+): SideGroups {
   const plain = (o: ObjectView) =>
     o.facing === "up" &&
     o.counters.length === 0 &&
@@ -697,11 +697,6 @@ function battlefieldPlacements(
     }
     return groups.map(topLowest);
   };
-  const creatures = grouped(objects.filter(isCreature));
-  const others = grouped(
-    objects.filter((o) => !isCreature(o) && !isManaSource(o)),
-  );
-
   // The back row's left side holds the mana: lands and mana artifacts, the untapped ones first
   // and the tapped ones in a group of their own after a wider gap, so how much mana is open
   // reads at a glance. Each name stands together.
@@ -714,35 +709,134 @@ function battlefieldPlacements(
   const sourcePiles = (tapped: boolean) =>
     grouped(sources.filter((o) => o.tapped === tapped).sort(order));
   const untapped = sourcePiles(false);
-  const landPiles = [...untapped, ...sourcePiles(true)];
-  // Each copy beneath a pile's top card peeks out by a step of its frame's size.
-  const pileWidth = (pile: ObjectView[]) => {
+  return {
+    creatures: grouped(objects.filter(isCreature)),
+    others: grouped(objects.filter((o) => !isCreature(o) && !isManaSource(o))),
+    landPiles: [...untapped, ...sourcePiles(true)],
+    untapped: untapped.length,
+  };
+}
+
+/** The mana piles' widths and the gaps before each, before scaling: each copy beneath a pile's
+ * top card peeks out by a step of its frame's size. */
+function landRun({ landPiles, untapped }: SideGroups) {
+  const widths = landPiles.map((pile) => {
     const { frame, span } = lying(LAND_WIDTH, pile[0]!.tapped);
     return span + frame * LAND_STEP.x * (pile.length - 1);
+  });
+  const gaps = landPiles.map((_, p): number =>
+    p === 0 ? 0 : p === untapped ? TAPPED_GAP : LAND_GAP,
+  );
+  const length =
+    widths.reduce((a, w) => a + w, 0) + gaps.reduce((a, g) => a + g, 0);
+  return { widths, gaps, length };
+}
+
+/** The room each of a side's rows may take (`battlefieldPlacements`). */
+function sideRows(side: Side, logOpen: boolean) {
+  const rows = ROWS[side];
+  const room = { ...ROOM, start: logOpen ? BESIDE_LOG : ROOM.start };
+  return {
+    lands: { y: rows.back, start: rows.lands, end: rows.landsEnd },
+    creatures: {
+      width: CREATURE_WIDTH,
+      y: rows.permanents,
+      start: room.start,
+      end: room.end,
+      center: room.center,
+      lane: true,
+    },
+    // Toward the stack's column, clear of the hand's middle.
+    others: {
+      width: rows.others.width,
+      y: rows.back,
+      start: rows.others.x,
+      end: rows.others.end,
+      center: Infinity,
+    },
   };
-  const unitWidths = landPiles.map(pileWidth);
-  const unitGaps: number[] = landPiles.map((_, p) =>
-    p === 0 ? 0 : p === untapped.length ? TAPPED_GAP : LAND_GAP,
-  );
-  const unitLength =
-    unitWidths.reduce((a, w) => a + w, 0) + unitGaps.reduce((a, g) => a + g, 0);
-  // Too many for their room: zoom the row out, all its cards alike, rather than overlap them.
-  const landFull = depthScale(rows.back);
-  const landFit = Math.min(
-    1,
-    Math.max(
-      MANA_LEAST,
-      (rows.landsEnd - rows.lands) / (unitLength * landFull),
-    ),
-  );
-  const landScale = landFull * landFit;
+}
+
+/** How far each row's room fits its cards, as a fraction of its depth's scale (1 or more when
+ * they fit at full size). */
+function rowFit(
+  groups: ObjectView[][],
+  spec: { width: number; y: number; start: number; end: number },
+  beneath: Map<number, ObjectView[]>,
+  attached: Map<number, ObjectView[]>,
+) {
+  if (groups.length === 0) return 1;
+  const length = rowLength(groups, spec.width, beneath, attached);
+  return (spec.end - spec.start) / (length * depthScale(spec.y));
+}
+
+/** How far the whole battlefield zooms out, as a fraction of each row's depth's scale: as far as
+ * its most crowded row, on either side, needs to fit its room, down to `ZOOM_LEAST`, though the
+ * back row's other permanents pull it no lower than `OTHERS_PULL`. Every row of both sides
+ * takes the same zoom, so the cards keep one size across the table, as if the camera drew
+ * back, rather than a crowded row's shrinking alone. */
+function battlefieldZoom(
+  sides: [Side, SideGroups][],
+  beneath: Map<number, ObjectView[]>,
+  attached: Map<number, ObjectView[]>,
+  logOpen: boolean,
+): number {
+  let zoom = 1;
+  for (const [side, groups] of sides) {
+    const rows = sideRows(side, logOpen);
+    const lands = landRun(groups).length;
+    if (lands > 0) {
+      zoom = Math.min(
+        zoom,
+        (rows.lands.end - rows.lands.start) /
+          (lands * depthScale(rows.lands.y)),
+      );
+    }
+    zoom = Math.min(
+      zoom,
+      rowFit(groups.creatures, rows.creatures, beneath, attached),
+      Math.max(
+        OTHERS_PULL,
+        rowFit(groups.others, rows.others, beneath, attached),
+      ),
+    );
+  }
+  return Math.max(ZOOM_LEAST, zoom);
+}
+
+/** One side's battlefield, as MTG Arena lays it out (ROWS): mana piles on the left behind the
+ * creatures' row, other permanents smaller on the right behind it, every row zoomed out alike
+ * by `zoom` (`battlefieldZoom`). A blocker stands across the table from the attacker it blocks
+ * among the other side's placements `across`, as combat.png does, an attacker's blockers side
+ * by side about its center, so a block reads as a short line; the rest of the row makes room.
+ * An attacker keeps its place in the row, standing out of it toward the other side, so
+ * declaring one moves no other. The cards each permanent exiled until it leaves (`beneath`, by
+ * its slot) lie tucked under it, peeking out to its left, and the Auras and Equipment attached
+ * to it (`attached`, by its slot, whoever controls them, which its groups leave out) behind it,
+ * peeking out to its right; its row makes room for both. Each tapped card takes its turned
+ * width (`lying`). */
+function battlefieldPlacements(
+  side: Side,
+  groups: SideGroups,
+  zoom: number,
+  across: Placement[] = [],
+  beneath: Map<number, ObjectView[]> = new Map(),
+  attached: Map<number, ObjectView[]> = new Map(),
+  logOpen = false,
+): Placement[] {
+  const rows = sideRows(side, logOpen);
+  const out: Placement[] = [];
+  const { landPiles } = groups;
+  const run = landRun(groups);
+  const landFull = depthScale(rows.lands.y);
+  const landScale = landFull * zoom;
   const landHeight = LAND_WIDTH / CARD_ASPECT;
-  // A shrunken row keeps its edge toward its player where a full-size one has it.
+  // A zoomed-out row keeps its edge toward its player where a full-size one has it.
   const landTop =
-    rows.back + (side === "you" ? (landFull - landScale) * landHeight : 0);
-  let landX = rows.lands;
+    rows.lands.y + (side === "you" ? (landFull - landScale) * landHeight : 0);
+  let landX = rows.lands.start;
   landPiles.forEach((pile, p) => {
-    landX += unitGaps[p]! * landScale;
+    landX += run.gaps[p]! * landScale;
     const { frame, span } = lying(LAND_WIDTH, pile[0]!.tapped);
     pile.forEach((o, i) => {
       const depth = pile.length - 1 - i;
@@ -761,38 +855,24 @@ function battlefieldPlacements(
         ...onTable(x, y, span, 0, landScale),
       });
     });
-    landX += unitWidths[p]! * landScale;
+    landX += run.widths[p]! * landScale;
   });
 
   const front = permanentRow(
     side,
-    creatures,
-    {
-      width: CREATURE_WIDTH,
-      y: rows.permanents,
-      start: room.start,
-      end: room.end,
-      center: room.center,
-      least: 0,
-    },
+    groups.creatures,
+    { ...rows.creatures, zoom },
     across,
     beneath,
     attached,
   );
-  // Everything else stands on the back row's right, always: as large as fits, zooming out
-  // rather than moving.
+  // Everything else stands on the back row's right, always, zooming out further alone when it
+  // still doesn't fit there.
+  const othersFit = rowFit(groups.others, rows.others, beneath, attached);
   const behind = permanentRow(
     side,
-    others,
-    {
-      width: rows.others.width,
-      y: rows.back,
-      start: rows.others.x,
-      end: rows.others.end,
-      // Toward the stack's column, clear of the hand's middle.
-      center: Infinity,
-      least: OTHERS_LEAST,
-    },
+    groups.others,
+    { ...rows.others, zoom: Math.max(ZOOM_LEAST, Math.min(zoom, othersFit)) },
     [],
     beneath,
     attached,
@@ -866,18 +946,15 @@ function permanentRow(
     y: frameWidth * LAND_STEP.y,
   };
   const unitWidths = groupWidths(groups, frameWidth, beneath, attached);
-  const unitLength = rowLength(groups, frameWidth, beneath, attached);
-  // A row too long for its room at its depth's scale shrinks, all its cards alike, down to its
-  // least scale; past that, `row` crowds its groups together.
+  // The battlefield's zoom fits its most crowded row; past its least, `row` crowds groups
+  // together.
   const full = depthScale(spec.y);
-  const least = Math.min(full, spec.least);
-  const scale = Math.max(
-    least,
-    Math.min(full, (spec.end - spec.start) / unitLength),
-  );
-  // A shrunken row keeps its edge toward its player where a full-size one has it, leaving the
-  // lane between the rows, where combat and the stack's arrows run, as wide as it can be.
-  const rowTop = spec.y + (side === "you" ? (full - scale) * height : 0);
+  const scale = full * spec.zoom;
+  // A zoomed-out creatures' row keeps its edge toward the lane between the rows, where combat
+  // and the stack's arrows run, so the lane stays as narrow as at full size; a back row keeps
+  // its edge toward its player.
+  const nearer = (side === "you") !== (spec.lane ?? false);
+  const rowTop = spec.y + (nearer ? (full - scale) * height : 0);
   const width = frameWidth * scale;
   const step = { x: unitStep.x * scale, y: unitStep.y * scale };
   const tucked = (g: ObjectView[]) => peeking(g, frameWidth, beneath) * scale;
@@ -1144,16 +1221,28 @@ export function layout(
   out.push(...heldPlacements(owned("opponent", "hand")));
   // Blockers stand across from their attackers, which stand where they would anyway: only the
   // defending side's row depends on the other's.
+  const groups = new Map(
+    (["opponent", "you"] as const).map((side) => [
+      side,
+      sideGroups(
+        permanents.filter(
+          (o) => o.controller === side && !behindHost.has(o.slot),
+        ),
+        beneath,
+        attached,
+        named,
+      ),
+    ]),
+  );
+  const zoom = battlefieldZoom([...groups], beneath, attached, logOpen);
   const field = (side: Side, across?: Placement[]) =>
     battlefieldPlacements(
       side,
-      permanents.filter(
-        (o) => o.controller === side && !behindHost.has(o.slot),
-      ),
+      groups.get(side)!,
+      zoom,
       across,
       beneath,
       attached,
-      named,
       logOpen,
     );
   const yours = field("you", field("opponent"));
