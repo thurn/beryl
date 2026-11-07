@@ -88,7 +88,11 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
 - File beads freely, in parallel. Merge conflicts are cheap: `enact push`
   rebases, you fix and push again. A filed bead may start within minutes, so put
   what it builds on in `staging` first or hold it back with a dependency.
-- `/enact <bead|epic|task>` runs work inline in one session;
+- Every session pays to learn the code it touches, so name in each bead the
+  files, helpers and tests it needs. Give beads that touch the same code one
+  `lane:<name>` label: one session works them in turn. Label mechanical beads
+  (wiring, renames, boilerplate tests) `tier:light` to run them on Sonnet.
+- `/enact <beads|epic|task>` runs work inline in one session;
   `/enact-plan <bead|plan|task>` runs it unattended across sessions. Most work
   uses neither.
 
