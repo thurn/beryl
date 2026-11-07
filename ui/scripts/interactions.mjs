@@ -1691,7 +1691,7 @@ async function assertAimedAtPlayer(page, attackers, side) {
         y > b.y - m &&
         y < b.y + b.height + m;
     for (const slot of attackers) {
-        const line = lines.find((l) => l.from === `card-${slot}-mark`);
+        const line = lines.find((l) => l.from === `card-${slot}`);
         assert.ok(line, `attacker ${slot} draws a line`);
         assert.equal(line.to, `${side}-life-orb`, `${slot} aims at ${side}`);
         assert.ok(inside(line.end, orb, 4), `${slot}'s line ends on the orb`);
@@ -1731,7 +1731,7 @@ await check(
         const lines = await combatLines(page, ".board-arrows");
         for (const a of blocked) {
             assert.ok(
-                !lines.some((l) => l.from === `card-${a}-mark`),
+                !lines.some((l) => l.from === `card-${a}`),
                 `blocked ${a} aims at no player`,
             );
         }
@@ -1782,7 +1782,7 @@ await check(
         }
         await page.clock.runFor(2000);
         const links = (await combatLines(page, ".board-arrows")).filter(
-            (l) => !l.from.endsWith("-mark"),
+            (l) => !l.to.endsWith("-life-orb"),
         );
         assert.equal(links.length, declaredBlocks.size, "a line a blocker");
         for (const [i, l] of links.entries()) {
