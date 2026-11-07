@@ -4,9 +4,11 @@
 //! it plays an app game:
 //!
 //! - `GET /specs` lists the specs and their moments.
-//! - `/m/<card>/<moment>/<instance>/events` and `/m/<card>/<moment>/<instance>/invoke/<cmd>`
-//!   are `serve`'s two routes for one instance of a moment, started by its first request.
-//! - `POST /m/<card>/<moment>/<instance>/play` plays out the moment's own actions.
+//! - `/m/<card>/<moment>/<view>/<instance>/events` and
+//!   `/m/<card>/<moment>/<view>/<instance>/invoke/<cmd>` are `serve`'s two routes for one
+//!   instance of a moment seen from `<view>` (`yours` or `theirs`, [`super::View`]), started
+//!   by its first request.
+//! - `POST /m/<card>/<moment>/<view>/<instance>/play` plays out the moment's own actions.
 //! - `GET /stream/<page>` is one event stream for a whole page: every view of each instance
 //!   named `<page>.<n>`, as a `game-update` event of `{"instance": key, "update": view}`. A
 //!   browser allows a host only about six open connections, so a page of moments shares one
@@ -17,7 +19,9 @@
 //! held until the viewer asks for them (`play`, or acting on the game in the frame), so the page
 //! animates them from that view on, when the viewer is watching; a new instance (the page's
 //! replay button) plays them again. An instance outside a page (a full-size frame, or a
-//! headless screenshot) has no play button, so it sends them a beat after its first view.
+//! headless screenshot), or of a moment with nothing to play, has no play button, so it sends
+//! them a beat after its first view: seen from the opponent's seat, the game plays on to the
+//! viewer's first decision.
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -30,7 +34,7 @@ use beryl_session::ipc;
 use beryl_session::{GameUpdate, Sessions};
 use serde_json::{Value, json};
 
-use super::{Phase, find, listing};
+use super::{Phase, View, find, listing};
 use crate::serve::{CORS, invoke, read_request, respond};
 
 /// How many instances live at once; the least recently used goes first. A page keeps each
@@ -51,6 +55,8 @@ struct Feed {
     start: Option<usize>,
     /// Whether views past the start go to the streams yet.
     released: bool,
+    /// Whether its moment has actions of its own to play, which a page holds for its button.
+    plays: bool,
     streams: Vec<Sender<String>>,
     /// Its key, and the page stream it goes to as well, if its key names a page.
     key: String,
@@ -113,14 +119,18 @@ fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result
     let Some(rest) = path.strip_prefix("/m/") else {
         return respond(&mut stream, "404 Not Found", "{}");
     };
-    let mut parts = rest.splitn(4, '/');
-    let (Some(card), Some(name), Some(id), Some(route)) =
-        (parts.next(), parts.next(), parts.next(), parts.next())
-    else {
+    let mut parts = rest.splitn(5, '/');
+    let (Some(card), Some(name), Some(view), Some(id), Some(route)) = (
+        parts.next(),
+        parts.next(),
+        parts.next(),
+        parts.next(),
+        parts.next(),
+    ) else {
         return respond(&mut stream, "404 Not Found", "{}");
     };
-    let key = format!("{card}/{name}/{id}");
-    let (sessions_feed, error) = match instance(instances, pages, &key, card, name) {
+    let key = format!("{card}/{name}/{view}/{id}");
+    let (sessions_feed, error) = match instance(instances, pages, &key, card, name, view) {
         Ok(found) => (Some(found), None),
         Err(e) => (None, Some(e)),
     };
@@ -169,6 +179,7 @@ fn instance(
     key: &str,
     card: &str,
     name: &str,
+    view: &str,
 ) -> Result<SharedFeed, String> {
     let mut list = lock(instances);
     if let Some(i) = list.iter_mut().find(|i| i.key == key) {
@@ -176,10 +187,12 @@ fn instance(
         return Ok(Arc::clone(&i.feed));
     }
     let (_, moment) = find(card, name).ok_or_else(|| format!("no moment {card}/{name}"))?;
+    let view = View::parse(view).ok_or_else(|| format!("no view {view:?}"))?;
     let feed: SharedFeed = Arc::default();
     {
         let mut f = lock(&feed.0);
         key.clone_into(&mut f.key);
+        f.plays = !moment.play.is_empty();
         // An instance `<page>.<n>` goes to its page's stream.
         let id = key.rsplit('/').next().unwrap_or_default();
         f.page = id
@@ -187,7 +200,7 @@ fn instance(
             .map(|(page, _)| (Arc::clone(pages), page.to_owned()));
     }
     let emitted = Arc::clone(&feed);
-    let (sessions, _) = super::start(moment, move |update, phase| {
+    let (sessions, _) = super::start(moment, view, move |update, phase| {
         let (feed, ready) = &*emitted;
         let mut f = lock(feed);
         f.views.push(update.clone());
@@ -255,7 +268,7 @@ fn current(feed: &SharedFeed) -> Value {
     let mut shown = f.views[start].clone();
     // Shown at once, it animates nothing.
     shown.view.events.clear();
-    if !f.released && f.page.is_none() {
+    if !f.released && (f.page.is_none() || !f.plays) {
         let feed = Arc::clone(feed);
         std::thread::spawn(move || {
             std::thread::sleep(BEAT);

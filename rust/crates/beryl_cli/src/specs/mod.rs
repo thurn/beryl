@@ -4,6 +4,11 @@
 //! when the viewer presses play (a replay button starts it over), and what must hold of the
 //! viewer's first live decision after that, which a test checks.
 //!
+//! The page shows each moment twice, side by side and played in step: from the human's seat,
+//! and from the opponent's ([`View::Theirs`]), the same game with the viewer seated across the
+//! table. What the opponent sees of a card (which ability was activated, which card a choice
+//! took, where a token came from) matters as much as what its controller sees.
+//!
 //! The `specs` skill (`.agents/specs/SKILL.md`) says which moments a card needs.
 
 mod currency_converter;
@@ -44,6 +49,52 @@ pub struct Moment {
     /// What must hold of the human's first decision once both have been taken, in the fixture
     /// conditions' words ([`Condition::parse`]).
     pub expect: &'static [&'static str],
+    /// What the opponent should see of it, in a few words.
+    pub theirs: &'static str,
+    /// What must hold of the opponent's first decision once both have been taken, seated in
+    /// their place ([`View::Theirs`]).
+    pub expect_theirs: &'static [&'static str],
+}
+
+/// Whose seat a moment is seen from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum View {
+    /// The human's, seat 0: the one its board is written for.
+    Yours,
+    /// The opponent's, seat 1: the same game, the viewer seated across the table, playing on
+    /// live as the opponent once every action is taken.
+    Theirs,
+}
+
+impl View {
+    pub const ALL: [View; 2] = [View::Yours, View::Theirs];
+
+    /// Its name in the page's URL.
+    pub const fn name(self) -> &'static str {
+        match self {
+            View::Yours => "yours",
+            View::Theirs => "theirs",
+        }
+    }
+
+    pub fn parse(name: &str) -> Option<View> {
+        View::ALL.into_iter().find(|v| v.name() == name)
+    }
+
+    const fn seat(self) -> Seat {
+        match self {
+            View::Yours => Seat::P0,
+            View::Theirs => Seat::P1,
+        }
+    }
+
+    /// The other seat's.
+    const fn other(self) -> Seat {
+        match self {
+            View::Yours => Seat::P1,
+            View::Theirs => Seat::P0,
+        }
+    }
 }
 
 impl Moment {
@@ -55,6 +106,8 @@ impl Moment {
             board,
             play: &[],
             expect: &[],
+            theirs: "",
+            expect_theirs: &[],
         }
     }
 
@@ -74,6 +127,23 @@ impl Moment {
     pub const fn expect(mut self, expect: &'static [&'static str]) -> Moment {
         self.expect = expect;
         self
+    }
+
+    /// What the opponent should see of it, and what must hold of their first decision, seated
+    /// in their place.
+    #[must_use]
+    pub const fn theirs(mut self, look: &'static str, expect: &'static [&'static str]) -> Moment {
+        self.theirs = look;
+        self.expect_theirs = expect;
+        self
+    }
+
+    /// What must hold of the viewer's first live decision, seen from `view`.
+    pub const fn expected(&self, view: View) -> &'static [&'static str] {
+        match view {
+            View::Yours => self.expect,
+            View::Theirs => self.expect_theirs,
+        }
     }
 }
 
@@ -107,10 +177,12 @@ pub enum Phase {
     Live,
 }
 
-/// Starts `moment` in its own [`Sessions`], each view sent to `emit` with the phase it was
-/// emitted in. Scripts that fail report to the view's phase as `Live` with the failure.
+/// Starts `moment` in its own [`Sessions`], seen from `view`, each view sent to `emit` with the
+/// phase it was emitted in. Scripts that fail report to the view's phase as `Live` with the
+/// failure.
 pub fn start(
     moment: &'static Moment,
+    view: View,
     emit: impl Fn(GameUpdate, Phase) + Send + Sync + 'static,
 ) -> Result<(Sessions, Shared), String> {
     let progress = Shared::default();
@@ -128,6 +200,14 @@ pub fn start(
             Phase::Play
         };
         drop(p);
+        let mut update = update;
+        if phase != Phase::Live && matches!(update.view.status, Status::Deciding { .. }) {
+            // A stand-in answers the viewer's decisions until the actions are taken, at once:
+            // the viewer watches the game go on through them, each held as long as its events
+            // take to follow (the opponent's ability on the stack, read before it resolves), as
+            // the app holds the opponent's play.
+            update.view.status = Status::Playing;
+        }
         emit(update, phase);
     });
     let (table, state) =
@@ -140,12 +220,13 @@ pub fn start(
     let handed = Arc::clone(&progress);
     sessions
         .start_prepared(Prepared {
-            opponent: agent(Seat::P1)?,
-            stand_in: agent(Seat::P0)?,
+            opponent: agent(view.other())?,
+            stand_in: agent(view.seat())?,
+            scripted: true,
             hand_over: Some(Box::new(move || boards::lock(&handed).done())),
             table,
             state,
-            human: Seat::P0,
+            human: view.seat(),
             stops: StopsSetting::SMART,
         })
         .map_err(|e| e.to_string())?;
@@ -165,6 +246,8 @@ pub struct MomentListing {
     name: &'static str,
     title: &'static str,
     look: &'static str,
+    /// What the opponent should see of it.
+    theirs: &'static str,
     /// Whether it plays actions out once shown, which a replay plays again.
     plays: bool,
 }
@@ -182,6 +265,7 @@ pub fn listing() -> Vec<Listing> {
                     name: m.name,
                     title: m.title,
                     look: m.look,
+                    theirs: m.theirs,
                     plays: !m.play.is_empty(),
                 })
                 .collect(),
@@ -189,15 +273,15 @@ pub fn listing() -> Vec<Listing> {
         .collect()
 }
 
-/// Plays `moment` headless to the human's first live decision and checks what it expects
-/// there: an error says what failed.
-pub fn check(moment: &'static Moment) -> Result<(), String> {
+/// Plays `moment` headless, seen from `view`, to the viewer's first live decision and checks
+/// what it expects there: an error says what failed.
+pub fn check(moment: &'static Moment, view: View) -> Result<(), String> {
     let (sent, received) = std::sync::mpsc::channel();
-    let (_sessions, progress) = start(moment, move |update, phase| {
+    let (_sessions, progress) = start(moment, view, move |update, phase| {
         let _ = sent.send((update, phase));
     })?;
-    let conditions = moment
-        .expect
+    let expected = moment.expected(view);
+    let conditions = expected
         .iter()
         .map(|c| Condition::parse(c))
         .collect::<Result<Vec<_>, _>>()?;
@@ -217,7 +301,7 @@ pub fn check(moment: &'static Moment) -> Result<(), String> {
             Status::Deciding { .. } if phase == Phase::Live => {
                 let failed: Vec<&str> = conditions
                     .iter()
-                    .zip(moment.expect)
+                    .zip(expected)
                     .filter(|(c, _)| !c.holds(&update.view))
                     .map(|(_, text)| *text)
                     .collect();
@@ -254,11 +338,14 @@ pub fn check_all(cards: &[String]) -> Result<(), String> {
     let mut failed = 0;
     for spec in SPECS.iter().filter(|s| wanted(s)) {
         for m in spec.moments {
-            match check(m) {
-                Ok(()) => println!("ok    {} / {}", slug(spec.card), m.name),
-                Err(e) => {
-                    failed += 1;
-                    println!("FAIL  {} / {}: {e}", slug(spec.card), m.name);
+            for view in View::ALL {
+                let name = format!("{} / {} ({})", slug(spec.card), m.name, view.name());
+                match check(m, view) {
+                    Ok(()) => println!("ok    {name}"),
+                    Err(e) => {
+                        failed += 1;
+                        println!("FAIL  {name}: {e}");
+                    }
                 }
             }
         }
@@ -291,8 +378,14 @@ mod tests {
                     m.name
                 );
                 assert!(
-                    !m.expect.is_empty(),
-                    "{}: {} expects nothing",
+                    !m.expect.is_empty() && !m.expect_theirs.is_empty(),
+                    "{}: {} expects nothing of a seat",
+                    spec.card,
+                    m.name
+                );
+                assert!(
+                    !m.theirs.is_empty(),
+                    "{}: {} says nothing of what the opponent sees",
                     spec.card,
                     m.name
                 );
@@ -300,16 +393,18 @@ mod tests {
         }
     }
 
-    /// Every moment sets up, plays out, and reaches a live decision where its expectations hold.
+    /// Every moment sets up, plays out, and reaches a live decision where its expectations hold,
+    /// from both seats.
     #[test]
     fn every_moment_holds() {
         let failures: Vec<String> = SPECS
             .iter()
             .flat_map(|s| s.moments.iter().map(move |m| (s, m)))
-            .filter_map(|(s, m)| {
-                check(m)
+            .flat_map(|(s, m)| View::ALL.map(|v| (s, m, v)))
+            .filter_map(|(s, m, v)| {
+                check(m, v)
                     .err()
-                    .map(|e| format!("{} / {}: {e}", s.card, m.name))
+                    .map(|e| format!("{} / {} ({}): {e}", s.card, m.name, v.name()))
             })
             .collect();
         assert!(failures.is_empty(), "{}", failures.join("\n"));

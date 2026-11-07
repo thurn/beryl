@@ -1,5 +1,6 @@
 //! Currency Converter's spec: its stops, its two abilities, the discard prompt, the cards it
-//! exiles and what it makes of them.
+//! exiles and what it makes of them, each seen from both seats: the opponent sees which ability
+//! went on the stack, which card each choice took, and the token fly out of it.
 
 use beryl_cards::names::{
     COUNTERSPELL, CURRENCY_CONVERTER, ISLAND, JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY,
@@ -166,6 +167,10 @@ pub const SPEC: Spec = Spec {
                 .library(P0, LANDS),
         )
         .look("Your turn ends unasked; the next stop is your next turn.")
+        .theirs(
+            "Nothing under it: their turn just ends.",
+            &["their turn", "step end", "0 exiled with Currency Converter"],
+        )
         .expect(&["turn 7", "your turn", "step precombatMain"]),
         Moment::new(
             "tap-anyway",
@@ -176,6 +181,10 @@ pub const SPEC: Spec = Spec {
                 .library(P0, LANDS),
         )
         .look("Click it: both abilities, the loot greyed. Pick the other.")
+        .theirs(
+            "An idle Converter: nothing to read.",
+            &["their turn", "step end"],
+        )
         .expect(&[
             "decision priority",
             "offers Currency Converter ability 2",
@@ -191,6 +200,14 @@ pub const SPEC: Spec = Spec {
         )
         .play(&[Action::activate(P0, CONVERTER, CONVERT)])
         .look("It taps and resolves; nothing is made.")
+        .theirs(
+            "Its {T} on the stack, an arrow from it.",
+            &[
+                "their turn",
+                "decision priority",
+                "stack Currency Converter",
+            ],
+        )
         .expect(&[
             "tapped Currency Converter",
             "controls 0 Rogue Token",
@@ -204,6 +221,10 @@ pub const SPEC: Spec = Spec {
                 .library(P0, LANDS),
         )
         .look("Your second main stops for the loot.")
+        .theirs(
+            "Their open loot makes you no stop.",
+            &["their turn", "step end"],
+        )
         .expect(&[
             "turn 5",
             "step postcombatMain",
@@ -217,6 +238,10 @@ pub const SPEC: Spec = Spec {
                 .library(P0, LANDS),
         )
         .look("Their turn plays to its end step, where you may loot.")
+        .theirs(
+            "Your turn; their two lands stay open.",
+            &["your turn", "step precombatMain"],
+        )
         .expect(&[
             "their turn",
             "step end",
@@ -231,6 +256,10 @@ pub const SPEC: Spec = Spec {
         )
         .play(&[Action::activate(P0, CONVERTER, LOOT)])
         .look("It draws, discards that card, and asks to exile it.")
+        .theirs(
+            "The loot on the stack. Resolve: the card it discards.",
+            &["decision priority", "stack Currency Converter"],
+        )
         .expect(&[
             "decision yesNo",
             "ask mayMove",
@@ -242,6 +271,10 @@ pub const SPEC: Spec = Spec {
             jace("discard-prompt").actions(JACE_LOOTS),
         )
         .look("Center question; Decline and Exile bottom right.")
+        .theirs(
+            "Its trigger on the stack. Resolve: Oust flies under it.",
+            &["decision priority", "stack Currency Converter"],
+        )
         .expect(&[
             "decision yesNo",
             "ask mayMove",
@@ -254,6 +287,10 @@ pub const SPEC: Spec = Spec {
         )
         .play(&[Action::pass(P0)])
         .look("Passing your first main stops again in your second.")
+        .theirs(
+            "Oust peeks out under their Converter.",
+            &["their turn", "step end", "1 exiled with Currency Converter"],
+        )
         .expect(&[
             "turn 5",
             "step postcombatMain",
@@ -270,6 +307,10 @@ pub const SPEC: Spec = Spec {
             ]),
         )
         .look("Oust stays in the graveyard; your turn ends unasked.")
+        .theirs(
+            "Oust stays in their graveyard.",
+            &["their turn", "step end", "0 exiled with Currency Converter"],
+        )
         .expect(&["turn 7", "0 exiled with Currency Converter"]),
         Moment::new(
             "exiled-pile",
@@ -277,6 +318,10 @@ pub const SPEC: Spec = Spec {
             thirst("exiled-pile"),
         )
         .look("Two cards peek out down-left. Click them to browse.")
+        .theirs(
+            "Two cards peek out under it. Click them to browse.",
+            &["their turn", "2 exiled with Currency Converter"],
+        )
         .expect(&["decision priority", "2 exiled with Currency Converter"]),
         Moment::new(
             "both-abilities",
@@ -284,6 +329,10 @@ pub const SPEC: Spec = Spec {
             thirst("both-abilities"),
         )
         .look("Click or drag it out: two side-by-side choices.")
+        .theirs(
+            "The same table, no hint of their options.",
+            &["their turn", "2 exiled with Currency Converter"],
+        )
         .expect(&[
             "offers Currency Converter ability 1",
             "offers Currency Converter ability 2",
@@ -295,6 +344,10 @@ pub const SPEC: Spec = Spec {
         )
         .play(&[Action::activate(P0, CONVERTER, CONVERT)])
         .look("A chooser of the two exiled cards; click one.")
+        .theirs(
+            "Its {T} on the stack. Resolve: they pick one.",
+            &["decision priority", "stack Currency Converter"],
+        )
         .expect(&[
             "decision chooseObject",
             "2 candidates",
@@ -310,6 +363,13 @@ pub const SPEC: Spec = Spec {
             Action::choose(P0, DecisionKind::ChooseObject, TUNDRA),
         ])
         .look("Tundra to the graveyard, a Treasure appears.")
+        .theirs(
+            "Tundra to their graveyard; a Treasure flies out of it.",
+            &[
+                "they control 1 Treasure Token",
+                "1 exiled with Currency Converter",
+            ],
+        )
         .expect(&[
             "controls 1 Treasure Token",
             "1 exiled with Currency Converter",
@@ -324,6 +384,13 @@ pub const SPEC: Spec = Spec {
             Action::choose(P0, DecisionKind::ChooseObject, COUNTERSPELL),
         ])
         .look("Counterspell to the graveyard, a 2/2 Rogue appears.")
+        .theirs(
+            "Counterspell to their graveyard; a Rogue flies out of it.",
+            &[
+                "they control 1 Rogue Token",
+                "1 exiled with Currency Converter",
+            ],
+        )
         .expect(&["controls 1 Rogue Token", "1 exiled with Currency Converter"]),
         Moment::new(
             "bounced-in-response",
@@ -336,6 +403,13 @@ pub const SPEC: Spec = Spec {
             Action::choose(P1, DecisionKind::Target, CONVERTER),
         ])
         .look("Sink into Stupor bounces it; its ability still returns Oust.")
+        .theirs(
+            "You bounce it; its ability stays on the stack.",
+            &[
+                "they control 0 Currency Converter",
+                "stack Currency Converter",
+            ],
+        )
         .expect(&["controls 0 Currency Converter", "controls 1 Rogue Token"]),
     ],
 };

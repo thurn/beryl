@@ -1,6 +1,6 @@
 ---
 name: specs
-description: Write or update a card's spec — the live, scrollable page at /specs/<card> showing every UI moment of that card (stops, prompts, ability choosers, tokens, statuses, exile links, stack interactions, payments) as playable game states — and QA the card's UI through it. Use when asked to spec a card, add a card's UI states, QA a card end to end, or check that a card's UI follows the design.
+description: Write or update a card's spec — the live, scrollable page at /specs/<card> showing every UI moment of that card (stops, prompts, ability choosers, tokens, statuses, exile links, stack interactions, payments) as playable game states, from both seats — and QA the card's UI through it. Use when asked to spec a card, add a card's UI states, QA a card end to end, or check that a card's UI follows the design.
 ---
 
 # Card specs
@@ -9,6 +9,13 @@ A spec is a scrollable page, `/specs/<card-slug>`, that shows every moment of
 play a card's UI must get right. Each moment is a real game, live and fully
 playable in the page: the engine behind it is the app's. Scrolling a spec is QA
 testing the card.
+
+Every moment shows twice, side by side and played in step: from your seat and
+from the opponent's (**Them**), the same game with the viewer across the table.
+What the opponent sees of a card counts as much as what its controller sees:
+which ability went on the stack, which card a choice took and where it went,
+where a token came from, what lies exiled under a permanent. The opponent's
+frame is live too: they get the stops and prompts they would in the app.
 
 Your job is the subjective part: deciding which moments the card needs, building
 boards that look like real games, and judging what you see. The automatable
@@ -30,16 +37,20 @@ test.
     actions are taken, in the fixture vocabulary (`fixture.rs`'s
     `Condition::parse`): `turn 7`, `your turn`, `their turn`,
     `step postcombatMain`, `decision yesNo`, `ask mayMove`, `2 candidates`,
-    `resolving <card>`, `offers <card> ability <n>`, `tapped <card>`,
-    `controls <n> <card>`, `<n> exiled with <card>`, `castable from exile`,
-    `not <condition>`, and the rest listed there. Add a condition when you need
-    one.
+    `resolving <card>`, `stack <card>`, `offers <card> ability <n>`,
+    `tapped <card>`, `controls <n> <card>`, `they control <n> <card>`,
+    `<n> exiled with <card>`, `castable from exile`, `not <condition>`, and the
+    rest listed there. Add a condition when you need one.
+  - `.theirs(look, expect)`: what the opponent should see, and conditions on
+    the opponent's first live decision, seated in their place (`your turn`
+    there is theirs). Required: a moment says what both seats see.
   - `title` (a few words: what it shows) and `.look(...)` (a few words: what to
     look at or try). Halve every sentence you write.
 - `just specs --check [slug]` plays every moment headless and checks it;
   `cargo test -p beryl_cli specs` runs the same in CI.
-- `just specs --shots [slug]` screenshots every moment, settled, into
-  `$BERYL_CACHE/spec-shots/<checkout>/<slug>/` and prints the paths.
+- `just specs --shots [slug]` screenshots every moment from both seats, settled,
+  into `$BERYL_CACHE/spec-shots/<checkout>/<slug>/` (`<moment>.png` and
+  `<moment>-theirs.png`) and prints the paths.
 - `just specs [slug]` serves the pages for a human and prints the URL
   (`http://localhost:1430/specs/<slug>`). It opens no window.
 
@@ -67,8 +78,9 @@ for each of these that applies. Most cards need 6 to 15.
    it puts into a graveyard.
 7. **The stack.** Responses to it and from it: countered, bounced in response,
    its targets gone, its source gone. The play button is for these.
-8. **The other side.** The same card in the opponent's hands, where its view
-   differs (a prompt the human only watches, a target on their permanent).
+8. **The other side.** Every moment's Them frame covers watching the card
+   played; add a moment where the opponent's hands differ (they control the
+   card, a target on your permanent, a prompt you only watch).
 9. **Edges a player hits.** Empty hand, no legal target, nothing to choose,
    one choice (answered silently), more than one.
 
@@ -94,8 +106,13 @@ a test fixture:
 - Short of its next action, a scripted seat passes priority, pays the first
   way, and answers one-answer questions; a decision it cannot answer fails the
   check, naming it.
-- Once both seats' actions are taken, the human plays live. The opponent then
-  passes and takes the first candidate of anything else.
+- Once both seats' actions are taken, the viewer's seat plays live. The other
+  seat then passes and takes the first candidate of anything else.
+- Until then, the viewer's decisions are the stand-in's: the page shows the game
+  going on through them, each held as long as the app holds the opponent's play.
+- Scripted seats order simultaneous triggers as the session orders the
+  human's, and are offered activations that would do nothing, so a script plays
+  the same from either chair.
 - The human is under the smart stops, as in the app, and the session halts
   them at their own first main phase. Decisions the engine answers silently
   need no action.
@@ -104,18 +121,24 @@ a test fixture:
 
 1. `just specs --check <slug>` until every moment passes. A check that fails on
    behavior the design wants is a bug to fix, not an expectation to loosen.
-2. `just specs --shots <slug>` and look at every screenshot against the design
-   philosophy in `.agents/ui-review/SKILL.md`: common case one gesture, the
-   client does the bookkeeping, ask once in context, Arena as the reference,
-   show don't tell, few words.
+2. `just specs --shots <slug>` and look at every screenshot, both seats,
+   against the design philosophy in `.agents/ui-review/SKILL.md`: common case
+   one gesture, the client does the bookkeeping, ask once in context, Arena as
+   the reference, show don't tell, few words.
 3. For what a still cannot show (a click, a drag, a chooser, a browser), drive
    the moment's page with Playwright WebKit from `ui/scripts`, as
    `ui/scripts/specs.mjs` does: open
-   `<vite>/?live=<vite>/spec-api/m/<slug>/<moment>/<any-id>#/game`, click
-   `.card-el[data-zone=battlefield][data-card='<name>']`, screenshot. Delete
-   any probe script after.
-4. Fix what is wrong, in the engine or the UI, inline. Fix it for every card
+   `<vite>/?live=<vite>/spec-api/m/<slug>/<moment>/<yours|theirs>/<any-id>#/game`,
+   click `.card-el[data-zone=battlefield][data-card='<name>']`, screenshot.
+4. What the opponent sees is mostly motion, which stills miss. Record the Them
+   frame as video (Playwright's `recordVideo`) while its actions play, and look
+   at it frame by frame (`ffmpeg -vf fps=20`): the ability on the stack long
+   enough to read, with an arrow from its source; each card moving from where it
+   was to where it went, face up when public; a token flying out of what made
+   it; nothing changing between two frames unexplained. Delete any probe script
+   after.
+5. Fix what is wrong, in the engine or the UI, inline. Fix it for every card
    that shares the moment, not just this one, and say which others it touched.
    A fixed engine bug gets its entry in `docs/bugs.md`.
-5. Report what each moment shows, what you fixed, and any moment you could not
-   build and why.
+6. Report what each moment shows from each seat, what you fixed, and any moment
+   you could not build and why.

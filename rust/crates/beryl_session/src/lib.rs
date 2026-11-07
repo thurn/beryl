@@ -23,7 +23,7 @@ use ts_rs::TS;
 pub use beryl_engine::Seat;
 use beryl_engine::{GameTable, State};
 use beryl_search::GameAgent;
-pub use game::{Answer, Game, OpenDecision, with_stops};
+pub use game::{Answer, Game, OpenDecision, trigger_to_stack, with_stops};
 pub use protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status, StopsSetting};
 pub use replay::ReplayFile;
 pub use sessions::{Sessions, StartRequest};
@@ -57,6 +57,11 @@ pub struct Prepared {
     /// there on (a spec's moment, played live from where its script ends). None keeps the
     /// stand-in to the end.
     pub hand_over: Option<HandOver>,
+    /// Both seats follow scripts (a spec's moment, a fixture's board), so neither has the
+    /// activations that would do nothing hidden
+    /// ([`Profile::hides_pointless`](beryl_engine::Profile)): either seat's script may take
+    /// one the human could, and a moment plays the same seen from either chair.
+    pub scripted: bool,
 }
 
 /// Whether a stand-in should hand the human's decisions back to them ([`Prepared::hand_over`]).

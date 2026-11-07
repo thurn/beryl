@@ -254,6 +254,11 @@ export function Board({
 }: BoardProps) {
   // The table shows what is resolving on the stack while its resolution asks a question.
   const view = useMemo(() => withResolving(given), [given]);
+  // The view shown before this one, whose stack says what just resolved.
+  const views = useRef<{ last?: PlayerView; before?: PlayerView }>({});
+  if (views.current.last !== view) {
+    views.current = { last: view, before: views.current.last };
+  }
   const [hovered, setHovered] = useState<number>();
   // The hand card a click found nothing to do with, which the inspector says why of while
   // the pointer stays on it.
@@ -1008,6 +1013,7 @@ export function Board({
           events={view.events}
           objects={shown.objects}
           placements={placements}
+          origins={tokenOrigins(views.current.before, view, placements)}
           hovered={hovered}
           states={states}
           onClick={onClick}
@@ -1602,6 +1608,27 @@ const lifeId = (side: Side) => `${side}-life-orb`;
  * player or planeswalker it attacks, each blocker's, gold, at the attacker it blocks, and for
  * the top of the stack, a gold one from an ability's source and a cyan one to each target
  * (trigger_on_stack_with_target.png). */
+/** Where each token `view`'s events made comes from: the permanent whose ability made it,
+ * resolving at the top of the stack `before`, so that either player sees which permanent made
+ * it, as Arena shows. A token whose maker is gone, or no ability's, just appears. */
+function tokenOrigins(
+  before: PlayerView | undefined,
+  view: PlayerView,
+  placements: Map<number, Placement>,
+): Map<number, Placement> | undefined {
+  const made = view.events.flatMap((e) =>
+    e.kind === "tokensCreated" ? e.tokens : [],
+  );
+  if (made.length === 0 || !before) return undefined;
+  const top = before.stack.at(-1);
+  const from =
+    top?.kind === "ability" && top.source !== null
+      ? placements.get(top.source)
+      : undefined;
+  if (!from) return undefined;
+  return new Map(made.map((slot) => [slot, from]));
+}
+
 function boardArrows(view: PlayerView): ArrowSpec[] {
   const objects = new Map(view.objects.map((o) => [o.slot, o]));
   const out: ArrowSpec[] = [];

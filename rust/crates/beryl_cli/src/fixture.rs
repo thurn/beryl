@@ -149,6 +149,8 @@ pub(crate) enum Condition {
     Tapped(String),
     /// The human controls this many permanents of this name.
     Controls(usize, String),
+    /// The opponent controls this many permanents of this name.
+    TheyControl(usize, String),
     /// The human's priority offers activating the ability at this index of a permanent of
     /// this name ([`Candidate::Activate`]).
     Offers(String, u8),
@@ -183,6 +185,8 @@ pub(crate) enum Condition {
     /// The open decision is asked by the resolution of a spell of this name or an ability of
     /// a card of this name.
     Resolving(String),
+    /// The top of the stack is a spell of this name or an ability of a card of this name.
+    OnStack(String),
     /// The open decision is asked by the casting of a spell of this name: its X, a target or
     /// its payment.
     Casting(String),
@@ -276,7 +280,7 @@ impl Condition {
     /// "blocking", "targeted trigger on the stack", "targeted spell on the stack", "player
     /// targeted on the stack", "ability targeting beside its source", "opponent's spell on
     /// the stack", "castable <card name>", "playable <card name>", "abilities of <card name>",
-    /// "namesake candidates", "resolving <card name>", "casting <card name>",
+    /// "namesake candidates", "resolving <card name>", "stack <card name>", "casting <card name>",
     /// "playable pair in hand", "exiled beneath a permanent", "exiled with a permanent",
     /// "attached across the table", "castable from exile", "castable from the graveyard",
     /// "known card in the opponent's hand", "token twins", "changed token", "token beside its
@@ -284,7 +288,7 @@ impl Condition {
     /// "emblems a side", "<n> nonland permanents a side", or "<mark> beside a twin" with the
     /// mark "+1/+1 counters", "damage", "summoning sickness" or "story or time counters".
     /// Specs add "turn <n>", "your turn", "their turn", "decision <kind>", "ask <kind>",
-    /// "<n> candidates", "tapped <card>", "controls <n> <card>", "offers <card> ability <n>",
+    /// "<n> candidates", "tapped <card>", "controls <n> <card>", "they control <n> <card>", "offers <card> ability <n>",
     /// "<n> exiled with <card>" and "not <condition>".
     pub(crate) fn parse(text: &str) -> Result<Condition, String> {
         if let Some(rest) = text.strip_prefix("not ") {
@@ -304,6 +308,11 @@ impl Condition {
             && let Some((n, card)) = rest.split_once(' ')
         {
             return Ok(Condition::Controls(number(text, n)?, card.to_owned()));
+        }
+        if let Some(rest) = text.strip_prefix("they control ")
+            && let Some((n, card)) = rest.split_once(' ')
+        {
+            return Ok(Condition::TheyControl(number(text, n)?, card.to_owned()));
         }
         if let Some(n) = text.strip_suffix(" candidates")
             && let Ok(n) = n.parse()
@@ -365,6 +374,8 @@ impl Condition {
                     Condition::Abilities(name.to_owned())
                 } else if let Some(name) = text.strip_prefix("resolving ") {
                     Condition::Resolving(name.to_owned())
+                } else if let Some(name) = text.strip_prefix("stack ") {
+                    Condition::OnStack(name.to_owned())
                 } else if let Some(name) = text.strip_prefix("casting ") {
                     Condition::Casting(name.to_owned())
                 } else if let Some(n) = text.strip_suffix(" nonland permanents a side") {
@@ -393,6 +404,8 @@ impl Condition {
             | Condition::Candidates(_)
             | Condition::Tapped(_)
             | Condition::Controls(..)
+            | Condition::TheyControl(..)
+            | Condition::OnStack(..)
             | Condition::Offers(..)
             | Condition::ExiledWithCard(..) => self.holds_for_spec(view),
             Condition::Step(step) => view.turn.step == *step,
@@ -502,6 +515,12 @@ impl Condition {
             Condition::Candidates(n) => decision.is_some_and(|d| d.candidates.len() == *n),
             Condition::Tapped(card) => mine(view, card).any(|o| o.tapped),
             Condition::Controls(n, card) => mine(view, card).count() == *n,
+            Condition::TheyControl(n, card) => theirs(view, card).count() == *n,
+            Condition::OnStack(card) => match view.stack.last() {
+                Some(StackItem::Spell { slot, .. }) => name(*slot) == Some(card.as_str()),
+                Some(StackItem::Ability { name, .. }) => name == card,
+                None => false,
+            },
             Condition::Offers(card, ability) => candidates(view).any(|c| {
                 matches!(c.option, Candidate::Activate { slot, ability: a, granted: false }
                     if a == *ability && name(slot) == Some(card.as_str()))
@@ -915,6 +934,7 @@ fn start(
                 sessions.start_prepared(Prepared {
                     opponent: agent(human.opponent())?,
                     stand_in: agent(human)?,
+                    scripted: true,
                     hand_over: None,
                     table,
                     state,
@@ -949,10 +969,20 @@ fn number<T: std::str::FromStr>(text: &str, n: &str) -> Result<T, String> {
 
 /// The permanents named `card` the human controls.
 fn mine<'a>(view: &'a PlayerView, card: &'a str) -> impl Iterator<Item = &'a ObjectView> {
+    controlled(view, card, Side::You)
+}
+
+fn theirs<'a>(view: &'a PlayerView, card: &'a str) -> impl Iterator<Item = &'a ObjectView> {
+    controlled(view, card, Side::Opponent)
+}
+
+fn controlled<'a>(
+    view: &'a PlayerView,
+    card: &'a str,
+    side: Side,
+) -> impl Iterator<Item = &'a ObjectView> {
     view.objects.iter().filter(move |o| {
-        o.zone == ZoneName::Battlefield
-            && o.controller == Side::You
-            && o.name.as_deref() == Some(card)
+        o.zone == ZoneName::Battlefield && o.controller == side && o.name.as_deref() == Some(card)
     })
 }
 

@@ -85,6 +85,9 @@ export interface CardLayerProps {
   events?: GameEvent[];
   objects: ObjectView[];
   placements: Layout;
+  /** Where a card new to the table starts: a token flies out of the permanent that made it,
+   * rather than only fading in where it lands. */
+  origins?: Map<number, Placement>;
   /** The card the pointer is over: a hand card rises out of the fan (RAISE), drawn over the
    * rest of the hand while its element keeps its place in the fan, so that nothing else moves
    * and the pointer keeps the card. */
@@ -114,6 +117,13 @@ const CARRIED: Transition = {
   ease: [0.4, 0, 0.2, 1],
   delay: STRUCK_FOR,
 };
+/** A token flies out of the permanent that made it at a pace the eye follows, over the table. */
+const EMERGING: Transition = {
+  type: "tween",
+  duration: 0.6,
+  ease: [0.4, 0, 0.2, 1],
+};
+const EMERGING_FOR = 650;
 /** A struck spell stays over the table until it has arrived, in ms. */
 const CARRIED_FOR = (STRUCK_FOR + 0.75) * 1000 + 50;
 /** A hand card rises and settles back quickly and without bounce. */
@@ -201,6 +211,7 @@ export function CardLayer(props: CardLayerProps) {
                 epoch={props.epoch}
                 callbacks={callbacks}
                 appearing={shown.current}
+                origin={props.origins?.get(o.slot)}
               />
             )
           );
@@ -253,6 +264,7 @@ const CardElement = memo(function CardElement({
   epoch,
   callbacks: layer,
   appearing,
+  origin,
 }: {
   object: ObjectView;
   place: Placement;
@@ -262,16 +274,20 @@ const CardElement = memo(function CardElement({
   epoch: unknown;
   callbacks: Callbacks;
   appearing: boolean;
+  origin?: Placement;
 }) {
   const reduce = useReducedMotion() ?? false;
   const stageScale = useContext(StageScale);
   const grow = appearing && !reduce;
-  const x = useMotionValue(place.x);
-  const y = useMotionValue(place.y);
-  const scale = useMotionValue(place.scale * (grow ? 0.6 : 1));
+  // A card new to the table grows in where it lands, or flies there from where it came from.
+  const [emerging, setEmerging] = useState(() => grow && origin !== undefined);
+  const from = (emerging && origin) || place;
+  const x = useMotionValue(from.x);
+  const y = useMotionValue(from.y);
+  const scale = useMotionValue(from.scale * (grow ? 0.6 : 1));
   const rotate = useMotionValue(place.rotate);
   const skewX = useMotionValue(place.skew);
-  const opacity = useMotionValue(grow ? 0 : place.opacity);
+  const opacity = useMotionValue(grow && !emerging ? 0 : place.opacity);
   const [held, setHeld] = useState<Held>();
   const dragging = held?.dragging === true;
   // The pointer places the card while it holds it, whatever its placement does meanwhile. A
@@ -281,7 +297,7 @@ const CardElement = memo(function CardElement({
   // A struck spell leaves the stack for where it went: after its shake, slowly, over the
   // table.
   const carried = struck && place.look !== "stack";
-  const how = carried ? CARRIED : SPRING;
+  const how = carried ? CARRIED : emerging ? EMERGING : SPRING;
   useGlide(x, place.x, reduce, { holding, how });
   useGlide(y, place.y, reduce, { holding, how });
   // A card changing looks, or tapping, is drawn at another width (a back, a whole card, a
@@ -365,6 +381,12 @@ const CardElement = memo(function CardElement({
       clearTimeout(timer);
     };
   }, [carried, reduce, shake, flash]);
+  // An emerging token crosses over the table, then is a card like the rest.
+  useEffect(() => {
+    if (!emerging) return;
+    const timer = setTimeout(() => setEmerging(false), EMERGING_FOR);
+    return () => clearTimeout(timer);
+  }, [emerging]);
   const drag = useRef<{ start: Point; from: Point; moved: boolean }>(undefined);
   // A card in a library is unseen, and one on a graveyard or exile pile is the pile's: the
   // pile's button opens it (Piles.tsx). Neither is pointed at alone.
@@ -457,7 +479,7 @@ const CardElement = memo(function CardElement({
           ...frame,
           zIndex: dragging
             ? 1000
-            : flying
+            : flying || emerging
               ? FLYING_Z
               : lifted && !ghosted
                 ? RAISED_Z

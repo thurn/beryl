@@ -493,8 +493,17 @@ impl Game {
             opponent,
             stand_in,
             hand_over,
+            scripted,
         } = prepared;
-        state.set_profile(with_stops(Profile::SMART, stops, human));
+        let base = if scripted {
+            Profile {
+                hides_pointless: [false; 2],
+                ..Profile::SMART
+            }
+        } else {
+            Profile::SMART
+        };
+        state.set_profile(with_stops(base, stops, human));
         let replay = ReplayFile {
             seed: 0,
             decks: [Vec::new(), Vec::new()],
@@ -1273,7 +1282,7 @@ fn new_agent(
 ///    made seeing everything the others did;
 ///
 /// and, within each group, in the order they triggered.
-fn trigger_to_stack<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Choice {
+pub fn trigger_to_stack<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Choice {
     let resolves_late = |opt: Opt<L>| {
         let Opt::Trigger(i) = opt else {
             unreachable!("a trigger-order decision offers only triggers");

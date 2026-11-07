@@ -79,6 +79,7 @@ fn game(
         Prepared {
             opponent: opponent(&table),
             stand_in: human(&table),
+            scripted: false,
             hand_over: None,
             state,
             human: Seat::P0,

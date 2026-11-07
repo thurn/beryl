@@ -24,6 +24,7 @@ use beryl_engine::{
 };
 use beryl_scenario::{Action, P0, P1, Permanent, Pick, Scenario};
 use beryl_search::Agent;
+use beryl_session::trigger_to_stack;
 
 /// The tokens the boards name, as the cards that make them name them.
 const INSECT_TOKEN: &str = "Insect Token";
@@ -1233,8 +1234,10 @@ pub fn lock(progress: &Shared) -> std::sync::MutexGuard<'_, Progress> {
 /// An agent answering one seat's decisions from a board's actions for that seat, in order, by
 /// the scenario vocabulary: each action answers the first decision it fits once the actions
 /// listed before it, both seats', have been taken. Short of its next
-/// action, the seat passes priority, pays by the first payment plan, and answers a question
-/// with one answer; any other decision is the script's failure. Once its actions are taken,
+/// action, the seat passes priority, pays by the first payment plan, orders simultaneous
+/// triggers as the session orders the human's ([`trigger_to_stack`]), so a board plays the same
+/// from either chair, and answers a question with one answer; any other decision is the
+/// script's failure. Once its actions are taken,
 /// it passes priority and takes the first candidate of anything else. Its view is the true
 /// state: a script names the cards it means.
 pub struct Scripted {
@@ -1319,6 +1322,9 @@ impl<L: Layout> Agent<L> for Scripted {
             && let Some(c) = beryl_scenario::answer(&self.table, s, d, &Action::pass(d.player))
         {
             return c;
+        }
+        if d.kind == DecisionKind::TriggerOrder {
+            return trigger_to_stack(s, &self.table, d);
         }
         if let Some(action) = next
             && d.kind != DecisionKind::PaymentPlan
