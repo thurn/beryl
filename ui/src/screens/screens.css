@@ -2394,14 +2394,14 @@
     0 0 18px var(--turn-glow),
     0 2px 3px rgb(0 0 0 / 90%);
 }
-/* Left of the gear, in its brushed metal: back to the start of the player's turn. A red eye
-   marks an undo made having seen hidden cards since. */
+/* Under the gear, in its brushed metal, right of the opponent's piles: back to the start of
+   the player's turn. A red eye marks an undo made having seen hidden cards since. */
 .undo-button {
   position: absolute;
-  right: 72px;
-  top: 0;
-  width: 56px;
-  height: 72px;
+  right: 0;
+  top: 72px;
+  width: 72px;
+  height: 48px;
   padding: 0;
   border: 0;
   background: none;
@@ -2409,8 +2409,8 @@
 }
 .undo-icon {
   position: absolute;
-  right: 6px;
-  top: 18px;
+  right: 19px;
+  top: 2px;
   width: 34px;
   overflow: visible;
   filter: drop-shadow(0 1px 0 rgb(255 255 255 / 12%))
@@ -2436,8 +2436,8 @@
 }
 .undo-tip {
   position: absolute;
-  right: 0;
-  top: 64px;
+  right: 68px;
+  top: 4px;
   display: none;
   flex-direction: column;
   gap: 2px;

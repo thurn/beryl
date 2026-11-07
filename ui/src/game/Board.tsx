@@ -1419,7 +1419,7 @@ const INSPECT_MIN_WIDTH = 230;
  * opponent's orb and above yours (y 159 and 618), with room for the artist's line. */
 const BETWEEN_ORBS_AND_STACK = { left: 940, top: 172, width: 258 };
 
-/** Left of the gear: goes back to the start of the player's turn. Once they have seen a card
+/** Under the gear: goes back to the start of the player's turn. Once they have seen a card
  * since that they did not know there, a red eye says so, and hovering says what it means. */
 function UndoButton({
   peeked,
