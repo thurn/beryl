@@ -12,6 +12,7 @@ import type {
   ZoneName,
 } from "../generated/protocol";
 import { CARD_ASPECT } from "../components/Card";
+import { cardEntry } from "../cards";
 import { referenced, twins } from "./decisions";
 import type { Phase } from "../components/Controls";
 
@@ -147,25 +148,26 @@ const BACK_WIDTH = 105;
 
 /** Each side's rows, in stage pixels, as MTG Arena lays them out: its creatures' row at
  * `permanents`, toward the middle of the table and centered on it; behind it, one back row with
- * its top at `back`, in front of its library and graveyard: its land piles from `lands`, filling
- * rightward to `LANDS_END`, and its other permanents (artifacts, enchantments, planeswalkers that
- * are not creatures), `others.width` wide, smaller than a creature, right of its life orb from
- * `others.x` to `others.end`; those that overflow it stand left of the orb, past the lands, up to
- * `others.overflowEnd`. Each permanent's row follows its types after continuous effects, so
- * an animated land or a crewed Vehicle stands with the creatures. The rows lie clear of one
- * another, so a long row of creatures may pass over the land piles' side of the table. Every
- * row's cards are scaled by their depth (depthScale); a row too long for its room shrinks, all
- * its cards alike, so that none covers another's marks. */
-/** Where each side's life orb begins (Board.tsx's Life, with its wings): your back row's other
- * permanents that overflow the room right of it stand left of it, right of the lands. */
+ * its top at `back`, in front of its library and graveyard. Its mana, lands and mana artifacts,
+ * stands on the left, from `lands` to `landsEnd`, untapped ones before tapped ones; everything
+ * else that is not a creature (artifacts, enchantments, planeswalkers, battles), `others.width`
+ * wide, smaller than a creature, stands on the right, right of its life orb, from `others.x`
+ * to `others.end`. The sides never change; a row too long for its room shrinks, all its cards
+ * alike, instead. Each permanent's row follows its types after continuous effects, so an
+ * animated land or a crewed Vehicle stands with the creatures. The rows lie clear of one
+ * another, so a long row of creatures may pass over the land side of the table. Every row's
+ * cards are scaled by their depth (depthScale). */
+/** Where each side's life orb begins (Board.tsx's Life, with its wings): the lands end left of
+ * it. */
 const ORB_LEFT = 664;
 const ROWS: Record<
   Side,
   {
     back: number;
     lands: number;
+    landsEnd: number;
     permanents: number;
-    others: { x: number; end: number; overflowEnd: number; width: number };
+    others: { x: number; end: number; width: number };
   }
 > = {
   // Just under the opponent's hand; their other permanents clear of the step banner
@@ -175,29 +177,29 @@ const ROWS: Record<
   opponent: {
     back: 112,
     lands: 158,
+    landsEnd: 590,
     permanents: 235,
-    others: { x: 998, end: 1180, overflowEnd: 598, width: 110 },
+    others: { x: 998, end: 1180, width: 110 },
   },
   // Right of your orb, left of the stack's column and the prompt; your library and graveyard
   // lie behind the row, in the near left corner.
   you: {
     back: 570,
     lands: 111,
+    landsEnd: ORB_LEFT - 14,
     permanents: 408,
-    others: { x: 940, end: 1196, overflowEnd: ORB_LEFT, width: 92 },
+    others: { x: 940, end: 1196, width: 92 },
   },
 };
-/** How narrow, on the stage, the back row's other permanents may shrink to fit their room before
- * they crowd one another instead: as narrow as keeps their loyalty and counters readable. */
-const OTHERS_LEAST = 84;
-/** How far the land piles may crowd together, as a fraction of their length, to make room for
- * the back row's other permanents left of the orb, before those shrink. */
-const LANDS_SQUEEZE = 0.6;
-/** Lands fill from the left up to here, `LAND_GAP` apart before depth scaling. */
-const LANDS_END = 600;
+/** The least scale, as a fraction of its depth's, the back row's other permanents may shrink to
+ * before they crowd one another instead. */
+const OTHERS_LEAST = 0.3;
+/** The same for its mana. */
+const MANA_LEAST = 0.3;
+/** Lands of different names stand this far apart before depth scaling, and the tapped ones
+ * stand this far from the untapped ones. */
 const LAND_GAP = 12;
-/** How far a length may overrun the room it is measured against and still fit, in stage pixels. */
-const SLACK = 0.01;
+const TAPPED_GAP = 44;
 /** How far apart permanents stand, in frame widths. */
 const PERMANENT_GAP = 0.1;
 /** Where the permanents' rows may lie: centered on the table while they fit left of the
@@ -596,17 +598,6 @@ function settle(
   return xs;
 }
 
-/** Lands of one name, stacked as Player.tsx's LandStack: copies beneath peek out to the left
- * and below. Callers key tapped and untapped copies apart. */
-function piles(objects: ObjectView[], key: (o: ObjectView) => string) {
-  const groups = new Map<string, ObjectView[]>();
-  for (const o of objects) {
-    const k = key(o);
-    groups.set(k, [...(groups.get(k) ?? []), o]);
-  }
-  return [...groups.values()];
-}
-
 /** How a battlefield card `width` wide lies on the table, before depth scaling: its frame's
  * width, and the width it takes. Tapped, it turns a quarter (Card.tsx) whole and takes its
  * turned width: lying on its side, it stands lower than its row and never reaches into the
@@ -618,9 +609,7 @@ function lying(width: number, tapped: boolean) {
 /** A row of permanents other than lands: how wide each card's frame is before scaling, where
  * the row's top lies at its depth's full scale, the room it may take, centered on `center`
  * while it fits there or laid from `start`, and the least scale it may shrink to before its
- * groups crowd one another instead (`row`). A row with `overflow` fills its room from its last
- * group back, and its first groups that do not fit there stand in the overflow's room, toward
- * its end. */
+ * groups crowd one another instead (`row`). */
 interface RowSpec {
   width: number;
   y: number;
@@ -628,24 +617,6 @@ interface RowSpec {
   end: number;
   center?: number;
   least: number;
-  overflow?: { start: number; end: number };
-}
-
-/** How a row's groups, `widths` wide and `gap` apart, divide between a room `room` long and the
- * overflow before it: the first group in the room (of the last groups that fit it, at least
- * one), and how long the groups before it are. */
-function split(widths: number[], gap: number, room: number) {
-  let first = Math.max(0, widths.length - 1);
-  let length = widths[first] ?? 0;
-  while (first > 0 && length + gap + widths[first - 1]! <= room) {
-    length += gap + widths[--first]!;
-  }
-  const before = widths.slice(0, first);
-  return {
-    first,
-    overflow:
-      before.reduce((a, w) => a + w, 0) + gap * Math.max(0, before.length - 1),
-  };
 }
 
 /** Whether a permanent is drawn in its side's creatures' row: a creature, as its types say after
@@ -654,6 +625,18 @@ const isCreature = (o: ObjectView) => o.types.includes("creature");
 
 /** Whether a permanent is drawn in its side's land piles: a land that is not also a creature. */
 const isLand = (o: ObjectView) => o.types.includes("land") && !isCreature(o);
+
+/** Whether a permanent is a mana source on the back row's land side: a land, or a noncreature
+ * artifact whose card says "{T}: Add" a mana (a mana rock, a Treasure). */
+const MANA_ABILITY = /^[^\n:]*:\s*Add\b/m;
+const isManaSource = (o: ObjectView) =>
+  isLand(o) ||
+  (o.types.includes("artifact") &&
+    !isCreature(o) &&
+    o.name !== null &&
+    (cardEntry(o.name)?.faces ?? []).some((f) =>
+      MANA_ABILITY.test(f.oracle_text ?? ""),
+    ));
 
 /** A pile's cards, bottom first, so that its lowest slot lies on top: the engine offers the
  * lowest slot of interchangeable objects (architecture §7.2) and its payments tap a class of
@@ -687,15 +670,13 @@ function battlefieldPlacements(
 ): Placement[] {
   const rows = ROWS[side];
   const room = { ...ROOM, start: logOpen ? BESIDE_LOG : ROOM.start };
-  const lands = objects.filter(isLand);
   const out: Placement[] = [];
-  // Twins (decisions.ts) with nothing on them share a pile, as lands do, the top card wearing
-  // their count, as Arena stacks them; everything else stands alone. Twins are alike in all the
-  // table shows (Card.tsx's marks) and the inspector tells, so a sick token and a ready one, a
-  // stolen one and its owner's, or one an effect has made a Vehicle and a creature, never share
-  // one; and either offers what the engine offers for both, so a click on the top card does
-  // what the one beneath would. Face-down permanents, which may be different cards, and those
-  // the stack `named`, which must be seen and are offered alone, stand apart.
+  // Twins (decisions.ts) with nothing on them share a pile, the top card wearing their count,
+  // as Arena stacks them; everything else stands alone. Twins are alike in all the table shows
+  // (Card.tsx's marks), so a sick token and a ready one, a stolen one and its owner's, or
+  // two planeswalkers of different loyalty, never share one: a pile hides nothing a player
+  // would want to read. Face-down permanents, which may be different cards, and those the stack
+  // `named`, which must be seen and are offered alone, stand apart.
   const plain = (o: ObjectView) =>
     o.facing === "up" &&
     o.counters.length === 0 &&
@@ -717,65 +698,56 @@ function battlefieldPlacements(
     return groups.map(topLowest);
   };
   const creatures = grouped(objects.filter(isCreature));
-  const others = grouped(objects.filter((o) => !isCreature(o) && !isLand(o)));
-  // The back row's other permanents that overflow their room right of the orb stand left of
-  // it, past the land piles, which crowd together for them, down to `LANDS_SQUEEZE` of their
-  // length, as far as the others need at their least scale.
-  const landScale = depthScale(rows.back);
-  const otherWidth = rows.others.width;
-  const othersLeast = Math.min(
-    depthScale(rows.back),
-    OTHERS_LEAST / otherWidth,
-  );
-  const { overflow: deficit } = split(
-    groupWidths(others, otherWidth, beneath, attached).map(
-      (w) => w * othersLeast,
-    ),
-    PERMANENT_GAP * otherWidth * othersLeast,
-    rows.others.end - rows.others.x,
+  const others = grouped(
+    objects.filter((o) => !isCreature(o) && !isManaSource(o)),
   );
 
-  // Each name's untapped lands, then its tapped ones beside them.
+  // The back row's left side holds the mana: lands and mana artifacts, the untapped ones first
+  // and the tapped ones in a group of their own after a wider gap, so how much mana is open
+  // reads at a glance. Each name stands together.
   const name = (o: ObjectView) => o.name ?? `#${o.slot}`;
-  const names = [...new Set(lands.map(name))];
-  const landPiles = piles(
-    [...lands].sort(
-      (a, b) =>
-        names.indexOf(name(a)) - names.indexOf(name(b)) ||
-        Number(a.tapped) - Number(b.tapped),
-    ),
-    (o) => `${name(o)}|${o.tapped}`,
-  ).map(topLowest);
+  const sources = objects.filter(isManaSource);
+  const names = [...new Set(sources.map(name))];
+  const order = (a: ObjectView, b: ObjectView) =>
+    Number(isLand(b)) - Number(isLand(a)) ||
+    names.indexOf(name(a)) - names.indexOf(name(b));
+  const sourcePiles = (tapped: boolean) =>
+    grouped(sources.filter((o) => o.tapped === tapped).sort(order));
+  const untapped = sourcePiles(false);
+  const landPiles = [...untapped, ...sourcePiles(true)];
   // Each copy beneath a pile's top card peeks out by a step of its frame's size.
   const pileWidth = (pile: ObjectView[]) => {
     const { frame, span } = lying(LAND_WIDTH, pile[0]!.tapped);
-    return (span + frame * LAND_STEP.x * (pile.length - 1)) * landScale;
+    return span + frame * LAND_STEP.x * (pile.length - 1);
   };
-  const landGap = LAND_GAP * landScale;
-  const landsLength =
-    landPiles.reduce((a, pile) => a + pileWidth(pile), 0) +
-    landGap * Math.max(0, landPiles.length - 1);
-  const landXs = row(
-    landPiles.map(pileWidth),
-    landGap,
-    rows.lands,
-    Math.min(
-      LANDS_END,
-      Math.max(
-        rows.lands + landsLength * LANDS_SQUEEZE,
-        rows.others.overflowEnd - 2 * landGap - deficit,
-      ),
+  const unitWidths = landPiles.map(pileWidth);
+  const unitGaps: number[] = landPiles.map((_, p) =>
+    p === 0 ? 0 : p === untapped.length ? TAPPED_GAP : LAND_GAP,
+  );
+  const unitLength =
+    unitWidths.reduce((a, w) => a + w, 0) + unitGaps.reduce((a, g) => a + g, 0);
+  // Too many for their room: zoom the row out, all its cards alike, rather than overlap them.
+  const landFull = depthScale(rows.back);
+  const landFit = Math.min(
+    1,
+    Math.max(
+      MANA_LEAST,
+      (rows.landsEnd - rows.lands) / (unitLength * landFull),
     ),
   );
-  // Where the land piles end: the back row's other permanents may stand from there to the orb.
-  let landsEnd = rows.lands;
+  const landScale = landFull * landFit;
+  const landHeight = LAND_WIDTH / CARD_ASPECT;
+  // A shrunken row keeps its edge toward its player where a full-size one has it.
+  const landTop =
+    rows.back + (side === "you" ? (landFull - landScale) * landHeight : 0);
+  let landX = rows.lands;
   landPiles.forEach((pile, p) => {
-    landsEnd = landXs[p]! + pileWidth(pile);
+    landX += unitGaps[p]! * landScale;
     const { frame, span } = lying(LAND_WIDTH, pile[0]!.tapped);
     pile.forEach((o, i) => {
       const depth = pile.length - 1 - i;
-      const x = landXs[p]! + i * frame * LAND_STEP.x * landScale;
-      const y = rows.back + depth * frame * LAND_STEP.y * landScale;
+      const x = landX + i * frame * LAND_STEP.x * landScale;
+      const y = landTop + depth * frame * LAND_STEP.y * landScale;
       out.push({
         slot: o.slot,
         zone: o.zone,
@@ -784,10 +756,12 @@ function battlefieldPlacements(
         span,
         opacity: 1,
         z: 10 + p * 8 + i,
+        count: depth === 0 && pile.length > 1 ? pile.length : undefined,
         pile: pileOf(pile),
-        ...onTable(x, y, span),
+        ...onTable(x, y, span, 0, landScale),
       });
     });
+    landX += unitWidths[p]! * landScale;
   });
 
   const front = permanentRow(
@@ -805,18 +779,19 @@ function battlefieldPlacements(
     beneath,
     attached,
   );
+  // Everything else stands on the back row's right, always: as large as fits, zooming out
+  // rather than moving.
   const behind = permanentRow(
     side,
     others,
     {
-      width: otherWidth,
+      width: rows.others.width,
       y: rows.back,
       start: rows.others.x,
       end: rows.others.end,
       // Toward the stack's column, clear of the hand's middle.
       center: Infinity,
-      least: othersLeast,
-      overflow: { start: landsEnd + 2 * landGap, end: rows.others.overflowEnd },
+      least: OTHERS_LEAST,
     },
     [],
     beneath,
@@ -891,39 +866,15 @@ function permanentRow(
     y: frameWidth * LAND_STEP.y,
   };
   const unitWidths = groupWidths(groups, frameWidth, beneath, attached);
-  const unitGap = PERMANENT_GAP * frameWidth;
   const unitLength = rowLength(groups, frameWidth, beneath, attached);
   // A row too long for its room at its depth's scale shrinks, all its cards alike, down to its
   // least scale; past that, `row` crowds its groups together.
   const full = depthScale(spec.y);
   const least = Math.min(full, spec.least);
-  // The land piles crowd together to leave the overflow exactly the room it needs, which
-  // rounding may shave by a hair: within `SLACK`, it fits.
-  const overflowRoom = spec.overflow
-    ? spec.overflow.end - spec.overflow.start + SLACK
-    : 0;
-  const overflow =
-    spec.overflow && overflowRoom >= frameWidth * least
-      ? spec.overflow
-      : undefined;
-  // Without an overflow, as large as fits its room; with one, the largest scale, in steps, at
-  // which the groups that overflow the room fit the overflow's.
-  let scale = Math.max(
+  const scale = Math.max(
     least,
     Math.min(full, (spec.end - spec.start) / unitLength),
   );
-  if (overflow) {
-    const fits = (at: number) =>
-      split(
-        unitWidths.map((w) => w * at),
-        unitGap * at,
-        spec.end - spec.start,
-      ).overflow <= overflowRoom;
-    scale = full;
-    for (let k = 1; k <= 20 && !fits(scale); k++) {
-      scale = full - ((full - least) * k) / 20;
-    }
-  }
   // A shrunken row keeps its edge toward its player where a full-size one has it, leaving the
   // lane between the rows, where combat and the stack's arrows run, as wide as it can be.
   const rowTop = spec.y + (side === "you" ? (full - scale) * height : 0);
@@ -933,15 +884,7 @@ function permanentRow(
   const widths = unitWidths.map((w) => w * scale);
   const gap = PERMANENT_GAP * width;
   const { start, end } = spec;
-  // The last groups that fit the room, at least one; those before them overflow.
-  const first = overflow ? split(widths, gap, end - start).first : 0;
-  const xs = [
-    // Toward the overflow's end, beside the room.
-    ...(overflow
-      ? row(widths.slice(0, first), gap, overflow.start, overflow.end, Infinity)
-      : []),
-    ...row(widths.slice(first), gap, start, end, spec.center),
-  ];
+  const xs = row(widths, gap, start, end, spec.center);
   // Where each blocker wants to stand: its attacker's blockers side by side about its center.
   const attackers = new Map(across.map((p) => [p.slot, p]));
   const blocking = new Map<number, number[]>();
