@@ -17,6 +17,8 @@
 //!   still offers more than one game.
 //! - **Knowledge.** The card values the rollout policy and the evaluation read
 //!   ([`Knowledge`]).
+//! - **Scores.** A win scores more the sooner it comes and a loss more the later
+//!   ([`TURN_DISCOUNT`]), in every family, so that a decided position still has a best move.
 //! - **Work.** A budget is engine steps, not iterations: every decision `next` returns or
 //!   settles itself, in the tree or a rollout, plus what copying the root, dealing a world
 //!   and an evaluation cost in steps' time ([`ITERATION_STEPS`], [`WORLD_STEPS`],
@@ -152,6 +154,8 @@ const FREE_ROUNDS: u64 = ROUNDS * 3 / 4;
 /// `pimc18/omniscient/rollout/tuned@10M` (42 games, 2026-11-07), every decision it would
 /// switch searched again from a fresh seed: at 0.02 the anchor switches 0.4 decisions a game
 /// at a cost of 0.005 ± 0.001 a game by the search's own estimate; at 0.04, 0.7 for 0.013.
+/// Measured before [`TURN_DISCOUNT`], which shrinks leads by a tenth to a quarter a few turns
+/// out, so the margin now asks a little more.
 pub const ANCHOR_MARGIN: f64 = 0.02;
 
 /// The standard errors, across the trees, by which an anchored search's lead over greedy's
@@ -160,6 +164,20 @@ pub const ANCHOR_ERRORS: f64 = 2.0;
 
 /// No node.
 const NONE: u32 = u32::MAX;
+
+/// How much less a game's result counts each turn it is put off: a search scores a win
+/// `0.5 + 0.5 * TURN_DISCOUNT^t` and a loss `0.5 - 0.5 * TURN_DISCOUNT^t`, `t` the turns since
+/// its tree's first root. Without it a decided position offers no best move, every move
+/// winning (or losing) in nearly every rollout, and noise chose: in run-003, 45% of
+/// `pimc18/omniscient/rollout/tuned@10M`'s searched decisions came
+/// in positions it rated above 0.95 or below 0.05. So it now closes a won game out and drags
+/// a lost one on. Measured by `beryl_cli agreement` over 60 of those positions and 60
+/// contested ones (2026-11-07, two seeds each at 10M): the seeds chose alike in 60% of
+/// decided positions undiscounted, 78% at 0.98 and 80% at 0.95, and in 78%, 77% and 90% of
+/// contested ones. 0.98 rather than 0.95 because the stronger discount trades more of a
+/// close game's chances for speed: at 0.95 a line winning 63% in 14 turns loses to one winning
+/// 60% in 8.
+pub const TURN_DISCOUNT: f64 = 0.98;
 
 impl fmt::Display for Family {
     /// `ismcts18/hidden/rollout/17l`: method, sight, leaf, knowledge, then any options, as
@@ -847,6 +865,8 @@ struct Tree<L: Layout> {
     extra: u64,
     /// While an anchored search checks its choice, the two root candidates it plays.
     allowed: Option<[usize; 2]>,
+    /// The turn its first root was asked in, from which a finished game's turns count.
+    origin: u16,
 }
 
 impl<L: Layout> Tree<L> {
@@ -877,7 +897,9 @@ impl<L: Layout> Tree<L> {
             iterations: 0,
             extra: 0,
             allowed: None,
+            origin: 0,
         };
+        tree.origin = tree.state.turn().number;
         if !resample {
             tree.state = tree.deal(t, &mut rng);
             tree.extra += WORLD_STEPS;
@@ -1080,7 +1102,7 @@ impl<L: Layout> Tree<L> {
                 break self.leaf(&mut s, t, policy);
             }
             match next(&mut s, t, &mut self.x, &mut Replay) {
-                Step::Over(outcome) => break value(outcome),
+                Step::Over(outcome) => break value(outcome, self.turns(&s)),
                 Step::Decide(below) => {
                     d = below;
                     node = child;
@@ -1169,24 +1191,32 @@ impl<L: Layout> Tree<L> {
             temperature: ROLLOUT_TEMPERATURE,
         };
         match self.family.leaf {
-            Leaf::Rollout => value(soft_rollout(s, t, &mut self.x, policy, &mut soft)),
+            Leaf::Rollout => {
+                let outcome = soft_rollout(s, t, &mut self.x, policy, &mut soft);
+                value(outcome, self.turns(s))
+            }
             Leaf::Cutoff { turns } => {
                 let turn = s.turn().number.saturating_add(u16::from(turns));
                 if let Some(outcome) = soft_rollout_to(s, t, &mut self.x, policy, &mut soft, turn) {
-                    value(outcome)
+                    value(outcome, self.turns(s))
                 } else {
                     self.extra += EVAL_STEPS;
-                    evaluate(s, policy.values())
+                    discounted(evaluate(s, policy.values()), self.turns(s))
                 }
             }
             Leaf::Eval => match next(s, t, &mut self.x, &mut Replay) {
-                Step::Over(outcome) => value(outcome),
+                Step::Over(outcome) => value(outcome, self.turns(s)),
                 Step::Decide(_) => {
                     self.extra += EVAL_STEPS;
-                    evaluate(s, policy.values())
+                    discounted(evaluate(s, policy.values()), self.turns(s))
                 }
             },
         }
+    }
+
+    /// The turns from the tree's first root to `s`.
+    fn turns(&self, s: &State<L>) -> u16 {
+        s.turn().number.saturating_sub(self.origin)
     }
 }
 
@@ -1245,14 +1275,22 @@ fn answered_by_policy(kind: DecisionKind) -> bool {
     }
 }
 
-/// A finished game's score for the first seat: 1 for a win, 0 for a loss, 0.5 for a draw or
-/// a stall.
-fn value(outcome: Outcome) -> f64 {
-    match outcome {
+/// A finished game's score for the first seat, `turns` turns after the tree's first root: a
+/// win 1 and a loss 0, discounted toward an even game by [`TURN_DISCOUNT`] each turn; a draw
+/// or a stall 0.5.
+fn value(outcome: Outcome, turns: u16) -> f64 {
+    let p0 = match outcome {
         Outcome::Win(Seat::P0) => 1.0,
         Outcome::Win(_) => 0.0,
         Outcome::Draw | Outcome::Stalled(_) => 0.5,
-    }
+    };
+    discounted(p0, turns)
+}
+
+/// A score for the first seat, `p0`, discounted toward an even game for `turns` turns: an
+/// evaluation as a finished game is, so the two compare on one scale.
+fn discounted(p0: f64, turns: u16) -> f64 {
+    0.5 + (p0 - 0.5) * TURN_DISCOUNT.powi(i32::from(turns))
 }
 
 /// Each candidate's key: its player, the decision's kind and the option with the card it
@@ -1638,5 +1676,23 @@ mod tests {
         }
         assert!(searched > 3, "{searched} searched");
         assert!(checked > 0, "no guarded decision met");
+    }
+
+    /// A win scores more the sooner it comes and a loss more the later, a draw even, and an
+    /// evaluation on the same scale.
+    #[test]
+    fn sooner_wins_and_later_losses_score_higher() {
+        let (win, loss) = (Outcome::Win(Seat::P0), Outcome::Win(Seat::P1));
+        assert!((value(win, 0) - 1.0).abs() < 1e-12 && value(loss, 0).abs() < 1e-12);
+        assert!(value(win, 3) > value(win, 8));
+        assert!(value(loss, 8) > value(loss, 3));
+        assert!(value(win, 40) > 0.5 && value(loss, 40) < 0.5);
+        assert!((value(Outcome::Draw, 7) - 0.5).abs() < 1e-12);
+        assert!(
+            (value(win, 5) + value(loss, 5) - 1.0).abs() < 1e-12,
+            "zero-sum"
+        );
+        assert!((discounted(0.8, 5) - (0.5 + 0.3 * TURN_DISCOUNT.powi(5))).abs() < 1e-12);
+        assert!(discounted(0.8, 5) < value(win, 5));
     }
 }

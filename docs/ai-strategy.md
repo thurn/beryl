@@ -135,6 +135,9 @@ the cb8d5d5f mirror:
   (by-7wl) may follow: `anchor` plays greedy's answer unless the search's own
   choice leads it clearly, tree by tree; `mid` lets greedy answer the questions
   asked below the root while casting or resolving.
+- **A result counts less each turn it is put off** (`TURN_DISCOUNT`, 0.98 a
+  turn, by-a8g), so a decided position still has a best move: close a won game
+  out, drag a lost one on. Runs before run-004 scored every win alike.
 - **Rollouts draw their moves** by a softmax over the greedy policy's scores, at
   a temperature as strong as greedy. A greedy rollout always plays the same game
   from a position, so in a world the search knows it would exploit one line of

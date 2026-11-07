@@ -22,7 +22,7 @@ pub use expert::ExpertAgent;
 pub use frozen::FrozenExpertAgent;
 pub use long::{
     ANCHOR_ERRORS, ANCHOR_MARGIN, AnchorCheck, EVAL_STEPS, Family, Leaf, LongSearch, Method,
-    Options, Settings, WORLD_STEPS, guarded,
+    Options, Settings, TURN_DISCOUNT, WORLD_STEPS, guarded,
 };
 pub use mcts::{Budget, Mcts, Search, Sight, rollouts_run};
 pub use rollout::{
@@ -250,8 +250,9 @@ pub static AGENTS: &[AgentInfo] = &[
     },
 ];
 
-/// Agents no longer offered, kept buildable by name so that games recorded against them
-/// still replay and review as they were played.
+/// Agents no longer offered, kept buildable by name so that games recorded against them can
+/// still be reviewed. A review re-searches with today's search, so where the search has
+/// changed since (`TURN_DISCOUNT`, for one) it may not choose as the game did.
 pub static RETIRED: &[AgentInfo] = &[AgentInfo {
     name: "pimc18-omniscient-30m",
     title: "Deep Seer, unanchored",
