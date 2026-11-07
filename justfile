@@ -9,6 +9,12 @@ by := "uv run --quiet --project tools by"
 
 search_cpu := "-C target-cpu=apple-m4"
 
+# Low priority for long compute: utility QoS, under which macOS gives interactive work and
+# checks the CPU first. `nice` does not: beside nice'd work a check ran as slowly as beside
+# work at full priority.
+
+low := "taskpolicy -c utility"
+
 default:
     @just --list --unsorted
 
@@ -106,19 +112,19 @@ fuzz games="10000":
 [group('agents')]
 [no-cd]
 play *args:
-    RUSTFLAGS="{{ search_cpu }}" nice -n 10 cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- play "$@"
+    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- play "$@"
 
 # An app game's transcript with the agent's search at each of its decisions, at low priority (REPLAY.json, --out FILE)
 [group('agents')]
 [no-cd]
 review *args:
-    RUSTFLAGS="{{ search_cpu }}" nice -n 10 cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- review "$@"
+    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- review "$@"
 
 # A round robin between agents, games in parallel at low priority (--games N, --seed N, --json FILE, --check)
 [group('agents')]
 [no-cd]
 tournament *args:
-    RUSTFLAGS="{{ search_cpu }}" nice -n 10 cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- tournament "$@"
+    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- tournament "$@"
 
 # The long-think arena: starts or resumes the latest run, low priority, kept awake (--status, --new, --run DIR, --upgrade, --add FAMILY, --games N, --power full|light)
 [group('agents')]

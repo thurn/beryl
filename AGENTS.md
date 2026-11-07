@@ -116,13 +116,15 @@ counts, `just bench` for timing (it refuses a busy machine).
 Tournaments are expensive: a game involving an MCTS agent at
 `--iterations 300 --trees 4` costs about 180 CPU-seconds, so a 100-game pairing
 holds the whole machine for about 20 minutes and a full round robin for over 2
-hours. `just tournament` and `just play` run under `nice -n 10` so other
-sessions' checks keep their CPU. Wardens rerun only the pairings that gate
-acceptance, never reported-only ones. `just longthink`, the long-think arena
-(`docs/ai-strategy.md` §5), holds the machine for days: with no arguments it
-starts or resumes the run in `$BERYL_CACHE/longthink`, any stop costs at most
-the decisions being searched, `--status` prints where it stands, and
-`--power light` leaves room for other work until `--power full`.
+hours. `just tournament`, `just play` and `just review` run at utility QoS
+(`taskpolicy -c utility`), so other sessions' checks get the CPU first: `nice`
+does not do that on macOS. They slow down while the machine is busy. Wardens
+rerun only the pairings that gate acceptance, never reported-only ones.
+`just longthink`, the long-think arena (`docs/ai-strategy.md` §5), holds the
+machine for days: with no arguments it starts or resumes the run in
+`$BERYL_CACHE/longthink`, any stop costs at most the decisions being searched,
+`--status` prints where it stands, and `--power light` leaves room for other
+work until `--power full`.
 
 ## Checks
 
@@ -138,6 +140,9 @@ the decisions being searched, `--status` prints where it stands, and
   in `rust/crates/beryl_bench/count-gate.toml`, whose comments say when it may
   rise). A run over budget fails: speed up, move or delete the slowest step
   rather than raise it.
+- Budgets and deadlines count load-adjusted seconds: while the load average is
+  over the core count, the clock runs slower in proportion, up to 8x. A check
+  passes on a busy machine if it would on a quiet one.
 - A fresh worktree clones the cached `rust/target` and `ui/node_modules` in
   seconds (copy-on-write); removing it saves them back.
 

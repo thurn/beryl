@@ -100,3 +100,27 @@ def test_an_over_budget_run_reports_the_machine_load(
     lane = checks.Lane("slow").step("true", ["true"])
     assert checks.run_lanes([lane], "ci", 0, strict=True) == 1
     assert "ci: load average 53 45 46 on 18 cores" in capsys.readouterr().out
+
+
+def test_load_beyond_the_cores_stretches_the_clock() -> None:
+    assert checks.stretch(10.0, 18) == 1.0
+    assert checks.stretch(18.0, 18) == 1.0
+    assert checks.stretch(36.0, 18) == 2.0
+    assert checks.stretch(1000.0, 18) == checks.MAX_STRETCH
+
+
+def test_a_loaded_machine_stretches_the_deadline_and_the_budget(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(os, "cpu_count", lambda: 18)
+    monkeypatch.setenv("CHECK_DEADLINE_S", "1")
+    lane = checks.Lane("busy").step("sleep", ["sleep", "1.5"])
+    # Twice the cores' worth of load halves the clock's pace: 1.5 s of wall time is under a
+    # second of the deadline, and of the budget.
+    monkeypatch.setattr(os, "getloadavg", lambda: (36.0, 36.0, 36.0))
+    assert checks.run_lanes([lane], "ci", 1, strict=True) == 0
+    assert "on the clock, the machine loaded" in capsys.readouterr().out
+    # On a machine to itself the same step runs out of time.
+    monkeypatch.setattr(os, "getloadavg", lambda: (4.0, 4.0, 4.0))
+    assert checks.run_lanes([lane], "ci", 1, strict=True) == 1
+    assert "ci busy sleep: TIMED OUT after" in capsys.readouterr().out

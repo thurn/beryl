@@ -4,6 +4,10 @@ sequence of timed steps, and print failed lanes last. A run has a hard deadline 
 budget ($CHECK_DEADLINE_S overrides it): a step still running then is killed, with everything it
 started, and fails its lane.
 
+Budgets and deadlines count load-adjusted seconds ([`Clock`]): while other work oversubscribes
+the machine (other sessions' checks, a game, `just longthink`), the clock runs slower, so a run
+is held to what it would take on a machine to itself, and a hung step still dies.
+
 The fast check runs the lanes whose files changed since the branch left origin/staging. Slow
 CI runs every lane plus `app` (the debug app built and launched headless until its UI loads),
 `shots` (the screens rendered headless), `ui-test` (the game screen played headless),
@@ -33,6 +37,9 @@ from . import cards, paths, warm
 
 FAST_BUDGET = 60
 SLOW_BUDGET = 300
+# The most a busy machine slows a run's clock (`Clock`): a step that hangs dies by this many
+# times its deadline, however loaded the machine.
+MAX_STRETCH = 8.0
 COMMIT: re.Pattern[str] = re.compile(
     r"^(feat|fix|perf|refactor|test|docs|build|ci|chore|style|revert)"
     r"(\([a-z0-9-]+\))?!?: \S"
@@ -68,13 +75,53 @@ class Outcome:
     timings: list[str]
 
 
+def stretch(load: float, cpus: int) -> float:
+    """How many times longer than on a machine to itself work takes under `load` (the run
+    queue's average length) on `cpus` cores: the cores are shared among that many threads,
+    so a step gets about `cpus / load` of what it would, however many threads it runs (up to
+    the cores). Its own threads count too, so a check that alone oversubscribes the machine
+    gets back at most that much.
+    """
+    return min(MAX_STRETCH, max(1.0, load / cpus))
+
+
+class Clock:
+    """Seconds since it started, as a machine to itself would have spent them: each stretch of
+    wall time divided by how much the load then slowed it (`stretch`). It reads the load as
+    it is asked the time, which a running step does every half second."""
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.cpus: int = os.cpu_count() or 1
+        self.wall_start: float = time.monotonic()
+        self.last: float = self.wall_start
+        self.adjusted: float = 0.0
+
+    def now(self) -> float:
+        with self.lock:
+            t = time.monotonic()
+            self.adjusted += (t - self.last) / stretch(os.getloadavg()[0], self.cpus)
+            self.last = t
+            return self.adjusted
+
+    def wall(self) -> float:
+        return time.monotonic() - self.wall_start
+
+
+def took(wall: float, adjusted: float) -> str:
+    """A duration, with the load-adjusted one where the load stretched it."""
+    if wall <= adjusted * 1.1:
+        return f"{wall:.1f} s"
+    return f"{adjusted:.1f} s ({wall:.0f} s on the clock, the machine loaded)"
+
+
 class Steps:
     """A run's steps, each started in its own session, so that once the run's deadline passes,
     or the run is interrupted, a step can be killed with everything it started."""
 
     def __init__(self, deadline: float) -> None:
         self.deadline = deadline
-        self.ends: float = time.monotonic() + deadline
+        self.clock = Clock()
         self.stopped = threading.Event()
         self.lock = threading.Lock()
         self.running: set[subprocess.Popen[bytes]] = set()
@@ -87,7 +134,7 @@ class Steps:
         """
         with tempfile.TemporaryFile("w+", errors="replace") as out:
             with self.lock:
-                if self.stopped.is_set() or time.monotonic() >= self.ends:
+                if self.stopped.is_set() or self.clock.now() >= self.deadline:
                     return None, ""
                 proc = subprocess.Popen(
                     cmd,
@@ -99,13 +146,17 @@ class Steps:
                     start_new_session=True,
                 )
                 self.running.add(proc)
-            code: int | None
+            code: int | None = None
             try:
-                code = proc.wait(timeout=max(0.0, self.ends - time.monotonic()))
-            except subprocess.TimeoutExpired:
-                kill_tree(proc.pid)
-                proc.wait()
-                code = None
+                while (left := self.deadline - self.clock.now()) > 0:
+                    try:
+                        code = proc.wait(timeout=min(0.5, left))
+                        break
+                    except subprocess.TimeoutExpired:
+                        continue
+                else:
+                    kill_tree(proc.pid)
+                    proc.wait()
             finally:
                 with self.lock:
                     self.running.discard(proc)
@@ -147,35 +198,35 @@ def kill_tree(pid: int) -> None:
 
 
 def run_lane(lane: Lane, script: str, env: dict[str, str], steps: Steps) -> Outcome:
-    started = time.monotonic()
+    clock = steps.clock
+    started = clock.now()
     log: list[str] = []
     timings: list[str] = []
     for name, cmd, cwd in lane.steps:
-        t = time.monotonic()
+        t, wall = clock.now(), clock.wall()
         code, output = steps.run(cmd, cwd, env)
-        seconds = time.monotonic() - t
+        seconds, wall = clock.now() - t, clock.wall() - wall
         if output.strip():
             log.append(output.rstrip())
         if code != 0:
             log.append(
                 f"{script} {lane.name} {name}: "
                 + (
-                    f"TIMED OUT after {seconds:.0f} s (deadline {steps.deadline:.0f} s)"
+                    f"TIMED OUT after {took(wall, seconds)} (deadline {steps.deadline:.0f} s)"
                     if code is None
-                    else f"FAILED (exit {code}) after {seconds:.0f} s"
+                    else f"FAILED (exit {code}) after {took(wall, seconds)}"
                 )
             )
             timings.append(f"{name} {'TIMED OUT' if code is None else 'FAILED'}")
             return Outcome(
-                lane.name, False, time.monotonic() - started, "\n".join(log), timings
+                lane.name, False, clock.now() - started, "\n".join(log), timings
             )
-        log.append(f"{script} {lane.name} {name}: {seconds:.1f} s")
+        log.append(f"{script} {lane.name} {name}: {took(wall, seconds)}")
         timings.append(f"{name} {seconds:.0f} s")
-    return Outcome(lane.name, True, time.monotonic() - started, "\n".join(log), timings)
+    return Outcome(lane.name, True, clock.now() - started, "\n".join(log), timings)
 
 
 def run_lanes(lanes: list[Lane], script: str, budget: int, strict: bool) -> int:
-    started = time.monotonic()
     steps = Steps(float(os.environ.get("CHECK_DEADLINE_S", 2 * budget)))
     if any(lane.warm for lane in lanes):
         warm.ensure()
@@ -193,11 +244,11 @@ def run_lanes(lanes: list[Lane], script: str, budget: int, strict: bool) -> int:
         print(f"=== {script} {o.lane}: {'passed' if o.ok else 'FAILED'}\n{o.log}")
     for o in outcomes:
         print(f"{script}: {o.lane} {o.seconds:.0f} s ({', '.join(o.timings)})")
-    elapsed = time.monotonic() - started
+    elapsed = steps.clock.now()
     failed = [o.lane for o in outcomes if not o.ok]
     over = elapsed > budget
     print(
-        f"{script}: {'FAILED: ' + ' '.join(failed) if failed else 'passed'} in {elapsed:.0f} s (budget {budget} s)"
+        f"{script}: {'FAILED: ' + ' '.join(failed) if failed else 'passed'} in {took(steps.clock.wall(), elapsed)} (budget {budget} s)"
     )
     if over:
         print(
@@ -214,7 +265,7 @@ def load_note() -> str:
     one, five, fifteen = os.getloadavg()
     return (
         f"load average {one:.0f} {five:.0f} {fifteen:.0f} on {os.cpu_count()} cores;"
-        " if every lane is slow and the load is high, rerun on a quieter machine"
+        f" the times above are adjusted for load beyond the cores, up to {MAX_STRETCH:.0f}x"
     )
 
 
