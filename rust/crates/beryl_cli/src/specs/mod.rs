@@ -306,12 +306,12 @@ pub fn reach(moment: &'static Moment, view: View) -> Result<beryl_session::Playe
     trace(moment, view).map(|(view, _)| view)
 }
 
-/// [`reach`], with the events the viewer was shown on the way, once the setup was done: each
-/// view's events in a line, after the turn and step it showed them in.
+/// [`reach`], with the views the viewer was shown on the way once the setup was done, each
+/// with the events it animates.
 fn trace(
     moment: &'static Moment,
     view: View,
-) -> Result<(beryl_session::PlayerView, Vec<String>), String> {
+) -> Result<(beryl_session::PlayerView, Vec<beryl_session::PlayerView>), String> {
     let (sent, received) = std::sync::mpsc::channel();
     let (_sessions, progress) = start(moment, view, move |update, phase| {
         let _ = sent.send((update, phase));
@@ -326,8 +326,8 @@ fn trace(
             return Err(failure);
         }
         // The first view shown animates nothing (`specs-serve` clears its events).
-        if shown && let Some(line) = events_line(&update.view) {
-            events.push(line);
+        if shown {
+            events.push(update.view.clone());
         }
         shown |= phase != Phase::Setup;
         match update.view.status {
@@ -336,13 +336,9 @@ fn trace(
                 return Ok((update.view, events));
             }
             Status::Over { .. } | Status::Stopped => {
-                let next = boards::lock(&progress).next;
-                return Err(match next {
-                    [None, None] => "the game ended before a live decision".to_owned(),
-                    next => format!(
-                        "the game ended with the scripts waiting on {:?}",
-                        next.iter().flatten().collect::<Vec<_>>()
-                    ),
+                return Err(match boards::lock(&progress).stalled() {
+                    None => "the game ended before a live decision".to_owned(),
+                    Some(why) => format!("the game ended with {why}"),
                 });
             }
             Status::Deciding { .. } if phase == Phase::Live => {
@@ -431,10 +427,88 @@ fn events_line(view: &beryl_session::PlayerView) -> Option<String> {
         .then(|| format!("turn {} {whose} {step}: {}", turn.number, events.join("; ")))
 }
 
+/// One view as `specs-describe --views` prints it: its turn and events, what the viewer is
+/// asked (or the game's status), the stack bottom first, and each side's battlefield, hand,
+/// graveyard and exile by name (a card the viewer cannot see as `?`, tapped ones marked), and
+/// their library's size.
+fn view_lines(view: &beryl_session::PlayerView) -> Vec<String> {
+    let v = serde_json::to_value(view).unwrap_or_default();
+    let objects = v["objects"].as_array().cloned().unwrap_or_default();
+    let named = |slot: &serde_json::Value| {
+        objects
+            .iter()
+            .find(|o| o["slot"] == *slot)
+            .and_then(|o| o["name"].as_str())
+            .unwrap_or("?")
+            .to_owned()
+    };
+    let mut lines = vec![events_line(view).unwrap_or_else(|| {
+        format!(
+            "turn {} {:?} {:?}: no events",
+            view.turn.number, view.turn.active, view.turn.step
+        )
+    })];
+    lines.push(match &v["status"] {
+        s if s["kind"] == "deciding" => format!(
+            "asks   {} ({} candidates)",
+            s["decision"]["kind"].as_str().unwrap_or("?"),
+            s["decision"]["candidates"].as_array().map_or(0, Vec::len)
+        ),
+        s => format!("status {}", s["kind"].as_str().unwrap_or("?")),
+    });
+    let stack: Vec<String> = v["stack"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|item| match item["kind"].as_str() {
+            Some("spell") => named(&item["slot"]),
+            _ => item["name"].as_str().map_or_else(
+                || format!("{} ability", named(&item["source"])),
+                str::to_owned,
+            ),
+        })
+        .collect();
+    if !stack.is_empty() {
+        lines.push(format!("stack  {}", stack.join(" < ")));
+    }
+    for side in ["you", "opponent"] {
+        let mut zones = Vec::new();
+        for zone in ["battlefield", "hand", "graveyard", "exile"] {
+            // A permanent is on its controller's side; a card elsewhere, its owner's.
+            let whose = if zone == "battlefield" {
+                "controller"
+            } else {
+                "owner"
+            };
+            let cards: Vec<String> = objects
+                .iter()
+                .filter(|o| o["zone"] == zone && o[whose] == side)
+                .map(|o| {
+                    let name = o["name"].as_str().unwrap_or("?");
+                    if o["tapped"] == true {
+                        format!("{name} (tapped)")
+                    } else {
+                        name.to_owned()
+                    }
+                })
+                .collect();
+            if !cards.is_empty() {
+                zones.push(format!("{zone}: {}", cards.join(", ")));
+            }
+        }
+        let library = v["players"][side]["library"].as_array().map_or(0, Vec::len);
+        zones.push(format!("library: {library}"));
+        lines.push(format!("{side:<6} {}", zones.join(" | ")));
+    }
+    lines
+}
+
 /// Prints each moment of the specs for `cards` (by name or slug; all of them if none), or the
 /// one `moment` names: its page, the actions it plays once shown, and from each seat the
 /// events shown on the way and what holds at its first live decision, abilities by their cost.
-pub fn describe(cards: &[String], moment: Option<&str>) -> Result<(), String> {
+/// With `views`, each view shown is printed whole instead: its events, what it asks, the stack
+/// and each side's zones ([`view_lines`]).
+pub fn describe(cards: &[String], moment: Option<&str>, views: bool) -> Result<(), String> {
     let wanted =
         |card: &str| cards.is_empty() || cards.iter().any(|c| c == card || *c == slug(card));
     let mut found = false;
@@ -472,8 +546,15 @@ pub fn describe(cards: &[String], moment: Option<&str>) -> Result<(), String> {
             for view in View::ALL {
                 let (shown, events) = trace(m, view)?;
                 println!("{}:", view.name());
-                for e in events {
-                    println!("  shown  {}", label(&e));
+                for (n, v) in events.iter().enumerate() {
+                    if views {
+                        println!("  view {}", n + 1);
+                        for line in view_lines(v) {
+                            println!("    {}", label(&line));
+                        }
+                    } else if let Some(line) = events_line(v) {
+                        println!("  shown  {}", label(&line));
+                    }
                 }
                 let holds: Vec<String> = auto::snapshot(&shown, def)
                     .iter()

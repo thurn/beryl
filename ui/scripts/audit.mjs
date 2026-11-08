@@ -8,8 +8,15 @@
 //   unseen    they changed, but off screen, covered or transparent the while
 //   still     nothing showed it: no element changed, or none shows it
 //   crowded   a view showed more than CROWDED events at once, too many to follow
-// A finding about a tap or untap is `minor`: mana bookkeeping, which a land in a group shows
-// under its neighbours.
+//   duplicate the same card showed twice at once for DUPLICATE_MS or longer: a second copy of
+//             a card (one slot drawn twice, or a copy with no slot beside it), outside a
+//             prompt, which shows copies of the cards it offers on purpose
+// Beside the events, `ui` findings judge what moved with no event to show (a hand rising, a
+// chooser opening, a button sliding in): the motion a live click sets going. A finding about a
+// tap or untap is `minor`: mana bookkeeping, which a land in a group shows under its
+// neighbours; so are `ui` findings when no live action set them going (`audit`'s `live`).
+// `timeline` lists when each thing first showed, and `ordered` asserts their order: the
+// driver's `spec.ordered`, and any test with a recording.
 
 /** The shortest change that counts as animated, in ms, and the least move that counts. */
 const MIN_MS = 150;
@@ -25,9 +32,22 @@ const CROWDED = 3;
 const QUIET_EVENTS = new Set(["stepBegins", "coinFlip", "win", "lose"]);
 /** Events that come with another and count for nothing in a crowd. */
 const MINOR_EVENTS = new Set(["tap", "untap", "draw", "cast"]);
+/** How long a card may show twice before it counts as a duplicate: a hand-off between two
+ * elements of one card (a prompt's card settling back onto the table) crosses briefly. */
+const DUPLICATE_MS = 250;
+/** How long after a view's window a card drawn in it may still arrive in the hand: a draw's
+ * beat can hold it back past the next view. */
+const DRAW_GRACE = 1500;
 
-/** Starts recording every frame in the page. Run with `page.evaluate`. */
-export function record() {
+/** Starts recording every frame in the page. Run with `page.evaluate(record, ui?)`: `ui`
+ * selects the elements other than cards whose motion is judged, by default what a click opens
+ * or moves (a chooser's frames, a prompt's title and buttons, the dock's buttons). */
+export function record(ui) {
+    const UI_SELECTOR =
+        ui ??
+        ".dock button, .prompt-title, .ability-choice, .choice-card, .chooser-close, .chooser-corner";
+    // Where copies of a card are shown on purpose: the cards a prompt offers, the inspector.
+    const ALLOWED = "[role=dialog], .prompt, .ability-chooser, .inspector";
     const opacity = (e) => {
         let o = 1;
         for (let x = e; x && x !== document.body; x = x.parentElement) {
@@ -126,6 +146,86 @@ export function record() {
                 ),
             };
         }
+        // Each card shown more than once at a time: its name, and where each copy is. Twins
+        // (two slots of one name) are two cards; one slot drawn twice, or a copy with no slot
+        // beside it, is a duplicate.
+        const copies = {};
+        for (const e of document.querySelectorAll("[data-card]")) {
+            const name = e.dataset.card;
+            if (!name || e.closest(ALLOWED)) continue;
+            // The outermost element of a card: its own parts may name it too.
+            if (e.parentElement?.closest(`[data-card="${CSS.escape(name)}"]`))
+                continue;
+            const r = e.getBoundingClientRect();
+            if (r.width * r.height < 1500 || opacity(e) <= 0.3) continue;
+            const visible = [
+                [0.5, 0.5],
+                [0.25, 0.25],
+                [0.75, 0.75],
+            ].some(([fx, fy]) => {
+                const x = r.left + r.width * fx;
+                const y = r.top + r.height * fy;
+                return (
+                    x >= 0 &&
+                    y >= 0 &&
+                    x < innerWidth &&
+                    y < innerHeight &&
+                    onTop(e, x, y)
+                );
+            });
+            if (!visible) continue;
+            (copies[name] ??= []).push({
+                slot: e.dataset.slot ?? null,
+                where:
+                    e.dataset.zone ??
+                    (e.className && typeof e.className === "string"
+                        ? e.className.split(" ")[0]
+                        : e.tagName.toLowerCase()),
+            });
+        }
+        const dupes = {};
+        for (const [name, list] of Object.entries(copies)) {
+            const slots = list.filter((c) => c.slot !== null);
+            const distinct = new Set(slots.map((c) => c.slot)).size;
+            if (list.length > Math.max(distinct, 1) || slots.length > distinct)
+                dupes[name] = list.map((c) => c.where).join(" + ");
+        }
+        // The other elements a click opens or moves, by their kind and place among those
+        // alike.
+        const uis = {};
+        const counts = {};
+        for (const e of document.querySelectorAll(UI_SELECTOR)) {
+            const r = e.getBoundingClientRect();
+            if (r.width === 0 && r.height === 0) continue;
+            const kind =
+                typeof e.className === "string" && e.className
+                    ? e.className.split(" ")[0]
+                    : e.tagName.toLowerCase();
+            const label = (
+                e.getAttribute("aria-label") ??
+                e.dataset.card ??
+                e.textContent ??
+                ""
+            )
+                .trim()
+                .slice(0, 30);
+            // By kind and place, not label: a button whose text changes is the same button.
+            counts[kind] = (counts[kind] ?? 0) + 1;
+            const key = `${kind} #${counts[kind]}`;
+            const cx = r.left + r.width / 2;
+            const cy = r.top + r.height / 2;
+            uis[key] = {
+                label,
+                x: Math.round(cx),
+                y: Math.round(cy),
+                w: Math.round(r.width),
+                h: Math.round(r.height),
+                o: opacity(e),
+                on: cx >= 0 && cy >= 0 && cx < innerWidth && cy < innerHeight,
+                top: onTop(e, cx, cy),
+                anim: e.getAnimations({ subtree: true }).length > 0,
+            };
+        }
         const lives = {};
         for (const e of document.querySelectorAll("[data-life]")) {
             const r = e.getBoundingClientRect();
@@ -140,8 +240,10 @@ export function record() {
         // The stack's items that are no card of their own (abilities), by place from the
         // bottom: an item's text changes as it settles.
         const stack = {};
-        [...document.querySelectorAll(".stack-item")].forEach((e, i) => {
+        [...document.querySelectorAll(".stack-item")].forEach((e, n) => {
             const r = e.getBoundingClientRect();
+            // By place and name: an item that resolves and another put in its place are two.
+            const i = `${n}:${e.querySelector(".card-name, .card-scan")?.textContent || e.querySelector(".card-scan")?.getAttribute("alt") || ""}`;
             const cx = r.left + r.width / 2;
             const cy = r.top + r.height / 2;
             stack[i] = {
@@ -155,7 +257,7 @@ export function record() {
                 anim: e.getAnimations({ subtree: true }).length > 0,
             };
         });
-        frames.push({ t: performance.now(), cards, lives, stack });
+        frames.push({ t: performance.now(), cards, lives, stack, uis, dupes });
         if (!window.__motion.stop) requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
@@ -177,7 +279,7 @@ export function collect(since) {
                 s.update.view.objects.map((o) => [o.slot, o.name]),
             ),
         }));
-    return { frames: window.__motion.frames, shown };
+    return { frames: window.__motion.frames, shown, since };
 }
 
 /** The slots an event is about, which should show it. */
@@ -198,7 +300,8 @@ function subjects(e) {
         case "damage":
             return e.to.kind === "object" ? [e.source, e.to.slot] : [e.source];
         case "ability":
-            return e.item.source === undefined ? [] : [e.item.source];
+            // An emblem's ability has no source (null): its stack item shows it.
+            return e.item.source == null ? [] : [e.item.source];
         default:
             return [];
     }
@@ -223,6 +326,8 @@ function describe(e, names) {
             return `${e.player} ${e.kind === "lifeGain" ? "+" : "-"}${e.amount} life`;
         case "draw":
             return `${e.player} draws ${e.cards}`;
+        case "cast":
+            return `cast ${name(e.slot)}`;
         case "countersAdded":
         case "countersRemoved":
             return `${name(e.slot)} ${e.kind === "countersAdded" ? "+" : "-"}${e.amount} ${e.counter}`;
@@ -286,6 +391,8 @@ function behavior(frames, slot, of = (f) => f.cards[slot]) {
                 x.c.anim),
     );
     const judged = changing.length ? changing : present;
+    // When it first showed the change: where it appeared, or its first changing frame.
+    const start = appeared ? present[0].t : changing[0]?.t;
     const seen =
         judged.filter((x) => x.c.on && x.c.top && x.c.o > 0.3).length /
         judged.length;
@@ -298,6 +405,7 @@ function behavior(frames, slot, of = (f) => f.cards[slot]) {
         ms: Math.round(Math.max(motion, fade, anim)),
         seen: Math.round(seen * 100) / 100,
         changed: appeared || vanished || moved >= MIN_PX || turned || zone,
+        start,
     };
 }
 
@@ -316,20 +424,37 @@ function lifeBehavior(frames, side) {
         shown,
         (a, b) => a.lives[side].text !== b.lives[side].text,
     );
-    return { changed, ms: Math.round(Math.max(anim, counting)), seen: 1 };
+    const at = shown.findIndex(
+        (f, i) =>
+            i > 0 &&
+            (f.lives[side].text !== shown[i - 1].lives[side].text ||
+                f.lives[side].anim),
+    );
+    return {
+        changed,
+        ms: Math.round(Math.max(anim, counting)),
+        seen: 1,
+        start: shown[at]?.t,
+    };
 }
 
 /** Each event's finding: its verdict and why. */
-function judge(e, frames, names) {
+function judge(e, frames, names, later = frames) {
     const what = describe(e, names);
     if (e.kind === "lifeGain" || e.kind === "lifeLoss") {
         const b = lifeBehavior(frames, e.player);
         if (b.none)
             return { what, verdict: "still", why: "no life total shows it" };
         if (b.ms >= MIN_MS)
-            return { what, verdict: "ok", why: `animated ${b.ms} ms` };
+            return {
+                what,
+                verdict: "ok",
+                why: `animated ${b.ms} ms`,
+                start: b.start,
+            };
         return {
             what,
+            start: b.start,
             verdict: b.changed ? "instant" : "still",
             why: b.changed
                 ? "the number changed without animation"
@@ -357,21 +482,42 @@ function judge(e, frames, names) {
     if (e.kind === "damage" && e.to.kind === "player") {
         const b = lifeBehavior(frames, e.to.player);
         if (!b.none && b.ms >= MIN_MS) {
-            return { what, verdict: "ok", why: `life animated ${b.ms} ms` };
+            return {
+                what,
+                verdict: "ok",
+                why: `life animated ${b.ms} ms`,
+                start: b.start,
+            };
         }
     }
     if (e.kind === "draw") {
-        // The cards drawn: those whose element arrived in a hand over the view.
-        const before = frames[0]?.cards ?? {};
-        const drawn = Object.keys(frames.at(-1)?.cards ?? {}).filter(
-            (s) =>
-                frames.at(-1).cards[s].zone === "hand" &&
-                before[s]?.zone !== "hand",
-        );
-        if (drawn.length === 0) {
+        // The cards drawn: those whose element arrived in a hand over the view or a beat
+        // after it, even if they left it again (a card drawn and discarded).
+        const before = later[0]?.cards ?? {};
+        const drawn = new Set();
+        for (const f of later) {
+            for (const [s, c] of Object.entries(f.cards)) {
+                if (c.zone === "hand" && before[s]?.zone !== "hand")
+                    drawn.add(s);
+            }
+        }
+        if (drawn.size === 0) {
             return { what, verdict: "still", why: "no card arrived in a hand" };
         }
-        return judgeSlots(what, frames, drawn);
+        return judgeSlots(what, later, [...drawn]);
+    }
+    // A spell's cast announced a view after its card reached the stack: the card showed it
+    // then, as that view's zone change; a nudge since (the stack making room) is no cast.
+    if (e.kind === "cast") {
+        const first = frames.find((f) => f.cards[e.slot])?.cards[e.slot];
+        if (first?.zone === "stack") {
+            return {
+                what,
+                verdict: "ok",
+                why: "on the stack since an earlier view",
+                start: frames[0]?.t,
+            };
+        }
     }
     const slots = subjects(e);
     if (slots.length === 0) {
@@ -415,12 +561,18 @@ function judgeBadge(what, frames, slot) {
             span(shown, (a, b) => a.cards[slot].anim && b.cards[slot].anim),
         ),
     );
+    const at = shown.findIndex(
+        (f, i) =>
+            i > 0 && f.cards[slot].badge !== shown[i - 1].cards[slot].badge,
+    );
+    const start = shown[Math.max(0, at - 1)]?.t;
     return ms >= MIN_MS
-        ? { what, verdict: "ok", why: `its counters animated ${ms} ms` }
+        ? { what, verdict: "ok", why: `its counters animated ${ms} ms`, start }
         : {
               what,
               verdict: "instant",
               why: "its counters changed without animation",
+              start,
           };
 }
 
@@ -437,11 +589,13 @@ function judgeShown(what, b, name) {
     ]
         .filter(Boolean)
         .join(", ");
+    const start = b.start;
     if (b.ms < MIN_MS) {
         return {
             what,
             verdict: "instant",
             why: `${name} ${how} in ${b.ms} ms`,
+            start,
         };
     }
     if (b.seen < SEEN) {
@@ -449,9 +603,15 @@ function judgeShown(what, b, name) {
             what,
             verdict: "unseen",
             why: `${name} ${how} over ${b.ms} ms, visible ${Math.round(b.seen * 100)}% of it`,
+            start,
         };
     }
-    return { what, verdict: "ok", why: `${name} ${how} over ${b.ms} ms` };
+    return {
+        what,
+        verdict: "ok",
+        why: `${name} ${how} over ${b.ms} ms`,
+        start,
+    };
 }
 
 /** The best showing among the elements of `slots`. */
@@ -479,27 +639,132 @@ function judgeSlots(what, frames, slots) {
     ]
         .filter(Boolean)
         .join(", ");
+    // When it first showed: the earliest change of any of its elements.
+    const start = Math.min(
+        ...changed.map((x) => x.b.start).filter((t) => t !== undefined),
+    );
+    const at = Number.isFinite(start) ? start : undefined;
     if (best.b.ms < MIN_MS) {
-        return { what, verdict: "instant", why: `${how} in ${best.b.ms} ms` };
+        return {
+            what,
+            verdict: "instant",
+            why: `${how} in ${best.b.ms} ms`,
+            start: at,
+        };
     }
     if (best.b.seen < SEEN) {
         return {
             what,
             verdict: "unseen",
             why: `${how} over ${best.b.ms} ms, visible ${Math.round(best.b.seen * 100)}% of it`,
+            start: at,
         };
     }
-    return { what, verdict: "ok", why: `${how} over ${best.b.ms} ms` };
+    return {
+        what,
+        verdict: "ok",
+        why: `${how} over ${best.b.ms} ms`,
+        start: at,
+    };
 }
 
-/** Each finding of one seat's run: per view, each event's, and a crowd. */
-export function audit({ frames, shown }) {
+/** The slots a view's events account for: their subjects, and with a draw, every card that
+ * arrived in a hand. */
+function claimed(events, frames) {
+    const out = new Set();
+    for (const e of events) {
+        for (const s of subjects(e)) out.add(String(s));
+        if (e.kind === "damage") out.add(String(e.source));
+    }
+    if (events.some((e) => e.kind === "draw")) {
+        const before = frames[0]?.cards ?? {};
+        for (const f of frames) {
+            for (const [s, c] of Object.entries(f.cards)) {
+                if (c.zone === "hand" && before[s]?.zone !== "hand") out.add(s);
+            }
+        }
+    }
+    return out;
+}
+
+/** The `ui` findings of one window: each card that changed with no event of the view to
+ * account for it (a hand rising, a fan making room), and each other element `record`'s `ui`
+ * selects that appeared, vanished or moved. */
+function uiFindings(window, events) {
+    const out = [];
+    const accounted = claimed(events, window);
+    const slots = new Set(window.flatMap((f) => Object.keys(f.cards)));
+    for (const slot of slots) {
+        if (accounted.has(slot)) continue;
+        const b = behavior(window, slot);
+        if (b.none || !b.changed) continue;
+        const name = window.find((f) => f.cards[slot])?.cards[slot];
+        const label = `${name?.name ?? `#${slot}`} (${name?.zone ?? "?"})`;
+        out.push(judgeShown(label, b, "it"));
+    }
+    const keys = new Set(window.flatMap((f) => Object.keys(f.uis ?? {})));
+    for (const key of keys) {
+        const b = behavior(window, key, (f) => f.uis?.[key]);
+        if (b.none || !b.changed) continue;
+        const label = window.find((f) => f.uis?.[key])?.uis[key].label ?? "";
+        out.push(
+            judgeShown(`${key.replace(/ #\d+$/, "")} «${label}»`, b, "it"),
+        );
+    }
+    return out;
+}
+
+/** Each card shown twice at once for DUPLICATE_MS or more, over `frames`. */
+function duplicates(frames) {
+    const runs = {};
+    const out = [];
+    const close = (name, end) => {
+        const run = runs[name];
+        delete runs[name];
+        if (end - run.from >= DUPLICATE_MS) {
+            out.push({
+                kind: "duplicate",
+                what: `${name} shown twice: ${run.where}`,
+                verdict: "duplicate",
+                why: `two copies on screen for ${Math.round(end - run.from)} ms`,
+                start: run.from,
+            });
+        }
+    };
+    for (const f of frames) {
+        for (const [name, where] of Object.entries(f.dupes ?? {})) {
+            runs[name] ??= { from: f.t, where };
+        }
+        for (const name of Object.keys(runs)) {
+            if (!f.dupes?.[name]) close(name, f.t);
+        }
+    }
+    for (const name of Object.keys(runs)) close(name, frames.at(-1).t);
+    return out;
+}
+
+/** Each finding of one seat's run: per view, each event's, its `ui` findings and a crowd,
+ * then each duplicate. With `live`, an action of the viewer's set the run going (a click, not
+ * a scripted play): what it moved before the first view counts as a view of its own, and `ui`
+ * findings are not minor. Each finding has `at`, ms from the recording's start to when it
+ * first showed, where it showed at all. */
+export function audit({ frames, shown, since }, { live = false } = {}) {
     const findings = [];
-    for (let i = 0; i < shown.length; i++) {
-        const view = shown[i];
+    const origin = since ?? frames[0]?.t ?? 0;
+    const views = [...shown];
+    if (live) {
+        views.unshift({
+            at: origin,
+            turn: "the action",
+            events: [],
+            names: {},
+        });
+    }
+    for (let i = 0; i < views.length; i++) {
+        const view = views[i];
         // Until the next view, or long enough for an animation that outlasts a short hold.
         const end = Math.max(
-            shown[i + 1]?.at ?? frames.at(-1)?.t ?? view.at,
+            views[i + 1]?.at ?? frames.at(-1)?.t ?? view.at,
             view.at + 1000,
         );
         // From a frame before the view, for where things were, to the end: the page draws a
@@ -509,14 +774,25 @@ export function audit({ frames, shown }) {
             frames.findIndex((f) => f.t >= view.at - LEAD) - 1,
         );
         const window = frames.slice(from).filter((f) => f.t <= end);
+        const later = frames.slice(from).filter((f) => f.t <= end + DRAW_GRACE);
         const events = view.events.filter((e) => !QUIET_EVENTS.has(e.kind));
         for (const e of events) {
             findings.push({
                 view: view.turn,
                 kind: e.kind,
                 minor: e.kind === "tap" || e.kind === "untap",
-                ...judge(e, window, view.names),
+                ...judge(e, window, view.names, later),
             });
+        }
+        if (window.length > 1) {
+            for (const f of uiFindings(window, events)) {
+                findings.push({
+                    view: view.turn,
+                    kind: "ui",
+                    minor: !live,
+                    ...f,
+                });
+            }
         }
         // Cards making the same move together (a mill, a graveyard exiled) read as one move:
         // the game shows them as a batch (beats.ts's showcase).
@@ -534,9 +810,61 @@ export function audit({ frames, shown }) {
                 view: view.turn,
                 what: counted.map((e) => describe(e, view.names)).join("; "),
                 verdict: "crowded",
-                why: `${counted.length} events shown at once, held ${Math.round((shown[i + 1]?.at ?? end) - view.at)} ms`,
+                why: `${counted.length} events shown at once, held ${Math.round((views[i + 1]?.at ?? end) - view.at)} ms`,
+                start: view.at,
             });
         }
     }
-    return findings;
+    for (const d of duplicates(frames)) {
+        const view = views.findLast((v) => v.at - LEAD <= d.start) ?? views[0];
+        findings.push({ view: view?.turn ?? "", ...d });
+    }
+    return findings.map(({ start, ...f }) => ({
+        ...f,
+        ...(start === undefined ? {} : { at: Math.round(start - origin) }),
+    }));
+}
+
+/** What a seat's run showed, in the order it first showed it: each finding with an `at`, as
+ * `{ at, text }`, its text its `what` and `why` ("Winds of Abandon hand->stack (cast): moved
+ * 300px over 500 ms"). */
+export function timeline(findings) {
+    return findings
+        .filter((f) => f.at !== undefined && f.verdict !== "still")
+        .sort((a, b) => a.at - b.at)
+        .map((f) => ({ at: f.at, text: `${f.what}: ${f.why}` }));
+}
+
+/** Whether `entries` (a `timeline`) showed what `patterns` match in that order: each pattern,
+ * a substring (any case) or a RegExp, takes the first entry it matches that no earlier
+ * pattern took, and each must show no earlier than the one before it. Returns `ok`, each
+ * pattern's match (`at` and `text`, or null), and why not, if not. */
+export function ordered(entries, patterns) {
+    const used = new Set();
+    const matched = patterns.map((p) => {
+        const test =
+            p instanceof RegExp
+                ? (t) => p.test(t)
+                : (t) => t.toLowerCase().includes(String(p).toLowerCase());
+        const i = entries.findIndex((e, n) => !used.has(n) && test(e.text));
+        if (i < 0) return { pattern: String(p), at: null, text: null };
+        used.add(i);
+        return { pattern: String(p), ...entries[i] };
+    });
+    const missing = matched.find((m) => m.at === null);
+    if (missing) {
+        return { ok: false, matched, why: `nothing showed ${missing.pattern}` };
+    }
+    const early = matched.findIndex(
+        (m, i) => i > 0 && m.at < matched[i - 1].at,
+    );
+    if (early > 0) {
+        const [a, b] = [matched[early - 1], matched[early]];
+        return {
+            ok: false,
+            matched,
+            why: `${b.pattern} showed at ${b.at} ms, before ${a.pattern} at ${a.at} ms`,
+        };
+    }
+    return { ok: true, matched };
 }

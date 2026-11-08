@@ -3,7 +3,7 @@
 // the settle, and lays out the bursts of motion as one sheet per moment, at most MOST frames,
 // each frame your seat over theirs, labelled with its time. One image shows how the moment
 // moves for both players, where a still shows only how it ends. Usage:
-//   node scripts/film.mjs <base-url> <out-dir> [card-slug...] [--moment NAME]
+//   node scripts/film.mjs <base-url> <out-dir> [card-slug...] [--moment NAME] [--viewport WxH]
 // Writes <out-dir>/<card>/<moment>.png, and every frame under <out-dir>/<card>/<moment>/,
 // and prints each sheet's path.
 import { mkdir, writeFile } from "node:fs/promises";
@@ -15,8 +15,11 @@ import {
     LONGEST,
     moving,
     openSeat,
+    option,
     play,
     QUIET,
+    viewport,
+    warm,
 } from "./moments.mjs";
 
 /** How often both seats are shot, the most frames a sheet keeps, and how many a row. */
@@ -30,8 +33,8 @@ const TILE = 400;
 const DIFFERENT = 0.004;
 
 const args = process.argv.slice(2);
-const at = args.indexOf("--moment");
-const moment = at >= 0 ? args.splice(at, 2)[1] : undefined;
+const moment = option(args, "--moment");
+const size = viewport(option(args, "--viewport"));
 const [base, out, ...only] = args;
 if (!base || !out) {
     console.error(
@@ -96,7 +99,7 @@ async function sheet(page, title, frames) {
         `<body style="margin:0;background:#2b2b2b;color:#ddd;font:13px -apple-system,sans-serif"></body>`,
     );
     return page.evaluate(
-        async ({ title, data, most, across, tile, different }) => {
+        async ({ title, data, most, across, tile, aspect, different }) => {
             const load = (src) =>
                 new Promise((ok) => {
                     const i = new Image();
@@ -159,7 +162,7 @@ async function sheet(page, title, frames) {
                 fresh.forEach((i) => picked.add(i));
             }
             const shown = [...picked].sort((x, y) => x - y);
-            const h = Math.round((tile * 9) / 16);
+            const h = Math.round(tile * aspect);
             document.body.innerHTML = `<div style="padding:10px 12px;font-size:15px">${title}  <span style="opacity:.6">top: you · bottom: them</span></div><div style="display:grid;grid-template-columns:repeat(${across},${tile}px);gap:10px;padding:0 12px 12px">${shown
                 .map(
                     (i) =>
@@ -182,6 +185,7 @@ async function sheet(page, title, frames) {
             most: MOST,
             across: ACROSS,
             tile: TILE,
+            aspect: size.height / size.width,
             different: DIFFERENT,
         },
     );
@@ -195,13 +199,17 @@ try {
     process.exit(2);
 }
 const browser = await launch();
+await warm(browser, base);
 // Each task drives two pages and shoots them as fast as it can: fewer at once.
 const run = workers();
 let failed = false;
 for (const spec of specs) {
     for (const m of spec.moments) {
         await run(async () => {
-            const seats = await Promise.all([moving(browser), moving(browser)]);
+            const seats = await Promise.all([
+                moving(browser, size),
+                moving(browser, size),
+            ]);
             const errors = seats.flatMap((s) => s.errors);
             const dir = join(out, spec.slug);
             const path = join(dir, `${m.name}.png`);

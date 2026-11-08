@@ -10,7 +10,8 @@
 // declarations, which the page makes whole and sends one pick at a time. Animation is
 // measured on Playwright's clock, so the checks do not depend on the machine's speed, nor on
 // how many run at once. The `choice-*` fixtures end on decisions the choice overlays ask. Exits
-// non-zero if a check fails or a page logs an error.
+// non-zero if a check fails or a page logs an error. Filters after the fixtures folder run only
+// the checks whose titles contain one of them, in any case (`just ui-test "drag"`).
 import assert from "node:assert/strict";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
@@ -22,10 +23,15 @@ import {
 import { logLines } from "../src/game/log.ts";
 import { cutText, launch, workers } from "./capture.mjs";
 
-const [base, fixtures] = process.argv.slice(2);
+const [base, fixtures, ...filters] = process.argv.slice(2);
+/** Whether the check `title` runs: every check, or those a filter names. */
+const wanted = (title) =>
+    filters.length === 0 ||
+    filters.some((f) => title.toLowerCase().includes(f.toLowerCase()));
+let ran = 0;
 if (!base || !fixtures) {
     console.error(
-        "usage: node scripts/interactions.mjs <base-url> <fixtures-dir>",
+        "usage: node scripts/interactions.mjs <base-url> <fixtures-dir> [title-filter...]",
     );
     process.exit(2);
 }
@@ -132,6 +138,8 @@ async function check(
         init,
     } = {},
 ) {
+    if (!wanted(title)) return;
+    ran += 1;
     await queue(async () => {
         const context = await browser.newContext({
             viewport,
@@ -6321,6 +6329,10 @@ await check(
 
 await queue.drain();
 await browser.close();
+if (ran === 0) {
+    failed = true;
+    console.error(`no check's title contains ${filters.join(" or ")}`);
+}
 if (errors.length) {
     failed = true;
     console.error(`page errors:\n  ${errors.join("\n  ")}`);

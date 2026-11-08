@@ -2,24 +2,39 @@
 // beside the live game server and Vite, and `by specs --drive` beside the spec server. Usage:
 //   node scripts/drive.mjs <port> <app-url> <out-dir> [width] [height]
 // Each `POST /` body is the body of an async JavaScript function, run in Node with these in
-// scope, whose return value comes back as JSON:
-//   page, context   the Playwright page (opened at <app-url>) and its context
+// scope, whose return value comes back as JSON. Snippets run one at a time, in the order
+// they arrive:
+//   page, context   the Playwright page (opened at <app-url>) and its context; `page` is
+//                   always the current one, so `spec.seat` and `spec.fixture` switch it at once
 //   shot(name)      screenshots the page to <out-dir>/<n>-<name>.png and returns the path
 //   probe           the measuring helpers below (`act`, `compare` and `sweep` first)
 //   errors          the page's errors and console errors so far
 //   spec            spec moments (`by specs --drive`): `open(card, moment, seat)` opens one seat
 //                   in `page`, held; `both(card, moment)` opens yours in `page` and theirs in a
 //                   second page; `play()` plays every open seat at once; `audit()` plays them
-//                   and audits each seat's motion; `seat(name)` makes
+//                   and audits each seat's motion (`audit(action)` a live click's);
+//                   `ordered(patterns)` asserts the order things showed in; `seat(name)` makes
 //                   that seat's page the one `page`, `shot` and `probe` act on; `settled()`
-//                   waits for the page to go quiet. Each returns the page(s) it opened.
-// Restart `by ui-live` to load a change to this file; changes under src/ reload in the page.
-// Motion is not reduced, unlike ui-shots: animation and layout shift are what a player sees.
+//                   waits for the page to go quiet; `fixture(name, at)` opens a ui-test or
+//                   ui-shots fixture; `gestures()` drags each card the viewer holds.
+// The browser is launched again if it goes away. Restart `by ui-live` to load a change to
+// this file (`by specs --drive` restarts the driver itself); changes under src/ reload in
+// the page. Motion is not reduced, unlike ui-shots: animation and layout shift are what a
+// player sees.
 import { createServer } from "node:http";
-import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
+import { execFile } from "node:child_process";
+import { access, mkdir, readFile } from "node:fs/promises";
+import { basename, join } from "node:path";
+import { promisify } from "node:util";
 import { compareSheet, launch } from "./capture.mjs";
-import { audit as auditFrames, collect, record } from "./audit.mjs";
+import {
+    audit as auditFrames,
+    collect,
+    ordered,
+    record,
+    timeline,
+} from "./audit.mjs";
+import { summary } from "./fixture-views.mjs";
 import { openSeat, play, settled } from "./moments.mjs";
 
 const [port, url, out, width = "1600", height = "900"] = process.argv.slice(2);
@@ -36,24 +51,62 @@ process.on("unhandledRejection", (e) =>
     console.error(`drive: unhandled rejection: ${e?.stack ?? e}`),
 );
 
-const browser = await launch();
+let browser = await launch();
 // Playwright closes the browser on a signal, but the server below would keep Node running:
 // exit, so `by ui-live` stopping leaves no driver holding its port.
+let exiting = false;
 for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"]) {
     process.on(signal, () => {
+        exiting = true;
         browser.close().finally(() => process.exit(0));
     });
 }
-const context = await browser.newContext({
-    viewport: { width: Number(width), height: Number(height) },
-});
-// The page `shot` and `probe` act on: a seat's, once `spec.seat` picks it.
-let page = await context.newPage();
-const first = page;
+const size = { width: Number(width), height: Number(height) };
 const errors = [];
-page.on("pageerror", (e) => errors.push(e.message));
-page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
-await page.goto(url);
+const watch = (p, prefix = "") => {
+    p.on("pageerror", (e) => errors.push(`${prefix}${e.message}`));
+    p.on(
+        "console",
+        (m) => m.type() === "error" && errors.push(`${prefix}${m.text()}`),
+    );
+};
+let context;
+// The page `shot` and `probe` act on: a seat's, once `spec.seat` picks it.
+let current;
+let first;
+/** Opens the context and its first page at the app. */
+async function begin() {
+    context = await browser.newContext({ viewport: size });
+    current = first = await context.newPage();
+    watch(first);
+    await first.goto(url);
+}
+await begin();
+// A browser that went away (a crash, the machine under memory pressure) comes back with a
+// fresh page; the snippet after it opens its moments again.
+const relaunch = () => {
+    if (exiting) return;
+    console.error("drive: the browser went away; launching it again");
+    for (const key of Object.keys(seats)) delete seats[key];
+    launch()
+        .then(async (b) => {
+            browser = b;
+            browser.on("disconnected", relaunch);
+            await begin();
+        })
+        .catch((e) => console.error(`drive: relaunching failed: ${e}`));
+};
+browser.on("disconnected", relaunch);
+/** `page` as snippets see it: whichever page is current when they use it. */
+const page = new Proxy(
+    {},
+    {
+        get(_, key) {
+            const value = current[key];
+            return typeof value === "function" ? value.bind(current) : value;
+        },
+    },
+);
 
 let shots = 0;
 const shot = async (name = "shot") => {
@@ -521,13 +574,77 @@ const probe = {
      * click, or `spec.play`): records every frame while it runs and the page settles, then
      * judges each event the page showed meanwhile, as `by specs --motion` does. Returns the
      * findings that are not ok (all of them with `all`). */
-    async audit(action, { all = false } = {}) {
+    async audit(action, { all = false, live = true } = {}) {
         const since = await page.evaluate(() => performance.now());
         await page.evaluate(record);
         await action();
         await settled(page);
-        const findings = auditFrames(await page.evaluate(collect, since));
+        const findings = auditFrames(await page.evaluate(collect, since), {
+            live,
+        });
         return all ? findings : findings.filter((f) => f.verdict !== "ok");
+    },
+
+    /** Drags from `from` (a locator or selector: where its element shows, as a pointer would
+     * find it) to `to` (one too, or a point `{ x, y }`) in `steps` moves, as a player's drag.
+     * Returns how far the element followed the pointer at most, where it ended against where
+     * it began, and the commands the page sent meanwhile. */
+    async drag(from, to, { steps = 12 } = {}) {
+        const source =
+            typeof from === "string" ? page.locator(from).first() : from;
+        const target = typeof to === "string" ? page.locator(to).first() : to;
+        const sent = () =>
+            page.evaluate(() =>
+                (window.berylLive?.log ?? [])
+                    .filter((m) => m.kind === "invoke")
+                    .map((m) => m.command)
+                    .concat(
+                        (window.berylFixture?.calls ?? []).map(
+                            (c) => c.command,
+                        ),
+                    ),
+            );
+        const before = (await sent()).length;
+        const start = await source.boundingBox();
+        const grab = await probe.pointAt(source);
+        if (!start || !grab) throw new Error("nothing to drag shows on screen");
+        const end =
+            "x" in target && "y" in target && !("boundingBox" in target)
+                ? target
+                : await target
+                      .boundingBox()
+                      .then((b) =>
+                          b
+                              ? { x: b.x + b.width / 2, y: b.y + b.height / 2 }
+                              : null,
+                      );
+        if (!end) throw new Error("nowhere to drop shows on screen");
+        await page.mouse.down();
+        let followed = 0;
+        for (let i = 1; i <= steps; i++) {
+            await page.mouse.move(
+                grab.x + ((end.x - grab.x) * i) / steps,
+                grab.y + ((end.y - grab.y) * i) / steps,
+            );
+            const box = await source.boundingBox().catch(() => null);
+            if (box) {
+                followed = Math.max(
+                    followed,
+                    Math.hypot(box.x - start.x, box.y - start.y),
+                );
+            }
+        }
+        await page.mouse.up();
+        await page.waitForTimeout(600);
+        const after = await source.boundingBox().catch(() => null);
+        await page.mouse.move(1, 1);
+        return {
+            followedPx: Math.round(followed),
+            endedPx: after
+                ? Math.round(Math.hypot(after.x - start.x, after.y - start.y))
+                : null,
+            sent: (await sent()).slice(before),
+        };
     },
 
     /** Crops each element (a locator, or a selector) out of the page at its size on screen,
@@ -549,24 +666,50 @@ const probe = {
  * first frame, and `play` starts them together. */
 const base = new URL("/", url).href;
 const seats = {};
+/** Each seat's timeline from the last `spec.audit`, for `spec.ordered`. */
+const timelines = {};
+/** The recorded fixtures `spec.fixture` opens, and the CLI that records them. */
+const recordings = join(out, "fixtures");
+const cli = process.env.BERYL_CLI;
+const definitions = new URL("../fixtures.json", import.meta.url).pathname;
+let fixtureContext;
+
+/** The recorded fixture `name`, recorded once (`beryl_cli record-fixture`). Returns its
+ * folder. */
+async function recorded(name) {
+    const dir = join(recordings, name);
+    const file = join(dir, `${name}.json`);
+    if (
+        await access(file).then(
+            () => true,
+            () => false,
+        )
+    )
+        return dir;
+    if (!cli) throw new Error("no BERYL_CLI to record fixtures with");
+    await mkdir(dir, { recursive: true });
+    await promisify(execFile)(cli, ["record-fixture", definitions, dir, name], {
+        maxBuffer: 1 << 26,
+    });
+    return dir;
+}
+
 const spec = {
     async open(card, moment, seat = "yours") {
         if (!seats[seat]) {
             const p = seat === "yours" ? first : await context.newPage();
-            if (p !== first) {
-                p.on("pageerror", (e) => errors.push(`${seat}: ${e.message}`));
-            }
+            if (p !== first) watch(p, `${seat}: `);
             seats[seat] = { page: p };
         }
         const s = seats[seat];
         s.live = await openSeat(s.page, base, card, moment, seat);
-        page = seats.yours?.page ?? s.page;
+        current = seats.yours?.page ?? s.page;
         return s.page;
     },
     async both(card, moment) {
         const yours = await spec.open(card, moment, "yours");
         const theirs = await spec.open(card, moment, "theirs");
-        page = yours;
+        current = yours;
         return { yours, theirs };
     },
     play() {
@@ -577,60 +720,190 @@ const spec = {
         );
     },
     /** Plays every open seat at once (or runs `action`, a live click, say) and audits
-     * each seat's motion (audit.mjs): the findings that are not ok, by seat. */
-    async audit(action = () => spec.play(), { all = false } = {}) {
+     * each seat's motion (audit.mjs): the findings that are not ok, by seat. An action is the
+     * viewer's own: what it moves before the game answers is audited too (`ui` findings). */
+    async audit(action, { all = false } = {}) {
+        const live = action !== undefined;
         const open = Object.entries(seats);
         const since = await Promise.all(
             open.map(([, s]) => s.page.evaluate(() => performance.now())),
         );
         await Promise.all(open.map(([, s]) => s.page.evaluate(record)));
-        await action();
+        await (action ?? (() => spec.play()))();
         await Promise.all(open.map(([, s]) => settled(s.page)));
         const out = {};
         for (const [i, [name, s]] of open.entries()) {
             const findings = auditFrames(
                 await s.page.evaluate(collect, since[i]),
+                { live },
             );
+            timelines[name] = timeline(findings);
             out[name] = all
                 ? findings
                 : findings.filter((f) => f.verdict !== "ok");
         }
         return out;
     },
+    /** What each seat showed in the last `audit` (or a fresh one, if none), in order: `{ at,
+     * text }` by seat, or one seat's. */
+    async timeline(seat) {
+        if (Object.keys(timelines).length === 0) await spec.audit();
+        return seat ? timelines[seat] : timelines;
+    },
+    /** Whether `seat` (the current one by default) showed what `patterns` match in that
+     * order (audit.mjs's `ordered`: substrings or RegExps, each taking the first entry it
+     * matches), in the last `audit`, or one run now with `action` (default: play every
+     * seat). Returns `ok`, each pattern's match, why not, and the seat's whole timeline. */
+    async ordered(patterns, { seat, action } = {}) {
+        if (action || Object.keys(timelines).length === 0) {
+            await spec.audit(action);
+        }
+        const name =
+            seat ??
+            Object.entries(seats).find(([, s]) => s.page === current)?.[0] ??
+            "yours";
+        const entries = timelines[name];
+        if (!entries) throw new Error(`no audit of the ${name} seat`);
+        return { seat: name, ...ordered(entries, patterns), timeline: entries };
+    },
     seat(name) {
         if (!seats[name]) throw new Error(`no ${name} seat open`);
-        page = seats[name].page;
-        return page;
+        current = seats[name].page;
+        return current;
     },
-    settled(p = page) {
+    settled(p = current) {
         return settled(p);
     },
+    /** Opens fixture `name` (ui/fixtures.json, as ui-test and ui-shots do) at its view `at`
+     * (all of them if none) in a page of its own, which becomes `page`: recorded on first use.
+     * `clock` installs Playwright's clock, as ui-test does, so `page.clock.runFor` paces it;
+     * `viewport` sizes it (`{ width, height }`); it is open once `ready` shows. */
+    async fixture(
+        name,
+        at,
+        {
+            clock = false,
+            viewport = size,
+            ready = "[data-life]",
+            hash = "#/game",
+        } = {},
+    ) {
+        const dir = await recorded(name);
+        await fixtureContext?.close();
+        fixtureContext = await browser.newContext({
+            viewport,
+            deviceScaleFactor: 1,
+        });
+        await fixtureContext.route("**/fixtures/*.json", (route) =>
+            route.fulfill({
+                path: join(
+                    dir,
+                    decodeURIComponent(
+                        basename(new URL(route.request().url()).pathname),
+                    ),
+                ),
+            }),
+        );
+        const p = await fixtureContext.newPage();
+        watch(p, `${name}: `);
+        if (clock) await p.clock.install();
+        const query = at === undefined ? "" : `&at=${at}`;
+        await p.goto(new URL(`/?fixture=${name}${query}${hash}`, base).href);
+        await p.waitForSelector(ready);
+        seats.fixture = { page: p };
+        current = p;
+        return p;
+    },
+    /** Fixture `name`'s views, each with its index for `at`, its turn and step, what it
+     * asks and what happened in it (fixture-views.mjs). */
+    async fixtureViews(name) {
+        const dir = await recorded(name);
+        return summary(
+            JSON.parse(await readFile(join(dir, `${name}.json`), "utf8")),
+        );
+    },
+    /** Drags each card the viewer holds as a player might: each of their permanents (at most
+     * `most`) a short way up, which must not move it or send a command (a permanent never
+     * drags: a click uses it), and each playable card in their hand to the table's middle,
+     * which plays it. Reports each drag, and `faults`: the drags that went wrong. Leaves the
+     * game where the last drag left it, so open the moment again after. */
+    async gestures({ most = 6 } = {}) {
+        const drags = [];
+        const permanents = page.locator(".card-el-you[data-zone=battlefield]");
+        const n = Math.min(most, await permanents.count());
+        for (let i = 0; i < n; i++) {
+            const card = permanents.nth(i);
+            const name = await card.getAttribute("data-card");
+            const box = await card.boundingBox();
+            if (!box) continue;
+            const r = await probe.drag(card, {
+                x: box.x + box.width / 2,
+                y: Math.max(10, box.y - 120),
+            });
+            drags.push({
+                card: name,
+                zone: "battlefield",
+                ...r,
+                fault:
+                    r.followedPx > 30 || r.sent.includes("choose")
+                        ? "a permanent moved with the pointer or acted on a drag"
+                        : undefined,
+            });
+        }
+        const playable = page.locator(
+            ".card-el-you.card-el-playable[data-zone=hand]",
+        );
+        if ((await playable.count()) > 0) {
+            const card = playable.first();
+            const name = await card.getAttribute("data-card");
+            const r = await probe.drag(card, {
+                x: size.width / 2,
+                y: size.height * 0.45,
+            });
+            drags.push({
+                card: name,
+                zone: "hand",
+                ...r,
+                fault:
+                    r.followedPx < 30
+                        ? "a playable hand card did not follow the pointer"
+                        : undefined,
+            });
+        }
+        return { drags, faults: drags.filter((d) => d.fault) };
+    },
 };
+
+/** Snippets run one at a time: two at once would act on the same page. */
+let queue = Promise.resolve();
 
 createServer((request, response) => {
     let body = "";
     request.on("data", (chunk) => (body += chunk));
-    request.on("end", async () => {
-        let answer;
-        try {
-            const run = new (Object.getPrototypeOf(async () => {}).constructor)(
-                "page",
-                "context",
-                "shot",
-                "probe",
-                "errors",
-                "spec",
-                body,
-            );
-            answer = {
-                ok: await run(page, context, shot, probe, errors, spec),
-            };
-        } catch (e) {
-            answer = { error: String(e?.stack ?? e) };
-        }
-        response.writeHead(200, { "Content-Type": "application/json" });
-        response.end(JSON.stringify(answer, null, 1) + "\n");
+    request.on("end", () => {
+        queue = queue.then(() => answer(body, response));
     });
 }).listen(Number(port), "127.0.0.1", () =>
     console.log(`drive: http://127.0.0.1:${port}/ driving ${url}`),
 );
+
+/** Runs one snippet and answers its request. */
+async function answer(body, response) {
+    let result;
+    try {
+        const run = new (Object.getPrototypeOf(async () => {}).constructor)(
+            "page",
+            "context",
+            "shot",
+            "probe",
+            "errors",
+            "spec",
+            body,
+        );
+        result = { ok: await run(page, context, shot, probe, errors, spec) };
+    } catch (e) {
+        result = { error: String(e?.stack ?? e) };
+    }
+    response.writeHead(200, { "Content-Type": "application/json" });
+    response.end(JSON.stringify(result, null, 1) + "\n");
+}

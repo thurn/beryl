@@ -680,24 +680,37 @@ fn playable(scenario: &Scenario) -> Vec<Action> {
 }
 
 /// The scenario on a table that looks like a game: life off 20, graveyards, and the
-/// opponent's lands and hand, where it has none of its own, and lands under each library so
-/// that the game goes on after its actions. Each part is kept only if the scenario still
-/// passes, its assertions and its scripted decisions alike, so nothing added changes it: the
-/// libraries are tried alone if the whole fails.
-fn dressed(scenario: &Scenario) -> Scenario {
+/// opponent's lands and hand, where it has none of its own, lands under each library so that
+/// the game goes on after its actions, and a twin of the card in the human's hand where it
+/// starts there, so that some moment of every card in hand holds two cards just alike (which
+/// the UI must keep apart: which one moves, which one is offered). Each part is kept only if
+/// the scenario still passes, its assertions and its scripted decisions alike, so nothing
+/// added changes it: the table without the twin, then the libraries, are tried alone if the
+/// whole fails.
+fn dressed(def: &'static CardDef, scenario: &Scenario) -> Scenario {
     let passes = |d: &Scenario| {
         let checked = d.actions(leak(d.actions.iter().map(deeper).collect()));
         beryl_scenario::run(&beryl_cards::CARDS, &checked).is_ok()
     };
     let deep = with_libraries(scenario);
     let full = with_table(&deep);
-    if passes(&full) {
+    let twinned = with_twin(def, &full);
+    if twinned.is_some_and(|t| passes(&t)) {
+        twinned.unwrap_or(full)
+    } else if passes(&full) {
         full
     } else if passes(&deep) {
         deep
     } else {
         *scenario
     }
+}
+
+/// `scenario` with a second copy of `def` in the human's hand, if one starts there.
+fn with_twin(def: &'static CardDef, scenario: &Scenario) -> Option<Scenario> {
+    let hand = scenario.setup.players[P0.index()].hand;
+    hand.contains(&def.name)
+        .then(|| scenario.hand(P0, leak([hand, &[def.name]].concat())))
 }
 
 /// An assertion counting a whole library, counting the lands [`with_libraries`] adds too.
@@ -804,7 +817,7 @@ fn flipped(action: &Action) -> Option<(Action, &'static str)> {
 }
 
 fn from_scenario(def: &'static CardDef, scenario: &Scenario, out: &mut Vec<Candidate>) {
-    let board = dressed(scenario);
+    let board = dressed(def, scenario);
     let group = heading(def, scenario);
     let actions = playable(scenario);
     let card = slug(def.name);

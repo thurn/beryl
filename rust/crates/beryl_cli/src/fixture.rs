@@ -939,7 +939,11 @@ fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
             return Ok(messages);
         }
         if ended {
-            return Err(format!("the game ended before {:?}", def.until));
+            let why = boards::lock(&progress).stalled();
+            return Err(match why {
+                Some(why) => format!("the game ended before {:?}, with {why}", def.until),
+                None => format!("the game ended before {:?}", def.until),
+            });
         }
         if deciding {
             // The stand-in answered; the UI's `choose` would have returned nothing.

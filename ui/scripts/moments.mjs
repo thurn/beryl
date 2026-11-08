@@ -10,9 +10,39 @@ export const QUIET = 1500;
 export const LAST_VIEW = 1200;
 export const LONGEST = 30000;
 
+/** How many times a request or a seat's opening is tried, and the wait before the first
+ * retry, doubled each time: a loaded machine, or a spec server restarting after a rebuild,
+ * answers late or with a proxy's 502. */
+const TRIES = 4;
+const BACKOFF = 1000;
+
+/** Runs `attempt` until it resolves, up to TRIES times, waiting between tries; rethrows the
+ * last failure. */
+export async function retried(attempt, tries = TRIES) {
+    for (let n = 1; ; n++) {
+        try {
+            return await attempt(n);
+        } catch (e) {
+            if (n >= tries) throw e;
+            await new Promise((r) => setTimeout(r, BACKOFF * 2 ** (n - 1)));
+        }
+    }
+}
+
+/** `fetch`, retried on a network error or a 5xx answer. */
+export function request(url, init) {
+    return retried(async () => {
+        const response = await fetch(url, init);
+        if (response.status >= 500) {
+            throw new Error(`${url} answered HTTP ${response.status}`);
+        }
+        return response;
+    });
+}
+
 /** The spec server's listing: each card's slug and its moments. */
 export async function listing(base) {
-    const response = await fetch(new URL("spec-api/specs", base));
+    const response = await request(new URL("spec-api/specs", base));
     if (!response.ok) {
         throw new Error(`the spec server answered HTTP ${response.status}`);
     }
@@ -37,20 +67,57 @@ export async function chosen(base, slugs, moment) {
     return specs;
 }
 
-/** Opens a moment's seat in `page`, held, and waits until its first view shows. Returns the
- * page's live game URL on the spec server, which `play` posts to. */
+/** Opens a moment's seat in `page`, held, and waits until its first view shows, retried (a
+ * fresh game each try). Returns the page's live game URL on the spec server, which `play`
+ * posts to. */
 export async function openSeat(page, base, slug, moment, seat) {
-    await page.goto(new URL(`specs/${slug}/${moment}/${seat}?hold`, base).href);
-    await page.waitForURL(/[?&]live=/, { timeout: LONGEST });
-    await page.waitForSelector("[data-life]", { timeout: LONGEST });
-    return new URL(page.url()).searchParams.get("live");
+    return retried(async (n) => {
+        await page.goto(
+            new URL(`specs/${slug}/${moment}/${seat}?hold`, base).href,
+        );
+        // A cold Vite compiles the whole app for the first page: its first try waits longer.
+        const timeout = n === 1 ? 2 * LONGEST : LONGEST;
+        await page.waitForURL(/[?&]live=/, { timeout });
+        await page.waitForSelector("[data-life]", { timeout });
+        return new URL(page.url()).searchParams.get("live");
+    }, 3);
 }
 
 /** Plays out what each live game holds, all at once. */
 export async function play(...lives) {
     await Promise.all(
-        lives.map((live) => fetch(`${live}/play`, { method: "POST" })),
+        lives.map((live) => request(`${live}/play`, { method: "POST" })),
     );
+}
+
+/** Warms the UI's dev server: loads the app once, so the first moment's page does not wait for
+ * Vite to compile it under a seat's timeout. */
+export async function warm(browser, base) {
+    const context = await browser.newContext();
+    try {
+        const page = await context.newPage();
+        await retried(() =>
+            page.goto(base, { waitUntil: "load", timeout: 4 * LONGEST }),
+        );
+    } finally {
+        await context.close();
+    }
+}
+
+/** A viewport from "WxH" ("1180x820"), or the default. */
+export function viewport(text) {
+    if (!text) return { width: 1600, height: 900 };
+    const m = /^(\d+)x(\d+)$/.exec(text);
+    if (!m) throw new Error(`a viewport is WxH, as 1180x820, not ${text}`);
+    return { width: Number(m[1]), height: Number(m[2]) };
+}
+
+/** Takes `--name value` out of `args`, returning the value (undefined if absent), and
+ * `--name` alone as true with `flag`. */
+export function option(args, name, flag = false) {
+    const at = args.indexOf(name);
+    if (at < 0) return flag ? false : undefined;
+    return flag ? Boolean(args.splice(at, 1)) : args.splice(at, 2)[1];
 }
 
 /** Waits until `page` has heard no view for `QUIET` ms and queues none, then `LAST_VIEW` more

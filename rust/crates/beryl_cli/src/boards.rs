@@ -4,6 +4,7 @@
 //! same game however the agents are tuned or the decks change.
 
 use std::collections::VecDeque;
+use std::fmt::Write as _;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use beryl_cards::names::{
@@ -1277,6 +1278,10 @@ pub struct Progress {
     pub failure: Option<String>,
     /// Each seat's next action, while any is left.
     pub next: [Option<Action>; 2],
+    /// The last decision a seat's next action was due at and of the kind of, but fit no
+    /// candidate of (a scripted target that resolves to none offered): why a script that
+    /// never finishes stalled.
+    pub missed: Option<String>,
     /// How many actions the two scripts have taken.
     pub taken: usize,
     /// A turn the scripts hold out for after their last action (a trailing
@@ -1290,6 +1295,20 @@ impl Progress {
     /// they hold out for.
     pub fn done(&self) -> bool {
         self.next.iter().all(Option::is_none) && self.until.is_none_or(|t| self.turn >= t)
+    }
+
+    /// Why the scripts have not finished, if they have not: the actions still waiting, and
+    /// the last decision one was due at that it fit no candidate of.
+    pub fn stalled(&self) -> Option<String> {
+        let waiting: Vec<&Action> = self.next.iter().flatten().collect();
+        if waiting.is_empty() {
+            return None;
+        }
+        let mut why = format!("the scripts waiting on {waiting:?}");
+        if let Some(missed) = &self.missed {
+            let _ = write!(why, "; {missed}");
+        }
+        Some(why)
     }
 }
 
@@ -1459,11 +1478,15 @@ impl<L: Layout> Agent<L> for Scripted {
                 Action::Answer { kind, .. } => kind,
                 _ => DecisionKind::Priority,
             };
-            if kind == d.kind
-                && let Some(c) = beryl_scenario::answer(&self.table, s, d, &action)
-            {
-                self.take();
-                return c;
+            if kind == d.kind {
+                if let Some(c) = beryl_scenario::answer(&self.table, s, d, &action) {
+                    self.take();
+                    return c;
+                }
+                lock(&self.progress).missed = Some(format!(
+                    "{action:?} fit no candidate of {}",
+                    beryl_scenario::describe(&self.table, s, d),
+                ));
             }
         }
         if d.kind == DecisionKind::Priority

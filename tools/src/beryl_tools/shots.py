@@ -154,7 +154,25 @@ def served_ui(
                 server.kill()
 
 
+def fixture_views(name: str) -> int:
+    """Prints fixture `name`'s views, each with the index `&at=` takes, recorded into the
+    cache for the purpose (ui/scripts/fixture-views.mjs)."""
+    into = paths.cache_root() / "ui-views" / paths.REPO.name / name
+    code = record_fixtures(into, [name])
+    if code != 0:
+        print(f"ui-shots: recording {name} failed", file=sys.stderr)
+        return code
+    return subprocess.run(
+        ["node", "scripts/fixture-views.mjs", str(into / f"{name}.json")],
+        cwd=paths.UI,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    ).returncode
+
+
 def ui_shots(args: argparse.Namespace) -> int:
+    if args.views:
+        return fixture_views(args.views)
     out = out_dir()
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True)
@@ -239,7 +257,8 @@ def ui_test(args: argparse.Namespace) -> int:
         if code == 0:
             with served_ui(env) as url:
                 code = subprocess.run(
-                    ["node", "scripts/interactions.mjs", url, str(recorded)],
+                    ["node", "scripts/interactions.mjs", url, str(recorded)]
+                    + list(args.only),
                     cwd=paths.UI,
                     env=env,
                     stdin=subprocess.DEVNULL,
@@ -325,9 +344,19 @@ def ui_live(args: argparse.Namespace) -> int:
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser("ui-shots", help="screenshot UI states headless (ui/shots.json)")
     p.add_argument("only", nargs="*", help="shot names; all of them by default")
+    p.add_argument(
+        "--views",
+        metavar="FIXTURE",
+        help="list a fixture's views with the index each route's &at= takes",
+    )
     p.set_defaults(func=ui_shots)
     p = sub.add_parser(
         "ui-test", help="play the game screen headless through a fixture"
+    )
+    p.add_argument(
+        "only",
+        nargs="*",
+        help="run only the checks whose titles contain one of these (any case)",
     )
     p.set_defaults(func=ui_test)
     p = sub.add_parser(

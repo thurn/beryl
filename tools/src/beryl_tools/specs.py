@@ -6,26 +6,35 @@ runs `beryl_cli specs-serve` and serves the UI with Vite, which proxies the spec
 - no flag: serves the pages for a human and prints their URLs until interrupted;
 - `--check`: lists every generated moment and the candidates generation skipped;
 - `--describe <card> [--moment M]`: what each moment shows from each seat, as text;
+- `--views <card> [--moment M]`: each view shown from each seat, its events, stack and zones;
 - `--film`: one sheet per moment of its playout from both seats (ui/scripts/film.mjs);
 - `--motion`: audits that every event animates clearly for both seats (ui/scripts/motion.mjs);
 - `--shots`: a settled screenshot of every moment from both seats (ui/scripts/specs.mjs);
-- `--drive`: a headless page an agent posts Playwright snippets to (ui/scripts/drive.mjs).
+- `--drive`: a headless page an agent posts Playwright snippets to (ui/scripts/drive.mjs),
+  restarted with the spec server rebuilt when Rust changes, and itself when its scripts do.
 
+Cards are named by slug or by name ("Teferi, Time Raveler"); a card with no spec gets the
+specced cards nearest it in rules text. Each card's film and shots replace only that card's.
 `--release` builds `beryl_cli` optimized and serves the UI's production build.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import re
 import shutil
 import signal
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
-from . import paths, warm
+from . import cards, paths, warm
 from .shots import (
     NPM_BIN,
     UiError,
@@ -71,17 +80,122 @@ def build_ui() -> bool:
     return built.returncode == 0
 
 
+def slug(name: str) -> str:
+    """A card name in a URL, as `beryl_cli`'s `specs::slug` makes it: `currency-converter`."""
+    out = ""
+    for c in name:
+        if c.isascii() and c.isalnum():
+            out += c.lower()
+        elif c in " -" and out and not out.endswith("-"):
+            out += "-"
+    return out.rstrip("-")
+
+
+CARD_SOURCES: Path = paths.RUST / "crates" / "beryl_cards" / "src"
+
+
+def implemented() -> set[str]:
+    """The slugs of the implemented cards: each card's file under beryl_cards, by its name."""
+    return {
+        f.stem.replace("_", "-")
+        for f in CARD_SOURCES.glob("*/*.rs")
+        if f.stem not in ("mod", "beryl_scenario")
+    }
+
+
+WORD: re.Pattern[str] = re.compile(r"[a-z+\-/{}0-9]+")
+COMMON: frozenset[str] = frozenset(
+    "a an the of to and or it its this that you your each target card cards from".split()
+)
+
+
+def words(text: str, name: str) -> set[str]:
+    """A rules text's words and word pairs, less its card's name and the commonest words:
+    what two cards' mechanics share."""
+    text = text.lower().replace(name.lower(), "~")
+    found = [w for w in WORD.findall(text) if w not in COMMON]
+    return set(found) | {f"{a} {b}" for a, b in zip(found, found[1:])}
+
+
+def oracle(name: str) -> str | None:
+    """A card's rules text: data/cards.json's, else Scryfall's; None offline or unknown."""
+    data = json.loads(cards.OUTPUT.read_text())
+    for card in data["cards"]:
+        if slug(card["name"]) == slug(name):
+            return "\n".join(f.get("oracle_text", "") for f in card["faces"])
+    url = "https://api.scryfall.com/cards/named?fuzzy=" + urllib.parse.quote(name)
+    try:
+        found = cards.http_get(url)
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+    faces = found.get("card_faces")
+    if isinstance(faces, list):
+        return "\n".join(str(f.get("oracle_text", "")) for f in faces)
+    return str(found.get("oracle_text", ""))
+
+
+def nearest(name: str, specced: set[str], most: int = 5) -> list[str]:
+    """The specced cards whose rules text shares most with `name`'s, nearest first."""
+    text = oracle(name)
+    if text is None:
+        return []
+    mine = words(text, name)
+    data = json.loads(cards.OUTPUT.read_text())
+    scored: list[tuple[float, str]] = []
+    for card in data["cards"]:
+        if slug(card["name"]) not in specced or slug(card["name"]) == slug(name):
+            continue
+        theirs = words(
+            "\n".join(f.get("oracle_text", "") for f in card["faces"]), card["name"]
+        )
+        shared = len(mine & theirs) / max(1, len(mine | theirs))
+        if shared > 0:
+            scored.append((shared, card["name"]))
+    return [n for _, n in sorted(scored, reverse=True)[:most]]
+
+
+def resolve(names: list[str]) -> list[str] | None:
+    """The slugs of `names` (slugs or card names); None, having said which have no spec and
+    the specced cards nearest each in rules text, if any has none."""
+    specced = implemented()
+    slugs = [slug(n) for n in names]
+    unknown = [n for n, s in zip(names, slugs) if s not in specced]
+    for n in unknown:
+        near = nearest(n, specced)
+        hint = f"; nearest specced: {', '.join(near)}" if near else ""
+        print(f"specs: no spec for {n}{hint}", file=sys.stderr)
+    return None if unknown else slugs
+
+
 def moment_args(args: argparse.Namespace) -> list[str]:
     return ["--moment", args.moment] if args.moment else []
 
 
+def fresh(kind: str, slugs: list[str]) -> Path:
+    """This checkout's output of `kind`, emptied of `slugs`' (of everything, if none): each
+    card's output replaces only its own."""
+    out = out_dir(kind)
+    if not slugs:
+        shutil.rmtree(out, ignore_errors=True)
+    for s in slugs:
+        shutil.rmtree(out / s, ignore_errors=True)
+    out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
 def capture(args: argparse.Namespace, url: str, env: dict[str, str]) -> int:
     """Runs the capture script the flags ask for against the served UI at `url`."""
+    size = ["--viewport", args.viewport] if args.viewport else []
     if args.film:
-        out = out_dir("film")
-        shutil.rmtree(out, ignore_errors=True)
-        out.mkdir(parents=True)
-        command = ["scripts/film.mjs", url, str(out), *args.cards, *moment_args(args)]
+        out = fresh("film", args.cards)
+        command = [
+            "scripts/film.mjs",
+            url,
+            str(out),
+            *args.cards,
+            *moment_args(args),
+            *size,
+        ]
     elif args.motion:
         out = out_dir("motion")
         out.mkdir(parents=True, exist_ok=True)
@@ -92,12 +206,21 @@ def capture(args: argparse.Namespace, url: str, env: dict[str, str]) -> int:
             str(report),
             *args.cards,
             *moment_args(args),
+            *size,
+            *(["--minor"] if args.minor else []),
         ]
     else:
-        out = out_dir("shots")
-        shutil.rmtree(out, ignore_errors=True)
-        out.mkdir(parents=True)
-        command = ["scripts/specs.mjs", url, str(out), *args.cards]
+        out = fresh("shots", args.cards)
+        command = [
+            "scripts/specs.mjs",
+            url,
+            str(out),
+            *args.cards,
+            *moment_args(args),
+            *size,
+            *(["--select", args.select] if args.select else []),
+            *(["--crop", args.crop] if args.crop else []),
+        ]
     return subprocess.run(
         ["node", *command],
         cwd=paths.UI,
@@ -107,33 +230,109 @@ def capture(args: argparse.Namespace, url: str, env: dict[str, str]) -> int:
     ).returncode
 
 
-def drive(args: argparse.Namespace, url: str, env: dict[str, str]) -> int:
-    """Runs the driver at the spec pages until it or the server exits."""
-    out = out_dir("drive") / time.strftime("%Y%m%d-%H%M%S")
-    out.mkdir(parents=True)
-    port = args.drive_port or free_port()
-    driver = subprocess.Popen(
-        ["node", "scripts/drive.mjs", str(port), f"{url}specs", str(out)],
-        cwd=paths.UI,
-        env=env,
+def serve_specs(binary: Path, port: int) -> subprocess.Popen[bytes]:
+    """Starts `beryl_cli specs-serve` on `port`."""
+    return subprocess.Popen(
+        [str(binary), "specs-serve", "--port", str(port)],
         stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
     )
-    try:
-        address = f"http://127.0.0.1:{port}/"
+
+
+def warm_specs(port: int) -> None:
+    """Asks the spec server for its listing, which generates every spec, so the first page
+    after a start does not wait on it."""
+    deadline = time.monotonic() + 600
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/specs", timeout=600):
+                return
+        except (urllib.error.URLError, OSError):
+            time.sleep(0.5)
+
+
+def newest(root: Path, suffix: str) -> float:
+    """The latest modification time of the files under `root` ending in `suffix`."""
+    latest = 0.0
+    for folder, subfolders, files in os.walk(root):
+        subfolders[:] = [d for d in subfolders if d not in ("target", "node_modules")]
+        for name in files:
+            if name.endswith(suffix):
+                try:
+                    latest = max(latest, os.stat(os.path.join(folder, name)).st_mtime)
+                except OSError:
+                    pass
+    return latest
+
+
+def drive(
+    args: argparse.Namespace,
+    url: str,
+    env: dict[str, str],
+    servers: list[subprocess.Popen[bytes]],
+    spec_port: int,
+) -> int:
+    """Runs the driver at the spec pages until interrupted. A change to the Rust sources
+    rebuilds beryl_cli and restarts the spec server on its port (the driver's next `open` gets
+    the new game); a change to ui/scripts restarts the driver on its port; either exiting is
+    started again."""
+    out: Path = out_dir("drive") / f"{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}"
+    out.mkdir(parents=True)
+    port: int = args.drive_port or free_port()
+    address: str = f"http://127.0.0.1:{port}/"
+    crates = paths.RUST / "crates"
+    scripts = paths.UI / "scripts"
+
+    def start_driver() -> subprocess.Popen[bytes]:
+        driver = subprocess.Popen(
+            ["node", "scripts/drive.mjs", str(port), f"{url}specs", str(out)],
+            cwd=paths.UI,
+            env=env,
+            stdin=subprocess.DEVNULL,
+        )
         if not wait_for_server(address, driver):
             raise UiError(f"the driver did not answer at {address}")
-        print(f"specs: pages {url}specs", flush=True)
-        print(f"specs: drive {address} (POST a Playwright snippet)", flush=True)
-        print(f"specs: screenshots {out}", flush=True)
-        while driver.poll() is None:
-            time.sleep(0.5)
-        raise UiError("the driver exited")
+        return driver
+
+    driver = start_driver()
+    print(f"specs: pages {url}specs", flush=True)
+    print(f"specs: drive {address} (POST a Playwright snippet)", flush=True)
+    print(f"specs: screenshots {out}", flush=True)
+    rust, js = newest(crates, ".rs"), newest(scripts, ".mjs")
+    try:
+        while True:
+            time.sleep(2)
+            changed = newest(crates, ".rs")
+            if changed > rust or servers[-1].poll() is not None:
+                rust = changed
+                print("specs: rebuilding beryl_cli for a Rust change", flush=True)
+                binary = build(args.release)
+                if binary is None:
+                    print("specs: keeping the old spec server", flush=True)
+                    continue
+                servers[-1].terminate()
+                servers[-1].wait()
+                servers.append(serve_specs(binary, spec_port))
+                warm_specs(spec_port)
+                print("specs: spec server restarted; open moments again", flush=True)
+            changed = newest(scripts, ".mjs")
+            if changed > js or driver.poll() is not None:
+                js = changed
+                driver.terminate()
+                driver.wait()
+                driver = start_driver()
+                print("specs: driver restarted; open moments again", flush=True)
     finally:
         driver.terminate()
+    return 0
 
 
 def specs(args: argparse.Namespace) -> int:
     warm.ensure()
+    resolved = resolve(args.cards)
+    if resolved is None:
+        return 2
+    args.cards = resolved
     binary = build(args.release)
     if binary is None:
         return 1
@@ -143,13 +342,14 @@ def specs(args: argparse.Namespace) -> int:
             stdin=subprocess.DEVNULL,
             check=False,
         ).returncode
-    if args.describe:
+    if args.describe or args.views:
         if len(args.cards) != 1:
-            print("specs: --describe takes one card", file=sys.stderr)
+            print("specs: --describe and --views take one card", file=sys.stderr)
             return 2
         moment = [args.moment] if args.moment else []
+        views = ["--views"] if args.views else []
         return subprocess.run(
-            [str(binary), "specs-describe", args.cards[0], *moment],
+            [str(binary), "specs-describe", *views, args.cards[0], *moment],
             stdin=subprocess.DEVNULL,
             check=False,
         ).returncode
@@ -160,20 +360,20 @@ def specs(args: argparse.Namespace) -> int:
     if args.release and not build_ui():
         return 1
     spec_port = free_port()
-    server = subprocess.Popen(
-        [str(binary), "specs-serve", "--port", str(spec_port)],
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-    )
+    servers = [serve_specs(binary, spec_port)]
     # A plain SIGTERM would end Python without the cleanup below, orphaning the server.
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     try:
         if capturing or args.drive:
-            env = {**webkit_env(), "BERYL_SPECS_PORT": str(spec_port)}
+            env = {
+                **webkit_env(),
+                "BERYL_SPECS_PORT": str(spec_port),
+                "BERYL_CLI": str(binary),
+            }
             port = None if capturing else args.port or None
             with served_ui(env, port, preview=args.release) as url:
                 if args.drive:
-                    return drive(args, url, env)
+                    return drive(args, url, env, servers, spec_port)
                 return capture(args, url, env)
         env = {**os.environ, "BERYL_SPECS_PORT": str(spec_port)}
         with served_ui(env, args.port or None, preview=args.release) as url:
@@ -181,14 +381,14 @@ def specs(args: argparse.Namespace) -> int:
             print(f"specs: {base}specs", flush=True)
             for card in args.cards:
                 print(f"specs: {base}specs/{card}", flush=True)
-            while server.poll() is None:
+            while servers[-1].poll() is None:
                 time.sleep(0.5)
             raise UiError("the spec server exited")
     except UiError as e:
         print(f"specs: {e}", file=sys.stderr)
         return 1
     finally:
-        server.terminate()
+        servers[-1].terminate()
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -196,7 +396,11 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         "specs",
         help="card specs: serve, describe, film, audit motion or drive each moment",
     )
-    p.add_argument("cards", nargs="*", help="card slugs, e.g. currency-converter")
+    p.add_argument(
+        "cards",
+        nargs="*",
+        help="card slugs or names, e.g. currency-converter or 'Teferi, Time Raveler'",
+    )
     p.add_argument("--moment", help="only this moment, by its name")
     p.add_argument(
         "--port", type=int, default=1430, help="the pages' port (0: any free one)"
@@ -207,6 +411,11 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     )
     mode.add_argument(
         "--describe", action="store_true", help="each moment from each seat, as text"
+    )
+    mode.add_argument(
+        "--views",
+        action="store_true",
+        help="each view shown from each seat: its events, stack and zones",
     )
     mode.add_argument(
         "--film", action="store_true", help="a sheet of each moment's playout"
@@ -224,6 +433,19 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     )
     p.add_argument(
         "--drive-port", type=int, default=0, help="the driver's port (default: any)"
+    )
+    p.add_argument(
+        "--viewport", help="the pages' size for --shots, --film, --motion: 1180x820"
+    )
+    p.add_argument(
+        "--select",
+        help="--shots: only the seats where this selector shows, e.g. .prompt",
+    )
+    p.add_argument(
+        "--crop", help="--shots: only this selector's element, or a region X,Y,W,H"
+    )
+    p.add_argument(
+        "--minor", action="store_true", help="--motion: print minor findings too"
     )
     p.add_argument(
         "--release",
