@@ -129,7 +129,7 @@
 
 .specs-toc-them {
   display: block;
-  margin-top: 16px;
+  margin-top: 24px;
   color: var(--text-dim);
   font-size: 12px;
   font-weight: 600;
@@ -258,12 +258,24 @@
 
 /* Which seat a moment is seen from, after its title. */
 .specs-seat {
-  margin-left: 12px;
-  font-size: 13px;
-  font-weight: 600;
+  display: inline-block;
+  margin-right: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  vertical-align: 4px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  opacity: 0.6;
+  color: var(--text-dim);
+  border: 1px solid var(--text-faint);
+}
+
+.specs-seat-theirs {
+  color: var(--surface);
+  background: var(--cyan);
+  border-color: var(--cyan);
 }
 
 /* One moment (`/specs/<card>/<moment>`): its two seats side by side. */

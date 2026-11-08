@@ -76,6 +76,21 @@ Beryl should feel seamless. Judge every flow by these principles:
 - **Few words.** On-screen text is a cost. Where an icon, a highlight or the
   board itself can say it, words are noise. Flag text that could be half as
   long.
+- **The opponent's cards read as clearly as yours.** Every spell, ability,
+  draw, discard, mill, search and counter the opponent makes is shown to the
+  player as plainly as their own: the card or ability comes up large enough to
+  read, and each card it moves travels visibly to where it goes.
+- **Everything appears with animation.** Nothing pops in or blinks out: cards,
+  choices, prompts and counters arrive from where they come from (a mode
+  option out of its card, a drawn card out of the library) and leave toward
+  where they go.
+- **Picking how to play a card is picking a card.** Modes, alternate costs
+  (evoke, overload), cycling and ability choices appear as full-size cards
+  with art in the middle of the screen, out of the source card, never as a
+  text prompt.
+- **One button system, bottom right.** Every action button shares one design
+  and sits in the bottom-right corner, with Resolve. No buttons in the middle
+  of the screen.
 
 A flow that works but breaks one of these principles is a finding. It is Major
 when it affects something players do every turn, and Design otherwise.

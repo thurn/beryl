@@ -5,7 +5,7 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Card } from "../components/Card";
-import type { ObjectView, PlayerView, Side } from "../generated/protocol";
+import type { ObjectView, PlayerView } from "../generated/protocol";
 import { useFace } from "./faces";
 import { STEP_NAMES } from "./layout";
 import type { LogEntry } from "./log";
@@ -99,11 +99,9 @@ export const GameLog = memo(function GameLog({
   );
 });
 
-/** A spell that left the stack in the view on screen, and how. */
+/** A spell that left the stack in the view on screen. */
 interface Announced {
   object: ObjectView;
-  /** Who cast it, when its casting is in the same view: the stack's diamond in their color. */
-  caster?: Side;
 }
 
 /** The spells `view`'s events took off the stack into a graveyard or exile as they resolved,
@@ -112,11 +110,6 @@ interface Announced {
  * goes (CardLayer). */
 export function announced(view: PlayerView): Announced[] {
   const objects = new Map(view.objects.map((o) => [o.slot, o]));
-  const cast = new Map(
-    view.events.flatMap((e) =>
-      e.kind === "cast" ? [[e.slot, e.controller] as const] : [],
-    ),
-  );
   const out: Announced[] = [];
   for (const e of view.events) {
     if (
@@ -129,10 +122,7 @@ export function announced(view: PlayerView): Announced[] {
     }
     const object = objects.get(e.slot);
     if (!object?.name) continue;
-    out.push({
-      object,
-      caster: cast.get(e.slot),
-    });
+    out.push({ object });
   }
   return out.slice(-3);
 }
@@ -171,18 +161,12 @@ export function Announcements({ view }: { view: PlayerView }) {
   );
 }
 
-/** An announced spell, wordless: its caster's diamond as on the stack. */
+/** An announced spell, wordless. */
 function AnnouncedCard({ item }: { item: Announced }) {
   const face = useFace(item.object);
   return (
     <figure className="announced" data-card={item.object.name}>
       <Card card={face} width={196} />
-      {item.caster && (
-        <span
-          className={`stack-controller stack-controller-${item.caster}`}
-          aria-hidden
-        />
-      )}
     </figure>
   );
 }

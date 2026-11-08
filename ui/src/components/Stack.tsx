@@ -93,8 +93,9 @@ const PAID: Record<PaidCost, string> = {
   flashback: "Flashback",
 };
 
-/** What a stack item's frame cannot say, on its edges: whose it is, as a diamond in that
- * player's colour (the game log's), the X it was announced with, spell or ability alike, and
+/** What a stack item's frame cannot say, on its edges: whose it is, named for assistive
+ * technology only (a corner mark in each player's colour said nothing a player could read), the
+ * X it was announced with, spell or ability alike, and
  * the alternative or additional costs a spell was cast with, as Arena tags them, since its
  * printed text does not say what they change (an overloaded spell targets nothing). An X of 0
  * goes unmarked, as for an item without X. */
@@ -253,7 +254,7 @@ export function Arrows({
           from: a.from,
           to: a.to,
           tone: a.tone,
-          d: r.d,
+          d: shaft(r.p, r.angle, scale),
           end: r.end,
           angle: r.angle,
         };
@@ -305,7 +306,11 @@ export function Arrows({
             {(["glow", "line", "core"] as const).map((layer) => (
               <g key={layer} className={`arrow-${layer}`}>
                 <path d={a.d} />
-                <path className="arrow-head" d={HEAD} transform={head} />
+                <path
+                  className="arrow-head"
+                  d={layer === "core" ? HEAD_CORE : HEAD}
+                  transform={head}
+                />
               </g>
             ))}
           </g>
@@ -315,5 +320,24 @@ export function Arrows({
   );
 }
 
-/** The arrowhead, its tip at the origin, pointing along +x: a solid barbed head. */
-const HEAD = "M-26 -15 L0 0 L-26 15 L-20 0 Z";
+/** The arrowhead, its tip at the origin, pointing along +x: a solid barbed head, three and a
+ * half tubes wide, whose base the shaft runs into. */
+const HEAD = "M-25 -15 L0 0 L-25 15 L-19 0 Z";
+/** The head's core, the shaft's core carried on to near the tip: one tone, as the tube's. */
+const HEAD_CORE = "M-22 -11 L-5 0 L-22 11 L-17 0 Z";
+/** How far short of the tip the shaft stops: inside the head, past its notch, so its round cap
+ * is hidden in the head and the two read as one piece. */
+const SHAFT_SHORT = 15;
+
+/** An arrow's shaft: its cubic `p` stopped `SHAFT_SHORT` short of the tip along its heading
+ * `angle` (degrees), both end and last control point, so it arrives square in the head. */
+function shaft(p: readonly Vector[], angle: number, scale: number): string {
+  const [p0, p1, p2, p3] = p as [Vector, Vector, Vector, Vector];
+  const r = (angle * Math.PI) / 180;
+  const back: Vector = [
+    -Math.cos(r) * SHAFT_SHORT * scale,
+    -Math.sin(r) * SHAFT_SHORT * scale,
+  ];
+  const move = ([x, y]: Vector): Vector => [x + back[0], y + back[1]];
+  return `M${point(p0)} C${point(p1)} ${point(move(p2))} ${point(move(p3))}`;
+}

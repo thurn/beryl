@@ -168,32 +168,36 @@ function SpecPage({ spec, only }: { spec: SpecListing; only?: MomentListing }) {
           ←
         </a>
         <CardImage name={spec.card} className="specs-card" />
-        <ol className="specs-toc">
-          {spec.moments.map((m, i) => (
-            <Fragment key={m.name}>
-              {startsGroup(spec.moments, i) && (
-                <li className="specs-toc-group">{m.group}</li>
-              )}
+        {(only ? (["yours"] as const) : VIEWS).map((view) => (
+          <ol key={view} className="specs-toc">
+            {view === "theirs" && (
               <li>
-                <a
-                  href={
-                    only
-                      ? `/specs/${spec.slug}/${m.name}`
-                      : `#${anchor(m, "yours")}`
-                  }
-                  aria-current={m === only ? "page" : undefined}
-                >
-                  {m.title}
+                <a href="#theirs" className="specs-toc-them">
+                  <SeatBadge view={view} />
                 </a>
               </li>
-            </Fragment>
-          ))}
-        </ol>
-        {!only && (
-          <a href="#theirs" className="specs-toc-them">
-            Them
-          </a>
-        )}
+            )}
+            {spec.moments.map((m, i) => (
+              <Fragment key={m.name}>
+                {startsGroup(spec.moments, i) && (
+                  <li className="specs-toc-group">{m.group}</li>
+                )}
+                <li>
+                  <a
+                    href={
+                      only
+                        ? `/specs/${spec.slug}/${m.name}`
+                        : `#${anchor(m, view)}`
+                    }
+                    aria-current={m === only ? "page" : undefined}
+                  >
+                    {m.title}
+                  </a>
+                </li>
+              </Fragment>
+            ))}
+          </ol>
+        ))}
       </nav>
       {only ? (
         <main className="specs-moments specs-pair">
@@ -214,7 +218,9 @@ function SpecPage({ spec, only }: { spec: SpecListing; only?: MomentListing }) {
           {VIEWS.map((view) => (
             <div key={view} id={view}>
               {view === "theirs" && (
-                <h1 className="specs-section-head">Them</h1>
+                <h1 className="specs-section-head">
+                  <SeatBadge view={view} /> Opponent's seat
+                </h1>
               )}
               {spec.moments.map((m, i) => (
                 <Fragment key={m.name}>
@@ -267,6 +273,13 @@ type View = (typeof VIEWS)[number];
 
 /** Each seat as a moment's header names it. */
 const SEAT_NAMES: Record<View, string> = { yours: "You", theirs: "Them" };
+
+/** Which seat a moment is seen from, tagged ahead of its title: Them stands out. */
+function SeatBadge({ view }: { view: View }) {
+  return (
+    <span className={`specs-seat specs-seat-${view}`}>{SEAT_NAMES[view]}</span>
+  );
+}
 
 /** A moment's place on the page, from one seat. */
 function anchor(moment: MomentListing, view: View): string {
@@ -335,8 +348,8 @@ function MomentView({
     <section className="specs-moment" id={anchor(moment, view)}>
       <header className="specs-moment-head">
         <h2>
+          <SeatBadge view={view} />
           {moment.title}
-          <span className="specs-seat">{SEAT_NAMES[view]}</span>
         </h2>
         <div className="specs-moment-actions">
           {waiting ? (
@@ -391,7 +404,12 @@ function MomentView({
         ref={holder}
       >
         {reached && open && (
-          <iframe key={key} ref={mount} src={src} title={moment.title} />
+          <iframe
+            key={key}
+            ref={mount}
+            src={src}
+            title={`${SEAT_NAMES[view]}: ${moment.title}`}
+          />
         )}
       </div>
     </section>

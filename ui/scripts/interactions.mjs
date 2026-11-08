@@ -2349,15 +2349,24 @@ function inFan(seen, rest, when) {
 }
 
 await check(
-    "a dragged twin goes back to its place in the fan, also once drawn again",
+    "a dragged twin is the card that goes into play; the fan keeps its places",
     async (page) => {
         await page.clock.runFor(2000);
         await dragFromHand(page, `[data-slot="${twin.slot}"]`, {
             x: 0,
             y: -320,
         });
+        // The element in hand marked, to find it again whatever card it then shows.
+        await page.$eval(`[data-slot="${twin.slot}"]`, (e) => {
+            e.dataset.handled = "";
+        });
         await page.mouse.up();
         await until(page, `[data-slot="${pairLand}"][data-zone="battlefield"]`);
+        assert.equal(
+            await page.$eval("[data-handled]", (e) => e.dataset.slot),
+            String(pairLand),
+            "the card let go of is the one played, not its twin",
+        );
         // The pointer stays over the battlefield, off the hand.
         const played = await fan(page);
         await page.keyboard.press("Space");
@@ -3524,6 +3533,11 @@ for (const fixture of ["arrow-spell", "arrow-ability", "arrow-player"]) {
                 return [...document.querySelectorAll(".arrow")].map((g) => {
                     const path = g.querySelector(".arrow-line path");
                     const ctm = path.getScreenCTM();
+                    // The shaft stops inside the head: the head's tip is its end.
+                    const head = g.querySelector(".arrow-line .arrow-head");
+                    const tip = new DOMPoint(0, 0).matrixTransform(
+                        head.getScreenCTM(),
+                    );
                     const length = path.getTotalLength();
                     const points = Array.from({ length: 61 }, (_, i) => {
                         const p = path.getPointAtLength((length * i) / 60);
@@ -3542,6 +3556,7 @@ for (const fixture of ["arrow-spell", "arrow-ability", "arrow-player"]) {
                         ends: [g.dataset.from, g.dataset.to],
                         boxes: ends.map(box),
                         points,
+                        tip: [tip.x, tip.y],
                         others,
                     };
                 });
@@ -3558,7 +3573,11 @@ for (const fixture of ["arrow-spell", "arrow-ability", "arrow-player"]) {
                 y < b.y + b.h + m;
             const gap = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
             for (const a of drawn) {
-                const [start, end] = [a.points[0], a.points.at(-1)];
+                const [start, end] = [a.points[0], a.tip];
+                assert.ok(
+                    gap(a.points.at(-1), a.tip) < 30,
+                    `${a.ends.join(" -> ")}'s shaft runs into its head`,
+                );
                 const name = a.ends.join(" -> ");
                 // On each end's edge: within its box grown a little but not deep inside it.
                 for (const [p, b] of [
@@ -3647,7 +3666,9 @@ for (const fixture of ["arrow-spell", "arrow-ability", "arrow-player"]) {
                                       b.textContent.startsWith("+")
                                           ? "mark-plusOne"
                                           : "mark-minusOne",
-                                      b.textContent.slice(1),
+                                      b
+                                          .querySelector("b")
+                                          ?.textContent.slice(1) ?? "1",
                                   ]
                                 : [b.className, b.textContent],
                         ),
@@ -4293,7 +4314,7 @@ await check(
 );
 
 await check(
-    "each stack item shows whose it is and any X announced",
+    "each stack item names whose it is and shows any X announced",
     async (page) => {
         await page.clock.runFor(3000);
         const view = (await load("stack-x")).at(-1);

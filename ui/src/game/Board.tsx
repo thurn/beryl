@@ -112,6 +112,7 @@ import {
 import { CastStep } from "./CastStep";
 import { FloatPrompt, PromptRow } from "./FloatPrompt";
 import { stoppedPhases, togglePhase } from "./stops";
+import { useStandIns } from "./standIns";
 import { tablePick } from "./tablePick";
 import {
   combatBanner,
@@ -294,6 +295,8 @@ export function Board({
     Pick<ZonePile, "side" | "zone"> & { linked?: number }
   >();
   const can = useMemo(() => interactions(view), [view]);
+  // The hand card the player handles is the one that moves, of identical ones.
+  const standIns = useStandIns(view);
   // Under a screen over the table (the opening hand, a choice, the game's end), the table only
   // shows.
   const deciding =
@@ -465,14 +468,15 @@ export function Board({
         highlight: single ? "target" : undefined,
         // Every untapped source can tap for mana at priority, which no glow need say.
         playable: !single && !tapsOnly(acts),
-        // A card in your hand fan, or one it holds because you can play it from elsewhere.
+        // A card in your hand fan, or one it holds because you can play it from elsewhere,
+        // and a creature to declare. A permanent's abilities are only ever clicked: a drag
+        // that activates reads as moving the card.
         draggable:
           (placements.get(slot)?.look === "hand" &&
             playActs(acts).length > 0) ||
           acts.some(
             (a) => a.option.kind === "attack" || a.option.kind === "block",
-          ) ||
-          abilityChoices(objects.get(slot), acts) !== undefined,
+          ),
       });
     }
   }
@@ -636,6 +640,7 @@ export function Board({
 
   /** A click on the card in `slot`: what it offers, or nothing (false). */
   const onClick = (slot: number, at: Point): boolean => {
+    standIns.touch(slot, deciding ? can.bySlot.get(slot) : undefined);
     if (castingNow) {
       // A permanent another payment taps pays that way.
       const plan = plansOf(castingNow.choice).find((p) =>
@@ -708,6 +713,7 @@ export function Board({
     return true;
   };
   const onDrop = (slot: number, { start, at, onto }: Drop) => {
+    standIns.touch(slot, deciding ? can.bySlot.get(slot) : undefined);
     // The card being cast let go in the hand goes back: the cast step closes, or the spell not
     // yet paid for is taken back. The cast step's card let go on the battlefield is cast as set.
     const inHand = at.y >= BATTLEFIELD_EDGE;
@@ -743,12 +749,6 @@ export function Board({
         );
         setMenu({ slot, at, acts: listed });
       }
-      return false;
-    }
-    // A permanent with abilities to choose among, dragged out, chooses as a click does.
-    const choices = abilityChoices(objects.get(slot), acts);
-    if (choices && Math.hypot(at.x - start.x, at.y - start.y) >= FORWARD / 2) {
-      setChooser({ slot, choices });
       return false;
     }
     // A creature dragged in a declaration joins it, as clicking would, and goes to its new
@@ -1012,6 +1012,7 @@ export function Board({
           epoch={view}
           events={view.events}
           objects={shown.objects}
+          keys={standIns.keys}
           placements={placements}
           origins={tokenOrigins(views.current.before, view, placements)}
           hovered={hovered}

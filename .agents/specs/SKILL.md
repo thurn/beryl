@@ -119,8 +119,9 @@ capability to add when it is not:
 1. **Priority and stops.** When the card makes the human stop, and when it must
    not: an affordable instant-speed ability stops them; one that would do
    nothing (`Needs`) must not, though it stays activatable.
-2. **Each ability's path.** Clicking it, dragging it out; two or more non-mana
-   activated abilities open the side-by-side chooser, unaffordable ones dimmed.
+2. **Each ability's path.** Clicking it (a permanent never drags); two or more
+   non-mana activated abilities open the side-by-side chooser, unaffordable
+   ones dimmed.
 3. **Costs and payments.** Mana, X, alternate and additional costs, life,
    sacrifice, tapping creatures, loyalty.
 4. **Prompts.** Each question the card asks: may, choose, target, order,

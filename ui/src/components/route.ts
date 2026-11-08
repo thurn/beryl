@@ -157,6 +157,8 @@ export interface Leg {
  * degrees. `choice` names the ports and reach it used, to follow them as its ends move. */
 export interface Route {
   d: string;
+  /** The cubic's control points, from start to end. */
+  p: readonly Vector[];
   start: Vector;
   end: Vector;
   angle: number;
@@ -274,6 +276,7 @@ function drawn(c: Candidate, cost: number, samples: Vector[]): Route {
       height: Math.max(...ys) - Math.min(...ys),
     },
     d: `M${point(c.p[0]!)} C${point(c.p[1]!)} ${point(c.p[2]!)} ${point(c.p[3]!)}`,
+    p: c.p,
     start: c.start.at,
     end: c.end.at,
     angle: (Math.atan2(-c.end.normal[1], -c.end.normal[0]) * 180) / Math.PI,

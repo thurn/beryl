@@ -322,14 +322,15 @@ export async function screenFaults(page) {
             }
             for (const c of o.counters) {
                 if (c.kind === "loyalty") continue;
-                // +1/+1 and -1/-1 counters show as one signed count in a disc.
-                const signed = { plusOne: "+", minusOne: "\u2212" }[c.kind];
-                const badge = signed
-                    ? text(e.querySelector(".card-pt-counter"))?.replace(
-                          signed,
-                          "",
-                      )
-                    : text(e.querySelector(`.mark-${c.kind} b`));
+                // +1/+1 and -1/-1 counters show as one pill naming the kind, with a count
+                // past one.
+                const pill = e.querySelector(".card-pt-counter");
+                const badge =
+                    c.kind === "plusOne" || c.kind === "minusOne"
+                        ? pill
+                            ? (text(pill.querySelector("b"))?.slice(1) ?? "1")
+                            : undefined
+                        : text(e.querySelector(`.mark-${c.kind} b`));
                 if (badge !== String(c.count)) {
                     faults.push(
                         `${what} shows ${badge} ${c.kind} counters for ${c.count}`,

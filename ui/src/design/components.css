@@ -461,18 +461,23 @@
   position: absolute;
   top: 2.3em;
   right: 0.55em;
-  min-width: 2.1em;
-  height: 2.1em;
-  padding: 0 0.3em;
-  display: grid;
-  place-items: center;
-  border-radius: 1.05em;
-  font: 700 1.25em/1 var(--font-sans);
+  height: 1.9em;
+  padding: 0 0.45em;
+  display: flex;
+  align-items: center;
+  gap: 0.25em;
+  border-radius: 0.95em;
+  font: 700 1em/1 var(--font-sans);
+  white-space: nowrap;
   color: #fff;
   background: radial-gradient(circle at 50% 30%, #3a3631, #141210);
   border: 0.12em solid currentColor;
   box-shadow: 0 0.08em 0.3em rgb(0 0 0 / 70%);
   pointer-events: none;
+}
+.card-pt-counter b {
+  font-size: 0.85em;
+  color: var(--type);
 }
 .card-pt-counter.stat-up {
   color: var(--stat-up);
@@ -919,11 +924,15 @@
   stroke: var(--tone-core);
   stroke-width: calc(var(--weight) * var(--arrow-scale) * var(--core));
 }
+/* The head takes each layer's tone as a fill, with a thin stroke of it rounding its corners. */
 .arrow .arrow-head {
-  stroke-width: 3px;
+  stroke-width: calc(2px * var(--arrow-scale));
 }
 .arrow-glow .arrow-head {
   fill: var(--tone-soft);
+}
+.arrow-line .arrow-head {
+  fill: var(--tone);
 }
 .arrow-core .arrow-head {
   fill: var(--tone-core);

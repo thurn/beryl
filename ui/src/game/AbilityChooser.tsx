@@ -1,7 +1,7 @@
 // The choice of a permanent's activated ability: a click on a permanent with two or more
 // (other than mana abilities, which the payment taps for itself) always opens it, even when
 // only one can be activated now, so that activating is always two clicks, card then ability,
-// whichever it is; dragging the permanent out opens it too. Each ability is shown as the
+// whichever it is (never a drag, which reads as moving the card). Each ability is shown as the
 // stack would show it, side by side mid-table, those that cannot be activated now dimmed.
 import { useEffect } from "react";
 import { faceEntry } from "../cards";

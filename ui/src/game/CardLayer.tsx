@@ -93,6 +93,9 @@ export interface CardLayerProps {
    * and the pointer keeps the card. */
   hovered?: number;
   states: Map<number, CardState>;
+  /** The element each object is drawn by, where it is not its own slot's: the card the
+   * player handled of identical ones stands in for the one the engine moved (standIns.ts). */
+  keys?: ReadonlyMap<number, number>;
   /** A card was clicked (or tapped without dragging) at `at`; returns whether that did
    * something. A hand card that offers nothing shakes. */
   onClick(slot: number, at: Point): boolean;
@@ -202,7 +205,7 @@ export function CardLayer(props: CardLayerProps) {
           return (
             place && (
               <CardElement
-                key={o.slot}
+                key={props.keys?.get(o.slot) ?? o.slot}
                 object={o}
                 place={place}
                 state={stateOf(o.slot)}

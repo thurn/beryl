@@ -942,8 +942,8 @@
 .game-log-counter {
   color: #ffab7c;
 }
-/* Spells that came and went in the view on screen, large beside the stack for a moment, each
-   wearing its caster's stack diamond; a countered one dimmed under a small ember mark. */
+/* Spells that came and went in the view on screen, large beside the stack for a moment; a
+   countered one dimmed under a small ember mark. */
 .announcements {
   position: absolute;
   right: 100px;
@@ -1107,6 +1107,14 @@
 }
 .turn-controls .phase-tracker-compact .phase:nth-child(3) {
   grid-column-start: 4;
+}
+/* The row spans the orb, over it: only its stops take the pointer, so the whole orb is there
+   to click, as a target, and not just its rims. */
+.turn-controls .phase-tracker-compact {
+  pointer-events: none;
+}
+.turn-controls .phase-tracker-compact .phase {
+  pointer-events: auto;
 }
 .turn-controls .phase-tracker-compact .phase-icon {
   width: 26px;
@@ -1360,27 +1368,17 @@
 .stack-ability {
   transform-origin: 0 0;
 }
-/* A stack item's marks (Stack.tsx' StackMarks): whose it is, a diamond on its top left corner
-   in the game log's colour for that player, and its X, a dark tab on its top right corner. */
+/* A stack item's marks (Stack.tsx' StackMarks): whose it is, unseen, and its X, a dark tab on
+   its top right corner. */
 .on-stack {
   position: relative;
 }
 .stack-controller {
   position: absolute;
-  left: -8px;
-  top: -8px;
-  z-index: 1;
-  width: 18px;
-  height: 18px;
-  rotate: 45deg;
-  border: 2px solid #15120f;
-  border-radius: 3px;
-  background: var(--cyan);
-  box-shadow: 0 0 8px 2px rgb(51 220 254 / 55%);
-}
-.stack-controller-opponent {
-  background: var(--ember);
-  box-shadow: 0 0 8px 2px rgb(240 122 28 / 60%);
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
 .stack-x {
   position: absolute;

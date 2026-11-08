@@ -429,15 +429,16 @@ export function Card({
             <MarkBadge icon="sick" label="Summoning sick" />
           </span>
         )}
-        {/* +1/+1 and -1/-1 counters, as on Arena: their net count in a disc inset at the
-            top right of the art. */}
+        {/* +1/+1 and -1/-1 counters: a pill inset at the top right of the art naming the
+            kind, as the card's text does, with their net count past one. */}
         {ptCounters !== 0 && (
           <span
             className={`card-pt-counter ${ptCounters > 0 ? "stat-up" : "stat-down"}`}
             role="img"
             aria-label={`${Math.abs(ptCounters)} ${ptCounters > 0 ? "+1/+1" : "-1/-1"} counters`}
           >
-            {ptCounters > 0 ? `+${ptCounters}` : `\u2212${-ptCounters}`}
+            {ptCounters > 0 ? "+1/+1" : "\u22121/\u22121"}
+            {Math.abs(ptCounters) > 1 && <b>×{Math.abs(ptCounters)}</b>}
           </span>
         )}
         {marks && (otherCounters.length > 0 || marks.token) && (
