@@ -6,6 +6,16 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- Knowledge of hidden cards is kept per slot, so a card a player saw in the
+  opponent's hand (fatesealed, then drawn) stayed known after the opponent
+  brainstormed, though nothing shows which hand cards went back on the library
+  (CR 400.2, 402.3); the UI kept showing it face up in their hand.
+  `zone::move_to_place` now makes the other player forget the moved card and the
+  whole hand when a card goes from a hand to a library. Prevention: treat every
+  move between hidden zones as a question of what each viewer can still tell
+  apart, in the one zone-move chokepoint, and test knowledge after each such
+  move, not just after reveals.
+
 - Decisions collapsed an activated ability's source with an interchangeable twin
   (`engine::collapse`, which keeps only the objects `cast::referenced` names
   apart), so with two Strip Mines the target decision offered one, and taking it

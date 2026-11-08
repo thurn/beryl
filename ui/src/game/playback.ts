@@ -69,6 +69,15 @@ export interface Playback {
   behind: boolean;
   /** Shows every view waiting at once, the last with all their events. */
   skip(): void;
+  /** Holds back the views that arrive from now on, as the player's picks for a choice already
+   * made go out one decision at a time (an overlay's six cards to exile), so the table stays
+   * as it was under the choice rather than playing each pick's events in turn. */
+  gather(): void;
+  /** Ends `gather`: the views held back show as one, with all their events, as the choice
+   * gives way to the table, so what the picks did plays together where it can be seen. */
+  release(): void;
+  /** The latest view held back by `gather`, which the picks still to go answer. */
+  latest?: GameUpdate;
   /** What has happened in the game up to it, oldest first. */
   log: LogEntry[];
 }
@@ -92,12 +101,16 @@ interface State {
   starting: boolean;
   /** The game in progress has not been asked for yet (`currentGame`). */
   resuming: boolean;
+  /** The views held back while gathering (`Playback.gather`), oldest first; none when not. */
+  gathered?: GameUpdate[];
 }
 
 type Action =
   | { kind: "arrive"; update: GameUpdate; past: boolean; now: number }
   | { kind: "advance"; now: number }
   | { kind: "skip"; now: number }
+  | { kind: "gather" }
+  | { kind: "release"; now: number }
   | { kind: "starting"; on: boolean }
   | { kind: "resume"; update?: GameUpdate; now: number };
 
@@ -138,13 +151,7 @@ function show(
   }
   const last = updates.at(-1)!;
   // The views passed over lend the one shown their events, so it animates all of them.
-  const update =
-    updates.length === 1
-      ? last
-      : {
-          ...last,
-          view: { ...last.view, events: updates.flatMap((u) => u.view.events) },
-        };
+  const update = merged(updates);
   return {
     ...state,
     shown: update,
@@ -156,6 +163,33 @@ function show(
     key,
     log: log === state.log ? log : log.slice(-LOG_LENGTH),
   };
+}
+
+/** The last of `updates` with the events of them all. */
+function merged(updates: GameUpdate[]): GameUpdate {
+  const last = updates.at(-1)!;
+  if (updates.length === 1) return last;
+  return {
+    ...last,
+    view: { ...last.view, events: updates.flatMap((u) => u.view.events) },
+  };
+}
+
+/** `state` with `update` shown now, if nothing waits and the view shown has had its time, or
+ * else queued; a live update as the views a player can follow (`split`). */
+function enqueue(
+  state: State,
+  update: GameUpdate,
+  past: boolean,
+  now: number,
+): State {
+  const parts = past
+    ? [update]
+    : split(state.queue.at(-1) ?? state.shown, update);
+  if (state.queue.length === 0 && (past || now >= state.until)) {
+    return show({ ...state, queue: parts.slice(1) }, [parts[0]!], !past, now);
+  }
+  return { ...state, queue: [...state.queue, ...parts] };
 }
 
 function reduce(state: State, action: Action): State {
@@ -181,18 +215,19 @@ function reduce(state: State, action: Action): State {
           now,
         );
       }
-      const parts = past
-        ? [update]
-        : split(state.queue.at(-1) ?? shown, update);
-      if (state.queue.length === 0 && (past || now >= state.until)) {
-        return show(
-          { ...state, queue: parts.slice(1) },
-          [parts[0]!],
-          !past,
-          now,
-        );
+      if (state.gathered && !past) {
+        return { ...state, gathered: [...state.gathered, update] };
       }
-      return { ...state, queue: [...state.queue, ...parts] };
+      return enqueue(state, update, past, now);
+    }
+    case "gather":
+      return { ...state, gathered: state.gathered ?? [] };
+    case "release": {
+      const gathered = state.gathered;
+      if (!gathered) return state;
+      const rest = { ...state, gathered: undefined };
+      if (gathered.length === 0) return rest;
+      return enqueue(rest, merged(gathered), false, action.now);
     }
     case "advance": {
       if (state.queue.length === 0) return state;
@@ -295,6 +330,9 @@ export function usePlayback(): {
       spotlight: state.spotlight,
       behind: queue.length > 0,
       skip: () => dispatch({ kind: "skip", now: Date.now() }),
+      gather: () => dispatch({ kind: "gather" }),
+      release: () => dispatch({ kind: "release", now: Date.now() }),
+      latest: state.gathered?.at(-1),
       log: state.log,
     },
     starting: state.starting,

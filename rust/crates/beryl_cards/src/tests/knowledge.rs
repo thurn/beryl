@@ -338,6 +338,60 @@ fn a_fatesealed_card_stays_known_once_drawn() {
     varies(&t, s, Seat::P0, &others);
 }
 
+/// A card the opponent knows in a hand (seen on top of the library by Jace, the Mind
+/// Sculptor's +2, then drawn) is lost to them once its owner brainstorms: they can't tell which
+/// cards went back, so they know neither what stays in the hand nor what went on top.
+#[test]
+fn brainstorming_hides_a_known_hand_card() {
+    const JACE: &[Permanent] = &[Permanent::new(names::JACE_THE_MIND_SCULPTOR)];
+    const HIDDEN: Scenario = Scenario::new("Jace fateseals, then the opponent brainstorms")
+        .battlefield(P0, JACE)
+        .hand(P0, &[names::PLAINS])
+        .library(P0, &[names::ISLAND, names::PLAINS])
+        .battlefield(P1, JACE)
+        .library(
+            P1,
+            &[
+                names::COUNTERSPELL,
+                names::PLAINS,
+                names::MANA_CRYPT,
+                names::OUST,
+                names::ISLAND,
+            ],
+        )
+        .hand(P1, &[names::MANA_TITHE, names::SNAPCASTER_MAGE])
+        .actions(&[
+            Action::activate(P0, names::JACE_THE_MIND_SCULPTOR, 0),
+            Action::answer(P0, DecisionKind::Target, Pick::Player { player: P1 }),
+            Action::Resolve,
+            Action::answer(P0, DecisionKind::YesNo, Pick::No),
+            Action::pass(P0),
+            Action::AdvanceTo {
+                turn: 2,
+                step: TurnStep::PrecombatMain,
+            },
+            Action::activate(P1, names::JACE_THE_MIND_SCULPTOR, 1),
+            Action::Resolve,
+            Action::choose(P1, DecisionKind::ChooseObject, names::MANA_TITHE),
+            Action::choose(P1, DecisionKind::ChooseObject, names::SNAPCASTER_MAGE),
+            Action::pass(P1),
+        ]);
+    let (t, states) = at_each_action(&HIDDEN);
+    // Drawn, the fatesealed Counterspell is still known in the hand.
+    let s = &states[6];
+    let counterspell = slot_of(&t, s, Seat::P1, Zone::Hand, names::COUNTERSPELL);
+    kept(&t, s, Seat::P0, counterspell);
+    let s = &states[10];
+    let hand = slots(s, Seat::P1, Zone::Hand);
+    assert!(hand.contains(&counterspell));
+    let library = slots(s, Seat::P1, Zone::Library);
+    for &slot in &library[..2] {
+        kept(&t, s, Seat::P1, slot);
+    }
+    let hidden: Vec<Slot> = hand.iter().chain(&library[..2]).copied().collect();
+    varies(&t, s, Seat::P0, &hidden);
+}
+
 /// Scry ([CR 701.22a](https://yawgatog.com/resources/magic-rules/#R70122a)): the scrying player
 /// knows the cards they put on the bottom and those they kept on top, each in its place.
 #[test]

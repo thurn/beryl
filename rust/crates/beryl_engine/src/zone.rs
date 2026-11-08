@@ -49,12 +49,13 @@ pub(crate) fn move_to_place<L: Layout>(
     // [CR 708.9](https://yawgatog.com/resources/magic-rules/#R7089): "If a face-down permanent
     // ... moves from the battlefield to any other zone, its owner must reveal it to all players
     // as they move it." Whatever zone it goes to, a hidden one included.
-    let o = s.object(slot);
+    let o = *s.object(slot);
     if o.zone == Zone::Battlefield && o.face == FaceIx::DOWN {
         for k in &mut s.knowledge {
             k.insert(slot);
         }
     }
+    let from = o.zone;
     leave(s, slot);
     let timestamp = s.zones.next_timestamp;
     let o = s.object_mut(slot);
@@ -111,7 +112,30 @@ pub(crate) fn move_to_place<L: Layout>(
     if to == Zone::Hand {
         s.knowledge[owner].insert(slot);
     }
+    if from == Zone::Hand && to == Zone::Library {
+        forget_hand(s, Seat::BOTH[owner], slot);
+    }
     Ok(())
+}
+
+/// A card put from its owner's hand into their library unrevealed, as Brainstorm puts two
+/// back: the other player sees a card back go and cannot tell which of the hand's cards it
+/// was, so they forget it and every card still in that hand, however they came to know them
+/// (a look at the hand, a card they saw on top of the library drawn). A hand and a library are
+/// hidden zones ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002): "Library and
+/// hand are hidden zones, even if all the cards in one such zone happen to be revealed"), and
+/// the owner keeps their hand in any order
+/// ([CR 402.3](https://yawgatog.com/resources/magic-rules/#R4023): "A player may arrange their
+/// hand in any convenient fashion").
+fn forget_hand<L: Layout>(s: &mut State<L>, owner: Seat, moved: L::Slot) {
+    let hand = s.zones.members[owner.index()][Zone::Hand as usize];
+    for p in Seat::BOTH {
+        if p != owner {
+            let k = &mut s.knowledge[p.index()];
+            k.remove(moved);
+            *k &= !hand;
+        }
+    }
 }
 
 /// Unlinks the cards exiled with an earlier object in `slot`, as a new object arrives there

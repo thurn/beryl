@@ -27,6 +27,7 @@ import {
   type SessionId,
   type Stall,
   type StopsSetting,
+  type TargetRef,
 } from "../ipc";
 import { Board } from "../game/Board";
 import { ChoiceOverlay } from "../game/ChoiceOverlay";
@@ -302,6 +303,7 @@ function Playing({ playback }: { playback: Playback }) {
   // The choice whose overlay is put aside to see the battlefield.
   const [peek, setPeek] = useState<number>();
   const { update, live, spotlight, behind, skip, log } = playback;
+  const { gather, release, latest } = playback;
   const { session, view } = update;
   const status = view.status;
   // An answer is on its way, or the game plays on without the player: the opponent deciding,
@@ -314,6 +316,7 @@ function Playing({ playback }: { playback: Playback }) {
   const fail = (e: unknown) => {
     setAnswered(undefined);
     planned.current = [];
+    release();
     setHeld(undefined);
     const message = failure(e);
     if (message) setError(message);
@@ -396,10 +399,13 @@ function Playing({ playback }: { playback: Playback }) {
       // A pick that waits stays planned while the player answers the decisions before it.
       if (intent?.waits && decision && decision.kind !== "priority") {
         planned.current = [intent, ...rest];
-      } else if (decision && loneTarget(decision, view)) {
+      } else {
         // A target with no alternative is taken for the player, as Arena takes it.
-        answer(0, []);
-        return;
+        const lone = decision && loneTarget(decision, view);
+        if (lone !== undefined) {
+          answer(lone, []);
+          return;
+        }
       }
       setHeld(undefined);
       return;
@@ -407,6 +413,24 @@ function Playing({ playback }: { playback: Playback }) {
     answer(index, rest);
     // Only a new view answers (`answer` changes with every render).
   }, [view]);
+
+  // While gathering, each view held back that asks for the next planned pick gets it at once;
+  // the first that doesn't, or the game playing on without the player, ends the gathering,
+  // and the views held back show as one, for the effect above to take up.
+  useEffect(() => {
+    if (!latest) return;
+    const status = latest.view.status;
+    if (status.kind === "deciding" && planned.current.length > 0) {
+      const { decision } = status;
+      const { index, rest } = follow(decision, planned.current);
+      if (index !== undefined) {
+        planned.current = rest;
+        choose(decision.id, index).catch(fail);
+        return;
+      }
+    }
+    release();
+  }, [latest]);
 
   // A choice over the table waits until what its view shows has been seen (the spell that asks
   // it cast and resolving, what it exiled), rather than covering it as it plays.
@@ -429,6 +453,9 @@ function Playing({ playback }: { playback: Playback }) {
     const { index, rest } = follow(decision, picks);
     if (index === undefined) return;
     setHeld(choice);
+    // The picks after this one go out unseen under the choice, and what they all did plays
+    // once it gives way to the table.
+    if (rest.length > 0) gather();
     answer(index, rest);
   };
   /** Sends the picks the opening planned, the first now and the rest as they are asked. */
@@ -928,18 +955,38 @@ function ReasonIcon({ reason }: { reason: LossReason | "stall" }) {
   );
 }
 
-/** Whether `decision` asks for a target that only one choice answers (one object of each set of
- * interchangeable ones, architecture §7.2), the opponent's or something they control, which
- * there is nothing to ask about: as Counterspell's target with only their spell on the stack
- * (it can't target itself, CR 115.5). A lone target of the player's own is still asked, as
- * Oust's when their own creature is the only one: aiming at it unasked would hurt them. Full
- * control asks anyway. */
-function loneTarget(decision: DecisionView, view: PlayerView): boolean {
-  if (view.stops.fullControl || decision.kind !== "target") return false;
-  if (decision.candidates.length !== 1) return false;
-  const option = decision.candidates[0]!.option;
-  if (option.kind === "player") return option.player === "opponent";
-  if (option.kind !== "object") return false;
-  const target = view.objects.find((o) => o.slot === option.slot);
-  return target?.controller === "opponent";
+/** The answer to `decision` when it asks for a target that only one choice answers (one
+ * object of each set of interchangeable ones, architecture §7.2), the opponent's or something
+ * they control, which there is nothing to ask about: as Counterspell's target with only their
+ * spell on the stack (it can't target itself, CR 115.5). "Up to one target" with one such
+ * choice takes it too, as Subtlety's with only their creature spell on the stack: the count
+ * of one, whose target the engine then takes as the only one (CR 115.6: "A spell or ability
+ * that requires targets may allow zero targets to be chosen"). A lone target of the player's
+ * own is still asked, as Oust's when their own creature is the only one: aiming at it
+ * unasked would hurt them. Full control asks anyway. */
+function loneTarget(
+  decision: DecisionView,
+  view: PlayerView,
+): CandidateIndex | undefined {
+  if (view.stops.fullControl) return undefined;
+  const opposing = (target: TargetRef) =>
+    target.kind === "player"
+      ? target.player === "opponent"
+      : view.objects.find((o) => o.slot === target.slot)?.controller ===
+        "opponent";
+  const candidates = decision.candidates;
+  if (decision.kind === "target") {
+    if (candidates.length !== 1) return undefined;
+    const option = candidates[0]!.option;
+    if (option.kind === "player") return opposing(option) ? 0 : undefined;
+    if (option.kind !== "object") return undefined;
+    return opposing({ kind: "object", slot: option.slot }) ? 0 : undefined;
+  }
+  if (decision.kind !== "targetCount" || candidates.length !== 2)
+    return undefined;
+  const one = candidates.findIndex(
+    (c) => c.option.kind === "number" && c.option.n === 1,
+  );
+  const targets = candidates[one]?.targets ?? [];
+  return targets.length === 1 && opposing(targets[0]!) ? one : undefined;
 }
