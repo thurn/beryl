@@ -10,12 +10,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use beryl_cards::CARDS;
 use beryl_cards::decks::WU_CONTROL;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use ts_rs::TS;
 
 use crate::game::Game;
 use crate::protocol::{CandidateIndex, DecisionId, SessionId, StopsSetting};
+use crate::replay::ReplayFile;
 use crate::session::GameSession;
-use crate::{GameUpdate, Prepared, Seat, SessionError, StartGame};
+use crate::{GameUpdate, Prepared, Seat, SessionError, StartGame, journal};
 
 /// The UI's request for a game: the WU Control mirror against `agent`, the human in seat 0
 /// under the smart stops.
@@ -55,11 +57,17 @@ pub struct Sessions {
     latest: Arc<Mutex<Option<GameUpdate>>>,
 }
 
+/// A game's replay as of its latest decision, which a bug report copies.
+pub(crate) type LatestReplay = Arc<Mutex<Option<ReplayFile>>>;
+
 #[derive(Default)]
 struct Current {
     /// The last session number given out; numbers only grow.
     last: u32,
     game: Option<(SessionId, GameSession)>,
+    /// The replay of the game in progress, if it was dealt from a seed: a prepared game has
+    /// none that could reproduce it.
+    replay: Option<LatestReplay>,
 }
 
 impl Sessions {
@@ -90,37 +98,72 @@ impl Sessions {
         stand_in: Option<&str>,
     ) -> Result<SessionId, SessionError> {
         let replay = self.replay_path(start.seed);
+        let about = json!({
+            "seed": start.seed,
+            "opponent": start.opponent,
+            "human": start.human as u8,
+            "standIn": stand_in,
+            "replay": replay,
+        });
         self.launch(
             |session| Game::new(&CARDS, start, session),
             stand_in,
             replay,
+            true,
+            about,
         )
     }
 
     /// Starts a game from `prepared`, replacing any game in progress. It writes no replay,
     /// which could not reproduce it.
     pub fn start_prepared(&self, prepared: Prepared) -> Result<SessionId, SessionError> {
-        self.launch(|session| Ok(Game::prepared(prepared, session)), None, None)
+        self.launch(
+            |session| Ok(Game::prepared(prepared, session)),
+            None,
+            None,
+            false,
+            json!({ "prepared": true }),
+        )
     }
 
+    /// Starts a game, writing its replay file to `replay`, if given. A `seeded` game keeps its
+    /// latest replay for a bug report; a prepared game has none that would reproduce it.
     fn launch(
         &self,
         game: impl FnOnce(SessionId) -> Result<Game, SessionError>,
         stand_in: Option<&str>,
         replay: Option<PathBuf>,
+        seeded: bool,
+        mut about: serde_json::Value,
     ) -> Result<SessionId, SessionError> {
         let mut current = self.lock();
         // Stop the old game before the new one can emit.
-        current.game = None;
+        if let Some((old, _)) = current.game.take() {
+            journal::info("session", "game replaced", json!({ "session": old.0 }));
+        }
+        current.replay = None;
         current.last += 1;
         let session = SessionId(current.last);
-        let mut game = game(session)?;
-        if let Some(name) = stand_in {
-            game.set_stand_in(name)?;
-        }
+        about["session"] = json!(session.0);
+        let started = game(session).and_then(|mut game| {
+            if let Some(name) = stand_in {
+                game.set_stand_in(name)?;
+            }
+            Ok(game)
+        });
+        let game = match started {
+            Ok(game) => game,
+            Err(e) => {
+                about["error"] = json!(e.to_string());
+                journal::warn("session", "game failed to start", about);
+                return Err(e);
+            }
+        };
+        journal::info("session", "game started", about);
+        let latest_replay = seeded.then(LatestReplay::default);
         let emit = Arc::clone(&self.emit);
         let latest = Arc::clone(&self.latest);
-        let game = GameSession::start(game, replay, move |view| {
+        let game = GameSession::start(game, replay, latest_replay.clone(), move |view| {
             let update = GameUpdate { session, view };
             {
                 let mut latest = latest.lock().unwrap_or_else(PoisonError::into_inner);
@@ -132,6 +175,7 @@ impl Sessions {
             emit(update);
         })?;
         current.game = Some((session, game));
+        current.replay = latest_replay;
         Ok(session)
     }
 
@@ -148,45 +192,84 @@ impl Sessions {
             .filter(|u| u.session == *session)
     }
 
+    /// The replay of the game in progress, or of the one that ended last, as of its latest
+    /// decision: none for a prepared game, or before the first decision.
+    pub fn current_replay(&self) -> Option<ReplayFile> {
+        let replay = self.lock().replay.clone()?;
+        replay
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
     /// The human concedes game `session` ([`crate::Game::concede`]).
     pub fn concede(&self, session: SessionId) -> Result<(), SessionError> {
-        self.with(session, GameSession::concede)
+        self.with(
+            "concede",
+            json!({ "session": session.0 }),
+            session,
+            GameSession::concede,
+        )
     }
 
     /// Answers the human's open decision `decision` with its candidate `index`.
     pub fn choose(&self, decision: DecisionId, index: CandidateIndex) -> Result<(), SessionError> {
-        self.with(decision.session, |game| game.choose(decision, index))
+        let data = json!({ "decision": decision.seq, "index": index.0 });
+        self.with("choose", data, decision.session, |game| {
+            game.choose(decision, index)
+        })
     }
 
     /// Takes back the cast the human's open decision `decision` is part of.
     pub fn cancel(&self, decision: DecisionId) -> Result<(), SessionError> {
-        self.with(decision.session, |game| game.cancel(decision))
+        let data = json!({ "decision": decision.seq });
+        self.with("cancel", data, decision.session, |game| {
+            game.cancel(decision)
+        })
     }
 
     /// Takes back the human's latest answer from their open decision `decision`.
     pub fn undo(&self, decision: DecisionId) -> Result<(), SessionError> {
-        self.with(decision.session, |game| game.undo(decision))
+        let data = json!({ "decision": decision.seq });
+        self.with("undo", data, decision.session, |game| game.undo(decision))
     }
 
     /// Passes on from the human's open decision `decision` to their next stop.
     pub fn pass_on(&self, decision: DecisionId) -> Result<(), SessionError> {
-        self.with(decision.session, |game| game.pass_on(decision))
+        let data = json!({ "decision": decision.seq });
+        self.with("pass_on", data, decision.session, |game| {
+            game.pass_on(decision)
+        })
     }
 
     /// Switches the human's priority stops in game `session`.
     pub fn set_stops(&self, session: SessionId, stops: StopsSetting) -> Result<(), SessionError> {
-        self.with(session, |game| game.set_stops(stops))
+        let data = json!({ "stops": stops });
+        self.with("set_stops", data, session, |game| game.set_stops(stops))
     }
 
+    /// Runs the human's `command` on game `session`, journaling it with `data` and how it
+    /// went: a refused command is how a UI out of step with the game shows itself.
     fn with(
         &self,
+        command: &str,
+        mut data: serde_json::Value,
         session: SessionId,
         f: impl FnOnce(&GameSession) -> Result<(), SessionError>,
     ) -> Result<(), SessionError> {
-        match &self.lock().game {
+        let result = match &self.lock().game {
             Some((current, game)) if *current == session => f(game),
             _ => Err(SessionError::StaleSession { session }),
+        };
+        data["session"] = json!(session.0);
+        match &result {
+            Ok(()) => journal::debug("command", command, data),
+            Err(e) => {
+                data["error"] = json!(e);
+                journal::warn("command", format!("{command} refused: {e}"), data);
+            }
         }
+        result
     }
 
     fn lock(&self) -> MutexGuard<'_, Current> {
@@ -197,7 +280,11 @@ impl Sessions {
     fn replay_path(&self, seed: u64) -> Option<PathBuf> {
         let dir = self.replays.as_ref()?;
         if let Err(e) = std::fs::create_dir_all(dir) {
-            eprintln!("beryl_session: {}: {e}", dir.display());
+            journal::error(
+                "session",
+                format!("no replay: {}: {e}", dir.display()),
+                serde_json::Value::Null,
+            );
             return None;
         }
         Some(dir.join(format!("{}-{seed}.json", now().as_secs())))

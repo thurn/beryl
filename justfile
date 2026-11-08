@@ -48,6 +48,11 @@ ui-live *args:
 specs *args:
     {{ by }} specs "$@"
 
+# The app's bug reports: list them, `file` a bead for each open one, `done <id|bead>` (see .agents/bugfix)
+[group('app')]
+bugs *args:
+    {{ by }} bugs "$@"
+
 # The release Beryl.app, under rust/target/tauri/release/bundle/macos
 [group('app')]
 bundle:

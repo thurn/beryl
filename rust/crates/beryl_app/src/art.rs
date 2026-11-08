@@ -175,7 +175,11 @@ impl ArtCache {
         let (status, body) = match self.get(path) {
             Ok(bytes) => (StatusCode::OK, bytes),
             Err(e) => {
-                eprintln!("beryl: art {path}: {e}");
+                beryl_session::journal::warn(
+                    "art",
+                    format!("{path}: {e}"),
+                    serde_json::Value::Null,
+                );
                 let status = match e {
                     ArtError::NotAnImage => StatusCode::NOT_FOUND,
                     ArtError::Download(_) | ArtError::Io(_) => StatusCode::BAD_GATEWAY,

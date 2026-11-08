@@ -4,10 +4,12 @@
 
 use ts_rs::{Config, TS};
 
+use crate::bugs::{BugReport, BugSaved, PageInfo, Region, UiLogEntry, UiLogRequest};
 use crate::ipc::{
     AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, Fixture, FixtureMessage, PassOnRequest,
     SetStopsRequest, UndoRequest,
 };
+use crate::journal::Level;
 use crate::protocol::{
     AbilityClass, AbilityRef, AskView, Candidate, CandidateIndex, CandidateView, CardType, Combat,
     Counter, CounterView, Culprit, DecisionId, DecisionView, Declaration, Facing, GameEvent,
@@ -34,6 +36,13 @@ pub fn typescript() -> String {
         UndoRequest::decl(&cfg),
         PassOnRequest::decl(&cfg),
         ConcedeRequest::decl(&cfg),
+        BugReport::decl(&cfg),
+        Region::decl(&cfg),
+        PageInfo::decl(&cfg),
+        BugSaved::decl(&cfg),
+        UiLogRequest::decl(&cfg),
+        UiLogEntry::decl(&cfg),
+        Level::decl(&cfg),
         SessionError::decl(&cfg),
         GameUpdate::decl(&cfg),
         AgentView::decl(&cfg),

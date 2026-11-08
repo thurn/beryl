@@ -5,14 +5,18 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
+  BugReport,
   CandidateIndex,
   Commands,
   DecisionId,
   Events,
   Fixture,
+  GameUpdate,
   SessionId,
   StopsSetting,
 } from "./generated/protocol";
+import { brief, forwardTo, note, noteUpdate } from "./diagnostics";
+import { whenThawed } from "./freeze";
 
 export type * from "./generated/protocol";
 
@@ -334,7 +338,66 @@ const browserFixture: Fixture = {
   ],
 };
 
+/** A value for the log: the big ones (a snapshot, a report) cut to what says what they were. */
+const logged = (command: Command, value: unknown): unknown =>
+  command === "capture_window" && typeof value === "string"
+    ? { bytes: value.length }
+    : command === "report_bug"
+      ? { description: (value as { request?: BugReport }).request?.description }
+      : brief(value);
+
+/** `inner`, every message logged for bug reports (diagnostics.ts), and its events held while
+ * the page is frozen (freeze.ts). */
+function instrumented(inner: Transport): Transport {
+  return {
+    async invoke<C extends Command>(command: C, args: Args<C>) {
+      // The log's own forwarding is not logged: it would never end.
+      if (command === "ui_log") return inner.invoke(command, args);
+      note("debug", "invoke", command, logged(command, args));
+      try {
+        const result = await inner.invoke(command, args);
+        note("debug", "result", command, logged(command, result));
+        return result;
+      } catch (e) {
+        // A command the game refused is journaled by the app; anything else is the UI's to say.
+        if (e instanceof CommandError) {
+          note("info", "result", `${command} refused`, e.error);
+        } else {
+          note("error", "result", `${command} failed: ${String(e)}`);
+        }
+        throw e;
+      }
+    },
+    listen<E extends keyof Events>(
+      event: E,
+      handler: (payload: Events[E], past: boolean) => void,
+    ) {
+      return inner.listen(event, (payload, past) => {
+        if (event === "game-update") noteUpdate(payload as GameUpdate, past);
+        whenThawed(() => handler(payload, past));
+      });
+    },
+  };
+}
+
+/** Whether this page can write bug reports: the app, or a live browser page of its own
+ * (`?live=`), not one framed by a spec page or replaying a fixture. */
+export const canReportBugs = () =>
+  window.parent === window &&
+  ("__TAURI_INTERNALS__" in window || liveBase() !== undefined);
+
+/** Whether the app can snapshot its window, for a report's frozen frame. */
+export const canCaptureWindow = () => "__TAURI_INTERNALS__" in window;
+
 async function chooseTransport(): Promise<Transport> {
+  const wrapped = instrumented(await rawTransport());
+  if (canReportBugs()) {
+    forwardTo((entries) => wrapped.invoke("ui_log", { request: { entries } }));
+  }
+  return wrapped;
+}
+
+async function rawTransport(): Promise<Transport> {
   if ("__TAURI_INTERNALS__" in window) {
     return tauriTransport;
   }
@@ -428,6 +491,13 @@ export const concede = (session: SessionId) =>
 
 /** The latest view of the game in progress, if any: where a reloaded page takes it up. */
 export const currentGame = () => call("current_game", {});
+
+/** The window as drawn now, a PNG in base64 (only in the app: `canCaptureWindow`). */
+export const captureWindow = () => call("capture_window", {});
+
+/** Writes a bug report; resolves to its folder. */
+export const reportBug = (request: BugReport) =>
+  call("report_bug", { request });
 
 export const onGameUpdate = async (
   handler: (update: Events["game-update"], past: boolean) => void,

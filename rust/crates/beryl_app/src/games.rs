@@ -5,6 +5,7 @@ use beryl_session::ipc::{
     CancelRequest, ChooseRequest, ConcedeRequest, PassOnRequest, SetStopsRequest, UndoRequest,
 };
 use beryl_session::{AgentView, GameUpdate, SessionError, SessionId, Sessions, StartRequest, ipc};
+use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 /// The sessions, writing replays into the app's data directory and emitting views to the UI.
@@ -13,7 +14,7 @@ pub fn sessions(app: &AppHandle) -> Sessions {
     let app = app.clone();
     Sessions::new(replays, move |update| {
         if let Err(e) = app.emit(ipc::GAME_UPDATE, update) {
-            eprintln!("beryl: {e}");
+            beryl_session::journal::error("app", format!("view not sent: {e}"), json!(null));
         }
     })
 }

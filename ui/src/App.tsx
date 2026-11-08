@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { MotionConfig } from "motion/react";
-import { appInfo, uiReady } from "./ipc";
+import { appInfo, canReportBugs, uiReady } from "./ipc";
+import { BugReporter } from "./components/BugReport";
 import { Gallery } from "./screens/Gallery";
 import { Specs } from "./screens/Specs";
 import { GameScreen, StartScreen } from "./screens/Game";
@@ -52,6 +53,7 @@ function Main() {
       ) : (
         <StartScreen inProgress={inProgress} onStart={start} />
       )}
+      {canReportBugs() && <BugReporter route={path} />}
     </MotionConfig>
   );
 }

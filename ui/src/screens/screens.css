@@ -2593,3 +2593,206 @@
   margin: -32px 0 0 -32px;
   opacity: 0;
 }
+
+/* The bug report (components/BugReport.tsx). Its button sits in the gear's column, in its
+   brushed metal: under the undo button on the game screen, at the top right elsewhere. */
+.bug-button {
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 1000;
+  width: 72px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.bug-button-game {
+  top: 120px;
+}
+.bug-icon {
+  position: absolute;
+  right: 21px;
+  top: 9px;
+  width: 30px;
+  overflow: visible;
+  fill: none;
+  stroke: #737172;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 1px 0 rgb(255 255 255 / 12%))
+    drop-shadow(0 2px 3px rgb(0 0 0 / 45%));
+}
+.bug-button:hover .bug-icon,
+.bug-button:focus-visible .bug-icon {
+  stroke: #9a9899;
+}
+/* Over everything, the frozen frame filling the window under the region and the panel. */
+.bug-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  font-family: var(--font-sans);
+  color: var(--text);
+}
+.bug-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+  pointer-events: none;
+}
+.bug-surface {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+}
+.bug-shade {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 25%);
+}
+/* The region clear, the rest of the frame shaded around it. */
+.bug-region {
+  position: absolute;
+  outline: 1.5px solid var(--gold);
+  box-shadow: 0 0 0 200vmax rgb(0 0 0 / 45%);
+  pointer-events: none;
+}
+.bug-region-dim {
+  box-shadow: 0 0 0 200vmax rgb(0 0 0 / 65%);
+}
+.bug-hint {
+  position: absolute;
+  left: 50%;
+  top: 22px;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border: 1px solid var(--metal);
+  border-radius: 999px;
+  background: rgb(33 31 28 / 92%);
+  font-size: 15px;
+  pointer-events: none;
+}
+/* Its buttons at the top right, on a dark pill that reads over any frozen frame. */
+.bug-tools {
+  position: absolute;
+  right: 16px;
+  top: 14px;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--metal);
+  border-radius: 999px;
+  background: rgb(33 31 28 / 92%);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 45%);
+}
+.bug-tool {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+.bug-tool:hover,
+.bug-tool:focus-visible {
+  background: rgb(255 255 255 / 8%);
+}
+.bug-tool svg {
+  width: 22px;
+}
+.bug-x {
+  fill: #a9a6a4;
+}
+.bug-whole {
+  fill: none;
+  stroke: #a9a6a4;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.bug-tool:hover .bug-x {
+  fill: var(--type);
+}
+.bug-tool:hover .bug-whole {
+  stroke: var(--type);
+}
+.bug-panel {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 520px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  box-sizing: border-box;
+  padding: 18px 20px;
+  border: 1px solid var(--metal);
+  border-radius: 10px;
+  background: rgb(33 31 28 / 97%);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 55%);
+  animation: bug-panel-in 0.16s ease-out;
+}
+@keyframes bug-panel-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px));
+  }
+}
+.bug-title {
+  margin: 0;
+  font: 600 22px/1.2 var(--font-display);
+  letter-spacing: 0.04em;
+  color: var(--type);
+}
+.bug-crop {
+  align-self: center;
+  max-width: 100%;
+  max-height: 150px;
+  min-height: 0;
+  object-fit: contain;
+  border: 1px solid var(--metal);
+  border-radius: 4px;
+}
+.bug-text {
+  min-height: 110px;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1px solid var(--metal);
+  border-radius: 6px;
+  background: var(--surface-sunk);
+  color: var(--type);
+  font: 15px/1.45 var(--font-sans);
+}
+.bug-text:focus {
+  outline: 2px solid var(--gold-soft);
+  outline-offset: 1px;
+}
+.bug-error {
+  margin: 0;
+  color: var(--stat-down);
+  font-size: 14px;
+}
+.bug-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.bug-saved {
+  width: auto;
+  font: 600 20px/1 var(--font-display);
+  color: var(--type);
+}
+/* While the page is frozen, a CSS animation that starts stays on its first frame. */
+.page-frozen *:not([data-unfrozen], [data-unfrozen] *) {
+  animation-play-state: paused !important;
+}

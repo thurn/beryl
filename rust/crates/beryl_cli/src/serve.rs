@@ -16,11 +16,12 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex, PoisonError};
 
+use beryl_session::bugs::{self, BugReport, UiLogRequest};
 use beryl_session::ipc::{
     self, AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, PassOnRequest, SetStopsRequest,
     UndoRequest,
 };
-use beryl_session::{GameUpdate, Sessions, StartRequest, agents};
+use beryl_session::{GameUpdate, SessionError, Sessions, StartRequest, agents};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -29,6 +30,7 @@ type Streams = Arc<Mutex<Vec<Sender<String>>>>;
 
 /// Serves the game commands on `127.0.0.1:port` until the process is killed.
 pub fn serve(port: u16) -> Result<(), String> {
+    beryl_session::journal::install_panic_hook();
     let listener =
         TcpListener::bind(("127.0.0.1", port)).map_err(|e| format!("port {port}: {e}"))?;
     let streams: Streams = Arc::default();
@@ -189,6 +191,15 @@ pub(crate) fn invoke(sessions: &Sessions, command: &str, args: Value) -> Value {
                 .and_then(|r| sessions.concede(r.session).map_err(|e| json!(e))),
         ),
         ipc::CURRENT_GAME => answer::<_, ()>(Ok(sessions.current())),
+        // A browser's page has no window to snapshot: its report goes without the frame.
+        ipc::CAPTURE_WINDOW => answer::<(), _>(Err(SessionError::Io {
+            reason: "no window snapshot in a browser".to_owned(),
+        })),
+        ipc::REPORT_BUG => answer(
+            request::<BugReport>(args)
+                .and_then(|r| bugs::write(&bugs::dir(), &r, sessions).map_err(|e| json!(e))),
+        ),
+        ipc::UI_LOG => answer(request::<UiLogRequest>(args).map(bugs::ui_log)),
         _ => json!({ "err": { "kind": "unknownCommand", "command": command } }),
     }
 }

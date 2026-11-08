@@ -1048,6 +1048,11 @@ impl Game {
         Arc::clone(&self.stop)
     }
 
+    /// The session this game is.
+    pub fn session(&self) -> SessionId {
+        self.session
+    }
+
     /// The record of the game so far.
     pub fn replay(&self) -> &ReplayFile {
         &self.replay

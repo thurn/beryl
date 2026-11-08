@@ -45,6 +45,52 @@ decision: DecisionId, };
 
 export type ConcedeRequest = { session: SessionId, };
 
+export type BugReport = { 
+/**
+ * What the player says went wrong.
+ */
+description: string, 
+/**
+ * The region the player chose, as a PNG in base64.
+ */
+screenshot: string | null, 
+/**
+ * The whole window as the player froze it, as a PNG in base64.
+ */
+window: string | null, 
+/**
+ * Where the region lies in the window, in CSS pixels.
+ */
+region: Region | null, page: PageInfo, 
+/**
+ * The UI's log ([`ui/src/diagnostics.ts`]): commands, events, errors, console.
+ */
+uiLog: unknown, 
+/**
+ * The latest game updates the UI received, oldest first.
+ */
+updates: unknown[], };
+
+export type Region = { x: number, y: number, width: number, height: number, };
+
+export type PageInfo = { url: string, 
+/**
+ * The window's size in CSS pixels, and device pixels to one.
+ */
+width: number, height: number, scale: number, };
+
+export type BugSaved = { id: string, 
+/**
+ * Its folder.
+ */
+path: string, };
+
+export type UiLogRequest = { entries: Array<UiLogEntry>, };
+
+export type UiLogEntry = { level: Level, message: string, data: unknown, };
+
+export type Level = "debug" | "info" | "warn" | "error";
+
 export type SessionError = { "kind": "unknownAgent", name: string, } | { "kind": "unknownCard", name: string, } | { "kind": "deck", reason: string, } | { "kind": "staleSession", session: SessionId, } | { "kind": "notDeciding" } | { "kind": "staleDecision", decision: DecisionId, open: DecisionId, } | { "kind": "noSuchCandidate", index: CandidateIndex, candidates: number, } | { "kind": "notCancellable" } | { "kind": "nothingToUndo" } | { "kind": "noPassOn" } | { "kind": "ended" } | { "kind": "badReplay", reason: string, } | { "kind": "io", reason: string, };
 
 export type GameUpdate = { 
@@ -438,6 +484,9 @@ export type Commands = {
   pass_on: { args: { request: PassOnRequest }; result: null; error: SessionError };
   concede: { args: { request: ConcedeRequest }; result: null; error: SessionError };
   current_game: { args: Record<string, never>; result: GameUpdate | null; error: never };
+  capture_window: { args: Record<string, never>; result: string; error: SessionError };
+  report_bug: { args: { request: BugReport }; result: BugSaved; error: SessionError };
+  ui_log: { args: { request: UiLogRequest }; result: null; error: never };
 };
 
 /** Each event's payload. */

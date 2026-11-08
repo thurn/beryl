@@ -5,7 +5,19 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import app, bench, cards, checks, edit, oracles, quality, shots, specs, warm
+from . import (
+    app,
+    bench,
+    bugs,
+    cards,
+    checks,
+    edit,
+    oracles,
+    quality,
+    shots,
+    specs,
+    warm,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -14,6 +26,7 @@ def main(argv: list[str] | None = None) -> int:
     for module in (
         app,
         bench,
+        bugs,
         cards,
         checks,
         edit,

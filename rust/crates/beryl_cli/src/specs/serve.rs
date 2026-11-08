@@ -85,6 +85,7 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 
 /// Serves the specs on `127.0.0.1:port` until the process is killed.
 pub fn serve(port: u16) -> Result<(), String> {
+    beryl_session::journal::install_panic_hook();
     let listener =
         TcpListener::bind(("127.0.0.1", port)).map_err(|e| format!("port {port}: {e}"))?;
     println!("beryl_cli: serving specs on http://127.0.0.1:{port}");

@@ -9,6 +9,7 @@ use std::fmt::Write;
 use serde::{Deserialize, Serialize};
 use ts_rs::{Config, TS};
 
+use crate::bugs::{BugReport, BugSaved, UiLogRequest};
 use crate::protocol::{CandidateIndex, DecisionId, SessionId, StopsSetting};
 use crate::{AgentView, GameUpdate, SessionError, StartRequest};
 
@@ -35,6 +36,15 @@ pub const CONCEDE: &str = "concede";
 /// The latest view of the game in progress ([`crate::Sessions::current`]), which a reloaded UI
 /// takes up the game from.
 pub const CURRENT_GAME: &str = "current_game";
+
+/// The window as it is drawn now, a PNG in base64: the bug report's frozen frame. Only the app
+/// has it.
+pub const CAPTURE_WINDOW: &str = "capture_window";
+/// Writes a bug report ([`crate::bugs::BugReport`]); returns where
+/// ([`crate::bugs::BugSaved`]).
+pub const REPORT_BUG: &str = "report_bug";
+/// Journals the UI's warnings and errors ([`crate::bugs::UiLogRequest`]).
+pub const UI_LOG: &str = "ui_log";
 
 /// The event every view arrives on, carrying a [`GameUpdate`].
 pub const GAME_UPDATE: &str = "game-update";
@@ -138,6 +148,7 @@ impl FixtureMessage {
 }
 
 /// The `Commands` and `Events` maps, as TypeScript.
+#[allow(clippy::too_many_lines)] // A line or five per command.
 pub(crate) fn typescript(cfg: &Config) -> String {
     fn name<T: TS>(cfg: &Config) -> String {
         T::name(cfg)
@@ -195,12 +206,30 @@ pub(crate) fn typescript(cfg: &Config) -> String {
             CONCEDE,
             request(name::<ConcedeRequest>(cfg)),
             name::<()>(cfg),
-            error,
+            error.clone(),
         ),
         (
             CURRENT_GAME,
             "Record<string, never>".to_owned(),
             name::<Option<GameUpdate>>(cfg),
+            never.clone(),
+        ),
+        (
+            CAPTURE_WINDOW,
+            "Record<string, never>".to_owned(),
+            name::<String>(cfg),
+            error.clone(),
+        ),
+        (
+            REPORT_BUG,
+            request(name::<BugReport>(cfg)),
+            name::<BugSaved>(cfg),
+            error.clone(),
+        ),
+        (
+            UI_LOG,
+            request(name::<UiLogRequest>(cfg)),
+            name::<()>(cfg),
             never.clone(),
         ),
     ];

@@ -7,9 +7,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use crate::SessionError;
+use serde_json::json;
+
 use crate::game::{Answer, Game, OpenDecision};
 use crate::protocol::{CandidateIndex, DecisionId, PlayerView, Status, StopsSetting};
+use crate::sessions::LatestReplay;
+use crate::{SessionError, journal};
 
 /// A game against an agent, running on its own thread. Dropping it ends the thread once the
 /// agent has finished its current decision, and nothing is emitted after that.
@@ -38,10 +41,11 @@ enum Command {
 impl GameSession {
     /// Starts `game`. `emit` receives every view of the human's as the game plays
     /// ([`Game::next_view`]); the replay file at `replay`, if any, is rewritten before each
-    /// view at which the human decides or the game ends.
+    /// view at which the human decides or the game ends, and so is `latest`, if given.
     pub(crate) fn start(
         game: Game,
         replay: Option<PathBuf>,
+        latest: Option<LatestReplay>,
         emit: impl FnMut(PlayerView) + Send + 'static,
     ) -> Result<GameSession, SessionError> {
         let stop = game.stop_flag();
@@ -51,10 +55,19 @@ impl GameSession {
         let thread = Shared {
             open: Arc::clone(&open),
             conceded: Arc::clone(&conceded),
+            latest,
         };
         std::thread::Builder::new()
             .name("game session".to_owned())
-            .spawn(move || run(game, &received, &thread, replay.as_deref(), emit))
+            .spawn(move || {
+                let session = game.session();
+                let end = run(game, &received, &thread, replay.as_deref(), emit);
+                journal::info(
+                    "session",
+                    "thread ended",
+                    json!({ "session": session.0, "why": end }),
+                );
+            })
             .map_err(|e| SessionError::Io {
                 reason: e.to_string(),
             })?;
@@ -133,6 +146,7 @@ impl GameSession {
 struct Shared {
     open: Arc<Mutex<Option<OpenDecision>>>,
     conceded: Arc<AtomicBool>,
+    latest: Option<LatestReplay>,
 }
 
 impl Drop for GameSession {
@@ -143,25 +157,32 @@ impl Drop for GameSession {
 
 /// The session thread: plays and emits each view, then waits for the human (or has the
 /// stand-in answer). Commands are taken only while the human decides, so a stops change lands
-/// at a definite point of the choice log.
+/// at a definite point of the choice log. Returns why it ended, for the journal.
 fn run(
     mut game: Game,
     commands: &Receiver<Command>,
     shared: &Shared,
     replay: Option<&Path>,
     mut emit: impl FnMut(PlayerView),
-) {
+) -> &'static str {
     let stop = game.stop_flag();
     // A stops change re-emits the open decision, which may already be answered, so it does
     // not reopen it. Returns whether the session is over: the session was dropped.
     let mut publish = |game: &Game, view: PlayerView, reopen: bool| {
         let deciding = matches!(view.status, Status::Deciding { .. });
+        let decides = deciding || matches!(view.status, Status::Over { .. });
         if let Some(path) = replay
-            && (deciding || matches!(view.status, Status::Over { .. }))
+            && decides
             && let Err(e) = game.replay().save(path)
         {
-            eprintln!("beryl_session: {e}");
+            journal::error("session", format!("replay not saved: {e}"), json!(null));
         }
+        if let Some(latest) = &shared.latest
+            && decides
+        {
+            *latest.lock().unwrap_or_else(PoisonError::into_inner) = Some(game.replay().clone());
+        }
+        journal::debug("view", view_kind(&view), view_summary(game, &view));
         // A concession closes the human's decisions for good.
         if reopen && deciding && !shared.conceded.load(Ordering::Relaxed) {
             *shared.open.lock().unwrap_or_else(PoisonError::into_inner) = game.open();
@@ -175,7 +196,7 @@ fn run(
     loop {
         while let Some(view) = game.next_view() {
             if publish(&game, view, true) {
-                return;
+                return "replaced";
             }
             // The game plays on without the human: it takes their concession before the
             // agent's next decision.
@@ -183,19 +204,19 @@ fn run(
                 && let Some(view) = game.concede()
             {
                 publish(&game, view, false);
-                return;
+                return "conceded";
             }
         }
         if game.open().is_none() {
             // The game is over, or stopped.
-            return;
+            return "over";
         }
         loop {
             if game.answer_by_stand_in() {
                 break;
             }
             let Ok(command) = commands.recv() else {
-                return;
+                return "closed";
             };
             match command {
                 // The session checked the answer against the open decision, which only this
@@ -212,34 +233,74 @@ fn run(
                 Command::Undo => match game.undo() {
                     Ok(view) => {
                         if publish(&game, view, true) {
-                            return;
+                            return "replaced";
                         }
                     }
-                    Err(e) => eprintln!("beryl_session: {e}"),
+                    Err(e) => refused(&e),
                 },
                 Command::Cancel => match game.cancel() {
                     Ok(view) => {
                         if publish(&game, view, true) {
-                            return;
+                            return "replaced";
                         }
                     }
-                    Err(e) => eprintln!("beryl_session: {e}"),
+                    Err(e) => refused(&e),
                 },
                 Command::Concede => {
                     if let Some(view) = game.concede() {
                         publish(&game, view, false);
                     }
-                    return;
+                    return "conceded";
                 }
                 Command::SetStops(stops) => match game.set_stops(stops) {
                     Ok(view) => {
                         if publish(&game, view, false) {
-                            return;
+                            return "replaced";
                         }
                     }
-                    Err(e) => eprintln!("beryl_session: {e}"),
+                    Err(e) => refused(&e),
                 },
             }
         }
     }
+}
+
+/// A command the session accepted that the game then refused: the two disagree on what is open.
+fn refused(e: &SessionError) {
+    journal::error(
+        "session",
+        format!("the game refused a command: {e}"),
+        json!(e),
+    );
+}
+
+fn view_kind(view: &PlayerView) -> &'static str {
+    match view.status {
+        Status::Deciding { .. } => "deciding",
+        Status::Thinking => "thinking",
+        Status::Playing => "playing",
+        Status::Stopped => "stopped",
+        Status::Over { .. } => "over",
+    }
+}
+
+/// Where a view stands, in a line of the journal: enough to find it in the replay.
+fn view_summary(game: &Game, view: &PlayerView) -> serde_json::Value {
+    let mut summary = json!({
+        "session": game.session().0,
+        "log": game.replay().log.len(),
+        "turn": view.turn.number,
+        "step": view.turn.step,
+        "events": view.events.len(),
+        "stack": view.stack.len(),
+    });
+    if let Status::Deciding { decision } = &view.status {
+        summary["decision"] = json!(decision.id.seq);
+        summary["kind"] = json!(decision.kind);
+        summary["candidates"] = json!(decision.candidates.len());
+    }
+    if view.undone {
+        summary["undone"] = json!(true);
+    }
+    summary
 }

@@ -5,7 +5,13 @@
 // answer ends each run of them. Views from before the screen started listening (a fixture's
 // recorded past) show at once, and the player may skip the rest of a run (`Playback.skip`), as
 // a click skips Arena's animations.
-import { useEffect, useLayoutEffect, useReducer } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useReducer,
+  useSyncExternalStore,
+} from "react";
+import { isFrozen, subscribeFrozen } from "../freeze";
 import {
   currentGame,
   onGameUpdate,
@@ -305,14 +311,16 @@ export function usePlayback(): {
       );
     }
   }, [showing]);
+  // A frozen page (a bug report, freeze.ts) shows no next view until it thaws.
+  const frozen = useSyncExternalStore(subscribeFrozen, isFrozen);
   useEffect(() => {
-    if (queue.length === 0) return;
+    if (queue.length === 0 || frozen) return;
     const timer = setTimeout(
       () => dispatch({ kind: "advance", now: Date.now() }),
       Math.max(0, until - Date.now()),
     );
     return () => clearTimeout(timer);
-  }, [queue, until, shown]);
+  }, [queue, until, shown, frozen]);
 
   const start = async (agent: string, seed?: number) => {
     dispatch({ kind: "starting", on: true });
