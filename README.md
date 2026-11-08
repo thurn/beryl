@@ -22,6 +22,21 @@ On an Apple silicon Mac:
 | Enact, Beads, Dolt       | [Enact](https://github.com/thurn/enact)'s setup, for delivering changes        |
 | Maven, JDK 21            | `just oracle-setup`, with Homebrew; it also builds the XMage and Forge oracles |
 
+On Windows 11 (x64), which runs the app, the tests and the agents, but not
+`pyre` or the instruction-count gate (`just bench-count`, `just count-gate`):
+
+| Tool                      | Install                                                                  |
+| ------------------------- | ------------------------------------------------------------------------ |
+| Visual Studio Build Tools | The "Desktop development with C++" workload; WebView2 ships with Windows |
+| Git for Windows           | `winget install Git.Git`; `just` runs recipes in its `sh`                |
+| Rust                      | [rustup](https://rustup.rs); `rust/rust-toolchain.toml` pins it          |
+| Node.js 24, uv, just      | `winget install OpenJS.NodeJS astral-sh.uv Casey.Just`                   |
+| JDK 21, Maven             | `just oracle-setup`, with winget and Apache's Maven download             |
+
+Set `PYTHONUTF8=1`, so Python reads and writes text as UTF-8. Keep the checkout
+and `BERYL_CACHE` on one Dev Drive (ReFS): copies there are block clones, as
+APFS clones are on macOS, and Defender's scans slow builds less.
+
 Then `just` lists the commands. `just dev` opens the app with hot reload;
 `just smoke` builds it and checks that it starts, headless; `just ci` runs every
 check.

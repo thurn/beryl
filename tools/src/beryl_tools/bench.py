@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
 import re
 import shlex
 import subprocess
@@ -27,7 +28,7 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import paths, warm
+from . import paths, system, warm
 
 # At most this much of the machine's CPU may be in use before timing (sampled for a second).
 MAX_BUSY_PERCENT = 10.0
@@ -45,8 +46,13 @@ VM_GUNGRAUN = "$HOME/gungraun"
 # workspace members.
 VM_OWNER = ".beryl-checkout"
 COUNT_BENCHES = ["--bench", "*_counts"]
-# A Cargo profile can't set the CPU, so the recipes building the `search` profile pass it.
-SEARCH_CPU = "-C target-cpu=apple-m4"
+# A Cargo profile can't set the CPU, so the recipes building the `search` profile pass it: off
+# Apple silicon, this machine's own (the justfile's `search_cpu`).
+SEARCH_CPU = (
+    "-C target-cpu=apple-m4"
+    if platform.machine() in ("arm64", "aarch64")
+    else "-C target-cpu=native"
+)
 
 
 def log(message: str) -> None:
@@ -117,7 +123,43 @@ def problems(m: Machine) -> list[str]:
     return found
 
 
+def probe_windows() -> Machine:
+    """Windows has no top, pmset or pgrep: CPU in use over a second, the power line from
+    GetSystemPowerStatus, and builds from tasklist. It reads no throttling."""
+    import ctypes
+    import time
+
+    system.loadavg()
+    time.sleep(1)
+    busy = 100.0 * system.loadavg()[0] / (os.cpu_count() or 1)
+
+    class PowerStatus(ctypes.Structure):
+        _fields_ = [
+            ("ac_line", ctypes.c_ubyte),
+            ("battery_flag", ctypes.c_ubyte),
+            ("battery_percent", ctypes.c_ubyte),
+            ("saver", ctypes.c_ubyte),
+            ("life", ctypes.c_ulong),
+            ("full_life", ctypes.c_ulong),
+        ]
+
+    power = PowerStatus()
+    ctypes.windll.kernel32.GetSystemPowerStatus(  # pyre-ignore[16]: Windows only
+        ctypes.byref(power)
+    )
+    tasks = output("tasklist", "/fo", "csv", "/nh").splitlines()
+    names = {row.split(",")[0].strip('"').removesuffix(".exe") for row in tasks}
+    return Machine(
+        busy_percent=busy,
+        on_battery=power.ac_line == 0,
+        low_power=power.saver == 1,
+        builds=sorted(names & set(BUILD_PROCESSES)),
+    )
+
+
 def probe() -> Machine:
+    if system.WINDOWS:
+        return probe_windows()
     busiest = output("ps", "-Aco", "pcpu,comm", "-r").splitlines()[1:6]
     builds = output("pgrep", "-lx", "|".join(BUILD_PROCESSES)).split()
     return Machine(

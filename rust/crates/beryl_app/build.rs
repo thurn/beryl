@@ -5,6 +5,10 @@ use std::path::Path;
 use std::process::Command;
 
 fn main() {
+    // macOS's 8 MiB main-thread stack on Windows, whose linker defaults to 1 MiB.
+    if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") {
+        println!("cargo:rustc-link-arg-bins=/STACK:8388608");
+    }
     commit();
     tauri_build::build();
 }
