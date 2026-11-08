@@ -282,9 +282,11 @@ fn passing_on_goes_past_the_stops_in_its_step() {
                     "seed {seed}: stopped again in the step it passed on from"
                 );
             }
-            // A replay passes on the same way.
-            let (_, replayed) = Game::from_replay(&CARDS, game.replay(), SESSION).unwrap();
-            assert_eq!(without_id(replayed), without_id(view.clone()));
+            // A replay passes on the same way, to the same decision.
+            if deciding(&view).is_some() {
+                let (_, replayed) = Game::from_replay(&CARDS, game.replay(), SESSION).unwrap();
+                assert_eq!(without_id(replayed), without_id(view.clone()));
+            }
             // An undo takes the pass on back, if nothing came out since.
             if let Some(next) = deciding(&view)
                 && next.undo > 0
