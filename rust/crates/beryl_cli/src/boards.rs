@@ -132,6 +132,21 @@ pub const BOARDS: &[Scenario] = &[
             // The one creature that may attack ends the declaration.
             choose(P1, DecisionKind::Attacker, BEZA_THE_BOUNDING_SPRING),
         ]),
+    // The opponent's Jace, Wielder of Mysteries mills their own last two cards with his +1,
+    // and its draw from the empty library wins them the game instead.
+    Scenario::new("game-over-jace")
+        .at(4, P1, TurnStep::PrecombatMain)
+        .battlefield(P0, &[ISLAND_, PLAINS_])
+        .library(P0, LANDS)
+        .battlefield(
+            P1,
+            &[Permanent::new(JACE_WIELDER_OF_MYSTERIES), ISLAND_, PLAINS_],
+        )
+        .library(P1, &[ISLAND, PLAINS])
+        .actions(&[
+            Action::activate(P1, JACE_WIELDER_OF_MYSTERIES, 1),
+            Action::answer(P1, DecisionKind::Target, Pick::Player { player: P1 }),
+        ]),
     // Six permanents a side, the last face down (the human's tapped): the human's quiet turn,
     // then Trinket Mage, second in its row, blocks Beza, first in hers.
     Scenario::new("combat-blockers")

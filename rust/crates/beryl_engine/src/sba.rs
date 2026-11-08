@@ -3,7 +3,7 @@
 use crate::bitboard::Bitboard;
 use crate::card::{Subtype, Supertypes, Types};
 use crate::decision::{Outcome, StallReason};
-use crate::event::{self, Entry, Event, Reason, Sink};
+use crate::event::{self, Entry, Event, LossCause, Reason, Sink};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layers;
@@ -143,39 +143,51 @@ fn doomed<L: Layout>(s: &State<L>) -> Doomed<L::Slot> {
 /// [CR 104.4a](https://yawgatog.com/resources/magic-rules/#R1044a): "If all the players
 /// remaining in a game lose simultaneously, the game is a draw."
 fn check_losses<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>) -> bool {
-    let lost = s
-        .players
-        .each_ref()
-        .map(|p| p.life <= 0 || p.drew_from_empty);
-    if lost == [false, false] {
+    // Both may hold at one check: life is named.
+    let causes = Seat::BOTH.map(|player| {
+        let p = s.player(player);
+        if p.life <= 0 {
+            Some(LossCause::Life)
+        } else if p.drew_from_empty {
+            Some(LossCause::Library)
+        } else {
+            None
+        }
+    });
+    if causes == [None, None] {
         return false;
     }
-    end(s, sink, lost);
+    end(s, sink, causes);
     true
 }
 
-/// Ends the game as `loser` loses it, as their opponent wins it by an effect
-/// ([CR 104.2b](https://yawgatog.com/resources/magic-rules/#R1042b)): "An effect may state
-/// that a player wins the game." In a two-player game that is one ending
+/// Ends the game as `loser` loses it for `cause`: they conceded, or an effect had their
+/// opponent win ([CR 104.2b](https://yawgatog.com/resources/magic-rules/#R1042b): "An effect
+/// may state that a player wins the game"). In a two-player game either is one ending
 /// ([CR 104.2a](https://yawgatog.com/resources/magic-rules/#R1042a)): "A player still in the
 /// game wins the game if that player's opponents have all left the game."
-pub(crate) fn end_game<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, loser: Seat) {
-    let mut lost = [false; 2];
-    lost[loser.index()] = true;
-    end(s, sink, lost);
+pub(crate) fn end_game<L: Layout>(
+    s: &mut State<L>,
+    sink: &mut Sink<L>,
+    loser: Seat,
+    cause: LossCause<L>,
+) {
+    let mut causes = [None; 2];
+    causes[loser.index()] = Some(cause);
+    end(s, sink, causes);
 }
 
-fn end<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, lost: [bool; 2]) {
-    s.outcome = Some(match lost {
-        [true, false] => Outcome::Win(Seat::P1),
-        [false, true] => Outcome::Win(Seat::P0),
+/// Ends the game as each player with a cause loses it.
+fn end<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, causes: [Option<LossCause<L>>; 2]) {
+    s.outcome = Some(match causes {
+        [Some(_), None] => Outcome::Win(Seat::P1),
+        [None, Some(_)] => Outcome::Win(Seat::P0),
         _ => Outcome::Draw,
     });
     for player in Seat::BOTH {
-        sink.push(if lost[player.index()] {
-            Event::Lose { player }
-        } else {
-            Event::Win { player }
+        sink.push(match causes[player.index()] {
+            Some(cause) => Event::Lose { player, cause },
+            None => Event::Win { player },
         });
     }
 }

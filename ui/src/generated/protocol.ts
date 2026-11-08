@@ -322,11 +322,30 @@ export type OutcomeView = { "kind": "win", winner: Side,
 /**
  * Why the other player lost.
  */
-reason: LossReason, } | { "kind": "draw" } | { "kind": "stalled", reason: Stall, };
+reason: LossReason, 
+/**
+ * The card that made them lose, when one did and the session saw it.
+ */
+by: Culprit | null, } | { "kind": "draw" } | { "kind": "stalled", reason: Stall, };
 
 export type Stall = "decisionsPerTurn" | "turns" | "stateBasedIterations" | "capacity";
 
 export type LossReason = "life" | "library" | "effect" | "concede";
+
+export type Culprit = { 
+/**
+ * The name of its face.
+ */
+name: string, 
+/**
+ * Which of its abilities did it, as its card's text orders them; none for a spell, or
+ * for damage.
+ */
+ability: AbilityRef | null, };
+
+export type AbilityRef = { kind: AbilityClass, nth: number, };
+
+export type AbilityClass = "triggered" | "activated" | "static";
 
 export type StopsSetting = { 
 /**

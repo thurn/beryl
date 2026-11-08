@@ -4,7 +4,7 @@
 
 use crate::bitboard::Bitboard;
 use crate::decision::{Ask, Candidates, Decision, Opt, Refusal, Step};
-use crate::event::{Event, Recipient};
+use crate::event::{Event, LossCause, Recipient};
 use crate::ids::SlotId;
 use crate::layout::{Item, Layout, Queue, Table, index};
 use crate::state::{
@@ -449,6 +449,29 @@ fn cast<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
     }
 }
 
+impl<L: Layout> Relayout for LossCause<L> {
+    type In<M: Layout> = LossCause<M>;
+
+    fn relayout<M: Layout>(&self) -> LossCause<M> {
+        match *self {
+            LossCause::Life => LossCause::Life,
+            LossCause::Library => LossCause::Library,
+            LossCause::Effect {
+                source,
+                card,
+                face,
+                ability,
+            } => LossCause::Effect {
+                source: source.map(|r| r.relayout()),
+                card,
+                face,
+                ability,
+            },
+            LossCause::Concede => LossCause::Concede,
+        }
+    }
+}
+
 impl<L: Layout> Relayout for Event<L> {
     type In<M: Layout> = Event<M>;
 
@@ -543,7 +566,10 @@ impl<L: Layout> Relayout for Event<L> {
                 won,
                 source: source.relayout(),
             },
-            &Event::Lose { player } => Event::Lose { player },
+            &Event::Lose { player, cause } => Event::Lose {
+                player,
+                cause: cause.relayout(),
+            },
             &Event::Win { player } => Event::Win { player },
         }
     }

@@ -9,10 +9,10 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use beryl_engine::event::Event;
+use beryl_engine::event::{Event, LossCause, Recipient};
 use beryl_engine::layout::Queue;
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::state::{DECK_SLOTS, ObjectFlags, Pending, StackEntry, Turn};
+use beryl_engine::state::{DECK_SLOTS, ObjectFlags, ObjectRef, Pending, StackEntry, Turn};
 use beryl_engine::{
     Ask, Candidates, CardIx, CardTable, Choice, Decision, DecisionKind, GameTable, Large, Layout,
     Limits, Observation, Opt, Outcome, Profile, Relayout, Replay, Scratch, Seat, SlotId, Small,
@@ -139,8 +139,14 @@ enum At {
     Agent(Decision<Large>),
     /// The human's open decision.
     Human(DecisionId, Open),
-    /// The game is over; `conceded`, because the human conceded ([`Game::concede`]).
-    Over { outcome: Outcome, conceded: bool },
+    /// The game is over; `cause`, why the loser lost, once a view has seen its
+    /// [`Event::Lose`] (or the human conceded, [`Game::concede`]), and `hurt_by`, what dealt
+    /// them the damage that last lowered their life ([`Game::hurt_by`]).
+    Over {
+        outcome: Outcome,
+        cause: Option<LossCause<Large>>,
+        hurt_by: Option<ObjectRef<Large>>,
+    },
     /// Stopped by the stop flag before the agent's decision.
     Stopped,
 }
@@ -441,6 +447,10 @@ pub struct Game {
     /// The events of the paused resolution the latest view was in, which it reported: the
     /// body executes them again as it goes on (architecture §7.3).
     paused: Vec<Event<Large>>,
+    /// For each player, the source of the damage that last lowered their life, if damage
+    /// rather than a loss of life did, among the events the views reported: what the end
+    /// names when a player's life reaches 0.
+    hurt_by: [Option<ObjectRef<Large>>; 2],
     /// Where the human's cast in progress began, while it can be taken back.
     before_cast: Option<BeforeCast>,
     /// Where the human's latest turn began, which they may go back to.
@@ -548,6 +558,7 @@ impl Game {
             stop: Arc::default(),
             events: Vec::new(),
             paused: Vec::new(),
+            hurt_by: [None; 2],
             before_cast: None,
             turn_start: None,
             flip_winner,
@@ -936,7 +947,8 @@ impl Game {
         let outcome = self.board.outcome().expect("a concession ends the game");
         self.at = At::Over {
             outcome,
-            conceded: true,
+            cause: Some(LossCause::Concede),
+            hurt_by: None,
         };
         Some(self.view())
     }
@@ -1006,7 +1018,8 @@ impl Game {
                 }
                 Some(Step::Over(outcome)) => At::Over {
                     outcome,
-                    conceded: false,
+                    cause: None,
+                    hurt_by: None,
                 },
                 Some(Step::Decide(d)) if d.player == self.human => {
                     if let Some(c) = self.auto_answer(&d) {
@@ -1189,6 +1202,31 @@ impl Game {
                 .strip_prefix(self.paused.as_slice())
                 .unwrap_or(&paused),
         );
+        for e in &fresh {
+            match *e {
+                Event::Damage {
+                    source,
+                    to: Recipient::Player(player),
+                    ..
+                } => self.hurt_by[player.index()] = Some(source),
+                Event::LifeLoss { player, .. } => self.hurt_by[player.index()] = None,
+                _ => {}
+            }
+        }
+        // The loser's cause, from the event that ended the game.
+        if let At::Over {
+            outcome: Outcome::Win(winner),
+            cause: cause @ None,
+            hurt_by,
+        } = &mut self.at
+        {
+            let loser = winner.opponent();
+            *cause = fresh.iter().find_map(|e| match *e {
+                Event::Lose { player, cause } if player == loser => Some(cause),
+                _ => None,
+            });
+            *hurt_by = self.hurt_by[loser.index()];
+        }
         self.events = fresh;
         self.paused = paused;
         self.draw()
@@ -1218,9 +1256,17 @@ impl Game {
                     Moment::Deciding(*id, d, resolving.as_ref())
                 }
                 (At::Human(id, _), _) => Moment::Halted(*id),
-                (At::Over { outcome, conceded }, _) => Moment::Over {
+                (
+                    At::Over {
+                        outcome,
+                        cause,
+                        hurt_by,
+                    },
+                    _,
+                ) => Moment::Over {
                     outcome: *outcome,
-                    conceded: *conceded,
+                    cause: cause.as_ref().map(Relayout::relayout),
+                    hurt_by: hurt_by.as_ref().map(Relayout::relayout),
                 },
                 (At::Stopped, _) => Moment::Stopped,
             };

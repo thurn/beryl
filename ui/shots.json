@@ -39,6 +39,12 @@
       "height": 900
     },
     {
+      "name": "game-over-jace",
+      "route": "/?fixture=game-over-jace#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
       "name": "game-over-battlefield",
       "route": "/?fixture=game-over#/game",
       "width": 1600,

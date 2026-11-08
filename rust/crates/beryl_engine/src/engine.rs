@@ -79,7 +79,7 @@ pub fn view<'a, L: Layout>(s: &'a State<L>, t: &GameTable, x: &'a mut Scratch<L>
 /// game wins the game if that player's opponents have all left the game."
 pub fn concede<L: Layout>(s: &mut State<L>, x: &mut Scratch<L>, player: Seat) {
     if s.outcome.is_none() {
-        sba::end_game(s, &mut x.events, player);
+        sba::end_game(s, &mut x.events, player, crate::event::LossCause::Concede);
     }
 }
 

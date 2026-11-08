@@ -154,7 +154,7 @@ fn a_scripted_human_plays_a_whole_game_and_its_replay_reproduces_it() {
     std::fs::remove_dir_all(&dir).unwrap();
     // The end says why the loser lost.
     if let Status::Over {
-        outcome: OutcomeView::Win { winner, reason },
+        outcome: OutcomeView::Win { winner, reason, .. },
     } = last.status
     {
         let loser = match winner {
@@ -238,6 +238,7 @@ fn a_concession_ends_the_game_in_defeat_and_its_replay_reproduces_it() {
             outcome: OutcomeView::Win {
                 winner: Side::Opponent,
                 reason: LossReason::Concede,
+                by: None,
             }
         }
     );
@@ -282,7 +283,8 @@ fn a_concession_is_taken_where_the_game_waits_on_a_decision() {
                     Status::Over {
                         outcome: OutcomeView::Win {
                             winner: Side::Opponent,
-                            reason: LossReason::Concede
+                            reason: LossReason::Concede,
+                            by: None,
                         }
                     }
                 ));

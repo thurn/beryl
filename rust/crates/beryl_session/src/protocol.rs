@@ -4,12 +4,14 @@
 //! ([`crate::typescript`]).
 
 use beryl_engine::card::{
-    Ability, AbilityIx, AbilityKind, CastingOption, Castings, Colors, Cost, FaceAbility, FaceIx,
-    ManaColor, ManaCost, Types,
+    Ability, AbilityIx, AbilityKind, CastingOption, Castings, Colors, Cost, Face, FaceAbility,
+    FaceIx, ManaColor, ManaCost, Types,
 };
-use beryl_engine::event::{Event, Reason, Recipient};
+use beryl_engine::event::{Event, LossCause, Reason, Recipient};
 use beryl_engine::layout::Queue;
-use beryl_engine::state::{CounterKind, MulliganStatus, ObjectFlags, StackEntry, TurnStep};
+use beryl_engine::state::{
+    CounterKind, MulliganStatus, ObjectFlags, ObjectRef, StackEntry, TurnStep,
+};
 use beryl_engine::{
     Ask, Candidates, Decision, DecisionKind, GameTable, Layout, NextStop, Observation, Opt,
     Outcome, Refusal, Seat, SlotId, Small, StallReason, StepStops, Stops, Zone,
@@ -563,6 +565,8 @@ pub enum OutcomeView {
         winner: Side,
         /// Why the other player lost.
         reason: LossReason,
+        /// The card that made them lose, when one did and the session saw it.
+        by: Option<Culprit>,
     },
     Draw,
     /// The engine gave up when a budget or capacity ran out; not a rules outcome.
@@ -589,6 +593,39 @@ pub enum LossReason {
     /// [CR 104.3a](https://yawgatog.com/resources/magic-rules/#R1043a): "A player can concede
     /// the game at any time."
     Concede,
+}
+
+/// The card that ended the game: the one whose effect had a player win or lose, or the source
+/// of the damage that took a player's last life.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct Culprit {
+    /// The name of its face.
+    pub name: String,
+    /// Which of its abilities did it, as its card's text orders them; none for a spell, or
+    /// for damage.
+    pub ability: Option<AbilityRef>,
+}
+
+/// One of a face's abilities, as its rules text finds it: the `nth` of its `kind`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AbilityRef {
+    pub kind: AbilityClass,
+    pub nth: u8,
+}
+
+/// The kinds of ability a face's rules text tells apart
+/// ([CR 113.3](https://yawgatog.com/resources/magic-rules/#R1133)): "There are four general
+/// categories of abilities", of which spell abilities have no paragraph of their own and mana
+/// abilities are written as activated ones are.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum AbilityClass {
+    Triggered,
+    Activated,
+    /// A static ability, one that creates a replacement effect included.
+    Static,
 }
 
 /// Where the viewer gets priority (architecture §15, decision D13).
@@ -913,10 +950,13 @@ pub enum Moment<'a, L: Layout = Small> {
     Thinking(Option<&'a StackEntry<L>>),
     Playing,
     Stopped,
-    /// The game is over; `conceded`, because the loser conceded.
+    /// The game is over; `cause`, why the loser lost, when the session saw it
+    /// ([`Event::Lose`]), and `hurt_by`, the source of the damage that last lowered their
+    /// life, if damage rather than a loss of life did.
     Over {
         outcome: Outcome,
-        conceded: bool,
+        cause: Option<LossCause<L>>,
+        hurt_by: Option<ObjectRef<L>>,
     },
 }
 
@@ -1015,8 +1055,8 @@ pub fn player_view<L: Layout>(
         Moment::Thinking(_) => Status::Thinking,
         Moment::Playing => Status::Playing,
         Moment::Stopped => Status::Stopped,
-        Moment::Over { outcome, conceded } => Status::Over {
-            outcome: outcome_view(obs, outcome, conceded),
+        Moment::Over { .. } => Status::Over {
+            outcome: outcome_view(t, obs, moment),
         },
     };
     PlayerView {
@@ -1780,28 +1820,89 @@ fn trigger<L: Layout>(
 /// Mana symbols by [`ManaColor`] index.
 const MANA_SYMBOLS: [&str; 6] = ["{W}", "{U}", "{B}", "{R}", "{G}", "{C}"];
 
-fn outcome_view<L: Layout>(obs: Observation<'_, L>, o: Outcome, conceded: bool) -> OutcomeView {
-    match o {
-        Outcome::Win(player) => OutcomeView::Win {
-            winner: side(obs, player),
-            reason: {
-                // Both state-based losses may hold at one check: life is named.
-                let loser = obs.player(player.opponent());
-                if conceded {
-                    LossReason::Concede
-                } else if loser.life <= 0 {
-                    LossReason::Life
-                } else if loser.drew_from_empty {
-                    LossReason::Library
-                } else {
-                    LossReason::Effect
-                }
-            },
-        },
+fn outcome_view<L: Layout>(
+    t: &GameTable,
+    obs: Observation<'_, L>,
+    over: Moment<'_, L>,
+) -> OutcomeView {
+    let Moment::Over {
+        outcome,
+        cause,
+        hurt_by,
+    } = over
+    else {
+        unreachable!("the game is over");
+    };
+    match outcome {
+        Outcome::Win(player) => {
+            let loser = obs.player(player.opponent());
+            let (reason, by) = match cause {
+                Some(LossCause::Life) => (
+                    LossReason::Life,
+                    hurt_by
+                        .and_then(|r| name(t, obs, r.slot))
+                        .map(|name| Culprit {
+                            name: name.to_owned(),
+                            ability: None,
+                        }),
+                ),
+                Some(LossCause::Library) => (LossReason::Library, None),
+                Some(LossCause::Effect {
+                    card,
+                    face,
+                    ability,
+                    ..
+                }) => (
+                    LossReason::Effect,
+                    Some(Culprit {
+                        name: t.def(card).face_name(face).to_owned(),
+                        ability: ability.map(|a| ability_ref(t.def(card).face(face), a)),
+                    }),
+                ),
+                Some(LossCause::Concede) => (LossReason::Concede, None),
+                // Without the loss's event, the state-based losses are read off the loser,
+                // life first as the engine names them.
+                None if loser.life <= 0 => (LossReason::Life, None),
+                None if loser.drew_from_empty => (LossReason::Library, None),
+                None => (LossReason::Effect, None),
+            };
+            OutcomeView::Win {
+                winner: side(obs, player),
+                reason,
+                by,
+            }
+        }
         Outcome::Draw => OutcomeView::Draw,
         Outcome::Stalled(reason) => OutcomeView::Stalled {
             reason: reason.into(),
         },
+    }
+}
+
+/// Where the rules text of `face` says ability `a`: the how-manyth of its kind.
+fn ability_ref(face: &Face, a: FaceAbility) -> AbilityRef {
+    let (list, index) = match a {
+        FaceAbility::Own(i) => (face.abilities, i),
+        FaceAbility::Grant(i) => (face.grants, i),
+    };
+    let class = |a: &Ability| match a.kind {
+        AbilityKind::Triggered => Some(AbilityClass::Triggered),
+        AbilityKind::Activated | AbilityKind::Mana => Some(AbilityClass::Activated),
+        AbilityKind::Static | AbilityKind::Replacement => Some(AbilityClass::Static),
+        AbilityKind::Spell => None,
+    };
+    let kind = list
+        .get(usize::from(index))
+        .and_then(class)
+        .unwrap_or(AbilityClass::Static);
+    let nth = list
+        .iter()
+        .take(usize::from(index))
+        .filter(|a| class(a) == Some(kind))
+        .count();
+    AbilityRef {
+        kind,
+        nth: u8::try_from(nth).expect("a face has fewer than 256 abilities"),
     }
 }
 
@@ -1981,7 +2082,7 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
             won,
             source: source.slot.num(),
         },
-        Event::Lose { player } => GameEvent::Lose {
+        Event::Lose { player, .. } => GameEvent::Lose {
             player: side(player),
         },
         Event::Win { player } => GameEvent::Win {

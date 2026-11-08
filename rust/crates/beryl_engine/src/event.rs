@@ -62,6 +62,36 @@ pub enum Recipient<L: Layout = Small> {
     Permanent(ObjectRef<L>),
 }
 
+/// Why a player lost the game
+/// ([CR 104.3](https://yawgatog.com/resources/magic-rules/#R1043)): "There are several ways
+/// to lose the game."
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum LossCause<L: Layout = Small> {
+    /// [CR 704.5a](https://yawgatog.com/resources/magic-rules/#R7045a): "If a player has 0 or
+    /// less life, that player loses the game." What lowered it is in the events before.
+    Life,
+    /// [CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b): "If a player attempted
+    /// to draw a card from a library with no cards in it since the last time state-based
+    /// actions were checked, that player loses the game."
+    Library,
+    /// An effect had their opponent win
+    /// ([CR 104.2b](https://yawgatog.com/resources/magic-rules/#R1042b): "An effect may state
+    /// that a player wins the game") or had them lose
+    /// ([CR 104.3e](https://yawgatog.com/resources/magic-rules/#R1043e): "An effect may state
+    /// that a player loses the game"): the ability of `face` of `card` that did, or its spell
+    /// when `ability` is none, and the object that had it, if any.
+    Effect {
+        source: Option<ObjectRef<L>>,
+        card: CardIx,
+        face: FaceIx,
+        ability: Option<FaceAbility>,
+    },
+    /// [CR 104.3a](https://yawgatog.com/resources/magic-rules/#R1043a): "A player can concede
+    /// the game at any time. A player who concedes leaves the game immediately. That player
+    /// loses the game."
+    Concede,
+}
+
 /// One thing that happened (architecture §8.1). Simultaneous happenings that rules read as
 /// one carry a set: one `TokensCreated` for every token an effect creates, one `Attack` for
 /// every attacker declared. Flag writes and cache updates never go through events.
@@ -166,6 +196,7 @@ pub enum Event<L: Layout = Small> {
     },
     Lose {
         player: Seat,
+        cause: LossCause<L>,
     },
     Win {
         player: Seat,
@@ -637,11 +668,11 @@ pub(crate) fn draw<L: Layout>(
     cards: u8,
 ) -> Result<(), Full> {
     let mut drawn = 0;
-    let mut wins = false;
+    let mut wins = None;
     for _ in 0..cards {
         if s.library(player).is_empty() {
-            if wins_instead_of_drawing(s, t, player) {
-                wins = true;
+            wins = wins_instead_of_drawing(s, t, player);
+            if wins.is_some() {
                 break;
             }
         } else {
@@ -660,26 +691,39 @@ pub(crate) fn draw<L: Layout>(
             },
         )?;
     }
-    if wins {
-        crate::sba::end_game(s, sink, player.opponent());
+    if let Some(cause) = wins {
+        crate::sba::end_game(s, sink, player.opponent(), cause);
     }
     Ok(())
 }
 
-/// Whether `player` controls a permanent whose replacement effect has them win rather than
-/// draw from an empty library.
-fn wins_instead_of_drawing<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> bool {
-    let replacing = s
-        .battlefield()
+/// Why `player`'s opponent loses, if `player` controls a permanent whose replacement effect
+/// has them win rather than draw from an empty library: that ability.
+fn wins_instead_of_drawing<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+) -> Option<LossCause<L>> {
+    s.battlefield()
         .iter()
         .filter(|&&slot| s.controller(slot) == player)
         .find_map(|&slot| {
-            trigger::face(s, t, slot)
+            let (index, a) = trigger::face(s, t, slot)
                 .abilities
                 .iter()
-                .find(|a| a.replacement == Replacement::WinInsteadOfDrawingFromEmptyLibrary)
-        });
-    replacing.inspect(|&a| crate::coverage::hit(a)).is_some()
+                .enumerate()
+                .find(|(_, a)| a.replacement == Replacement::WinInsteadOfDrawingFromEmptyLibrary)?;
+            crate::coverage::hit(a);
+            let o = s.object(slot);
+            Some(LossCause::Effect {
+                source: Some(s.object_ref(slot)),
+                card: o.card,
+                face: o.face,
+                ability: Some(FaceAbility::Own(
+                    u8::try_from(index).expect("a face has fewer than 256 abilities"),
+                )),
+            })
+        })
 }
 
 /// Deals damage ([CR 120.3](https://yawgatog.com/resources/magic-rules/#R1203)).

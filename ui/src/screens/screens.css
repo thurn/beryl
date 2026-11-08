@@ -2099,6 +2099,11 @@
   color: #fff;
   text-shadow: 0 1px 3px rgb(0 0 0 / 70%);
 }
+/* The card that ended the game, under the reason. */
+.game-over-card {
+  margin-top: 22px;
+  filter: drop-shadow(0 8px 18px rgb(0 0 0 / 60%));
+}
 .game-over-icon {
   width: 28px;
   height: 28px;

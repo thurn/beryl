@@ -56,6 +56,11 @@
       "until": "game over"
     },
     {
+      "name": "game-over-jace",
+      "board": "game-over-jace",
+      "until": "game over"
+    },
+    {
       "name": "combat-blockers",
       "board": "combat-blockers",
       "until": "first priority decision for seat 0",

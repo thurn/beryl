@@ -1299,7 +1299,13 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// asks nothing more.
     pub fn win_game(&mut self, player: Seat) {
         if self.state.outcome.is_none() {
-            crate::sba::end_game(self.state, self.sink, player.opponent());
+            let cause = crate::event::LossCause::Effect {
+                source: self.entry.object,
+                card: self.entry.card,
+                face: self.entry.face,
+                ability: self.entry.ability,
+            };
+            crate::sba::end_game(self.state, self.sink, player.opponent(), cause);
         }
     }
 

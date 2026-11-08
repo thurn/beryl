@@ -17,6 +17,7 @@ import {
   setStops,
   type AgentView,
   type CandidateIndex,
+  type Culprit,
   type DecisionView,
   type LossReason,
   type ObjectView,
@@ -30,7 +31,7 @@ import { Board } from "../game/Board";
 import { ChoiceOverlay } from "../game/ChoiceOverlay";
 import { choiceOf, floats, type Choice } from "../game/choices";
 import { follow, isOpening, twins, type Intent } from "../game/decisions";
-import { useFace } from "../game/faces";
+import { BLANK, paragraphOf, useAbilityFace, useFace } from "../game/faces";
 import { useHoverInspect, type HoverHandlers } from "../game/Piles";
 import { eventsHold, HOLD, type Playback } from "../game/playback";
 import { Stage } from "../game/Stage";
@@ -863,6 +864,9 @@ function GameOver({
           {reason.text}
         </p>
       )}
+      {outcome?.kind === "win" && outcome.by && (
+        <CulpritCard culprit={outcome.by} />
+      )}
       <Dock>
         <DockButtons>
           <Button onClick={() => (window.location.hash = "#/")}>
@@ -873,6 +877,21 @@ function GameOver({
           </Button>
         </DockButtons>
       </Dock>
+    </div>
+  );
+}
+
+/** The card that ended the game, under the reason: with the ability that did it lit, as a
+ * plate over its scan, or whole for a spell or a source of damage. */
+function CulpritCard({ culprit }: { culprit: Culprit }) {
+  const face = useAbilityFace(culprit.name, undefined, BLANK);
+  const lit =
+    culprit.ability && face.text
+      ? paragraphOf(face.text, culprit.ability)
+      : undefined;
+  return (
+    <div className="game-over-card" data-card={culprit.name}>
+      <Card card={{ ...face, lit }} width={230} />
     </div>
   );
 }

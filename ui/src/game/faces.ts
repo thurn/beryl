@@ -9,7 +9,11 @@ import type {
 } from "../components/Card";
 import type { AbilityIcon } from "../components/Mana";
 import { tokenFace, useCardArt, type CardArt, type CardFace } from "../cards";
-import type { CounterView, ObjectView } from "../generated/protocol";
+import type {
+  AbilityRef,
+  CounterView,
+  ObjectView,
+} from "../generated/protocol";
 
 const ABILITIES: [RegExp, AbilityIcon][] = [
   [/^Flying\b/m, "flying"],
@@ -183,6 +187,20 @@ export function abilityParagraph(
     ? /^(When|Whenever|At)\b|\(.*\b([Ww]hen|[Ww]henever|At the beginning)\b/
     : /^[^(]*:/;
   return text.split("\n").flatMap((p, i) => (kind.test(p) ? [i] : []))[nth];
+}
+
+/** The paragraph of a card's rules text that says ability `ref`: a triggered or activated one
+ * as `abilityParagraph` finds it, or the `nth` static one, a paragraph that is neither and is
+ * a sentence (keyword lines such as "Flying" are not). */
+export function paragraphOf(text: string, ref: AbilityRef): number | undefined {
+  if (ref.kind !== "static")
+    return abilityParagraph(text, ref.kind === "triggered", ref.nth);
+  const other = (p: string) =>
+    abilityParagraph(p, true, 0) !== undefined ||
+    abilityParagraph(p, false, 0) !== undefined;
+  return text
+    .split("\n")
+    .flatMap((p, i) => (/\.\)?$/.test(p) && !other(p) ? [i] : []))[ref.nth];
 }
 
 /** A paragraph of rules text without its reminder text, as a menu or the cast step says it. */
