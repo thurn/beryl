@@ -5,10 +5,10 @@
 
 use beryl_cards::CARDS;
 use beryl_cards::names::{
-    AANGS_ICEBERG, GET_LOST, ISLAND, JACE_VRYNS_PRODIGY, MANA_CRYPT, MANA_DRAIN, PLAINS, STOCK_UP,
-    THUNDERTRAP_TRAINER, TRINKET_MAGE,
+    AANGS_ICEBERG, GET_LOST, ISLAND, JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY, MANA_CRYPT,
+    MANA_DRAIN, PLAINS, STOCK_UP, THUNDERTRAP_TRAINER, TRINKET_MAGE,
 };
-use beryl_engine::state::StackEntry;
+use beryl_engine::state::{CounterKind, StackEntry};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_search::Budget;
 use beryl_session::protocol::{Candidate, Kind, Side, StackItem, ZoneName};
@@ -151,8 +151,9 @@ fn priority_on_a_stack(a: &Asked) -> bool {
     kind(&a.view) == Kind::Priority && !a.stack.is_empty()
 }
 
-/// Whether the human's own spell or ability is on top, and only their own entries came onto
-/// the stack or left it since their previous answer in this step.
+/// Whether the human's own spell or ability is on top, and nothing of the opponent's came
+/// onto the stack since their previous answer in this step: an opponent's response that has
+/// since resolved gives them nothing new to answer.
 fn only_own_doings(a: &Asked) -> bool {
     let Some(before) = &a.after_previous else {
         return false;
@@ -163,9 +164,7 @@ fn only_own_doings(a: &Asked) -> bool {
         .zip(&a.stack)
         .take_while(|(x, y)| x == y)
         .count();
-    a.stack.last().is_some_and(own)
-        && before[kept..].iter().all(own)
-        && a.stack[kept..].iter().all(own)
+    a.stack.last().is_some_and(own) && a.stack[kept..].iter().all(own)
 }
 
 /// The replay reproduces the game: cut at the end, it shows the last view.
@@ -200,10 +199,10 @@ fn a_humans_own_spell_resolves_without_their_priority_under_smart_stops_only() {
 }
 
 #[test]
-fn an_opponents_response_gives_the_human_priority() {
-    let (mut responses, mut after_responses) = (0, 0);
-    // A response leaving the stack from above the human's spell is rare: play seeds until one
-    // has (seed 34, once the mulligan put its bottom picks after the keep).
+fn an_opponents_response_gives_the_human_priority_until_it_resolves() {
+    let (mut responses, mut resolved_unasked) = (0, 0);
+    // A response leaving the stack from above the human's spell is rare (seed 34 has one,
+    // once the mulligan put its bottom picks after the keep).
     for seed in 0..64 {
         let mut game = new_game(seed, get_lost(), StopsSetting::SMART);
         let (views, asked) = play(&mut game);
@@ -216,24 +215,36 @@ fn an_opponents_response_gives_the_human_priority() {
             );
             if a.stack.last().is_some_and(theirs) {
                 responses += 1;
-            } else if a
-                .after_previous
-                .as_ref()
-                .is_some_and(|before| before.iter().any(|e| theirs(e) && !a.stack.contains(e)))
-            {
-                // The opponent's response left the stack, from above the human's spell.
-                after_responses += 1;
             }
         }
-        assert_replays(&game, &views);
-        if responses > 0 && after_responses > 0 {
-            break;
+        // Passing to the opponent's response leaves the human's spell beneath it on top once
+        // it resolves: that spell resolves too, without asking them again.
+        for pair in asked.windows(2) {
+            let [then, next] = pair else { unreachable!() };
+            let [below @ .., mine, response] = then.stack.as_slice() else {
+                continue;
+            };
+            if kind(&then.view) != Kind::Priority
+                || !theirs(response)
+                || theirs(mine)
+                || !matches!(then.chosen, Candidate::Pass)
+            {
+                continue;
+            }
+            let mut left = below.to_vec();
+            left.push(*mine);
+            assert!(
+                kind(&next.view) != Kind::Priority || next.stack != left,
+                "seed {seed}: asked again at their own spell once the response resolved"
+            );
+            resolved_unasked += usize::from(!next.stack.contains(mine));
         }
+        assert_replays(&game, &views);
     }
     assert!(responses > 0, "the opponent never responded");
     assert!(
-        after_responses > 0,
-        "no response left the stack above the human's spell"
+        resolved_unasked > 0,
+        "no spell resolved unasked once a response above it left"
     );
 }
 
@@ -398,8 +409,29 @@ const STOCKED: Scenario = Scenario::new("stocked")
     )
     .library(P1, &[ISLAND, ISLAND, ISLAND]);
 
+/// [`TRINKET`] after Jace, the Mind Sculptor's 0, which puts two cards from the human's hand
+/// on top of their library: they know the card they draw next.
+const KNOWN_TOP: Scenario = Scenario::new("known top")
+    .battlefield(
+        P0,
+        &[
+            Permanent::new(ISLAND),
+            Permanent::new(ISLAND),
+            Permanent::new(ISLAND),
+            Permanent::new(JACE_THE_MIND_SCULPTOR).counters(CounterKind::Loyalty, 3),
+        ],
+    )
+    .hand(P0, &[TRINKET_MAGE, ISLAND, ISLAND])
+    .library(
+        P0,
+        &[
+            MANA_CRYPT, ISLAND, ISLAND, ISLAND, ISLAND, ISLAND, MANA_CRYPT,
+        ],
+    )
+    .library(P1, &[ISLAND, ISLAND, ISLAND]);
+
 /// The kinds of decision the human is asked after casting `scenario`'s Trinket Mage, up to its
-/// search, having first cast anything else they hold.
+/// search, having first cast anything else they hold and used any Jace, the Mind Sculptor's 0.
 fn asked_after_trinket_mage(scenario: &Scenario, stops: StopsSetting) -> Vec<Kind> {
     let (table, state) = beryl_scenario::position(&CARDS, scenario).unwrap();
     let random = beryl_search::agent("random").unwrap();
@@ -448,8 +480,19 @@ fn asked_after_trinket_mage(scenario: &Scenario, stops: StopsSetting) -> Vec<Kin
         let mage = casts
             .iter()
             .find(|(_, n)| n.as_deref() == Some(TRINKET_MAGE));
+        let jace = decision.candidates.iter().position(|c| {
+            matches!(c.option, Candidate::Activate { slot, ability: 1, .. }
+                if name(slot).as_deref() == Some(JACE_THE_MIND_SCULPTOR))
+        });
         // Otherwise the first: a pass, a card to take, or searching.
         let index = match (asked.is_none(), other, mage) {
+            (true, _, _) if jace.is_some() => jace.unwrap(),
+            // Jace's put-back keeps the Mage in hand.
+            (true, None, None) if decision.kind != Kind::Priority => decision
+                .candidates
+                .iter()
+                .position(|c| !c.label.contains(TRINKET_MAGE))
+                .unwrap_or(0),
             (true, Some(&(i, _)), _) => i,
             (true, None, Some(&(i, _))) => {
                 asked = Some(Vec::new());
@@ -463,17 +506,25 @@ fn asked_after_trinket_mage(scenario: &Scenario, stops: StopsSetting) -> Vec<Kin
     asked.expect("the Mage was cast")
 }
 
-/// Declining Trinket Mage's search differs from finding nothing only by the shuffle, which
-/// costs a player nothing worth asking about unless they know the card they draw next: the
-/// smart stops search, and the search itself may find nothing. Cards known only on the
-/// bottom, as Stock Up's, are no reason to ask; exact stops ask everyone.
+/// Declining Trinket Mage's search differs from finding nothing only by the shuffle: the
+/// smart stops search, whatever the human knows of their library, and the search itself may
+/// find nothing. Exact stops ask.
 #[test]
-fn smart_stops_search_a_library_whose_top_the_human_does_not_know() {
-    let smart = asked_after_trinket_mage(&TRINKET, StopsSetting::SMART);
-    assert!(!smart.contains(&Kind::YesNo), "{smart:?}");
-    assert_eq!(smart.last(), Some(&Kind::ChooseUpTo));
-    let bottom = asked_after_trinket_mage(&STOCKED, StopsSetting::SMART);
-    assert!(!bottom.contains(&Kind::YesNo), "{bottom:?}");
+fn smart_stops_search_unasked() {
+    for scenario in [&TRINKET, &STOCKED, &KNOWN_TOP] {
+        let smart = asked_after_trinket_mage(scenario, StopsSetting::SMART);
+        assert!(
+            !smart.contains(&Kind::YesNo),
+            "{}: {smart:?}",
+            scenario.name
+        );
+        assert_eq!(
+            smart.last(),
+            Some(&Kind::ChooseUpTo),
+            "{}: {smart:?}",
+            scenario.name
+        );
+    }
     let exact = asked_after_trinket_mage(&TRINKET, StopsSetting::EXACT);
     assert!(exact.contains(&Kind::YesNo), "{exact:?}");
 }

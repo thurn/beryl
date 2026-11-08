@@ -160,6 +160,10 @@ work until `--power full`.
 - When launching more than one subagent at a time, please always use Sonnet.
 - When designing a UI, reduce the amount of words you put on screen by at least
   50%.
+- Never ask the player a question whose answer the next screen could take: open
+  the choice itself with a way to decline (a search with "find nothing", not
+  "Search?" first). Never give them priority they would only pass, as with their
+  own spell alone on the stack. Arena's flow is the reference.
 - It's fine to file your own beads outside a specified enact role, but please
   offer to fix them inline in that case, don't just throw them onto the backlog.
 
