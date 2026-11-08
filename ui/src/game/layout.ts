@@ -439,13 +439,15 @@ function turned(
 const HAND_TUCK = 67;
 
 /** The hand raised for a choice of its cards (a discard): the whole fan lifted into view,
- * larger and flatter, each card whole above the near edge. */
+ * larger and flatter, each card whole above your life orb (its top at y 625) and clear of the
+ * action dock at the right (from x 1310): its middle `room` wide between the outer cards'
+ * centers. */
 export const RAISED_HAND = {
-  top: 470,
-  scale: 1.12,
+  top: 325,
+  scale: 1.1,
   spacing: 214,
-  room: 1180,
-  sag: 3,
+  room: 940,
+  sag: 2,
   turn: 2,
 };
 
@@ -475,8 +477,7 @@ function handPlacements(cards: ObjectView[], hold: HandHold): Placement[] {
       width: FULL_WIDTH,
       span: FULL_WIDTH,
       opacity: 1,
-      // Raised, over the life orb (z 250) it rises past.
-      z: (raised ? 260 : 200) + i,
+      z: 200 + i,
       ...turned(left, top, (i - mid) * fan.turn + (raised ? 0 : HAND.bias), [
         width / 2,
         0,

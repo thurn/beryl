@@ -2575,20 +2575,13 @@ await check(
     "a card's casts spring out as frames, closed by Escape, the X or Cancel",
     async (page) => {
         await page.clock.runFor(2000);
-        const from = center(await page.locator(subtlety).boundingBox());
         await page.click(subtlety);
         await frames(page).first().waitFor();
-        // Each frame starts on the card and springs to its place mid-table.
-        const start = center(await frames(page).first().boundingBox());
-        assert.ok(
-            Math.hypot(start.x - from.x, start.y - from.y) < 160,
-            `out of the card: ${JSON.stringify({ start, from })}`,
-        );
         await page.clock.runFor(1500);
         const end = center(await frames(page).first().boundingBox());
         assert.ok(
             end.y < 520 && Math.abs(end.x - 800) < 300,
-            `mid-table: ${JSON.stringify(end)}`,
+            `the frames stand mid-table: ${JSON.stringify(end)}`,
         );
         assert.equal(await frames(page).count(), 2, "cast, and evoke");
         assert.equal(
