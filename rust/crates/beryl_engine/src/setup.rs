@@ -4,6 +4,7 @@
 //! so identities, knowledge and zone membership stay in agreement.
 
 use crate::card::FaceIx;
+use crate::event::Sink;
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
@@ -55,7 +56,7 @@ impl<L: Layout> State<L> {
     /// this way has been there since its controller's turn began, so it is not summoning sick
     /// ([CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026)).
     pub fn place(&mut self, slot: L::Slot, zone: Zone) -> Result<(), Full> {
-        zone::move_to(self, slot, zone)?;
+        zone::move_to(self, &mut Sink::off(), slot, zone)?;
         if zone == Zone::Battlefield {
             self.object_mut(slot)
                 .flags

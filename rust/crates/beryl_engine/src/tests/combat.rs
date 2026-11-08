@@ -198,7 +198,13 @@ impl Game {
             .iter()
             .find(|&slot| self.t.def(self.s.object(slot).card).name == name)
             .expect("a card left to put onto the battlefield");
-        zone::move_to(&mut self.s, slot, Zone::Battlefield).unwrap();
+        zone::move_to(
+            &mut self.s,
+            &mut crate::event::Sink::off(),
+            slot,
+            Zone::Battlefield,
+        )
+        .unwrap();
         let o = self.s.object_mut(slot);
         o.flags.set(ObjectFlags::SUMMONING_SICK, false);
         if let Some(loyalty) = self.t.def(o.card).front().loyalty {
@@ -580,7 +586,13 @@ fn an_attacker_stays_blocked_when_its_blocker_leaves() {
     g.pick(DecisionKind::Blocker, Opt::Block(bear));
     // Stop after blockers are declared and remove the blocker (CR 506.4, 509.1h).
     stop_at(&mut g, TurnStep::DeclareBlockers);
-    zone::move_to(&mut g.s, bear, Zone::Graveyard).unwrap();
+    zone::move_to(
+        &mut g.s,
+        &mut crate::event::Sink::off(),
+        bear,
+        Zone::Graveyard,
+    )
+    .unwrap();
     g.finish_combat();
     assert_eq!(g.life(d), 20);
     assert_eq!(g.s.object(ogre).damage, 0);
@@ -596,7 +608,13 @@ fn an_attacker_whose_planeswalker_left_deals_no_damage() {
     g.pick(DecisionKind::Attacker, Opt::Attack(ogre));
     g.pick(DecisionKind::AttackTarget, Opt::Defender(Some(walker)));
     stop_at(&mut g, TurnStep::DeclareAttackers);
-    zone::move_to(&mut g.s, walker, Zone::Graveyard).unwrap();
+    zone::move_to(
+        &mut g.s,
+        &mut crate::event::Sink::off(),
+        walker,
+        Zone::Graveyard,
+    )
+    .unwrap();
     g.finish_combat();
     assert_eq!(g.life(d), 20);
 }
@@ -610,7 +628,13 @@ fn combat_goes_on_when_every_declared_attacker_is_removed() {
     g.pass_to_combat();
     g.pick(DecisionKind::Attacker, Opt::Attack(bear));
     stop_at(&mut g, TurnStep::DeclareAttackers);
-    zone::move_to(&mut g.s, bear, Zone::Graveyard).unwrap();
+    zone::move_to(
+        &mut g.s,
+        &mut crate::event::Sink::off(),
+        bear,
+        Zone::Graveyard,
+    )
+    .unwrap();
     g.finish_combat();
     let steps = g.steps();
     assert!(steps.contains(&TurnStep::DeclareBlockers), "{steps:?}");

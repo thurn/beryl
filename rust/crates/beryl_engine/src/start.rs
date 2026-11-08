@@ -75,6 +75,22 @@ impl State {
 }
 
 impl<L: Layout> State<L> {
+    /// Settles who won the coin flip of [CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031)
+    /// as a record says, rather than as the game's randomness drew it: "the players determine
+    /// which one of them will choose who takes the first turn". Only while the winner's choice
+    /// to play or draw is open.
+    ///
+    /// # Panics
+    ///
+    /// If the choice to play or draw is not open.
+    pub fn set_flip_winner(&mut self, chooser: Seat) {
+        assert!(
+            matches!(self.pending, Pending::PlayOrDraw { .. }),
+            "the choice to play or draw is open"
+        );
+        self.pending = Pending::PlayOrDraw { chooser };
+    }
+
     /// A state with no objects, before the game begins.
     pub(crate) fn empty(profile: Profile) -> State<L> {
         State {
@@ -133,7 +149,7 @@ pub(crate) fn set_starting_player<L: Layout>(
     s.turn.starting_player = starting;
     s.turn.active = starting;
     for player in [starting, starting.opponent()] {
-        zone::draw_n(s, player, STARTING_HAND)?;
+        zone::draw_n(s, sink, player, STARTING_HAND)?;
     }
     s.pending = Pending::Mulligans;
     advance_mulligans(s, t, sink)
@@ -186,7 +202,7 @@ pub(crate) fn put_on_bottom<L: Layout>(
     player: Seat,
     slot: L::Slot,
 ) -> Result<(), Full> {
-    zone::put_on_bottom(s, slot)?;
+    zone::put_on_bottom(s, sink, slot)?;
     s.player_mut(player).to_bottom -= 1;
     advance_mulligans(s, t, sink)
 }
@@ -233,10 +249,10 @@ fn advance_mulligans<L: Layout>(
             }
             any = true;
             for slot in turn::hand(s, p).iter() {
-                zone::move_to(s, slot, Zone::Library)?;
+                zone::move_to(s, sink, slot, Zone::Library)?;
             }
             zone::shuffle_library(s, p);
-            zone::draw_n(s, p, STARTING_HAND)?;
+            zone::draw_n(s, sink, p, STARTING_HAND)?;
             let player = s.player_mut(p);
             player.mulligans += 1;
             player.mulligan = MulliganStatus::Undeclared;

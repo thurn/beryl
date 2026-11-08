@@ -13,6 +13,7 @@
 use crate::bitboard::Bitboard;
 use crate::card::{Ability, AbilityKind, CastingOption, FaceAbility};
 use crate::cast::{self, entry_ability};
+use crate::chance;
 use crate::decision::{Answers, Decision};
 use crate::effect::EffectCtx;
 use crate::engine::Scratch;
@@ -74,7 +75,7 @@ pub(crate) fn resolve<L: Layout>(
         }
         Some(question) => {
             sink.truncate(mark);
-            keep_what_was_seen(s, spare);
+            keep_what_was_seen(s, spare, chance::replaying(sink));
             // While the question is open no one holds priority; the finished resolution gives
             // it to the active player (CR 117.3b).
             s.turn.passes = 0;
@@ -92,8 +93,22 @@ pub(crate) fn resolve<L: Layout>(
 /// A slot keeps its identity through the moves of a run, so a card seen there is the card the
 /// committed state holds in that slot, unless something random dealt identities anew (a
 /// shuffle, a random order); then only a slot that is still the same object counts.
-fn keep_what_was_seen<L: Layout>(s: &mut State<L>, run: &State<L>) {
+///
+/// A run that replayed a save's record (`settled`) may have bound recorded cards to the slots
+/// it revealed, trading identities among the cards no player knew ([`chance`]). With nothing
+/// random dealt since, the committed state takes those identities, still unknown to every
+/// player there, so the cards seen are the cards it holds and the run replays to the same
+/// question.
+fn keep_what_was_seen<L: Layout>(s: &mut State<L>, run: &State<L>, settled: bool) {
     let random = run.rng != s.rng;
+    if settled && !random {
+        let known = s.knowledge[0] | s.knowledge[1];
+        for p in Seat::BOTH {
+            for slot in (s.zone(p, Zone::Library) & !known).iter() {
+                s.object_mut(slot).card = run.object(slot).card;
+            }
+        }
+    }
     for p in Seat::BOTH {
         let gained = run.knowledge[p.index()] & !s.knowledge[p.index()];
         for slot in gained.iter() {

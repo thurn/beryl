@@ -6,6 +6,20 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- Choices the engine and session make for a player depended on slot numbers,
+  which the deck deal and every shuffle choose at random: mana sources of one
+  rank sorted by lowest slot (`mana::Sources::of`), a class's members tapped in
+  slot order, the human's look-ahead met hand costs in slot order before its
+  bounded search gave up, and an answer inside a paused resolution was described
+  in the committed position, where `collapse`'s lowest-slot pick among
+  interchangeable cards could be the copy just drawn (still in the library
+  there) or the one already in hand. So the same game dealt by another seed
+  tapped other lands, and a save replayed under another seed went elsewhere.
+  Found by replaying saves under another seed. Prevention: never let a slot
+  number, or a list built in slot order, break a tie: order by card, then by
+  battlefield order; test every behavior that must not depend on randomness by
+  replaying under another seed.
+
 - Knowledge of hidden cards is kept per slot, so a card a player saw in the
   opponent's hand (fatesealed, then drawn) stayed known after the opponent
   brainstormed, though nothing shows which hand cards went back on the library

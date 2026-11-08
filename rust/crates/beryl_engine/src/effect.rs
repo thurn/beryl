@@ -9,6 +9,7 @@ use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, CardDef, FaceAbility, FaceIx, Flow, ManaColor, ManaCost, Modification, Pause, Types,
 };
+use crate::chance;
 use crate::decision::{Answers, Ask, Candidates, Choice, Decision, DecisionKind, Opt, StallReason};
 use crate::event::{self, Entry, Reason, Recipient, Sink, TokenEntry};
 use crate::filter::Filter;
@@ -717,6 +718,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// show that card to all players for a brief time." Each player knows it from then on,
     /// until it is shuffled or otherwise hidden anew.
     pub fn reveal(&mut self, slot: L::Slot) {
+        chance::settle(self.state, self.sink, slot);
         for k in &mut self.state.knowledge {
             k.insert(slot);
         }
@@ -775,6 +777,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)), "zones in which not
     /// all players can be expected to see the cards' faces."
     pub fn look_at(&mut self, player: Seat, cards: Bitboard<L::Slot>) {
+        chance::settle_all(self.state, self.sink, cards);
         self.state.knowledge[player.index()] |= cards;
     }
 
@@ -1344,9 +1347,10 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// ([CR 705.2](https://yawgatog.com/resources/magic-rules/#R7052)): "the player that flips
     /// the coin calls 'heads' or 'tails.' If the call matches the result, the player wins the
     /// flip." A fair coin against any call is a fair win, so one draw from the game's
-    /// randomness decides it (architecture §14).
+    /// randomness decides it (architecture §14), or while a save replays, its record
+    /// ([`chance`]).
     pub fn flip_coin(&mut self, player: Seat) -> bool {
-        let won = self.state.rng.other.below(2) == 0;
+        let won = chance::flip(self.state, self.sink, player);
         let source = self.source();
         let r = event::settle(
             self.state,

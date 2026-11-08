@@ -828,6 +828,11 @@ slot.
 - **Shuffling rebinds identities among the shuffled slots** and clears their
   knowledge bits, in addition to reordering. Without the rebinding, the owner of
   a Brainstormed-back Ponder would know where it went.
+- **A card's identity is settled as a player first learns it.** Every chokepoint
+  above calls `chance::settle` first, while no player knows the card yet. Live
+  play keeps what the deal and the shuffles put there and records it; a replay
+  swaps in the recorded card from another slot of the same owner and zone that
+  no player knows, the move a shuffle's rebinding makes (§14).
 - Face-down exile (Memory Jar, Shelldock Isle) is a known-to-owner slot in
   exile; cards exiled face up are known to both. A face-down permanent (a
   manifested card) is a known-to-controller slot on the battlefield whose face
@@ -859,18 +864,34 @@ zone.
   bottom orders). Separate streams keep shuffle outcomes stable across replays
   whose other random events differ. Search gives each copy a derived seed so
   sibling rollouts diverge.
+- **A save records what chance produced, not the seed** (save format 3). The
+  session lends the engine a `chance::Chance` through the sink of the calls that
+  play its game on; search never does, and pays one branch per chokepoint. It
+  records each card a player first learns (§13), by its owner and name, and each
+  coin flip's winner, after the log entry they followed, and the play-first
+  flip's winner in the file. A replay hands chance the outcomes logged after
+  each entry as that entry plays out: each first-seen card is dealt the recorded
+  card, each flip falls as recorded, and the seed decides only what nobody has
+  seen. A shuffled library's order never matters until one of its cards is
+  revealed, and a random bottom order settles the same way. An outcome chance
+  cannot reproduce, one the game makes that the record lacks, or one the record
+  has that never happens stops the replay at its turn and step. Slot numbers are
+  random too (the deal and each shuffle choose them), so no tie the engine or
+  session breaks for a player may depend on them: a save must replay the same
+  under another seed.
 - No `std::collections::HashMap` with `RandomState`, no wall clock, no statics
   with interior mutability, no thread-locals. A test greps the engine crates for
   the banned types, as Arcana does.
-- A replay is `(decklists, seed, choices)`. Replaying one on the same build
-  reproduces the game bit for bit, and a scenario can be cut from a replay.
-  Since save format 2, each choice is recorded by what it does (who decided, the
-  turn and step, the kind of decision, and the candidate by rules terms: cast
-  this card, attack with that creature, target that player), with its old index
-  kept only to break ties. A later build replays it though candidates moved, and
-  goes on where record and game part only if the rules leave nothing to choose:
-  one candidate, a priority passed unasked, or a pass no priority asks. Anything
-  else stops the replay at the turn and step.
+- A replay is `(decklists, seed, choices, chance)`. Replaying one on the same
+  build reproduces the game bit for bit, and a scenario can be cut from a
+  replay. Since save format 2, each choice is recorded by what it does (who
+  decided, the turn and step, the kind of decision, and the candidate by rules
+  terms: cast this card, attack with that creature, target that player, in the
+  position the question is asked in), with its old index kept only to break
+  ties. A later build replays it though candidates moved, and goes on where
+  record and game part only if the rules leave nothing to choose: one candidate,
+  a priority passed unasked, or a pass no priority asks. Anything else stops the
+  replay at the turn and step.
 - `State` implements `Hash` over its fields, computed on demand for tests,
   divergence checks and the first transposition tables. The mutation chokepoints
   are placed so an incremental Zobrist hash can be added without touching card
@@ -1192,11 +1213,11 @@ human's decision the session waits for one `choose(decision, index)` command,
 naming the decision id it received; the session's record of the open decision is
 the one place an answer is checked. AI decisions run on the session thread, and
 a search may use a pool, so IPC never blocks. The webview never sees a `State`.
-Every session records seed, decklists and the choice log as a replay file (§14),
-rewritten at each decision of the human's, and the app resumes the newest
-unfinished one on launch. The protocol's TypeScript types are generated from the
-Rust types, and `ui/src/ipc.ts` keeps the typed wrappers for the commands and
-events.
+Every session records seed, decklists, the choice log and what chance produced
+as a replay file (§14), rewritten at each decision of the human's, and the app
+resumes the newest unfinished one on launch. The protocol's TypeScript types are
+generated from the Rust types, and `ui/src/ipc.ts` keeps the typed wrappers for
+the commands and events.
 
 The human plays under the smart stops of §15 by default. A setting switches to
 the exact profile, which offers every priority. Milestone 1 offers a game

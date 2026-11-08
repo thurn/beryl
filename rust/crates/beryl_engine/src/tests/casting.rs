@@ -89,8 +89,14 @@ fn a_spell_whose_targets_all_became_illegal_does_not_resolve() {
         bear
     );
     // The bear leaves and comes back: a new object (CR 400.7), so an illegal target.
-    crate::zone::move_to(&mut g.s, bear, Zone::Hand).unwrap();
-    crate::zone::move_to(&mut g.s, bear, Zone::Battlefield).unwrap();
+    crate::zone::move_to(&mut g.s, &mut crate::event::Sink::off(), bear, Zone::Hand).unwrap();
+    crate::zone::move_to(
+        &mut g.s,
+        &mut crate::event::Sink::off(),
+        bear,
+        Zone::Battlefield,
+    )
+    .unwrap();
     g.pass_both();
     assert_eq!(g.s.object(bear).zone, Zone::Battlefield, "unaffected");
     assert_eq!(g.s.object(removal).zone, Zone::Graveyard);

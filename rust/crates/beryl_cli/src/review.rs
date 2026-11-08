@@ -145,8 +145,10 @@ fn review(path: &Path, searcher_name: Option<&str>, only: Option<u16>) -> Result
                         // A halt is the session's: only decisionless play separates it from
                         // this decision.
                         Some(Entry::Halt) => keep(&mut points, before),
-                        // The session passes for the human after it; each pass is logged.
-                        Some(Entry::PassOn) => {}
+                        // The session passes for the human after it; each pass is logged. The
+                        // review plays from the seed on the build that wrote the file, which deals
+                        // and flips as the game did.
+                        Some(Entry::PassOn | Entry::Reveal { .. } | Entry::Flip { .. }) => {}
                         Some(Entry::Concede) => {
                             transcript.note("(the human conceded)");
                             break None;
@@ -159,7 +161,7 @@ fn review(path: &Path, searcher_name: Option<&str>, only: Option<u16>) -> Result
                 }
                 let c = match entry {
                     Some(Entry::Choice(chosen) | Entry::Auto(chosen)) => chosen
-                        .find(&t, &s, &d)
+                        .find(&t, view(&s, &t, &mut x), &d)
                         .ok_or("no candidate does what the record did")?,
                     Some(Entry::Undo) => {
                         let Some(point) = points.pop_back() else {

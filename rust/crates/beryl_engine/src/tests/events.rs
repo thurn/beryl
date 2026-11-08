@@ -515,7 +515,7 @@ fn game_with_seed(seed: u64) -> (GameTable, State, Seat) {
             .iter()
             .find(|&slot| t.def(s.object(slot).card).name == "Test Land")
             .unwrap();
-        crate::zone::move_to(&mut s, land, Zone::Hand).unwrap();
+        crate::zone::move_to(&mut s, &mut crate::event::Sink::off(), land, Zone::Hand).unwrap();
     }
     let p = s.turn().starting_player;
     (t, s, p)
@@ -614,7 +614,7 @@ fn an_enters_trigger_resolves_after_the_land_is_played() {
     let (t, mut s, p) = game();
     let mut x = Scratch::recording();
     let land = find(&s, &t, p, "Test Gain Land");
-    crate::zone::move_to(&mut s, land, Zone::Hand).unwrap();
+    crate::zone::move_to(&mut s, &mut crate::event::Sink::off(), land, Zone::Hand).unwrap();
     let d = decide_with(&t, &mut s, &mut x);
     let play = (0..d.len() as u16)
         .find(|&i| d.candidates.option(Choice(i)) == Some(Opt::PlayLand(land)))
@@ -1032,7 +1032,7 @@ fn lands_enter_tapped_conditionally_or_unless_life_is_paid() {
         let (t, mut s, p) = game();
         let mut x = Scratch::new();
         let springs = find(&s, &t, p, "Test Springs");
-        crate::zone::move_to(&mut s, springs, Zone::Hand).unwrap();
+        crate::zone::move_to(&mut s, &mut crate::event::Sink::off(), springs, Zone::Hand).unwrap();
         let d = decide_with(&t, &mut s, &mut x);
         let play = (0..d.len() as u16)
             .find(|&i| d.candidates.option(Choice(i)) == Some(Opt::PlayLand(springs)))
@@ -1055,7 +1055,7 @@ fn lands_enter_tapped_conditionally_or_unless_life_is_paid() {
     let mut x = Scratch::new();
     s.player_mut(p).life = 2;
     let springs = find(&s, &t, p, "Test Springs");
-    crate::zone::move_to(&mut s, springs, Zone::Hand).unwrap();
+    crate::zone::move_to(&mut s, &mut crate::event::Sink::off(), springs, Zone::Hand).unwrap();
     let d = decide_with(&t, &mut s, &mut x);
     let play = (0..d.len() as u16)
         .find(|&i| d.candidates.option(Choice(i)) == Some(Opt::PlayLand(springs)))
@@ -1354,7 +1354,13 @@ fn an_object_exiled_until_its_exiler_leaves_returns_under_its_owners_control() {
 fn reading_derived_after_a_raw_change_without_a_refresh_panics() {
     let (t, mut s, p) = game();
     let bear = find(&s, &t, p, "Test Bear");
-    crate::zone::move_to(&mut s, bear, Zone::Battlefield).unwrap();
+    crate::zone::move_to(
+        &mut s,
+        &mut crate::event::Sink::off(),
+        bear,
+        Zone::Battlefield,
+    )
+    .unwrap();
     let _ = s.derived(bear);
 }
 

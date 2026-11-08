@@ -473,9 +473,11 @@ impl<L: Layout> Sources<L> {
                 })?;
             }
         }
+        // Classes of one rank by card, never by slot, which the game's randomness chose as it
+        // dealt the cards to their slots: any member of a class of one card names it.
         classes
             .as_mut_slice()
-            .sort_by_key(|c| (c.rank, c.members.iter().next()));
+            .sort_by_key(|c| (c.rank, c.members.iter().next().map(|m| s.card(m))));
         Ok(Sources { classes })
     }
 
@@ -1031,7 +1033,15 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
             && (sorcery || instant_speed(s, face, player))
     };
     let activatable = |a: &Ability| sorcery || a.timing == Timing::Instant;
+    // The hand by card, not by slot: [`Lookahead::together`]'s search is bounded, so the order
+    // it meets the costs in can decide, and the slots are where the game's randomness dealt
+    // the cards.
+    let mut hand: L::Queue<L::Slot, 64> = Default::default();
     for slot in s.zone(player, Zone::Hand).iter() {
+        let _ = hand.push(slot);
+    }
+    hand.as_mut_slice().sort_by_key(|&slot| s.object(slot).card);
+    for &slot in hand.as_slice() {
         let card = s.object(slot).card;
         let def = t.def(card);
         for f in def.face_ixs() {
@@ -1451,11 +1461,7 @@ pub(crate) fn pay<L: Layout>(
         let tapped: L::Queue<L::Slot, 64> = if human {
             human_taps(s, c, plan.taps[i])?
         } else {
-            let mut v: L::Queue<L::Slot, 64> = Default::default();
-            for slot in c.members.iter().take(usize::from(plan.taps[i])) {
-                v.push(slot)?;
-            }
-            v
+            by_card(s, c, plan.taps[i])?
         };
         if c.amount == 1 {
             for &slot in tapped.iter() {
@@ -1486,21 +1492,38 @@ pub(crate) fn pay<L: Layout>(
     Ok(())
 }
 
+/// The first `n` members of class `c` in the order a payment taps them: by card, so which of
+/// a class's cards it taps never depends on their slots, which the game's randomness chose as
+/// it dealt the cards to them; copies of one card are alike to it.
+fn by_card<L: Layout>(s: &State<L>, c: &Class<L>, n: u8) -> Result<L::Queue<L::Slot, 64>, Full> {
+    let mut v: L::Queue<L::Slot, 64> = Default::default();
+    let first = c.members.iter().next().map(|m| s.card(m));
+    if c.members.iter().all(|m| Some(s.card(m)) == first) {
+        for slot in c.members.iter().take(usize::from(n)) {
+            v.push(slot)?;
+        }
+        return Ok(v);
+    }
+    for slot in c.members.iter() {
+        v.push(slot)?;
+    }
+    v.as_mut_slice().sort_by_key(|&slot| s.card(slot));
+    while v.len() > usize::from(n) {
+        v.pop();
+    }
+    Ok(v)
+}
+
 /// The `n` members of class `c` the human's payment taps: its creatures last, free to attack
 /// or block as long as they can ([`Outlook`]).
 #[cold]
 #[inline(never)]
 fn human_taps<L: Layout>(s: &State<L>, c: &Class<L>, n: u8) -> Result<L::Queue<L::Slot, 64>, Full> {
-    let creature = |m: L::Slot| s.derived(m).types.intersects(Types::CREATURE);
-    let mut v: L::Queue<L::Slot, 64> = Default::default();
-    for slot in c
-        .members
-        .iter()
-        .filter(|&m| !creature(m))
-        .chain(c.members.iter().filter(|&m| creature(m)))
-        .take(usize::from(n))
-    {
-        v.push(slot)?;
+    let mut v = by_card(s, c, c.count())?;
+    v.as_mut_slice()
+        .sort_by_key(|&m| s.derived(m).types.intersects(Types::CREATURE));
+    while v.len() > usize::from(n) {
+        v.pop();
     }
     Ok(v)
 }

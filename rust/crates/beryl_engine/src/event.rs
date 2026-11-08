@@ -9,6 +9,7 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityKind, Castings, FaceAbility, FaceIx, ManaColor, Replacement, Types};
+use crate::chance::Chance;
 use crate::fixed::Full;
 use crate::ids::{CardIx, Seat};
 use crate::layers;
@@ -261,6 +262,9 @@ pub struct Sink<L: Layout = Small> {
     /// The work done since the scratch last took the counts: the sink goes everywhere the
     /// engine does it.
     pub(crate) work: Work,
+    /// The game's chance, lent by the session for the calls that play its game on: what the
+    /// knowledge chokepoints and coin flips record or replay ([`crate::chance`]).
+    pub(crate) chance: Option<Box<Chance>>,
 }
 
 /// Counts of the engine's work below `next` and `apply`, moved into the scratch's
@@ -285,6 +289,18 @@ impl<L: Layout> Sink<L> {
             on: true,
             ..Self::default()
         }
+    }
+
+    /// Lends the sink the game's chance, or with none takes it back: from then on the calls
+    /// given this sink record each random event's outcome, or replay a record
+    /// ([`crate::chance`]).
+    pub fn set_chance(&mut self, chance: Option<Chance>) {
+        self.chance = chance.map(Box::new);
+    }
+
+    /// Takes back the chance lent to the sink, if any.
+    pub fn take_chance(&mut self) -> Option<Chance> {
+        self.chance.take().map(|c| *c)
     }
 
     /// The events since the last drain, oldest first.
@@ -322,6 +338,7 @@ impl<L: Layout> Sink<L> {
             events: self.events.iter().map(Relayout::relayout).collect(),
             on: self.on,
             work: self.work,
+            chance: self.chance.clone(),
         }
     }
 
@@ -470,7 +487,7 @@ pub(crate) fn move_batch_to<L: Layout>(
         if dest == Zone::Battlefield && entry.pay_life {
             pay_life_to_enter(s, t, sink, slot, entry)?;
         }
-        zone::move_to_place(s, slot, dest, place)?;
+        zone::move_to_place(s, sink, slot, dest, place)?;
         if dest == Zone::Battlefield {
             let o = s.object_mut(slot);
             o.flags.set(ObjectFlags::TAPPED, entry.tapped);
@@ -697,7 +714,7 @@ pub(crate) fn draw<L: Layout>(
         } else {
             drawn += 1;
         }
-        zone::draw(s, player)?;
+        zone::draw(s, sink, player)?;
     }
     if drawn > 0 {
         settle(

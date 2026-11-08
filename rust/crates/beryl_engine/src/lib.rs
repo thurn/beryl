@@ -12,6 +12,7 @@
 pub mod bitboard;
 pub mod card;
 mod cast;
+pub mod chance;
 mod combat;
 pub mod coverage;
 pub mod decision;

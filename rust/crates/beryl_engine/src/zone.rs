@@ -4,6 +4,8 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::FaceIx;
+use crate::chance;
+use crate::event::Sink;
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, SlotId};
 use crate::layout::{Layout, Queue};
@@ -31,21 +33,37 @@ pub(crate) enum Place {
 /// [CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003): "If an object would go to
 /// any library, graveyard, or hand other than its owner's, it goes to its owner's
 /// corresponding zone." Zones are kept by owner, so that holds by construction.
-pub(crate) fn move_to<L: Layout>(s: &mut State<L>, slot: L::Slot, to: Zone) -> Result<(), Full> {
-    move_to_place(s, slot, to, Place::Top)
+pub(crate) fn move_to<L: Layout>(
+    s: &mut State<L>,
+    sink: &mut Sink<L>,
+    slot: L::Slot,
+    to: Zone,
+) -> Result<(), Full> {
+    move_to_place(s, sink, slot, to, Place::Top)
 }
 
 /// Moves an object to the bottom of its owner's library.
-pub(crate) fn put_on_bottom<L: Layout>(s: &mut State<L>, slot: L::Slot) -> Result<(), Full> {
-    move_to_place(s, slot, Zone::Library, Place::Bottom)
+pub(crate) fn put_on_bottom<L: Layout>(
+    s: &mut State<L>,
+    sink: &mut Sink<L>,
+    slot: L::Slot,
+) -> Result<(), Full> {
+    move_to_place(s, sink, slot, Zone::Library, Place::Bottom)
 }
 
 pub(crate) fn move_to_place<L: Layout>(
     s: &mut State<L>,
+    sink: &mut Sink<L>,
     slot: L::Slot,
     to: Zone,
     place: Place,
 ) -> Result<(), Full> {
+    // A card about to be seen has its identity settled first, before anything reads it
+    // ([`chance`]): CR 400.2 below has every player see a card in a public zone, and CR 402.3
+    // its owner see one in their hand.
+    if to.is_public() || to == Zone::Hand {
+        chance::settle(s, sink, slot);
+    }
     // [CR 708.9](https://yawgatog.com/resources/magic-rules/#R7089): "If a face-down permanent
     // ... moves from the battlefield to any other zone, its owner must reveal it to all players
     // as they move it." Whatever zone it goes to, a hidden one included.
@@ -204,20 +222,29 @@ fn remove_slot<S: SlotId>(list: &mut impl Queue<S>, slot: S) {
 /// [CR 121.4](https://yawgatog.com/resources/magic-rules/#R1214): "A player who attempts to
 /// draw a card from a library with no cards in it loses the game the next time a player would
 /// receive priority."
-pub(crate) fn draw<L: Layout>(s: &mut State<L>, player: Seat) -> Result<(), Full> {
+pub(crate) fn draw<L: Layout>(
+    s: &mut State<L>,
+    sink: &mut Sink<L>,
+    player: Seat,
+) -> Result<(), Full> {
     let Some(&slot) = s.zones.library[player.index()].as_slice().last() else {
         s.player_mut(player).drew_from_empty = true;
         return Ok(());
     };
-    move_to(s, slot, Zone::Hand)
+    move_to(s, sink, slot, Zone::Hand)
 }
 
 /// Draws `n` cards, one at a time ([CR 121.2](https://yawgatog.com/resources/magic-rules/#R1212)):
 /// "If a player is instructed to draw multiple cards, that player performs that many
 /// individual card draws."
-pub(crate) fn draw_n<L: Layout>(s: &mut State<L>, player: Seat, n: u8) -> Result<(), Full> {
+pub(crate) fn draw_n<L: Layout>(
+    s: &mut State<L>,
+    sink: &mut Sink<L>,
+    player: Seat,
+    n: u8,
+) -> Result<(), Full> {
     for _ in 0..n {
-        draw(s, player)?;
+        draw(s, sink, player)?;
     }
     Ok(())
 }

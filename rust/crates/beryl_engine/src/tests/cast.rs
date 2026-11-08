@@ -667,7 +667,7 @@ impl Game {
         let me = s.turn().starting_player;
         for p in Seat::BOTH {
             for slot in s.zone(p, Zone::Hand).iter() {
-                crate::zone::put_on_bottom(&mut s, slot).unwrap();
+                crate::zone::put_on_bottom(&mut s, &mut crate::event::Sink::off(), slot).unwrap();
             }
         }
         let mut g = Game {
@@ -689,7 +689,7 @@ impl Game {
             .iter()
             .find(|&&slot| self.t.def(self.s.object(slot).card).name == name)
             .unwrap_or_else(|| panic!("no {name} left in the library"));
-        crate::zone::move_to(&mut self.s, slot, zone).unwrap();
+        crate::zone::move_to(&mut self.s, &mut crate::event::Sink::off(), slot, zone).unwrap();
         if zone == Zone::Battlefield {
             let loyalty = self.t.def(self.s.object(slot).card).front().loyalty;
             let o = self.s.object_mut(slot);
@@ -710,7 +710,13 @@ impl Game {
             .iter()
             .find(|&&slot| self.t.def(self.s.object(slot).card).name == name)
             .unwrap_or_else(|| panic!("no {name} left in the library"));
-        crate::zone::move_to(&mut self.s, slot, Zone::Library).unwrap();
+        crate::zone::move_to(
+            &mut self.s,
+            &mut crate::event::Sink::off(),
+            slot,
+            Zone::Library,
+        )
+        .unwrap();
         slot
     }
 

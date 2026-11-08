@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
+use beryl_engine::chance::{Chance, Mismatch, Random};
 use beryl_engine::event::{Event, LossCause, Recipient};
 use beryl_engine::layout::Queue;
 use beryl_engine::rng::SplitMix64;
@@ -204,6 +205,19 @@ macro_rules! on_board {
     };
 }
 
+/// Runs `f` with `chance` lent to the scratch's sink ([`beryl_engine::chance`]), and takes it
+/// back after.
+fn lend<L: Layout, R>(
+    x: &mut Scratch<L>,
+    chance: &mut Chance,
+    f: impl FnOnce(&mut Scratch<L>) -> R,
+) -> R {
+    x.events.set_chance(Some(std::mem::take(chance)));
+    let r = f(x);
+    *chance = x.events.take_chance().expect("the chance lent");
+    r
+}
+
 /// Whether the engine stalled the game because a capacity of its layout ran out.
 fn ran_out<L: Layout>(s: &State<L>) -> bool {
     s.outcome() == Some(Outcome::Stalled(StallReason::Capacity))
@@ -242,53 +256,82 @@ impl Boards {
         }));
     }
 
-    /// Applies `c` to the open decision, widening the game if it runs out of capacity.
-    fn apply(&mut self, t: &GameTable, c: Choice) {
+    /// Applies `c` to the open decision with the game's `chance`, widening the game if it
+    /// runs out of capacity.
+    fn apply(&mut self, t: &GameTable, c: Choice, chance: &mut Chance) {
         if let Boards::Small(b) = self {
-            let (before, events) = (b.state, b.scratch.events.len());
-            apply(&mut b.state, t, &mut b.scratch, &mut Replay, c);
+            let (before, events, lent) = (b.state, b.scratch.events.len(), chance.clone());
+            lend(&mut b.scratch, chance, |x| {
+                apply(&mut b.state, t, x, &mut Replay, c);
+            });
             if !ran_out(&b.state) {
                 return;
             }
+            *chance = lent;
             self.widen(&before, events);
         }
         let Boards::Large(b) = self else {
             unreachable!("a game widened")
         };
-        apply(&mut b.state, t, &mut b.scratch, &mut Replay, c);
+        lend(&mut b.scratch, chance, |x| {
+            apply(&mut b.state, t, x, &mut Replay, c);
+        });
     }
 
-    /// Plays on as [`next_in_step`] does, widening the game if it runs out of capacity.
-    fn next_in_step(&mut self, t: &GameTable, seen: (u16, TurnStep)) -> Option<Step<Large>> {
+    /// Plays on as [`next_in_step`] does with the game's `chance`, widening the game if it
+    /// runs out of capacity.
+    fn next_in_step(
+        &mut self,
+        t: &GameTable,
+        seen: (u16, TurnStep),
+        chance: &mut Chance,
+    ) -> Option<Step<Large>> {
         if let Boards::Small(b) = self {
-            let (before, events) = (b.state, b.scratch.events.len());
-            let step = next_in_step(&mut b.state, t, &mut b.scratch, &mut Replay, seen);
+            let (before, events, lent) = (b.state, b.scratch.events.len(), chance.clone());
+            let step = lend(&mut b.scratch, chance, |x| {
+                next_in_step(&mut b.state, t, x, &mut Replay, seen)
+            });
             if !ran_out(&b.state) {
                 return step.map(|s| s.relayout());
             }
+            *chance = lent;
             self.widen(&before, events);
         }
         let Boards::Large(b) = self else {
             unreachable!("a game widened")
         };
-        next_in_step(&mut b.state, t, &mut b.scratch, &mut Replay, seen)
+        lend(&mut b.scratch, chance, |x| {
+            next_in_step(&mut b.state, t, x, &mut Replay, seen)
+        })
     }
 
-    /// What [`Boards::next_in_step`] would return, played on a copy.
-    fn ahead(&mut self, t: &GameTable, seen: (u16, TurnStep)) -> Option<Step<Large>> {
+    /// What [`Boards::next_in_step`] would return, played on a copy with a copy of `chance`,
+    /// so a replay looks ahead at the cards its record has.
+    fn ahead(
+        &mut self,
+        t: &GameTable,
+        seen: (u16, TurnStep),
+        chance: &Chance,
+    ) -> Option<Step<Large>> {
         match self {
             Boards::Small(b) => {
                 let mut ahead = b.state;
-                let step = next_in_step(&mut ahead, t, &mut b.peek, &mut Replay, seen);
+                let step = lend(&mut b.peek, &mut chance.clone(), |x| {
+                    next_in_step(&mut ahead, t, x, &mut Replay, seen)
+                });
                 if !ran_out(&ahead) {
                     return step.map(|s| s.relayout());
                 }
                 let mut wide = b.state.widen();
-                next_in_step(&mut wide, t, &mut Scratch::new(), &mut Replay, seen)
+                lend(&mut Scratch::new(), &mut chance.clone(), |x| {
+                    next_in_step(&mut wide, t, x, &mut Replay, seen)
+                })
             }
             Boards::Large(b) => {
                 let mut ahead = b.state.clone();
-                next_in_step(&mut ahead, t, &mut b.peek, &mut Replay, seen)
+                lend(&mut b.peek, &mut chance.clone(), |x| {
+                    next_in_step(&mut ahead, t, x, &mut Replay, seen)
+                })
             }
         }
     }
@@ -468,6 +511,9 @@ pub struct Game {
     /// The coin flip's winner, who chooses who takes the first turn
     /// ([CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031)), in a game begun by one.
     flip_winner: Option<Seat>,
+    /// What the game's random events produced since it was last logged, and while a replay
+    /// plays, what its record says they produced ([`beryl_engine::chance`]).
+    chance: Chance,
 }
 
 impl Game {
@@ -484,6 +530,7 @@ impl Game {
             human: start.human.get(),
             opponent: start.opponent.clone(),
             stops: start.stops,
+            chooser: None,
             log: Vec::new(),
             commit: None,
         };
@@ -494,14 +541,9 @@ impl Game {
             &table,
             SplitMix64::new(start.seed).next_u64(),
         )?;
-        Ok(Game::assemble(
-            table,
-            &state,
-            replay,
-            start.human,
-            session,
-            agent,
-        ))
+        let mut game = Game::assemble(table, &state, replay, start.human, session, agent);
+        game.replay.chooser = game.flip_winner.map(Seat::get);
+        Ok(game)
     }
 
     /// Sets up game `session` from a prepared position. Its replay file holds no decks or
@@ -533,6 +575,7 @@ impl Game {
             human: human.get(),
             opponent: String::new(),
             stops,
+            chooser: None,
             log: Vec::new(),
             commit: None,
         };
@@ -580,6 +623,7 @@ impl Game {
             passing: None,
             passes_on: None,
             flip_winner,
+            chance: Chance::default(),
         }
     }
 
@@ -611,37 +655,83 @@ impl Game {
     ///
     /// Anything else fails, naming the turn and step. A version 1 record, of indices alone,
     /// replays as it always did.
+    ///
+    /// Since version 3, chance has the outcomes the record logged after each entry, while that
+    /// entry plays out and play goes on to the next: each hidden card as a player first learns
+    /// it is dealt the card the record names, and each coin flip falls as it fell
+    /// ([`beryl_engine::chance`]). The seed then decides only what no player has seen. An
+    /// outcome the game cannot reproduce, one it makes that the record lacks, or one the record
+    /// has that never happens stops the replay. An older record replays from its seed.
     pub fn from_replay(
         cards: &'static CardTable,
         file: &ReplayFile,
         session: SessionId,
     ) -> Result<(Game, PlayerView), SessionError> {
         let mut game = Game::new(cards, &file.start()?, session)?;
-        // The session's own answers are found again as it plays on.
-        let mut log = file
-            .log
-            .iter()
-            .filter(|e| !matches!(e, Entry::Auto(_)))
-            .peekable();
+        let chance = file.format_version >= 3;
+        if chance {
+            if let Some(chooser) = file.chooser {
+                let chooser = Seat::try_new(chooser).ok_or_else(|| SessionError::BadReplay {
+                    reason: format!("no seat {chooser} won the coin flip"),
+                })?;
+                game.set_flip_winner(chooser);
+            }
+            game.chance.replay([]);
+        }
+        // Each entry replay takes, with the outcomes of chance logged after it, and those logged
+        // before the first. The session's own answers are found again as it plays on.
+        let mut before = Vec::new();
+        let mut steps: Vec<(&Entry, Vec<Random>)> = Vec::new();
+        for entry in &file.log {
+            match entry.random(&game.table)? {
+                Some(outcome) => match steps.last_mut() {
+                    Some((_, outcomes)) => outcomes.push(outcome),
+                    None => before.push(outcome),
+                },
+                None if matches!(entry, Entry::Auto(_)) => {}
+                None => steps.push((entry, Vec::new())),
+            }
+        }
+        if chance {
+            game.chance.replay(before);
+        }
+        let mut steps = steps.into_iter().peekable();
         let mut drift = Drift::default();
+        // Whether chance has the outcomes logged after the next entry.
+        let mut dealt = false;
         loop {
             if matches!(game.at, At::Playing) {
                 game.play_on();
+                game.chance_reproduced()?;
                 if matches!(game.at, At::Playing) {
                     // A step began, and live play went on after its view.
                     game.board.drain_events();
                     continue;
                 }
             }
-            let Some(&entry) = log.peek() else {
+            let Some((entry, outcomes)) = steps.peek_mut() else {
                 break;
             };
+            if !dealt {
+                // The entry before played out, and play went on to here.
+                game.chance_spent()?;
+                if chance {
+                    game.chance.replay(std::mem::take(outcomes));
+                }
+                dealt = true;
+            }
+            let entry: &Entry = entry;
             // Live play's view here took the events so far.
             game.board.drain_events();
-            if game.replay_entry(entry, &mut drift)? {
-                log.next();
+            let took = game.replay_entry(entry, &mut drift)?;
+            game.chance_reproduced()?;
+            if took {
+                steps.next();
+                dealt = false;
             }
         }
+        game.chance_spent()?;
+        game.chance.stop_replaying();
         if drift != Drift::default() {
             journal::info(
                 "replay",
@@ -651,6 +741,76 @@ impl Game {
         }
         let view = game.view();
         Ok((game, view))
+    }
+
+    /// Settles the coin flip of [CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031)
+    /// as a record says: `chooser` won it and chooses to play or draw.
+    fn set_flip_winner(&mut self, chooser: Seat) {
+        on_board!(&mut self.board, b => b.state.set_flip_winner(chooser));
+        self.flip_winner = Some(chooser);
+        self.replay.chooser = Some(chooser.get());
+    }
+
+    /// Fails where a replay's chance could not reproduce what its record says chance produced.
+    fn chance_reproduced(&mut self) -> Result<(), SessionError> {
+        let Some(m) = self.chance.take_mismatch() else {
+            return Ok(());
+        };
+        let Mismatch {
+            turn,
+            step,
+            recorded,
+            happened,
+        } = m;
+        let what = match (recorded, happened) {
+            (None, happened) => format!("{} that the record lacks", self.outcome(happened)),
+            (
+                Some(Random::Reveal { owner, card }),
+                Random::Reveal {
+                    owner: revealed, ..
+                },
+            ) if owner == revealed => format!(
+                "the record reveals player {}'s {} where no card of theirs that no player knows \
+                 can be it",
+                owner.get(),
+                self.table.def(card).name
+            ),
+            (Some(recorded), happened) => format!(
+                "the record has {} where the game has {}",
+                self.outcome(recorded),
+                self.outcome(happened)
+            ),
+        };
+        Err(SessionError::BadReplay {
+            reason: format!("turn {turn} {step:?}: {what}"),
+        })
+    }
+
+    /// Fails where a replay's record has an outcome of chance that never happened.
+    fn chance_spent(&self) -> Result<(), SessionError> {
+        match self.chance.next_recorded() {
+            Some(outcome) => Err(self.parted(&format!(
+                "the record has {} that never happened",
+                self.outcome(outcome)
+            ))),
+            None => Ok(()),
+        }
+    }
+
+    /// An outcome of chance, in words.
+    fn outcome(&self, outcome: Random) -> String {
+        match outcome {
+            Random::Reveal { owner, card } => format!(
+                "player {}'s {} revealed",
+                owner.get(),
+                self.table.def(card).name
+            ),
+            Random::Flip { player, won } => format!(
+                "a coin flip player {} {}",
+                player.get(),
+                if won { "won" } else { "lost" }
+            ),
+        }
     }
 
     /// Plays the record's next entry, `entry`, at the game's open decision or halt. Returns
@@ -709,8 +869,12 @@ impl Game {
 
     /// The candidate of `d` that does what `chosen` did, if any; one found elsewhere than its
     /// recorded index counts as drift.
-    fn found(&self, d: &Decision<Large>, chosen: &Chosen, drift: &mut Drift) -> Option<Choice> {
-        let c = on_board!(&self.board, b => chosen.find(&self.table, &b.state, &d.relayout()))?;
+    fn found(&mut self, d: &Decision<Large>, chosen: &Chosen, drift: &mut Drift) -> Option<Choice> {
+        let c = on_board!(&mut self.board, b => chosen.find(
+            &self.table,
+            view(&b.state, &self.table, &mut b.peek),
+            &d.relayout(),
+        ))?;
         if c.0 != chosen.index {
             drift.moved += 1;
         }
@@ -1243,7 +1407,10 @@ impl Game {
     fn play_on(&mut self) {
         debug_assert!(matches!(self.at, At::Playing));
         loop {
-            let step = self.board.next_in_step(&self.table, self.seen);
+            let step = self
+                .board
+                .next_in_step(&self.table, self.seen, &mut self.chance);
+            self.log_chance();
             // Once a cast is complete, or another player decides, it can no longer be taken back.
             if !matches!(&step, Some(Step::Decide(d)) if d.player == self.human && self.casting()) {
                 self.before_cast = None;
@@ -1396,7 +1563,7 @@ impl Game {
         if self.stops.full_control || !halting_step {
             return false;
         }
-        match self.board.ahead(&self.table, self.seen) {
+        match self.board.ahead(&self.table, self.seen, &self.chance) {
             Some(Step::Decide(d)) => d.player != self.human,
             Some(Step::Over(_)) => false,
             None => true,
@@ -1417,17 +1584,31 @@ impl Game {
         }
     }
 
-    /// Records candidate `c` of `d`, the session's own answer if `auto`, by what it does, and
-    /// applies it.
+    /// Records candidate `c` of `d`, the session's own answer if `auto`, by what it does in the
+    /// position it is asked in (in a paused resolution, its body done up to the question: a
+    /// card it drew is in the hand), and applies it.
     fn apply(&mut self, d: &Decision<Large>, c: Choice, auto: bool) {
-        let chosen =
-            on_board!(&self.board, b => Chosen::new(&self.table, &b.state, &d.relayout(), c));
+        let chosen = on_board!(&mut self.board, b => Chosen::new(
+            &self.table,
+            view(&b.state, &self.table, &mut b.peek),
+            &d.relayout(),
+            c,
+        ));
         self.replay.log.push(if auto {
             Entry::Auto(chosen)
         } else {
             Entry::Choice(chosen)
         });
-        self.board.apply(&self.table, c);
+        self.board.apply(&self.table, c, &mut self.chance);
+        self.log_chance();
+    }
+
+    /// Logs what the game's random events produced since the last log, after the entry that
+    /// led to them.
+    fn log_chance(&mut self) {
+        for outcome in self.chance.take() {
+            self.replay.log.push(Entry::of(&self.table, outcome));
+        }
     }
 
     /// The human's view now, with the engine's events since the previous view. A view in a

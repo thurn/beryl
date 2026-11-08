@@ -80,7 +80,7 @@ fn replayed(file: &ReplayFile) -> Result<PlayerView, SessionError> {
 fn a_save_describes_each_answer_by_what_it_does() {
     let (game, _, _) = played(3, 30);
     let file = game.replay();
-    assert_eq!(file.format_version, 2);
+    assert_eq!(file.format_version, beryl_session::replay::FORMAT_VERSION);
     let mut kinds = std::collections::HashSet::new();
     for entry in &file.log {
         if let Entry::Choice(c) | Entry::Auto(c) = entry {
@@ -123,6 +123,9 @@ fn a_version_1_save_still_replays() {
     let (game, view, _) = played(4, 30);
     let mut old = game.replay().clone();
     old.commit = None;
+    old.chooser = None;
+    old.log
+        .retain(|e| !matches!(e, Entry::Reveal { .. } | Entry::Flip { .. }));
     for entry in &mut old.log {
         if let Entry::Choice(c) | Entry::Auto(c) = entry {
             c.what = None;

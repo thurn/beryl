@@ -48,5 +48,5 @@ fn moves() -> u64 {
 /// against it is void. Only an engine or card fix may do that, on purpose.
 #[test]
 fn frozen_moves_never_change() {
-    assert_eq!(moves(), 9_566_448_272_650_892_169);
+    assert_eq!(moves(), 15_721_975_428_907_575_390);
 }

@@ -1,9 +1,12 @@
 //! Replay files (architecture §14): a game's seed, decklists and every choice, which
 //! reproduce it. Since version 2, a choice is recorded by what it does ([`crate::save`]), so a
-//! later build replays it though its candidates moved.
+//! later build replays it though its candidates moved. Since version 3, what chance produced
+//! is recorded too, each hidden card as a player first learns it and each coin flip
+//! ([`beryl_engine::chance`]), so a replay does not depend on the seed.
 
 use std::path::Path;
 
+use beryl_engine::chance::Random;
 use beryl_engine::{CardTable, GameTable, Seat, State, TableError};
 use serde::{Deserialize, Serialize};
 
@@ -16,8 +19,8 @@ use crate::{SessionError, StartGame};
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReplayFile {
-    /// The file's format: 1 recorded each choice as its index alone, 2 by what it does. A
-    /// file without one is version 1.
+    /// The file's format: 1 recorded each choice as its index alone, 2 by what it does, and 3
+    /// also what chance produced. A file without one is version 1.
     #[serde(default = "version_1")]
     pub format_version: u8,
     pub seed: u64,
@@ -28,6 +31,10 @@ pub struct ReplayFile {
     pub opponent: String,
     /// The priority stops the game began with.
     pub stops: StopsSetting,
+    /// Who won the coin flip and chose to play or draw
+    /// ([CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031)), since version 3.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chooser: Option<u8>,
     pub log: Vec<Entry>,
     /// The commit of the build that last wrote the file, if it said (older files do not).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -35,7 +42,7 @@ pub struct ReplayFile {
 }
 
 /// The format this build writes.
-pub const FORMAT_VERSION: u8 = 2;
+pub const FORMAT_VERSION: u8 = 3;
 
 fn version_1() -> u8 {
     1
@@ -62,6 +69,55 @@ pub enum Entry {
     /// The human passed on to their next stop from their open priority
     /// ([`crate::Game::pass_on`]): the pass follows, and the session passes for them after it.
     PassOn,
+    /// A card no player knew became known, as the entry before it played out: `card` is the
+    /// name of what player `player`'s card was. A replay deals it there ([`Random::Reveal`]).
+    Reveal { player: u8, card: String },
+    /// Player `player` flipped a coin as the entry before it played out, and won or lost.
+    Flip { player: u8, won: bool },
+}
+
+impl Entry {
+    /// The entry recording `outcome`.
+    pub(crate) fn of(t: &GameTable, outcome: Random) -> Entry {
+        match outcome {
+            Random::Reveal { owner, card } => Entry::Reveal {
+                player: owner.get(),
+                card: t.def(card).name.to_owned(),
+            },
+            Random::Flip { player, won } => Entry::Flip {
+                player: player.get(),
+                won,
+            },
+        }
+    }
+
+    /// The outcome of chance this entry records in the game of `t`, if it records one.
+    pub(crate) fn random(&self, t: &GameTable) -> Result<Option<Random>, SessionError> {
+        let seat = |player: u8| {
+            Seat::try_new(player).ok_or_else(|| SessionError::BadReplay {
+                reason: format!("no seat {player}"),
+            })
+        };
+        Ok(Some(match self {
+            Entry::Reveal { player, card } => {
+                let owner = seat(*player)?;
+                let card = t
+                    .deck(owner)
+                    .iter()
+                    .copied()
+                    .find(|&c| t.def(c).name == card)
+                    .ok_or_else(|| SessionError::BadReplay {
+                        reason: format!("player {player}'s deck has no {card} to reveal"),
+                    })?;
+                Random::Reveal { owner, card }
+            }
+            &Entry::Flip { player, won } => Random::Flip {
+                player: seat(player)?,
+                won,
+            },
+            _ => return Ok(None),
+        }))
+    }
 }
 
 impl ReplayFile {

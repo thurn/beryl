@@ -407,9 +407,9 @@ mod tests {
         let answers: Vec<&[Choice]> = scripts.iter().map(|s| s.answers.as_slice()).collect();
         assert_eq!(
             (summary.decisions, summary.inline, summary.turns),
-            (12_656, 1_912, 1_572)
+            (12_763, 1_887, 1_599)
         );
-        assert_eq!(stable_hash(&(answers, ends)), 7_009_709_475_716_064_079);
+        assert_eq!(stable_hash(&(answers, ends)), 16_148_638_688_204_884_521);
     }
 
     /// The engine benchmark replays the rollouts the whole-rollout benchmark plays: the
