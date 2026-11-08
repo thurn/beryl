@@ -11,6 +11,7 @@ pub mod checkpoint;
 mod game;
 pub mod ipc;
 pub mod journal;
+pub mod migrate;
 pub mod preview;
 pub mod protocol;
 pub mod replay;

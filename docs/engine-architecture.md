@@ -909,6 +909,14 @@ zone.
   board (an effect, a delayed trigger, a permission to cast) is not recorded:
   `State::off_board` names it in the checkpoint, and that turn refuses to
   rebuild rather than rebuild wrong.
+- **Old saves are migrated** (`beryl_session::migrate`). A save names its format
+  version, and loading runs it up a chain of migrations, one per version, each
+  on the file's JSON, to the format the build writes. Versions 1 and 2 lack what
+  later formats record, so their migrations replay the file on the build and
+  record it again; they fail where it no longer replays. A change that breaks a
+  save adds a migration or, for a save of the frozen corpus that no migration
+  can carry, an entry in `data/save-breaks.json` naming where it stops matching
+  and why, in the same commit.
 - `State` implements `Hash` over its fields, computed on demand for tests,
   divergence checks and the first transposition tables. The mutation chokepoints
   are placed so an incremental Zobrist hash can be added without touching card

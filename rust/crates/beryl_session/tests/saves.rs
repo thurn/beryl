@@ -1,10 +1,12 @@
 //! Saves record each answer by what it does (`beryl_session::save`): a game replays from one
-//! though its candidates move, a version 1 save still replays, and where the record and the
-//! game part, replay goes on only where the rules leave nothing to choose.
+//! though its candidates move, and where the record and the
+//! game part, replay goes on only where the rules leave nothing to choose. A version 1 save
+//! upgrades by replaying.
 
 use beryl_cards::CARDS;
 use beryl_cards::decks::fuzz_deck;
-use beryl_session::replay::Entry;
+use beryl_session::migrate;
+use beryl_session::replay::{Entry, FORMAT_VERSION};
 use beryl_session::save::{self, Act, Chosen, Described, Kind, Obj};
 use beryl_session::{
     CandidateIndex, Game, PlayerView, ReplayFile, Seat, SessionError, SessionId, StartGame, Status,
@@ -80,7 +82,7 @@ fn replayed(file: &ReplayFile) -> Result<PlayerView, SessionError> {
 fn a_save_describes_each_answer_by_what_it_does() {
     let (game, _, _) = played(3, 30);
     let file = game.replay();
-    assert_eq!(file.format_version, beryl_session::replay::FORMAT_VERSION);
+    assert_eq!(file.format_version, FORMAT_VERSION);
     let mut kinds = std::collections::HashSet::new();
     for entry in &file.log {
         if let Entry::Choice(c) | Entry::Auto(c) = entry {
@@ -118,10 +120,10 @@ fn a_save_replays_the_same_with_its_candidates_listed_the_other_way() {
     );
 }
 
-#[test]
-fn a_version_1_save_still_replays() {
-    let (game, view, _) = played(4, 30);
-    let mut old = game.replay().clone();
+/// `file` as version 1 recorded it: each answer by its index alone, nothing chance produced,
+/// no checkpoints and no version.
+fn version_1(file: &ReplayFile) -> serde_json::Value {
+    let mut old = file.clone();
     old.commit = None;
     old.chooser = None;
     old.log.retain(|e| {
@@ -135,13 +137,76 @@ fn a_version_1_save_still_replays() {
             c.what = None;
         }
     }
-    let mut json: serde_json::Value = serde_json::to_value(&old).unwrap();
+    let mut json = serde_json::to_value(&old).unwrap();
     json.as_object_mut().unwrap().remove("formatVersion");
-    let text = json.to_string();
-    assert!(text.contains("{\"choice\":"), "answers as bare indices");
-    let old: ReplayFile = serde_json::from_str(&text).unwrap();
-    assert_eq!(old.format_version, 1);
-    assert_eq!(replayed(&old).unwrap(), view);
+    assert!(
+        json.to_string().contains("{\"choice\":"),
+        "answers as bare indices"
+    );
+    json
+}
+
+/// `file`'s log without what `keep` rejects.
+fn only(file: &ReplayFile, keep: impl Fn(&Entry) -> bool) -> Vec<Entry> {
+    file.log.iter().filter(|e| keep(e)).cloned().collect()
+}
+
+#[test]
+fn a_version_1_save_upgrades_to_version_2_by_replaying() {
+    for (seed, answers) in [(4, 30), (6, 60)] {
+        let (game, view, _) = played(seed, answers);
+        let old = version_1(game.replay());
+        let v1: ReplayFile = serde_json::from_value(old.clone()).unwrap();
+        assert_eq!(v1.format_version, 1);
+        assert_eq!(replayed(&v1).unwrap(), view);
+        let v2: ReplayFile =
+            serde_json::from_value(migrate::CHAIN[0](old, &CARDS).unwrap()).unwrap();
+        assert_eq!(v2.format_version, 2);
+        assert_eq!(v2.chooser, None);
+        // Each answer again, by what it does.
+        assert_eq!(
+            v2.log,
+            only(game.replay(), |e| !matches!(
+                e,
+                Entry::Reveal { .. } | Entry::Flip { .. } | Entry::Checkpoint(_)
+            ))
+        );
+        assert_eq!(replayed(&v2).unwrap(), view);
+    }
+}
+
+#[test]
+fn a_loaded_version_1_save_is_in_the_format_of_today() {
+    let (game, view, _) = played(4, 30);
+    let dir = std::env::temp_dir().join(format!("beryl-migrate-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("v1.json");
+    std::fs::write(&path, version_1(game.replay()).to_string()).unwrap();
+    let loaded = ReplayFile::load(&path);
+    std::fs::remove_dir_all(&dir).unwrap();
+    let loaded = loaded.unwrap();
+    assert_eq!(loaded.format_version, FORMAT_VERSION);
+    assert_eq!(loaded.chooser, game.replay().chooser);
+    assert_eq!(
+        loaded.log,
+        only(game.replay(), |e| !matches!(e, Entry::Checkpoint(_)))
+    );
+    assert_eq!(replayed(&loaded).unwrap(), view);
+}
+
+#[test]
+fn a_version_1_save_that_no_longer_replays_does_not_upgrade() {
+    let (game, _, _) = played(4, 30);
+    let mut old = version_1(game.replay());
+    for entry in old["log"].as_array_mut().unwrap() {
+        if let Some(index) = entry.get_mut("choice") {
+            *index = 900.into();
+        }
+    }
+    let Err(SessionError::BadReplay { reason }) = migrate::to_current(old, &CARDS) else {
+        panic!("a version 1 save that does not replay upgraded");
+    };
+    assert!(reason.contains("version 1 does not replay"), "{reason}");
 }
 
 #[test]

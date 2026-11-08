@@ -8,6 +8,7 @@ use beryl_cards::CARDS;
 use beryl_cards::decks::{VINTAGE_WU_CONTROL, WU_CONTROL};
 use beryl_engine::{Decklist, GameTable};
 use beryl_session::checkpoint::Checkpoint;
+use beryl_session::migrate;
 use beryl_session::replay::{Entry, FORMAT_VERSION};
 use beryl_session::save::{Act, Described};
 use beryl_session::{
@@ -274,7 +275,7 @@ fn a_recorded_reveal_that_never_happens_stops_the_replay() {
 }
 
 #[test]
-fn a_version_2_save_replays_from_its_seed() {
+fn a_version_2_save_upgrades_to_version_3_from_its_seed() {
     let (game, view) = played(4, [WU_CONTROL, WU_CONTROL]);
     let mut old = game.replay().clone();
     old.format_version = 2;
@@ -285,9 +286,16 @@ fn a_version_2_save_replays_from_its_seed() {
             Entry::Reveal { .. } | Entry::Flip { .. } | Entry::Checkpoint(_)
         )
     });
-    let (again, replayed) = Game::from_replay(&CARDS, &old, SESSION).unwrap();
+    let (_, replayed) = Game::from_replay(&CARDS, &old, SESSION).unwrap();
     assert_eq!(replayed, view);
-    // It is saved again in the format of today, with the outcomes its seed produced.
+    let v3 = migrate::CHAIN[1](serde_json::to_value(&old).unwrap(), &CARDS).unwrap();
+    let v3: ReplayFile = serde_json::from_value(v3).unwrap();
+    assert_eq!(v3.format_version, 3);
+    // With the outcomes its seed produced, and no checkpoints, which version 3 lacks.
+    assert_eq!(v3.chooser, game.replay().chooser);
+    assert!(!v3.log.iter().any(|e| matches!(e, Entry::Checkpoint(_))));
+    assert_eq!(meaning(&v3), meaning(game.replay()));
+    let (again, replayed) = Game::from_replay(&CARDS, &v3, SESSION).unwrap();
+    assert_eq!(replayed, view);
     assert_eq!(again.replay().format_version, FORMAT_VERSION);
-    assert_eq!(meaning(again.replay()), meaning(game.replay()));
 }

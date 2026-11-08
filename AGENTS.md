@@ -40,9 +40,10 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
 - `data/`: the V1 cube cardlist (`color,name` CSV); `cards.json`, the card data
   `just cards` writes from Scryfall (printing, artist, per-face text and image
   URLs); `card-printings.csv`, the printings it pins; `oracle-divergences.json`,
-  the scenarios where an oracle is wrong, each with its CR citation. The app
-  downloads images on demand into its cache (`beryl_app`'s `art.rs`); none are
-  committed.
+  the scenarios where an oracle is wrong, each with its CR citation;
+  `save-breaks.json`, the corpus saves no migration carries past a change. The
+  app downloads images on demand into its cache (`beryl_app`'s `art.rs`); none
+  are committed.
 - `docs/ui_mockups/`: generated images of the UI, kept as visual references.
   They disagree with one another in details, so they are not a spec: never tune
   the UI's values to match one image.
