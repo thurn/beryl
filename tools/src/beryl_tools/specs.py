@@ -1,9 +1,16 @@
-"""`specs`: the cards' spec pages, every moment of a card's play a live game. It builds
-`beryl_cli`, runs `beryl_cli specs-serve` and serves the UI with Vite, which proxies the spec
-server under /spec-api, and prints the pages' URLs until interrupted. `--shots` instead
-screenshots every moment headless into the cache (ui/scripts/specs.mjs) and prints the paths,
-for an agent to judge; `--check` plays every moment headless and checks what it expects, and
-`--approve` first records each generated moment's state as approved in data/specs.
+"""`specs`: the cards' spec pages, every moment of a card's play a live game, and the tools an
+agent reproduces, looks at, audits and drives a card's behavior with. It builds `beryl_cli`,
+runs `beryl_cli specs-serve` and serves the UI with Vite, which proxies the spec server under
+/spec-api:
+
+- no flag: serves the pages for a human and prints their URLs until interrupted;
+- `--check`: lists every generated moment and the candidates generation skipped;
+- `--describe <card> [--moment M]`: what each moment shows from each seat, as text;
+- `--film`: one sheet per moment of its playout from both seats (ui/scripts/film.mjs);
+- `--motion`: audits that every event animates clearly for both seats (ui/scripts/motion.mjs);
+- `--shots`: a settled screenshot of every moment from both seats (ui/scripts/specs.mjs);
+- `--drive`: a headless page an agent posts Playwright snippets to (ui/scripts/drive.mjs).
+
 `--release` builds `beryl_cli` optimized and serves the UI's production build.
 """
 
@@ -19,12 +26,20 @@ import time
 from pathlib import Path
 
 from . import paths, warm
-from .shots import NPM_BIN, UiError, free_port, port_free, served_ui, webkit_env
+from .shots import (
+    NPM_BIN,
+    UiError,
+    free_port,
+    port_free,
+    served_ui,
+    wait_for_server,
+    webkit_env,
+)
 
 
-def out_dir() -> Path:
-    """This checkout's spec screenshots, fresh each run."""
-    return paths.cache_root() / "spec-shots" / paths.REPO.name
+def out_dir(kind: str) -> Path:
+    """This checkout's output of `kind` (shots, film, motion, drive)."""
+    return paths.cache_root() / f"spec-{kind}" / paths.REPO.name
 
 
 def build(release: bool) -> Path | None:
@@ -56,19 +71,90 @@ def build_ui() -> bool:
     return built.returncode == 0
 
 
+def moment_args(args: argparse.Namespace) -> list[str]:
+    return ["--moment", args.moment] if args.moment else []
+
+
+def capture(args: argparse.Namespace, url: str, env: dict[str, str]) -> int:
+    """Runs the capture script the flags ask for against the served UI at `url`."""
+    if args.film:
+        out = out_dir("film")
+        shutil.rmtree(out, ignore_errors=True)
+        out.mkdir(parents=True)
+        command = ["scripts/film.mjs", url, str(out), *args.cards, *moment_args(args)]
+    elif args.motion:
+        out = out_dir("motion")
+        out.mkdir(parents=True, exist_ok=True)
+        report = out / f"{time.strftime('%Y%m%d-%H%M%S')}.json"
+        command = [
+            "scripts/motion.mjs",
+            url,
+            str(report),
+            *args.cards,
+            *moment_args(args),
+        ]
+    else:
+        out = out_dir("shots")
+        shutil.rmtree(out, ignore_errors=True)
+        out.mkdir(parents=True)
+        command = ["scripts/specs.mjs", url, str(out), *args.cards]
+    return subprocess.run(
+        ["node", *command],
+        cwd=paths.UI,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    ).returncode
+
+
+def drive(args: argparse.Namespace, url: str, env: dict[str, str]) -> int:
+    """Runs the driver at the spec pages until it or the server exits."""
+    out = out_dir("drive") / time.strftime("%Y%m%d-%H%M%S")
+    out.mkdir(parents=True)
+    port = args.drive_port or free_port()
+    driver = subprocess.Popen(
+        ["node", "scripts/drive.mjs", str(port), f"{url}specs", str(out)],
+        cwd=paths.UI,
+        env=env,
+        stdin=subprocess.DEVNULL,
+    )
+    try:
+        address = f"http://127.0.0.1:{port}/"
+        if not wait_for_server(address, driver):
+            raise UiError(f"the driver did not answer at {address}")
+        print(f"specs: pages {url}specs", flush=True)
+        print(f"specs: drive {address} (POST a Playwright snippet)", flush=True)
+        print(f"specs: screenshots {out}", flush=True)
+        while driver.poll() is None:
+            time.sleep(0.5)
+        raise UiError("the driver exited")
+    finally:
+        driver.terminate()
+
+
 def specs(args: argparse.Namespace) -> int:
     warm.ensure()
     binary = build(args.release)
     if binary is None:
         return 1
-    if args.check or args.approve:
-        approve = ["--approve"] if args.approve else []
+    if args.check:
         return subprocess.run(
-            [str(binary), "specs-check", *approve, *args.cards],
+            [str(binary), "specs-check", *args.cards],
             stdin=subprocess.DEVNULL,
             check=False,
         ).returncode
-    if args.port and not port_free(args.port):
+    if args.describe:
+        if len(args.cards) != 1:
+            print("specs: --describe takes one card", file=sys.stderr)
+            return 2
+        moment = [args.moment] if args.moment else []
+        return subprocess.run(
+            [str(binary), "specs-describe", args.cards[0], *moment],
+            stdin=subprocess.DEVNULL,
+            check=False,
+        ).returncode
+    capturing = args.shots or args.film or args.motion
+    if args.port and not capturing and not port_free(args.port):
         print(f"specs: port {args.port} is in use", file=sys.stderr)
         return 1
     if args.release and not build_ui():
@@ -82,19 +168,13 @@ def specs(args: argparse.Namespace) -> int:
     # A plain SIGTERM would end Python without the cleanup below, orphaning the server.
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     try:
-        if args.shots:
+        if capturing or args.drive:
             env = {**webkit_env(), "BERYL_SPECS_PORT": str(spec_port)}
-            out = out_dir()
-            shutil.rmtree(out, ignore_errors=True)
-            out.mkdir(parents=True)
-            with served_ui(env, preview=args.release) as url:
-                return subprocess.run(
-                    ["node", "scripts/specs.mjs", url, str(out), *args.cards],
-                    cwd=paths.UI,
-                    env=env,
-                    stdin=subprocess.DEVNULL,
-                    check=False,
-                ).returncode
+            port = None if capturing else args.port or None
+            with served_ui(env, port, preview=args.release) as url:
+                if args.drive:
+                    return drive(args, url, env)
+                return capture(args, url, env)
         env = {**os.environ, "BERYL_SPECS_PORT": str(spec_port)}
         with served_ui(env, args.port or None, preview=args.release) as url:
             base = url.replace("127.0.0.1", "localhost")
@@ -113,22 +193,37 @@ def specs(args: argparse.Namespace) -> int:
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser(
-        "specs", help="serve the cards' spec pages, each moment a live game"
+        "specs",
+        help="card specs: serve, describe, film, audit motion or drive each moment",
     )
     p.add_argument("cards", nargs="*", help="card slugs, e.g. currency-converter")
+    p.add_argument("--moment", help="only this moment, by its name")
     p.add_argument(
         "--port", type=int, default=1430, help="the pages' port (0: any free one)"
     )
-    p.add_argument(
-        "--shots", action="store_true", help="screenshot every moment headless"
+    mode = p.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--check", action="store_true", help="list every moment and the skipped ones"
     )
-    p.add_argument(
-        "--check", action="store_true", help="play every moment headless and check it"
+    mode.add_argument(
+        "--describe", action="store_true", help="each moment from each seat, as text"
     )
-    p.add_argument(
-        "--approve",
+    mode.add_argument(
+        "--film", action="store_true", help="a sheet of each moment's playout"
+    )
+    mode.add_argument(
+        "--motion",
         action="store_true",
-        help="record each generated moment as approved in data/specs, then check",
+        help="audit that every event animates clearly for both seats",
+    )
+    mode.add_argument(
+        "--shots", action="store_true", help="screenshot every moment settled"
+    )
+    mode.add_argument(
+        "--drive", action="store_true", help="a headless page to post snippets to"
+    )
+    p.add_argument(
+        "--drive-port", type=int, default=0, help="the driver's port (default: any)"
     )
     p.add_argument(
         "--release",

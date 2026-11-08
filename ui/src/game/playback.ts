@@ -44,6 +44,9 @@ export const HOLD = {
 /** The log keeps this many entries. */
 const LOG_LENGTH = 200;
 
+/** `window.berylShown` keeps this many views. */
+const SHOWN_LOG = 500;
+
 /** How long `view` stays before a queued view replaces it. A view the player answers, or the
  * game's end, waits for them; a view with nothing in it (the opponent starting to think) goes
  * at once when another is waiting. */
@@ -399,6 +402,16 @@ export function usePlayback(): {
   useEffect(() => {
     (window as { berylBehind?: boolean }).berylBehind = queue.length > 0;
   }, [queue]);
+  // Each view as it takes the screen, with the events it animates, on the page's clock: a
+  // motion audit (`by specs --motion`, ui/scripts/motion.mjs) matches what moved on screen to
+  // what happened in the game.
+  useEffect(() => {
+    if (!shown) return;
+    const w = window as { berylShown?: { at: number; update: GameUpdate }[] };
+    const log = (w.berylShown ??= []);
+    log.push({ at: performance.now(), update: shown });
+    if (log.length > SHOWN_LOG) log.splice(0, log.length - SHOWN_LOG);
+  }, [shown]);
   // A spec page framing the game shows it once it has a view (screens/Specs.tsx).
   const showing = shown !== undefined;
   useEffect(() => {

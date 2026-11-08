@@ -1,5 +1,5 @@
 // A headless WebKit page an agent drives one step at a time: `by ui-live` (tools/) starts it
-// beside the live game server and Vite. Usage:
+// beside the live game server and Vite, and `by specs --drive` beside the spec server. Usage:
 //   node scripts/drive.mjs <port> <app-url> <out-dir> [width] [height]
 // Each `POST /` body is the body of an async JavaScript function, run in Node with these in
 // scope, whose return value comes back as JSON:
@@ -7,12 +7,19 @@
 //   shot(name)      screenshots the page to <out-dir>/<n>-<name>.png and returns the path
 //   probe           the measuring helpers below (`act`, `compare` and `sweep` first)
 //   errors          the page's errors and console errors so far
+//   spec            spec moments (`by specs --drive`): `open(card, moment, seat)` opens one seat
+//                   in `page`, held; `both(card, moment)` opens yours in `page` and theirs in a
+//                   second page; `play()` plays every open seat at once; `seat(name)` makes
+//                   that seat's page the one `page`, `shot` and `probe` act on; `settled()`
+//                   waits for the page to go quiet. Each returns the page(s) it opened.
 // Restart `by ui-live` to load a change to this file; changes under src/ reload in the page.
 // Motion is not reduced, unlike ui-shots: animation and layout shift are what a player sees.
 import { createServer } from "node:http";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { compareSheet, launch } from "./capture.mjs";
+import { audit as auditFrames, collect, record } from "./audit.mjs";
+import { openSeat, play, settled } from "./moments.mjs";
 
 const [port, url, out, width = "1600", height = "900"] = process.argv.slice(2);
 if (!port || !url || !out) {
@@ -39,7 +46,9 @@ for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"]) {
 const context = await browser.newContext({
     viewport: { width: Number(width), height: Number(height) },
 });
-const page = await context.newPage();
+// The page `shot` and `probe` act on: a seat's, once `spec.seat` picks it.
+let page = await context.newPage();
+const first = page;
 const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
 page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
@@ -507,6 +516,19 @@ const probe = {
         };
     },
 
+    /** The motion audit (audit.mjs) of whatever `action` sets going (an async function: a
+     * click, or `spec.play`): records every frame while it runs and the page settles, then
+     * judges each event the page showed meanwhile, as `by specs --motion` does. Returns the
+     * findings that are not ok (all of them with `all`). */
+    async audit(action, { all = false } = {}) {
+        const since = await page.evaluate(() => performance.now());
+        await page.evaluate(record);
+        await action();
+        await settled(page);
+        const findings = auditFrames(await page.evaluate(collect, since));
+        return all ? findings : findings.filter((f) => f.verdict !== "ok");
+    },
+
     /** Crops each element (a locator, or a selector) out of the page at its size on screen,
      * with `pad` px around it, and lays the crops side by side, labelled, in one image: for
      * judging whether two states, or two things that should look alike, can be told apart at
@@ -522,6 +544,47 @@ const probe = {
     },
 };
 
+/** Spec moments, for `by specs --drive`: seats open held, so a snippet watches from the
+ * first frame, and `play` starts them together. */
+const base = new URL("/", url).href;
+const seats = {};
+const spec = {
+    async open(card, moment, seat = "yours") {
+        if (!seats[seat]) {
+            const p = seat === "yours" ? first : await context.newPage();
+            if (p !== first) {
+                p.on("pageerror", (e) => errors.push(`${seat}: ${e.message}`));
+            }
+            seats[seat] = { page: p };
+        }
+        const s = seats[seat];
+        s.live = await openSeat(s.page, base, card, moment, seat);
+        page = seats.yours?.page ?? s.page;
+        return s.page;
+    },
+    async both(card, moment) {
+        const yours = await spec.open(card, moment, "yours");
+        const theirs = await spec.open(card, moment, "theirs");
+        page = yours;
+        return { yours, theirs };
+    },
+    play() {
+        return play(
+            ...Object.values(seats)
+                .map((s) => s.live)
+                .filter(Boolean),
+        );
+    },
+    seat(name) {
+        if (!seats[name]) throw new Error(`no ${name} seat open`);
+        page = seats[name].page;
+        return page;
+    },
+    settled(p = page) {
+        return settled(p);
+    },
+};
+
 createServer((request, response) => {
     let body = "";
     request.on("data", (chunk) => (body += chunk));
@@ -534,9 +597,12 @@ createServer((request, response) => {
                 "shot",
                 "probe",
                 "errors",
+                "spec",
                 body,
             );
-            answer = { ok: await run(page, context, shot, probe, errors) };
+            answer = {
+                ok: await run(page, context, shot, probe, errors, spec),
+            };
         } catch (e) {
             answer = { error: String(e?.stack ?? e) };
         }
