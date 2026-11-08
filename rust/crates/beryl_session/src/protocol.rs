@@ -325,9 +325,13 @@ pub struct DecisionView {
     /// takes it back.
     pub cancellable: bool,
     /// How many of the viewer's answers the `undo` command can take back, one per command,
-    /// latest first: back to where the opponent last decided or something came out the viewer
-    /// could not know before, which no undo crosses. Zero with nothing to take back.
+    /// latest first, across the opponent's decisions and turns, as far back as the session
+    /// keeps them. Zero with nothing to take back.
     pub undo: u16,
+    /// How many of the viewer's answers stand before this decision, counting those too old
+    /// to take back: its place among them, the same whenever an undo comes back to it, which
+    /// the UI marks its log by.
+    pub undo_depth: u32,
     /// At a priority, each card in the viewer's hand they may neither cast nor play as a land,
     /// and why: what the UI says of one a click finds nothing to do with.
     pub refused: Vec<Refused>,
@@ -1368,6 +1372,7 @@ fn decision_view<L: Layout>(
         halt: false,
         cancellable: false,
         undo: 0,
+        undo_depth: 0,
         refused: if d.kind == DecisionKind::Priority {
             refused(t, obs)
         } else {
@@ -1425,6 +1430,7 @@ fn halt_view<L: Layout>(
         halt: true,
         cancellable: false,
         undo: 0,
+        undo_depth: 0,
         refused: refused(t, obs),
     }
 }

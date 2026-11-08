@@ -585,6 +585,7 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
                 {
                     a.cancellable = b.cancellable;
                     a.undo = b.undo;
+                    a.undo_depth = b.undo_depth;
                 }
                 assert_eq!(theirs, view, "seed {seed}");
                 events += view.events.len();

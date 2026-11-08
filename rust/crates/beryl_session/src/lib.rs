@@ -26,7 +26,7 @@ use ts_rs::TS;
 pub use beryl_engine::Seat;
 use beryl_engine::{GameTable, State};
 use beryl_search::GameAgent;
-pub use game::{Answer, Game, OpenDecision, trigger_to_stack, with_stops};
+pub use game::{Answer, Game, OpenDecision, UNDO_POINTS, trigger_to_stack, with_stops};
 pub use protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status, StopsSetting};
 pub use replay::ReplayFile;
 pub use sessions::{Sessions, StartRequest};

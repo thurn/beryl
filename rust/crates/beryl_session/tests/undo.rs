@@ -1,16 +1,24 @@
 //! Taking back the human's answers one at a time: each undo restores the game exactly as it
-//! stood at the decision answered, the replay goes back the same way, the same answers play the
-//! same game again, and no undo goes back past the agent's decisions or anything the human
-//! could not know. Passing on to the next stop goes past the stops a pass would make in its
-//! step, and a replay passes on the same way.
+//! stood at the decision answered, across the agent's decisions, the cards drawn and turns,
+//! the replay goes back the same way, and the same answers play the same game again. Passing
+//! on to the next stop goes past the stops a pass would make in its step, and a replay passes
+//! on the same way.
+
+use std::sync::{Arc, Mutex};
 
 use beryl_cards::CARDS;
 use beryl_cards::decks::WU_CONTROL;
-use beryl_engine::{Seat, State};
-use beryl_session::protocol::{Candidate, DecisionView, Kind, PassTo, Step};
+use beryl_cards::names::{ISLAND, PLAINS, TEFERI_HERO_OF_DOMINARIA};
+use beryl_engine::{Choice, Decision, Layout, Observation, Seat, State, TurnStep};
+use beryl_scenario::{P0, P1, Permanent, Scenario};
+use beryl_search::{Agent, AgentDecision, Budget};
+use beryl_session::protocol::{
+    AskView, Candidate, DecisionView, Kind, PassTo, Side, Step, ZoneName,
+};
 use beryl_session::replay::Entry;
 use beryl_session::{
-    CandidateIndex, Game, PlayerView, SessionError, SessionId, StartGame, Status, StopsSetting,
+    CandidateIndex, Game, PlayerView, Prepared, SessionError, SessionId, StartGame, Status,
+    StopsSetting, UNDO_POINTS,
 };
 
 fn owned(deck: &[(u8, &str)]) -> Vec<(u8, String)> {
@@ -114,8 +122,11 @@ fn play_and_check(seed: u64, decisions: usize, every: usize) -> usize {
             undo <= answered.len(),
             "more to take back than was answered"
         );
+        // Back across a turn or two, and all the way back now and then.
         if undo > 0 && n % every == 0 {
-            checked += check_undo(&game, &answered[answered.len() - undo..], &view);
+            let all = n % (every * 8) == 0;
+            let back = if all { undo } else { undo.min(BACK) };
+            checked += check_undo(&game, &answered[answered.len() - back..], &view, all);
         }
         let i = policy(d, n);
         answered.push(Answered {
@@ -129,8 +140,9 @@ fn play_and_check(seed: u64, decisions: usize, every: usize) -> usize {
 }
 
 /// Takes back, in a copy of `game` at `now`, each of the answers `points` holds, the latest
-/// first, checking each, then plays them again. Returns how many it took back.
-fn check_undo(game: &Game, points: &[Answered], now: &PlayerView) -> usize {
+/// first, checking each, then plays them again. With `all`, `points` are all there are to
+/// take back. Returns how many it took back.
+fn check_undo(game: &Game, points: &[Answered], now: &PlayerView, all: bool) -> usize {
     let (mut probe, resumed) = Game::from_replay(&CARDS, game.replay(), SESSION).unwrap();
     assert_eq!(without_id(resumed.clone()), without_id(now.clone()));
     let mut back = now.clone();
@@ -141,11 +153,18 @@ fn check_undo(game: &Game, points: &[Answered], now: &PlayerView) -> usize {
         assert_eq!(*probe.state(), point.state, "the game is as it stood");
         assert!(back.events.is_empty(), "nothing happened");
         assert!(back.undone);
-        assert_eq!(usize::from(deciding(&back).unwrap().undo), left);
+        let undo = usize::from(deciding(&back).unwrap().undo);
+        assert_eq!(
+            undo + points.len(),
+            left + usize::from(deciding(now).unwrap().undo)
+        );
+        assert_eq!(deciding(&back).unwrap().undo_depth as usize, undo);
         assert_eq!(without_id(back.clone()), without_id(point.view.clone()));
         assert_eq!(probe.replay().log.last(), Some(&Entry::Undo));
     }
-    assert_eq!(probe.undo(), Err(SessionError::NothingToUndo));
+    if all {
+        assert_eq!(probe.undo(), Err(SessionError::NothingToUndo));
+    }
 
     // A replay goes back the same way.
     let (_, replayed) = Game::from_replay(&CARDS, probe.replay(), SESSION).unwrap();
@@ -174,9 +193,12 @@ fn each_undo_takes_back_one_answer_and_replays() {
     assert!(checked >= 20, "only {checked} undos checked");
 }
 
+/// How many answers the undo checks take back, but now and then: a turn's worth or two.
+const BACK: usize = 12;
+
 #[test]
-fn no_undo_goes_back_past_the_agent_or_a_card_seen() {
-    let (mut after_land, mut after_agent, mut after_seen) = (0, 0, 0);
+fn undo_goes_back_past_the_agent_and_cards_seen() {
+    let (mut after_agent, mut after_seen) = (0, 0);
     for seed in 4..12 {
         let mut game = new_game(seed);
         let mut view = to_human(&mut game);
@@ -185,8 +207,7 @@ fn no_undo_goes_back_past_the_agent_or_a_card_seen() {
                 break;
             };
             let i = policy(d, n);
-            let land = matches!(d.candidates[i].option, Candidate::PlayLand { .. });
-            let id = d.id;
+            let (id, undo) = (d.id, d.undo);
             let before = view.clone();
             game.choose(
                 game.answer(id, CandidateIndex(u16::try_from(i).unwrap()))
@@ -197,30 +218,15 @@ fn no_undo_goes_back_past_the_agent_or_a_card_seen() {
             let Some(after) = deciding(&view) else {
                 break;
             };
-            let seen = saw_unseen(&before, &view);
-            if seen {
-                assert_eq!(after.undo, 0, "seed {seed}: an undo past a card seen");
-                after_seen += usize::from(!agent);
-            }
-            if agent {
-                assert_eq!(
-                    after.undo, 0,
-                    "seed {seed}: an undo past the agent's decision"
-                );
-                after_agent += 1;
-            } else if land && !seen {
-                // A land from hand shows the human nothing new.
-                assert!(after.undo > 0, "seed {seed}: a land can be taken back");
-                after_land += 1;
-            }
+            // Every answer can be taken back, whatever came out since.
+            assert_eq!(after.undo, undo + 1, "seed {seed}: one more to take back");
+            assert_eq!(u32::from(after.undo), after.undo_depth);
+            after_agent += usize::from(agent);
+            after_seen += usize::from(saw_unseen(&before, &view));
         }
     }
-    assert!(after_land > 0, "no land played");
     assert!(after_agent > 0, "the agent never decided between answers");
-    assert!(
-        after_seen > 0,
-        "no card seen between answers but for the agent's"
-    );
+    assert!(after_seen > 0, "no card seen between answers");
 }
 
 /// Whether `after` shows the human a card of either deck by name that `before` did not.
@@ -287,15 +293,242 @@ fn passing_on_goes_past_the_stops_in_its_step() {
                 let (_, replayed) = Game::from_replay(&CARDS, game.replay(), SESSION).unwrap();
                 assert_eq!(without_id(replayed), without_id(view.clone()));
             }
-            // An undo takes the pass on back, if nothing came out since.
-            if let Some(next) = deciding(&view)
-                && next.undo > 0
-            {
+            // An undo takes the pass on back, and the human passes once instead.
+            if deciding(&view).is_some() {
                 let back = game.undo().unwrap();
                 assert_eq!(without_id(back.clone()), without_id(resumed));
-                view = back;
+                view = answer(&mut game, &back, 0);
             }
         }
     }
     assert!(passed >= 5, "only {passed} passes on");
+}
+
+/// An opponent that takes each decision's first candidate, counting its decisions, and
+/// records each decision it is rewound to, in `log`.
+struct Counting(Arc<Mutex<AgentLog>>);
+
+#[derive(Default)]
+struct AgentLog {
+    next: u32,
+    rewinds: Vec<u32>,
+}
+
+impl<L: Layout> Agent<L> for Counting {
+    fn choose(&mut self, _: Observation<'_, L>, _: &Decision<L>) -> Choice {
+        self.0.lock().unwrap().next += 1;
+        Choice(0)
+    }
+
+    fn next_decision(&self) -> Option<AgentDecision> {
+        Some(AgentDecision(self.0.lock().unwrap().next))
+    }
+
+    fn rewind(&mut self, to: AgentDecision) {
+        let mut log = self.0.lock().unwrap();
+        log.next = to.0;
+        log.rewinds.push(to.0);
+    }
+}
+
+/// The human's turn, with Teferi, Hero of Dominaria to +1 and two of their three lands
+/// tapped.
+const TEFERI_UNTAP: Scenario = Scenario::new("teferi-untap")
+    .at(3, P0, TurnStep::PrecombatMain)
+    .battlefield(
+        P0,
+        &[
+            Permanent::new(TEFERI_HERO_OF_DOMINARIA),
+            Permanent::new(ISLAND).tapped(),
+            Permanent::new(PLAINS).tapped(),
+            Permanent::new(ISLAND),
+        ],
+    )
+    .library(P0, &[ISLAND, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS])
+    .battlefield(P1, &[Permanent::new(ISLAND), Permanent::new(PLAINS)])
+    .library(P1, &[ISLAND, ISLAND, ISLAND, ISLAND, ISLAND, ISLAND]);
+
+/// Plays on to the human's next decision or the end, and returns the view there and every
+/// view on the way.
+fn to_human_watching(game: &mut Game) -> (PlayerView, Vec<PlayerView>) {
+    let mut views = Vec::new();
+    while let Some(view) = game.next_view() {
+        views.push(view);
+    }
+    (views.last().cloned().expect("the game plays on"), views)
+}
+
+/// Whether the object in `slot` is tapped in `view`.
+fn tapped(view: &PlayerView, slot: u16) -> bool {
+    view.objects.iter().any(|o| o.slot == slot && o.tapped)
+}
+
+/// Whether each of `lands` is tapped in the first view of the opponent's turn 4, among
+/// `views`.
+fn tapped_in_their_turn(views: &[PlayerView], lands: &[u16]) -> Vec<bool> {
+    let view = views
+        .iter()
+        .find(|v| v.turn.number == 4)
+        .expect("the opponent's turn is seen");
+    lands.iter().map(|&slot| tapped(view, slot)).collect()
+}
+
+/// The cards in the human's hand, by name.
+fn hand(view: &PlayerView) -> Vec<Option<String>> {
+    view.objects
+        .iter()
+        .filter(|o| o.zone == ZoneName::Hand && o.owner == Side::You)
+        .map(|o| o.name.clone())
+        .collect()
+}
+
+/// The player's report (by-2ml): Teferi's end-step untap took the wrong lands, and by their
+/// next turn no undo went back to it. From the human's next turn, past the agent's turn and
+/// their draw, one undo goes back to the untap, the agent goes back with the game, and the
+/// human chooses again: the lands they choose are untapped through the opponent's turn, and
+/// the same card is drawn.
+#[test]
+fn undo_goes_back_across_turns_to_teferis_untap() {
+    let (table, state) = beryl_scenario::position(&CARDS, &TEFERI_UNTAP).unwrap();
+    let log = Arc::new(Mutex::new(AgentLog::default()));
+    let random = beryl_search::agent("random").unwrap();
+    let mut game = Game::prepared(
+        Prepared {
+            opponent: Box::new(Counting(Arc::clone(&log))),
+            stand_in: (random.new)(&table, 2, Budget::DEFAULT),
+            scripted: false,
+            hand_over: None,
+            table,
+            state,
+            human: Seat::P0,
+            stops: StopsSetting::SMART,
+        },
+        SESSION,
+    );
+    // The human activates Teferi's +1 and passes to the end step's untap.
+    let mut view = to_human(&mut game);
+    let d = deciding(&view).unwrap();
+    let plus = d
+        .candidates
+        .iter()
+        .position(|c| matches!(c.option, Candidate::Activate { ability: 0, .. }))
+        .unwrap();
+    view = answer(&mut game, &view, plus);
+    while deciding(&view).unwrap().kind == Kind::Priority {
+        view = answer(&mut game, &view, 0);
+    }
+    let untap = view.clone();
+    let d = deciding(&untap).unwrap();
+    assert!(matches!(d.ask, AskView::Untap { max: 2 }));
+    assert_eq!((untap.turn.number, untap.turn.step), (3, Step::End));
+    let agent_there = log.lock().unwrap().next;
+    // The two tapped lands it may untap.
+    let lands: Vec<u16> = d
+        .candidates
+        .iter()
+        .filter_map(|c| match c.option {
+            Candidate::Object { slot } => Some(slot),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(lands.len(), 2);
+
+    // They untap nothing, and the opponent's turn goes by with both lands tapped.
+    let done = d
+        .candidates
+        .iter()
+        .position(|c| c.option == Candidate::Done)
+        .unwrap();
+    game.choose(game.answer(d.id, CandidateIndex(done as u16)).unwrap());
+    let (next_turn, views) = to_human_watching(&mut game);
+    assert_eq!(tapped_in_their_turn(&views, &lands), [true, true]);
+    assert_eq!(next_turn.turn.number, 5);
+    let agent_after = log.lock().unwrap().next;
+    assert!(agent_after > agent_there, "the agent decided in its turn");
+
+    // One undo from the next turn goes back to the untap, asked again as it was.
+    let d = deciding(&next_turn).unwrap();
+    assert_eq!(d.undo, d.undo_depth as u16);
+    assert!(game.open().unwrap().undo(d.id).is_ok());
+    let back = game.undo().unwrap();
+    assert!(back.undone && back.events.is_empty());
+    assert_eq!(without_id(back.clone()), without_id(untap.clone()));
+    assert_eq!(
+        log.lock().unwrap().rewinds,
+        [agent_there],
+        "the agent goes back"
+    );
+    assert_eq!(
+        game.replay().log.last(),
+        Some(&Entry::Undo),
+        "the log records the undo"
+    );
+
+    // They untap both lands this time, which stay untapped through the opponent's turn.
+    let mut view = back;
+    for (n, &slot) in lands.iter().enumerate() {
+        let d = deciding(&view).unwrap();
+        let i = d
+            .candidates
+            .iter()
+            .position(|c| c.option == Candidate::Object { slot })
+            .unwrap();
+        game.choose(game.answer(d.id, CandidateIndex(i as u16)).unwrap());
+        let views;
+        (view, views) = to_human_watching(&mut game);
+        if n == 1 {
+            assert_eq!(tapped_in_their_turn(&views, &lands), [false, false]);
+        }
+    }
+    assert_eq!(view.turn.number, 5);
+    assert_eq!(
+        log.lock().unwrap().next,
+        agent_after,
+        "the agent decides again"
+    );
+    assert_eq!(hand(&view), hand(&next_turn), "the same card is drawn");
+}
+
+/// Two players with nothing but Islands, a long game.
+const ISLANDS: Scenario = Scenario::new("islands")
+    .at(3, P0, TurnStep::PrecombatMain)
+    .library(P0, &[ISLAND; 60])
+    .library(P1, &[ISLAND; 60]);
+
+/// A game keeps at most `UNDO_POINTS` to go back to, dropping the oldest (a whole game against
+/// greedy under the exact stops took 339 answers): the depth goes on counting every answer,
+/// and an undo goes back as far as the points kept.
+#[test]
+fn undo_keeps_the_latest_points() {
+    let (table, state) = beryl_scenario::position(&CARDS, &ISLANDS).unwrap();
+    let random = beryl_search::agent("random").unwrap();
+    let mut game = Game::prepared(
+        Prepared {
+            opponent: Box::new(Counting(Arc::default())),
+            stand_in: (random.new)(&table, 2, Budget::DEFAULT),
+            scripted: false,
+            hand_over: None,
+            table,
+            state,
+            human: Seat::P0,
+            stops: StopsSetting::EXACT,
+        },
+        SESSION,
+    );
+    let mut view = to_human(&mut game);
+    let mut n = 0;
+    while deciding(&view).is_some_and(|d| d.undo_depth as usize <= UNDO_POINTS + 10) {
+        let d = deciding(&view).unwrap();
+        assert_eq!(usize::from(d.undo), n.min(UNDO_POINTS));
+        assert_eq!(d.undo_depth as usize, n);
+        view = answer(&mut game, &view, policy(d, n));
+        n += 1;
+    }
+    assert!(deciding(&view).is_some(), "the game lasts {n} answers");
+    for _ in 0..UNDO_POINTS {
+        view = game.undo().unwrap();
+    }
+    let d = deciding(&view).unwrap();
+    assert_eq!((d.undo, d.undo_depth as usize), (0, n - UNDO_POINTS));
+    assert_eq!(game.undo(), Err(SessionError::NothingToUndo));
 }

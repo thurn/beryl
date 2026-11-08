@@ -1646,8 +1646,8 @@ const INSPECT_MIN_WIDTH = 230;
  * opponent's orb and above yours (y 159 and 618), with room for the artist's line. */
 const BETWEEN_ORBS_AND_STACK = { left: 940, top: 172, width: 258 };
 
-/** Under the gear: takes back the player's latest answer, one per press, back to where the
- * opponent last acted or a card they had not seen came out. */
+/** Under the gear: takes back the player's latest answer, one per press, across the
+ * opponent's turns. */
 function UndoButton({ onUndo }: { onUndo: () => void }) {
   return (
     <button

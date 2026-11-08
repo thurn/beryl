@@ -10,6 +10,7 @@
 //! `N`'s decisions and ends the transcript there; skipping the searches before it moves the
 //! agent's random stream, so its searches sample afresh rather than repeat the game's.
 
+use std::collections::VecDeque;
 use std::fmt::Write as _;
 use std::path::Path;
 
@@ -20,7 +21,7 @@ use beryl_engine::{Choice, Profile, Replay, Scratch, Seat, Small, State, Step};
 use beryl_engine::{apply, next, observe, view};
 use beryl_search::{Agent, Budget, GameAgent, Search, agent};
 use beryl_session::replay::Entry;
-use beryl_session::{ReplayFile, with_stops};
+use beryl_session::{ReplayFile, UNDO_POINTS, with_stops};
 
 use crate::game;
 use crate::transcript::Transcript;
@@ -111,8 +112,15 @@ fn review(path: &Path, searcher_name: Option<&str>, only: Option<u16>) -> Result
     let mut log = file.log.iter();
     let mut stops = file.stops;
     // The positions an undo goes back to, one per answer of the human's, the latest last, as
-    // `Game::undo` keeps them: the state at each decision or halt they answered.
-    let mut points: Vec<State> = Vec::new();
+    // `Game::undo` keeps them: the state at each decision or halt they answered, the oldest
+    // dropped beyond `UNDO_POINTS`.
+    let mut points: VecDeque<State> = VecDeque::new();
+    let keep = |points: &mut VecDeque<State>, point: State| {
+        points.push_back(point);
+        if points.len() > UNDO_POINTS {
+            points.pop_front();
+        }
+    };
     loop {
         match next(&mut s, &t, &mut x, &mut Replay) {
             Step::Over(outcome) => {
@@ -136,7 +144,7 @@ fn review(path: &Path, searcher_name: Option<&str>, only: Option<u16>) -> Result
                         }
                         // A halt is the session's: only decisionless play separates it from
                         // this decision.
-                        Some(Entry::Halt) => points.push(before),
+                        Some(Entry::Halt) => keep(&mut points, before),
                         // The session passes for the human after it; each pass is logged.
                         Some(Entry::PassOn) => {}
                         Some(Entry::Concede) => {
@@ -146,16 +154,13 @@ fn review(path: &Path, searcher_name: Option<&str>, only: Option<u16>) -> Result
                         entry => break entry.copied(),
                     }
                 };
-                match entry {
-                    Some(Entry::Choice(_)) if d.player == human => points.push(before),
-                    // What the agent chose, the human could not know: no undo goes back past it.
-                    Some(Entry::Choice(_)) => points.clear(),
-                    _ => {}
+                if matches!(entry, Some(Entry::Choice(_))) && d.player == human {
+                    keep(&mut points, before);
                 }
                 let c = match entry {
                     Some(Entry::Choice(c) | Entry::Auto(c)) => c,
                     Some(Entry::Undo) => {
-                        let Some(point) = points.pop() else {
+                        let Some(point) = points.pop_back() else {
                             return Err("an undo with nothing to take back".to_owned());
                         };
                         // Stops changed since stay changed, as `Game::undo` keeps them.
@@ -252,7 +257,8 @@ mod tests {
 
     /// A game against greedy in which the human plays a land when they can and otherwise
     /// passes, for `answers` answers. With `undo`, once they can from the fifth turn on, they
-    /// take back their latest answer, then answer as before, which plays the same game again.
+    /// take back their answers until they stand in the turn before, across the agent's, then
+    /// answer as before, which plays the same game again.
     fn play(answers: usize, undo: bool) -> (ReplayFile, bool) {
         let start = StartGame {
             seed: 3,
@@ -268,7 +274,11 @@ mod tests {
         while answered < answers {
             let Some(d) = deciding(&view) else { break };
             if undo && !undone && d.undo > 0 && view.turn.number >= 5 {
-                view = game.undo().unwrap();
+                let from = view.turn.number;
+                while view.turn.number == from {
+                    view = game.undo().unwrap();
+                    answered -= 1;
+                }
                 undone = true;
                 continue;
             }
@@ -305,10 +315,15 @@ mod tests {
         let (straight, _) = play(40, false);
         let with_undo = reviewed(&with_undo, "undo");
         let straight = reviewed(&straight, "straight");
-        let (before, after) = with_undo
+        let (before, _) = with_undo
             .split_once("(the human takes back an answer)")
             .expect("the review notes the undo");
-        let (_, after) = after.split_once('\n').unwrap();
+        let (_, after) = with_undo
+            .rsplit_once("(the human takes back an answer)")
+            .unwrap();
+        // The review heads the step gone back to again; from the next turn it reads as the
+        // game played straight through.
+        let after = &after[after.find("\n== Turn 4,").expect("back in turn 3")..];
         assert!(straight.starts_with(before), "before the undo:\n{before}");
         assert!(straight.ends_with(after), "after the undo:\n{after}");
         assert!(

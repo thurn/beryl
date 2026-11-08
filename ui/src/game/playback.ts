@@ -99,9 +99,9 @@ interface State {
   until: number;
   queue: GameUpdate[];
   log: LogEntry[];
-  /** For each answer the player can take back, by its place among them, the key of the last
-   * log entry before the decision it answered: an undo to that decision goes back to there.
-   * None for a decision shown before the screen saw it. */
+  /** For each decision, by how many of the player's answers stand before it
+   * (`DecisionView.undoDepth`), the key of the last log entry before it: an undo back to that
+   * decision goes back to there. None for a decision shown before the screen saw it. */
   marks: (number | undefined)[];
   /** The last key given a log entry: keys only grow, past entries an undo took back too. */
   key: number;
@@ -147,15 +147,16 @@ function show(
     const status = u.view.status;
     const decision = status.kind === "deciding" ? status.decision : undefined;
     // What happened since the decision asked again never did.
-    const kept = decision && u.view.undone ? marks[decision.undo] : undefined;
+    const kept =
+      decision && u.view.undone ? marks[decision.undoDepth] : undefined;
     if (kept !== undefined) log = log.filter((e) => e.key <= kept);
     names = learnNames(names, u.view);
     const lines = logLines(u.view, names);
     if (lines.length)
       log = [...log, ...lines.map((l) => ({ ...l, key: ++key }))];
     if (decision) {
-      marks = marks.slice(0, decision.undo);
-      marks[decision.undo] = key;
+      marks = marks.slice(0, decision.undoDepth);
+      marks[decision.undoDepth] = key;
     }
   }
   const last = updates.at(-1)!;

@@ -319,10 +319,16 @@ halt: boolean,
 cancellable: boolean, 
 /**
  * How many of the viewer's answers the `undo` command can take back, one per command,
- * latest first: back to where the opponent last decided or something came out the viewer
- * could not know before, which no undo crosses. Zero with nothing to take back.
+ * latest first, across the opponent's decisions and turns, as far back as the session
+ * keeps them. Zero with nothing to take back.
  */
 undo: number, 
+/**
+ * How many of the viewer's answers stand before this decision, counting those too old
+ * to take back: its place among them, the same whenever an undo comes back to it, which
+ * the UI marks its log by.
+ */
+undoDepth: number, 
 /**
  * At a priority, each card in the viewer's hand they may neither cast nor play as a land,
  * and why: what the UI says of one a click finds nothing to do with.

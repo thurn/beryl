@@ -1190,16 +1190,15 @@ The human plays under the smart stops of §15 by default. A setting switches to
 the exact profile, which offers every priority. Milestone 1 offers a game
 against any one agent; the human and the AI both play the WU Control mirror.
 
-As a practice tool, the human may go back to their first decision of their
-latest turn, from any decision of theirs until their next turn begins. The
-session keeps a copy of the state there, random streams included, so going back
-takes a play back without dealing the luck again: shuffles fall as they did. An
-agent seeded by decision index goes back with it (`Agent::rewind`). The choice
-log keeps the turn taken back and an `Undo` entry, so a replay goes back too.
-The engine is untouched. The view marks an undo made after the human saw a card
-they did not know at the turn's start (`UndoView::Peeked`). The session notes
-this as it builds each view, so the mark counts exactly what the webview was
-shown.
+As a practice tool, the human may take back their answers one at a time, from
+any decision of theirs, across the agent's decisions and turns. The session
+keeps a copy of the state at each of their last 500 decisions (`UNDO_POINTS`, 20
+KiB each, more than a whole game's answers), random streams included, so going
+back takes a play back without dealing the luck again: shuffles fall as they
+did, and the cards drawn since come out again in the same order, which the human
+now knows. An agent seeded by decision index goes back with it (`Agent::rewind`)
+and decides again as play goes on. The choice log keeps everything taken back
+and an `Undo` entry, so a replay goes back too. The engine is untouched.
 
 ### 19.3 Draft
 
