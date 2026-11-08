@@ -304,6 +304,13 @@ function judge(e, frames, names) {
                 : "the life total never changed",
         };
     }
+    // Damage to a player shows on their life total, whatever its source does.
+    if (e.kind === "damage" && e.to.kind === "player") {
+        const b = lifeBehavior(frames, e.to.player);
+        if (!b.none && b.ms >= MIN_MS) {
+            return { what, verdict: "ok", why: `life animated ${b.ms} ms` };
+        }
+    }
     if (e.kind === "draw") {
         // The cards drawn: those whose element arrived in a hand over the view.
         const before = frames[0]?.cards ?? {};
