@@ -20,13 +20,37 @@
       "license": "CC0",
       "url": "https://kenney.nl/assets/interface-sounds",
       "dir": "kenney/kenney_interface-sounds/Audio"
+    },
+    "kenney-impact": {
+      "title": "Impact Sounds",
+      "author": "Kenney",
+      "license": "CC0",
+      "url": "https://kenney.nl/assets/impact-sounds",
+      "dir": "kenney/kenney_impact-sounds/Audio"
+    },
+    "kenney-rpg": {
+      "title": "RPG Audio",
+      "author": "Kenney",
+      "license": "CC0",
+      "url": "https://kenney.nl/assets/rpg-audio",
+      "dir": "kenney/kenney_rpg-audio/Audio"
+    },
+    "kenney-ui": {
+      "title": "UI Audio",
+      "author": "Kenney",
+      "license": "CC0",
+      "url": "https://kenney.nl/assets/ui-audio",
+      "dir": "kenney/kenney_ui-audio/Audio"
     }
   },
   "music": {
     "menu": {
       "loop": true,
       "variants": [
-        { "source": "notjam", "file": "Loopable/ChillMenu_Loopable.wav" }
+        {
+          "source": "notjam",
+          "file": "Loopable/ChillMenu_Loopable.wav"
+        }
       ]
     },
     "game": {
@@ -36,7 +60,10 @@
           "source": "notjam",
           "file": "Loopable/KleptoLindaMountainA_Loopable.wav"
         },
-        { "source": "notjam", "file": "Loopable/TypeCastTheme_Loopable.wav" },
+        {
+          "source": "notjam",
+          "file": "Loopable/TypeCastTheme_Loopable.wav"
+        },
         {
           "source": "notjam",
           "file": "Loopable/KleptoLindaCavernsA_Loopable.wav"
@@ -49,36 +76,390 @@
     },
     "win": {
       "loop": false,
-      "variants": [{ "source": "notjam", "file": "Standalone/VictoryLap.wav" }]
+      "variants": [
+        {
+          "source": "notjam",
+          "file": "Standalone/VictoryLap.wav"
+        }
+      ]
     },
     "loss": {
       "loop": false,
       "variants": [
-        { "source": "notjam", "file": "Standalone/KleptoLindaCredits.wav" }
+        {
+          "source": "notjam",
+          "file": "Standalone/KleptoLindaCredits.wav"
+        }
       ]
     }
   },
   "sounds": {
     "click": {
       "gain": -6,
-      "variants": [{ "source": "kenney-interface", "file": "click_001.ogg" }]
+      "variants": [
+        {
+          "source": "kenney-interface",
+          "file": "click_001.ogg"
+        }
+      ]
     },
     "toggle": {
       "gain": -6,
       "variants": [
-        { "source": "kenney-interface", "file": "toggle_001.ogg" },
-        { "source": "kenney-interface", "file": "toggle_002.ogg" }
+        {
+          "source": "kenney-interface",
+          "file": "toggle_001.ogg"
+        },
+        {
+          "source": "kenney-interface",
+          "file": "toggle_002.ogg"
+        }
       ]
     },
     "tick": {
       "gain": -10,
       "voices": 1,
-      "variants": [{ "source": "kenney-interface", "file": "tick_002.ogg" }]
+      "variants": [
+        {
+          "source": "kenney-interface",
+          "file": "tick_002.ogg"
+        }
+      ]
     },
     "start": {
       "gain": -3,
       "voices": 1,
-      "variants": [{ "source": "kenney-casino", "file": "card-shuffle.ogg" }]
+      "variants": [
+        {
+          "source": "kenney-casino",
+          "file": "card-shuffle.ogg"
+        }
+      ]
+    },
+    "select": {
+      "gain": -8,
+      "variants": [
+        {
+          "source": "kenney-interface",
+          "file": "select_001.ogg"
+        },
+        {
+          "source": "kenney-interface",
+          "file": "select_002.ogg"
+        }
+      ]
+    },
+    "back": {
+      "gain": -6,
+      "variants": [
+        {
+          "source": "kenney-interface",
+          "file": "back_001.ogg"
+        },
+        {
+          "source": "kenney-interface",
+          "file": "back_002.ogg"
+        }
+      ]
+    },
+    "no": {
+      "gain": -8,
+      "voices": 1,
+      "variants": [
+        {
+          "source": "kenney-interface",
+          "file": "error_004.ogg"
+        }
+      ]
+    },
+    "open": {
+      "gain": -8,
+      "voices": 1,
+      "variants": [
+        {
+          "source": "kenney-interface",
+          "file": "open_001.ogg"
+        }
+      ]
+    },
+    "slide": {
+      "gain": -6,
+      "variants": [
+        {
+          "source": "kenney-casino",
+          "file": "card-slide-1.ogg"
+        },
+        {
+          "source": "kenney-casino",
+          "file": "card-slide-2.ogg"
+        },
+        {
+          "source": "kenney-casino",
+          "file": "card-slide-3.ogg"
+        },
+        {
+          "source": "kenney-casino",
+          "file": "card-slide-4.ogg"
+        }
+      ]
+    },
+    "place": {
+      "gain": -4,
+      "variants": [
+        {
+          "source": "kenney-casino",
+          "file": "card-place-1.ogg"
+        },
+        {
+          "source": "kenney-casino",
+          "file": "card-place-2.ogg"
+        },
+        {
+          "source": "kenney-casino",
+          "file": "card-place-4.ogg"
+        }
+      ]
+    },
+    "shove": {
+      "gain": -6,
+      "variants": [
+        {
+          "source": "kenney-casino",
+          "file": "card-shove-1.ogg"
+        },
+        {
+          "source": "kenney-casino",
+          "file": "card-shove-2.ogg"
+        },
+        {
+          "source": "kenney-casino",
+          "file": "card-shove-3.ogg"
+        }
+      ]
+    },
+    "fan": {
+      "gain": -6,
+      "voices": 2,
+      "variants": [
+        {
+          "source": "kenney-casino",
+          "file": "card-fan-1.ogg"
+        }
+      ]
+    },
+    "cast": {
+      "gain": -6,
+      "voices": 2,
+      "variants": [
+        {
+          "source": "kenney-interface",
+          "file": "maximize_006.ogg"
+        }
+      ]
+    },
+    "exile": {
+      "gain": -6,
+      "voices": 2,
+      "variants": [
+        {
+          "source": "kenney-interface",
+          "file": "minimize_006.ogg"
+        }
+      ]
+    },
+    "ability": {
+      "gain": -8,
+      "voices": 2,
+      "variants": [
+        {
+          "source": "kenney-interface",
+          "file": "select_005.ogg"
+        }
+      ]
+    },
+    "resolve": {
+      "gain": -8,
+      "voices": 2,
+      "variants": [
+        {
+          "source": "kenney-interface",
+          "file": "confirmation_001.ogg"
+        }
+      ]
+    },
+    "shatter": {
+      "gain": -6,
+      "voices": 2,
+      "variants": [
+        {
+          "source": "kenney-impact",
+          "file": "impactGlass_heavy_000.ogg"
+        },
+        {
+          "source": "kenney-impact",
+          "file": "impactGlass_heavy_002.ogg"
+        }
+      ]
+    },
+    "hit": {
+      "gain": -4,
+      "variants": [
+        {
+          "source": "kenney-impact",
+          "file": "impactPunch_medium_000.ogg"
+        },
+        {
+          "source": "kenney-impact",
+          "file": "impactPunch_medium_001.ogg"
+        },
+        {
+          "source": "kenney-impact",
+          "file": "impactPunch_medium_002.ogg"
+        }
+      ]
+    },
+    "gain": {
+      "gain": -8,
+      "voices": 2,
+      "variants": [
+        {
+          "source": "kenney-interface",
+          "file": "glass_002.ogg"
+        }
+      ]
+    },
+    "drain": {
+      "gain": -8,
+      "voices": 2,
+      "variants": [
+        {
+          "source": "kenney-interface",
+          "file": "drop_002.ogg"
+        }
+      ]
+    },
+    "chip": {
+      "gain": -6,
+      "variants": [
+        {
+          "source": "kenney-casino",
+          "file": "chip-lay-1.ogg"
+        },
+        {
+          "source": "kenney-casino",
+          "file": "chip-lay-2.ogg"
+        },
+        {
+          "source": "kenney-casino",
+          "file": "chip-lay-3.ogg"
+        }
+      ]
+    },
+    "chips": {
+      "gain": -6,
+      "voices": 2,
+      "variants": [
+        {
+          "source": "kenney-casino",
+          "file": "chips-handle-1.ogg"
+        },
+        {
+          "source": "kenney-casino",
+          "file": "chips-handle-2.ogg"
+        }
+      ]
+    },
+    "tap": {
+      "gain": -10,
+      "voices": 2,
+      "variants": [
+        {
+          "source": "kenney-ui",
+          "file": "switch5.ogg"
+        }
+      ]
+    },
+    "untap": {
+      "gain": -10,
+      "voices": 2,
+      "variants": [
+        {
+          "source": "kenney-ui",
+          "file": "switch6.ogg"
+        }
+      ]
+    },
+    "mana": {
+      "gain": -10,
+      "voices": 2,
+      "variants": [
+        {
+          "source": "kenney-interface",
+          "file": "pluck_001.ogg"
+        },
+        {
+          "source": "kenney-interface",
+          "file": "pluck_002.ogg"
+        }
+      ]
+    },
+    "attack": {
+      "gain": -6,
+      "voices": 2,
+      "variants": [
+        {
+          "source": "kenney-rpg",
+          "file": "drawKnife1.ogg"
+        },
+        {
+          "source": "kenney-rpg",
+          "file": "drawKnife2.ogg"
+        },
+        {
+          "source": "kenney-rpg",
+          "file": "drawKnife3.ogg"
+        }
+      ]
+    },
+    "turn": {
+      "gain": -14,
+      "voices": 1,
+      "variants": [
+        {
+          "source": "kenney-impact",
+          "file": "impactBell_heavy_000.ogg"
+        }
+      ]
+    },
+    "step": {
+      "gain": -16,
+      "voices": 1,
+      "variants": [
+        {
+          "source": "kenney-interface",
+          "file": "tick_004.ogg"
+        }
+      ]
+    },
+    "control": {
+      "gain": -6,
+      "voices": 1,
+      "variants": [
+        {
+          "source": "kenney-interface",
+          "file": "glitch_001.ogg"
+        }
+      ]
+    },
+    "coin": {
+      "gain": -6,
+      "voices": 1,
+      "variants": [
+        {
+          "source": "kenney-rpg",
+          "file": "handleCoins.ogg"
+        }
+      ]
     }
   }
 }

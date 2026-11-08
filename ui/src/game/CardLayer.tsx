@@ -3,6 +3,7 @@
 // cast, resolved, killed, bounced or exiled travels rather than jumps (decision D10). Hand
 // cards with something to play drag onto the battlefield, attackers forward and blockers onto
 // attackers; a click on any card asks the board what it offers.
+import { play } from "../audio/sound";
 import {
   memo,
   useContext,
@@ -497,6 +498,7 @@ const CardElement = memo(function CardElement({
       setHeld({ dragging: true });
       layer.onHover(undefined);
       layer.onLift?.(object.slot);
+      play("slide");
     }
     x.set(d.from.x + dx);
     y.set(d.from.y + dy);
@@ -508,8 +510,12 @@ const CardElement = memo(function CardElement({
     const at = stagePoint(e);
     if (d.strayed) return;
     if (!d.moved) {
-      if (!layer.onClick(object.slot, at) && hand && !reduce) {
-        animate(shake, SHAKE, { duration: 0.32, ease: "easeInOut" });
+      // A hand card with nothing to do shakes its head.
+      if (!layer.onClick(object.slot, at) && hand) {
+        play("no");
+        if (!reduce) {
+          animate(shake, SHAKE, { duration: 0.32, ease: "easeInOut" });
+        }
       }
       return;
     }
@@ -521,6 +527,8 @@ const CardElement = memo(function CardElement({
       at,
       onto: under(e, e.currentTarget as HTMLElement),
     });
+    // One dropped where it does nothing goes back, refused.
+    if (!played) play("no");
     setHeld(played ? { dragging: false, epoch } : undefined);
   };
 

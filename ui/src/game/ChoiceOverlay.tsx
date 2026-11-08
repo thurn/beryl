@@ -25,6 +25,7 @@ import {
   type Highlight,
 } from "../components/Card";
 import { Button } from "../components/Controls";
+import { useOpenSound } from "../audio/SoundControls";
 import { Overlay, type OverlayAction } from "../components/Overlay";
 import { RulesText } from "../components/Mana";
 import type { ObjectView, PlayerView } from "../generated/protocol";
@@ -56,6 +57,7 @@ export interface ChoiceOverlayProps {
 }
 
 export function ChoiceOverlay(props: ChoiceOverlayProps) {
+  useOpenSound();
   const { choice } = props;
   if (floats(choice)) return <AskFloat {...props} choice={choice} />;
   // Its cards are small: hovering one shows it whole, over the source card's column, clear of

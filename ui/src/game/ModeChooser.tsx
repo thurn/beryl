@@ -13,6 +13,7 @@ import {
   useReducedMotion,
 } from "motion/react";
 import { CARD_ASPECT, Card } from "../components/Card";
+import { useOpenSound } from "../audio/SoundControls";
 import { Button, Dock, DockButtons } from "../components/Controls";
 import { StackItem } from "../components/Stack";
 import type { ObjectView } from "../generated/protocol";
@@ -68,6 +69,7 @@ export function ModeChooser({
   from?: Origin;
   onClose(): void;
 }) {
+  useOpenSound();
   const reduce = useReducedMotion() ?? false;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

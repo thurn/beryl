@@ -169,7 +169,7 @@ import {
 } from "./Piles";
 import { ManaFlow, manaMotes } from "./ManaFlow";
 import { TurnBanner } from "./TurnBanner";
-import { SoundPanel } from "../audio/SoundControls";
+import { SoundPanel, useOpenSound } from "../audio/SoundControls";
 
 export interface BoardProps {
   view: PlayerView;
@@ -2669,6 +2669,7 @@ function ActionMenu({
   onPoint(act: Act | undefined): void;
   onClose(): void;
 }) {
+  useOpenSound();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);

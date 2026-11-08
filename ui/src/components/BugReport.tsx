@@ -8,6 +8,7 @@
 // the agent's latest searches (beryl_session::ai). The button beside the X, or Space or Enter, takes the whole window
 // instead, even pressed straight after ⌘B, before the snapshot is in.
 // The X or Escape closes it at any point, and the page plays on.
+import { useOpenSound } from "../audio/SoundControls";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import {
@@ -282,6 +283,8 @@ function Selector({
   onChoose: (region: Region) => void;
   onClose: () => void;
 }) {
+  // The report opens over the frozen frame.
+  useOpenSound();
   const from = useRef<{ x: number; y: number } | undefined>(undefined);
   const [drag, setDrag] = useState<Region>();
   const down = (e: ReactPointerEvent) => {

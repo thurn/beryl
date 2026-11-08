@@ -23,6 +23,7 @@ import {
   type SessionId,
 } from "../ipc";
 import { beats, eventsHold } from "./beats";
+import { soundBeat } from "../audio/events";
 import type { Spotlight } from "./layout";
 import { learnNames, logLines, type LogEntry, type Names } from "./log";
 
@@ -313,10 +314,15 @@ export function usePlayback(): {
   // time.
   useLayoutEffect(() => {
     if (!shown) return;
-    const w = window as { berylShown?: { at: number; update: GameUpdate }[] };
+    const w = window as {
+      berylShown?: { at: number; update: GameUpdate; live: boolean }[];
+    };
     const log = (w.berylShown ??= []);
-    log.push({ at: performance.now(), update: shown });
+    const at = performance.now();
+    log.push({ at, update: shown, live: state.live });
     if (log.length > SHOWN_LOG) log.splice(0, log.length - SHOWN_LOG);
+    // What it shows sounds as it shows; a view from the past is silent, as it is still.
+    if (state.live) soundBeat(shown.view, at);
   }, [shown]);
   // A spec page framing the game shows it once it has a view (screens/Specs.tsx).
   const showing = shown !== undefined;

@@ -193,9 +193,18 @@ function unlock() {
 const pick = (cue: Cue) => Math.floor(Math.random() * cue.variants.length);
 
 /** Plays a sound effect: a variant at random, slightly varied, unless that sound already
- * plays at its most copies or the player muted effects. `gain` is in decibels. */
-export function play(sound: Sound, { gain = 0 }: { gain?: number } = {}) {
-  logged?.berylSounds.push({ sound, at: performance.now() });
+ * plays at its most copies or the player muted effects. `gain` is in decibels; `delay` in
+ * milliseconds; `at` stamps the log entry (the beat it sounds, game/playback.ts), now by
+ * default. */
+export function play(
+  sound: Sound,
+  {
+    gain = 0,
+    delay = 0,
+    at = performance.now(),
+  }: { gain?: number; delay?: number; at?: number } = {},
+) {
+  logged?.berylSounds.push({ sound, at });
   if (!engine || settings.muted || settings.sfx === 0) return;
   // Sounds asked for while the context is locked would all burst out when it unlocks.
   if (engine.context.state !== "running" && !resuming) return;
@@ -216,7 +225,7 @@ export function play(sound: Sound, { gain = 0 }: { gain?: number } = {}) {
     engine?.playing.set(sound, (engine.playing.get(sound) ?? 1) - 1);
     level.disconnect();
   };
-  source.start();
+  source.start(context.currentTime + delay / 1000);
 }
 
 // ---- Music ----

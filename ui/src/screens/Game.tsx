@@ -327,10 +327,23 @@ function Playing({ playback }: { playback: Playback }) {
     release();
     setHeld(undefined);
     const message = failure(e);
-    if (message) setError(message);
+    if (message) {
+      play("no");
+      setError(message);
+    }
   };
   const decision = status.kind === "deciding" ? status.decision : undefined;
+  /** Answers the decision as the player picked: heard, or refused while the game is busy. */
   const answer = (index: CandidateIndex, then: Intent[] = []) => {
+    if (!decision || waiting) {
+      play("no");
+      return;
+    }
+    play("select");
+    send(index, then);
+  };
+  /** Sends an answer, the player's or one taken for them (a planned pick, a lone target). */
+  const send = (index: CandidateIndex, then: Intent[] = []) => {
     if (!decision || waiting) return;
     setError(undefined);
     setAnswered(view);
@@ -342,6 +355,7 @@ function Playing({ playback }: { playback: Playback }) {
    * if put aside, is done with: asked again, it is shown. */
   const cancelCast = () => {
     if (!decision?.cancellable || waiting) return;
+    play("back");
     setError(undefined);
     setAnswered(view);
     planned.current = [];
@@ -352,6 +366,7 @@ function Playing({ playback }: { playback: Playback }) {
   /** Takes back the player's latest answer, dropping any picks planned. */
   const undoAnswer = () => {
     if (!decision?.undo || waiting) return;
+    play("back");
     setError(undefined);
     setAnswered(view);
     planned.current = [];
@@ -361,6 +376,7 @@ function Playing({ playback }: { playback: Playback }) {
   /** Passes on to the player's next stop. */
   const passOnward = () => {
     if (!decision?.passOn || waiting) return;
+    play("select");
     setError(undefined);
     setAnswered(view);
     passOn(decision.id).catch(fail);
@@ -411,15 +427,15 @@ function Playing({ playback }: { playback: Playback }) {
         // A target with no alternative is taken for the player, as Arena takes it.
         const lone = decision && loneTarget(decision, view);
         if (lone !== undefined) {
-          answer(lone, []);
+          send(lone, []);
           return;
         }
       }
       setHeld(undefined);
       return;
     }
-    answer(index, rest);
-    // Only a new view answers (`answer` changes with every render).
+    send(index, rest);
+    // Only a new view answers (`send` changes with every render).
   }, [view]);
 
   // While gathering, each view held back that asks for the next planned pick gets it at once;

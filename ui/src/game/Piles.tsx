@@ -2,6 +2,7 @@
 // where layout.ts puts it, a graveyard or exile pile is one button that opens it, never a card
 // to point at alone, and the zone viewer lists every card in the pile, each shown whole on
 // hover. A card the open decision offers something for (a target, a cast) is picked there.
+import { useOpenSound } from "../audio/SoundControls";
 import {
   useContext,
   useEffect,
@@ -163,6 +164,7 @@ export function ZoneViewer({
   onPick(slot: number): void;
   onClose(): void;
 }) {
+  useOpenSound();
   const [inspector, inspect] = useHoverInspect();
   const cards = [...pile.cards].reverse();
   const columns = Math.min(VIEWER_COLUMNS, Math.max(1, cards.length));

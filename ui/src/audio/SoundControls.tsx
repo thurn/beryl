@@ -12,14 +12,21 @@ import {
 import manifest from "./manifest.json";
 import {
   audioSettings,
+  play,
   setAudioSettings,
   setMusic,
   subscribeAudio,
   type Music,
+  type Sound,
 } from "./sound";
 
 const useAudioSettings = () =>
   useSyncExternalStore(subscribeAudio, audioSettings);
+
+/** Plays `sound` as the calling component opens. */
+export function useOpenSound(sound: Sound = "open") {
+  useEffect(() => play(sound), []);
+}
 
 /** Plays `music` while the calling screen shows, or silence for none. */
 export function useMusic(music: Music | undefined) {

@@ -170,6 +170,7 @@ async function check(
             await page.goto(new URL(route, base).href, { waitUntil: "load" });
             await page.waitForSelector(ready);
             await body(page);
+            await assertSounded(page);
             console.log(`ok: ${title}`);
         } catch (e) {
             failed = true;
@@ -178,6 +179,44 @@ async function check(
             await context.close();
         }
     });
+}
+
+/** Across every check: the views shown live whose sounds were checked, and the player's
+ * commands heard. */
+const sounded = { views: 0, heard: 0 };
+
+/** Anything that happens on the screen makes a sound (src/audio): every view the page showed
+ * live asked, as it showed, for the sounds of its events (audio/events.ts holds one for every
+ * kind), and a page that sent the player's answers played their sound. The page logs its cues
+ * (`window.berylSounds`) rather than playing them. */
+async function assertSounded(page) {
+    const { silent, views, sent, heard } = await page.evaluate(() => {
+        const sounds = window.berylSounds ?? [];
+        const live = (window.berylShown ?? []).filter((s) => s.live);
+        const silent = live.flatMap((s) =>
+            window
+                .berylBeatSounds(s.update.view)
+                .filter(
+                    (c) => !sounds.some((x) => x.sound === c && x.at === s.at),
+                )
+                .map((c) => `${c} at ${Math.round(s.at)} ms`),
+        );
+        const commands = ["choose", "cancel", "undo", "pass_on"];
+        return {
+            silent,
+            views: live.length,
+            sent: (window.berylFixture?.calls ?? []).filter((c) =>
+                commands.includes(c.command),
+            ).length,
+            heard: sounds.filter((x) => ["select", "back"].includes(x.sound))
+                .length,
+        };
+    });
+    assert.deepEqual(silent, [], "every view shown live asked for its sounds");
+    // Picks the page takes for the player (a lone target, a plan's next pick) go unheard.
+    if (sent > 0) assert.ok(heard > 0, `${sent} answers sent, none heard`);
+    sounded.views += views;
+    sounded.heard += heard;
 }
 
 await check(
@@ -6612,6 +6651,13 @@ await check(
 
 await queue.drain();
 await browser.close();
+// A run of every check plays views and answers: none sounding means the sounds are unwired.
+if (filters.length === 0 && (sounded.views === 0 || sounded.heard === 0)) {
+    failed = true;
+    console.error(
+        `sound: ${JSON.stringify(sounded)} checked; expected some of each`,
+    );
+}
 if (ran === 0) {
     failed = true;
     console.error(`no check's title contains ${filters.join(" or ")}`);
