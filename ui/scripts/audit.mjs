@@ -244,7 +244,12 @@ export function record(ui) {
         [...document.querySelectorAll(".stack-item")].forEach((e, n) => {
             const r = e.getBoundingClientRect();
             // By place and name: an item that resolves and another put in its place are two.
-            const i = `${n}:${e.querySelector(".card-name, .card-scan")?.textContent || e.querySelector(".card-scan")?.getAttribute("alt") || ""}`;
+            // An ability says its own (the item, not its source's face, which an emblem's
+            // shares with its planeswalker), and keeps it while one leaving beneath it shifts
+            // the order.
+            const i =
+                e.closest("[data-stack-key]")?.dataset.stackKey ??
+                `${n}:${e.querySelector(".card-name, .card-scan")?.textContent || e.querySelector(".card-scan")?.getAttribute("alt") || ""}`;
             const cx = r.left + r.width / 2;
             const cy = r.top + r.height / 2;
             stack[i] = {

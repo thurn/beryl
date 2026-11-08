@@ -1149,6 +1149,7 @@ export function Board({
                   source={
                     item.source === null ? undefined : objects.get(item.source)
                   }
+                  from={placements.get(abilityOrigin(view, item))}
                 />
               ),
           )}
@@ -1713,21 +1714,41 @@ function AbilityOnStack({
   count,
   item,
   source,
+  from,
 }: {
   index: number;
   count: number;
   item: Extract<StackItemView, { kind: "ability" }>;
   source?: ObjectView;
+  /** Where its source is drawn: it springs out of it onto the stack. */
+  from?: Placement;
 }) {
   const face = useAbilityFace(item.name, source, BLANK);
   const place = stackPlace(index, count);
+  const start = from
+    ? {
+        x: from.x,
+        y: from.y,
+        scale: Math.max(0.2, (from.width * from.scale) / place.width),
+      }
+    : { x: place.x, y: place.y, scale: 0.8 };
   return (
     <motion.div
       className="hud stack-ability"
+      // Which item it is, by place and the ability's own name, for a motion audit: two
+      // items sharing a source's face (an emblem's and its planeswalker's) stay apart.
+      data-stack-key={`${index}:${item.name}`}
       style={{ zIndex: STACK_Z + index }}
-      initial={{ opacity: 0, scale: 0.8, x: place.x, y: place.y }}
+      initial={{ opacity: 0, ...start }}
       animate={{ opacity: 1, scale: 1, x: place.x, y: place.y }}
-      exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.35 } }}
+      // Leaving, it drops beneath whatever takes its place on the stack, which would
+      // otherwise arrive hidden under it.
+      exit={{
+        opacity: 0,
+        scale: 0.9,
+        zIndex: STACK_Z - 1,
+        transition: { duration: 0.35, zIndex: { duration: 0 } },
+      }}
     >
       <StackItem
         id={stackId(index)}
@@ -1740,6 +1761,19 @@ function AbilityOnStack({
       <StackMarks controller={item.controller} x={item.x} />
     </motion.div>
   );
+}
+
+/** The slot of what an ability on the stack comes from: its source, or for an emblem's ability,
+ * which the view gives no source ([CR 114.4](https://yawgatog.com/resources/magic-rules/#R1144):
+ * "Abilities of emblems function in the command zone"), the card the table draws for the
+ * emblem of that name its controller has. */
+function abilityOrigin(
+  view: PlayerView,
+  item: Extract<StackItemView, { kind: "ability" }>,
+): number {
+  if (item.source !== null) return item.source;
+  const index = view.players[item.controller].emblems.indexOf(item.name);
+  return index < 0 ? Number.NaN : emblemSlot(item.controller, index);
 }
 
 /** The element id of the stack item at `index`: its card for a spell. */

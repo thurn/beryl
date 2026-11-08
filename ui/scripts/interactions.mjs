@@ -2244,6 +2244,42 @@ await check(
     },
 );
 
+// A permanent that does something when clicked but doesn't drag (a land, which taps for mana)
+// does nothing when pulled aside: a drag never acts as a click.
+const marksViews = await load("marks");
+const marksView = marksViews.at(-1);
+const manaLand = marksView.status.decision.candidates.find(
+    (c) =>
+        c.option.kind === "mana" &&
+        marksView.objects.find((o) => o.slot === c.option.slot)?.zone ===
+            "battlefield",
+);
+assert.ok(manaLand, "the marks fixture offers a land's mana");
+await check(
+    "a land pulled aside does not tap; clicked, it does",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const land = page.locator(`[data-slot="${manaLand.option.slot}"]`);
+        const box = await land.boundingBox();
+        const at = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        await page.mouse.move(at.x, at.y);
+        await page.mouse.down();
+        for (let i = 1; i <= 10; i++) {
+            await page.mouse.move(at.x + 4 * i, at.y - 12 * i);
+        }
+        await page.mouse.up();
+        await page.clock.runFor(500);
+        assert.deepEqual(await chosen(page), [], "the drag chose nothing");
+        await page.mouse.click(at.x, at.y);
+        assert.equal((await settled(page, 1)).length, 1, "the click chose");
+    },
+    {
+        fixture: "marks",
+        at: marksViews.length,
+        ready: `[data-slot="${manaLand.option.slot}"]`,
+    },
+);
+
 const landActs = pairView.status.decision.candidates.filter(
     (c) => c.option.slot === playable.get(twin.name).option.slot,
 );

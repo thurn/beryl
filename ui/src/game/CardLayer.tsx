@@ -442,7 +442,14 @@ const CardElement = memo(function CardElement({
     const timer = setTimeout(() => setEmerging(false), EMERGING_FOR);
     return () => clearTimeout(timer);
   }, [emerging]);
-  const drag = useRef<{ start: Point; from: Point; moved: boolean }>(undefined);
+  // `strayed`: the pointer went past a click's reach on a card that does not drag. Let go, it
+  // does nothing: a drag never acts as a click (a land pulled aside must not tap).
+  const drag = useRef<{
+    start: Point;
+    from: Point;
+    moved: boolean;
+    strayed?: boolean;
+  }>(undefined);
   // A card in a library is unseen, and one on a graveyard or exile pile is the pile's: the
   // pile's button opens it (Piles.tsx). Neither is pointed at alone.
   const untouchable = place.look === "hidden" || place.look === "pile";
@@ -475,10 +482,14 @@ const CardElement = memo(function CardElement({
   };
   const onPointerMove = (e: ReactPointerEvent) => {
     const d = drag.current;
-    if (!d || !state.draggable) return;
+    if (!d) return;
     const at = stagePoint(e);
     const [dx, dy] = [at.x - d.start.x, at.y - d.start.y];
     if (!d.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+    if (!state.draggable) {
+      d.strayed = true;
+      return;
+    }
     if (!d.moved) {
       d.moved = true;
       x.stop();
@@ -495,6 +506,7 @@ const CardElement = memo(function CardElement({
     drag.current = undefined;
     if (!d) return;
     const at = stagePoint(e);
+    if (d.strayed) return;
     if (!d.moved) {
       if (!layer.onClick(object.slot, at) && hand && !reduce) {
         animate(shake, SHAKE, { duration: 0.32, ease: "easeInOut" });

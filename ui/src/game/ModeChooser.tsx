@@ -109,16 +109,20 @@ export function ModeChooser({
           />
         ))}
       </div>
-      <button
+      {/* The X turns in beside the gear as the frames spring out. */}
+      <motion.button
         type="button"
         className="chooser-close"
         aria-label="Close"
         onClick={onClose}
+        initial={{ opacity: 0, scale: 0.6, rotate: -90 }}
+        animate={{ opacity: 1, scale: 1, rotate: 0 }}
+        transition={reduce ? { duration: 0 } : SPRING}
       >
         <svg viewBox="0 0 24 24" role="img" aria-hidden>
           <path d="M5.6 3.5 12 9.9l6.4-6.4 2.1 2.1-6.4 6.4 6.4 6.4-2.1 2.1-6.4-6.4-6.4 6.4-2.1-2.1 6.4-6.4-6.4-6.4z" />
         </svg>
-      </button>
+      </motion.button>
       <Dock className="chooser-dock">
         <DockButtons>
           <Button variant="secondary" onClick={onClose}>
