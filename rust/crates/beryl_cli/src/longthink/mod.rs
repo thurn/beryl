@@ -696,6 +696,10 @@ fn supervise(dir: &Path, games: Option<u32>) -> Result<(), String> {
     let mut crashes = 0;
     let mut before = finished()?;
     loop {
+        // No runner runs now: what an upgrade moved aside can go.
+        if cfg!(windows) {
+            remove_old_binaries(dir);
+        }
         let mut runner = Command::new(&bin);
         runner.arg("longthink-run").arg(dir);
         if let Some(n) = games {
