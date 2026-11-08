@@ -38,7 +38,9 @@ show the mechanics it shares.
    moment from both seats with motion on and judges every event: `ok` (moved,
    faded or animated long enough, visibly), `instant` (a jump), `unseen` (moved
    off screen, covered or transparent), `still` (nothing showed it), and
-   `crowded` (more than three events in one view). Beside the events,
+   `crowded` (more than three events in one view). Arrows are judged too: `jump`
+   (a new path while both its ends stood still) and `stretch` (drawn while an end
+   moved). Beside the events,
    `duplicate` flags one card shown twice at once for 250 ms or more (one slot
    drawn twice, or a slotless copy beside it; a prompt's copies are allowed),
    and `ui` findings judge what moved with no event behind it (a fan making

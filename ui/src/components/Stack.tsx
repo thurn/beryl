@@ -263,7 +263,13 @@ export function Arrows({
         return still || !choice ? undefined : retrace(legs[i]!, choice);
       });
       const searched = traced.some((r) => !r);
-      const routes = searched ? route(legs, size) : traced;
+      const routes = searched
+        ? route(
+            legs,
+            size,
+            ends.map(({ a }) => choices.current.get(keyOf(a))),
+          )
+        : traced;
       seen.current = { where, searched: still || searched };
       choices.current = new Map(
         ends.map(({ a }, i) => [keyOf(a), routes[i]!.choice]),

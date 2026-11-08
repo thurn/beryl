@@ -102,6 +102,9 @@ const REORDER = 3;
  * ends: flatter, tighter or rounder curves. The flattest lets a long arrow run along the
  * narrow gap between a row of cards and what lies above or below it. */
 const REACH = [0.1, 0.3, 0.55];
+/** A new route replaces the one an arrow has only when it costs less than this `share` of it
+ * less `by`: clearly better, not just a little after something moved. */
+const STAY = { share: 0.8, by: 150 };
 /** How many points along a curve price it: roughly, to shortlist the `SHORTLIST` likeliest
  * routes for an arrow, then finely, against the other arrows. */
 const COARSE = 10;
@@ -169,11 +172,62 @@ export interface Route {
   cost: number;
 }
 
-/** Which of its ends' ports a route leaves and meets, and how far it reaches. */
+/** Which of its ends' ports a route leaves and meets, and how far it reaches. Each port is
+ * also kept as where it lies on its end (`from`, `to`), since how many ports a side has, and
+ * so which index names a port, changes as a card grows or shrinks. */
 export interface Choice {
   start: number;
   end: number;
   reach: number;
+  from?: Anchor;
+  to?: Anchor;
+}
+
+/** Where a port lies on its box: as fractions of the box's width and height, and which way it
+ * faces. */
+interface Anchor {
+  u: number;
+  v: number;
+  normal: Vector;
+}
+
+const anchorOf = (p: Port, b: Box): Anchor => ({
+  u: b.width ? (p.at[0] - b.x) / b.width : 0.5,
+  v: b.height ? (p.at[1] - b.y) / b.height : 0.5,
+  normal: p.normal,
+});
+
+/** The index among `list`, the ports of `b`, of the port facing as `a` does nearest where it
+ * lay; undefined if none faces that way. */
+function anchored(
+  list: readonly Port[],
+  b: Box,
+  a: Anchor,
+): number | undefined {
+  let found: number | undefined;
+  let nearest = Infinity;
+  list.forEach((p, i) => {
+    if (p.normal[0] * a.normal[0] + p.normal[1] * a.normal[1] < 0.9) return;
+    const at = anchorOf(p, b);
+    const d = Math.hypot(at.u - a.u, at.v - a.v);
+    if (d < nearest) [found, nearest] = [i, d];
+  });
+  return found;
+}
+
+/** The candidate `choice` names for `leg` now: its ports found by where they lay, or by index
+ * for a choice that does not say; undefined if its ends no longer have them. */
+function again(leg: Leg, choice: Choice): Candidate | undefined {
+  const starts = ports(leg.from.box, leg.from.oval ?? false);
+  const ends = ports(leg.to.box, leg.to.oval ?? false);
+  const start = choice.from
+    ? anchored(starts, leg.from.box, choice.from)
+    : choice.start;
+  const end = choice.to ? anchored(ends, leg.to.box, choice.to) : choice.end;
+  const s = start === undefined ? undefined : starts[start];
+  const e = end === undefined ? undefined : ends[end];
+  if (!s || !e) return undefined;
+  return candidate(s, e, { start: start!, end: end!, reach: choice.reach });
 }
 
 interface Candidate {
@@ -265,7 +319,7 @@ function price(
   return { cost, samples };
 }
 
-function drawn(c: Candidate, cost: number, samples: Vector[]): Route {
+function drawn(leg: Leg, c: Candidate, cost: number, samples: Vector[]): Route {
   const xs = samples.map((q) => q[0]);
   const ys = samples.map((q) => q[1]);
   return {
@@ -280,7 +334,11 @@ function drawn(c: Candidate, cost: number, samples: Vector[]): Route {
     start: c.start.at,
     end: c.end.at,
     angle: (Math.atan2(-c.end.normal[1], -c.end.normal[0]) * 180) / Math.PI,
-    choice: c.choice,
+    choice: {
+      ...c.choice,
+      from: anchorOf(c.start, leg.from.box),
+      to: anchorOf(c.end, leg.to.box),
+    },
     samples,
     cost,
   };
@@ -304,19 +362,26 @@ function shortlist(leg: Leg, table: Box): Candidate[] {
 }
 
 /** The best of `leg`'s `candidates` on a `table`, priced finely, clear of the arrows routed
- * before it (`earlier`). */
+ * before it (`earlier`); the route it had (`kept`) stays unless another is clearly better
+ * (`STAY`), so that an arrow does not jump to a new way round every time a card somewhere on
+ * the table moves and settles. */
 function best(
   leg: Leg,
   candidates: readonly Candidate[],
   earlier: readonly Route[],
   table: Box,
+  kept?: Candidate,
 ): Route {
-  return candidates
-    .map((c) => {
-      const { cost, samples } = price(leg, c, earlier, table, FINE);
-      return drawn(c, cost, samples);
-    })
+  const priced = (c: Candidate) => {
+    const { cost, samples } = price(leg, c, earlier, table, FINE);
+    return drawn(leg, c, cost, samples);
+  };
+  const found = candidates
+    .map(priced)
     .reduce((a, b) => (b.cost < a.cost ? b : a));
+  if (!kept) return found;
+  const stay = priced(kept);
+  return found.cost < stay.cost * STAY.share - STAY.by ? found : stay;
 }
 
 /** Every ordering of `items`. */
@@ -331,17 +396,26 @@ function orders<T>(items: readonly T[]): T[][] {
 }
 
 /** Routes `legs` over a `size` table, each clear of the cards it avoids and of the others,
- * in whichever order (of up to `REORDER` legs) costs least in all; returned in `legs`' order. */
-export function route(legs: readonly Leg[], size: Vector): Route[] {
+ * in whichever order (of up to `REORDER` legs) costs least in all; returned in `legs`' order.
+ * A leg routed before keeps its `previous` choice unless another is clearly better (`best`). */
+export function route(
+  legs: readonly Leg[],
+  size: Vector,
+  previous: readonly (Choice | undefined)[] = [],
+): Route[] {
   const table = { x: 0, y: 0, width: size[0], height: size[1] };
   const indices = legs.map((_, i) => i);
   const candidates = legs.map((leg) => shortlist(leg, table));
+  const kept = legs.map((leg, i) => {
+    const choice = previous[i];
+    return choice && again(leg, choice);
+  });
   let cheapest: { cost: number; routes: Route[] } | undefined;
   for (const order of legs.length <= REORDER ? orders(indices) : [indices]) {
     const routes: Route[] = [];
     const placed: Route[] = [];
     for (const i of order) {
-      const r = best(legs[i]!, candidates[i]!, placed, table);
+      const r = best(legs[i]!, candidates[i]!, placed, table, kept[i]);
       routes[i] = r;
       placed.push(r);
     }
@@ -354,11 +428,10 @@ export function route(legs: readonly Leg[], size: Vector): Route[] {
 /** `leg` routed as `choice` was, from the same ports with the same reach, as its ends move;
  * undefined if its ends no longer have those ports. */
 export function retrace(leg: Leg, choice: Choice): Route | undefined {
-  const s = ports(leg.from.box, leg.from.oval ?? false)[choice.start];
-  const e = ports(leg.to.box, leg.to.oval ?? false)[choice.end];
-  if (!s || !e) return undefined;
-  const c = candidate(s, e, choice);
+  const c = again(leg, choice);
+  if (!c) return undefined;
   return drawn(
+    leg,
     c,
     0,
     Array.from({ length: FINE + 1 }, (_, n) => bezier(c.p, n / FINE)),

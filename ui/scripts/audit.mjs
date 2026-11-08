@@ -11,6 +11,10 @@
 //   duplicate the same card showed twice at once for DUPLICATE_MS or longer: a second copy of
 //             a card (one slot drawn twice, or a copy with no slot beside it), outside a
 //             prompt, which shows copies of the cards it offers on purpose
+//   jump      an arrow took a new path while both its ends stood still: rerouted round
+//             something that moved elsewhere, which the eye reads as the arrow jumping
+//   stretch   an arrow was drawn while one of its ends moved, following a card in flight
+//             rather than waiting for it to land
 // Beside the events, `ui` findings judge what moved with no event to show (a hand rising, a
 // chooser opening, a button sliding in): the motion a live click sets going. A finding about a
 // tap or untap is `minor`: mana bookkeeping, which a land in a group shows under its
@@ -281,8 +285,25 @@ export function record(ui) {
                 anim: e.getAnimations().length > 0,
             };
         }
+        // Each arrow, by its ends, with its path and where its ends' elements are.
+        const arrows = {};
+        for (const g of document.querySelectorAll(".arrow[data-from]")) {
+            const ends = [g.dataset.from, g.dataset.to].map((id) => {
+                const r = document.getElementById(id)?.getBoundingClientRect();
+                return r
+                    ? [r.left, r.top, r.width, r.height]
+                          .map(Math.round)
+                          .join(",")
+                    : "";
+            });
+            arrows[`${g.dataset.from}>${g.dataset.to}`] = {
+                d: g.querySelector("path")?.getAttribute("d") ?? "",
+                ends: ends.join("|"),
+            };
+        }
         hits.remove();
         frames.push({
+            arrows,
             t: performance.now(),
             cards,
             lives,
@@ -791,6 +812,37 @@ function uiFindings(window, events) {
     return out;
 }
 
+/** Each arrow that took a new path while its ends stood still (`jump`), or was drawn while an
+ * end moved (`stretch`), over `frames`: one finding for each arrow and verdict, counting the
+ * frames it happened in. */
+function arrowFindings(frames) {
+    const runs = {};
+    for (let i = 1; i < frames.length; i++) {
+        for (const [key, now] of Object.entries(frames[i].arrows ?? {})) {
+            const was = frames[i - 1].arrows?.[key];
+            if (!was || was.d === now.d) continue;
+            const verdict = was.ends === now.ends ? "jump" : "stretch";
+            const run = (runs[`${verdict} ${key}`] ??= {
+                verdict,
+                key,
+                start: frames[i].t,
+                count: 0,
+            });
+            run.count++;
+        }
+    }
+    return Object.values(runs).map(({ verdict, key, start, count }) => ({
+        kind: "arrow",
+        what: `arrow ${key}`,
+        verdict,
+        why:
+            verdict === "jump"
+                ? `rerouted ${count} time${count > 1 ? "s" : ""} with its ends still`
+                : `redrawn over ${count} frame${count > 1 ? "s" : ""} as an end moved`,
+        start,
+    }));
+}
+
 /** Each card shown twice at once for DUPLICATE_MS or more, over `frames`. */
 function duplicates(frames) {
     const runs = {};
@@ -892,7 +944,7 @@ export function audit({ frames, shown, since }, { live = false } = {}) {
             });
         }
     }
-    for (const d of duplicates(frames)) {
+    for (const d of [...duplicates(frames), ...arrowFindings(frames)]) {
         const view = views.findLast((v) => v.at - LEAD <= d.start) ?? views[0];
         findings.push({ view: view?.turn ?? "", ...d });
     }
