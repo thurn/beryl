@@ -8,6 +8,7 @@ import { CARD_ASPECT, Card } from "../components/Card";
 import type { ObjectView } from "../generated/protocol";
 import { useFace } from "./faces";
 import { StageScale } from "./Stage";
+import { STAGE } from "./layout";
 
 const SPRING = { type: "spring", stiffness: 300, damping: 28 } as const;
 
@@ -80,7 +81,7 @@ export function Risen({
   // Above its place, kept on the stage.
   const left = Math.min(
     Math.max(at.x - RISEN_WIDTH / 2, 16),
-    1600 - 16 - RISEN_WIDTH,
+    STAGE.width - 16 - RISEN_WIDTH,
   );
   const top = Math.max(at.y - height - 14, 16);
   const scale = at.width / RISEN_WIDTH;

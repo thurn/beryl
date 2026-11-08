@@ -1,5 +1,5 @@
 // The overlay shell every choice screen uses (scry, Jace's put-back, modes), laid out on the
-// 1600×900 table stage as in docs/ui_mockups/scry.png: a title and an instruction over the
+// table stage (layout.ts STAGE) as in docs/ui_mockups/scry.png: a title and an instruction over the
 // choice, a confirm button under it, and on the right a "View Battlefield" escape over the
 // source card, all on the dimmed battlefield; its buttons in the action dock at the bottom right,
 // as every action on the game screen (Controls.tsx' Dock).

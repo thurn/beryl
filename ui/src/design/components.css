@@ -1451,16 +1451,18 @@
   }
 }
 
-/* The overlay shell, on the 1600×900 stage: a 1000px choice column and a 338px side column. */
+/* The overlay shell, on the table stage: a 1000px choice column and a 338px side column. */
 .overlay {
   position: absolute;
   inset: 0;
   z-index: 20;
   display: grid;
   grid-template-columns: 1000px 338px;
-  column-gap: 72px;
+  /* On the base stage; held to its middle (Stage.tsx --shift-mid), and on a narrower one closer
+     together (ChoiceOverlay.tsx side). */
+  column-gap: clamp(16px, calc(72px + 0.35 * var(--shift, 0px)), 72px);
   align-items: start;
-  padding: 48px 54px 0 136px;
+  padding: 48px 0 0 calc(136px + var(--shift-mid, 0px));
 }
 /* Darkens whatever is behind; the table also blurs itself (.table-dimmed) while an overlay is up. */
 .overlay-backdrop {

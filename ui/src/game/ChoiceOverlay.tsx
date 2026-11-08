@@ -29,7 +29,8 @@ import { useOpenSound } from "../audio/SoundControls";
 import { Overlay, type OverlayAction } from "../components/Overlay";
 import { RulesText } from "../components/Mana";
 import type { ObjectView, PlayerView } from "../generated/protocol";
-import { StageScale } from "./Stage";
+import { StageScale, useStageWidth } from "./Stage";
+import { STAGE, STAGE_WIDTHS } from "./layout";
 import {
   floats,
   type Arrange,
@@ -58,11 +59,13 @@ export interface ChoiceOverlayProps {
 
 export function ChoiceOverlay(props: ChoiceOverlayProps) {
   useOpenSound();
+  // The source card's column moves with the stage's width.
+  useStageWidth();
   const { choice } = props;
   if (floats(choice)) return <AskFloat {...props} choice={choice} />;
   // Its cards are small: hovering one shows it whole, over the source card's column, clear of
   // the title, the choice and its buttons.
-  const [inspector, inspect] = useHoverInspect(SIDE);
+  const [inspector, inspect] = useHoverInspect(side());
   return (
     <Inspecting.Provider value={inspect}>
       {choice.kind === "arrange" ? (
@@ -85,11 +88,17 @@ const Inspecting = createContext<
 >(undefined);
 
 /** The inspector over the source card, its margin around the card's edges (components.css
- * .overlay: a 338 px side column from x 1208, the card from y 205 under View Battlefield). */
-const SIDE = {
-  left: 1208 - INSPECT_PAD,
-  top: 205 - INSPECT_PAD,
-  width: 338 + 2 * INSPECT_PAD,
+ * .overlay: a 338 px side column right of the 1000 px tray, which starts at x 136 on the base
+ * stage, held to its middle, and lies `column-gap` from it; the card from y 205 under View
+ * Battlefield). */
+const side = () => {
+  const shift = STAGE.width - STAGE_WIDTHS.base;
+  const gap = Math.min(72, Math.max(16, 72 + 0.35 * shift));
+  return {
+    left: 136 + shift / 2 + 1000 + gap - INSPECT_PAD,
+    top: 205 - INSPECT_PAD,
+    width: 338 + 2 * INSPECT_PAD,
+  };
 };
 
 /** The tray's size (the overlay's choice column) and the cards' in it, stage pixels. */

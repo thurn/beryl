@@ -3,8 +3,9 @@
 // Captures several at once (capture.mjs' workers) and prints each screenshot's path; exits
 // non-zero if a page logs an error, cuts off text (capture.mjs' clippedText), draws the game
 // otherwise than its fixture's view has it (screenFaults), crowds a control (crowdedControls)
-// or never settles. A game screen is checked again at a smaller window of another shape,
-// RESIZED, without a screenshot.
+// or never settles. A game screen is checked again, without a screenshot, at the windows of
+// RESIZED: the stage's narrowest and widest (src/game/Stage.tsx fitStage), where its layout
+// differs most from the shots' 16:9.
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -15,12 +16,18 @@ import {
     openPage,
     screenFaults,
     settle,
+    still,
     workers,
 } from "./capture.mjs";
 
-/** The second window a game screen is checked at: smaller than the shots' and squarer, as a
- * player might leave it. */
-const RESIZED = { width: 1180, height: 820 };
+/** The other windows a game screen is checked at. Between the stage's narrowest and widest
+ * every position slides linearly with its width, so these two stand for every window: a small
+ * one squarer than 16:10, as a player might leave it, which the stage meets at its narrowest
+ * with room above and below it; and a 21:9 one, which it fills at its widest. */
+const RESIZED = [
+    { width: 1180, height: 820 },
+    { width: 2560, height: 1080 },
+];
 
 const [base, out, list, ...only] = process.argv.slice(2);
 if (!base || !out || !list) {
@@ -80,10 +87,12 @@ async function capture(browser, shot) {
             errors.push(`screen: ${fault}`);
         for (const fault of await crowdedControls(page))
             errors.push(`controls: ${fault}`);
-        if (shot.route.includes("fixture=")) {
-            await page.setViewportSize(RESIZED);
+        for (const size of shot.route.includes("fixture=") ? RESIZED : []) {
+            await page.setViewportSize(size);
             await settle(page);
-            const at = `at ${RESIZED.width}×${RESIZED.height}`;
+            // The table is placed afresh for the stage's new width.
+            await still(page);
+            const at = `at ${size.width}×${size.height}`;
             for (const cut of await clippedText(page))
                 errors.push(`text cut ${at}: ${cut}`);
             for (const fault of await screenFaults(page))

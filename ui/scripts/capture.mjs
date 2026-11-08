@@ -63,6 +63,29 @@ export async function settle(page) {
     });
 }
 
+/** Waits until every card holds still: Motion writes a card's place to its transform from its
+ * own frame loop (CardLayer's useGlide), a frame or two after the render that moved it, even
+ * when motion is reduced, and `settle` cannot see that. Done once the cards' transforms are the
+ * same three frames running, or after `timeout` ms. */
+export async function still(page, timeout = 2000) {
+    await page.evaluate(async (timeout) => {
+        const frame = () => new Promise((r) => requestAnimationFrame(r));
+        const sample = () =>
+            [...document.querySelectorAll(".card-el")]
+                .map((e) => e.style.transform)
+                .join("|");
+        const end = performance.now() + timeout;
+        let last = sample();
+        let same = 0;
+        while (same < 3 && performance.now() < end) {
+            await frame();
+            const now = sample();
+            same = now === last ? same + 1 : 0;
+            last = now;
+        }
+    }, timeout);
+}
+
 /** Crops each element (a locator, or a selector) out of `page` at its size on screen, with
  * `pad` px around it, and lays the crops side by side, labelled, in one image saved to `path`:
  * for judging whether two states, or two things that should look alike, can be told apart at
@@ -384,10 +407,52 @@ export async function screenFaults(page) {
 /** The controls a player can't fully reach: a button or other control a click reaches (no
  * modal covers its middle) lying partly outside the window, or overlapping another such
  * control that is neither inside it nor around it, so that a click meant for one may land on
- * the other. Cards may overlap one another, as a fan or a pile does. Each is described for a
- * failure message. */
+ * the other; or one of the table's fixtures (a step stop, a life orb, the dock's and the
+ * corners' buttons) that a permanent or a spell on the stack lies over or under, as lands
+ * crowding a life orb's stops on a narrow stage would. A menu or a screen opened over the
+ * table, and a pile's own cards under its button, are meant to overlap them. Cards may overlap
+ * one another, as a fan or a pile does. Each is described for a failure message. */
 export async function crowdedControls(page) {
     return page.evaluate(() => {
+        const name = (e) =>
+            e.getAttribute("aria-label") ||
+            e.textContent?.trim().slice(0, 30) ||
+            e.className ||
+            e.tagName.toLowerCase();
+        const faults = [];
+        // The permanents and spells, by their frames' boxes (a card's element may reach past
+        // its frame).
+        const cards = [
+            ...document.querySelectorAll(
+                ".card-layer .card-el:is([data-zone=battlefield], [data-zone=stack])",
+            ),
+        ]
+            .filter((c) => {
+                const s = getComputedStyle(c);
+                return s.visibility !== "hidden" && Number(s.opacity) > 0;
+            })
+            .map((c) => ({
+                card: c,
+                box: (
+                    c.querySelector(".card-slot, .card-back") ?? c
+                ).getBoundingClientRect(),
+            }));
+        const FIXTURES =
+            ".turn-controls :is(button, [role=button]), .life-target, .dock button, .icon-button";
+        /** A card whose frame lies over or under the fixture `e`'s `box` by more than a sliver:
+         * either way the two collide. */
+        const cardOver = (e, box) =>
+            e.matches(FIXTURES)
+                ? cards.find(({ box: c }) => {
+                      const w =
+                          Math.min(box.right, c.right) -
+                          Math.max(box.left, c.left);
+                      const h =
+                          Math.min(box.bottom, c.bottom) -
+                          Math.max(box.top, c.top);
+                      return w > 3 && h > 3;
+                  })?.card
+                : undefined;
         const controls = [
             ...document.querySelectorAll(
                 "button, [role=button], a[href], input, select, .life-target",
@@ -404,18 +469,19 @@ export async function crowdedControls(page) {
             ) {
                 return false;
             }
+            const card = cardOver(e, box);
+            if (card) {
+                faults.push(
+                    `${name(e)} collides with ${card.dataset.card ?? "a card"}`,
+                );
+                return false;
+            }
             const hit = document.elementFromPoint(
                 box.left + box.width / 2,
                 box.top + box.height / 2,
             );
             return hit !== null && (e.contains(hit) || hit.contains(e));
         });
-        const name = (e) =>
-            e.getAttribute("aria-label") ||
-            e.textContent?.trim().slice(0, 30) ||
-            e.className ||
-            e.tagName.toLowerCase();
-        const faults = [];
         const slack = 1;
         const boxes = controls.map((e) => e.getBoundingClientRect());
         controls.forEach((e, i) => {

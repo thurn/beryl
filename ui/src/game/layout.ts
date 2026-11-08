@@ -1,5 +1,5 @@
-// Where every card of a PlayerView lies on the 1600×900 stage, in the table's pseudo-3D
-// perspective (depthScale, lean; no WebGL). Each object is placed by its public slot, which it
+// Where every card of a PlayerView lies on the stage (900 high, as wide as the window's shape;
+// STAGE), in the table's pseudo-3D perspective (depthScale, lean; no WebGL). Each object is placed by its public slot, which it
 // keeps from zone to zone (docs/engine-architecture.md §13), so the game screen draws one
 // element per slot and a card moving zones glides from its old place to its new one rather than
 // jumping. Pure functions of the view: the screen animates between their results.
@@ -15,8 +15,34 @@ import { CARD_ASPECT } from "../components/Card";
 import { cardEntry } from "../cards";
 import { referenced, twins } from "./decisions";
 
-/** The fixed stage the table is drawn on, scaled to fit the window (Stage.tsx). */
+/** The stage the table is drawn on, scaled to fit the window (Stage.tsx): always 900 high, and
+ * as wide as the window's shape asks within `STAGE_WIDTHS`, so a squarer window draws the table
+ * larger rather than leave bands above and below it, and a wider one takes the room at its sides.
+ * Stage sets `width` (`setStageWidth`) before the table is drawn at it, and every placement reads
+ * it when made: positions are pure functions of the view and the window's shape. */
 export const STAGE = { width: 1600, height: 900 };
+
+/** How wide the stage may be: `base`, the width every position here was drawn for (16:9);
+ * `least`, 16:10, the app's first window and a MacBook's screen, as narrow as a choice
+ * screen's tray and side column (components.css .overlay) still fit side by side; `most`, 21:9,
+ * beyond which the table's controls would stand too far apart to take in at once. A window of
+ * another shape shows the table's cloth past the stage's edges. */
+export const STAGE_WIDTHS = { base: 1600, least: 1440, most: 2134 };
+
+/** Sets the stage's width (Stage.tsx), within `STAGE_WIDTHS`. */
+export function setStageWidth(width: number) {
+  STAGE.width = Math.min(
+    STAGE_WIDTHS.most,
+    Math.max(STAGE_WIDTHS.least, width),
+  );
+}
+
+/** Where `x`, drawn for the base stage, lies on the stage as wide as it is now: what stands at
+ * the right keeps its distance from the right edge (`fromRight`), what stands at the middle from
+ * the middle (`fromMiddle`); what stands at the left keeps its `x`. */
+export const fromRight = (x: number) => x + STAGE.width - STAGE_WIDTHS.base;
+export const fromMiddle = (x: number) =>
+  x + (STAGE.width - STAGE_WIDTHS.base) / 2;
 
 /** The camera's distance from the near edge of the table, in perspective's terms. */
 const CAMERA_DISTANCE = 1400;
@@ -36,12 +62,12 @@ export const cameraDistance = (y: number) => CAMERA_DISTANCE / depthScale(y);
 
 /** Where the table's receding edges meet, far above the stage: a card left of center leans
  * left at its near end, and one right of center leans right. */
-const VANISHING = { x: STAGE.width / 2, y: -4400 };
+const VANISHING_Y = -4400;
 
 /** How far a thing lying on the table with its top-center at (x, y) leans, in degrees: its
- * sides run toward the vanishing point. */
+ * sides run toward the vanishing point, over the stage's middle. */
 export const lean = (x: number, y: number) =>
-  (Math.atan((x - VANISHING.x) / (y - VANISHING.y)) * 180) / Math.PI;
+  (Math.atan((x - STAGE.width / 2) / (y - VANISHING_Y)) * 180) / Math.PI;
 
 export const CREATURE_WIDTH = 128;
 export const LAND_WIDTH = 100;
@@ -159,12 +185,15 @@ const BACK_WIDTH = 105;
  * animated land or a crewed Vehicle stands with the creatures. The rows lie clear of one
  * another, so a long row of creatures may pass over the land side of the table. Every row's
  * cards are scaled by their depth (depthScale). */
-/** Where each side's life orb and its phase stops begin (Board.tsx's Life, screens.css
- * .phase-tracker-compact): the lands end left of them. */
-const ORB_LEFT = 664;
+/** Where each side's step stops about its life orb begin (screens.css .turn-controls
+ * .step-stops, whose lower row's first stop stands at its left edge): the lands end clear of
+ * them, a leaning card's near corner included. */
+const ORB_LEFT = 646;
 /** Where both back rows' other permanents may reach: the stack's column's outer edge, which
  * stands between the two back rows (STACK), clear of both. */
 const OTHERS_END = 1500;
+/** Each side's rows on the base stage (`STAGE_WIDTHS`); `sideRows` holds them to the stage's
+ * edges and middle as it is. */
 const ROWS: Record<
   Side,
   {
@@ -191,7 +220,7 @@ const ROWS: Record<
   you: {
     back: 570,
     lands: 111,
-    landsEnd: ORB_LEFT - 14,
+    landsEnd: ORB_LEFT - 10,
     permanents: 408,
     others: { x: 988, end: OTHERS_END, width: 92 },
   },
@@ -233,9 +262,8 @@ const ROOM = {
   // Right of the folded game log's button.
   start: 76,
   // Left of the stack's column (STACK.x), with room between for an arrow from the row's
-  // last card to the stack.
+  // last card to the stack; on the base stage, held to its right edge as the stack is.
   end: 1160,
-  center: STAGE.width / 2,
 };
 
 /** The game log's column at the table's left (screens.css .game-log): the permanents' rows
@@ -267,11 +295,18 @@ export function overLog(placements: Layout): boolean {
  * and exile toward the middle, left of the gear. Their top cards end above the opponent's back
  * row (`ROWS`), whose permanents, nearer, lie over the edges of a thick pile. */
 export const PILES = {
+  // In the far right corner, held to the stage's right edge.
   opponent: {
     width: 96,
-    library: { x: 1432, y: 8 },
-    graveyard: { x: 1336, y: 8 },
-    exile: { x: 1240, y: 8 },
+    get library() {
+      return { x: fromRight(1432), y: 8 };
+    },
+    get graveyard() {
+      return { x: fromRight(1336), y: 8 };
+    },
+    get exile() {
+      return { x: fromRight(1240), y: 8 };
+    },
   },
   you: {
     width: 80,
@@ -281,11 +316,13 @@ export const PILES = {
   },
 };
 
-/** Where a pile's upright sides meet, below the stage. Seen from above the near edge, the cards
- * beneath a pile's top card show on its side toward this point, and the farther the pile lies
- * from it the more of its side shows: the camera looks at the far table more nearly level. */
-const NADIR = { x: STAGE.width / 2, y: 1500 };
-/** How far each card beneath a pile's top card lies toward `NADIR`, as a fraction of the way. */
+/** Where a pile's upright sides meet, below the stage's middle. Seen from above the near edge,
+ * the cards beneath a pile's top card show on its side toward this point, and the farther the
+ * pile lies from it the more of its side shows: the camera looks at the far table more nearly
+ * level. */
+const NADIR_Y = 1500;
+/** How far each card beneath a pile's top card lies toward the nadir, as a fraction of the
+ * way. */
 const CARD_RISE = 0.0011;
 
 /** How a pile of cards looks on the table. */
@@ -316,7 +353,10 @@ export function pileLook(
     y: at.y,
     width,
     skew: lean(center, at.y),
-    depth: { x: (NADIR.x - center) * rise, y: (NADIR.y - at.y) * rise },
+    depth: {
+      x: (STAGE.width / 2 - center) * rise,
+      y: (NADIR_Y - at.y) * rise,
+    },
   };
 }
 
@@ -326,7 +366,16 @@ export function pileLook(
  * the taller the stack. It stands between the two back rows, whose other permanents reach under
  * its column (`ROWS`), so neither side's are covered by it. `x` and `width` bound it; `y` is
  * the top item's top at full size. */
-export const STACK = { x: 1252, y: 236, width: 236, step: 40, reach: 170 };
+export const STACK = {
+  // Held to the stage's right edge.
+  get x() {
+    return fromRight(1252);
+  },
+  y: 236,
+  width: 236,
+  step: 40,
+  reach: 170,
+};
 
 /** How high the stack may reach: below the opponent's back row at its full size. */
 const STACK_TOP = 234;
@@ -447,12 +496,12 @@ function turned(
 /** Where the action dock's leftmost button begins, passing on to the next stop left of the turn
  * button: the dock stands 39 from the right edge (screens.css' .dock), the turn button
  * --button-width wide and the round one --button-height, --button-gap apart (tokens.css). */
-const DOCK_LEFT = STAGE.width - 39 - 250 - 10 - 48;
+const dockLeft = () => STAGE.width - 39 - 250 - 10 - 48;
 
 /** The held fan's middle, between its outer cards' centers: its outer card, raised (RAISE), and
- * the glow of a playable card's outline stay clear of the dock (DOCK_LEFT). */
-const HELD_ROOM =
-  2 * (DOCK_LEFT - 12 - STAGE.width / 2 - (HAND.width * RAISE.scale) / 2);
+ * the glow of a playable card's outline stay clear of the dock (dockLeft). */
+const heldRoom = () =>
+  2 * (dockLeft() - 12 - STAGE.width / 2 - (HAND.width * RAISE.scale) / 2);
 
 /** How far the hand sinks under a screen over the table (scry.png). */
 const HAND_TUCK = 67;
@@ -465,7 +514,11 @@ export const RAISED_HAND = {
   top: 325,
   scale: 1.1,
   spacing: 214,
-  room: 940,
+  // The dock is held to the stage's right edge and the fan to its middle, so each half of the
+  // fan gains or loses half of what the stage does.
+  get room() {
+    return 940 + STAGE.width - STAGE_WIDTHS.base;
+  },
   sag: 2,
   turn: 2,
 };
@@ -484,7 +537,7 @@ function handPlacements(cards: ObjectView[], hold: HandHold): Placement[] {
   const n = cards.length;
   const mid = (n - 1) / 2;
   const raised = hold === "raised";
-  const fan = raised ? RAISED_HAND : { ...HAND, scale: 1, room: HELD_ROOM };
+  const fan = raised ? RAISED_HAND : { ...HAND, scale: 1, room: heldRoom() };
   const width = FULL_WIDTH * fan.scale;
   const spacing = n > 1 ? Math.min(fan.spacing, fan.room / (n - 1)) : 0;
   return cards.map((o, i) => {
@@ -512,12 +565,14 @@ function handPlacements(cards: ObjectView[], hold: HandHold): Placement[] {
 
 /** How far the opponent's hand reaches down the stage: above their life orb's top (y 48),
  * which would otherwise cover the middle backs' feet, so each back can be counted. Its feet lie
- * on one arc whatever the hand's size, rising `HELD_RISE` by `HELD_REACH` either side of the
+ * on one arc whatever the hand's size, rising `HELD_RISE` by `heldReach` either side of the
  * middle, so that the outer backs of the largest hand stay in sight; a hand wider than that
  * closes up, its outer backs clear of the opponent's piles. */
 const HELD_FOOT = 44;
 const HELD_RISE = 18;
-const HELD_REACH = 370;
+// On the base stage; between the middle and the piles at the right edge, it gains half of what
+// the stage does.
+const heldReach = () => fromMiddle(370);
 
 /** How far each hand card in `hand` may rise (RAISE) without the raised card, or the reach of
  * its element that keeps the pointer on it, coming over any of the `lands` boxes of your back
@@ -560,10 +615,10 @@ function heldPlacements(
   const mid = (n - 1) / 2;
   const height = BACK_WIDTH / CARD_ASPECT;
   const spacing =
-    n > 1 ? Math.min(BACK_WIDTH - 2, (2 * HELD_REACH) / (n - 1)) : 0;
+    n > 1 ? Math.min(BACK_WIDTH - 2, (2 * heldReach()) / (n - 1)) : 0;
   // The arc's foot is HELD_FOOT - bend · dx² at dx from the middle; its slope there, -2 · bend
   // · dx, is how far a back turns.
-  const bend = HELD_RISE / HELD_REACH ** 2;
+  const bend = HELD_RISE / heldReach() ** 2;
   return cards.map((o, i) => {
     const dx = (i - mid) * spacing;
     const turn = (Math.atan(-2 * bend * dx) * 180) / Math.PI;
@@ -878,23 +933,23 @@ function landRun({ landPiles, untapped }: SideGroups) {
 /** The room each of a side's rows may take (`battlefieldPlacements`). */
 function sideRows(side: Side, logOpen: boolean) {
   const rows = ROWS[side];
-  const room = { ...ROOM, start: logOpen ? BESIDE_LOG : ROOM.start };
   return {
-    lands: { y: rows.back, start: rows.lands, end: rows.landsEnd },
+    // From the table's edge to its player's orb, at the middle.
+    lands: { y: rows.back, start: rows.lands, end: fromMiddle(rows.landsEnd) },
     creatures: {
       width: CREATURE_WIDTH,
       y: rows.permanents,
-      start: room.start,
-      end: room.end,
-      center: room.center,
+      start: logOpen ? BESIDE_LOG : ROOM.start,
+      end: fromRight(ROOM.end),
+      center: STAGE.width / 2,
       lane: true,
     },
     // From the orb's phase stops outward, as the lands run from the table's edge inward.
     others: {
       width: rows.others.width,
       y: rows.back,
-      start: rows.others.x,
-      end: rows.others.end,
+      start: fromMiddle(rows.others.x),
+      end: fromRight(rows.others.end),
     },
   };
 }

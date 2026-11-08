@@ -780,7 +780,7 @@
 }
 /* The opponent thinking, under their orb, clear of its rays. */
 .thinking-hud {
-  left: 782px;
+  left: calc(782px + var(--shift-mid, 0px));
   top: 166px;
   z-index: 250;
   pointer-events: none;
@@ -934,7 +934,7 @@
   /* Over the permanents (CardLayer), which a card peeking out above its row would otherwise
      lay over the detail; it takes no pointer, so they stay at hand. Under the life orbs. */
   z-index: 240;
-  left: 802px;
+  left: calc(802px + var(--shift-mid, 0px));
   top: 158px;
   width: 400px;
   height: 80px;
@@ -1066,7 +1066,7 @@
    either side of it, centered on the orb's face (x 800; y 670 yours, 105 the opponent's), each
    side's inner edge 70px from its middle. */
 .turn-controls .step-stops {
-  left: 646px;
+  left: calc(646px + var(--shift-mid, 0px));
   top: 645px;
   z-index: 251;
   width: 308px;

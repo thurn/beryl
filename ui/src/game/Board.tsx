@@ -118,6 +118,7 @@ import { CastCaption, CastStep } from "./CastStep";
 import { ModeChooser, type Mode, type Origin } from "./ModeChooser";
 import { eventsHold } from "./playback";
 import { Risen, useRiseFrom } from "./Risen";
+import { useStageWidth } from "./Stage";
 import { FloatPrompt, PromptRow } from "./FloatPrompt";
 import { useStandIns } from "./standIns";
 import { tablePick } from "./tablePick";
@@ -128,6 +129,7 @@ import {
   exiledWith,
   held,
   footprint,
+  fromMiddle,
   isEmblem,
   FULL_WIDTH,
   layout,
@@ -137,6 +139,7 @@ import {
   passButton,
   pileLook,
   PILES,
+  STACK,
   STACK_Z,
   stackPlace,
   STEP_NAMES,
@@ -258,6 +261,8 @@ export function Board({
 }: BoardProps) {
   // The table shows what is resolving on the stack while its resolution asks a question.
   const view = useMemo(() => withResolving(given), [given]);
+  // Placed afresh when the window changes shape, as the stage then does (layout.ts STAGE).
+  const stageWidth = useStageWidth();
   // The view shown before this one, whose stack says what just resolved.
   const views = useRef<{ last?: PlayerView; before?: PlayerView }>({});
   if (views.current.last !== view) {
@@ -389,7 +394,7 @@ export function Board({
       : "held";
   const resting = useMemo(
     () => layout(shown, hold, false, spotlight, standIns.order),
-    [shown, hold, spotlight, standIns.order],
+    [shown, hold, spotlight, standIns.order, stageWidth],
   );
   const crowdsLog = overLog(resting);
   const laid = useMemo(
@@ -473,7 +478,7 @@ export function Board({
     }, GLIDE_MS);
   }, [hoveredPlace]);
   useEffect(() => () => clearTimeout(recheck.current), []);
-  const piles = useMemo(() => zonePiles(shown), [shown]);
+  const piles = useMemo(() => zonePiles(shown), [shown, stageWidth]);
   const pile = piles.find(
     (p) => p.side === viewing?.side && p.zone === viewing.zone,
   );
@@ -1213,7 +1218,7 @@ export function Board({
           life={opponent.life}
           incoming={combatDamage("opponent")}
           active={active === "opponent"}
-          style={{ left: 670, top: 48 }}
+          style={{ left: fromMiddle(670), top: 48 }}
           target={deciding ? can.players.get("opponent") : undefined}
           onPick={(act) => pick(act.index, act.then)}
         />
@@ -1227,7 +1232,7 @@ export function Board({
           life={you.life}
           incoming={combatDamage("you")}
           active={active === "you"}
-          style={{ left: 670, top: 618 }}
+          style={{ left: fromMiddle(670), top: 618 }}
           target={deciding ? can.players.get("you") : undefined}
           onPick={(act) => pick(act.index, act.then)}
         />
@@ -1696,7 +1701,7 @@ function inspectorPlace(
   targets: Box[],
 ): InspectPlace {
   const right: InspectPlace = taken
-    ? BETWEEN_ORBS_AND_STACK
+    ? betweenOrbsAndStack()
     : { left: STAGE.width - INSPECT_WIDTH - 24 };
   const sides = x >= STAGE.width / 2 ? [LEFT, right] : [right, LEFT];
   const covered = (place: InspectPlace) => {
@@ -1728,9 +1733,14 @@ const LEFT: InspectPlace = { left: 24 };
 /** How narrow the inspector gets to clear a target: a scan's rules text still reads. */
 const INSPECT_MIN_WIDTH = 230;
 
-/** Right of the life orbs (x 670 to 930), left of the stack (STACK.x), and below the
- * opponent's orb and above yours (y 159 and 618), with room for the artist's line. */
-const BETWEEN_ORBS_AND_STACK = { left: 940, top: 172, width: 258 };
+/** Right of the life orbs (x 670 to 930 on the base stage, held to its middle), left of the
+ * stack (STACK.x, held to its right edge), and below the opponent's orb and above yours (y 159
+ * and 618), with room for the artist's line. */
+const betweenOrbsAndStack = (): InspectPlace => ({
+  left: fromMiddle(940),
+  top: 172,
+  width: STACK.x - 54 - fromMiddle(940),
+});
 
 /** Under the gear and the bug report: takes back the player's latest answer, one per press, across the
  * opponent's turns. */
@@ -2689,10 +2699,10 @@ function ActionMenu({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   // Kept on the stage: opened near an edge, it opens away from it.
-  const left = Math.min(menu.at.x, 1600 - 330);
-  const bottom = menu.at.y > 450;
+  const left = Math.min(menu.at.x, STAGE.width - 330);
+  const bottom = menu.at.y > STAGE.height / 2;
   const place = bottom
-    ? { left, bottom: 900 - menu.at.y + 8 }
+    ? { left, bottom: STAGE.height - menu.at.y + 8 }
     : { left, top: menu.at.y + 8 };
   if (tapsOnly(menu.acts)) {
     // A source of several colors: the mana it can add, one symbol each.
