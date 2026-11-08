@@ -34,6 +34,7 @@ fn app_info() -> AppInfo {
     AppInfo {
         version: env!("CARGO_PKG_VERSION").to_owned(),
         smoke: smoke_seconds().is_some(),
+        mobile: cfg!(mobile),
     }
 }
 

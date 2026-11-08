@@ -160,6 +160,7 @@ pub(crate) fn invoke(sessions: &Sessions, command: &str, args: Value) -> Value {
         ipc::APP_INFO => answer::<_, ()>(Ok(AppInfo {
             version: format!("{} (live)", env!("CARGO_PKG_VERSION")),
             smoke: false,
+            mobile: false,
         })),
         ipc::UI_READY => answer::<_, ()>(Ok(())),
         ipc::LIST_AGENTS => answer::<_, ()>(Ok(agents())),

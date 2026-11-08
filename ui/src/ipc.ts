@@ -329,7 +329,7 @@ const browserFixture: Fixture = {
     {
       kind: "response",
       command: "app_info",
-      value: { version: "browser", smoke: false },
+      value: { version: "browser", smoke: false, mobile: false },
     },
     { kind: "response", command: "ui_ready", value: null },
     { kind: "response", command: "list_agents", value: [] },

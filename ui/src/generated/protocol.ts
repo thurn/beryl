@@ -5,7 +5,11 @@ export type AppInfo = { version: string,
 /**
  * Running under `just smoke`.
  */
-smoke: boolean, };
+smoke: boolean, 
+/**
+ * Running on a phone (a Tauri mobile target): the UI takes its portrait layout.
+ */
+mobile: boolean, };
 
 export type Fixture = { messages: Array<FixtureMessage>, };
 

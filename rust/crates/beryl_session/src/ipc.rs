@@ -109,6 +109,8 @@ pub struct AppInfo {
     pub version: String,
     /// Running under `just smoke`.
     pub smoke: bool,
+    /// Running on a phone (a Tauri mobile target): the UI takes its portrait layout.
+    pub mobile: bool,
 }
 
 /// A recorded stream of the app's messages, which the UI's fixture transport replays.
