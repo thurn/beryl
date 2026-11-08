@@ -839,6 +839,12 @@ fn enter_from_hand<L: Layout>(
 /// controller ([CR 708.5](https://yawgatog.com/resources/magic-rules/#R7085)): "You can't look
 /// at face-down cards in any other zone or face-down spells or permanents controlled by
 /// another player." Offering one of them, not both, would tell the other player.
+///
+/// Nor are two copies of a card that different players know: in a hidden zone
+/// ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)), "Library and hand are
+/// hidden zones, even if all the cards in one such zone happen to be revealed", a copy the
+/// other player has seen and one they haven't lead to different games, as playing the one they
+/// know tells them nothing new and leaves them the other unknown.
 pub(crate) fn collapse<L: Layout>(
     s: &State<L>,
     candidates: Bitboard<L::Slot>,
@@ -860,6 +866,10 @@ fn collapse_ordered<L: Layout>(
     slots: impl Iterator<Item = L::Slot>,
 ) -> Bitboard<L::Slot> {
     let signature = |slot: L::Slot| zone::signature(s, slot);
+    let known = |slot: L::Slot| {
+        matches!(s.object(slot).zone, Zone::Hand | Zone::Library)
+            .then(|| Seat::BOTH.map(|p| s.knows(p, slot)))
+    };
     // Found only once two candidates are of one card: until then every one is kept, named by
     // a reference or not.
     let mut referenced = None;
@@ -879,6 +889,7 @@ fn collapse_ordered<L: Layout>(
             || !kept.iter().any(|k| {
                 !referenced.contains(k)
                     && s.object(k).card == card
+                    && known(k) == known(slot)
                     && signature(k) == *own.get_or_insert_with(|| signature(slot))
             })
         {

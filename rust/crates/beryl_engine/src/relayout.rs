@@ -168,7 +168,7 @@ impl<L: Layout> Relayout for FloatingEffect<L> {
 
     fn relayout<M: Layout>(&self) -> FloatingEffect<M> {
         FloatingEffect {
-            source: self.source.relayout(),
+            source: self.source,
             timestamp: self.timestamp,
             duration: self.duration,
             affected: self.affected.relayout(),

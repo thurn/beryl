@@ -349,17 +349,14 @@ impl Checkpoint {
     ///   been under its controller's control continuously since their most recent turn
     ///   began", so which of two Islands, one played last turn, a payment taps follows their
     ///   slots;
-    /// - who knows which hidden card: knowledge changes nothing the rules do with the answers
-    ///   a record gives, and which of two copies of a card in a hand the other player knows
-    ///   can follow their slots too (the engine's `collapse` takes them as alike).
     ///
     /// A rebuild restores each of these as recorded.
     pub fn difference(&self, t: &GameTable, replayed: &Checkpoint) -> Option<String> {
         first_difference("", &self.canonical(t), &replayed.canonical(t))
     }
 
-    /// This board as [`Checkpoint::difference`] compares it: without what players know or
-    /// noncreature cards' summoning sickness, with its graveyards in name order and its
+    /// This board as [`Checkpoint::difference`] compares it: without noncreature cards'
+    /// summoning sickness, with its graveyards in name order and its
     /// permanents and exiled cards each in one line and in name order, naming the permanents
     /// they are linked to rather than counting to them.
     fn canonical(&self, t: &GameTable) -> serde_json::Value {
@@ -403,9 +400,8 @@ impl Checkpoint {
                         .contains(Types::CREATURE)
                 });
                 let mut v = to_value(b);
-                let fields = v.as_object_mut().expect("a permanent is an object");
-                fields.remove("known");
                 if !creature {
+                    let fields = v.as_object_mut().expect("a permanent is an object");
                     fields.remove("sick");
                 }
                 v
@@ -419,9 +415,6 @@ impl Checkpoint {
             let v = &mut value["players"][i];
             v["exile"] = lines(exile, &["with", "until"]).into();
             v["graveyard"] = graveyard.into();
-            let v = v.as_object_mut().expect("a side is an object");
-            v.remove("shown");
-            v.remove("known");
         }
         value
     }

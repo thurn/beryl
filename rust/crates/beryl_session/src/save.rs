@@ -121,7 +121,19 @@ impl Chosen {
         {
             return None;
         }
-        let same = |c: Choice| Act::of(t, s, d, c) == what.act;
+        // An object named before version 5 is compared as version 4 named it, whatever else
+        // the file says of it (a version 1 or 2 file is recorded again on this build).
+        let before_v5 = what.act.object().is_some_and(|o| o.before_v5);
+        let as_v4 = |mut act: Act| {
+            if let Some(o) = act.object_mut().filter(|_| before_v5) {
+                o.owner = None;
+                o.shown = false;
+                o.before_v5 = true;
+            }
+            act
+        };
+        let recorded = as_v4(what.act.clone());
+        let same = |c: Choice| as_v4(Act::of(t, s, d, c)) == recorded;
         let hint = Choice(self.index);
         if !REVERSED.get() && self.index < n && same(hint) {
             return Some(hint);
@@ -390,6 +402,39 @@ fn is_false(b: &bool) -> bool {
 }
 
 impl Act {
+    /// The object the act names, if any.
+    fn object(&self) -> Option<&Obj> {
+        match self {
+            Act::PlayLand { card }
+            | Act::Attack { creature: card }
+            | Act::Block { creature: card }
+            | Act::Lethal { blocker: card }
+            | Act::Cast { card, .. }
+            | Act::Activate { card, .. }
+            | Act::Mana { source: card, .. }
+            | Act::Object { object: card }
+            | Act::TurnFaceUp { card } => Some(card),
+            Act::Trigger { source: card } | Act::Defender { planeswalker: card } => card.as_ref(),
+            _ => None,
+        }
+    }
+
+    fn object_mut(&mut self) -> Option<&mut Obj> {
+        match self {
+            Act::PlayLand { card }
+            | Act::Attack { creature: card }
+            | Act::Block { creature: card }
+            | Act::Lethal { blocker: card }
+            | Act::Cast { card, .. }
+            | Act::Activate { card, .. }
+            | Act::Mana { source: card, .. }
+            | Act::Object { object: card }
+            | Act::TurnFaceUp { card } => Some(card),
+            Act::Trigger { source: card } | Act::Defender { planeswalker: card } => card.as_mut(),
+            _ => None,
+        }
+    }
+
     /// What candidate `c` of `d` does, in the position `s`.
     pub fn of<L: Layout>(t: &GameTable, s: &State<L>, d: &Decision<L>, c: Choice) -> Act {
         let obj = |slot| Obj::of(t, s, slot);
@@ -460,28 +505,50 @@ impl Act {
     }
 }
 
-/// An object, by what the rules see of it: its name, zone and controller, and whether it is
-/// tapped. Two objects alike in all of these are alike to the rules, but for their histories
-/// (counters, damage), which a later version tells apart with names given as cards are
-/// revealed.
+/// An object, by what the rules see of it: its name, zone, controller and owner, and whether
+/// it is tapped. Two objects alike in all of these are alike to the rules, but for their
+/// histories (counters, damage), which a later version tells apart with names given as cards
+/// are revealed.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Obj {
     pub name: String,
     pub zone: ZoneName,
     pub controller: u8,
+    /// Its owner, where that is not its controller, since version 5. Two copies of a card one
+    /// player controls, one of them another player's, part ways where the rules send a card
+    /// to its owner's zone ([CR 108.3](https://yawgatog.com/resources/magic-rules/#R1083)):
+    /// "The owner of a card in the game is the player who started the game with it in their
+    /// deck."
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<u8>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub tapped: bool,
+    /// A card in its owner's hand or library that the other player knows, since version 5.
+    /// Playing a copy they have seen tells them nothing; playing one they haven't leaves them
+    /// still not knowing the other, in a hidden zone
+    /// ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub shown: bool,
+    /// Named by a version 4 save or older, which names neither the owner nor whether the other
+    /// player knows it: replay takes an object either way, as version 4 did.
+    #[serde(default, rename = "beforeV5", skip_serializing_if = "is_false")]
+    pub before_v5: bool,
 }
 
 impl Obj {
     pub fn of<L: Layout>(t: &GameTable, s: &State<L>, slot: L::Slot) -> Obj {
         let o = s.object(slot);
+        let controller = s.controller(slot);
         Obj {
             name: s.name(t, slot).to_owned(),
             zone: o.zone.into(),
-            controller: s.controller(slot).get(),
+            controller: controller.get(),
+            owner: (o.owner != controller).then_some(o.owner.get()),
             tapped: o.flags.0 & beryl_engine::state::ObjectFlags::TAPPED != 0,
+            shown: matches!(o.zone, Zone::Hand | Zone::Library)
+                && s.knows(o.owner.opponent(), slot),
+            before_v5: false,
         }
     }
 }

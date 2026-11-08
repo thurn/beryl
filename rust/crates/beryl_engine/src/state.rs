@@ -667,7 +667,11 @@ pub enum Continuous {
 /// change."
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FloatingEffect<L: Layout = Small> {
-    pub source: ObjectRef<L>,
+    /// The game index of the card the spell or ability that created it came from, as it was
+    /// then. The source may since have left its zone, and once hidden its slot may hold another
+    /// card ([CR 611.2a](https://yawgatog.com/resources/magic-rules/#R6112a): the effect lasts
+    /// as stated even then), so the effect keeps the card rather than the slot.
+    pub source: CardIx,
     pub timestamp: u16,
     pub duration: Duration,
     pub affected: ObjectRef<L>,
@@ -677,7 +681,7 @@ pub struct FloatingEffect<L: Layout = Small> {
 impl<L: Layout> Default for FloatingEffect<L> {
     fn default() -> Self {
         FloatingEffect {
-            source: ObjectRef::default(),
+            source: CardIx::default(),
             timestamp: 0,
             duration: Duration::EndOfTurn,
             affected: ObjectRef::default(),

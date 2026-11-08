@@ -194,10 +194,19 @@ impl Game {
     /// Puts a card of `player`'s from their library or hand onto the battlefield, as if it
     /// had been there since the turn began.
     fn put(&mut self, player: Seat, name: &str) -> Slot {
-        let slot = (self.s.zone(player, Zone::Library) | self.s.zone(player, Zone::Hand))
+        let slot = self.cards(player, name)[0];
+        self.put_slot(slot)
+    }
+
+    /// The slots of `player`'s cards named `name` not yet on the battlefield, lowest first.
+    fn cards(&self, player: Seat, name: &str) -> Vec<Slot> {
+        (self.s.zone(player, Zone::Library) | self.s.zone(player, Zone::Hand))
             .iter()
-            .find(|&slot| self.t.def(self.s.object(slot).card).name == name)
-            .expect("a card left to put onto the battlefield");
+            .filter(|&slot| self.t.def(self.s.object(slot).card).name == name)
+            .collect()
+    }
+
+    fn put_slot(&mut self, slot: Slot) -> Slot {
         zone::move_to(
             &mut self.s,
             &mut crate::event::Sink::off(),
@@ -516,6 +525,25 @@ fn a_division_that_must_kill_asks_only_how_many() {
     assert!(!g.on_battlefield(x));
     assert!(!g.on_battlefield(y));
     assert!(!g.on_battlefield(giant));
+}
+
+#[test]
+fn damage_below_lethal_goes_onto_blockers_in_the_order_they_entered() {
+    // A 3/3 blocked by two 1/4s kills neither, and its damage goes onto the first to enter
+    // the battlefield, here the one in the higher slot: slots follow the deal, which is random.
+    let mut g = Game::new();
+    let (a, d) = (g.attacker, g.defender());
+    let ogre = g.put(a, "Ogre");
+    let spiders = g.cards(d, "Spider");
+    let (low, high) = (spiders[0], spiders[1]);
+    g.put_slot(high);
+    g.put_slot(low);
+    g.pass_to_combat();
+    g.pick(DecisionKind::Attacker, Opt::Attack(ogre));
+    g.pick(DecisionKind::Blocker, Opt::Block(low));
+    g.pick(DecisionKind::Blocker, Opt::Block(high));
+    g.finish_combat();
+    assert_eq!((g.s.object(high).damage, g.s.object(low).damage), (3, 0));
 }
 
 #[test]

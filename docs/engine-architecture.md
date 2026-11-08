@@ -521,8 +521,9 @@ The exact profile offers a choice only across **distinct consequences**:
   two identical tokens with the same counters and nothing attached. The
   signature compared is every field of the object but its incarnation and
   timestamp (card, face, zone, owner, controller, counters, damage, flags,
-  attachment, link, copy, chosen value), with no pending reference to the
-  object.
+  attachment, link, copy, chosen value) and which players know it, with no
+  pending reference to the object: a copy in hand the opponent has seen is not
+  one they haven't.
 - Triggers from the same source card and ability with the same targets are
   equivalent and ordered silently; non-equivalent simultaneous triggers are
   ordered by their controller under APNAP.
@@ -888,7 +889,10 @@ zone.
   decided, the turn and step, the kind of decision, and the candidate by rules
   terms: cast this card, attack with that creature, target that player, in the
   position the question is asked in), with its old index kept only to break
-  ties. A later build replays it though candidates moved, and goes on where
+  ties. Since format 5 an object also names its owner where another player
+  controls it, and whether the other player knows a card in a hand or library; a
+  version 4 answer's objects are marked as named before that, and match either
+  way. A later build replays it though candidates moved, and goes on where
   record and game part only if the rules leave nothing to choose: one candidate,
   a priority passed unasked, or a pass no priority asks. Anything else stops the
   replay at the turn and step.
@@ -899,16 +903,15 @@ zone.
   knows each hidden card. A replay compares each turn's board with the record's;
   a difference is divergence, reported with the turn and the first difference.
   Interchangeable things are not differences: like permanents in another order,
-  a graveyard's order, a noncreature's summoning sickness, and knowledge, all of
-  which slot-order ties can move. Where a replay stops (an answer no candidate
-  does, a reveal it cannot deal, a board that differs), the game is rebuilt from
-  the latest board the replay reached at or before that turn:
-  `State::begin_before_turn` puts the board as it stood once the turn before
-  ended, and the engine begins the turn again. The rebuilt save records that
-  board (`from`) and logs from there. What lasts past a turn's beginning off the
-  board (an effect, a delayed trigger, a permission to cast) is not recorded:
-  `State::off_board` names it in the checkpoint, and that turn refuses to
-  rebuild rather than rebuild wrong.
+  a graveyard's order and a noncreature's summoning sickness, which slot-order
+  ties can move. Where a replay stops (an answer no candidate does, a reveal it
+  cannot deal, a board that differs), the game is rebuilt from the latest board
+  the replay reached at or before that turn: `State::begin_before_turn` puts the
+  board as it stood once the turn before ended, and the engine begins the turn
+  again. The rebuilt save records that board (`from`) and logs from there. What
+  lasts past a turn's beginning off the board (an effect, a delayed trigger, a
+  permission to cast) is not recorded: `State::off_board` names it in the
+  checkpoint, and that turn refuses to rebuild rather than rebuild wrong.
 - **Old saves are migrated** (`beryl_session::migrate`). A save names its format
   version, and loading runs it up a chain of migrations, one per version, each
   on the file's JSON, to the format the build writes. Versions 1 and 2 lack what

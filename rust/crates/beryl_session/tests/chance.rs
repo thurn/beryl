@@ -185,6 +185,16 @@ fn a_save_records_each_card_as_it_is_first_seen_and_the_flip_winner() {
     assert_eq!(&serde_json::from_str::<ReplayFile>(&json).unwrap(), file);
 }
 
+/// The decks of game `seed` in a sweep: Vintage WU Control against WU Control, seats
+/// alternating with the seed.
+fn sweep_decks(seed: u64) -> [&'static Decklist; 2] {
+    if seed % 2 == 1 {
+        [WU_CONTROL, VINTAGE_WU_CONTROL]
+    } else {
+        [VINTAGE_WU_CONTROL, WU_CONTROL]
+    }
+}
+
 /// Games of the decks that shuffle, search, look at hands and libraries, mulligan and flip
 /// coins each replay the same under another seed: their records alone deal every card seen.
 #[test]
@@ -205,6 +215,35 @@ fn a_save_replays_the_same_under_another_seed() {
         "shuffle and draw seven",
     ]);
     assert_eq!(kinds, wanted);
+}
+
+/// Games where a replay under another seed once parted from the record, each at a tie broken
+/// by slot, which the deal and shuffles choose at random: an effect named by its source's slot,
+/// combat damage left over after a division, copies of a card one player controls but
+/// different players own, and a copy in hand the other player knows taken for one they don't.
+#[test]
+fn games_that_found_slot_order_ties_replay_the_same_under_another_seed() {
+    for seed in [17, 19, 48, 55, 65, 72] {
+        let (game, view) = played(seed, sweep_decks(seed));
+        replays_under_another_seed(game.replay(), &view);
+    }
+}
+
+/// [`games_that_found_slot_order_ties_replay_the_same_under_another_seed`] over more seeds,
+/// too slow for every check: run it after a change to how candidates are told apart.
+#[test]
+#[ignore = "a sweep of 68 games, about 12 s in a debug build"]
+fn a_wider_sweep_replays_the_same_under_another_seed() {
+    let parted: Vec<u64> = (12..80)
+        .filter(|&seed| {
+            std::panic::catch_unwind(|| {
+                let (game, view) = played(seed, sweep_decks(seed));
+                replays_under_another_seed(game.replay(), &view);
+            })
+            .is_err()
+        })
+        .collect();
+    assert!(parted.is_empty(), "seeds whose replays parted: {parted:?}");
 }
 
 #[test]
@@ -298,4 +337,36 @@ fn a_version_2_save_upgrades_to_version_3_from_its_seed() {
     let (again, replayed) = Game::from_replay(&CARDS, &v3, SESSION).unwrap();
     assert_eq!(replayed, view);
     assert_eq!(again.replay().format_version, FORMAT_VERSION);
+}
+
+/// A version 4 save names no object's owner nor whether the other player knows it: replay
+/// takes an object either way, so it still plays on a build that tells them apart.
+#[test]
+fn a_version_4_save_replays_without_owners_or_cards_shown() {
+    let (game, view) = played(65, sweep_decks(65));
+    let mut old = serde_json::to_value(game.replay()).unwrap();
+    old["formatVersion"] = 4.into();
+    let mut stripped = 0;
+    strip(&mut old["log"], &mut stripped);
+    assert!(stripped > 0, "no object named its owner or was shown");
+    let v5 = migrate::to_current(old, &CARDS).unwrap();
+    assert_eq!(v5.format_version, FORMAT_VERSION);
+    let (_, replayed) = Game::from_replay(&CARDS, &v5, SESSION).unwrap();
+    assert_eq!(replayed, view);
+}
+
+/// Removes each object's `owner` and `shown` under `value`, counting them in `n`.
+fn strip(value: &mut serde_json::Value, n: &mut usize) {
+    match value {
+        serde_json::Value::Object(fields) => {
+            if fields.contains_key("zone") && fields.contains_key("controller") {
+                for key in ["owner", "shown"] {
+                    *n += usize::from(fields.remove(key).is_some());
+                }
+            }
+            fields.values_mut().for_each(|v| strip(v, n));
+        }
+        serde_json::Value::Array(items) => items.iter_mut().for_each(|v| strip(v, n)),
+        _ => {}
+    }
 }

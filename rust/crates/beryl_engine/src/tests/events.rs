@@ -15,6 +15,7 @@ use crate::event::{self, Event, Reason, Recipient, TokenEntry};
 use crate::filter::{Filter, Whose};
 use crate::fixed::Fixed;
 use crate::ids::{Seat, Slot};
+use crate::profile::Breakpoint;
 use crate::state::{
     Continuous, CounterKind, Duration, ManaPool, ObjectFlags, PendingTrigger, TurnStep, Zone,
 };
@@ -607,6 +608,35 @@ fn advance_to(
 
 fn types<L: Layout>(s: &State<L>, slot: L::Slot) -> Types {
     s.derived(slot).types
+}
+
+#[test]
+fn a_copy_in_hand_the_opponent_knows_is_offered_apart_from_one_they_do_not() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let lands: Vec<Slot> = s
+        .zone(p, Zone::Library)
+        .iter()
+        .filter(|&slot| t.def(s.object(slot).card).name == "Test Land")
+        .take(2)
+        .collect();
+    for &land in &lands {
+        crate::zone::move_to(&mut s, &mut crate::event::Sink::off(), land, Zone::Hand).unwrap();
+    }
+    let plays = |s: &mut State, x: &mut Scratch| {
+        let d = decide_with(&t, s, x);
+        (0..d.len() as u16)
+            .filter_map(|i| match d.candidates.option(Choice(i)) {
+                Some(Opt::PlayLand(slot)) if t.def(s.object(slot).card).name == "Test Land" => {
+                    Some(slot)
+                }
+                _ => None,
+            })
+            .count()
+    };
+    assert_eq!(plays(&mut s, &mut x), 1, "copies alike are one candidate");
+    s.knowledge[p.opponent().index()].insert(lands[1]);
+    assert_eq!(plays(&mut s, &mut x), 2);
 }
 
 #[test]
@@ -1263,6 +1293,51 @@ fn gaining_control_changes_the_controller_until_the_effect_ends() {
     assert_eq!(s.object(theirs).zone, Zone::Graveyard);
     assert!(s.zone(q, Zone::Graveyard).contains(theirs));
     assert!(s.effects().is_empty(), "the effect ended with its object");
+}
+
+#[test]
+fn an_effect_keeps_its_source_card_once_the_source_is_hidden_again() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let q = p.opponent();
+    let theirs = put(&t, &mut s, &mut x, q, "Test Bear");
+    let mine = put(&t, &mut s, &mut x, p, "Test Adeline");
+    let r = s.object_ref(theirs);
+    with_ctx(&t, &mut s, &mut x, mine, |ctx| {
+        ctx.gain_control(r, Duration::Indefinite);
+    });
+    // The source goes into its owner's library, whose shuffle may put another card in its
+    // slot (`zone::rebind`), as the deal decides what a hidden slot holds.
+    event::move_one(
+        &mut s,
+        &t,
+        &mut x.events,
+        mine,
+        Zone::Library,
+        Reason::Effect,
+    )
+    .unwrap();
+    let other = (s.zone(p, Zone::Library))
+        .iter()
+        .find(|&slot| s.object(slot).card != s.object(mine).card)
+        .unwrap();
+    let (a, b) = (s.object(mine).card, s.object(other).card);
+    s.object_mut(mine).card = b;
+    s.object_mut(other).card = a;
+    let turn = s.turn().number + 1;
+    s.set_profile(Profile {
+        breakpoint: Some(Breakpoint {
+            turn,
+            step: TurnStep::Upkeep,
+        }),
+        ..Profile::EXACT
+    });
+    advance_to(&t, &mut s, &mut x, q, TurnStep::Upkeep);
+    assert_eq!(s.controller(theirs), p);
+    assert_eq!(
+        s.off_board(&t).as_deref(),
+        Some("an effect of Test Adeline on Test Bear lasting indefinitely")
+    );
 }
 
 #[test]

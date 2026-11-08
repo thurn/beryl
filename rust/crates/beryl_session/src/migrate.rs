@@ -33,7 +33,7 @@ pub type Step = fn(Value, &'static CardTable) -> Result<Value, SessionError>;
 
 /// The migrations, in order: the first upgrades a version 1 file to version 2. Its length is
 /// [`FORMAT_VERSION`] less one.
-pub const CHAIN: [Step; FORMAT_VERSION as usize - 1] = [v1_to_v2, v2_to_v3, v3_to_v4];
+pub const CHAIN: [Step; FORMAT_VERSION as usize - 1] = [v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5];
 
 /// `file`, a replay file of any version this build knows, in the format it writes. `cards`
 /// are the cards its games are played with, which the migrations that replay need.
@@ -109,6 +109,37 @@ fn v2_to_v3(file: Value, cards: &'static CardTable) -> Result<Value, SessionErro
 /// ([`crate::checkpoint`]), which a replay checks only where the record has them.
 fn v3_to_v4(mut file: Value, _: &'static CardTable) -> Result<Value, SessionError> {
     set_version(&mut file, 4)?;
+    Ok(file)
+}
+
+/// Version 4 to 5: version 5 names an object's owner where another player controls it, and
+/// whether the other player knows a card in a hand or library. Each object a version 4 answer
+/// names is marked as named before version 5 ([`crate::save::Obj::before_v5`]), which replay
+/// matches with an object either way, as version 4 did.
+fn v4_to_v5(mut file: Value, _: &'static CardTable) -> Result<Value, SessionError> {
+    /// Marks each object under `value`: what has a zone and a controller.
+    fn mark(value: &mut Value) {
+        match value {
+            Value::Object(fields) => {
+                if fields.contains_key("zone") && fields.contains_key("controller") {
+                    fields.insert("beforeV5".to_owned(), true.into());
+                }
+                fields.values_mut().for_each(mark);
+            }
+            Value::Array(items) => items.iter_mut().for_each(mark),
+            _ => {}
+        }
+    }
+    if let Some(log) = file.get_mut("log").and_then(Value::as_array_mut) {
+        for entry in log.iter_mut().filter_map(Value::as_object_mut) {
+            for kind in ["choice", "auto"] {
+                if let Some(answer) = entry.get_mut(kind) {
+                    mark(answer);
+                }
+            }
+        }
+    }
+    set_version(&mut file, 5)?;
     Ok(file)
 }
 
@@ -253,6 +284,21 @@ mod tests {
         let mut expected = v3;
         expected["formatVersion"] = 4.into();
         assert_eq!(v4, expected);
+    }
+
+    #[test]
+    fn version_4_to_5_marks_the_objects_answers_name() {
+        let island = json!({ "name": "Island", "zone": "hand", "controller": 0 });
+        let v4 = json!({ "formatVersion": 4, "seed": 1, "log": [
+            { "flip": { "player": 0, "won": true } },
+            { "choice": { "index": 1, "player": 0, "turn": 1, "step": "precombatMain",
+                "kind": "priority", "act": { "act": "playLand", "card": island } } },
+        ] });
+        let v5 = v4_to_v5(v4.clone(), &CARDS).unwrap();
+        let mut expected = v4;
+        expected["formatVersion"] = 5.into();
+        expected["log"][1]["choice"]["act"]["card"]["beforeV5"] = true.into();
+        assert_eq!(v5, expected);
     }
 
     #[test]

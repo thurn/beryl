@@ -187,11 +187,39 @@ fn a_loaded_version_1_save_is_in_the_format_of_today() {
     let loaded = loaded.unwrap();
     assert_eq!(loaded.format_version, FORMAT_VERSION);
     assert_eq!(loaded.chooser, game.replay().chooser);
+    // Re-recorded on this build, with the objects answers name marked as named before
+    // version 5, as every version 4 file's are.
     assert_eq!(
         loaded.log,
-        only(game.replay(), |e| !matches!(e, Entry::Checkpoint(_)))
+        before_v5(&only(game.replay(), |e| !matches!(e, Entry::Checkpoint(_))))
     );
     assert_eq!(replayed(&loaded).unwrap(), view);
+}
+
+/// `log` with each object its answers name marked as named before version 5
+/// ([`Obj::before_v5`]).
+fn before_v5(log: &[Entry]) -> Vec<Entry> {
+    fn mark(value: &mut serde_json::Value) {
+        match value {
+            serde_json::Value::Object(fields) => {
+                if fields.contains_key("zone") && fields.contains_key("controller") {
+                    fields.insert("beforeV5".to_owned(), true.into());
+                }
+                fields.values_mut().for_each(mark);
+            }
+            serde_json::Value::Array(items) => items.iter_mut().for_each(mark),
+            _ => {}
+        }
+    }
+    log.iter()
+        .map(|e| {
+            let mut v = serde_json::to_value(e).unwrap();
+            if matches!(e, Entry::Choice(_) | Entry::Auto(_)) {
+                mark(&mut v);
+            }
+            serde_json::from_value(v).unwrap()
+        })
+        .collect()
 }
 
 #[test]

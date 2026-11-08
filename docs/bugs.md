@@ -6,6 +6,21 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- More slot-order ties, found by replaying 68 saves under another seed: a
+  floating effect named its source by slot, so once the source was shuffled into
+  a library and its slot rebound, `State::off_board` (and the grant source the
+  layers read) named whatever card the slot then held; combat damage left over
+  after a division went to the chosen or remaining blockers in slot order;
+  `collapse` merged a copy in hand the opponent had seen with one they hadn't,
+  so which one was played, and what they still knew, followed slots; and a
+  save's object description lacked the owner, so of two Mana Crypts one player
+  controlled, a replay targeted the one in the lowest slot. Prevention: an
+  effect keeps its source's card, not its slot (CR 113.7a); order by battlefield
+  order, never by slot; a candidate signature and a save's description must
+  cover everything that can make two choices lead to different games (owner, who
+  knows it); the ignored sweep in `beryl_session/tests/chance.rs` replays 68
+  games under another seed.
+
 - Choices the engine and session make for a player depended on slot numbers,
   which the deck deal and every shuffle choose at random: mana sources of one
   rank sorted by lowest slot (`mana::Sources::of`), a class's members tapped in

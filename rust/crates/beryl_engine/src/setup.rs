@@ -127,7 +127,7 @@ impl<L: Layout> State<L> {
             };
             return Some(format!(
                 "an effect of {} on {} lasting {until}",
-                name(e.source.slot),
+                t.def(e.source).name,
                 name(e.affected.slot)
             ));
         }

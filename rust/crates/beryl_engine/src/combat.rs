@@ -562,9 +562,11 @@ fn deal<L: Layout>(
 
 /// How a blocked attacker's damage divides among its blockers, given the blockers chosen to
 /// be dealt lethal damage: each chosen one gets lethal damage, and what is left goes to the
-/// first of them, or, if none was chosen, below lethal onto the others in slot order. A lone
-/// blocker gets everything (CR 510.1c: "If exactly one creature is blocking it, it assigns
-/// all its combat damage to that creature").
+/// first of them, or, if none was chosen, below lethal onto the others, in the order they
+/// entered the battlefield. Slots are no order at all: the deal and shuffles put cards in
+/// them at random, so a slot order would make the outcome depend on the seed. A lone blocker
+/// gets everything (CR 510.1c: "If exactly one creature is blocking it, it assigns all its
+/// combat damage to that creature").
 fn division<L: Layout>(
     s: &State<L>,
     attacker: L::Slot,
@@ -578,7 +580,13 @@ fn division<L: Layout>(
         return out;
     }
     let killed = blockers & lethal_to;
-    for b in killed.iter() {
+    let entered = |set: Bitboard<L::Slot>| {
+        s.battlefield()
+            .iter()
+            .copied()
+            .filter(move |&b| set.contains(b))
+    };
+    for b in entered(killed) {
         let n = lethal(s, b).min(left);
         left -= n;
         let _ = out.push((b, n));
@@ -587,7 +595,7 @@ fn division<L: Layout>(
         first.1 += left;
         return out;
     }
-    for b in (blockers & !killed).iter() {
+    for b in entered(blockers & !killed) {
         let n = (lethal(s, b) - 1).min(left);
         left -= n;
         if n > 0 {

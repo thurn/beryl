@@ -156,13 +156,12 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) {
             continue;
         }
         if let Some(target) = s.battlefield_position(e.affected.slot) {
-            let source = s.object(e.source.slot);
             let _ = list.get_or_insert_with(Default::default).push(Apply {
                 layer: m.layer() as u8,
                 timestamp: e.timestamp,
                 order: 0,
                 target: target as u8,
-                source: source.card,
+                source: e.source,
                 modification: Some(m),
             });
         }

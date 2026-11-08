@@ -132,12 +132,13 @@ pub const SCENARIOS: &[Scenario] = &[
                 turn: 2,
                 step: TurnStep::PrecombatMain,
             },
-            // Pass, an Island to play, and the Skydiver unkicked: kicked, it would need five.
+            // Pass, an Island to play, the one P0 saw or the one just drawn, and the Skydiver
+            // unkicked: kicked, it would need five.
             Action::Assert {
                 assertion: Assertion::Decision {
                     player: P1,
                     kind: DecisionKind::Priority,
-                    candidates: 3,
+                    candidates: 4,
                 },
             },
             Action::Cast {
