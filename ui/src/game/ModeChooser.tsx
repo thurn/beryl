@@ -112,7 +112,7 @@ export function ModeChooser({
       {/* The X turns in beside the gear as the frames spring out. */}
       <motion.button
         type="button"
-        className="chooser-close"
+        className="icon-button chooser-close"
         aria-label="Close"
         onClick={onClose}
         initial={{ opacity: 0, scale: 0.6, rotate: -90 }}

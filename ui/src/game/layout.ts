@@ -461,8 +461,12 @@ export const RAISED_HAND = {
 };
 
 /** How the hand is held: at the near edge; `tucked`, sunk out of the way under a screen over
- * the table; `raised`, lifted whole into view for a choice of its cards. */
-export type HandHold = "held" | "tucked" | "raised";
+ * the table; `away`, below the stage while a screen shows the hand itself (the opening hand),
+ * so it is not seen twice; `raised`, lifted whole into view for a choice of its cards. */
+export type HandHold = "held" | "tucked" | "away" | "raised";
+
+/** How far below the near edge the hand waits while held `away`. */
+const HAND_AWAY = 420;
 
 /** The hand fan, held at the near edge: the more cards, the closer they sit; tucked, the fan
  * sinks out of the way; raised, it rises whole into view. */
@@ -478,7 +482,7 @@ function handPlacements(cards: ObjectView[], hold: HandHold): Placement[] {
     const top =
       (raised ? RAISED_HAND.top : HAND.top) +
       (i - mid) ** 2 * fan.sag +
-      (hold === "tucked" ? HAND_TUCK : 0);
+      (hold === "tucked" ? HAND_TUCK : hold === "away" ? HAND_AWAY : 0);
     return {
       slot: o.slot,
       zone: o.zone,
@@ -535,9 +539,9 @@ function handLifts(hand: Placement[], lands: Box[]): Placement[] {
 
 /** The opponent's hand fanned along the top edge, as yours is along the bottom turned about the
  * table's middle: backs, and the faces of the cards you know (a look at their hand, a card
- * returned to it). Each back's foot lies on the arc (`HELD_RISE`) and the back turns to lie
- * along it, so the fan's lower edge runs smooth at any size, no back's corner standing out of
- * it. */
+ * returned to it), upside down to you as the opponent holds them. Each back's foot lies on the
+ * arc (`HELD_RISE`) and the back turns to lie along it, so the fan's lower edge runs smooth at
+ * any size, no back's corner standing out of it. */
 function heldPlacements(
   cards: ObjectView[],
   drawn?: ReadonlySet<number>,
@@ -553,6 +557,17 @@ function heldPlacements(
   return cards.map((o, i) => {
     const dx = (i - mid) * spacing;
     const turn = (Math.atan(-2 * bend * dx) * 180) / Math.PI;
+    // The foot on the arc, and the card's middle half a card up from it along its turn: the
+    // card lies upside down about that middle, as the opponent holds it, facing them.
+    const foot = [
+      STAGE.width / 2 + dx,
+      HELD_FOOT - bend * dx ** 2 + (drawn?.has(o.slot) ? DRAWN_DIP : 0),
+    ] as const;
+    const a = (turn * Math.PI) / 180;
+    const middle = [
+      foot[0] + (Math.sin(a) * height) / 2,
+      foot[1] - (Math.cos(a) * height) / 2,
+    ] as const;
     return {
       slot: o.slot,
       zone: o.zone,
@@ -562,13 +577,10 @@ function heldPlacements(
       opacity: 1,
       z: 100 + i,
       ...turned(
-        STAGE.width / 2 + dx - BACK_WIDTH / 2,
-        HELD_FOOT -
-          bend * dx ** 2 -
-          height +
-          (drawn?.has(o.slot) ? DRAWN_DIP : 0),
-        turn,
-        [BACK_WIDTH / 2, height],
+        middle[0] - BACK_WIDTH / 2,
+        middle[1] - height / 2,
+        turn + 180,
+        [BACK_WIDTH / 2, height / 2],
       ),
     };
   });
@@ -775,11 +787,17 @@ interface SideGroups {
   untapped: number;
 }
 
+/** How many lands a side has before its mana's twins share piles, unless left apart they would
+ * shrink the table's cards (`layout`) below `LANDS_APART_ZOOM` of their piled size. */
+const LANDS_PILED = 7;
+const LANDS_APART_ZOOM = 0.9;
+
 /** Groups one side's permanents `objects` into piles. Twins (decisions.ts) with nothing on them
  * share a pile, the top card wearing their count, as Arena stacks them; everything else stands
  * alone. Twins are alike in all the table shows (Card.tsx's marks), so a sick token and a ready
  * one, a stolen one and its owner's, or two planeswalkers of different loyalty, never share
- * one: a pile hides nothing a player would want to read. Face-down permanents, which may be
+ * one: a pile hides nothing a player would want to read. Mana piles wait for `LANDS_PILED`
+ * lands. Face-down permanents, which may be
  * different cards, and those the stack `named`, which must be seen and are offered alone, stand
  * apart. */
 function sideGroups(
@@ -787,6 +805,7 @@ function sideGroups(
   beneath: Map<number, ObjectView[]>,
   attached: Map<number, ObjectView[]>,
   named: Set<number>,
+  pileLands?: boolean,
 ): SideGroups {
   const plain = (o: ObjectView) =>
     o.facing === "up" &&
@@ -797,12 +816,13 @@ function sideGroups(
     !beneath.has(o.slot) &&
     !attached.has(o.slot) &&
     !named.has(o.slot);
-  const grouped = (permanents: ObjectView[]) => {
+  const grouped = (permanents: ObjectView[], piling = true) => {
     const groups: ObjectView[][] = [];
     for (const o of permanents) {
-      const pile = plain(o)
-        ? groups.find((g) => plain(g[0]!) && twins(g[0]!, o))
-        : undefined;
+      const pile =
+        piling && plain(o)
+          ? groups.find((g) => plain(g[0]!) && twins(g[0]!, o))
+          : undefined;
       if (pile) pile.push(o);
       else groups.push([o]);
     }
@@ -810,15 +830,17 @@ function sideGroups(
   };
   // The back row's left side holds the mana: lands and mana artifacts, the untapped ones first
   // and the tapped ones in a group of their own after a wider gap, so how much mana is open
-  // reads at a glance. Each name stands together.
+  // reads at a glance. Each name stands together, piled only once there are `LANDS_PILED`
+  // lands: fewer read best one by one, a basic's frameless art hiding a pile's edges.
   const name = (o: ObjectView) => o.name ?? `#${o.slot}`;
   const sources = objects.filter(isManaSource);
+  const piling = pileLands ?? sources.filter(isLand).length >= LANDS_PILED;
   const names = [...new Set(sources.map(name))];
   const order = (a: ObjectView, b: ObjectView) =>
     Number(isLand(b)) - Number(isLand(a)) ||
     names.indexOf(name(a)) - names.indexOf(name(b));
   const sourcePiles = (tapped: boolean) =>
-    grouped(sources.filter((o) => o.tapped === tapped).sort(order));
+    grouped(sources.filter((o) => o.tapped === tapped).sort(order), piling);
   const untapped = sourcePiles(false);
   return {
     creatures: grouped(objects.filter(isCreature)),
@@ -1426,20 +1448,27 @@ export function layout(
   out.push(...heldPlacements(owned("opponent", "hand"), spotlight.drawn));
   // Blockers stand across from their attackers, which stand where they would anyway: only the
   // defending side's row depends on the other's.
-  const groups = new Map(
-    (["opponent", "you"] as const).map((side) => [
-      side,
-      sideGroups(
-        permanents.filter(
-          (o) => o.controller === side && !behindHost.has(o.slot),
+  const grouping = (pileLands?: boolean) =>
+    new Map(
+      (["opponent", "you"] as const).map((side) => [
+        side,
+        sideGroups(
+          permanents.filter(
+            (o) => o.controller === side && !behindHost.has(o.slot),
+          ),
+          beneath,
+          attached,
+          named,
+          pileLands,
         ),
-        beneath,
-        attached,
-        named,
-      ),
-    ]),
-  );
-  const zoom = battlefieldZoom([...groups], beneath, attached, logOpen);
+      ]),
+    );
+  // Lands left apart that would shrink the table's cards much pile after all.
+  let groups = grouping();
+  let zoom = battlefieldZoom([...groups], beneath, attached, logOpen);
+  const piled = grouping(true);
+  const piledZoom = battlefieldZoom([...piled], beneath, attached, logOpen);
+  if (zoom < piledZoom * LANDS_APART_ZOOM) [groups, zoom] = [piled, piledZoom];
   const field = (side: Side, across?: Placement[]) =>
     battlefieldPlacements(
       side,

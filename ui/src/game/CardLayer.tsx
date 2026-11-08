@@ -546,9 +546,12 @@ const CardElement = memo(function CardElement({
           ...frame,
           // A library's cards, drawn only while they travel, never take the pointer.
           pointerEvents: place.look === "hidden" ? "none" : undefined,
+          // A card travelling into the hand keeps its place in the fan's order all the way,
+          // sliding in under the cards to its right, rather than landing over them and then
+          // dropping behind.
           zIndex: dragging
             ? 1000
-            : flying || emerging || travelling
+            : flying || emerging || (travelling && !hand)
               ? FLYING_Z
               : lifted && !ghosted
                 ? RAISED_Z

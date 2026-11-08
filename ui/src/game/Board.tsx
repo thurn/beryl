@@ -22,6 +22,7 @@ import {
   useReducedMotion,
 } from "motion/react";
 import { cardEntry, faceEntry, landFace } from "../cards";
+import { BugIcon, requestBugReport } from "../components/BugReport";
 import { CARD_ASPECT, Card, type Highlight } from "../components/Card";
 import {
   Button,
@@ -376,8 +377,11 @@ export function Board({
     );
     return () => clearTimeout(wait);
   }, [view, live, picking]);
+  // Before the first turn the screen over the table is the opening, which shows the hand.
   const hold = dimmed
-    ? "tucked"
+    ? view.turn.number === 0
+      ? "away"
+      : "tucked"
     : picking?.fromHand && seen === view
       ? "raised"
       : "held";
@@ -1516,12 +1520,24 @@ export function Board({
           />
         )}
 
+        {/* The gear's column at the top right: the gear, the bug report, and undo while there
+            is something to take back. The bug report stays over any screen. */}
+        <button
+          type="button"
+          className="icon-button bug-button bug-button-game"
+          aria-label="Report bug"
+          title={`Report bug (${MOD_KEY}B)`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={requestBugReport}
+        >
+          <BugIcon />
+        </button>
         {!inert && undoable && <UndoButton onUndo={undo} />}
         {/* Like the turn's controls, the gear gives way to a screen over the table. */}
         {!inert && (
           <button
             type="button"
-            className="gear-button"
+            className="icon-button gear-button"
             aria-label="Settings"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={() => setSettings(!settings)}
@@ -1683,13 +1699,13 @@ const INSPECT_MIN_WIDTH = 230;
  * opponent's orb and above yours (y 159 and 618), with room for the artist's line. */
 const BETWEEN_ORBS_AND_STACK = { left: 940, top: 172, width: 258 };
 
-/** Under the gear: takes back the player's latest answer, one per press, across the
+/** Under the gear and the bug report: takes back the player's latest answer, one per press, across the
  * opponent's turns. */
 function UndoButton({ onUndo }: { onUndo: () => void }) {
   return (
     <button
       type="button"
-      className="undo-button has-tip"
+      className="icon-button undo-button has-tip"
       aria-label="Undo"
       onPointerDown={(e) => e.stopPropagation()}
       onClick={onUndo}

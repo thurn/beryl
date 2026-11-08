@@ -2,7 +2,7 @@
 // mulligan, choice (game/ChoiceOverlay.tsx) and game-over screens over it. Views arrive as
 // `game-update` events and play back at a readable pace (game/playback.ts); the screen answers
 // the open decision through `choose`. A reloaded page takes up the game in progress.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Button, Dock, DockButtons } from "../components/Controls";
 import { Card, CardBack } from "../components/Card";
 import { Coin } from "../components/Player";
@@ -714,24 +714,30 @@ function Opening({
         )}
       </div>
       <h2 className="opening-title">{title}</h2>
+      {/* Fanned on a gentle arc, as the hand is held: each card's place from the middle. */}
       <div className="opening-hand">
         {starting !== null &&
-          hand.map((o) =>
-            facedown ? (
-              <CardBack key={o.slot} width={176} />
-            ) : (
-              <OpeningCard
-                key={o.slot}
-                object={o}
-                hover={inspect(o)}
-                onPick={
-                  picking && bottom.length < toBottom
-                    ? () => toggle(o)
-                    : undefined
-                }
-              />
-            ),
-          )}
+          hand.map((o, i) => (
+            <div
+              key={o.slot}
+              className="opening-fan"
+              style={{ "--fan": i - (hand.length - 1) / 2 } as CSSProperties}
+            >
+              {facedown ? (
+                <CardBack width={176} />
+              ) : (
+                <OpeningCard
+                  object={o}
+                  hover={inspect(o)}
+                  onPick={
+                    picking && bottom.length < toBottom
+                      ? () => toggle(o)
+                      : undefined
+                  }
+                />
+              )}
+            </div>
+          ))}
       </div>
       {slots > 0 && (
         <div className="opening-slots" aria-label="Bottom of your library">

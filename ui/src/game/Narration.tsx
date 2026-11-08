@@ -71,7 +71,7 @@ export const GameLog = memo(function GameLog({
       {folded && (
         <button
           type="button"
-          className="game-log-toggle"
+          className="icon-button game-log-toggle"
           aria-label={open ? "Hide log" : "Show log"}
           aria-expanded={open}
           onClick={onToggle}

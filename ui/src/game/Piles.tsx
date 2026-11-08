@@ -3,6 +3,7 @@
 // to point at alone, and the zone viewer lists every card in the pile, each shown whole on
 // hover. A card the open decision offers something for (a target, a cast) is picked there.
 import {
+  useContext,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -10,6 +11,7 @@ import {
   type CSSProperties,
   type PointerEvent,
   type ReactNode,
+  type RefObject,
 } from "react";
 import {
   CARD_ASPECT,
@@ -25,6 +27,8 @@ import type { CardType, ObjectView, RefusalView } from "../generated/protocol";
 import type { CardState } from "./CardLayer";
 import { BLANK, printedFace, SCAN, tone, useFace } from "./faces";
 import { STAGE, type Box, type PileLook, type ZonePile } from "./layout";
+import { animate, useReducedMotion } from "motion/react";
+import { StageScale } from "./Stage";
 
 /** A pile lying on the table as `look` says: its top card's top-left corner at the look's
  * corner, the edges beneath on whichever side they show. Its `tip` (Controls.tsx' Tip), shown
@@ -135,6 +139,8 @@ export function PileButton({
 const VIEWER_CARD = 150;
 /** The most cards in a row of the viewer, leaving room for the whole card at its right. */
 const VIEWER_COLUMNS = 5;
+/** The rows of cards the viewer shows before it scrolls (screens.css). */
+const VIEWER_ROWS = 2;
 
 /** Every card in a pile, the top one first, over the dimmed table, marked as on the table:
  * hovering one shows it whole, and one the open decision `offers` something for is picked with
@@ -158,19 +164,22 @@ export function ZoneViewer({
   onClose(): void;
 }) {
   const [inspector, inspect] = useHoverInspect();
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
   const cards = [...pile.cards].reverse();
   const columns = Math.min(VIEWER_COLUMNS, Math.max(1, cards.length));
   const name = title ?? pileName(pile);
   const [list, more, onScroll] = useScrollEdges();
+  const panel = useRef<HTMLDivElement>(null);
+  const close = useFlight(panel, list, pile, onClose);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [close]);
   return (
     <>
-      <div className="viewer-scrim" onPointerDown={onClose} />
+      <div className="viewer-scrim" onPointerDown={close} />
       <div
+        ref={panel}
         className="zone-viewer"
         role="dialog"
         aria-label={name}
@@ -185,11 +194,13 @@ export function ZoneViewer({
           </span>
           <button
             type="button"
-            className="zone-viewer-close"
+            className="icon-button zone-viewer-close"
             aria-label="Close"
-            onClick={onClose}
+            onClick={close}
           >
-            ×
+            <svg viewBox="0 0 24 24" aria-hidden>
+              <path d="M5.6 3.5 12 9.9l6.4-6.4 2.1 2.1-6.4 6.4 6.4 6.4-2.1 2.1-6.4-6.4-6.4 6.4-2.1-2.1 6.4-6.4-6.4-6.4z" />
+            </svg>
           </button>
         </header>
         {cards.length === 0 ? (
@@ -221,6 +232,96 @@ export function ZoneViewer({
     </>
   );
 }
+
+/** The viewer's cards fly out of their pile on the table into their places, the panel coming
+ * up around them, and fly back into it as it closes: returns what closes it. A list too long
+ * to show whole, which scrolls, would clip what flies: it only comes up and goes. */
+function useFlight(
+  panel: RefObject<HTMLDivElement | null>,
+  list: RefObject<HTMLDivElement | null>,
+  pile: ZonePile,
+  onClose: () => void,
+) {
+  const scale = useContext(StageScale);
+  const reduce = useReducedMotion() ?? false;
+  const closing = useRef(false);
+  /** Each card's element and how far it lies from the pile, in stage pixels, and how much
+   * larger it is drawn. */
+  const flights = () => {
+    const origin = document
+      .querySelector(
+        `.pile-button[data-pile="${pile.zone}"][data-side="${pile.side}"]`,
+      )
+      ?.getBoundingClientRect();
+    const cards =
+      list.current?.querySelectorAll<HTMLElement>(".zone-viewer-card");
+    if (!origin || !cards || cards.length > VIEWER_COLUMNS * VIEWER_ROWS)
+      return [];
+    return [...cards].map((card) => {
+      // Measured where it lies, not where a flight begun before left it (a remount).
+      card.style.transform = "none";
+      const r = card.getBoundingClientRect();
+      return {
+        card,
+        x: (origin.left + origin.width / 2 - (r.left + r.width / 2)) / scale,
+        y: (origin.top + origin.height / 2 - (r.top + r.height / 2)) / scale,
+        scale: origin.width / r.width,
+      };
+    });
+  };
+  useLayoutEffect(() => {
+    if (reduce || !panel.current) return;
+    const el = panel.current;
+    el.classList.add("zone-viewer-rising", "zone-viewer-flying");
+    const controls = flights().map((f, i) =>
+      animate(
+        f.card,
+        { x: [f.x, 0], y: [f.y, 0], scale: [f.scale, 1] },
+        { ...VIEWER_FLIGHT, delay: i * VIEWER_STAGGER },
+      ),
+    );
+    void Promise.all(controls).then(() =>
+      el.classList.remove("zone-viewer-flying"),
+    );
+    const rise = requestAnimationFrame(() =>
+      panel.current?.classList.remove("zone-viewer-rising"),
+    );
+    return () => {
+      cancelAnimationFrame(rise);
+      controls.forEach((c) => c.stop());
+    };
+    // Once, as the viewer opens.
+  }, []);
+  return () => {
+    if (closing.current) return;
+    closing.current = true;
+    if (reduce || !panel.current) return onClose();
+    panel.current.classList.add("zone-viewer-going", "zone-viewer-flying");
+    const back = flights();
+    void Promise.all([
+      ...back.map((f, i) =>
+        animate(
+          f.card,
+          { x: f.x, y: f.y, scale: f.scale, opacity: 0 },
+          {
+            ...VIEWER_RETURN,
+            delay: (back.length - 1 - i) * VIEWER_STAGGER,
+            opacity: { delay: VIEWER_RETURN.duration * 0.7, duration: 0.08 },
+          },
+        ),
+      ),
+      new Promise((done) => setTimeout(done, VIEWER_GOING_MS)),
+    ]).then(onClose);
+  };
+}
+
+/** How the viewer's cards fly out of their pile, one after another. */
+const VIEWER_FLIGHT = { type: "spring", stiffness: 420, damping: 34 } as const;
+const VIEWER_STAGGER = 0.025;
+/** How they fly back into it. */
+const VIEWER_RETURN = { duration: 0.28, ease: [0.4, 0, 0.6, 1] } as const;
+/** How long the panel takes to go (screens.css `.zone-viewer-going`). */
+const VIEWER_GOING_MS = 200;
 
 /** Which ends of a scrolling list have more beyond them: "below", "above", "both" or "none". */
 type Beyond = "none" | "above" | "below" | "both";

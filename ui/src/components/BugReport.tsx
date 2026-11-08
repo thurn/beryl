@@ -1,4 +1,5 @@
-// The bug report: the bug button at the top right, or ⌘B / Ctrl+B, freezes the page (freeze.ts)
+// The bug report: the bug button at the top right (the board's own on the game screen), or
+// ⌘B / Ctrl+B, freezes the page (freeze.ts)
 // and snapshots the window as it was that instant, so an animation mid-flight or a hover is
 // caught. The player drags out the region that shows the bug over the frozen frame (a click
 // takes the whole window), says what went wrong, and submits: the app writes a report folder
@@ -63,9 +64,21 @@ const span = (
   height: Math.abs(a.y - b.y),
 });
 
+/** The event a bug button elsewhere (the game board's, in the gear's column) sends to open the
+ * report. */
+const REQUEST = "beryl:report-bug";
+
+/** Opens the bug report, as its own button or ⌘B does. */
+export const requestBugReport = () => window.dispatchEvent(new Event(REQUEST));
+
 export function BugReporter({ route }: { route: string }) {
   const [stage, setStage] = useState<Stage>({ kind: "idle" });
   const open = stage.kind !== "idle";
+  // While it is open, a bug button elsewhere hides (screens.css), out of the frame.
+  useEffect(() => {
+    if (open) document.documentElement.dataset.bugReport = "";
+    else delete document.documentElement.dataset.bugReport;
+  }, [open]);
 
   // What the keys and the snapshot act on, without waiting for a render.
   const stageRef = useRef(stage);
@@ -157,6 +170,13 @@ export function BugReporter({ route }: { route: string }) {
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [start, close, choose]);
+  useEffect(() => {
+    const onRequest = () => {
+      if (stageRef.current.kind === "idle") void start();
+    };
+    window.addEventListener(REQUEST, onRequest);
+    return () => window.removeEventListener(REQUEST, onRequest);
+  }, [start]);
 
   const submit = async (description: string, ai: boolean) => {
     if (stage.kind !== "describe" || stage.saving) return;
@@ -188,16 +208,19 @@ export function BugReporter({ route }: { route: string }) {
 
   return (
     <>
-      <button
-        type="button"
-        className={`bug-button${route === "/game" ? " bug-button-game" : ""}`}
-        aria-label="Report bug"
-        title="Report bug (⌘B)"
-        onClick={() => void start()}
-        hidden={open}
-      >
-        <BugIcon />
-      </button>
+      {/* The game board has its own, in the gear's column. */}
+      {route !== "/game" && (
+        <button
+          type="button"
+          className="icon-button bug-button"
+          aria-label="Report bug"
+          title="Report bug (⌘B)"
+          onClick={() => void start()}
+          hidden={open}
+        >
+          <BugIcon />
+        </button>
+      )}
       {stage.kind === "select" && (
         <Selector
           frame={stage.frame}
@@ -411,7 +434,7 @@ function Tools({
   );
 }
 
-function BugIcon() {
+export function BugIcon() {
   return (
     <svg className="bug-icon" viewBox="0 0 24 24" role="img" aria-hidden>
       <path d="M9 5.5 7.5 3.5M15 5.5l1.5-2" />

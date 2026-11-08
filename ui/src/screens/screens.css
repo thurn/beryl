@@ -815,22 +815,12 @@
 }
 /* The settings gear at the top right: brushed grey metal. */
 .gear {
-  position: absolute;
-  right: 15px;
-  top: 14px;
-  width: 42px;
-  fill: #737172;
+  fill: currentColor;
   fill-rule: evenodd;
-  filter: drop-shadow(0 1px 0 rgb(255 255 255 / 12%))
-    drop-shadow(0 2px 3px rgb(0 0 0 / 45%));
 }
-.gear path {
-  stroke: rgb(24 22 21 / 70%);
-  stroke-width: 0.35;
-}
-/* The hole shows the table in shadow. */
+/* The hole shows the button's face. */
 .gear .gear-hole {
-  fill: rgb(0 0 0 / 30%);
+  fill: none;
 }
 .hand-card {
   position: absolute;
@@ -840,9 +830,10 @@
    cyan, the opponent's ember), the newest brightest at the foot and the oldest fading out at
    the top. */
 .game-log {
+  --log-top: 262px;
   position: absolute;
   left: 18px;
-  top: 262px;
+  top: var(--log-top);
   width: 300px;
 }
 .game-log-list {
@@ -876,43 +867,23 @@
 }
 .game-log-folded .game-log-list {
   max-height: 228px;
-  margin-top: 8px;
   background: rgb(24 21 19);
   box-shadow:
     inset 0 0 0 1px rgb(214 192 150 / 24%),
     0 12px 28px rgb(0 0 0 / 45%);
 }
-.game-log-toggle {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border: 0;
-  border-radius: 10px;
-  background: rgb(24 21 19 / 62%);
-  box-shadow: inset 0 0 0 1px rgb(214 192 150 / 16%);
-  color: var(--text-dim);
-  cursor: pointer;
-  transition:
-    color 120ms,
-    box-shadow 120ms,
-    background 120ms;
+/* Folded, the log's button stands at the stage's top left, in the icon buttons' circle; the
+   list opens in the log's column. */
+.game-log-folded .game-log-toggle {
+  position: absolute;
+  left: 0;
+  top: calc(18px - var(--log-top));
 }
 .game-log-toggle svg {
-  width: 20px;
-  height: 20px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
   stroke-linecap: round;
-}
-.game-log-toggle:hover {
-  color: var(--text);
-  box-shadow: inset 0 0 0 1px rgb(214 192 150 / 45%);
-}
-.game-log-toggle:active {
-  background: rgb(12 10 9 / 88%);
 }
 .game-log-toggle[aria-expanded="true"] {
   color: var(--gold);
@@ -1188,6 +1159,9 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Room for descenders inside the clip, at line-height 1, taking none from the button. */
+  padding-block: 0.2em;
+  margin-block: -0.2em;
 }
 /* Passing on to the next stop: a round icon button left of the turn button, which stays put,
    in the turn button's orange (components.css .button-primary); full control's sign moves
@@ -1479,16 +1453,12 @@
     drop-shadow(0 0 10px rgb(0 185 235 / 85%));
 }
 /* The settings gear is a button; its menu drops below it. */
+/* The gear's column at the stage's top right (Board.tsx): the gear, the bug report, then undo
+   while there is something to take back. */
 .gear-button {
   position: absolute;
-  right: 0;
-  top: 0;
-  width: 72px;
-  height: 72px;
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: pointer;
+  right: 14px;
+  top: 14px;
 }
 .settings {
   position: absolute;
@@ -1830,6 +1800,37 @@
   background: rgb(33 31 28 / 97%);
   box-shadow: 0 18px 48px rgb(0 0 0 / 65%);
 }
+/* As the viewer opens its panel comes up around the cards flying out of the pile (Piles.tsx
+   useFlight), and as it closes it goes while they fly back: the panel's own face and its header
+   fade, not the cards. */
+.zone-viewer,
+.viewer-scrim,
+.zone-viewer-header {
+  transition:
+    background-color 200ms,
+    border-color 200ms,
+    box-shadow 200ms,
+    opacity 200ms;
+}
+.zone-viewer-rising,
+.zone-viewer-going {
+  border-color: transparent;
+  background-color: transparent;
+  box-shadow: none;
+}
+.zone-viewer-rising .zone-viewer-header,
+.zone-viewer-going .zone-viewer-header {
+  opacity: 0;
+}
+/* What flies is not clipped by the list's scrolling box. */
+.zone-viewer-flying .zone-viewer-cards {
+  overflow: visible;
+  mask-image: none;
+}
+.viewer-scrim:has(+ .zone-viewer-rising),
+.viewer-scrim:has(+ .zone-viewer-going) {
+  opacity: 0;
+}
 .zone-viewer-header {
   display: flex;
   align-items: baseline;
@@ -1848,21 +1849,9 @@
 }
 .zone-viewer-close {
   align-self: center;
-  width: 34px;
-  height: 34px;
-  padding: 0 0 3px;
-  border: 1px solid var(--metal);
-  border-radius: 50%;
-  background: rgb(255 255 255 / 4%);
-  color: var(--type);
-  font: 24px/1 var(--font-sans);
-  cursor: pointer;
 }
-.zone-viewer-close:hover,
-.zone-viewer-close:focus-visible {
-  outline: none;
-  border-color: var(--metal-bright);
-  background: rgb(233 173 74 / 18%);
+.zone-viewer-close svg {
+  fill: currentColor;
 }
 .zone-viewer-cards {
   display: grid;
@@ -2061,7 +2050,12 @@
 }
 .opening-hand {
   display: flex;
-  gap: 14px;
+  gap: 8px;
+}
+.opening-fan {
+  transform-origin: 50% 100%;
+  transform: translateY(calc(var(--fan) * var(--fan) * 5px))
+    rotate(calc(var(--fan) * 2deg));
 }
 .opening-card {
   padding: 0;
@@ -2193,8 +2187,8 @@
 .start-panel {
   position: absolute;
   left: 50%;
-  top: 110px;
-  translate: -50% 0;
+  top: 50%;
+  translate: -50% -50%;
   width: 620px;
   display: flex;
   flex-direction: column;
@@ -2433,34 +2427,19 @@
    answer. Over the cards, so its tip opens over the opponent's piles. */
 .undo-button.has-tip {
   position: absolute;
-  right: 0;
-  top: 72px;
+  right: 14px;
+  top: 126px;
   z-index: 1000;
-  width: 72px;
-  height: 48px;
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: pointer;
 }
 .undo-icon {
-  position: absolute;
-  right: 19px;
-  top: 2px;
-  width: 34px;
   overflow: visible;
-  filter: drop-shadow(0 1px 0 rgb(255 255 255 / 12%))
-    drop-shadow(0 2px 3px rgb(0 0 0 / 45%));
 }
 .undo-arrow {
   fill: none;
-  stroke: #737172;
-  stroke-width: 2.6;
+  stroke: currentColor;
+  stroke-width: 2.2;
   stroke-linecap: round;
   stroke-linejoin: round;
-}
-.undo-button:hover .undo-arrow {
-  stroke: #9a9899;
 }
 .undo-button > .tip {
   margin-right: -14px;
@@ -2529,31 +2508,15 @@
 .ability-choice-caption .mana-cost {
   vertical-align: -3px;
 }
-/* The X that closes the chooser, beside the gear, in the gear's grey metal. */
+/* The X that closes the chooser, beside the gear, an icon button like it. */
 .chooser-close {
   position: absolute;
-  right: 72px;
-  top: 0;
+  right: 70px;
+  top: 14px;
   z-index: 1210;
-  width: 72px;
-  height: 72px;
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: pointer;
 }
 .chooser-close svg {
-  position: absolute;
-  right: 18px;
-  top: 17px;
-  width: 36px;
-  fill: #8a8889;
-  filter: drop-shadow(0 1px 0 rgb(255 255 255 / 12%))
-    drop-shadow(0 2px 3px rgb(0 0 0 / 45%));
-}
-.chooser-close:hover svg,
-.chooser-close:focus-visible svg {
-  fill: #c9c6c4;
+  fill: currentColor;
 }
 /* Its Cancel, in the action dock, over the dimmed table. */
 .chooser-dock {
@@ -2603,40 +2566,30 @@
   opacity: 0;
 }
 
-/* The bug report (components/BugReport.tsx). Its button sits in the gear's column, in its
-   brushed metal: under the undo button on the game screen, at the top right elsewhere. */
+/* The bug report (components/BugReport.tsx). Its button sits in the gear's column: under the
+   gear on the game screen (the board's own), at the top right elsewhere. */
 .bug-button {
   position: fixed;
-  right: 0;
-  top: 0;
+  right: 14px;
+  top: 14px;
   z-index: 1000;
-  width: 72px;
-  height: 48px;
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: pointer;
 }
+/* On the game screen, the board's, under the gear, over any screen on the table. */
 .bug-button-game {
-  top: 120px;
+  position: absolute;
+  top: 70px;
+}
+/* Out of the frame while the report is open. */
+:root[data-bug-report] .bug-button-game {
+  visibility: hidden;
 }
 .bug-icon {
-  position: absolute;
-  right: 21px;
-  top: 9px;
-  width: 30px;
   overflow: visible;
   fill: none;
-  stroke: #737172;
+  stroke: currentColor;
   stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
-  filter: drop-shadow(0 1px 0 rgb(255 255 255 / 12%))
-    drop-shadow(0 2px 3px rgb(0 0 0 / 45%));
-}
-.bug-button:hover .bug-icon,
-.bug-button:focus-visible .bug-icon {
-  stroke: #9a9899;
 }
 /* Over everything, the frozen frame filling the window under the region and the panel. */
 .bug-overlay {
