@@ -66,6 +66,11 @@ export function record() {
         }
         return false;
     };
+    const badges = (e) => [
+        ...e.querySelectorAll(
+            ".card-counters, .card-pt-counter, .card-loyalty",
+        ),
+    ];
     const frames = [];
     window.__motion = { frames, stop: false };
     const frame = () => {
@@ -112,6 +117,13 @@ export function record() {
                 on,
                 top,
                 anim: e.getAnimations({ subtree: true }).length > 0,
+                // Its counters and loyalty, as their badges read, and whether they animate.
+                badge: badges(e)
+                    .map((b) => b.textContent.trim())
+                    .join(" "),
+                badgeAnim: badges(e).some(
+                    (b) => b.getAnimations({ subtree: true }).length > 0,
+                ),
             };
         }
         const lives = {};
@@ -125,11 +137,31 @@ export function record() {
                 anim: e.getAnimations({ subtree: true }).length > 0,
             };
         }
-        const stack = document.querySelectorAll(".stack-item").length;
+        // The stack's items that are no card of their own (abilities), by place from the
+        // bottom: an item's text changes as it settles.
+        const stack = {};
+        [...document.querySelectorAll(".stack-item")].forEach((e, i) => {
+            const r = e.getBoundingClientRect();
+            const cx = r.left + r.width / 2;
+            const cy = r.top + r.height / 2;
+            stack[i] = {
+                x: Math.round(cx),
+                y: Math.round(cy),
+                w: Math.round(r.width),
+                h: Math.round(r.height),
+                o: opacity(e),
+                on: cx >= 0 && cy >= 0 && cx < innerWidth && cy < innerHeight,
+                top: onTop(e, cx, cy),
+                anim: e.getAnimations({ subtree: true }).length > 0,
+            };
+        });
         frames.push({ t: performance.now(), cards, lives, stack });
         if (!window.__motion.stop) requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
+    // A few frames of where things were before the caller sets anything going: a view can
+    // arrive within a frame of a play.
+    return new Promise((done) => setTimeout(done, 100));
 }
 
 /** What the page recorded, and the views it showed since `since`, with their events. */
@@ -213,14 +245,14 @@ function span(frames, changing) {
 }
 
 /** How one slot's element behaved over `frames`: what changed, for how long, how visibly. */
-function behavior(frames, slot) {
-    const track = frames.map((f) => ({ t: f.t, c: f.cards[slot] }));
+function behavior(frames, slot, of = (f) => f.cards[slot]) {
+    const track = frames.map((f) => ({ t: f.t, c: of(f) }));
     const present = track.filter((x) => x.c);
     if (present.length === 0) return { none: true };
-    const first = track[0].c;
-    const last = track.at(-1).c;
-    const appeared = !first && !!last;
-    const vanished = !!first && !last;
+    // Appeared: absent at first, then shown; vanished: shown, then absent at the end. A
+    // stack item that comes and resolves within the window does both.
+    const appeared = !track[0].c;
+    const vanished = !track.at(-1).c;
     const moved = present.reduce(
         (m, x) =>
             Math.max(
@@ -304,6 +336,23 @@ function judge(e, frames, names) {
                 : "the life total never changed",
         };
     }
+    if (e.kind === "countersAdded" || e.kind === "countersRemoved") {
+        return judgeBadge(what, frames, e.slot);
+    }
+    if (e.kind === "ability") {
+        // A new item on the stack shows it; a loyalty ability's cost shows on its badge.
+        const item = newStackItem(frames);
+        if (item) {
+            return judgeShown(
+                what,
+                behavior(frames, item, (f) => f.stack?.[item]),
+                "its stack item",
+            );
+        }
+        if (e.loyalty !== null && e.loyalty !== undefined) {
+            return judgeBadge(what, frames, e.item.source);
+        }
+    }
     // Damage to a player shows on their life total, whatever its source does.
     if (e.kind === "damage" && e.to.kind === "player") {
         const b = lifeBehavior(frames, e.to.player);
@@ -329,6 +378,80 @@ function judge(e, frames, names) {
         return { what, verdict: "still", why: "no element is matched to it" };
     }
     return judgeSlots(what, frames, slots);
+}
+
+/** The stack item that appeared over `frames`, if any: one the first frame has not. */
+function newStackItem(frames) {
+    const before = new Set(Object.keys(frames[0]?.stack ?? {}));
+    for (const f of frames) {
+        const key = Object.keys(f.stack ?? {}).find((k) => !before.has(k));
+        if (key) return key;
+    }
+    return undefined;
+}
+
+/** How a card's counter badges showed a change over `frames`. */
+function judgeBadge(what, frames, slot) {
+    const shown = frames.filter((f) => f.cards[slot]);
+    if (shown.length === 0) {
+        return {
+            what,
+            verdict: "still",
+            why: "no element on the table shows it",
+        };
+    }
+    const changed = shown.some(
+        (f) => f.cards[slot].badge !== shown[0].cards[slot].badge,
+    );
+    if (!changed) {
+        return { what, verdict: "still", why: "its counters never changed" };
+    }
+    const ms = Math.round(
+        Math.max(
+            span(
+                shown,
+                (a, b) => a.cards[slot].badgeAnim && b.cards[slot].badgeAnim,
+            ),
+            span(shown, (a, b) => a.cards[slot].anim && b.cards[slot].anim),
+        ),
+    );
+    return ms >= MIN_MS
+        ? { what, verdict: "ok", why: `its counters animated ${ms} ms` }
+        : {
+              what,
+              verdict: "instant",
+              why: "its counters changed without animation",
+          };
+}
+
+/** The verdict on one element's `behavior`, named `name`. */
+function judgeShown(what, b, name) {
+    if (b.none) return { what, verdict: "still", why: `${name} never showed` };
+    if (!b.changed)
+        return { what, verdict: "still", why: `${name} never changed` };
+    const how = [
+        b.appeared && "appeared",
+        b.vanished && "vanished",
+        b.moved >= MIN_PX && `moved ${b.moved}px`,
+        b.turned && "turned",
+    ]
+        .filter(Boolean)
+        .join(", ");
+    if (b.ms < MIN_MS) {
+        return {
+            what,
+            verdict: "instant",
+            why: `${name} ${how} in ${b.ms} ms`,
+        };
+    }
+    if (b.seen < SEEN) {
+        return {
+            what,
+            verdict: "unseen",
+            why: `${name} ${how} over ${b.ms} ms, visible ${Math.round(b.seen * 100)}% of it`,
+        };
+    }
+    return { what, verdict: "ok", why: `${name} ${how} over ${b.ms} ms` };
 }
 
 /** The best showing among the elements of `slots`. */
