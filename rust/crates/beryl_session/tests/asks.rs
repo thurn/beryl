@@ -172,15 +172,28 @@ fn mana_tithe_asks_its_target_to_pay_one() {
 }
 
 #[test]
-fn subtlety_asks_the_spells_owner_top_or_bottom() {
+fn subtlety_asks_the_spells_owner_top_or_bottom_and_its_evoke_exile() {
     let asked = asks(names::SUBTLETY);
-    assert!(!asked.is_empty());
-    for ask in &asked {
-        assert!(
-            matches!(ask, (Kind::YesNo, AskView::TopOrBottom { .. })),
-            "{asked:?}"
-        );
-    }
+    let top_or_bottom =
+        |ask: &(Kind, AskView)| matches!(ask, (Kind::YesNo, AskView::TopOrBottom { .. }));
+    let exile = |ask: &(Kind, AskView)| {
+        matches!(
+            ask,
+            (
+                Kind::ExileCost,
+                AskView::ExileCards {
+                    zone: ZoneName::Hand,
+                    count: 1
+                }
+            )
+        )
+    };
+    assert!(asked.iter().any(top_or_bottom), "{asked:?}");
+    assert!(asked.iter().any(exile), "{asked:?}");
+    assert!(
+        asked.iter().all(|a| top_or_bottom(a) || exile(a)),
+        "{asked:?}"
+    );
 }
 
 #[test]
