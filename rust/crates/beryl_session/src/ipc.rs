@@ -36,6 +36,10 @@ pub const CONCEDE: &str = "concede";
 /// The latest view of the game in progress ([`crate::Sessions::current`]), which a reloaded UI
 /// takes up the game from.
 pub const CURRENT_GAME: &str = "current_game";
+/// Resumes the newest unfinished game saved, unless a game is in progress
+/// ([`crate::Sessions::resume_latest`]); returns the [`SessionId`] of the game in progress,
+/// if any now. Its views arrive as a started game's do.
+pub const RESUME_GAME: &str = "resume_game";
 
 /// Snapshots the window as it is drawn now, the bug report's frozen frame, and returns its
 /// number: the app serves it at `beryl-art://localhost/snapshot/<n>` and turns it into the
@@ -213,6 +217,12 @@ pub(crate) fn typescript(cfg: &Config) -> String {
             CURRENT_GAME,
             "Record<string, never>".to_owned(),
             name::<Option<GameUpdate>>(cfg),
+            never.clone(),
+        ),
+        (
+            RESUME_GAME,
+            "Record<string, never>".to_owned(),
+            name::<Option<SessionId>>(cfg),
             never.clone(),
         ),
         (

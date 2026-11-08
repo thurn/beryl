@@ -607,7 +607,7 @@ pub fn set_build_commit(commit: &str) {
 /// The commit this runs from, and whether its checkout had uncommitted changes. Under
 /// `cargo run` (`just dev`, the CLI), git says, of the checkout that built it; else the
 /// commit the build recorded, whose changes are unknown.
-fn commit() -> (String, bool) {
+pub(crate) fn commit() -> (String, bool) {
     let built = || {
         let commit = BUILD_COMMIT.get().map_or("unknown", String::as_str);
         (commit.to_owned(), false)

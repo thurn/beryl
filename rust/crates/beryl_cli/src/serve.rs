@@ -191,6 +191,7 @@ pub(crate) fn invoke(sessions: &Sessions, command: &str, args: Value) -> Value {
                 .and_then(|r| sessions.concede(r.session).map_err(|e| json!(e))),
         ),
         ipc::CURRENT_GAME => answer::<_, ()>(Ok(sessions.current())),
+        ipc::RESUME_GAME => answer::<_, ()>(Ok(sessions.resume_latest())),
         // A browser's page has no window to snapshot: its report goes without the frame.
         ipc::CAPTURE_WINDOW => answer::<(), _>(Err(SessionError::Io {
             reason: "no window snapshot in a browser".to_owned(),

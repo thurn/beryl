@@ -173,7 +173,7 @@ fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result
             let answer = match command {
                 ipc::CURRENT_GAME => current(&feed),
                 // The moment is the game: the page never starts another.
-                ipc::START_GAME | ipc::CONCEDE => json!({ "ok": null }),
+                ipc::START_GAME | ipc::CONCEDE | ipc::RESUME_GAME => json!({ "ok": null }),
                 ipc::LIST_AGENTS => json!({ "ok": [] }),
                 _ => {
                     // The viewer acts on the game: it plays on from where it truly is.

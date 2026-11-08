@@ -514,6 +514,7 @@ impl Game {
             opponent: start.opponent.clone(),
             stops: start.stops,
             log: Vec::new(),
+            commit: None,
         };
         let (table, state) = replay.setup(cards)?;
         // The agent draws from its own stream, apart from the game's.
@@ -561,6 +562,7 @@ impl Game {
             opponent: String::new(),
             stops,
             log: Vec::new(),
+            commit: None,
         };
         let mut game = Game::assemble(table, &state, replay, human, session, opponent);
         game.stand_in = Some(stand_in);
@@ -1114,6 +1116,11 @@ impl Game {
     /// The record of the game so far.
     pub fn replay(&self) -> &ReplayFile {
         &self.replay
+    }
+
+    /// Records that the build at `commit` writes the game's replay from here on.
+    pub(crate) fn set_commit(&mut self, commit: String) {
+        self.replay.commit = Some(commit);
     }
 
     /// The game itself, for tests, while it is in [`Small`].

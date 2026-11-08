@@ -183,6 +183,7 @@ pub fn run() {
             games::pass_on = ipc::PASS_ON,
             games::concede = ipc::CONCEDE,
             games::current_game = ipc::CURRENT_GAME,
+            games::resume_game = ipc::RESUME_GAME,
             capture_window = ipc::CAPTURE_WINDOW,
             report_bug = ipc::REPORT_BUG,
             ui_log = ipc::UI_LOG,

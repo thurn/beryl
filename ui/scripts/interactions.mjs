@@ -6353,6 +6353,50 @@ await check(
     overAt,
 );
 
+// A launched app with no game in progress resumes the newest unfinished one saved
+// (`resume_game`): here the views of `game-over` up to its last pass.
+await writeFile(
+    join(fixtures, "game-over-launched.json"),
+    JSON.stringify({
+        messages: [
+            { kind: "response", command: "current_game", value: null },
+            {
+                kind: "response",
+                command: "resume_game",
+                value: overEvents[0].payload.session,
+            },
+            ...overFixture.messages,
+        ],
+    }),
+);
+await check(
+    "a game resumed at launch gives way to a new game at one click",
+    async (page) => {
+        await page
+            .getByRole("button", { name: "Return to Game", exact: true })
+            .waitFor();
+        const commands = () =>
+            page.evaluate(() =>
+                window.berylFixture.calls
+                    .map((c) => c.command)
+                    .filter((c) => c === "concede" || c === "start_game"),
+            );
+        await page
+            .getByRole("button", { name: "New Game", exact: true })
+            .click();
+        for (let i = 0; i < 20 && (await commands()).length < 2; i++) {
+            await page.clock.runFor(100);
+        }
+        assert.deepEqual(await commands(), ["concede", "start_game"]);
+    },
+    {
+        fixture: "game-over-launched",
+        at: lastPass + 1,
+        hash: "#/",
+        ready: ".start-agent input:checked",
+    },
+);
+
 // A reloaded page asks for the game in progress (`current_game`) and takes it up: here the
 // fixture records no views, only that answer, the human's last pass in `game-over`.
 await writeFile(

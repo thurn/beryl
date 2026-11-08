@@ -3,8 +3,8 @@
 //! session that is no longer in progress. The app's commands and the CLI's fixture recorder
 //! both drive games through it.
 
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use beryl_cards::CARDS;
@@ -15,10 +15,10 @@ use ts_rs::TS;
 
 use crate::ai::{self, AgentMove, AgentMoves};
 use crate::game::Game;
-use crate::protocol::{CandidateIndex, DecisionId, SessionId, StopsSetting};
+use crate::protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status, StopsSetting};
 use crate::replay::ReplayFile;
 use crate::session::GameSession;
-use crate::{GameUpdate, Prepared, Seat, SessionError, StartGame, journal};
+use crate::{GameUpdate, Prepared, Seat, SessionError, StartGame, bugs, journal};
 
 /// The UI's request for a game: the WU Control mirror against `agent`, the human in seat 0
 /// under the smart stops.
@@ -109,7 +109,7 @@ impl Sessions {
             "replay": replay,
         });
         self.launch(
-            |session| Game::new(&CARDS, start, session),
+            |session| Ok((Game::new(&CARDS, start, session)?, None)),
             stand_in,
             replay,
             true,
@@ -121,7 +121,7 @@ impl Sessions {
     /// which could not reproduce it.
     pub fn start_prepared(&self, prepared: Prepared) -> Result<SessionId, SessionError> {
         self.launch(
-            |session| Ok(Game::prepared(prepared, session)),
+            |session| Ok((Game::prepared(prepared, session), None)),
             None,
             None,
             false,
@@ -129,11 +129,74 @@ impl Sessions {
         )
     }
 
-    /// Starts a game, writing its replay file to `replay`, if given. A `seeded` game keeps its
-    /// latest replay for a bug report; a prepared game has none that would reproduce it.
+    /// Resumes the newest game in the replay directory if it is unfinished: what the app
+    /// takes up on launch. With a game already in progress, it resumes nothing and returns
+    /// that game's session. None with nothing to resume: no replay directory or file, the
+    /// newest game is over, or its file no longer replays (an engine change broke it, say),
+    /// which is journaled. Only the newest file counts: starting a game concedes the one in
+    /// progress, so no older one is unfinished but by a crash, and finding one would mean
+    /// replaying every game ever played.
+    pub fn resume_latest(&self) -> Option<SessionId> {
+        if let Some((session, _)) = &self.lock().game {
+            return Some(*session);
+        }
+        let path = newest_replay(self.replays.as_ref()?)?;
+        let resumed = ReplayFile::load(&path).and_then(|file| {
+            // Replayed apart first, so an ended game is left alone without a session.
+            let (_, view) = Game::from_replay(&CARDS, &file, SessionId(0))?;
+            if matches!(view.status, Status::Over { .. }) {
+                return Ok(None);
+            }
+            self.resume_file(&file, &path).map(Some)
+        });
+        resumed.unwrap_or_else(|e| {
+            journal::warn(
+                "session",
+                format!("the latest game does not resume: {e}"),
+                json!({ "replay": path, "error": e }),
+            );
+            None
+        })
+    }
+
+    /// Resumes `file`, read from `path`, replacing any game in progress: it replays the record
+    /// to where it ends ([`Game::from_replay`]), emits the view there and plays on, saving to
+    /// `path` still.
+    fn resume_file(&self, file: &ReplayFile, path: &Path) -> Result<SessionId, SessionError> {
+        let commit = build_commit();
+        if file.commit.as_deref() != Some(commit) {
+            journal::info(
+                "session",
+                "resuming a game another build wrote",
+                json!({ "replay": path, "wrote": file.commit, "resumes": commit }),
+            );
+        }
+        let about = json!({
+            "seed": file.seed,
+            "opponent": file.opponent,
+            "human": file.human,
+            "replay": path,
+            "resumed": file.log.len(),
+        });
+        self.launch(
+            |session| {
+                let (game, view) = Game::from_replay(&CARDS, file, session)?;
+                Ok((game, Some(view)))
+            },
+            None,
+            Some(path.to_owned()),
+            true,
+            about,
+        )
+    }
+
+    /// Starts a game, writing its replay file to `replay`, if given, and emitting first the
+    /// view the game was built with, if any (a resumed game's). A `seeded` game keeps its
+    /// latest replay for a bug report and records this build in it; a prepared game has none
+    /// that would reproduce it.
     fn launch(
         &self,
-        game: impl FnOnce(SessionId) -> Result<Game, SessionError>,
+        game: impl FnOnce(SessionId) -> Result<(Game, Option<PlayerView>), SessionError>,
         stand_in: Option<&str>,
         replay: Option<PathBuf>,
         seeded: bool,
@@ -149,13 +212,16 @@ impl Sessions {
         current.last += 1;
         let session = SessionId(current.last);
         about["session"] = json!(session.0);
-        let started = game(session).and_then(|mut game| {
+        let started = game(session).and_then(|(mut game, first)| {
             if let Some(name) = stand_in {
                 game.set_stand_in(name)?;
             }
-            Ok(game)
+            if seeded {
+                game.set_commit(build_commit().to_owned());
+            }
+            Ok((game, first))
         });
-        let game = match started {
+        let (game, first) = match started {
             Ok(game) => game,
             Err(e) => {
                 about["error"] = json!(e.to_string());
@@ -168,7 +234,7 @@ impl Sessions {
         let latest_replay = seeded.then(LatestReplay::default);
         let emit = Arc::clone(&self.emit);
         let latest = Arc::clone(&self.latest);
-        let game = GameSession::start(game, replay, latest_replay.clone(), move |view| {
+        let game = GameSession::start(game, first, replay, latest_replay.clone(), move |view| {
             let update = GameUpdate { session, view };
             {
                 let mut latest = latest.lock().unwrap_or_else(PoisonError::into_inner);
@@ -306,6 +372,32 @@ impl Sessions {
         }
         Some(dir.join(format!("{}-{seed}.json", now().as_secs())))
     }
+}
+
+/// The newest replay file in `dir`, by the start time that begins its name.
+fn newest_replay(dir: &Path) -> Option<PathBuf> {
+    std::fs::read_dir(dir)
+        .ok()?
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            if path.extension()? != "json" {
+                return None;
+            }
+            let (start, _) = path.file_stem()?.to_str()?.split_once('-')?;
+            Some((start.parse::<u64>().ok()?, path))
+        })
+        .max()
+        .map(|(_, path)| path)
+}
+
+/// The commit of this build, as replay files record it: `-dirty` marks a checkout with
+/// uncommitted changes.
+fn build_commit() -> &'static str {
+    static COMMIT: OnceLock<String> = OnceLock::new();
+    COMMIT.get_or_init(|| match bugs::commit() {
+        (commit, true) => format!("{commit}-dirty"),
+        (commit, false) => commit,
+    })
 }
 
 fn clock_seed() -> u64 {

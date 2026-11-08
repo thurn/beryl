@@ -71,6 +71,12 @@ pub fn current_game(sessions: State<'_, Sessions>) -> Option<GameUpdate> {
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
+pub fn resume_game(sessions: State<'_, Sessions>) -> Option<SessionId> {
+    sessions.resume_latest()
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 pub fn set_stops(
     sessions: State<'_, Sessions>,
     request: SetStopsRequest,

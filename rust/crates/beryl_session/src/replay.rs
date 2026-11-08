@@ -23,6 +23,9 @@ pub struct ReplayFile {
     /// The priority stops the game began with.
     pub stops: StopsSetting,
     pub log: Vec<Entry>,
+    /// The commit of the build that last wrote the file, if it said (older files do not).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub commit: Option<String>,
 }
 
 /// One entry of the choice log.

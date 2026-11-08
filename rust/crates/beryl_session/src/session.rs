@@ -40,10 +40,12 @@ enum Command {
 
 impl GameSession {
     /// Starts `game`. `emit` receives every view of the human's as the game plays
-    /// ([`Game::next_view`]); the replay file at `replay`, if any, is rewritten before each
-    /// view at which the human decides or the game ends, and so is `latest`, if given.
+    /// ([`Game::next_view`]), beginning with `first`, the view where the game already stands,
+    /// if given (a resumed game's); the replay file at `replay`, if any, is rewritten before
+    /// each view at which the human decides or the game ends, and so is `latest`, if given.
     pub(crate) fn start(
         game: Game,
+        first: Option<PlayerView>,
         replay: Option<PathBuf>,
         latest: Option<LatestReplay>,
         emit: impl FnMut(PlayerView) + Send + 'static,
@@ -61,7 +63,7 @@ impl GameSession {
             .name("game session".to_owned())
             .spawn(move || {
                 let session = game.session();
-                let end = run(game, &received, &thread, replay.as_deref(), emit);
+                let end = run(game, first, &received, &thread, replay.as_deref(), emit);
                 journal::info(
                     "session",
                     "thread ended",
@@ -160,6 +162,7 @@ impl Drop for GameSession {
 /// at a definite point of the choice log. Returns why it ended, for the journal.
 fn run(
     mut game: Game,
+    first: Option<PlayerView>,
     commands: &Receiver<Command>,
     shared: &Shared,
     replay: Option<&Path>,
@@ -193,6 +196,11 @@ fn run(
         emit(view);
         false
     };
+    if let Some(view) = first
+        && publish(&game, view, true)
+    {
+        return "replaced";
+    }
     loop {
         while let Some(view) = game.next_view() {
             if publish(&game, view, true) {

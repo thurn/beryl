@@ -74,9 +74,13 @@ function rememberGame(agent: string, seed: string) {
  * what the primary button does. */
 export function StartScreen({
   inProgress,
+  resumed,
   onStart,
 }: {
   inProgress?: SessionId;
+  /** The game in progress was resumed at launch and not yet gone back to: a new game
+   * concedes it without asking. */
+  resumed: boolean;
   onStart(agent: string, seed?: number): Promise<void>;
 }) {
   const [agents, setAgents] = useState<AgentView[]>([]);
@@ -108,7 +112,7 @@ export function StartScreen({
   const starting = useRef(false);
   const start = () => {
     if (!agent || !startable || starting.current) return;
-    if (inProgress !== undefined && !confirming) {
+    if (inProgress !== undefined && !resumed && !confirming) {
       setConfirming(true);
       return;
     }

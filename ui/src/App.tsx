@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { MotionConfig } from "motion/react";
 import { appInfo, canReportBugs, uiReady } from "./ipc";
 import { BugReporter } from "./components/BugReport";
@@ -27,12 +27,18 @@ export function App() {
 function Main() {
   const path = useSyncExternalStore(subscribe, route);
   // Listening from the start, so a game's first view is never missed.
-  const { playback, starting, resuming, start } = usePlayback();
+  const { playback, starting, resuming, resumed, start } = usePlayback();
   const status = playback?.update.view.status.kind;
   const inProgress =
     playback && status !== "over" && status !== "stopped"
       ? playback.update.session
       : undefined;
+
+  // The game resumed at launch replaces without asking until the player goes back to it.
+  const [returned, setReturned] = useState(false);
+  useEffect(() => {
+    if (path === "/game") setReturned(true);
+  }, [path]);
 
   // The app hears the UI has loaded once it has answered a first command.
   useEffect(() => {
@@ -51,7 +57,13 @@ function Main() {
           resuming={resuming}
         />
       ) : (
-        <StartScreen inProgress={inProgress} onStart={start} />
+        <StartScreen
+          inProgress={inProgress}
+          resumed={
+            inProgress !== undefined && inProgress === resumed && !returned
+          }
+          onStart={start}
+        />
       )}
       {canReportBugs() && <BugReporter route={path} />}
     </MotionConfig>

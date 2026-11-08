@@ -334,6 +334,7 @@ const browserFixture: Fixture = {
     { kind: "response", command: "ui_ready", value: null },
     { kind: "response", command: "list_agents", value: [] },
     { kind: "response", command: "current_game", value: null },
+    { kind: "response", command: "resume_game", value: null },
     { kind: "response", command: "concede", value: null },
   ],
 };
@@ -489,6 +490,10 @@ export const concede = (session: SessionId) =>
 
 /** The latest view of the game in progress, if any: where a reloaded page takes it up. */
 export const currentGame = () => call("current_game", {});
+
+/** Resumes the newest unfinished game saved, unless one is in progress; resolves to the
+ * session in progress, if any. Its views arrive as a started game's do. */
+export const resumeGame = () => call("resume_game", {});
 
 /** Snapshots the window as drawn now; resolves to its number (only in the app:
  * `canCaptureWindow`). */

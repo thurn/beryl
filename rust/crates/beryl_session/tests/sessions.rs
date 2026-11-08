@@ -330,6 +330,145 @@ fn a_replay_cut_at_a_decision_resumes_there() {
     assert_eq!(resumed, view);
 }
 
+/// A fresh directory for one test's replay files.
+fn replay_dir(name: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("beryl-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    dir
+}
+
+/// The one replay file in `dir`.
+fn only_replay(dir: &std::path::Path) -> std::path::PathBuf {
+    let files: Vec<_> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    assert_eq!(files.len(), 1, "{files:?}");
+    files[0].clone()
+}
+
+/// Answers `n` of the human's decisions through `sessions` by the script, from `view`, and
+/// returns each view they were asked at after it.
+fn answer(
+    sessions: &Sessions,
+    views: &std::sync::mpsc::Receiver<beryl_session::GameUpdate>,
+    mut view: PlayerView,
+    n: usize,
+) -> Vec<PlayerView> {
+    let mut seen = Vec::new();
+    for _ in 0..n {
+        let (id, index) = script(&view);
+        sessions.choose(id, index).unwrap();
+        view = to_decision(views);
+        seen.push(view.clone());
+    }
+    seen
+}
+
+#[test]
+fn a_game_resumed_from_its_save_plays_on_as_if_it_never_stopped() {
+    // The same game played through without stopping.
+    let mut game = Game::new(&CARDS, &start(3, StopsSetting::EXACT), SESSION).unwrap();
+    let mut expected = vec![to_human(&mut game)];
+    for _ in 0..30 {
+        let next = play(&mut game, expected.last().unwrap());
+        expected.push(next);
+    }
+
+    let dir = replay_dir("resume");
+    let (sent, views) = channel();
+    let first = Sessions::new(Some(dir.clone()), move |u| sent.send(u).unwrap());
+    first
+        .start_game(&start(3, StopsSetting::EXACT), None)
+        .unwrap();
+    let mut played = vec![to_decision(&views)];
+    played.extend(answer(&first, &views, played[0].clone(), 15));
+    // The app quits at the human's decision.
+    drop(first);
+    let path = only_replay(&dir);
+    let mut saved = ReplayFile::load(&path).unwrap();
+    assert!(saved.commit.is_some(), "the save names its build");
+    // A file from before saves named their build still resumes.
+    saved.commit = None;
+    saved.save(&path).unwrap();
+
+    let (sent, views) = channel();
+    let second = Sessions::new(Some(dir.clone()), move |u| sent.send(u).unwrap());
+    let session = second.resume_latest().expect("the unfinished game resumes");
+    assert_eq!(
+        second.resume_latest(),
+        Some(session),
+        "a game is in progress"
+    );
+    let resumed = to_decision(&views);
+    assert_eq!(
+        &resumed,
+        played.last().unwrap(),
+        "it resumes where it stopped"
+    );
+    played.extend(answer(&second, &views, resumed, 15));
+    assert_eq!(played, expected);
+
+    // The resumed game keeps saving to its file.
+    assert_eq!(only_replay(&dir), path);
+    let saved = ReplayFile::load(&path).unwrap();
+    assert_eq!(saved.log, game.replay().log);
+    assert!(saved.commit.is_some());
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn only_an_unfinished_game_that_still_replays_is_resumed() {
+    let dir = replay_dir("no-resume");
+    let (sent, views) = channel();
+    let sessions = Sessions::new(Some(dir.clone()), move |u| sent.send(u).unwrap());
+    assert_eq!(sessions.resume_latest(), None, "no replay directory");
+    assert_eq!(
+        Sessions::new(None, |_| {}).resume_latest(),
+        None,
+        "no replays at all"
+    );
+
+    // A game that ended is not resumed.
+    let session = sessions
+        .start_game(&start(4, StopsSetting::SMART), None)
+        .unwrap();
+    let view = to_decision(&views);
+    answer(&sessions, &views, view, 3);
+    sessions.concede(session).unwrap();
+    assert!(matches!(to_decision(&views).status, Status::Over { .. }));
+    drop(sessions);
+    let over = only_replay(&dir);
+    let (sent, views) = channel();
+    let sessions = Sessions::new(Some(dir.clone()), move |u| sent.send(u).unwrap());
+    assert_eq!(sessions.resume_latest(), None, "the newest game is over");
+    assert_eq!(sessions.current(), None);
+
+    // Nor is a newer file that no longer replays: the player starts a new game.
+    let mut unknown = ReplayFile::load(&over).unwrap();
+    unknown.log.truncate(unknown.log.len() / 2);
+    unknown.decks[1][0].1 = "No Such Card".to_owned();
+    let newer = dir.join("9999999998-1.json");
+    unknown.save(&newer).unwrap();
+    assert_eq!(sessions.resume_latest(), None, "an unknown card");
+    std::fs::write(dir.join("9999999999-1.json"), "{ not a replay").unwrap();
+    assert_eq!(sessions.resume_latest(), None, "a corrupt file");
+    assert!(views.try_recv().is_err(), "nothing was shown");
+    let session = sessions
+        .start_game(&start(5, StopsSetting::SMART), None)
+        .unwrap();
+    assert!(matches!(
+        to_decision(&views).status,
+        Status::Deciding { .. }
+    ));
+    assert_eq!(
+        sessions.resume_latest(),
+        Some(session),
+        "a game is in progress"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
 #[test]
 fn a_stopped_game_lets_the_agent_decide_no_more() {
     let mut game = Game::new(&CARDS, &start(7, StopsSetting::EXACT), SESSION).unwrap();

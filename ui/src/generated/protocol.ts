@@ -486,6 +486,7 @@ export type Commands = {
   pass_on: { args: { request: PassOnRequest }; result: null; error: SessionError };
   concede: { args: { request: ConcedeRequest }; result: null; error: SessionError };
   current_game: { args: Record<string, never>; result: GameUpdate | null; error: never };
+  resume_game: { args: Record<string, never>; result: SessionId | null; error: never };
   capture_window: { args: Record<string, never>; result: number; error: SessionError };
   report_bug: { args: { request: BugReport }; result: BugSaved; error: SessionError };
   ui_log: { args: { request: UiLogRequest }; result: null; error: never };

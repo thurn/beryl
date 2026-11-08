@@ -9,15 +9,18 @@ import {
   useEffect,
   useLayoutEffect,
   useReducer,
+  useState,
   useSyncExternalStore,
 } from "react";
 import { isFrozen, subscribeFrozen } from "../freeze";
 import {
   currentGame,
   onGameUpdate,
+  resumeGame,
   startGame,
   type GameUpdate,
   type PlayerView,
+  type SessionId,
 } from "../ipc";
 import { beats, eventsHold } from "./beats";
 import type { Spotlight } from "./layout";
@@ -118,7 +121,7 @@ type Action =
   | { kind: "gather" }
   | { kind: "release"; now: number }
   | { kind: "starting"; on: boolean }
-  | { kind: "resume"; update?: GameUpdate; now: number };
+  | { kind: "resume"; update?: GameUpdate; awaiting?: boolean; now: number };
 
 const INITIAL: State = {
   live: false,
@@ -204,7 +207,9 @@ function reduce(state: State, action: Action): State {
       return { ...state, starting: action.on };
     case "resume": {
       // A view that arrived meanwhile is as new as the game's latest, or newer.
-      const { update, now } = action;
+      const { update, awaiting, now } = action;
+      // A game resumed from its save shows as its first view arrives.
+      if (awaiting && !state.shown) return state;
       if (!update || state.shown) return { ...state, resuming: false };
       return show({ ...state, resuming: false }, [update], false, now);
     }
@@ -257,10 +262,13 @@ export function usePlayback(): {
   starting: boolean;
   /** The game in progress, if any, is still being asked for, as the page loads. */
   resuming: boolean;
+  /** The game resumed from its save as the page loaded, if one was. */
+  resumed?: SessionId;
   /** Starts a game against `agent`, replacing any in progress. */
   start(agent: string, seed?: number): Promise<void>;
 } {
   const [state, dispatch] = useReducer(reduce, INITIAL);
+  const [resumed, setResumed] = useState<SessionId>();
   useEffect(() => {
     // Stopping a listener takes a moment, in which it may still hear views (StrictMode's
     // second mount hears them too): only the effect still mounted acts on them.
@@ -269,12 +277,20 @@ export function usePlayback(): {
     const unlisten = onGameUpdate((update, past) =>
       act({ kind: "arrive", update, past, now: Date.now() }),
     );
-    // Once listening, so no view falls between: a reloaded page takes up the game where it is.
+    // Once listening, so no view falls between: a reloaded page takes up the game where it is,
+    // and a launched app the newest unfinished game saved.
     void unlisten
       .then(() => currentGame())
       .then(
-        (update) =>
-          act({ kind: "resume", update: update ?? undefined, now: Date.now() }),
+        async (update) => {
+          if (update) {
+            act({ kind: "resume", update, now: Date.now() });
+            return;
+          }
+          const session = await resumeGame().catch(() => null);
+          if (mounted && session !== null) setResumed(session);
+          act({ kind: "resume", awaiting: session !== null, now: Date.now() });
+        },
         () => act({ kind: "resume", now: Date.now() }),
       );
     return () => {
@@ -345,6 +361,7 @@ export function usePlayback(): {
     },
     starting: state.starting,
     resuming: state.resuming,
+    resumed,
     start,
   };
 }
