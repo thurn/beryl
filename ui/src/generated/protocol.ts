@@ -51,6 +51,11 @@ export type BugReport = {
  */
 description: string, 
 /**
+ * The player reports a questionable play of the AI's, for incident analysis: the report
+ * carries the agent's latest searches.
+ */
+ai: boolean, 
+/**
  * The app's snapshot of the window as the player froze it (`capture_window`), which the
  * app turns into the report's images ([`Images`]); none in a browser.
  */

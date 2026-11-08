@@ -470,3 +470,26 @@ fn open_decision(s: &State, t: &GameTable) -> Decision {
         Step::Over(o) => panic!("the game is over: {o:?}"),
     }
 }
+
+#[test]
+fn the_game_keeps_the_agents_decisions_for_a_report() {
+    let mut game = Game::new(&CARDS, &start(5, StopsSetting::SMART), SESSION).unwrap();
+    let mut view = to_human(&mut game);
+    for _ in 0..12 {
+        if !matches!(view.status, Status::Deciding { .. }) {
+            break;
+        }
+        view = play(&mut game, &view);
+    }
+    let moves = beryl_session::ai::latest(&game.agent_moves());
+    assert!(!moves.is_empty(), "the agent decided by now");
+    let log = game.replay().log.len();
+    for m in &moves {
+        assert!(usize::from(m.chosen) < m.candidates.len(), "{m:?}");
+        assert!(m.candidates.iter().all(|c| !c.is_empty()), "{m:?}");
+        assert!(m.log < log);
+        // The random agent does not search.
+        assert_eq!(m.search, None);
+    }
+    assert!(moves.windows(2).all(|w| w[0].log < w[1].log));
+}

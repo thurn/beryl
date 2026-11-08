@@ -1314,6 +1314,22 @@ fn stack_item<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &StackEntry<
     }
 }
 
+/// What each candidate of `d` is called, to the seat `obs` sees for: as the UI names the
+/// human's, for the agent's decisions in a report ([`crate::ai`]).
+pub(crate) fn candidate_labels<L: Layout>(
+    t: &GameTable,
+    obs: Observation<'_, L>,
+    d: &Decision<L>,
+) -> Vec<String> {
+    match &d.candidates {
+        Candidates::Objects(b) => b
+            .iter()
+            .map(|slot| name(t, obs, slot).unwrap_or("a hidden card").to_owned())
+            .collect(),
+        Candidates::Options(opts) => opts.iter().map(|&o| candidate(t, obs, o).label).collect(),
+    }
+}
+
 fn decision_view<L: Layout>(
     t: &GameTable,
     obs: Observation<'_, L>,

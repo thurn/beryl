@@ -18,7 +18,8 @@ player select the area that shows the bug, and writes a folder under
 `~/Library/Application Support/ca.thurn.beryl/bugs` (`$BERYL_BUGS` overrides it;
 `beryl_session`'s `bugs.rs` writes it):
 
-- `report.md`: front matter (`status`: open, filed or done; `bead`; the game's
+- `report.md`: front matter (`kind`: `bug`, or `ai` for a play of the AI's the
+  player ticked "AI play" for; `status`: open, filed or done; `bead`; the game's
   `seed`, `turn`, `step`, `decision`; the `commit` the app was built from,
   marked if it had uncommitted changes; the page `url`), then the player's words
   and how to reproduce it.
@@ -28,6 +29,11 @@ player select the area that shows the bug, and writes a folder under
 - `replay.json`: the game's replay as of its latest decision, which reproduces
   it bit for bit.
 - `view.json`: the latest view the session emitted.
+- `searches.json`: the agent's latest 200 decisions as the game ran them: each
+  one's candidates as the UI names them, its choice, its thinking time and its
+  search (root visits and mean reward per candidate, rollouts, the decision
+  whose trees it reused, an anchored search's check against greedy). An `ai`
+  report's `report.md` digests the latest dozen.
 - `fixture.json`: the UI's latest views (up to 60) as a UI fixture.
 - `ui.json`: the page, and the UI's log: every command and answer, every view as
   it arrived (summarized: status, decision, turn, step, event kinds), routes,
@@ -47,6 +53,13 @@ player select the area that shows the bug, and writes a folder under
 2. **Read every report** and ask your questions (above). A report from a spec
    page has a `url` naming the card and moment (`/m/<card>/<moment>/…`).
 3. **Reproduce.** Pick by what went wrong:
+   - An AI play (`kind: ai`, bead label `ai-play`): an incident, as the ones in
+     `docs/incidents/` are. Start from the digest and `searches.json`, which are
+     the game's own searches, then search the decision again with
+     `just review "<folder>/replay.json" --agent recorded --turn N` (slow, at
+     low priority: a fresh sample, so a near-tie may go the other way). Copy the
+     replay beside the incident, find why the search chose as it did, and fix
+     it or file what it would take.
    - Rules or AI: `just review "<folder>/replay.json" --turn N` prints the game
      as a transcript to the reported turn; `--agent recorded` adds the
      opponent's searches. If the report's `commit` is not `staging`'s, the

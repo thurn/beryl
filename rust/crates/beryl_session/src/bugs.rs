@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use ts_rs::TS;
 
+use crate::ai::AgentMove;
 use crate::ipc::{CHOOSE, Fixture, FixtureMessage, GAME_UPDATE, SET_STOPS};
 use crate::journal::{self, Level};
 use crate::protocol::Status;
@@ -39,6 +40,9 @@ const JOURNAL_RECORDS: usize = 2000;
 pub struct BugReport {
     /// What the player says went wrong.
     pub description: String,
+    /// The player reports a questionable play of the AI's, for incident analysis: the report
+    /// carries the agent's latest searches.
+    pub ai: bool,
     /// The app's snapshot of the window as the player froze it (`capture_window`), which the
     /// app turns into the report's images ([`Images`]); none in a browser.
     pub snapshot: Option<u32>,
@@ -131,6 +135,7 @@ pub fn dir() -> PathBuf {
 
 /// Writes `report` into a new folder under `dir`, with its `images` and what `sessions` knows
 /// of the game.
+#[allow(clippy::too_many_lines)] // A block per file the report holds.
 pub fn write(
     dir: &Path,
     report: &BugReport,
@@ -167,6 +172,17 @@ pub fn write(
                 if replay.human == 0 { "P0" } else { "P1" },
                 replay.opponent,
                 replay.log.len()
+            ),
+        ));
+    }
+    let moves = sessions.agent_moves();
+    if !moves.is_empty() {
+        put("searches.json", pretty(&moves).as_bytes())?;
+        files.push((
+            "searches.json",
+            format!(
+                "the agent's latest {} decisions, each with its candidates and the search behind it as the game ran it",
+                moves.len()
             ),
         ));
     }
@@ -229,6 +245,7 @@ pub fn write(
         title: &title,
         created: &journal::utc(now),
         report,
+        moves: &moves,
         screenshot: images.screenshot.is_some(),
         game: &game,
         files: &files,
@@ -287,6 +304,7 @@ struct Markdown<'a> {
     title: &'a str,
     created: &'a str,
     report: &'a BugReport,
+    moves: &'a [AgentMove],
     screenshot: bool,
     game: &'a Game,
     files: &'a [(&'a str, String)],
@@ -305,6 +323,7 @@ fn markdown(m: &Markdown<'_>) -> String {
         "---\n\
          id: {}\n\
          title: {}\n\
+         kind: {}\n\
          status: open\n\
          bead:\n\
          created: {}\n\
@@ -320,6 +339,7 @@ fn markdown(m: &Markdown<'_>) -> String {
          ---\n",
         m.id,
         quote(m.title),
+        if m.report.ai { "ai" } else { "bug" },
         m.created,
         env!("CARGO_PKG_VERSION"),
         commit,
@@ -343,6 +363,9 @@ fn markdown(m: &Markdown<'_>) -> String {
     if m.screenshot {
         out.push_str("![What the player saw](screenshot.png)\n\n");
     }
+    if m.report.ai {
+        ai_section(&mut out, m.moves);
+    }
     out.push_str("## Reproduce\n\n");
     let folder = m.folder.display();
     if g.seed.is_some() {
@@ -351,6 +374,15 @@ fn markdown(m: &Markdown<'_>) -> String {
             out,
             "- The game, as a transcript to the reported turn:\n  \
              `just review \"{folder}/replay.json\"{turn}`"
+        )
+        .expect("writes");
+    }
+    if m.report.ai && g.seed.is_some() {
+        let turn = g.turn.map(|t| format!(" --turn {t}")).unwrap_or_default();
+        writeln!(
+            out,
+            "- The agent's searches again, a fresh sample (slow: at low priority):\n  \
+             `just review \"{folder}/replay.json\" --agent recorded{turn}`"
         )
         .expect("writes");
     }
@@ -371,6 +403,27 @@ fn markdown(m: &Markdown<'_>) -> String {
         writeln!(out, "- [{name}]({name}): {about}").expect("writes");
     }
     out
+}
+
+/// How many of the agent's latest decisions an AI report's digest shows.
+const DIGEST: usize = 12;
+
+/// An AI report's digest of the agent's latest decisions, newest last: `searches.json` has
+/// them all.
+fn ai_section(out: &mut String, moves: &[AgentMove]) {
+    out.push_str("## The AI's latest decisions\n\n");
+    if moves.is_empty() {
+        out.push_str("None recorded: no game, or the agent has not decided yet.\n\n");
+        return;
+    }
+    out.push_str(
+        "Newest last. Root visits and mean reward per candidate, the chosen one starred; \
+         `searches.json` has the last 200.\n\n```\n",
+    );
+    for m in &moves[moves.len().saturating_sub(DIGEST)..] {
+        out.push_str(&m.describe());
+    }
+    out.push_str("```\n\n");
 }
 
 fn region_note(report: &BugReport) -> String {
@@ -524,6 +577,7 @@ mod tests {
         let sessions = Sessions::new(None, |_| {});
         let report = BugReport {
             description: "The button: it vanished\nafter I clicked".to_owned(),
+            ai: true,
             snapshot: None,
             region: Some(Region {
                 x: 1.0,
@@ -551,6 +605,8 @@ mod tests {
         assert!(md.starts_with("---\nid: "));
         assert!(md.contains("title: \"The button: it vanished\""));
         assert!(md.contains("status: open\n"));
+        assert!(md.contains("kind: ai\n"));
+        assert!(md.contains("## The AI's latest decisions"));
         assert!(md.contains("![What the player saw](screenshot.png)"));
         assert_eq!(std::fs::read(folder.join("screenshot.png")).unwrap(), b"hi");
         let fixture: Fixture =

@@ -8,6 +8,7 @@
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Instant;
 
 use beryl_engine::event::{Event, LossCause, Recipient};
 use beryl_engine::layout::Queue;
@@ -19,15 +20,17 @@ use beryl_engine::{
     StallReason, State, Step, StepStops, TurnStep, apply, next_in_step, observe, paused_events,
     view,
 };
-use beryl_search::{Budget, GameAgent};
+use beryl_search::{Agent, Budget, GameAgent};
+use serde_json::json;
 
-use crate::preview;
+use crate::ai::{self, AgentMove, AgentMoves, SearchView};
 use crate::protocol::{
     CandidateIndex, DecisionId, Moment, PlayerView, SessionId, Side, Status, StopsSetting,
     player_view,
 };
 use crate::replay::{Entry, ReplayFile};
 use crate::{HandOver, Prepared, SessionError, StartGame};
+use crate::{journal, preview};
 
 /// The human's open decision, as a session records it: the one place an answer is checked.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -453,6 +456,8 @@ pub struct Game {
     human: Seat,
     session: SessionId,
     agent: Box<dyn GameAgent + Send>,
+    /// The agent's latest decisions and their searches ([`crate::ai`]).
+    moves: AgentMoves,
     /// An agent answering the human's decisions in their place, if any.
     stand_in: Option<Box<dyn GameAgent + Send>>,
     /// When the stand-in hands the human's decisions back to them, if ever.
@@ -585,6 +590,7 @@ impl Game {
             human,
             session,
             agent,
+            moves: AgentMoves::default(),
             stand_in: None,
             hand_over: None,
             at: At::Playing,
@@ -694,10 +700,15 @@ impl Game {
             At::Human(..) | At::Over { .. } | At::Stopped => return None,
             At::Agent(_) if self.stop.load(Ordering::Relaxed) => self.at = At::Stopped,
             At::Agent(d) => {
-                let c = on_board!(&mut self.board, b => {
+                let started = Instant::now();
+                let kind = d.kind.into();
+                let (c, candidates) = on_board!(&mut self.board, b => {
                     let obs = observe(&b.state, &self.table, &mut b.scratch, d.player);
-                    self.agent.choose(obs, &d.relayout())
+                    let d = d.relayout();
+                    let labels = crate::protocol::candidate_labels(&self.table, obs, &d);
+                    (self.agent.choose(obs, &d), labels)
                 });
+                self.note_agent_move(kind, candidates, c, started);
                 self.agent_decides(c);
                 self.play_on();
             }
@@ -855,6 +866,53 @@ impl Game {
 
     /// Applies the agent's answer `c` to its decision. What it chose is something the human
     /// could not know before, so no undo goes back past it.
+    /// Keeps the agent's decision just made, with its search, and journals it.
+    fn note_agent_move(
+        &mut self,
+        kind: crate::protocol::Kind,
+        candidates: Vec<String>,
+        c: Choice,
+        started: Instant,
+    ) {
+        let search = match &self.board {
+            Boards::Small(_) => Agent::<Small>::last_search(&*self.agent),
+            Boards::Large(_) => Agent::<Large>::last_search(&*self.agent),
+        }
+        .map(SearchView::of);
+        let turn = self.board.turn();
+        let m = AgentMove {
+            log: self.replay.log.len(),
+            turn: turn.number,
+            step: turn.step.into(),
+            kind,
+            candidates,
+            chosen: c.0,
+            ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+            search,
+        };
+        journal::debug(
+            "agent",
+            m.candidates
+                .get(usize::from(c.0))
+                .cloned()
+                .unwrap_or_default(),
+            json!({
+                "session": self.session.0,
+                "log": m.log,
+                "kind": m.kind,
+                "candidates": m.candidates.len(),
+                "ms": m.ms,
+                "rollouts": m.search.as_ref().map(|s| s.rollouts),
+            }),
+        );
+        ai::keep(&self.moves, m);
+    }
+
+    /// The agent's latest decisions, shared: the session reads them for a report.
+    pub fn agent_moves(&self) -> AgentMoves {
+        Arc::clone(&self.moves)
+    }
+
     fn agent_decides(&mut self, c: Choice) {
         self.apply(Entry::Choice(c.0));
         self.at = At::Playing;

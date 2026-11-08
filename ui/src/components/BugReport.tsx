@@ -3,7 +3,8 @@
 // caught. The player drags out the region that shows the bug over the frozen frame (a click
 // takes the whole window), says what went wrong, and submits: the app writes a report folder
 // with the region, the window, the game's replay, its latest views and both logs
-// (beryl_session::bugs). The button beside the X, or Space or Enter, takes the whole window
+// (beryl_session::bugs). "AI play" marks a questionable play of the AI's, whose report carries
+// the agent's latest searches (beryl_session::ai). The button beside the X, or Space or Enter, takes the whole window
 // instead, even pressed straight after ⌘B, before the snapshot is in.
 // The X or Escape closes it at any point, and the page plays on.
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -131,6 +132,19 @@ export function BugReporter({ route }: { route: string }) {
       } else if (e.key === "Escape" && now.kind !== "idle") {
         swallow();
         close();
+      } else if (now.kind === "describe" || now.kind === "saved") {
+        // ⌘Enter submits from anywhere, focus in the text or not (a checkbox takes none),
+        // and no key aimed past the overlay reaches the page: the board's Enter would pass.
+        const inside =
+          e.target instanceof Element && e.target.closest("[data-unfrozen]");
+        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+          swallow();
+          document
+            .querySelector<HTMLFormElement>(".bug-panel")
+            ?.requestSubmit();
+        } else if (!inside) {
+          swallow();
+        }
       } else if (now.kind === "capturing" || now.kind === "select") {
         swallow();
         const plain = !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey;
@@ -144,13 +158,14 @@ export function BugReporter({ route }: { route: string }) {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [start, close, choose]);
 
-  const submit = async (description: string) => {
+  const submit = async (description: string, ai: boolean) => {
     if (stage.kind !== "describe" || stage.saving) return;
     setStage({ ...stage, saving: true, error: undefined });
     const { log, updates } = diagnostics();
     try {
       await reportBug({
         description,
+        ai,
         snapshot: stage.frame?.id ?? null,
         region: stage.region,
         page: {
@@ -294,9 +309,11 @@ function Describe({
   region: Region;
   saving: boolean;
   error?: string;
-  onSubmit: (description: string) => void;
+  /** With the description, and whether it reports a play of the AI's. */
+  onSubmit: (description: string, ai: boolean) => void;
 }) {
   const [text, setText] = useState("");
+  const [ai, setAi] = useState(false);
   const ready = text.trim().length > 0 && !saving;
   return (
     <form
@@ -305,7 +322,7 @@ function Describe({
       aria-label="Report bug"
       onSubmit={(e) => {
         e.preventDefault();
-        if (ready) onSubmit(text);
+        if (ready) onSubmit(text, ai);
       }}
     >
       <h2 className="bug-title">Report bug</h2>
@@ -317,15 +334,19 @@ function Describe({
         placeholder="What went wrong?"
         value={text}
         onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && ready) {
-            e.preventDefault();
-            onSubmit(text);
-          }
-        }}
       />
       {error && <p className="bug-error">{error}</p>}
       <div className="bug-actions">
+        {/* A questionable play of the AI's, for incident analysis: the report carries the
+            agent's latest searches. */}
+        <label className="bug-ai">
+          <input
+            type="checkbox"
+            checked={ai}
+            onChange={(e) => setAi(e.target.checked)}
+          />
+          AI play
+        </label>
         <Button type="submit" size="small" disabled={!ready}>
           {saving ? "Saving…" : "Submit"}
         </Button>

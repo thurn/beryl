@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use ts_rs::TS;
 
+use crate::ai::{self, AgentMove, AgentMoves};
 use crate::game::Game;
 use crate::protocol::{CandidateIndex, DecisionId, SessionId, StopsSetting};
 use crate::replay::ReplayFile;
@@ -68,6 +69,8 @@ struct Current {
     /// The replay of the game in progress, if it was dealt from a seed: a prepared game has
     /// none that could reproduce it.
     replay: Option<LatestReplay>,
+    /// The agent's latest decisions in the game in progress ([`crate::ai`]).
+    moves: Option<AgentMoves>,
 }
 
 impl Sessions {
@@ -142,6 +145,7 @@ impl Sessions {
             journal::info("session", "game replaced", json!({ "session": old.0 }));
         }
         current.replay = None;
+        current.moves = None;
         current.last += 1;
         let session = SessionId(current.last);
         about["session"] = json!(session.0);
@@ -160,6 +164,7 @@ impl Sessions {
             }
         };
         journal::info("session", "game started", about);
+        let moves = game.agent_moves();
         let latest_replay = seeded.then(LatestReplay::default);
         let emit = Arc::clone(&self.emit);
         let latest = Arc::clone(&self.latest);
@@ -176,6 +181,7 @@ impl Sessions {
         })?;
         current.game = Some((session, game));
         current.replay = latest_replay;
+        current.moves = Some(moves);
         Ok(session)
     }
 
@@ -200,6 +206,16 @@ impl Sessions {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clone()
+    }
+
+    /// The agent's latest decisions in the game in progress, or the one that ended last,
+    /// oldest first, each with its search.
+    pub fn agent_moves(&self) -> Vec<AgentMove> {
+        self.lock()
+            .moves
+            .as_ref()
+            .map(ai::latest)
+            .unwrap_or_default()
     }
 
     /// The human concedes game `session` ([`crate::Game::concede`]).

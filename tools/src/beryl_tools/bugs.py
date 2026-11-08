@@ -26,6 +26,8 @@ REPORT = "report.md"
 DONE = "done"
 # Every bead filed from a report carries it, so `bd list --label bug-report` finds them.
 LABEL = "bug-report"
+# And a report of a questionable play of the AI's (`kind: ai`) carries this one too.
+AI_LABEL = "ai-play"
 
 
 def bugs_dir() -> Path:
@@ -51,6 +53,11 @@ class Report:
     @property
     def status(self) -> str:
         return self.fields.get("status", "open")
+
+    @property
+    def kind(self) -> str:
+        """`ai` for a questionable play of the AI's, else `bug`."""
+        return self.fields.get("kind", "bug")
 
     @property
     def bead(self) -> str:
@@ -130,8 +137,16 @@ def bead_description(report: Report) -> str:
         for k in ("seed", "turn", "step", "decision", "session")
         if f.get(k)
     )
+    ai = (
+        "A questionable play of the AI's, for incident analysis: `report.md` digests "
+        "the agent's latest searches as the game ran them, and `searches.json` holds "
+        "them all. Write it up as an incident under `docs/incidents/`, as the ones "
+        "there are, and fix what it finds.\n\n"
+        if report.kind == "ai"
+        else ""
+    )
     return (
-        f"Reported from the app's bug button. The report, with its screenshot "
+        ai + f"Reported from the app's bug button. The report, with its screenshot "
         f"(`screenshot.png`), the game's replay, its latest views and the logs:\n\n"
         f"`{report.folder}`\n\n"
         f"Read `{report.folder / REPORT}` first; the `bugfix` skill "
@@ -179,7 +194,7 @@ def file_bead(report: Report, priority: str) -> str:
                 "--body-file",
                 body.name,
                 "--labels",
-                LABEL,
+                f"{LABEL},{AI_LABEL}" if report.kind == "ai" else LABEL,
                 "--priority",
                 priority,
                 "--external-ref",
@@ -199,7 +214,8 @@ def list_cmd(args: argparse.Namespace) -> int:
         return 0
     for r in found:
         bead = f" {r.bead}" if r.bead else ""
-        print(f"{r.status:<6}{bead} {r.id}: {r.title}")
+        kind = " [ai]" if r.kind == "ai" else ""
+        print(f"{r.status:<6}{bead}{kind} {r.id}: {r.title}")
         print(f"       {r.folder}")
     return 0
 

@@ -2786,7 +2786,20 @@
 }
 .bug-actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+}
+.bug-ai {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 15px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.bug-ai input {
+  margin: 0;
+  accent-color: var(--gold);
 }
 .bug-saved {
   width: auto;

@@ -5,6 +5,7 @@
 //! The UI never sees a `State`: each view is built from the human's `Observation`, so it
 //! holds only what they know.
 
+pub mod ai;
 pub mod bugs;
 mod game;
 pub mod ipc;
