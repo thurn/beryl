@@ -275,12 +275,11 @@ fn passing_on_goes_past_the_stops_in_its_step() {
                 "the log records the pass on"
             );
             passed += 1;
-            // It stops at a later step, or sooner for a decision other than priority or
-            // something of the opponent's on the stack.
+            // It stops at a later step, or sooner only for a decision other than priority:
+            // never for what the opponent casts meanwhile.
             if let Some(next) = deciding(&view)
                 && next.kind == Kind::Priority
                 && !next.halt
-                && view.stack.is_empty()
             {
                 let (turn, step) = at(&view);
                 assert!(

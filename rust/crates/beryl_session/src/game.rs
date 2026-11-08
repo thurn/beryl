@@ -341,15 +341,6 @@ impl Boards {
         on_board!(self, b => b.state.turn())
     }
 
-    /// Whether a creature is attacking.
-    fn any_attacking(&self) -> bool {
-        on_board!(self, b => b
-            .state
-            .battlefield()
-            .iter()
-            .any(|&slot| b.state.object(slot).flags.has(ObjectFlags::ATTACKING)))
-    }
-
     /// Whether a creature is blocking.
     fn any_blocking(&self) -> bool {
         on_board!(self, b => b
@@ -357,15 +348,6 @@ impl Boards {
             .battlefield()
             .iter()
             .any(|&slot| b.state.object(slot).flags.has(ObjectFlags::BLOCKING)))
-    }
-
-    /// Whether `player` knows the top card of their library.
-    fn knows_top(&self, player: Seat) -> bool {
-        on_board!(self, b => b
-            .state
-            .library(player)
-            .last()
-            .is_some_and(|&slot| b.state.knows(player, slot)))
     }
 
     fn outcome(&self) -> Option<Outcome> {
@@ -424,8 +406,6 @@ struct UndoPoint {
 struct PassingOn {
     /// The turn and step of their next stop, where it ends.
     until: (u16, TurnStep),
-    /// The turn and step it began in.
-    began: (u16, TurnStep),
 }
 
 /// A game in progress.
@@ -919,9 +899,9 @@ impl Game {
     /// Passes the human's priority, at their open decision, with `answer` (checked by
     /// [`OpenDecision::pass_on`]), and goes on passing it for them until their next stop in a
     /// later step: where passing would stop them again in this one, for the stack resolving or
-    /// combat damage, this goes on past it. They stop sooner wherever the opponent does
-    /// something they could answer ([`Game::passes_for`]), and at every decision but a
-    /// priority. The choice log records an [`Entry::PassOn`] before the pass, so a replay
+    /// combat damage, this goes on past it, through whatever the opponent does: the human
+    /// asked to pass until then, as Arena's end-turn button does. They stop sooner only at a
+    /// decision other than a priority. The choice log records an [`Entry::PassOn`] before the pass, so a replay
     /// passes on the same way. [`Game::next_view`] plays on from it.
     pub fn pass_on(&mut self, answer: Answer) {
         let started = self.start_passing();
@@ -935,11 +915,7 @@ impl Game {
         let Some(until) = self.pass_on_target() else {
             return false;
         };
-        let turn = self.board.turn();
-        self.passing = Some(PassingOn {
-            until,
-            began: (turn.number, turn.step),
-        });
+        self.passing = Some(PassingOn { until });
         self.replay.log.push(Entry::PassOn);
         true
     }
@@ -967,34 +943,11 @@ impl Game {
     }
 
     /// Whether the session passes the human's priority for them as they pass on to their next
-    /// stop ([`Game::pass_on`]): short of it, and with nothing new from the opponent to answer.
-    /// The opponent's spells and abilities put on the stack since the human's latest answer
-    /// stop them, as do the opponent's attackers, or blockers in the human's attack, in a
-    /// combat step the pass did not begin in: the session's usual stops after them
-    /// ([`Game::quiet_combat`]).
+    /// stop ([`Game::pass_on`]): short of it, whatever the opponent puts on the stack or
+    /// attacks with meanwhile.
     fn passes_for(&self, passing: PassingOn) -> bool {
         let turn = self.board.turn();
-        let at = (turn.number, turn.step);
-        if at >= passing.until {
-            return false;
-        }
-        let answered = self.answered.as_deref().unwrap_or_default();
-        let now = self.board.stack();
-        let kept = answered
-            .iter()
-            .zip(&now)
-            .take_while(|(then, now)| then == now)
-            .count();
-        if now[kept..].iter().any(|e| e.controller != self.human) {
-            return false;
-        }
-        let ours = turn.active == self.human;
-        let combat = match turn.step {
-            TurnStep::DeclareAttackers => !ours && self.board.any_attacking(),
-            TurnStep::DeclareBlockers => ours && self.any_blocking(),
-            _ => false,
-        };
-        !combat || at == passing.began
+        (turn.number, turn.step) < passing.until
     }
 
     /// Checks `index` as an answer to the human's open decision `id`.
@@ -1196,7 +1149,7 @@ impl Game {
     /// smart stops, it passes their priority while only their own doings sit on the stack
     /// ([`Game::own_top`]) or in combat with nothing new to answer ([`Game::quiet_combat`]),
     /// orders their simultaneous triggers ([`trigger_to_stack`]), searches their library
-    /// where they may when they don't know its top card ([`Game::searches_unasked`]), and
+    /// whenever they may ([`Game::searches_unasked`]), and
     /// pays a waterbend cost with mana whenever mana can pay it, tapping no artifact or
     /// creature ([CR 701.67a](https://yawgatog.com/resources/magic-rules/#R70167a): "you may
     /// tap an untapped artifact or creature you control rather than pay that mana").
@@ -1220,7 +1173,7 @@ impl Game {
             DecisionKind::TriggerOrder => Some(on_board!(&self.board, b => {
                 trigger_to_stack(&b.state, &self.table, &d.relayout())
             })),
-            DecisionKind::YesNo if self.searches_unasked(d) => (0..d.len() as u16)
+            DecisionKind::YesNo if Self::searches_unasked(d) => (0..d.len() as u16)
                 .map(Choice)
                 .find(|&c| d.candidates.option(c) == Some(Opt::Yes)),
             DecisionKind::Waterbend => (0..d.len() as u16)
@@ -1231,25 +1184,25 @@ impl Game {
     }
 
     /// Whether `d` asks whether to search the human's library (Trinket Mage's "you may
-    /// search") while they don't know its top card. Declining differs from searching and
-    /// finding nothing ([CR 701.23b](https://yawgatog.com/resources/magic-rules/#R70123b): "If
-    /// a player is searching a hidden zone for cards with a stated quality ... that player
-    /// isn't required to find some or all of those cards") only by the shuffle
+    /// search"), which the smart stops answer by searching, as Arena does: the search itself
+    /// offers taking nothing. Declining differs from searching and finding nothing
+    /// ([CR 701.23b](https://yawgatog.com/resources/magic-rules/#R70123b): "If a player is
+    /// searching a hidden zone for cards with a stated quality ... that player isn't required
+    /// to find some or all of those cards") only by the shuffle
     /// ([CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a): "To shuffle a
-    /// library ..., randomize the cards within it so that no player knows their order"), and
-    /// the search itself offers taking nothing. The shuffle costs a player something worth a
-    /// question only when it loses them the card they know they draw next, after a put-back
-    /// or a scry to the top. Cards they know deeper down, as a London mulligan's on the
-    /// bottom, are not worth a question each time they search.
-    fn searches_unasked(&self, d: &Decision<Large>) -> bool {
-        d.ask == Ask::MaySearch && !self.board.knows_top(self.human)
+    /// library ..., randomize the cards within it so that no player knows their order"). That
+    /// shuffle loses a player a card they put back on top, a cost not worth a question before
+    /// every search: a player who must keep it plays under exact stops, which ask.
+    fn searches_unasked(d: &Decision<Large>) -> bool {
+        d.ask == Ask::MaySearch
     }
 
     /// Whether the top of the stack is the human's own spell or ability and, since their
-    /// latest answer in this step, nothing but their own entries came onto the stack or left
-    /// it: what they cast, its triggers, and its resolution, but not an opponent's response
-    /// or its resolution, which they get priority to see and answer. Their priority then
-    /// would only let them respond to themselves, as an Arena player auto-passes.
+    /// latest answer in this step, nothing of the opponent's came onto the stack: what they
+    /// cast, its triggers, and its resolution, or the resolution of an opponent's response
+    /// they already passed to, but not a new response, which they get priority to see and
+    /// answer. Their priority then would only let them respond to themselves, as an Arena
+    /// player auto-passes.
     fn own_top(&self) -> bool {
         let answered = self.answered.as_deref().unwrap_or_default();
         let now = self.board.stack();
@@ -1259,9 +1212,7 @@ impl Game {
             .zip(&now)
             .take_while(|(then, now)| then == now)
             .count();
-        now.last().is_some_and(own)
-            && answered[kept..].iter().all(own)
-            && now[kept..].iter().all(own)
+        now.last().is_some_and(own) && now[kept..].iter().all(own)
     }
 
     /// Whether the human's priority, with the stack empty, comes in a combat step where they
