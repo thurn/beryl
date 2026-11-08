@@ -1,6 +1,7 @@
-______________________________________________________________________
-
-## name: bugfix description: Work the bug reports filed from Beryl's in-app bug button (⌘B) — turn them into beads, reproduce each from its screenshot, replay, views and logs, fix it, and mark it done. Use when asked to fix reported bugs, work the bug reports, or run /bugfix.
+---
+name: bugfix
+description: Work the bug reports filed from Beryl's in-app bug button (⌘B) — turn them into beads, reproduce each from its screenshot, replay, views and logs, fix it, and mark it done. Use when asked to fix reported bugs, work the bug reports, or run /bugfix.
+---
 
 # Fixing reported bugs
 
