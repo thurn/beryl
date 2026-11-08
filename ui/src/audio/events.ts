@@ -65,10 +65,6 @@ const soundOf = <K extends GameEvent["kind"]>(
 ) =>
   (EVENTS[e.kind] as (e: Extract<GameEvent, { kind: K }>) => Sound | null)(e);
 
-/** Sounds a beat makes that another of its sounds already says: life lost to damage is the
- * hit. */
-const COVERED: Partial<Record<Sound, Sound>> = { drain: "hit" };
-
 /** How much quieter the opponent's doings are than the player's own, in decibels. */
 const THEIRS_DB = -4;
 /** How long after its beat a sound waits, in ms: a card is placed as it lands, after its
@@ -77,11 +73,26 @@ const DELAY: Partial<Record<Sound, number>> = { place: 450 };
 
 /** Who did what `e` records, as far as it says. */
 function sideOf(e: GameEvent, view: PlayerView): Side | undefined {
+  if (e.kind === "stepBegins") return e.active;
+  if (e.kind === "ability" && "controller" in e.item) return e.item.controller;
   if ("player" in e) return e.player;
   if ("controller" in e) return e.controller;
   const slot =
     "slot" in e ? e.slot : e.kind === "damage" ? e.source : undefined;
   return view.objects.find((o) => o.slot === slot)?.controller;
+}
+
+/** Whether `e` is life lost to damage `view` deals that player, which its hit already says. */
+function hurt(e: GameEvent, view: PlayerView): boolean {
+  return (
+    e.kind === "lifeLoss" &&
+    view.events.some(
+      (d) =>
+        d.kind === "damage" &&
+        d.to.kind === "player" &&
+        d.to.player === e.player,
+    )
+  );
 }
 
 /** The sounds `view`'s events make, each once however many events make it: louder if any of
@@ -91,12 +102,9 @@ export function beatSounds(view: PlayerView): Map<Sound, Side | undefined> {
   if (view.undone) return sounds;
   for (const e of view.events) {
     const sound = soundOf(e);
-    if (sound === null) continue;
+    if (sound === null || hurt(e, view)) continue;
     const side = sideOf(e, view);
     if (sounds.get(sound) !== "you") sounds.set(sound, side);
-  }
-  for (const [sound, by] of Object.entries(COVERED) as [Sound, Sound][]) {
-    if (sounds.has(by)) sounds.delete(sound);
   }
   return sounds;
 }

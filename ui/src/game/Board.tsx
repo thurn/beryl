@@ -170,6 +170,7 @@ import {
 import { ManaFlow, manaMotes } from "./ManaFlow";
 import { TurnBanner } from "./TurnBanner";
 import { SoundPanel, useOpenSound } from "../audio/SoundControls";
+import { play as playSound } from "../audio/sound";
 
 export interface BoardProps {
   view: PlayerView;
@@ -826,6 +827,7 @@ export function Board({
         p.taps.includes(slot),
       );
       if (plan && !taps.has(slot)) {
+        playSound("select");
         setCasting({
           ...castingNow,
           choice: { ...castingNow.choice, plan: plan.plan ?? undefined },
@@ -839,11 +841,16 @@ export function Board({
     // clicked, as the engine takes the lowest slot of interchangeable ones, which lies on top.
     const pile = placements.get(slot)?.pile ?? [slot];
     if (drafting) {
+      playSound("select");
       setDraft(drafted(draft, pile[0]!));
       return true;
     }
     if (picking) {
-      if (!picking.eligible.has(slot)) return false;
+      if (!picking.eligible.has(slot)) {
+        playSound("no");
+        return false;
+      }
+      playSound("select");
       // Picked, its pile gives back its deepest pick; otherwise its topmost card not yet
       // picked is picked, so a pile's picks are always its top cards.
       const mates = pile.filter((s) => picking.eligible.has(s));
@@ -869,6 +876,7 @@ export function Board({
       return true;
     }
     if (!acts) {
+      playSound("no");
       setMenu(undefined);
       setRefused(slot);
       return false;
@@ -905,6 +913,7 @@ export function Board({
     const inHand = at.y >= BATTLEFIELD_EDGE;
     if (castingNow?.slot === slot) {
       if (inHand) {
+        playSound("back");
         setCasting(undefined);
         return false;
       }
@@ -938,6 +947,8 @@ export function Board({
         play(plays[0]!);
         return true;
       }
+      // Let go over the table with nothing to play it by: refused, back to the hand.
+      if (!inHand) playSound("no");
       return false;
     }
     // A creature dragged in a declaration joins it, as clicking would, and goes to its new
@@ -945,11 +956,13 @@ export function Board({
     // what it attacks, the defending player or one of their planeswalkers (CR 508.1b).
     const over = onto && "slot" in onto ? onto.slot : undefined;
     if (drafting === "blocker" && declarable(slot) && over !== undefined) {
+      playSound("select");
       setDraft(drafted({ ...draft, selected: slot }, over));
     } else if (drafting === "attacker" && declarable(slot)) {
       const walker = over !== undefined && walkers.includes(over) ? over : null;
       const atPlayer = onto && "player" in onto && onto.player === "opponent";
       if (walker !== null || atPlayer || start.y - at.y >= FORWARD) {
+        playSound("select");
         const attacks = new Map(draft.attacks).set(slot, walker);
         setDraft({ ...draft, attacks, selected: slot });
       }

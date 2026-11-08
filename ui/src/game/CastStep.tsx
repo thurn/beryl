@@ -5,6 +5,7 @@
 import { useEffect } from "react";
 import { cardEntry } from "../cards";
 import { Button } from "../components/Controls";
+import { useOpenSound } from "../audio/SoundControls";
 import { ManaCost, RulesText } from "../components/Mana";
 import {
   castName,
@@ -129,6 +130,7 @@ export function CastStep({
 /** A cast's button: "Cast" with the card's cost, or the keyword that names it ("Evoke",
  * "Overload {2}{B}{B}", "Kicker {1}"), its cost where the keyword has none. */
 export function CastLabel({ label, cost }: { label: string; cost?: string }) {
+  useOpenSound();
   const word = label.split(/[,—]/)[0]!.trim();
   return (
     <>

@@ -185,6 +185,10 @@ async function check(
  * commands heard. */
 const sounded = { views: 0, heard: 0 };
 
+/** The sounds the page has asked for so far (src/audio), oldest first. */
+const cues = (page) =>
+    page.evaluate(() => (window.berylSounds ?? []).map((s) => s.sound));
+
 /** Anything that happens on the screen makes a sound (src/audio): every view the page showed
  * live asked, as it showed, for the sounds of its events (audio/events.ts holds one for every
  * kind), and a page that sent the player's answers played their sound. The page logs its cues
@@ -1478,9 +1482,15 @@ await check(
         assert.equal(declaring[0], insectTop, "the pile's top attacks first");
         // Changing one's mind: a second click takes an attacker back, a third returns it.
         const malcolm = named(attackView, "Malcolm, Alluring Scoundrel")[0];
+        const before = (await cues(page)).length;
         await page.click(slotOf(malcolm));
         await page.clock.runFor(500);
         assert.ok(!(await shows(page, malcolm, "attacker")), "taken back");
+        assert.deepEqual(
+            (await cues(page)).slice(before),
+            ["select"],
+            "a declaration's toggle is heard",
+        );
         await page.click(slotOf(malcolm));
         await page.clock.runFor(500);
         for (const slot of declaring) {
@@ -1692,11 +1702,17 @@ await check(
         await page.click(slotOf(unblockable));
         await page.clock.runFor(500);
         assert.ok(!(await shows(page, blocker, "blocker")), "no block");
+        const before = (await cues(page)).length;
         await drag(page, slotOf(blocker), { to: slotOf(doubled) });
         await page.clock.runFor(1000);
         assert.ok(
             await shows(page, blocker, "blocker"),
             "dragged on, it blocks",
+        );
+        const dragged = (await cues(page)).slice(before);
+        assert.ok(
+            dragged.includes("select") && !dragged.includes("no"),
+            `a block dragged on is heard, not refused: ${dragged}`,
         );
         assert.deepEqual(await chosen(page), []);
     },
@@ -3412,6 +3428,7 @@ await check(
             await inspect.locator(".inspect-refusal").innerText(),
             "No target",
         );
+        assert.equal((await cues(page)).at(-1), "no", "a refusal sounds no");
         await page.hover(".turn-action");
         await page.hover(counterspell);
         await page.getByLabel("Counterspell, inspected").waitFor();

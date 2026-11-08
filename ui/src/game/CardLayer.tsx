@@ -510,12 +510,8 @@ const CardElement = memo(function CardElement({
     const at = stagePoint(e);
     if (d.strayed) return;
     if (!d.moved) {
-      // A hand card with nothing to do shakes its head.
-      if (!layer.onClick(object.slot, at) && hand) {
-        play("no");
-        if (!reduce) {
-          animate(shake, SHAKE, { duration: 0.32, ease: "easeInOut" });
-        }
+      if (!layer.onClick(object.slot, at) && hand && !reduce) {
+        animate(shake, SHAKE, { duration: 0.32, ease: "easeInOut" });
       }
       return;
     }
@@ -527,8 +523,6 @@ const CardElement = memo(function CardElement({
       at,
       onto: under(e, e.currentTarget as HTMLElement),
     });
-    // One dropped where it does nothing goes back, refused.
-    if (!played) play("no");
     setHeld(played ? { dragging: false, epoch } : undefined);
   };
 
