@@ -177,7 +177,7 @@ pub fn reverse_candidates(on: bool) {
 }
 
 /// What is being decided: [`DecisionKind`], under names a save keeps.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Kind {
     Priority,
@@ -205,6 +205,38 @@ pub enum Kind {
     ChooseUpTo,
     Waterbend,
     ExileCost,
+}
+
+impl Kind {
+    /// Every kind, in order. A new kind goes here as well as in the match below, which the
+    /// compiler holds to every [`DecisionKind`].
+    pub const ALL: [Kind; 25] = [
+        Kind::Priority,
+        Kind::PlayOrDraw,
+        Kind::KeepOrMulligan,
+        Kind::PutOnBottom,
+        Kind::Discard,
+        Kind::LegendRule,
+        Kind::TriggerOrder,
+        Kind::PayLife,
+        Kind::Attacker,
+        Kind::AttackTarget,
+        Kind::Blocker,
+        Kind::BlockTarget,
+        Kind::DamageDivision,
+        Kind::X,
+        Kind::TargetCount,
+        Kind::Target,
+        Kind::PaymentPlan,
+        Kind::ManaPayment,
+        Kind::CastOffer,
+        Kind::YesNo,
+        Kind::ChooseObject,
+        Kind::Crew,
+        Kind::ChooseUpTo,
+        Kind::Waterbend,
+        Kind::ExileCost,
+    ];
 }
 
 impl From<DecisionKind> for Kind {

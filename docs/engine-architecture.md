@@ -917,6 +917,15 @@ zone.
   save adds a migration or, for a save of the frozen corpus that no migration
   can carry, an entry in `data/save-breaks.json` naming where it stops matching
   and why, in the same commit.
+- **A frozen corpus of saves stays playable** (`beryl_session::corpus`,
+  `beryl_session/tests/saves/`): gzipped saves of every age, only ever added,
+  which `tests/corpus.rs` holds to three levels without rebuilding
+  (`Game::replay_exactly`): each replays to its end, matches every board it
+  recorded, and ends with the same winner on the same turn (`endings.json`). A
+  save on the breaks list is held to its listed entry. `just freeze-saves`, run
+  weekly or so, plays seeded games of the cheap agents and freezes a small set
+  covering every implemented cube card played, cast or activated and every kind
+  of decision, printing what it reached; `--replay FILE` freezes one game.
 - `State` implements `Hash` over its fields, computed on demand for tests,
   divergence checks and the first transposition tables. The mutation chokepoints
   are placed so an incremental Zobrist hash can be added without touching card

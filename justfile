@@ -131,6 +131,12 @@ test-rust *args:
 fuzz games="10000":
     cd rust && BERYL_FUZZ_GAMES="$1" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true cargo test --release -p beryl_search --test games -- --nocapture
 
+# Adds saves to the frozen corpus, weekly or so: seeded games covering every card and decision, or one replay (--replay FILE, --games N, --seed N)
+[group('test')]
+[no-cd]
+freeze-saves *args:
+    cargo run --quiet --release --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- freeze-saves {{ quote(justfile_directory() / "rust" / "crates" / "beryl_session" / "tests" / "saves") }} "$@"
+
 # A seeded WU Control mirror game between two agents at low priority, as a transcript (--seed N, --out FILE)
 [group('agents')]
 [no-cd]

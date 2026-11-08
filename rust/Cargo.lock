@@ -209,6 +209,7 @@ dependencies = [
  "beryl_engine",
  "beryl_scenario",
  "beryl_search",
+ "flate2",
  "serde",
  "serde_json",
  "ts-rs",

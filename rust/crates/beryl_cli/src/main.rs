@@ -23,6 +23,9 @@
 //! - `beryl_cli review <replay.json> [--agent NAME] [--turn N] [--out FILE]` replays an app game's replay
 //!   file and writes its transcript; `--agent recorded` or another agent adds its search at
 //!   each of the opponent's decisions ([`review`]).
+//! - `beryl_cli freeze-saves <dir> [--games N] [--seed N] [--replay FILE]` adds saves to the
+//!   frozen corpus at `<dir>`: a small set of seeded games between them covering the cube's
+//!   cards and every kind of decision, or the given replay file ([`freeze`]).
 //! - `beryl_cli serve [--port N]` serves the app's game commands over HTTP for a UI in a plain
 //!   browser to play live games through (`just ui-live`, [`serve`]).
 //! - `beryl_cli specs-serve [--port N]` serves the cards' specs, each moment a live game, for
@@ -36,6 +39,7 @@ mod anchor_replay;
 mod boards;
 mod evalfit;
 mod fixture;
+mod freeze;
 mod game;
 mod longthink;
 mod review;
@@ -63,6 +67,7 @@ const USAGE: &str = "usage:
   beryl_cli specs-check [card...]
   beryl_cli specs-describe [--views] <card> [moment]
   beryl_cli review <replay.json> [--agent NAME] [--turn N] [--out FILE]
+  beryl_cli freeze-saves <dir> [--games N] [--seed N] [--replay FILE]
   beryl_cli anchor-replay <run-dir> <entrant> [--examples N] [--recheck N] [--guarded]
   beryl_cli agreement <run-dir> <entrant> [--positions N] [--budget B]";
 
@@ -80,6 +85,7 @@ fn main() -> ExitCode {
         [command, rest @ ..] if command == "longthink" => longthink::main(rest),
         [command, rest @ ..] if command == "eval-fit" => evalfit::main(rest),
         [command, rest @ ..] if command == "review" => review::main(rest),
+        [command, rest @ ..] if command == "freeze-saves" => freeze::main(rest),
         [command, rest @ ..] if command == "anchor-replay" => anchor_replay::main(rest),
         [command, rest @ ..] if command == "agreement" => agreement::main(rest),
         [command, dir] if command == "longthink-run" => longthink::runner(Path::new(dir), None),

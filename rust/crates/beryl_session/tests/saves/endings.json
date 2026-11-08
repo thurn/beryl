@@ -1,0 +1,11 @@
+{
+  "2026-11-08-20765000000.json.gz": {"turn":19,"outcome":{"won":{"seat":0}}},
+  "2026-11-08-20765000017.json.gz": {"turn":12,"outcome":{"won":{"seat":1}}},
+  "2026-11-08-20765000027.json.gz": {"turn":31,"outcome":{"won":{"seat":1}}},
+  "2026-11-08-20765000030.json.gz": {"turn":14,"outcome":{"won":{"seat":0}}},
+  "2026-11-08-20765000039.json.gz": {"turn":16,"outcome":{"won":{"seat":0}}},
+  "2026-11-08-20765000081.json.gz": {"turn":17,"outcome":{"won":{"seat":1}}},
+  "2026-11-08-20765000150.json.gz": {"turn":15,"outcome":{"won":{"seat":0}}},
+  "2026-11-08-20765000186.json.gz": {"turn":14,"outcome":{"won":{"seat":0}}},
+  "2026-11-08-20765000189.json.gz": {"turn":27,"outcome":{"won":{"seat":1}}}
+}

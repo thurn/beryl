@@ -460,6 +460,8 @@ struct Checks<'a> {
     ahead: VecDeque<&'a Checkpoint>,
     /// Those reached, in order.
     reached: Vec<&'a Checkpoint>,
+    /// The turns of those dropped unreached, in order.
+    missed: Vec<u16>,
 }
 
 impl<'a> Checks<'a> {
@@ -471,6 +473,7 @@ impl<'a> Checks<'a> {
         Checks {
             ahead: file.from.as_deref().into_iter().chain(logged).collect(),
             reached: Vec::new(),
+            missed: Vec::new(),
         }
     }
 
@@ -479,8 +482,8 @@ impl<'a> Checks<'a> {
     /// Checkpoints of earlier turns not reached are dropped; an undo past a turn's beginning
     /// begins it again, so a record may have two of a turn, which the replay reaches in turn.
     fn reached(&mut self, t: &GameTable, board: &Checkpoint) -> Result<(), SessionError> {
-        while self.ahead.front().is_some_and(|c| c.turn < board.turn) {
-            self.ahead.pop_front();
+        while let Some(missed) = self.ahead.pop_front_if(|c| c.turn < board.turn) {
+            self.missed.push(missed.turn);
         }
         let Some(recorded) = self.ahead.front().copied().filter(|c| c.turn == board.turn) else {
             return Ok(());
@@ -769,6 +772,31 @@ impl Game {
                 game.replay_log(&rebuilt, &mut Checks::new(&rebuilt))?;
             }
             Err(e) => return Err(e),
+        }
+        let view = game.view();
+        Ok((game, view))
+    }
+
+    /// Replays `file` as [`Game::from_replay`] does, but never rebuilds the game from a turn's
+    /// beginning: where the record and the game part, a turn's board included, it fails, and
+    /// so does a checkpoint of the record the replay never reached. The frozen save corpus is
+    /// held to this ([`crate::corpus`]).
+    pub fn replay_exactly(
+        cards: &'static CardTable,
+        file: &ReplayFile,
+        session: SessionId,
+    ) -> Result<(Game, PlayerView), SessionError> {
+        let mut game = Game::begin(cards, file, session)?;
+        let mut checks = Checks::new(file);
+        game.replay_log(file, &mut checks)?;
+        if let Some(turn) = checks
+            .missed
+            .first()
+            .or(checks.ahead.front().map(|c| &c.turn))
+        {
+            return Err(SessionError::BadReplay {
+                reason: format!("the record's board as turn {turn} began was never reached"),
+            });
         }
         let view = game.view();
         Ok((game, view))
