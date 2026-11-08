@@ -7,9 +7,9 @@ mod art;
 mod games;
 mod snapshot;
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use beryl_session::bugs::{self, BugReport, BugSaved, UiLogRequest};
+use beryl_session::bugs::{self, BugReport, BugSaved, Images, UiLogRequest};
 use beryl_session::ipc::{self, AppInfo};
 use beryl_session::{SessionError, Sessions, journal};
 use serde_json::json;
@@ -17,6 +17,7 @@ use tauri::Manager;
 use tauri::http::{Response, StatusCode};
 
 use crate::art::ArtCache;
+use crate::snapshot::Snapshots;
 
 /// Set by `just smoke`: run without a visible window or Dock icon and exit once the UI reports
 /// that it loaded, or with an error after this many seconds.
@@ -31,7 +32,7 @@ fn app_info() -> AppInfo {
 }
 
 /// The UI calls this once it has rendered; in smoke mode that ends the run, successfully once
-/// the window snapshot a bug report freezes works too.
+/// the window snapshot a bug report freezes works too, timed.
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)] // Tauri passes command arguments by value.
 fn ui_ready(app: tauri::AppHandle) {
@@ -40,13 +41,33 @@ fn ui_ready(app: tauri::AppHandle) {
     }
     println!("beryl: ui ready");
     tauri::async_runtime::spawn(async move {
-        match snapshot::capture(&app).await {
-            Ok(png) if png.starts_with(b"\x89PNG") => {
-                println!("beryl: window snapshot, {} bytes", png.len());
+        let started = Instant::now();
+        let result = match snapshot::capture(&app).await {
+            Ok(id) => {
+                let captured = started.elapsed();
+                app.state::<Snapshots>()
+                    .pngs(id, None, 1.0)
+                    .map(|images| (captured, images))
+            }
+            Err(e) => Err(e),
+        };
+        match result {
+            Ok((
+                captured,
+                Images {
+                    window: Some(png), ..
+                },
+            )) if png.starts_with(b"\x89PNG") => {
+                println!(
+                    "beryl: window snapshot in {} ms, its PNG ({} bytes) by {} ms",
+                    captured.as_millis(),
+                    png.len(),
+                    started.elapsed().as_millis()
+                );
                 app.exit(0);
             }
             Ok(_) => {
-                eprintln!("beryl: the window snapshot is not a PNG");
+                eprintln!("beryl: the window snapshot made no PNG");
                 app.exit(1);
             }
             Err(e) => {
@@ -63,11 +84,19 @@ fn smoke_seconds() -> Option<u64> {
         .map(|v| v.parse().unwrap_or(20))
 }
 
-/// The window as drawn now, a PNG in base64 ([`ipc::CAPTURE_WINDOW`]).
+/// Snapshots the window as drawn now and returns its number ([`ipc::CAPTURE_WINDOW`]).
 #[tauri::command]
-async fn capture_window(app: tauri::AppHandle) -> Result<String, SessionError> {
+async fn capture_window(app: tauri::AppHandle) -> Result<u32, SessionError> {
+    let started = Instant::now();
     match snapshot::capture(&app).await {
-        Ok(png) => Ok(bugs::encode_base64(&png)),
+        Ok(id) => {
+            journal::debug(
+                "app",
+                "window snapshot",
+                json!({ "id": id, "ms": started.elapsed().as_millis() }),
+            );
+            Ok(id)
+        }
         Err(reason) => {
             journal::warn("app", format!("no window snapshot: {reason}"), json!(null));
             Err(SessionError::Io { reason })
@@ -75,13 +104,32 @@ async fn capture_window(app: tauri::AppHandle) -> Result<String, SessionError> {
     }
 }
 
-/// Writes a bug report ([`ipc::REPORT_BUG`]), off the main thread.
+/// Writes a bug report ([`ipc::REPORT_BUG`]), off the main thread, its images made from the
+/// snapshot it names.
 #[tauri::command]
 async fn report_bug(app: tauri::AppHandle, request: BugReport) -> Result<BugSaved, SessionError> {
+    let started = Instant::now();
+    let images = match request.snapshot {
+        Some(id) => app
+            .state::<Snapshots>()
+            .pngs(id, request.region, request.page.width)
+            .unwrap_or_else(|e| {
+                journal::warn("bugs", format!("no images: {e}"), json!(null));
+                Images::default()
+            }),
+        None => Images::default(),
+    };
+    let encoded = started.elapsed();
     let sessions = app.state::<Sessions>();
-    bugs::write(&bugs::dir(), &request, &sessions).inspect_err(|e| {
+    let saved = bugs::write(&bugs::dir(), &request, &images, &sessions).inspect_err(|e| {
         journal::error("bugs", format!("report not written: {e}"), json!(null));
-    })
+    })?;
+    journal::debug(
+        "bugs",
+        "report timing",
+        json!({ "pngMs": encoded.as_millis(), "totalMs": started.elapsed().as_millis() }),
+    );
+    Ok(saved)
 }
 
 #[tauri::command]
@@ -144,6 +192,13 @@ pub fn run() {
             let path = request.uri().path().to_owned();
             // A miss waits on the download queue: off the main thread.
             tauri::async_runtime::spawn_blocking(move || {
+                // The bug report's frozen frame (snapshot.rs) shares the scheme.
+                if path.starts_with(snapshot::PATH)
+                    && let Some(snapshots) = app.try_state::<Snapshots>()
+                {
+                    responder.respond(snapshots.respond(&path));
+                    return;
+                }
                 // `setup` manages the cache before the window's page can ask for art.
                 let response = match app.try_state::<ArtCache>() {
                     Some(cache) => cache.respond(&path),
@@ -170,6 +225,7 @@ pub fn run() {
                 json!({ "smoke": smoke_seconds().is_some(), "bugs": bugs::dir() }),
             );
             app.manage(games::sessions(app.handle()));
+            app.manage(Snapshots::default());
             let dir = app.path().app_cache_dir()?.join("art");
             app.manage(ArtCache::new(dir, art::SCRYFALL));
             // The main window starts hidden (tauri.conf.json) so a smoke run never shows it.

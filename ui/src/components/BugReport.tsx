@@ -8,7 +8,12 @@
 // The X or Escape closes it at any point, and the page plays on.
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { canCaptureWindow, captureWindow, reportBug } from "../ipc";
+import {
+  canCaptureWindow,
+  captureWindow,
+  reportBug,
+  snapshotUrl,
+} from "../ipc";
 import type { Region } from "../ipc";
 import { diagnostics, note } from "../diagnostics";
 import { freeze, thaw } from "../freeze";
@@ -18,16 +23,21 @@ type Stage =
   | { kind: "idle" }
   /** Freezing and snapshotting: nothing of the reporter shows, or it would be in the frame. */
   | { kind: "capturing" }
-  | { kind: "select"; frame?: string }
+  | { kind: "select"; frame?: Shot }
   | {
       kind: "describe";
-      frame?: string;
+      frame?: Shot;
       region: Region;
-      crop?: string;
       saving: boolean;
       error?: string;
     }
-  | { kind: "saved"; frame?: string; region: Region };
+  | { kind: "saved"; frame?: Shot; region: Region };
+
+/** The app's snapshot of the frozen window: its number, and where the app serves it. */
+interface Shot {
+  id: number;
+  url: string;
+}
 
 /** A drag shorter than this, in CSS pixels, is a click: the whole window. */
 const CLICK = 6;
@@ -52,31 +62,6 @@ const span = (
   height: Math.abs(a.y - b.y),
 });
 
-/** `region` of the frozen `frame`, as a PNG data URL. */
-async function crop(frame: string, region: Region): Promise<string> {
-  const image = new Image();
-  image.src = frame;
-  await image.decode();
-  const scale = image.naturalWidth / window.innerWidth;
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(region.width * scale));
-  canvas.height = Math.max(1, Math.round(region.height * scale));
-  canvas
-    .getContext("2d")
-    ?.drawImage(
-      image,
-      region.x * scale,
-      region.y * scale,
-      region.width * scale,
-      region.height * scale,
-      0,
-      0,
-      canvas.width,
-      canvas.height,
-    );
-  return canvas.toDataURL("image/png");
-}
-
 export function BugReporter({ route }: { route: string }) {
   const [stage, setStage] = useState<Stage>({ kind: "idle" });
   const open = stage.kind !== "idle";
@@ -90,20 +75,9 @@ export function BugReporter({ route }: { route: string }) {
   const opening = useRef(0);
 
   /** Goes on to describe `region` of `frame`. */
-  const choose = useCallback(
-    async (frame: string | undefined, region: Region) => {
-      let image: string | undefined;
-      if (frame) {
-        try {
-          image = await crop(frame, region);
-        } catch (e) {
-          note("warn", "bug", `no crop: ${String(e)}`);
-        }
-      }
-      setStage({ kind: "describe", frame, region, crop: image, saving: false });
-    },
-    [],
-  );
+  const choose = useCallback((frame: Shot | undefined, region: Region) => {
+    setStage({ kind: "describe", frame, region, saving: false });
+  }, []);
 
   const start = useCallback(async () => {
     // Stop the motion first: the frame is the instant the player asked.
@@ -111,20 +85,22 @@ export function BugReporter({ route }: { route: string }) {
     const mine = ++opening.current;
     wantWhole.current = false;
     setStage({ kind: "capturing" });
-    let frame: string | undefined;
+    let frame: Shot | undefined;
     if (canCaptureWindow()) {
       try {
-        // WebKit's snapshot can run past the page (a strip under it): keep the page's part.
-        frame = await crop(
-          `data:image/png;base64,${await captureWindow()}`,
-          whole(),
-        );
+        // The pixels stay in the app, which serves them: nothing large crosses IPC.
+        const id = await captureWindow();
+        frame = { id, url: snapshotUrl(id) };
+        // Decoded before it shows, so the overlay never flashes empty.
+        const image = new Image();
+        image.src = frame.url;
+        await image.decode();
       } catch (e) {
         note("warn", "bug", `no window snapshot: ${String(e)}`);
       }
     }
     if (mine !== opening.current) return;
-    if (wantWhole.current) await choose(frame, whole());
+    if (wantWhole.current) choose(frame, whole());
     else setStage({ kind: "select", frame });
   }, [choose]);
 
@@ -159,7 +135,7 @@ export function BugReporter({ route }: { route: string }) {
         swallow();
         const plain = !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey;
         if ((e.key === " " || e.key === "Enter") && plain && !e.repeat) {
-          if (now.kind === "select") void choose(now.frame, whole());
+          if (now.kind === "select") choose(now.frame, whole());
           else wantWhole.current = true;
         }
       }
@@ -175,8 +151,7 @@ export function BugReporter({ route }: { route: string }) {
     try {
       await reportBug({
         description,
-        screenshot: stage.crop ?? null,
-        window: stage.frame ?? null,
+        snapshot: stage.frame?.id ?? null,
         region: stage.region,
         page: {
           url: window.location.href,
@@ -211,7 +186,7 @@ export function BugReporter({ route }: { route: string }) {
       {stage.kind === "select" && (
         <Selector
           frame={stage.frame}
-          onChoose={(region) => void choose(stage.frame, region)}
+          onChoose={(region) => choose(stage.frame, region)}
           onClose={close}
         />
       )}
@@ -229,7 +204,8 @@ export function BugReporter({ route }: { route: string }) {
           />
           {stage.kind === "describe" ? (
             <Describe
-              crop={stage.crop}
+              frame={stage.frame}
+              region={stage.region}
               saving={stage.saving}
               error={stage.error}
               onSubmit={submit}
@@ -255,8 +231,8 @@ const box = (r: Region) => ({
 
 /** The frozen frame, over the live page; none where the app cannot snapshot (a browser),
  * where the frozen page itself shows through. */
-function Frame({ frame }: { frame?: string }) {
-  return frame ? <img className="bug-frame" src={frame} alt="" /> : null;
+function Frame({ frame }: { frame?: Shot }) {
+  return frame ? <img className="bug-frame" src={frame.url} alt="" /> : null;
 }
 
 function Selector({
@@ -264,7 +240,7 @@ function Selector({
   onChoose,
   onClose,
 }: {
-  frame?: string;
+  frame?: Shot;
   onChoose: (region: Region) => void;
   onClose: () => void;
 }) {
@@ -308,12 +284,14 @@ function Selector({
 }
 
 function Describe({
-  crop,
+  frame,
+  region,
   saving,
   error,
   onSubmit,
 }: {
-  crop?: string;
+  frame?: Shot;
+  region: Region;
   saving: boolean;
   error?: string;
   onSubmit: (description: string) => void;
@@ -331,7 +309,7 @@ function Describe({
       }}
     >
       <h2 className="bug-title">Report bug</h2>
-      {crop && <img className="bug-crop" src={crop} alt="" />}
+      {frame && <Thumb frame={frame} region={region} />}
       <textarea
         className="bug-text"
         autoFocus
@@ -353,6 +331,23 @@ function Describe({
         </Button>
       </div>
     </form>
+  );
+}
+
+/** The region, cut from the frozen frame by the page's own drawing of it: no pixels made. */
+function Thumb({ frame, region }: { frame: Shot; region: Region }) {
+  const k = Math.min(1, 480 / region.width, 150 / region.height);
+  return (
+    <div
+      className="bug-crop"
+      style={{
+        width: region.width * k,
+        height: region.height * k,
+        backgroundImage: `url("${frame.url}")`,
+        backgroundSize: `${window.innerWidth * k}px auto`,
+        backgroundPosition: `${-region.x * k}px ${-region.y * k}px`,
+      }}
+    />
   );
 }
 

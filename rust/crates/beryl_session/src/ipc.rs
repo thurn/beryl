@@ -37,8 +37,9 @@ pub const CONCEDE: &str = "concede";
 /// takes up the game from.
 pub const CURRENT_GAME: &str = "current_game";
 
-/// The window as it is drawn now, a PNG in base64: the bug report's frozen frame. Only the app
-/// has it.
+/// Snapshots the window as it is drawn now, the bug report's frozen frame, and returns its
+/// number: the app serves it at `beryl-art://localhost/snapshot/<n>` and turns it into the
+/// report's images. Only the app has it.
 pub const CAPTURE_WINDOW: &str = "capture_window";
 /// Writes a bug report ([`crate::bugs::BugReport`]); returns where
 /// ([`crate::bugs::BugSaved`]).
@@ -217,7 +218,7 @@ pub(crate) fn typescript(cfg: &Config) -> String {
         (
             CAPTURE_WINDOW,
             "Record<string, never>".to_owned(),
-            name::<String>(cfg),
+            name::<u32>(cfg),
             error.clone(),
         ),
         (

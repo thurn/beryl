@@ -51,13 +51,10 @@ export type BugReport = {
  */
 description: string, 
 /**
- * The region the player chose, as a PNG in base64.
+ * The app's snapshot of the window as the player froze it (`capture_window`), which the
+ * app turns into the report's images ([`Images`]); none in a browser.
  */
-screenshot: string | null, 
-/**
- * The whole window as the player froze it, as a PNG in base64.
- */
-window: string | null, 
+snapshot: number | null, 
 /**
  * Where the region lies in the window, in CSS pixels.
  */
@@ -484,7 +481,7 @@ export type Commands = {
   pass_on: { args: { request: PassOnRequest }; result: null; error: SessionError };
   concede: { args: { request: ConcedeRequest }; result: null; error: SessionError };
   current_game: { args: Record<string, never>; result: GameUpdate | null; error: never };
-  capture_window: { args: Record<string, never>; result: string; error: SessionError };
+  capture_window: { args: Record<string, never>; result: number; error: SessionError };
   report_bug: { args: { request: BugReport }; result: BugSaved; error: SessionError };
   ui_log: { args: { request: UiLogRequest }; result: null; error: never };
 };

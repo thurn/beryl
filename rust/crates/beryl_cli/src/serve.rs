@@ -16,7 +16,7 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use beryl_session::bugs::{self, BugReport, UiLogRequest};
+use beryl_session::bugs::{self, BugReport, Images, UiLogRequest};
 use beryl_session::ipc::{
     self, AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, PassOnRequest, SetStopsRequest,
     UndoRequest,
@@ -195,10 +195,9 @@ pub(crate) fn invoke(sessions: &Sessions, command: &str, args: Value) -> Value {
         ipc::CAPTURE_WINDOW => answer::<(), _>(Err(SessionError::Io {
             reason: "no window snapshot in a browser".to_owned(),
         })),
-        ipc::REPORT_BUG => answer(
-            request::<BugReport>(args)
-                .and_then(|r| bugs::write(&bugs::dir(), &r, sessions).map_err(|e| json!(e))),
-        ),
+        ipc::REPORT_BUG => answer(request::<BugReport>(args).and_then(|r| {
+            bugs::write(&bugs::dir(), &r, &Images::default(), sessions).map_err(|e| json!(e))
+        })),
         ipc::UI_LOG => answer(request::<UiLogRequest>(args).map(bugs::ui_log)),
         _ => json!({ "err": { "kind": "unknownCommand", "command": command } }),
     }

@@ -2633,15 +2633,18 @@
 .bug-overlay {
   position: fixed;
   inset: 0;
+  overflow: hidden;
   z-index: 5000;
   font-family: var(--font-sans);
   color: var(--text);
 }
+/* Top-aligned at the window's width: WebKit's snapshot may run past the page, below it. */
 .bug-frame {
   position: absolute;
-  inset: 0;
+  left: 0;
+  top: 0;
   width: 100%;
-  height: 100%;
+  height: auto;
   user-select: none;
   pointer-events: none;
 }
@@ -2756,11 +2759,9 @@
   color: var(--type);
 }
 .bug-crop {
+  flex: none;
   align-self: center;
-  max-width: 100%;
-  max-height: 150px;
-  min-height: 0;
-  object-fit: contain;
+  background-repeat: no-repeat;
   border: 1px solid var(--metal);
   border-radius: 4px;
 }

@@ -338,13 +338,11 @@ const browserFixture: Fixture = {
   ],
 };
 
-/** A value for the log: the big ones (a snapshot, a report) cut to what says what they were. */
+/** A value for the log: a report cut to what says what it was. */
 const logged = (command: Command, value: unknown): unknown =>
-  command === "capture_window" && typeof value === "string"
-    ? { bytes: value.length }
-    : command === "report_bug"
-      ? { description: (value as { request?: BugReport }).request?.description }
-      : brief(value);
+  command === "report_bug"
+    ? { description: (value as { request?: BugReport }).request?.description }
+    : brief(value);
 
 /** `inner`, every message logged for bug reports (diagnostics.ts), and its events held while
  * the page is frozen (freeze.ts). */
@@ -492,8 +490,13 @@ export const concede = (session: SessionId) =>
 /** The latest view of the game in progress, if any: where a reloaded page takes it up. */
 export const currentGame = () => call("current_game", {});
 
-/** The window as drawn now, a PNG in base64 (only in the app: `canCaptureWindow`). */
+/** Snapshots the window as drawn now; resolves to its number (only in the app:
+ * `canCaptureWindow`). */
 export const captureWindow = () => call("capture_window", {});
+
+/** Where the app serves snapshot `id` (rust/crates/beryl_app/src/snapshot.rs). */
+export const snapshotUrl = (id: number) =>
+  `beryl-art://localhost/snapshot/${id}`;
 
 /** Writes a bug report; resolves to its folder. */
 export const reportBug = (request: BugReport) =>

@@ -21,6 +21,17 @@ must_use_candidate = "allow"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 
+# A bug report encodes a retina window to PNG (beryl_app's snapshot.rs): unoptimized, that held
+# a dev build's report for seconds. Optimizing these few dependencies costs no build time of ours.
+[profile.dev.package.png]
+opt-level = 3
+[profile.dev.package.fdeflate]
+opt-level = 3
+[profile.dev.package.crc32fast]
+opt-level = 3
+[profile.dev.package.miniz_oxide]
+opt-level = 3
+
 [profile.release]
 debug = "line-tables-only"
 codegen-units = 1
