@@ -748,11 +748,15 @@ pub struct Casting {
 
 /// A paused resolution (architecture §7.3): the answers its body has been given so far, and
 /// the question it stopped at. The committed state is still the state before the resolution
-/// began.
+/// began, except that it keeps known what the runs of the body showed.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Resolving<L: Layout = Small> {
     pub record: L::Queue<L::Index, 32>,
     pub question: Decision<L>,
+    /// What each player knew as the resolution began. Every run of the body starts from it,
+    /// not from what earlier runs showed, so a run asks its questions with the candidates the
+    /// first run asked them with and each recorded index names the answer it named then.
+    pub(crate) knowledge: [Bitboard<L::Slot>; 2],
 }
 
 impl Copy for Resolving<Small> {}

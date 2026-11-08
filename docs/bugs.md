@@ -6,6 +6,21 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- A paused resolution's runs disagreed on what was known: each pause kept in the
+  committed state what its run had shown, and the next run started from that, so
+  a card shown after one question was known before it. When Thirst for
+  Discovery's first discard went to the graveyard, the opponent knew that
+  Plains, and the next run merged it with the Plains they had already seen; the
+  first discard then had other candidates, its recorded index named another
+  Plains, and the second discard's index was out of range (a panic in a live
+  game). Prevention: answers recorded by index are only as stable as the
+  candidates they index, so every run of a paused body must start from the same
+  state (`Resolving::knowledge` holds what was known as it began); a test that
+  pauses over copies known to different players holds it. Rules knowledge and
+  chance's "first time anyone learns it" then differ inside a run, so the sink
+  carries what earlier runs revealed and chance counts each once; the frozen
+  corpus caught the double reveals.
+
 - More slot-order ties, found by replaying 68 saves under another seed: a
   floating effect named its source by slot, so once the source was shuffled into
   a library and its slot rebound, `State::off_board` (and the grant source the

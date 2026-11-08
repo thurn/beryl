@@ -146,6 +146,16 @@ fn loot_and_cast<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     Ok(())
 }
 
+/// "Draw a card, then discard two cards."
+fn rummage<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
+    let you = ctx.controller();
+    ctx.draw(you, 1);
+    for _ in 0..2 {
+        ctx.discard_a_card(you)?;
+    }
+    Ok(())
+}
+
 fn sorceries_as_flash<L: Layout>(ctx: &mut EffectCtx<'_, L>) -> Flow {
     let you = ctx.controller();
     ctx.allow_sorceries_as_flash(you);
@@ -341,6 +351,22 @@ pub(crate) static PONDER: CardDef = CardDef {
             kind: AbilityKind::Spell,
             may_pause: true,
             body: bodies!(ponder),
+            ..Ability::NONE
+        }],
+        ..Face::EMPTY
+    }],
+};
+
+pub(crate) static RUMMAGE: CardDef = CardDef {
+    name: "Test Rummage",
+    tokens: &[],
+    faces: &[Face {
+        cost: mana(0, 0, 0),
+        types: Types::SORCERY,
+        abilities: &[Ability {
+            kind: AbilityKind::Spell,
+            may_pause: true,
+            body: bodies!(rummage),
             ..Ability::NONE
         }],
         ..Face::EMPTY
@@ -615,7 +641,7 @@ pub(crate) static STINGER: CardDef = CardDef {
 pub(crate) static CAST_CARDS: CardTable = CardTable::new(&[
     &LAND, &ISLAND, &DUAL, &CRYPT, &TREASURE, &STRIP, &HQ, &BEAR, &REMOVAL, &TITHE, &LIES, &PONDER,
     &FLASHER, &DIVER, &TRAINER, &OVERLORD, &STUPOR, &RAVELER, &EMPEROR, &FLASHBACK, &BINDER,
-    &LOOTER, &STINGER, &SNAPBACK, &BOUNCE, &ELF, &SAGE,
+    &LOOTER, &STINGER, &SNAPBACK, &BOUNCE, &ELF, &SAGE, &RUMMAGE,
 ]);
 
 /// Every test card, two of most, and lands.
@@ -661,7 +687,12 @@ pub(crate) struct Game {
 
 impl Game {
     pub fn new(profile: Profile) -> Game {
-        let t = GameTable::new(&CAST_CARDS, [EVERYTHING, EVERYTHING]).unwrap();
+        Game::of(EVERYTHING, profile)
+    }
+
+    /// A game of `deck` mirrors, with empty hands.
+    pub fn of(deck: &Decklist, profile: Profile) -> Game {
+        let t = GameTable::new(&CAST_CARDS, [deck, deck]).unwrap();
         let mut s = State::new(&t, 5, profile);
         begin(&t, &mut s);
         let me = s.turn().starting_player;

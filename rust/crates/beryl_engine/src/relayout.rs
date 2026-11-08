@@ -32,7 +32,7 @@ fn slot<S: SlotId, T: SlotId>(s: S) -> T {
 }
 
 /// `b` over the slots of the same numbers.
-fn bits<S: SlotId, T: SlotId>(b: Bitboard<S>) -> Bitboard<T> {
+pub(crate) fn bits<S: SlotId, T: SlotId>(b: Bitboard<S>) -> Bitboard<T> {
     let mut out = Bitboard::<T>::EMPTY;
     let (from, to) = (b.0.as_ref(), out.0.as_mut());
     let n = from.len().min(to.len());
@@ -225,6 +225,7 @@ impl<L: Layout> Relayout for Resolving<L> {
         Resolving {
             record: queue(self.record.as_slice(), |&i| index::<M>(i.into())),
             question: self.question.relayout(),
+            knowledge: self.knowledge.map(bits),
         }
     }
 }

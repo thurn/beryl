@@ -152,6 +152,12 @@ fn settle_but<L: Layout>(
     if !unknown(s, slot) || o.flags.has(ObjectFlags::TOKEN) {
         return;
     }
+    // A paused body run again reveals what its earlier runs revealed: chance took its course
+    // there, once (crate::resolve).
+    if sink.revealed.contains(slot) {
+        sink.revealed.remove(slot);
+        return;
+    }
     if let Some(r) = &mut chance.replaying {
         let happened = Random::Reveal {
             owner: o.owner,
@@ -164,7 +170,7 @@ fn settle_but<L: Layout>(
                 if owner != o.owner {
                     chance.mismatch(s, recorded, happened);
                 } else if card != o.card {
-                    match partner(s, slot, card, settled) {
+                    match partner(s, slot, card, settled | sink.revealed) {
                         Some(p) => {
                             s.object_mut(p).card = o.card;
                             s.object_mut(slot).card = card;
@@ -182,7 +188,8 @@ fn settle_but<L: Layout>(
 }
 
 /// Another slot of the owner of `slot`, in its zone, that no player knows and that holds
-/// `card`, but those `settled`: the first by slot, as any of them would do.
+/// `card`, but those `settled` (or revealed by an earlier run of a paused body, whose
+/// identities are known in the committed state): the first by slot, as any of them would do.
 fn partner<L: Layout>(
     s: &State<L>,
     slot: L::Slot,

@@ -40,15 +40,18 @@ pub(crate) fn resolve<L: Layout>(
         .expect("a stack entry to resolve")
         .clone();
     let ability = entry_ability(t, &entry);
-    let record = match s.pending {
-        Pending::Resolving(ref r) => r.record.clone(),
-        _ => Default::default(),
+    let (record, knowledge) = match s.pending {
+        Pending::Resolving(ref r) => (r.record.clone(), Some(r.knowledge)),
+        _ => (Default::default(), None),
     };
     if !ability.is_some_and(|b| b.may_pause) || a.inline() {
         // An inline source runs the body once on the committed state. A resolution that
         // paused under another source, as search's tree nodes do before a rollout takes over,
-        // replays its record first.
+        // replays its record first, from what was known as it began.
         s.pending = Pending::None;
+        if let Some(knowledge) = knowledge {
+            rewind(s, &mut x.events, knowledge);
+        }
         let paused = run(
             s,
             t,
@@ -57,7 +60,9 @@ pub(crate) fn resolve<L: Layout>(
             record.as_slice(),
             &entry,
             ability,
-        )?;
+        );
+        x.events.revealed = Bitboard::EMPTY;
+        let paused = paused?;
         debug_assert!(
             paused.is_none() || s.outcome.is_some(),
             "a body paused outside a scratch copy"
@@ -66,9 +71,14 @@ pub(crate) fn resolve<L: Layout>(
     }
     let (spare, sink) = x.copy_to_spare(s);
     spare.pending = Pending::None;
+    if let Some(knowledge) = knowledge {
+        rewind(spare, sink, knowledge);
+    }
     // Events of a run that ends paused are discarded with the copy (§7.3).
     let mark = sink.len();
-    match run(spare, t, sink, Some(a), record.as_slice(), &entry, ability)? {
+    let paused = run(spare, t, sink, Some(a), record.as_slice(), &entry, ability);
+    sink.revealed = Bitboard::EMPTY;
+    match paused? {
         None => {
             s.clone_from(spare);
             x.counts.copied();
@@ -79,16 +89,36 @@ pub(crate) fn resolve<L: Layout>(
             // While the question is open no one holds priority; the finished resolution gives
             // it to the active player (CR 117.3b).
             s.turn.passes = 0;
-            s.pending = Pending::Resolving(Resolving { record, question });
+            s.pending = Pending::Resolving(Resolving {
+                record,
+                question,
+                knowledge: knowledge.unwrap_or(s.knowledge),
+            });
         }
     }
     Ok(())
+}
+
+/// Readies `s`, the committed state or a copy of it, to run a body from its start: with what
+/// players knew as the resolution began, which a paused resolution keeps
+/// ([`Resolving::knowledge`]), and with the cards its earlier runs revealed beyond that in the
+/// sink, so chance does not count them as revealed again ([`chance`]). The caller empties
+/// `sink.revealed` once the run returns.
+fn rewind<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, knowledge: [Bitboard<L::Slot>; 2]) {
+    sink.revealed = (s.knowledge[0] | s.knowledge[1]) & !(knowledge[0] | knowledge[1]);
+    s.knowledge = knowledge;
 }
 
 /// What a paused run showed a player stays known in the committed state (architecture
 /// §13): the cards a body looked at, revealed or drew before its question. A player who
 /// looked at the top of their library knows those cards while they decide, so a state
 /// determinized from what they know replays the body to the same question.
+///
+/// The runs themselves start from what was known as the resolution began
+/// ([`Resolving::knowledge`]). A card a run showed after one of its questions, as a discarded
+/// card shown to the opponent, would otherwise be known before that question in the next run,
+/// so the question would be asked with other candidates and its recorded index would name
+/// another answer.
 ///
 /// A slot keeps its identity through the moves of a run, so a card seen there is the card the
 /// committed state holds in that slot, unless something random dealt identities anew (a
@@ -141,8 +171,11 @@ pub(crate) fn replay_to_question<'a, L: Layout>(
     let ability = entry_ability(t, &entry);
     let (spare, sink) = x.copy_to_spare(s);
     spare.pending = Pending::None;
+    rewind(spare, sink, r.knowledge);
     let mark = sink.len();
-    run(spare, t, sink, None, r.record.as_slice(), &entry, ability)?;
+    let paused = run(spare, t, sink, None, r.record.as_slice(), &entry, ability);
+    sink.revealed = Bitboard::EMPTY;
+    paused?;
     match seen {
         Some(seen) => seen.extend(sink.take_from(mark)),
         None => sink.truncate(mark),

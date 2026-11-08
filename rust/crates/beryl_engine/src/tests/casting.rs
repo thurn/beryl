@@ -663,3 +663,46 @@ fn a_triggered_ability_chooses_its_targets_as_it_goes_on_the_stack() {
         assert_eq!(g.s.object(bears[0]).zone, Zone::Battlefield);
     }
 }
+
+#[test]
+fn a_paused_body_answers_each_question_with_the_card_first_chosen() {
+    // A hand of copies some known to the opponent and some not: what a run shows after one
+    // question (a discard, to both players) must not change that question's candidates when
+    // the body runs again, or its recorded index names another card.
+    const DECK: &crate::Decklist = &[(20, "Test Land"), (2, "Test Bear"), (1, "Test Rummage")];
+    let mut g = Game::of(DECK, Profile::EXACT);
+    let mut lands: Vec<Slot> =
+        g.s.library(g.me)
+            .iter()
+            .copied()
+            .filter(|&slot| g.t.def(g.s.object(slot).card).name == "Test Land")
+            .collect();
+    lands.sort_unstable();
+    let [seen, mine, drawn] = [lands[0], lands[1], lands[2]];
+    for slot in [seen, mine] {
+        crate::zone::move_to(&mut g.s, &mut crate::event::Sink::off(), slot, Zone::Hand).unwrap();
+    }
+    crate::zone::move_to(
+        &mut g.s,
+        &mut crate::event::Sink::off(),
+        drawn,
+        Zone::Library,
+    )
+    .unwrap();
+    g.s.knowledge[g.them.index()].insert(seen);
+    let bear = g.give(g.me, "Test Bear", Zone::Hand);
+    let rummage = g.give(g.me, "Test Rummage", Zone::Hand);
+    assert!(!g.s.knows(g.them, mine) && !g.s.knows(g.them, drawn));
+    g.pick(cast(rummage));
+    g.pass_both();
+    assert!(g.is_paused());
+    // The land only I know and the one I drew are one candidate, offered as the first.
+    g.pick_object(mine);
+    assert!(g.is_paused());
+    g.pick_object(bear);
+    assert!(!g.is_paused());
+    let graveyard = g.s.zone(g.me, Zone::Graveyard);
+    assert!(graveyard.contains(mine) && graveyard.contains(bear));
+    let hand = g.s.zone(g.me, Zone::Hand);
+    assert!(hand.contains(seen) && hand.contains(drawn));
+}

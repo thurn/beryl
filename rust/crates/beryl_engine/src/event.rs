@@ -265,6 +265,10 @@ pub struct Sink<L: Layout = Small> {
     /// The game's chance, lent by the session for the calls that play its game on: what the
     /// knowledge chokepoints and coin flips record or replay ([`crate::chance`]).
     pub(crate) chance: Option<Box<Chance>>,
+    /// While a paused body runs again, the cards its earlier runs revealed that no player
+    /// knew as the resolution began. The run starts from that knowledge, so it reveals them
+    /// again; chance counts each as revealed already, once ([`crate::chance`]).
+    pub(crate) revealed: Bitboard<L::Slot>,
 }
 
 /// Counts of the engine's work below `next` and `apply`, moved into the scratch's
@@ -339,6 +343,7 @@ impl<L: Layout> Sink<L> {
             on: self.on,
             work: self.work,
             chance: self.chance.clone(),
+            revealed: crate::relayout::bits(self.revealed),
         }
     }
 
