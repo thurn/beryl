@@ -173,14 +173,20 @@ export function installAudio() {
   }
 }
 
+/** Whether a gesture's resume is under way: a sound asked for meanwhile (the click of the
+ * press that unlocks) plays as the context starts. */
+let resuming = false;
+
 /** Resumes the context on a user gesture, and starts the music the first time. */
 function unlock() {
-  if (!engine || engine.context.state === "running") return;
+  if (!engine || engine.context.state === "running" || resuming) return;
+  resuming = true;
   engine.context.resume().then(
     () => {
+      resuming = false;
       if (!track && wanted !== undefined) startMusic(wanted);
     },
-    () => undefined, // A later gesture tries again.
+    () => (resuming = false), // A later gesture tries again.
   );
 }
 
@@ -191,6 +197,8 @@ const pick = (cue: Cue) => Math.floor(Math.random() * cue.variants.length);
 export function play(sound: Sound, { gain = 0 }: { gain?: number } = {}) {
   logged?.berylSounds.push({ sound, at: performance.now() });
   if (!engine || settings.muted || settings.sfx === 0) return;
+  // Sounds asked for while the context is locked would all burst out when it unlocks.
+  if (engine.context.state !== "running" && !resuming) return;
   const cue = SOUNDS[sound];
   const playing = engine.playing.get(sound) ?? 0;
   const buffer = engine.decoded.get(soundUrl(sound, pick(cue)));
