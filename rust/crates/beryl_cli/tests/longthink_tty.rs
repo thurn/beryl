@@ -2,6 +2,10 @@
 //! pseudo-terminal (`pty.py`, Python's standard `pty`), stopped by Ctrl-C once and twice;
 //! and its output piped, with no terminal at all.
 
+// The terminal tests drive a pty through Python's `pty`, which Windows lacks; only the
+// piped one runs there.
+#![cfg_attr(not(unix), allow(dead_code, unused_imports))]
+
 mod ansi;
 mod exe;
 
@@ -127,6 +131,7 @@ const FIRST: &str = "expert~ismcts1.hidden.rollout.tuned@1500-p0000-s0";
 
 /// One Ctrl-C finishes the game being played, then exits, leaving a run that goes on.
 #[test]
+#[cfg(unix)]
 fn one_ctrl_c_stops_after_the_game() {
     let dir = scratch("once");
     let mut args = vec!["--games", "1000"];
@@ -147,6 +152,7 @@ fn one_ctrl_c_stops_after_the_game() {
 
 /// A second Ctrl-C stops at once, losing the game in progress, which the next run resumes.
 #[test]
+#[cfg(unix)]
 fn two_ctrl_cs_stop_at_once() {
     let dir = scratch("twice");
     let mut args = vec!["--games", "1000"];
@@ -201,6 +207,7 @@ fn first_game_line(dir: &Path) -> Option<String> {
 /// A runner that crashes after one Ctrl-C is not restarted to play on: the stop was asked
 /// for, and the game resumes next time.
 #[test]
+#[cfg(unix)]
 fn a_crash_after_one_ctrl_c_still_stops() {
     let dir = scratch("crash");
     let mut args = vec!["--games", "4"];

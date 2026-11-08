@@ -102,10 +102,12 @@ pub fn restore() {
 }
 
 /// The terminal's settings before the panel changed them.
+#[cfg(unix)]
 static SAVED: Mutex<Option<libc::termios>> = Mutex::new(None);
 
 /// With `keep`, has stdout's terminal keep its queued output when Ctrl-C is pressed,
 /// saving its settings; without, puts the saved ones back.
+#[cfg(unix)]
 #[allow(unsafe_code)]
 fn settings(keep: bool) {
     let fd = libc::STDOUT_FILENO;
@@ -130,6 +132,10 @@ fn settings(keep: bool) {
         (false, None) => {}
     }
 }
+
+/// Windows consoles discard no queued output on Ctrl-C.
+#[cfg(not(unix))]
+fn settings(_keep: bool) {}
 
 /// What the panel shows, as the runner publishes it.
 pub struct Board {

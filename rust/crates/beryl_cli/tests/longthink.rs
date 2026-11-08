@@ -3,8 +3,6 @@
 //! logs an uninterrupted run writes.
 
 use std::fs;
-use std::io::Write;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
 use std::thread;
@@ -63,9 +61,14 @@ fn tiny(dir: &Path) {
     assert!(o.status.success(), "{}", text(&o));
 }
 
+/// Run `dir`'s own copy of the binary.
+fn own_binary(dir: &Path) -> PathBuf {
+    dir.join(format!("beryl_cli{}", std::env::consts::EXE_SUFFIX))
+}
+
 /// The run's own runner on `dir`, until it holds `games` games.
 fn runner(dir: &Path, games: u32) -> Command {
-    let mut c = Command::new(dir.join("beryl_cli"));
+    let mut c = Command::new(own_binary(dir));
     c.arg("longthink-run")
         .arg(dir)
         .args(["--games", &games.to_string()])
@@ -281,8 +284,12 @@ fn a_family_added_to_a_run_being_played() {
 /// cannot, as one from before it could be asked cannot vouch for any, saying to upgrade
 /// first. It refuses too while a runner from before live upgrades plays, which may lack it.
 /// With `--upgrade`, in either order, the adopt comes first: refused, it adds nothing.
+// Stands in shell scripts for binaries, or stops a process with signals.
+#[cfg(unix)]
 #[test]
 fn a_family_the_runs_binary_cannot_play_is_refused() {
+    use std::io::Write;
+    use std::os::unix::fs::PermissionsExt;
     let dir = scratch("refused");
     tiny(&dir);
     let at = dir.to_str().unwrap();
@@ -336,6 +343,8 @@ fn a_family_the_runs_binary_cannot_play_is_refused() {
 
 /// `--upgrade` while the arena plays moves its runner to the adopted binary before its next
 /// decision, without a restart, and the run ends as an uninterrupted one.
+// Stands in shell scripts for binaries, or stops a process with signals.
+#[cfg(unix)]
 #[test]
 fn an_upgrade_moves_the_runner_playing() {
     let whole = scratch("upgrade-whole");
@@ -427,7 +436,7 @@ fn no_arguments_start_or_resume_the_latest_run() {
     let cache = scratch("cache");
     let o = longthink(&cache, &["--status"]);
     assert!(!o.status.success(), "{}", text(&o));
-    let run = cache.join("longthink/run-001");
+    let run = cache.join("longthink").join("run-001");
     // `--games 0` plays nothing: the default arena is far too dear for a test.
     let o = longthink(&cache, &["--games", "0"]);
     assert!(
@@ -435,7 +444,7 @@ fn no_arguments_start_or_resume_the_latest_run() {
         "{}",
         text(&o)
     );
-    assert!(run.join("beryl_cli").exists() && run.join("config.json").exists());
+    assert!(own_binary(&run).exists() && run.join("config.json").exists());
     let o = longthink(&cache, &["--games", "0"]);
     assert!(o.status.success(), "{}", text(&o));
     assert!(
@@ -470,8 +479,11 @@ fn no_arguments_start_or_resume_the_latest_run() {
 /// A `rust/target` cloned into another checkout runs the binary beside it, not the one the
 /// test was compiled beside: a copy of this test binary, in a target of its own, spawns that
 /// target's `beryl_cli`, here a script that says where it is.
+// Stands in shell scripts for binaries, or stops a process with signals.
+#[cfg(unix)]
 #[test]
 fn a_moved_target_runs_its_own_binary() {
+    use std::os::unix::fs::PermissionsExt;
     const MOVED: &str = "BERYL_MOVED_TARGET";
     if std::env::var_os(MOVED).is_some() {
         let o = Command::new(exe::beryl_cli()).output().unwrap();

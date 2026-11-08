@@ -42,7 +42,6 @@ mod upgrade;
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -487,10 +486,15 @@ fn add_families(dir: &Path, families: &[String]) -> Result<(), String> {
     files::write_whole(&dir.join("config.json"), json.as_bytes())
 }
 
+/// Run `dir`'s own copy of the binary, which plays its games.
+fn binary(dir: &Path) -> PathBuf {
+    dir.join(format!("beryl_cli{}", std::env::consts::EXE_SUFFIX))
+}
+
 /// Whether run `dir`'s own binary, which plays its games, can play family `name`: asked, so
 /// one from before it could be asked vouches for none.
 fn vouched(dir: &Path, name: &str) -> Result<(), String> {
-    let bin = dir.join("beryl_cli");
+    let bin = binary(dir);
     let answer = Command::new(&bin).args([CHECK_FAMILY, name]).output();
     match answer {
         Ok(o) if o.status.success() && String::from_utf8_lossy(&o.stdout).trim() == name => Ok(()),
@@ -507,10 +511,14 @@ fn follows(lock: &str) -> bool {
     lock.lines().any(|l| l == run::FOLLOWS)
 }
 
-/// The per-machine cache: `$BERYL_CACHE`, else `~/Library/Caches/beryl`.
+/// The per-machine cache: `$BERYL_CACHE`, else `~/Library/Caches/beryl`, or on Windows
+/// `%LOCALAPPDATA%\beryl`.
 fn cache() -> PathBuf {
     match std::env::var_os("BERYL_CACHE") {
         Some(dir) if !dir.is_empty() => PathBuf::from(dir),
+        _ if cfg!(windows) => {
+            PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap_or_default()).join("beryl")
+        }
         _ => {
             PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join("Library/Caches/beryl")
         }
@@ -570,9 +578,35 @@ fn adopt_binary(dir: &Path, code: Option<&BTreeMap<String, String>>) -> Result<(
     let exe = std::env::current_exe().map_err(|e| format!("this binary: {e}"))?;
     let tmp = dir.join("beryl_cli.tmp");
     fs::copy(&exe, &tmp).map_err(|e| format!("copying {}: {e}", exe.display()))?;
-    fs::rename(&tmp, dir.join("beryl_cli")).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let bin = binary(dir);
+    // Windows replaces no running binary, but renames one: the runner's moves aside first,
+    // to be deleted once nothing runs it.
+    if cfg!(windows) && bin.exists() {
+        let old = dir.join(format!("beryl_cli.old-{}.exe", std::process::id()));
+        fs::rename(&bin, &old).map_err(|e| format!("{}: {e}", bin.display()))?;
+    }
+    fs::rename(&tmp, &bin).map_err(|e| format!("{}: {e}", dir.display()))?;
+    if cfg!(windows) {
+        remove_old_binaries(dir);
+    }
     let json = serde_json::to_string_pretty(&code).map_err(|e| e.to_string())? + "\n";
     files::write_whole(&dir.join("code.json"), json.as_bytes())
+}
+
+/// Deletes the binaries [`adopt_binary`] moved aside on Windows that nothing runs any more:
+/// a running one refuses deletion.
+fn remove_old_binaries(dir: &Path) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for e in entries.filter_map(Result::ok) {
+        if e.file_name()
+            .to_string_lossy()
+            .starts_with("beryl_cli.old-")
+        {
+            let _ = fs::remove_file(e.path());
+        }
+    }
 }
 
 /// The run's settings.
@@ -657,7 +691,7 @@ fn supervise(dir: &Path, games: Option<u32>) -> Result<(), String> {
     static ASKED: AtomicBool = AtomicBool::new(false);
     ctrlc::set_handler(|| ASKED.store(true, Ordering::Relaxed))
         .map_err(|e| format!("taking Ctrl-C: {e}"))?;
-    let bin = dir.join("beryl_cli");
+    let bin = binary(dir);
     let finished = || files::read::<GameRecord>(&dir.join("games.jsonl")).map(|g| g.len());
     let mut crashes = 0;
     let mut before = finished()?;
@@ -687,10 +721,7 @@ fn supervise(dir: &Path, games: Option<u32>) -> Result<(), String> {
             continue;
         }
         // A panic exits with 101, or aborts under the search profile; so might a fault.
-        let abnormal = status.code() == Some(101)
-            || status
-                .signal()
-                .is_some_and(|s| [4, 5, 6, 10, 11].contains(&s));
+        let abnormal = status.code() == Some(101) || crashed(status);
         if !abnormal {
             return Err(format!("the runner stopped: {status}"));
         }
@@ -706,6 +737,25 @@ fn supervise(dir: &Path, games: Option<u32>) -> Result<(), String> {
         }
         eprintln!("the runner crashed ({status}); restarting it");
     }
+}
+
+/// Whether the runner died of an abort or a fault: SIGILL, SIGTRAP, SIGABRT, SIGBUS or
+/// SIGSEGV.
+#[cfg(unix)]
+fn crashed(status: std::process::ExitStatus) -> bool {
+    use std::os::unix::process::ExitStatusExt;
+    status
+        .signal()
+        .is_some_and(|s| [4, 5, 6, 10, 11].contains(&s))
+}
+
+/// Whether the runner died of an abort or a fault, whose NTSTATUS is its exit code: an
+/// access violation, illegal instruction, stack overflow, or the fail-fast Rust aborts with.
+#[cfg(windows)]
+fn crashed(status: std::process::ExitStatus) -> bool {
+    status.code().is_some_and(|c| {
+        [0xC000_0005_u32, 0xC000_001D, 0xC000_00FD, 0xC000_0409, 3].contains(&(c as u32))
+    })
 }
 
 #[cfg(test)]

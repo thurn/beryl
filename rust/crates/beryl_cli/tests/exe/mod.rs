@@ -14,7 +14,7 @@ pub fn beryl_cli() -> PathBuf {
         .parent()
         .and_then(|deps| deps.parent())
         .expect("target/<profile>/deps")
-        .join("beryl_cli");
+        .join(format!("beryl_cli{}", std::env::consts::EXE_SUFFIX));
     assert!(bin.is_file(), "no beryl_cli beside {}", me.display());
     bin
 }

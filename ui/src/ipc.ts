@@ -533,5 +533,8 @@ export const cardImageUrl = (scryfallUrl: string) => {
   if (!("__TAURI_INTERNALS__" in window)) {
     return scryfallUrl;
   }
-  return `beryl-art://localhost${prefix}${url.pathname}`;
+  // WebView2 serves custom schemes at http://<scheme>.localhost instead.
+  return navigator.userAgent.includes("Windows")
+    ? `http://beryl-art.localhost${prefix}${url.pathname}`
+    : `beryl-art://localhost${prefix}${url.pathname}`;
 };

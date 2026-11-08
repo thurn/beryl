@@ -5,7 +5,6 @@
 
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 
 use serde::Serialize;
@@ -143,6 +142,8 @@ pub fn write_whole(path: &Path, contents: &[u8]) -> Result<(), String> {
 /// The run's lock, held while this process plays it.
 pub struct Lock {
     file: File,
+    /// The file the lock is on, where that is not `file` ([`GUARD`]).
+    _guard: Option<File>,
 }
 
 impl Lock {
@@ -153,23 +154,41 @@ impl Lock {
     }
 }
 
-/// Takes the exclusive lock on run directory `dir`, or names the process that holds it.
-pub fn lock(dir: &Path) -> Result<Lock, String> {
-    let path = dir.join("lock");
-    let at = |e: std::io::Error| format!("{}: {e}", path.display());
-    let mut file = OpenOptions::new()
+/// On Windows a file locked by one process cannot be read by another, so there the lock is
+/// taken on a file of its own, leaving `lock`'s text readable; elsewhere on `lock` itself.
+const GUARD: Option<&str> = if cfg!(windows) {
+    Some("lock.guard")
+} else {
+    None
+};
+
+fn open_rw(path: &Path) -> std::io::Result<File> {
+    OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(false)
-        .open(&path)
-        .map_err(at)?;
-    match file.try_lock() {
+        .open(path)
+}
+
+/// Takes the exclusive lock on run directory `dir`, or names the process that holds it.
+pub fn lock(dir: &Path) -> Result<Lock, String> {
+    let path = dir.join("lock");
+    let at = |e: std::io::Error| format!("{}: {e}", path.display());
+    let mut file = open_rw(&path).map_err(at)?;
+    let guard = match GUARD {
+        Some(name) => Some(open_rw(&dir.join(name)).map_err(at)?),
+        None => None,
+    };
+    match guard.as_ref().unwrap_or(&file).try_lock() {
         Ok(()) => {
             file.set_len(0).map_err(at)?;
             file.seek(SeekFrom::Start(0)).map_err(at)?;
             writeln!(file, "{}", std::process::id()).map_err(at)?;
-            Ok(Lock { file })
+            Ok(Lock {
+                file,
+                _guard: guard,
+            })
         }
         Err(TryLockError::WouldBlock) => {
             let mut holder = String::new();
@@ -194,7 +213,15 @@ pub fn holder(dir: &Path) -> Result<Option<String>, String> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(at(e)),
     };
-    match file.try_lock() {
+    let guard = match GUARD {
+        Some(name) => match File::open(dir.join(name)) {
+            Ok(guard) => Some(guard),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(at(e)),
+        },
+        None => None,
+    };
+    match guard.as_ref().unwrap_or(&file).try_lock() {
         // Free: closing the file lets it go again.
         Ok(()) => Ok(None),
         Err(TryLockError::WouldBlock) => {
@@ -210,21 +237,34 @@ pub fn holder(dir: &Path) -> Result<Option<String>, String> {
 /// another, or rewritten, has a new stamp.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Stamp {
-    dev: u64,
-    ino: u64,
+    /// The file itself: its device and inode, or on Windows its volume and file index.
+    id: (u64, u64),
     len: u64,
-    mtime: (i64, i64),
+    mtime: Option<std::time::SystemTime>,
 }
 
 /// The stamp of the file at `path`, none if there is none.
 pub fn stamp(path: &Path) -> Option<Stamp> {
     let m = fs::metadata(path).ok()?;
     Some(Stamp {
-        dev: m.dev(),
-        ino: m.ino(),
+        id: file_id(path, &m)?,
         len: m.len(),
-        mtime: (m.mtime(), m.mtime_nsec()),
+        mtime: m.modified().ok(),
     })
+}
+
+#[cfg(unix)]
+fn file_id(_: &Path, m: &fs::Metadata) -> Option<(u64, u64)> {
+    use std::os::unix::fs::MetadataExt;
+    Some((m.dev(), m.ino()))
+}
+
+/// Std reads no file index from metadata on Windows: it takes a handle.
+#[cfg(windows)]
+fn file_id(path: &Path, _: &fs::Metadata) -> Option<(u64, u64)> {
+    let handle = winapi_util::Handle::from_path_any(path).ok()?;
+    let info = winapi_util::file::information(&handle).ok()?;
+    Some((info.volume_serial_number(), info.file_index()))
 }
 
 #[cfg(test)]

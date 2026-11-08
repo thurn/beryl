@@ -170,7 +170,7 @@ struct Runner<'a> {
 /// binary is replaced.
 pub fn run(dir: &Path, total: Option<u32>) -> Result<Ended, String> {
     let mut lock = files::lock(dir)?;
-    let binary = files::stamp(&dir.join("beryl_cli"));
+    let binary = files::stamp(&super::binary(dir));
     lock.note(FOLLOWS)?;
     let c = super::config(dir)?;
     let t = mirror();
@@ -235,7 +235,7 @@ impl Runner<'_> {
         if self.upgraded.load(Ordering::Relaxed) {
             return true;
         }
-        if files::stamp(&self.dir.join("beryl_cli")) == self.binary {
+        if files::stamp(&super::binary(self.dir)) == self.binary {
             return false;
         }
         if !self.upgraded.swap(true, Ordering::Relaxed) {
