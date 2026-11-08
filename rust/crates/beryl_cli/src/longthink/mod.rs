@@ -154,7 +154,8 @@ pub struct DecisionRecord {
     pub work: u64,
     pub inherited: u32,
     pub visits: Vec<u32>,
-    /// Each candidate's mean reward for the deciding player; none if never visited.
+    /// Each candidate's mean reward for the deciding player, averaged over the trees with each
+    /// weighing the same (`Search::means`); none if never visited.
     pub mean: Vec<Option<f64>>,
     /// An anchored family's check of its choice against greedy's answer.
     #[serde(default, skip_serializing_if = "Option::is_none")]

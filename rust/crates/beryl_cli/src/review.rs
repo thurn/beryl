@@ -199,9 +199,8 @@ fn review(path: &Path, searcher_name: Option<&str>, only: Option<u16>) -> Result
 /// answer, and whether it chose other than the game's `logged` answer.
 fn search_line(search: &Search, chose: Choice, logged: Choice) -> String {
     let mut line = String::from("    search:");
-    for (i, (&v, &r)) in search.visits.iter().zip(&search.rewards).enumerate() {
-        let mean = if v == 0 { 0.0 } else { r / f64::from(v) };
-        let _ = write!(line, " [{i}] {v} {mean:.3}");
+    for (i, (&v, &mean)) in search.visits.iter().zip(&search.means).enumerate() {
+        let _ = write!(line, " [{i}] {v} {:.3}", mean.unwrap_or(0.0));
     }
     if let Some(a) = search.anchor {
         let _ = write!(

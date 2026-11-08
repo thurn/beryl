@@ -1,7 +1,7 @@
 //! The agent's decisions as a game plays, for an AI-play bug report ([`crate::bugs`]) and the
 //! journal: each one's candidates as the UI names them, what it chose, how long it thought,
-//! and the search behind it (the root visits and mean reward of each candidate, summed over
-//! its trees), as the agent itself ran it. `just review --agent recorded` searches a replay's
+//! and the search behind it (each candidate's root visits summed over its trees, and its mean
+//! reward averaged over them), as the agent itself ran it. `just review --agent recorded` searches a replay's
 //! decisions again, but its searches are a fresh sample; these are the game's own.
 
 use std::collections::VecDeque;
@@ -38,7 +38,7 @@ pub struct AgentMove {
     pub search: Option<SearchView>,
 }
 
-/// A search, as [`Search`] records it, with each candidate's mean.
+/// A search, as [`Search`] records it.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchView {
@@ -53,7 +53,8 @@ pub struct SearchView {
     pub work: u64,
     /// Root visits per candidate, summed across the trees.
     pub visits: Vec<u32>,
-    /// Mean reward per candidate for the agent: none for one never visited.
+    /// Mean reward per candidate for the agent, averaged over the trees ([`Search::means`]):
+    /// none for one never visited.
     pub means: Vec<Option<f64>>,
     /// An anchored search's check of its choice against greedy's answer.
     pub anchor: Option<String>,
@@ -68,12 +69,7 @@ impl SearchView {
             inherited: s.inherited,
             work: s.work,
             visits: s.visits.clone(),
-            means: s
-                .visits
-                .iter()
-                .zip(&s.rewards)
-                .map(|(&v, &r)| (v > 0).then(|| r / f64::from(v)))
-                .collect(),
+            means: s.means.clone(),
             anchor: s.anchor.as_ref().map(|a| format!("{a:?}")),
         }
     }
@@ -170,10 +166,11 @@ mod tests {
             work: 1000,
             visits: vec![60, 40, 0],
             rewards: vec![30.0, 30.0, 0.0],
+            means: vec![Some(0.4), Some(0.75), None],
             anchor: None,
         };
         let view = SearchView::of(&search);
-        assert_eq!(view.means, vec![Some(0.5), Some(0.75), None]);
+        assert_eq!(view.means, vec![Some(0.4), Some(0.75), None]);
         assert_eq!((view.decision, view.chain), (4, 2));
     }
 

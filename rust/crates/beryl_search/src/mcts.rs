@@ -136,9 +136,16 @@ pub struct Search {
     pub work: u64,
     /// The root visits per candidate, summed across the trees, when the search stopped.
     pub visits: Vec<u32>,
-    /// The rewards per candidate for the deciding player, summed likewise: divided by the
-    /// visits, each candidate's mean.
+    /// The rewards per candidate for the deciding player, summed likewise. Divided by the
+    /// visits they pool the trees' worlds visit-weighted, which misleads: see `means`.
     pub rewards: Vec<f64>,
+    /// Each candidate's mean reward for the deciding player, averaged over the trees that
+    /// visited it with each tree weighing the same; none for one no tree visited. Pooling
+    /// instead (`rewards / visits`) weighs a candidate's mean toward the trees whose world
+    /// favours it, since each tree spends its visits on its own best candidate: with worlds
+    /// that disagree, the candidate visited most can have the lower pooled mean (Simpson's
+    /// paradox; `docs/incidents/2026-11-08-searcher-mulligan-means.md`).
+    pub means: Vec<Option<f64>>,
     /// For an anchored long-think search, its check of its choice against greedy's answer.
     pub anchor: Option<crate::long::AnchorCheck>,
 }
@@ -349,6 +356,12 @@ impl<L: Layout> Agent<L> for Mcts<L> {
         let work = trees.iter().map(Tree::steps).sum::<u64>() - before;
         let (visits, rewards) = totals(&trees);
         let choice = Choice(leader(&visits) as u16);
+        let means = tree_means(
+            visits.len(),
+            trees
+                .iter()
+                .map(|tree| tree.children().iter().map(|c| Some((c.visits, c.reward)))),
+        );
         self.last = Some(Search {
             decision,
             chain,
@@ -357,6 +370,7 @@ impl<L: Layout> Agent<L> for Mcts<L> {
             work,
             visits,
             rewards,
+            means,
             anchor: None,
         });
         if trees.iter().all(|tree| tree.expanded(choice)) {
@@ -507,6 +521,28 @@ fn totals<L: Layout>(trees: &[Tree<L>]) -> (Vec<u32>, Vec<f64>) {
         }
     }
     (visits, rewards)
+}
+
+/// Each of `n` candidates' mean reward averaged over the trees, each tree weighing the same:
+/// every tree gives each candidate its (visits, summed reward), or none where it has no such
+/// child. A candidate a tree never visited is left out of that tree's share, and one no tree
+/// visited has no mean.
+pub(crate) fn tree_means<I>(n: usize, trees: impl IntoIterator<Item = I>) -> Vec<Option<f64>>
+where
+    I: IntoIterator<Item = Option<(u32, f64)>>,
+{
+    let mut sums = vec![(0.0, 0u32); n];
+    for tree in trees {
+        for ((sum, count), child) in sums.iter_mut().zip(tree) {
+            if let Some((visits, reward)) = child.filter(|&(v, _)| v > 0) {
+                *sum += reward / f64::from(visits);
+                *count += 1;
+            }
+        }
+    }
+    sums.into_iter()
+        .map(|(sum, count)| (count > 0).then(|| sum / f64::from(count)))
+        .collect()
 }
 
 /// The card a choice names, which answering it may move: the card cast, the land played,
@@ -772,7 +808,7 @@ mod tests {
     use beryl_cards::decks::WU_CONTROL;
     use beryl_engine::{GameTable, Limits, Profile, Small, State};
 
-    use super::{finished, leader, smart};
+    use super::{finished, leader, smart, tree_means};
 
     #[test]
     fn a_tree_plays_under_search_budgets_below_a_player_game() {
@@ -784,6 +820,36 @@ mod tests {
         let mut s: State<Small> = State::new(&t, 0, player);
         smart(&mut s);
         assert_eq!(s.profile().limits, Limits::DEFAULT);
+    }
+
+    /// Trees whose worlds disagree, as the hidden search's mulligan in the incident did: each
+    /// spends its visits on its own best candidate. Pooled, the rewards rank the candidates
+    /// against their visits; averaged tree by tree, they rank them as the visits do.
+    #[test]
+    fn tree_means_weigh_each_tree_the_same() {
+        let trees = [
+            [(200, 160.0), (10, 1.0)],
+            [(10, 0.0), (200, 120.0)],
+            [(10, 0.0), (200, 100.0)],
+        ];
+        let pooled: Vec<f64> = (0..2)
+            .map(|i| {
+                let (v, r) = trees
+                    .iter()
+                    .fold((0, 0.0), |(v, r), t| (v + t[i].0, r + t[i].1));
+                r / f64::from(v)
+            })
+            .collect();
+        assert!(pooled[0] > pooled[1], "{pooled:?}");
+        let means = tree_means(2, trees.iter().map(|t| t.iter().map(|&c| Some(c))));
+        let [Some(keep), Some(mulligan)] = means[..] else {
+            panic!("{means:?}")
+        };
+        assert!((keep - 0.8 / 3.0).abs() < 1e-9 && (mulligan - 1.2 / 3.0).abs() < 1e-9);
+        assert_eq!(
+            tree_means(2, [[Some((0, 0.0)), None], [Some((4, 2.0)), None]]),
+            vec![Some(0.5), None]
+        );
     }
 
     /// Every way to hand `left` more root visits to the candidates of `visits`.

@@ -565,12 +565,15 @@ fn commit(dir: &Path, spec: &Spec, played: &Played) -> Result<GameRecord, String
                 work: s.work,
                 inherited: s.inherited,
                 visits: s.visits.clone(),
-                mean: s
-                    .visits
-                    .iter()
-                    .zip(&s.rewards)
-                    .map(|(&v, &r)| (v > 0).then(|| r / f64::from(v)))
-                    .collect(),
+                mean: if s.means.len() == s.visits.len() {
+                    s.means.clone()
+                } else {
+                    s.visits
+                        .iter()
+                        .zip(&s.rewards)
+                        .map(|(&v, &r)| (v > 0).then(|| r / f64::from(v)))
+                        .collect()
+                },
                 anchor: s.anchor,
             },
             false,

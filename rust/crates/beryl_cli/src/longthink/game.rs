@@ -96,6 +96,10 @@ pub struct Searched {
     pub work: u64,
     pub visits: Vec<u32>,
     pub rewards: Vec<f64>,
+    /// Each candidate's mean averaged over the trees ([`Search::means`]); empty in a log
+    /// written before it was kept.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub means: Vec<Option<f64>>,
     /// An anchored family's check of its choice against greedy's answer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub anchor: Option<AnchorRecord>,
@@ -357,6 +361,7 @@ fn searched(s: &Search) -> Searched {
         work: s.work,
         visits: s.visits.clone(),
         rewards: s.rewards.clone(),
+        means: s.means.clone(),
         anchor: s.anchor.map(|a| AnchorRecord {
             greedy: a.greedy.0,
             search: a.search.0,

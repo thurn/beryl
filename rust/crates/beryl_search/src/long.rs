@@ -777,6 +777,14 @@ impl<L: Layout> Agent<L> for LongSearch<L> {
         let (iterations, work, checked) = self.grow(&mut trees, greedy, guards);
         let (visits, rewards) = totals(&trees);
         let best = Choice(leader(&visits, &rewards) as u16);
+        let means = crate::mcts::tree_means(
+            visits.len(),
+            trees.iter().map(|tree| {
+                tree.root_children().into_iter().map(|node| {
+                    node.map(|n| (tree.nodes[n as usize].visits, tree.nodes[n as usize].reward))
+                })
+            }),
+        );
         // The candidate checked against greedy's answer after the two had the last of the work
         // to themselves, whichever then has more visits; else the leader, if guarded.
         let anchor = greedy.and_then(|g| {
@@ -792,6 +800,7 @@ impl<L: Layout> Agent<L> for LongSearch<L> {
             work,
             visits,
             rewards,
+            means,
             anchor,
         });
         if trees.iter().all(|tree| tree.expanded(choice)) {
