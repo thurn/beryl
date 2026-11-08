@@ -40,3 +40,9 @@ APFS clones are on macOS, and Defender's scans slow builds less.
 Then `just` lists the commands. `just dev` opens the app with hot reload;
 `just smoke` builds it and checks that it starts, headless; `just ci` runs every
 check.
+
+## Credits
+
+The step icons beside each life total are from
+[Phosphor Icons](https://phosphoricons.com), Copyright (c) 2023 Phosphor Icons,
+under the MIT License.

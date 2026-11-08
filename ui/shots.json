@@ -173,7 +173,7 @@
       "route": "/?fixture=greedy-turn-9&at=-1#/game",
       "width": 1600,
       "height": 900,
-      "hover": ".turn-controls .phase-current"
+      "hover": ".turn-controls .step-current"
     },
     {
       "name": "game-main-1280",
@@ -697,42 +697,42 @@
       "route": "/?fixture=signals#/game",
       "width": 1600,
       "height": 900,
-      "compare": [".turn-controls .phase-tracker-compact"]
+      "compare": [".step-stops-opponent", ".step-stops-you"]
     },
     {
       "name": "game-tracker-begin-combat",
       "route": "/?fixture=game-over&at=2#/game",
       "width": 1600,
       "height": 900,
-      "compare": [".turn-controls .phase-tracker-compact"]
+      "compare": [".step-stops-opponent", ".step-stops-you"]
     },
     {
       "name": "game-tracker-attackers",
       "route": "/?fixture=game-over&at=4#/game",
       "width": 1600,
       "height": 900,
-      "compare": [".turn-controls .phase-tracker-compact"]
+      "compare": [".step-stops-opponent", ".step-stops-you"]
     },
     {
       "name": "game-tracker-end-combat",
       "route": "/?fixture=game-over&at=6#/game",
       "width": 1600,
       "height": 900,
-      "compare": [".turn-controls .phase-tracker-compact"]
+      "compare": [".step-stops-opponent", ".step-stops-you"]
     },
     {
       "name": "game-tracker-blockers",
       "route": "/?fixture=game-over&at=25#/game",
       "width": 1600,
       "height": 900,
-      "compare": [".turn-controls .phase-tracker-compact"]
+      "compare": [".step-stops-opponent", ".step-stops-you"]
     },
     {
       "name": "game-tracker-damage",
       "route": "/?fixture=combat-declare&at=32#/game",
       "width": 1600,
       "height": 900,
-      "compare": [".turn-controls .phase-tracker-compact"]
+      "compare": [".step-stops-opponent", ".step-stops-you"]
     },
     {
       "name": "game-coin-on-draw",

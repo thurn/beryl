@@ -6,12 +6,12 @@ import type { PlayerView } from "../generated/protocol";
 import { STEP_NAMES } from "./layout";
 import type { LogEntry } from "./log";
 
-/** What the game is doing while the player waits: the opponent deciding, or a step of whose
- * turn passing. */
-export function actingLabel(view: PlayerView): string {
+/** What the game is doing while the player waits: a step of whose turn passing. The opponent
+ * deciding says nothing here: a spinner under their orb shows it (Player.tsx' Thinking). */
+export function actingLabel(view: PlayerView): string | undefined {
   switch (view.status.kind) {
     case "thinking":
-      return "Opponent is thinking";
+      return undefined;
     case "playing": {
       const whose = view.turn.active === "you" ? "Your" : "Opponent's";
       return `${whose} ${STEP_NAMES[view.turn.step]}`;
@@ -21,12 +21,13 @@ export function actingLabel(view: PlayerView): string {
   }
 }
 
-/** The opponent's badge's line under their name while they act, if they are. */
+/** The opponent's badge's line under their name while their turn plays on, if it does. While
+ * they think, the spinner under their orb says so instead. */
 export function opponentActivity(
   view: PlayerView,
   waiting: boolean,
 ): string | undefined {
-  if (view.status.kind === "thinking") return "Thinking";
+  if (view.status.kind === "thinking") return undefined;
   if (waiting && view.turn.active === "opponent") return "Taking their turn";
   return undefined;
 }

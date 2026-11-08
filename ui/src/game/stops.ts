@@ -1,35 +1,8 @@
-// Phase stops: the steps where the player stops with the stack empty under the smart stops,
-// on their own turns and the opponent's (`StopsSetting.yours`, `.theirs`), set by clicking the
-// phase tracker's icons as on Arena. The browser remembers them from game to game.
-import type { Phase } from "../components/Controls";
+// Step stops: the steps where the player stops with the stack empty under the smart stops, on
+// their own turns and the opponent's (`StopsSetting.yours`, `.theirs`), set by clicking the
+// icons about each life orb (Steps.tsx) as on Arena. The browser remembers them from game to
+// game.
 import type { Step, StopsSetting } from "../ipc";
-
-/** The steps a phase icon stands for. Combat's are those after attackers and after blockers
- * are declared, the smart stops' own; beginning's, those the player gets priority in. */
-export const PHASE_STEPS: Record<Phase, Step[]> = {
-  beginning: ["upkeep", "draw"],
-  main1: ["precombatMain"],
-  combat: ["declareAttackers", "declareBlockers"],
-  main2: ["postcombatMain"],
-  end: ["end"],
-};
-
-/** The phases with a stop among `steps`. */
-export function stoppedPhases(steps: Step[]): Set<Phase> {
-  const on = new Set<Phase>();
-  for (const [phase, inPhase] of Object.entries(PHASE_STEPS)) {
-    if (inPhase.some((s) => steps.includes(s))) on.add(phase as Phase);
-  }
-  return on;
-}
-
-/** `steps` with `phase`'s stops cleared if it has any, or set if not. */
-export function togglePhase(steps: Step[], phase: Phase): Step[] {
-  const inPhase = PHASE_STEPS[phase];
-  return inPhase.some((s) => steps.includes(s))
-    ? steps.filter((s) => !inPhase.includes(s))
-    : [...steps, ...inPhase];
-}
 
 export function sameStops(a: StopsSetting, b: StopsSetting): boolean {
   const same = (x: Step[], y: Step[]) =>

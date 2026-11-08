@@ -773,6 +773,13 @@
 .table .life-orb {
   --orb: calc(1px / 1.045);
 }
+/* The opponent thinking, under their orb, clear of its rays. */
+.thinking-hud {
+  left: 758px;
+  top: 166px;
+  z-index: 250;
+  pointer-events: none;
+}
 /* In combat, the damage the unblocked attackers will deal, a badge on the rim of the life orb
    toward the table: a number, solid red when lethal. */
 .life-incoming {
@@ -1079,39 +1086,25 @@
 .turn-controls > * {
   position: absolute;
 }
-/* Each player's phase stops about their life orb, as on Arena: the beginning and first main
-   phase left of it, combat, the second main phase and the end right of it, evenly spaced, each
-   group's inner edge 70px from the orb's middle (x 800). */
-.turn-controls .phase-tracker-compact {
-  left: 668px;
-  top: 656px;
+/* Each player's step stops about their life orb (Steps.tsx), as on Arena: two rows of three on
+   either side of it, centered on the orb's face (x 800; y 670 yours, 105 the opponent's), each
+   side's inner edge 70px from its middle. */
+.turn-controls .step-stops {
+  left: 646px;
+  top: 645px;
   z-index: 251;
-  display: grid;
-  grid-template-columns: repeat(2, 26px) 120px repeat(3, 26px);
-  column-gap: 10px;
+  width: 308px;
 }
-.turn-controls .phase-tracker-compact .phase:nth-child(3) {
-  grid-column-start: 4;
+.turn-controls .step-stops-opponent {
+  top: 80px;
 }
-/* The row spans the orb, over it: only its stops take the pointer, so the whole orb is there
-   to click, as a target, and not just its rims. */
-.turn-controls .phase-tracker-compact {
+/* The rows span the orb, over it: only the steps take the pointer, so the whole orb is there to
+   click, as a target, and not just its rims. */
+.turn-controls .step-stops {
   pointer-events: none;
 }
-.turn-controls .phase-tracker-compact .phase {
+.turn-controls .step {
   pointer-events: auto;
-}
-.turn-controls .phase-tracker-compact .phase-icon {
-  width: 26px;
-  height: 26px;
-}
-/* The rule and groove run under each group, not behind the orb. */
-.turn-controls .phase-tracker-compact::before,
-.turn-controls .phase-tracker-compact::after {
-  display: none;
-}
-.turn-controls .phase-row-opponent {
-  top: 89px;
 }
 /* Full control's stop sign, left of the turn button, while it is on. */
 .full-control {

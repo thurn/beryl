@@ -27,7 +27,6 @@ import {
   Button,
   Dock,
   DockButtons,
-  PhaseTracker,
   PriorityPill,
   Tip,
   TurnButton,
@@ -46,7 +45,9 @@ import {
   LifeOrb,
   ManaPool,
   PlayerBadge,
+  Thinking,
 } from "../components/Player";
+import { StepStops } from "../components/Steps";
 import {
   Arrows,
   StackItem,
@@ -117,7 +118,6 @@ import { ModeChooser, type Mode, type Origin } from "./ModeChooser";
 import { eventsHold } from "./playback";
 import { Risen, useRiseFrom } from "./Risen";
 import { FloatPrompt, PromptRow } from "./FloatPrompt";
-import { stoppedPhases, togglePhase } from "./stops";
 import { useStandIns } from "./standIns";
 import { tablePick } from "./tablePick";
 import {
@@ -134,7 +134,6 @@ import {
   MANA_POOLS,
   overLog,
   passButton,
-  phaseOf,
   pileLook,
   PILES,
   STACK_Z,
@@ -348,6 +347,8 @@ export function Board({
   // The cast under way, which the engine is asking about, can still be taken back: on the
   // table, or from it while a screen asking about the cast is put aside to see the table
   // (inert, but not dimmed).
+  /** What the priority pill says while you wait, if anything. */
+  const acting = actingLabel(view);
   const cancellable = !waiting && !dimmed && decision?.cancellable === true;
   // An answer can be taken back, one per press.
   const undoable =
@@ -1176,6 +1177,11 @@ export function Board({
           target={deciding ? can.players.get("opponent") : undefined}
           onPick={(act) => pick(act.index, act.then)}
         />
+        {view.status.kind === "thinking" && (
+          <div className="hud thinking-hud">
+            <Thinking />
+          </div>
+        )}
         <Life
           side="you"
           life={you.life}
@@ -1267,30 +1273,21 @@ export function Board({
                 <Tip side="above">Full control</Tip>
               </span>
             )}
-            {/* As on Arena, a row of phase stops for each player's turns about their life
-                orb; the current phase lights in the active player's row. */}
+            {/* As on Arena, each player's step stops about their life orb; the current step
+                lights in the active player's. */}
             {(["opponent", "you"] as const).map((side) => {
               const key = side === "you" ? "yours" : "theirs";
               return (
-                <PhaseTracker
+                <StepStops
                   key={side}
-                  className={`phase-row-${side}`}
+                  side={side}
                   current={
-                    view.turn.active === side
-                      ? phaseOf(view.turn.step)
-                      : undefined
+                    view.turn.active === side ? view.turn.step : undefined
                   }
-                  step={view.turn.step}
-                  compact
                   now={`Turn ${view.turn.number} · ${STEP_NAMES[view.turn.step]}`}
                   whose={side === "you" ? "Your" : "Opponent's"}
-                  stops={stoppedPhases(stops[key])}
-                  onStop={(phase) =>
-                    setStops({
-                      ...stops,
-                      [key]: togglePhase(stops[key], phase),
-                    })
-                  }
+                  stops={stops[key]}
+                  onStops={(steps) => setStops({ ...stops, [key]: steps })}
                 />
               );
             })}
@@ -1349,7 +1346,7 @@ export function Board({
                   {/* While you wait, the priority pill takes the caption's place under the
                   button, leaving the tracker showing the phase. */}
                   {waiting ? (
-                    <PriorityPill>{actingLabel(view)}</PriorityPill>
+                    acting && <PriorityPill>{acting}</PriorityPill>
                   ) : (
                     <span className="turn-caption">{stop.caption}</span>
                   )}

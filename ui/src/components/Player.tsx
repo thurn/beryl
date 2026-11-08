@@ -9,33 +9,63 @@ import { ManaSymbol } from "./Mana";
 // ring underlining it toward its player's edge of the table. The opponent's orb is yours mirrored
 // top to bottom, still lit from the top of the screen. The active player's orb flares.
 
-const RING = "M-44 16 A49 41 0 0 0 44 16";
-
 /** The core: a cushion, a rounded oval with flattened sides, `rx` by `ry` about (0, `cy`), a
  * little away from the blades' tips; the life total centers on it. */
 const CORE = { rx: 49, ry: 37, cy: -3 };
 
-/** A superellipse (|x/rx|^n + |y/ry|^n = 1) about (0, cy), as a path. */
-function cushion({ rx, ry, cy }: { rx: number; ry: number; cy: number }) {
-  const n = 2.25;
-  const points = Array.from({ length: 72 }, (_, i) => {
-    const t = (i / 72) * 2 * Math.PI;
-    const [c, s] = [Math.cos(t), Math.sin(t)];
-    const x = rx * Math.sign(c) * Math.abs(c) ** (2 / n);
-    const y = cy + ry * Math.sign(s) * Math.abs(s) ** (2 / n);
-    return `${x.toFixed(1)} ${y.toFixed(1)}`;
-  });
-  return `M${points.join(" L")} Z`;
+/** The superellipse's exponent: |x/rx|^n + |y/ry|^n = 1. */
+const SQUARENESS = 2.25;
+
+/** The point of the core's outline at parameter `t` (radians, clockwise from its right). */
+function corePoint(t: number): [number, number] {
+  const [c, s] = [Math.cos(t), Math.sin(t)];
+  const e = 2 / SQUARENESS;
+  return [
+    CORE.rx * Math.sign(c) * Math.abs(c) ** e,
+    CORE.cy + CORE.ry * Math.sign(s) * Math.abs(s) ** e,
+  ];
 }
 
+/** The core's outline as a path. */
+function cushion() {
+  const points = Array.from({ length: 72 }, (_, i) =>
+    corePoint((i / 72) * 2 * Math.PI),
+  );
+  return `M${points.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join(" L")} Z`;
+}
+
+/** The part of the core's outline from `from` to `to` degrees (clockwise from its right), moved
+ * `offset` units out along its normal (in, if negative): an arc that follows the cushion's shape
+ * all along it, as an ellipse's does not. */
+function rim(offset: number, from: number, to: number) {
+  const steps = 32;
+  const points = Array.from({ length: steps + 1 }, (_, i) => {
+    const t = ((from + ((to - from) * i) / steps) * Math.PI) / 180;
+    const [x, y] = corePoint(t);
+    const [ax, ay] = corePoint(t - 0.001);
+    const [bx, by] = corePoint(t + 0.001);
+    // Clockwise on screen, the outward normal is the tangent turned a quarter back.
+    const [tx, ty] = [bx - ax, by - ay];
+    const length = Math.hypot(tx, ty);
+    return `${(x + (ty / length) * offset).toFixed(1)} ${(y - (tx / length) * offset).toFixed(1)}`;
+  });
+  return `M${points.join(" L")}`;
+}
+
+/** The gold ring under the core, just outside its bezel, toward its player's edge. */
+const RING = rim(5, 37, 143);
+
+/** The active player's crescent of light along the inside of the core's top. */
+const CRESCENT = rim(-4.5, 222, 318);
+
 /** The active player's rays, by where each tip lies (the left half; mirrored on the right):
- * each widens from the rim of the oval to its tip. */
+ * each widens from the rim of the oval to its tip. They fan above the orb, clear of the step
+ * stops on either side of it (Steps.tsx). */
 const RAYS = [
-  [-44, -50],
-  [-66, -44],
-  [-84, -32],
-  [-100, -16],
-  [-70, -6],
+  [-16, -60],
+  [-36, -58],
+  [-54, -52],
+  [-68, -42],
 ]
   .flatMap(([x, y]) => [
     [x!, y!],
@@ -43,9 +73,9 @@ const RAYS = [
   ])
   .map(([x, y]) => {
     const a = Math.atan2(y!, x! / 1.2);
-    const rim = (da: number) =>
+    const base = (da: number) =>
       `${(Math.cos(a + da) * 36 * 1.2).toFixed(1)} ${(Math.sin(a + da) * 36).toFixed(1)}`;
-    return `M${rim(-0.06)} L${x} ${y} L${rim(0.06)} Z`;
+    return `M${base(-0.06)} L${x} ${y} L${base(0.06)} Z`;
   })
   .join(" ");
 
@@ -116,7 +146,7 @@ export function LifeOrb({
         <g transform={`scale(1 ${down})`}>
           {active && (
             <g className="life-orb-flare">
-              <ellipse cx="0" cy="-2" rx="62" ry="50" filter="url(#orb-blur)" />
+              <ellipse cx="0" cy="-6" rx="56" ry="46" filter="url(#orb-blur)" />
               <path d={RAYS} filter="url(#orb-blur)" />
               <path d={RAYS} fill="url(#orb-ray)" />
             </g>
@@ -132,7 +162,7 @@ export function LifeOrb({
             id={anchor}
             data-oval
             className="life-orb-core"
-            d={cushion(CORE)}
+            d={cushion()}
             stroke={`url(#${id("rim")})`}
             filter={`url(#${id("shadow")})`}
           />
@@ -152,12 +182,7 @@ export function LifeOrb({
               filter="url(#orb-blur)"
             />
           )}
-          {active && (
-            <path
-              className="life-orb-crescent"
-              d="M-40 -24 A47 37 0 0 1 40 -24"
-            />
-          )}
+          {active && <path className="life-orb-crescent" d={CRESCENT} />}
         </g>
       </svg>
       <span
@@ -167,6 +192,54 @@ export function LifeOrb({
         {life}
       </span>
     </div>
+  );
+}
+
+/** The opponent thinking, under their orb: a comet of gold light circling a flat orbit, its
+ * far side dimmer, words being needless here. */
+export function Thinking() {
+  const orbit = "M21 0 A21 6 0 1 1 -21 0 A21 6 0 1 1 21 0";
+  return (
+    <svg
+      className="thinking"
+      viewBox="-24 -8 48 16"
+      role="status"
+      aria-label="Opponent thinking"
+    >
+      <defs>
+        <linearGradient id="thinking-depth" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0.2" stopColor="#fff" stopOpacity="0.35" />
+          <stop offset="0.8" stopColor="#fff" />
+        </linearGradient>
+        <mask
+          id="thinking-near"
+          maskUnits="userSpaceOnUse"
+          x="-24"
+          y="-8"
+          width="48"
+          height="16"
+        >
+          <rect
+            x="-24"
+            y="-8"
+            width="48"
+            height="16"
+            fill="url(#thinking-depth)"
+          />
+        </mask>
+      </defs>
+      <g mask="url(#thinking-near)">
+        <path className="thinking-track" d={orbit} />
+        {[0, 1, 2].map((i) => (
+          <path
+            key={i}
+            className={`thinking-tail thinking-tail-${i}`}
+            d={orbit}
+            pathLength={100}
+          />
+        ))}
+      </g>
+    </svg>
   );
 }
 

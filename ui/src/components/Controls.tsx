@@ -1,6 +1,5 @@
 // Actions and status: buttons, the priority pill, the phase tracker and hover tips.
 import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
-import type { Step } from "../generated/protocol";
 import { useTextFit } from "./fit";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -151,40 +150,7 @@ const SWORD = (
   </>
 );
 
-/** Combat damage: the inspector's damage burst, at the set's size. */
-const BURST = (
-  <path
-    className="phase-dark"
-    strokeWidth="1.5"
-    transform="translate(12 12) scale(1.15) translate(-8 -8)"
-    d="M8 0.5 L9.8 5.2 L15 4 L11.4 8 L15 12 L9.8 10.8 L8 15.5 L6.2 10.8 L1 12 L4.6 8 L1 4 L6.2 5.2 Z"
-  />
-);
-
-/** Each step of combat's icon, where the tracker tells them apart: crossed swords as combat
- * begins, one sword raised for attackers, a shield for blockers, a burst for damage and the
- * sword lowered as combat ends. */
-const COMBAT_STEPS: Partial<Record<Step, ReactNode>> = {
-  declareAttackers: SWORD,
-  declareBlockers: (
-    <>
-      <path
-        className="phase-shield"
-        d="M12 3.9 C14.7 5.25 17.4 5.7 20.46 5.7 L20.46 11.1 C20.46 16.05 16.5 19.2 12 20.64 C7.5 19.2 3.54 16.05 3.54 11.1 L3.54 5.7 C6.6 5.7 9.3 5.25 12 3.9 Z"
-      />
-      <path
-        className="phase-shield-dark"
-        stroke="none"
-        d="M12 4.98 C9.48 6.15 7.05 6.6 4.62 6.69 L4.62 11.1 C4.62 15.24 7.86 18.12 12 19.47 Z"
-      />
-    </>
-  ),
-  firstStrikeDamage: BURST,
-  combatDamage: BURST,
-  endOfCombat: <g transform="rotate(180 12 12)">{SWORD}</g>,
-};
-
-/** Each phase's icon (one set, as above), drawn by both trackers: two cards for the beginning,
+/** Each phase's icon (one set, as above): two cards for the beginning,
  * a peak for the first main phase, crossed swords for combat, a second peak before the first
  * for the second main phase, and the sun setting for the end. */
 const PHASES: { phase: Phase; label: string; icon: ReactNode }[] = [
@@ -261,93 +227,37 @@ const PHASES: { phase: Phase; label: string; icon: ReactNode }[] = [
   },
 ];
 
-/** The turn's phases, the current one lit gold. The compact variant sits on the table above
- * the pass button: smaller, with no pill or arrows, and a gold rule under the current phase.
- * Given `stops`, it shows a turn's phase stops, each phase with one lit and pipped, the others
- * dimmed, and a click on a phase sets or clears its stop (`onStop`). */
+/** The turn's phases between small arrows in a dark pill, the current one lit gold. (On the
+ * table, the step stops about each life orb stand for it: Steps.tsx.) */
 export function PhaseTracker({
   current,
-  step,
-  compact = false,
-  now,
-  stops,
-  onStop,
-  whose,
   className,
 }: {
   current?: Phase;
-  /** The current step, which picks combat's icon among its steps' (COMBAT_STEPS). */
-  step?: Step;
-  compact?: boolean;
-  /** What the current phase's tip says, such as "Turn 9 · Blockers"; its label otherwise. */
-  now?: string;
-  /** The phases with a stop. */
-  stops?: Set<Phase>;
-  onStop?: (phase: Phase) => void;
-  /** Whose turn the row stands for, before each phase's label in its tip. */
-  whose?: string;
   className?: string;
 }) {
   return (
-    <ol
-      className={[
-        "phase-tracker",
-        compact && "phase-tracker-compact",
-        stops && "phase-tracker-stops",
-        className,
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    >
-      {PHASES.map(({ phase, label, icon }, i) => {
-        const glyph = (
+    <ol className={["phase-tracker", className].filter(Boolean).join(" ")}>
+      {PHASES.map(({ phase, label, icon }, i) => (
+        <li
+          key={phase}
+          className={phase === current ? "phase phase-current" : "phase"}
+        >
+          {i > 0 && (
+            <svg className="phase-arrow" viewBox="0 0 9 11" aria-hidden>
+              <path d="M0.5 0.5 L8.5 5.5 L0.5 10.5 Z" />
+            </svg>
+          )}
           <svg
             className="phase-icon"
             viewBox="0 0 24 24"
             role="img"
             aria-label={label}
           >
-            {(phase === current && step && COMBAT_STEPS[step]) || icon}
+            {icon}
           </svg>
-        );
-        const stopped = stops?.has(phase);
-        return (
-          <li
-            key={phase}
-            className={[
-              "phase has-tip",
-              phase === current && "phase-current",
-              stopped === true && "phase-stop",
-              stopped === false && "phase-no-stop",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-          >
-            <Tip side="above">
-              {(phase === current && now) ||
-                (whose ? `${whose} ${label.toLowerCase()}` : label)}
-            </Tip>
-            {i > 0 && !compact && (
-              <svg className="phase-arrow" viewBox="0 0 9 11" aria-hidden>
-                <path d="M0.5 0.5 L8.5 5.5 L0.5 10.5 Z" />
-              </svg>
-            )}
-            {onStop ? (
-              <button
-                type="button"
-                className="phase-toggle"
-                aria-pressed={stopped}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => onStop(phase)}
-              >
-                {glyph}
-              </button>
-            ) : (
-              glyph
-            )}
-          </li>
-        );
-      })}
+        </li>
+      ))}
     </ol>
   );
 }

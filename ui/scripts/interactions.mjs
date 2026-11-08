@@ -1110,7 +1110,7 @@ await check(
             assert.ok(took < 60_000, "the opponent's turn ends");
             const pill = await page.$(".priority-pill");
             if (pill) pills.add(await pill.textContent());
-            thinking ||= (await page.$(".player-badge-activity")) !== null;
+            thinking ||= (await page.$(".thinking")) !== null;
             landBeforeHalt ||= (await page.$(land)) !== null;
             for (const card of await page.$$eval(
                 '.card-el[data-zone="stack"]',
@@ -1121,9 +1121,10 @@ await check(
             await page.clock.runFor(100);
             took += 100;
         }
+        assert.ok(thinking, "the opponent is seen thinking");
         assert.ok(
-            pills.has("Opponent is thinking") && thinking,
-            `the opponent is seen thinking: ${[...pills].join(", ")}`,
+            ![...pills].some((p) => /thinking/i.test(p)),
+            `no pill says the opponent is thinking: ${[...pills].join(", ")}`,
         );
         assert.ok(
             pills.size >= 5,
@@ -4254,17 +4255,24 @@ await check(
 );
 
 await check(
-    "a phase icon sets and clears a stop in that player's turns",
+    "a step icon sets and clears a stop in that player's turns",
     async (page) => {
         await page.clock.runFor(2000);
-        const end = ".phase-row-opponent .phase:last-child";
-        const upkeep = ".phase-row-opponent .phase:first-child";
-        assert.ok(await page.locator(`${end}.phase-stop`).count());
-        assert.ok(await page.locator(`${upkeep}.phase-no-stop`).count());
-        await page.click(`${end} .phase-toggle`);
-        await page.click(`${upkeep} .phase-toggle`);
-        assert.ok(await page.locator(`${end}.phase-no-stop`).count());
-        assert.ok(await page.locator(`${upkeep}.phase-stop`).count());
+        const row = ".step-stops-opponent";
+        const end = `${row} [data-step=end]`;
+        const upkeep = `${row} [data-step=upkeep]`;
+        assert.ok(await page.locator(`${end}.step-stop`).count());
+        assert.ok(await page.locator(`${upkeep}.step-no-stop`).count());
+        // Untap and cleanup, where no one gets priority, are never stops.
+        assert.equal(await page.locator(`${row} .step-fixed`).count(), 2);
+        assert.equal(
+            await page.locator(`${row} .step-fixed .step-toggle`).count(),
+            0,
+        );
+        await page.click(`${end} .step-toggle`);
+        await page.click(`${upkeep} .step-toggle`);
+        assert.ok(await page.locator(`${end}.step-no-stop`).count());
+        assert.ok(await page.locator(`${upkeep}.step-stop`).count());
         const sent = await page.evaluate(() =>
             window.berylFixture.calls
                 .filter((c) => c.command === "set_stops")
@@ -4274,7 +4282,6 @@ await check(
             "declareAttackers",
             "declareBlockers",
             "upkeep",
-            "draw",
         ]);
     },
 );
@@ -4371,7 +4378,7 @@ await check(
             return page.locator(".tip").filter({ visible: true }).innerText();
         };
         assert.equal(
-            await tip(".turn-controls .phase-current"),
+            await tip(".turn-controls .step-current"),
             `Turn ${view.turn.number} · Main 1`,
         );
         assert.equal(

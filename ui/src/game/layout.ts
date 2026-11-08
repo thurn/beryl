@@ -14,7 +14,6 @@ import type {
 import { CARD_ASPECT } from "../components/Card";
 import { cardEntry } from "../cards";
 import { referenced, twins } from "./decisions";
-import type { Phase } from "../components/Controls";
 
 /** The fixed stage the table is drawn on, scaled to fit the window (Stage.tsx). */
 export const STAGE = { width: 1600, height: 900 };
@@ -1565,25 +1564,6 @@ const SHOWCASE_Z = 800;
 
 /** The stack's items are drawn over everything else on the table, the top item in front. */
 export const STACK_Z = 400;
-
-/** The compact phase tracker's phase for a step. */
-export function phaseOf(step: Step): Phase {
-  switch (step) {
-    case "untap":
-    case "upkeep":
-    case "draw":
-      return "beginning";
-    case "precombatMain":
-      return "main1";
-    case "postcombatMain":
-      return "main2";
-    case "end":
-    case "cleanup":
-      return "end";
-    default:
-      return "combat";
-  }
-}
 
 export const STEP_NAMES: Record<Step, string> = {
   untap: "Untap",

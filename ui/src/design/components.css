@@ -1206,10 +1206,10 @@
   stroke-width: 1.1;
 }
 /* Amber haze on the pill behind the current phase, centered on its icon. */
-.phase-tracker:not(.phase-tracker-compact) .phase-current {
+.phase-tracker .phase-current {
   position: relative;
 }
-.phase-tracker:not(.phase-tracker-compact) .phase-current::before {
+.phase-tracker .phase-current::before {
   content: "";
   position: absolute;
   top: -12px;
@@ -1226,9 +1226,26 @@
   filter: drop-shadow(0 1px 1px rgb(0 0 0 / 70%));
 }
 
-/* Phase stops: a phase with one is lit and pipped gold, one without dimmed; each is a button
-   that sets or clears it. */
-.phase-toggle {
+/* Step stops (Steps.tsx): Phosphor icons in cream, filled where there is a stop, outlined and
+   dimmer where there is none; untap and cleanup, never stops, dimmer still. The current step
+   burns gold. */
+.step-stops {
+  display: flex;
+  justify-content: space-between;
+}
+.step-group {
+  display: grid;
+  grid-template-columns: repeat(3, var(--step-size, 22px));
+  gap: var(--step-row-gap, 6px) var(--step-gap, 9px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.step {
+  position: relative;
+  display: flex;
+}
+.step-toggle {
   display: flex;
   padding: 0;
   border: none;
@@ -1236,105 +1253,99 @@
   color: inherit;
   cursor: pointer;
 }
-.phase-tracker-stops .phase-icon {
-  transition: opacity 120ms;
+.step-icon {
+  width: var(--step-size, 22px);
+  height: var(--step-size, 22px);
+  fill: #f0e2c4;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 75%));
+  transition:
+    opacity 120ms,
+    fill 120ms;
 }
-.phase-tracker-stops .phase-no-stop .phase-icon {
-  opacity: 0.35;
+.step-no-stop .step-icon {
+  opacity: 0.6;
 }
-.phase-tracker-stops .phase-no-stop .phase-toggle:hover .phase-icon {
-  opacity: 0.7;
+.step-fixed .step-icon {
+  opacity: 0.32;
 }
-.phase-tracker-stops .phase-current .phase-icon {
+.step-toggle:hover .step-icon {
   opacity: 1;
 }
-.phase-tracker-stops .phase-stop::before {
-  content: "";
-  position: absolute;
-  top: -1px;
-  right: -3px;
-  width: 5px;
-  height: 5px;
-  z-index: 1;
-  border-radius: 50%;
-  background: #ffd27a;
-  box-shadow: 0 0 3px 1px rgb(245 130 30 / 60%);
-  pointer-events: none;
+.step-current .step-icon {
+  opacity: 1;
+  fill: #ffd27a;
+  filter: drop-shadow(0 0 1.5px rgb(255 170 50))
+    drop-shadow(0 0 3px rgb(255 130 20))
+    drop-shadow(0 0 5px rgb(230 100 10 / 65%));
 }
 
-/* The compact tracker on the table, in stage pixels: the same icons, smaller, evenly spaced
-   over a thin rule with no pill or arrows. The current one glows as in the full tracker, and
-   the rule under it turns gold. */
-.phase-tracker-compact {
-  position: relative;
-  gap: 13px;
-  height: auto;
-  padding: 0 0 4px;
-  border: none;
-  border-radius: 0;
-  background: none;
-  box-shadow: none;
+/* The opponent thinking (Player.tsx' Thinking): a comet's tails of three lengths, brightest and
+   thickest at its head, circling the orbit together. */
+.thinking {
+  width: 84px;
+  height: 28px;
+  overflow: visible;
+  filter: drop-shadow(0 0 2px rgb(255 150 40 / 60%));
 }
-.phase-tracker-compact::after {
-  content: "";
-  position: absolute;
-  left: -6px;
-  right: -6px;
-  bottom: 0;
-  height: 2px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgb(160 150 136 / 40%) 6%,
-    rgb(160 150 136 / 40%) 94%,
-    transparent
-  );
+.thinking-track {
+  fill: none;
+  stroke: rgb(255 214 150 / 22%);
+  stroke-width: 0.9;
 }
-/* A dark groove runs behind the icons. */
-.phase-tracker-compact::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 20%;
-  height: 50%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgb(0 0 0 / 22%) 12%,
-    rgb(0 0 0 / 22%) 88%,
-    transparent
-  );
-  filter: blur(3px);
+.thinking-tail {
+  fill: none;
+  stroke-linecap: round;
+  animation: 1.2s linear infinite;
 }
-.phase-tracker-compact .phase {
-  position: relative;
+.thinking-tail-0 {
+  stroke: #ff7a14;
+  stroke-opacity: 0.45;
+  stroke-width: 1.3;
+  stroke-dasharray: 36 64;
+  animation-name: thinking-tail-0;
 }
-.phase-tracker-compact .phase-icon {
-  position: relative;
-  width: 30px;
-  height: 30px;
+.thinking-tail-1 {
+  stroke: #ffb444;
+  stroke-opacity: 0.8;
+  stroke-width: 1.7;
+  stroke-dasharray: 16 84;
+  animation-name: thinking-tail-1;
 }
-.phase-tracker-compact .phase-current::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -4px;
-  height: 2px;
-  z-index: 1;
-  background:
-    radial-gradient(closest-side, rgb(255 250 220), transparent) 50% 50% / 8px
-      4px no-repeat,
-    linear-gradient(
-      90deg,
-      transparent,
-      rgb(255 150 40 / 85%) 35%,
-      #ffd27a 50%,
-      rgb(255 150 40 / 85%) 65%,
-      transparent
-    );
-  box-shadow: 0 0 4px 1px rgb(245 130 30 / 55%);
+.thinking-tail-2 {
+  stroke: #fff3c0;
+  stroke-width: 2.4;
+  stroke-dasharray: 3 97;
+  animation-name: thinking-tail-2;
+}
+/* Each tail's dash ends at the head, which runs once round the orbit (100) a cycle. */
+@keyframes thinking-tail-0 {
+  from {
+    stroke-dashoffset: 36;
+  }
+  to {
+    stroke-dashoffset: -64;
+  }
+}
+@keyframes thinking-tail-1 {
+  from {
+    stroke-dashoffset: 16;
+  }
+  to {
+    stroke-dashoffset: -84;
+  }
+}
+@keyframes thinking-tail-2 {
+  from {
+    stroke-dashoffset: 3;
+  }
+  to {
+    stroke-dashoffset: -97;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .thinking-tail {
+    animation-duration: 4s;
+  }
 }
 
 /* Life orbs, drawn in mockup pixels (Player.tsx); --orb scales one to CSS pixels. */
