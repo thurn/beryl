@@ -633,6 +633,17 @@
   top: 0;
   pointer-events: none;
 }
+/* Jace's put-back: the library and the hand on the open table, no tray around them. */
+.stack-zone {
+  border-color: transparent;
+  background: none;
+}
+.stack-empty {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background: rgb(0 0 0 / 30%);
+}
 
 /* The table: a fixed stage scaled to the window. */
 .stage-frame {

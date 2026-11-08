@@ -46,6 +46,17 @@ export interface Arrange extends Common {
   plan(left: number[], right: number[]): Intent[];
 }
 
+/** Cards from your hand put on your library, dragged from the fanned hand onto the deck and
+ * into order there. */
+export interface Stack extends Common {
+  kind: "stack";
+  hand: number[];
+  /** How many cards go onto the library. */
+  count: number;
+  /** The cards on the library, the deepest first. */
+  plan(onto: number[]): Intent[];
+}
+
 /** Cards in a row, some of which can be picked. */
 export interface Pick extends Common {
   kind: "pick";
@@ -70,7 +81,7 @@ export interface Ask extends Common {
   answers: { label: string; plan: Intent[] }[];
 }
 
-export type Choice = Arrange | Pick | Ask;
+export type Choice = Arrange | Stack | Pick | Ask;
 
 /** Whether a choice is asked in the floating prompt over the table, as a title and a row of
  * buttons, rather than in the overlay over the dimmed table: a question with no cards. */
@@ -374,20 +385,16 @@ function scry(at: Situation, { count }: AskOf<"scry">): Arrange {
 }
 
 /** Cards from your hand put on top of your library in any order, each on the one before. */
-function putBack(at: Situation, { count }: AskOf<"putBack">): Arrange {
+function putBack(at: Situation, { count }: AskOf<"putBack">): Stack {
   const hand = at.hand("you");
-  const need = Math.min(count, hand.length);
   return {
-    kind: "arrange",
+    kind: "stack",
     key: at.key,
     title: "Put Back",
     source: at.source,
-    labels: ["Hand", "Top"],
-    left: hand,
-    right: [],
-    rightCount: need,
-    plan: (_left, right) =>
-      right.map((slot) => at.pickCard("chooseObject", slot)),
+    hand,
+    count: Math.min(count, hand.length),
+    plan: (onto) => onto.map((slot) => at.pickCard("chooseObject", slot)),
   };
 }
 

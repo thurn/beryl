@@ -36,6 +36,7 @@ import {
   type Choice,
   type Pick,
   type Source,
+  type Stack,
 } from "./choices";
 import type { Intent } from "./decisions";
 import { useFace } from "./faces";
@@ -64,6 +65,8 @@ export function ChoiceOverlay(props: ChoiceOverlayProps) {
     <Inspecting.Provider value={inspect}>
       {choice.kind === "arrange" ? (
         <ArrangeChoice {...props} choice={choice} />
+      ) : choice.kind === "stack" ? (
+        <StackChoice {...props} choice={choice} />
       ) : choice.kind === "pick" ? (
         <PickChoice {...props} choice={choice} />
       ) : (
@@ -209,7 +212,7 @@ const corner = (x: number, width: number, lift = 0) => ({
   y: (TRAY.height - width / CARD_ASPECT) / 2 - lift,
 });
 
-// --- Arranging: scry, Jace's put-back ---
+// --- Arranging: scry, a look's hand and bottom ---
 
 /** The library between the piles, in the sequence of tray items; then the outlines of the
  * cards the right pile still needs, from `GHOST` down. */
@@ -355,20 +358,22 @@ function ArrangeChoice({
                 key={item}
                 object={objects.get(item)}
                 x={center.get(item)!}
+                y={FACE.y}
+                width={FACE.width}
                 z={i + 1}
                 turn={i < libraryAt ? -FACE.turn : FACE.turn}
                 disabled={busy}
-                onMove={(x) =>
+                onMove={(p) =>
                   setHeld(
-                    x === undefined
+                    p === undefined
                       ? undefined
                       : {
                           slot: item,
-                          sequence: place(item, x, heldFrom(item)),
+                          sequence: place(item, p.x, heldFrom(item)),
                         },
                   )
                 }
-                onDrop={(x) => split(place(item, x, heldFrom(item)))}
+                onDrop={(p) => split(place(item, p.x, heldFrom(item)))}
                 onClick={() => toggle(item)}
               />
             ),
@@ -392,13 +397,22 @@ const BACK_WIDTH = 220;
 /** A drag starts once the pointer has moved this far, in stage pixels; less is a click. */
 const DRAG_THRESHOLD = 6;
 
-/** A tray card that glides to its place and can be dragged about the tray, lifted while
- * held; `onMove` follows the held card's center (undefined once let go). */
+/** A point in the tray, stage pixels. */
+interface Point {
+  x: number;
+  y: number;
+}
+
+/** A tray card that glides to its place, centered at (`x`, `y`), and can be dragged about the
+ * tray, lifted while held; `onMove` follows the held card's center (undefined once let go). */
 function DraggableCard({
   object,
   x: centerX,
+  y: centerY,
+  width: restWidth,
   z,
   turn,
+  out = false,
   disabled,
   onMove,
   onDrop,
@@ -406,17 +420,21 @@ function DraggableCard({
 }: {
   object?: ObjectView;
   x: number;
+  y: number;
+  width: number;
   z: number;
   turn: number;
+  /** Dimmed: it can't go anywhere now, though it still shows whole on hover. */
+  out?: boolean;
   disabled: boolean;
-  onMove(x: number | undefined): void;
-  onDrop(x: number): void;
+  onMove(at: Point | undefined): void;
+  onDrop(at: Point): void;
   onClick(): void;
 }) {
   const reduce = useReducedMotion() ?? false;
   const stageScale = useContext(StageScale);
   const x = useMotionValue(centerX);
-  const y = useMotionValue(FACE.y);
+  const y = useMotionValue(centerY);
   const [dragging, setDragging] = useState(false);
   const drag = useRef<{
     start: number;
@@ -429,17 +447,17 @@ function DraggableCard({
     if (dragging) return;
     const glide = reduce ? { duration: 0 } : SPRING;
     const a = animate(x, centerX, glide);
-    const b = animate(y, FACE.y, glide);
+    const b = animate(y, centerY, glide);
     return () => {
       a.stop();
       b.stop();
     };
-  }, [x, y, centerX, dragging, reduce]);
+  }, [x, y, centerX, centerY, dragging, reduce]);
   const point = (e: PointerEvent) => ({
     x: e.clientX / stageScale,
     y: e.clientY / stageScale,
   });
-  const width = dragging ? HELD.width : FACE.width;
+  const width = dragging ? (restWidth * HELD.width) / FACE.width : restWidth;
   const height = width / CARD_ASPECT;
   const release = () => {
     drag.current = undefined;
@@ -448,7 +466,13 @@ function DraggableCard({
   };
   return (
     <motion.div
-      className={dragging ? "choice-card choice-card-dragging" : "choice-card"}
+      className={[
+        "choice-card",
+        dragging && "choice-card-dragging",
+        out && !dragging && "choice-card-out",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       data-slot={object?.slot}
       data-card={object?.name ?? undefined}
       style={{
@@ -486,12 +510,12 @@ function DraggableCard({
         }
         x.set(d.from + dx);
         y.set(d.fromY + dy);
-        onMove(x.get());
+        onMove({ x: x.get(), y: y.get() });
       }}
       onPointerUp={() => {
         const d = drag.current;
         if (!d) return;
-        const at = x.get();
+        const at = { x: x.get(), y: y.get() };
         release();
         if (d.moved) onDrop(at);
         else onClick();
@@ -504,6 +528,176 @@ function DraggableCard({
         highlight={dragging ? "target" : undefined}
       />
     </motion.div>
+  );
+}
+
+// --- Stacking: Jace's put-back ---
+
+/** The library at the tray's left, face down, with the cards put on it cascading down its
+ * face, the top one in front and whole; the hand fanned at the right. A card goes from one to
+ * the other by a click or a drag, and into order on the library by a drag. */
+const DECK = { x: 150, width: 230 };
+/** How far each card on the library lies below the one under it: its name bar shows. */
+const CASCADE = 46;
+/** The library's backs, each this far up and left of the one above it: a deck's edge. */
+const DECK_EDGE = { dx: -1.5, dy: -2.5 };
+/** The hand's fan: from `left` to the tray's right edge less `right`, neighbors at most
+ * `step` apart, turned up to `turn` degrees at its ends and dropped `drop` there. */
+const FAN = { left: 350, right: 12, width: 230, step: 150, turn: 7, drop: 22 };
+/** A card dropped left of this goes on the library; right of it, back to the hand. */
+const DECK_REACH = (DECK.x + DECK.width / 2 + FAN.left) / 2 + 40;
+
+/** The centers and turns of the cards on the library, the deepest first, for a column built
+ * for `room` of them, centered down the tray. */
+function cascade(count: number, room: number) {
+  const height = DECK.width / CARD_ASPECT;
+  const span = Math.min(
+    CASCADE,
+    (TRAY.height - 24 - height) / Math.max(room - 1, 1),
+  );
+  const top = TRAY.height / 2 - (span * (room - 1)) / 2;
+  return {
+    top,
+    cards: Array.from({ length: count }, (_, i) => ({
+      y: top + span * i,
+      turn: i === count - 1 ? 0 : i % 2 === 0 ? -1.6 : 1.4,
+    })),
+  };
+}
+
+/** Centers and turns of `count` cards fanned across the tray's right. */
+function fan(count: number) {
+  const right = TRAY.width - FAN.right - FAN.width / 2;
+  const left = FAN.left + FAN.width / 2;
+  const step = count > 1 ? Math.min(FAN.step, (right - left) / (count - 1)) : 0;
+  const start = (left + right) / 2 - (step * (count - 1)) / 2;
+  return Array.from({ length: count }, (_, i) => {
+    const t = count > 1 ? (i / (count - 1)) * 2 - 1 : 0;
+    return {
+      x: start + step * i,
+      y: TRAY.height / 2 + FAN.drop * t * t,
+      turn: FAN.turn * t,
+    };
+  });
+}
+
+function StackChoice({
+  view,
+  choice,
+  busy,
+  onPlan,
+  onViewBattlefield,
+  onCancel,
+}: ChoiceOverlayProps & { choice: Stack }) {
+  const [onto, setOnto] = useState<number[]>([]);
+  const [held, setHeld] = useState<{ slot: number; at: Point }>();
+  const full = onto.length >= choice.count;
+  const room = Math.max(choice.count, 1);
+  // Where a card held at `at` would land: on the library at the place its height picks, if
+  // there's room for it there; else in the hand.
+  const landing = (slot: number, at: Point): number[] => {
+    const others = onto.filter((s) => s !== slot);
+    if (at.x > DECK_REACH || others.length >= choice.count) return others;
+    // Over the library, it goes onto every card whose middle it is below: dropped anywhere on
+    // the deck but high up, it lands on top.
+    const index = cascade(others.length, room).cards.filter(
+      (c) => c.y < at.y,
+    ).length;
+    return [...others.slice(0, index), slot, ...others.slice(index)];
+  };
+  const shown = held ? landing(held.slot, held.at) : onto;
+  const hand = choice.hand.filter((s) => !shown.includes(s));
+  const column = cascade(shown.length, room);
+  const fanned = fan(hand.length);
+  const place = new Map<
+    number,
+    { x: number; y: number; turn: number; z: number }
+  >();
+  shown.forEach((slot, i) =>
+    place.set(slot, { x: DECK.x, ...column.cards[i]!, z: 50 + i }),
+  );
+  hand.forEach((slot, i) => place.set(slot, { ...fanned[i]!, z: 1 + i }));
+  const objects = new Map(view.objects.map((o) => [o.slot, o]));
+  const library = view.players.you.library.length;
+  const backs = Math.min(library, 6, 2 + Math.ceil(library / 10));
+  const deckY = column.top - 14;
+  // A click moves a card across: from the hand onto the top of the library while it has room,
+  // from the library back to the hand.
+  const toggle = (slot: number) =>
+    setOnto((now) =>
+      now.includes(slot)
+        ? now.filter((s) => s !== slot)
+        : now.length < choice.count
+          ? [...now, slot]
+          : now,
+    );
+  return (
+    <Shell
+      view={view}
+      choice={choice}
+      busy={busy}
+      onViewBattlefield={onViewBattlefield}
+      onCancel={onCancel}
+      actions={[
+        {
+          label: "Done",
+          disabled: busy || onto.length !== choice.count,
+          onClick: () => onPlan(choice.plan(onto)),
+        },
+      ]}
+    >
+      <div className="scry-zone stack-zone choice-zone" data-choice="stack">
+        <div
+          className="choice-library"
+          data-count={library}
+          style={{
+            left: DECK.x - DECK.width / 2,
+            top: deckY - DECK.width / CARD_ASPECT / 2,
+            width: DECK.width,
+            height: DECK.width / CARD_ASPECT,
+          }}
+        >
+          {library === 0 ? (
+            <div className="stack-empty" />
+          ) : (
+            Array.from({ length: backs }, (_, i) => {
+              const depth = backs - 1 - i;
+              return (
+                <CardBack
+                  key={i}
+                  width={DECK.width}
+                  style={{
+                    position: "absolute",
+                    left: DECK_EDGE.dx * depth,
+                    top: DECK_EDGE.dy * depth,
+                  }}
+                />
+              );
+            })
+          )}
+        </div>
+        {choice.hand.map((slot) => {
+          const at = place.get(slot)!;
+          const inHand = !shown.includes(slot);
+          return (
+            <DraggableCard
+              key={slot}
+              object={objects.get(slot)}
+              x={at.x}
+              y={at.y}
+              width={inHand ? FAN.width : DECK.width}
+              z={at.z}
+              turn={at.turn}
+              out={inHand && full && held?.slot !== slot}
+              disabled={busy}
+              onMove={(p) => setHeld(p && { slot, at: p })}
+              onDrop={(p) => setOnto(landing(slot, p))}
+              onClick={() => toggle(slot)}
+            />
+          );
+        })}
+      </div>
+    </Shell>
   );
 }
 

@@ -3106,27 +3106,39 @@ await check(
         await page.clock.runFor(2000);
         const done = page.getByRole("button", { name: "Done" });
         assert.ok(await done.isDisabled(), "Done waits for two cards");
-        const zone = await page.locator(".choice-zone").boundingBox();
+        // The library lies at the left, the hand fanned at the right.
+        const deck = await page.locator(".choice-library").boundingBox();
         const end = {
-            x: zone.x + zone.width - 30,
-            y: zone.y + zone.height / 2,
+            x: deck.x + deck.width / 2,
+            y: deck.y + deck.height / 2,
         };
         for (const slot of [first, second]) {
-            // By its left edge, which the fanned cards after it leave showing.
             const box = await page.locator(tray(slot)).boundingBox();
-            const grab = { x: box.x + 20, y: box.y + box.height / 2 };
+            assert.ok(
+                box.x > deck.x + deck.width,
+                "the hand is right of the library",
+            );
+            // By its name bar, which the fanned cards after it leave showing.
+            const grab = { x: box.x + 24, y: box.y + 30 };
             await page.mouse.move(grab.x, grab.y);
             await page.mouse.down();
             for (let i = 1; i <= 10; i++) {
                 await page.mouse.move(
                     grab.x + ((end.x - grab.x) * i) / 10,
-                    grab.y,
+                    grab.y + ((end.y - grab.y) * i) / 10,
                 );
             }
             await page.mouse.up();
             await page.clock.runFor(2000);
         }
         assert.ok(await done.isEnabled(), "two cards are on the library");
+        const [under, over] = await Promise.all(
+            [first, second].map((s) => page.locator(tray(s)).boundingBox()),
+        );
+        assert.ok(
+            over.y > under.y && over.x < deck.x + deck.width,
+            "the top card lies in front, lower down the library",
+        );
         await done.click();
         assert.deepEqual(
             await settled(page, 1),
