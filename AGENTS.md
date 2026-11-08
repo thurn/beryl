@@ -116,6 +116,11 @@ Cheapest first. Agents never open a window: `just dev` refuses to for them.
 3. The app: `just smoke` builds the debug app and launches it with no window and
    no Dock icon until the UI reports over IPC that it loaded (about a second
    once built). It fails on a build error or a UI that never loads.
+4. The iOS app: `just mobile-setup` installs its toolchain once per machine.
+   `just ios-smoke` builds it and launches it in a headless iOS Simulator until
+   the UI loads. `just ios` launches it in a simulator; drive that with the iOS
+   Simulator tool. Agents never install to a phone: `just ios-device` (signs and
+   installs to the paired iPhone) is the user's, `--no-install` only builds.
 
 A human runs `just dev` for the app with hot reload, or `just bundle` for a
 release `Beryl.app`.

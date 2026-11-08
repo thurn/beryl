@@ -41,6 +41,26 @@ dev *args:
 smoke *args:
     {{ by }} smoke "$@"
 
+# Install the phone apps' toolchains: Rust targets, CocoaPods, the iOS Simulator runtime (idempotent)
+[group('app')]
+mobile-setup:
+    {{ by }} mobile-setup
+
+# Build the debug iOS app, boot the Beryl iPhone simulator and launch it there (--no-build)
+[group('app')]
+ios *args:
+    {{ by }} ios "$@"
+
+# Build the debug iOS app and launch it in a headless simulator until its UI loads (--seconds N, --no-build)
+[group('app')]
+ios-smoke *args:
+    {{ by }} ios-smoke "$@"
+
+# Build and sign the release iOS app and install it on the paired iPhone (--no-install)
+[group('app')]
+ios-device *args:
+    {{ by }} ios-device "$@"
+
 # Screenshot UI states headless into the cache and print the paths (shot names; ui/shots.json)
 [group('app')]
 ui-shots *args:
