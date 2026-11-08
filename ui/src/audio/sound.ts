@@ -7,8 +7,11 @@
 // but logs every cue it is asked for, on the page's clock, in `window.berylSounds` and
 // `window.berylMusic`, for tests to assert on.
 //
-// WebKit keeps an AudioContext suspended until a user gesture: the context is made at once, so
-// the effects decode ahead, and resumed by the first pointer or key press, when music starts.
+// The context is made at once, so the effects decode ahead, and music starts as soon as it
+// runs. In the app that is at launch: Tauri's wry sets WKWebView's
+// `mediaTypesRequiringUserActionForPlayback` to none, lifting the gesture rule. In a browser
+// (`just dev` in Safari, the spec pages) the context stays suspended until the first pointer
+// or key press resumes it.
 import { note } from "../diagnostics";
 import { audioAvailable } from "../ipc";
 import manifest from "./manifest.json";
@@ -162,6 +165,14 @@ export function installAudio() {
     playing: new Map(),
   };
   applyLevels();
+  // A new context reports suspended and turns running a moment later where nothing blocks
+  // it, so the music waits for the change rather than for a gesture.
+  context.addEventListener("statechange", () => {
+    if (context.state === "running" && !track && wanted !== undefined) {
+      startMusic(wanted);
+    }
+  });
+  context.resume().catch(() => undefined); // Locked: the first gesture resumes it.
   for (const sound of Object.keys(SOUNDS) as Sound[]) {
     SOUNDS[sound].variants.forEach((_, n) => {
       const url = soundUrl(sound, n);
@@ -177,15 +188,12 @@ export function installAudio() {
  * press that unlocks) plays as the context starts. */
 let resuming = false;
 
-/** Resumes the context on a user gesture, and starts the music the first time. */
+/** Resumes a context still locked at a user gesture; its `statechange` starts the music. */
 function unlock() {
   if (!engine || engine.context.state === "running" || resuming) return;
   resuming = true;
   engine.context.resume().then(
-    () => {
-      resuming = false;
-      if (!track && wanted !== undefined) startMusic(wanted);
-    },
+    () => (resuming = false),
     () => (resuming = false), // A later gesture tries again.
   );
 }
@@ -327,7 +335,7 @@ function startMusic(music: Music) {
 }
 
 /** Asks for `music`, or silence: a change crossfades, the same music plays on. Before the
- * first gesture it waits for it. */
+ * context runs it waits for it. */
 export function setMusic(music: Music | undefined) {
   if (music === wanted) return;
   wanted = music;
