@@ -618,46 +618,6 @@
   top: 0;
   pointer-events: none;
 }
-/* Its buttons: the primary as wide as its label needs, alternatives outlined beside it. */
-.overlay-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 16px 28px;
-  margin-top: 51px;
-}
-/* Rimmed in pale gold and glowing hotter than the shell's own confirm (scry.png's Done). */
-.overlay-actions .overlay-confirm {
-  margin-top: 0;
-  width: auto;
-  min-width: 280px;
-  padding: 0 36px 3px;
-  border-color: #fff9c6;
-  box-shadow:
-    inset 0 2px 2px rgb(253 202 87 / 85%),
-    inset 0 0 8px rgb(255 190 80 / 45%),
-    0 0 0 1px rgb(160 62 4 / 90%),
-    0 0 10px 5px rgb(255 108 20 / 85%),
-    0 0 24px 9px rgb(226 76 16 / 40%);
-}
-.overlay-alternative {
-  min-width: 200px;
-  height: 61px;
-  padding: 0 32px;
-  font-size: 30px;
-}
-/* While the battlefield shows, the way back sits where the turn button does, which gives way to
-   it: the top right, where "View Battlefield" was, holds the opponent's piles. Over the hand. */
-.overlay-return {
-  position: absolute;
-  top: 765px;
-  right: 39px;
-  z-index: 600;
-  min-width: 250px;
-  height: 48px;
-  padding: 0 21px;
-  font-size: 22px;
-}
 
 /* The table: a fixed stage scaled to the window. */
 .stage-frame {
@@ -1162,105 +1122,110 @@
   stroke-width: 2.6;
   stroke-linecap: round;
 }
-/* A declaration's shortcuts over the turn button, as wide as it, splitting it evenly. */
-.combat-actions {
+/* The action dock (Controls.tsx' Dock): every action on the game screen, in the bottom-right
+   corner. A column of buttons of one size, as wide as the widest (the turn button's width at
+   the least), whose foot is where the turn button stands; the question it answers over them,
+   wrapped to the column; a caption or the priority pill under the foot. It rises in. */
+.dock {
+  position: absolute;
   right: 39px;
-  top: 705px;
-  width: 250px;
+  bottom: 87px;
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--button-gap);
+  width: max-content;
+  min-width: var(--button-width);
+  max-width: 460px;
+  pointer-events: auto;
+  animation: dock-in 0.22s ease-out both;
 }
-.combat-actions .button {
-  flex: 1 1 0;
+@keyframes dock-in {
+  from {
+    opacity: 0;
+    translate: 0 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dock {
+    animation: none;
+  }
+}
+/* The question: a few words over the buttons, never widening them. */
+.dock .prompt-title {
+  contain: inline-size;
+  margin: 0 0 2px;
+  font: 600 26px/1.15 var(--font-serif);
+  color: #fff7e6;
+  text-align: center;
+  text-wrap: balance;
+  text-shadow:
+    0 2px 4px rgb(0 0 0 / 90%),
+    0 0 14px rgb(0 0 0 / 85%),
+    0 0 28px rgb(0 0 0 / 70%);
+  pointer-events: none;
+}
+/* The buttons, the first at the foot and the rest stacked over it. */
+.dock-buttons {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: stretch;
+  gap: var(--button-gap);
+}
+.dock .button {
   min-width: 0;
-  height: 44px;
-  padding: 0 12px;
-  font-size: 18px;
-  font-weight: 700;
-  white-space: nowrap;
+  width: 100%;
 }
+.dock .button > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The turn button: its icon and label centered together, a label too long for it shrinking
+   to fit (Controls.tsx' TurnButton); its caption or the priority pill under it, standing
+   centered out over both sides, so nothing moves between states. */
 .turn-action {
-  right: 39px;
-  top: 765px;
-  /* As wide as the button, whatever lies under it, so no caption or pill moves it: a wider one
-     stands centered under it, out over both sides. */
-  width: 250px;
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
-.turn-action > :not(.button) {
-  flex: none;
-  max-width: 320px;
-}
-.turn-action .priority-pill > span {
-  min-width: 0;
-  white-space: nowrap;
-  font-size: calc(1em * var(--fit, 1));
-}
-/* The turn button keeps one size and type style for every label and state: its icon and label
-   centered together, a label too long for it shrinking to fit (Controls.tsx's TurnButton). */
-.turn-action .button {
-  width: 250px;
-  height: 48px;
-  padding: 0 21px;
-  border-width: 1.5px;
-  font-weight: 700;
-}
 .turn-action .button > span:last-child {
-  min-width: 0;
-  white-space: nowrap;
+  text-overflow: clip;
   font-size: calc(1em * var(--fit, 1));
 }
 .turn-action .button .button-icon {
-  flex: none;
-  width: 28px;
+  width: 26px;
   margin: 0;
 }
-/* Enabled: deep amber in the middle, under a gold rim. */
-.turn-action .button-primary:not(:disabled) {
-  border-color: #fff2b1 #eba043 #f7bc56;
-  background: linear-gradient(
-    180deg,
-    #e28322,
-    #cc6f1c 12%,
-    #b45e12 30%,
-    #a7570f 48%,
-    #ad5b10 60%,
-    #c46a18 74%,
-    #e08122 87%,
-    #f6a83c 100%
-  );
-  box-shadow:
-    inset 0 1px 1px rgb(255 240 190 / 70%),
-    0 0 0 1px rgb(60 25 5 / 85%),
-    0 0 6px 3px rgb(240 140 50 / 55%),
-    0 4px 8px rgb(0 0 0 / 35%);
-}
-.turn-action .button:disabled {
-  color: #8a8480;
-  border-color: #a4a09c #8c8884 #7f7b78;
-  background: linear-gradient(180deg, #342f2b, #3a3430 50%, #433d39);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 8%),
-    0 0 0 1px rgb(14 11 10 / 60%),
-    0 5px 8px rgb(0 0 0 / 55%);
+.turn-action > :not(.button) {
+  position: absolute;
+  top: calc(100% + 8.5px);
+  max-width: 320px;
 }
 .turn-action .priority-pill {
-  margin-top: 8.5px;
   height: 39px;
   padding-left: 1.1em;
   font-size: 20.5px;
   border-color: rgb(111 101 96 / 35%);
   border-top-color: #8a7f78;
 }
+.turn-action .priority-pill > span {
+  min-width: 0;
+  white-space: nowrap;
+  font-size: calc(1em * var(--fit, 1));
+}
 .turn-caption {
-  margin-top: 8.5px;
   text-align: center;
+  white-space: nowrap;
   font-size: 17.8px;
   line-height: 22px;
   color: #b4b2ae;
   -webkit-text-stroke: 0.3px currentColor;
+}
+/* The way back from a peek at the battlefield, over the hand. */
+.dock:has(> .overlay-return) {
+  z-index: 600;
 }
 
 /* The game screen (game/Board.tsx), in stage pixels. Cards live in one layer, one element per
@@ -1497,59 +1462,36 @@
   font-size: 13px;
 }
 /* A decision other than priority, the cast step and the questions asked in words: the
-   floating prompt (game/FloatPrompt.tsx), a title over one row of equal buttons at the top
-   of the table between the opponent's life and their cards, with no panel. The text sits on
-   its own shadow; only its buttons take clicks. Cards or a list of triggers move it to the
-   middle of the table. */
+   floating prompt (game/FloatPrompt.tsx). Its title and buttons stand in the action dock; what
+   it shows to choose among (cards off the table, triggers to order, a crew meter) mid-table,
+   with no panel. Only those take clicks. */
 .prompt {
   position: absolute;
-  left: 50%;
-  top: 146px;
-  translate: -50% 0;
+  inset: 0;
   z-index: 900;
+  pointer-events: none;
+}
+.prompt-body {
+  position: absolute;
+  left: 50%;
+  top: 300px;
+  translate: -50% 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  width: max-content;
-  max-width: 1000px;
-  pointer-events: none;
-}
-.prompt:has(.prompt-cards, .prompt-triggers, .crew-meter) {
-  top: 300px;
-  max-width: 460px;
   gap: 10px;
-}
-.prompt > * {
+  width: max-content;
+  max-width: 460px;
   pointer-events: auto;
+  animation: dock-in 0.22s ease-out both;
 }
-.prompt > :is(.prompt-triggers) {
+.prompt-body > :is(.prompt-triggers) {
   align-self: stretch;
 }
-.prompt-title {
-  margin: 0;
-  font: 600 28px/1.1 var(--font-serif);
-  color: #fff7e6;
-  text-align: center;
-  text-shadow:
-    0 2px 4px rgb(0 0 0 / 90%),
-    0 0 14px rgb(0 0 0 / 85%),
-    0 0 28px rgb(0 0 0 / 70%);
-  pointer-events: none;
-}
-.prompt-row {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 12px;
-}
-.prompt-row .button {
-  height: 44px;
-  min-width: 130px;
-  padding: 0 26px;
-  font-size: 22px;
-  white-space: nowrap;
+@media (prefers-reduced-motion: reduce) {
+  .prompt-body {
+    animation: none;
+  }
 }
 /* Candidate cards off the table, as a graveyard's targets, by their faces: one row, which
    scrolls sideways when they are many. */
@@ -1558,9 +1500,6 @@
   justify-content: center;
   gap: 6px;
   overflow-x: auto;
-}
-.prompt-cards:not(:last-child) {
-  margin-bottom: 8px;
 }
 .prompt-card {
   flex: none;
@@ -1743,17 +1682,18 @@
     0 0 24px 6px rgb(240 122 28 / 30%),
     var(--card-shadow, var(--shadow-card));
 }
-/* The cast step's X: a stepper over the buttons. */
+/* The cast step's X: a stepper over the buttons, its steps square. */
 .cast-x {
-  gap: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--button-gap);
 }
-.cast-x .button {
-  min-width: 0;
-  width: 46px;
+.dock .cast-x .button {
+  width: var(--button-height);
   padding: 0;
 }
 .cast-x-value {
-  min-width: 4ch;
   font: 600 26px var(--font-serif);
   text-align: center;
   color: #fff7e6;
@@ -2017,7 +1957,9 @@
 .game-over > :not(.overlay-backdrop) {
   position: relative;
 }
-.opening > .inspect {
+.opening > .inspect,
+.opening > .dock,
+.game-over > .dock {
   position: absolute;
 }
 .opening-title,
@@ -2507,27 +2449,4 @@
 .ability-choice:disabled {
   cursor: default;
   filter: grayscale(0.85) brightness(0.55);
-}
-
-/* A "you may" move's answers, where the turn button stands (Board.tsx' MayMoveActions). */
-.may-actions {
-  position: absolute;
-  right: 39px;
-  top: 765px;
-  width: 250px;
-  display: flex;
-  gap: 10px;
-}
-.may-actions .button-secondary {
-  border-color: transparent;
-  background: #6f6963;
-  color: var(--type);
-}
-.may-actions .button {
-  flex: 1 1 0;
-  min-width: 0;
-  height: 52px;
-  padding: 0 12px;
-  font-size: 20px;
-  font-weight: 700;
 }

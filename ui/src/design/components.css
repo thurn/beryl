@@ -92,6 +92,16 @@
   background: #cbc4ba;
   box-shadow: -0.05em 0.1em 0 rgb(0 0 0 / 65%);
   vertical-align: -0.12em;
+  /* A symbol inside shadowed or stroked type (a button's label, a prompt's title) takes
+     neither: on its glyph they read as a smudge across the numeral. */
+  text-shadow: none;
+  -webkit-text-stroke: 0;
+  font-weight: normal;
+}
+/* In the UI's own type (a button's label, a prompt's title) rather than a card's text: a soft
+   shadow under the symbol, not the printed one's hard offset crescent. */
+:is(.button, .prompt-title, .dock) .mana-symbol {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 45%);
 }
 /* Costs in the name bar: small symbols, each ringed in black as on the mockups' Counterspell. */
 .mana-cost .mana-symbol {
@@ -939,35 +949,39 @@
   stroke: none;
 }
 
-/* Buttons (ui_system.png section 02), sized in em so each place sets one font size: a pill with
-   a 2px light rim. Primary is molten ember, deep in the middle and yellow at the bottom, with a
-   hot glow; secondary is black under a white rim; disabled is grey stone with grey type. */
+/* Buttons (ui_system.png section 02): one system for every button. A pill of one height and
+   type, under a 1.5px rim. Primary is deep amber under a gold rim with a warm glow; secondary
+   is near black under a pale rim, as heavy as the primary but cool; disabled is flat stone,
+   with no rim light, glow or shadow, and dim type: clearly inert, whichever it was. */
 .button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.45em;
   min-width: 8em;
-  height: 1.5em;
-  padding: 0 1.1em;
+  height: var(--button-height);
+  padding: 0 0.9em;
   border-radius: 999px;
-  border: 2px solid transparent;
+  border: 1.5px solid transparent;
   font-family: var(--font-serif);
   font-weight: 700;
-  font-size: 30px;
+  font-size: var(--button-font);
   line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
   transition:
     filter 0.15s,
-    transform 0.15s;
+    transform 0.15s,
+    box-shadow 0.15s;
 }
 .button-small {
   min-width: 0;
+  height: 2em;
   font-size: 15px;
   padding: 0 1em;
 }
 .button:not(:disabled):hover {
-  filter: brightness(1.08);
+  filter: brightness(1.1);
 }
 /* Reached by Tab: a bright ring clear of the button's own edge. */
 .button:focus-visible {
@@ -979,59 +993,45 @@
 }
 .button-primary {
   color: #fffaf2;
-  text-shadow:
-    1px 1px 0 rgb(90 30 6 / 85%),
-    1px 2px 2px rgb(60 18 4 / 60%);
-  border-color: #fff1c2 #ffd77e #fff4cc;
-  background:
-    radial-gradient(
-      ellipse 22% 60% at 18% 62%,
-      rgb(255 190 90 / 30%),
-      transparent
-    ),
-    radial-gradient(
-      ellipse 24% 60% at 84% 40%,
-      rgb(255 170 80 / 28%),
-      transparent
-    ),
-    linear-gradient(
-      180deg,
-      #fc8a1e,
-      #fd7114 14%,
-      #fc620c 40%,
-      #fc5f0b 50%,
-      #fd6810 60%,
-      #fe7c18 72%,
-      #fe9a30 86%,
-      #ffbb4a 100%
-    );
+  text-shadow: 0 1px 1px rgb(70 25 4 / 75%);
+  border-color: #fff2b1 #eba043 #f7bc56;
+  background: linear-gradient(
+    180deg,
+    #e28322,
+    #cc6f1c 12%,
+    #b45e12 30%,
+    #a7570f 48%,
+    #ad5b10 60%,
+    #c46a18 74%,
+    #e08122 87%,
+    #f6a83c 100%
+  );
   box-shadow:
-    inset 0 2px 2px rgb(253 202 87 / 85%),
-    inset 0 0 8px rgb(255 190 80 / 45%),
-    0 0 0 1px rgb(178 40 4 / 85%),
-    0 0 4px 1px rgb(255 108 20 / 80%),
-    0 0 10px 2px rgb(226 78 16 / 40%);
+    inset 0 1px 1px rgb(255 240 190 / 70%),
+    0 0 0 1px rgb(60 25 5 / 85%),
+    0 0 6px 3px rgb(240 140 50 / 55%),
+    0 4px 8px rgb(0 0 0 / 35%);
 }
 .button-secondary {
   color: #fffdfa;
-  border-color: #faf8f6;
-  background: linear-gradient(180deg, #1e1a18, #1d1917 60%, #231e1b);
+  text-shadow: 0 1px 1px rgb(0 0 0 / 70%);
+  border-color: #e9e3da #b9b2a9 #a59e96;
+  background: linear-gradient(180deg, #2a2522, #1d1917 55%, #262120);
   box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 14%),
     0 0 0 1px rgb(14 9 7 / 75%),
-    0 3px 6px rgb(0 0 0 / 35%);
+    0 4px 8px rgb(0 0 0 / 35%);
 }
-.button:disabled {
+/* Whatever a place sets on its button, disabled wins: no rim light, glow or lift. */
+.button.button:disabled {
   cursor: default;
-  color: #98938f;
-  font-weight: 400;
-  border-width: 2px;
-  border-color: #c4c0bc #a5a19d #858380;
-  background: linear-gradient(180deg, #36322f, #393532 50%, #423d39);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 10%),
-    0 0 0 1px rgb(14 11 10 / 60%),
-    0 4px 6px rgb(0 0 0 / 55%);
+  color: #7e7873;
   text-shadow: none;
+  border-color: #57514c;
+  background: #2f2b28;
+  box-shadow: 0 0 0 1px rgb(14 11 10 / 50%);
+  filter: none;
+  transform: none;
 }
 .button-icon {
   flex: none;
@@ -1040,9 +1040,7 @@
   margin-right: 0.15em;
 }
 .button:disabled .button-icon {
-  width: 0.9em;
-  margin-left: -0.1em;
-  color: #88837f;
+  color: #6c6661;
 }
 .button-icon svg {
   width: 100%;
@@ -1535,23 +1533,6 @@
   color: #fff;
   text-shadow: 0 1px 3px rgb(0 0 0 / 70%);
 }
-.overlay-confirm {
-  margin-top: 47px;
-  translate: -6.5px 0;
-  min-width: 0;
-  width: 280px;
-  height: 61px;
-  padding-bottom: 3px;
-  border-width: 2px;
-  border-color: #fffdf0;
-  box-shadow:
-    inset 0 2px 2px rgb(253 202 87 / 85%),
-    inset 0 0 8px rgb(255 190 80 / 45%),
-    0 0 0 1px rgb(178 40 4 / 85%),
-    0 0 8px 4px rgb(255 100 20 / 80%),
-    0 0 16px 6px rgb(226 70 16 / 35%);
-  font-size: 39.5px;
-}
 .overlay-side {
   position: relative;
   display: flex;
@@ -1560,14 +1541,9 @@
   gap: 94px;
   padding-top: 10px;
 }
-/* Near black inside, as scry.png draws it over the dimmed table. */
+/* Its way back to the table, a secondary button of the one size. */
 .overlay-view {
-  background: #141211;
-  min-width: 0;
-  width: 255px;
-  height: 53px;
-  padding: 0;
-  font-size: 29.3px;
+  min-width: var(--button-width);
 }
 
 /* Hover tips (Controls.tsx' Tip): a dark label that opens beside its parent on hover or

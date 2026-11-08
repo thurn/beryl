@@ -1,12 +1,13 @@
 // The overlay shell every choice screen uses (scry, Jace's put-back, modes), laid out on the
 // 1600×900 table stage as in docs/ui_mockups/scry.png: a title and an instruction over the
 // choice, a confirm button under it, and on the right a "View Battlefield" escape over the
-// source card, all on the dimmed battlefield.
+// source card, all on the dimmed battlefield; its buttons in the action dock at the bottom right,
+// as every action on the game screen (Controls.tsx' Dock).
 import type { ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { Button } from "./Controls";
+import { Button, Dock, DockButtons } from "./Controls";
 
-/** A button under the choice. */
+/** A button in the dock. */
 export interface OverlayAction {
   label: ReactNode;
   onClick?: () => void;
@@ -22,7 +23,7 @@ export interface OverlayProps {
   aside?: ReactNode;
   confirm?: string;
   onConfirm?: () => void;
-  /** The buttons under the choice, the first one primary; given, they replace `confirm`. */
+  /** The dock's buttons, the first one primary; given, they replace `confirm`. */
   actions?: OverlayAction[];
   onViewBattlefield?: () => void;
   className?: string;
@@ -59,26 +60,22 @@ export function Overlay({
           {instruction && <p className="overlay-instruction">{instruction}</p>}
         </header>
         {children}
-        {actions ? (
-          <div className="overlay-actions">
-            {actions.map((a, i) => (
-              <Button
-                key={i}
-                variant={i === 0 ? "primary" : "secondary"}
-                className={i === 0 ? "overlay-confirm" : "overlay-alternative"}
-                disabled={a.disabled}
-                onClick={a.onClick}
-              >
-                {a.label}
-              </Button>
-            ))}
-          </div>
-        ) : (
-          <Button className="overlay-confirm" onClick={onConfirm}>
-            {confirm}
-          </Button>
-        )}
       </div>
+      <Dock>
+        <DockButtons className="overlay-actions">
+          {(actions ?? [{ label: confirm, onClick: onConfirm }]).map((a, i) => (
+            <Button
+              key={i}
+              variant={i === 0 ? "primary" : "secondary"}
+              className={i === 0 ? "overlay-confirm" : "overlay-alternative"}
+              disabled={a.disabled}
+              onClick={a.onClick}
+            >
+              {a.label}
+            </Button>
+          ))}
+        </DockButtons>
+      </Dock>
       <div className="overlay-side">
         <Button
           variant="secondary"

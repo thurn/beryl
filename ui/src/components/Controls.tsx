@@ -35,6 +35,44 @@ export function Button({
   );
 }
 
+/** The action dock (decision: every action on the game screen in one place): a column of
+ * buttons in the table's bottom-right corner, built up from where the turn button stands, the
+ * question they answer briefly over them. Every button in it is one size, the primary at the
+ * foot and the others stacked over it (screens.css .dock). It eases in as it appears. */
+export function Dock({
+  title,
+  className,
+  children,
+}: {
+  /** The question the buttons answer, in a few words. */
+  title?: ReactNode;
+  className?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div className={["dock", className].filter(Boolean).join(" ")}>
+      {title !== undefined && <h2 className="prompt-title">{title}</h2>}
+      {children}
+    </div>
+  );
+}
+
+/** A dock's buttons, the first (the primary, if any) at the foot and the rest stacked over it,
+ * all as wide as the widest. */
+export function DockButtons({
+  className,
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={["dock-buttons", className].filter(Boolean).join(" ")}>
+      {children}
+    </div>
+  );
+}
+
 /** The button that advances the turn: one size and type style for every label and state, a long
  * label shrinking to fit (screens.css). */
 export function TurnButton({

@@ -1,5 +1,5 @@
 // The cast step (game/casting.ts): a card's casts, each by its cost, with its X where it has
-// one, as the floating prompt's buttons: a button casts. What the payment taps is lit on the
+// one, as the floating prompt's buttons in the action dock: a button casts. What the payment taps is lit on the
 // board, where a payment the engine offers a choice of is picked by clicking a glowing
 // permanent that another payment taps.
 import { useEffect } from "react";
@@ -67,9 +67,8 @@ export function CastStep({
   return (
     <FloatPrompt title={name} label={`Cast ${name}`}>
       {xs.length > 0 && x !== undefined && (
-        <div className="prompt-row cast-x">
+        <div className="cast-x">
           <Button
-            size="small"
             variant="secondary"
             aria-label="Decrease X"
             disabled={x === xs[0]}
@@ -81,7 +80,6 @@ export function CastStep({
             X={x}
           </output>
           <Button
-            size="small"
             variant="secondary"
             aria-label="Increase X"
             disabled={x === xs[xs.length - 1]}
@@ -92,6 +90,8 @@ export function CastStep({
         </div>
       )}
       <PromptRow>
+        {/* Choosing among casts paid on the board, Cast is the primary, at the foot. */}
+        {selects && <Button onClick={() => onCast(choice)}>Cast</Button>}
         {casts.map((a, i) => {
           const c = choiceFor(a);
           const face =
@@ -100,8 +100,7 @@ export function CastStep({
           return (
             <Button
               key={a.index}
-              size="small"
-              variant={i === 0 ? "primary" : "secondary"}
+              variant={i === 0 && !selects ? "primary" : "secondary"}
               aria-pressed={selects ? a === choice.act : undefined}
               onClick={() => (selects ? onChoose(c) : onCast(c))}
             >
@@ -118,12 +117,7 @@ export function CastStep({
             </Button>
           );
         })}
-        {selects && (
-          <Button size="small" onClick={() => onCast(choice)}>
-            Cast
-          </Button>
-        )}
-        <Button size="small" variant="secondary" onClick={onCancel}>
+        <Button variant="secondary" onClick={onCancel}>
           Cancel
         </Button>
       </PromptRow>

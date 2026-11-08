@@ -27,6 +27,13 @@
   /* A permanent its owner doesn't control (Card.tsx), apart from every glow. */
   --stolen: #b48cff;
 
+  /* Buttons: one size for every action on the game screen, each in the action dock at the
+     bottom right (components.css .button, screens.css .dock). */
+  --button-height: 48px;
+  --button-font: 24px;
+  --button-width: 250px;
+  --button-gap: 10px;
+
   /* Thin metallic borders: a pale gold line that catches the light. */
   --metal: rgb(214 192 150 / 42%);
   --metal-bright: rgb(236 220 186 / 75%);

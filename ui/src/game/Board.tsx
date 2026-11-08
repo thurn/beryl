@@ -24,6 +24,8 @@ import { cardEntry, faceEntry, landFace } from "../cards";
 import { Card, type Highlight } from "../components/Card";
 import {
   Button,
+  Dock,
+  DockButtons,
   PhaseTracker,
   PriorityPill,
   Tip,
@@ -1077,36 +1079,33 @@ export function Board({
               />
             ) : declaring ? (
               <Finish decision={declaring} done={finish} onPick={pick} />
-            ) : prompting && decision?.ask.kind === "mayMove" ? (
-              <MayMoveActions decision={decision} onPick={pick} />
-            ) : decision?.kind === "priority" || waiting ? (
-              <div className="turn-action">
-                {/* In the cast step, its Cast is the one primary action. */}
-                <TurnButton
-                  label={waiting ? "Pass" : stop.label}
-                  disabled={
-                    waiting ||
-                    can.pass === undefined ||
-                    castingNow !== undefined
-                  }
-                  onClick={() => {
-                    if (can.pass === undefined || castingNow) return;
-                    // Mana left unspent empties as the step ends (CR 500.4): passing on to a
-                    // step, rather than to the top of the stack resolving, pulses the pool
-                    // rather than asking.
-                    const resolves = decision?.passTo?.kind === "resolve";
-                    if (floating(you.mana) && !resolves) setLost((n) => n + 1);
-                    pick(can.pass);
-                  }}
-                />
-                {/* While you wait, the priority pill takes the caption's place under the
-                button, leaving the tracker showing the phase. */}
-                {waiting ? (
-                  <PriorityPill>{actingLabel(view)}</PriorityPill>
-                ) : (
-                  <span className="turn-caption">{stop.caption}</span>
-                )}
-              </div>
+            ) : (decision?.kind === "priority" || waiting) && !castingNow ? (
+              // In the cast step, its buttons take the dock.
+              <Dock>
+                <div className="turn-action">
+                  <TurnButton
+                    label={waiting ? "Pass" : stop.label}
+                    disabled={waiting || can.pass === undefined}
+                    onClick={() => {
+                      if (can.pass === undefined) return;
+                      // Mana left unspent empties as the step ends (CR 500.4): passing on to a
+                      // step, rather than to the top of the stack resolving, pulses the pool
+                      // rather than asking.
+                      const resolves = decision?.passTo?.kind === "resolve";
+                      if (floating(you.mana) && !resolves)
+                        setLost((n) => n + 1);
+                      pick(can.pass);
+                    }}
+                  />
+                  {/* While you wait, the priority pill takes the caption's place under the
+                  button, leaving the tracker showing the phase. */}
+                  {waiting ? (
+                    <PriorityPill>{actingLabel(view)}</PriorityPill>
+                  ) : (
+                    <span className="turn-caption">{stop.caption}</span>
+                  )}
+                </div>
+              </Dock>
             ) : null}
           </div>
         )}
@@ -1718,24 +1717,26 @@ function Declare({
         : "Declare blockers"
       : `${n} ${attack ? "attacking" : "blocking"}`;
   return (
-    <>
-      <div className="combat-actions">
-        {everyone && (
-          <Button variant="secondary" onClick={onAll}>
-            Attack All
-          </Button>
-        )}
-        {n > 0 && (
-          <Button variant="secondary" onClick={onClear}>
-            Clear
-          </Button>
-        )}
-      </div>
+    <Dock>
+      {(everyone || n > 0) && (
+        <DockButtons>
+          {everyone && (
+            <Button variant="secondary" onClick={onAll}>
+              Attack All
+            </Button>
+          )}
+          {n > 0 && (
+            <Button variant="secondary" onClick={onClear}>
+              Clear
+            </Button>
+          )}
+        </DockButtons>
+      )}
       <div className="turn-action">
         <TurnButton label={label} onClick={onDeclare} />
         <span className="turn-caption">{caption}</span>
       </div>
-    </>
+    </Dock>
   );
 }
 
@@ -1758,38 +1759,16 @@ function Finish({
   };
   const [label, caption] = labels[decision.kind] ?? ["Done", prompt(decision)];
   return (
-    <div className="turn-action">
-      <TurnButton
-        label={label}
-        disabled={done === undefined}
-        onClick={() => done !== undefined && onPick(done)}
-      />
-      <span className="turn-caption">{caption}</span>
-    </div>
-  );
-}
-
-/** A "you may" move's answers where the turn button stands: declining, in grey, and the
- * move, in the primary color, named by what it does ("Exile"). */
-function MayMoveActions({
-  decision,
-  onPick,
-}: {
-  decision: DecisionView;
-  onPick(index: CandidateIndex): void;
-}) {
-  const { ask } = decision;
-  const at = (kind: "yes" | "no") =>
-    decision.candidates.findIndex((c) => c.option.kind === kind);
-  const [yes, no] = [at("yes"), at("no")];
-  if (ask.kind !== "mayMove" || yes < 0 || no < 0) return null;
-  return (
-    <div className="may-actions">
-      <Button variant="secondary" onClick={() => onPick(no)}>
-        Decline
-      </Button>
-      <Button onClick={() => onPick(yes)}>{moveVerb(ask.to)}</Button>
-    </div>
+    <Dock>
+      <div className="turn-action">
+        <TurnButton
+          label={label}
+          disabled={done === undefined}
+          onClick={() => done !== undefined && onPick(done)}
+        />
+        <span className="turn-caption">{caption}</span>
+      </div>
+    </Dock>
   );
 }
 
@@ -1837,6 +1816,10 @@ function Prompt({
     if (ask.kind === "unlessPays") {
       return c.option.kind === "yes" ? `Pay ${ask.cost}` : "Don't Pay";
     }
+    // A "you may" move by what it does ("Exile"), or declining.
+    if (ask.kind === "mayMove") {
+      return c.option.kind === "yes" ? moveVerb(ask.to) : "Decline";
+    }
     const taps = c.payments[0]?.taps;
     if (c.option.kind !== "plan" || !taps) return c.label;
     return taps.length > 0 ? `Tap ${tapList(taps.map(nameOf))}` : "Tap nothing";
@@ -1867,11 +1850,16 @@ function Prompt({
   const subject = ask.kind === "mayMove" ? objects.get(ask.card) : undefined;
   if (subject) faces.unshift({ object: subject });
   const ordering = decision.kind === "triggerOrder";
-  // A "you may" move is answered where the turn button stands (MayMoveActions).
-  const buttons =
-    ordering || ask.kind === "mayMove"
-      ? []
-      : listed.filter(({ c }) => c.option.kind !== "object");
+  // Its answers in the dock, a "you may" move's first.
+  const buttons = ordering
+    ? []
+    : listed
+        .filter(({ c }) => c.option.kind !== "object")
+        .sort(
+          (a, b) =>
+            Number(b.c.option.kind === "yes") -
+            Number(a.c.option.kind === "yes"),
+        );
   const [order, setOrder] = useState<CandidateIndex[]>([]);
   const title = ordering
     ? order.length === 0
@@ -1882,23 +1870,8 @@ function Prompt({
         source,
         subject?.zone,
       );
-  return (
-    <FloatPrompt
-      label={title}
-      title={
-        <>
-          {/* The source of a target is on the stack, with its arrow. */}
-          <RulesText
-            text={decision.kind === "target" ? prompt(decision) : title}
-          />
-          {ask.kind === "waterbend" && (
-            <span className="prompt-cost">
-              <CostText text={ask.cost} />
-            </span>
-          )}
-        </>
-      }
-    >
+  const body = (
+    <>
       {ask.kind === "crew" && (
         <CrewMeter
           ask={ask}
@@ -1936,29 +1909,48 @@ function Prompt({
           )}
         </>
       )}
+    </>
+  );
+  return (
+    <FloatPrompt
+      label={title}
+      body={(ask.kind === "crew" || ordering || faces.length > 0) && body}
+      title={
+        <>
+          {/* The source of a target is on the stack, with its arrow. */}
+          <RulesText
+            text={decision.kind === "target" ? prompt(decision) : title}
+          />
+          {ask.kind === "waterbend" && (
+            <span className="prompt-cost">
+              <CostText text={ask.cost} />
+            </span>
+          )}
+        </>
+      }
+    >
       {(buttons.length > 0 || onCancel || confirm) && (
         <PromptRow>
           {buttons.map((b, i) => (
             <Button
               key={b.index}
-              size="small"
-              variant={i === 0 && !confirm ? "primary" : "secondary"}
+              variant={
+                i === 0 && !confirm && skip === undefined
+                  ? "primary"
+                  : "secondary"
+              }
               onClick={() => onPick(b.index)}
             >
               <RulesText text={b.label} />
             </Button>
           ))}
           {confirm && (
-            <Button
-              size="small"
-              disabled={confirm.disabled}
-              onClick={confirm.onClick}
-            >
+            <Button disabled={confirm.disabled} onClick={confirm.onClick}>
               {confirm.label}
             </Button>
           )}
           {onCancel && (
-            <Button size="small" variant="secondary" onClick={onCancel}>
+            <Button variant="secondary" onClick={onCancel}>
               Cancel
             </Button>
           )}

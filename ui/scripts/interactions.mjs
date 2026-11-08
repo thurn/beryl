@@ -2555,9 +2555,10 @@ await check(
         const step = page.getByRole("dialog", { name: "Cast Subtlety" });
         await step.waitFor();
         assert.equal(await primaries(page), 1, "the cast step's Cast alone");
-        assert.ok(
-            await page.locator(".turn-action button").isDisabled(),
-            "the turn button waits for the cast",
+        assert.equal(
+            await page.locator(".turn-action button").count(),
+            0,
+            "the cast step's buttons take the turn button's place",
         );
         // Let go in the hand, the card goes back and the step closes, casting nothing.
         await dragHandCardTo(page, subtlety, { x: 700, y: 870 });

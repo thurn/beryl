@@ -669,7 +669,6 @@ function AskFloat({
         {choice.answers.map((a, i) => (
           <Button
             key={i}
-            size="small"
             variant={i === 0 ? "primary" : "secondary"}
             disabled={busy}
             onClick={() => onPlan(a.plan)}
@@ -678,12 +677,7 @@ function AskFloat({
           </Button>
         ))}
         {onCancel && (
-          <Button
-            size="small"
-            variant="secondary"
-            disabled={busy}
-            onClick={onCancel}
-          >
+          <Button variant="secondary" disabled={busy} onClick={onCancel}>
             Cancel
           </Button>
         )}

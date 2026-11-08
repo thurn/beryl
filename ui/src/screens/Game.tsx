@@ -3,7 +3,7 @@
 // `game-update` events and play back at a readable pace (game/playback.ts); the screen answers
 // the open decision through `choose`. A reloaded page takes up the game in progress.
 import { useEffect, useRef, useState } from "react";
-import { Button } from "../components/Controls";
+import { Button, Dock, DockButtons } from "../components/Controls";
 import { Card, CardBack } from "../components/Card";
 import { Coin } from "../components/Player";
 import { RulesText } from "../components/Mana";
@@ -476,13 +476,15 @@ function Playing({ playback }: { playback: Playback }) {
         />
       )}
       {choice && peeking && (
-        <Button
-          variant="secondary"
-          className="overlay-return"
-          onClick={() => setPeek(undefined)}
-        >
-          Back to <RulesText text={choice.title} />
-        </Button>
+        <Dock>
+          <Button
+            variant="secondary"
+            className="overlay-return"
+            onClick={() => setPeek(undefined)}
+          >
+            Back to <RulesText text={choice.title} />
+          </Button>
+        </Dock>
       )}
       {over && (
         <GameOver
@@ -491,14 +493,16 @@ function Playing({ playback }: { playback: Playback }) {
         />
       )}
       {result.state === "aside" && (
-        <Button
-          variant="secondary"
-          className="overlay-return"
-          onClick={result.show}
-        >
-          Back to{" "}
-          {resultTitle(status.kind === "over" ? status.outcome : undefined)}
-        </Button>
+        <Dock>
+          <Button
+            variant="secondary"
+            className="overlay-return"
+            onClick={result.show}
+          >
+            Back to{" "}
+            {resultTitle(status.kind === "over" ? status.outcome : undefined)}
+          </Button>
+        </Dock>
       )}
       {error && (
         <p className="game-error game-toast" role="alert">
@@ -680,21 +684,27 @@ function Opening({
           })}
         </div>
       )}
+      {(picking || buttons.length > 0) && (
+        <Dock>
+          <DockButtons className="opening-actions">
+            {picking && (
+              <Button disabled={unsent.length !== toBottom} onClick={confirm}>
+                Done
+              </Button>
+            )}
+            {buttons.map((b, i) => (
+              <Button
+                key={b.index}
+                variant={i === 0 ? "primary" : "secondary"}
+                onClick={() => onPick(b.index)}
+              >
+                {b.label}
+              </Button>
+            ))}
+          </DockButtons>
+        </Dock>
+      )}
       <div className="opening-buttons">
-        {picking && (
-          <Button disabled={unsent.length !== toBottom} onClick={confirm}>
-            Done
-          </Button>
-        )}
-        {buttons.map((b, i) => (
-          <Button
-            key={b.index}
-            variant={i === 0 ? "primary" : "secondary"}
-            onClick={() => onPick(b.index)}
-          >
-            {b.label}
-          </Button>
-        ))}
         {considering ? (
           <div
             className="opening-considering"
@@ -828,12 +838,16 @@ function GameOver({
           {reason.text}
         </p>
       )}
-      <div className="opening-buttons">
-        <Button onClick={() => (window.location.hash = "#/")}>New Game</Button>
-        <Button variant="secondary" onClick={onClose}>
-          View Battlefield
-        </Button>
-      </div>
+      <Dock>
+        <DockButtons>
+          <Button onClick={() => (window.location.hash = "#/")}>
+            New Game
+          </Button>
+          <Button variant="secondary" onClick={onClose}>
+            View Battlefield
+          </Button>
+        </DockButtons>
+      </Dock>
     </div>
   );
 }
