@@ -132,8 +132,17 @@ fn a_scripted_human_plays_a_whole_game_and_its_replay_reproduces_it() {
             Err(SessionError::StaleSession { session: other })
         );
         sessions.choose(id, index).unwrap();
-        // A second click on the same candidate finds the decision answered.
-        assert_eq!(sessions.choose(id, index), Err(SessionError::NotDeciding));
+        // A second click on the same candidate finds the decision answered: none open yet, or
+        // already the next one, if the game got there first.
+        let again = sessions.choose(id, index);
+        let answered = match again {
+            Err(SessionError::NotDeciding) => true,
+            Err(SessionError::StaleDecision { decision, open }) => {
+                decision == id && open.seq > id.seq
+            }
+            _ => false,
+        };
+        assert!(answered, "{again:?}");
     };
     assert!(decisions > 40, "a short game: {decisions} decisions");
     let past = DecisionId {

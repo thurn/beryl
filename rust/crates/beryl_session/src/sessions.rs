@@ -249,7 +249,8 @@ impl Sessions {
     }
 
     /// Runs the human's `command` on game `session`, journaling it with `data` and how it
-    /// went: a refused command is how a UI out of step with the game shows itself.
+    /// went: a refused command is how a UI out of step with the game shows itself, though
+    /// most are a double click, so they go to the journal without a warning.
     fn with(
         &self,
         command: &str,
@@ -266,7 +267,7 @@ impl Sessions {
             Ok(()) => journal::debug("command", command, data),
             Err(e) => {
                 data["error"] = json!(e);
-                journal::warn("command", format!("{command} refused: {e}"), data);
+                journal::info("command", format!("{command} refused: {e}"), data);
             }
         }
         result
