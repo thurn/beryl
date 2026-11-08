@@ -1,6 +1,6 @@
 // Films each moment of the specs from both seats (`by specs --film`, tools/): plays the two
 // seats' games in step with motion on, screenshots both every INTERVAL ms from the play to
-// the settle, and lays out the frames in which something changed as one sheet per moment,
+// the settle, and lays out the bursts of motion as one sheet per moment, at most MOST frames,
 // each frame your seat over theirs, labelled with its time. One image shows how the moment
 // moves for both players, where a still shows only how it ends. Usage:
 //   node scripts/film.mjs <base-url> <out-dir> [card-slug...] [--moment NAME]
@@ -21,12 +21,12 @@ import {
 
 /** How often both seats are shot, the most frames a sheet keeps, and how many a row. */
 const INTERVAL = 120;
-const MOST = 16;
+const MOST = 8;
 const ACROSS = 4;
 /** Each frame's width on the sheet. */
 const TILE = 400;
-/** How different a frame must be from the last one kept to be kept, as a share of a
- * downscaled frame's pixels that changed. */
+/** How much of a downscaled frame's pixels must change from the frame before for it to
+ * count as motion. */
 const DIFFERENT = 0.004;
 
 const args = process.argv.slice(2);
@@ -82,8 +82,9 @@ async function film(pages, lives) {
     return frames;
 }
 
-/** The sheet of `frames` as a PNG, keeping the first, the last and those that differ from the
- * last kept, at most MOST, spread evenly; drawn in `page`, which also measures the difference. */
+/** Draws the sheet of `frames` in `page`: the first and last frames and, for the bursts of
+ * motion that moved most, the frame before each, its middle and its end, at most MOST in all.
+ * Returns how many it shows. */
 async function sheet(page, title, frames) {
     const data = frames.map((f) => ({
         t: f.t,
@@ -111,7 +112,8 @@ async function sheet(page, title, frames) {
                 imgs.forEach((im, k) => g.drawImage(im, 0, 90 * k, 160, 90));
                 return g.getImageData(0, 0, 160, 180).data;
             };
-            const kept = [0];
+            // How much each frame changed from the one before it.
+            const change = [0];
             let last = await pixels(data[0].srcs);
             for (let i = 1; i < data.length; i++) {
                 const p = await pixels(data[i].srcs);
@@ -126,20 +128,37 @@ async function sheet(page, title, frames) {
                         changed += 1;
                     }
                 }
-                if (changed / (p.length / 4) > different) {
-                    kept.push(i);
-                    last = p;
+                change.push(changed / (p.length / 4));
+                last = p;
+            }
+            // Bursts of motion, each shown by the frame before it, its middle and its end,
+            // the bursts that moved most first; then the first and last frames.
+            const bursts = [];
+            for (let i = 1; i < data.length; i++) {
+                if (change[i] <= different) continue;
+                const open = bursts.at(-1);
+                if (open && open.end === i - 1) {
+                    open.end = i;
+                    open.moved += change[i];
+                } else {
+                    bursts.push({ start: i, end: i, moved: change[i] });
                 }
             }
-            if (kept.at(-1) !== data.length - 1) kept.push(data.length - 1);
-            let shown = kept;
-            if (shown.length > most) {
-                shown = Array.from(
-                    { length: most },
-                    (_, k) =>
-                        kept[Math.round((k * (kept.length - 1)) / (most - 1))],
-                );
+            const picked = new Set([0, data.length - 1]);
+            for (const b of [...bursts].sort((x, y) => y.moved - x.moved)) {
+                const frames = [
+                    b.start - 1,
+                    Math.round((b.start + b.end) / 2),
+                    b.end,
+                ];
+                const fresh = frames.filter((i) => !picked.has(i));
+                if (picked.size + fresh.length > most) {
+                    if (picked.size + 1 <= most) picked.add(frames[1]);
+                    continue;
+                }
+                fresh.forEach((i) => picked.add(i));
             }
+            const shown = [...picked].sort((x, y) => x - y);
             const h = Math.round((tile * 9) / 16);
             document.body.innerHTML = `<div style="padding:10px 12px;font-size:15px">${title}  <span style="opacity:.6">top: you · bottom: them</span></div><div style="display:grid;grid-template-columns:repeat(${across},${tile}px);gap:10px;padding:0 12px 12px">${shown
                 .map(

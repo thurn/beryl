@@ -274,11 +274,17 @@ function lifeBehavior(frames, side) {
     const track = frames.map((f) => f.lives[side]).filter(Boolean);
     if (track.length === 0) return { none: true };
     const changed = track.some((l) => l.text !== track[0].text);
+    const shown = frames.filter((f) => f.lives[side]);
     const anim = span(
-        frames.filter((f) => f.lives[side]),
+        shown,
         (a, b) => a.lives[side].anim && b.lives[side].anim,
     );
-    return { changed, ms: Math.round(anim), seen: 1 };
+    // A number that counts its way to the new total over several frames is animated too.
+    const counting = span(
+        shown,
+        (a, b) => a.lives[side].text !== b.lives[side].text,
+    );
+    return { changed, ms: Math.round(Math.max(anim, counting)), seen: 1 };
 }
 
 /** Each event's finding: its verdict and why. */
