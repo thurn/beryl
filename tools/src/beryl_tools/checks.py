@@ -28,6 +28,7 @@ import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -123,7 +124,8 @@ class Steps:
         self.clock = Clock()
         self.stopped = threading.Event()
         self.lock = threading.Lock()
-        self.running: set[subprocess.Popen[bytes]] = set()
+        # Popen's type depends on its arguments, which pyre reads differently per platform.
+        self.running: set[subprocess.Popen[Any]] = set()
 
     def run(
         self, cmd: list[str], cwd: Path, env: dict[str, str]

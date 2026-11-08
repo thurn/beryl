@@ -254,6 +254,7 @@ pub fn stamp(path: &Path) -> Option<Stamp> {
 }
 
 #[cfg(unix)]
+#[allow(clippy::unnecessary_wraps)] // Windows' reading can fail: one signature for both.
 fn file_id(_: &Path, m: &fs::Metadata) -> Option<(u64, u64)> {
     use std::os::unix::fs::MetadataExt;
     Some((m.dev(), m.ino()))

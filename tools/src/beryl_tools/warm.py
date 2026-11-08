@@ -67,6 +67,7 @@ def locked() -> Iterator[None]:
             # LK_LOCK gives up after ten tries a second apart: a clone can take longer.
             while True:
                 try:
+                    # pyre-ignore[16]: Windows only
                     msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
                     break
                 except OSError:
@@ -75,6 +76,7 @@ def locked() -> Iterator[None]:
                 yield
             finally:
                 handle.seek(0)
+                # pyre-ignore[16]: Windows only
                 msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
             return
         import fcntl

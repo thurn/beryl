@@ -79,7 +79,9 @@ class _CpuSampler:
             elif time.monotonic() - self.at < 0.1:
                 return self.load
             idle, total = self.times()
-            last_idle, last_total = self.last
+            last = self.last
+            assert last is not None
+            last_idle, last_total = last
             elapsed = total - last_total
             if elapsed > 0:
                 busy = 1.0 - (idle - last_idle) / elapsed
@@ -103,6 +105,7 @@ def own_session() -> dict[str, Any]:
     """Popen arguments that start a process apart from this one's Ctrl-C, as the leader of a
     tree [`kill_tree`] can end whole."""
     if WINDOWS:
+        # pyre-ignore[16]: Windows only
         return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
     return {"start_new_session": True}
 
@@ -160,6 +163,7 @@ def file_lock(path: Path) -> Iterator[None]:
             # LK_LOCK gives up after ten tries a second apart: keep trying.
             while True:
                 try:
+                    # pyre-ignore[16]: Windows only
                     msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
                     break
                 except OSError:
@@ -168,6 +172,7 @@ def file_lock(path: Path) -> Iterator[None]:
                 yield
             finally:
                 handle.seek(0)
+                # pyre-ignore[16]: Windows only
                 msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
             return
         import fcntl
@@ -197,6 +202,7 @@ def low(args: argparse.Namespace) -> int:
         kernel32.SetThreadExecutionState(es_continuous | es_system_required)
     proc = subprocess.Popen(
         [which(command[0]), *command[1:]],
+        # pyre-ignore[16]: Windows only
         creationflags=subprocess.BELOW_NORMAL_PRIORITY_CLASS,
     )
     try:
