@@ -368,6 +368,7 @@ mod platform {
 
     pub const CONTENT_TYPE: &str = "image/png";
 
+    #[allow(clippy::needless_pass_by_value)] // The other platforms' signature.
     pub fn snapshot(_: &tauri::webview::PlatformWebview, send: Sender<Result<Vec<u8>, String>>) {
         let _ = send.send(Err("window snapshots are macOS and Windows only".to_owned()));
     }

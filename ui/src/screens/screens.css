@@ -2677,11 +2677,12 @@
 }
 
 /* The bug report (components/BugReport.tsx). Its button sits in the gear's column: under the
-   gear on the game screen (the board's own), at the top right elsewhere. */
+   gear on the game screen (the board's own), at the top right elsewhere, clear of a phone's
+   status bar and notch (insets 0 on desktop). */
 .bug-button {
   position: fixed;
-  right: 14px;
-  top: 14px;
+  right: calc(14px + env(safe-area-inset-right));
+  top: calc(14px + env(safe-area-inset-top));
   z-index: 1000;
 }
 /* On the game screen, the board's, under the gear, over any screen on the table. */

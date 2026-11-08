@@ -180,12 +180,24 @@ pub fn ui_log(request: UiLogRequest) {
     }
 }
 
-/// Where reports go: `$BERYL_BUGS`, else the app's data directory's `bugs`
-/// (`~/Library/Application Support/ca.thurn.beryl/bugs`, or on Windows
+/// The folder a phone app keeps its reports in ([`set_dir`]).
+static DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// Sets where reports go when no `$BERYL_BUGS` says: a phone app's data directory has no
+/// fixed path, so the app sets it at startup from its own.
+pub fn set_dir(dir: PathBuf) {
+    let _ = DIR.set(dir);
+}
+
+/// Where reports go: `$BERYL_BUGS`, else the folder [`set_dir`] set, else the app's data
+/// directory's `bugs` (`~/Library/Application Support/ca.thurn.beryl/bugs`, or on Windows
 /// `%APPDATA%\ca.thurn.beryl\bugs`), wherever the report came from.
 pub fn dir() -> PathBuf {
     if let Some(dir) = std::env::var_os("BERYL_BUGS") {
         return PathBuf::from(dir);
+    }
+    if let Some(dir) = DIR.get() {
+        return dir.clone();
     }
     if cfg!(windows)
         && let Some(appdata) = std::env::var_os("APPDATA")

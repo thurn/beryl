@@ -1,6 +1,6 @@
 # Build output: Rust, Tauri's generated schemas, the UI, Python.
 /rust/target/
-/rust/crates/*/gen/
+/rust/crates/*/gen/schemas/
 /ui/node_modules/
 /ui/dist/
 /ui/*.tsbuildinfo

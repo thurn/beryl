@@ -41,6 +41,13 @@ fn ui_ready(app: tauri::AppHandle) {
         return;
     }
     println!("beryl: ui ready");
+    // A phone has no window snapshot yet: there the UI loading passes alone. Its stdout goes
+    // to the system log, so `just ios-smoke` reads the journal; and iOS apps never quit, so
+    // tao panics on `app.exit`: the process ends itself.
+    if cfg!(mobile) {
+        journal::info("app", "ui ready", json!(null));
+        std::process::exit(0);
+    }
     tauri::async_runtime::spawn(async move {
         let started = Instant::now();
         let result = match snapshot::capture(&app).await {
@@ -168,6 +175,9 @@ const fn names(path: &str, name: &str) -> bool {
     start == 0 || path[start - 1] == b':' || path[start - 1] == b' '
 }
 
+/// The app's entry point: `main.rs`'s on desktop, and on iOS the one the Xcode project
+/// (`gen/apple`) calls.
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     journal::install_panic_hook();
     bugs::set_build_commit(env!("BERYL_COMMIT"));
@@ -214,6 +224,9 @@ pub fn run() {
             });
         })
         .setup(|app| {
+            // A phone's data directory has no fixed path: reports go in its own.
+            #[cfg(mobile)]
+            bugs::set_dir(app.path().app_data_dir()?.join("bugs"));
             match app.path().app_log_dir() {
                 Ok(dir) => {
                     if let Err(e) = journal::open(&dir.join("beryl.jsonl")) {
