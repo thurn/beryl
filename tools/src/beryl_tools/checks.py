@@ -379,6 +379,12 @@ def oracle_lane() -> Lane:
     return Lane("oracle", warm=True).step("oracle", [*BY, "oracle"])
 
 
+def mobile_lane() -> Lane:
+    """Type-checks the app crate for the iOS Simulator and Android (`by mobile-check`); the
+    phone builds themselves take minutes, too long for the budget."""
+    return Lane("mobile", warm=True).step("mobile-check", [*BY, "mobile-check"])
+
+
 def counts_lane() -> Lane:
     """Counts the cube rollout benchmark's instructions in the bench VM (`by count-gate`) and
     fails a rise past the bar in `beryl_bench/count-gate.toml`. The VM builds into its own
@@ -423,11 +429,13 @@ def slow(args: argparse.Namespace) -> int:
         "ui-test": ui_test_lane(),
         "oracle": oracle_lane(),
         "counts": counts_lane(),
+        "mobile": mobile_lane(),
     }
     if system.WINDOWS and not args.lanes:
-        # The count gate's VM is Lima's, on macOS.
-        print("ci: skipping counts, which needs macOS")
+        # The count gate's VM is Lima's, and the phone toolchains are set up, on macOS.
+        print("ci: skipping counts and mobile, which need macOS")
         del lanes["counts"]
+        del lanes["mobile"]
     chosen = args.lanes or list(lanes)
     unknown = set(chosen) - set(lanes)
     if unknown:

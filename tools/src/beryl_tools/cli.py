@@ -8,6 +8,7 @@ import subprocess
 import sys
 
 from . import (
+    android,
     app,
     audio,
     bench,
@@ -50,6 +51,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="by", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     for module in (
+        android,
         app,
         audio,
         bench,

@@ -116,11 +116,14 @@ Cheapest first. Agents never open a window: `just dev` refuses to for them.
 3. The app: `just smoke` builds the debug app and launches it with no window and
    no Dock icon until the UI reports over IPC that it loaded (about a second
    once built). It fails on a build error or a UI that never loads.
-4. The iOS app: `just mobile-setup` installs its toolchain once per machine.
-   `just ios-smoke` builds it and launches it in a headless iOS Simulator until
-   the UI loads. `just ios` launches it in a simulator; drive that with the iOS
-   Simulator tool. Agents never install to a phone: `just ios-device` (signs and
-   installs to the paired iPhone) is the user's, `--no-install` only builds.
+4. The phone apps: `just mobile-setup` installs their toolchains once per
+   machine. `just ios-smoke` builds the iOS app and launches it in a headless
+   iOS Simulator until the UI loads. `just ios` launches it in a simulator;
+   drive that with the iOS Simulator tool. Agents never install to a phone:
+   `just ios-device` (signs and installs to the paired iPhone) is the user's,
+   `--no-install` only builds. `just android-smoke` and `just android` do the
+   same in the Android emulator (headless for agents; drive it with
+   `adb shell input` or the WebView's DevTools over `adb forward`).
 
 A human runs `just dev` for the app with hot reload, or `just bundle` for a
 release `Beryl.app`.
@@ -150,11 +153,12 @@ work until `--power full`.
 - `just ci` (slow, budget 300 s) runs every lane plus `app` (`just smoke`),
   `shots` (`just ui-shots`, which fails on any page error), `ui-test`
   (`just ui-test`, which plays the game screen through a fixture), `oracle`
-  (`just oracle`, which needs `just oracle-setup` once per machine) and `counts`
+  (`just oracle`, which needs `just oracle-setup` once per machine), `counts`
   (`just count-gate`: the rollout benchmark's instruction count, held to the bar
   in `rust/crates/beryl_bench/count-gate.toml`, whose comments say when it may
-  rise). A run over budget fails: speed up, move or delete the slowest step
-  rather than raise it.
+  rise) and `mobile` (`cargo check` of the app for the iOS Simulator and
+  Android, which needs `just mobile-setup`). A run over budget fails: speed up,
+  move or delete the slowest step rather than raise it.
 - Budgets and deadlines count load-adjusted seconds: while the load average is
   over the core count, the clock runs slower in proportion, up to 8x. A check
   passes on a busy machine if it would on a quiet one.

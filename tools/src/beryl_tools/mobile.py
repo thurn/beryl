@@ -1,6 +1,7 @@
 """The phone apps: `mobile-setup` installs their toolchains, `ios` builds the app for the iOS
 Simulator and launches it there, `ios-smoke` does the same headless until the UI reports that
-it loaded, and `ios-device` builds, signs and installs it on a paired iPhone."""
+it loaded, and `ios-device` builds, signs and installs it on a paired iPhone. The Android
+recipes are `android`'s."""
 
 from __future__ import annotations
 
@@ -27,23 +28,49 @@ IOS_TARGETS = ("aarch64-apple-ios", "aarch64-apple-ios-sim")
 # Tauri's iOS project generation needs both; Homebrew installs them.
 IOS_FORMULAE = ("cocoapods", "xcodegen")
 
+# The Android SDK, where Android Studio would put it; recipes set its variables themselves.
+ANDROID_HOME: Path = Path.home() / "Library" / "Android" / "sdk"
+ANDROID_API = "36"
+NDK_VERSION = "28.2.13676358"
+# gen/android/app/build.gradle.kts's minSdk.
+MIN_SDK = 24
+ANDROID_SYSTEM_IMAGE: str = f"system-images;android-{ANDROID_API};google_apis;arm64-v8a"
+ANDROID_PACKAGES: tuple[str, ...] = (
+    "cmdline-tools;latest",
+    "platform-tools",
+    "emulator",
+    f"platforms;android-{ANDROID_API}",
+    "build-tools;36.0.0",
+    f"ndk;{NDK_VERSION}",
+    ANDROID_SYSTEM_IMAGE,
+)
+ANDROID_TARGETS = ("aarch64-linux-android",)
+# The Android Gradle Plugin runs on a JDK it supports, not the newest.
+JDK_FORMULA = "openjdk@21"
+
 
 def run(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(args, cwd=cwd, capture_output=True, text=True, check=False)
 
 
+def rust_targets(targets: tuple[str, ...]) -> int:
+    """Adds the Rust `targets` missing from the toolchain rust-toolchain.toml pins."""
+    # From rust/, so rustup acts on the pinned toolchain.
+    installed = run("rustup", "target", "list", "--installed", cwd=paths.RUST)
+    missing = [t for t in targets if t not in installed.stdout.split()]
+    if not missing:
+        return 0
+    print(f"mobile-setup: rustup target add {' '.join(missing)}")
+    return subprocess.run(
+        ["rustup", "target", "add", *missing], cwd=paths.RUST, check=False
+    ).returncode
+
+
 def ios_setup() -> int:
     """Installs what an iOS build needs, skipping what is there."""
-    # From rust/, so the targets go to the toolchain rust-toolchain.toml pins.
-    installed = run("rustup", "target", "list", "--installed", cwd=paths.RUST)
-    missing = [t for t in IOS_TARGETS if t not in installed.stdout.split()]
-    if missing:
-        print(f"mobile-setup: rustup target add {' '.join(missing)}")
-        code = subprocess.run(
-            ["rustup", "target", "add", *missing], cwd=paths.RUST, check=False
-        ).returncode
-        if code != 0:
-            return code
+    code = rust_targets(IOS_TARGETS)
+    if code != 0:
+        return code
     formulae = [f for f in IOS_FORMULAE if shutil.which(formula_command(f)) is None]
     if formulae:
         print(f"mobile-setup: brew install {' '.join(formulae)}")
@@ -78,6 +105,107 @@ def can_build_for_simulator() -> bool:
     return "platform:iOS Simulator" in eligible
 
 
+def java_home() -> Path:
+    prefix = run("brew", "--prefix", JDK_FORMULA).stdout.strip()
+    return Path(prefix) / "libexec" / "openjdk.jdk" / "Contents" / "Home"
+
+
+def android_env() -> dict[str, str]:
+    """The Tauri CLI's environment with the Android SDK, NDK and JDK, whatever the user's
+    shell profile sets."""
+    tools = [
+        ANDROID_HOME / "platform-tools",
+        ANDROID_HOME / "emulator",
+        ANDROID_HOME / "cmdline-tools" / "latest" / "bin",
+    ]
+    env = paths.tauri_env()
+    return {
+        **env,
+        "ANDROID_HOME": str(ANDROID_HOME),
+        "NDK_HOME": str(ANDROID_HOME / "ndk" / NDK_VERSION),
+        "JAVA_HOME": str(java_home()),
+        "PATH": os.pathsep.join([*map(str, tools), env.get("PATH", "")]),
+    }
+
+
+def ndk_env() -> dict[str, str]:
+    """The environment for plain cargo building C for Android (ring's, under rustls) with
+    the NDK's clang; Tauri's CLI sets it up itself."""
+    prebuilt = ANDROID_HOME / "ndk" / NDK_VERSION / "toolchains" / "llvm" / "prebuilt"
+    clang = prebuilt / "darwin-x86_64" / "bin" / f"aarch64-linux-android{MIN_SDK}-clang"
+    return {
+        **os.environ,
+        "CC_aarch64_linux_android": str(clang),
+        "AR_aarch64_linux_android": str(clang.with_name("llvm-ar")),
+    }
+
+
+def check(args: argparse.Namespace) -> int:
+    """Type-checks the app crate for the iOS Simulator and Android: the native builds slow CI
+    can afford (seconds on a warm cache)."""
+    for target in ("aarch64-apple-ios-sim", "aarch64-linux-android"):
+        started = time.monotonic()
+        code = subprocess.run(
+            ["cargo", "check", "--locked", "-p", "beryl_app", "--target", target],
+            cwd=paths.RUST,
+            env=ndk_env(),
+            check=False,
+        ).returncode
+        print(f"mobile-check: {target} in {time.monotonic() - started:.0f} s")
+        if code != 0:
+            print("mobile-check: missing targets or NDK? `just mobile-setup`")
+            return code
+    return 0
+
+
+def android_setup() -> int:
+    """Installs what an Android build needs, skipping what is there, the SDK's licenses
+    accepted."""
+    code = rust_targets(ANDROID_TARGETS)
+    if code != 0:
+        return code
+    if not (java_home() / "bin" / "java").exists():
+        print(f"mobile-setup: brew install {JDK_FORMULA}")
+        code = subprocess.run(["brew", "install", JDK_FORMULA], check=False).returncode
+        if code != 0:
+            return code
+    # A package `a;b;c` installs into the SDK's a/b/c.
+    missing = [
+        p
+        for p in ANDROID_PACKAGES
+        if not (ANDROID_HOME.joinpath(*p.split(";")) / "package.xml").exists()
+    ]
+    if missing:
+        sdkmanager = ANDROID_HOME / "cmdline-tools" / "latest" / "bin" / "sdkmanager"
+        if not sdkmanager.exists():
+            # Homebrew's command-line tools bootstrap the SDK's own.
+            if shutil.which("sdkmanager") is None:
+                print("mobile-setup: brew install --cask android-commandlinetools")
+                code = subprocess.run(
+                    ["brew", "install", "--cask", "android-commandlinetools"],
+                    check=False,
+                ).returncode
+                if code != 0:
+                    return code
+            sdkmanager = Path(shutil.which("sdkmanager") or "sdkmanager")
+        command = [str(sdkmanager), f"--sdk_root={ANDROID_HOME}"]
+        env = {**os.environ, "JAVA_HOME": str(java_home())}
+        print(f"mobile-setup: sdkmanager {' '.join(missing)}")
+        subprocess.run(
+            [*command, "--licenses"],
+            input="y\n" * 20,
+            text=True,
+            env=env,
+            stdout=subprocess.DEVNULL,
+            check=False,
+        )
+        code = subprocess.run([*command, *missing], env=env, check=False).returncode
+        if code != 0:
+            return code
+    print("mobile-setup: Android ready")
+    return 0
+
+
 def formula_command(formula: str) -> str:
     return "pod" if formula == "cocoapods" else formula
 
@@ -109,9 +237,9 @@ def simulator_runtime() -> str | None:
 
 def setup(args: argparse.Namespace) -> int:
     if sys.platform != "darwin":
-        print("mobile-setup: iOS builds need macOS", file=sys.stderr)
+        print("mobile-setup: the phone apps build on macOS", file=sys.stderr)
         return 2
-    return ios_setup()
+    return ios_setup() or android_setup()
 
 
 def build_simulator_app() -> int:
@@ -242,8 +370,8 @@ def alive(pid: int) -> bool:
 
 
 def journal(udid: str, pid: int) -> list[dict[str, Any]]:
-    """The journal records of the app run `pid` (beryl_session's `journal`): those after the
-    record that opened the journal in that process."""
+    """The journal records of the app run `pid` (beryl_session's `journal`) in the
+    simulator."""
     data = run("xcrun", "simctl", "get_app_container", udid, BUNDLE_ID, "data")
     path = (
         Path(data.stdout.strip())
@@ -255,9 +383,15 @@ def journal(udid: str, pid: int) -> list[dict[str, Any]]:
     )
     if data.returncode != 0 or not path.exists():
         return []
+    return run_records(path.read_text(), pid)
+
+
+def run_records(journal: str, pid: int) -> list[dict[str, Any]]:
+    """The records of the app run `pid` in `journal`'s text: those after the record that
+    opened the journal in that process."""
     records: list[dict[str, Any]] = []
     ours = False
-    for line in path.read_text().splitlines():
+    for line in journal.splitlines():
         record: dict[str, Any] = json.loads(line)
         if record.get("source") == "journal" and record.get("message") == "opened":
             ours = (record.get("data") or {}).get("pid") == pid
@@ -332,6 +466,9 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     sub.add_parser(
         "mobile-setup", help="install the phone apps' toolchains (idempotent)"
     ).set_defaults(func=setup)
+    sub.add_parser(
+        "mobile-check", help="cargo check the app for the iOS Simulator and Android"
+    ).set_defaults(func=check)
     p = sub.add_parser("ios", help="build the iOS app and launch it in the Simulator")
     p.add_argument("--no-build", action="store_true")
     p.set_defaults(func=ios)
