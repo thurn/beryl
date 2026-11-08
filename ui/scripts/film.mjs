@@ -239,6 +239,11 @@ for (const spec of specs) {
                     ),
                 );
                 const page = await seats[0].context.newPage();
+                // As wide as the sheet, whatever size the seats were filmed at.
+                await page.setViewportSize({
+                    width: ACROSS * (TILE + 10) + 24,
+                    height: 900,
+                });
                 const kept = await sheet(
                     page,
                     `${spec.slug} / ${m.name} · ${m.title}`,

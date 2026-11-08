@@ -69,11 +69,11 @@ show the mechanics it shares.
 
    `spec.open(card, moment, seat)` opens one seat (and points `page` at it),
    `spec.both` both, held until `spec.play()`, and `spec.audit(action?)` plays
-   them (or runs the action, a live click) and audits both seats' motion. An action is the viewer's own, so
-   what it moves before the game answers is judged too, not minor: a chooser
-   opening, the hand rising (`ui` findings). `spec.seat("theirs")` points
-   `page`, `shot` and `probe` at that seat at once; `spec.settled()` waits for
-   quiet.
+   them (or runs the action, a live click) and audits both seats' motion. An
+   action is the viewer's own, so what it moves before the game answers is
+   judged too, not minor: a chooser opening, the hand rising (`ui` findings).
+   `spec.seat("theirs")` points `page`, `shot` and `probe` at that seat at once;
+   `spec.settled()` waits for quiet.
 
    `spec.ordered(patterns, { seat, action })` asserts the order things showed
    in: each pattern (a substring, any case, or a RegExp) takes the first entry
@@ -136,7 +136,8 @@ For ui-test and ui-shots: `just ui-test <filter...>` runs only the checks whose
 titles contain a filter, and `just ui-shots --views <fixture>` lists a
 fixture's views with the index a route's `&at=` takes. A scripted board that
 stalls names the actions still waiting and the last decision one fit no
-candidate of (a target that resolved to nothing offered).
+candidate of (a target that resolved to nothing offered). A board's fixture
+records from seat 1 with `"until": "first <kind> decision for seat 1"`.
 
 ## How a spec is generated
 

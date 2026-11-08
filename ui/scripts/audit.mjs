@@ -264,8 +264,16 @@ export function record(ui) {
     };
     requestAnimationFrame(frame);
     // A few frames of where things were before the caller sets anything going: a view can
-    // arrive within a frame of a play.
-    return new Promise((done) => setTimeout(done, 100));
+    // arrive within a frame of a play. Counted, not timed: a busy machine may draw no frame
+    // for a while, and a run whose first frame comes after the play sees nothing change.
+    const started = performance.now();
+    return new Promise((done) => {
+        const wait = () =>
+            frames.length >= 3 || performance.now() - started > 3000
+                ? done()
+                : setTimeout(wait, 20);
+        wait();
+    });
 }
 
 /** What the page recorded, and the views it showed since `since`, with their events. */
