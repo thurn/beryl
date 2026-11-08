@@ -1279,72 +1279,37 @@
     drop-shadow(0 0 5px rgb(230 100 10 / 65%));
 }
 
-/* The opponent thinking (Player.tsx' Thinking): a comet's tails of three lengths, brightest and
-   thickest at its head, circling the orbit together. */
+/* The opponent acting (Player.tsx' Thinking): an arc faint at its tail and bright at
+   its head, turning round a faint ring. */
 .thinking {
-  width: 84px;
-  height: 28px;
+  width: 40px;
+  height: 40px;
   overflow: visible;
-  filter: drop-shadow(0 0 2px rgb(255 150 40 / 60%));
+  filter: drop-shadow(0 0 3px rgb(255 150 40 / 70%));
 }
 .thinking-track {
   fill: none;
   stroke: rgb(255 214 150 / 22%);
-  stroke-width: 0.9;
+  stroke-width: 2.6;
 }
-.thinking-tail {
+.thinking-arc {
   fill: none;
+  stroke-width: 3.4;
   stroke-linecap: round;
-  animation: 1.2s linear infinite;
+  animation: thinking-turn 0.8s linear infinite;
 }
-.thinking-tail-0 {
-  stroke: #ff7a14;
-  stroke-opacity: 0.45;
-  stroke-width: 1.3;
-  stroke-dasharray: 36 64;
-  animation-name: thinking-tail-0;
+.thinking-head {
+  fill: #fff3c0;
+  stroke: none;
 }
-.thinking-tail-1 {
-  stroke: #ffb444;
-  stroke-opacity: 0.8;
-  stroke-width: 1.7;
-  stroke-dasharray: 16 84;
-  animation-name: thinking-tail-1;
-}
-.thinking-tail-2 {
-  stroke: #fff3c0;
-  stroke-width: 2.4;
-  stroke-dasharray: 3 97;
-  animation-name: thinking-tail-2;
-}
-/* Each tail's dash ends at the head, which runs once round the orbit (100) a cycle. */
-@keyframes thinking-tail-0 {
-  from {
-    stroke-dashoffset: 36;
-  }
+@keyframes thinking-turn {
   to {
-    stroke-dashoffset: -64;
-  }
-}
-@keyframes thinking-tail-1 {
-  from {
-    stroke-dashoffset: 16;
-  }
-  to {
-    stroke-dashoffset: -84;
-  }
-}
-@keyframes thinking-tail-2 {
-  from {
-    stroke-dashoffset: 3;
-  }
-  to {
-    stroke-dashoffset: -97;
+    rotate: 360deg;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .thinking-tail {
-    animation-duration: 4s;
+  .thinking-arc {
+    animation-duration: 2s;
   }
 }
 
@@ -1446,19 +1411,10 @@
   stroke: url(#emblem-brass);
   stroke-width: 1.5;
 }
-/* What the player is doing, under their name while they act: small gold italic, with dots that
-   pulse so the table never looks frozen. */
 .player-badge-name {
   display: flex;
   flex-direction: column;
   line-height: 1.05;
-}
-.player-badge-activity {
-  display: inline-flex;
-  align-items: baseline;
-  font: italic 600 14px var(--font-sans);
-  letter-spacing: 0.03em;
-  color: var(--gold);
 }
 .working-dots {
   display: inline-flex;

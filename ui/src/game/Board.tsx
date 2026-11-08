@@ -155,7 +155,7 @@ import {
   type PlayChoice,
 } from "./AbilityChooser";
 import type { LogEntry } from "./log";
-import { actingLabel, GameLog, opponentActivity } from "./Narration";
+import { actingLabel, GameLog, opponentActing } from "./Narration";
 import {
   Inspect,
   INSPECT_WIDTH,
@@ -1119,6 +1119,8 @@ export function Board({
   );
   const announcement = combatBanner(view) ?? coinFlipBanner(view);
   const banner = announcement;
+  const bannerKey = banner && `${banner.title}|${banner.detail}`;
+  const bannerUp = useBannerUp(bannerKey);
   // A combat declaration is finished with the turn button, where priority is passed.
   const declaring =
     deciding && decision && isCombat(decision.kind) ? decision : undefined;
@@ -1186,7 +1188,6 @@ export function Board({
         <div className="hud" style={{ left: 18, top: 62 }}>
           <PlayerBadge
             seat="opponent"
-            activity={opponentActivity(view, waiting)}
             mulligans={early ? opponent.mulligans : 0}
           />
         </div>
@@ -1202,7 +1203,7 @@ export function Board({
           target={deciding ? can.players.get("opponent") : undefined}
           onPick={(act) => pick(act.index, act.then)}
         />
-        {view.status.kind === "thinking" && (
+        {opponentActing(view, waiting) && !bannerUp && (
           <div className="hud thinking-hud">
             <Thinking />
           </div>
@@ -1223,9 +1224,7 @@ export function Board({
           <ManaPool pool={you.mana} pulse={lost} />
         </div>
 
-        {banner && (
-          <StepBanner key={`${banner.title}|${banner.detail}`} {...banner} />
-        )}
+        {banner && <StepBanner key={bannerKey} shown={bannerUp} {...banner} />}
 
         <GameLog log={log} folded open={logOpen} onToggle={toggleLog} />
         <TurnBanner view={view} live={live} />
@@ -1605,15 +1604,34 @@ const GLIDE_MS = 700;
 /** How long an announcing banner shows, in ms. */
 const BANNER_MS = 2500;
 
-/** A step announcement over the battlefield, such as "Combat" over "Blockers declared", between
- * the opponent's life orb and their permanents: it fades away after a moment. */
-function StepBanner({ title, detail }: { title: string; detail: string }) {
-  const reduce = useReducedMotion() ?? false;
-  const [shown, setShown] = useState(true);
+/** Whether the banner of this key is still showing: for BANNER_MS after it appears, then not,
+ * until it goes and comes again. The spinner under the opponent's orb hides meanwhile, since the
+ * banner lies where it does. */
+function useBannerUp(key: string | undefined): boolean {
+  const [gone, setGone] = useState<string>();
   useEffect(() => {
-    const timer = setTimeout(() => setShown(false), BANNER_MS);
+    if (key === undefined) {
+      setGone(undefined);
+      return;
+    }
+    const timer = setTimeout(() => setGone(key), BANNER_MS);
     return () => clearTimeout(timer);
-  }, []);
+  }, [key]);
+  return key !== undefined && gone !== key;
+}
+
+/** A step announcement over the battlefield, such as "Combat" over "Blockers declared", between
+ * the opponent's life orb and their permanents: it fades away once no longer `shown`. */
+function StepBanner({
+  title,
+  detail,
+  shown,
+}: {
+  title: string;
+  detail: string;
+  shown: boolean;
+}) {
+  const reduce = useReducedMotion() ?? false;
   return (
     <AnimatePresence>
       {shown && (

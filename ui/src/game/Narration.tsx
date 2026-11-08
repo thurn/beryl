@@ -21,15 +21,13 @@ export function actingLabel(view: PlayerView): string | undefined {
   }
 }
 
-/** The opponent's badge's line under their name while their turn plays on, if it does. While
- * they think, the spinner under their orb says so instead. */
-export function opponentActivity(
-  view: PlayerView,
-  waiting: boolean,
-): string | undefined {
-  if (view.status.kind === "thinking") return undefined;
-  if (waiting && view.turn.active === "opponent") return "Taking their turn";
-  return undefined;
+/** Whether the opponent is acting while the player waits: thinking, or their turn playing on.
+ * The spinner under their orb (Player.tsx' Thinking) shows it, wordless. */
+export function opponentActing(view: PlayerView, waiting: boolean): boolean {
+  return (
+    view.status.kind === "thinking" ||
+    (waiting && view.turn.active === "opponent")
+  );
 }
 
 /** The game log at the table's left: a heading for each turn, then what happened, newest at

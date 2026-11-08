@@ -1101,6 +1101,7 @@ await check(
         // A tenth of a second at a time, what the board says as the turn plays out.
         const pills = new Set();
         let thinking = false;
+        let worded = false;
         let landBeforeHalt = false;
         const stacked = new Set();
         let took = 0;
@@ -1111,6 +1112,7 @@ await check(
             const pill = await page.$(".priority-pill");
             if (pill) pills.add(await pill.textContent());
             thinking ||= (await page.$(".thinking")) !== null;
+            worded ||= (await page.getByText(/their turn/i).count()) > 0;
             landBeforeHalt ||= (await page.$(land)) !== null;
             for (const card of await page.$$eval(
                 '.card-el[data-zone="stack"]',
@@ -1122,6 +1124,7 @@ await check(
             took += 100;
         }
         assert.ok(thinking, "the opponent is seen thinking");
+        assert.ok(!worded, "no words say the opponent takes their turn");
         assert.ok(
             ![...pills].some((p) => /thinking/i.test(p)),
             `no pill says the opponent is thinking: ${[...pills].join(", ")}`,
@@ -4907,6 +4910,65 @@ const coveredBy = (page, by) =>
 /** What may never lie over a card on the table: a life orb, a tip, the game log or the reach of
  * a raised hand card. */
 const COVERS = "[data-life], .tip, .game-log, .hand-hit";
+
+// Eight cards in your hand while you may pass on to the next stop: the fan, each card at rest
+// and raised in turn, stays clear of the round button left of the turn button (by-biv).
+await derive("crowded", "crowded-eight", crowdedAt, (v) => {
+    const hand = v.objects.filter(
+        (o) => o.owner === "you" && o.zone === "hand",
+    );
+    const more = Array.from({ length: 8 - hand.length }, (_, i) => ({
+        ...hand[i % hand.length],
+        slot: 9200 + i,
+    }));
+    const decision = v.status.decision;
+    return {
+        ...v,
+        objects: [...v.objects, ...more],
+        status: {
+            ...v.status,
+            decision: {
+                ...decision,
+                passOn: decision.passOn ?? { kind: "nextTurn" },
+            },
+        },
+    };
+});
+await check(
+    "a full hand keeps clear of the pass-on button",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const button = await page.locator(".pass-on-button").boundingBox();
+        assert.ok(button, "the pass-on button shows");
+        // The right edge of everything drawn for a hand card, a raised one's copy included.
+        const right = () =>
+            page.$$eval(
+                ".card-el-hand, .card-el-hand *, .card-ghost *",
+                (all) =>
+                    Math.max(
+                        ...all.map((e) => e.getBoundingClientRect().right),
+                    ),
+            );
+        const cards = await page.locator(".card-el-hand").all();
+        assert.equal(cards.length, 8, "eight cards in hand");
+        assert.ok(
+            (await right()) < button.x,
+            `the hand reaches ${await right()}, the button begins at ${button.x}`,
+        );
+        for (const card of cards) {
+            const box = await card.boundingBox();
+            await page.mouse.move(box.x + box.width / 2, box.y + 30);
+            await page.clock.runFor(600);
+            const name = await card.getAttribute("data-card");
+            const reach = await right();
+            assert.ok(
+                reach < button.x,
+                `${name} raised reaches ${reach}, the button begins at ${button.x}`,
+            );
+        }
+    },
+    { ...crowdedRun(crowdedAt), fixture: "crowded-eight" },
+);
 
 // The opponent holding nine cards: their fan's outer backs, which its turn lifts, still show.
 await derive(FIXTURE, "held-nine", views.length - 2, (v) => {

@@ -195,49 +195,34 @@ export function LifeOrb({
   );
 }
 
-/** The opponent thinking, under their orb: a comet of gold light circling a flat orbit, its
- * far side dimmer, words being needless here. */
+/** The opponent acting, under their orb: a gold arc of three eighths of a turn, brightening to
+ * its head, sweeping round a faint ring, the familiar spinner of software at work. */
 export function Thinking() {
-  const orbit = "M21 0 A21 6 0 1 1 -21 0 A21 6 0 1 1 21 0";
   return (
     <svg
       className="thinking"
-      viewBox="-24 -8 48 16"
+      viewBox="-16 -16 32 32"
       role="status"
       aria-label="Opponent thinking"
     >
       <defs>
-        <linearGradient id="thinking-depth" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0.2" stopColor="#fff" stopOpacity="0.35" />
-          <stop offset="0.8" stopColor="#fff" />
-        </linearGradient>
-        <mask
-          id="thinking-near"
-          maskUnits="userSpaceOnUse"
-          x="-24"
-          y="-8"
-          width="48"
-          height="16"
+        <linearGradient
+          id="thinking-tail"
+          gradientUnits="userSpaceOnUse"
+          x1="-7.8"
+          y1="7.8"
+          x2="0"
+          y2="-11"
         >
-          <rect
-            x="-24"
-            y="-8"
-            width="48"
-            height="16"
-            fill="url(#thinking-depth)"
-          />
-        </mask>
+          <stop offset="0" stopColor="#ff7a14" stopOpacity="0" />
+          <stop offset="0.3" stopColor="#ff9a2a" />
+          <stop offset="1" stopColor="#fff3c0" />
+        </linearGradient>
       </defs>
-      <g mask="url(#thinking-near)">
-        <path className="thinking-track" d={orbit} />
-        {[0, 1, 2].map((i) => (
-          <path
-            key={i}
-            className={`thinking-tail thinking-tail-${i}`}
-            d={orbit}
-            pathLength={100}
-          />
-        ))}
+      <circle className="thinking-track" r="11" />
+      <g className="thinking-arc">
+        <path d="M-7.8 7.8 A11 11 0 0 1 0 -11" stroke="url(#thinking-tail)" />
+        <circle className="thinking-head" cx="0" cy="-11" r="2.2" />
       </g>
     </svg>
   );
@@ -304,8 +289,6 @@ export function ManaPool({ pool, pulse = 0 }: { pool: Pool; pulse?: number }) {
   );
 }
 
-/** A player's name on a dark band behind a nested brass diamond, and under it what they are
- * doing, if anything: the opponent thinking or taking their turn. */
 /** The coin of the flip that settles who plays first, which then marks the starting player: a
  * gold disc bearing a 1, drawn by its style as the icon it is, not text. It lands with a flip as
  * it appears, or spins while the flip's winner chooses, or once flipped rocks between the seats
@@ -346,22 +329,20 @@ export function Coin({
   );
 }
 
-/** A player's emblem beside what they are doing and their mulligans. The table names no one (whose
- * side is plain from where it is), so there it shows only while it has something to say. */
+/** A player's emblem beside their name and mulligans. The table names no one (whose side is
+ * plain from where it is), so there it shows only while it has something to say. */
 export function PlayerBadge({
   name,
-  activity,
   mulligans = 0,
   seat = "you",
 }: {
   name?: string;
-  activity?: string;
   /** Mulligans taken, shown as a badge once there are any. */
   mulligans?: number;
   /** Whose badge: its tip opens toward the middle of the table. */
   seat?: "you" | "opponent";
 }) {
-  if (name === undefined && activity === undefined && mulligans === 0) {
+  if (name === undefined && mulligans === 0) {
     return null;
   }
   return (
@@ -387,19 +368,7 @@ export function PlayerBadge({
           strokeWidth="1.3"
         />
       </svg>
-      <span className="player-badge-name">
-        {name}
-        {activity && (
-          <small className="player-badge-activity" role="status">
-            {activity}
-            <i className="working-dots" aria-hidden>
-              <i />
-              <i />
-              <i />
-            </i>
-          </small>
-        )}
-      </span>
+      <span className="player-badge-name">{name}</span>
       {mulligans > 0 && (
         <span
           className="player-badge-mulligans has-tip"

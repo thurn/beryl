@@ -444,6 +444,16 @@ function turned(
   };
 }
 
+/** Where the action dock's leftmost button begins, passing on to the next stop left of the turn
+ * button: the dock stands 39 from the right edge (screens.css' .dock), the turn button
+ * --button-width wide and the round one --button-height, --button-gap apart (tokens.css). */
+const DOCK_LEFT = STAGE.width - 39 - 250 - 10 - 48;
+
+/** The held fan's middle, between its outer cards' centers: its outer card, raised (RAISE), and
+ * the glow of a playable card's outline stay clear of the dock (DOCK_LEFT). */
+const HELD_ROOM =
+  2 * (DOCK_LEFT - 12 - STAGE.width / 2 - (HAND.width * RAISE.scale) / 2);
+
 /** How far the hand sinks under a screen over the table (scry.png). */
 const HAND_TUCK = 67;
 
@@ -474,7 +484,7 @@ function handPlacements(cards: ObjectView[], hold: HandHold): Placement[] {
   const n = cards.length;
   const mid = (n - 1) / 2;
   const raised = hold === "raised";
-  const fan = raised ? RAISED_HAND : { ...HAND, scale: 1, room: 760 };
+  const fan = raised ? RAISED_HAND : { ...HAND, scale: 1, room: HELD_ROOM };
   const width = FULL_WIDTH * fan.scale;
   const spacing = n > 1 ? Math.min(fan.spacing, fan.room / (n - 1)) : 0;
   return cards.map((o, i) => {

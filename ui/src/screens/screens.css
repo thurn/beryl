@@ -780,7 +780,7 @@
 }
 /* The opponent thinking, under their orb, clear of its rays. */
 .thinking-hud {
-  left: 758px;
+  left: 782px;
   top: 166px;
   z-index: 250;
   pointer-events: none;
