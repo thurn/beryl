@@ -488,6 +488,7 @@ def dump_scenarios(path: Path, log: Path) -> list[dict[str, object]]:
         ],
         log,
         paths.RUST,
+        CARGO_TARGET_DIR=str(paths.RUN_TARGET),
     )
     return json.loads(path.read_text())
 

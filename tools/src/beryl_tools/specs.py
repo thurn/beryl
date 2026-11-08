@@ -57,6 +57,7 @@ def build(release: bool) -> Path | None:
     built = subprocess.run(
         ["cargo", "build", "--quiet", *profile, "--package", "beryl_cli"],
         cwd=paths.RUST,
+        env=paths.run_env(),
         stdin=subprocess.DEVNULL,
         check=False,
     )
@@ -64,7 +65,7 @@ def build(release: bool) -> Path | None:
         print("specs: building beryl_cli failed", file=sys.stderr)
         return None
     return system.exe(
-        paths.RUST / "target" / ("release" if release else "debug") / "beryl_cli"
+        paths.RUN_TARGET / ("release" if release else "debug") / "beryl_cli"
     )
 
 

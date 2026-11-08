@@ -1,7 +1,8 @@
 """`ui-shots`: screenshots of UI states without opening a window. It records the game fixtures
 ui/fixtures.json defines with `beryl_cli record-fixture`, serves the UI with Vite, captures the
 routes listed in ui/shots.json with headless Playwright (ui/scripts/shots.mjs) and prints the
-paths. Playwright runs the engine of the app's webview: WebKit on macOS, Chromium on Windows. Pages run in a plain browser on the fixture transport (ui/src/ipc.ts).
+paths. Playwright runs the engine of the app's webview: WebKit on macOS, Chromium on Windows.
+Pages run in a plain browser on the fixture transport (ui/src/ipc.ts).
 
 `ui-test` plays the game screen through a fixture the same way, dragging, clicking and hovering
 as a player would (ui/scripts/interactions.mjs). It records its fixtures into the cache instead,
@@ -121,6 +122,7 @@ def record_fixtures(into: Path = RECORDED, only: list[str] | None = None) -> int
         + ["record-fixture", str(FIXTURES), str(into)]
         + (only or []),
         cwd=paths.RUST,
+        env=paths.run_env(),
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         check=False,
@@ -291,6 +293,7 @@ def ui_live(args: argparse.Namespace) -> int:
     built = subprocess.run(
         ["cargo", "build", "--quiet", "--package", "beryl_cli", *profile],
         cwd=paths.RUST,
+        env=paths.run_env(),
         stdin=subprocess.DEVNULL,
         check=False,
     )
@@ -298,7 +301,7 @@ def ui_live(args: argparse.Namespace) -> int:
         print("ui-live: building beryl_cli failed", file=sys.stderr)
         return built.returncode
     binary = system.exe(
-        paths.RUST / "target" / ("release" if args.release else "debug") / "beryl_cli"
+        paths.RUN_TARGET / ("release" if args.release else "debug") / "beryl_cli"
     )
     # Fixture routes (`?fixture=`) reach rare states; record them as ui-shots does.
     if record_fixtures() != 0:

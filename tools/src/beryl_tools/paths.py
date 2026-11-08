@@ -62,6 +62,20 @@ def main_checkout() -> Path | None:
 TAURI_TARGET: Path = RUST / "target" / "tauri"
 
 
+# The target directory of the binaries `by` runs while other work builds: on Windows, one of
+# their own. Windows replaces no running binary, and `cargo test --workspace` (dev-dependencies'
+# features unified in) and `cargo build -p beryl_cli` build different binaries at one path, so
+# the rust lane would fail to relink the binary a UI lane runs, and the other way round.
+RUN_TARGET: Path = (
+    RUST / "target" / "run" if sys.platform == "win32" else RUST / "target"
+)
+
+
+def run_env() -> dict[str, str]:
+    """The environment for cargo building a binary `by` runs ([`RUN_TARGET`])."""
+    return {**os.environ, "CARGO_TARGET_DIR": str(RUN_TARGET)}
+
+
 def tauri_env() -> dict[str, str]:
     """The environment for the Tauri CLI, run from ui/: it finds the app crate through
     TAURI_APP_PATH."""
