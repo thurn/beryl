@@ -210,8 +210,9 @@ export function cutText(page) {
             }
             // Text of the table's own (the log, a badge, a banner) that a permanent or a hand
             // card lies over, sampled at each line's ends and middle. Text on the cards and the
-            // stack's items, which overlap by design, is not checked.
-            if (el.closest(".card-el, .stack-item")) continue;
+            // stack's items, which overlap by design, and on the inspector, drawn over the cards
+            // but letting the pointer through to them, is not checked.
+            if (el.closest(".card-el, .stack-item, .inspect")) continue;
             // Only where the text shows: not scrolled out of a list's view.
             let view = {
                 left: 0,
@@ -345,8 +346,18 @@ export async function screenFaults(page) {
                 );
             }
         }
+        // Each emblem is drawn as a card, under a slot no object has (layout's emblemSlot).
+        for (const side of ["you", "opponent"]) {
+            for (const name of view.players[side].emblems) {
+                const card = [...drawn].some(
+                    ([slot, els]) =>
+                        slot < 0 && els.some((e) => e.dataset.card === name),
+                );
+                if (!card) faults.push(`${side}'s emblem ${name} not drawn`);
+            }
+        }
         for (const slot of drawn.keys()) {
-            if (!objects.has(slot))
+            if (slot >= 0 && !objects.has(slot))
                 faults.push(`slot ${slot} drawn but not in the view`);
         }
         for (const side of ["you", "opponent"]) {

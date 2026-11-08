@@ -1110,13 +1110,14 @@
   position: absolute;
 }
 /* Each player's phase stops about their life orb, as on Arena: the beginning and first main
-   phase left of it, combat, the second main phase and the end right of it. */
+   phase left of it, combat, the second main phase and the end right of it, evenly spaced, each
+   group's inner edge 70px from the orb's middle (x 800). */
 .turn-controls .phase-tracker-compact {
-  left: 677px;
+  left: 668px;
   top: 656px;
   z-index: 251;
   display: grid;
-  grid-template-columns: repeat(2, 26px) 118px repeat(3, 26px);
+  grid-template-columns: repeat(2, 26px) 120px repeat(3, 26px);
   column-gap: 10px;
 }
 .turn-controls .phase-tracker-compact .phase:nth-child(3) {

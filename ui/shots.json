@@ -546,7 +546,7 @@
       "route": "/?fixture=emblems#/game",
       "width": 1600,
       "height": 900,
-      "hover": "[data-emblem='Teferi, Hero of Dominaria Emblem']"
+      "hover": "[data-card='Teferi, Hero of Dominaria Emblem']"
     },
     {
       "name": "game-target-graveyard",
@@ -594,6 +594,12 @@
     {
       "name": "game-converter-choose",
       "route": "/?fixture=converter-choose#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "game-walkers",
+      "route": "/?fixture=walkers&at=27#/game",
       "width": 1600,
       "height": 900
     },

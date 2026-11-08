@@ -315,6 +315,13 @@
       "where": ["namesake candidates"]
     },
     {
+      "name": "walkers",
+      "board": "walkers",
+      "until": "first priority decision for seat 0 from turn 4",
+      "where": ["emblems a side", "exiled beneath a permanent"],
+      "after": 3
+    },
+    {
       "name": "target-up-to-one",
       "board": "target-up-to-one",
       "until": "first targetCount decision for seat 0",

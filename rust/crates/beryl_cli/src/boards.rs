@@ -881,6 +881,70 @@ pub const BOARDS: &[Scenario] = &[
         .hand(P1, &[STOCK_UP])
         .library(P1, LANDS)
         .actions(&[Action::cast(P1, STOCK_UP)]),
+    // Four planeswalkers and an emblem a side, and a Portable Hole a side holding the other's
+    // Snapcaster Mage, beside a full hand for the opponent: the human's Teferi, Hero of
+    // Dominaria −8 and Hole in their turn, then the opponent's Jace, Telepath Unbound −9 and
+    // Hole in theirs.
+    Scenario::new("walkers")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(TEFERI_HERO_OF_DOMINARIA).counters(CounterKind::Loyalty, 9),
+                Permanent::new(JACE_THE_MIND_SCULPTOR),
+                Permanent::new(THE_WANDERING_EMPEROR),
+                Permanent::new(JACE_VRYNS_PRODIGY).transformed(),
+                Permanent::new(SNAPCASTER_MAGE),
+                ISLAND_,
+                ISLAND_,
+                PLAINS_,
+                PLAINS_,
+            ],
+        )
+        .hand(P0, &[PORTABLE_HOLE, COUNTERSPELL, OUST, ISLAND])
+        .library(P0, LANDS)
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(JACE_VRYNS_PRODIGY)
+                    .transformed()
+                    .counters(CounterKind::Loyalty, 10),
+                Permanent::new(JACE_THE_MIND_SCULPTOR),
+                Permanent::new(THE_WANDERING_EMPEROR),
+                Permanent::new(TEFERI_HERO_OF_DOMINARIA),
+                Permanent::new(SNAPCASTER_MAGE),
+                ISLAND_,
+                ISLAND_,
+                PLAINS_,
+                PLAINS_,
+            ],
+        )
+        .hand(
+            P1,
+            &[
+                PORTABLE_HOLE,
+                COUNTERSPELL,
+                MANA_DRAIN,
+                OUST,
+                REPRIEVE,
+                STOCK_UP,
+                ISLAND,
+                PLAINS,
+                ISLAND,
+                PLAINS,
+                ISLAND,
+                PLAINS,
+            ],
+        )
+        .library(P1, LANDS)
+        .actions(&[
+            Action::activate(P0, TEFERI_HERO_OF_DOMINARIA, 2),
+            Action::cast(P0, PORTABLE_HOLE),
+            choose(P0, DecisionKind::Target, SNAPCASTER_MAGE),
+            Action::activate(P1, JACE_TELEPATH_UNBOUND, 2),
+            Action::cast(P1, PORTABLE_HOLE),
+            choose(P1, DecisionKind::Target, SNAPCASTER_MAGE),
+        ]),
     // Teferi, Time Raveler's −3 announces how many targets, up to one, with an artifact and a
     // creature across the table; the human then announces one.
     Scenario::new("target-up-to-one")

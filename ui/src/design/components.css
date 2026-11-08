@@ -1377,39 +1377,6 @@
   overflow: visible;
   filter: drop-shadow(0 1px 2px rgb(0 0 0 / 70%));
 }
-/* A player's emblems: round medallions of their art in a brass rim, a row that wraps. */
-.emblems {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  max-width: 108px;
-}
-.emblem {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  overflow: hidden;
-  cursor: default;
-  border: 2px solid #ad9168;
-  box-shadow:
-    inset 0 0 0 1px #151210,
-    0 0 0 1px #151210,
-    0 2px 6px rgb(0 0 0 / 70%);
-  transition: box-shadow 0.15s;
-}
-.emblem:hover,
-.emblem:focus-visible {
-  outline: none;
-  box-shadow:
-    inset 0 0 0 1px #151210,
-    0 0 0 1px #151210,
-    0 0 10px var(--gold);
-}
-.emblem .card-art {
-  width: 100%;
-  height: 100%;
-  box-shadow: none;
-}
 .player-badge-ring {
   fill: #151210;
   stroke: url(#emblem-brass);
@@ -1655,12 +1622,20 @@
 
 /* A player's unspent mana beside their life orb (Player.tsx' ManaPool): large symbols, each
    with its amount when more than one. Passing with mana in it makes it pulse. */
+/* Unspent mana grows in where it floats, over the start of its player's lands. */
 .mana-pool {
   display: flex;
   gap: 6px;
   align-items: center;
   font-size: 30px;
   filter: drop-shadow(0 0 4px rgb(255 236 190 / 45%));
+  animation: mana-pool-in 220ms ease-out;
+}
+@keyframes mana-pool-in {
+  from {
+    opacity: 0;
+    scale: 0.6;
+  }
 }
 .mana-pool-entry {
   display: inline-flex;
@@ -1682,6 +1657,7 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .mana-pool,
   .mana-pool-pulse {
     animation: none;
   }

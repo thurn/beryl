@@ -81,21 +81,22 @@ export function PriorityPill({ children }: { children: string }) {
 
 export type Phase = "beginning" | "main1" | "combat" | "main2" | "end";
 
-/** A main phase's peak: the first main phase's icon, and the front of the second's. */
+/** The phase icons are one set: each drawn in a 24-unit box to one optical size, its ink
+ * spanning about 18 units both ways about the box's middle (3 to 21), in cream outlines of one
+ * weight over dark or stone fills, so that a row of them reads evenly spaced. */
+
+/** A main phase's peak, a snow line under its summit: the first main phase's icon. */
 const PEAK = (
   <>
-    <path
-      className="phase-dark"
-      d="M0.5 21.5 L7 11 L9 12.5 L12 3.5 L15 12.5 L17 11 L23.5 21.5 Z"
-    />
+    <path className="phase-dark" d="M3 19.5 L12 4.5 L21 19.5 Z" />
     <path
       className="phase-stone"
       stroke="none"
-      d="M4.5 20 L8.8 14 L10.3 15.3 L12 11 L13.7 15.3 L15.2 14 L19.5 20 Z"
+      d="M6.6 18 L12 9.3 L17.4 18 Z"
     />
     <path
-      strokeWidth="1"
-      d="M7.6 13.4 L9.6 15.2 L12 9.6 L14.4 15.2 L16.4 13.4"
+      strokeWidth="1.1"
+      d="M8.6 10.4 L10.4 11.8 L12 9.6 L13.6 11.8 L15.4 10.4"
     />
   </>
 );
@@ -105,18 +106,18 @@ const SWORD = (
   <>
     <path
       className="phase-blade"
-      d="M22.32 1.68 L20.41 2.03 L7.97 14.47 L8.11 14.62 L4.58 18.15 L4.15 17.73 L2.60 19.28 L4.72 21.40 L6.27 19.85 L5.85 19.42 L9.38 15.89 L9.53 16.03 L21.97 3.59 Z"
+      d="M20.88 3.12 L19.23 3.43 L8.53 14.12 L8.65 14.25 L5.62 17.29 L5.25 16.93 L3.92 18.26 L5.74 20.08 L7.07 18.75 L6.71 18.38 L9.75 15.35 L9.88 15.47 L20.57 4.77 Z"
     />
-    <path d="M19.78 4.22 L10.23 13.77 M5.92 12.14 L11.86 18.08" />
+    <path d="M18.69 5.31 L10.48 13.52 M6.77 12.12 L11.88 17.23" />
   </>
 );
 
-/** Combat damage: the inspector's damage burst, at the tracker's scale. */
+/** Combat damage: the inspector's damage burst, at the set's size. */
 const BURST = (
   <path
     className="phase-dark"
-    strokeWidth="1.1"
-    transform="scale(1.5)"
+    strokeWidth="1.5"
+    transform="translate(12 12) scale(1.15) translate(-8 -8)"
     d="M8 0.5 L9.8 5.2 L15 4 L11.4 8 L15 12 L9.8 10.8 L8 15.5 L6.2 10.8 L1 12 L4.6 8 L1 4 L6.2 5.2 Z"
   />
 );
@@ -130,12 +131,12 @@ const COMBAT_STEPS: Partial<Record<Step, ReactNode>> = {
     <>
       <path
         className="phase-shield"
-        d="M12 3 C15 4.5 18 5 21.4 5 L21.4 11 C21.4 16.5 17 20 12 21.6 C7 20 2.6 16.5 2.6 11 L2.6 5 C6 5 9 4.5 12 3 Z"
+        d="M12 3.9 C14.7 5.25 17.4 5.7 20.46 5.7 L20.46 11.1 C20.46 16.05 16.5 19.2 12 20.64 C7.5 19.2 3.54 16.05 3.54 11.1 L3.54 5.7 C6.6 5.7 9.3 5.25 12 3.9 Z"
       />
       <path
         className="phase-shield-dark"
         stroke="none"
-        d="M12 4.2 C9.2 5.5 6.5 6 3.8 6.1 L3.8 11 C3.8 15.6 7.4 18.8 12 20.3 Z"
+        d="M12 4.98 C9.48 6.15 7.05 6.6 4.62 6.69 L4.62 11.1 C4.62 15.24 7.86 18.12 12 19.47 Z"
       />
     </>
   ),
@@ -144,7 +145,9 @@ const COMBAT_STEPS: Partial<Record<Step, ReactNode>> = {
   endOfCombat: <g transform="rotate(180 12 12)">{SWORD}</g>,
 };
 
-/** Each phase's icon, cream outlines over dark or stone fills, drawn by both trackers. */
+/** Each phase's icon (one set, as above), drawn by both trackers: two cards for the beginning,
+ * a peak for the first main phase, crossed swords for combat, a second peak before the first
+ * for the second main phase, and the sun setting for the end. */
 const PHASES: { phase: Phase; label: string; icon: ReactNode }[] = [
   {
     phase: "beginning",
@@ -153,30 +156,21 @@ const PHASES: { phase: Phase; label: string; icon: ReactNode }[] = [
       <>
         <rect
           className="phase-dark"
-          x="1.5"
-          y="5"
-          width="11"
-          height="16.5"
-          rx="1.2"
-          transform="rotate(-20 7 13.25)"
-        />
-        <rect
-          className="phase-dark"
-          x="5"
-          y="3.5"
-          width="11"
-          height="16.5"
-          rx="1.2"
-          transform="rotate(-8 10.5 11.75)"
+          x="4.5"
+          y="5.5"
+          width="10"
+          height="14"
+          rx="1.4"
+          transform="rotate(-14 9.5 12.5)"
         />
         <rect
           className="phase-card"
-          x="10"
-          y="2"
-          width="11.5"
-          height="17"
-          rx="1.2"
-          transform="rotate(8 15.75 10.5)"
+          x="9.5"
+          y="4.5"
+          width="10"
+          height="14"
+          rx="1.4"
+          transform="rotate(10 14.5 11.5)"
         />
       </>
     ),
@@ -189,24 +183,30 @@ const PHASES: { phase: Phase; label: string; icon: ReactNode }[] = [
       <>
         <path
           className="phase-blade"
-          d="M1.68 1.68 L3.59 2.03 L16.03 14.47 L15.89 14.62 L19.42 18.15 L19.85 17.73 L21.40 19.28 L19.28 21.40 L17.73 19.85 L18.15 19.42 L14.62 15.89 L14.47 16.03 L2.03 3.59 Z"
+          d="M3.12 3.12 L4.77 3.43 L15.47 14.12 L15.35 14.25 L18.38 17.29 L18.75 16.93 L20.08 18.26 L18.26 20.08 L16.93 18.75 L17.29 18.38 L14.25 15.35 L14.12 15.47 L3.43 4.77 Z"
         />
-        <path d="M4.22 4.22 L13.77 13.77 M18.08 12.14 L12.14 18.08" />
+        <path d="M5.31 5.31 L13.52 13.52 M17.23 12.12 L12.12 17.23" />
         {SWORD}
       </>
     ),
   },
   {
-    // The first main phase's peak before a second one, the part of it in view only.
+    // The first main phase's peak before a second, lower one behind it.
     phase: "main2",
     label: "Second main phase",
     icon: (
       <>
+        <path className="phase-dark" d="M3 18.5 L8.5 9 L14 18.5 Z" />
+        <path className="phase-dark" d="M8 18.5 L14.5 6 L21 18.5 Z" />
         <path
-          className="phase-dark"
-          d="M0.5 21.5 L5.5 7 L8.17 14.81 L3.9 21.7 Z"
+          className="phase-stone"
+          stroke="none"
+          d="M11.2 17 L14.5 10.6 L17.8 17 Z"
         />
-        <g transform="translate(3.5 3.4) scale(0.85)">{PEAK}</g>
+        <path
+          strokeWidth="1.1"
+          d="M11.9 10.9 L13.3 12 L14.5 10.3 L15.7 12 L17.1 10.9"
+        />
       </>
     ),
   },
@@ -214,10 +214,10 @@ const PHASES: { phase: Phase; label: string; icon: ReactNode }[] = [
     phase: "end",
     label: "End",
     icon: (
-      <path
-        className="phase-heavy"
-        d="M9.8 5.5 A8 8 0 1 1 5 15.7 M13 2.5 L9.6 5.5 L13 8.5"
-      />
+      <>
+        <path className="phase-dark" d="M5.5 17.5 A6.5 6.5 0 0 1 18.5 17.5 Z" />
+        <path d="M3 17.5 H21 M12 4.5 V7 M5.6 7.6 L7.3 9.3 M18.4 7.6 L16.7 9.3 M7 20.5 H17" />
+      </>
     ),
   },
 ];

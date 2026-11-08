@@ -36,7 +36,6 @@ import {
   RulesText,
 } from "../components/Mana";
 import {
-  Emblems,
   FaceUpEdges,
   floating,
   Library,
@@ -116,11 +115,15 @@ import { useStandIns } from "./standIns";
 import { tablePick } from "./tablePick";
 import {
   combatBanner,
+  emblemObjects,
+  emblemSlot,
   exiledWith,
   held,
   footprint,
+  isEmblem,
   layout,
   linked,
+  MANA_POOLS,
   overLog,
   passButton,
   phaseOf,
@@ -194,20 +197,6 @@ export interface BoardProps {
   /** A screen over it answers the decision: the table only shows. */
   inert?: boolean;
 }
-
-/** Where each player's unspent mana shows: right of their life orb's blades, level with its
- * oval. */
-const POOLS: Record<Side, CSSProperties> = {
-  opponent: { left: 936, top: 92 },
-  you: { left: 936, top: 659 },
-};
-
-/** Where each player's emblems lie: in their corner of the table, under the opponent's badge
- * and left of their land piles; above your library and left of yours. */
-const EMBLEMS: Record<Side, CSSProperties> = {
-  opponent: { left: 20, top: 110 },
-  you: { left: 20, top: 712 },
-};
 
 /** Dropped above this line, a hand card is on the battlefield rather than back in the hand. */
 const BATTLEFIELD_EDGE = 690;
@@ -284,8 +273,6 @@ export function Board({
   const [lifted, setLifted] = useState<number>();
   // The card off the table the pointer is on in the prompt, shown whole.
   const [pointedOff, setPointedOff] = useState<number>();
-  // The emblem the pointer is on, shown whole.
-  const [pointedEmblem, setPointedEmblem] = useState<string>();
   const [settings, setSettings] = useState(false);
   /** How many times the player passed with mana unspent: each pulses their pool. */
   const [lost, setLost] = useState(0);
@@ -303,9 +290,11 @@ export function Board({
     view.status.kind === "deciding" && !waiting && !dimmed && !inert;
   const decision =
     view.status.kind === "deciding" ? view.status.decision : undefined;
+  // Emblems are drawn as cards (layout's emblemObjects), shown whole when pointed at.
+  const emblems = useMemo(() => emblemObjects(view), [view]);
   const objects = useMemo(
-    () => new Map(view.objects.map((o) => [o.slot, o])),
-    [view],
+    () => new Map([...view.objects, ...emblems].map((o) => [o.slot, o])),
+    [view, emblems],
   );
   // Declaring attackers or blockers: the creatures are picked on the table, in any order.
   const drafting =
@@ -325,6 +314,8 @@ export function Board({
     () => (drafting ? declared(view, draft) : view),
     [view, draft, drafting],
   );
+  // Every card the table draws: the objects shown, and the emblems.
+  const drawn = useMemo(() => [...shown.objects, ...emblems], [shown, emblems]);
   // Until combat damage is dealt, what each player's unblocked attackers will deal them.
   const beforeDamage =
     view.turn.step === "declareAttackers" ||
@@ -350,15 +341,11 @@ export function Board({
   // column, the rows give it room.
   const [logOpen, setLogOpen] = useState(false);
   const toggleLog = useCallback(() => setLogOpen((o) => !o), []);
-  const resting = useMemo(
-    () => layout(shown, asking, dimmed),
-    [shown, asking, dimmed],
-  );
+  const resting = useMemo(() => layout(shown, dimmed), [shown, dimmed]);
   const crowdsLog = overLog(resting);
   const placements = useMemo(
-    () =>
-      crowdsLog && logOpen ? layout(shown, asking, dimmed, true) : resting,
-    [resting, crowdsLog, logOpen, shown, asking, dimmed],
+    () => (crowdsLog && logOpen ? layout(shown, dimmed, true) : resting),
+    [resting, crowdsLog, logOpen, shown, dimmed],
   );
   // The hovered card, unless it has since gone where it is not shown alone.
   const hoveredPlace =
@@ -640,6 +627,7 @@ export function Board({
 
   /** A click on the card in `slot`: what it offers, or nothing (false). */
   const onClick = (slot: number, at: Point): boolean => {
+    if (isEmblem(slot)) return false;
     standIns.touch(slot, deciding ? can.bySlot.get(slot) : undefined);
     if (castingNow) {
       // A permanent another payment taps pays that way.
@@ -969,18 +957,10 @@ export function Board({
           target={deciding ? can.players.get("you") : undefined}
           onPick={(act) => pick(act.index, act.then)}
         />
-        {(["opponent", "you"] as const).map((side) => (
-          <div key={side} className="hud" style={EMBLEMS[side]}>
-            <Emblems
-              names={view.players[side].emblems}
-              onPoint={setPointedEmblem}
-            />
-          </div>
-        ))}
-        <div className="hud" style={POOLS.opponent}>
+        <div className="hud" style={MANA_POOLS.opponent}>
           <ManaPool pool={opponent.mana} />
         </div>
-        <div className="hud" style={POOLS.you}>
+        <div className="hud" style={MANA_POOLS.you}>
           <ManaPool pool={you.mana} pulse={lost} />
         </div>
 
@@ -999,7 +979,6 @@ export function Board({
                 key={`${i}-${item.name}`}
                 index={i}
                 count={view.stack.length}
-                lifted={asking}
                 item={item}
                 source={
                   item.source === null ? undefined : objects.get(item.source)
@@ -1011,7 +990,7 @@ export function Board({
         <CardLayer
           epoch={view}
           events={view.events}
-          objects={shown.objects}
+          objects={drawn}
           keys={standIns.keys}
           placements={placements}
           origins={tokenOrigins(views.current.before, view, placements)}
@@ -1223,13 +1202,6 @@ export function Board({
               refusal={menu ? undefined : refusal}
             />
           )}
-
-        {pointedEmblem !== undefined && !menu && !dimmed && (
-          <Inspect
-            object={{ ...BLANK, name: pointedEmblem }}
-            place={inspectorPlace(0, view.stack.length > 0 || asking, targets)}
-          />
-        )}
 
         {pointedOff !== undefined && prompting && (
           <InspectAt
@@ -1572,18 +1544,16 @@ function Incoming({ amount, lethal }: { amount: number; lethal: boolean }) {
 function AbilityOnStack({
   index,
   count,
-  lifted,
   item,
   source,
 }: {
   index: number;
   count: number;
-  lifted: boolean;
   item: Extract<StackItemView, { kind: "ability" }>;
   source?: ObjectView;
 }) {
   const face = useAbilityFace(item.name, source, BLANK);
-  const place = stackPlace(index, count, lifted);
+  const place = stackPlace(index, count);
   return (
     <motion.div
       className="hud stack-ability"
@@ -1618,18 +1588,28 @@ const lifeId = (side: Side) => `${side}-life-orb`;
  * player or planeswalker it attacks, each blocker's, gold, at the attacker it blocks, and for
  * the top of the stack, a gold one from an ability's source and a cyan one to each target
  * (trigger_on_stack_with_target.png). */
-/** Where each token `view`'s events made comes from: the permanent whose ability made it,
- * resolving at the top of the stack `before`, so that either player sees which permanent made
- * it, as Arena shows. A token whose maker is gone, or no ability's, just appears. */
+/** Where each token `view`'s events made, and each emblem new since `before`, comes from: the
+ * permanent whose ability made it, resolving at the top of the stack `before`, so that either
+ * player sees which permanent made it, as Arena shows. One whose maker is gone, or no
+ * ability's, just appears. */
 function tokenOrigins(
   before: PlayerView | undefined,
   view: PlayerView,
   placements: Map<number, Placement>,
 ): Map<number, Placement> | undefined {
-  const made = view.events.flatMap((e) =>
-    e.kind === "tokensCreated" ? e.tokens : [],
-  );
-  if (made.length === 0 || !before) return undefined;
+  if (!before) return undefined;
+  // The tokens made, and the emblems: those past the ones each player had.
+  const made = [
+    ...view.events.flatMap((e) => (e.kind === "tokensCreated" ? e.tokens : [])),
+    ...(["opponent", "you"] as const).flatMap((side) =>
+      view.players[side].emblems
+        .slice(before.players[side].emblems.length)
+        .map((_, i) =>
+          emblemSlot(side, before.players[side].emblems.length + i),
+        ),
+    ),
+  ];
+  if (made.length === 0) return undefined;
   const top = before.stack.at(-1);
   const from =
     top?.kind === "ability" && top.source !== null
@@ -2035,7 +2015,7 @@ function PromptCard({
 }
 
 /** Faces in the prompt's one row, as the battlefield draws cards: low enough that the prompt
- * stays under the lifted stack (layout's STACK_LIFT). */
+ * keeps to the middle of the table. */
 const PROMPT_CARD_WIDTH = 80;
 
 /** The order of simultaneous triggers ([CR 603.3b](https://yawgatog.com/resources/magic-rules/#R6033b):

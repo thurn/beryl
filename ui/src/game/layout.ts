@@ -48,11 +48,12 @@ export const CREATURE_WIDTH = 128;
 export const LAND_WIDTH = 100;
 /** Each copy beneath a land stack's top card, as a fraction of the card's width. */
 export const LAND_STEP = { x: 0.103, y: 0.022 };
-/** How far each card a permanent holds in exile peeks out from behind it, down and to the left,
- * as a fraction of the permanent's untapped width and height: what it exiled until it leaves
- * (CR 610.3) and what its abilities find "exiled with" it (CR 607.2a). A click on one opens
- * them all. Each Aura or Equipment attached to a permanent peeks out from behind it as far, up
- * and to the right. */
+/** How far each card a permanent holds in exile peeks out from behind it, to the left and toward
+ * its controller (down for yours, up for the opponent's), as a fraction of the permanent's
+ * untapped width and height: what it exiled until it leaves (CR 610.3) and what its abilities
+ * find "exiled with" it (CR 607.2a), mirrored across the table. A click on one opens them all.
+ * Each Aura or Equipment attached to a permanent peeks out from behind it as far, up and to the
+ * right on either side, so its name bar always shows. */
 export const BENEATH_STEP = { x: 0.3, y: 0.17 };
 
 /** The hand's cards: each card's top center lies on an arc over the near edge, and the fan
@@ -148,11 +149,12 @@ const BACK_WIDTH = 105;
 
 /** Each side's rows, in stage pixels, as MTG Arena lays them out: its creatures' row at
  * `permanents`, toward the middle of the table and centered on it; behind it, one back row with
- * its top at `back`, in front of its library and graveyard. Its mana, lands and mana artifacts,
- * stands on the left, from `lands` to `landsEnd`, untapped ones before tapped ones; everything
- * else that is not a creature (artifacts, enchantments, planeswalkers, battles), `others.width`
- * wide, smaller than a creature, stands on the right, right of its life orb, from `others.x`
- * to `others.end`. The sides never change; a row too long for its room shrinks, all its cards
+ * its top at `back`. Its mana, lands and mana artifacts, stands on the left, from `lands` to
+ * `landsEnd`, untapped ones before tapped ones; everything else that is not a creature
+ * (artifacts, enchantments, planeswalkers, battles, and its player's emblems), `others.width`
+ * wide, smaller than a creature, stands on the right, from its life orb's phase stops at
+ * `others.x` out to the stack's column's outer edge at `others.end`, about as much room as its
+ * lands have. The sides never change; a row too long for its room shrinks, all its cards
  * alike, instead. Each permanent's row follows its types after continuous effects, so an
  * animated land or a crewed Vehicle stands with the creatures. The rows lie clear of one
  * another, so a long row of creatures may pass over the land side of the table. Every row's
@@ -160,6 +162,9 @@ const BACK_WIDTH = 105;
 /** Where each side's life orb and its phase stops begin (Board.tsx's Life, screens.css
  * .phase-tracker-compact): the lands end left of them. */
 const ORB_LEFT = 664;
+/** Where both back rows' other permanents may reach: the stack's column's outer edge, which
+ * stands between the two back rows (STACK), clear of both. */
+const OTHERS_END = 1500;
 const ROWS: Record<
   Side,
   {
@@ -171,30 +176,45 @@ const ROWS: Record<
   }
 > = {
   // Just under the opponent's hand; their other permanents clear of the step banner
-  // (screens.css .step-banner, 602 to 1002 across), whose detail text would lie over them, and well
-  // left of their library, which lies behind the row in the far corner. As wide as keeps a
-  // planeswalker's loyalty readable at that depth.
+  // (screens.css .step-banner, 602 to 1002 across), whose detail text would lie over them, and
+  // under their piles' top cards in the far corner, nearer than the piles and so over their
+  // edges. As wide as keeps a planeswalker's loyalty readable at that depth.
   opponent: {
     back: 112,
     lands: 158,
     landsEnd: 590,
     permanents: 235,
-    others: { x: 998, end: 1180, width: 110 },
+    others: { x: 998, end: OTHERS_END, width: 110 },
   },
-  // Right of your orb and its phase stops (which end at 975), left of the stack's column and the prompt; your library and graveyard
-  // lie behind the row, in the near left corner.
+  // Right of your orb and its phase stops (which end at 975), above the turn button; your
+  // library and graveyard lie in front of the lands, in the near left corner.
   you: {
     back: 570,
     lands: 111,
     landsEnd: ORB_LEFT - 14,
     permanents: 408,
-    others: { x: 988, end: 1196, width: 92 },
+    others: { x: 988, end: OTHERS_END, width: 92 },
   },
 };
+/** Where each player's unspent mana shows, its top-left corner: over the start of their lands,
+ * on the side toward the middle of the table (above yours, under the opponent's at their full
+ * size), clear of the life orbs' phase stops. */
+const POOL_HEIGHT = 34;
+export const MANA_POOLS: Record<Side, { left: number; top: number }> = {
+  opponent: {
+    left: ROWS.opponent.lands,
+    top:
+      ROWS.opponent.back +
+      (LAND_WIDTH * depthScale(ROWS.opponent.back)) / CARD_ASPECT +
+      2,
+  },
+  you: { left: ROWS.you.lands, top: ROWS.you.back - POOL_HEIGHT - 2 },
+};
+
 /** The least zoom the battlefield may take (`battlefieldZoom`) before its rows crowd their cards
  * together instead. */
 const ZOOM_LEAST = 0.3;
-/** The least zoom the back row's other permanents, in their narrow room right of the orb, may
+/** The least zoom the back row's other permanents, in their room right of the orb, may
  * pull the whole battlefield down to: past it, they zoom out further alone, so a few
  * planeswalkers don't shrink every land and creature on the table. */
 const OTHERS_PULL = 0.8;
@@ -240,15 +260,18 @@ export function overLog(placements: Layout): boolean {
 }
 
 /** Where each side's library, graveyard and exile lie: their top cards' top-left corners, and
- * how wide a top card is before its depth shrinks it. The opponent's lie at the far right; yours
- * lie side by side in the near left corner, under your badge and left of the hand's widest fan,
- * so nothing covers them. */
+ * how wide a top card is before its depth shrinks it. The two sides mirror each other through
+ * the table's middle: yours lie side by side in the near left corner, under your badge and left
+ * of the hand's widest fan, the library outermost, then the graveyard and exile toward the
+ * middle; the opponent's in the far right corner, their library outermost, then their graveyard
+ * and exile toward the middle, left of the gear. Their top cards end above the opponent's back
+ * row (`ROWS`), whose permanents, nearer, lie over the edges of a thick pile. */
 export const PILES = {
   opponent: {
-    width: 104,
-    library: { x: 1236, y: 13 },
-    graveyard: { x: 1336, y: 40 },
-    exile: { x: 1432, y: 40 },
+    width: 96,
+    library: { x: 1432, y: 8 },
+    graveyard: { x: 1336, y: 8 },
+    exile: { x: 1240, y: 8 },
   },
   you: {
     width: 80,
@@ -300,23 +323,22 @@ export function pileLook(
 /** The stack, spells and abilities alike, large at the right of the table as in
  * docs/ui_mockups/trigger_on_stack_with_target.png: the top item in front where the mockup
  * draws its trigger, each item beneath it peeking out above by its name bar, closer together
- * the taller the stack. `x` and `width` bound it; `y` is the top item's top at full size. */
-export const STACK = { x: 1205, y: 222, width: 295, step: 46, reach: 200 };
+ * the taller the stack. It stands between the two back rows, whose other permanents reach under
+ * its column (`ROWS`), so neither side's are covered by it. `x` and `width` bound it; `y` is
+ * the top item's top at full size. */
+export const STACK = { x: 1252, y: 236, width: 236, step: 40, reach: 170 };
 
-/** How far the stack rises to clear the prompt below it, while one is open. */
-const STACK_LIFT = 90;
+/** How high the stack may reach: below the opponent's back row at its full size. */
+const STACK_TOP = 234;
 
-/** How high the stack may reach: below the opponent's piles at the far right of the table,
- * whose top cards end by y 160, with room for a pile of about 20 cards' thickness beneath. */
-const STACK_TOP = 175;
-
-/** Where the stack item at `index` (bottom first) of `count` is drawn, `lifted` or not. The top
- * item's foot stays put; a stack too tall to fit under the opponent's piles shrinks, all its
- * items alike, about its column's middle. */
-export function stackPlace(index: number, count: number, lifted = false) {
+/** Where the stack item at `index` (bottom first) of `count` is drawn. The top item's foot stays
+ * put, clear of your back row and of the turn controls and the prompts over them; a stack too
+ * tall to fit under the opponent's back row shrinks, all its items alike, about its column's
+ * middle. */
+export function stackPlace(index: number, count: number) {
   const step = count > 1 ? Math.min(STACK.step, STACK.reach / (count - 1)) : 0;
   const height = STACK.width / CARD_ASPECT;
-  const foot = STACK.y - (lifted ? STACK_LIFT : 0) + height;
+  const foot = STACK.y + height;
   const scale = Math.min(1, (foot - STACK_TOP) / (height + (count - 1) * step));
   const width = STACK.width * scale;
   return {
@@ -404,11 +426,13 @@ function handPlacements(cards: ObjectView[], tucked: boolean): Placement[] {
 }
 
 /** How far the opponent's hand reaches down the stage: above their life orb's top (y 48),
- * which would otherwise cover the middle backs' feet, so each back can be counted. Its arc
- * rises toward the ends no more than `HELD_RISE`, so that the outer backs of a large hand, which
- * their turn already lifts, stay in sight. */
+ * which would otherwise cover the middle backs' feet, so each back can be counted. Its feet lie
+ * on one arc whatever the hand's size, rising `HELD_RISE` by `HELD_REACH` either side of the
+ * middle, so that the outer backs of the largest hand stay in sight; a hand wider than that
+ * closes up, its outer backs clear of the opponent's piles. */
 const HELD_FOOT = 44;
-const HELD_RISE = 16;
+const HELD_RISE = 18;
+const HELD_REACH = 370;
 
 /** How far each hand card in `hand` may rise (RAISE) without the raised card, or the reach of
  * its element that keeps the pointer on it, coming over any of the `lands` boxes of your back
@@ -438,29 +462,39 @@ function handLifts(hand: Placement[], lands: Box[]): Placement[] {
   });
 }
 
-/** The opponent's hand fanned along the top edge: backs, and the faces of the cards you know
- * (a look at their hand, a card returned to it). */
+/** The opponent's hand fanned along the top edge, as yours is along the bottom turned about the
+ * table's middle: backs, and the faces of the cards you know (a look at their hand, a card
+ * returned to it). Each back's foot lies on the arc (`HELD_RISE`) and the back turns to lie
+ * along it, so the fan's lower edge runs smooth at any size, no back's corner standing out of
+ * it. */
 function heldPlacements(cards: ObjectView[]): Placement[] {
   const n = cards.length;
   const mid = (n - 1) / 2;
   const height = BACK_WIDTH / CARD_ASPECT;
-  const total = n * BACK_WIDTH - (n - 1) * 2;
-  return cards.map((o, i) => ({
-    slot: o.slot,
-    zone: o.zone,
-    look: "held",
-    width: BACK_WIDTH,
-    span: BACK_WIDTH,
-    opacity: 1,
-    z: 100 + i,
-    ...turned(
-      STAGE.width / 2 - total / 2 + i * (BACK_WIDTH - 2),
-      HELD_FOOT - height,
-      (i - mid) * -4.2,
-      [BACK_WIDTH / 2, height / 2],
-      -Math.min((i - mid) ** 2 * 3.5, HELD_RISE),
-    ),
-  }));
+  const spacing =
+    n > 1 ? Math.min(BACK_WIDTH - 2, (2 * HELD_REACH) / (n - 1)) : 0;
+  // The arc's foot is HELD_FOOT - bend · dx² at dx from the middle; its slope there, -2 · bend
+  // · dx, is how far a back turns.
+  const bend = HELD_RISE / HELD_REACH ** 2;
+  return cards.map((o, i) => {
+    const dx = (i - mid) * spacing;
+    const turn = (Math.atan(-2 * bend * dx) * 180) / Math.PI;
+    return {
+      slot: o.slot,
+      zone: o.zone,
+      look: "held",
+      width: BACK_WIDTH,
+      span: BACK_WIDTH,
+      opacity: 1,
+      z: 100 + i,
+      ...turned(
+        STAGE.width / 2 + dx - BACK_WIDTH / 2,
+        HELD_FOOT - bend * dx ** 2 - height,
+        turn,
+        [BACK_WIDTH / 2, height],
+      ),
+    };
+  });
 }
 
 /** The step from each group's left edge to the next's in a row of groups `widths` wide, and
@@ -746,13 +780,12 @@ function sideRows(side: Side, logOpen: boolean) {
       center: room.center,
       lane: true,
     },
-    // Toward the stack's column, clear of the hand's middle.
+    // From the orb's phase stops outward, as the lands run from the table's edge inward.
     others: {
       width: rows.others.width,
       y: rows.back,
       start: rows.others.x,
       end: rows.others.end,
-      center: Infinity,
     },
   };
 }
@@ -1024,9 +1057,11 @@ function permanentRow(
         pile: pileOf(group),
         ...onTable(x, y, span, 0, scale),
       });
-      // Untapped, each a step further down and to the left, or for what is attached to it up
-      // and to the right, centered on the permanent.
+      // Untapped, each a step further to the left and toward its controller, or for what is
+      // attached to it up and to the right, centered on the permanent.
       const center = x + (span * scale) / 2;
+      // An exiled card steps toward its controller: down for yours, up for the opponent's.
+      const controllerward = side === "you" ? -1 : 1;
       const tuck = (
         under: ObjectView[] | undefined,
         look: "beneath" | "attached",
@@ -1034,7 +1069,7 @@ function permanentRow(
       ) =>
         under?.forEach((e, j) => {
           const n = j + 1;
-          const up = toward * n;
+          const up = (look === "beneath" ? controllerward : 1) * n;
           out.push({
             slot: e.slot,
             zone: e.zone,
@@ -1059,6 +1094,44 @@ function permanentRow(
     });
   });
   return out;
+}
+
+/** The slot each of a side's emblems is drawn under: one no object has, counting down from -1,
+ * the two sides' taking turns, so that each emblem keeps its own as more are made. */
+export const emblemSlot = (side: Side, index: number) =>
+  -1 - (2 * index + (side === "you" ? 1 : 0));
+
+/** Whether a slot is an emblem's (`emblemSlot`), which nothing can be done with. */
+export const isEmblem = (slot: number) => slot < 0;
+
+/** Each player's emblems ([CR 114.1](https://yawgatog.com/resources/magic-rules/#R1141): "An
+ * emblem is a marker used to represent an object that has one or more abilities, but no other
+ * characteristics") as objects to draw: each a card, under its `emblemSlot`, in its player's
+ * back row after their other permanents, where pointing at it shows it whole. The table draws
+ * the command zone there ([CR 114.2](https://yawgatog.com/resources/magic-rules/#R1142): "An
+ * emblem is created in the command zone"). */
+export function emblemObjects(view: PlayerView): ObjectView[] {
+  return (["opponent", "you"] as const).flatMap((side) =>
+    view.players[side].emblems.map((name, i) => ({
+      slot: emblemSlot(side, i),
+      zone: "battlefield" as const,
+      owner: side,
+      controller: side,
+      name,
+      facing: "up" as const,
+      token: false,
+      tapped: false,
+      summoningSick: false,
+      damage: 0,
+      counters: [],
+      types: [],
+      pt: null,
+      attachedTo: null,
+      exiledBy: null,
+      exiledWith: null,
+      combat: null,
+    })),
+  );
 }
 
 /** The Auras and Equipment drawn behind the permanents they are attached to, whoever controls
@@ -1199,12 +1272,10 @@ function onPile(look: PileLook) {
   };
 }
 
-/** Every object's placement. The stack is `lifted` over a prompt; the hand is `tucked` under a
- * screen over the table; the permanents' rows keep clear of the game log while it is
+/** Every object's placement. The hand is `tucked` under a screen over the table; the permanents' rows keep clear of the game log while it is
  * `logOpen` over them. Hovering changes none of it (CardLayer raises a hovered hand card). */
 export function layout(
   view: PlayerView,
-  lifted = false,
   tucked = false,
   logOpen = false,
 ): Layout {
@@ -1213,7 +1284,11 @@ export function layout(
   const owned = (side: Side, zone: ZoneName) =>
     objects.filter((o) => o.owner === side && o.zone === zone);
   const bySlot = new Map(objects.map((o) => [o.slot, o]));
-  const permanents = view.battlefield.flatMap((s) => bySlot.get(s) ?? []);
+  // Emblems stand after their player's other permanents.
+  const permanents = [
+    ...view.battlefield.flatMap((s) => bySlot.get(s) ?? []),
+    ...emblemObjects(view),
+  ];
   // What you can play from outside your hand waits at the right of your hand fan.
   const elsewhere = playableElsewhere(view).flatMap((s) => bySlot.get(s) ?? []);
   const inHand = new Set(elsewhere.map((o) => o.slot));
@@ -1260,8 +1335,9 @@ export function layout(
   out.push(...yours, ...field("opponent", yours));
   // A raised hand card keeps clear of your back row: your lands and the permanents beside them.
   const backRow = (p: Placement) => {
+    // An emblem has no object here: it stands in the back row too.
     const o = bySlot.get(p.slot);
-    return p.look === "land" || (p.look === "field" && !!o && !isCreature(o));
+    return p.look === "land" || (p.look === "field" && !(o && isCreature(o)));
   };
   out.push(
     ...handLifts(
@@ -1305,7 +1381,7 @@ export function layout(
     if (item.kind !== "spell") return;
     const o = bySlot.get(item.slot);
     if (!o) return;
-    const place = stackPlace(i, view.stack.length, lifted);
+    const place = stackPlace(i, view.stack.length);
     out.push({
       slot: item.slot,
       zone: o.zone,
