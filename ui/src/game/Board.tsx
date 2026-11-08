@@ -82,6 +82,7 @@ import {
   moveVerb,
   prompt,
   slotOf,
+  tapsOnly,
   triggerPlan,
   withResolving,
   type Act,
@@ -132,6 +133,7 @@ import {
   fromMiddle,
   isEmblem,
   FULL_WIDTH,
+  HALT_BUTTON,
   layout,
   linked,
   MANA_POOLS,
@@ -217,13 +219,6 @@ export interface BoardProps {
 const BATTLEFIELD_EDGE = 690;
 /** Dragged forward at least this far, a creature attacks. */
 const FORWARD = 60;
-
-/** Whether all a card offers is tapping it for mana
- * ([CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a): "A player may activate an
- * activated mana ability whenever they have priority"), floating it until it is spent or the
- * step ends. */
-const tapsOnly = (acts: Act[]) =>
-  acts.length > 0 && acts.every((a) => a.option.kind === "mana");
 
 /** A menu of a card's candidates, open at a point on the stage; `pointed`, the one under
  * the pointer. A permanent's abilities are chosen in the ability chooser instead. */
@@ -1613,10 +1608,6 @@ function ConcedeButton({ onConcede }: { onConcede(): void }) {
     </Button>
   );
 }
-
-/** The turn button at a halt of the session's (`DecisionView.halt`), where passing is all the
- * player can do: ending their own turn from its first main phase. */
-const HALT_BUTTON = { label: "End Turn", caption: "Nothing to play" };
 
 /** How long a card takes to glide to a new place (CardLayer's spring), near enough, in ms. */
 const GLIDE_MS = 700;

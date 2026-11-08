@@ -37,6 +37,8 @@ import { BLANK, paragraphOf, useAbilityFace, useFace } from "../game/faces";
 import { useHoverInspect, type HoverHandlers } from "../game/Piles";
 import { eventsHold, HOLD, type Playback } from "../game/playback";
 import { Stage } from "../game/Stage";
+import { PhoneBoard } from "../mobile/PhoneBoard";
+import { usePhone } from "../mobile/phone";
 import { sameStops, savedStops, saveStops } from "../game/stops";
 import { play } from "../audio/sound";
 import { SoundCorner } from "../audio/SoundControls";
@@ -505,44 +507,44 @@ function Playing({ playback }: { playback: Playback }) {
   const ended = status.kind === "over" || status.kind === "stopped";
   const result = useResult(ended, live, view);
   const over = result.state === "shown";
-  return (
-    <Stage>
-      <Board
-        view={view}
-        live={live}
-        spotlight={spotlight}
-        log={log}
-        waiting={waiting}
-        onSkip={behind ? skip : undefined}
-        choose={answer}
-        cancel={cancelCast}
-        undo={undoAnswer}
-        passOn={passOnward}
-        stops={stops}
-        setStops={chooseStops}
-        onLeave={() => (window.location.hash = "#/")}
-        onConcede={
-          ended
-            ? undefined
-            : () =>
-                void concede(session).catch((e: unknown) => {
-                  // A second concession, or one the game's end overtook.
-                  if (!(
-                    e instanceof CommandError && e.error.kind === "ended"
-                  )) {
-                    fail(e);
-                  }
-                })
-        }
-        // A question in the floating prompt leaves the table lit.
-        dimmed={
-          opening ||
-          over ||
-          (choice !== undefined && !floats(choice) && !peeking)
-        }
-        // Nor does it take input while a choice waits to be shown.
-        inert={asked !== undefined}
-      />
+  const phone = usePhone();
+  const leave = () => (window.location.hash = "#/");
+  const board = (
+    <Board
+      view={view}
+      live={live}
+      spotlight={spotlight}
+      log={log}
+      waiting={waiting}
+      onSkip={behind ? skip : undefined}
+      choose={answer}
+      cancel={cancelCast}
+      undo={undoAnswer}
+      passOn={passOnward}
+      stops={stops}
+      setStops={chooseStops}
+      onLeave={leave}
+      onConcede={
+        ended
+          ? undefined
+          : () =>
+              void concede(session).catch((e: unknown) => {
+                // A second concession, or one the game's end overtook.
+                if (!(e instanceof CommandError && e.error.kind === "ended")) {
+                  fail(e);
+                }
+              })
+      }
+      // A question in the floating prompt leaves the table lit.
+      dimmed={
+        opening || over || (choice !== undefined && !floats(choice) && !peeking)
+      }
+      // Nor does it take input while a choice waits to be shown.
+      inert={asked !== undefined}
+    />
+  );
+  const overlays = (
+    <>
       {opening && (
         <Opening
           view={view}
@@ -596,7 +598,35 @@ function Playing({ playback }: { playback: Playback }) {
           {error}
         </p>
       )}
-    </Stage>
+    </>
+  );
+  if (!phone) {
+    return (
+      <Stage>
+        {board}
+        {overlays}
+      </Stage>
+    );
+  }
+  // On a phone the board is drawn for the phone; what shows over it is still the desktop's,
+  // on its stage over the board, until the phone has its own (by-7pm's designs).
+  const overlaid =
+    opening ||
+    choice !== undefined ||
+    over ||
+    result.state === "aside" ||
+    error !== undefined;
+  return (
+    <>
+      <PhoneBoard
+        view={view}
+        waiting={waiting}
+        choose={answer}
+        passOn={passOnward}
+        onLeave={leave}
+      />
+      {overlaid && <Stage>{overlays}</Stage>}
+    </>
   );
 }
 

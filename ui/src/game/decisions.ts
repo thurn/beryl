@@ -147,6 +147,13 @@ export function twins(a: ObjectView, b: ObjectView): boolean {
   );
 }
 
+/** Whether all a card offers is tapping it for mana
+ * ([CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a): "A player may activate an
+ * activated mana ability whenever they have priority"), floating it until it is spent or the
+ * step ends: every untapped source can, which no glow need say. */
+export const tapsOnly = (acts: Act[]) =>
+  acts.length > 0 && acts.every((a) => a.option.kind === "mana");
+
 /** Whether two candidates are the same answer. */
 export const optionsMatch = (a: Candidate, b: Candidate) =>
   JSON.stringify(a) === JSON.stringify(b);

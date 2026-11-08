@@ -3,9 +3,11 @@
 // Captures several at once (capture.mjs' workers) and prints each screenshot's path; exits
 // non-zero if a page logs an error, cuts off text (capture.mjs' clippedText), draws the game
 // otherwise than its fixture's view has it (screenFaults), crowds a control (crowdedControls)
-// or never settles. A game screen is checked again, without a screenshot, at the windows of
-// RESIZED: the stage's narrowest and widest (src/game/Stage.tsx fitStage), where its layout
-// differs most from the shots' 16:9.
+// or never settles; a phone screen (`?phone`) also if it shows text too small to read or a
+// control too small to touch (phoneFaults). A desktop game screen is checked again, without a
+// screenshot, at the windows of RESIZED: the stage's narrowest and widest
+// (src/game/Stage.tsx fitStage), where its layout differs most from the shots' 16:9. A phone
+// screen has a shot at each phone size instead.
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -14,6 +16,7 @@ import {
     crowdedControls,
     launch,
     openPage,
+    phoneFaults,
     screenFaults,
     settle,
     still,
@@ -87,7 +90,13 @@ async function capture(browser, shot) {
             errors.push(`screen: ${fault}`);
         for (const fault of await crowdedControls(page))
             errors.push(`controls: ${fault}`);
-        for (const size of shot.route.includes("fixture=") ? RESIZED : []) {
+        const phone = new URL(shot.route, base).searchParams.has("phone");
+        if (phone) {
+            for (const fault of await phoneFaults(page))
+                errors.push(`phone: ${fault}`);
+        }
+        const resized = shot.route.includes("fixture=") && !phone;
+        for (const size of resized ? RESIZED : []) {
             await page.setViewportSize(size);
             await settle(page);
             // The table is placed afresh for the stage's new width.

@@ -227,6 +227,23 @@ const PHASES: { phase: Phase; label: string; icon: ReactNode }[] = [
   },
 ];
 
+/** One phase's icon from the tracker's set, lit gold when `lit`. */
+export function PhaseIcon({ phase, lit }: { phase: Phase; lit: boolean }) {
+  const { label, icon } = PHASES.find((p) => p.phase === phase)!;
+  return (
+    <span className={lit ? "phase phase-current" : "phase"}>
+      <svg
+        className="phase-icon"
+        viewBox="0 0 24 24"
+        role="img"
+        aria-label={label}
+      >
+        {icon}
+      </svg>
+    </span>
+  );
+}
+
 /** The turn's phases between small arrows in a dark pill, the current one lit gold. (On the
  * table, the step stops about each life orb stand for it: Steps.tsx.) */
 export function PhaseTracker({

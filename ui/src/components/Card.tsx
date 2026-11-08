@@ -82,6 +82,8 @@ export interface CardProps {
   /** Placement on the slot: Motion style, so `rotate` and `y` compose with layout animation. */
   style?: MotionStyle;
   id?: string;
+  /** Badges drawn over the frame, turning with it. */
+  children?: ReactNode;
 }
 
 /** How a card turns as it taps or untaps, and its slot with it. */
@@ -246,7 +248,7 @@ function stats(card: CardFace): ReactNode {
 
 /** A planeswalker's loyalty on the printed loyalty symbol, the shield its card prints it on
  * ([CR 306.5b](https://yawgatog.com/resources/magic-rules/#R3065b)). */
-function Loyalty({ loyalty }: { loyalty: string }) {
+export function Loyalty({ loyalty }: { loyalty: string }) {
   const pop = usePop(loyalty);
   return (
     <span
@@ -342,6 +344,7 @@ export function Card({
   className,
   style,
   id,
+  children,
 }: CardProps) {
   const height = width / CARD_ASPECT;
   const field = variant === "field";
@@ -503,6 +506,7 @@ export function Card({
         {count !== undefined && count > 1 && (
           <span className="card-count">×{count}</span>
         )}
+        {children}
       </motion.div>
     </motion.div>
   );

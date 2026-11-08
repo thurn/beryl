@@ -1675,6 +1675,10 @@ export const STEP_NAMES: Record<Step, string> = {
   cleanup: "Cleanup",
 };
 
+/** The turn button at a halt of the session's (`DecisionView.halt`), where passing is all the
+ * player can do: ending their own turn from its first main phase. */
+export const HALT_BUTTON = { label: "End Turn", caption: "Nothing to play" };
+
 /** The turn button for passing priority (decision D13): where the pass goes, as the engine
  * says (`DecisionView.passTo`). */
 export function passButton(

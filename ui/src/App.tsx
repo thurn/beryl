@@ -7,6 +7,7 @@ import { Specs } from "./screens/Specs";
 import { GameScreen, StartScreen } from "./screens/Game";
 import { usePlayback } from "./game/playback";
 import { useMusic } from "./audio/SoundControls";
+import { setMobile, usePhone } from "./mobile/phone";
 
 // Routes live in the hash so they work from the Tauri asset server and from Vite alike.
 const subscribe = (onChange: () => void) => {
@@ -54,10 +55,18 @@ function Main() {
             : "loss",
   );
 
-  // The app hears the UI has loaded once it has answered a first command.
+  // The app hears the UI has loaded once it has answered a first command, which says whether
+  // it runs on a phone.
   useEffect(() => {
-    void appInfo().then(() => uiReady());
+    void appInfo().then((info) => {
+      setMobile(info.mobile);
+      uiReady();
+    });
   }, []);
+  const phone = usePhone();
+  useEffect(() => {
+    document.body.classList.toggle("phone", phone);
+  }, [phone]);
 
   // Motion honors the reduced-motion setting, which `just ui-shots` turns on for still captures.
   return (

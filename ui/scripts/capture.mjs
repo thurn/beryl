@@ -306,6 +306,7 @@ export async function screenFaults(page) {
         const view = window.berylFixture?.view?.();
         // A screen other than the game's, as the menu, draws no table to check.
         if (!view || !document.querySelector("[data-life]")) return [];
+        const phone = document.querySelector(".phone-board") !== null;
         const faults = [];
         const drawn = new Map();
         for (const e of document.querySelectorAll(".card-el[data-slot]")) {
@@ -346,9 +347,12 @@ export async function screenFaults(page) {
             if (o.zone !== "battlefield") continue;
             const stats = text(e.querySelector(".card-pt, .card-loyalty b"));
             const loyalty = o.counters.find((c) => c.kind === "loyalty");
-            const want = o.pt
-                ? `${o.pt.power}/${Math.max(0, o.pt.toughness - o.damage)}`
-                : loyalty && String(loyalty.count);
+            // A phone draws a face-up creature's scan alone: its printed P/T stands.
+            const printed = phone && o.facing === "up";
+            const want =
+                o.pt && !printed
+                    ? `${o.pt.power}/${Math.max(0, o.pt.toughness - o.damage)}`
+                    : loyalty && String(loyalty.count);
             if (want !== undefined && stats !== want) {
                 faults.push(`${what} shows ${stats} for ${want}`);
             }
@@ -438,7 +442,7 @@ export async function crowdedControls(page) {
                 ).getBoundingClientRect(),
             }));
         const FIXTURES =
-            ".turn-controls :is(button, [role=button]), .life-target, .dock button, .icon-button";
+            ".turn-controls :is(button, [role=button]), .life-target, .dock button, .phone-dock button, .icon-button";
         /** A card whose frame lies over or under the fixture `e`'s `box` by more than a sliver:
          * either way the two collide. */
         const cardOver = (e, box) =>
@@ -507,6 +511,75 @@ export async function crowdedControls(page) {
                 }
             }
         });
+        return faults;
+    });
+}
+
+/** What a phone screen (`?phone`) must not show, as DESIGN.md of the phone prototype sets it:
+ * UI text under 12px (the P/T slash may be smaller, and a card's own printing, drawn where its
+ * scan has not loaded, is the card's: a scan's is texture); a control smaller than about 40×40,
+ * too small for a finger; the page scrolling sideways; and a card or control reaching outside
+ * the window, but for the hand's, which the screen's edges cut off. Each is described for a
+ * failure message. */
+export async function phoneFaults(page) {
+    return page.evaluate(() => {
+        const faults = [];
+        const shown = (e) => {
+            if (!e.getClientRects().length) return false;
+            if (getComputedStyle(e).visibility !== "visible") return false;
+            for (let a = e; a; a = a.parentElement) {
+                if (parseFloat(getComputedStyle(a).opacity) <= 0) return false;
+            }
+            return true;
+        };
+        const name = (e) =>
+            e.getAttribute("aria-label") ||
+            e.textContent?.trim().slice(0, 30) ||
+            e.className ||
+            e.tagName.toLowerCase();
+        for (const el of document.querySelectorAll("#root *")) {
+            const text = [...el.childNodes]
+                .filter((n) => n.nodeType === Node.TEXT_NODE)
+                .map((n) => n.textContent.trim())
+                .join(" ")
+                .trim();
+            if (!text || el.closest(".card-rim, .card-pt i") || !shown(el))
+                continue;
+            const size = parseFloat(getComputedStyle(el).fontSize);
+            if (size < 11.95) {
+                faults.push(`"${text.slice(0, 40)}" at ${size.toFixed(1)}px`);
+            }
+        }
+        const controls = document.querySelectorAll(
+            "button, [role=button], a[href], input, select",
+        );
+        for (const e of controls) {
+            if (!shown(e)) continue;
+            const b = e.getBoundingClientRect();
+            if (b.width < 39.5 || b.height < 39.5) {
+                faults.push(
+                    `${name(e)} is ${Math.round(b.width)}×${Math.round(b.height)}`,
+                );
+            }
+        }
+        const page = document.documentElement;
+        if (page.scrollWidth > innerWidth + 1) {
+            faults.push(`the page scrolls sideways to ${page.scrollWidth}px`);
+        }
+        for (const e of document.querySelectorAll(".card-el, button")) {
+            if (!shown(e) || e.closest("[data-zone=hand]")) continue;
+            const b = e.getBoundingClientRect();
+            if (
+                b.left < -1 ||
+                b.top < -1 ||
+                b.right > innerWidth + 1 ||
+                b.bottom > innerHeight + 1
+            ) {
+                faults.push(
+                    `${e.dataset.card ?? name(e)} reaches outside the window`,
+                );
+            }
+        }
         return faults;
     });
 }
