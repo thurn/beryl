@@ -43,6 +43,12 @@ player select the area that shows the bug, and writes a folder under
   backtraces. The whole journal is `~/Library/Logs/ca.thurn.beryl/beryl.jsonl`
   (rotated to `.jsonl.1`).
 
+A note filed from a spec page (a moment's 🐞 on `/specs/<card>`, or the bug
+button on a moment's full-size page) also names its moment in the front matter's
+`spec` (`<card>/<moment>/<yours|theirs>`), and its Reproduce section gives the
+`just specs` commands that show it. A 🐞 note has no images or fixture: the spec
+reproduces it.
+
 ## The loop
 
 1. **File them.** `just bugs` lists open and filed reports. `just bugs file`
@@ -69,7 +75,7 @@ player select the area that shows the bug, and writes a folder under
      `await page.goto(new URL("/?fixture=bug-<id>#/game", page.url()).href)`,
      then `shot(...)` and `probe`. `&at=-1` stops a view short so the last one
      plays live when you answer.
-   - A card's UI moment: use the `specs` skill (`just specs --describe`,
+   - A card's UI moment, or a report with a `spec`: use the `specs` skill (`just specs --describe`,
      `--film`, `--motion`, `--drive`). If no moment covers the report, write a
      scenario that reaches it, which turns it into one: extending the specs is
      part of the fix.

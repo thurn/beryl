@@ -128,7 +128,10 @@ show the mechanics it shares.
   server instance's `play` (`spec.play()`, or `POST <live>/play` where `<live>`
   is the page's `?live=` URL).
 
-`just specs [card]` serves them for a human.
+`just specs [card]` serves them for a human. `/specs` lists the cards a human
+has not marked reviewed first (the ✓ on a card's page; the marks live in
+`~/Library/Application Support/ca.thurn.beryl/spec-reviews.json`), and each
+moment's 🐞 files a note on it as a bug report (the `bugfix` skill).
 `just specs --shots --port 0 [card...]` screenshots every moment settled from
 both seats, for a quick look at end states: `--moment M` one moment,
 `--select .prompt-title` only the seats where that selector shows, and

@@ -6,6 +6,10 @@
 // then again in the page's second half from the opponent's. Whatever would play after a frame's
 // first view (the moment's own actions, or the game going on to the viewer's first decision)
 // waits for its play button; replay starts it afresh.
+//
+// Reviewing: the index lists the cards not yet marked reviewed first, and a card's page marks
+// it (the spec server keeps the marks, `specs/reviews.rs`). Each moment's 🐞 files a note on it
+// as a bug report, for `just bugs` and the `bugfix` skill, naming the moment and seat.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { cardEntry } from "../cards";
 import type { RelayedEvent } from "../ipc";
@@ -26,6 +30,22 @@ interface SpecListing {
   card: string;
   slug: string;
   moments: MomentListing[];
+  /** When it was marked reviewed, or null. */
+  reviewed: string | null;
+  /** Its open bug reports. */
+  reports: number;
+}
+
+/** A spec server answer: `{ok}` or `{err}`, as `serve`'s commands answer. */
+async function post<T>(path: string, body: unknown): Promise<T> {
+  const r = await fetch(`${API}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const answer = (await r.json()) as { ok?: T; err?: { message?: string } };
+  if ("err" in answer) throw new Error(answer.err?.message ?? "refused");
+  return answer.ok as T;
 }
 
 function useSpecs(): SpecListing[] | string | undefined {
@@ -110,20 +130,93 @@ function SeatRedirect({
 }
 
 function SpecIndex({ specs }: { specs: SpecListing[] }) {
+  const todo = specs.filter((s) => !s.reviewed);
+  const done = specs.filter((s) => s.reviewed);
   return (
     <div className="specs">
-      <h1 className="specs-heading">Specs</h1>
-      <ul className="specs-index">
-        {specs.map((s) => (
-          <li key={s.slug}>
-            <a href={`/specs/${s.slug}`} className="specs-index-card">
-              <CardImage name={s.card} className="specs-index-image" />
-              <span className="specs-index-name">{s.card}</span>
-              <span className="specs-index-count">{s.moments.length}</span>
-            </a>
-          </li>
-        ))}
-      </ul>
+      <h1 className="specs-heading">
+        Specs{" "}
+        <span className="specs-heading-count">
+          {done.length}/{specs.length}
+        </span>
+      </h1>
+      <SpecCards specs={todo} />
+      {done.length > 0 && todo.length > 0 && (
+        <hr className="specs-index-rule" />
+      )}
+      <SpecCards specs={done} />
+    </div>
+  );
+}
+
+function SpecCards({ specs }: { specs: SpecListing[] }) {
+  if (specs.length === 0) return null;
+  return (
+    <ul className="specs-index">
+      {specs.map((s) => (
+        <li key={s.slug}>
+          <a
+            href={`/specs/${s.slug}`}
+            className={
+              s.reviewed
+                ? "specs-index-card specs-index-reviewed"
+                : "specs-index-card"
+            }
+          >
+            <CardImage name={s.card} className="specs-index-image" />
+            <span className="specs-index-name">{s.card}</span>
+            <span className="specs-index-marks">
+              {s.reports > 0 && (
+                <span className="specs-bugs" title="Open bug reports">
+                  🐞{s.reports}
+                </span>
+              )}
+              {s.reviewed ? (
+                <span className="specs-check" title="Reviewed">
+                  ✓
+                </span>
+              ) : (
+                <span className="specs-index-count">{s.moments.length}</span>
+              )}
+            </span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Marks the card reviewed, or not, and shows its open reports. */
+function ReviewBar({ spec, reports }: { spec: SpecListing; reports: number }) {
+  const [reviewed, setReviewed] = useState(spec.reviewed !== null);
+  const [busy, setBusy] = useState(false);
+  const toggle = () => {
+    setBusy(true);
+    post<{ reviewed: string | null }>(`/review/${spec.slug}`, {
+      reviewed: !reviewed,
+    })
+      .then((r) => setReviewed(r.reviewed !== null))
+      .catch((e: unknown) => console.error("review failed", e))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <div className="specs-review">
+      <button
+        type="button"
+        className={
+          reviewed ? "specs-reviewed specs-reviewed-on" : "specs-reviewed"
+        }
+        aria-pressed={reviewed}
+        disabled={busy}
+        onClick={toggle}
+      >
+        ✓ {reviewed ? "Reviewed" : "Mark reviewed"}
+      </button>
+      {reports > 0 && (
+        <span className="specs-bugs" title="Open bug reports">
+          🐞{reports}
+        </span>
+      )}
     </div>
   );
 }
@@ -140,6 +233,8 @@ function SpecPage({ spec, only }: { spec: SpecListing; only?: MomentListing }) {
   const page = useMemo(() => Math.random().toString(36).slice(2, 10), []);
   const frames = useRef<Frames>(new Map());
   const [open, setOpen] = useState(false);
+  const [reports, setReports] = useState(spec.reports);
+  const filed = () => setReports((n) => n + 1);
   useEffect(() => {
     const stream = new EventSource(`${API}/stream/${page}`);
     stream.addEventListener("open", () => setOpen(true));
@@ -168,6 +263,7 @@ function SpecPage({ spec, only }: { spec: SpecListing; only?: MomentListing }) {
           ←
         </a>
         <CardImage name={spec.card} className="specs-card" />
+        <ReviewBar spec={spec} reports={reports} />
         {(only ? (["yours"] as const) : VIEWS).map((view) => (
           <ol key={view} className="specs-toc">
             {view === "theirs" && (
@@ -210,6 +306,7 @@ function SpecPage({ spec, only }: { spec: SpecListing; only?: MomentListing }) {
               page={page}
               open={open}
               frames={frames.current}
+              onFiled={filed}
             />
           ))}
         </main>
@@ -234,6 +331,7 @@ function SpecPage({ spec, only }: { spec: SpecListing; only?: MomentListing }) {
                     page={page}
                     open={open}
                     frames={frames.current}
+                    onFiled={filed}
                   />
                 </Fragment>
               ))}
@@ -294,6 +392,7 @@ function MomentView({
   page,
   open,
   frames,
+  onFiled,
 }: {
   slug: string;
   moment: MomentListing;
@@ -301,6 +400,7 @@ function MomentView({
   page: string;
   open: boolean;
   frames: Frames;
+  onFiled: () => void;
 }) {
   const holder = useRef<HTMLDivElement>(null);
   const reached = useReached(holder);
@@ -339,6 +439,8 @@ function MomentView({
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
   }, [key]);
+  const [noting, setNoting] = useState(false);
+  const [filed, setFiled] = useState(0);
   const mount = (iframe: HTMLIFrameElement | null) => {
     frame.current = iframe;
     if (iframe?.contentWindow) frames.set(key, iframe.contentWindow);
@@ -377,6 +479,19 @@ function MomentView({
               ↻
             </button>
           )}
+          <button
+            type="button"
+            className={
+              filed > 0 ? "specs-icon-button specs-filed" : "specs-icon-button"
+            }
+            title="Report a bug"
+            aria-label="Report a bug"
+            aria-expanded={noting}
+            data-filed={filed || undefined}
+            onClick={() => setNoting((x) => !x)}
+          >
+            🐞
+          </button>
           <a
             className="specs-icon-button"
             href={`/specs/${slug}/${moment.name}`}
@@ -397,6 +512,17 @@ function MomentView({
           </a>
         </div>
       </header>
+      {noting && (
+        <BugNote
+          instance={key}
+          onClose={() => setNoting(false)}
+          onFiled={() => {
+            setNoting(false);
+            setFiled((n) => n + 1);
+            onFiled();
+          }}
+        />
+      )}
       <div
         className={
           shown === key ? "specs-frame" : "specs-frame specs-frame-loading"
@@ -413,5 +539,72 @@ function MomentView({
         )}
       </div>
     </section>
+  );
+}
+
+/** A note on one moment from one seat, filed as a bug report about it: the spec server adds
+ * the instance's game as it stands. ⌘↩ files it; Esc closes it. */
+function BugNote({
+  instance,
+  onClose,
+  onFiled,
+}: {
+  instance: string;
+  onClose: () => void;
+  onFiled: () => void;
+}) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const file = () => {
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    setError(undefined);
+    post<{ id: string; path: string }>("/report", {
+      key: instance,
+      description: text,
+    }).then(onFiled, (e: unknown) => {
+      setError(e instanceof Error ? e.message : String(e));
+      setBusy(false);
+    });
+  };
+  return (
+    <form
+      className="specs-note"
+      onSubmit={(e) => {
+        e.preventDefault();
+        file();
+      }}
+    >
+      <textarea
+        autoFocus
+        rows={3}
+        value={text}
+        placeholder="What's wrong?"
+        aria-label="What's wrong?"
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            file();
+          } else if (e.key === "Escape") {
+            onClose();
+          }
+        }}
+      />
+      <div className="specs-note-actions">
+        {error && <span className="specs-note-error">{error}</span>}
+        <button type="button" className="specs-note-cancel" onClick={onClose}>
+          Cancel
+        </button>
+        <button
+          type="submit"
+          className="specs-note-file"
+          disabled={busy || !text.trim()}
+        >
+          File
+        </button>
+      </div>
+    </form>
   );
 }

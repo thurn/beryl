@@ -16,6 +16,7 @@
 //! (`.agents/specs/SKILL.md`) says which.
 
 mod auto;
+pub mod reviews;
 pub mod serve;
 
 use std::sync::{Arc, OnceLock};

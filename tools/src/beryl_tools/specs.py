@@ -233,11 +233,17 @@ def capture(args: argparse.Namespace, url: str, env: dict[str, str]) -> int:
 
 
 def serve_specs(binary: Path, port: int) -> subprocess.Popen[bytes]:
-    """Starts `beryl_cli specs-serve` on `port`."""
+    """Starts `beryl_cli specs-serve` on `port`. It runs from this checkout as `cargo run`
+    would, so a bug report filed from a spec page names the commit (`bugs.rs`'s `commit`).
+    """
     return subprocess.Popen(
         [str(binary), "specs-serve", "--port", str(port)],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
+        env={
+            **os.environ,
+            "CARGO_MANIFEST_DIR": str(paths.REPO / "rust" / "crates" / "beryl_cli"),
+        },
     )
 
 

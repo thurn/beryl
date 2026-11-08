@@ -13,6 +13,10 @@
 //! - `ui.json`, the page and the UI's own log: its commands, events, errors and console;
 //! - `journal.jsonl`, the latest records of the process's [`journal`].
 //!
+//! A note from a spec page (`specs-serve`) names its moment ([`SpecMoment`]): the front
+//! matter's `spec`, and the commands that show it again under Reproduce. [`open_by_card`]
+//! counts the open ones by card, for the spec index.
+//!
 //! `by bugs` (`tools/src/beryl_tools/bugs.py`) lists the open reports, files a bead for each and
 //! marks them done; the `bugfix` skill (`.agents/bugfix`) works them.
 
@@ -55,6 +59,39 @@ pub struct BugReport {
     /// The latest game updates the UI received, oldest first.
     #[ts(type = "unknown[]")]
     pub updates: Vec<Value>,
+    /// The spec moment it is about, which the spec server fills in: never the UI's to say.
+    #[serde(skip)]
+    #[ts(skip)]
+    pub spec: Option<SpecMoment>,
+}
+
+/// A moment of a card's spec, seen from one seat: `/specs/<card>/<moment>/<view>`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SpecMoment {
+    /// The card's slug: `currency-converter`.
+    pub card: String,
+    pub moment: String,
+    /// `yours` or `theirs`.
+    pub view: String,
+}
+
+impl SpecMoment {
+    /// Parses the front matter's `spec`: `<card>/<moment>/<view>`.
+    pub fn parse(field: &str) -> Option<SpecMoment> {
+        let mut parts = field.trim().splitn(3, '/');
+        let (card, moment, view) = (parts.next()?, parts.next()?, parts.next()?);
+        (!card.is_empty() && !moment.is_empty() && !view.is_empty()).then(|| SpecMoment {
+            card: card.to_owned(),
+            moment: moment.to_owned(),
+            view: view.to_owned(),
+        })
+    }
+}
+
+impl std::fmt::Display for SpecMoment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}/{}", self.card, self.moment, self.view)
+    }
 }
 
 /// A rectangle of the window, in CSS pixels.
@@ -83,6 +120,32 @@ pub struct PageInfo {
 pub struct Images {
     pub screenshot: Option<Vec<u8>>,
     pub window: Option<Vec<u8>>,
+}
+
+/// The open reports (not done) about spec moments, counted by card slug.
+pub fn open_by_card(dir: &Path) -> std::collections::BTreeMap<String, usize> {
+    let mut counts = std::collections::BTreeMap::new();
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return counts;
+    };
+    for entry in entries.flatten() {
+        let Ok(text) = std::fs::read_to_string(entry.path().join("report.md")) else {
+            continue;
+        };
+        let field = |key: &str| {
+            text.lines()
+                .skip(1)
+                .take_while(|l| *l != "---")
+                .find_map(|l| l.strip_prefix(key)?.strip_prefix(':').map(str::trim))
+        };
+        if field("status") == Some("done") {
+            continue;
+        }
+        if let Some(spec) = field("spec").and_then(SpecMoment::parse) {
+            *counts.entry(spec.card).or_default() += 1;
+        }
+    }
+    counts
 }
 
 /// Where a report was written.
@@ -330,6 +393,7 @@ fn markdown(m: &Markdown<'_>) -> String {
          version: {}\n\
          commit: {}{}\n\
          url: {}\n\
+         spec: {}\n\
          session: {}\n\
          seed: {}\n\
          turn: {}\n\
@@ -345,6 +409,7 @@ fn markdown(m: &Markdown<'_>) -> String {
         commit,
         if dirty { " (uncommitted changes)" } else { "" },
         quote(&m.report.page.url),
+        opt(m.report.spec.as_ref().map(ToString::to_string)),
         opt(g.session.map(|s| s.to_string())),
         opt(g.seed.map(|s| s.to_string())),
         opt(g.turn.map(|t| t.to_string())),
@@ -367,6 +432,9 @@ fn markdown(m: &Markdown<'_>) -> String {
         ai_section(&mut out, m.moves);
     }
     out.push_str("## Reproduce\n\n");
+    if let Some(spec) = &m.report.spec {
+        spec_lines(&mut out, spec);
+    }
     let folder = m.folder.display();
     if g.seed.is_some() {
         let turn = g.turn.map(|t| format!(" --turn {t}")).unwrap_or_default();
@@ -387,7 +455,9 @@ fn markdown(m: &Markdown<'_>) -> String {
         .expect("writes");
     }
     if m.report.updates.is_empty() {
-        writeln!(out, "- The page: `{}`", m.report.page.url).expect("writes");
+        if m.report.spec.is_none() {
+            writeln!(out, "- The page: `{}`", m.report.page.url).expect("writes");
+        }
     } else {
         writeln!(
             out,
@@ -424,6 +494,20 @@ fn ai_section(out: &mut String, moves: &[AgentMove]) {
         out.push_str(&m.describe());
     }
     out.push_str("```\n\n");
+}
+
+/// The Reproduce lines for a note on a spec moment: the commands that show it again.
+fn spec_lines(out: &mut String, spec: &SpecMoment) {
+    writeln!(
+        out,
+        "- The spec moment, as text from both seats:\n  \
+         `just specs {card} --describe --moment {moment}`\n\
+         - Its page, both seats side by side: `/specs/{card}/{moment}` (`just specs {card}`); \
+         this seat full size: `/specs/{spec}`",
+        card = spec.card,
+        moment = spec.moment,
+    )
+    .expect("writes");
 }
 
 fn region_note(report: &BugReport) -> String {
@@ -593,6 +677,7 @@ mod tests {
             },
             ui_log: json!([]),
             updates: vec![json!({ "session": 1 })],
+            spec: None,
         };
         let images = Images {
             screenshot: Some(b"hi".to_vec()),
@@ -614,6 +699,43 @@ mod tests {
                 .unwrap();
         assert_eq!(fixture.messages.len(), 3);
         assert!(folder.join("journal.jsonl").exists());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn spec_notes_name_their_moment_and_are_counted_while_open() {
+        let dir = std::env::temp_dir().join(format!("beryl-spec-bugs-{}", std::process::id()));
+        let sessions = Sessions::new(None, |_| {});
+        let note = |description: &str| BugReport {
+            description: description.to_owned(),
+            ai: false,
+            snapshot: None,
+            region: None,
+            page: PageInfo {
+                url: "/specs/llanowar-elves/tap/theirs".to_owned(),
+                width: 0.0,
+                height: 0.0,
+                scale: 1.0,
+            },
+            ui_log: json!([]),
+            updates: Vec::new(),
+            spec: SpecMoment::parse("llanowar-elves/tap/theirs"),
+        };
+        let first = write(
+            &dir,
+            &note("Mana never shows"),
+            &Images::default(),
+            &sessions,
+        )
+        .unwrap();
+        write(&dir, &note("Arrow is wrong"), &Images::default(), &sessions).unwrap();
+        let md = std::fs::read_to_string(PathBuf::from(&first.path).join("report.md")).unwrap();
+        assert!(md.contains("spec: llanowar-elves/tap/theirs\n"));
+        assert!(md.contains("`just specs llanowar-elves --describe --moment tap`"));
+        assert_eq!(open_by_card(&dir).get("llanowar-elves"), Some(&2));
+        let report = PathBuf::from(&first.path).join("report.md");
+        std::fs::write(&report, md.replace("status: open", "status: done")).unwrap();
+        assert_eq!(open_by_card(&dir).get("llanowar-elves"), Some(&1));
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

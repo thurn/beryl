@@ -293,3 +293,150 @@
 .specs-toc a[aria-current="page"] {
   font-weight: 700;
 }
+
+/* Reviewing: the index puts the cards not yet reviewed first, the reviewed after a rule, dimmed. */
+.specs-heading-count {
+  margin-left: 8px;
+  color: var(--text-faint);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.specs-index-rule {
+  margin: 8px 48px;
+  border: 0;
+  border-top: 1px solid rgb(255 255 255 / 8%);
+}
+
+.specs-index-reviewed {
+  opacity: 0.5;
+  transition: opacity 120ms ease;
+}
+
+.specs-index-reviewed:hover {
+  opacity: 1;
+}
+
+.specs-index-marks {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.specs-check {
+  color: var(--stat-up);
+  font-weight: 700;
+}
+
+.specs-bugs {
+  color: var(--ember);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* A card's page: the review toggle under its image. */
+.specs-review {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.specs-reviewed {
+  flex: 1;
+  height: 34px;
+  border: 1px solid var(--metal);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--text-dim);
+  font: 600 13px var(--font-sans);
+  cursor: pointer;
+}
+
+.specs-reviewed:hover:not(:disabled) {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.specs-reviewed-on {
+  border-color: var(--stat-up);
+  color: var(--stat-up);
+}
+
+/* A moment's bug note, between its header and its game. */
+.specs-filed {
+  position: relative;
+}
+
+.specs-filed::after {
+  content: attr(data-filed);
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--ember);
+  color: var(--surface);
+  font: 700 10px/16px var(--font-sans);
+  text-align: center;
+}
+
+.specs-note {
+  margin-bottom: 12px;
+}
+
+.specs-note textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--metal);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--text);
+  font: 15px/1.4 var(--font-sans);
+  resize: vertical;
+}
+
+.specs-note textarea:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+.specs-note-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.specs-note-error {
+  margin-right: auto;
+  color: var(--ember);
+  font-size: 13px;
+}
+
+.specs-note-actions button {
+  height: 32px;
+  padding: 0 16px;
+  border: 1px solid var(--metal);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--text-dim);
+  font: 600 13px var(--font-sans);
+  cursor: pointer;
+}
+
+.specs-note-actions .specs-note-file:not(:disabled) {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.specs-note-actions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

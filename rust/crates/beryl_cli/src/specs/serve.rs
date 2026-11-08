@@ -3,7 +3,13 @@
 //! so the game screen's live transport (`?live=<prefix>`, `ui/src/ipc.ts`) plays a moment as
 //! it plays an app game:
 //!
-//! - `GET /specs` lists the specs and their moments.
+//! - `GET /specs` lists the specs and their moments, each with when it was `reviewed` (null if
+//!   not, [`super::reviews`]) and how many open bug `reports` are about it.
+//! - `POST /review/<card>` with `{"reviewed": bool}` marks the card reviewed, or not.
+//! - `POST /report` with `{"key": instance key, "description": ...}` writes a bug report about
+//!   that instance's moment ([`beryl_session::bugs`]), with its game's replay and latest view if
+//!   the instance still runs. A report from a moment's full-size page (the game screen's bug
+//!   button, `report_bug`) names its moment the same way.
 //! - `/m/<card>/<moment>/<view>/<instance>/events` and
 //!   `/m/<card>/<moment>/<view>/<instance>/invoke/<cmd>` are `serve`'s two routes for one
 //!   instance of a moment seen from `<view>` (`yours` or `theirs`, [`super::View`]), started
@@ -31,11 +37,12 @@ use std::sync::mpsc::{RecvTimeoutError, Sender, channel};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
+use beryl_session::bugs::{self, BugReport, Images, PageInfo, SpecMoment};
 use beryl_session::ipc;
 use beryl_session::{GameUpdate, Sessions, Status};
 use serde_json::{Value, json};
 
-use super::{Phase, View, find, listing};
+use super::{Phase, View, find, listing, reviews, slug, specs};
 use crate::serve::{CORS, invoke, read_request, respond};
 
 /// How many instances live at once; the least recently used goes first. A page keeps each
@@ -110,8 +117,16 @@ fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result
         return respond(&mut stream, "204 No Content", "");
     }
     if method == "GET" && path == "/specs" {
-        let body = serde_json::to_string(&listing()).map_err(|e| e.to_string())?;
+        let body = annotated_listing().to_string();
         return respond(&mut stream, "200 OK", &body);
+    }
+    if let ("POST", Some(card)) = (method.as_str(), path.strip_prefix("/review/")) {
+        let answer = review(card, &body);
+        return respond(&mut stream, "200 OK", &answer.to_string());
+    }
+    if method == "POST" && path == "/report" {
+        let answer = report(instances, &body);
+        return respond(&mut stream, "200 OK", &answer.to_string());
     }
     if let ("GET", Some(page)) = (method.as_str(), path.strip_prefix("/stream/")) {
         let (sent, received) = channel();
@@ -172,12 +187,112 @@ fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result
                     let Some(i) = list.iter().find(|i| i.key == key) else {
                         return respond(&mut stream, "200 OK", "{\"err\":{\"kind\":\"ended\"}}");
                     };
-                    invoke(&i.sessions, command, args)
+                    if command == ipc::REPORT_BUG {
+                        // The full-size page's bug button: the report names its moment.
+                        let spec = SpecMoment {
+                            card: card.to_owned(),
+                            moment: name.to_owned(),
+                            view: view.to_owned(),
+                        };
+                        write_report(&i.sessions, args, spec)
+                    } else {
+                        invoke(&i.sessions, command, args)
+                    }
                 }
             };
             respond(&mut stream, "200 OK", &answer.to_string())
         }
         _ => respond(&mut stream, "404 Not Found", "{}"),
+    }
+}
+
+/// The specs as `GET /specs` lists them: each with when it was reviewed and its open reports.
+fn annotated_listing() -> Value {
+    let reviewed = reviews::load(&reviews::path());
+    let reports = bugs::open_by_card(&bugs::dir());
+    let mut listing = serde_json::to_value(listing()).unwrap_or_else(|_| json!([]));
+    if let Some(specs) = listing.as_array_mut() {
+        for spec in specs {
+            let card = spec["card"].as_str().unwrap_or_default().to_owned();
+            let slug = spec["slug"].as_str().unwrap_or_default().to_owned();
+            spec["reviewed"] = json!(reviewed.get(&card));
+            spec["reports"] = json!(reports.get(&slug).copied().unwrap_or(0));
+        }
+    }
+    listing
+}
+
+/// `POST /review/<card>`: marks the card `card` slugs reviewed, or not, as `body` says.
+fn review(card: &str, body: &[u8]) -> Value {
+    let Some(spec) = specs().iter().find(|s| slug(s.card) == card) else {
+        return json!({ "err": { "kind": "spec", "message": format!("no spec {card}") } });
+    };
+    let Some(reviewed) = serde_json::from_slice::<Value>(body)
+        .ok()
+        .and_then(|v| v["reviewed"].as_bool())
+    else {
+        return json!({ "err": { "kind": "badRequest", "message": "want {\"reviewed\": bool}" } });
+    };
+    match reviews::set(&reviews::path(), spec.card, reviewed) {
+        Ok(all) => json!({ "ok": { "reviewed": all.get(spec.card) } }),
+        Err(message) => json!({ "err": { "kind": "io", "message": message } }),
+    }
+}
+
+/// `POST /report`: a note from the spec page about the moment an instance plays, written as a
+/// bug report with what its game knows, if it still runs.
+fn report(instances: &Instances, body: &[u8]) -> Value {
+    let request: Value = serde_json::from_slice(body).unwrap_or(Value::Null);
+    let (Some(key), Some(description)) = (request["key"].as_str(), request["description"].as_str())
+    else {
+        return json!({ "err": { "kind": "badRequest", "message": "want key and description" } });
+    };
+    if description.trim().is_empty() {
+        return json!({ "err": { "kind": "badRequest", "message": "an empty note" } });
+    }
+    let mut parts = key.splitn(4, '/');
+    let (Some(card), Some(moment), Some(view)) = (parts.next(), parts.next(), parts.next()) else {
+        return json!({ "err": { "kind": "badRequest", "message": format!("no moment in {key}") } });
+    };
+    if find(card, moment).is_none() || View::parse(view).is_none() {
+        return json!({ "err": { "kind": "spec", "message": format!("no moment {key}") } });
+    }
+    let spec = SpecMoment {
+        card: card.to_owned(),
+        moment: moment.to_owned(),
+        view: view.to_owned(),
+    };
+    let args = json!({ "request": {
+        "description": description,
+        "ai": false,
+        "snapshot": null,
+        "region": null,
+        "page": PageInfo { url: format!("/specs/{spec}"), width: 0.0, height: 0.0, scale: 1.0 },
+        "uiLog": [],
+        "updates": [],
+    }});
+    let list = lock(instances);
+    match list.iter().find(|i| i.key == key) {
+        Some(i) => write_report(&i.sessions, args, spec),
+        None => write_report(&Sessions::new(None, |_| {}), args, spec),
+    }
+}
+
+/// Writes the `report_bug` request in `args` as a report about `spec`, with what `sessions`
+/// knows of its game.
+fn write_report(sessions: &Sessions, args: Value, spec: SpecMoment) -> Value {
+    #[derive(serde::Deserialize)]
+    struct Request {
+        request: BugReport,
+    }
+    let mut report = match serde_json::from_value::<Request>(args) {
+        Ok(r) => r.request,
+        Err(e) => return json!({ "err": { "kind": "badRequest", "message": e.to_string() } }),
+    };
+    report.spec = Some(spec);
+    match bugs::write(&bugs::dir(), &report, &Images::default(), sessions) {
+        Ok(saved) => json!({ "ok": saved }),
+        Err(e) => json!({ "err": e }),
     }
 }
 
