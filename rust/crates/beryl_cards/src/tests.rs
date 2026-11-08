@@ -13,6 +13,8 @@ use beryl_engine::{
 
 use crate::{CARDS, SCENARIOS, blue, decks, names};
 
+mod knowledge;
+
 /// This crate's directory, read at run time: a test binary from the shared target directory
 /// may have been built in a worktree that no longer exists.
 fn crate_dir() -> PathBuf {
