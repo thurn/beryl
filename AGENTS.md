@@ -125,10 +125,10 @@ counts, `just bench` for timing (it refuses a busy machine).
 Tournaments are expensive: a game involving an MCTS agent at
 `--iterations 300 --trees 4` costs about 180 CPU-seconds, so a 100-game pairing
 holds the whole machine for about 20 minutes and a full round robin for over 2
-hours. `just tournament`, `just play` and `just review` run at utility QoS
-(`taskpolicy -c utility`), so other sessions' checks get the CPU first: `nice`
-does not do that on macOS. They slow down while the machine is busy. Wardens
-rerun only the pairings that gate acceptance, never reported-only ones.
+hours. `just tournament`, `just play` and `just review --agent` run at utility
+QoS (`taskpolicy -c utility`), so other sessions' checks get the CPU first:
+`nice` does not do that on macOS. They slow down while the machine is busy.
+Wardens rerun only the pairings that gate acceptance, never reported-only ones.
 `just longthink`, the long-think arena (`docs/ai-strategy.md` §5), holds the
 machine for days: with no arguments it starts or resumes the run in
 `$BERYL_CACHE/longthink`, any stop costs at most the decisions being searched,

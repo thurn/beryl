@@ -28,7 +28,7 @@ copied from the app's `~/Library/Application Support/ca.thurn.beryl/replays/`.
 It holds the seed, the decks, the stops and every answer, from both seats.
 
 ```bash
-just review docs/incidents/2026-11-06-deep-seer-misplays.replay.json --out review.txt
+just review docs/incidents/2026-11-06-deep-seer-misplays.replay.json --agent recorded --out review.txt
 ```
 
 - The command prints the transcript, adding a `search:` line after each of the

@@ -20,8 +20,9 @@
 //!   can play a family.
 //! - `beryl_cli eval-fit [--games N] [--seed N]` fits the board evaluation's weights on
 //!   seeded games and prints them ([`evalfit`]).
-//! - `beryl_cli review <replay.json> [--out FILE]` replays an app game's replay file and
-//!   writes its transcript, with the agent's search at each of its decisions ([`review`]).
+//! - `beryl_cli review <replay.json> [--agent NAME] [--turn N] [--out FILE]` replays an app game's replay
+//!   file and writes its transcript; `--agent recorded` or another agent adds its search at
+//!   each of the opponent's decisions ([`review`]).
 //! - `beryl_cli serve [--port N]` serves the app's game commands over HTTP for a UI in a plain
 //!   browser to play live games through (`just ui-live`, [`serve`]).
 //! - `beryl_cli specs-serve [--port N]` serves the cards' specs, each moment a live game, for
@@ -61,7 +62,7 @@ const USAGE: &str = "usage:
   beryl_cli specs-serve [--port N]
   beryl_cli specs-check [card...]
   beryl_cli specs-describe [--views] <card> [moment]
-  beryl_cli review <replay.json> [--agent NAME] [--out FILE]
+  beryl_cli review <replay.json> [--agent NAME] [--turn N] [--out FILE]
   beryl_cli anchor-replay <run-dir> <entrant> [--examples N] [--recheck N] [--guarded]
   beryl_cli agreement <run-dir> <entrant> [--positions N] [--budget B]";
 
