@@ -494,9 +494,15 @@ export const currentGame = () => call("current_game", {});
  * `canCaptureWindow`). */
 export const captureWindow = () => call("capture_window", {});
 
+/** The app's URL for `path` on its `beryl-art` scheme. WebView2 serves custom schemes at
+ * http://<scheme>.localhost instead. */
+const artSchemeUrl = (path: string) =>
+  navigator.userAgent.includes("Windows")
+    ? `http://beryl-art.localhost${path}`
+    : `beryl-art://localhost${path}`;
+
 /** Where the app serves snapshot `id` (rust/crates/beryl_app/src/snapshot.rs). */
-export const snapshotUrl = (id: number) =>
-  `beryl-art://localhost/snapshot/${id}`;
+export const snapshotUrl = (id: number) => artSchemeUrl(`/snapshot/${id}`);
 
 /** Writes a bug report; resolves to its folder. */
 export const reportBug = (request: BugReport) =>
@@ -533,8 +539,5 @@ export const cardImageUrl = (scryfallUrl: string) => {
   if (!("__TAURI_INTERNALS__" in window)) {
     return scryfallUrl;
   }
-  // WebView2 serves custom schemes at http://<scheme>.localhost instead.
-  return navigator.userAgent.includes("Windows")
-    ? `http://beryl-art.localhost${prefix}${url.pathname}`
-    : `beryl-art://localhost${prefix}${url.pathname}`;
+  return artSchemeUrl(`${prefix}${url.pathname}`);
 };

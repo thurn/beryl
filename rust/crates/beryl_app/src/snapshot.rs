@@ -1,7 +1,8 @@
 //! The window as it is drawn now, for a bug report's frozen frame: `WKWebView`'s own snapshot
 //! of the page (`takeSnapshotWithConfiguration:completionHandler:`), which, unlike a screen
 //! capture, needs no screen-recording permission and holds only the app's pixels, at the
-//! display's scale.
+//! display's scale. On Windows, `WebView2`'s (`CapturePreview`), as a PNG, which is what it
+//! makes and what Chromium shows.
 //!
 //! The pixels stay here. [`capture`] keeps the snapshot as `WebKit`'s uncompressed TIFF, a few
 //! milliseconds' work, and hands the UI a number; the UI shows it from
@@ -33,7 +34,7 @@ impl Snapshots {
         self.0.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Serves snapshot `<n>` at `/snapshot/<n>`, as a TIFF.
+    /// Serves snapshot `<n>` at `/snapshot/<n>`, as a TIFF (a PNG on Windows).
     pub fn respond(&self, path: &str) -> Response<Vec<u8>> {
         let wanted = path.strip_prefix(PATH).and_then(|n| n.parse::<u32>().ok());
         let found = self
@@ -44,7 +45,7 @@ impl Snapshots {
         match found {
             Some(tiff) => Response::builder()
                 .status(StatusCode::OK)
-                .header("Content-Type", "image/tiff")
+                .header("Content-Type", platform::CONTENT_TYPE)
                 .header("Cache-Control", "no-store")
                 .body(tiff),
             None => Response::builder()
@@ -80,7 +81,14 @@ pub async fn capture(app: &AppHandle) -> Result<u32, String> {
     let window = app.get_webview_window("main").ok_or("no main window")?;
     let (send, receive) = channel::<Result<Vec<u8>, String>>();
     window
-        .with_webview(move |webview| platform::snapshot(webview.inner(), send))
+        .with_webview(move |webview| {
+            #[cfg(target_os = "macos")]
+            platform::snapshot(webview.inner(), send);
+            #[cfg(windows)]
+            platform::snapshot(&webview.controller(), send);
+            #[cfg(not(any(target_os = "macos", windows)))]
+            platform::snapshot(&webview, send);
+        })
         .map_err(|e| e.to_string())?;
     // The snapshot completes on the main thread, which this must not block.
     let tiff = tauri::async_runtime::spawn_blocking(move || {
@@ -157,6 +165,8 @@ mod platform {
     use objc2_web_kit::{WKSnapshotConfiguration, WKWebView};
 
     use super::Pixels;
+
+    pub const CONTENT_TYPE: &str = "image/tiff";
 
     /// Asks `webview` (a `WKWebView`) for a snapshot and sends it, as an uncompressed TIFF,
     /// once, to `send`. Runs on the main thread.
@@ -248,19 +258,122 @@ mod platform {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(windows)]
+#[allow(unsafe_code)] // COM calls into WebView2.
 mod platform {
-    use std::ffi::c_void;
+    use std::io::Cursor;
+    use std::sync::mpsc::Sender;
+
+    use webview2_com::CapturePreviewCompletedHandler;
+    use webview2_com::Microsoft::Web::WebView2::Win32::{
+        COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG, ICoreWebView2Controller,
+    };
+    use windows::Win32::Foundation::HGLOBAL;
+    use windows::Win32::System::Com::StructuredStorage::CreateStreamOnHGlobal;
+    use windows::Win32::System::Com::{IStream, STREAM_SEEK_SET};
+
+    use super::Pixels;
+
+    pub const CONTENT_TYPE: &str = "image/png";
+
+    /// Asks the webview `controller` holds for a snapshot and sends it, as a PNG, once, to
+    /// `send`. Runs on the main thread.
+    pub fn snapshot(controller: &ICoreWebView2Controller, send: Sender<Result<Vec<u8>, String>>) {
+        let failed = send.clone();
+        if let Err(e) = start(controller, send) {
+            let _ = failed.send(Err(e.message()));
+        }
+    }
+
+    fn start(
+        controller: &ICoreWebView2Controller,
+        send: Sender<Result<Vec<u8>, String>>,
+    ) -> windows::core::Result<()> {
+        // SAFETY: Tauri hands `with_webview` closures the window's live controller, on the main
+        // thread, where WebView2 takes its calls; the handler holds the stream it reads.
+        unsafe {
+            let webview = controller.CoreWebView2()?;
+            let stream = CreateStreamOnHGlobal(HGLOBAL::default(), true)?;
+            let target = stream.clone();
+            let done = CapturePreviewCompletedHandler::create(Box::new(move |result| {
+                let png = result.and_then(|()| read_all(&target));
+                let _ = send.send(png.map_err(|e| e.message()));
+                Ok(())
+            }));
+            webview.CapturePreview(
+                COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG,
+                &stream,
+                &done,
+            )
+        }
+    }
+
+    fn read_all(stream: &IStream) -> windows::core::Result<Vec<u8>> {
+        let mut png = Vec::new();
+        let mut chunk = vec![0_u8; 1 << 16];
+        // SAFETY: each read writes at most the chunk's length into it.
+        unsafe {
+            stream.Seek(0, STREAM_SEEK_SET, None)?;
+            loop {
+                let mut read = 0;
+                stream
+                    .Read(
+                        chunk.as_mut_ptr().cast(),
+                        chunk.len() as u32,
+                        Some(&raw mut read),
+                    )
+                    .ok()?;
+                if read == 0 {
+                    return Ok(png);
+                }
+                png.extend_from_slice(&chunk[..read as usize]);
+            }
+        }
+    }
+
+    /// A PNG's pixels as 8-bit RGBA.
+    pub fn pixels(image: &[u8]) -> Result<Pixels, String> {
+        let mut decoder = png::Decoder::new(Cursor::new(image));
+        decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
+        let mut reader = decoder.read_info().map_err(|e| e.to_string())?;
+        let size = reader
+            .output_buffer_size()
+            .ok_or("the snapshot is too large")?;
+        let mut buffer = vec![0; size];
+        let frame = reader.next_frame(&mut buffer).map_err(|e| e.to_string())?;
+        buffer.truncate(frame.buffer_size());
+        let rgba = match frame.color_type {
+            png::ColorType::Rgba => buffer,
+            png::ColorType::Rgb => buffer
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .flat_map(|&[r, g, b]| [r, g, b, 255])
+                .collect(),
+            other => return Err(format!("a snapshot of {other:?} pixels")),
+        };
+        Ok(Pixels {
+            width: frame.width,
+            height: frame.height,
+            rgba,
+        })
+    }
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
+mod platform {
     use std::sync::mpsc::Sender;
 
     use super::Pixels;
 
-    pub fn snapshot(_: *mut c_void, send: Sender<Result<Vec<u8>, String>>) {
-        let _ = send.send(Err("window snapshots are macOS only".to_owned()));
+    pub const CONTENT_TYPE: &str = "image/png";
+
+    pub fn snapshot(_: &tauri::webview::PlatformWebview, send: Sender<Result<Vec<u8>, String>>) {
+        let _ = send.send(Err("window snapshots are macOS and Windows only".to_owned()));
     }
 
     pub fn pixels(_: &[u8]) -> Result<Pixels, String> {
-        Err("window snapshots are macOS only".to_owned())
+        Err("window snapshots are macOS and Windows only".to_owned())
     }
 }
 
@@ -289,5 +402,21 @@ mod tests {
         assert_eq!(&crop.rgba[8..], &[24, 25, 26, 27, 28, 29, 30, 31]);
         let png = encode(&crop).unwrap();
         assert!(png.starts_with(b"\x89PNG"));
+    }
+
+    /// `WebView2`'s snapshots are PNGs, whose pixels a report crops.
+    #[cfg(windows)]
+    #[test]
+    fn reads_back_a_png_snapshot() {
+        let rgba: Vec<u8> = (0..32).collect();
+        let png = encode(&Pixels {
+            width: 4,
+            height: 2,
+            rgba: rgba.clone(),
+        })
+        .unwrap();
+        let pixels = platform::pixels(&png).unwrap();
+        assert_eq!((pixels.width, pixels.height), (4, 2));
+        assert_eq!(pixels.rgba, rgba);
     }
 }
