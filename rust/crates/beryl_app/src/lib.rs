@@ -80,6 +80,7 @@ pub fn run() {
             games::set_stops = ipc::SET_STOPS,
             games::cancel = ipc::CANCEL,
             games::undo = ipc::UNDO,
+            games::pass_on = ipc::PASS_ON,
             games::concede = ipc::CONCEDE,
             games::current_game = ipc::CURRENT_GAME,
         ])

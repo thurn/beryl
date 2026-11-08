@@ -921,6 +921,12 @@ impl<L: Layout> State<L> {
         Limits::search(self.turn.number, self.budgets.decisions)
     }
 
+    /// The game's random streams: a session compares them to tell whether anything random
+    /// happened between two positions.
+    pub fn rng(&self) -> Rng {
+        self.rng
+    }
+
     /// Reseeds the game's random streams, as search does for each copy it plays on so sibling
     /// rollouts diverge (architecture §14).
     pub fn reseed(&mut self, seed: u64) {

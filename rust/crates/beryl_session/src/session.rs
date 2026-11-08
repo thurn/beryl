@@ -29,6 +29,8 @@ enum Command {
     SetStops(StopsSetting),
     Cancel,
     Undo,
+    /// Pass on to the human's next stop, beginning with this pass.
+    PassOn(Answer),
     /// Wakes the thread waiting on the human to take their concession.
     Concede,
 }
@@ -86,14 +88,25 @@ impl GameSession {
             .map_err(|_| SessionError::Ended)
     }
 
-    /// Goes back from the human's open decision `id` to the start of their turn
-    /// ([`Game::undo`]). It returns at once; the view of it again arrives through `emit`.
+    /// Takes back the human's latest answer from their open decision `id` ([`Game::undo`]).
+    /// It returns at once; the view of the decision it answered arrives through `emit`.
     pub(crate) fn undo(&self, id: DecisionId) -> Result<(), SessionError> {
         let mut open = self.open.lock().unwrap_or_else(PoisonError::into_inner);
         open.ok_or(SessionError::NotDeciding)?.undo(id)?;
         *open = None;
         self.commands
             .send(Command::Undo)
+            .map_err(|_| SessionError::Ended)
+    }
+
+    /// Passes on from the human's open decision `id` to their next stop ([`Game::pass_on`]).
+    /// It returns at once; the next view arrives through `emit`.
+    pub(crate) fn pass_on(&self, id: DecisionId) -> Result<(), SessionError> {
+        let mut open = self.open.lock().unwrap_or_else(PoisonError::into_inner);
+        let answer = open.ok_or(SessionError::NotDeciding)?.pass_on(id)?;
+        *open = None;
+        self.commands
+            .send(Command::PassOn(answer))
             .map_err(|_| SessionError::Ended)
     }
 
@@ -191,7 +204,10 @@ fn run(
                     game.choose(answer);
                     break;
                 }
-                // The session checked that the open decision can be taken back.
+                Command::PassOn(answer) => {
+                    game.pass_on(answer);
+                    break;
+                }
                 // The session checked that the open decision can go back.
                 Command::Undo => match game.undo() {
                     Ok(view) => {

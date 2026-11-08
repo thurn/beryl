@@ -44,8 +44,8 @@ pub struct PlayerView {
     pub stops: StopsSetting,
     /// What happened since the previous view, oldest first, for animation.
     pub events: Vec<GameEvent>,
-    /// The game went back to the start of the viewer's turn (`undo`): what happened since that
-    /// view never did.
+    /// The viewer's latest answer was taken back (`undo`): what happened since the decision
+    /// asked again never did.
     pub undone: bool,
 }
 
@@ -307,6 +307,10 @@ pub struct DecisionView {
     pub ask: AskView,
     /// For a priority decision, where passing takes the viewer, for the pass button.
     pub pass_to: Option<PassTo>,
+    /// For a priority where passing stops the viewer again in this step (the top of the stack
+    /// resolving, or combat damage), where the `pass_on` command takes them instead: on to
+    /// their next stop in a later step, unless the opponent does something first.
+    pub pass_on: Option<PassTo>,
     /// The card the decision is for: the spell or ability resolving, or else the one on top of
     /// the stack (which a target, an X or a payment is chosen for); the attacker whose combat
     /// damage is divided; the land asking for life. None for priority and the other combat
@@ -320,24 +324,13 @@ pub struct DecisionView {
     /// activating from their priority, whose costs are not yet paid: the `cancel` command
     /// takes it back.
     pub cancellable: bool,
-    /// Whether the `undo` command can go back to the start of the viewer's latest turn, and
-    /// how; none with nothing decided since.
-    pub undo: Option<UndoView>,
+    /// How many of the viewer's answers the `undo` command can take back, one per command,
+    /// latest first: back to where the opponent last decided or something came out the viewer
+    /// could not know before, which no undo crosses. Zero with nothing to take back.
+    pub undo: u16,
     /// At a priority, each card in the viewer's hand they may neither cast nor play as a land,
     /// and why: what the UI says of one a click finds nothing to do with.
     pub refused: Vec<Refused>,
-}
-
-/// Going back to the start of the viewer's turn.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub enum UndoView {
-    /// The viewer has seen nothing since that they did not know there.
-    Clean,
-    /// The viewer has since seen a card they did not know there: in a hand, or where it lies in
-    /// a library, which stays where it is when they go back, as the shuffles to come fall the
-    /// same. Going back is allowed; this says it is with that knowledge.
-    Peeked,
 }
 
 /// A card in the viewer's hand they may neither cast nor play as a land now.
@@ -1349,11 +1342,16 @@ fn decision_view<L: Layout>(
         candidates,
         resolving: resolving.map(|e| stack_item(t, obs, e)),
         ask: ask_view(obs, d.ask),
-        pass_to: (d.kind == DecisionKind::Priority).then(|| pass_to(obs, stops)),
+        pass_to: (d.kind == DecisionKind::Priority).then(|| pass_to(obs, stops).into()),
+        pass_on: if d.kind == DecisionKind::Priority {
+            pass_on(obs, stops).map(Into::into)
+        } else {
+            None
+        },
         source: decision_source(obs, d, resolving),
         halt: false,
         cancellable: false,
-        undo: None,
+        undo: 0,
         refused: if d.kind == DecisionKind::Priority {
             refused(t, obs)
         } else {
@@ -1405,11 +1403,12 @@ fn halt_view<L: Layout>(
         }],
         resolving: None,
         ask: AskView::Plain,
-        pass_to: Some(pass_to(obs, stops)),
+        pass_to: Some(pass_to(obs, stops).into()),
+        pass_on: None,
         source: None,
         halt: true,
         cancellable: false,
-        undo: None,
+        undo: 0,
         refused: refused(t, obs),
     }
 }
@@ -1465,26 +1464,56 @@ fn ask_view<L: Layout>(obs: Observation<'_, L>, ask: Ask<L>) -> AskView {
 }
 
 /// [`DecisionView::pass_to`]: the engine's [`next_stop`], less the declare blockers step for a
-/// defender with nothing to block with under the smart stops. The session passes them through
-/// it, as no creature blocks ([`crate::Game`]), on to their next stop after it: by default the
-/// end step, as the postcombat main phase is the active player's.
-fn pass_to<L: Layout>(obs: Observation<'_, L>, stops: StopsSetting) -> PassTo {
-    let step_stops = stops.step_stops();
-    let next = match next_stop(obs, stops.stops(), step_stops) {
+/// defender with nothing to block with under the smart stops ([`skip_idle_blocks`]).
+fn pass_to<L: Layout>(obs: Observation<'_, L>, stops: StopsSetting) -> NextStop {
+    skip_idle_blocks(
+        obs,
+        stops,
+        next_stop(obs, stops.stops(), stops.step_stops()),
+    )
+}
+
+/// [`DecisionView::pass_on`]: where the viewer's next stop in a later step is, when passing
+/// would stop them again in this one, for the stack resolving or for combat damage.
+pub(crate) fn pass_on<L: Layout>(obs: Observation<'_, L>, stops: StopsSetting) -> Option<NextStop> {
+    match pass_to(obs, stops) {
+        NextStop::Resolve | NextStop::CombatDamage => {
+            let later = next_step_stop(obs, stops.step_stops(), obs.turn().step);
+            Some(skip_idle_blocks(obs, stops, later))
+        }
+        NextStop::Step(_) | NextStop::NextTurn => None,
+    }
+}
+
+/// `next` less the declare blockers step for a defender with nothing to block with under the
+/// smart stops. The session passes them through it, as no creature blocks ([`crate::Game`]),
+/// on to their next stop after it: by default the end step, as the postcombat main phase is
+/// the active player's.
+fn skip_idle_blocks<L: Layout>(
+    obs: Observation<'_, L>,
+    stops: StopsSetting,
+    next: NextStop,
+) -> NextStop {
+    match next {
         NextStop::Step(TurnStep::DeclareBlockers)
             if !stops.full_control
                 && obs.turn().active != obs.viewer()
                 && !can_declare_blockers(obs) =>
         {
-            next_step_stop(obs, step_stops, TurnStep::DeclareBlockers)
+            next_step_stop(obs, stops.step_stops(), TurnStep::DeclareBlockers)
         }
         next => next,
-    };
-    match next {
-        NextStop::Resolve => PassTo::Resolve,
-        NextStop::CombatDamage => PassTo::CombatDamage,
-        NextStop::Step(step) => PassTo::Step { step: step.into() },
-        NextStop::NextTurn => PassTo::NextTurn,
+    }
+}
+
+impl From<NextStop> for PassTo {
+    fn from(next: NextStop) -> PassTo {
+        match next {
+            NextStop::Resolve => PassTo::Resolve,
+            NextStop::CombatDamage => PassTo::CombatDamage,
+            NextStop::Step(step) => PassTo::Step { step: step.into() },
+            NextStop::NextTurn => PassTo::NextTurn,
+        }
     }
 }
 

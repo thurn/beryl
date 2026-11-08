@@ -37,9 +37,15 @@ export type UndoRequest = {
  */
 decision: DecisionId, };
 
+export type PassOnRequest = { 
+/**
+ * The open decision the UI received.
+ */
+decision: DecisionId, };
+
 export type ConcedeRequest = { session: SessionId, };
 
-export type SessionError = { "kind": "unknownAgent", name: string, } | { "kind": "unknownCard", name: string, } | { "kind": "deck", reason: string, } | { "kind": "staleSession", session: SessionId, } | { "kind": "notDeciding" } | { "kind": "staleDecision", decision: DecisionId, open: DecisionId, } | { "kind": "noSuchCandidate", index: CandidateIndex, candidates: number, } | { "kind": "notCancellable" } | { "kind": "nothingToUndo" } | { "kind": "ended" } | { "kind": "badReplay", reason: string, } | { "kind": "io", reason: string, };
+export type SessionError = { "kind": "unknownAgent", name: string, } | { "kind": "unknownCard", name: string, } | { "kind": "deck", reason: string, } | { "kind": "staleSession", session: SessionId, } | { "kind": "notDeciding" } | { "kind": "staleDecision", decision: DecisionId, open: DecisionId, } | { "kind": "noSuchCandidate", index: CandidateIndex, candidates: number, } | { "kind": "notCancellable" } | { "kind": "nothingToUndo" } | { "kind": "noPassOn" } | { "kind": "ended" } | { "kind": "badReplay", reason: string, } | { "kind": "io", reason: string, };
 
 export type GameUpdate = { 
 /**
@@ -86,8 +92,8 @@ stops: StopsSetting,
  */
 events: Array<GameEvent>, 
 /**
- * The game went back to the start of the viewer's turn (`undo`): what happened since that
- * view never did.
+ * The viewer's latest answer was taken back (`undo`): what happened since the decision
+ * asked again never did.
  */
 undone: boolean, };
 
@@ -239,6 +245,12 @@ ask: AskView,
  */
 passTo: PassTo | null, 
 /**
+ * For a priority where passing stops the viewer again in this step (the top of the stack
+ * resolving, or combat damage), where the `pass_on` command takes them instead: on to
+ * their next stop in a later step, unless the opponent does something first.
+ */
+passOn: PassTo | null, 
+/**
  * The card the decision is for: the spell or ability resolving, or else the one on top of
  * the stack (which a target, an X or a payment is chosen for); the attacker whose combat
  * damage is divided; the land asking for life. None for priority and the other combat
@@ -258,10 +270,11 @@ halt: boolean,
  */
 cancellable: boolean, 
 /**
- * Whether the `undo` command can go back to the start of the viewer's latest turn, and
- * how; none with nothing decided since.
+ * How many of the viewer's answers the `undo` command can take back, one per command,
+ * latest first: back to where the opponent last decided or something came out the viewer
+ * could not know before, which no undo crosses. Zero with nothing to take back.
  */
-undo: UndoView | null, 
+undo: number, 
 /**
  * At a priority, each card in the viewer's hand they may neither cast nor play as a land,
  * and why: what the UI says of one a click finds nothing to do with.
@@ -273,8 +286,6 @@ export type AskView = { "kind": "plain" } | { "kind": "scry", count: number, } |
 export type PassTo = { "kind": "resolve" } | { "kind": "combatDamage" } | { "kind": "step", step: Step, } | { "kind": "nextTurn" };
 
 export type Refused = { slot: number, reason: RefusalView, };
-
-export type UndoView = "clean" | "peeked";
 
 export type RefusalView = { "kind": "timing", by: number | null, } | { "kind": "landPlayed" } | { "kind": "mana" } | { "kind": "cost" } | { "kind": "target" };
 
@@ -424,6 +435,7 @@ export type Commands = {
   set_stops: { args: { request: SetStopsRequest }; result: null; error: SessionError };
   cancel: { args: { request: CancelRequest }; result: null; error: SessionError };
   undo: { args: { request: UndoRequest }; result: null; error: SessionError };
+  pass_on: { args: { request: PassOnRequest }; result: null; error: SessionError };
   concede: { args: { request: ConcedeRequest }; result: null; error: SessionError };
   current_game: { args: Record<string, never>; result: GameUpdate | null; error: never };
 };

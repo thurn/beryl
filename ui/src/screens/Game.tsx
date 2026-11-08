@@ -10,6 +10,7 @@ import { RulesText } from "../components/Mana";
 import {
   cancel,
   undo,
+  passOn,
   choose,
   CommandError,
   concede,
@@ -228,7 +229,8 @@ function failure(e: unknown): string | undefined {
   return kind === "notDeciding" ||
     kind === "staleDecision" ||
     kind === "notCancellable" ||
-    kind === "nothingToUndo"
+    kind === "nothingToUndo" ||
+    kind === "noPassOn"
     ? undefined
     : e.message;
 }
@@ -336,14 +338,21 @@ function Playing({ playback }: { playback: Playback }) {
     cancel(decision.id).catch(fail);
   };
 
-  /** Goes back to the start of the player's turn, dropping any picks planned. */
-  const undoTurn = () => {
+  /** Takes back the player's latest answer, dropping any picks planned. */
+  const undoAnswer = () => {
     if (!decision?.undo || waiting) return;
     setError(undefined);
     setAnswered(view);
     planned.current = [];
     setPeek(undefined);
     undo(decision.id).catch(fail);
+  };
+  /** Passes on to the player's next stop. */
+  const passOnward = () => {
+    if (!decision?.passOn || waiting) return;
+    setError(undefined);
+    setAnswered(view);
+    passOn(decision.id).catch(fail);
   };
 
   // The stops the player chose, here or in an earlier game, until the game holds them: the
@@ -456,7 +465,8 @@ function Playing({ playback }: { playback: Playback }) {
         onSkip={behind ? skip : undefined}
         choose={answer}
         cancel={cancelCast}
-        undo={undoTurn}
+        undo={undoAnswer}
+        passOn={passOnward}
         stops={stops}
         setStops={chooseStops}
         onLeave={() => (window.location.hash = "#/")}

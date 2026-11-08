@@ -5,7 +5,7 @@
 use ts_rs::{Config, TS};
 
 use crate::ipc::{
-    AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, Fixture, FixtureMessage,
+    AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, Fixture, FixtureMessage, PassOnRequest,
     SetStopsRequest, UndoRequest,
 };
 use crate::protocol::{
@@ -13,7 +13,7 @@ use crate::protocol::{
     Counter, CounterView, Culprit, DecisionId, DecisionView, Declaration, Facing, GameEvent,
     Keyword, Kind, LossReason, Mana, ManaPool, ObjectView, OutcomeView, PaidCost, PassTo, Payment,
     PlayerState, PlayerView, Players, PowerToughness, RefusalView, Refused, SessionId, Side,
-    StackItem, Stall, Status, Step, StopsSetting, TargetRef, TurnView, UndoView, Why, ZoneName,
+    StackItem, Stall, Status, Step, StopsSetting, TargetRef, TurnView, Why, ZoneName,
 };
 use crate::{AgentView, GameUpdate, SessionError, StartRequest};
 
@@ -32,6 +32,7 @@ pub fn typescript() -> String {
         SetStopsRequest::decl(&cfg),
         CancelRequest::decl(&cfg),
         UndoRequest::decl(&cfg),
+        PassOnRequest::decl(&cfg),
         ConcedeRequest::decl(&cfg),
         SessionError::decl(&cfg),
         GameUpdate::decl(&cfg),
@@ -59,7 +60,6 @@ pub fn typescript() -> String {
         AskView::decl(&cfg),
         PassTo::decl(&cfg),
         Refused::decl(&cfg),
-        UndoView::decl(&cfg),
         RefusalView::decl(&cfg),
         CandidateView::decl(&cfg),
         Payment::decl(&cfg),

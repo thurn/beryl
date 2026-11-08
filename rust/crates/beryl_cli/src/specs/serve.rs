@@ -161,7 +161,10 @@ fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result
                 ipc::LIST_AGENTS => json!({ "ok": [] }),
                 _ => {
                     // The viewer acts on the game: it plays on from where it truly is.
-                    if matches!(command, ipc::CHOOSE | ipc::CANCEL | ipc::UNDO) {
+                    if matches!(
+                        command,
+                        ipc::CHOOSE | ipc::CANCEL | ipc::UNDO | ipc::PASS_ON
+                    ) {
                         release(&feed);
                     }
                     let list = lock(instances);

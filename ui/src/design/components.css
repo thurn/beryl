@@ -1639,6 +1639,18 @@
   /* Over a leaning pile (Piles.tsx' Lying), its middle. */
   margin-left: calc(var(--drop, 0px) / 2);
 }
+.tip-left {
+  top: 50%;
+  right: calc(100% + 8px);
+  left: auto;
+  transform: translateY(-50%);
+}
+/* A key that does the same, after the words. */
+.tip kbd {
+  margin-left: 8px;
+  font: inherit;
+  color: #a59d92;
+}
 .has-tip:hover > .tip,
 .has-tip:focus-visible > .tip {
   visibility: visible;

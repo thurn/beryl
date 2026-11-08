@@ -2,7 +2,7 @@
 //! [`ipc::GAME_UPDATE`] events.
 
 use beryl_session::ipc::{
-    CancelRequest, ChooseRequest, ConcedeRequest, SetStopsRequest, UndoRequest,
+    CancelRequest, ChooseRequest, ConcedeRequest, PassOnRequest, SetStopsRequest, UndoRequest,
 };
 use beryl_session::{AgentView, GameUpdate, SessionError, SessionId, Sessions, StartRequest, ipc};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -48,6 +48,12 @@ pub fn cancel(sessions: State<'_, Sessions>, request: CancelRequest) -> Result<(
 #[allow(clippy::needless_pass_by_value)]
 pub fn undo(sessions: State<'_, Sessions>, request: UndoRequest) -> Result<(), SessionError> {
     sessions.undo(request.decision)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+pub fn pass_on(sessions: State<'_, Sessions>, request: PassOnRequest) -> Result<(), SessionError> {
+    sessions.pass_on(request.decision)
 }
 
 #[tauri::command]

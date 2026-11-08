@@ -25,9 +25,11 @@ pub const SET_STOPS: &str = "set_stops";
 /// Takes back the spell the human is casting, or the ability they are activating, before its
 /// costs are paid ([`crate::protocol::DecisionView::cancellable`]).
 pub const CANCEL: &str = "cancel";
-/// Goes back to the start of the human's latest turn
-/// ([`crate::protocol::DecisionView::undo`]).
+/// Takes back the human's latest answer ([`crate::protocol::DecisionView::undo`]).
 pub const UNDO: &str = "undo";
+/// Passes the human's priority on to their next stop
+/// ([`crate::protocol::DecisionView::pass_on`]).
+pub const PASS_ON: &str = "pass_on";
 /// The human concedes the game in progress.
 pub const CONCEDE: &str = "concede";
 /// The latest view of the game in progress ([`crate::Sessions::current`]), which a reloaded UI
@@ -66,6 +68,14 @@ pub struct CancelRequest {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct UndoRequest {
+    /// The open decision the UI received.
+    pub decision: DecisionId,
+}
+
+/// The [`PASS_ON`] command's request.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct PassOnRequest {
     /// The open decision the UI received.
     pub decision: DecisionId,
 }
@@ -172,6 +182,12 @@ pub(crate) fn typescript(cfg: &Config) -> String {
         (
             UNDO,
             request(name::<UndoRequest>(cfg)),
+            name::<()>(cfg),
+            error.clone(),
+        ),
+        (
+            PASS_ON,
+            request(name::<PassOnRequest>(cfg)),
             name::<()>(cfg),
             error.clone(),
         ),

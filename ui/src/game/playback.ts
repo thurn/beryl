@@ -81,9 +81,12 @@ interface State {
   until: number;
   queue: GameUpdate[];
   log: LogEntry[];
-  /** The key of the last log entry before the player's latest turn began: an undo goes back
-   * to there. */
-  turnStart?: number;
+  /** For each answer the player can take back, by its place among them, the key of the last
+   * log entry before the decision it answered: an undo to that decision goes back to there.
+   * None for a decision shown before the screen saw it. */
+  marks: (number | undefined)[];
+  /** The last key given a log entry: keys only grow, past entries an undo took back too. */
+  key: number;
   names: Names;
   /** A game was asked to start and its first view has not arrived. */
   starting: boolean;
@@ -103,6 +106,8 @@ const INITIAL: State = {
   until: 0,
   queue: [],
   log: [],
+  marks: [],
+  key: -1,
   names: new Map(),
   starting: false,
   resuming: true,
@@ -115,20 +120,21 @@ function show(
   live: boolean,
   now: number,
 ): State {
-  let { names, log, turnStart } = state;
-  // Keys only grow, past entries an undo took back too.
-  let key = Math.max(log.at(-1)?.key ?? -1, turnStart ?? -1);
+  let { names, log, marks, key } = state;
   for (const u of updates) {
-    // What happened since the turn began never did.
-    if (u.view.undone && turnStart !== undefined) {
-      const kept = turnStart;
-      log = log.filter((e) => e.key <= kept);
-    }
+    const status = u.view.status;
+    const decision = status.kind === "deciding" ? status.decision : undefined;
+    // What happened since the decision asked again never did.
+    const kept = decision && u.view.undone ? marks[decision.undo] : undefined;
+    if (kept !== undefined) log = log.filter((e) => e.key <= kept);
     names = learnNames(names, u.view);
     const lines = logLines(u.view, names);
     if (lines.length)
       log = [...log, ...lines.map((l) => ({ ...l, key: ++key }))];
-    if (startsTurn(u.view)) turnStart = key;
+    if (decision) {
+      marks = marks.slice(0, decision.undo);
+      marks[decision.undo] = key;
+    }
   }
   const last = updates.at(-1)!;
   // The views passed over lend the one shown their events, so it animates all of them.
@@ -146,20 +152,10 @@ function show(
     spotlight: live ? SPOTLIGHTS.get(last) : undefined,
     until: now + (live ? holdOf(last) : 0),
     names,
-    turnStart,
+    marks,
+    key,
     log: log === state.log ? log : log.slice(-LOG_LENGTH),
   };
-}
-
-/** Whether `view` is where the player's turn began, which an undo goes back to: their first
- * decision of a turn of theirs, with nothing to take back yet. */
-function startsTurn(view: PlayerView): boolean {
-  return (
-    view.status.kind === "deciding" &&
-    !view.status.decision.undo &&
-    view.turn.active === "you" &&
-    view.turn.number > 0
-  );
 }
 
 function reduce(state: State, action: Action): State {

@@ -14,17 +14,17 @@ use beryl_engine::layout::Queue;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{DECK_SLOTS, ObjectFlags, ObjectRef, Pending, StackEntry, Turn};
 use beryl_engine::{
-    Ask, Candidates, CardIx, CardTable, Choice, Decision, DecisionKind, GameTable, Large, Layout,
-    Limits, Observation, Opt, Outcome, Profile, Relayout, Replay, Scratch, Seat, SlotId, Small,
+    Ask, Candidates, CardTable, Choice, Decision, DecisionKind, GameTable, Large, Layout, Limits,
+    NextStop, Observation, Opt, Outcome, Profile, Relayout, Replay, Scratch, Seat, SlotId, Small,
     StallReason, State, Step, StepStops, TurnStep, apply, next_in_step, observe, paused_events,
     view,
 };
-use beryl_search::{Agent, AgentDecision, Budget, GameAgent};
+use beryl_search::{Budget, GameAgent};
 
 use crate::preview;
 use crate::protocol::{
     CandidateIndex, DecisionId, Moment, PlayerView, SessionId, Side, Status, StopsSetting,
-    UndoView, player_view,
+    player_view,
 };
 use crate::replay::{Entry, ReplayFile};
 use crate::{HandOver, Prepared, SessionError, StartGame};
@@ -36,13 +36,16 @@ pub struct OpenDecision {
     candidates: usize,
     /// The human may take back the cast it is part of ([`Game::cancel`]).
     cancellable: bool,
-    /// The human may go back to the start of their turn ([`Game::undo`]).
+    /// The human may take back their latest answer ([`Game::undo`]).
     undoable: bool,
+    /// The human may pass on to their next stop ([`Game::pass_on`]).
+    passes_on: bool,
 }
 
 impl OpenDecision {
     fn new(id: DecisionId, open: &Open, cancellable: bool, undoable: bool) -> OpenDecision {
         OpenDecision {
+            passes_on: false,
             id,
             candidates: match open {
                 Open::Decision(d) => d.len(),
@@ -72,8 +75,7 @@ impl OpenDecision {
         }
     }
 
-    /// Checks that the human may go back from this decision, named `id`, to the start of their
-    /// turn.
+    /// Checks that the human may take back their latest answer from this decision, named `id`.
     pub fn undo(self, id: DecisionId) -> Result<(), SessionError> {
         if id != self.id {
             return Err(SessionError::StaleDecision {
@@ -85,6 +87,25 @@ impl OpenDecision {
             Ok(())
         } else {
             Err(SessionError::NothingToUndo)
+        }
+    }
+
+    /// Checks that the human may pass on to their next stop from this decision, named `id`,
+    /// and returns the pass that begins it: a priority's first candidate.
+    pub fn pass_on(self, id: DecisionId) -> Result<Answer, SessionError> {
+        if id != self.id {
+            return Err(SessionError::StaleDecision {
+                decision: id,
+                open: self.id,
+            });
+        }
+        if self.passes_on {
+            Ok(Answer {
+                id,
+                choice: Choice(0),
+            })
+        } else {
+            Err(SessionError::NoPassOn)
         }
     }
 
@@ -188,6 +209,16 @@ fn ran_out<L: Layout>(s: &State<L>) -> bool {
 enum Snapshot {
     Small(Box<State<Small>>),
     Large(Box<State<Large>>),
+}
+
+impl<L: Layout> Board<L> {
+    /// Whether the position now shows `human` anything they could not know in `then`
+    /// ([`reveals`]), each as the human is shown it: a paused resolution's body done up to its
+    /// question (§7.3), as the card a loot draws before it asks for the discard.
+    fn reveals(&mut self, then: &State<L>, t: &GameTable, human: Seat) -> bool {
+        let then = view(then, t, &mut self.peek).clone();
+        reveals(&then, view(&self.state, t, &mut self.peek), t, human)
+    }
 }
 
 impl Boards {
@@ -315,6 +346,15 @@ impl Boards {
         on_board!(self, b => b.state.turn())
     }
 
+    /// Whether a creature is attacking.
+    fn any_attacking(&self) -> bool {
+        on_board!(self, b => b
+            .state
+            .battlefield()
+            .iter()
+            .any(|&slot| b.state.object(slot).flags.has(ObjectFlags::ATTACKING)))
+    }
+
     /// Whether a creature is blocking.
     fn any_blocking(&self) -> bool {
         on_board!(self, b => b
@@ -348,6 +388,7 @@ impl Boards {
 
 /// The game as it stood at the human's priority before they began to cast a spell or activate
 /// an ability, kept until its costs are paid so that they can take it back ([`Game::cancel`]).
+#[derive(Clone)]
 struct BeforeCast {
     state: Snapshot,
     at: At,
@@ -355,58 +396,37 @@ struct BeforeCast {
     /// The length of the choice log then.
     log: usize,
     stops: StopsSetting,
+    /// How many answers could be taken back then ([`Game::undo`]).
+    undo: usize,
 }
 
-/// The game as it stood at the human's first decision or halt of their latest turn, which
-/// they may go back to ([`Game::undo`]) until their next turn begins. A copy of the state, so
-/// going back is exact, and its random streams with it: the shuffles and other random events
-/// to come fall as they did, so going back takes a play back without dealing the luck again.
-/// What a player learned since is theirs to keep, and the view says so ([`UndoView::Peeked`]).
-struct TurnStart {
-    turn: u16,
+/// The game as it stood at one of the human's decisions or halts before they answered it,
+/// which they may go back to ([`Game::undo`]). A copy of the state, random streams and all, so
+/// going back is exact. Points are kept only while nothing the human could not know came out
+/// since ([`reveals`]): no decision of the agent's, nothing random, and no card the human did
+/// not know, so taking an answer back never lets them answer again knowing more.
+struct UndoPoint {
     state: Snapshot,
     /// The open decision there.
     at: At,
-    step: (u16, TurnStep),
+    seen: (u16, TurnStep),
     answered: Option<Vec<StackEntry<Large>>>,
-    /// The length of the choice log when the game last stood here.
-    log: usize,
-    /// The agent's next decision then, if it can go back to it ([`Agent::rewind`]).
-    agent: Option<AgentDecision>,
-    /// For each card of both decks (`deck_slots`): its card there, and whether the human
-    /// knew it.
-    known: Vec<(CardIx, bool)>,
-    /// The cards there the human did not know, sorted.
-    hidden: Vec<CardIx>,
-    /// The human has been shown a card since that they did not know there ([`Self::note`]).
-    peeked: bool,
+    before_cast: Option<BeforeCast>,
 }
 
-impl TurnStart {
-    /// Notes what `shown`, a position the human is shown, tells them that they did not know
-    /// at the start of the turn: a card they now know in a slot they did not know there, or a
-    /// card that a shuffle has since moved, where it went, which the same shuffle would send
-    /// it to again. Basic lands make the second conservative: seeing one says no more than
-    /// that some unknown slot held one.
-    fn note<L: Layout>(&mut self, shown: &State<L>, t: &GameTable, human: Seat) {
-        if self.peeked {
-            return;
-        }
-        self.peeked = deck_slots(t)
-            .zip(&self.known)
-            .any(|(slot, &(card, known))| {
-                let slot = L::Slot::from_index(slot);
-                if !shown.knows(human, slot) {
-                    return false;
-                }
-                let now = shown.card(slot);
-                if now == card {
-                    !known
-                } else {
-                    self.hidden.binary_search(&now).is_ok()
-                }
-            });
-    }
+/// Whether `now`, played on from `then` without a decision of the agent's, shows `human`
+/// anything they could not know at `then`: a random stream drawn from (a shuffle, a coin flip,
+/// a random discard), or a card of either deck they now know that they did not know there (a
+/// draw, a search, a reveal). A shuffle also moves cards among the deck slots
+/// ([CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a): "randomize the cards
+/// within it so that no player knows their order"), which counts as well.
+fn reveals<L: Layout>(then: &State<L>, now: &State<L>, t: &GameTable, human: Seat) -> bool {
+    then.rng() != now.rng()
+        || deck_slots(t).any(|i| {
+            let slot = L::Slot::from_index(i);
+            then.card(slot) != now.card(slot)
+                || (now.knows(human, slot) && !then.knows(human, slot))
+        })
 }
 
 /// The slot index of every card of both decks, the first seat's first.
@@ -414,6 +434,16 @@ fn deck_slots(t: &GameTable) -> impl Iterator<Item = usize> + '_ {
     Seat::BOTH
         .into_iter()
         .flat_map(move |p| (0..t.deck(p).len()).map(move |i| p.index() * DECK_SLOTS + i))
+}
+
+/// The human's pass on to their next stop ([`Game::pass_on`]), while the session passes their
+/// priority for them.
+#[derive(Clone, Copy, Debug)]
+struct PassingOn {
+    /// The turn and step of their next stop, where it ends.
+    until: (u16, TurnStep),
+    /// The turn and step it began in.
+    began: (u16, TurnStep),
 }
 
 /// A game in progress.
@@ -453,8 +483,13 @@ pub struct Game {
     hurt_by: [Option<ObjectRef<Large>>; 2],
     /// Where the human's cast in progress began, while it can be taken back.
     before_cast: Option<BeforeCast>,
-    /// Where the human's latest turn began, which they may go back to.
-    turn_start: Option<TurnStart>,
+    /// The positions the human may go back to, one per answer, the latest last
+    /// ([`Game::undo`]).
+    undo: Vec<UndoPoint>,
+    /// The human's pass on to their next stop, while it lasts.
+    passing: Option<PassingOn>,
+    /// Where the human's open decision passes on to, if it can ([`Game::pass_on`]).
+    passes_on: Option<(u16, TurnStep)>,
     /// The coin flip's winner, who chooses who takes the first turn
     /// ([CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031)), in a game begun by one.
     flip_winner: Option<Seat>,
@@ -560,7 +595,9 @@ impl Game {
             paused: Vec::new(),
             hurt_by: [None; 2],
             before_cast: None,
-            turn_start: None,
+            undo: Vec::new(),
+            passing: None,
+            passes_on: None,
             flip_winner,
         }
     }
@@ -601,7 +638,6 @@ impl Game {
                 if matches!(game.at, At::Playing) {
                     // A step began, and live play went on after its view.
                     game.board.drain_events();
-                    game.note_shown();
                     continue;
                 }
             }
@@ -610,13 +646,16 @@ impl Game {
             };
             // Live play's view here took the events so far.
             game.board.drain_events();
-            game.note_shown();
             match (game.at.clone(), entry) {
                 (At::Agent(d), Entry::Choice(c)) if usize::from(c) < d.len() => {
-                    game.apply(entry);
-                    game.at = At::Playing;
+                    game.agent_decides(Choice(c));
                 }
                 (At::Human(..), Entry::Stops(stops)) => game.change_stops(stops),
+                (At::Human(_, Open::Decision(_)), Entry::PassOn) => {
+                    if !game.start_passing() {
+                        return Err(bad("a pass on where there is none"));
+                    }
+                }
                 (At::Human(id, open @ Open::Decision(_)), Entry::Choice(_))
                 | (At::Human(id, open @ Open::Halt), Entry::Halt) => {
                     let c = if let Entry::Choice(c) = entry { c } else { 0 };
@@ -627,7 +666,7 @@ impl Game {
                 }
                 (At::Human(..), Entry::Undo) => {
                     game.undo()
-                        .map_err(|_| bad("an undo with nothing to go back to"))?;
+                        .map_err(|_| bad("an undo with nothing to take back"))?;
                 }
                 (At::Agent(_) | At::Human(..), Entry::Concede) => {
                     game.concede();
@@ -659,8 +698,7 @@ impl Game {
                     let obs = observe(&b.state, &self.table, &mut b.scratch, d.player);
                     self.agent.choose(obs, &d.relayout())
                 });
-                self.apply(Entry::Choice(c.0));
-                self.at = At::Playing;
+                self.agent_decides(c);
                 self.play_on();
             }
             At::Playing => self.play_on(),
@@ -671,12 +709,10 @@ impl Game {
     /// The human's open decision, if any.
     pub fn open(&self) -> Option<OpenDecision> {
         match &self.at {
-            At::Human(id, open) => Some(OpenDecision::new(
-                *id,
-                open,
-                self.cancellable(),
-                self.undoable(),
-            )),
+            At::Human(id, open) => Some(OpenDecision {
+                passes_on: self.passes_on.is_some(),
+                ..OpenDecision::new(*id, open, self.cancellable(), self.undoable())
+            }),
             _ => None,
         }
     }
@@ -720,6 +756,7 @@ impl Game {
         self.board.restore(before.state);
         self.answered = before.answered;
         self.replay.log.truncate(before.log);
+        self.undo.truncate(before.undo);
         // Stops changed during the cast stay changed, recorded again at the priority.
         if self.stops != before.stops {
             self.change_stops(self.stops);
@@ -736,25 +773,18 @@ impl Game {
         Ok(self.draw())
     }
 
-    /// Whether the human, at their open decision, may go back to where their latest turn began
-    /// ([`Game::undo`]): something was decided since, not only their stops changed.
+    /// Whether the human, at their open decision, may take back an answer ([`Game::undo`]).
     fn undoable(&self) -> bool {
-        matches!(self.at, At::Human(..))
-            && self.turn_start.as_ref().is_some_and(|start| {
-                self.replay.log[start.log..]
-                    .iter()
-                    .any(|e| !matches!(e, Entry::Stops(_)))
-            })
+        matches!(self.at, At::Human(..)) && !self.undo.is_empty()
     }
 
-    /// Goes back to the human's first decision or halt of their latest turn, at their open
-    /// decision, and returns the view of it again: the turn so far, or the opponent's turn
-    /// after it, never happened. The state is a copy, random streams and all, so what comes
-    /// next falls as it did unless the players play differently; the agent goes back to the
-    /// same place among its own decisions where it can ([`Agent::rewind`]). This is no rule of
-    /// the game: it is a practice tool, and the view says when the human saw a card since that
-    /// they did not know there ([`UndoView::Peeked`]). The choice log keeps the turn taken
-    /// back, then an [`Entry::Undo`], so a replay goes back the same way.
+    /// Takes back the human's latest answer, at their open decision, and returns the view of
+    /// the decision or halt it answered, asked again: the game is exactly as it stood there.
+    /// Each call takes back one more, back to where something came out that the human could
+    /// not know ([`reveals`]) or the agent decided, which no undo crosses. This is no rule of
+    /// the game: it is a misclick tool, and taking back an answer never shows the human
+    /// anything they would not have seen anyway. The choice log keeps the answer taken back,
+    /// then an [`Entry::Undo`], so a replay goes back the same way.
     pub fn undo(&mut self) -> Result<PlayerView, SessionError> {
         if self.open().is_none() {
             return Err(SessionError::NotDeciding);
@@ -762,24 +792,13 @@ impl Game {
         if !self.undoable() {
             return Err(SessionError::NothingToUndo);
         }
-        let start = self
-            .turn_start
-            .as_mut()
-            .expect("an undoable game has a turn start");
-        self.board.restore(start.state.clone());
-        self.answered.clone_from(&start.answered);
-        self.seen = start.step;
-        self.before_cast = None;
+        let point = self.undo.pop().expect("an undoable game has a point");
+        self.board.restore(point.state);
+        self.answered = point.answered;
+        self.seen = point.seen;
+        self.before_cast = point.before_cast;
+        self.passing = None;
         self.replay.log.push(Entry::Undo);
-        start.peeked = false;
-        start.log = self.replay.log.len();
-        let (open, agent) = (start.at.clone(), start.agent);
-        if let Some(to) = agent {
-            match self.board {
-                Boards::Small(_) => Agent::<Small>::rewind(&mut *self.agent, to),
-                Boards::Large(_) => Agent::<Large>::rewind(&mut *self.agent, to),
-            }
-        }
         // Stops changed since stay changed. The log has them already, and a replay goes back
         // with the same ones.
         self.board
@@ -791,8 +810,8 @@ impl Game {
                 .map(Relayout::relayout)
                 .collect()
         });
-        let At::Human(_, open) = open else {
-            unreachable!("a turn start is at the human's decision");
+        let At::Human(_, open) = point.at else {
+            unreachable!("an undo point is at the human's decision");
         };
         // The decision asked again is a new one: an answer sent to an earlier one is stale.
         self.seq += 1;
@@ -804,56 +823,123 @@ impl Game {
         Ok(view)
     }
 
-    /// Keeps the position as the start of the human's turn, if it is the first decision or
-    /// halt of theirs in a turn of theirs.
-    fn note_turn_start(&mut self) {
-        let turn = self.board.turn();
-        let number = turn.number;
-        if !matches!(self.at, At::Human(..))
-            || number == 0
-            || turn.active != self.human
-            || self.turn_start.as_ref().is_some_and(|t| t.turn == number)
-        {
-            return;
-        }
-        let known: Vec<(CardIx, bool)> = on_board!(&self.board, b => deck_slots(&self.table)
-            .map(|i| {
-                let slot = SlotId::from_index(i);
-                (b.state.card(slot), b.state.knows(self.human, slot))
-            })
-            .collect());
-        let agent = match self.board {
-            Boards::Small(_) => Agent::<Small>::next_decision(&*self.agent),
-            Boards::Large(_) => Agent::<Large>::next_decision(&*self.agent),
-        };
-        let mut hidden: Vec<CardIx> = known
-            .iter()
-            .filter(|(_, known)| !known)
-            .map(|&(card, _)| card)
-            .collect();
-        hidden.sort_unstable();
-        self.turn_start = Some(TurnStart {
-            turn: number,
+    /// Keeps the position at the human's open decision, before their answer is applied, as one
+    /// they may go back to.
+    fn keep_undo_point(&mut self) {
+        self.undo.push(UndoPoint {
             state: self.board.snapshot(),
             at: self.at.clone(),
-            step: self.seen,
+            seen: self.seen,
             answered: self.answered.clone(),
-            log: self.replay.log.len(),
-            agent,
-            known,
-            hidden,
-            peeked: false,
+            before_cast: self.before_cast.clone(),
         });
     }
 
-    /// Notes what the human is shown in the position now ([`TurnStart::note`]), as a view
-    /// would: a replay calls it where live play built one.
-    fn note_shown(&mut self) {
-        if let Some(start) = &mut self.turn_start {
-            on_board!(&mut self.board, b => {
-                start.note(view(&b.state, &self.table, &mut b.scratch), &self.table, self.human);
-            });
+    /// Forgets every position the human could go back to if the game, played on to their open
+    /// decision since the latest, showed them anything they could not know there ([`reveals`]).
+    fn check_undo_points(&mut self) {
+        let Some(latest) = self.undo.last() else {
+            return;
+        };
+        let (t, human) = (&self.table, self.human);
+        let revealed = match (&latest.state, &mut self.board) {
+            (Snapshot::Small(then), Boards::Small(b)) => b.reveals(then, t, human),
+            (Snapshot::Small(then), Boards::Large(b)) => b.reveals(&then.widen(), t, human),
+            (Snapshot::Large(then), Boards::Large(b)) => b.reveals(then, t, human),
+            (Snapshot::Large(_), Boards::Small(_)) => unreachable!("a game is never narrowed"),
+        };
+        if revealed {
+            self.undo.clear();
         }
+    }
+
+    /// Applies the agent's answer `c` to its decision. What it chose is something the human
+    /// could not know before, so no undo goes back past it.
+    fn agent_decides(&mut self, c: Choice) {
+        self.apply(Entry::Choice(c.0));
+        self.at = At::Playing;
+        self.undo.clear();
+    }
+
+    /// Passes the human's priority, at their open decision, with `answer` (checked by
+    /// [`OpenDecision::pass_on`]), and goes on passing it for them until their next stop in a
+    /// later step: where passing would stop them again in this one, for the stack resolving or
+    /// combat damage, this goes on past it. They stop sooner wherever the opponent does
+    /// something they could answer ([`Game::passes_for`]), and at every decision but a
+    /// priority. The choice log records an [`Entry::PassOn`] before the pass, so a replay
+    /// passes on the same way. [`Game::next_view`] plays on from it.
+    pub fn pass_on(&mut self, answer: Answer) {
+        let started = self.start_passing();
+        debug_assert!(started, "a pass on is checked against the open decision");
+        self.choose(answer);
+    }
+
+    /// Begins passing on to the human's next stop from their open decision, if it can pass on,
+    /// and records it. Returns whether it began.
+    fn start_passing(&mut self) -> bool {
+        let Some(until) = self.pass_on_target() else {
+            return false;
+        };
+        let turn = self.board.turn();
+        self.passing = Some(PassingOn {
+            until,
+            began: (turn.number, turn.step),
+        });
+        self.replay.log.push(Entry::PassOn);
+        true
+    }
+
+    /// The turn and step of the human's next stop in a later step, if their open decision is a
+    /// priority from which passing would stop them again in this one
+    /// ([`crate::protocol::DecisionView::pass_on`]).
+    fn pass_on_target(&mut self) -> Option<(u16, TurnStep)> {
+        if !matches!(&self.at, At::Human(_, Open::Decision(d)) if d.kind == DecisionKind::Priority)
+        {
+            return None;
+        }
+        let next = on_board!(&mut self.board, b => {
+            let obs = Observation::new(view(&b.state, &self.table, &mut b.scratch), self.human);
+            crate::protocol::pass_on(obs, self.stops)
+        })?;
+        let turn = self.board.turn().number;
+        Some(match next {
+            NextStop::Step(step) => (turn, step),
+            NextStop::NextTurn => (turn + 1, TurnStep::Untap),
+            NextStop::Resolve | NextStop::CombatDamage => {
+                unreachable!("a later step's stop is a step or the next turn")
+            }
+        })
+    }
+
+    /// Whether the session passes the human's priority for them as they pass on to their next
+    /// stop ([`Game::pass_on`]): short of it, and with nothing new from the opponent to answer.
+    /// The opponent's spells and abilities put on the stack since the human's latest answer
+    /// stop them, as do the opponent's attackers, or blockers in the human's attack, in a
+    /// combat step the pass did not begin in: the session's usual stops after them
+    /// ([`Game::quiet_combat`]).
+    fn passes_for(&self, passing: PassingOn) -> bool {
+        let turn = self.board.turn();
+        let at = (turn.number, turn.step);
+        if at >= passing.until {
+            return false;
+        }
+        let answered = self.answered.as_deref().unwrap_or_default();
+        let now = self.board.stack();
+        let kept = answered
+            .iter()
+            .zip(&now)
+            .take_while(|(then, now)| then == now)
+            .count();
+        if now[kept..].iter().any(|e| e.controller != self.human) {
+            return false;
+        }
+        let ours = turn.active == self.human;
+        let combat = match turn.step {
+            TurnStep::DeclareAttackers => !ours && self.board.any_attacking(),
+            TurnStep::DeclareBlockers => ours && self.any_blocking(),
+            _ => false,
+        };
+        !combat || at == passing.began
     }
 
     /// Checks `index` as an answer to the human's open decision `id`.
@@ -869,6 +955,7 @@ impl Game {
             panic!("an answer is checked against the open decision");
         };
         debug_assert_eq!(id, answer.id, "an answer names the open decision");
+        self.keep_undo_point();
         match open {
             Open::Decision(d) => {
                 // A cast or an activation from priority can be taken back until it is paid for.
@@ -878,6 +965,7 @@ impl Game {
                     answered: self.answered.clone(),
                     log: self.replay.log.len(),
                     stops: self.stops,
+                    undo: self.undo.len() - 1,
                 });
                 self.apply(Entry::Choice(answer.choice.0));
                 if let Some(before) = before {
@@ -1032,7 +1120,10 @@ impl Game {
                 }
                 Some(Step::Decide(d)) => At::Agent(d),
             };
-            self.note_turn_start();
+            if matches!(self.at, At::Human(..)) {
+                self.passing = None;
+                self.check_undo_points();
+            }
             return;
         }
     }
@@ -1050,6 +1141,10 @@ impl Game {
     /// the stops and the human's answers, so a replay finds each again; the replay records
     /// each as an [`Entry::Auto`].
     fn auto_answer(&self, d: &Decision<Large>) -> Option<Choice> {
+        if d.kind == DecisionKind::Priority && self.passing.is_some_and(|p| self.passes_for(p)) {
+            debug_assert_eq!(d.candidates.option(Choice(0)), Some(Opt::Pass));
+            return Some(Choice(0));
+        }
         if self.stops.full_control {
             return None;
         }
@@ -1271,9 +1366,6 @@ impl Game {
                 (At::Stopped, _) => Moment::Stopped,
             };
             let shown = view(&b.state, &self.table, &mut b.scratch);
-            if let Some(start) = &mut self.turn_start {
-                start.note(shown, &self.table, self.human);
-            }
             let obs = Observation::new(shown, self.human);
             let mut view = player_view(&self.table, obs, moment, self.stops, &events);
             if let Some(d) = &decision {
@@ -1288,15 +1380,14 @@ impl Game {
                 Side::Opponent
             }
         });
+        self.passes_on = self.pass_on_target();
         if let Status::Deciding { decision } = &mut view.status {
             decision.cancellable = self.cancellable();
-            decision.undo = self.undoable().then(|| {
-                if self.turn_start.as_ref().is_some_and(|t| t.peeked) {
-                    UndoView::Peeked
-                } else {
-                    UndoView::Clean
-                }
-            });
+            decision.undo = if self.undoable() {
+                u16::try_from(self.undo.len()).unwrap_or(u16::MAX)
+            } else {
+                0
+            };
         }
         view
     }

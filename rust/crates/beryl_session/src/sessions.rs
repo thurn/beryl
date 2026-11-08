@@ -163,9 +163,14 @@ impl Sessions {
         self.with(decision.session, |game| game.cancel(decision))
     }
 
-    /// Goes back from the human's open decision `decision` to the start of their turn.
+    /// Takes back the human's latest answer from their open decision `decision`.
     pub fn undo(&self, decision: DecisionId) -> Result<(), SessionError> {
         self.with(decision.session, |game| game.undo(decision))
+    }
+
+    /// Passes on from the human's open decision `decision` to their next stop.
+    pub fn pass_on(&self, decision: DecisionId) -> Result<(), SessionError> {
+        self.with(decision.session, |game| game.pass_on(decision))
     }
 
     /// Switches the human's priority stops in game `session`.

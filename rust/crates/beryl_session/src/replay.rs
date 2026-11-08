@@ -40,9 +40,12 @@ pub enum Entry {
     Auto(u16),
     /// The human conceded, at the open decision, theirs or the agent's.
     Concede,
-    /// The human went back from their open decision to the start of their turn
-    /// ([`crate::Game::undo`]): the entries since it began were taken back.
+    /// The human took back their latest answer from their open decision
+    /// ([`crate::Game::undo`]): the entries since that answer was asked were taken back.
     Undo,
+    /// The human passed on to their next stop from their open priority
+    /// ([`crate::Game::pass_on`]): the pass follows, and the session passes for them after it.
+    PassOn,
 }
 
 impl ReplayFile {

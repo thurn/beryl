@@ -81,12 +81,13 @@ export function TurnButton({
 }: { label: string } & ButtonHTMLAttributes<HTMLButtonElement>) {
   const labelRef = useTextFit(label);
   return (
-    <Button icon={<FastForwardIcon />} labelRef={labelRef} {...rest}>
+    <Button labelRef={labelRef} {...rest}>
       {label}
     </Button>
   );
 }
 
+/** Passing on to the next stop (Board.tsx' pass-on button). */
 export function FastForwardIcon() {
   return (
     <svg viewBox="0 0 24 16" aria-hidden>
@@ -359,7 +360,7 @@ export function Tip({
 }: {
   /** Where it opens: toward the middle of the table from the parent's edge of it, or over the
    * parent's middle where nothing beside it is free (your piles, under your badge). */
-  side: "above" | "below" | "over";
+  side: "above" | "below" | "over" | "left";
   children: ReactNode;
 }) {
   return (

@@ -64,7 +64,8 @@ export interface FixtureCall {
  * given `at`, the first `at` (or all but the last `-at`, if negative), and then after each `choose` the views up to the next one the
  * player answers or the end, as if the app played on from the recorded answer. A `cancel`
  * goes back to the priority the cast began at, shown again with nothing happening in it, and
- * the next `choose` plays the recording on from there. The events a listener gets as it
+ * the next `choose` plays the recording on from there; an `undo` goes back to the decision before
+ * the latest, shown again as undone; a `pass_on` plays on as a `choose` does. The events a listener gets as it
  * starts listening are past; those released by `choose` and `cancel` happen live.
  * Every command is logged in `calls`. A fixture is the app's own recording, so its values are taken as their
  * commands' types. */
@@ -105,11 +106,46 @@ export function fixtureTransport(
       }
     });
   const calls: FixtureCall[] = [];
+  const viewAt = (i: number) =>
+    (events[i]?.payload as Events["game-update"] | undefined)?.view;
+  /** Shows the recorded view `at` again, with nothing happening in it, `undone` if so; the
+   * next `choose` plays the recording on from there. */
+  const showAgain = (at: number, undone: boolean) => {
+    const update = events[at]!.payload as Events["game-update"];
+    released = at + 1;
+    queueMicrotask(() => {
+      for (const l of [...listeners]) {
+        if (l.event === "game-update" && listeners.has(l)) {
+          l.handler(
+            {
+              ...update,
+              view: { ...update.view, events: [], undone },
+            } as never,
+            false,
+          );
+        }
+      }
+    });
+    return Promise.resolve(null);
+  };
+  /** Takes back the latest answer: the decision before the latest view's, again. */
+  const undo = () => {
+    const latest = viewAt(released - 1);
+    if (latest?.status.kind !== "deciding" || !latest.status.decision.undo) {
+      return Promise.reject(
+        new CommandError("undo", { kind: "nothingToUndo" }),
+      );
+    }
+    let at = released - 1;
+    while (at > 0) {
+      at -= 1;
+      if (viewAt(at)?.status.kind === "deciding") break;
+    }
+    return showAgain(at, true);
+  };
   /** Takes back the cast the latest view is part of: its priority again, as it was. */
   const cancel = () => {
-    const view = (i: number) =>
-      (events[i]?.payload as Events["game-update"] | undefined)?.view;
-    const latest = view(released - 1);
+    const latest = viewAt(released - 1);
     if (
       latest?.status.kind !== "deciding" ||
       !latest.status.decision.cancellable
@@ -121,26 +157,14 @@ export function fixtureTransport(
     let at = released - 1;
     while (at > 0) {
       at -= 1;
-      const v = view(at);
+      const v = viewAt(at);
       if (
         v?.status.kind === "deciding" &&
         v.status.decision.kind === "priority"
       )
         break;
     }
-    const update = events[at]!.payload as Events["game-update"];
-    released = at + 1;
-    queueMicrotask(() => {
-      for (const l of [...listeners]) {
-        if (l.event === "game-update" && listeners.has(l)) {
-          l.handler(
-            { ...update, view: { ...update.view, events: [] } } as never,
-            false,
-          );
-        }
-      }
-    });
-    return Promise.resolve(null);
+    return showAgain(at, false);
   };
   return {
     calls,
@@ -156,17 +180,16 @@ export function fixtureTransport(
     invoke<C extends Command>(command: C, args: Args<C>): Promise<Result<C>> {
       calls.push({ command, args });
       if (command === "cancel") return cancel() as Promise<Result<C>>;
-      // A recording holds one line of play: there is no turn start to go back to.
-      if (command === "undo") {
-        return Promise.reject(
-          new CommandError("undo", { kind: "nothingToUndo" }),
-        );
-      }
-      const queue = responses.get(command);
+      if (command === "undo") return undo() as Promise<Result<C>>;
+      // A recording holds one line of play: passing on plays it on as its next answer did.
+      const queue = responses.get(command === "pass_on" ? "choose" : command);
       if (!queue || queue.length === 0) {
         return Promise.reject(new Error(`fixture: no response for ${command}`));
       }
-      if (command === "choose" && released < events.length) {
+      if (
+        (command === "choose" || command === "pass_on") &&
+        released < events.length
+      ) {
         const from = released;
         let last;
         do {
@@ -389,10 +412,15 @@ export const setStops = (session: SessionId, stops: StopsSetting) =>
 export const cancel = (decision: DecisionId) =>
   call("cancel", { request: { decision } });
 
-/** Goes back from the open decision `decision` to the start of the human's latest turn
- * (`DecisionView.undo`); the view of it arrives again. */
+/** Takes back the human's latest answer from the open decision `decision`
+ * (`DecisionView.undo`); the view of the decision it answered arrives again. */
 export const undo = (decision: DecisionId) =>
   call("undo", { request: { decision } });
+
+/** Passes the human's priority from the open decision `decision` on to their next stop
+ * (`DecisionView.passOn`); the views as the game plays on arrive. */
+export const passOn = (decision: DecisionId) =>
+  call("pass_on", { request: { decision } });
 
 /** The human concedes game `session`; the view of its end arrives at the next decision. */
 export const concede = (session: SessionId) =>

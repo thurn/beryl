@@ -1180,6 +1180,60 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Passing on to the next stop: a round icon button left of the turn button, which stays put,
+   in the turn button's orange (components.css .button-primary); full control's sign moves
+   over for it. The face is a child, so the button frames nothing and its tip stands free. */
+.dock .turn-action .pass-on-button {
+  position: absolute;
+  right: calc(100% + var(--button-gap));
+  top: 0;
+  width: var(--button-height);
+  height: var(--button-height);
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.pass-on-face {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border-width: 1.5px;
+  border-style: solid;
+  color: #fffaf2;
+  transition:
+    filter 0.15s,
+    transform 0.15s;
+}
+.pass-on-button:hover .pass-on-face {
+  filter: brightness(1.1);
+}
+.pass-on-button:active .pass-on-face {
+  transform: translateY(1px);
+}
+.pass-on-button:focus-visible {
+  outline: none;
+}
+.pass-on-button:focus-visible .pass-on-face {
+  outline: 2px solid var(--metal-bright);
+  outline-offset: 3px;
+}
+/* The glyph's ink leans left of its box (each triangle's weight sits toward its base): nudged
+   right so it reads centered in the circle. */
+.pass-on-face > svg {
+  width: 22px;
+  transform: translateX(1.5px);
+  filter: drop-shadow(0 1px 1px rgb(70 25 4 / 75%));
+}
+.turn-controls:has(.pass-on-button) .full-control {
+  right: calc(301px + var(--button-height) + var(--button-gap));
+}
+/* A control's tip stands over the cards while it shows: its row or dock is raised for it. */
+.turn-controls > :has(.has-tip:hover, .has-tip:focus-visible) {
+  z-index: 1000;
+}
 /* The turn button: its icon and label centered together, a label too long for it shrinking
    to fit (Controls.tsx' TurnButton); its caption or the priority pill under it, standing
    centered out over both sides, so nothing moves between states. */
@@ -2366,12 +2420,13 @@
     0 0 18px var(--turn-glow),
     0 2px 3px rgb(0 0 0 / 90%);
 }
-/* Under the gear, in its brushed metal, right of the opponent's piles: back to the start of
-   the player's turn. A red eye marks an undo made having seen hidden cards since. */
-.undo-button {
+/* Under the gear, in its brushed metal, right of the opponent's piles: takes back the latest
+   answer. Over the cards, so its tip opens over the opponent's piles. */
+.undo-button.has-tip {
   position: absolute;
   right: 0;
   top: 72px;
+  z-index: 1000;
   width: 72px;
   height: 48px;
   padding: 0;
@@ -2398,37 +2453,8 @@
 .undo-button:hover .undo-arrow {
   stroke: #9a9899;
 }
-.undo-eye path {
-  fill: #d8332a;
-  stroke: rgb(24 22 21 / 85%);
-  stroke-width: 0.8;
-}
-.undo-eye circle {
-  fill: #1b1110;
-}
-.undo-tip {
-  position: absolute;
-  right: 68px;
-  top: 4px;
-  display: none;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  background: rgb(14 13 12 / 92%);
-  box-shadow: 0 2px 8px rgb(0 0 0 / 50%);
-  color: #e8e2d6;
-  font-size: 13px;
-  text-align: right;
-  white-space: nowrap;
-  pointer-events: none;
-}
-.undo-button:hover .undo-tip,
-.undo-button:focus-visible .undo-tip {
-  display: flex;
-}
-.undo-tip-peeked {
-  color: #ff8a80;
+.undo-button > .tip {
+  margin-right: -14px;
 }
 
 /* The mode chooser (game/ModeChooser.tsx): a card's uses side by side mid-table over a

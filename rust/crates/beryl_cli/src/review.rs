@@ -110,9 +110,9 @@ fn review(path: &Path, searcher_name: Option<&str>, only: Option<u16>) -> Result
     let mut transcript = Transcript::new(names);
     let mut log = file.log.iter();
     let mut stops = file.stops;
-    // The position an undo goes back to: the turn and the state at the human's first stop in a
-    // turn of theirs, as `Game::undo` keeps it.
-    let mut turn_start: Option<(u16, State)> = None;
+    // The positions an undo goes back to, one per answer of the human's, the latest last, as
+    // `Game::undo` keeps them: the state at each decision or halt they answered.
+    let mut points: Vec<State> = Vec::new();
     loop {
         match next(&mut s, &t, &mut x, &mut Replay) {
             Step::Over(outcome) => {
@@ -128,14 +128,17 @@ fn review(path: &Path, searcher_name: Option<&str>, only: Option<u16>) -> Result
                     transcript.note("(the review stops after the turn it was asked for)");
                     break;
                 }
-                let mut halted = false;
                 let entry = loop {
                     match log.next() {
                         Some(&Entry::Stops(changed)) => {
                             stops = changed;
                             s.set_profile(with_stops(s.profile(), stops, human));
                         }
-                        Some(Entry::Halt) => halted = true,
+                        // A halt is the session's: only decisionless play separates it from
+                        // this decision.
+                        Some(Entry::Halt) => points.push(before),
+                        // The session passes for the human after it; each pass is logged.
+                        Some(Entry::PassOn) => {}
                         Some(Entry::Concede) => {
                             transcript.note("(the human conceded)");
                             break None;
@@ -143,31 +146,23 @@ fn review(path: &Path, searcher_name: Option<&str>, only: Option<u16>) -> Result
                         entry => break entry.copied(),
                     }
                 };
-                // The session keeps the turn's start where it first stops for the human in
-                // their turn: at a halt, which only decisionless play separates from this
-                // decision, or at a decision of theirs it did not answer for them.
-                let turn = before.turn();
-                if turn.active == human
-                    && turn.number > 0
-                    && turn_start.is_none_or(|(n, _)| n != turn.number)
-                    && (halted
-                        || d.player == human
-                            && matches!(entry, Some(Entry::Choice(_) | Entry::Undo)))
-                {
-                    turn_start = Some((turn.number, before));
+                match entry {
+                    Some(Entry::Choice(_)) if d.player == human => points.push(before),
+                    // What the agent chose, the human could not know: no undo goes back past it.
+                    Some(Entry::Choice(_)) => points.clear(),
+                    _ => {}
                 }
                 let c = match entry {
                     Some(Entry::Choice(c) | Entry::Auto(c)) => c,
                     Some(Entry::Undo) => {
-                        let Some((number, start)) = turn_start else {
-                            return Err("an undo with nothing to go back to".to_owned());
+                        let Some(point) = points.pop() else {
+                            return Err("an undo with nothing to take back".to_owned());
                         };
                         // Stops changed since stay changed, as `Game::undo` keeps them.
-                        s = start;
+                        s = point;
                         s.set_profile(with_stops(s.profile(), stops, human));
                         x.events.drain().for_each(drop);
-                        transcript
-                            .note(&format!("(the human undoes to the start of turn {number})"));
+                        transcript.note("(the human takes back an answer)");
                         continue;
                     }
                     _ => {
@@ -256,8 +251,8 @@ mod tests {
     }
 
     /// A game against greedy in which the human plays a land when they can and otherwise
-    /// passes, for `answers` answers. With `undo`, once past the start of a turn of theirs from
-    /// the fifth on they undo to it, then answer as before, which plays the same game again.
+    /// passes, for `answers` answers. With `undo`, once they can from the fifth turn on, they
+    /// take back their latest answer, then answer as before, which plays the same game again.
     fn play(answers: usize, undo: bool) -> (ReplayFile, bool) {
         let start = StartGame {
             seed: 3,
@@ -272,7 +267,7 @@ mod tests {
         let (mut undone, mut answered) = (false, 0);
         while answered < answers {
             let Some(d) = deciding(&view) else { break };
-            if undo && !undone && d.undo.is_some() && view.turn.number >= 5 {
+            if undo && !undone && d.undo > 0 && view.turn.number >= 5 {
                 view = game.undo().unwrap();
                 undone = true;
                 continue;
@@ -301,8 +296,8 @@ mod tests {
         text.unwrap()
     }
 
-    /// A replay with an undo reviews as the game went: the turn up to the undo, then that turn
-    /// again from its start, as a game played straight through shows it.
+    /// A replay with an undo reviews as the game went: the game up to the undo, then again from
+    /// the answer taken back, as a game played straight through shows it.
     #[test]
     fn review_goes_back_with_an_undo() {
         let (with_undo, undone) = play(40, true);
@@ -311,7 +306,7 @@ mod tests {
         let with_undo = reviewed(&with_undo, "undo");
         let straight = reviewed(&straight, "straight");
         let (before, after) = with_undo
-            .split_once("(the human undoes to the start of turn")
+            .split_once("(the human takes back an answer)")
             .expect("the review notes the undo");
         let (_, after) = after.split_once('\n').unwrap();
         assert!(straight.starts_with(before), "before the undo:\n{before}");

@@ -31,6 +31,7 @@ import {
   PriorityPill,
   Tip,
   TurnButton,
+  FastForwardIcon,
 } from "../components/Controls";
 import {
   CostText,
@@ -190,9 +191,10 @@ export interface BoardProps {
   /** Takes back the spell or ability being cast, at a decision that may
    * (`DecisionView.cancellable`). */
   cancel?(): void;
-  /** Goes back to the start of the player's turn, at a decision that may
-   * (`DecisionView.undo`). */
+  /** Takes back the player's latest answer, at a decision that may (`DecisionView.undo`). */
   undo?(): void;
+  /** Passes on to the player's next stop, at a priority that may (`DecisionView.passOn`). */
+  passOn?(): void;
   /** The player's stops (decision D13), as last chosen: the view's until a change arrives. */
   stops: StopsSetting;
   /** Changes the player's stops: full control, or a phase stop (stops.ts). */
@@ -244,6 +246,7 @@ export function Board({
   choose,
   cancel,
   undo,
+  passOn,
   stops,
   setStops,
   onLeave,
@@ -346,6 +349,9 @@ export function Board({
   // table, or from it while a screen asking about the cast is put aside to see the table
   // (inert, but not dimmed).
   const cancellable = !waiting && !dimmed && decision?.cancellable === true;
+  // An answer can be taken back, one per press.
+  const undoable =
+    !inert && !waiting && undo !== undefined && (decision?.undo ?? 0) > 0;
   // The prompt or the cast step sits over the turn controls; the stack rises to clear it.
   const asking = prompting || castingNow !== undefined;
   // The log stays folded to its button until opened; opened while the rows reach into its
@@ -990,8 +996,9 @@ export function Board({
     setDraft({ ...draft, attacks, selected: undefined });
   };
 
-  // The keyboard (Arena's): Space or Enter does the primary action, passing or confirming, and
-  // Escape takes back what was begun. A menu, the cast step and a pile's viewer close on
+  // The keyboard (Arena's): Space or Enter does the primary action, passing or confirming,
+  // Shift with either passes on to the next stop, Escape takes back what was begun and
+  // Cmd-Z (Ctrl-Z) the latest answer. A menu, the cast step and a pile's viewer close on
   // Escape themselves; a focused button takes its own Space and Enter.
   const onKey = useRef<(e: KeyboardEvent) => void>(undefined);
   onKey.current = (e) => {
@@ -1003,11 +1010,30 @@ export function Board({
       return;
     }
     if (inert) return;
+    if (
+      e.key.toLowerCase() === "z" &&
+      (e.metaKey || e.ctrlKey) &&
+      !e.shiftKey &&
+      !e.repeat
+    ) {
+      if (undoable) {
+        e.preventDefault();
+        undo?.();
+      }
+      return;
+    }
     if ((e.key !== " " && e.key !== "Enter") || e.repeat || menu || viewed) {
       return;
     }
     const target = e.target instanceof Element ? e.target : null;
     if (target?.closest("button, input, select, textarea, a")) return;
+    if (e.shiftKey && !onSkip) {
+      if (passesOn) {
+        e.preventDefault();
+        passOnNow();
+      }
+      return;
+    }
     if (onSkip) {
       e.preventDefault();
       onSkip();
@@ -1048,6 +1074,22 @@ export function Board({
     : decision?.passTo
       ? passButton(view, decision.passTo)
       : { label: "Pass", caption: "" };
+  // Passing on to the next stop, beside the turn button where passing would stop again in
+  // this step: as the top of the stack resolves, or combat damage.
+  const passesOn =
+    !waiting &&
+    !castingNow &&
+    !chooser &&
+    passOn !== undefined &&
+    decision?.kind === "priority" &&
+    decision.passOn !== null &&
+    can.pass !== undefined;
+  const passOnNow = () => {
+    if (!passesOn) return;
+    // It passes on out of this step, whose mana empties (CR 500.4).
+    if (floating(you.mana)) setLost((n) => n + 1);
+    passOn();
+  };
   const arrows = useMemo(() => boardArrows(shown), [shown]);
   const announcement = combatBanner(view) ?? coinFlipBanner(view);
   const banner = announcement;
@@ -1287,6 +1329,23 @@ export function Board({
                       pick(can.pass);
                     }}
                   />
+                  {passesOn && decision.passOn && (
+                    <button
+                      type="button"
+                      className="pass-on-button has-tip"
+                      aria-label={passButton(view, decision.passOn).caption}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={passOnNow}
+                    >
+                      <span className="pass-on-face button-primary">
+                        <FastForwardIcon />
+                      </span>
+                      <Tip side="above">
+                        {passButton(view, decision.passOn).caption}
+                        <kbd>⇧ Space</kbd>
+                      </Tip>
+                    </button>
+                  )}
                   {/* While you wait, the priority pill takes the caption's place under the
                   button, leaving the tracker showing the phase. */}
                   {waiting ? (
@@ -1420,9 +1479,7 @@ export function Board({
           />
         )}
 
-        {!inert && !waiting && undo && decision?.undo && (
-          <UndoButton peeked={decision.undo === "peeked"} onUndo={undo} />
-        )}
+        {!inert && undoable && <UndoButton onUndo={undo} />}
         {/* Like the turn's controls, the gear gives way to a screen over the table. */}
         {!inert && (
           <button
@@ -1589,21 +1646,14 @@ const INSPECT_MIN_WIDTH = 230;
  * opponent's orb and above yours (y 159 and 618), with room for the artist's line. */
 const BETWEEN_ORBS_AND_STACK = { left: 940, top: 172, width: 258 };
 
-/** Under the gear: goes back to the start of the player's turn. Once they have seen a card
- * since that they did not know there, a red eye says so, and hovering says what it means. */
-function UndoButton({
-  peeked,
-  onUndo,
-}: {
-  peeked: boolean;
-  onUndo: () => void;
-}) {
-  const label = peeked ? "Undo turn, having seen hidden cards" : "Undo turn";
+/** Under the gear: takes back the player's latest answer, one per press, back to where the
+ * opponent last acted or a card they had not seen came out. */
+function UndoButton({ onUndo }: { onUndo: () => void }) {
   return (
     <button
       type="button"
-      className={peeked ? "undo-button undo-peeked" : "undo-button"}
-      aria-label={label}
+      className="undo-button has-tip"
+      aria-label="Undo"
       onPointerDown={(e) => e.stopPropagation()}
       onClick={onUndo}
     >
@@ -1612,24 +1662,16 @@ function UndoButton({
           className="undo-arrow"
           d="M8.5 4.5 4 9l4.5 4.5M4 9h10a5.5 5.5 0 0 1 0 11h-4"
         />
-        {peeked && (
-          <g className="undo-eye">
-            <path d="M12.5 17.5c1.6-2.6 3.8-3.9 5.75-3.9s4.15 1.3 5.75 3.9c-1.6 2.6-3.8 3.9-5.75 3.9s-4.15-1.3-5.75-3.9Z" />
-            <circle cx="18.25" cy="17.5" r="1.7" />
-          </g>
-        )}
       </svg>
-      <span className="undo-tip" role="tooltip">
-        <span>Undo turn</span>
-        {peeked && (
-          <span className="undo-tip-peeked">
-            You've seen hidden cards since
-          </span>
-        )}
-      </span>
+      <Tip side="left">
+        Undo<kbd>{MOD_KEY}Z</kbd>
+      </Tip>
     </button>
   );
 }
+
+/** The platform's command modifier, as its keyboard shortcuts name it. */
+const MOD_KEY = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl ";
 
 /** The settings gear at the top right. */
 function Gear() {
