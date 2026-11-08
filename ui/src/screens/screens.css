@@ -1493,6 +1493,116 @@
   color: var(--text-dim);
   font-size: 13px;
 }
+/* Sound (audio/SoundControls.tsx): mute beside the music and effects sliders, in the game's
+   settings and over the start screen's corner. */
+.sound-panel {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.sound-levels {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sound-muted .sound-levels {
+  opacity: 0.45;
+}
+.sound-level {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--text-dim);
+}
+.sound-level input {
+  width: 150px;
+  margin: 0;
+  accent-color: var(--gold);
+}
+.sound-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.sound-icon-fill {
+  fill: currentColor;
+}
+.sound-mute[aria-pressed="true"] {
+  color: var(--ember);
+}
+.sound-corner {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.corner-panel {
+  position: absolute;
+  right: 0;
+  bottom: 56px;
+  padding: 14px 16px;
+  border: 1px solid var(--metal);
+  border-radius: 10px;
+  background: rgb(33 31 28 / 96%);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 55%);
+  font-family: var(--font-sans);
+  color: var(--type);
+}
+.credits-button {
+  padding: 4px 6px;
+  border: 0;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.credits-button:hover,
+.credits-button:focus-visible,
+.credits-button[aria-expanded="true"] {
+  outline: none;
+  color: var(--text);
+}
+.credits {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.credit {
+  display: grid;
+  grid-template-columns: 56px auto;
+  gap: 12px;
+}
+.credit dt {
+  color: var(--text-dim);
+}
+.credit dd {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+}
+.credit-author small {
+  margin-left: 4px;
+  color: var(--text-dim);
+}
+.credit a {
+  color: var(--gold);
+  text-decoration: none;
+}
+.credit a:hover,
+.credit a:focus-visible {
+  text-decoration: underline;
+}
 /* A decision other than priority, the cast step and the questions asked in words: the
    floating prompt (game/FloatPrompt.tsx). Its title and buttons stand in the action dock; what
    it shows to choose among (cards off the table, triggers to order, a crew meter) mid-table,

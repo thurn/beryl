@@ -38,6 +38,8 @@ import { useHoverInspect, type HoverHandlers } from "../game/Piles";
 import { eventsHold, HOLD, type Playback } from "../game/playback";
 import { Stage } from "../game/Stage";
 import { sameStops, savedStops, saveStops } from "../game/stops";
+import { play } from "../audio/sound";
+import { SoundCorner } from "../audio/SoundControls";
 
 /** The agent that plays on the true state, hidden cards included. */
 const CHEATING = "mcts-omniscient";
@@ -117,6 +119,7 @@ export function StartScreen({
       return;
     }
     starting.current = true;
+    play("start");
     rememberGame(agent, seed.trim());
     setPending(true);
     setError(undefined);
@@ -154,6 +157,7 @@ export function StartScreen({
   return (
     <Stage>
       <div className="table start-screen">
+        <SoundCorner />
         <section className="start-panel">
           <h1 className="start-title">New Game</h1>
           <p className="start-subtitle">WU Control mirror</p>

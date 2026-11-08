@@ -1,11 +1,12 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { MotionConfig } from "motion/react";
-import { appInfo, canReportBugs, uiReady } from "./ipc";
+import { appInfo, canReportBugs, uiReady, type OutcomeView } from "./ipc";
 import { BugReporter } from "./components/BugReport";
 import { Gallery } from "./screens/Gallery";
 import { Specs } from "./screens/Specs";
 import { GameScreen, StartScreen } from "./screens/Game";
 import { usePlayback } from "./game/playback";
+import { useMusic } from "./audio/SoundControls";
 
 // Routes live in the hash so they work from the Tauri asset server and from Vite alike.
 const subscribe = (onChange: () => void) => {
@@ -28,9 +29,9 @@ function Main() {
   const path = useSyncExternalStore(subscribe, route);
   // Listening from the start, so a game's first view is never missed.
   const { playback, starting, resuming, resumed, start } = usePlayback();
-  const status = playback?.update.view.status.kind;
+  const status = playback?.update.view.status;
   const inProgress =
-    playback && status !== "over" && status !== "stopped"
+    playback && status?.kind !== "over" && status?.kind !== "stopped"
       ? playback.update.session
       : undefined;
 
@@ -39,6 +40,19 @@ function Main() {
   useEffect(() => {
     if (path === "/game") setReturned(true);
   }, [path]);
+
+  // The menu's music, the game's, then a sting for how it ended; the gallery is quiet.
+  useMusic(
+    path === "/gallery"
+      ? undefined
+      : path !== "/game"
+        ? "menu"
+        : status?.kind !== "over"
+          ? "game"
+          : won(status.outcome)
+            ? "win"
+            : "loss",
+  );
 
   // The app hears the UI has loaded once it has answered a first command.
   useEffect(() => {
@@ -69,3 +83,6 @@ function Main() {
     </MotionConfig>
   );
 }
+
+const won = (outcome: OutcomeView) =>
+  outcome.kind === "win" && outcome.winner === "you";

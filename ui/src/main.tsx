@@ -8,8 +8,10 @@ import "./design/tokens.css";
 import "./design/components.css";
 import "./screens/screens.css";
 import { installDiagnostics } from "./diagnostics";
+import { installAudio } from "./audio/sound";
 
 installDiagnostics();
+installAudio();
 
 createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>

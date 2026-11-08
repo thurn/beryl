@@ -526,6 +526,15 @@ export const artAvailable = () =>
   liveBase() !== undefined ||
   new URLSearchParams(window.location.search).has("art");
 
+/** Whether the page plays sound (audio/sound.ts): the app, a live browser (`?live=`) or one
+ * asked to (`?audio`), and never a page under automation (Playwright: `just ui-shots`,
+ * `ui-test`, the specs, an agent driving a live game), which only logs its cues. */
+export const audioAvailable = () =>
+  !navigator.webdriver &&
+  ("__TAURI_INTERNALS__" in window ||
+    liveBase() !== undefined ||
+    new URLSearchParams(window.location.search).has("audio"));
+
 // Card images come from the app's `beryl-art` URI scheme (rust/crates/beryl_app/src/art.rs),
 // which serves Scryfall's image paths from a disk cache and downloads misses: a card's from its
 // image host, the card back's (under `/backs`) from its back host.

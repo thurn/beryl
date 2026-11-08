@@ -169,6 +169,7 @@ import {
 } from "./Piles";
 import { ManaFlow, manaMotes } from "./ManaFlow";
 import { TurnBanner } from "./TurnBanner";
+import { SoundPanel } from "../audio/SoundControls";
 
 export interface BoardProps {
   view: PlayerView;
@@ -1546,6 +1547,7 @@ export function Board({
         )}
         {settings && !inert && (
           <div className="settings" onPointerDown={(e) => e.stopPropagation()}>
+            <SoundPanel />
             <label className="settings-toggle">
               <input
                 type="checkbox"
