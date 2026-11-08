@@ -140,9 +140,14 @@ export async function clippedText(page) {
  * line counts. A scrolling ancestor ends the search, since text scrolled out of view is
  * reachable, and so does a card's frame: a card may lie partly off the table or under another.
  * Text not on a card is also cut where a card on the table lies over it, as permanents once hid
- * the game log. Each is described by its text and how it is cut, for a failure message. */
+ * the game log. Each is described by its text and how it is cut, for a failure message. It
+ * first waits for the fonts: before they load, text shows in a fallback with other metrics (a
+ * P/T's numerals standing out of their plaque), as on a machine busy enough to slow them. */
 export function cutText(page) {
-    return page.evaluate(() => {
+    return page.evaluate(async () => {
+        // Laid out first, so every font the page shows has begun to load.
+        void document.body.offsetWidth;
+        await document.fonts.ready;
         const CARD = ".card-slot, .card-back";
         const scrolls = (v) => v === "auto" || v === "scroll";
         const boxed = (s) =>
