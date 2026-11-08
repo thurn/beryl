@@ -10,36 +10,14 @@ import {
   currentGame,
   onGameUpdate,
   startGame,
-  type GameEvent,
   type GameUpdate,
   type PlayerView,
 } from "../ipc";
-import type { ObjectView } from "../generated/protocol";
-import { withResolving } from "./decisions";
+import { beats, eventsHold } from "./beats";
+import type { Spotlight } from "./layout";
 import { learnNames, logLines, type LogEntry, type Names } from "./log";
 
-/** How long a view holds the screen before the next one, in milliseconds: a step passing
- * briefly, a new turn while it is announced, an action long enough to follow, a spell or ability the opponent puts on the stack
- * long enough to read before it resolves unanswered, a counter longest; and the game's last
- * view a beat more before the result covers it, so the play that ended it is seen. */
-export const HOLD = {
-  step: 300,
-  turn: 1100,
-  action: 900,
-  trigger: 1300,
-  stack: 2000,
-  counter: 1800,
-  ending: 1600,
-  /** A spell or ability resolving against another spell, held on the stack with its arrow to
-   * its target before the target is hit. */
-  resolving: 900,
-  /** The spell it hit, struck (CardLayer's shake) and then carried to its zone, in a view of
-   * its own so that the eye follows it. */
-  hit: 1500,
-  /** A card drawn and put elsewhere by the same resolution (a loot's discard), shown arriving
-   * in its owner's hand before it leaves. */
-  drawn: 700,
-};
+export { eventsHold, HOLD } from "./beats";
 
 /** The log keeps this many entries. */
 const LOG_LENGTH = 200;
@@ -56,159 +34,27 @@ export function holdFor(view: PlayerView): number {
   return eventsHold(view);
 }
 
-/** Holds of the views `beats` made, which their events would not give. */
+/** Holds of the views `beats` made, which their events would not give, and the cards each
+ * shows in a showcase. */
 const BEAT_HOLDS = new WeakMap<GameUpdate, number>();
+const SPOTLIGHTS = new WeakMap<GameUpdate, Spotlight>();
 
 /** How long `update` stays: its beat's hold, or `holdFor` its view. */
 function holdOf(update: GameUpdate): number {
   return BEAT_HOLDS.get(update) ?? holdFor(update.view);
 }
 
-/** `update` as the beats a player can follow: a card drawn and put elsewhere by one
- * resolution first arrives in its owner's hand ([`drawnBeat`]), and a spell countered or
- * bounced is struck before it goes ([`hitBeats`]). `before`, the view last shown or queued,
- * says where things were; with none it is one beat. */
-export function beats(
+/** `update` as the views a player can follow (beats.ts), after `before`, the view last shown
+ * or queued. */
+function split(
   before: GameUpdate | undefined,
   update: GameUpdate,
 ): GameUpdate[] {
-  if (!before) return [update];
-  const drawn = drawnBeat(before, update);
-  return drawn ? [drawn, ...hitBeats(drawn, update)] : hitBeats(before, update);
-}
-
-/** The beat of the cards `update` draws and puts elsewhere before it shows them (a loot's
- * draw and discard), arriving in their owner's hand: a card goes from library to graveyard by
- * way of the hand, where the eye expects it, rather than straight across, which on the
- * opponent's side is a hop between neighboring piles. Face down when the viewer doesn't know
- * it. None if `update` draws nothing it moves on. */
-function drawnBeat(
-  before: GameUpdate,
-  update: GameUpdate,
-): GameUpdate | undefined {
-  const { view } = update;
-  const was = withResolving(before.view);
-  const from = new Map(was.objects.map((o) => [o.slot, o]));
-  const passed = new Set(
-    view.events.flatMap((e) =>
-      e.kind === "zoneChange" &&
-      e.from === "hand" &&
-      from.get(e.slot)?.zone === "library"
-        ? [e.slot]
-        : [],
-    ),
-  );
-  if (passed.size === 0) return undefined;
-  const now = new Map(view.objects.map((o) => [o.slot, o]));
-  const inHand = (o: ObjectView): ObjectView => {
-    const seen = o.owner === "you" ? (now.get(o.slot) ?? o) : o;
-    return { ...seen, zone: "hand" };
-  };
-  const players = { ...was.players };
-  for (const side of ["you", "opponent"] as const) {
-    players[side] = {
-      ...was.players[side],
-      library: was.players[side].library.filter((s) => !passed.has(s)),
-    };
-  }
-  const drawn: GameUpdate = {
-    ...update,
-    view: {
-      ...was,
-      status: { kind: "playing" },
-      objects: was.objects.map((o) => (passed.has(o.slot) ? inHand(o) : o)),
-      players,
-      events: [],
-    },
-  };
-  BEAT_HOLDS.set(drawn, HOLD.drawn);
-  return drawn;
-}
-
-/** `update` as the beats a player can follow when it counters or bounces a spell: the spell
- * resolving against it shown on the stack with its arrow, then the target struck and carried
- * to its owner's hand, graveyard or exile while the resolving spell stays on the stack, and
- * only then the view itself, in which that spell goes to its graveyard and what follows (a
- * card drawn) plays. `before`, the view last shown or queued, says what the stack held; with
- * no such pair it is one beat. */
-function hitBeats(before: GameUpdate, update: GameUpdate): GameUpdate[] {
-  const { view } = update;
-  const hit = view.events.find(
-    (e) =>
-      e.kind === "zoneChange" &&
-      e.from === "stack" &&
-      e.to !== "battlefield" &&
-      e.reason !== "resolve" &&
-      e.reason !== "cast" &&
-      e.reason !== "play",
-  );
-  if (hit?.kind !== "zoneChange") return [update];
-  const was = withResolving(before.view);
-  const at = was.stack.findIndex(
-    (item) => item.kind === "spell" && item.slot === hit.slot,
-  );
-  const target = view.objects.find((o) => o.slot === hit.slot);
-  if (at < 0 || !target || at + 1 >= was.stack.length) return [update];
-  // The table as it was before the hit, with nothing for the player to answer.
-  const first: PlayerView = {
-    ...was,
-    status: { kind: "playing" },
-    events: [],
-  };
-  const owner = was.players[target.owner];
-  const second: PlayerView = {
-    ...first,
-    objects: was.objects.map((o) => (o.slot === hit.slot ? target : o)),
-    stack: was.stack.filter((_, i) => i !== at),
-    players:
-      hit.to === "graveyard"
-        ? {
-            ...was.players,
-            [target.owner]: {
-              ...owner,
-              graveyard: [...owner.graveyard, hit.slot],
-            },
-          }
-        : was.players,
-    events: [hit],
-  };
-  const rest: GameUpdate = {
-    ...update,
-    view: { ...view, events: view.events.filter((e) => e !== hit) },
-  };
-  const out = [{ ...update, view: first }, { ...update, view: second }, rest];
-  BEAT_HOLDS.set(out[0]!, HOLD.resolving);
-  BEAT_HOLDS.set(out[1]!, HOLD.hit);
-  return out;
-}
-
-/** How long `view`'s events take to play out, in milliseconds. */
-export function eventsHold(view: PlayerView): number {
-  return Math.max(0, ...view.events.map(eventHold));
-}
-
-function eventHold(e: GameEvent): number {
-  switch (e.kind) {
-    case "stepBegins":
-      // A new turn holds while it is announced (TurnBanner), before anything is played in it.
-      return e.step === "untap" ? HOLD.turn : HOLD.step;
-    case "draw":
-    case "tap":
-    case "untap":
-      return HOLD.step;
-    case "zoneChange":
-      return e.reason === "counter" ? HOLD.counter : HOLD.action;
-    // The player's own casts they just chose; the opponent's they have to read.
-    case "cast":
-      return e.controller === "opponent" ? HOLD.stack : HOLD.action;
-    case "ability":
-      if (e.item.kind !== "ability" || e.item.controller !== "opponent") {
-        return HOLD.action;
-      }
-      return e.item.triggered ? HOLD.trigger : HOLD.stack;
-    default:
-      return HOLD.action;
-  }
+  return beats(before, update).map((beat) => {
+    if (beat.hold !== undefined) BEAT_HOLDS.set(beat.update, beat.hold);
+    if (beat.spotlight) SPOTLIGHTS.set(beat.update, beat.spotlight);
+    return beat.update;
+  });
 }
 
 export interface Playback {
@@ -217,6 +63,8 @@ export interface Playback {
   /** It was shown as the game played on, so what happened in it is announced; a view from
    * the past just shows. */
   live: boolean;
+  /** Cards it shows apart from where they lie (beats.ts). */
+  spotlight?: Spotlight;
   /** More views wait to be shown after it. */
   behind: boolean;
   /** Shows every view waiting at once, the last with all their events. */
@@ -228,6 +76,7 @@ export interface Playback {
 interface State {
   shown?: GameUpdate;
   live: boolean;
+  spotlight?: Spotlight;
   /** When the view shown may give way to the next, on `Date.now()`'s clock. */
   until: number;
   queue: GameUpdate[];
@@ -294,6 +143,7 @@ function show(
     ...state,
     shown: update,
     live,
+    spotlight: live ? SPOTLIGHTS.get(last) : undefined,
     until: now + (live ? holdOf(last) : 0),
     names,
     turnStart,
@@ -337,7 +187,7 @@ function reduce(state: State, action: Action): State {
       }
       const parts = past
         ? [update]
-        : beats(state.queue.at(-1) ?? shown, update);
+        : split(state.queue.at(-1) ?? shown, update);
       if (state.queue.length === 0 && (past || now >= state.until)) {
         return show(
           { ...state, queue: parts.slice(1) },
@@ -444,6 +294,7 @@ export function usePlayback(): {
     playback: shown && {
       update: shown,
       live: state.live,
+      spotlight: state.spotlight,
       behind: queue.length > 0,
       skip: () => dispatch({ kind: "skip", now: Date.now() }),
       log: state.log,

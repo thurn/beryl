@@ -426,6 +426,29 @@ impl<L: Layout> Relayout for Recipient<L> {
     }
 }
 
+/// An [`Event::Cast`] in another layout.
+fn cast<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
+    let Event::Cast {
+        spell,
+        controller,
+        targets,
+        x,
+        costs,
+        flashback,
+    } = e
+    else {
+        unreachable!("a cast's event");
+    };
+    Event::Cast {
+        spell: spell.relayout(),
+        controller: *controller,
+        targets: queue(targets.as_slice(), Target::relayout),
+        x: *x,
+        costs: *costs,
+        flashback: *flashback,
+    }
+}
+
 impl<L: Layout> Relayout for Event<L> {
     type In<M: Layout> = Event<M>;
 
@@ -484,10 +507,7 @@ impl<L: Layout> Relayout for Event<L> {
                 controller,
                 tokens: bits(tokens),
             },
-            &Event::Cast { spell, controller } => Event::Cast {
-                spell: spell.relayout(),
-                controller,
-            },
+            Event::Cast { .. } => cast(self),
             Event::Ability {
                 source,
                 controller,

@@ -1093,7 +1093,7 @@ await check(
         const pills = new Set();
         let thinking = false;
         let landBeforeHalt = false;
-        const announced = new Set();
+        const stacked = new Set();
         let took = 0;
         const land = `[data-slot="${opponentLand.slot}"][data-zone="battlefield"]`;
         const halt = page.getByRole("button", { name: "End Turn" });
@@ -1103,10 +1103,11 @@ await check(
             if (pill) pills.add(await pill.textContent());
             thinking ||= (await page.$(".player-badge-activity")) !== null;
             landBeforeHalt ||= (await page.$(land)) !== null;
-            for (const card of await page.$$eval(".announced", (all) =>
-                all.map((e) => e.dataset.card),
+            for (const card of await page.$$eval(
+                '.card-el[data-zone="stack"]',
+                (all) => all.map((e) => e.dataset.card),
             )) {
-                announced.add(card);
+                stacked.add(card);
             }
             await page.clock.runFor(100);
             took += 100;
@@ -1125,9 +1126,9 @@ await check(
         );
         assert.ok(took >= 3000, `the turn took ${took} ms, not a jump`);
         assert.deepEqual(
-            vanished.filter((card) => !announced.has(card)),
+            vanished.filter((card) => !stacked.has(card)),
             [],
-            "each spell that resolved into a graveyard was shown large",
+            "each spell that resolved into a graveyard was seen on the stack",
         );
         const log = await page.locator(".game-log").textContent();
         assert.ok(
@@ -4195,7 +4196,6 @@ const tableWords = (page) =>
             ".zone-viewer",
             ".inspect",
             ".settings",
-            ".announcements",
             ".game-log",
         ].join(", ");
         const shown = (el) => {

@@ -53,7 +53,7 @@ fn events(
     let view = player_view(
         &t,
         Observation::new(&s, viewer),
-        Moment::Thinking,
+        Moment::Thinking(None),
         StopsSetting::SMART,
         x.events.events(),
     );
@@ -157,4 +157,38 @@ fn a_targeted_ability_names_its_source_cost_and_target_object() {
     let [TargetRef::Object { .. }] = targets.as_slice() else {
         panic!("one object targeted: {targets:?}");
     };
+}
+
+#[test]
+fn a_cast_names_its_spell_and_targets_as_the_stack_showed_them() {
+    // Oust aimed at P1's creature, as P1 sees it: a spell that resolves unanswered is gone from
+    // the stack by the next view, which shows its cast from the event alone.
+    let (events, slot) = events(
+        names::OUST,
+        "Oust puts the creature second from the top and its controller gains 3",
+        1,
+        Seat::new(1),
+    );
+    let oust = slot(names::OUST);
+    let creature = slot(names::ELITE_SPELLBINDER);
+    let casts: Vec<_> = events
+        .iter()
+        .filter_map(|e| match e {
+            GameEvent::Cast {
+                slot,
+                controller,
+                item,
+            } => Some((*slot, *controller, item)),
+            _ => None,
+        })
+        .collect();
+    let [(spell, controller, item)] = casts.as_slice() else {
+        panic!("one cast: {events:?}");
+    };
+    assert_eq!((*spell, *controller), (oust, Side::Opponent));
+    let StackItem::Spell { slot, targets, .. } = item else {
+        panic!("a spell: {item:?}");
+    };
+    assert_eq!(*slot, oust);
+    assert_eq!(targets, &[TargetRef::Object { slot: creature }]);
 }

@@ -83,6 +83,7 @@ export type Look =
   | "attached" // a battlefield frame tucked behind the permanent it is attached to
   | "stack" // a full frame on the stack
   | "pile" // a full frame on a graveyard or exile pile, which the pile's button covers
+  | "shown" // a full frame face up over the table, on its way to a pile (SHOWCASE)
   | "hidden"; // nothing drawn: libraries
 
 /** One card on the stage: its element's top-left corner at (x, y), then scaled, turned and
@@ -348,6 +349,43 @@ export function stackPlace(index: number, count: number) {
   };
 }
 
+/** Cards on their way to a pile (milled, discarded by the opponent, exiled from a graveyard),
+ * shown face up in a row across the middle of the table, left of the stack, before they land:
+ * as large as a stack card while few, smaller as more share the row. */
+export const SHOWCASE = {
+  center: 680,
+  middle: 430,
+  width: 220,
+  reach: 1000,
+  gap: 18,
+};
+
+/** Cards a beat of the game shows apart from where they lie (beats.ts): those `shown` face up
+ * in a row over the table on their way to a pile, and those the opponent just `drawn`, dipping
+ * out of their hand at the table's edge, where it would otherwise hide them, before they
+ * settle in it. */
+export interface Spotlight {
+  shown?: ReadonlySet<number>;
+  drawn?: ReadonlySet<number>;
+}
+
+/** How far below the opponent's hand a card they just drew dips into view. */
+const DRAWN_DIP = 120;
+
+/** Where the card at `index` of `count` in a showcase is drawn. */
+export function showcasePlace(index: number, count: number) {
+  const width = Math.min(
+    SHOWCASE.width,
+    (SHOWCASE.reach - SHOWCASE.gap * (count - 1)) / count,
+  );
+  const row = count * width + (count - 1) * SHOWCASE.gap;
+  return {
+    x: SHOWCASE.center - row / 2 + index * (width + SHOWCASE.gap),
+    y: SHOWCASE.middle - width / CARD_ASPECT / 2,
+    width,
+  };
+}
+
 /** How far attackers stand out of their row toward the other side, so an attack reads at a
  * glance; the rows are too close for more. */
 const ADVANCE = 16;
@@ -467,7 +505,10 @@ function handLifts(hand: Placement[], lands: Box[]): Placement[] {
  * returned to it). Each back's foot lies on the arc (`HELD_RISE`) and the back turns to lie
  * along it, so the fan's lower edge runs smooth at any size, no back's corner standing out of
  * it. */
-function heldPlacements(cards: ObjectView[]): Placement[] {
+function heldPlacements(
+  cards: ObjectView[],
+  drawn?: ReadonlySet<number>,
+): Placement[] {
   const n = cards.length;
   const mid = (n - 1) / 2;
   const height = BACK_WIDTH / CARD_ASPECT;
@@ -489,7 +530,10 @@ function heldPlacements(cards: ObjectView[]): Placement[] {
       z: 100 + i,
       ...turned(
         STAGE.width / 2 + dx - BACK_WIDTH / 2,
-        HELD_FOOT - bend * dx ** 2 - height,
+        HELD_FOOT -
+          bend * dx ** 2 -
+          height +
+          (drawn?.has(o.slot) ? DRAWN_DIP : 0),
         turn,
         [BACK_WIDTH / 2, height],
       ),
@@ -1272,12 +1316,15 @@ function onPile(look: PileLook) {
   };
 }
 
-/** Every object's placement. The hand is `tucked` under a screen over the table; the permanents' rows keep clear of the game log while it is
- * `logOpen` over them. Hovering changes none of it (CardLayer raises a hovered hand card). */
+/** Every object's placement. The hand is `tucked` under a screen over the table; the
+ * permanents' rows keep clear of the game log while it is `logOpen` over them; the cards in a
+ * `spotlight` are shown apart from where they lie. Hovering changes none of it (CardLayer
+ * raises a hovered hand card). */
 export function layout(
   view: PlayerView,
   tucked = false,
   logOpen = false,
+  spotlight: Spotlight = {},
 ): Layout {
   const out: Placement[] = [];
   const objects = view.objects;
@@ -1304,7 +1351,7 @@ export function layout(
   const named = referenced(view);
   const behindHost = new Set([...attached.values()].flat().map((o) => o.slot));
 
-  out.push(...heldPlacements(owned("opponent", "hand")));
+  out.push(...heldPlacements(owned("opponent", "hand"), spotlight.drawn));
   // Blockers stand across from their attackers, which stand where they would anyway: only the
   // defending side's row depends on the other's.
   const groups = new Map(
@@ -1397,8 +1444,29 @@ export function layout(
       skew: 0,
     });
   });
+  const shown = objects.filter((o) => spotlight.shown?.has(o.slot));
+  shown.forEach((o, i) => {
+    const place = showcasePlace(i, shown.length);
+    out.push({
+      slot: o.slot,
+      zone: o.zone,
+      look: "shown",
+      width: FULL_WIDTH,
+      span: FULL_WIDTH,
+      opacity: 1,
+      z: SHOWCASE_Z + i,
+      x: place.x,
+      y: place.y,
+      scale: place.width / FULL_WIDTH,
+      rotate: 0,
+      skew: 0,
+    });
+  });
   return new Map(out.map((p) => [p.slot, p]));
 }
+
+/** Cards in a showcase are drawn over the permanents and the stack. */
+const SHOWCASE_Z = 800;
 
 /** The stack's items are drawn over everything else on the table, the top item in front. */
 export const STACK_Z = 400;

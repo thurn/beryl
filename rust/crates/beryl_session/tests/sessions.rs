@@ -13,7 +13,7 @@ use beryl_engine::{
 };
 use beryl_session::preview::add_previews;
 use beryl_session::protocol::{
-    DecisionView, GameEvent, LossReason, Moment, OutcomeView, Side, player_view,
+    DecisionView, GameEvent, LossReason, Moment, OutcomeView, Side, StackItem, player_view,
 };
 use beryl_session::{
     CandidateIndex, DecisionId, Game, PlayerView, ReplayFile, SessionError, SessionId, Sessions,
@@ -388,6 +388,16 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
                     "seed {seed}: a paused resolution without its entry"
                 );
             }
+            if resolving && matches!(view.status, Status::Thinking) {
+                // The agent answering it, the entry stays on the human's stack, its card too.
+                let top = view.stack.last().expect("a paused resolution's entry");
+                if let StackItem::Spell { slot, .. } = top {
+                    assert!(
+                        view.objects.iter().any(|o| o.slot == *slot),
+                        "seed {seed}: a resolving spell without its card"
+                    );
+                }
+            }
             if !resolving {
                 let mut d = None;
                 let moment = match &view.status {
@@ -395,7 +405,7 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
                     Status::Deciding { decision } => {
                         Moment::Deciding(decision.id, d.insert(open_decision(s, t)), None)
                     }
-                    Status::Thinking => Moment::Thinking,
+                    Status::Thinking => Moment::Thinking(None),
                     Status::Playing => Moment::Playing,
                     // The end shows what the human knows by then; the game is over.
                     Status::Over { .. } | Status::Stopped => break,

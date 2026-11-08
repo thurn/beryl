@@ -1385,6 +1385,10 @@ fn finish<L: Layout>(
             Event::Cast {
                 spell,
                 controller: entry.controller,
+                targets: entry.targets.clone(),
+                x: entry.x,
+                costs: entry.costs,
+                flashback: entry.flashback,
             },
         )?;
     } else {

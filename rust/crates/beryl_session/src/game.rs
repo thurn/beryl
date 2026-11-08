@@ -1213,7 +1213,7 @@ impl Game {
             let events: Vec<_> = self.events.iter().map(Relayout::relayout).collect();
             let moment = match (&self.at, &decision) {
                 (At::Playing, _) => Moment::Playing,
-                (At::Agent(_), _) => Moment::Thinking,
+                (At::Agent(_), _) => Moment::Thinking(resolving.as_ref()),
                 (At::Human(id, Open::Decision(_)), Some(d)) => {
                     Moment::Deciding(*id, d, resolving.as_ref())
                 }

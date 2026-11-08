@@ -178,9 +178,12 @@ fn fires<L: Layout>(
                 .count();
             (matching > 0).then(|| info(None, you, matching as u8))
         }
-        (Trigger::YouCast, Event::Cast { spell, controller }) if controller == you => {
-            Some(info(Some(spell), you, 0))
-        }
+        (
+            Trigger::YouCast,
+            Event::Cast {
+                spell, controller, ..
+            },
+        ) if controller == you => Some(info(Some(spell), you, 0)),
         (
             Trigger::YouDiscard,
             Event::ZoneChange {

@@ -295,7 +295,7 @@ function Playing({ playback }: { playback: Playback }) {
   const [held, setHeld] = useState<Choice>();
   // The choice whose overlay is put aside to see the battlefield.
   const [peek, setPeek] = useState<number>();
-  const { update, live, behind, skip, log } = playback;
+  const { update, live, spotlight, behind, skip, log } = playback;
   const { session, view } = update;
   const status = view.status;
   // An answer is on its way, or the game plays on without the player: the opponent deciding,
@@ -426,6 +426,7 @@ function Playing({ playback }: { playback: Playback }) {
       <Board
         view={view}
         live={live}
+        spotlight={spotlight}
         log={log}
         waiting={waiting}
         onSkip={behind ? skip : undefined}

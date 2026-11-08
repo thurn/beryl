@@ -13,6 +13,7 @@ use crate::card::{
 use crate::effect::EffectCtx;
 use crate::event::{self, Event, Reason, Recipient, TokenEntry};
 use crate::filter::{Filter, Whose};
+use crate::fixed::Fixed;
 use crate::ids::{Seat, Slot};
 use crate::state::{
     Continuous, CounterKind, Duration, ManaPool, ObjectFlags, PendingTrigger, TurnStep, Zone,
@@ -968,12 +969,20 @@ fn an_emblem_triggers_from_the_command_zone() {
         Event::Cast {
             spell,
             controller: p,
+            targets: Fixed::default(),
+            x: 0,
+            costs: Castings::default(),
+            flashback: false,
         },
     )
     .unwrap();
     let them = Event::Cast {
         spell,
         controller: p.opponent(),
+        targets: Fixed::default(),
+        x: 0,
+        costs: Castings::default(),
+        flashback: false,
     };
     event::settle(&mut s, &t, &mut x.events, them).unwrap();
     assert_eq!(s.triggers().len(), 1, "only its owner's spells");

@@ -440,6 +440,26 @@
   font: 700 1.8em/1 var(--font-serif);
   color: #1c1a19;
 }
+/* A badge whose count changed pops (Card.tsx's usePop): two names for one animation, so a
+   change during a pop starts it again. */
+.badge-pop-0 {
+  animation: badge-pop-0 0.7s ease-out;
+}
+.badge-pop-1 {
+  animation: badge-pop-1 0.7s ease-out;
+}
+@keyframes badge-pop-0 {
+  30% {
+    scale: 1.7;
+    filter: brightness(1.8) drop-shadow(0 0 0.3em #ffd76a);
+  }
+}
+@keyframes badge-pop-1 {
+  30% {
+    scale: 1.7;
+    filter: brightness(1.8) drop-shadow(0 0 0.3em #ffd76a);
+  }
+}
 .card-full .card-loyalty {
   font-size: 0.8em;
 }

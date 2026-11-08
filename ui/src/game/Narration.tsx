@@ -1,15 +1,10 @@
 // What the board says about the game playing on: who is acting (the turn controls' pill and the
-// opponent's badge), the game log, and the spells that came and went in the view on screen,
-// shown large for a moment so a counter or an instant is seen rather than only found later in
-// a graveyard.
-import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
-import { Card } from "../components/Card";
-import type { ObjectView, PlayerView } from "../generated/protocol";
-import { useFace } from "./faces";
+// opponent's badge) and the game log. What came and went on the stack is seen there, each
+// spell and ability held in a beat of its own (beats.ts).
+import { memo, useEffect, useLayoutEffect, useRef } from "react";
+import type { PlayerView } from "../generated/protocol";
 import { STEP_NAMES } from "./layout";
 import type { LogEntry } from "./log";
-import { HOLD } from "./playback";
 
 /** What the game is doing while the player waits: the opponent deciding, or a step of whose
  * turn passing. */
@@ -98,75 +93,3 @@ export const GameLog = memo(function GameLog({
     </section>
   );
 });
-
-/** A spell that left the stack in the view on screen. */
-interface Announced {
-  object: ObjectView;
-}
-
-/** The spells `view`'s events took off the stack into a graveyard or exile as they resolved,
- * oldest first: those would otherwise flash by unseen. Permanents that resolve are seen
- * arriving on the battlefield, and a spell countered or bounced is seen carried to where it
- * goes (CardLayer). */
-export function announced(view: PlayerView): Announced[] {
-  const objects = new Map(view.objects.map((o) => [o.slot, o]));
-  const out: Announced[] = [];
-  for (const e of view.events) {
-    if (
-      e.kind !== "zoneChange" ||
-      e.from !== "stack" ||
-      e.reason !== "resolve" ||
-      (e.to !== "graveyard" && e.to !== "exile")
-    ) {
-      continue;
-    }
-    const object = objects.get(e.slot);
-    if (!object?.name) continue;
-    out.push({ object });
-  }
-  return out.slice(-3);
-}
-
-/** How long announced spells stay up, in milliseconds. */
-const ANNOUNCED_FOR = HOLD.counter + 400;
-
-/** The spells `announced` names, large beside the stack for a moment. */
-export function Announcements({ view }: { view: PlayerView }) {
-  const items = announced(view);
-  // The view whose spells are up: each view's for a while from when it shows.
-  const [upFor, setUpFor] = useState<PlayerView | undefined>(view);
-  useEffect(() => {
-    setUpFor(view);
-    const timer = setTimeout(() => setUpFor(undefined), ANNOUNCED_FOR);
-    return () => clearTimeout(timer);
-  }, [view]);
-  const up = upFor === view;
-  return (
-    <AnimatePresence>
-      {up && items.length > 0 && (
-        <motion.div
-          className="announcements"
-          role="status"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.25 }}
-        >
-          {items.map((item) => (
-            <AnnouncedCard key={item.object.slot} item={item} />
-          ))}
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-}
-
-/** An announced spell, wordless. */
-function AnnouncedCard({ item }: { item: Announced }) {
-  const face = useFace(item.object);
-  return (
-    <figure className="announced" data-card={item.object.name}>
-      <Card card={face} width={196} />
-    </figure>
-  );
-}

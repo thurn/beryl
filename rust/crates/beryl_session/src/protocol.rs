@@ -753,6 +753,10 @@ pub enum GameEvent {
     Cast {
         slot: u16,
         controller: Side,
+        /// The spell as it went on the stack: an opponent's spell that resolves unanswered
+        /// is gone from the stack by the next view, which shows its cast and resolution
+        /// together.
+        item: StackItem,
     },
     /// An ability was activated, or a triggered one with targets put on the stack, as the
     /// stack then showed it.
@@ -904,7 +908,9 @@ pub enum Moment<'a, L: Layout = Small> {
     Deciding(DecisionId, &'a Decision<L>, Option<&'a StackEntry<L>>),
     /// The viewer is halted ([`DecisionView::halt`]) with decision `id`.
     Halted(DecisionId),
-    Thinking,
+    /// The other player is deciding, in the resolution of the stack entry given if one asks
+    /// it.
+    Thinking(Option<&'a StackEntry<L>>),
     Playing,
     Stopped,
     /// The game is over; `conceded`, because the loser conceded.
@@ -969,19 +975,31 @@ pub fn player_view<L: Layout>(
         opponent: player_state(viewer.opponent()),
     };
     objects.extend(obs.battlefield().iter().map(|&s| object_view(t, obs, s)));
-    let stack = obs.stack().iter().map(|e| stack_item(t, obs, e)).collect();
+    let mut stack: Vec<_> = obs.stack().iter().map(|e| stack_item(t, obs, e)).collect();
     objects.extend(
         obs.stack()
             .iter()
             .filter_map(StackEntry::spell)
             .map(|r| object_view(t, obs, r.slot)),
     );
-    // A resolving spell's card stays on the stack until its resolution ends (CR 608.2n).
-    if let Moment::Deciding(_, _, Some(entry)) = moment
+    // A resolving spell's card stays on the stack until its resolution ends
+    // ([CR 608.2n](https://yawgatog.com/resources/magic-rules/#R6082n): "As the final part of
+    // an instant or sorcery spell's resolution, the spell itself is put into its owner's
+    // graveyard").
+    let resolving = match moment {
+        Moment::Deciding(_, _, entry) | Moment::Thinking(entry) => entry,
+        _ => None,
+    };
+    if let Some(entry) = resolving
         && let Some(r) = entry.spell()
         && obs.object(r.slot).zone == Zone::Stack
     {
         objects.push(object_view(t, obs, r.slot));
+    }
+    // While the other player answers a question of its resolution, the entry stays on top of
+    // the viewer's stack: the viewer's own questions name it apart ([`DecisionView::resolving`]).
+    if let Moment::Thinking(Some(entry)) = moment {
+        stack.push(stack_item(t, obs, entry));
     }
     objects.sort_by_key(|o| o.slot);
     let status = match moment {
@@ -994,7 +1012,7 @@ pub fn player_view<L: Layout>(
         Moment::Halted(id) => Status::Deciding {
             decision: halt_view(t, obs, id, stops),
         },
-        Moment::Thinking => Status::Thinking,
+        Moment::Thinking(_) => Status::Thinking,
         Moment::Playing => Status::Playing,
         Moment::Stopped => Status::Stopped,
         Moment::Over { outcome, conceded } => Status::Over {
@@ -1827,6 +1845,44 @@ fn ability_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>
     }
 }
 
+/// The spell an [`Event::Cast`] put on the stack, as the stack showed it then. Its card is
+/// public on the stack ([CR 601.2a](https://yawgatog.com/resources/magic-rules/#R6012a): "the
+/// player first moves that card ... from where it is to the stack"), and `obs` names it while
+/// it stays public.
+fn cast_item<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -> StackItem {
+    let Event::Cast {
+        spell,
+        controller,
+        targets,
+        x,
+        costs,
+        flashback,
+    } = e.clone()
+    else {
+        unreachable!("a cast's event");
+    };
+    // A spell gone back to a hidden zone since (bounced to its owner's hand) keeps its slot,
+    // its targets and X; the costs its card was cast with are its card's to say.
+    let entry = match obs.card(spell.slot) {
+        Some(card) => StackEntry {
+            card,
+            face: obs.object(spell.slot).face,
+            costs,
+            flashback,
+            ..StackEntry::default()
+        },
+        None => StackEntry::default(),
+    };
+    let entry = StackEntry {
+        object: Some(spell),
+        controller,
+        targets,
+        x,
+        ..entry
+    };
+    stack_item(t, obs, &entry)
+}
+
 /// An engine event as the viewer of `obs` is told it. Engine events name objects by slot and
 /// carry no identity: anything an event says about a card must come from `obs`, which the
 /// information independence test redeals. The table names only an ability's card, public as
@@ -1896,9 +1952,12 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
             controller: side(controller),
             tokens: slots(tokens.iter()),
         },
-        Event::Cast { spell, controller } => GameEvent::Cast {
+        Event::Cast {
+            spell, controller, ..
+        } => GameEvent::Cast {
             slot: spell.slot.num(),
             controller: side(controller),
+            item: cast_item(t, obs, e),
         },
         Event::Ability { .. } => ability_event(t, obs, e),
         Event::Attack { player, attackers } => GameEvent::Attack {

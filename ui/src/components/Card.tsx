@@ -7,8 +7,10 @@
 // card whole, never reshaping it.
 import {
   Fragment,
+  useEffect,
   useLayoutEffect,
   useRef,
+  useState,
   type CSSProperties,
   type ReactNode,
 } from "react";
@@ -243,8 +245,13 @@ function stats(card: CardFace): ReactNode {
 /** A planeswalker's loyalty on the printed loyalty symbol, the shield its card prints it on
  * ([CR 306.5b](https://yawgatog.com/resources/magic-rules/#R3065b)). */
 function Loyalty({ loyalty }: { loyalty: string }) {
+  const pop = usePop(loyalty);
   return (
-    <span className="card-loyalty" role="img" aria-label={`Loyalty ${loyalty}`}>
+    <span
+      className={`card-loyalty ${pop ?? ""}`}
+      role="img"
+      aria-label={`Loyalty ${loyalty}`}
+    >
       <span className="card-loyalty-glyph" aria-hidden>
         {"\ue628"}
       </span>
@@ -278,6 +285,20 @@ export type MarkIcon = keyof typeof MARK_ICONS;
 
 /** A mark's badge: its icon, with a count when it has one, named `label` for assistive
  * technology when it stands alone. */
+/** A class that pops a badge for a moment each time `value` changes once it has shown: a
+ * loyalty ability's cost, or a counter put on or taken off, seen as it happens rather than
+ * only found changed. Two classes alternate, so a change during a pop starts another. */
+function usePop(value: unknown): string | undefined {
+  const [pops, setPops] = useState(0);
+  const last = useRef(value);
+  useEffect(() => {
+    if (last.current === value) return;
+    last.current = value;
+    setPops((n) => n + 1);
+  }, [value]);
+  return pops === 0 ? undefined : `badge-pop-${pops % 2}`;
+}
+
 export function MarkBadge({
   icon,
   count,
@@ -287,9 +308,10 @@ export function MarkBadge({
   count?: number;
   label?: string;
 }) {
+  const pop = usePop(count);
   return (
     <span
-      className={`mark-badge mark-${icon}`}
+      className={`mark-badge mark-${icon} ${pop ?? ""}`}
       role={label ? "img" : undefined}
       aria-label={label}
     >
@@ -321,6 +343,7 @@ export function Card({
   const countOf = (kind: CounterMark) =>
     marks?.counters.find((c) => c.kind === kind)?.count ?? 0;
   const ptCounters = countOf("plusOne") - countOf("minusOne");
+  const ptPop = usePop(ptCounters);
   const otherCounters =
     marks?.counters.filter(
       (c) => c.kind !== "plusOne" && c.kind !== "minusOne",
@@ -433,7 +456,7 @@ export function Card({
             kind, as the card's text does, with their net count past one. */}
         {ptCounters !== 0 && (
           <span
-            className={`card-pt-counter ${ptCounters > 0 ? "stat-up" : "stat-down"}`}
+            className={`card-pt-counter ${ptCounters > 0 ? "stat-up" : "stat-down"} ${ptPop ?? ""}`}
             role="img"
             aria-label={`${Math.abs(ptCounters)} ${ptCounters > 0 ? "+1/+1" : "-1/-1"} counters`}
           >

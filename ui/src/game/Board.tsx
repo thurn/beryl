@@ -138,6 +138,7 @@ import {
   zonePiles,
   type Box,
   type Placement,
+  type Spotlight,
   type ZonePile,
 } from "./layout";
 import {
@@ -146,12 +147,7 @@ import {
   type AbilityChoice,
 } from "./AbilityChooser";
 import type { LogEntry } from "./log";
-import {
-  actingLabel,
-  Announcements,
-  GameLog,
-  opponentActivity,
-} from "./Narration";
+import { actingLabel, GameLog, opponentActivity } from "./Narration";
 import {
   Inspect,
   INSPECT_WIDTH,
@@ -167,9 +163,11 @@ import { TurnBanner } from "./TurnBanner";
 
 export interface BoardProps {
   view: PlayerView;
-  /** The view was shown as the game played on: the spells that came and went in it are
-   * announced. */
+  /** The view was shown as the game played on: a new turn in it is announced. */
   live: boolean;
+  /** Cards shown apart from where they lie (beats.ts): on their way to a pile, or just drawn
+   * by the opponent. */
+  spotlight?: Spotlight;
   /** What has happened in the game, oldest first. */
   log: LogEntry[];
   /** An answer was sent and the next view has not arrived, or the game plays on without the
@@ -231,6 +229,7 @@ interface Casting {
 export function Board({
   view: given,
   live,
+  spotlight,
   log,
   waiting,
   onSkip,
@@ -343,11 +342,15 @@ export function Board({
   // column, the rows give it room.
   const [logOpen, setLogOpen] = useState(false);
   const toggleLog = useCallback(() => setLogOpen((o) => !o), []);
-  const resting = useMemo(() => layout(shown, dimmed), [shown, dimmed]);
+  const resting = useMemo(
+    () => layout(shown, dimmed, false, spotlight),
+    [shown, dimmed, spotlight],
+  );
   const crowdsLog = overLog(resting);
   const placements = useMemo(
-    () => (crowdsLog && logOpen ? layout(shown, dimmed, true) : resting),
-    [resting, crowdsLog, logOpen, shown, dimmed],
+    () =>
+      crowdsLog && logOpen ? layout(shown, dimmed, true, spotlight) : resting,
+    [resting, crowdsLog, logOpen, shown, dimmed, spotlight],
   );
   // The hovered card, unless it has since gone where it is not shown alone.
   const hoveredPlace =
@@ -971,23 +974,25 @@ export function Board({
         )}
 
         <GameLog log={log} folded open={logOpen} onToggle={toggleLog} />
-        {live && <Announcements view={view} />}
         <TurnBanner view={view} live={live} />
 
-        {view.stack.map(
-          (item, i) =>
-            item.kind === "ability" && (
-              <AbilityOnStack
-                key={`${i}-${item.name}`}
-                index={i}
-                count={view.stack.length}
-                item={item}
-                source={
-                  item.source === null ? undefined : objects.get(item.source)
-                }
-              />
-            ),
-        )}
+        {/* An ability leaving the stack fades rather than blinking out. */}
+        <AnimatePresence>
+          {view.stack.map(
+            (item, i) =>
+              item.kind === "ability" && (
+                <AbilityOnStack
+                  key={`${i}-${item.name}`}
+                  index={i}
+                  count={view.stack.length}
+                  item={item}
+                  source={
+                    item.source === null ? undefined : objects.get(item.source)
+                  }
+                />
+              ),
+          )}
+        </AnimatePresence>
 
         <CardLayer
           epoch={view}
@@ -1559,6 +1564,7 @@ function AbilityOnStack({
       style={{ zIndex: STACK_Z + index }}
       initial={{ opacity: 0, scale: 0.8, x: place.x, y: place.y }}
       animate={{ opacity: 1, scale: 1, x: place.x, y: place.y }}
+      exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.35 } }}
     >
       <StackItem
         id={stackId(index)}

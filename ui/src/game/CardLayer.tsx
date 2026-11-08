@@ -36,7 +36,7 @@ import type {
 } from "../generated/protocol";
 import { StageScale } from "./Stage";
 import { faceDownFace, marksOf, useFace } from "./faces";
-import { RAISE, type Layout, type Placement } from "./layout";
+import { RAISE, type Layout, type Look, type Placement } from "./layout";
 import { useCardPhysics } from "./physics";
 
 /** Where on the stage a pointer is, in stage pixels. */
@@ -129,6 +129,20 @@ const EMERGING: Transition = {
 const EMERGING_FOR = 650;
 /** A struck spell stays over the table until it has arrived, in ms. */
 const CARRIED_FOR = (STRUCK_FOR + 0.75) * 1000 + 50;
+/** A card going to or from a library or a pile, or into a showcase, crosses the table at a
+ * pace the eye follows, rather than springing there: the zone it went to is what the player
+ * needs to see. */
+const TRAVEL: Transition = {
+  type: "tween",
+  duration: 0.65,
+  ease: [0.4, 0, 0.2, 1],
+};
+/** A card going into a library stays in sight until it is there, then fades into the pile. */
+const INTO_LIBRARY: Transition = { type: "tween", duration: 0.2, delay: 0.6 };
+const TRAVEL_FOR = 700;
+/** Looks a card travels to or from: the piles and libraries, which lie in the table's corners,
+ * and the showcase over its middle. */
+const TRAVELLED = new Set<Look>(["hidden", "pile", "shown"]);
 /** A hand card rises and settles back quickly and without bounce. */
 const RAISING: Transition = { type: "tween", duration: 0.14, ease: "easeOut" };
 /** A raised hand card is drawn over the rest of the hand. */
@@ -300,7 +314,27 @@ const CardElement = memo(function CardElement({
   // A struck spell leaves the stack for where it went: after its shake, slowly, over the
   // table.
   const carried = struck && place.look !== "stack";
-  const how = carried ? CARRIED : emerging ? EMERGING : SPRING;
+  // A card changing looks to or from a pile, a library or the showcase travels there; the
+  // transition holds until its look changes again, so that a render meanwhile keeps it going.
+  const moved = useRef<{ look: Look; travel: boolean }>({
+    look: place.look,
+    travel: false,
+  });
+  if (moved.current.look !== place.look) {
+    const was = moved.current.look;
+    moved.current = {
+      look: place.look,
+      travel: TRAVELLED.has(was) || TRAVELLED.has(place.look),
+    };
+  }
+  const change = moved.current;
+  const how = carried
+    ? CARRIED
+    : emerging
+      ? EMERGING
+      : change.travel
+        ? TRAVEL
+        : SPRING;
   useGlide(x, place.x, reduce, { holding, how });
   useGlide(y, place.y, reduce, { holding, how });
   // A card changing looks, or tapping, is drawn at another width (a back, a whole card, a
@@ -323,7 +357,17 @@ const CardElement = memo(function CardElement({
   const lifted = hand && (raised || holding);
   useGlide(rotate, dragging && !hand ? 0 : place.rotate, reduce);
   useGlide(skewX, place.skew, reduce);
-  useGlide(opacity, place.opacity, reduce);
+  // Out of a library, the card is in sight from the start, on the pile; into one, until it is
+  // there.
+  const fromLibrary = useRef(place.look === "hidden");
+  useLayoutEffect(() => {
+    const was = fromLibrary.current;
+    fromLibrary.current = place.look === "hidden";
+    if (was && place.look !== "hidden" && !reduce) opacity.jump(place.opacity);
+  }, [place.look, place.opacity, opacity, reduce]);
+  useGlide(opacity, place.opacity, reduce, {
+    how: change.travel && place.look === "hidden" ? INTO_LIBRARY : SPRING,
+  });
   // Raised, the card turns back upright about its top center and rises straight up the screen,
   // inside its element, which stays turned in the fan.
   const lift = place.lift ?? RAISE.lift;
@@ -384,6 +428,14 @@ const CardElement = memo(function CardElement({
       clearTimeout(timer);
     };
   }, [carried, reduce, shake, flash]);
+  // A travelling card crosses over the table, then lies where it went.
+  const [travelling, setTravelling] = useState(false);
+  useEffect(() => {
+    if (!change.travel || reduce) return;
+    setTravelling(true);
+    const timer = setTimeout(() => setTravelling(false), TRAVEL_FOR);
+    return () => clearTimeout(timer);
+  }, [change, reduce]);
   // An emerging token crosses over the table, then is a card like the rest.
   useEffect(() => {
     if (!emerging) return;
@@ -480,9 +532,11 @@ const CardElement = memo(function CardElement({
         data-card={object.name ?? undefined}
         style={{
           ...frame,
+          // A library's cards, drawn only while they travel, never take the pointer.
+          pointerEvents: place.look === "hidden" ? "none" : undefined,
           zIndex: dragging
             ? 1000
-            : flying || emerging
+            : flying || emerging || travelling
               ? FLYING_Z
               : lifted && !ghosted
                 ? RAISED_Z
@@ -592,7 +646,6 @@ function Look({
   ghost?: boolean;
 }) {
   const card = useFace(object);
-  if (place.look === "hidden") return null;
   const under = place.look === "beneath" || place.look === "attached";
   const field = under || place.look === "field" || place.look === "land";
   // A face-down permanent shows its back to both players; its controller's hover still names

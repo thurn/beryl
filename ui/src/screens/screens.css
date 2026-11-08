@@ -916,22 +916,6 @@
 .game-log-counter {
   color: #ffab7c;
 }
-/* Spells that came and went in the view on screen, large beside the stack for a moment; a
-   countered one dimmed under a small ember mark. */
-.announcements {
-  position: absolute;
-  right: 100px;
-  top: 190px;
-  z-index: 450;
-  display: flex;
-  gap: 16px;
-  pointer-events: none;
-}
-.announced {
-  position: relative;
-  margin: 0;
-  filter: drop-shadow(0 12px 22px rgb(0 0 0 / 50%));
-}
 /* A step announcement over the battlefield (combat.png's "Combat / Blockers declared"): a gold
    title between ornamented rules over an italic detail, on a smoky shade, in the band between
    the opponent's life orb and their permanents. Laid out from its center line; the shade's box

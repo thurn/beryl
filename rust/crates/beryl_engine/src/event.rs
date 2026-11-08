@@ -8,7 +8,7 @@
 //! most draws) arrive with the cards that create them.
 
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityKind, FaceAbility, FaceIx, Replacement, Types};
+use crate::card::{AbilityKind, Castings, FaceAbility, FaceIx, Replacement, Types};
 use crate::fixed::Full;
 use crate::ids::{CardIx, Seat};
 use crate::layers;
@@ -114,10 +114,16 @@ pub enum Event<L: Layout = Small> {
         controller: Seat,
         tokens: Bitboard<L::Slot>,
     },
-    /// A spell was cast ([CR 601.2i](https://yawgatog.com/resources/magic-rules/#R6012i)).
+    /// A spell was cast ([CR 601.2i](https://yawgatog.com/resources/magic-rules/#R6012i)), as
+    /// the stack then showed it, for the UI: an opponent's spell that resolves unanswered has
+    /// left the stack by the time anyone looks.
     Cast {
         spell: ObjectRef<L>,
         controller: Seat,
+        targets: L::Queue<Target<L>, TARGETS>,
+        x: u8,
+        costs: Castings,
+        flashback: bool,
     },
     /// An ability was put on the stack, for the UI's log: an activated one as it becomes
     /// activated, its costs paid
