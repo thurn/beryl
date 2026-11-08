@@ -106,12 +106,12 @@ Cheapest first. Agents never open a window: `just dev` refuses to for them.
    `just fuzz` plays random games at length.
 2. UI: `cd ui && npm run typecheck`. `just ui-shots [names]` screenshots UI
    states headless and prints their paths; `just ui-test` plays the game screen
-   through a fixture. Every card has a spec (`/specs/<card>`, the `specs`
-   skill), generated from its definition and scenarios, showing each of its UI
-   moments as a live game: `just specs --check` checks them against the approved
-   records in `data/specs/`, `just specs --approve` records them after review,
-   `just specs --shots` screenshots them, and `just specs` serves the pages for
-   a human.
+   through a fixture. Every card has a spec (`/specs/<card>`), generated from
+   its definition and scenarios, showing each of its UI moments as a live game
+   from both seats. To reproduce, debug or verify a card's behavior in the UI,
+   use the `specs` skill: `just specs --describe`, `--film`, `--motion` and
+   `--drive` show what each moment does for both players, in text, in pictures,
+   as an animation audit and under Playwright.
 3. The app: `just smoke` builds the debug app and launches it with no window and
    no Dock icon until the UI reports over IPC that it loaded (about a second
    once built). It fails on a build error or a UI that never loads.
