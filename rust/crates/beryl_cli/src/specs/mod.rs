@@ -10,22 +10,21 @@
 //! took, where a token came from) matters as much as what its controller sees.
 //!
 //! Every implemented card has a spec: its moments are generated from its definition and its
-//! scenarios ([`auto`]), and what holds at each is recorded and checked against the approved
-//! record in `data/specs/<slug>.json`. A moment a card needs that nothing generates comes from
+//! scenarios ([`auto`]), each played headless from both seats to its first live decision, and
+//! what holds there is recorded for `specs-describe`. A moment a card needs that nothing generates comes from
 //! a scenario in its file, or a general capability of the generator: the `specs` skill
 //! (`.agents/specs/SKILL.md`) says which.
 
 mod auto;
 pub mod serve;
 
-use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
 use beryl_cards::CARDS;
 use beryl_scenario::{Action, Scenario};
 use beryl_search::GameAgent;
 use beryl_session::{GameUpdate, Prepared, Seat, Sessions, Status, StopsSetting};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::boards::{self, Scripted, Shared};
 
@@ -97,8 +96,8 @@ pub struct Moment {
     /// The actions it plays out once shown, when the viewer presses play.
     pub play: &'static [Action],
     /// What held at each seat's first live decision ([`View`] order), in the fixture
-    /// conditions' words ([`crate::fixture::Condition::parse`]), checked against the approved record. None
-    /// while it is being recorded.
+    /// conditions' words ([`crate::fixture::Condition::parse`]): what `specs-describe` prints.
+    /// None while it is being recorded.
     pub recorded: Option<[&'static [&'static str]; 2]>,
 }
 
@@ -304,11 +303,21 @@ pub fn listing() -> Vec<Listing> {
 /// game's end, once every action is taken), and returns what the viewer sees there: an error
 /// says what failed on the way.
 pub fn reach(moment: &'static Moment, view: View) -> Result<beryl_session::PlayerView, String> {
+    trace(moment, view).map(|(view, _)| view)
+}
+
+/// [`reach`], with the events the viewer was shown on the way, once the setup was done: each
+/// view's events in a line, after the turn and step it showed them in.
+fn trace(
+    moment: &'static Moment,
+    view: View,
+) -> Result<(beryl_session::PlayerView, Vec<String>), String> {
     let (sent, received) = std::sync::mpsc::channel();
     let (_sessions, progress) = start(moment, view, move |update, phase| {
         let _ = sent.send((update, phase));
     })?;
     let mut shown = false;
+    let mut events = Vec::new();
     loop {
         let (update, phase) = received
             .recv_timeout(std::time::Duration::from_secs(30))
@@ -316,11 +325,15 @@ pub fn reach(moment: &'static Moment, view: View) -> Result<beryl_session::Playe
         if let Some(failure) = boards::lock(&progress).failure.take() {
             return Err(failure);
         }
+        // The first view shown animates nothing (`specs-serve` clears its events).
+        if shown && let Some(line) = events_line(&update.view) {
+            events.push(line);
+        }
         shown |= phase != Phase::Setup;
         match update.view.status {
             // A game won or lost once shown is a moment too: its end.
             Status::Over { .. } if shown && boards::lock(&progress).done() => {
-                return Ok(update.view);
+                return Ok((update.view, events));
             }
             Status::Over { .. } | Status::Stopped => {
                 let next = boards::lock(&progress).next;
@@ -336,147 +349,150 @@ pub fn reach(moment: &'static Moment, view: View) -> Result<beryl_session::Playe
                 if !shown {
                     return Err("nothing was shown".to_owned());
                 }
-                return Ok(update.view);
+                return Ok((update.view, events));
             }
             _ => {}
         }
     }
 }
 
-/// One generated moment's approved record.
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
-struct Approved {
-    moment: String,
-    yours: Vec<String>,
-    theirs: Vec<String>,
-}
-
-/// Where the approved records are: `data/specs`, in the checkout of the crate under test
-/// (`CARGO_MANIFEST_DIR` at run time, for tests) or else of this binary, four up from it in
-/// `rust/target/<profile>/`. Never `env!`: a `rust/target` cloned into another worktree keeps
-/// binaries built with the old worktree's path.
-fn approved_dir() -> PathBuf {
-    let checkout = match std::env::var_os("CARGO_MANIFEST_DIR") {
-        Some(dir) => PathBuf::from(dir).join("../../.."),
-        None => std::env::current_exe()
-            .ok()
-            .and_then(|exe| exe.ancestors().nth(4).map(std::path::Path::to_path_buf))
-            .unwrap_or_default(),
+/// A view's events in a line, each its kind and fields, objects by name: "turn 5 your
+/// postcombatMain: zoneChange Island exile->graveyard (effect); tokensCreated you [Treasure]".
+/// None if it has none but steps beginning, which every view of a turn passing has.
+fn events_line(view: &beryl_session::PlayerView) -> Option<String> {
+    let name = |slot: &serde_json::Value| {
+        slot.as_u64()
+            .and_then(|s| view.objects.iter().find(|o| u64::from(o.slot) == s))
+            .and_then(|o| o.name.clone())
+            .unwrap_or_else(|| format!("#{slot}"))
     };
-    checkout.join("data/specs")
-}
-
-fn approved_path(card: &str) -> PathBuf {
-    approved_dir().join(format!("{}.json", slug(card)))
-}
-
-/// A card's approved records, none if it has no file.
-fn approved(card: &str) -> Result<Vec<Approved>, String> {
-    let path = approved_path(card);
-    match std::fs::read_to_string(&path) {
-        Ok(text) => serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display())),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
-        Err(e) => Err(format!("{}: {e}", path.display())),
-    }
-}
-
-/// The records of a spec's generated moments, as an approval writes them.
-fn records(spec: &Spec) -> Vec<Approved> {
-    let owned = |c: &[&str]| c.iter().map(|&c| c.to_owned()).collect();
-    spec.moments
+    let text = |v: &serde_json::Value| match v {
+        serde_json::Value::String(s) => s.clone(),
+        v => v.to_string(),
+    };
+    let events: Vec<String> = view
+        .events
         .iter()
-        .filter_map(|m| {
-            let [yours, theirs] = m.recorded?;
-            Some(Approved {
-                moment: m.name.to_owned(),
-                yours: owned(yours),
-                theirs: owned(theirs),
-            })
-        })
-        .collect()
-}
-
-/// What differs between a moment's record and its approved one, from one seat.
-fn differs(seat: &str, recorded: &[String], approved: &[String]) -> Option<String> {
-    let gone: Vec<&str> = approved
-        .iter()
-        .filter(|c| !recorded.contains(c))
-        .map(String::as_str)
-        .collect();
-    let new: Vec<&str> = recorded
-        .iter()
-        .filter(|c| !approved.contains(c))
-        .map(String::as_str)
-        .collect();
-    let mut parts = Vec::new();
-    if !gone.is_empty() {
-        parts.push(format!("no longer {}", gone.join(", ")));
-    }
-    if !new.is_empty() {
-        parts.push(format!("now {}", new.join(", ")));
-    }
-    (!parts.is_empty()).then(|| format!("{seat}: {}", parts.join("; ")))
-}
-
-/// Checks a spec's generated moments against their approved records: each failure, by the
-/// moment's name (or the file's, for a stale record).
-fn check_generated(spec: &Spec) -> Result<Vec<Checked>, String> {
-    let approved = approved(spec.card)?;
-    let mut out = Vec::new();
-    for r in records(spec) {
-        let result = match approved.iter().find(|a| a.moment == r.moment) {
-            None => Err("not approved: `just specs --approve`".to_owned()),
-            Some(a) => {
-                let diffs: Vec<String> = [
-                    differs("yours", &r.yours, &a.yours),
-                    differs("theirs", &r.theirs, &a.theirs),
-                ]
-                .into_iter()
-                .flatten()
-                .collect();
-                if diffs.is_empty() {
-                    Ok(())
-                } else {
-                    Err(diffs.join("; "))
+        .filter(|e| !matches!(e, beryl_session::protocol::GameEvent::StepBegins { .. }))
+        .map(|e| {
+            let serde_json::Value::Object(fields) = serde_json::to_value(e).unwrap_or_default()
+            else {
+                return format!("{e:?}");
+            };
+            let mut parts = vec![fields.get("kind").map(text).unwrap_or_default()];
+            if let (Some(from), Some(to)) = (fields.get("from"), fields.get("to"))
+                && fields.contains_key("slot")
+            {
+                parts.push(format!(
+                    "{} {}->{}",
+                    name(&fields["slot"]),
+                    text(from),
+                    text(to)
+                ));
+                if let Some(why) = fields.get("reason") {
+                    parts.push(format!("({})", text(why)));
+                }
+                return parts.join(" ");
+            }
+            for (k, v) in &fields {
+                match k.as_str() {
+                    "kind" => {}
+                    "slot" | "source" => parts.push(name(v)),
+                    // A stack item by its name: "Currency Converter ability 2".
+                    "item" => {
+                        parts.push(v.get("name").map(text).unwrap_or_default());
+                        if let Some(k) = v.get("ability") {
+                            parts.push(format!("ability {}", text(k)));
+                        }
+                    }
+                    "loyalty" if v.is_null() => {}
+                    "tokens" | "attackers" => {
+                        let names: Vec<String> =
+                            v.as_array().into_iter().flatten().map(name).collect();
+                        parts.push(format!("[{}]", names.join(", ")));
+                    }
+                    _ => parts.push(format!("{k}={}", text(v))),
                 }
             }
+            parts.join(" ")
+        })
+        .collect();
+    let turn = &view.turn;
+    let whose = if turn.active == beryl_session::protocol::Side::You {
+        "your"
+    } else {
+        "their"
+    };
+    let step = serde_json::to_value(turn.step)
+        .ok()
+        .map(|v| text(&v))
+        .unwrap_or_default();
+    (!events.is_empty())
+        .then(|| format!("turn {} {whose} {step}: {}", turn.number, events.join("; ")))
+}
+
+/// Prints each moment of the specs for `cards` (by name or slug; all of them if none), or the
+/// one `moment` names: its page, the actions it plays once shown, and from each seat the
+/// events shown on the way and what holds at its first live decision, abilities by their cost.
+pub fn describe(cards: &[String], moment: Option<&str>) -> Result<(), String> {
+    let wanted =
+        |card: &str| cards.is_empty() || cards.iter().any(|c| c == card || *c == slug(card));
+    let mut found = false;
+    for spec in specs().iter().filter(|s| wanted(s.card)) {
+        let def = CARDS
+            .cards()
+            .iter()
+            .find(|d| d.name == spec.card)
+            .ok_or_else(|| format!("no card {:?}", spec.card))?;
+        let labels = auto::ability_labels(def);
+        // An ability by its cost rather than its index: "offers Currency Converter {T}".
+        let label = |c: &str| {
+            labels.iter().fold(c.to_owned(), |c, (k, l)| {
+                c.replace(
+                    &format!("{} ability {k}", spec.card),
+                    &format!("{} {l}", spec.card),
+                )
+            })
         };
-        out.push((r.moment, result));
-    }
-    for a in &approved {
-        if !spec.moments.iter().any(|m| m.name == a.moment) {
-            out.push((
-                a.moment.clone(),
-                Err("approved but no longer generated".to_owned()),
-            ));
+        for m in spec
+            .moments
+            .iter()
+            .filter(|m| moment.is_none_or(|n| n == m.name))
+        {
+            found = true;
+            let card = slug(spec.card);
+            println!("== {card} / {}  \"{}\"", m.name, m.title);
+            if !m.group.is_empty() {
+                println!("scenario: {}", m.group);
+            }
+            println!("page: /specs/{card}/{}", m.name);
+            for a in m.play {
+                println!("plays: {a:?}");
+            }
+            for view in View::ALL {
+                let (shown, events) = trace(m, view)?;
+                println!("{}:", view.name());
+                for e in events {
+                    println!("  shown  {}", label(&e));
+                }
+                let holds: Vec<String> =
+                    auto::snapshot(&shown, def).iter().map(|c| label(c)).collect();
+                println!("  holds  {}", holds.join(", "));
+            }
+            println!();
         }
     }
-    Ok(out)
-}
-
-/// Writes a spec's generated records as its approved ones.
-fn approve(spec: &Spec) -> Result<(), String> {
-    let records = records(spec);
-    let path = approved_path(spec.card);
-    if records.is_empty() {
-        return match std::fs::remove_file(&path) {
-            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
-            _ => Ok(()),
-        };
+    if found {
+        Ok(())
+    } else {
+        Err(format!("no moment {cards:?} {}", moment.unwrap_or_default()))
     }
-    std::fs::create_dir_all(approved_dir()).map_err(|e| e.to_string())?;
-    let text = serde_json::to_string_pretty(&records).map_err(|e| e.to_string())? + "\n";
-    std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
-/// Every failure of the specs for `cards` (by name or slug; all of them if none): moments
-/// checked against their approved records, and approved records no longer generated. Each moment is sent to `report` with its result
-/// as it is checked; candidates generation dropped are sent as skipped.
-fn failures(
-    cards: &[String],
-    approving: bool,
-    report: &mut dyn FnMut(Line),
-) -> Result<usize, String> {
+/// Lists every moment of the specs for `cards` (by name or slug; all of them if none), each
+/// generated by playing it headless from both seats to its first live decision, then the
+/// candidates generation could not play, with why. Fails on an unknown card.
+pub fn check_all(cards: &[String]) -> Result<(), String> {
     let wanted =
         |card: &str| cards.is_empty() || cards.iter().any(|c| c == card || *c == slug(card));
     if let Some(c) = cards.iter().find(|c| {
@@ -487,63 +503,22 @@ fn failures(
     }) {
         return Err(format!("no card {c:?}"));
     }
-    let mut failed = 0;
+    let mut moments = 0;
     for spec in specs().iter().filter(|s| wanted(s.card)) {
-        let card = slug(spec.card);
-        if approving {
-            approve(spec)?;
-        }
-        for (name, result) in check_generated(spec)? {
-            failed += usize::from(result.is_err());
-            report(Line::Checked(format!("{card} / {name}"), result));
+        for m in spec.moments {
+            moments += 1;
+            println!("ok    {} / {}  ({})", slug(spec.card), m.name, m.title);
         }
     }
+    let mut skipped = 0;
     for (card, dropped) in dropped().iter().filter(|(c, _)| wanted(c)) {
         for (name, why) in dropped {
-            report(Line::Skipped(
-                format!("{} / {name}", slug(card)),
-                why.clone(),
-            ));
+            skipped += 1;
+            println!("skip  {} / {name}: {why}", slug(card));
         }
     }
-    // A card whose moments are all gone leaves a stale file.
-    if !approving {
-        for def in CARDS.cards().iter().filter(|d| wanted(d.name)) {
-            if !specs().iter().any(|s| s.card == def.name) && !approved(def.name)?.is_empty() {
-                failed += 1;
-                report(Line::Checked(
-                    slug(def.name),
-                    Err("approved but no longer generated".to_owned()),
-                ));
-            }
-        }
-    }
-    Ok(failed)
-}
-
-/// A moment's name and how its check went.
-type Checked = (String, Result<(), String>);
-
-/// One line of a check's report.
-enum Line {
-    Checked(String, Result<(), String>),
-    Skipped(String, String),
-}
-
-/// Checks every moment of the specs for `cards` (by name or slug; all of them if none),
-/// printing each, and fails if any fails. With `approve`, first writes each generated record
-/// as the approved one.
-pub fn check_all(cards: &[String], approve: bool) -> Result<(), String> {
-    let failed = failures(cards, approve, &mut |line| match line {
-        Line::Checked(name, Ok(())) => println!("ok    {name}"),
-        Line::Checked(name, Err(e)) => println!("FAIL  {name}: {e}"),
-        Line::Skipped(name, why) => println!("skip  {name}: {why}"),
-    })?;
-    if failed == 0 {
-        Ok(())
-    } else {
-        Err(format!("{failed} moments failed"))
-    }
+    println!("{moments} moments, {skipped} candidates skipped");
+    Ok(())
 }
 
 #[cfg(test)]
@@ -556,6 +531,8 @@ mod tests {
         assert_eq!(slug("Jace, Vryn's Prodigy"), "jace-vryns-prodigy");
     }
 
+    /// Generating every spec plays every moment from both seats: a moment is kept only once it
+    /// reaches a live decision from each.
     #[test]
     fn moments_are_named_uniquely() {
         for spec in specs() {
@@ -568,19 +545,5 @@ mod tests {
                 );
             }
         }
-    }
-
-    /// Every moment records what was approved, from both seats, and no approved record is
-    /// stale.
-    #[test]
-    fn every_moment_holds() {
-        let mut failed = Vec::new();
-        failures(&[], false, &mut |line| {
-            if let Line::Checked(name, Err(e)) = line {
-                failed.push(format!("{name}: {e}"));
-            }
-        })
-        .expect("the specs check");
-        assert!(failed.is_empty(), "{}", failed.join("\n"));
     }
 }

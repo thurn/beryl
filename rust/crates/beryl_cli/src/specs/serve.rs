@@ -273,7 +273,10 @@ fn current(feed: &SharedFeed) -> Value {
     let mut shown = f.views[start].clone();
     // Shown at once, it animates nothing.
     shown.view.events.clear();
-    if !f.released && f.page.is_none() {
+    // An instance named `hold-…` waits for its `play`, as a page's does: a driver starts it
+    // when it is watching.
+    let held = f.key.rsplit('/').next().is_some_and(|id| id.starts_with("hold-"));
+    if !f.released && f.page.is_none() && !held {
         let feed = Arc::clone(feed);
         std::thread::spawn(move || {
             std::thread::sleep(BEAT);

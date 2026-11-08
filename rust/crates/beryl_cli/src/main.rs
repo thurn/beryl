@@ -25,8 +25,9 @@
 //! - `beryl_cli serve [--port N]` serves the app's game commands over HTTP for a UI in a plain
 //!   browser to play live games through (`just ui-live`, [`serve`]).
 //! - `beryl_cli specs-serve [--port N]` serves the cards' specs, each moment a live game, for
-//!   the spec page (`just specs`, [`specs::serve`]); `beryl_cli specs-check [card...]` plays
-//!   each moment headless and checks what it expects ([`specs`]).
+//!   the spec page (`just specs`, [`specs::serve`]); `beryl_cli specs-check [card...]` lists
+//!   each generated moment and the candidates generation skipped;
+//!   `beryl_cli specs-describe <card> [moment]` prints what each moment shows from each seat ([`specs`]).
 
 mod agreement;
 mod anchor_replay;
@@ -57,7 +58,8 @@ const USAGE: &str = "usage:
   beryl_cli eval-fit [--games N] [--seed N]
   beryl_cli serve [--port N]
   beryl_cli specs-serve [--port N]
-  beryl_cli specs-check [--approve] [card...]
+  beryl_cli specs-check [card...]
+  beryl_cli specs-describe <card> [moment]
   beryl_cli review <replay.json> [--agent NAME] [--out FILE]
   beryl_cli anchor-replay <run-dir> <entrant> [--examples N] [--recheck N] [--guarded]
   beryl_cli agreement <run-dir> <entrant> [--positions N] [--budget B]";
@@ -91,10 +93,13 @@ fn main() -> ExitCode {
         [command, flag, port] if command == "specs-serve" && flag == "--port" => {
             number(flag, port).and_then(specs::serve::serve)
         }
-        [command, flag, cards @ ..] if command == "specs-check" && flag == "--approve" => {
-            specs::check_all(cards, true)
+        [command, cards @ ..] if command == "specs-check" => specs::check_all(cards),
+        [command, card] if command == "specs-describe" => {
+            specs::describe(std::slice::from_ref(card), None)
         }
-        [command, cards @ ..] if command == "specs-check" => specs::check_all(cards, false),
+        [command, card, moment] if command == "specs-describe" => {
+            specs::describe(std::slice::from_ref(card), Some(moment))
+        }
         [command, rest @ ..] if command == "play" => Flags::parse(rest).and_then(|f| play(&f)),
         [command, rest @ ..] if command == "tournament" => {
             Flags::parse(rest).and_then(|f| tournament(&f))

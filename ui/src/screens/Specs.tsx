@@ -54,7 +54,10 @@ function CardImage({ name, className }: { name: string; className?: string }) {
 /** The spec pages, by the path after `/specs`. */
 export function Specs({ path }: { path: string }) {
   const specs = useSpecs();
-  const slug = path.replace(/^\/specs\/?/, "").replace(/\/$/, "");
+  const [slug, only, seat] = path
+    .replace(/^\/specs\/?/, "")
+    .replace(/\/$/, "")
+    .split("/");
   useEffect(() => {
     document.title = "Beryl specs";
   }, []);
@@ -68,13 +71,42 @@ export function Specs({ path }: { path: string }) {
   }
   if (!slug) return <SpecIndex specs={specs} />;
   const spec = specs.find((s) => s.slug === slug);
-  return spec ? (
-    <SpecPage spec={spec} />
+  const moment = spec?.moments.find((m) => m.name === only);
+  if (spec && moment && seat) {
+    return <SeatRedirect slug={spec.slug} moment={moment.name} seat={seat} />;
+  }
+  return spec && (moment || !only) ? (
+    <SpecPage spec={spec} only={moment} />
   ) : (
     <div className="specs">
-      <p className="specs-empty">No spec for {slug}.</p>
+      <p className="specs-empty">
+        No spec for {slug}
+        {only ? ` / ${only}` : ""}.
+      </p>
     </div>
   );
+}
+
+/** `/specs/<card>/<moment>/<yours|theirs>`: the moment from one seat, full size, as the game
+ * screen plays it: a fresh game each load, for a driver (`by specs --drive`) or a link. With
+ * `?hold` it waits for its spec server instance's `play`, so a driver can start watching
+ * first; otherwise it plays a beat after it shows. */
+function SeatRedirect({
+  slug,
+  moment,
+  seat,
+}: {
+  slug: string;
+  moment: string;
+  seat: string;
+}) {
+  useEffect(() => {
+    const hold = new URLSearchParams(window.location.search).has("hold");
+    const id = `${hold ? "hold-" : "seat-"}${Math.random().toString(36).slice(2, 10)}`;
+    const live = `${window.location.origin}${API}/m/${slug}/${moment}/${seat}/${id}`;
+    window.location.replace(`/?live=${encodeURIComponent(live)}#/game`);
+  }, [slug, moment, seat]);
+  return <div className="specs" />;
 }
 
 function SpecIndex({ specs }: { specs: SpecListing[] }) {
@@ -99,7 +131,9 @@ function SpecIndex({ specs }: { specs: SpecListing[] }) {
 /** A page's frames by their instance's key on the spec server, each handed its views. */
 type Frames = Map<string, Window>;
 
-function SpecPage({ spec }: { spec: SpecListing }) {
+/** A card's spec: every moment from your seat, then every moment from theirs; or, given
+ * `only`, that moment from both seats side by side. */
+function SpecPage({ spec, only }: { spec: SpecListing; only?: MomentListing }) {
   // One event stream for the page, named for it, which carries every frame's views
   // (`specs-serve`'s /stream): a frame holding its own would use up the few connections a
   // browser allows a host, and frames would have to leave as others came.
@@ -141,37 +175,66 @@ function SpecPage({ spec }: { spec: SpecListing }) {
                 <li className="specs-toc-group">{m.group}</li>
               )}
               <li>
-                <a href={`#${anchor(m, "yours")}`}>{m.title}</a>
+                <a
+                  href={
+                    only
+                      ? `/specs/${spec.slug}/${m.name}`
+                      : `#${anchor(m, "yours")}`
+                  }
+                  aria-current={m === only ? "page" : undefined}
+                >
+                  {m.title}
+                </a>
               </li>
             </Fragment>
           ))}
         </ol>
-        <a href="#theirs" className="specs-toc-them">
-          Them
-        </a>
+        {!only && (
+          <a href="#theirs" className="specs-toc-them">
+            Them
+          </a>
+        )}
       </nav>
-      <main className="specs-moments">
-        {VIEWS.map((view) => (
-          <div key={view} id={view}>
-            {view === "theirs" && <h1 className="specs-section-head">Them</h1>}
-            {spec.moments.map((m, i) => (
-              <Fragment key={m.name}>
-                {startsGroup(spec.moments, i) && (
-                  <h2 className="specs-group-head">{m.group}</h2>
-                )}
-                <MomentView
-                  slug={spec.slug}
-                  moment={m}
-                  view={view}
-                  page={page}
-                  open={open}
-                  frames={frames.current}
-                />
-              </Fragment>
-            ))}
-          </div>
-        ))}
-      </main>
+      {only ? (
+        <main className="specs-moments specs-pair">
+          {VIEWS.map((view) => (
+            <MomentView
+              key={view}
+              slug={spec.slug}
+              moment={only}
+              view={view}
+              page={page}
+              open={open}
+              frames={frames.current}
+            />
+          ))}
+        </main>
+      ) : (
+        <main className="specs-moments">
+          {VIEWS.map((view) => (
+            <div key={view} id={view}>
+              {view === "theirs" && (
+                <h1 className="specs-section-head">Them</h1>
+              )}
+              {spec.moments.map((m, i) => (
+                <Fragment key={m.name}>
+                  {startsGroup(spec.moments, i) && (
+                    <h2 className="specs-group-head">{m.group}</h2>
+                  )}
+                  <MomentView
+                    slug={spec.slug}
+                    moment={m}
+                    view={view}
+                    page={page}
+                    open={open}
+                    frames={frames.current}
+                  />
+                </Fragment>
+              ))}
+            </div>
+          ))}
+        </main>
+      )}
     </div>
   );
 }
@@ -202,6 +265,9 @@ function startsGroup(moments: MomentListing[], i: number): boolean {
 const VIEWS = ["yours", "theirs"] as const;
 type View = (typeof VIEWS)[number];
 
+/** Each seat as a moment's header names it. */
+const SEAT_NAMES: Record<View, string> = { yours: "You", theirs: "Them" };
+
 /** A moment's place on the page, from one seat. */
 function anchor(moment: MomentListing, view: View): string {
   return view === "yours" ? moment.name : `${moment.name}-theirs`;
@@ -230,7 +296,6 @@ function MomentView({
   const key = `${slug}/${moment.name}/${view}/${page}.${n}`;
   const live = `${window.location.origin}${API}/m/${key}`;
   const src = `/?live=${encodeURIComponent(live)}&relay#/game`;
-  const full = `${slug}/${moment.name}/${view}/${page}-full-${n}`;
   // Hidden until it shows its first view, over a placeholder.
   const [shown, setShown] = useState<string>();
   // Whether it holds views to play, by instance, asked once it has shown.
@@ -269,7 +334,10 @@ function MomentView({
   return (
     <section className="specs-moment" id={anchor(moment, view)}>
       <header className="specs-moment-head">
-        <h2>{moment.title}</h2>
+        <h2>
+          {moment.title}
+          <span className="specs-seat">{SEAT_NAMES[view]}</span>
+        </h2>
         <div className="specs-moment-actions">
           {waiting ? (
             <button
@@ -298,7 +366,15 @@ function MomentView({
           )}
           <a
             className="specs-icon-button"
-            href={`/?live=${encodeURIComponent(`${window.location.origin}${API}/m/${full}`)}#/game`}
+            href={`/specs/${slug}/${moment.name}`}
+            title="This moment"
+            aria-label="This moment"
+          >
+            #
+          </a>
+          <a
+            className="specs-icon-button"
+            href={`/specs/${slug}/${moment.name}/${view}`}
             target="_blank"
             rel="noreferrer"
             title="Open full size"

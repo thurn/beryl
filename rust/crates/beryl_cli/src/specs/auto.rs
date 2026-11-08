@@ -15,7 +15,6 @@
 //! holds there is recorded in the fixture conditions' words ([`snapshot`]). A candidate whose
 //! script cannot be played is dropped and reported; a question that is not the card's is
 //! dropped; a candidate that records the same as an earlier one of its scenario is dropped.
-//! The recorded conditions are checked against the approved ones in `data/specs/<slug>.json`.
 //!
 //! Labels are short and general: what made the moment, not prose.
 
@@ -373,6 +372,15 @@ fn activated(face: &Face) -> Vec<(u8, &'static beryl_engine::card::Ability)> {
         .filter(|(_, a)| a.kind == AbilityKind::Activated)
         .filter(|(_, a)| !a.cost.discard_self && a.cost.crew == 0)
         .filter_map(|(i, a)| Some((u8::try_from(i).ok()?, a)))
+        .collect()
+}
+
+/// The card's activated abilities that `snapshot` names by index, each with its label: its
+/// cost as the card prints it, for a reader of `specs-describe`.
+pub fn ability_labels(def: &'static CardDef) -> Vec<(u8, String)> {
+    activated(def.front())
+        .into_iter()
+        .map(|(k, a)| (k, cost_label(a, k)))
         .collect()
 }
 

@@ -255,3 +255,29 @@
     animation: none;
   }
 }
+
+/* Which seat a moment is seen from, after its title. */
+.specs-seat {
+  margin-left: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+/* One moment (`/specs/<card>/<moment>`): its two seats side by side. */
+.specs-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 24px;
+  padding-bottom: 24px;
+}
+
+.specs-pair .specs-moment {
+  margin: 0;
+}
+
+.specs-toc a[aria-current="page"] {
+  font-weight: 700;
+}
