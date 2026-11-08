@@ -233,6 +233,23 @@
       "where": ["token twins", "changed token", "stolen permanent"]
     },
     {
+      "name": "phone-main",
+      "board": "wu-mirror",
+      "until": "first priority decision for seat 0",
+      "where": ["step precombatMain", "castable Stock Up", "playable Island"]
+    },
+    {
+      "name": "phone-attack",
+      "board": "wu-mirror",
+      "until": "first attacker decision for seat 0"
+    },
+    {
+      "name": "phone-respond",
+      "board": "wu-mirror-respond",
+      "until": "first priority decision for seat 0",
+      "where": ["opponent's spell on the stack", "targeted spell on the stack"]
+    },
+    {
       "name": "crowded",
       "board": "crowded",
       "until": "first priority decision for seat 0",

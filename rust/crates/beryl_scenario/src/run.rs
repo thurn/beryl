@@ -6,7 +6,7 @@ use beryl_engine::card::{AbilityKind, FaceIx, Types};
 use beryl_engine::event::Event;
 use beryl_engine::state::{CounterKind, ObjectFlags, ObjectRef};
 use beryl_engine::{
-    Breakpoint, CardTable, Choice, Decision, DecisionKind, GameTable, Layout, Opt, Outcome,
+    Breakpoint, CardIx, CardTable, Choice, Decision, DecisionKind, GameTable, Layout, Opt, Outcome,
     Profile, Replay, Scratch, Seat, Slot, State, Step, Stops, Zone, apply, next,
 };
 
@@ -122,7 +122,7 @@ fn decks(scenario: &Scenario) -> [Vec<(u8, &'static str)>; 2] {
     scenario.setup.players.map(|p| {
         p.hand
             .iter()
-            .chain(p.battlefield.iter().map(|b| &b.card))
+            .chain(p.battlefield.iter().filter(|b| !b.token).map(|b| &b.card))
             .chain(p.battlefield.iter().flat_map(|b| b.exiled_with))
             .chain(p.graveyard)
             .chain(p.exile)
@@ -145,10 +145,17 @@ fn arrange(t: &GameTable, scenario: &Scenario) -> Result<State, String> {
                 .map_err(full)?;
         }
         for b in player.battlefield {
-            let slot = library_slot(&s, t, p, b.card);
-            s.place(slot, Zone::Battlefield).map_err(full)?;
+            let slot = if b.token {
+                s.place_token(p, token_index(t, b.card)?, b.face, false)
+                    .map_err(full)?
+            } else {
+                let slot = library_slot(&s, t, p, b.card);
+                s.place(slot, Zone::Battlefield).map_err(full)?;
+                s.set_face(slot, b.face);
+                slot
+            };
             s.set_tapped(slot, b.tapped);
-            s.set_face(slot, b.face);
+            s.set_sick(slot, b.sick);
             // CR 306.5b: a planeswalker "enters with a number of loyalty counters on it equal
             // to its printed loyalty number."
             let printed = t.def(s.card(slot)).face(b.face).loyalty;
@@ -187,6 +194,14 @@ fn arrange(t: &GameTable, scenario: &Scenario) -> Result<State, String> {
         s.order_library(p, &order);
     }
     Ok(s)
+}
+
+/// The game index of the token named `name`: one a card of the decks creates.
+fn token_index(t: &GameTable, name: &str) -> Result<CardIx, String> {
+    (0..t.len())
+        .map(|i| CardIx::new(u8::try_from(i).expect("game indices fit u8")))
+        .find(|&card| t.def(card).name == name)
+        .ok_or_else(|| format!("no card of the setup creates a {name}"))
 }
 
 /// A slot in `player`'s library holding the card `name`. The decks are built from the setup,

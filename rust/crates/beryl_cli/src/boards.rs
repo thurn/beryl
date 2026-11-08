@@ -9,8 +9,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use beryl_cards::names::{
     AANGS_ICEBERG, ABHORRENT_OCULUS, ADELINE_RESPLENDENT_CATHAR, BEZA_THE_BOUNDING_SPRING,
-    COUNTERSPELL, CURRENCY_CONVERTER, DAMN, ELITE_SPELLBINDER, GET_LOST, ISLAND,
-    JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY, JACE_WIELDER_OF_MYSTERIES,
+    COUNTERSPELL, CURRENCY_CONVERTER, DAMN, ELITE_SPELLBINDER, FLOODFARM_VERGE, FRACTURED_IDENTITY,
+    GET_LOST, ISLAND, JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY, JACE_WIELDER_OF_MYSTERIES,
     MALCOLM_ALLURING_SCOUNDREL, MANA_CRYPT, MANA_DRAIN, MANA_TITHE, NO_MORE_LIES, OUST,
     OVERLORD_OF_THE_MISTMOORS, PLAINS, PORTABLE_HOLE, REPRIEVE, SEACHROME_COAST, SINK_INTO_STUPOR,
     SNAPCASTER_MAGE, SPARAS_HEADQUARTERS, SPHINX_OF_FALSE_CONCLUSIONS, STAFF_OF_THE_STORYTELLER,
@@ -30,6 +30,9 @@ use beryl_session::trigger_to_stack;
 /// The tokens the boards name, as the cards that make them name them.
 const INSECT_TOKEN: &str = "Insect Token";
 const MAP_TOKEN: &str = "Map Token";
+const FISH_TOKEN: &str = "Fish Token";
+const SAMURAI_TOKEN: &str = "Samurai Token";
+const TREASURE_TOKEN: &str = "Treasure Token";
 /// Jace, Vryn's Prodigy's back face.
 const JACE_TELEPATH_UNBOUND: &str = "Jace, Telepath Unbound";
 
@@ -1251,6 +1254,20 @@ pub const BOARDS: &[Scenario] = &[
         .battlefield(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[Action::activate(P0, AANGS_ICEBERG, 1)]),
+    // The phone prototype's late-game WU mirror at turn 14, about 30 permanents (DESIGN.md
+    // in the mobile prototype): the human's precombat main phase, with a land drop and their
+    // sorceries castable, and then their declaration of attackers.
+    wu_mirror("wu-mirror", P0, &[]),
+    // The same table in the opponent's turn: their Fractured Identity targets the human's
+    // The Wandering Emperor.
+    wu_mirror(
+        "wu-mirror-respond",
+        P1,
+        &[
+            Action::cast(P1, FRACTURED_IDENTITY),
+            choose(P1, DecisionKind::Target, THE_WANDERING_EMPEROR),
+        ],
+    ),
 ];
 
 /// A library to draw from for a few turns.
@@ -1291,6 +1308,123 @@ const fn converter(name: &'static str, actions: &'static [Action]) -> Scenario {
         .library(P1, LANDS)
         .actions(actions)
 }
+
+/// The phone prototype's WU mirror at turn 14 in `active`'s precombat main phase, from which
+/// `actions` play on. The opponent's two manifested dread are face-down Counterspell and Oust.
+const fn wu_mirror(name: &'static str, active: Seat, actions: &'static [Action]) -> Scenario {
+    Scenario::new(name)
+        .at(14, active, TurnStep::PrecombatMain)
+        .life(P0, 14)
+        .battlefield(P0, MIRROR_YOURS)
+        .hand(
+            P0,
+            &[
+                COUNTERSPELL,
+                NO_MORE_LIES,
+                REPRIEVE,
+                OUST,
+                STOCK_UP,
+                DAMN,
+                ISLAND,
+                PLAINS,
+            ],
+        )
+        .graveyard(
+            P0,
+            &[
+                PLAINS,
+                ABHORRENT_OCULUS,
+                CURRENCY_CONVERTER,
+                JACE_THE_MIND_SCULPTOR,
+                TEFERI_TIME_RAVELER,
+                JACE_VRYNS_PRODIGY,
+                SUBTLETY,
+                FRACTURED_IDENTITY,
+                WINDS_OF_ABANDON,
+                THIRST_FOR_DISCOVERY,
+            ],
+        )
+        .library(P0, LANDS)
+        .life(P1, 11)
+        .battlefield(P1, MIRROR_THEIRS)
+        .hand(P1, &[FRACTURED_IDENTITY, COUNTERSPELL, REPRIEVE])
+        .graveyard(
+            P1,
+            &[
+                ISLAND,
+                REPRIEVE,
+                OUST,
+                PORTABLE_HOLE,
+                JACE_WIELDER_OF_MYSTERIES,
+                TEFERI_HERO_OF_DOMINARIA,
+                THE_WANDERING_EMPEROR,
+                BEZA_THE_BOUNDING_SPRING,
+                DAMN,
+                WINDS_OF_ABANDON,
+                THIRST_FOR_DISCOVERY,
+                STOCK_UP,
+                NO_MORE_LIES,
+                COUNTERSPELL,
+            ],
+        )
+        .exile(P1, &[SNAPCASTER_MAGE, SUBTLETY])
+        .library(P1, LANDS)
+        .actions(actions)
+}
+
+/// The human's side of the WU mirror: their Snapcaster Mage came down this turn.
+const MIRROR_YOURS: &[Permanent] = &[
+    Permanent::new(TUNDRA),
+    Permanent::new(SEACHROME_COAST),
+    Permanent::new(FLOODFARM_VERGE),
+    Permanent::new(SPARAS_HEADQUARTERS),
+    ISLAND_,
+    ISLAND_,
+    ISLAND_,
+    ISLAND_,
+    PLAINS_,
+    PLAINS_,
+    Permanent::new(THE_WANDERING_EMPEROR).counters(CounterKind::Loyalty, 5),
+    Permanent::new(TEFERI_HERO_OF_DOMINARIA),
+    Permanent::new(JACE_WIELDER_OF_MYSTERIES),
+    Permanent::new(PORTABLE_HOLE),
+    Permanent::new(STAFF_OF_THE_STORYTELLER).counters(CounterKind::Story, 4),
+    Permanent::new(MANA_CRYPT),
+    Permanent::new(BEZA_THE_BOUNDING_SPRING),
+    Permanent::new(SUBTLETY),
+    Permanent::new(SNAPCASTER_MAGE).sick(),
+    Permanent::new(TRINKET_MAGE),
+    Permanent::token(SAMURAI_TOKEN),
+    Permanent::token(SAMURAI_TOKEN),
+    Permanent::token(FISH_TOKEN),
+    Permanent::token(FISH_TOKEN),
+];
+
+/// The opponent's side of the WU mirror.
+const MIRROR_THEIRS: &[Permanent] = &[
+    Permanent::new(TUNDRA),
+    Permanent::new(SEACHROME_COAST),
+    Permanent::new(FLOODFARM_VERGE),
+    Permanent::new(SPARAS_HEADQUARTERS),
+    ISLAND_,
+    ISLAND_,
+    ISLAND_,
+    PLAINS_,
+    PLAINS_,
+    Permanent::new(JACE_THE_MIND_SCULPTOR).counters(CounterKind::Loyalty, 6),
+    Permanent::new(TEFERI_TIME_RAVELER).counters(CounterKind::Loyalty, 5),
+    Permanent::new(STAFF_OF_THE_STORYTELLER).counters(CounterKind::Story, 2),
+    Permanent::new(MANA_CRYPT),
+    Permanent::new(CURRENCY_CONVERTER),
+    Permanent::token(TREASURE_TOKEN),
+    Permanent::new(ABHORRENT_OCULUS),
+    Permanent::new(JACE_VRYNS_PRODIGY),
+    Permanent::new(TRINKET_MAGE),
+    Permanent::new(COUNTERSPELL).face_down(),
+    Permanent::new(OUST).face_down(),
+    Permanent::token(FISH_TOKEN),
+    Permanent::token(FISH_TOKEN),
+];
 
 const CONVERTER_TABLE: &[Permanent] = &[
     Permanent::new(CURRENCY_CONVERTER),

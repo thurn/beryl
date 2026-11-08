@@ -77,6 +77,13 @@ pub struct Permanent {
     /// them (CR 607.2a).
     #[serde(skip_serializing_if = "<[_]>::is_empty")]
     pub exiled_with: &'static [&'static str],
+    /// A token, not a card (CR 111.1): one a card of the setup creates.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub token: bool,
+    /// It came under its controller's control this turn, so it can't attack or use its tap
+    /// abilities yet ([CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026)).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub sick: bool,
 }
 
 /// Counters of one kind on a permanent at the start.
@@ -95,7 +102,30 @@ impl Permanent {
             face: FaceIx::FRONT,
             counters: None,
             exiled_with: &[],
+            token: false,
+            sick: false,
         }
+    }
+
+    /// A token named `card`, the name its definition gives it, which some card of the setup
+    /// creates, so the game has its definition
+    /// ([CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111)): "A token is a marker
+    /// used to represent any permanent that isn't represented by a card."
+    pub const fn token(card: &'static str) -> Permanent {
+        Permanent {
+            token: true,
+            ..Permanent::new(card)
+        }
+    }
+
+    /// Summoning sick ([CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026)): "A
+    /// creature's activated ability with the tap symbol or the untap symbol in its activation
+    /// cost can't be activated unless the creature has been under its controller's control
+    /// continuously since their most recent turn began. A creature can't attack unless it has
+    /// been under its controller's control continuously since their most recent turn began."
+    #[must_use]
+    pub const fn sick(self) -> Permanent {
+        Permanent { sick: true, ..self }
     }
 
     /// With `cards` in exile "exiled with" it.
