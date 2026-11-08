@@ -703,7 +703,7 @@ const spec = {
         }
         const s = seats[seat];
         s.live = await openSeat(s.page, base, card, moment, seat);
-        current = seats.yours?.page ?? s.page;
+        current = s.page;
         return s.page;
     },
     async both(card, moment) {
@@ -845,9 +845,11 @@ const spec = {
                 zone: "battlefield",
                 ...r,
                 fault:
-                    r.followedPx > 30 || r.sent.includes("choose")
-                        ? "a permanent moved with the pointer or acted on a drag"
-                        : undefined,
+                    r.followedPx > 30
+                        ? "a permanent moved with the pointer"
+                        : r.sent.includes("choose")
+                          ? "a drag off a permanent acted as a click"
+                          : undefined,
             });
         }
         const playable = page.locator(

@@ -57,10 +57,10 @@ export function record(ui) {
         return Math.round(o * 100) / 100;
     };
     // Hit testing follows paint order only where everything takes the pointer: a card in
-    // flight, or the layer it flies in, may not. Nothing is clicked while the audit watches.
+    // flight, or the layer it flies in, may not. Only while a frame is measured, so a live
+    // click between frames lands as it would for a player.
     const hits = document.createElement("style");
     hits.textContent = "* { pointer-events: auto !important; }";
-    document.head.append(hits);
     // Whether an element paints anything a player would see over what lies below it.
     const paints = (x) => {
         // An SVG's root is a canvas for its shapes, which paint where they are hit: an arrows
@@ -94,6 +94,7 @@ export function record(ui) {
     const frames = [];
     window.__motion = { frames, stop: false };
     const frame = () => {
+        document.head.append(hits);
         const cards = {};
         for (const e of document.querySelectorAll("[data-slot]")) {
             const r = e.getBoundingClientRect();
@@ -257,6 +258,7 @@ export function record(ui) {
                 anim: e.getAnimations({ subtree: true }).length > 0,
             };
         });
+        hits.remove();
         frames.push({ t: performance.now(), cards, lives, stack, uis, dupes });
         if (!window.__motion.stop) requestAnimationFrame(frame);
     };
@@ -477,6 +479,23 @@ function judge(e, frames, names, later = frames) {
         if (e.loyalty !== null && e.loyalty !== undefined) {
             return judgeBadge(what, frames, e.item.source);
         }
+        // An item announced a view after it reached the stack (a trigger put there while the
+        // view before showed its cause): its frame showed it then.
+        const named = e.item.name ?? "";
+        const held = Object.keys(frames[0]?.stack ?? {}).some((k) => {
+            const shown = k.slice(k.indexOf(":") + 1);
+            return (
+                shown && (named.startsWith(shown) || shown.startsWith(named))
+            );
+        });
+        if (held && named) {
+            return {
+                what,
+                verdict: "ok",
+                why: "on the stack since an earlier view",
+                start: frames[0]?.t,
+            };
+        }
     }
     // Damage to a player shows on their life total, whatever its source does.
     if (e.kind === "damage" && e.to.kind === "player") {
@@ -581,6 +600,8 @@ function judgeShown(what, b, name) {
     if (b.none) return { what, verdict: "still", why: `${name} never showed` };
     if (!b.changed)
         return { what, verdict: "still", why: `${name} never changed` };
+    // A `ui` finding names its element in `what`: its why starts with how it moved.
+    const lead = name ? `${name} ` : "";
     const how = [
         b.appeared && "appeared",
         b.vanished && "vanished",
@@ -594,7 +615,7 @@ function judgeShown(what, b, name) {
         return {
             what,
             verdict: "instant",
-            why: `${name} ${how} in ${b.ms} ms`,
+            why: `${lead}${how} in ${b.ms} ms`,
             start,
         };
     }
@@ -602,14 +623,14 @@ function judgeShown(what, b, name) {
         return {
             what,
             verdict: "unseen",
-            why: `${name} ${how} over ${b.ms} ms, visible ${Math.round(b.seen * 100)}% of it`,
+            why: `${lead}${how} over ${b.ms} ms, visible ${Math.round(b.seen * 100)}% of it`,
             start,
         };
     }
     return {
         what,
         verdict: "ok",
-        why: `${name} ${how} over ${b.ms} ms`,
+        why: `${lead}${how} over ${b.ms} ms`,
         start,
     };
 }
@@ -700,16 +721,14 @@ function uiFindings(window, events) {
         if (b.none || !b.changed) continue;
         const name = window.find((f) => f.cards[slot])?.cards[slot];
         const label = `${name?.name ?? `#${slot}`} (${name?.zone ?? "?"})`;
-        out.push(judgeShown(label, b, "it"));
+        out.push(judgeShown(label, b, ""));
     }
     const keys = new Set(window.flatMap((f) => Object.keys(f.uis ?? {})));
     for (const key of keys) {
         const b = behavior(window, key, (f) => f.uis?.[key]);
         if (b.none || !b.changed) continue;
         const label = window.find((f) => f.uis?.[key])?.uis[key].label ?? "";
-        out.push(
-            judgeShown(`${key.replace(/ #\d+$/, "")} «${label}»`, b, "it"),
-        );
+        out.push(judgeShown(`${key.replace(/ #\d+$/, "")} «${label}»`, b, ""));
     }
     return out;
 }

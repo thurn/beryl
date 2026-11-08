@@ -33,10 +33,10 @@ smoke *args:
 ui-shots *args:
     {{ by }} ui-shots "$@"
 
-# Play the game screen headless through a recorded fixture: drag, click, hover
+# Play the game screen headless through a recorded fixture: drag, click, hover (title filters)
 [group('app')]
-ui-test:
-    {{ by }} ui-test
+ui-test *args:
+    {{ by }} ui-test "$@"
 
 # Live games in a headless page an agent drives over HTTP, until interrupted (--release, --port N)
 [group('app')]

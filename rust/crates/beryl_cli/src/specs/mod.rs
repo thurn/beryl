@@ -617,6 +617,28 @@ mod tests {
         assert_eq!(slug("Jace, Vryn's Prodigy"), "jace-vryns-prodigy");
     }
 
+    /// A scripted action that never fits says so when the game ends without it: which action
+    /// waited, and the decision it fit no candidate of, not just that the game ended.
+    #[test]
+    fn a_stalled_script_names_the_decision_it_missed() {
+        use beryl_cards::names::{COUNTERSPELL, ISLAND};
+        use beryl_scenario::{P0, Permanent};
+        static MOMENT: Moment = Moment::new(
+            "stalled",
+            "Stalled",
+            Scenario::new("Counterspell with nothing to counter")
+                .battlefield(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
+                .hand(P0, &[COUNTERSPELL])
+                .library(P0, &[ISLAND])
+                .library(beryl_scenario::P1, &[ISLAND])
+                .at(2, beryl_scenario::P1, beryl_engine::TurnStep::PrecombatMain),
+        )
+        .play(&[Action::cast(P0, COUNTERSPELL)]);
+        let error = reach(&MOMENT, View::Yours).expect_err("Counterspell has no target");
+        assert!(error.contains("Counterspell"), "{error}");
+        assert!(error.contains("fit no candidate"), "{error}");
+    }
+
     /// Generating every spec plays every moment from both seats: a moment is kept only once it
     /// reaches a live decision from each.
     #[test]

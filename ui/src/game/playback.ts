@@ -5,7 +5,7 @@
 // answer ends each run of them. Views from before the screen started listening (a fixture's
 // recorded past) show at once, and the player may skip the rest of a run (`Playback.skip`), as
 // a click skips Arena's animations.
-import { useEffect, useReducer } from "react";
+import { useEffect, useLayoutEffect, useReducer } from "react";
 import {
   currentGame,
   onGameUpdate,
@@ -254,8 +254,10 @@ export function usePlayback(): {
   }, [queue]);
   // Each view as it takes the screen, with the events it animates, on the page's clock: a
   // motion audit (`by specs --motion`, ui/scripts/motion.mjs) matches what moved on screen to
-  // what happened in the game.
-  useEffect(() => {
+  // what happened in the game. Stamped before the view paints: a passive effect runs after
+  // it, late on a busy machine, so the first frame showing the view would come before its
+  // time.
+  useLayoutEffect(() => {
     if (!shown) return;
     const w = window as { berylShown?: { at: number; update: GameUpdate }[] };
     const log = (w.berylShown ??= []);

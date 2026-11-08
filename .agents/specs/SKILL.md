@@ -67,9 +67,9 @@ show the mechanics it shares.
    return { found, shot: await shot("after") };'
    ```
 
-   `spec.open(card, moment, seat)` opens one seat, `spec.both` both, held until
-   `spec.play()`, and `spec.audit(action?)` plays them (or runs the action, a
-   live click) and audits both seats' motion. An action is the viewer's own, so
+   `spec.open(card, moment, seat)` opens one seat (and points `page` at it),
+   `spec.both` both, held until `spec.play()`, and `spec.audit(action?)` plays
+   them (or runs the action, a live click) and audits both seats' motion. An action is the viewer's own, so
    what it moves before the game answers is judged too, not minor: a chooser
    opening, the hand rising (`ui` findings). `spec.seat("theirs")` points
    `page`, `shot` and `probe` at that seat at once; `spec.settled()` waits for
@@ -80,12 +80,16 @@ show the mechanics it shares.
    of the seat's timeline it matches, and each must show no earlier than the
    one before. It reads the last `spec.audit`, or runs one (with `action`), and
    returns `ok`, each match's ms, why not, and the whole timeline
-   (`spec.timeline(seat)`). From their seat on Winds of Abandon:
+   (`spec.timeline(seat)`): event lines as `--motion` words them, and `ui`
+   lines for what a click opens (`choice-card «Island»: appeared over 244 ms`).
+   From their seat on Winds of Abandon, the search waits for the cast and the
+   exile:
 
    ```js
    const m = "exiles-a-creature-its-controller-fetches-a-tapped-basic-0";
    await spec.both("winds-of-abandon", m);
-   return spec.ordered(["cast Winds", "->exile", "Search"], { seat: "theirs" });
+   const steps = ["cast Winds", "->exile", "choice-card"];
+   return spec.ordered(steps, { seat: "theirs" });
    ```
 
    A test with its own recording uses `timeline` and `ordered` from
