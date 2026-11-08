@@ -485,7 +485,28 @@ fn view_lines(view: &beryl_session::PlayerView) -> Vec<String> {
                 .filter(|o| o["zone"] == zone && o[whose] == side)
                 .map(|o| {
                     let name = o["name"].as_str().unwrap_or("?");
+                    // A permanent's status, power and toughness, counters and keywords, as
+                    // the view gives them: what its frame shows beyond its card.
+                    let mut marks = Vec::new();
                     if o["tapped"] == true {
+                        marks.push("tapped".to_owned());
+                    }
+                    if let (Some(p), Some(t)) =
+                        (o["pt"]["power"].as_i64(), o["pt"]["toughness"].as_i64())
+                    {
+                        marks.push(format!("{p}/{t}"));
+                    }
+                    for c in o["counters"].as_array().into_iter().flatten() {
+                        if let (Some(kind), Some(n)) = (c["kind"].as_str(), c["count"].as_u64()) {
+                            marks.push(format!("{n} {kind}"));
+                        }
+                    }
+                    for k in o["keywords"].as_array().into_iter().flatten() {
+                        marks.extend(k.as_str().map(str::to_owned));
+                    }
+                    if zone == "battlefield" && !marks.is_empty() {
+                        format!("{name} ({})", marks.join(", "))
+                    } else if o["tapped"] == true {
                         format!("{name} (tapped)")
                     } else {
                         name.to_owned()

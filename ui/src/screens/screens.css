@@ -2485,7 +2485,7 @@
   border-radius: 999px;
   background: rgb(18 15 12 / 92%);
   color: var(--text);
-  font-family: var(--font-display);
+  font-family: var(--font-serif);
   font-size: 22px;
   line-height: 1;
   white-space: nowrap;

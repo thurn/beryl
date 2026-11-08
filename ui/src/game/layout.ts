@@ -349,15 +349,14 @@ export function stackPlace(index: number, count: number) {
   };
 }
 
-/** Cards on their way to a pile (milled, discarded by the opponent, exiled from a graveyard),
- * shown face up in a row across the middle of the table, left of the stack, before they land:
- * as large as a stack card while few, smaller as more share the row. */
+/** A showcase: cards up to `width` wide, `gap` apart, in a row no wider than `reach`, held
+ * over the pile they are going to (or the permanent that holds them) and kept `margin` inside
+ * the stage, so the eye follows them from where they came to where they land. */
 export const SHOWCASE = {
-  center: 680,
-  middle: 430,
   width: 220,
-  reach: 1000,
+  reach: 900,
   gap: 18,
+  margin: 24,
 };
 
 /** Cards a beat of the game shows apart from where they lie (beats.ts): those `shown` face up
@@ -372,16 +371,27 @@ export interface Spotlight {
 /** How far below the opponent's hand a card they just drew dips into view. */
 const DRAWN_DIP = 120;
 
-/** Where the card at `index` of `count` in a showcase is drawn. */
-export function showcasePlace(index: number, count: number) {
+/** Where the card at `index` of `count` in a showcase over the point `over` is drawn: the row
+ * centered on it, as far as the stage's edges allow. */
+export function showcasePlace(
+  index: number,
+  count: number,
+  over: { x: number; y: number },
+) {
   const width = Math.min(
     SHOWCASE.width,
     (SHOWCASE.reach - SHOWCASE.gap * (count - 1)) / count,
   );
+  const height = width / CARD_ASPECT;
   const row = count * width + (count - 1) * SHOWCASE.gap;
+  const within = (at: number, size: number, stage: number) =>
+    Math.min(
+      Math.max(at - size / 2, SHOWCASE.margin),
+      stage - SHOWCASE.margin - size,
+    );
   return {
-    x: SHOWCASE.center - row / 2 + index * (width + SHOWCASE.gap),
-    y: SHOWCASE.middle - width / CARD_ASPECT / 2,
+    x: within(over.x, row, STAGE.width) + index * (width + SHOWCASE.gap),
+    y: within(over.y, height, STAGE.height),
     width,
   };
 }
@@ -1138,7 +1148,7 @@ function permanentRow(
         under?.forEach((e, j) => {
           const n = j + 1;
           const up = (look === "beneath" ? controllerward : 1) * n;
-          out.push({
+          const at = (rise: number): Placement => ({
             slot: e.slot,
             zone: e.zone,
             look,
@@ -1152,10 +1162,14 @@ function permanentRow(
                   scale,
               y,
               frameWidth,
-              up * height * BENEATH_STEP.y,
+              rise * height * BENEATH_STEP.y,
               scale,
             ),
           });
+          // One that would rise into its side's piles in the corner peeks out sideways only.
+          const peek = at(up);
+          const box = footprint(peek);
+          out.push(pileBoxes(side).some((b) => meets(box, b)) ? at(0) : peek);
         });
       tuck(beneath.get(o.slot), "beneath", -1);
       tuck(attached.get(o.slot), "attached", 1);
@@ -1193,6 +1207,7 @@ export function emblemObjects(view: PlayerView): ObjectView[] {
       damage: 0,
       counters: [],
       types: [],
+      keywords: [],
       pt: null,
       attachedTo: null,
       exiledBy: null,
@@ -1329,6 +1344,26 @@ export function zonePiles(view: PlayerView): ZonePile[] {
   });
 }
 
+/** How far a targeted card under a pile's top rises out of it, in its own heights. */
+const PILE_RISE = 0.6;
+
+/** The boxes `side`'s library, graveyard and exile take in their corner, a top card each. */
+function pileBoxes(side: Side): Box[] {
+  return (["library", "graveyard", "exile"] as const).map((zone) => {
+    const look = pileLook(side, PILES[side][zone], 1);
+    return {
+      left: look.x,
+      top: look.y,
+      right: look.x + look.width,
+      bottom: look.y + look.width / CARD_ASPECT,
+    };
+  });
+}
+
+/** Whether two boxes overlap. */
+const meets = (a: Box, b: Box) =>
+  a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
 /** A full frame drawn as a pile's top card. */
 function onPile(look: PileLook) {
   return {
@@ -1340,6 +1375,18 @@ function onPile(look: PileLook) {
   };
 }
 
+/** Your hand in the order of the elements that show it (standIns.ts): the twin left in hand
+ * when the engine moved the one you did not touch takes that one's place in the fan, so
+ * nothing in the hand shifts. The view orders the hand by slot, as the keys are. */
+function byElement(
+  hand: ObjectView[],
+  keys: ReadonlyMap<number, number> | undefined,
+): ObjectView[] {
+  if (!keys?.size) return hand;
+  const key = (o: ObjectView) => keys.get(o.slot) ?? o.slot;
+  return [...hand].sort((a, b) => key(a) - key(b));
+}
+
 /** Every object's placement. The hand is tucked under a screen over the table or raised for a
  * choice of its cards (`hold`); the permanents' rows keep clear of the game log while it is
  * `logOpen` over them; the cards in a `spotlight` are shown apart from where they lie.
@@ -1349,6 +1396,7 @@ export function layout(
   hold: HandHold = "held",
   logOpen = false,
   spotlight: Spotlight = {},
+  keys?: ReadonlyMap<number, number>,
 ): Layout {
   const out: Placement[] = [];
   const objects = view.objects;
@@ -1412,7 +1460,10 @@ export function layout(
   };
   out.push(
     ...handLifts(
-      handPlacements([...owned("you", "hand"), ...elsewhere], hold),
+      handPlacements(
+        [...byElement(owned("you", "hand"), keys), ...elsewhere],
+        hold,
+      ),
       yours.filter(backRow).map(footprint),
     ),
   );
@@ -1434,8 +1485,18 @@ export function layout(
       });
     }
   }
+  // A card under the top of a pile that the top of the stack targets rises out of the pile,
+  // toward the table's middle, so that the target arrow meets that card and not the pile's top.
+  const aimed = new Set(
+    view.stack
+      .at(-1)
+      ?.targets.flatMap((t) => (t.kind === "player" ? [] : [t.slot])) ?? [],
+  );
   for (const pile of zonePiles(view)) {
     pile.cards.forEach((o, i) => {
+      const at = onPile(pile.look);
+      const buried = aimed.has(o.slot) && i < pile.cards.length - 1;
+      const rise = (FULL_WIDTH * at.scale * PILE_RISE) / CARD_ASPECT;
       out.push({
         slot: o.slot,
         zone: o.zone,
@@ -1443,8 +1504,9 @@ export function layout(
         width: FULL_WIDTH,
         span: FULL_WIDTH,
         opacity: 1,
-        z: 20 + i,
-        ...onPile(pile.look),
+        z: buried ? 20 + pile.cards.length + i : 20 + i,
+        ...at,
+        y: buried ? at.y + (pile.side === "you" ? -rise : rise) : at.y,
       });
     });
   }
@@ -1469,8 +1531,16 @@ export function layout(
     });
   });
   const shown = objects.filter((o) => spotlight.shown?.has(o.slot));
+  // The showcase stands over where its cards land: the middle of the first one's resting place.
+  const landing = out.find((p) => p.slot === shown[0]?.slot);
+  const over = landing
+    ? {
+        x: landing.x + (landing.width * landing.scale) / 2,
+        y: landing.y + (landing.width * landing.scale) / CARD_ASPECT / 2,
+      }
+    : { x: STAGE.width / 2, y: STAGE.height / 2 };
   shown.forEach((o, i) => {
-    const place = showcasePlace(i, shown.length);
+    const place = showcasePlace(i, shown.length, over);
     out.push({
       slot: o.slot,
       zone: o.zone,

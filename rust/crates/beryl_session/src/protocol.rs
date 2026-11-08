@@ -5,7 +5,7 @@
 
 use beryl_engine::card::{
     Ability, AbilityIx, AbilityKind, CastingOption, Castings, Colors, Cost, Face, FaceAbility,
-    FaceIx, ManaColor, ManaCost, Types,
+    FaceIx, Keywords, ManaColor, ManaCost, Types,
 };
 use beryl_engine::event::{Event, LossCause, Reason, Recipient};
 use beryl_engine::layout::Queue;
@@ -185,6 +185,11 @@ pub struct ObjectView {
     pub types: Vec<CardType>,
     /// On the battlefield, for creatures: power and toughness after continuous effects.
     pub pt: Option<PowerToughness>,
+    /// On the battlefield: the keyword abilities it has after continuous effects, printed and
+    /// gained alike ([CR 613.1f](https://yawgatog.com/resources/magic-rules/#R6131f): "Layer
+    /// 6: Ability-adding effects, ability-removing effects, and effects that say an object
+    /// can't have an ability are applied"), so that one gained until end of turn shows.
+    pub keywords: Vec<Keyword>,
     pub attached_to: Option<u16>,
     /// The permanent that exiled it until it leaves (CR 610.3).
     pub exiled_by: Option<u16>,
@@ -937,6 +942,25 @@ pub enum CardType {
     Sorcery,
 }
 
+/// A keyword ability a permanent can show (CR 702), those the cube's permanents use in combat.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum Keyword {
+    FirstStrike,
+    Flying,
+    Reach,
+    Vigilance,
+}
+
+impl Keyword {
+    const ALL: [(Keywords, Keyword); 4] = [
+        (Keywords::FIRST_STRIKE, Keyword::FirstStrike),
+        (Keywords::FLYING, Keyword::Flying),
+        (Keywords::REACH, Keyword::Reach),
+        (Keywords::VIGILANCE, Keyword::Vigilance),
+    ];
+}
+
 impl CardType {
     const ALL: [(Types, CardType); 7] = [
         (Types::ARTIFACT, CardType::Artifact),
@@ -1175,6 +1199,13 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         pt: derived.filter(|_| creature).map(|d| PowerToughness {
             power: d.power,
             toughness: d.toughness,
+        }),
+        keywords: derived.map_or_else(Vec::new, |d| {
+            Keyword::ALL
+                .iter()
+                .filter(|&&(bit, _)| d.keywords.contains(bit))
+                .map(|&(_, k)| k)
+                .collect()
         }),
         attached_to: some(o.attached_to),
         exiled_by: if flags.has(ObjectFlags::EXILED_UNTIL) {

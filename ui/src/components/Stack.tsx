@@ -188,6 +188,11 @@ export function Arrows({
   // Where everything was on the last frame, and whether the arrows were routed afresh there:
   // once nothing moves, they are, once.
   const seen = useRef({ where: "", searched: false });
+  // Following, where each arrow's ends were and since when they have stood there: an arrow
+  // shows only once both its ends have stood still for `REST_MS`, so it never stretches after
+  // a card on its way (a countered spell to the graveyard, a creature still landing when its
+  // trigger goes on the stack), and it goes the moment either end starts moving.
+  const rest = useRef(new Map<string, { ends: string; since: number }>());
 
   // Measured against the svg's own parent: a parent's ref is not attached yet when this runs.
   useLayoutEffect(() => {
@@ -204,16 +209,33 @@ export function Arrows({
             box: box(e.getBoundingClientRect(), origin, scale),
           }))
         : [];
+      const now = performance.now();
+      const keyOf = (a: ArrowSpec) => `${a.from}-${a.to}`;
+      const resting = new Map<string, { ends: string; since: number }>();
       const ends = arrows.flatMap((a) => {
         const from = document.getElementById(a.from);
         const to = document.getElementById(a.to);
         if (!from || !to) return [];
         const source = box(from.getBoundingClientRect(), origin, scale);
         const target = box(to.getBoundingClientRect(), origin, scale);
+        if (follow) {
+          const key = keyOf(a);
+          const at = JSON.stringify(
+            [source, target].map((b) =>
+              [b.x, b.y, b.width, b.height].map(Math.round),
+            ),
+          );
+          const was = rest.current.get(key);
+          const since = was?.ends === at ? was.since : now;
+          resting.set(key, { ends: at, since });
+          if (now - since < REST_MS) return [];
+        }
         return [{ a, from, to, source, target }];
       });
+      if (follow) rest.current = resting;
       const where = JSON.stringify([
         size,
+        ends.map((e) => keyOf(e.a)),
         ...[
           ...ends.flatMap((e) => [e.source, e.target]),
           ...obstacles.map((o) => o.box),
@@ -235,7 +257,6 @@ export function Arrows({
           )
           .map((o) => o.box),
       }));
-      const keyOf = (a: ArrowSpec) => `${a.from}-${a.to}`;
       // While anything moves, each follows its ports; standing still, or new, all are routed.
       const traced = ends.map(({ a }, i) => {
         const choice = choices.current.get(keyOf(a));
@@ -319,6 +340,9 @@ export function Arrows({
     </svg>
   );
 }
+
+/** How long both ends of a followed arrow stand still before it shows, in ms. */
+const REST_MS = 90;
 
 /** The arrowhead, its tip at the origin, pointing along +x: a solid barbed head, three and a
  * half tubes wide, whose base the shaft runs into. */

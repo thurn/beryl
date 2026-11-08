@@ -187,6 +187,7 @@ const NOWHERE: ObjectView = {
   damage: 0,
   counters: [],
   types: [],
+  keywords: [],
   pt: null,
   attachedTo: null,
   exiledBy: null,

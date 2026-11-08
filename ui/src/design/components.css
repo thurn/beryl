@@ -163,11 +163,17 @@
   box-shadow: 0 0 0 0.15em var(--gold-soft);
   border-radius: 0.1em;
 }
-.ability-badge {
+/* The keyword badges, side by side at the foot of a battlefield frame. */
+.ability-badges {
   position: absolute;
-  --ink: #2b2b30;
   left: 0.62em;
   bottom: 0.28em;
+  display: flex;
+  gap: 0.2em;
+}
+.ability-badge {
+  position: relative;
+  --ink: #2b2b30;
   width: 2.2em;
   height: 2.1em;
   border-radius: 0.38em;
@@ -186,6 +192,23 @@
 }
 .ability-glyph {
   font: normal 1.3em/1 Mana;
+}
+/* A keyword the permanent gained (until end of turn, from another card): lit green, as a
+   raised stat, and popping in as it comes. */
+.ability-gained {
+  --ink: #0f3d16;
+  background: linear-gradient(180deg, #d6f7c9, #9fe08a 55%, #6fbf5a);
+  box-shadow:
+    inset 0 0.05em 0 rgb(255 255 255 / 80%),
+    0 0 0.45em 0.1em rgb(120 255 110 / 70%),
+    0 0.08em 0.2em rgb(0 0 0 / 55%);
+  animation: ability-gained-in 420ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+@keyframes ability-gained-in {
+  from {
+    transform: scale(0.2);
+    opacity: 0;
+  }
 }
 
 /* The card frame, in em (a twelfth of the card's width, so a frame scales as a whole): a black
@@ -529,6 +552,12 @@
 }
 .card-with-ability .card-counters {
   left: 3em;
+}
+.card-abilities-2 .card-counters {
+  left: 5.4em;
+}
+.card-abilities-3 .card-counters {
+  left: 7.8em;
 }
 .card-with-pt .card-counters {
   right: 5.1em;
@@ -910,9 +939,15 @@
   overflow: visible;
   z-index: 5;
 }
+@keyframes arrow-in {
+  from {
+    opacity: 0;
+  }
+}
 /* One look for every arrow: a tube, thin bright edges round a deeper core, in a bloom. Only the
    tone differs. */
 .arrow {
+  animation: arrow-in 160ms ease-out;
   --weight: 9px;
   --core: 0.55;
   --glow: 0.9;

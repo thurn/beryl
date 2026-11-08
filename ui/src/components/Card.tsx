@@ -17,7 +17,7 @@ import {
 import { motion, type MotionStyle } from "motion/react";
 import { useCardBack } from "../cards";
 import { useTextFit } from "./fit";
-import { AbilityBadge, type AbilityIcon, ManaCost, RulesText } from "./Mana";
+import { AbilityBadge, type AbilityMark, ManaCost, RulesText } from "./Mana";
 
 export type Color = "W" | "U" | "B" | "R" | "G";
 
@@ -34,7 +34,9 @@ export interface CardFace {
   art?: string;
   /** The card's whole scan, once it has loaded: drawn in place of the frame. */
   scan?: string;
-  ability?: AbilityIcon;
+  /** The keyword abilities badged at the foot of a battlefield frame; those `gained` (not in
+   * its printed text) are lit, as a stat changed from its printed value is. */
+  abilities?: AbilityMark[];
   /** The paragraph of the rules text lit, by index: the ability an option uses. Over a scan,
    * a plate over its text box says that paragraph alone. */
   lit?: number;
@@ -375,7 +377,10 @@ export function Card({
     card.colors.length > 1 && `accent-${card.colors[0]?.toLowerCase()}`,
     scan && "card-scanned",
     (pt || loyalty !== undefined) && "card-with-pt",
-    card.ability && field && "card-with-ability",
+    card.abilities?.length && field && "card-with-ability",
+    (card.abilities?.length ?? 0) > 1 &&
+      field &&
+      `card-abilities-${card.abilities!.length}`,
     marks?.sick && "card-sick",
     marks?.token && "card-token",
     highlight && `card-${highlight}`,
@@ -453,7 +458,13 @@ export function Card({
             )}
           </div>
         )}
-        {card.ability && field && <AbilityBadge ability={card.ability} />}
+        {card.abilities?.length && field ? (
+          <span className="ability-badges">
+            {card.abilities.map((a) => (
+              <AbilityBadge key={a.icon} ability={a.icon} gained={a.gained} />
+            ))}
+          </span>
+        ) : null}
         {marks?.sick && (
           <span className="card-sick-moon">
             <MarkBadge icon="sick" label="Summoning sick" />

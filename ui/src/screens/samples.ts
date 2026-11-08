@@ -24,7 +24,7 @@ export const SAMPLE = {
     colors: ["U", "B"],
     power: "1",
     toughness: "1",
-    ability: "flying",
+    abilities: [{ icon: "flying" }],
     text: "Flying, deathtouch\nWhen Baleful Strix enters, draw a card.",
   },
   beast: {

@@ -33,6 +33,12 @@ const CODES: Record<string, number> = {
 
 export type AbilityIcon = "flying" | "first-strike" | "vigilance";
 
+/** A keyword ability badged on a battlefield frame, lit when the permanent `gained` it. */
+export interface AbilityMark {
+  icon: AbilityIcon;
+  gained?: boolean;
+}
+
 const ABILITY_CODES: Record<Exclude<AbilityIcon, "flying">, number> = {
   "first-strike": 0xe950,
   vigilance: 0xe968,
@@ -124,9 +130,19 @@ export function CostText({ text }: { text: string }) {
 const EAGLE =
   "M2.7 3.2 L7.6 3.2 L15.3 15.1 L31.4 2.6 L30.7 8.2 L25.8 10.8 L30 11.4 L24.4 15.8 L27.9 17 L18.8 21.4 L18.1 25.1 L16.7 30.1 L12.5 30.8 L11.1 25.1 L9 25.1 L3.4 25.1 L4.1 22.6 L9.7 20.1 L6.2 12.6 Z";
 
-export function AbilityBadge({ ability }: { ability: AbilityIcon }) {
+export function AbilityBadge({
+  ability,
+  gained = false,
+}: {
+  ability: AbilityIcon;
+  gained?: boolean;
+}) {
   return (
-    <span className="ability-badge" role="img" aria-label={ability}>
+    <span
+      className={`ability-badge${gained ? " ability-gained" : ""}`}
+      role="img"
+      aria-label={gained ? `${ability} (gained)` : ability}
+    >
       {ability === "flying" ? (
         <svg viewBox="0 0 32 32" aria-hidden>
           <path d={EAGLE} />

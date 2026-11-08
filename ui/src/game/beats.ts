@@ -93,16 +93,16 @@ function hiddenTo(zone: ZoneName, owner: Side): boolean {
   return zone === "library" || (zone === "hand" && owner === "opponent");
 }
 
-/** Whether moving a card from `from` to `to` would only hop between piles, or out of a hand
- * whose cards the viewer never saw: milled, discarded by the opponent, exiled from a
- * graveyard or a library, shuffled from a graveyard into a library. Such a card is shown face
- * up over the table before it lands. A card the viewer sees leave (a permanent, a spell, their
- * own hand card) travels as it is. */
+/** Whether moving a card from `from` to `to` takes it out of a zone the viewer cannot see into
+ * a pile (milled, discarded by the opponent, exiled from a library), or out of sight from a
+ * pile (shuffled from a graveyard into a library). Such a card is shown face up over the pile
+ * it goes to (SHOWCASE), then shrinks into it. A card the viewer sees leave (a permanent, a
+ * spell, their own hand card) or that moves between two face-up piles (exiled from a
+ * graveyard, put into a graveyard from exile) travels as it is: there is nothing new to read. */
 function hops(from: ZoneName, to: ZoneName, owner: Side): boolean {
-  const piles: ZoneName[] = ["library", "graveyard", "exile"];
-  if (!piles.includes(to) || from === to) return false;
+  if (from === to) return false;
   if (to === "library") return from === "graveyard" || from === "exile";
-  return piles.includes(from) || (from === "hand" && owner === "opponent");
+  return (to === "graveyard" || to === "exile") && hiddenTo(from, owner);
 }
 
 /** The opponent's spell or ability on the stack, held long enough to read; a trigger a little

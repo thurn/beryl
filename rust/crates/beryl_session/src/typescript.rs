@@ -10,10 +10,10 @@ use crate::ipc::{
 };
 use crate::protocol::{
     AbilityClass, AbilityRef, AskView, Candidate, CandidateIndex, CandidateView, CardType, Combat,
-    Counter, CounterView, Culprit, DecisionId, DecisionView, Declaration, Facing, GameEvent, Kind,
-    LossReason, Mana, ManaPool, ObjectView, OutcomeView, PaidCost, PassTo, Payment, PlayerState,
-    PlayerView, Players, PowerToughness, RefusalView, Refused, SessionId, Side, StackItem, Stall,
-    Status, Step, StopsSetting, TargetRef, TurnView, UndoView, Why, ZoneName,
+    Counter, CounterView, Culprit, DecisionId, DecisionView, Declaration, Facing, GameEvent,
+    Keyword, Kind, LossReason, Mana, ManaPool, ObjectView, OutcomeView, PaidCost, PassTo, Payment,
+    PlayerState, PlayerView, Players, PowerToughness, RefusalView, Refused, SessionId, Side,
+    StackItem, Stall, Status, Step, StopsSetting, TargetRef, TurnView, UndoView, Why, ZoneName,
 };
 use crate::{AgentView, GameUpdate, SessionError, StartRequest};
 
@@ -79,6 +79,7 @@ pub fn typescript() -> String {
         Counter::decl(&cfg),
         Mana::decl(&cfg),
         CardType::decl(&cfg),
+        Keyword::decl(&cfg),
     ];
     let mut out = String::from(
         "// Generated from rust/crates/beryl_session by ts-rs; do not edit. Regenerate with\n\

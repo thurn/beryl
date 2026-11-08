@@ -7,19 +7,33 @@ import type {
   CounterMark,
   StatTone,
 } from "../components/Card";
-import type { AbilityIcon } from "../components/Mana";
+import type { AbilityIcon, AbilityMark } from "../components/Mana";
 import { tokenFace, useCardArt, type CardArt, type CardFace } from "../cards";
 import type {
   AbilityRef,
   CounterView,
+  Keyword,
   ObjectView,
 } from "../generated/protocol";
 
-const ABILITIES: [RegExp, AbilityIcon][] = [
-  [/^Flying\b/m, "flying"],
-  [/^First strike\b/m, "first-strike"],
-  [/^Vigilance\b/m, "vigilance"],
+/** The keyword abilities a frame badges, in badge order: the keyword the view names, and the
+ * printed text that has it, which tells a gained one from a printed one. */
+const ABILITIES: [Keyword, RegExp, AbilityIcon][] = [
+  ["flying", /^Flying\b/m, "flying"],
+  ["firstStrike", /^First strike\b/m, "first-strike"],
+  ["vigilance", /^Vigilance\b/m, "vigilance"],
 ];
+
+/** The badges for `o`: on the battlefield, the keywords it has now (a gained one lit), else
+ * those its printed `text` has. */
+function abilityMarks(o: ObjectView, text: string): AbilityMark[] {
+  const onField = o.zone === "battlefield";
+  return ABILITIES.flatMap(([keyword, printed, icon]) => {
+    const has = printed.test(text);
+    if (!onField) return has ? [{ icon }] : [];
+    return o.keywords.includes(keyword) ? [{ icon, gained: !has }] : [];
+  });
+}
 
 /** How `current` compares with a printed value, when the printed one is a number. */
 export function tone(
@@ -68,7 +82,7 @@ export function frameFace(o: ObjectView, art: CardArt): FrameFace {
         : String(loyalty)
       : face.loyalty,
     scan: art.src,
-    ability: ABILITIES.find(([pattern]) => pattern.test(text))?.[1],
+    abilities: abilityMarks(o, text),
   };
 }
 
@@ -105,6 +119,7 @@ export const BLANK: ObjectView = {
   counters: [],
   types: [],
   pt: null,
+  keywords: [],
   attachedTo: null,
   exiledBy: null,
   exiledWith: null,

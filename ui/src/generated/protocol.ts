@@ -161,7 +161,14 @@ types: Array<CardType>,
 /**
  * On the battlefield, for creatures: power and toughness after continuous effects.
  */
-pt: PowerToughness | null, attachedTo: number | null, 
+pt: PowerToughness | null, 
+/**
+ * On the battlefield: the keyword abilities it has after continuous effects, printed and
+ * gained alike ([CR 613.1f](https://yawgatog.com/resources/magic-rules/#R6131f): "Layer
+ * 6: Ability-adding effects, ability-removing effects, and effects that say an object
+ * can't have an ability are applied"), so that one gained until end of turn shows.
+ */
+keywords: Array<Keyword>, attachedTo: number | null, 
 /**
  * The permanent that exiled it until it leaves (CR 610.3).
  */
@@ -404,6 +411,8 @@ export type Counter = "plusOne" | "minusOne" | "loyalty" | "time" | "story" | "c
 export type Mana = "white" | "blue" | "black" | "red" | "green" | "colorless";
 
 export type CardType = "artifact" | "creature" | "enchantment" | "instant" | "land" | "planeswalker" | "sorcery";
+
+export type Keyword = "firstStrike" | "flying" | "reach" | "vigilance";
 
 /** Each command: its arguments, its result, and the error it rejects with. */
 export type Commands = {
