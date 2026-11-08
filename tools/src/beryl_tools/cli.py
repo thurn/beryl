@@ -9,6 +9,7 @@ import sys
 
 from . import (
     app,
+    audio,
     bench,
     bugs,
     cards,
@@ -49,6 +50,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     for module in (
         app,
+        audio,
         bench,
         bugs,
         cards,

@@ -3,3 +3,5 @@ node_modules/
 package-lock.json
 src/generated/
 public/fixtures/
+# Written by `just audio`.
+src/audio/loops.json

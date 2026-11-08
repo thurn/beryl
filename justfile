@@ -101,6 +101,11 @@ cards *args:
 card-quality *args:
     {{ by }} card-quality "$@"
 
+# Transcode the UI's music and sounds from the staged CC0 packs into ui/public/audio (--check)
+[group('data')]
+audio *args:
+    {{ by }} audio "$@"
+
 # Install Maven and JDK 21, fetch XMage and Forge at their pins and build them, in the cache
 [group('oracles')]
 oracle-setup:

@@ -1,0 +1,84 @@
+{
+  "sources": {
+    "notjam": {
+      "title": "Not Jam Music Pack",
+      "author": "NotJam",
+      "license": "CC0",
+      "url": "https://not-jam.itch.io/not-jam-music-pack",
+      "dir": "notjam"
+    },
+    "kenney-casino": {
+      "title": "Casino Audio",
+      "author": "Kenney",
+      "license": "CC0",
+      "url": "https://kenney.nl/assets/casino-audio",
+      "dir": "kenney/kenney_casino-audio/Audio"
+    },
+    "kenney-interface": {
+      "title": "Interface Sounds",
+      "author": "Kenney",
+      "license": "CC0",
+      "url": "https://kenney.nl/assets/interface-sounds",
+      "dir": "kenney/kenney_interface-sounds/Audio"
+    }
+  },
+  "music": {
+    "menu": {
+      "loop": true,
+      "variants": [
+        { "source": "notjam", "file": "Loopable/ChillMenu_Loopable.wav" }
+      ]
+    },
+    "game": {
+      "loop": true,
+      "variants": [
+        {
+          "source": "notjam",
+          "file": "Loopable/KleptoLindaMountainA_Loopable.wav"
+        },
+        { "source": "notjam", "file": "Loopable/TypeCastTheme_Loopable.wav" },
+        {
+          "source": "notjam",
+          "file": "Loopable/KleptoLindaCavernsA_Loopable.wav"
+        },
+        {
+          "source": "notjam",
+          "file": "Loopable/HaroldParanormalInstigatorTheme_Loopable.wav"
+        }
+      ]
+    },
+    "win": {
+      "loop": false,
+      "variants": [{ "source": "notjam", "file": "Standalone/VictoryLap.wav" }]
+    },
+    "loss": {
+      "loop": false,
+      "variants": [
+        { "source": "notjam", "file": "Standalone/KleptoLindaCredits.wav" }
+      ]
+    }
+  },
+  "sounds": {
+    "click": {
+      "gain": -6,
+      "variants": [{ "source": "kenney-interface", "file": "click_001.ogg" }]
+    },
+    "toggle": {
+      "gain": -6,
+      "variants": [
+        { "source": "kenney-interface", "file": "toggle_001.ogg" },
+        { "source": "kenney-interface", "file": "toggle_002.ogg" }
+      ]
+    },
+    "tick": {
+      "gain": -10,
+      "voices": 1,
+      "variants": [{ "source": "kenney-interface", "file": "tick_002.ogg" }]
+    },
+    "start": {
+      "gain": -3,
+      "voices": 1,
+      "variants": [{ "source": "kenney-casino", "file": "card-shuffle.ogg" }]
+    }
+  }
+}
