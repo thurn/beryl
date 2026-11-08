@@ -34,9 +34,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from . import cards, paths, warm
+from . import cards, paths, system, warm
 from .shots import (
-    NPM_BIN,
     UiError,
     free_port,
     port_free,
@@ -64,13 +63,15 @@ def build(release: bool) -> Path | None:
     if built.returncode != 0:
         print("specs: building beryl_cli failed", file=sys.stderr)
         return None
-    return paths.RUST / "target" / ("release" if release else "debug") / "beryl_cli"
+    return system.exe(
+        paths.RUST / "target" / ("release" if release else "debug") / "beryl_cli"
+    )
 
 
 def build_ui() -> bool:
     """Builds the UI's production bundle into ui/dist, for `vite preview`."""
     built = subprocess.run(
-        [str(NPM_BIN / "vite"), "build", "--logLevel", "warn"],
+        [system.npm_bin("vite"), "build", "--logLevel", "warn"],
         cwd=paths.UI,
         stdin=subprocess.DEVNULL,
         check=False,
@@ -271,6 +272,7 @@ def drive(
     env: dict[str, str],
     servers: list[subprocess.Popen[bytes]],
     spec_port: int,
+    binary: Path,
 ) -> int:
     """Runs the driver at the spec pages until interrupted. A change to the Rust sources
     rebuilds beryl_cli and restarts the spec server on its port (the driver's next `open` gets
@@ -306,24 +308,31 @@ def drive(
             if changed > rust or servers[-1].poll() is not None:
                 rust = changed
                 print("specs: rebuilding beryl_cli for a Rust change", flush=True)
-                binary = build(args.release)
-                if binary is None:
+                if system.WINDOWS:
+                    # Windows replaces no running binary: the old server stops first.
+                    servers[-1].terminate()
+                    servers[-1].wait()
+                built = build(args.release)
+                if built is None and not system.WINDOWS:
                     print("specs: keeping the old spec server", flush=True)
                     continue
+                if built is None:
+                    print("specs: restarting the old spec server", flush=True)
                 servers[-1].terminate()
                 servers[-1].wait()
+                binary = built or binary
                 servers.append(serve_specs(binary, spec_port))
                 warm_specs(spec_port)
                 print("specs: spec server restarted; open moments again", flush=True)
             changed = newest(scripts, ".mjs")
             if changed > js or driver.poll() is not None:
                 js = changed
-                driver.terminate()
+                system.terminate(driver)
                 driver.wait()
                 driver = start_driver()
                 print("specs: driver restarted; open moments again", flush=True)
     finally:
-        driver.terminate()
+        system.terminate(driver)
     return 0
 
 
@@ -373,7 +382,7 @@ def specs(args: argparse.Namespace) -> int:
             port = None if capturing else args.port or None
             with served_ui(env, port, preview=args.release) as url:
                 if args.drive:
-                    return drive(args, url, env, servers, spec_port)
+                    return drive(args, url, env, servers, spec_port, binary)
                 return capture(args, url, env)
         env = {**os.environ, "BERYL_SPECS_PORT": str(spec_port)}
         with served_ui(env, args.port or None, preview=args.release) as url:

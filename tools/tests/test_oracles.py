@@ -1,6 +1,7 @@
 import argparse
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -37,11 +38,13 @@ def test_setup_fetches_and_builds_once(
         name="fake",
         repo=(tmp_path / "upstream").as_uri(),
         commit=pinned,
-        build=("sh", "-c", "echo built >> builds"),
+        build=(sys.executable, "-c", "open('builds', 'a').write('built\\n')"),
     )
     monkeypatch.setattr(oracles, "ORACLES", (oracle,))
     monkeypatch.setattr(oracles, "mvn", lambda *args: list(args))
     monkeypatch.setattr(oracles, "brew_prefix", lambda formula: tmp_path / formula)
+    monkeypatch.setattr(oracles, "windows_jdk", lambda: tmp_path / "jdk")
+    monkeypatch.setattr(oracles, "windows_maven", lambda: tmp_path)
     monkeypatch.setattr(oracles, "configure_forge", lambda: None)
 
     def summary() -> dict[str, object]:

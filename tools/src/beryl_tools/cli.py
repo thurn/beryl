@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import os
+import subprocess
 import sys
 
 from . import (
@@ -16,11 +18,33 @@ from . import (
     quality,
     shots,
     specs,
+    system,
     warm,
 )
 
 
+def utf8_rerun(argv: list[str] | None) -> int | None:
+    """On Windows, outside Python's UTF-8 mode, runs `by` again in it and returns its exit
+    code: there text files are read and written in the ANSI code page by default, which garbles
+    card names. Its children inherit the mode. None when already in it."""
+    if not system.WINDOWS or sys.flags.utf8_mode:
+        return None
+    os.environ["PYTHONUTF8"] = "1"
+    args = sys.argv[1:] if argv is None else argv
+    proc = subprocess.Popen(
+        [sys.executable, "-X", "utf8", "-m", "beryl_tools.cli", *args]
+    )
+    while True:
+        try:
+            return proc.wait()
+        except KeyboardInterrupt:
+            continue  # The console sent Ctrl-C to the child too: it answers it.
+
+
 def main(argv: list[str] | None = None) -> int:
+    rerun = utf8_rerun(argv)
+    if rerun is not None:
+        return rerun
     parser = argparse.ArgumentParser(prog="by", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     for module in (
@@ -34,6 +58,7 @@ def main(argv: list[str] | None = None) -> int:
         quality,
         shots,
         specs,
+        system,
         warm,
     ):
         module.register(sub)

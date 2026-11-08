@@ -16,7 +16,14 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [dependency-groups]
-dev = ["black", "pyre-check", "pytest", "mdformat", "mdformat-gfm"]
+dev = [
+    "black",
+    # No Windows build: the python lane skips pyre there.
+    "pyre-check; sys_platform != 'win32'",
+    "pytest",
+    "mdformat",
+    "mdformat-gfm",
+]
 
 [tool.black]
 target-version = ["py312"]

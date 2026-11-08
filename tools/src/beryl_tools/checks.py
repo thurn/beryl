@@ -22,7 +22,6 @@ import json
 import os
 import re
 import shutil
-import signal
 import subprocess
 import sys
 import tempfile
@@ -33,7 +32,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import cards, paths, warm
+from . import cards, paths, system, warm
 
 FAST_BUDGET = 60
 SLOW_BUDGET = 300
@@ -48,7 +47,6 @@ COMMIT_MAX = 60
 TEXT_SUFFIXES = (".py", ".rs", ".md", ".toml", ".json", ".ts", ".tsx", ".css", ".html")
 
 BY: list[str] = [sys.executable, "-m", "beryl_tools.cli"]
-NPM_BIN: Path = paths.UI / "node_modules" / ".bin"
 # The game screen's code: it reads what a decision asks from the protocol
 # (`DecisionView.ask`), never from the card asking, so a new card needs no change here.
 GAME_UI: Path = paths.UI / "src" / "game"
@@ -93,19 +91,20 @@ class Clock:
     def __init__(self) -> None:
         self.lock = threading.Lock()
         self.cpus: int = os.cpu_count() or 1
-        self.wall_start: float = time.monotonic()
+        # perf_counter, not monotonic: on Windows monotonic ticks every 15.6 ms.
+        self.wall_start: float = time.perf_counter()
         self.last: float = self.wall_start
         self.adjusted: float = 0.0
 
     def now(self) -> float:
         with self.lock:
-            t = time.monotonic()
-            self.adjusted += (t - self.last) / stretch(os.getloadavg()[0], self.cpus)
+            t = time.perf_counter()
+            self.adjusted += (t - self.last) / stretch(system.loadavg()[0], self.cpus)
             self.last = t
             return self.adjusted
 
     def wall(self) -> float:
-        return time.monotonic() - self.wall_start
+        return time.perf_counter() - self.wall_start
 
 
 def took(wall: float, adjusted: float) -> str:
@@ -143,7 +142,7 @@ class Steps:
                     stdin=subprocess.DEVNULL,
                     stdout=out,
                     stderr=subprocess.STDOUT,
-                    start_new_session=True,
+                    **system.own_session(),
                 )
                 self.running.add(proc)
             code: int | None = None
@@ -155,7 +154,7 @@ class Steps:
                     except subprocess.TimeoutExpired:
                         continue
                 else:
-                    kill_tree(proc.pid)
+                    system.kill_tree(proc.pid)
                     proc.wait()
             finally:
                 with self.lock:
@@ -168,33 +167,7 @@ class Steps:
         with self.lock:
             self.stopped.set()
             for proc in self.running:
-                kill_tree(proc.pid)
-
-
-def kill_tree(pid: int) -> None:
-    """SIGKILLs the process group `pid` leads and every process under `pid`, including any
-    that left the group (cargo-nextest gives each test its own)."""
-    table = subprocess.run(
-        ["ps", "-A", "-o", "pid=,ppid="], capture_output=True, text=True, check=False
-    ).stdout
-    children: dict[int, list[int]] = {}
-    for row in table.splitlines():
-        child, parent = map(int, row.split())
-        children.setdefault(parent, []).append(child)
-    tree: list[int] = []
-    frontier = [pid]
-    while frontier:
-        frontier = [c for p in frontier for c in children.get(p, [])]
-        tree += frontier
-    try:
-        os.killpg(pid, signal.SIGKILL)
-    except (ProcessLookupError, PermissionError):
-        pass
-    for p in tree:
-        try:
-            os.kill(p, signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
-            pass
+                system.kill_tree(proc.pid)
 
 
 def run_lane(lane: Lane, script: str, env: dict[str, str], steps: Steps) -> Outcome:
@@ -262,7 +235,7 @@ def run_lanes(lanes: list[Lane], script: str, budget: int, strict: bool) -> int:
 
 
 def load_note() -> str:
-    one, five, fifteen = os.getloadavg()
+    one, five, fifteen = system.loadavg()
     return (
         f"load average {one:.0f} {five:.0f} {fifteen:.0f} on {os.cpu_count()} cores;"
         f" the times above are adjusted for load beyond the cores, up to {MAX_STRETCH:.0f}x"
@@ -349,12 +322,13 @@ def repo_lane() -> Lane:
 
 
 def python_lane() -> Lane:
-    return (
-        Lane("python")
-        .step("black", [sys.executable, "-m", "black", "--check", "--quiet", "tools"])
-        .step("pyre", ["pyre", "--noninteractive", "check"], paths.TOOLS)
-        .step("pytest", [sys.executable, "-m", "beryl_tools.checks", "pytest"])
+    lane = Lane("python").step(
+        "black", [sys.executable, "-m", "black", "--check", "--quiet", "tools"]
     )
+    # Pyre has no Windows build: macOS checks the types.
+    if not system.WINDOWS:
+        lane.step("pyre", ["pyre", "--noninteractive", "check"], paths.TOOLS)
+    return lane.step("pytest", [sys.executable, "-m", "beryl_tools.checks", "pytest"])
 
 
 def rust_lane() -> Lane:
@@ -376,8 +350,8 @@ def rust_lane() -> Lane:
 def ui_lane() -> Lane:
     return (
         Lane("ui", warm=True)
-        .step("prettier", [str(NPM_BIN / "prettier"), "--check", "."], paths.UI)
-        .step("tsc", [str(NPM_BIN / "tsc"), "-b"], paths.UI)
+        .step("prettier", [system.npm_bin("prettier"), "--check", "."], paths.UI)
+        .step("tsc", [system.npm_bin("tsc"), "-b"], paths.UI)
         .step("card-names", [sys.executable, "-m", "beryl_tools.checks", "card-names"])
     )
 
@@ -448,6 +422,10 @@ def slow(args: argparse.Namespace) -> int:
         "oracle": oracle_lane(),
         "counts": counts_lane(),
     }
+    if system.WINDOWS and not args.lanes:
+        # The count gate's VM is Lima's, on macOS.
+        print("ci: skipping counts, which needs macOS")
+        del lanes["counts"]
     chosen = args.lanes or list(lanes)
     unknown = set(chosen) - set(lanes)
     if unknown:

@@ -519,10 +519,10 @@ def cards(args: argparse.Namespace) -> int:
             write_printings(PRINTINGS, pinned)
         pins = pinned
     output = Path(args.output)
-    output.write_text(render(build(names, pins, post)))
+    output.write_text(render(build(names, pins, post)), newline="\n")
     if args.record:
         Path(args.record).write_text(
-            json.dumps(log, indent=1, ensure_ascii=False) + "\n"
+            json.dumps(log, indent=1, ensure_ascii=False) + "\n", newline="\n"
         )
     print(f"cards: wrote {output}", file=sys.stderr)
     return 0

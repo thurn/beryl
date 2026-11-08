@@ -1,6 +1,6 @@
 """The desktop app: `dev` opens it with hot reload for humans; `smoke` builds it and launches it
 hidden (no window, no Dock icon) until the UI reports that it loaded; `bundle` makes the
-release .app."""
+release .app, or on Windows its installer."""
 
 from __future__ import annotations
 
@@ -10,15 +10,15 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import paths, warm
+from . import paths, system, warm
 
-BINARY: Path = paths.TAURI_TARGET / "debug" / "beryl"
+BINARY: Path = system.exe(paths.TAURI_TARGET / "debug" / "beryl")
 
 
 def tauri(*args: str) -> int:
     warm.ensure(tauri=True)
     return subprocess.run(
-        ["npx", "--no-install", "tauri", *args],
+        [system.which("npx"), "--no-install", "tauri", *args],
         cwd=paths.UI,
         env=paths.tauri_env(),
         check=False,
@@ -52,9 +52,12 @@ def smoke(args: argparse.Namespace) -> int:
 
 
 def bundle(args: argparse.Namespace) -> int:
-    code = tauri("build", "--bundles", "app")
+    kind, folder = ("nsis", "nsis") if system.WINDOWS else ("app", "macos")
+    code = tauri("build", "--bundles", kind)
     if code == 0:
-        print(f"bundle: {paths.TAURI_TARGET / 'release' / 'bundle' / 'macos'}")
+        print(f"bundle: {paths.TAURI_TARGET / 'release' / 'bundle' / folder}")
+        if system.WINDOWS:
+            print(f"bundle: {system.exe(paths.TAURI_TARGET / 'release' / 'beryl')}")
     return code
 
 
@@ -68,4 +71,6 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.add_argument("--seconds", type=int, default=20, help="fail after this long")
     p.add_argument("--no-build", action="store_true")
     p.set_defaults(func=smoke)
-    sub.add_parser("bundle", help="the release Beryl.app").set_defaults(func=bundle)
+    sub.add_parser(
+        "bundle", help="the release Beryl.app, or Windows installer"
+    ).set_defaults(func=bundle)

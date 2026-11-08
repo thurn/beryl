@@ -1,7 +1,8 @@
 """`by oracle-setup` and `by oracle-smoke`: XMage and Forge, the rules oracles that scenarios
 are checked against (docs/engine-architecture.md, section 17.2).
 
-`oracle-setup` installs Maven and openjdk@21 with Homebrew when they are missing, fetches each
+`oracle-setup` installs Maven and openjdk@21 with Homebrew when they are missing (on Windows,
+the Microsoft Build of OpenJDK 21 with winget, and Maven from Apache into the cache), fetches each
 oracle at the commit pinned below into ~/Library/Caches/beryl/oracles, and builds only the
 modules the harnesses need, with JAVA_HOME on JDK 21 and a Maven repository of its own in the
 cache. A checkout at its pin whose build stamp matches is left alone, so a second run is a quick
@@ -22,7 +23,6 @@ the full results go to oracles/logs.
 from __future__ import annotations
 
 import argparse
-import fcntl
 import itertools
 import json
 import os
@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from . import cards, forge, paths, xmage
+from . import cards, forge, paths, system, xmage
 
 FORMULAS = ("maven", "openjdk@21")
 
@@ -102,12 +102,8 @@ def stamp(oracle: Oracle) -> str:
 @contextmanager
 def locked() -> Iterator[None]:
     """One setup or smoke at a time: concurrent Maven builds would share one repository."""
-    with open(root() / "oracles.lock", "w") as handle:
-        fcntl.flock(handle, fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(handle, fcntl.LOCK_UN)
+    with system.file_lock(root() / "oracles.lock"):
+        yield
 
 
 class StepFailed(Exception):
@@ -158,8 +154,50 @@ def brew_prefix(formula: str) -> Path | None:
     return Path(result.stdout.strip()) if result.returncode == 0 else None
 
 
+# Windows: Maven from Apache, unpacked into the cache; JDK 21 from winget.
+MAVEN_VERSION = "3.9.11"
+MAVEN_URL = (
+    f"https://archive.apache.org/dist/maven/maven-3/{MAVEN_VERSION}/binaries/"
+    f"apache-maven-{MAVEN_VERSION}-bin.zip"
+)
+WINGET_JDK = "Microsoft.OpenJDK.21"
+
+
+def windows_jdk() -> Path | None:
+    """The newest JDK 21 winget installed."""
+    homes = sorted(Path(r"C:\Program Files\Microsoft").glob("jdk-21*"))
+    return homes[-1] if homes else None
+
+
+def windows_maven() -> Path:
+    return root() / f"apache-maven-{MAVEN_VERSION}"
+
+
+def ensure_windows_tools(log: Path) -> list[str]:
+    """Installs JDK 21 and Maven where missing; returns the ones it installed."""
+    installed = []
+    if windows_jdk() is None:
+        run(
+            ["winget", "install", "--exact", "--id", WINGET_JDK, "--silent"]
+            + ["--accept-package-agreements", "--accept-source-agreements"],
+            log,
+        )
+        installed.append(WINGET_JDK)
+    if not windows_maven().is_dir():
+        import io
+        import urllib.request
+        import zipfile
+
+        with urllib.request.urlopen(MAVEN_URL, timeout=120) as response:
+            zipfile.ZipFile(io.BytesIO(response.read())).extractall(root())
+        installed.append(f"maven {MAVEN_VERSION}")
+    return installed
+
+
 def ensure_formulas(log: Path) -> list[str]:
     """Installs the missing formulas; returns the ones it installed."""
+    if system.WINDOWS:
+        return ensure_windows_tools(log)
     if shutil.which("brew") is None:
         raise StepFailed("Homebrew is missing: https://brew.sh")
     missing = [f for f in FORMULAS if brew_prefix(f) is None]
@@ -169,6 +207,11 @@ def ensure_formulas(log: Path) -> list[str]:
 
 
 def java_home() -> Path:
+    if system.WINDOWS:
+        home = windows_jdk()
+        if home is None:
+            raise StepFailed("JDK 21 is not installed; run `just oracle-setup`")
+        return home
     prefix = brew_prefix("openjdk@21")
     if prefix is None:
         raise StepFailed("openjdk@21 is not installed; run `just oracle-setup`")
@@ -177,8 +220,9 @@ def java_home() -> Path:
 
 def mvn(*args: str) -> list[str]:
     """A Maven command line on the cache's repository, batch mode, no transfer progress."""
+    maven = str(windows_maven() / "bin" / "mvn.cmd") if system.WINDOWS else "mvn"
     return [
-        "mvn",
+        maven,
         "-B",
         "--no-transfer-progress",
         f"-Dmaven.repo.local={root() / 'm2'}",
@@ -303,7 +347,7 @@ def forge_deck(path: Path) -> Path:
     lines = cards.DECK.read_text().splitlines()
     main = list(itertools.takewhile(str.strip, lines))
     header = ["[metadata]", "Name=Beryl M1 WU Control", "[Main]"]
-    path.write_text("\n".join(header + main) + "\n")
+    path.write_text("\n".join(header + main) + "\n", newline="\n")
     return path
 
 

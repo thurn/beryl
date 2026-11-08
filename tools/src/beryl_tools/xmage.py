@@ -1054,7 +1054,7 @@ def write(exports: Sequence[Export], directory: Path) -> list[str]:
     directory.mkdir(parents=True, exist_ok=True)
     for old in directory.glob("*.java"):
         old.unlink()
-    (directory / BASE.name).write_text(BASE.read_text())
+    (directory / BASE.name).write_text(BASE.read_text(), newline="\n")
     by_card: dict[str, list[Export]] = {}
     for export in exports:
         by_card.setdefault(export.card, []).append(export)
@@ -1063,7 +1063,7 @@ def write(exports: Sequence[Export], directory: Path) -> list[str]:
         if all(e.unsupported is not None for e in group):
             continue
         name = class_name(card)
-        (directory / f"{name}.java").write_text(render_class(card, group))
+        (directory / f"{name}.java").write_text(render_class(card, group), newline="\n")
         classes.append(name)
     return classes
 

@@ -4,7 +4,7 @@ A fresh worktree has no `rust/target` (a cold Tauri build) and no `ui/node_modul
 gets its own, seeded from the per-machine cache:
 
 - `ensure` APFS-clones (copy-on-write, seconds) the cached `rust/target` into a checkout that
-  has none, else the main checkout's; cargo rebuilds only what differs. It leaves out
+  has none, else the main checkout's (on Windows, copies it with robocopy); cargo rebuilds only what differs. It leaves out
   `target/tauri`, the Tauri CLI's own target directory, unless asked for it (`app.py`). It clones
   the `ui/node_modules` installed from the same package-lock.json, else runs `npm ci`.
 - `save` prunes what builds no longer use from `rust/target`, then moves both into the cache by
@@ -20,7 +20,6 @@ Standard library only: the hook may run from a copy of this file.
 from __future__ import annotations
 
 import argparse
-import fcntl
 import hashlib
 import os
 import shutil
@@ -39,9 +38,18 @@ KEEP_NODE_MODULES = 3
 TAURI = "tauri"
 
 
+WINDOWS: bool = sys.platform == "win32"
+
+
 def cache_root() -> Path:
     root = os.environ.get("BERYL_CACHE")
-    path = Path(root) if root else Path.home() / "Library" / "Caches" / "beryl"
+    local = os.environ.get("LOCALAPPDATA")
+    if root:
+        path = Path(root)
+    elif WINDOWS and local:
+        path = Path(local) / "beryl"
+    else:
+        path = Path.home() / "Library" / "Caches" / "beryl"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -53,6 +61,24 @@ def log(message: str) -> None:
 @contextmanager
 def locked() -> Iterator[None]:
     with open(cache_root() / "warm.lock", "w") as handle:
+        if WINDOWS:
+            import msvcrt
+
+            # LK_LOCK gives up after ten tries a second apart: a clone can take longer.
+            while True:
+                try:
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+                    break
+                except OSError:
+                    continue
+            try:
+                yield
+            finally:
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            return
+        import fcntl
+
         fcntl.flock(handle, fcntl.LOCK_EX)
         try:
             yield
@@ -83,6 +109,32 @@ def main_checkout(checkout: Path) -> Path | None:
     return main if main and main.resolve() != checkout.resolve() else None
 
 
+def robocopy(source: Path, dest: Path, leave_out: str | None) -> list[str]:
+    """Windows has no `cp -c`: robocopy copies on many threads, which makes a copy of
+    rust/target take a minute rather than many. Its exit codes under 8 mean success, which a
+    wrapper turns into 0."""
+    exclude = ["/XD", str(source / leave_out)] if leave_out else []
+    script = (
+        "import subprocess, sys; sys.exit(subprocess.run(sys.argv[1:]).returncode >= 8)"
+    )
+    return [
+        sys.executable,
+        "-c",
+        script,
+        "robocopy",
+        str(source),
+        str(dest),
+        "/E",
+        "/MT:32",
+        "/NFL",
+        "/NDL",
+        "/NJH",
+        "/NJS",
+        "/NP",
+        *exclude,
+    ]
+
+
 def clone_into(source: Path, dest: Path, leave_out: str | None = None) -> bool:
     """APFS-clones `source`, but for its entry `leave_out`, to the missing `dest` through a
     temporary name."""
@@ -90,7 +142,9 @@ def clone_into(source: Path, dest: Path, leave_out: str | None = None) -> bool:
     shutil.rmtree(tmp, ignore_errors=True)
     dest.parent.mkdir(parents=True, exist_ok=True)
     started = time.monotonic()
-    if leave_out is None:
+    if WINDOWS:
+        command = robocopy(source, tmp, leave_out)
+    elif leave_out is None:
         command = ["cp", "-c", "-R", str(source), str(tmp)]
     else:
         tmp.mkdir()
@@ -144,7 +198,13 @@ def ensure_node_modules(checkout: Path) -> None:
                 return
     log("npm ci")
     subprocess.run(
-        ["npm", "ci", "--no-audit", "--no-fund", "--loglevel=error"],
+        [
+            (shutil.which("npm") or "npm") if WINDOWS else "npm",
+            "ci",
+            "--no-audit",
+            "--no-fund",
+            "--loglevel=error",
+        ],
         cwd=checkout / "ui",
         stdin=subprocess.DEVNULL,
         check=True,

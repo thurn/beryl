@@ -3,17 +3,30 @@
 
 set positional-arguments := true
 
+# Recipes are POSIX shell; on Windows, Git for Windows' (PowerShell has no `sh` on its PATH).
+
+set windows-shell := ["C:/Program Files/Git/bin/sh.exe", "-cu"]
+
+# Python reads and writes text as UTF-8, as it does off Windows.
+
+export PYTHONUTF8 := "1"
 by := "uv run --quiet --project tools by"
 
-# The CPU the `search` profile builds for: a Cargo profile cannot set it (architecture §18)
+# The CPU the `search` profile builds for: a Cargo profile cannot set it (architecture §18).
+# Off Apple silicon, this machine's own.
 
-search_cpu := "-C target-cpu=apple-m4"
+search_cpu := if arch() == "aarch64" { "-C target-cpu=apple-m4" } else { "-C target-cpu=native" }
 
 # Low priority for long compute: utility QoS, under which macOS gives interactive work and
 # checks the CPU first. `nice` does not: beside nice'd work a check ran as slowly as beside
-# work at full priority.
+# work at full priority. Windows has neither: `by low` starts the work below normal priority.
 
-low := "taskpolicy -c utility"
+by_anywhere := "uv run --quiet --project " + quote(justfile_directory() / "tools") + " by"
+low := if os() == "windows" { by_anywhere + " low --" } else { "taskpolicy -c utility" }
+
+# The long-think arena's priority, kept awake.
+
+awake := if os() == "windows" { by_anywhere + " low --awake --" } else { "caffeinate -i nice -n 10" }
 
 default:
     @just --list --unsorted
@@ -53,7 +66,7 @@ specs *args:
 bugs *args:
     {{ by }} bugs "$@"
 
-# The release Beryl.app, under rust/target/tauri/release/bundle/macos
+# The release Beryl.app, under rust/target/tauri/release/bundle/macos (Windows: an installer under bundle/nsis)
 [group('app')]
 bundle:
     {{ by }} bundle
@@ -147,7 +160,7 @@ tournament *args:
 [group('agents')]
 [no-cd]
 longthink *args:
-    RUSTFLAGS="{{ search_cpu }}" caffeinate -i nice -n 10 cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- longthink "$@"
+    RUSTFLAGS="{{ search_cpu }}" {{ awake }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- longthink "$@"
 
 # The tools' tests
 [group('test')]

@@ -33,10 +33,9 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from . import paths, warm
+from . import paths, system, warm
 
 SERVER_TIMEOUT = 60.0
-NPM_BIN: Path = paths.UI / "node_modules" / ".bin"
 # The game fixtures' definitions, and where they are recorded to: gitignored, served by Vite.
 FIXTURES: Path = paths.UI / "fixtures.json"
 RECORDED: Path = paths.UI / "public" / "fixtures"
@@ -90,7 +89,7 @@ def webkit_env() -> dict[str, str]:
     }
     # A no-op once WebKit is there.
     install = subprocess.run(
-        [str(NPM_BIN / "playwright"), "install", "webkit"],
+        [system.npm_bin("playwright"), "install", "webkit"],
         cwd=paths.UI,
         env=env,
         stdin=subprocess.DEVNULL,
@@ -132,7 +131,7 @@ def served_ui(
     mode = ["preview", "--strictPort"] if preview else []
     with tempfile.TemporaryFile() as log:
         server = subprocess.Popen(
-            [str(NPM_BIN / "vite"), *mode, "--host", "127.0.0.1", "--port", str(port)],
+            [system.npm_bin("vite"), *mode, "--host", "127.0.0.1", "--port", str(port)],
             cwd=paths.UI,
             env=env,
             stdin=subprocess.DEVNULL,
@@ -147,7 +146,7 @@ def served_ui(
                 )
             yield url
         finally:
-            server.terminate()
+            system.terminate(server)
             try:
                 server.wait(timeout=10)
             except subprocess.TimeoutExpired:
@@ -290,7 +289,7 @@ def ui_live(args: argparse.Namespace) -> int:
     if built.returncode != 0:
         print("ui-live: building beryl_cli failed", file=sys.stderr)
         return built.returncode
-    binary = (
+    binary = system.exe(
         paths.RUST / "target" / ("release" if args.release else "debug") / "beryl_cli"
     )
     # Fixture routes (`?fixture=`) reach rare states; record them as ui-shots does.
@@ -338,7 +337,7 @@ def ui_live(args: argparse.Namespace) -> int:
         return 1
     finally:
         for c in children:
-            c.terminate()
+            system.terminate(c)
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 # tools/src/beryl_tools/paths.py: the checkout (a worktree or the main checkout) is four up.
@@ -23,11 +24,18 @@ AGENT_ENV = (
 )
 
 
+def default_cache() -> Path:
+    """~/Library/Caches/beryl, or on Windows %LOCALAPPDATA%\beryl."""
+    local = os.environ.get("LOCALAPPDATA")
+    if sys.platform == "win32" and local:
+        return Path(local) / "beryl"
+    return Path.home() / "Library" / "Caches" / "beryl"
+
+
 def cache_root() -> Path:
-    """The per-machine cache shared by every checkout: $BERYL_CACHE, else
-    ~/Library/Caches/beryl."""
+    """The per-machine cache shared by every checkout: $BERYL_CACHE, else the default."""
     root = os.environ.get("BERYL_CACHE")
-    path = Path(root) if root else Path.home() / "Library" / "Caches" / "beryl"
+    path = Path(root) if root else default_cache()
     path.mkdir(parents=True, exist_ok=True)
     return path
 

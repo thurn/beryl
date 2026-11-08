@@ -16,7 +16,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import checks, paths, warm
+from . import checks, paths, system, warm
 
 ENACT: list[str] = ["python3", str(Path.home() / "enact" / "scripts" / "enact.py")]
 
@@ -88,7 +88,13 @@ def formatter(tree: Path, rel: str) -> tuple[list[str], Path] | None:
     if rel == "justfile":
         return ["just", "--fmt", "--unstable"], tree
     if rel.startswith("ui/"):
-        prettier = tree / "ui" / "node_modules" / ".bin" / "prettier"
+        prettier = (
+            tree
+            / "ui"
+            / "node_modules"
+            / ".bin"
+            / ("prettier.cmd" if system.WINDOWS else "prettier")
+        )
         return [
             str(prettier),
             *("--write", "--ignore-unknown", "--log-level", "warn"),

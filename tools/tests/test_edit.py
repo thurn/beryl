@@ -25,7 +25,11 @@ def test_files_are_formatted_by_the_tool_their_check_uses() -> None:
 
     def tool(rel: str) -> str | None:
         fmt = edit.formatter(tree, rel)
-        return Path(fmt[0][0]).name + " " + str(fmt[1]) if fmt else None
+        return (
+            Path(fmt[0][0]).name.removesuffix(".cmd") + " " + fmt[1].as_posix()
+            if fmt
+            else None
+        )
 
     assert tool("README.md") == f"{Path(sys.executable).name} /tree"
     assert tool(".beads/notes.md") is None
