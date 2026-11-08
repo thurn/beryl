@@ -518,7 +518,17 @@ export function audit({ frames, shown }) {
                 ...judge(e, window, view.names),
             });
         }
-        const counted = events.filter((e) => !MINOR_EVENTS.has(e.kind));
+        // Cards making the same move together (a mill, a graveyard exiled) read as one move:
+        // the game shows them as a batch (beats.ts's showcase).
+        const moves = new Set();
+        const counted = events.filter((e) => {
+            if (MINOR_EVENTS.has(e.kind)) return false;
+            if (e.kind !== "zoneChange") return true;
+            const move = `${e.from}>${e.to}:${e.reason}`;
+            if (moves.has(move)) return false;
+            moves.add(move);
+            return true;
+        });
         if (counted.length > CROWDED) {
             findings.push({
                 view: view.turn,

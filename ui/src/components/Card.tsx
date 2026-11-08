@@ -303,12 +303,16 @@ export function MarkBadge({
   icon,
   count,
   label,
+  pop: given,
 }: {
   icon: MarkIcon;
   count?: number;
   label?: string;
+  /** The pop of the card's counters as a whole (`usePop`): a badge new on a card in play pops
+   * as it appears. */
+  pop?: string;
 }) {
-  const pop = usePop(count);
+  const pop = usePop(count) ?? given;
   return (
     <span
       className={`mark-badge mark-${icon} ${pop ?? ""}`}
@@ -348,6 +352,9 @@ export function Card({
     marks?.counters.filter(
       (c) => c.kind !== "plusOne" && c.kind !== "minusOne",
     ) ?? [];
+  const countersPop = usePop(
+    otherCounters.map((c) => `${c.kind} ${c.count}`).join(),
+  );
   const scan = back ? undefined : card.scan;
   const nameRef = useTextFit(card.name);
   const typeRef = useTextFit(card.typeLine);
@@ -474,6 +481,7 @@ export function Card({
                 icon={c.kind}
                 count={c.count}
                 label={`${c.count} ${c.kind} counters`}
+                pop={countersPop}
               />
             ))}
           </span>
