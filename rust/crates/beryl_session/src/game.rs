@@ -29,7 +29,8 @@ use crate::protocol::{
     CandidateIndex, DecisionId, Moment, PlayerView, SessionId, Side, Status, StopsSetting,
     player_view,
 };
-use crate::replay::{Entry, ReplayFile};
+use crate::replay::{Entry, FORMAT_VERSION, ReplayFile};
+use crate::save::{self, Chosen};
 use crate::{HandOver, Prepared, SessionError, StartGame};
 use crate::{journal, preview};
 
@@ -402,6 +403,14 @@ struct UndoPoint {
 
 /// The human's pass on to their next stop ([`Game::pass_on`]), while the session passes their
 /// priority for them.
+/// Where a replay and its record parted ([`Game::from_replay`]): answers found away from
+/// their recorded index, and places it went on where the rules left nothing to choose.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Drift {
+    moved: u32,
+    lenient: u32,
+}
+
 #[derive(Clone, Copy, Debug)]
 struct PassingOn {
     /// The turn and step of their next stop, where it ends.
@@ -469,6 +478,7 @@ impl Game {
         session: SessionId,
     ) -> Result<Game, SessionError> {
         let replay = ReplayFile {
+            format_version: FORMAT_VERSION,
             seed: start.seed,
             decks: start.decks.clone(),
             human: start.human.get(),
@@ -517,6 +527,7 @@ impl Game {
         };
         state.set_profile(with_stops(base, stops, human));
         let replay = ReplayFile {
+            format_version: FORMAT_VERSION,
             seed: 0,
             decks: [Vec::new(), Vec::new()],
             human: human.get(),
@@ -587,21 +598,32 @@ impl Game {
     /// Replays a recorded game to where its record ends, and returns it with the view live
     /// play emitted there: the human's open decision or halt, the agent about to decide, or
     /// the end. [`Game::next_view`] plays on from there.
+    ///
+    /// Each answer takes the candidate that does what the recorded one did
+    /// ([`Chosen::find`]), wherever it now stands. Where the record and the game part, replay
+    /// goes on only where the rules leave nothing to choose, journaling each time:
+    /// - a decision the record lacks with one candidate (a halt among them) is answered with
+    ///   it;
+    /// - a priority the record lacks, before the turn and step of its next answer, is passed:
+    ///   every decision is recorded, so the original game passed it unasked;
+    /// - a recorded priority pass, or halt, that the game no longer asks is skipped, as passing
+    ///   changes nothing where no priority is open.
+    ///
+    /// Anything else fails, naming the turn and step. A version 1 record, of indices alone,
+    /// replays as it always did.
     pub fn from_replay(
         cards: &'static CardTable,
         file: &ReplayFile,
         session: SessionId,
     ) -> Result<(Game, PlayerView), SessionError> {
         let mut game = Game::new(cards, &file.start()?, session)?;
-        let bad = |what: &str| SessionError::BadReplay {
-            reason: what.to_owned(),
-        };
         // The session's own answers are found again as it plays on.
         let mut log = file
             .log
             .iter()
-            .copied()
-            .filter(|e| !matches!(e, Entry::Auto(_)));
+            .filter(|e| !matches!(e, Entry::Auto(_)))
+            .peekable();
+        let mut drift = Drift::default();
         loop {
             if matches!(game.at, At::Playing) {
                 game.play_on();
@@ -611,47 +633,160 @@ impl Game {
                     continue;
                 }
             }
-            let Some(entry) = log.next() else {
+            let Some(&entry) = log.peek() else {
                 break;
             };
             // Live play's view here took the events so far.
             game.board.drain_events();
-            match (game.at.clone(), entry) {
-                (At::Agent(d), Entry::Choice(c)) if usize::from(c) < d.len() => {
-                    game.agent_decides(Choice(c));
-                }
-                (At::Human(..), Entry::Stops(stops)) => game.change_stops(stops),
-                (At::Human(_, Open::Decision(_)), Entry::PassOn) => {
-                    if !game.start_passing() {
-                        return Err(bad("a pass on where there is none"));
-                    }
-                }
-                (At::Human(id, open @ Open::Decision(_)), Entry::Choice(_))
-                | (At::Human(id, open @ Open::Halt), Entry::Halt) => {
-                    let c = if let Entry::Choice(c) = entry { c } else { 0 };
-                    let answer = OpenDecision::new(id, &open, false, false)
-                        .answer(id, CandidateIndex(c))
-                        .map_err(|_| bad("a choice out of range"))?;
-                    game.choose(answer);
-                }
-                (At::Human(..), Entry::Undo) => {
-                    game.undo()
-                        .map_err(|_| bad("an undo with nothing to take back"))?;
-                }
-                (At::Agent(_) | At::Human(..), Entry::Concede) => {
-                    game.concede();
-                }
-                (At::Over { .. }, _) => return Err(bad("the log goes on after the game ended")),
-                (_, entry) => {
-                    return Err(bad(&format!("{entry:?} where the game does not ask it")));
-                }
+            if game.replay_entry(entry, &mut drift)? {
+                log.next();
             }
         }
-        if game.replay.log != file.log {
-            return Err(bad("the session's own answers differ from the record's"));
+        if drift != Drift::default() {
+            journal::info(
+                "replay",
+                "the record replayed with drift",
+                json!({ "moved": drift.moved, "lenient": drift.lenient }),
+            );
         }
         let view = game.view();
         Ok((game, view))
+    }
+
+    /// Plays the record's next entry, `entry`, at the game's open decision or halt. Returns
+    /// whether it took the entry: false where it answered a decision the record lacks.
+    fn replay_entry(&mut self, entry: &Entry, drift: &mut Drift) -> Result<bool, SessionError> {
+        match (self.at.clone(), entry) {
+            (At::Agent(d), Entry::Choice(chosen)) => {
+                let Some(c) = self.found(&d, chosen, drift) else {
+                    return self.lenient(&d, chosen, drift);
+                };
+                self.agent_decides(c);
+            }
+            (At::Human(id, open @ Open::Decision(_)), Entry::Choice(chosen)) => {
+                let Open::Decision(d) = &open else {
+                    unreachable!("matched a decision")
+                };
+                let Some(c) = self.found(d, chosen, drift) else {
+                    return self.lenient(d, chosen, drift);
+                };
+                let answer = OpenDecision::new(id, &open, false, false)
+                    .answer(id, CandidateIndex(c.0))
+                    .expect("a found candidate is in range");
+                self.choose(answer);
+            }
+            (At::Human(..), Entry::Stops(stops)) => self.change_stops(*stops),
+            (At::Human(_, Open::Decision(_)), Entry::PassOn) => {
+                if !self.start_passing() {
+                    return Err(self.parted("a pass on where there is none"));
+                }
+            }
+            (At::Human(_, Open::Halt), Entry::Halt) => self.answer_first(),
+            (At::Human(..), Entry::Undo) => {
+                self.undo()
+                    .map_err(|_| self.parted("an undo with nothing to take back"))?;
+            }
+            (At::Agent(_) | At::Human(..), Entry::Concede) => {
+                self.concede();
+            }
+            (At::Over { .. }, _) => return Err(self.parted("the log goes on after the game ended")),
+            // A halt the record lacks: the human goes on from it, their one candidate.
+            (At::Human(_, Open::Halt), _) => {
+                self.lenient_note("went on from a halt the record lacks", entry, drift);
+                self.answer_first();
+                return Ok(false);
+            }
+            // A recorded halt that no longer happens: going on from it changed nothing.
+            (At::Agent(_) | At::Human(..), Entry::Halt) => {
+                self.lenient_note("skipped a halt the game no longer makes", entry, drift);
+            }
+            (_, entry) => {
+                return Err(self.parted(&format!("{entry:?} where the game does not ask it")));
+            }
+        }
+        Ok(true)
+    }
+
+    /// The candidate of `d` that does what `chosen` did, if any; one found elsewhere than its
+    /// recorded index counts as drift.
+    fn found(&self, d: &Decision<Large>, chosen: &Chosen, drift: &mut Drift) -> Option<Choice> {
+        let c = on_board!(&self.board, b => chosen.find(&self.table, &b.state, &d.relayout()))?;
+        if c.0 != chosen.index {
+            drift.moved += 1;
+        }
+        Some(c)
+    }
+
+    /// Goes on where no candidate of `d` does what `chosen` did, if the rules leave nothing to
+    /// choose ([`Game::from_replay`]). Returns whether it took the entry.
+    fn lenient(
+        &mut self,
+        d: &Decision<Large>,
+        chosen: &Chosen,
+        drift: &mut Drift,
+    ) -> Result<bool, SessionError> {
+        let entry = Entry::Choice(chosen.clone());
+        if d.len() == 1 {
+            self.lenient_note("answered a decision the record lacks", &entry, drift);
+            self.answer_first();
+            return Ok(false);
+        }
+        let now = on_board!(&self.board, b => save::when(&b.state));
+        let when = chosen.when();
+        // Every decision is recorded: one before the record's next, which the original game
+        // never asked, is a priority it passed unasked.
+        if d.kind == DecisionKind::Priority && when.is_some_and(|w| w > now) {
+            self.lenient_note("passed a priority the record lacks", &entry, drift);
+            debug_assert_eq!(d.candidates.option(Choice(0)), Some(Opt::Pass));
+            self.answer_first();
+            return Ok(false);
+        }
+        if chosen.is_priority_pass()
+            && (d.kind != DecisionKind::Priority || when.is_some_and(|w| w < now))
+        {
+            self.lenient_note("skipped a pass where no priority is open", &entry, drift);
+            return Ok(true);
+        }
+        Err(self.parted(&format!(
+            "no candidate of player {}'s {:?} decision does {}",
+            d.player,
+            d.kind,
+            serde_json::to_string(chosen).expect("an answer serializes"),
+        )))
+    }
+
+    /// Answers the open decision, the agent's or the human's, or the human's halt, with its
+    /// first candidate.
+    fn answer_first(&mut self) {
+        match self.at.clone() {
+            At::Human(id, open) => {
+                let answer = OpenDecision::new(id, &open, false, false)
+                    .answer(id, CandidateIndex(0))
+                    .expect("a decision has a first candidate");
+                self.choose(answer);
+            }
+            At::Agent(_) => self.agent_decides(Choice(0)),
+            _ => unreachable!("answered at a decision"),
+        }
+    }
+
+    /// Journals a place where replay went on though the record and the game parted.
+    fn lenient_note(&self, what: &str, entry: &Entry, drift: &mut Drift) {
+        drift.lenient += 1;
+        let turn = self.board.turn();
+        journal::info(
+            "replay",
+            what,
+            json!({ "turn": turn.number, "step": format!("{:?}", turn.step), "entry": entry }),
+        );
+    }
+
+    /// Why a replay stops where the record and the game parted: `what`, at this turn and step.
+    fn parted(&self, what: &str) -> SessionError {
+        let turn = self.board.turn();
+        SessionError::BadReplay {
+            reason: format!("turn {} {:?}: {what}", turn.number, turn.step),
+        }
     }
 
     /// The next view as the game plays on to the human's next decision or the end: as a step
@@ -892,7 +1027,10 @@ impl Game {
     }
 
     fn agent_decides(&mut self, c: Choice) {
-        self.apply(Entry::Choice(c.0));
+        let At::Agent(d) = self.at.clone() else {
+            unreachable!("the agent decides at its decision");
+        };
+        self.apply(&d, c, false);
         self.at = At::Playing;
     }
 
@@ -975,7 +1113,7 @@ impl Game {
                     stops: self.stops,
                     undo: self.undo_depth() - 1,
                 });
-                self.apply(Entry::Choice(answer.choice.0));
+                self.apply(&d, answer.choice, false);
                 if let Some(before) = before {
                     self.before_cast = self.casting().then_some(before);
                 }
@@ -1129,7 +1267,7 @@ impl Game {
                 },
                 Some(Step::Decide(d)) if d.player == self.human => {
                     if let Some(c) = self.auto_answer(&d) {
-                        self.apply(Entry::Auto(c.0));
+                        self.apply(&d, c, true);
                         self.answered = Some(self.board.stack());
                         continue;
                     }
@@ -1279,13 +1417,17 @@ impl Game {
         }
     }
 
-    /// Records `entry`, an answer, and applies it.
-    fn apply(&mut self, entry: Entry) {
-        let (Entry::Choice(c) | Entry::Auto(c)) = entry else {
-            unreachable!("only an answer is applied");
-        };
-        self.replay.log.push(entry);
-        self.board.apply(&self.table, Choice(c));
+    /// Records candidate `c` of `d`, the session's own answer if `auto`, by what it does, and
+    /// applies it.
+    fn apply(&mut self, d: &Decision<Large>, c: Choice, auto: bool) {
+        let chosen =
+            on_board!(&self.board, b => Chosen::new(&self.table, &b.state, &d.relayout(), c));
+        self.replay.log.push(if auto {
+            Entry::Auto(chosen)
+        } else {
+            Entry::Choice(chosen)
+        });
+        self.board.apply(&self.table, c);
     }
 
     /// The human's view now, with the engine's events since the previous view. A view in a

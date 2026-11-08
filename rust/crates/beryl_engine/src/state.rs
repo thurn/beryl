@@ -1038,6 +1038,21 @@ impl<L: Layout> State<L> {
         }
     }
 
+    /// The name of the object in `slot`: its face up's, which is the card's own name
+    /// everywhere but on the stack and the battlefield
+    /// ([CR 712.8a](https://yawgatog.com/resources/magic-rules/#R7128a)): "While a
+    /// double-faced card is outside the game or in a zone other than the battlefield or
+    /// stack, it has only the characteristics of its front face." A face-down permanent,
+    /// which has no name ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)),
+    /// goes by its card's: what scenarios and saves call it.
+    pub fn name(&self, t: &crate::table::GameTable, slot: L::Slot) -> &'static str {
+        let def = t.def(self.card(slot));
+        match self.object(slot).face {
+            FaceIx::DOWN => def.name,
+            face => def.face_name(face),
+        }
+    }
+
     /// The abilities waiting to be put on the stack.
     pub fn triggers(&self) -> &[PendingTrigger<L>] {
         self.triggers.as_slice()

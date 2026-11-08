@@ -180,7 +180,7 @@ fn arrange(t: &GameTable, scenario: &Scenario) -> Result<State, String> {
                 .library(p)
                 .iter()
                 .copied()
-                .find(|&slot| name_of(&s, t, slot) == name && !order.contains(&slot))
+                .find(|&slot| s.name(t, slot) == name && !order.contains(&slot))
                 .expect("the library holds the cards it lists");
             order.push(slot);
         }
@@ -195,19 +195,8 @@ fn library_slot(s: &State, t: &GameTable, player: Seat, name: &str) -> Slot {
     s.library(player)
         .iter()
         .copied()
-        .find(|&slot| name_of(s, t, slot) == name)
+        .find(|&slot| s.name(t, slot) == name)
         .expect("the deck holds every card the setup names")
-}
-
-/// The name of the object in `slot`: its face up's, which is the card's own name everywhere
-/// but on the stack and the battlefield (CR 712.8a, 712.8f). A face-down permanent, which has
-/// no name, goes by its card's.
-fn name_of<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> &'static str {
-    let def = t.def(s.card(slot));
-    match s.object(slot).face {
-        FaceIx::DOWN => def.name,
-        face => def.face_name(face),
-    }
 }
 
 struct Runner {
@@ -484,11 +473,11 @@ impl Runner {
     }
 
     fn name(&self, slot: Slot) -> &'static str {
-        name_of(&self.s, &self.t, slot)
+        self.s.name(&self.t, slot)
     }
 
     fn named(&self, o: Opt) -> Option<Slot> {
-        named(&self.s, o)
+        o.object_named(&self.s)
     }
 
     /// The only answer to `d` as a pick, where the scenario vocabulary can name it.
@@ -1049,7 +1038,7 @@ pub fn answer<L: Layout>(
 /// Whether `o` is the priority option `action` takes: playing, casting, activating or turning
 /// face up its card.
 fn takes<L: Layout>(t: &GameTable, s: &State<L>, action: &Action, o: Opt<L>) -> bool {
-    let name = |slot| name_of(s, t, slot);
+    let name = |slot| s.name(t, slot);
     match *action {
         Action::PlayLand { card, .. } => matches!(o, Opt::PlayLand(slot) if name(slot) == card),
         Action::Cast {
@@ -1091,8 +1080,8 @@ fn pick_in<L: Layout>(t: &GameTable, s: &State<L>, d: &Decision<L>, pick: Pick) 
             return (0..d.len() as u16).map(Choice).find(|&c| {
                 d.candidates
                     .object(c)
-                    .or_else(|| d.candidates.option(c).and_then(|o| named(s, o)))
-                    .is_some_and(|slot| name_of(s, t, slot) == card)
+                    .or_else(|| d.candidates.option(c).and_then(|o| o.object_named(s)))
+                    .is_some_and(|slot| s.name(t, slot) == card)
             });
         }
         Pick::Pass => Opt::Pass,
@@ -1108,37 +1097,15 @@ fn pick_in<L: Layout>(t: &GameTable, s: &State<L>, d: &Decision<L>, pick: Pick) 
     option_index(d, |o| o == wanted)
 }
 
-/// The object an option names, if it names one.
-fn named<L: Layout>(s: &State<L>, o: Opt<L>) -> Option<L::Slot> {
-    match o {
-        Opt::PlayLand(slot)
-        | Opt::Attack(slot)
-        | Opt::Block(slot)
-        | Opt::Lethal(slot)
-        | Opt::Cast { slot, .. }
-        | Opt::Activate { slot, .. }
-        | Opt::Mana { slot, .. }
-        | Opt::Object(slot)
-        | Opt::TurnFaceUp(slot) => Some(slot),
-        Opt::Defender(slot) => slot,
-        Opt::Trigger(i) => s
-            .triggers()
-            .get(Into::<usize>::into(i))
-            .and_then(|tr| tr.source)
-            .map(|r| r.slot),
-        _ => None,
-    }
-}
-
 /// A decision as a scenario author reads it.
 pub fn describe<L: Layout>(t: &GameTable, s: &State<L>, d: &Decision<L>) -> String {
     let candidates: Vec<String> = (0..d.len() as u16)
         .map(|i| {
             let c = Choice(i);
             match (d.candidates.object(c), d.candidates.option(c)) {
-                (Some(slot), _) => name_of(s, t, slot).to_string(),
-                (_, Some(o)) => match named(s, o) {
-                    Some(slot) => format!("{o:?} ({})", name_of(s, t, slot)),
+                (Some(slot), _) => s.name(t, slot).to_string(),
+                (_, Some(o)) => match o.object_named(s) {
+                    Some(slot) => format!("{o:?} ({})", s.name(t, slot)),
                     None => format!("{o:?}"),
                 },
                 (None, None) => unreachable!("a choice within the candidates"),

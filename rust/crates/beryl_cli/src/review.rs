@@ -151,14 +151,16 @@ fn review(path: &Path, searcher_name: Option<&str>, only: Option<u16>) -> Result
                             transcript.note("(the human conceded)");
                             break None;
                         }
-                        entry => break entry.copied(),
+                        entry => break entry.cloned(),
                     }
                 };
                 if matches!(entry, Some(Entry::Choice(_))) && d.player == human {
                     keep(&mut points, before);
                 }
                 let c = match entry {
-                    Some(Entry::Choice(c) | Entry::Auto(c)) => c,
+                    Some(Entry::Choice(chosen) | Entry::Auto(chosen)) => chosen
+                        .find(&t, &s, &d)
+                        .ok_or("no candidate does what the record did")?,
                     Some(Entry::Undo) => {
                         let Some(point) = points.pop_back() else {
                             return Err("an undo with nothing to take back".to_owned());
@@ -175,7 +177,6 @@ fn review(path: &Path, searcher_name: Option<&str>, only: Option<u16>) -> Result
                         break;
                     }
                 };
-                let c = Choice(c);
                 let happened: Vec<Event> = x.events.drain().collect();
                 let search = if d.player == bot && only.is_none_or(|n| before.turn().number == n) {
                     let chose =

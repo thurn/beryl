@@ -493,7 +493,10 @@ payment plan, one attacker, an attack target, one blocker, the attacker it
 blocks, a damage division, the next trigger to put on the stack, the next
 replacement to apply, one card from a set, the next card in an ordering, yes or
 no, a number, a color, a player, a pile assignment, keep or mulligan. Every
-answer is `Choice(u8)`: an index into the candidates.
+answer is `Choice(u8)`: an index into the candidates. The index is only for the
+engine and its search. A save records an answer by what it does
+(`beryl_session::save`, §14), and every `DecisionKind` and `Opt` has a
+description there, checked by exhaustive matches.
 
 The kind says the shape of an answer; `Ask` says what a question is for where
 the kind alone does not: a scry, a look that may take a card, a fateseal, an
@@ -859,8 +862,15 @@ zone.
 - No `std::collections::HashMap` with `RandomState`, no wall clock, no statics
   with interior mutability, no thread-locals. A test greps the engine crates for
   the banned types, as Arcana does.
-- A replay is `(decklists, seed, choices)`. Replaying one reproduces the game
-  bit for bit, and a scenario can be cut from a replay.
+- A replay is `(decklists, seed, choices)`. Replaying one on the same build
+  reproduces the game bit for bit, and a scenario can be cut from a replay.
+  Since save format 2, each choice is recorded by what it does (who decided, the
+  turn and step, the kind of decision, and the candidate by rules terms: cast
+  this card, attack with that creature, target that player), with its old index
+  kept only to break ties. A later build replays it though candidates moved, and
+  goes on where record and game part only if the rules leave nothing to choose:
+  one candidate, a priority passed unasked, or a pass no priority asks. Anything
+  else stops the replay at the turn and step.
 - `State` implements `Hash` over its fields, computed on demand for tests,
   divergence checks and the first transposition tables. The mutation chokepoints
   are placed so an incremental Zobrist hash can be added without touching card
@@ -1182,9 +1192,11 @@ human's decision the session waits for one `choose(decision, index)` command,
 naming the decision id it received; the session's record of the open decision is
 the one place an answer is checked. AI decisions run on the session thread, and
 a search may use a pool, so IPC never blocks. The webview never sees a `State`.
-Every session records seed, decklists and the choice log as a replay file. The
-protocol's TypeScript types are generated from the Rust types, and
-`ui/src/ipc.ts` keeps the typed wrappers for the commands and events.
+Every session records seed, decklists and the choice log as a replay file (§14),
+rewritten at each decision of the human's, and the app resumes the newest
+unfinished one on launch. The protocol's TypeScript types are generated from the
+Rust types, and `ui/src/ipc.ts` keeps the typed wrappers for the commands and
+events.
 
 The human plays under the smart stops of §15 by default. A setting switches to
 the exact profile, which offers every priority. Milestone 1 offers a game

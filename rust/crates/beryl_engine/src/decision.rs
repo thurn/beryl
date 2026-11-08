@@ -6,7 +6,7 @@ use crate::card::{AbilityIx, Castings, FaceIx, ManaColor, ManaCost};
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
 use crate::observation::Observation;
-use crate::state::Zone;
+use crate::state::{State, Zone};
 
 /// What `next` returns: a decision to make, or the end of the game. A decision is a flat
 /// value with its candidates inline, so it can live in the state and be copied with it.
@@ -302,6 +302,43 @@ pub enum Opt<L: Layout = Small> {
 }
 
 const _: () = assert!(size_of::<Opt<Small>>() == 4);
+
+impl<L: Layout> Opt<L> {
+    /// The object this option names, if it names one: the card to play, cast, activate or
+    /// turn face up, a creature to attack or block with, a blocker, a mana source, a
+    /// planeswalker to attack, an object chosen, or a waiting trigger's source.
+    pub fn object_named(self, s: &State<L>) -> Option<L::Slot> {
+        match self {
+            Opt::PlayLand(slot)
+            | Opt::Attack(slot)
+            | Opt::Block(slot)
+            | Opt::Lethal(slot)
+            | Opt::Cast { slot, .. }
+            | Opt::Activate { slot, .. }
+            | Opt::Mana { slot, .. }
+            | Opt::Object(slot)
+            | Opt::TurnFaceUp(slot) => Some(slot),
+            Opt::Defender(slot) => slot,
+            Opt::Trigger(i) => s
+                .triggers()
+                .get(Into::<usize>::into(i))
+                .and_then(|tr| tr.source)
+                .map(|r| r.slot),
+            Opt::Pass
+            | Opt::Play
+            | Opt::Draw
+            | Opt::Keep
+            | Opt::Mulligan
+            | Opt::Yes
+            | Opt::No
+            | Opt::Done
+            | Opt::Pool(_)
+            | Opt::Number(_)
+            | Opt::Plan(_)
+            | Opt::Player(_) => None,
+        }
+    }
+}
 
 /// How a game ended.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

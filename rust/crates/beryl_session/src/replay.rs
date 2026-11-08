@@ -1,5 +1,6 @@
 //! Replay files (architecture §14): a game's seed, decklists and every choice, which
-//! reproduce it bit for bit.
+//! reproduce it. Since version 2, a choice is recorded by what it does ([`crate::save`]), so a
+//! later build replays it though its candidates moved.
 
 use std::path::Path;
 
@@ -8,12 +9,17 @@ use serde::{Deserialize, Serialize};
 
 use crate::game::with_stops;
 use crate::protocol::StopsSetting;
+use crate::save::Chosen;
 use crate::{SessionError, StartGame};
 
 /// A recorded game: how it was set up, and every entry of its choice log.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReplayFile {
+    /// The file's format: 1 recorded each choice as its index alone, 2 by what it does. A
+    /// file without one is version 1.
+    #[serde(default = "version_1")]
+    pub format_version: u8,
     pub seed: u64,
     /// Each seat's decklist: (count, card name).
     pub decks: [Vec<(u8, String)>; 2],
@@ -28,19 +34,26 @@ pub struct ReplayFile {
     pub commit: Option<String>,
 }
 
+/// The format this build writes.
+pub const FORMAT_VERSION: u8 = 2;
+
+fn version_1() -> u8 {
+    1
+}
+
 /// One entry of the choice log.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Entry {
     /// The answer to the open decision, whichever seat made it.
-    Choice(u16),
+    Choice(Chosen),
     /// The human changed their stops while their decision was open.
     Stops(StopsSetting),
     /// The human went on from a halt, which the session, not the engine, asked.
     Halt,
     /// The answer the session gave to the human's decision for them (a priority passed, a
     /// trigger ordered under the smart stops), which it finds again as a replay plays on.
-    Auto(u16),
+    Auto(Chosen),
     /// The human conceded, at the open decision, theirs or the agent's.
     Concede,
     /// The human took back their latest answer from their open decision
