@@ -281,8 +281,9 @@ def configure_forge() -> None:
     its assets directory: the working directory for a build without "git" in its version, so
     `sim` runs in forge-gui (GuiDesktop.getAssetsDir)."""
     profile = checkout(FORGE) / "forge-gui" / "forge.profile.properties"
-    user = root() / "forge-user"
-    profile.write_text(f"userDir={user / 'data'}/\ncacheDir={user / 'cache'}/\n")
+    # Forward slashes: a properties file reads a backslash as an escape.
+    user = (root() / "forge-user").as_posix()
+    profile.write_text(f"userDir={user}/data/\ncacheDir={user}/cache/\n", newline="\n")
 
 
 def setup(_args: argparse.Namespace) -> int:

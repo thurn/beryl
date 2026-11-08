@@ -12,6 +12,7 @@ the exported scenarios and returns one result per scenario.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -448,7 +449,7 @@ def play(
                 str(java_home / "bin" / "java"),
                 "-Djava.awt.headless=true",
                 "-cp",
-                f"{jar}:{classes}",
+                os.pathsep.join([str(jar), str(classes)]),
                 HARNESS_CLASS,
                 str(scenarios),
                 str(results),
