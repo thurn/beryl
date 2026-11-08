@@ -1,6 +1,7 @@
-______________________________________________________________________
-
-## name: specs description: Reproduce, debug, verify or QA a card's behavior in Beryl's UI through its spec — every UI moment of the card (stops, prompts, ability choosers, tokens, exile links, stack interactions, payments) as a live game from both seats at /specs/<card>/<moment>. Gives text descriptions, filmstrips, an animation audit and a Playwright driver for any moment. Use when implementing or fixing a card's UI, checking that what happens is animated clearly for both players, reproducing a UI bug report about a card, or extending what specs generate.
+---
+name: specs
+description: Reproduce, debug, verify or QA a card's behavior in Beryl's UI through its spec — every UI moment of the card (stops, prompts, ability choosers, tokens, exile links, stack interactions, payments) as a live game from both seats at /specs/<card>/<moment>. Gives text descriptions, filmstrips, an animation audit and a Playwright driver for any moment. Use when implementing or fixing a card's UI, checking that what happens is animated clearly for both players, reproducing a UI bug report about a card, or extending what specs generate.
+---
 
 # Card specs
 
