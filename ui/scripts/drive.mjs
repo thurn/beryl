@@ -9,7 +9,8 @@
 //   errors          the page's errors and console errors so far
 //   spec            spec moments (`by specs --drive`): `open(card, moment, seat)` opens one seat
 //                   in `page`, held; `both(card, moment)` opens yours in `page` and theirs in a
-//                   second page; `play()` plays every open seat at once; `seat(name)` makes
+//                   second page; `play()` plays every open seat at once; `audit()` plays them
+//                   and audits each seat's motion; `seat(name)` makes
 //                   that seat's page the one `page`, `shot` and `probe` act on; `settled()`
 //                   waits for the page to go quiet. Each returns the page(s) it opened.
 // Restart `by ui-live` to load a change to this file; changes under src/ reload in the page.
@@ -574,6 +575,27 @@ const spec = {
                 .map((s) => s.live)
                 .filter(Boolean),
         );
+    },
+    /** Plays every open seat at once (or runs `action`, a live click, say) and audits
+     * each seat's motion (audit.mjs): the findings that are not ok, by seat. */
+    async audit(action = () => spec.play(), { all = false } = {}) {
+        const open = Object.entries(seats);
+        const since = await Promise.all(
+            open.map(([, s]) => s.page.evaluate(() => performance.now())),
+        );
+        await Promise.all(open.map(([, s]) => s.page.evaluate(record)));
+        await action();
+        await Promise.all(open.map(([, s]) => settled(s.page)));
+        const out = {};
+        for (const [i, [name, s]] of open.entries()) {
+            const findings = auditFrames(
+                await s.page.evaluate(collect, since[i]),
+            );
+            out[name] = all
+                ? findings
+                : findings.filter((f) => f.verdict !== "ok");
+        }
+        return out;
     },
     seat(name) {
         if (!seats[name]) throw new Error(`no ${name} seat open`);

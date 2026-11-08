@@ -46,19 +46,20 @@ went, where a token came from, what lies exiled under a permanent.
 
    ```sh
    curl -s localhost:<port> -d '
-   await spec.both("currency-converter", "ability-2");   // both seats, held
-   const found = await probe.audit(() => spec.play());   // play, judge motion
+   await spec.both("currency-converter", "ability-2");  // both seats, held
+   const found = await spec.audit();                    // play both, judge motion
    return { found, shot: await shot("after") };'
    ```
 
    `spec.open(card, moment, seat)` opens one seat, `spec.both` both, held until
-   `spec.play()`; `spec.seat("theirs")` points `page`, `shot` and `probe` at
-   that seat; `spec.settled()` waits for quiet. `probe.audit(action)` audits
-   whatever the action sets going, a live click as much as a play; `probe.act`,
-   `probe.motion`, `probe.covered`, `probe.timeline` and `probe.compare` are the
-   ui-review skill's. Restart the driver to load a change to the scripts; a
-   change under `ui/src` reloads with the next `open`, one in Rust needs a
-   restart.
+   `spec.play()`, and `spec.audit(action?)` plays them (or runs the action, a
+   live click) and audits both seats' motion; `spec.seat("theirs")` points
+   `page`, `shot` and `probe` at that seat; `spec.settled()` waits for quiet.
+   `probe.audit(action)` audits whatever the action sets going, a live click as
+   much as a play; `probe.act`, `probe.motion`, `probe.covered`,
+   `probe.timeline` and `probe.compare` are the ui-review skill's. Restart the
+   driver to load a change to the scripts; a change under `ui/src` reloads with
+   the next `open`, one in Rust needs a restart.
 
 6. **Fix generally** (below), then run the loop again on the card and on the
    cards that share what you changed.
