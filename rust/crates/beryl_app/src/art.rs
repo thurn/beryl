@@ -195,15 +195,17 @@ impl ArtCache {
     }
 }
 
+/// The TLS the downloads use: the system's, except on Android (Cargo.toml).
+#[cfg(not(target_os = "android"))]
+const TLS: ureq::tls::TlsProvider = ureq::tls::TlsProvider::NativeTls;
+#[cfg(target_os = "android")]
+const TLS: ureq::tls::TlsProvider = ureq::tls::TlsProvider::Rustls;
+
 fn agent() -> ureq::Agent {
     ureq::Agent::config_builder()
         .user_agent(format!("ProjectBeryl/{}", env!("CARGO_PKG_VERSION")))
         .timeout_global(Some(Duration::from_secs(30)))
-        .tls_config(
-            ureq::tls::TlsConfig::builder()
-                .provider(ureq::tls::TlsProvider::NativeTls)
-                .build(),
-        )
+        .tls_config(ureq::tls::TlsConfig::builder().provider(TLS).build())
         .build()
         .into()
 }

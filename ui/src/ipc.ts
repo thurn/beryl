@@ -499,10 +499,10 @@ export const resumeGame = () => call("resume_game", {});
  * `canCaptureWindow`). */
 export const captureWindow = () => call("capture_window", {});
 
-/** The app's URL for `path` on its `beryl-art` scheme. WebView2 serves custom schemes at
- * http://<scheme>.localhost instead. */
+/** The app's URL for `path` on its `beryl-art` scheme. WebView2 and Android's WebView serve
+ * custom schemes at http://<scheme>.localhost instead. */
 const artSchemeUrl = (path: string) =>
-  navigator.userAgent.includes("Windows")
+  /Windows|Android/.test(navigator.userAgent)
     ? `http://beryl-art.localhost${path}`
     : `beryl-art://localhost${path}`;
 

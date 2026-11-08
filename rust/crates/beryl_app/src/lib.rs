@@ -24,6 +24,11 @@ use crate::snapshot::Snapshots;
 /// that it loaded, or with an error after this many seconds.
 const SMOKE_ENV: &str = "BERYL_SMOKE";
 
+/// An Android app inherits no environment: `just android-smoke` sets this system property
+/// instead of [`SMOKE_ENV`].
+#[cfg(target_os = "android")]
+const SMOKE_PROPERTY: &str = "debug.beryl.smoke";
+
 #[tauri::command]
 fn app_info() -> AppInfo {
     AppInfo {
@@ -87,9 +92,17 @@ fn ui_ready(app: tauri::AppHandle) {
 }
 
 fn smoke_seconds() -> Option<u64> {
-    std::env::var(SMOKE_ENV)
-        .ok()
-        .map(|v| v.parse().unwrap_or(20))
+    let value = std::env::var(SMOKE_ENV).ok();
+    #[cfg(target_os = "android")]
+    let value = value.or_else(|| {
+        let out = std::process::Command::new("/system/bin/getprop")
+            .arg(SMOKE_PROPERTY)
+            .output()
+            .ok()?;
+        let value = String::from_utf8_lossy(&out.stdout).trim().to_owned();
+        (!value.is_empty()).then_some(value)
+    });
+    value.map(|v| v.parse().unwrap_or(20))
 }
 
 /// Snapshots the window as drawn now and returns its number ([`ipc::CAPTURE_WINDOW`]).
