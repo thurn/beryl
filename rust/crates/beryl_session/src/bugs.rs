@@ -18,6 +18,7 @@
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
@@ -441,12 +442,26 @@ fn stamp(t: SystemTime) -> String {
     )
 }
 
-/// The checkout this runs from: its commit, and whether it had uncommitted changes, asked of
-/// git now. `cargo run` (and so `just dev` and the CLI) says which checkout built it; else the
-/// working directory.
+/// The commit the app was built from, as its build script found it ([`set_build_commit`]).
+static BUILD_COMMIT: OnceLock<String> = OnceLock::new();
+
+/// Records the commit the running program was built from, for a report run from no checkout
+/// (a bundled app).
+pub fn set_build_commit(commit: &str) {
+    let _ = BUILD_COMMIT.set(commit.to_owned());
+}
+
+/// The commit this runs from, and whether its checkout had uncommitted changes. Under
+/// `cargo run` (`just dev`, the CLI), git says, of the checkout that built it; else the
+/// commit the build recorded, whose changes are unknown.
 fn commit() -> (String, bool) {
-    let dir =
-        std::env::var_os("CARGO_MANIFEST_DIR").map_or_else(|| PathBuf::from("."), PathBuf::from);
+    let built = || {
+        let commit = BUILD_COMMIT.get().map_or("unknown", String::as_str);
+        (commit.to_owned(), false)
+    };
+    let Some(dir) = std::env::var_os("CARGO_MANIFEST_DIR") else {
+        return built();
+    };
     let git = |args: &[&str]| {
         std::process::Command::new("git")
             .args(args)
@@ -457,7 +472,7 @@ fn commit() -> (String, bool) {
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
     };
     let Some(head) = git(&["rev-parse", "HEAD"]) else {
-        return ("unknown".to_owned(), false);
+        return built();
     };
     let dirty =
         git(&["status", "--porcelain", "--untracked-files=no"]).is_some_and(|s| !s.is_empty());

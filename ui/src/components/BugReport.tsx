@@ -3,7 +3,8 @@
 // caught. The player drags out the region that shows the bug over the frozen frame (a click
 // takes the whole window), says what went wrong, and submits: the app writes a report folder
 // with the region, the window, the game's replay, its latest views and both logs
-// (beryl_session::bugs). The button beside the X, or Enter, takes the whole window instead.
+// (beryl_session::bugs). The button beside the X, or Space or Enter, takes the whole window
+// instead, even pressed straight after ⌘B, before the snapshot is in.
 // The X or Escape closes it at any point, and the page plays on.
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
@@ -80,9 +81,35 @@ export function BugReporter({ route }: { route: string }) {
   const [stage, setStage] = useState<Stage>({ kind: "idle" });
   const open = stage.kind !== "idle";
 
+  // What the keys and the snapshot act on, without waiting for a render.
+  const stageRef = useRef(stage);
+  stageRef.current = stage;
+  /** Space or Enter came while the snapshot was being taken: take the whole window. */
+  const wantWhole = useRef(false);
+  /** Counts openings, so a snapshot that lands after its report was closed is dropped. */
+  const opening = useRef(0);
+
+  /** Goes on to describe `region` of `frame`. */
+  const choose = useCallback(
+    async (frame: string | undefined, region: Region) => {
+      let image: string | undefined;
+      if (frame) {
+        try {
+          image = await crop(frame, region);
+        } catch (e) {
+          note("warn", "bug", `no crop: ${String(e)}`);
+        }
+      }
+      setStage({ kind: "describe", frame, region, crop: image, saving: false });
+    },
+    [],
+  );
+
   const start = useCallback(async () => {
     // Stop the motion first: the frame is the instant the player asked.
     freeze();
+    const mine = ++opening.current;
+    wantWhole.current = false;
     setStage({ kind: "capturing" });
     let frame: string | undefined;
     if (canCaptureWindow()) {
@@ -96,48 +123,50 @@ export function BugReporter({ route }: { route: string }) {
         note("warn", "bug", `no window snapshot: ${String(e)}`);
       }
     }
-    setStage({ kind: "select", frame });
-  }, []);
+    if (mine !== opening.current) return;
+    if (wantWhole.current) await choose(frame, whole());
+    else setStage({ kind: "select", frame });
+  }, [choose]);
 
   const close = useCallback(() => {
+    opening.current += 1;
     setStage({ kind: "idle" });
     thaw();
   }, []);
 
-  // ⌘B or Ctrl+B anywhere opens it; Escape closes it.
+  // ⌘B or Ctrl+B anywhere opens it; Escape closes it; while it captures or selects, Space or
+  // Enter takes the whole window. It hears keys first (the capture phase), and while it
+  // captures or selects, nothing else on the page does: the board's Space would pass.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const now = stageRef.current;
+      const swallow = () => {
+        e.preventDefault();
+        e.stopPropagation();
+      };
       if (
         (e.metaKey || e.ctrlKey) &&
         !e.altKey &&
         !e.shiftKey &&
         e.key.toLowerCase() === "b"
       ) {
-        e.preventDefault();
-        if (!open) void start();
-      } else if (e.key === "Escape" && open) {
-        e.preventDefault();
-        e.stopPropagation();
+        swallow();
+        if (now.kind === "idle") void start();
+      } else if (e.key === "Escape" && now.kind !== "idle") {
+        swallow();
         close();
+      } else if (now.kind === "capturing" || now.kind === "select") {
+        swallow();
+        const plain = !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey;
+        if ((e.key === " " || e.key === "Enter") && plain && !e.repeat) {
+          if (now.kind === "select") void choose(now.frame, whole());
+          else wantWhole.current = true;
+        }
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [open, start, close]);
-
-  const choose = async (region: Region) => {
-    if (stage.kind !== "select") return;
-    const { frame } = stage;
-    let image: string | undefined;
-    if (frame) {
-      try {
-        image = await crop(frame, region);
-      } catch (e) {
-        note("warn", "bug", `no crop: ${String(e)}`);
-      }
-    }
-    setStage({ kind: "describe", frame, region, crop: image, saving: false });
-  };
+  }, [start, close, choose]);
 
   const submit = async (description: string) => {
     if (stage.kind !== "describe" || stage.saving) return;
@@ -180,10 +209,19 @@ export function BugReporter({ route }: { route: string }) {
         <BugIcon />
       </button>
       {stage.kind === "select" && (
-        <Selector frame={stage.frame} onChoose={choose} onClose={close} />
+        <Selector
+          frame={stage.frame}
+          onChoose={(region) => void choose(stage.frame, region)}
+          onClose={close}
+        />
       )}
       {(stage.kind === "describe" || stage.kind === "saved") && (
-        <div className="bug-overlay" data-unfrozen>
+        <div
+          className="bug-overlay"
+          data-unfrozen
+          // What is typed here is the report's: the board's keys (⌘Z undoes) never hear it.
+          onKeyDown={(e) => e.stopPropagation()}
+        >
           <Frame frame={stage.frame} />
           <div
             className="bug-region bug-region-dim"
@@ -232,17 +270,6 @@ function Selector({
 }) {
   const from = useRef<{ x: number; y: number } | undefined>(undefined);
   const [drag, setDrag] = useState<Region>();
-  // Enter takes the whole window.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        onChoose(whole());
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onChoose]);
   const down = (e: ReactPointerEvent) => {
     if (e.button !== 0) return;
     (e.target as Element).setPointerCapture(e.pointerId);
@@ -345,7 +372,7 @@ function Tools({
           type="button"
           className="bug-tool"
           aria-label="Whole window"
-          title="Whole window (Enter)"
+          title="Whole window (Space)"
           onClick={onWhole}
         >
           <svg viewBox="0 0 24 24" role="img" aria-hidden className="bug-whole">

@@ -121,6 +121,7 @@ const fn names(path: &str, name: &str) -> bool {
 
 pub fn run() {
     journal::install_panic_hook();
+    bugs::set_build_commit(env!("BERYL_COMMIT"));
     tauri::Builder::default()
         .invoke_handler(handlers![
             app_info = ipc::APP_INFO,
