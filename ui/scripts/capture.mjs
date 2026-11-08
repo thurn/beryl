@@ -1,8 +1,11 @@
 // What the headless capture scripts share: opening a page at a fixed size and waiting until it has
 // settled.
-import { webkit } from "playwright";
+import { chromium, webkit } from "playwright";
 
-export const launch = () => webkit.launch();
+/** The engine of the app's webview on this platform, as `by` names it (`BERYL_BROWSER`):
+ * WebKit (WKWebView, macOS) unless Chromium (WebView2, Windows). */
+export const launch = () =>
+    (process.env.BERYL_BROWSER === "chromium" ? chromium : webkit).launch();
 
 /** Runs the tasks it is handed at most `BERYL_UI_WORKERS` (default 4) at a time, each on its own
  * browser context. Awaiting a hand-off waits for a free worker, not for the task, so a script

@@ -2,7 +2,8 @@
 lists them, `by bugs file` files a bead for each open one, and `by bugs done` marks them fixed.
 
 Each report is a folder under $BERYL_BUGS, else
-`~/Library/Application Support/ca.thurn.beryl/bugs`: `report.md`, whose front matter holds its
+`~/Library/Application Support/ca.thurn.beryl/bugs` (on Windows, `%APPDATA%\ca.thurn.beryl\bugs`):
+`report.md`, whose front matter holds its
 `status` (open, filed, done) and `bead`, beside its screenshots, replay, views and logs. A done
 report moves to `done/`.
 """
@@ -31,6 +32,9 @@ def bugs_dir() -> Path:
     root = os.environ.get("BERYL_BUGS")
     if root:
         return Path(root)
+    appdata = os.environ.get("APPDATA")
+    if sys.platform == "win32" and appdata:
+        return Path(appdata) / "ca.thurn.beryl" / "bugs"
     return Path.home() / "Library" / "Application Support" / "ca.thurn.beryl" / "bugs"
 
 
@@ -96,7 +100,7 @@ def update(report: Report, **changes: str) -> None:
             seen.add(key)
     missing = [f"{k}: {v}".rstrip() for k, v in changes.items() if k not in seen]
     lines[end:end] = missing
-    path.write_text("\n".join(lines))
+    path.write_text("\n".join(lines), newline="\n")
     report.fields.update(changes)
 
 

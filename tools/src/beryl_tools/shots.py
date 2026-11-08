@@ -1,7 +1,7 @@
 """`ui-shots`: screenshots of UI states without opening a window. It records the game fixtures
 ui/fixtures.json defines with `beryl_cli record-fixture`, serves the UI with Vite, captures the
-routes listed in ui/shots.json with headless Playwright WebKit (ui/scripts/shots.mjs) and prints
-the paths. Pages run in a plain browser on the fixture transport (ui/src/ipc.ts).
+routes listed in ui/shots.json with headless Playwright (ui/scripts/shots.mjs) and prints the
+paths. Playwright runs the engine of the app's webview: WebKit on macOS, Chromium on Windows. Pages run in a plain browser on the fixture transport (ui/src/ipc.ts).
 
 `ui-test` plays the game screen through a fixture the same way, dragging, clicking and hovering
 as a player would (ui/scripts/interactions.mjs). It records its fixtures into the cache instead,
@@ -9,11 +9,11 @@ where its pages fetch them, so it runs alongside `ui-shots` (slow CI's `shots` a
 lanes).
 
 `ui-live` serves live games instead: `beryl_cli serve` runs the app's game commands, Vite serves
-the UI against it (`?live=`, src/ipc.ts), and ui/scripts/drive.mjs holds a headless WebKit page
+the UI against it (`?live=`, src/ipc.ts), and ui/scripts/drive.mjs holds a headless page
 open on it that an agent drives one step at a time over HTTP, until interrupted.
 
-Screenshots go to the cache (`ui-shots/<checkout>/`), never into the tree; WebKit is installed
-there on first use.
+Screenshots go to the cache (`ui-shots/<checkout>/`), never into the tree; the browser is
+installed there on first use.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ RECORDED: Path = paths.UI / "public" / "fixtures"
 
 
 class UiError(Exception):
-    """Serving the UI or installing WebKit failed; the message says why."""
+    """Serving the UI or installing the browser failed; the message says why."""
 
 
 def out_dir() -> Path:
@@ -80,16 +80,22 @@ def wait_for_server(url: str, server: subprocess.Popen[bytes]) -> bool:
     return False
 
 
-def webkit_env() -> dict[str, str]:
-    """The environment for the capture scripts, with Playwright WebKit installed in the cache."""
+# The engine of the app's webview: WKWebView's on macOS, WebView2's on Windows.
+BROWSER = "chromium" if system.WINDOWS else "webkit"
+
+
+def browser_env() -> dict[str, str]:
+    """The environment for the capture scripts, with the app webview's engine installed in the
+    cache for Playwright."""
     warm.ensure()
     env = {
         **os.environ,
         "PLAYWRIGHT_BROWSERS_PATH": str(paths.cache_root() / "playwright"),
+        "BERYL_BROWSER": BROWSER,
     }
-    # A no-op once WebKit is there.
+    # A no-op once it is there.
     install = subprocess.run(
-        [system.npm_bin("playwright"), "install", "webkit"],
+        [system.npm_bin("playwright"), "install", BROWSER],
         cwd=paths.UI,
         env=env,
         stdin=subprocess.DEVNULL,
@@ -99,7 +105,9 @@ def webkit_env() -> dict[str, str]:
     )
     if install.returncode != 0:
         raise UiError(
-            install.stdout + install.stderr + "installing Playwright WebKit failed"
+            install.stdout
+            + install.stderr
+            + f"installing Playwright's {BROWSER} failed"
         )
     return env
 
@@ -176,7 +184,7 @@ def ui_shots(args: argparse.Namespace) -> int:
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True)
     try:
-        env = webkit_env()
+        env = browser_env()
         code = record_fixtures()
         if code == 0:
             with served_ui(env) as url:
@@ -251,7 +259,7 @@ INTERACTION_FIXTURES = [
 def ui_test(args: argparse.Namespace) -> int:
     recorded = paths.cache_root() / "ui-test" / paths.REPO.name
     try:
-        env = webkit_env()
+        env = browser_env()
         code = record_fixtures(recorded, INTERACTION_FIXTURES)
         if code == 0:
             with served_ui(env) as url:
@@ -304,7 +312,7 @@ def ui_live(args: argparse.Namespace) -> int:
     # A plain SIGTERM would end Python without the cleanup below, orphaning the children.
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     try:
-        env = webkit_env()
+        env = browser_env()
         children.append(
             subprocess.Popen(
                 [str(binary), "serve", "--port", str(game_port)],

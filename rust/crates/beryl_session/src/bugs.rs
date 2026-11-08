@@ -114,10 +114,16 @@ pub fn ui_log(request: UiLogRequest) {
 }
 
 /// Where reports go: `$BERYL_BUGS`, else the app's data directory's `bugs`
-/// (`~/Library/Application Support/ca.thurn.beryl/bugs`), wherever the report came from.
+/// (`~/Library/Application Support/ca.thurn.beryl/bugs`, or on Windows
+/// `%APPDATA%\ca.thurn.beryl\bugs`), wherever the report came from.
 pub fn dir() -> PathBuf {
     if let Some(dir) = std::env::var_os("BERYL_BUGS") {
         return PathBuf::from(dir);
+    }
+    if cfg!(windows)
+        && let Some(appdata) = std::env::var_os("APPDATA")
+    {
+        return PathBuf::from(appdata).join("ca.thurn.beryl").join("bugs");
     }
     let home = std::env::var_os("HOME").map_or_else(|| PathBuf::from("."), PathBuf::from);
     home.join("Library/Application Support/ca.thurn.beryl/bugs")

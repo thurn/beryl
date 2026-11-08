@@ -41,7 +41,7 @@ from .shots import (
     port_free,
     served_ui,
     wait_for_server,
-    webkit_env,
+    browser_env,
 )
 
 
@@ -375,7 +375,7 @@ def specs(args: argparse.Namespace) -> int:
     try:
         if capturing or args.drive:
             env = {
-                **webkit_env(),
+                **browser_env(),
                 "BERYL_SPECS_PORT": str(spec_port),
                 "BERYL_CLI": str(binary),
             }

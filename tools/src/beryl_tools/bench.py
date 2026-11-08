@@ -17,11 +17,13 @@ Extra arguments go to `cargo bench`: `by bench -p beryl_bench --bench example_ab
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import platform
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -215,7 +217,7 @@ def bench(args: argparse.Namespace) -> int:
     return subprocess.run(run, cwd=paths.RUST, env=env, check=False).returncode
 
 
-# The Lima VM for Gungraun.
+# The Lima VM for Gungraun; on Windows, a WSL distribution of the same name.
 
 
 def toolchain() -> str:
@@ -249,7 +251,25 @@ fi
 """
 
 
+def wsl_status() -> str | None:
+    """The WSL distribution's state, Running or Stopped; None if there is none."""
+    run = subprocess.run(
+        ["wsl", "--list", "--verbose"],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "WSL_UTF8": "1"},
+        check=False,
+    )
+    for line in run.stdout.splitlines():
+        fields = line.replace("*", " ").split()
+        if len(fields) >= 2 and fields[0] == VM:
+            return fields[1]
+    return None
+
+
 def vm_status() -> str | None:
+    if system.WINDOWS:
+        return wsl_status()
     for line in output(
         "limactl", "list", "--format", "{{.Name}} {{.Status}}"
     ).splitlines():
@@ -260,6 +280,22 @@ def vm_status() -> str | None:
 
 
 def vm_command(script: str) -> list[str]:
+    if system.WINDOWS:
+        # Windows' command line would mangle the script's quotes on the way through wsl.exe:
+        # it goes as base64, and runs from a file so that its commands' stdin is not it.
+        encoded = base64.b64encode(script.encode()).decode()
+        unpack = f"f=$(mktemp); echo {encoded} | base64 -d >$f; bash -l $f; s=$?; rm -f $f; exit $s"
+        return [
+            "wsl",
+            "-d",
+            VM,
+            "--cd",
+            str(paths.RUST),
+            "--exec",
+            "bash",
+            "-c",
+            unpack,
+        ]
     return ["limactl", "shell", "--workdir", str(paths.RUST), VM, "bash", "-lc", script]
 
 
@@ -315,7 +351,25 @@ fi
     return locked(f"{provision}{prepare}{env} {shlex.join(cargo)}\n")
 
 
+def wsl_ensure() -> int:
+    """Creates the WSL distribution, its disk in the cache (on the Dev Drive, if the cache is),
+    where it runs as root; WSL starts it for each command."""
+    if shutil.which("wsl") is None:
+        log("WSL is missing: wsl --install, in an administrator's terminal")
+        return 2
+    if wsl_status() is not None:
+        return 0
+    log(f"creating the {VM} WSL distribution (downloads Ubuntu once; a few minutes)")
+    return subprocess.run(
+        ["wsl", "--install", "Ubuntu-24.04", "--name", VM, "--no-launch"]
+        + ["--location", str(paths.cache_root() / "wsl" / VM)],
+        check=False,
+    ).returncode
+
+
 def vm_ensure() -> int:
+    if system.WINDOWS:
+        return wsl_ensure()
     if not output("which", "limactl").strip():
         log("Lima is missing: brew install lima")
         return 2
@@ -418,6 +472,10 @@ def judge(gate: Gate, measured: int) -> tuple[bool, str]:
 
 
 def count_gate(args: argparse.Namespace) -> int:
+    if platform.machine() not in ("arm64", "aarch64"):
+        # The bar counts an aarch64 build's instructions; an x86-64 build runs others.
+        log("the gate's bar is for Apple silicon; `just bench-count` compares here")
+        return 2
     if vm_status() is None:
         # Creating it takes minutes, past CI's deadline.
         log(f"no {VM} VM: run `just bench-count` once to create it")
@@ -464,7 +522,7 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.set_defaults(func=bench, passthrough=True)
     p = sub.add_parser(
         "bench-count",
-        help="Gungraun instruction counts in a Lima VM (cargo bench flags)",
+        help="Gungraun instruction counts in a Lima VM, or WSL (cargo bench flags)",
         allow_abbrev=False,
     )
     p.set_defaults(func=bench_count, passthrough=True)
