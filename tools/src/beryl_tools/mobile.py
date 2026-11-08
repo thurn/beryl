@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import app, paths
+from . import app, paths, system
 
 BUNDLE_ID = "ca.thurn.beryl"
 APPLE: Path = paths.APP / "gen" / "apple"
@@ -320,17 +320,22 @@ def smoke(args: argparse.Namespace) -> int:
         code = build_simulator_app()
         if code != 0:
             return code
-    udid, booted = simulator()
-    started = time.monotonic()
-    boot(udid)
-    install(udid, SIMULATOR_APP)
-    print(f"ios-smoke: booted and installed in {time.monotonic() - started:.0f} s")
-    try:
-        ready = launch_until_ready(udid, args.seconds)
-    finally:
-        run("xcrun", "simctl", "terminate", udid, BUNDLE_ID)
-        if not booted:
-            run("xcrun", "simctl", "shutdown", udid)
+    # One smoke at a time: another would reinstall the app under this one, or shut down the
+    # simulator it booted.
+    with system.file_lock(paths.cache_root() / "ios-smoke.lock"):
+        udid, booted = simulator()
+        started = time.monotonic()
+        boot(udid)
+        try:
+            install(udid, SIMULATOR_APP)
+            print(
+                f"ios-smoke: booted and installed in {time.monotonic() - started:.0f} s"
+            )
+            ready = launch_until_ready(udid, args.seconds)
+        finally:
+            run("xcrun", "simctl", "terminate", udid, BUNDLE_ID)
+            if not booted:
+                run("xcrun", "simctl", "shutdown", udid)
     print(f"ios-smoke: {'passed' if ready else 'FAILED'}")
     return 0 if ready else 1
 
@@ -387,14 +392,17 @@ def journal(udid: str, pid: int) -> list[dict[str, Any]]:
 
 
 def run_records(journal: str, pid: int) -> list[dict[str, Any]]:
-    """The records of the app run `pid` in `journal`'s text: those after the record that
-    opened the journal in that process."""
+    """The records of the app run `pid` in `journal`'s text: those after the last record that
+    opened the journal in that process. The last: an emulator booted afresh gives the app the
+    same pid it gave an earlier run."""
     records: list[dict[str, Any]] = []
     ours = False
     for line in journal.splitlines():
         record: dict[str, Any] = json.loads(line)
         if record.get("source") == "journal" and record.get("message") == "opened":
             ours = (record.get("data") or {}).get("pid") == pid
+            if ours:
+                records = []
         if ours:
             records.append(record)
     return records

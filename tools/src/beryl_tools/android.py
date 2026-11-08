@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import mobile, paths, warm
+from . import mobile, paths, system, warm
 
 PACKAGE: str = mobile.BUNDLE_ID
 ACTIVITY: str = f"{PACKAGE}/.MainActivity"
@@ -23,6 +23,8 @@ PORT = 5584
 SERIAL = f"emulator-{PORT}"
 # lib.rs's SMOKE_PROPERTY: an Android app inherits no environment.
 SMOKE_PROPERTY = "debug.beryl.smoke"
+# A cold boot takes about a minute; this only catches one that never finishes.
+BOOT_SECONDS = 600
 # Where `tauri android build --debug --apk --target aarch64` leaves the app.
 APK: Path = (
     paths.APP
@@ -120,10 +122,14 @@ def start_emulator(window: bool) -> subprocess.Popen[bytes]:
         stderr=subprocess.DEVNULL,
         env=mobile.android_env(),
     )
-    adb("wait-for-device", check=True)
+    # Not `adb wait-for-device`, which waits forever on an emulator that died, as one does
+    # when another emulator runs its AVD.
     while adb("shell", "getprop", "sys.boot_completed").stdout.strip() != "1":
         if proc.poll() is not None:
             raise SystemExit(f"android: the emulator exited ({proc.returncode})")
+        if time.monotonic() - started > BOOT_SECONDS:
+            proc.kill()
+            raise SystemExit(f"android: the emulator did not boot in {BOOT_SECONDS} s")
         time.sleep(1)
     print(f"android: emulator booted in {time.monotonic() - started:.0f} s")
     return proc
@@ -152,17 +158,19 @@ def smoke(args: argparse.Namespace) -> int:
         code = build()
         if code != 0:
             return code
-    started_here = not running()
-    if started_here:
-        start_emulator(window=False)
-    try:
-        install()
-        ready = launch_until_ready(args.seconds)
-    finally:
-        adb("shell", "setprop", SMOKE_PROPERTY, "''")
-        adb("shell", "am", "force-stop", PACKAGE)
-        if started_here:
-            adb("emu", "kill")
+    # One smoke at a time: another would reinstall the app under this one, or kill the
+    # emulator it started.
+    with system.file_lock(paths.cache_root() / "android-smoke.lock"):
+        emulator = None if running() else start_emulator(window=False)
+        try:
+            install()
+            ready = launch_until_ready(args.seconds)
+        finally:
+            adb("shell", "setprop", SMOKE_PROPERTY, "''")
+            adb("shell", "am", "force-stop", PACKAGE)
+            if emulator is not None:
+                adb("emu", "kill")
+                emulator.wait(timeout=BOOT_SECONDS)
     print(f"android-smoke: {'passed' if ready else 'FAILED'}")
     return 0 if ready else 1
 
