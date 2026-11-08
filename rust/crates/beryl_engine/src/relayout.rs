@@ -426,6 +426,25 @@ impl<L: Layout> Relayout for Recipient<L> {
     }
 }
 
+/// An [`Event::Mana`] in another layout.
+fn mana<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
+    let &Event::Mana {
+        player,
+        source,
+        color,
+        amount,
+    } = e
+    else {
+        unreachable!("a mana event")
+    };
+    Event::Mana {
+        player,
+        source: source.map(|o| o.relayout()),
+        color,
+        amount,
+    }
+}
+
 /// An [`Event::Cast`] in another layout.
 fn cast<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
     let Event::Cast {
@@ -526,6 +545,7 @@ impl<L: Layout> Relayout for Event<L> {
             Event::Untap { object } => Event::Untap {
                 object: object.relayout(),
             },
+            Event::Mana { .. } => mana(self),
             &Event::TokensCreated { controller, tokens } => Event::TokensCreated {
                 controller,
                 tokens: bits(tokens),

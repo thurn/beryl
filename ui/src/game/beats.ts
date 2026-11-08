@@ -77,7 +77,7 @@ function onStack(stack: StackItem[], item: StackItem): boolean {
   return stack.some((s) => sameItem(s, item));
 }
 
-function sameItem(a: StackItem, b: StackItem): boolean {
+export function sameItem(a: StackItem, b: StackItem): boolean {
   if (a.kind === "spell" && b.kind === "spell") return a.slot === b.slot;
   return a.kind === b.kind && JSON.stringify(a) === JSON.stringify(b);
 }
@@ -417,6 +417,7 @@ function effect(e: GameEvent): boolean {
     case "ability":
     case "tap":
     case "untap":
+    case "mana":
     case "stepBegins":
       return false;
     case "zoneChange":
@@ -439,8 +440,10 @@ function eventHold(e: GameEvent): number {
     // The opponent's draw crosses the table; the player's own is in their hand at once.
     case "draw":
       return e.player === "opponent" ? HOLD.draw : HOLD.step;
+    // Mana flows into what it pays for (ManaFlow), held no longer than a tap.
     case "tap":
     case "untap":
+    case "mana":
       return HOLD.step;
     case "zoneChange":
       return e.reason === "counter" ? HOLD.counter : HOLD.action;

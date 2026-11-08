@@ -142,6 +142,7 @@ import {
   STAGE,
   zonePiles,
   type Box,
+  type Layout,
   type Placement,
   type Spotlight,
   type ZonePile,
@@ -165,6 +166,7 @@ import {
   pileTip,
   ZoneViewer,
 } from "./Piles";
+import { ManaFlow, manaMotes } from "./ManaFlow";
 import { TurnBanner } from "./TurnBanner";
 
 export interface BoardProps {
@@ -378,6 +380,23 @@ export function Board({
     () =>
       crowdsLog && logOpen ? layout(shown, hold, true, spotlight) : resting,
     [resting, crowdsLog, logOpen, shown, hold, spotlight],
+  );
+  // The table as the view before this one laid it: where a source sacrificed for its mana was.
+  const tables = useRef<{ view?: PlayerView; laid?: Layout; before?: Layout }>(
+    {},
+  );
+  if (tables.current.view !== view) {
+    tables.current = { view, laid, before: tables.current.laid };
+  } else {
+    tables.current.laid = laid;
+  }
+  const previousTable = tables.current.before;
+  // Mana flowing from its sources into what it paid for, as the game plays on.
+  const motes = useMemo(
+    () =>
+      live ? manaMotes(views.current.before, view, laid, previousTable) : [],
+    // Once per view: the table settling under it (the log opening) sends none again.
+    [view, live],
   );
   // In the raised hand, the cards picked stand higher than the rest.
   const placements = useMemo(() => {
@@ -1172,6 +1191,8 @@ export function Board({
           }}
           onLift={setLifted}
         />
+
+        <ManaFlow motes={motes} />
 
         {/* Over the cards on them: a pile is opened, never pointed at card by card. */}
         {piles.map(

@@ -31,7 +31,7 @@ const CROWDED = 3;
 /** Events that need no animation of their own. */
 const QUIET_EVENTS = new Set(["stepBegins", "coinFlip", "win", "lose"]);
 /** Events that come with another and count for nothing in a crowd. */
-const MINOR_EVENTS = new Set(["tap", "untap", "draw", "cast"]);
+const MINOR_EVENTS = new Set(["tap", "untap", "draw", "cast", "mana"]);
 /** How long a card may show twice before it counts as a duplicate: a hand-off between two
  * elements of one card (a prompt's card settling back onto the table) crosses briefly. */
 const DUPLICATE_MS = 250;
@@ -263,8 +263,34 @@ export function record(ui) {
                 anim: e.getAnimations({ subtree: true }).length > 0,
             };
         });
+        // Mana in flight from its source (game/ManaFlow.tsx), each mote by its source and
+        // flight.
+        const motes = {};
+        for (const e of document.querySelectorAll("[data-mana-id]")) {
+            const r = e.getBoundingClientRect();
+            const cx = r.left + r.width / 2;
+            const cy = r.top + r.height / 2;
+            motes[`${e.dataset.manaSource}:${e.dataset.manaId}`] = {
+                x: Math.round(cx),
+                y: Math.round(cy),
+                w: Math.round(r.width),
+                h: Math.round(r.height),
+                o: opacity(e),
+                on: cx >= 0 && cy >= 0 && cx < innerWidth && cy < innerHeight,
+                top: true,
+                anim: e.getAnimations().length > 0,
+            };
+        }
         hits.remove();
-        frames.push({ t: performance.now(), cards, lives, stack, uis, dupes });
+        frames.push({
+            t: performance.now(),
+            cards,
+            lives,
+            stack,
+            uis,
+            dupes,
+            motes,
+        });
         if (!window.__motion.stop) requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
@@ -346,6 +372,8 @@ function describe(e, names) {
         case "countersAdded":
         case "countersRemoved":
             return `${name(e.slot)} ${e.kind === "countersAdded" ? "+" : "-"}${e.amount} ${e.counter}`;
+        case "mana":
+            return `${e.amount} ${e.color} mana from ${e.source == null ? "an effect" : name(e.source)}`;
         default:
             return "slot" in e ? `${name(e.slot)}` : JSON.stringify(e);
     }
@@ -478,6 +506,23 @@ function judge(e, frames, names, later = frames) {
     }
     if (e.kind === "countersAdded" || e.kind === "countersRemoved") {
         return judgeBadge(what, frames, e.slot);
+    }
+    if (e.kind === "mana") {
+        // Its motes flying from its source: the one that showed longest.
+        const keys = new Set(
+            frames.flatMap((f) =>
+                Object.keys(f.motes ?? {}).filter((k) =>
+                    k.startsWith(`${e.source}:`),
+                ),
+            ),
+        );
+        if (keys.size === 0) {
+            return { what, verdict: "still", why: "no mana flew from it" };
+        }
+        const best = [...keys]
+            .map((k) => behavior(frames, k, (f) => f.motes?.[k]))
+            .reduce((a, b) => (b.ms > a.ms ? b : a));
+        return judgeShown(what, best, "its mana");
     }
     if (e.kind === "ability") {
         // A new item on the stack shows it; a loyalty ability's cost shows on its badge.

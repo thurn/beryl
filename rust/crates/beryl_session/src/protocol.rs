@@ -783,6 +783,18 @@ pub enum GameEvent {
     Untap {
         slot: u16,
     },
+    /// Mana added to a player's mana pool
+    /// ([CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064)): "When an effect
+    /// instructs a player to add mana, that mana goes into a player's mana pool." The UI
+    /// shows it flow from its source to the spell or ability it pays for.
+    Mana {
+        player: Side,
+        /// The mana ability's permanent, or the spell or ability that added it, in the slot
+        /// it had then: a source sacrificed for mana has left it by the time the view shows.
+        source: Option<u16>,
+        color: Mana,
+        amount: u8,
+    },
     TokensCreated {
         controller: Side,
         tokens: Vec<u16>,
@@ -1984,6 +1996,52 @@ fn cast_item<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) ->
     stack_item(t, obs, &entry)
 }
 
+/// An [`Event::CountersAdded`] or [`Event::CountersRemoved`] as the viewer is told it.
+fn counters_event<L: Layout>(e: &Event<L>) -> GameEvent {
+    match *e {
+        Event::CountersAdded {
+            object,
+            kind,
+            amount,
+        } => GameEvent::CountersAdded {
+            slot: object.slot.num(),
+            counter: kind.into(),
+            amount,
+        },
+        Event::CountersRemoved {
+            object,
+            kind,
+            amount,
+        } => GameEvent::CountersRemoved {
+            slot: object.slot.num(),
+            counter: kind.into(),
+            amount,
+        },
+        _ => unreachable!("a counters event"),
+    }
+}
+
+/// An [`Event::Mana`] as the viewer of `obs` is told it: who made it, from what, all public
+/// ([CR 605.3b](https://yawgatog.com/resources/magic-rules/#R6053b): a mana ability
+/// "resolves immediately after it is activated", in view of both players).
+fn mana_event<L: Layout>(obs: Observation<'_, L>, e: &Event<L>) -> GameEvent {
+    let &Event::Mana {
+        player,
+        source,
+        color,
+        amount,
+    } = e
+    else {
+        unreachable!("a mana event")
+    };
+    GameEvent::Mana {
+        player: side(obs, player),
+        source: source.map(|o| o.slot.num()),
+        color: color.into(),
+        amount,
+    }
+}
+
 /// An engine event as the viewer of `obs` is told it. Engine events name objects by slot and
 /// carry no identity: anything an event says about a card must come from `obs`, which the
 /// information independence test redeals. The table names only an ability's card, public as
@@ -2025,30 +2083,14 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
             player: side(player),
             amount,
         },
-        Event::CountersAdded {
-            object,
-            kind,
-            amount,
-        } => GameEvent::CountersAdded {
-            slot: object.slot.num(),
-            counter: kind.into(),
-            amount,
-        },
-        Event::CountersRemoved {
-            object,
-            kind,
-            amount,
-        } => GameEvent::CountersRemoved {
-            slot: object.slot.num(),
-            counter: kind.into(),
-            amount,
-        },
+        Event::CountersAdded { .. } | Event::CountersRemoved { .. } => counters_event(e),
         Event::Tap { object } => GameEvent::Tap {
             slot: object.slot.num(),
         },
         Event::Untap { object } => GameEvent::Untap {
             slot: object.slot.num(),
         },
+        Event::Mana { .. } => mana_event(obs, e),
         Event::TokensCreated { controller, tokens } => GameEvent::TokensCreated {
             controller: side(controller),
             tokens: slots(tokens.iter()),

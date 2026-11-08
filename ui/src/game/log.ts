@@ -225,6 +225,7 @@ export function logLines(view: PlayerView, names: Names): LogLine[] {
         return;
       case "tap":
       case "untap":
+      case "mana":
         return;
     }
   };

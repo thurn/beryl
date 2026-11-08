@@ -553,6 +553,13 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     pub fn add_mana(&mut self, player: Seat, color: ManaColor, amount: u8) {
         let pool = &mut self.state.player_mut(player).mana[color];
         *pool = pool.saturating_add(amount);
+        // Nothing triggers on adding mana, so it skips the rest of the pipeline.
+        self.sink.note(event::Event::Mana {
+            player,
+            source: self.entry.object,
+            color,
+            amount,
+        });
     }
 
     /// Deals noncombat damage from this ability's source.

@@ -8,7 +8,7 @@
 //! most draws) arrive with the cards that create them.
 
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityKind, Castings, FaceAbility, FaceIx, Replacement, Types};
+use crate::card::{AbilityKind, Castings, FaceAbility, FaceIx, ManaColor, Replacement, Types};
 use crate::fixed::Full;
 use crate::ids::{CardIx, Seat};
 use crate::layers;
@@ -138,6 +138,17 @@ pub enum Event<L: Layout = Small> {
     },
     Untap {
         object: ObjectRef<L>,
+    },
+    /// Mana was added to a player's mana pool
+    /// ([CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064)): "When an effect
+    /// instructs a player to add mana, that mana goes into a player's mana pool." For the UI,
+    /// which shows it flow from `source` (the mana ability's permanent, or the spell or
+    /// ability that added it) to what it pays for.
+    Mana {
+        player: Seat,
+        source: Option<ObjectRef<L>>,
+        color: ManaColor,
+        amount: u8,
     },
     /// "Whenever you create one or more tokens" reads this once per event.
     TokensCreated {
@@ -311,6 +322,14 @@ impl<L: Layout> Sink<L> {
             events: self.events.iter().map(Relayout::relayout).collect(),
             on: self.on,
             work: self.work,
+        }
+    }
+
+    /// Keeps an event only the UI reads, which no rule acts on and so counts as no work of
+    /// the pipeline's: search pays one branch for it.
+    pub(crate) fn note(&mut self, e: Event<L>) {
+        if self.on {
+            self.events.push(e);
         }
     }
 
