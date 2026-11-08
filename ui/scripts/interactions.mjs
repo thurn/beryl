@@ -3613,28 +3613,70 @@ await check(
 );
 
 // The stack's arrows (by-l1w.8): a spell aimed at a card beside the stack, an ability aimed at
-// its source's neighbor, and one aimed at a player. Each arrow ties the elements the top of
-// the stack names, starts and ends on their edges apart from every other arrow's ends, is long
-// enough to read, and runs mostly clear of the other cards on the table.
-for (const fixture of ["arrow-spell", "arrow-ability", "arrow-player"]) {
+// its source's neighbor, one aimed at a player, and a spell aimed at a creature under one aimed
+// at it (by-97z). Every item's targets are drawn, the top's first; an ability's source only
+// while the pointer is on the ability (by-wkr). Each arrow ties the elements its item names,
+// starts and ends on their edges apart from every other arrow's ends, is long enough to read,
+// and runs mostly clear of the other cards on the table.
+for (const fixture of [
+    "arrow-spell",
+    "arrow-ability",
+    "arrow-player",
+    "arrow-stacked",
+]) {
     const views = await load(fixture);
     const view = views.at(-1);
     const top = view.stack.length - 1;
     const item = view.stack[top];
-    const from = item.kind === "spell" ? `card-${item.slot}` : `stack-${top}`;
+    // The top item's element; beneath it, the strip of the item that peeks out.
+    const idOf = (item, i) =>
+        i < top
+            ? `stack-peek-${i}`
+            : item.kind === "spell"
+              ? `card-${item.slot}`
+              : `stack-${i}`;
+    const targets = view.stack
+        .map((item, i) =>
+            item.targets.map((t) => [
+                idOf(item, i),
+                t.kind === "player" ? `${t.player}-life-orb` : `card-${t.slot}`,
+            ]),
+        )
+        .reverse()
+        .flat();
+    const sourced = item.kind === "ability" && item.source !== null;
     const expected = [
-        ...(item.kind === "ability" && item.source !== null
-            ? [[`card-${item.source}`, from]]
-            : []),
-        ...item.targets.map((t) => [
-            from,
-            t.kind === "player" ? `${t.player}-life-orb` : `card-${t.slot}`,
-        ]),
+        ...(sourced ? [[`card-${item.source}`, idOf(item, top)]] : []),
+        ...targets,
     ];
+    if (sourced) {
+        await check(
+            `${fixture}: an ability's source arrow shows while it is pointed at`,
+            async (page) => {
+                await page.clock.runFor(3000);
+                const ends = () =>
+                    page.$$eval(".board-arrows .arrow", (gs) =>
+                        gs.map((g) => [g.dataset.from, g.dataset.to]),
+                    );
+                assert.deepEqual(await ends(), targets, "targets alone");
+                await page.hover(`#stack-${top}`);
+                await page.clock.runFor(500);
+                assert.deepEqual(await ends(), expected, "and the source");
+                await page.mouse.move(5, 450);
+                await page.clock.runFor(500);
+                assert.deepEqual(await ends(), targets, "targets again");
+            },
+            { fixture, at: views.length, ready: ".arrow" },
+        );
+    }
     await check(
         `${fixture}: each arrow's source and target read distinctly`,
         async (page) => {
             await page.clock.runFor(3000);
+            if (sourced) {
+                await page.hover(`#stack-${top}`);
+                await page.clock.runFor(500);
+            }
             const drawn = await page.evaluate(() => {
                 const box = (e) => {
                     const r = e.getBoundingClientRect();
@@ -3660,9 +3702,15 @@ for (const fixture of ["arrow-spell", "arrow-ability", "arrow-player"]) {
                     const ends = [g.dataset.from, g.dataset.to].map((id) =>
                         document.getElementById(id),
                     );
+                    // An end and the item it is the strip of.
+                    const own = ends.flatMap((e) =>
+                        e.dataset.within
+                            ? [e, document.getElementById(e.dataset.within)]
+                            : [e],
+                    );
                     const others = cards
                         .filter(
-                            (c) => !ends.some((e) => c === e || c.contains(e)),
+                            (c) => !own.some((e) => c === e || c.contains(e)),
                         )
                         .map(box);
                     return {

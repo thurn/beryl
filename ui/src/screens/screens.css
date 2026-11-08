@@ -745,6 +745,11 @@
 .hud {
   position: absolute;
 }
+/* The strip of a stack item that peeks out from under the next (Board's StackPeek): an anchor
+   for its arrows, which neither shows nor takes the pointer. */
+.stack-peek {
+  pointer-events: none;
+}
 /* Over the permanents and the hand at rest, under a hovered (CardLayer's RAISED_Z, 300) or
    dragged hand card: the card in hand is what the player is reading. */
 .table .life {

@@ -522,6 +522,30 @@ pub const BOARDS: &[Scenario] = &[
             Action::cast(P0, TRINKET_MAGE),
             Action::cast(P1, COUNTERSPELL),
         ]),
+    // The human's Oust aimed at the opponent's Trinket Mage, under the opponent's Counterspell
+    // aimed at Oust, which the human may save: each spell's target is drawn, the one beneath
+    // the top's too.
+    Scenario::new("arrow-stacked")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[PLAINS_, PLAINS_, PLAINS_, ISLAND_])
+        .hand(P0, &[OUST, REPRIEVE])
+        .library(P0, LANDS)
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(TRINKET_MAGE),
+                Permanent::new(SNAPCASTER_MAGE),
+                ISLAND_,
+                ISLAND_,
+            ],
+        )
+        .hand(P1, &[COUNTERSPELL])
+        .library(P1, LANDS)
+        .actions(&[
+            Action::cast(P0, OUST),
+            choose(P0, DecisionKind::Target, TRINKET_MAGE),
+            Action::cast(P1, COUNTERSPELL),
+        ]),
     // The opponent's Jace, the Mind Sculptor returns their own Trinket Mage, beside it.
     Scenario::new("arrow-ability")
         .at(4, P1, TurnStep::PrecombatMain)

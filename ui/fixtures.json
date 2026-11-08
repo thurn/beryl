@@ -199,6 +199,12 @@
       "where": ["targeted spell on the stack"]
     },
     {
+      "name": "arrow-stacked",
+      "board": "arrow-stacked",
+      "until": "first priority decision for seat 0",
+      "where": ["stack Counterspell", "targeted spell on the stack"]
+    },
+    {
       "name": "arrow-ability",
       "board": "arrow-ability",
       "until": "first priority decision for seat 0",

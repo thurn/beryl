@@ -133,7 +133,9 @@ export function StackMarks({
 /** An arrow from the element with id `from` to the one with id `to`, routed (route.ts): out of
  * whichever edge and into whichever edge make the clearest curve past the cards `Arrows` avoids
  * and the arrows before it, the head square to the edge it meets. An element marked
- * `data-oval` is met round its inscribed ellipse. Every arrow looks alike; only `tone` tells
+ * `data-oval` is met round its inscribed ellipse. One marked `data-within` with another's id
+ * is a part of that one (the strip of a stack item that peeks out from under the next): the
+ * arrow keeps off neither. Every arrow looks alike; only `tone` tells
  * a kind apart: gold for a source or a block, cyan for a target, red for an attack. */
 export interface ArrowSpec {
   from: string;
@@ -243,20 +245,25 @@ export function Arrows({
       ]);
       const still = where === seen.current.where;
       if (still && seen.current.searched) return;
-      // Each arrow keeps off every other card, not what holds or lies within its ends.
-      const legs = ends.map(({ from, to, source, target }): Leg => ({
-        from: { box: source, oval: from.hasAttribute("data-oval") },
-        to: { box: target, oval: to.hasAttribute("data-oval") },
-        avoid: obstacles
-          .filter(
-            ({ element: e }) =>
-              !e.contains(from) &&
-              !from.contains(e) &&
-              !e.contains(to) &&
-              !to.contains(e),
-          )
-          .map((o) => o.box),
-      }));
+      // Each arrow keeps off every other card, not what holds or lies within its ends, or
+      // within what its ends are part of.
+      const legs = ends.map(({ from, to, source, target }): Leg => {
+        const own = [from, to].flatMap((end) => {
+          const host = end.dataset.within;
+          const whole = host ? document.getElementById(host) : null;
+          return whole ? [end, whole] : [end];
+        });
+        return {
+          from: { box: source, oval: from.hasAttribute("data-oval") },
+          to: { box: target, oval: to.hasAttribute("data-oval") },
+          avoid: obstacles
+            .filter(
+              ({ element: e }) =>
+                !own.some((end) => e.contains(end) || end.contains(e)),
+            )
+            .map((o) => o.box),
+        };
+      });
       // While anything moves, each follows its ports; standing still, or new, all are routed.
       const traced = ends.map(({ a }, i) => {
         const choice = choices.current.get(keyOf(a));

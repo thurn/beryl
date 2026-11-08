@@ -230,6 +230,7 @@ INTERACTION_FIXTURES = [
     "arrow-spell",
     "arrow-ability",
     "arrow-player",
+    "arrow-stacked",
     "marks",
     "marks-damage",
     "tokens",

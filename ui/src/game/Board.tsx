@@ -3,8 +3,8 @@
 // land piles, permanents, libraries and graveyards, player badges, the phase tracker and the
 // turn button, with the hand fanned at the near edge (decisions D10 to D13). Combat and the
 // stack follow combat.png and trigger_on_stack_with_target.png: attack and block lines and the
-// step banner; spells and abilities large at the right, a gold line from an ability's source
-// and cyan lines to targets.
+// step banner; spells and abilities large at the right, cyan lines to targets and, while one is
+// pointed at, a gold line from an ability's source.
 import {
   useCallback,
   useEffect,
@@ -261,6 +261,9 @@ export function Board({
     views.current = { last: view, before: views.current.last };
   }
   const [hovered, setHovered] = useState<number>();
+  // The ability on the stack under the pointer, by its place and name (`data-stack-key`): one
+  // that leaves under the pointer sends no event, and its key then names nothing.
+  const [pointedItem, setPointedItem] = useState<string>();
   // The hand card a click found nothing to do with, which the inspector says why of while
   // the pointer stays on it.
   const [refused, setRefused] = useState<number>();
@@ -1091,7 +1094,25 @@ export function Board({
     if (floating(you.mana)) setLost((n) => n + 1);
     passOn();
   };
-  const arrows = useMemo(() => boardArrows(shown), [shown]);
+  // The abilities whose source arrow shows: each one pointed at, on the stack or at its
+  // source. Joined, so that pointing elsewhere keeps the arrows and their routes.
+  const sourced = shown.stack
+    .flatMap((item, i) =>
+      item.kind === "ability" &&
+      item.source !== null &&
+      (pointedItem === stackKey(i, item) || hovered === item.source)
+        ? [i]
+        : [],
+    )
+    .join(",");
+  const arrows = useMemo(
+    () =>
+      boardArrows(
+        shown,
+        new Set(sourced === "" ? [] : sourced.split(",").map(Number)),
+      ),
+    [shown, sourced],
+  );
   const announcement = combatBanner(view) ?? coinFlipBanner(view);
   const banner = announcement;
   // A combat declaration is finished with the turn button, where priority is passed.
@@ -1219,6 +1240,12 @@ export function Board({
                     item.source === null ? undefined : objects.get(item.source)
                   }
                   from={placements.get(abilityOrigin(view, item))}
+                  onPoint={(on) => {
+                    const key = stackKey(i, item);
+                    setPointedItem((k) =>
+                      on ? key : k === key ? undefined : k,
+                    );
+                  }}
                 />
               ),
           )}
@@ -1256,6 +1283,19 @@ export function Board({
                   setMenu(undefined);
                   setViewing({ side: pile.side, zone: pile.zone });
                 }}
+              />
+            ),
+        )}
+
+        {/* Where each item beneath the top peeks out, which its arrows leave from. */}
+        {view.stack.map(
+          (item, i) =>
+            i < view.stack.length - 1 && (
+              <StackPeek
+                key={stackKey(i, item)}
+                index={i}
+                count={view.stack.length}
+                within={itemId(item, i)}
               />
             ),
         )}
@@ -1777,6 +1817,7 @@ function AbilityOnStack({
   item,
   source,
   from,
+  onPoint,
 }: {
   index: number;
   count: number;
@@ -1784,25 +1825,33 @@ function AbilityOnStack({
   source?: ObjectView;
   /** Where its source is drawn: it springs out of it onto the stack. */
   from?: Placement;
+  /** The pointer coming onto it, or leaving: its source's arrow shows meanwhile. */
+  onPoint(on: boolean): void;
 }) {
   const face = useAbilityFace(item.name, source, BLANK);
   const place = stackPlace(index, count);
+  // Out of its source it comes whole, the size of the card it lifts off, so that the eye
+  // follows it from there; with no source drawn, it fades in where it stays.
   const start = from
     ? {
+        opacity: 1,
         x: from.x,
         y: from.y,
         scale: Math.max(0.2, (from.width * from.scale) / place.width),
       }
-    : { x: place.x, y: place.y, scale: 0.8 };
+    : { opacity: 0, x: place.x, y: place.y, scale: 0.8 };
   return (
     <motion.div
       className="hud stack-ability"
       // Which item it is, by place and the ability's own name, for a motion audit: two
       // items sharing a source's face (an emblem's and its planeswalker's) stay apart.
-      data-stack-key={`${index}:${item.name}`}
+      data-stack-key={stackKey(index, item)}
       style={{ zIndex: STACK_Z + index }}
-      initial={{ opacity: 0, ...start }}
+      initial={start}
       animate={{ opacity: 1, scale: 1, x: place.x, y: place.y }}
+      transition={ABILITY_FLIGHT}
+      onPointerEnter={() => onPoint(true)}
+      onPointerLeave={() => onPoint(false)}
       // Leaving, it drops beneath whatever takes its place on the stack, which would
       // otherwise arrive hidden under it.
       exit={{
@@ -1825,6 +1874,14 @@ function AbilityOnStack({
   );
 }
 
+/** An ability's flight from its source onto the stack: long enough for the eye to follow it
+ * across the table, easing into its place. */
+const ABILITY_FLIGHT = { duration: 0.5, ease: [0.2, 0.7, 0.3, 1] } as const;
+
+/** A stack item's key, by its place and its own name. */
+const stackKey = (index: number, item: StackItemView) =>
+  `${index}:${item.kind === "ability" ? item.name : item.slot}`;
+
 /** The slot of what an ability on the stack comes from: its source, or for an emblem's ability,
  * which the view gives no source ([CR 114.4](https://yawgatog.com/resources/magic-rules/#R1144):
  * "Abilities of emblems function in the command zone"), the card the table draws for the
@@ -1838,8 +1895,45 @@ function abilityOrigin(
   return index < 0 ? Number.NaN : emblemSlot(item.controller, index);
 }
 
-/** The element id of the stack item at `index`: its card for a spell. */
+/** The element id of the ability on the stack at `index`. */
 const stackId = (index: number) => `stack-${index}`;
+
+/** The element id of the stack item at `index`: its card for a spell. */
+const itemId = (item: StackItemView, index: number) =>
+  item.kind === "spell" ? cardId(item.slot) : stackId(index);
+
+/** The element id of the strip of the stack item at `index` that peeks out from under the
+ * next. */
+const peekId = (index: number) => `stack-peek-${index}`;
+
+/** The strip of the stack item at `index` of `count` that the next one leaves uncovered: its
+ * name bar (STACK), which is all of it the eye can tie an arrow to. Unseen, part of the item's
+ * element `within` for the arrows. */
+function StackPeek({
+  index,
+  count,
+  within,
+}: {
+  index: number;
+  count: number;
+  within: string;
+}) {
+  const place = stackPlace(index, count);
+  const next = stackPlace(index + 1, count);
+  return (
+    <div
+      id={peekId(index)}
+      className="hud stack-peek"
+      data-within={within}
+      style={{
+        left: place.x,
+        top: place.y,
+        width: place.width,
+        height: next.y - place.y,
+      }}
+    />
+  );
+}
 
 /** What the stack's arrows keep off: every card on the screen, the stack's items, the life
  * orbs and the game log. */
@@ -1848,10 +1942,6 @@ const AVOID = ".card-el .card-slot, .stack-item, .life-orb, .game-log";
 /** The element id of the oval of a player's life orb. */
 const lifeId = (side: Side) => `${side}-life-orb`;
 
-/** Every arrow over the table, all routed alike (decision D10): each attacker's, red, at the
- * player or planeswalker it attacks, each blocker's, gold, at the attacker it blocks, and for
- * the top of the stack, a gold one from an ability's source and a cyan one to each target
- * (trigger_on_stack_with_target.png). */
 /** Where each token `view`'s events made, and each emblem new since `before`, comes from: the
  * permanent whose ability made it, resolving at the top of the stack `before`, so that either
  * player sees which permanent made it, as Arena shows. One whose maker is gone, or no
@@ -1883,7 +1973,11 @@ function tokenOrigins(
   return new Map(made.map((slot) => [slot, from]));
 }
 
-function boardArrows(view: PlayerView): ArrowSpec[] {
+/** Every arrow over the table, all routed alike (decision D10): each attacker's, red, at the
+ * player or planeswalker it attacks, each blocker's, gold, at the attacker it blocks, and for
+ * each item on the stack a cyan one to each target and, for the abilities at the places
+ * `sourced` names, a gold one from the source (trigger_on_stack_with_target.png). */
+function boardArrows(view: PlayerView, sourced: Set<number>): ArrowSpec[] {
   const objects = new Map(view.objects.map((o) => [o.slot, o]));
   const out: ArrowSpec[] = [];
   for (const slot of view.battlefield) {
@@ -1912,11 +2006,15 @@ function boardArrows(view: PlayerView): ArrowSpec[] {
       tone: "red",
     });
   }
+  // Each item's targets, the top's first so that it routes clearest: what a spell or ability
+  // aims at is what a player most needs to read, beneath the top as on it. An ability's
+  // source only while it, or the source, is pointed at: its glow says it otherwise.
+  // One beneath the top ties its arrows to the strip of it that shows.
   const top = view.stack.length - 1;
-  const item = view.stack[top];
-  if (item) {
-    const from = item.kind === "spell" ? cardId(item.slot) : stackId(top);
-    if (item.kind === "ability" && item.source !== null) {
+  for (let i = top; i >= 0; i--) {
+    const item = view.stack[i]!;
+    const from = i === top ? itemId(item, i) : peekId(i);
+    if (item.kind === "ability" && item.source !== null && sourced.has(i)) {
       out.push({ from: cardId(item.source), to: from, tone: "gold" });
     }
     for (const target of item.targets) {
