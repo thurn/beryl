@@ -19,6 +19,26 @@
     ]
   },
   {
+    "moment": "on-a-double-faced-card-front-face-up-end",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack Fractured Identity",
+      "controls 0 Fractured Identity"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Fractured Identity",
+      "controls 0 Fractured Identity"
+    ]
+  },
+  {
     "moment": "on-its-casters-own-token-end",
     "yours": [
       "turn 3",

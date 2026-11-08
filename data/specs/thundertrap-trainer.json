@@ -64,6 +64,26 @@
     ]
   },
   {
+    "moment": "takes-a-spell-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Thundertrap Trainer",
+      "not tapped Thundertrap Trainer"
+    ],
+    "theirs": [
+      "turn 3",
+      "their turn",
+      "step end",
+      "decision priority",
+      "controls 0 Thundertrap Trainer",
+      "they control 1 Thundertrap Trainer",
+      "known card in the opponent's hand"
+    ]
+  },
+  {
     "moment": "finds-no-spell-0",
     "yours": [
       "turn 3",

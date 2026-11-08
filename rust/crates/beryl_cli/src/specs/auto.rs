@@ -22,8 +22,8 @@
 use std::fmt::Write as _;
 
 use beryl_cards::names::{
-    COUNTERSPELL, ISLAND, MANA_DRAIN, OUST, PLAINS, REPRIEVE, SINK_INTO_STUPOR, STOCK_UP, SWAMP,
-    THIEVING_SKYDIVER,
+    COUNTERSPELL, FRACTURED_IDENTITY, ISLAND, MANA_DRAIN, OUST, PLAINS, REPRIEVE, SINK_INTO_STUPOR,
+    STOCK_UP, SWAMP, THIEVING_SKYDIVER, TIME_SPIRAL,
 };
 use beryl_engine::card::{AbilityIx, AbilityKind, CardDef, Face, Needs, Timing, Types};
 use beryl_engine::state::CounterKind;
@@ -58,6 +58,13 @@ enum Kind {
     Flip(usize),
     /// A scenario's end: kept unless an earlier moment ended the same.
     End,
+    /// A scenario's activation of the card, the card bounced in response: kept unless an
+    /// earlier one of the same label stopped at the same question.
+    Bounced,
+    /// What follows a scenario's end or flipped answer where the human holds priority on their
+    /// turn with the stack empty (they pass, or the game goes on to their next turn): kept
+    /// unless an earlier moment ended the same.
+    FollowOn,
 }
 
 struct Candidate {
@@ -66,6 +73,9 @@ struct Candidate {
     board: Scenario,
     play: Vec<Action>,
     kind: Kind,
+    /// The card whose cast or activation last came before it, which a question is asked
+    /// for: one question asked for two causes is two moments.
+    cause: Option<&'static str>,
 }
 
 /// What a recorded seat's decision is: its kind, what it asks, what asks it.
@@ -81,13 +91,13 @@ fn question_of(recorded: &[String]) -> Vec<&str> {
         .collect()
 }
 
-/// A record with its turn and step left out: two moments that end the same way a turn apart
-/// show the same thing.
+/// A record with its turn number left out: two moments that end the same way a turn apart
+/// show the same thing. Its step stays: stopping in another step is another moment.
 fn timeless(recorded: &[String]) -> Vec<&str> {
     recorded
         .iter()
         .map(String::as_str)
-        .filter(|c| !c.starts_with("turn ") && !c.starts_with("step "))
+        .filter(|c| !c.starts_with("turn "))
         .collect()
 }
 
@@ -96,7 +106,42 @@ pub fn generate(def: &'static CardDef, scenarios: &'static [Scenario]) -> Genera
     for (i, scenario) in scenarios.iter().enumerate() {
         from_scenario(def, scenario, i + 1, &mut candidates);
     }
-    let recorded: Vec<Result<[Vec<String>; 2], String>> = candidates
+    let mut recorded = record(def, &candidates);
+    let mut kept = select(def, &candidates, &recorded, &mut Vec::new());
+    // What follows the card's moments, for a card whose abilities decide its stops.
+    if !activated(def.front()).is_empty() {
+        let follow: Vec<Candidate> = (0..candidates.len())
+            .filter(|&i| kept[i])
+            .filter_map(|i| Some((&candidates[i], recorded[i].as_ref().ok()?)))
+            .flat_map(|(c, r)| follow_ons(c, r))
+            .collect();
+        recorded.extend(record(def, &follow));
+        candidates.extend(follow);
+    }
+    let mut dropped = Vec::new();
+    kept = select(def, &candidates, &recorded, &mut dropped);
+    let moments = candidates
+        .iter()
+        .zip(&recorded)
+        .zip(kept)
+        .filter(|(_, k)| *k)
+        .filter_map(|((c, r), _)| {
+            let r = r.as_ref().ok()?;
+            let title = match c.kind {
+                Kind::Ask => format!("{}{}", c.title, question(&r[0])),
+                _ => c.title.clone(),
+            };
+            Some(moment(c, title, Some(r)))
+        })
+        .collect();
+    Generated { moments, dropped }
+}
+
+type Recorded = Result<[Vec<String>; 2], String>;
+
+/// Each candidate played from both seats to its first live decision, and what held there.
+fn record(def: &'static CardDef, candidates: &[Candidate]) -> Vec<Recorded> {
+    candidates
         .iter()
         .map(|c| {
             let m: &'static Moment = Box::leak(Box::new(moment(c, c.title.clone(), None)));
@@ -104,7 +149,17 @@ pub fn generate(def: &'static CardDef, scenarios: &'static [Scenario]) -> Genera
             let theirs = reach(m, View::Theirs).map(|v| snapshot(&v, def));
             Ok([yours?, theirs?])
         })
-        .collect();
+        .collect()
+}
+
+/// Which candidates are kept, by their kinds' rules; those that could not be played go to
+/// `dropped`, with why.
+fn select(
+    def: &'static CardDef,
+    candidates: &[Candidate],
+    recorded: &[Recorded],
+    dropped: &mut Vec<(String, String)>,
+) -> Vec<bool> {
     let asks = |r: &[Vec<String>; 2]| {
         let mine = [
             format!("resolving {}", def.name),
@@ -112,9 +167,8 @@ pub fn generate(def: &'static CardDef, scenarios: &'static [Scenario]) -> Genera
         ];
         r.iter().flatten().any(|c| mine.contains(c))
     };
+    let label = |c: &Candidate| c.title.rsplit(" · ").next().map(str::to_owned);
     let mut kept = vec![false; candidates.len()];
-    let mut dropped = Vec::new();
-    let mut moments = Vec::new();
     for (i, c) in candidates.iter().enumerate() {
         let r = match &recorded[i] {
             Ok(r) => r,
@@ -131,46 +185,88 @@ pub fn generate(def: &'static CardDef, scenarios: &'static [Scenario]) -> Genera
                         .is_ok_and(|rj| same(&candidates[j], rj))
             })
         };
-        let keep = match c.kind {
+        let same_question = |cj: &Candidate, rj: &[Vec<String>; 2]| {
+            cj.cause == c.cause && question_of(&rj[0]) == question_of(&r[0])
+        };
+        let ended_alike = |_: &Candidate, rj: &[Vec<String>; 2]| {
+            timeless(&rj[0]) == timeless(&r[0]) && timeless(&rj[1]) == timeless(&r[1])
+        };
+        kept[i] = match c.kind {
             Kind::Probe => true,
-            Kind::Play => !earlier(&|cj, rj| {
-                cj.kind == Kind::Play
-                    && cj.title.split(" · ").last() == c.title.split(" · ").last()
+            Kind::Play | Kind::Bounced => !earlier(&|cj, rj| {
+                (cj.kind == c.kind || cj.kind == Kind::Probe)
+                    && label(cj) == label(c)
                     && question_of(&rj[0]) == question_of(&r[0])
             }),
             Kind::Ask => {
                 asks(r)
                     && !earlier(&|cj, rj| {
                         matches!(cj.kind, Kind::Ask | Kind::Play | Kind::Probe)
-                            && question_of(&rj[0]) == question_of(&r[0])
+                            && same_question(cj, rj)
                     })
             }
             // The other answer to a question the card asks, unless an earlier moment gave it
-            // to the same question.
+            // to the same question for the same cause.
             Kind::Flip(j) => recorded[j].as_ref().is_ok_and(|rj| {
                 asks(rj)
                     && !(0..i).any(|k| {
                         kept[k]
-                            && candidates[k].title.split(" · ").last()
-                                == c.title.split(" · ").last()
+                            && label(&candidates[k]) == label(c)
+                            && candidates[k].cause == c.cause
                             && matches!(candidates[k].kind, Kind::Flip(p)
                             if recorded[p].as_ref().is_ok_and(|rp| {
                                 question_of(&rp[0]) == question_of(&rj[0])
                             }))
                     })
             }),
-            Kind::End => !earlier(&|_, rj| timeless(&rj[0]) == timeless(&r[0])),
+            Kind::End | Kind::FollowOn => !earlier(&ended_alike),
         };
-        if keep {
-            kept[i] = true;
-            let title = match c.kind {
-                Kind::Ask => format!("{}{}", c.title, question(&r[0])),
-                _ => c.title.clone(),
-            };
-            moments.push(moment(c, title, Some(r)));
-        }
     }
-    Generated { moments, dropped }
+    kept
+}
+
+/// What follows a scenario's moment where the human holds priority on their turn with the
+/// stack empty: they pass (where does the card stop them next?), and the game goes on to their
+/// next turn (what does it offer once their permanents untap?).
+fn follow_ons(c: &Candidate, r: &[Vec<String>; 2]) -> Vec<Candidate> {
+    if !matches!(c.kind, Kind::End | Kind::Flip(_)) {
+        return Vec::new();
+    }
+    let yours = &r[0];
+    let holds = |c: &str| yours.iter().any(|y| y == c);
+    if !holds("decision priority")
+        || !holds("your turn")
+        || yours.iter().any(|y| y.starts_with("stack "))
+    {
+        return Vec::new();
+    }
+    let Some(turn) = yours
+        .iter()
+        .find_map(|y| y.strip_prefix("turn ")?.parse::<u16>().ok())
+    else {
+        return Vec::new();
+    };
+    let setup = leak([c.board.actions, &c.play[..]].concat());
+    let base = c.board.actions(setup);
+    let next = |name: &str, title: &str, play: Vec<Action>| Candidate {
+        name: format!("{}-{name}", c.name),
+        title: format!("{} · {title}", c.title),
+        board: base,
+        play,
+        kind: Kind::FollowOn,
+        cause: c.cause,
+    };
+    vec![
+        next("pass", "pass", vec![Action::pass(P0)]),
+        next(
+            "next-turn",
+            "next turn",
+            vec![Action::AdvanceTo {
+                turn: turn + 2,
+                step: TurnStep::PrecombatMain,
+            }],
+        ),
+    ]
 }
 
 /// A question's label, from what was recorded at it: "Ask: mayMove", or its kind.
@@ -351,13 +447,23 @@ fn permanent(
 }
 
 fn probe(name: &str, title: &str, board: Scenario, play: Vec<Action>) -> Candidate {
+    let cause = cause_of(&play);
     Candidate {
         name: name.to_owned(),
         title: title.to_owned(),
         board,
         play,
         kind: Kind::Probe,
+        cause,
     }
+}
+
+/// The card the last cast or activation among `actions` was of.
+fn cause_of(actions: &[Action]) -> Option<&'static str> {
+    actions.iter().rev().find_map(|a| match *a {
+        Action::Cast { card, .. } | Action::Activate { card, .. } => Some(card),
+        _ => None,
+    })
 }
 
 type Activated = [(u8, &'static beryl_engine::card::Ability)];
@@ -433,6 +539,26 @@ fn stops(
         let board = table("nothing-to-do", 5, P0, TurnStep::PostcombatMain).battlefield(P0, tapped);
         out.push(probe("nothing-to-do", "Nothing to do", board, Vec::new()));
     }
+    // The same board with what the ability needs: it stops the human here.
+    for need in abilities
+        .iter()
+        .map(|(_, a)| a.needs)
+        .filter(|&n| n != Needs::Nothing)
+    {
+        let (name, title, board) = match need {
+            Needs::ExiledWithSource => {
+                let mut met = tapped.to_vec();
+                met[0] = met[0].exiled_with(&[OUST]);
+                ("card-exiled", "Stops: card exiled", leak(met))
+            }
+            Needs::Nothing => continue,
+        };
+        if out.iter().any(|c| c.name == name) {
+            continue;
+        }
+        let board = table(name, 5, P0, TurnStep::PostcombatMain).battlefield(P0, board);
+        out.push(probe(name, title, board, Vec::new()));
+    }
     out
 }
 
@@ -470,7 +596,8 @@ fn activations(
             Action::cast(P1, SINK_INTO_STUPOR),
             Action::choose(P1, DecisionKind::Target, def.name),
         ];
-        out.push(probe("bounced", "Bounced in response", board, play));
+        let title = format!("{}, bounced", cost_label(a, k));
+        out.push(probe("bounced", &title, board, play));
     }
 }
 
@@ -557,18 +684,36 @@ fn deeper(action: &Action) -> Action {
             player,
             zone: beryl_engine::Zone::Library,
             card: None,
-            count: count + u8::try_from(LANDS.len()).unwrap_or(u8::MAX),
+            count: count + u8::try_from(FILLER.len()).unwrap_or(u8::MAX),
         }),
         a => a,
     }
 }
 
-/// Lands under each player's library.
+/// Cards under each player's library that neither seat can play from a scenario's board: no
+/// land drop and no affordable spell, so whatever stops a player after the scenario is its
+/// cards'.
+const FILLER: &[&str] = &[
+    TIME_SPIRAL,
+    FRACTURED_IDENTITY,
+    TIME_SPIRAL,
+    FRACTURED_IDENTITY,
+    TIME_SPIRAL,
+    FRACTURED_IDENTITY,
+    TIME_SPIRAL,
+    FRACTURED_IDENTITY,
+    TIME_SPIRAL,
+    FRACTURED_IDENTITY,
+    TIME_SPIRAL,
+    FRACTURED_IDENTITY,
+];
+
+/// [`FILLER`] under each player's library.
 fn with_libraries(scenario: &Scenario) -> Scenario {
     let mut d = *scenario;
     for seat in [P0, P1] {
         let library = d.setup.players[seat.index()].library;
-        d = d.library(seat, leak([library, LANDS].concat()));
+        d = d.library(seat, leak([library, FILLER].concat()));
     }
     d
 }
@@ -640,28 +785,16 @@ fn from_scenario(def: &'static CardDef, scenario: &Scenario, n: usize, out: &mut
         name,
         title,
         board: board.actions(leak(setup.to_vec())),
+        cause: cause_of(setup)
+            .filter(|_| play.is_empty())
+            .or(cause_of(&play)),
         play,
         kind,
     };
     for (i, action) in actions.iter().enumerate() {
         let setup = &actions[..i];
-        let mine = match *action {
-            Action::Cast { card, .. } if card == def.name => Some("Cast".to_owned()),
-            Action::PlayLand { card, .. } if card == def.name => Some("Play".to_owned()),
-            Action::TurnFaceUp { card, .. } if card == def.name => Some("Turn up".to_owned()),
-            Action::Activate {
-                card,
-                ability: AbilityIx::Own(k),
-                ..
-            } if card == def.name => Some(
-                def.front()
-                    .abilities
-                    .get(usize::from(k))
-                    .map_or_else(|| format!("Ability {k}"), |a| cost_label(a, k)),
-            ),
-            _ => None,
-        };
-        if let Some(what) = mine {
+        let mine = label_of(def, action);
+        if let Some(what) = mine.clone() {
             out.push(at(
                 format!("{short}-{i}"),
                 format!("S{n} · {what}"),
@@ -669,6 +802,26 @@ fn from_scenario(def: &'static CardDef, scenario: &Scenario, n: usize, out: &mut
                 vec![*action],
                 Kind::Play,
             ));
+        }
+        if let Action::Activate {
+            player: P0,
+            card,
+            ability: AbilityIx::Own(_),
+        } = *action
+            && card == def.name
+            && !def.front().types.intersects(Types::LAND)
+        {
+            let play = bounce(def, &actions, i);
+            out.push(Candidate {
+                board: with_a_bounce(&board).actions(leak(setup.to_vec())),
+                ..at(
+                    format!("{short}-bounced-{i}"),
+                    format!("S{n} · {}, bounced", mine.clone().unwrap_or_default()),
+                    setup,
+                    play,
+                    Kind::Bounced,
+                )
+            });
         }
         if let Action::Answer { kind, .. } = *action
             && kind != DecisionKind::Priority
@@ -682,13 +835,15 @@ fn from_scenario(def: &'static CardDef, scenario: &Scenario, n: usize, out: &mut
                 Kind::Ask,
             ));
             if let Some((flip, answer)) = flipped(action) {
-                out.push(at(
+                let mut c = at(
                     format!("{short}-{}-{i}", answer.to_lowercase()),
                     format!("S{n} · Answer {answer}"),
                     setup,
                     vec![flip],
                     Kind::Flip(ask),
-                ));
+                );
+                c.cause = cause_of(setup);
+                out.push(c);
             }
         }
     }
@@ -699,6 +854,62 @@ fn from_scenario(def: &'static CardDef, scenario: &Scenario, n: usize, out: &mut
         Vec::new(),
         Kind::End,
     ));
+}
+
+/// What a scenario's action of the card is, as its moment's label: "Cast", "{T}", "−3".
+fn label_of(def: &'static CardDef, action: &Action) -> Option<String> {
+    match *action {
+        Action::Cast { card, .. } if card == def.name => Some("Cast".to_owned()),
+        Action::PlayLand { card, .. } if card == def.name => Some("Play".to_owned()),
+        Action::TurnFaceUp { card, .. } if card == def.name => Some("Turn up".to_owned()),
+        Action::Activate {
+            card,
+            ability: AbilityIx::Own(k),
+            ..
+        } if card == def.name => Some(
+            def.front()
+                .abilities
+                .get(usize::from(k))
+                .map_or_else(|| format!("Ability {k}"), |a| cost_label(a, k)),
+        ),
+        _ => None,
+    }
+}
+
+/// The activation at `i` with its own answers (its targets, its payment), then the opponent
+/// bouncing the card with Sink into Stupor in response.
+fn bounce(def: &'static CardDef, actions: &[Action], i: usize) -> Vec<Action> {
+    let own = actions[i + 1..]
+        .iter()
+        .take_while(|a| {
+            matches!(a, Action::Answer { player: P0, kind, .. } if *kind != DecisionKind::Priority)
+        })
+        .copied();
+    std::iter::once(actions[i])
+        .chain(own)
+        .chain([
+            Action::cast(P1, SINK_INTO_STUPOR),
+            Action::choose(P1, DecisionKind::Target, def.name),
+        ])
+        .collect()
+}
+
+/// The board with Sink into Stupor in the opponent's hand and three Islands to cast it.
+fn with_a_bounce(board: &Scenario) -> Scenario {
+    let theirs = board.setup.players[P1.index()];
+    let hand = leak([&[SINK_INTO_STUPOR][..], theirs.hand].concat());
+    let lands = leak(
+        [
+            theirs.battlefield,
+            &[
+                Permanent::new(ISLAND),
+                Permanent::new(ISLAND),
+                Permanent::new(ISLAND),
+            ][..],
+        ]
+        .concat(),
+    );
+    board.hand(P1, hand).battlefield(P1, lands)
 }
 
 // What holds at a moment's first live decision.

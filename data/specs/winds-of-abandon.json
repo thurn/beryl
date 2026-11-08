@@ -57,5 +57,24 @@
       "resolving Winds of Abandon",
       "controls 0 Winds of Abandon"
     ]
+  },
+  {
+    "moment": "no-basic-land-to-find-end",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack Winds of Abandon",
+      "controls 0 Winds of Abandon"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Winds of Abandon"
+    ]
   }
 ]

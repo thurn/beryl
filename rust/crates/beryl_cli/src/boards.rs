@@ -1215,12 +1215,17 @@ pub struct Progress {
     pub next: [Option<Action>; 2],
     /// How many actions the two scripts have taken.
     pub taken: usize,
+    /// A turn the scripts hold out for after their last action (a trailing
+    /// [`Action::AdvanceTo`]), and the turn the game has reached, as its views show.
+    pub until: Option<u16>,
+    pub turn: u16,
 }
 
 impl Progress {
-    /// Whether both scripts have taken all their actions.
+    /// Whether both scripts have taken all their actions, and the game has reached the turn
+    /// they hold out for.
     pub fn done(&self) -> bool {
-        self.next.iter().all(Option::is_none)
+        self.next.iter().all(Option::is_none) && self.until.is_none_or(|t| self.turn >= t)
     }
 }
 
@@ -1302,6 +1307,43 @@ impl Scripted {
     }
 }
 
+impl Scripted {
+    /// Takes the seat's next action: it is answered.
+    fn take(&mut self) {
+        self.script.pop_front();
+        let mut progress = lock(&self.progress);
+        progress.next[self.seat.index()] = self.script.front().map(|&(_, a, _)| a);
+        progress.taken += 1;
+    }
+
+    /// A decision its script leaves to it short of `next`: discarding to hand size in a
+    /// cleanup (the first cards), and combat (no attackers, no blockers, as a scenario's
+    /// passing does).
+    fn by_default<L: Layout>(
+        &self,
+        s: &beryl_engine::State<L>,
+        d: &Decision<L>,
+        next: Option<Action>,
+    ) -> Option<Choice> {
+        let scripted = matches!(next, Some(Action::Answer { kind, .. }) if kind == d.kind);
+        if d.kind == DecisionKind::Discard && s.turn().step == TurnStep::Cleanup && !scripted {
+            return Some(Choice(0));
+        }
+        if matches!(d.kind, DecisionKind::Attacker | DecisionKind::Blocker)
+            && next.is_some()
+            && !scripted
+        {
+            return beryl_scenario::answer(
+                &self.table,
+                s,
+                d,
+                &Action::answer(d.player, d.kind, Pick::Done),
+            );
+        }
+        None
+    }
+}
+
 impl<L: Layout> Agent<L> for Scripted {
     fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
         let s = obs.unmasked_root();
@@ -1329,16 +1371,24 @@ impl<L: Layout> Agent<L> for Scripted {
                 &Action::answer(d.player, d.kind, Pick::Done),
             );
             if let Some(done) = done {
-                self.script.pop_front();
-                let mut progress = lock(&self.progress);
-                progress.next[self.seat.index()] = self.script.front().map(|&(_, a, _)| a);
-                progress.taken += 1;
-                drop(progress);
+                self.take();
                 if matches!(pick, Pick::No) {
                     return done;
                 }
                 return self.choose(obs, d);
             }
+        }
+        // A target its script names that was the only one, chosen without asking: the seat is
+        // back at priority with the spell or ability cast.
+        if let Some(Action::Answer {
+            kind: DecisionKind::Target,
+            ..
+        }) = next.filter(|_| due)
+            && d.kind == DecisionKind::Priority
+            && d.player == self.seat
+        {
+            self.take();
+            return self.choose(obs, d);
         }
         if let Some(action) = next.filter(|_| due) {
             let kind = match action {
@@ -1348,11 +1398,7 @@ impl<L: Layout> Agent<L> for Scripted {
             if kind == d.kind
                 && let Some(c) = beryl_scenario::answer(&self.table, s, d, &action)
             {
-                self.script.pop_front();
-                let mut progress = lock(&self.progress);
-                progress.next[self.seat.index()] = self.script.front().map(|&(_, a, _)| a);
-                progress.taken += 1;
-                drop(progress);
+                self.take();
                 return c;
             }
         }
@@ -1364,31 +1410,7 @@ impl<L: Layout> Agent<L> for Scripted {
         if d.kind == DecisionKind::TriggerOrder {
             return trigger_to_stack(s, &self.table, d);
         }
-        // Discarding to hand size in a cleanup its script does not answer: the first cards.
-        if d.kind == DecisionKind::Discard
-            && s.turn().step == TurnStep::Cleanup
-            && !matches!(
-                next,
-                Some(Action::Answer {
-                    kind: DecisionKind::Discard,
-                    ..
-                })
-            )
-        {
-            return Choice(0);
-        }
-        // Combat its script does not declare: no attackers, no blockers, as a scenario's
-        // passing does.
-        if matches!(d.kind, DecisionKind::Attacker | DecisionKind::Blocker)
-            && next.is_some()
-            && !matches!(next, Some(Action::Answer { kind, .. }) if kind == d.kind)
-            && let Some(c) = beryl_scenario::answer(
-                &self.table,
-                s,
-                d,
-                &Action::answer(d.player, d.kind, Pick::Done),
-            )
-        {
+        if let Some(c) = self.by_default(s, d, next) {
             return c;
         }
         if let Some(action) = next

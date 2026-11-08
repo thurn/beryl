@@ -142,7 +142,7 @@
     ]
   },
   {
-    "moment": "its-own-spirit-and-a-samurai-each-add-a-story-counter-spent-to-draw-2",
+    "moment": "its-own-spirit-and-a-samurai-each-add-a-story-counter-spent-to-draw-end",
     "yours": [
       "turn 1",
       "your turn",
@@ -180,6 +180,78 @@
     ],
     "theirs": [
       "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Staff of the Storyteller",
+      "they control 1 Staff of the Storyteller",
+      "controls 0 Spirit Token",
+      "Staff of the Storyteller has 1 story"
+    ]
+  },
+  {
+    "moment": "its-own-spirit-and-a-samurai-each-add-a-story-counter-spent-to-draw-end-pass",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step postcombatMain",
+      "decision priority",
+      "not offers Staff of the Storyteller ability 2",
+      "controls 1 Staff of the Storyteller",
+      "controls 1 Spirit Token",
+      "tapped Staff of the Storyteller",
+      "Staff of the Storyteller has 1 story"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Staff of the Storyteller",
+      "they control 1 Staff of the Storyteller",
+      "controls 0 Spirit Token",
+      "they control 1 Spirit Token"
+    ]
+  },
+  {
+    "moment": "its-own-spirit-and-a-samurai-each-add-a-story-counter-spent-to-draw-end-next-turn",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "offers Staff of the Storyteller ability 2",
+      "controls 1 Staff of the Storyteller",
+      "controls 1 Spirit Token",
+      "not tapped Staff of the Storyteller",
+      "Staff of the Storyteller has 1 story"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Staff of the Storyteller",
+      "they control 1 Staff of the Storyteller",
+      "controls 0 Spirit Token",
+      "they control 1 Spirit Token"
+    ]
+  },
+  {
+    "moment": "two-tokens-created-at-once-add-one-story-counter-end-pass",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step declareAttackers",
+      "decision attacker",
+      "3 candidates",
+      "controls 1 Staff of the Storyteller",
+      "controls 0 Spirit Token",
+      "not tapped Staff of the Storyteller",
+      "Staff of the Storyteller has 1 story"
+    ],
+    "theirs": [
+      "turn 4",
       "your turn",
       "step precombatMain",
       "decision priority",

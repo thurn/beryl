@@ -27,15 +27,22 @@ sources, with short general labels:
 - **The definition.** A permanent with activated abilities (not mana abilities)
   gets probes: `Stops: main 2` and `Stops: their end` (instant-speed abilities),
   `Lands tapped` (what stays offered unpaid), `Nothing to do` (an ability whose
-  `Needs` is unmet must not stop), each ability activated (labelled by its cost:
-  `{2}{T}`, `+2`, `−1`), and `Bounced in response`.
+  `Needs` is unmet must not stop) beside the same board with the need met
+  (`Stops: card exiled`, through `Permanent::exiled_with`), each ability
+  activated (labelled by its cost: `{2}{T}`, `+2`, `−1`), and one bounced in
+  response (`{2}{T}, bounced`).
 - **The card's scenarios** (`beryl_cards::SCENARIOS`). Each is cut at each cast
-  or activation of the card (`S1 · {T}`, played out once shown), at each
-  question the card asks (`S1 · Ask: mayMove`), with a yes or no flipped
-  (`S1 · Answer No`), and at its end (`S1 · End`). Scenario boards are dressed
-  to look like a game (life off 20, graveyards, the opponent's lands and a
-  response in hand, lands under each library) only where the scenario still
-  passes with the dressing.
+  or activation of the card (`S1 · {T}`, played out once shown), the same
+  activation with the card bounced in response (`S1 · {T}, bounced`), each
+  question the card asks for each cause (`S1 · Ask: mayMove`), with a yes or no
+  flipped (`S1 · Answer No`), and its end (`S1 · End`, held to the turn a
+  trailing `AdvanceTo` names). For a card with activated abilities, an end or
+  flipped answer where the human holds priority goes on twice more: they pass
+  (`· pass`: where does it stop them next?) and the game reaches their next
+  turn (`· next turn`: what does it offer untapped?). Scenario boards are
+  dressed to look like a game (life off 20, graveyards, the opponent's lands
+  and a response in hand, unplayable spells under each library) only where the
+  scenario still passes with the dressing.
 
 Each candidate is played headless from both seats to its first live decision
 (or the game's end), and what holds there is recorded in the fixture conditions'
@@ -61,7 +68,7 @@ approved, or an approved one no longer generated.
 
 ## When a moment is missing or wrong
 
-Fix it in this order:
+Fix it in this order, preferring the general fix:
 
 1. **A scenario in the card's file** that reaches the state. It also tests the
    rules and runs against XMage and Forge (`just oracle`), and the generator
@@ -71,10 +78,8 @@ Fix it in this order:
    cut or dedupe in `from_scenario`/`generate`, a condition `snapshot` records,
    or a scripted-seat rule in `boards.rs`'s `Scripted`. Say which other cards'
    records it changed.
-3. **Last resort: a moment written by hand**, in `specs/<card>.rs` registered in
-   `WRITTEN` (`specs/currency_converter.rs` is the example), with a line saying
-   why no general rule fits. Written moments carry their own `look`, `theirs`
-   and expectations.
+There are no hand-written moments: a case only one card has is a scenario in its
+file.
 
 A record that shows behavior the design does not want is a bug to fix, in the
 engine, the session or the UI, not a record to approve. A fixed engine bug gets
@@ -114,8 +119,10 @@ capability to add when it is not:
   way, answers one-answer questions, declares no attackers or blockers,
   discards its first cards to hand size, and takes a scripted "may" the session
   folds into the question it leads to (a search's choice: yes is the choice, no
-  is Done). Any other decision it cannot answer fails, naming it.
-- Once both seats' actions are taken, the viewer's seat plays live. The other
+  is Done); a scripted target the engine chose silently (the only one) is
+  skipped. Any other decision it cannot answer fails, naming it.
+- Once both seats' actions are taken (and the game reaches the turn of a
+  trailing `AdvanceTo`), the viewer's seat plays live. The other
   seat then passes and takes the first candidate of anything else.
 - The human is under the smart stops, as in the app, and the session halts them
   at the start of their own first main phase (not when a moment starts there).

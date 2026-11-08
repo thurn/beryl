@@ -56,5 +56,25 @@
       "controls 0 Portable Hole",
       "they control 1 Portable Hole"
     ]
+  },
+  {
+    "moment": "gone-before-its-trigger-resolves-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Portable Hole",
+      "castable Portable Hole"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack Sink into Stupor",
+      "controls 0 Portable Hole"
+    ]
   }
 ]

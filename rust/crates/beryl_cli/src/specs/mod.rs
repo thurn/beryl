@@ -11,11 +11,11 @@
 //!
 //! Every implemented card has a spec: its moments are generated from its definition and its
 //! scenarios ([`auto`]), and what holds at each is recorded and checked against the approved
-//! record in `data/specs/<slug>.json`. A card may add moments written by hand, whose
-//! expectations are written too. The `specs` skill (`.agents/specs/SKILL.md`) says when.
+//! record in `data/specs/<slug>.json`. A moment a card needs that nothing generates comes from
+//! a scenario in its file, or a general capability of the generator: the `specs` skill
+//! (`.agents/specs/SKILL.md`) says which.
 
 mod auto;
-mod currency_converter;
 pub mod serve;
 
 use std::path::PathBuf;
@@ -28,10 +28,6 @@ use beryl_session::{GameUpdate, Prepared, Seat, Sessions, Status, StopsSetting};
 use serde::{Deserialize, Serialize};
 
 use crate::boards::{self, Scripted, Shared};
-use crate::fixture::Condition;
-
-/// The moments written by hand, by card: added to the card's generated ones.
-const WRITTEN: &[Spec] = &[currency_converter::SPEC];
 
 /// Every card's spec, generated once: those with no moments left out.
 pub fn specs() -> &'static [Spec] {
@@ -68,10 +64,7 @@ fn generation() -> &'static Generation {
         let mut specs = Vec::new();
         let mut dropped = Vec::new();
         for (def, g) in cards.iter().zip(generated) {
-            let mut moments = g.moments;
-            if let Some(w) = WRITTEN.iter().find(|w| w.card == def.name) {
-                moments.extend(w.moments.iter().map(Moment::copy));
-            }
+            let moments = g.moments;
             if !moments.is_empty() {
                 specs.push(Spec {
                     card: def.name,
@@ -92,26 +85,17 @@ pub struct Spec {
 
 /// One moment of play a spec shows.
 pub struct Moment {
-    /// Its name in the page's URL, unique within the spec: `stops-with-exile`.
+    /// Its name in the page's URL, unique within the spec: `card-exiled`.
     pub name: &'static str,
-    /// What it shows, in a few words: "Something exiled: it stops".
+    /// What made it, in a few words: "Stops: card exiled", "S1 · {T}".
     pub title: &'static str,
-    /// What to look at or try, in a few words.
-    pub look: &'static str,
     /// The game, the human in seat 0: its actions set the moment up before the page shows it.
     pub board: Scenario,
     /// The actions it plays out once shown, when the viewer presses play.
     pub play: &'static [Action],
-    /// What must hold of the human's first decision once both have been taken, in the fixture
-    /// conditions' words ([`Condition::parse`]).
-    pub expect: &'static [&'static str],
-    /// What the opponent should see of it, in a few words.
-    pub theirs: &'static str,
-    /// What must hold of the opponent's first decision once both have been taken, seated in
-    /// their place ([`View::Theirs`]).
-    pub expect_theirs: &'static [&'static str],
-    /// A generated moment's record: what held at each seat's first live decision ([`View`]
-    /// order), checked against the approved record. None for a moment written by hand.
+    /// What held at each seat's first live decision ([`View`] order), in the fixture
+    /// conditions' words ([`crate::fixture::Condition::parse`]), checked against the approved record. None
+    /// while it is being recorded.
     pub recorded: Option<[&'static [&'static str]; 2]>,
 }
 
@@ -161,64 +145,16 @@ impl Moment {
         Moment {
             name,
             title,
-            look: "",
             board,
             play: &[],
-            expect: &[],
-            theirs: "",
-            expect_theirs: &[],
             recorded: None,
         }
-    }
-
-    /// A copy: every field is shared static data.
-    fn copy(&self) -> Moment {
-        Moment {
-            name: self.name,
-            title: self.title,
-            look: self.look,
-            board: self.board,
-            play: self.play,
-            expect: self.expect,
-            theirs: self.theirs,
-            expect_theirs: self.expect_theirs,
-            recorded: self.recorded,
-        }
-    }
-
-    #[must_use]
-    pub const fn look(mut self, look: &'static str) -> Moment {
-        self.look = look;
-        self
     }
 
     #[must_use]
     pub const fn play(mut self, play: &'static [Action]) -> Moment {
         self.play = play;
         self
-    }
-
-    #[must_use]
-    pub const fn expect(mut self, expect: &'static [&'static str]) -> Moment {
-        self.expect = expect;
-        self
-    }
-
-    /// What the opponent should see of it, and what must hold of their first decision, seated
-    /// in their place.
-    #[must_use]
-    pub const fn theirs(mut self, look: &'static str, expect: &'static [&'static str]) -> Moment {
-        self.theirs = look;
-        self.expect_theirs = expect;
-        self
-    }
-
-    /// What must hold of the viewer's first live decision, seen from `view`.
-    pub const fn expected(&self, view: View) -> &'static [&'static str] {
-        match view {
-            View::Yours => self.expect,
-            View::Theirs => self.expect_theirs,
-        }
     }
 }
 
@@ -268,11 +204,19 @@ pub fn start(
         .iter()
         .filter(|a| !matches!(a, Action::AdvanceTo { .. }))
         .count();
+    // A trailing `AdvanceTo` holds the hand-over until the game reaches its turn.
+    if let Some(Action::AdvanceTo { turn, .. }) =
+        moment.board.actions.iter().chain(moment.play).last()
+    {
+        boards::lock(&progress).until = Some(*turn);
+    }
     let watched = Arc::clone(&progress);
     let sessions = Sessions::new(None, move |update| {
         // The emitting thread is the one the scripts answer on, so this is the phase the view
-        // was made in.
-        let p = boards::lock(&watched);
+        // was made in. Views are published before the stand-in answers, so the hand-over sees
+        // the turn this one shows.
+        let mut p = boards::lock(&watched);
+        p.turn = update.view.turn.number;
         let phase = if p.taken < setup {
             Phase::Setup
         } else if p.done() {
@@ -326,9 +270,6 @@ pub struct Listing {
 pub struct MomentListing {
     name: &'static str,
     title: &'static str,
-    look: &'static str,
-    /// What the opponent should see of it.
-    theirs: &'static str,
     /// Whether it plays actions out once shown, which a replay plays again.
     plays: bool,
 }
@@ -345,8 +286,6 @@ pub fn listing() -> Vec<Listing> {
                 .map(|m| MomentListing {
                     name: m.name,
                     title: m.title,
-                    look: m.look,
-                    theirs: m.theirs,
                     plays: !m.play.is_empty(),
                 })
                 .collect(),
@@ -394,33 +333,6 @@ pub fn reach(moment: &'static Moment, view: View) -> Result<beryl_session::Playe
             }
             _ => {}
         }
-    }
-}
-
-/// Plays a moment written by hand headless, seen from `view`, to the viewer's first live
-/// decision and checks what it expects there: an error says what failed.
-pub fn check(moment: &'static Moment, view: View) -> Result<(), String> {
-    let expected = moment.expected(view);
-    let conditions = expected
-        .iter()
-        .map(|c| Condition::parse(c))
-        .collect::<Result<Vec<_>, _>>()?;
-    let seen = reach(moment, view)?;
-    let failed: Vec<&str> = conditions
-        .iter()
-        .zip(expected)
-        .filter(|(c, _)| !c.holds(&seen))
-        .map(|(_, text)| *text)
-        .collect();
-    if failed.is_empty() {
-        Ok(())
-    } else {
-        Err(format!(
-            "at turn {} {:?}: expected {}",
-            seen.turn.number,
-            seen.turn.step,
-            failed.join(", ")
-        ))
     }
 }
 
@@ -551,8 +463,7 @@ fn approve(spec: &Spec) -> Result<(), String> {
 }
 
 /// Every failure of the specs for `cards` (by name or slug; all of them if none): moments
-/// written by hand played and checked, generated ones checked against their approved records,
-/// and approved records no longer generated. Each moment is sent to `report` with its result
+/// checked against their approved records, and approved records no longer generated. Each moment is sent to `report` with its result
 /// as it is checked; candidates generation dropped are sent as skipped.
 fn failures(
     cards: &[String],
@@ -578,16 +489,6 @@ fn failures(
         for (name, result) in check_generated(spec)? {
             failed += usize::from(result.is_err());
             report(Line::Checked(format!("{card} / {name}"), result));
-        }
-        for m in spec.moments.iter().filter(|m| m.recorded.is_none()) {
-            for view in View::ALL {
-                let result = check(m, view);
-                failed += usize::from(result.is_err());
-                report(Line::Checked(
-                    format!("{card} / {} ({})", m.name, view.name()),
-                    result,
-                ));
-            }
         }
     }
     for (card, dropped) in dropped().iter().filter(|(c, _)| wanted(c)) {
@@ -658,28 +559,12 @@ mod tests {
                     spec.card,
                     m.name
                 );
-                if m.recorded.is_some() {
-                    continue;
-                }
-                assert!(
-                    !m.expect.is_empty() && !m.expect_theirs.is_empty(),
-                    "{}: {} expects nothing of a seat",
-                    spec.card,
-                    m.name
-                );
-                assert!(
-                    !m.theirs.is_empty(),
-                    "{}: {} says nothing of what the opponent sees",
-                    spec.card,
-                    m.name
-                );
             }
         }
     }
 
-    /// Every written moment sets up, plays out, and reaches a live decision where its
-    /// expectations hold, from both seats; every generated one records what was approved; and
-    /// no approved record is stale.
+    /// Every moment records what was approved, from both seats, and no approved record is
+    /// stale.
     #[test]
     fn every_moment_holds() {
         let mut failed = Vec::new();

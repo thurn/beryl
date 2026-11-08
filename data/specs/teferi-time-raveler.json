@@ -83,17 +83,14 @@
     ]
   },
   {
-    "moment": "3-returns-an-opposing-artifact-and-draws-a-card-0",
+    "moment": "3-returns-an-opposing-artifact-and-draws-a-card-bounced-0",
     "yours": [
-      "turn 1",
+      "turn 3",
       "your turn",
       "step precombatMain",
-      "decision targetCount",
-      "2 candidates",
-      "stack Teferi, Time Raveler",
-      "controls 1 Teferi, Time Raveler",
-      "not tapped Teferi, Time Raveler",
-      "Teferi, Time Raveler has 4 loyalty"
+      "decision priority",
+      "controls 0 Teferi, Time Raveler",
+      "known card in the opponent's hand"
     ],
     "theirs": [
       "turn 2",
@@ -101,8 +98,7 @@
       "step precombatMain",
       "decision priority",
       "controls 0 Teferi, Time Raveler",
-      "they control 1 Teferi, Time Raveler",
-      "Teferi, Time Raveler has 1 loyalty"
+      "known card in the opponent's hand"
     ]
   },
   {
@@ -129,48 +125,84 @@
     ]
   },
   {
-    "moment": "1-lets-a-sorcery-be-cast-on-the-opponents-turn-until-the-next-0",
+    "moment": "1-lets-a-sorcery-be-cast-on-the-opponents-turn-until-the-next-end",
     "yours": [
-      "turn 1",
+      "turn 3",
       "your turn",
       "step precombatMain",
       "decision priority",
-      "not offers Teferi, Time Raveler ability 1",
-      "not offers Teferi, Time Raveler ability 2",
+      "offers Teferi, Time Raveler ability 1",
+      "offers Teferi, Time Raveler ability 2",
       "controls 1 Teferi, Time Raveler",
       "not tapped Teferi, Time Raveler",
       "Teferi, Time Raveler has 5 loyalty"
     ],
     "theirs": [
-      "turn 1",
-      "their turn",
+      "turn 4",
+      "your turn",
       "step precombatMain",
       "decision priority",
-      "stack Teferi, Time Raveler",
       "controls 0 Teferi, Time Raveler",
       "they control 1 Teferi, Time Raveler",
       "Teferi, Time Raveler has 5 loyalty"
     ]
   },
   {
-    "moment": "1-lets-a-sorcery-be-cast-on-the-opponents-turn-until-the-next-end",
+    "moment": "an-opponents-flash-spell-waits-for-sorcery-timing-end-pass",
     "yours": [
-      "turn 2",
+      "turn 3",
+      "your turn",
+      "step postcombatMain",
+      "decision priority",
+      "controls 0 Teferi, Time Raveler",
+      "exiled beneath a permanent"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Teferi, Time Raveler",
+      "exiled beneath a permanent"
+    ]
+  },
+  {
+    "moment": "an-opponents-flash-spell-waits-for-sorcery-timing-end-next-turn",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Teferi, Time Raveler",
+      "exiled beneath a permanent"
+    ],
+    "theirs": [
+      "turn 5",
       "their turn",
       "step end",
-      "decision target",
-      "1 candidates",
-      "stack Oust",
+      "decision priority",
+      "controls 0 Teferi, Time Raveler",
+      "exiled beneath a permanent"
+    ]
+  },
+  {
+    "moment": "1-lets-a-sorcery-be-cast-on-the-opponents-turn-until-the-next-end-pass",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step postcombatMain",
+      "decision priority",
+      "offers Teferi, Time Raveler ability 1",
+      "offers Teferi, Time Raveler ability 2",
       "controls 1 Teferi, Time Raveler",
       "not tapped Teferi, Time Raveler",
       "Teferi, Time Raveler has 5 loyalty"
     ],
     "theirs": [
-      "turn 2",
+      "turn 4",
       "your turn",
-      "step end",
+      "step precombatMain",
       "decision priority",
-      "stack Oust",
       "controls 0 Teferi, Time Raveler",
       "they control 1 Teferi, Time Raveler",
       "Teferi, Time Raveler has 5 loyalty"

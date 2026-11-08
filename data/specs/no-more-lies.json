@@ -75,5 +75,23 @@
       "decision priority",
       "controls 0 No More Lies"
     ]
+  },
+  {
+    "moment": "a-controller-who-cant-pay-isnt-asked-1",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "controls 0 No More Lies"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack No More Lies",
+      "controls 0 No More Lies"
+    ]
   }
 ]

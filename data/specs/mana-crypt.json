@@ -13,7 +13,26 @@
       "turn 4",
       "your turn",
       "step precombatMain",
+      "controls 0 Mana Crypt",
+      "they control 1 Mana Crypt"
+    ]
+  },
+  {
+    "moment": "s-flip-won-no-damage-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
       "decision priority",
+      "controls 1 Mana Crypt",
+      "not tapped Mana Crypt"
+    ],
+    "theirs": [
+      "turn 3",
+      "their turn",
+      "step upkeep",
+      "decision priority",
+      "stack Mana Crypt",
       "controls 0 Mana Crypt",
       "they control 1 Mana Crypt"
     ]

@@ -123,6 +123,7 @@ fn decks(scenario: &Scenario) -> [Vec<(u8, &'static str)>; 2] {
         p.hand
             .iter()
             .chain(p.battlefield.iter().map(|b| &b.card))
+            .chain(p.battlefield.iter().flat_map(|b| b.exiled_with))
             .chain(p.graveyard)
             .chain(p.exile)
             .chain(p.library)
@@ -157,6 +158,11 @@ fn arrange(t: &GameTable, scenario: &Scenario) -> Result<State, String> {
                 .or(printed.map(|n| (CounterKind::Loyalty, n)));
             if let Some((kind, n)) = counters {
                 s.set_counters(slot, kind, n);
+            }
+            for &name in b.exiled_with {
+                let card = library_slot(&s, t, p, name);
+                s.place(card, Zone::Exile).map_err(full)?;
+                s.set_exiled_with(card, slot);
             }
         }
         // Top first: the last placed is on top.

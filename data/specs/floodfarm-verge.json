@@ -40,6 +40,26 @@
     ]
   },
   {
+    "moment": "s-u-with-a-plains-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Floodfarm Verge",
+      "not tapped Floodfarm Verge"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Jace, Vryn's Prodigy",
+      "controls 0 Floodfarm Verge",
+      "they control 1 Floodfarm Verge"
+    ]
+  },
+  {
     "moment": "s-w-end",
     "yours": [
       "turn 2",

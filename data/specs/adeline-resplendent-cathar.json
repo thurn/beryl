@@ -5,7 +5,6 @@
       "turn 3",
       "your turn",
       "step precombatMain",
-      "decision priority",
       "controls 1 Adeline, Resplendent Cathar",
       "controls 1 Human Token",
       "not tapped Adeline, Resplendent Cathar"
@@ -14,7 +13,6 @@
       "turn 2",
       "your turn",
       "step precombatMain",
-      "decision priority",
       "controls 0 Adeline, Resplendent Cathar",
       "they control 1 Adeline, Resplendent Cathar",
       "controls 0 Human Token",
@@ -34,6 +32,27 @@
       "controls 1 Human Token",
       "not tapped Adeline, Resplendent Cathar",
       "attacking"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Adeline, Resplendent Cathar",
+      "they control 1 Adeline, Resplendent Cathar",
+      "controls 0 Human Token",
+      "they control 1 Human Token"
+    ]
+  },
+  {
+    "moment": "adelines-human-attacks-a-planeswalker-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "controls 1 Adeline, Resplendent Cathar",
+      "controls 1 Human Token",
+      "not tapped Adeline, Resplendent Cathar"
     ],
     "theirs": [
       "turn 2",

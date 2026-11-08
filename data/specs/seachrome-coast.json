@@ -19,6 +19,24 @@
     ]
   },
   {
+    "moment": "with-three-other-lands-enters-tapped-0",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "controls 1 Seachrome Coast",
+      "not tapped Seachrome Coast"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Seachrome Coast",
+      "they control 1 Seachrome Coast"
+    ]
+  },
+  {
     "moment": "s-white-mana-end",
     "yours": [
       "turn 2",

@@ -75,5 +75,23 @@
       "decision priority",
       "controls 0 Mana Tithe"
     ]
+  },
+  {
+    "moment": "a-controller-who-cant-pay-isnt-asked-1",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "controls 0 Mana Tithe"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack Mana Tithe",
+      "controls 0 Mana Tithe"
+    ]
   }
 ]

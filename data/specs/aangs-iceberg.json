@@ -121,26 +121,6 @@
     ]
   },
   {
-    "moment": "exiles-a-permanent-until-it-leaves-waterbend-taps-a-creature-to-pay-4",
-    "yours": [
-      "turn 3",
-      "your turn",
-      "step precombatMain",
-      "decision chooseUpTo",
-      "ask scry",
-      "3 candidates",
-      "resolving Aang's Iceberg",
-      "controls 0 Aang's Iceberg"
-    ],
-    "theirs": [
-      "turn 4",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 0 Aang's Iceberg"
-    ]
-  },
-  {
     "moment": "waterbend-taps-a-creature-and-an-artifact-scry-reorders-the-top-0",
     "yours": [
       "turn 1",
@@ -175,6 +155,41 @@
     ],
     "theirs": [
       "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Aang's Iceberg"
+    ]
+  },
+  {
+    "moment": "waterbend-taps-a-creature-and-an-artifact-scry-reorders-the-top-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Aang's Iceberg"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Aang's Iceberg"
+    ]
+  },
+  {
+    "moment": "waterbend-taps-a-creature-and-an-artifact-scry-reorders-the-top-end-pass",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step declareAttackers",
+      "decision attacker",
+      "2 candidates",
+      "controls 0 Aang's Iceberg"
+    ],
+    "theirs": [
+      "turn 4",
       "your turn",
       "step precombatMain",
       "decision priority",

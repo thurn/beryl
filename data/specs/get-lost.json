@@ -5,7 +5,6 @@
       "turn 3",
       "your turn",
       "step precombatMain",
-      "decision priority",
       "controls 0 Get Lost",
       "controls 0 Map Token"
     ],
@@ -60,6 +59,27 @@
       "stack Map Token",
       "controls 0 Get Lost",
       "controls 2 Map Token"
+    ]
+  },
+  {
+    "moment": "a-map-explores-a-nonland-into-a-counter-and-the-graveyard-end",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Get Lost",
+      "controls 0 Map Token",
+      "they control 1 Map Token",
+      "known card in the opponent's hand"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step postcombatMain",
+      "decision priority",
+      "controls 0 Get Lost",
+      "controls 1 Map Token"
     ]
   }
 ]

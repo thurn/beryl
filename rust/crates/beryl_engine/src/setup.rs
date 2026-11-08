@@ -64,6 +64,20 @@ impl<L: Layout> State<L> {
         Ok(())
     }
 
+    /// Links the exiled card in `slot` to the permanent in `source` as one of the cards
+    /// "exiled with" it, as an ability of `source` exiling it would have
+    /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "If an object has an
+    /// activated or triggered ability printed on it that instructs a player to exile one or more
+    /// cards and an ability printed on it that refers either to 'the exiled cards' or to cards
+    /// 'exiled with [this object],' these abilities are linked."
+    pub fn set_exiled_with(&mut self, slot: L::Slot, source: L::Slot) {
+        debug_assert_eq!(self.object(slot).zone, Zone::Exile);
+        debug_assert_eq!(self.object(source).zone, Zone::Battlefield);
+        let o = self.object_mut(slot);
+        o.flags.set(ObjectFlags::EXILED_WITH, true);
+        o.linked = Some(source);
+    }
+
     /// Sets how many counters of a kind a permanent has, such as a planeswalker's loyalty.
     pub fn set_counters(&mut self, slot: L::Slot, kind: CounterKind, n: u8) {
         debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);

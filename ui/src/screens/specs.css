@@ -183,13 +183,6 @@
   cursor: default;
 }
 
-.specs-moment-head p {
-  grid-row: 2;
-  margin: 2px 0 0;
-  color: var(--text-dim);
-  font-size: 14px;
-}
-
 /* The opponent's seat: every moment again, below yours. */
 .specs-section-head {
   max-width: 1600px;

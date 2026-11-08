@@ -17,9 +17,6 @@ const API = "/spec-api";
 interface MomentListing {
   name: string;
   title: string;
-  look: string;
-  /** What the opponent should see of it. */
-  theirs: string;
   plays: boolean;
 }
 
@@ -193,7 +190,7 @@ function anchor(moment: MomentListing, view: View): string {
   return view === "yours" ? moment.name : `${moment.name}-theirs`;
 }
 
-/** One moment from one seat: what to look for, and its live game. */
+/** One moment from one seat: what made it, and its live game. */
 function MomentView({
   slug,
   moment,
@@ -256,9 +253,6 @@ function MomentView({
     <section className="specs-moment" id={anchor(moment, view)}>
       <header className="specs-moment-head">
         <h2>{moment.title}</h2>
-        {(view === "yours" ? moment.look : moment.theirs) && (
-          <p>{view === "yours" ? moment.look : moment.theirs}</p>
-        )}
         <div className="specs-moment-actions">
           {waiting ? (
             <button

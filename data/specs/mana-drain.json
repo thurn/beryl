@@ -14,7 +14,23 @@
       "turn 4",
       "your turn",
       "step precombatMain",
+      "controls 0 Mana Drain"
+    ]
+  },
+  {
+    "moment": "the-countered-spells-mana-value-at-the-casters-next-main-phase-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
       "decision priority",
+      "controls 0 Mana Drain",
+      "mana floating"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
       "controls 0 Mana Drain"
     ]
   },

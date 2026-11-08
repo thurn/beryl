@@ -5,7 +5,6 @@
       "turn 3",
       "your turn",
       "step precombatMain",
-      "decision priority",
       "controls 0 Oust"
     ],
     "theirs": [
@@ -31,6 +30,25 @@
       "turn 2",
       "your turn",
       "step precombatMain",
+      "controls 0 Oust"
+    ]
+  },
+  {
+    "moment": "on-a-library-of-one-puts-the-creature-under-it-end",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack Oust",
+      "controls 0 Oust"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
       "controls 0 Oust"
     ]
   }

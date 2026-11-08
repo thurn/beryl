@@ -73,6 +73,10 @@ pub struct Permanent {
     #[serde(serialize_with = "face_ix")]
     pub face: FaceIx,
     pub counters: Option<Counters>,
+    /// Cards its owner owns in exile "exiled with" it, as its own ability would have exiled
+    /// them (CR 607.2a).
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    pub exiled_with: &'static [&'static str],
 }
 
 /// Counters of one kind on a permanent at the start.
@@ -90,6 +94,16 @@ impl Permanent {
             tapped: false,
             face: FaceIx::FRONT,
             counters: None,
+            exiled_with: &[],
+        }
+    }
+
+    /// With `cards` in exile "exiled with" it.
+    #[must_use]
+    pub const fn exiled_with(self, cards: &'static [&'static str]) -> Permanent {
+        Permanent {
+            exiled_with: cards,
+            ..self
         }
     }
 

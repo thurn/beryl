@@ -112,6 +112,22 @@ fn a_scenario_sets_up_its_position() {
     run(&CARDS, &S).unwrap();
 }
 
+/// Cards a setup exiles with a permanent are linked to it, as its ability would have linked
+/// them (CR 607.2a); the run checks the engine's invariants at each step.
+#[test]
+fn a_permanent_starts_with_cards_exiled_with_it() {
+    const S: Scenario = Scenario::new("exiled with")
+        .battlefield(
+            P0,
+            &[Permanent::new(L).exiled_with(&["Other Land", "Other Land"])],
+        )
+        .actions(&[count(P0, Zone::Exile, 2)]);
+    run(&CARDS, &S).unwrap();
+    let (_, s) = crate::position(&CARDS, &S).unwrap();
+    let host = s.battlefield()[0];
+    assert_eq!(s.exiled_with(host).count(), 2);
+}
+
 #[test]
 fn a_scenario_casts_resolves_activates_and_attacks() {
     const BEAR: &str = "Test Bear";

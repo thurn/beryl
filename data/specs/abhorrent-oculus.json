@@ -73,10 +73,11 @@
       "not tapped Abhorrent Oculus"
     ],
     "theirs": [
-      "turn 1",
-      "their turn",
-      "step end",
+      "turn 2",
+      "your turn",
+      "step upkeep",
       "decision priority",
+      "stack Abhorrent Oculus",
       "controls 0 Abhorrent Oculus",
       "they control 1 Abhorrent Oculus"
     ]
@@ -92,9 +93,9 @@
       "not tapped Abhorrent Oculus"
     ],
     "theirs": [
-      "turn 2",
-      "your turn",
-      "step precombatMain",
+      "turn 3",
+      "their turn",
+      "step end",
       "decision priority",
       "controls 0 Abhorrent Oculus",
       "they control 1 Abhorrent Oculus"
@@ -120,11 +121,48 @@
     ]
   },
   {
+    "moment": "a-manifested-creature-turns-face-up-for-its-mana-cost-entering-no-more-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "controls 1 Abhorrent Oculus",
+      "not tapped Abhorrent Oculus"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Abhorrent Oculus",
+      "they control 1 Abhorrent Oculus"
+    ]
+  },
+  {
     "moment": "a-manifested-noncreature-card-cant-be-turned-face-up-end",
     "yours": [
       "turn 2",
       "their turn",
       "step end",
+      "decision priority",
+      "controls 1 Abhorrent Oculus",
+      "not tapped Abhorrent Oculus"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Abhorrent Oculus",
+      "they control 1 Abhorrent Oculus"
+    ]
+  },
+  {
+    "moment": "a-face-down-permanent-leaving-the-battlefield-is-revealed-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
       "decision priority",
       "controls 1 Abhorrent Oculus",
       "not tapped Abhorrent Oculus"

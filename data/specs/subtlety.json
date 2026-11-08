@@ -26,7 +26,6 @@
       "turn 3",
       "your turn",
       "step precombatMain",
-      "decision priority",
       "controls 1 Subtlety",
       "not tapped Subtlety"
     ],
@@ -49,7 +48,6 @@
       "turn 3",
       "your turn",
       "step precombatMain",
-      "decision priority",
       "controls 1 Subtlety",
       "not tapped Subtlety"
     ],
@@ -60,27 +58,6 @@
       "decision priority",
       "controls 0 Subtlety",
       "they control 1 Subtlety"
-    ]
-  },
-  {
-    "moment": "evoked-sacrificed-its-trigger-still-tucks-a-planeswalker-spell-ask-3",
-    "yours": [
-      "turn 3",
-      "your turn",
-      "step draw",
-      "controls 0 Subtlety",
-      "game over"
-    ],
-    "theirs": [
-      "turn 2",
-      "your turn",
-      "step precombatMain",
-      "decision yesNo",
-      "ask topOrBottom",
-      "2 candidates",
-      "resolving Subtlety",
-      "stack Teferi, Time Raveler",
-      "controls 0 Subtlety"
     ]
   },
   {

@@ -39,6 +39,46 @@
     ]
   },
   {
+    "moment": "crewing-the-vehicle-makes-it-a-creature-until-end-of-turn-end",
+    "yours": [
+      "turn 2",
+      "their turn",
+      "step end",
+      "decision priority",
+      "controls 1 Swift Reconfiguration",
+      "not tapped Swift Reconfiguration"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Swift Reconfiguration",
+      "they control 1 Swift Reconfiguration"
+    ]
+  },
+  {
+    "moment": "thieving-skydiver-kicked-for-1-cant-take-a-reconfigured-2-drop-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Swift Reconfiguration",
+      "not tapped Swift Reconfiguration"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Thieving Skydiver",
+      "controls 0 Swift Reconfiguration",
+      "they control 1 Swift Reconfiguration",
+      "X on the stack"
+    ]
+  },
+  {
     "moment": "thieving-skydiver-kicked-for-2-takes-the-reconfigured-creature-end",
     "yours": [
       "turn 1",
