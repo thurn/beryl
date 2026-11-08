@@ -1521,11 +1521,20 @@ function Life({
   const targetable = target !== undefined;
   return (
     <motion.div
-      className={targetable ? "hud life life-target" : "hud life"}
+      className={targetable ? "hud life life-aimed" : "hud life"}
       data-life={side}
       style={{ ...style, scale: pulse }}
-      onClick={() => targetable && onPick(target)}
     >
+      {/* As a target, the orb's whole face is clicked, not just its number; the stops on
+          either side keep theirs. */}
+      {targetable && (
+        <span
+          className="life-hit life-target"
+          role="button"
+          aria-label={side === "you" ? "Target yourself" : "Target opponent"}
+          onClick={() => onPick(target)}
+        />
+      )}
       <LifeOrb
         life={shown}
         active={active}

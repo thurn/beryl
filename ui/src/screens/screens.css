@@ -764,10 +764,24 @@
 .table .life {
   z-index: 250;
 }
-/* Your orb takes the pointer only to be picked as a target: otherwise the top of a raised hand
-   card under it stays at hand. (A drag only ever aims at the opponent's orb.) */
-.table .life[data-life="you"]:not(.life-target) {
+/* Your orb takes the pointer only on its face, to be picked as a target: otherwise the top of a
+   raised hand card under it stays at hand. (A drag only ever aims at the opponent's orb.) */
+.table .life[data-life="you"] {
   pointer-events: none;
+}
+/* The orb's face, picked as a target: the cushion and its ring, in the middle of the orb's art
+   (Player.tsx: 98 by 96 of its 272 by 116), clear of the stops beside it. */
+.life-hit {
+  position: absolute;
+  left: 50%;
+  top: 46.5%;
+  z-index: 1;
+  width: 36%;
+  height: 83%;
+  translate: -50% -50%;
+  border-radius: 50%;
+  cursor: pointer;
+  pointer-events: auto;
 }
 /* Mockup pixels on the 1600-wide stage. */
 .table .life-orb {
@@ -1431,8 +1445,7 @@
   bottom: calc(100% - 1.6em);
   scale: 1 -1;
 }
-.life-target {
-  cursor: pointer;
+.life-aimed {
   border-radius: 50%;
   filter: drop-shadow(0 0 3px #05c8f0)
     drop-shadow(0 0 10px rgb(0 185 235 / 85%));
