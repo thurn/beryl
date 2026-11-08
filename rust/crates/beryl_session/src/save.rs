@@ -5,9 +5,13 @@
 //! candidate that does the same ([`Chosen::find`]); the index it had is kept as a hint, which
 //! only breaks ties between candidates that do the same and shows drift.
 
-use beryl_engine::card::{AbilityIx, AbilityKind, CastingOption, ManaColor};
+use beryl_engine::card::{AbilityIx, AbilityKind, CastingOption, ManaColor, Types};
+use beryl_engine::state::ObjectFlags;
 use beryl_engine::{Choice, Decision, DecisionKind, GameTable, Layout, Opt, State, TurnStep, Zone};
 use serde::{Deserialize, Serialize};
+
+use crate::checkpoint::Counter;
+use crate::perturb;
 
 /// One answer in the choice log: what it does, and where it stood among the candidates.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -28,6 +32,10 @@ pub struct Described {
     pub step: StepName,
     pub kind: Kind,
     pub act: Act,
+    /// Where the candidate taken stood among those that do alike, in the order of the
+    /// battlefield or its graveyard, since version 6: two permanents alike to one answer can
+    /// differ to the answers after it, as two triggers that target one of them or both.
+    pub nth: Option<u8>,
 }
 
 /// A [`Chosen`] as a file holds it: a bare index (version 1) or the whole description.
@@ -42,6 +50,8 @@ enum ChosenFile {
         step: StepName,
         kind: Kind,
         act: Act,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        nth: Option<u8>,
     },
 }
 
@@ -56,6 +66,7 @@ impl From<ChosenFile> for Chosen {
                 step,
                 kind,
                 act,
+                nth,
             } => Chosen {
                 index,
                 what: Some(Described {
@@ -64,6 +75,7 @@ impl From<ChosenFile> for Chosen {
                     step,
                     kind,
                     act,
+                    nth,
                 }),
             },
         }
@@ -80,6 +92,7 @@ impl From<Chosen> for ChosenFile {
                 step,
                 kind,
                 act,
+                nth,
             }) => ChosenFile::Described {
                 index: chosen.index,
                 player,
@@ -87,6 +100,7 @@ impl From<Chosen> for ChosenFile {
                 step,
                 kind,
                 act,
+                nth,
             },
         }
     }
@@ -95,6 +109,14 @@ impl From<Chosen> for ChosenFile {
 impl Chosen {
     /// Candidate `c` of `d`, described in the position `s` it is asked in.
     pub fn new<L: Layout>(t: &GameTable, s: &State<L>, d: &Decision<L>, c: Choice) -> Chosen {
+        let act = Act::of(t, s, d, c);
+        let alike: Vec<Choice> = (0..d.len() as u16)
+            .map(Choice)
+            .filter(|&other| Act::of(t, s, d, other) == act)
+            .collect();
+        let nth = in_order(s, d, alike)
+            .and_then(|alike| alike.iter().position(|&other| other == c))
+            .map(|i| u8::try_from(i).expect("a decision has under 256 candidates"));
         Chosen {
             index: c.0,
             what: Some(Described {
@@ -102,18 +124,20 @@ impl Chosen {
                 turn: s.turn().number,
                 step: s.turn().step.into(),
                 kind: d.kind.into(),
-                act: Act::of(t, s, d, c),
+                act,
+                nth,
             }),
         }
     }
 
     /// The candidate of `d` that does what this answer did, if any: among several that do,
     /// the one at its old index, if that is one of them, else the first. A version 1 answer
-    /// takes its index, if `d` has it.
+    /// takes its index, if `d` has it. Candidates are in the order this thread lists them
+    /// ([`perturb::candidates`]).
     pub fn find<L: Layout>(&self, t: &GameTable, s: &State<L>, d: &Decision<L>) -> Option<Choice> {
-        let n = d.len() as u16;
+        let listed = perturb::candidates(d.len() as u16);
         let Some(what) = &self.what else {
-            return (self.index < n).then_some(Choice(self.index));
+            return listed.get(usize::from(self.index)).copied();
         };
         if what.player != d.player.get()
             || Some(when(s)) != self.when()
@@ -121,24 +145,26 @@ impl Chosen {
         {
             return None;
         }
-        // An object named before version 5 is compared as version 4 named it, whatever else
-        // the file says of it (a version 1 or 2 file is recorded again on this build).
-        let before_v5 = what.act.object().is_some_and(|o| o.before_v5);
-        let as_v4 = |mut act: Act| {
-            if let Some(o) = act.object_mut().filter(|_| before_v5) {
-                o.owner = None;
-                o.shown = false;
-                o.before_v5 = true;
+        // Each candidate is compared as the recorded answer's version would have named it,
+        // whatever else the file says of it (a version 1 or 2 file is recorded again on this
+        // build).
+        let named = what.act.clone();
+        let as_recorded = |act: Act| act.named_like(&named);
+        let recorded = as_recorded(what.act.clone());
+        let same = |c: Choice| as_recorded(Act::of(t, s, d, c)) == recorded;
+        if let Some(nth) = what.nth {
+            let alike = listed.iter().copied().filter(|&c| same(c)).collect();
+            if let Some(c) =
+                in_order(s, d, alike).and_then(|alike| alike.get(usize::from(nth)).copied())
+            {
+                return Some(c);
             }
-            act
-        };
-        let recorded = as_v4(what.act.clone());
-        let same = |c: Choice| as_v4(Act::of(t, s, d, c)) == recorded;
-        let hint = Choice(self.index);
-        if !REVERSED.get() && self.index < n && same(hint) {
+        }
+        let hint = listed.get(usize::from(self.index)).copied();
+        if let Some(hint) = hint.filter(|&c| same(c)) {
             return Some(hint);
         }
-        candidates(n).find(|&c| same(c))
+        listed.into_iter().find(|&c| same(c))
     }
 
     /// The turn and step the answer was made in, if the save says.
@@ -160,32 +186,47 @@ impl Chosen {
     }
 }
 
+/// `alike`, candidates of `d` that do alike, in the order of the battlefield or of their
+/// graveyards, which the rules keep ([CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137)
+/// orders permanents by timestamp; [CR 404.2](https://yawgatog.com/resources/magic-rules/#R4042)
+/// keeps a graveyard's order): if there are two or more, each naming an object in one of
+/// those zones.
+fn in_order<L: Layout>(
+    s: &State<L>,
+    d: &Decision<L>,
+    mut alike: Vec<Choice>,
+) -> Option<Vec<Choice>> {
+    if alike.len() < 2 {
+        return None;
+    }
+    let place = |c: Choice| {
+        let slot = d
+            .candidates
+            .object(c)
+            .or_else(|| d.candidates.option(c)?.object_named(s))?;
+        let o = s.object(slot);
+        match o.zone {
+            Zone::Battlefield => Some((0, s.battlefield().iter().position(|&b| b == slot)?)),
+            Zone::Graveyard => Some((
+                1 + o.owner.index(),
+                s.graveyard(o.owner).iter().position(|&g| g == slot)?,
+            )),
+            _ => None,
+        }
+    };
+    let mut places = Vec::with_capacity(alike.len());
+    for &c in &alike {
+        places.push((place(c)?, c));
+    }
+    places.sort_unstable_by_key(|&(place, _)| place);
+    alike = places.into_iter().map(|(_, c)| c).collect();
+    Some(alike)
+}
+
 /// The turn and step the position `s` is in.
 pub fn when<L: Layout>(s: &State<L>) -> (u16, StepName) {
     let turn = s.turn();
     (turn.number, turn.step.into())
-}
-
-/// The candidates of a decision of `n`, in order: reversed while a test asks
-/// ([`reverse_candidates`]), as an engine that listed them the other way would.
-fn candidates(n: u16) -> Box<dyn Iterator<Item = Choice>> {
-    if REVERSED.get() {
-        Box::new((0..n).rev().map(Choice))
-    } else {
-        Box::new((0..n).map(Choice))
-    }
-}
-
-thread_local! {
-    static REVERSED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
-
-/// Has this thread's replays search each decision's candidates last first and ignore the old
-/// index, while `on`: a save that replays the same either way depends on what its answers do,
-/// not on where they stood. For tests.
-#[doc(hidden)]
-pub fn reverse_candidates(on: bool) {
-    REVERSED.set(on);
 }
 
 /// What is being decided: [`DecisionKind`], under names a save keeps.
@@ -335,9 +376,15 @@ pub enum Act {
     Draw,
     Keep,
     Mulligan,
-    /// A waiting triggered ability, by its source.
+    /// A waiting triggered ability, by its source and, since version 6, its place among the
+    /// triggered abilities of the source's face: one permanent's two abilities may trigger
+    /// on one event, as an evoked creature's own and its sacrifice
+    /// ([CR 702.74a](https://yawgatog.com/resources/magic-rules/#R70274a)), and their order
+    /// matters ([CR 603.3b](https://yawgatog.com/resources/magic-rules/#R6033b)).
     Trigger {
         source: Option<Obj>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ability: Option<u8>,
     },
     Yes,
     No,
@@ -401,6 +448,11 @@ fn is_false(b: &bool) -> bool {
     !b
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)] // Serde's `skip_serializing_if` passes a reference.
+fn is_zero(n: &u8) -> bool {
+    *n == 0
+}
+
 impl Act {
     /// The object the act names, if any.
     fn object(&self) -> Option<&Obj> {
@@ -414,7 +466,9 @@ impl Act {
             | Act::Mana { source: card, .. }
             | Act::Object { object: card }
             | Act::TurnFaceUp { card } => Some(card),
-            Act::Trigger { source: card } | Act::Defender { planeswalker: card } => card.as_ref(),
+            Act::Trigger { source: card, .. } | Act::Defender { planeswalker: card } => {
+                card.as_ref()
+            }
             _ => None,
         }
     }
@@ -430,9 +484,28 @@ impl Act {
             | Act::Mana { source: card, .. }
             | Act::Object { object: card }
             | Act::TurnFaceUp { card } => Some(card),
-            Act::Trigger { source: card } | Act::Defender { planeswalker: card } => card.as_mut(),
+            Act::Trigger { source: card, .. } | Act::Defender { planeswalker: card } => {
+                card.as_mut()
+            }
             _ => None,
         }
+    }
+
+    /// This candidate as the version that recorded `named` would have described it, given
+    /// that `named` describes it alike: without what that version did not record.
+    fn named_like(mut self, named: &Act) -> Act {
+        if let Some(o) = named.object() {
+            let (before_v5, before_v6) = (o.before_v5, o.before_v6);
+            if let Some(o) = self.object_mut() {
+                o.name_like(before_v5, before_v6);
+            }
+        }
+        if let (Act::Trigger { ability, .. }, Act::Trigger { ability: None, .. }) =
+            (&mut self, named)
+        {
+            *ability = None;
+        }
+        self
     }
 
     /// What candidate `c` of `d` does, in the position `s`.
@@ -453,8 +526,16 @@ impl Act {
             Opt::Draw => Act::Draw,
             Opt::Keep => Act::Keep,
             Opt::Mulligan => Act::Mulligan,
-            Opt::Trigger(_) => Act::Trigger {
+            Opt::Trigger(i) => Act::Trigger {
                 source: o.object_named(s).map(obj),
+                ability: s.triggers().get(Into::<usize>::into(i)).map(|tr| {
+                    let triggered = t.def(tr.card).face(tr.face).abilities
+                        [..usize::from(tr.ability)]
+                        .iter()
+                        .filter(|a| matches!(a.kind, AbilityKind::Triggered))
+                        .count();
+                    u8::try_from(triggered).expect("a face's abilities number under 256")
+                }),
             },
             Opt::Yes => Act::Yes,
             Opt::No => Act::No,
@@ -505,10 +586,15 @@ impl Act {
     }
 }
 
-/// An object, by what the rules see of it: its name, zone, controller and owner, and whether
-/// it is tapped. Two objects alike in all of these are alike to the rules, but for their
-/// histories (counters, damage), which a later version tells apart with names given as cards
-/// are revealed.
+/// An object, by what the rules see of it: its name, zone, controller and owner, whether it
+/// is tapped, and for a permanent, since version 6, whether it is a token, summoning sick,
+/// its counters, the damage marked on it and its place in combat. Copies of a card alike in
+/// all of these are alike to the rules for one answer; [`Described::nth`] tells them apart
+/// for the answers after it.
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "an object's statuses, each yes or no in the rules"
+)]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Obj {
@@ -534,21 +620,103 @@ pub struct Obj {
     /// player knows it: replay takes an object either way, as version 4 did.
     #[serde(default, rename = "beforeV5", skip_serializing_if = "is_false")]
     pub before_v5: bool,
+    /// A token, since version 6: a token copy of a card is a permanent apart from the card
+    /// ([CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111)).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub token: bool,
+    /// A creature that cannot yet attack or {T} ([CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026)):
+    /// "A creature's activated ability with the tap symbol or the untap symbol in its
+    /// activation cost can't be activated unless the creature has been under its controller's
+    /// control continuously since their most recent turn began." Since version 6.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub sick: bool,
+    /// A permanent's counters, since version 6.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub counters: Vec<Counter>,
+    /// The damage marked on a permanent, since version 6.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub damage: u8,
+    /// An attacking creature ([CR 506.4](https://yawgatog.com/resources/magic-rules/#R5064)),
+    /// since version 6.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub attacking: bool,
+    /// A blocking creature, since version 6.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub blocking: bool,
+    /// An attacking creature that was blocked, which stays blocked though its blockers leave
+    /// combat ([CR 509.1h](https://yawgatog.com/resources/magic-rules/#R5091h)), since
+    /// version 6.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub blocked: bool,
+    /// The planeswalker an attacking creature attacks, or the creature a blocking one blocks,
+    /// by name, since version 6: two attackers alike but for whom they attack differ to the
+    /// defender ([CR 506.3](https://yawgatog.com/resources/magic-rules/#R5063)).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub against: Option<String>,
+    /// Named by a version 5 save or older, which names none of a permanent's token, summoning
+    /// sickness, counters, damage and place in combat: replay takes an object whatever they
+    /// are.
+    #[serde(default, rename = "beforeV6", skip_serializing_if = "is_false")]
+    pub before_v6: bool,
 }
 
 impl Obj {
     pub fn of<L: Layout>(t: &GameTable, s: &State<L>, slot: L::Slot) -> Obj {
         let o = s.object(slot);
         let controller = s.controller(slot);
+        let permanent = o.zone == Zone::Battlefield;
         Obj {
             name: s.name(t, slot).to_owned(),
             zone: o.zone.into(),
             controller: controller.get(),
             owner: (o.owner != controller).then_some(o.owner.get()),
-            tapped: o.flags.0 & beryl_engine::state::ObjectFlags::TAPPED != 0,
+            tapped: o.flags.has(ObjectFlags::TAPPED),
             shown: matches!(o.zone, Zone::Hand | Zone::Library)
                 && s.knows(o.owner.opponent(), slot),
             before_v5: false,
+            token: permanent && o.flags.has(ObjectFlags::TOKEN),
+            sick: permanent
+                && o.flags.has(ObjectFlags::SUMMONING_SICK)
+                && s.derived(slot).types.contains(Types::CREATURE),
+            counters: if permanent {
+                Counter::on(o)
+            } else {
+                Vec::new()
+            },
+            damage: if permanent { o.damage } else { 0 },
+            attacking: permanent && o.flags.has(ObjectFlags::ATTACKING),
+            blocking: permanent && o.flags.has(ObjectFlags::BLOCKING),
+            blocked: permanent && o.flags.has(ObjectFlags::BLOCKED),
+            against: o
+                .combat
+                .filter(|&other| {
+                    permanent
+                        && o.flags.0 & (ObjectFlags::ATTACKING | ObjectFlags::BLOCKING) != 0
+                        && s.object(other).zone == Zone::Battlefield
+                })
+                .map(|other| s.name(t, other).to_owned()),
+            before_v6: false,
+        }
+    }
+
+    /// This object as a version before 5, if `before_v5`, or before 6, if `before_v6`, named
+    /// it.
+    fn name_like(&mut self, before_v5: bool, before_v6: bool) {
+        if before_v5 {
+            self.owner = None;
+            self.shown = false;
+            self.before_v5 = true;
+        }
+        if before_v6 {
+            self.token = false;
+            self.sick = false;
+            self.counters.clear();
+            self.damage = 0;
+            self.attacking = false;
+            self.blocking = false;
+            self.blocked = false;
+            self.against = None;
+            self.before_v6 = true;
         }
     }
 }

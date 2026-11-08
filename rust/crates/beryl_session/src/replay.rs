@@ -16,10 +16,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::checkpoint::Checkpoint;
 use crate::game::with_stops;
-use crate::migrate;
 use crate::protocol::StopsSetting;
 use crate::save::Chosen;
 use crate::{SessionError, StartGame};
+use crate::{migrate, perturb};
 
 /// A recorded game: how it was set up, and every entry of its choice log.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -53,7 +53,7 @@ pub struct ReplayFile {
 }
 
 /// The format this build writes. Raising it adds a migration ([`crate::migrate`]).
-pub const FORMAT_VERSION: u8 = 5;
+pub const FORMAT_VERSION: u8 = 6;
 
 fn version_1() -> u8 {
     1
@@ -180,7 +180,7 @@ impl ReplayFile {
             self.stops,
             self.start()?.human,
         );
-        let state = State::new(&table, self.seed, profile);
+        let state = perturb::new_game(&table, self.seed, profile);
         Ok((table, state))
     }
 

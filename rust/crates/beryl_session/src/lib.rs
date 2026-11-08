@@ -13,6 +13,7 @@ mod game;
 pub mod ipc;
 pub mod journal;
 pub mod migrate;
+pub mod perturb;
 pub mod preview;
 pub mod protocol;
 pub mod replay;

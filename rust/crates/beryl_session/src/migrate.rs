@@ -33,7 +33,8 @@ pub type Step = fn(Value, &'static CardTable) -> Result<Value, SessionError>;
 
 /// The migrations, in order: the first upgrades a version 1 file to version 2. Its length is
 /// [`FORMAT_VERSION`] less one.
-pub const CHAIN: [Step; FORMAT_VERSION as usize - 1] = [v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5];
+pub const CHAIN: [Step; FORMAT_VERSION as usize - 1] =
+    [v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6];
 
 /// `file`, a replay file of any version this build knows, in the format it writes. `cards`
 /// are the cards its games are played with, which the migrations that replay need.
@@ -117,16 +118,33 @@ fn v3_to_v4(mut file: Value, _: &'static CardTable) -> Result<Value, SessionErro
 /// names is marked as named before version 5 ([`crate::save::Obj::before_v5`]), which replay
 /// matches with an object either way, as version 4 did.
 fn v4_to_v5(mut file: Value, _: &'static CardTable) -> Result<Value, SessionError> {
-    /// Marks each object under `value`: what has a zone and a controller.
-    fn mark(value: &mut Value) {
+    mark_objects(&mut file, "beforeV5");
+    set_version(&mut file, 5)?;
+    Ok(file)
+}
+
+/// Version 5 to 6: version 6 names whether a permanent is a token or summoning sick, its
+/// counters, its damage and its place in combat, and which of its source's triggered abilities a trigger is. Each
+/// object a version 5 answer names is marked as named before version 6
+/// ([`crate::save::Obj::before_v6`]), which replay matches with a permanent whatever they are,
+/// as version 5 did; a trigger without its ability matches either of its source's.
+fn v5_to_v6(mut file: Value, _: &'static CardTable) -> Result<Value, SessionError> {
+    mark_objects(&mut file, "beforeV6");
+    set_version(&mut file, 6)?;
+    Ok(file)
+}
+
+/// Marks each object `file`'s answers name, what has a zone and a controller, with `field`.
+fn mark_objects(file: &mut Value, field: &str) {
+    fn mark(value: &mut Value, field: &str) {
         match value {
             Value::Object(fields) => {
                 if fields.contains_key("zone") && fields.contains_key("controller") {
-                    fields.insert("beforeV5".to_owned(), true.into());
+                    fields.insert(field.to_owned(), true.into());
                 }
-                fields.values_mut().for_each(mark);
+                fields.values_mut().for_each(|v| mark(v, field));
             }
-            Value::Array(items) => items.iter_mut().for_each(mark),
+            Value::Array(items) => items.iter_mut().for_each(|v| mark(v, field)),
             _ => {}
         }
     }
@@ -134,13 +152,11 @@ fn v4_to_v5(mut file: Value, _: &'static CardTable) -> Result<Value, SessionErro
         for entry in log.iter_mut().filter_map(Value::as_object_mut) {
             for kind in ["choice", "auto"] {
                 if let Some(answer) = entry.get_mut(kind) {
-                    mark(answer);
+                    mark(answer, field);
                 }
             }
         }
     }
-    set_version(&mut file, 5)?;
-    Ok(file)
 }
 
 /// `file`, of version `from`, replayed on this build and recorded again as version `from + 1`:
@@ -299,6 +315,21 @@ mod tests {
         expected["formatVersion"] = 5.into();
         expected["log"][1]["choice"]["act"]["card"]["beforeV5"] = true.into();
         assert_eq!(v5, expected);
+    }
+
+    #[test]
+    fn version_5_to_6_marks_the_objects_answers_name() {
+        let bear = json!({ "name": "Grizzly Bears", "zone": "battlefield", "controller": 0,
+            "beforeV5": true });
+        let v5 = json!({ "formatVersion": 5, "seed": 1, "log": [
+            { "choice": { "index": 0, "player": 0, "turn": 3, "step": "declareAttackers",
+                "kind": "attacker", "act": { "act": "attack", "creature": bear } } },
+        ] });
+        let v6 = v5_to_v6(v5.clone(), &CARDS).unwrap();
+        let mut expected = v5;
+        expected["formatVersion"] = 6.into();
+        expected["log"][0]["choice"]["act"]["creature"]["beforeV6"] = true.into();
+        assert_eq!(v6, expected);
     }
 
     #[test]

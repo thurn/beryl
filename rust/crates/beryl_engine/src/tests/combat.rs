@@ -547,6 +547,31 @@ fn damage_below_lethal_goes_onto_blockers_in_the_order_they_entered() {
 }
 
 #[test]
+fn creatures_dying_together_reach_the_graveyard_in_the_order_they_entered() {
+    // Two Bears blocking an Ogre and a Bear die at once, and lie in the graveyard as they
+    // entered the battlefield, the one in the higher slot first: slots follow the deal, which
+    // is random, so a slot order would let the seed decide what a graveyard's order shows.
+    let mut g = Game::new();
+    let (a, d) = (g.attacker, g.defender());
+    let ogre = g.put(a, "Ogre");
+    let bear = g.put(a, "Bear");
+    let bears = g.cards(d, "Bear");
+    let (low, high) = (bears[0], bears[1]);
+    g.put_slot(high);
+    g.put_slot(low);
+    g.pass_to_combat();
+    g.pick(DecisionKind::Attacker, Opt::Attack(ogre));
+    g.pick(DecisionKind::Attacker, Opt::Attack(bear));
+    // The defender's Bears are alike: the lower slot answers for both, then the other.
+    g.pick(DecisionKind::Blocker, Opt::Block(low));
+    g.pick_object(DecisionKind::BlockTarget, ogre);
+    g.pick(DecisionKind::Blocker, Opt::Block(high));
+    g.pick_object(DecisionKind::BlockTarget, bear);
+    g.finish_combat();
+    assert_eq!(g.s.graveyard(d), &[high, low]);
+}
+
+#[test]
 fn first_strike_adds_a_damage_step_only_when_present() {
     let mut g = Game::new();
     let (a, d) = (g.attacker, g.defender());

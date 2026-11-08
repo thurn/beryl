@@ -34,7 +34,7 @@ use crate::protocol::{
 use crate::replay::{Entry, FORMAT_VERSION, ReplayFile};
 use crate::save::{self, Chosen};
 use crate::{HandOver, Prepared, SessionError, StartGame};
-use crate::{journal, preview};
+use crate::{journal, perturb, preview};
 
 /// The human's open decision, as a session records it: the one place an answer is checked.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -813,8 +813,8 @@ impl Game {
         let Some(from) = &file.from else {
             return Ok(game);
         };
-        let mut state = State::new(&game.table, file.seed, game.board.profile());
-        from.arrange(&game.table, &mut state, file.seed)
+        let mut state = perturb::new_game(&game.table, file.seed, game.board.profile());
+        from.arrange(&game.table, &mut state, perturb::seed(file.seed))
             .map_err(|reason| SessionError::BadReplay {
                 reason: format!("the checkpoint of turn {}: {reason}", from.turn),
             })?;

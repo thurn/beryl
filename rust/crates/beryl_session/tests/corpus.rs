@@ -1,16 +1,18 @@
 //! The frozen save corpus (`beryl_session::corpus`): every save under `tests/saves/` still
 //! replays to its end, matches each board it recorded as a turn began, and ends as it ended;
-//! a save on the breaks list, to its listed entry. `just freeze-saves` adds saves.
+//! a save on the breaks list, to its listed entry; and does so under each perturbation of what
+//! a save must not depend on (`beryl_session::perturb`). `just freeze-saves` adds saves.
 
 use std::path::{Path, PathBuf};
 use std::thread;
 
 use beryl_cards::CARDS;
-use beryl_session::ReplayFile;
 use beryl_session::corpus::{self, ENDINGS, Ending, Failure, Level, Outcome};
 use beryl_session::migrate::{self, Break};
+use beryl_session::perturb::{self, Perturbation};
 use beryl_session::replay::Entry;
 use beryl_session::save::Act;
+use beryl_session::{Game, ReplayFile, SessionId};
 
 fn dir() -> PathBuf {
     let crate_dir = std::env::var_os("CARGO_MANIFEST_DIR").expect("run under cargo");
@@ -28,8 +30,9 @@ fn saves() -> Vec<String> {
     names
 }
 
-#[test]
-fn every_frozen_save_still_plays() {
+/// Each save of the corpus frozen in format `since` or later that fails its check while `p`
+/// perturbs replay, saying how.
+fn failures(since: u8, p: Perturbation) -> Vec<String> {
     let endings = corpus::endings(&dir()).unwrap();
     let saves = saves();
     assert!(!saves.is_empty(), "no saves in {}", dir().display());
@@ -47,33 +50,132 @@ fn every_frozen_save_still_plays() {
         );
     }
     // Each save on its own thread: replaying is the corpus's whole cost.
-    let failures: Vec<String> = thread::scope(|scope| {
+    thread::scope(|scope| {
         let checks: Vec<_> = saves
             .iter()
             .map(|name| {
                 let ending = &endings[name];
                 let listed = breaks.iter().find(|b| &b.save == name);
                 scope.spawn(move || {
-                    let file = corpus::load(&CARDS, &dir().join(name)).map_err(|e| e.clone())?;
-                    corpus::check_listed(&CARDS, &file, ending, listed).map_err(|f| f.to_string())
+                    perturb::with(p, || {
+                        let (file, frozen) = corpus::load(&CARDS, &dir().join(name))?;
+                        if frozen < since {
+                            return Ok(false);
+                        }
+                        corpus::check_listed(&CARDS, &file, ending, listed)
+                            .map(|()| true)
+                            .map_err(|f| f.to_string())
+                    })
                 })
             })
             .collect();
-        saves
+        let mut checked = false;
+        let failures = saves
             .iter()
             .zip(checks)
             .filter_map(|(name, check)| match check.join().unwrap() {
-                Ok(()) => None,
+                Ok(held) => {
+                    checked |= held;
+                    None
+                }
                 Err(e) => Some(format!("{name}: {e}")),
             })
-            .collect()
-    });
+            .collect();
+        assert!(
+            checked,
+            "no save in the corpus is of format {since} or later"
+        );
+        failures
+    })
+}
+
+#[test]
+fn every_frozen_save_still_plays() {
+    let failures = failures(1, Perturbation::default());
     assert!(
         failures.is_empty(),
         "saves that no longer play as frozen (add a migration or a breaks entry, \
          beryl_session::migrate):\n{}",
         failures.join("\n")
     );
+}
+
+/// The corpus replays the same with its seed derived another way, its candidates listed in
+/// other orders and its cards in other slots: a save depends on none of them (architecture
+/// §14), from the format that made it so on.
+#[test]
+fn every_frozen_save_plays_the_same_under_each_perturbation() {
+    let failed: Vec<String> = Perturbation::EACH
+        .iter()
+        .flat_map(|&(name, since, p)| {
+            failures(since, p)
+                .into_iter()
+                .map(move |f| format!("{name}: {f}"))
+        })
+        .collect();
+    assert!(
+        failed.is_empty(),
+        "saves that depend on what the rules leave to chance or to the engine:\n{}",
+        failed.join("\n")
+    );
+}
+
+/// `file` as version 1 recorded it: each answer by its index alone, replayed from the seed.
+fn version_1(file: &ReplayFile) -> serde_json::Value {
+    let mut old = file.clone();
+    old.commit = None;
+    old.chooser = None;
+    old.log.retain(|e| {
+        !matches!(
+            e,
+            Entry::Reveal { .. } | Entry::Flip { .. } | Entry::Checkpoint(_)
+        )
+    });
+    for entry in &mut old.log {
+        if let Entry::Choice(c) | Entry::Auto(c) = entry {
+            c.what = None;
+        }
+    }
+    let mut json = serde_json::to_value(&old).unwrap();
+    json.as_object_mut().unwrap().remove("formatVersion");
+    json
+}
+
+/// Each perturbation changes what an index-based save replays to: a save of the corpus,
+/// recorded again by this build as version 1, that plays without it fails under it. So no
+/// perturbation passes by perturbing nothing.
+#[test]
+fn each_perturbation_breaks_a_save_of_indices() {
+    let endings = corpus::endings(&dir()).unwrap();
+    let breaks = migrate::breaks().unwrap();
+    let saves: Vec<(serde_json::Value, Ending)> = saves()
+        .into_iter()
+        .filter(|name| breaks.iter().all(|b| &b.save != name))
+        .map(|name| {
+            let (file, _) = corpus::load(&CARDS, &dir().join(&name)).unwrap();
+            let (game, _) = Game::replay_exactly(&CARDS, &file, SessionId(0)).unwrap();
+            (version_1(game.replay()), endings[&name])
+        })
+        .collect();
+    let plays = |p: Perturbation, (old, ending): &(serde_json::Value, Ending)| {
+        perturb::with(p, || {
+            let file = migrate::to_current(old.clone(), &CARDS).map_err(|e| e.to_string())?;
+            corpus::check(&CARDS, &file, Some(ending)).map_err(|f| f.to_string())
+        })
+    };
+    // Indices recorded as a save of today replays need not lead a game played from the seed
+    // alone the same way: identical cards may lie in other slots.
+    let playing: Vec<_> = saves
+        .iter()
+        .filter(|save| plays(Perturbation::default(), save).is_ok())
+        .collect();
+    assert!(!playing.is_empty(), "no save of indices plays");
+    for (name, _, p) in Perturbation::EACH {
+        assert!(
+            playing.iter().any(|save| plays(p, save).is_err()),
+            "every save of indices plays the same under {name}"
+        );
+    }
 }
 
 /// The smallest save of the corpus that is not on the breaks list and was played to its end
@@ -87,7 +189,7 @@ fn smallest() -> (String, ReplayFile, Ending) {
         .into_iter()
         .filter(|name| breaks.iter().all(|b| &b.save != name))
         .map(|name| {
-            let file = corpus::load(&CARDS, &dir().join(&name)).unwrap();
+            let (file, _) = corpus::load(&CARDS, &dir().join(&name)).unwrap();
             let ending = endings[&name];
             (name, file, ending)
         })

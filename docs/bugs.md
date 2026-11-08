@@ -124,3 +124,18 @@ fixed in the same session. Newest first.
   so a stolen creature could cost the wrong player a basic. Prevention: split
   the objects by the player that matters once, before they move, and derive
   every count from that one split rather than recomputing who it was.
+
+- Saves still depended on slot numbers and candidate order, found by the save
+  format's perturbation tests: a batch of objects moved in slot order, so cards
+  put into a graveyard together (a wrath, combat deaths, a mill) lay in an order
+  the seed chose, and Abhorrent Oculus's exile cost, which counts from the
+  bottom of the graveyard, offered other cards; mana sources of one class (an
+  Island and Sink into Stupor's land face) sorted by the card in their lowest
+  slot, so the payment tapped other lands; and an answer named a permanent too
+  loosely to tell a token copy from its card, a summoning-sick creature from
+  another, or an attacker of a planeswalker from one of the player, nor which of
+  a permanent's two triggers it ordered. Prevention: no engine ordering may come
+  from a `Bitboard`'s iteration where the order outlives the call; key it on
+  something the rules see (battlefield order, library order, name). Run the
+  perturbation tests over freshly frozen saves after any change to how answers
+  are described.

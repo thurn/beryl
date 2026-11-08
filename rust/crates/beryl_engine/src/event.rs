@@ -418,6 +418,58 @@ pub(crate) fn move_one<L: Layout>(
     )
 }
 
+/// `objects` in an order that depends on the game alone: permanents in the order they entered
+/// the battlefield, then each library's cards top first, then the rest by name. Slots are no
+/// order at all: the deal and shuffles put cards in them at random (architecture §14). A
+/// batch moves in this order, so cards put into a graveyard together lie in it in an order no
+/// seed decides, which a cost that counts from the bottom of a graveyard sees
+/// ([CR 404.2](https://yawgatog.com/resources/magic-rules/#R4042)): "Each graveyard is kept in
+/// a single face-up pile. A player can examine the cards in any graveyard at any time but
+/// normally can't change their order."
+fn in_order<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    objects: Bitboard<L::Slot>,
+) -> Result<L::Queue<L::Slot, 128>, Full> {
+    let mut ordered: L::Queue<L::Slot, 128> = Default::default();
+    if objects.count() < 2 {
+        for slot in objects.iter() {
+            ordered.push(slot)?;
+        }
+        return Ok(ordered);
+    }
+    let mut rest = objects;
+    let zone = |z: Zone| s.zone(Seat::P0, z) | s.zone(Seat::P1, z);
+    if !(rest & zone(Zone::Battlefield)).is_empty() {
+        for &slot in s.battlefield() {
+            if rest.contains(slot) {
+                rest.remove(slot);
+                ordered.push(slot)?;
+            }
+        }
+    }
+    for player in Seat::BOTH {
+        if (rest & s.zone(player, Zone::Library)).is_empty() {
+            continue;
+        }
+        for &slot in s.library(player).iter().rev() {
+            if rest.contains(slot) {
+                rest.remove(slot);
+                ordered.push(slot)?;
+            }
+        }
+    }
+    let first = ordered.as_slice().len();
+    for slot in rest.iter() {
+        ordered.push(slot)?;
+    }
+    // Copies of a card alike but for their slots are interchangeable wherever they go.
+    if ordered.as_slice().len() - first > 1 {
+        ordered.as_mut_slice()[first..].sort_by_key(|&slot| t.def(s.object(slot).card).name);
+    }
+    Ok(ordered)
+}
+
 /// Moves a set of objects to one zone simultaneously, through the whole pipeline (§8.2).
 ///
 /// 1. Replacement effects decide each object's destination and how a permanent enters.
@@ -463,7 +515,7 @@ pub(crate) fn move_batch_to<L: Layout>(
     layers::refresh(s, t, sink);
     let mut moves: L::Queue<(L::Slot, Zone, Zone, Entry<L>), 128> = Default::default();
     let mut returning = Bitboard::EMPTY;
-    for slot in objects.iter() {
+    for &slot in in_order(s, t, objects)?.as_slice() {
         let o = *s.object(slot);
         // CR 111.8: "A token that has left the battlefield can't move to another zone or
         // come back onto the battlefield. If such a token would change zones, it remains in

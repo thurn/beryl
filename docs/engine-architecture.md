@@ -892,10 +892,14 @@ zone.
   ties. Since format 5 an object also names its owner where another player
   controls it, and whether the other player knows a card in a hand or library; a
   version 4 answer's objects are marked as named before that, and match either
-  way. A later build replays it though candidates moved, and goes on where
-  record and game part only if the rules leave nothing to choose: one candidate,
-  a priority passed unasked, or a pass no priority asks. Anything else stops the
-  replay at the turn and step.
+  way. Since format 6 a permanent also names whether it is a token or summoning
+  sick, its counters, damage and place in combat, a trigger which of its
+  source's triggered abilities it is, and an answer among alike permanents its
+  place in battlefield (or graveyard) order, which a later answer may depend on;
+  version 5 answers match either way. A later build replays it though candidates
+  moved, and goes on where record and game part only if the rules leave nothing
+  to choose: one candidate, a priority passed unasked, or a pass no priority
+  asks. Anything else stops the replay at the turn and step.
 - **A save records the board as each turn begins** (save format 4,
   `beryl_session::checkpoint`), taken as the upkeep begins: each zone's cards by
   name (the library as a count and the cards someone knows in it), life, tapped,
@@ -929,6 +933,17 @@ zone.
   weekly or so, plays seeded games of the cheap agents and freezes a small set
   covering every implemented cube card played, cast or activated and every kind
   of decision, printing what it reached; `--replay FILE` freezes one game.
+- **Perturbations prove a save depends on none of the engine's internals**
+  (`beryl_session::perturb`, test-only hooks on one thread that reach only
+  replay and game setup): the seed derived another way, each decision's
+  candidates reversed or shuffled before matching, and each deck dealt into its
+  slots last first (`State::reverse_deck_slots`). The corpus replays at all
+  three levels under each, from the format that made it so (3 for the seed, 6
+  for the rest: older answers name too little to tell some objects apart). Each
+  hook breaks a save of indices (version 1), so none passes by doing nothing.
+  Batches of objects move in battlefield, then library, then name order, not
+  slot order, so cards put into a graveyard together lie in an order no seed
+  decides.
 - `State` implements `Hash` over its fields, computed on demand for tests,
   divergence checks and the first transposition tables. The mutation chokepoints
   are placed so an incremental Zobrist hash can be added without touching card

@@ -204,6 +204,8 @@ struct Class<L: Layout = Small> {
     /// Whether tapping one for mana also sacrifices it: a plan's taps of this class are the
     /// permanents it consumes (§10).
     consumed: bool,
+    /// The least card among the members, which orders classes of one rank.
+    least: CardIx,
 }
 
 impl<L: Layout> Class<L> {
@@ -434,14 +436,11 @@ impl<L: Layout> Sources<L> {
                     rank: CONSUMED_RANK,
                     members: Bitboard::single(slot),
                     consumed: true,
+                    least: s.card(slot),
                 };
                 // Only permanents of one card are interchangeable when spending one: the
                 // payment sacrifices whichever comes first.
-                let same = |c: &Class<L>| {
-                    c.consumed
-                        && c.has_room()
-                        && c.members.iter().next().map(|m| s.card(m)) == Some(s.card(slot))
-                };
+                let same = |c: &Class<L>| c.consumed && c.has_room() && c.least == s.card(slot);
                 if let Some(i) = classes.iter().position(same) {
                     classes.as_mut_slice()[i].members.insert(slot);
                 } else {
@@ -460,7 +459,9 @@ impl<L: Layout> Sources<L> {
                     && c.rank == rank
                     && c.has_room()
             }) {
-                classes.as_mut_slice()[i].members.insert(slot);
+                let c = &mut classes.as_mut_slice()[i];
+                c.members.insert(slot);
+                c.least = c.least.min(s.card(slot));
             } else {
                 let mut members = Bitboard::EMPTY;
                 members.insert(slot);
@@ -470,14 +471,14 @@ impl<L: Layout> Sources<L> {
                     rank,
                     members,
                     consumed: false,
+                    least: s.card(slot),
                 })?;
             }
         }
         // Classes of one rank by card, never by slot, which the game's randomness chose as it
-        // dealt the cards to their slots: any member of a class of one card names it.
-        classes
-            .as_mut_slice()
-            .sort_by_key(|c| (c.rank, c.members.iter().next().map(|m| s.card(m))));
+        // dealt the cards to their slots: by the least card of each, as a class may hold
+        // several, such as Islands and a modal double-faced card's land face.
+        classes.as_mut_slice().sort_by_key(|c| (c.rank, c.least));
         Ok(Sources { classes })
     }
 

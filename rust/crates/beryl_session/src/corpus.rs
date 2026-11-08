@@ -200,14 +200,19 @@ pub fn check_listed(
 }
 
 /// The save at `path`, gzipped JSON, upgraded to the format this build writes
-/// ([`crate::migrate`]).
-pub fn load(cards: &'static CardTable, path: &Path) -> Result<ReplayFile, String> {
+/// ([`crate::migrate`]), and the format it was frozen in.
+pub fn load(cards: &'static CardTable, path: &Path) -> Result<(ReplayFile, u8), String> {
     let failed = |e: &dyn fmt::Display| format!("{}: {e}", path.display());
     let gz = std::fs::File::open(path).map_err(|e| failed(&e))?;
     let json: serde_json::Value =
         serde_json::from_reader(GzDecoder::new(std::io::BufReader::new(gz)))
             .map_err(|e| failed(&e))?;
-    migrate::to_current(json, cards).map_err(|e| failed(&e))
+    let frozen = json
+        .get("formatVersion")
+        .and_then(serde_json::Value::as_u64)
+        .map_or(1, |v| u8::try_from(v).unwrap_or(u8::MAX));
+    let file = migrate::to_current(json, cards).map_err(|e| failed(&e))?;
+    Ok((file, frozen))
 }
 
 /// The endings of the saves in the corpus at `dir`, by file name.

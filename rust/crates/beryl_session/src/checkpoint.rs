@@ -16,7 +16,7 @@
 use beryl_engine::card::{FaceIx, Types};
 use beryl_engine::layout::Queue;
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::state::{CounterKind, ObjectFlags};
+use beryl_engine::state::{CounterKind, Object, ObjectFlags};
 use beryl_engine::{CardIx, GameTable, Layout, Seat, Small, State, Zone};
 use serde::{Deserialize, Serialize};
 
@@ -172,6 +172,19 @@ impl Face {
 pub struct Counter {
     pub kind: CounterName,
     pub count: u8,
+}
+
+impl Counter {
+    /// The counters on `o`, a kind at a time.
+    pub fn on<L: Layout>(o: &Object<L>) -> Vec<Counter> {
+        CounterName::ALL
+            .into_iter()
+            .filter_map(|kind| {
+                let count = o.counters.get(kind.kind());
+                (count > 0).then_some(Counter { kind, count })
+            })
+            .collect()
+    }
 }
 
 /// A kind of counter, by its name in the rules
@@ -522,13 +535,7 @@ fn permanent<L: Layout>(
         one_one: o.flags.has(ObjectFlags::ONE_ONE),
         tapped: o.flags.has(ObjectFlags::TAPPED),
         sick: o.flags.has(ObjectFlags::SUMMONING_SICK),
-        counters: CounterName::ALL
-            .into_iter()
-            .filter_map(|kind| {
-                let count = o.counters.get(kind.kind());
-                (count > 0).then_some(Counter { kind, count })
-            })
-            .collect(),
+        counters: Counter::on(o),
         damage: o.damage,
         attached_to: o.attached_to.and_then(place),
         impending: o.flags.has(ObjectFlags::IMPENDING),

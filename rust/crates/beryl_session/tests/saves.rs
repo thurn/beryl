@@ -6,8 +6,9 @@
 use beryl_cards::CARDS;
 use beryl_cards::decks::fuzz_deck;
 use beryl_session::migrate;
+use beryl_session::perturb::{self, Order, Perturbation};
 use beryl_session::replay::{Entry, FORMAT_VERSION};
-use beryl_session::save::{self, Act, Chosen, Described, Kind, Obj};
+use beryl_session::save::{Act, Chosen, Described, Kind, Obj};
 use beryl_session::{
     CandidateIndex, Game, PlayerView, ReplayFile, Seat, SessionError, SessionId, StartGame, Status,
     StopsSetting,
@@ -98,10 +99,14 @@ fn a_save_describes_each_answer_by_what_it_does() {
 #[test]
 fn a_save_replays_the_same_with_its_candidates_listed_the_other_way() {
     let (game, view, _) = played(3, 30);
-    save::reverse_candidates(true);
-    let reversed = Game::from_replay(&CARDS, game.replay(), SESSION);
-    save::reverse_candidates(false);
-    let (again, replayed) = reversed.unwrap();
+    let reversed = Perturbation {
+        order: Order::Reversed,
+        ..Perturbation::default()
+    };
+    let (again, replayed) = perturb::with(reversed, || {
+        Game::from_replay(&CARDS, game.replay(), SESSION)
+    })
+    .unwrap();
     // The same answers, though identical objects may have traded places.
     let acts = |file: &ReplayFile| -> Vec<Option<Described>> {
         file.log
@@ -188,7 +193,7 @@ fn a_loaded_version_1_save_is_in_the_format_of_today() {
     assert_eq!(loaded.format_version, FORMAT_VERSION);
     assert_eq!(loaded.chooser, game.replay().chooser);
     // Re-recorded on this build, with the objects answers name marked as named before
-    // version 5, as every version 4 file's are.
+    // versions 5 and 6, as every version 4 file's are.
     assert_eq!(
         loaded.log,
         before_v5(&only(game.replay(), |e| !matches!(e, Entry::Checkpoint(_))))
@@ -196,14 +201,15 @@ fn a_loaded_version_1_save_is_in_the_format_of_today() {
     assert_eq!(replayed(&loaded).unwrap(), view);
 }
 
-/// `log` with each object its answers name marked as named before version 5
-/// ([`Obj::before_v5`]).
+/// `log` with each object its answers name marked as named before versions 5 and 6
+/// ([`Obj::before_v5`], [`Obj::before_v6`]), as a version 4 file's are once loaded.
 fn before_v5(log: &[Entry]) -> Vec<Entry> {
     fn mark(value: &mut serde_json::Value) {
         match value {
             serde_json::Value::Object(fields) => {
                 if fields.contains_key("zone") && fields.contains_key("controller") {
                     fields.insert("beforeV5".to_owned(), true.into());
+                    fields.insert("beforeV6".to_owned(), true.into());
                 }
                 fields.values_mut().for_each(mark);
             }
@@ -300,6 +306,7 @@ fn a_recorded_pass_where_no_priority_is_open_is_skipped() {
             step,
             kind: Kind::Priority,
             act: Act::Pass,
+            nth: None,
         }),
     };
     file.log.insert(asked.at, Entry::Choice(pass));

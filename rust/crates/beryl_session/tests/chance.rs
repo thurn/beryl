@@ -55,13 +55,13 @@ fn played(seed: u64, decks: [&Decklist; 2]) -> (Game, PlayerView) {
 /// The log of a save as a later replay must reproduce it: each answer by what it does (its
 /// index depends on where the game's cards happen to lie), each other entry but checkpoints
 /// whole ([`same_boards`] compares those).
-fn meaning(file: &ReplayFile) -> Vec<Result<Option<Described>, Entry>> {
+fn meaning(file: &ReplayFile) -> Vec<Result<Option<Described>, Box<Entry>>> {
     file.log
         .iter()
         .filter(|e| !matches!(e, Entry::Checkpoint(_)))
         .map(|e| match e {
             Entry::Choice(c) | Entry::Auto(c) => Ok(c.what.clone()),
-            e => Err(e.clone()),
+            e => Err(Box::new(e.clone())),
         })
         .collect()
 }
