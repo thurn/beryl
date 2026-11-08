@@ -19,6 +19,11 @@ interface Touched {
  * `keys` honors once the card the engine offered for it moves. */
 export interface StandIns {
   keys: ReadonlyMap<number, number>;
+  /** Where in your hand's order (by slot) a card left in hand stands, where not its own slot:
+   * the twin left in hand takes the place of the one the engine moved, so that the element
+   * showing it keeps its place in the fan and nothing in the hand shifts. It lasts while the
+   * card stays in hand. */
+  order: ReadonlyMap<number, number>;
   /** The player handled the hand card in `slot`, which offers `acts`. */
   touch(slot: number, acts: readonly Act[] | undefined): void;
 }
@@ -26,9 +31,10 @@ export interface StandIns {
 export function useStandIns(view: PlayerView): StandIns {
   const state = useRef<{
     keys: Map<number, number>;
+    order: Map<number, number>;
     pending?: Touched;
     last?: PlayerView;
-  }>({ keys: new Map() });
+  }>({ keys: new Map(), order: new Map() });
   const s = state.current;
   if (s.last !== view) {
     const before = s.last;
@@ -46,10 +52,18 @@ export function useStandIns(view: PlayerView): StandIns {
       ];
       s.keys.set(touched, b);
       s.keys.set(offered, a);
+      s.order = new Map(s.order).set(touched, s.order.get(offered) ?? offered);
+    }
+    const inHand = new Set(
+      view.objects.filter((o) => o.zone === "hand").map((o) => o.slot),
+    );
+    if ([...s.order.keys()].some((slot) => !inHand.has(slot))) {
+      s.order = new Map([...s.order].filter(([slot]) => inHand.has(slot)));
     }
   }
   return {
     keys: s.keys,
+    order: s.order,
     touch(slot, acts) {
       const object = view.objects.find((o) => o.slot === slot);
       if (object?.zone !== "hand") return;

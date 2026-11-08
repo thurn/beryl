@@ -105,6 +105,13 @@ function hops(from: ZoneName, to: ZoneName, owner: Side): boolean {
   return (to === "graveyard" || to === "exile") && hiddenTo(from, owner);
 }
 
+/** Whether a card moving from `from` to `to` goes between two face-up piles: a graveyard and
+ * exile, either way. */
+function crosses(from: ZoneName, to: ZoneName): boolean {
+  const open: ZoneName[] = ["graveyard", "exile"];
+  return from !== to && open.includes(from) && open.includes(to);
+}
+
 /** The opponent's spell or ability on the stack, held long enough to read; a trigger a little
  * less; the player's own, which they chose, an action's beat. */
 function stackHold(item: StackItem): number {
@@ -153,6 +160,23 @@ class Walk {
         this.cut(HOLD.showcase, {
           shown: new Set(group.map((g) => g.slot)),
         });
+        continue;
+      }
+      if (e.kind === "zoneChange" && crosses(e.from, e.to)) {
+        // A card going from one face-up pile to another travels as it is, in a beat of its
+        // own with the rest of its move, so that what it leads to (a token made for it)
+        // follows rather than coming with it.
+        this.cut();
+        this.apply(e);
+        this.pending.push(e);
+        while (i + 1 < events.length) {
+          const next = events[i + 1]!;
+          if (next.kind !== "zoneChange" || !crosses(next.from, next.to)) break;
+          this.apply(next);
+          this.pending.push(next);
+          i++;
+        }
+        this.cut(HOLD.landing);
         continue;
       }
       if (e.kind === "zoneChange" && this.struck(e)) {

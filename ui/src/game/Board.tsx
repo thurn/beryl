@@ -372,16 +372,16 @@ export function Board({
       ? "raised"
       : "held";
   const resting = useMemo(
-    () => layout(shown, hold, false, spotlight, standIns.keys),
-    [shown, hold, spotlight, standIns.keys],
+    () => layout(shown, hold, false, spotlight, standIns.order),
+    [shown, hold, spotlight, standIns.order],
   );
   const crowdsLog = overLog(resting);
   const laid = useMemo(
     () =>
       crowdsLog && logOpen
-        ? layout(shown, hold, true, spotlight, standIns.keys)
+        ? layout(shown, hold, true, spotlight, standIns.order)
         : resting,
-    [resting, crowdsLog, logOpen, shown, hold, spotlight, standIns.keys],
+    [resting, crowdsLog, logOpen, shown, hold, spotlight, standIns.order],
   );
   // The table as the view before this one laid it: where a source sacrificed for its mana was.
   const tables = useRef<{ view?: PlayerView; laid?: Layout; before?: Layout }>(

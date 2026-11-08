@@ -1375,15 +1375,16 @@ function onPile(look: PileLook) {
   };
 }
 
-/** Your hand in the order of the elements that show it (standIns.ts): the twin left in hand
- * when the engine moved the one you did not touch takes that one's place in the fan, so
- * nothing in the hand shifts. The view orders the hand by slot, as the keys are. */
-function byElement(
+/** Your hand in its order (standIns.ts' `order`): by slot, as the view gives it, but for the
+ * twin left in hand when the engine moved the one you did not touch, which takes that one's
+ * place in the fan, so nothing in the hand shifts. */
+function inOrder(
   hand: ObjectView[],
-  keys: ReadonlyMap<number, number> | undefined,
+  order: ReadonlyMap<number, number> | undefined,
 ): ObjectView[] {
-  if (!keys?.size) return hand;
-  const key = (o: ObjectView) => keys.get(o.slot) ?? o.slot;
+  if (!order?.size) return hand;
+  // Ties go to the card standing in, the one shown where the other was.
+  const key = (o: ObjectView) => order.get(o.slot) ?? o.slot + 0.5;
   return [...hand].sort((a, b) => key(a) - key(b));
 }
 
@@ -1396,7 +1397,7 @@ export function layout(
   hold: HandHold = "held",
   logOpen = false,
   spotlight: Spotlight = {},
-  keys?: ReadonlyMap<number, number>,
+  order?: ReadonlyMap<number, number>,
 ): Layout {
   const out: Placement[] = [];
   const objects = view.objects;
@@ -1461,7 +1462,7 @@ export function layout(
   out.push(
     ...handLifts(
       handPlacements(
-        [...byElement(owned("you", "hand"), keys), ...elsewhere],
+        [...inOrder(owned("you", "hand"), order), ...elsewhere],
         hold,
       ),
       yours.filter(backRow).map(footprint),

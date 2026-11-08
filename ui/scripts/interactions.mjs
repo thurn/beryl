@@ -2384,6 +2384,15 @@ async function fan(page) {
     );
 }
 
+/** The places of `rest`, a fan by slot, with the card in `slot` moved to where a card in slot
+ * `as` would stand in its order. */
+function reordered(rest, slot, as) {
+    const places = Object.values(rest).sort((a, b) => a[0] - b[0]);
+    const key = (s) => (Number(s) === slot ? as : Number(s) + 0.5);
+    const order = Object.keys(rest).sort((a, b) => key(a) - key(b));
+    return Object.fromEntries(order.map((s, i) => [s, places[i]]));
+}
+
 /** Asserts that every hand card in `seen` is at its place in `rest`, within 2 pixels. */
 function inFan(seen, rest, when) {
     assert.deepEqual(Object.keys(seen).sort(), Object.keys(rest).sort(), when);
@@ -2427,7 +2436,15 @@ await check(
             await page.waitForSelector('[data-zone="hand"]');
             return fan(page);
         };
-        inFan(played, await rest(pairViews.length + 1), "the land played");
+        // The twin left in hand stands where the card played stood, the element showing it
+        // unmoved: the hand's places are those of the hand untouched, but for the twin taking
+        // the played card's place in its order.
+        inFan(
+            played,
+            reordered(await rest(pairViews.length + 1), twin.slot, pairLand),
+            "the land played",
+        );
+        // Once it has left the hand and come back, it takes its own place again.
         inFan(drawn, await rest(pairViews.length + 3), "the twin drawn again");
     },
     {
