@@ -10,6 +10,7 @@ import {
   type Intent,
   type Interactions,
 } from "./decisions";
+import { untapChoice } from "./untapChoice";
 
 /** A choice of cards made on the table rather than in an overlay, with the table in view: the
  * cards that can be picked, glowing; how many may be; those picked to begin with; and, for
@@ -36,7 +37,7 @@ export function tablePick(
   const decision = view.status.decision;
   const objects = new Map(view.objects.map((o) => [o.slot, o]));
   const { ask } = decision;
-  if (ask.kind === "untap") return untapPick(can, objects, ask.max);
+  if (ask.kind === "untap") return untapPick(view, can, objects, ask.max);
   if (ask.kind === "discardBasicLand" && decision.kind === "yesNo") {
     return basicLandOrCards(view, objects, ask.count);
   }
@@ -124,17 +125,16 @@ function handPick(
 
 /** "Untap up to N lands", whoever controls them: the engine offers only tapped ones
  * (CR 701.26b), so each of the player's own is worth untapping, and as many as may be are
- * picked to begin with; an opponent's, whose mana would let them answer, only by a click. */
+ * picked to begin with, those whose mana their hand wants most ([`untapChoice`]); an
+ * opponent's, whose mana would let them answer, only by a click. */
 function untapPick(
+  view: PlayerView,
   can: Interactions,
   objects: Map<number, ObjectView>,
   max: number,
 ): TablePick {
   const eligible = new Set(can.bySlot.keys());
-  const initial = [...eligible]
-    .filter((slot) => objects.get(slot)?.controller === "you")
-    .sort((a, b) => a - b)
-    .slice(0, max);
+  const initial = untapChoice(view, eligible, max, faceEntry);
   return {
     eligible,
     max,

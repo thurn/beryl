@@ -21,6 +21,7 @@ import {
     twins,
 } from "../src/game/decisions.ts";
 import { logLines } from "../src/game/log.ts";
+import { untapChoice } from "../src/game/untapChoice.ts";
 import { cutText, launch, workers } from "./capture.mjs";
 
 const [base, fixtures, ...filters] = process.argv.slice(2);
@@ -5604,6 +5605,62 @@ await check(
     },
     { fixture: "choice-loot", at: lootAt + 1, ready: slotOf(jaceVp) },
 );
+
+// Teferi, Hero of Dominaria's end-step untap picks, of the human's tapped lands, those whose
+// mana casts what they hold for the opponent's turn: a Tundra over a Plains for Reprieve, and
+// blue sources for Counterspell.
+{
+    const title = "an untap picks the lands the hand's instants want";
+    if (wanted(title)) {
+        ran += 1;
+        try {
+            const data = JSON.parse(
+                await readFile(
+                    new URL("../../data/cards.json", import.meta.url),
+                ),
+            );
+            const faces = new Map();
+            for (const c of [...data.tokens, ...data.cards]) {
+                faces.set(c.name, c.faces[0]);
+                for (const f of c.faces) faces.set(f.name, f);
+            }
+            const faceOf = (name) => faces.get(name);
+            const object = (slot, name, zone, tapped = true) => ({
+                slot,
+                name,
+                zone,
+                tapped,
+                owner: "you",
+                controller: "you",
+                types: zone === "battlefield" ? ["land"] : ["instant"],
+            });
+            const pick = (spell) => {
+                const view = {
+                    turn: { active: "opponent", step: "end" },
+                    objects: [
+                        object(1, "Plains", "battlefield"),
+                        object(2, "Island", "battlefield"),
+                        object(3, "Island", "battlefield"),
+                        object(4, "Tundra", "battlefield"),
+                        object(5, "Plains", "battlefield", false),
+                        object(6, spell, "hand"),
+                    ],
+                };
+                return untapChoice(view, [1, 2, 3, 4], 2, faceOf).sort();
+            };
+            assert.ok(pick("Reprieve").includes(4), "Tundra for Reprieve");
+            assert.deepEqual(
+                pick("Counterspell"),
+                [2, 4],
+                "blue for Counterspell",
+            );
+            console.log(`ok: ${title}`);
+        } catch (e) {
+            failed = true;
+            console.error(`FAILED: ${title}\n${e.stack ?? e}`);
+        }
+    }
+}
 
 // Time Spiral's untap (`choice-untap`) is picked on the board: the tapped lands it may untap
 // glow, wherever they sit and whoever controls them, and no others. The engine offers only
