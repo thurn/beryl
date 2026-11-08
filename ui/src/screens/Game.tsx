@@ -367,7 +367,12 @@ function Playing({ playback }: { playback: Playback }) {
   // the overlay gives way to the table so the player sees the game play on.
   useEffect(() => {
     if (status.kind === "thinking" || status.kind === "playing") {
-      if (planned.current.length === 0) setHeld(undefined);
+      // Optional picks the engine did not ask for (a search's done, once it took as many as
+      // it may) are over once the game plays on.
+      if (planned.current.every((i) => i.optional)) {
+        planned.current = [];
+        setHeld(undefined);
+      }
       return;
     }
     const { intent, index, rest } = decision

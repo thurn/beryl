@@ -109,24 +109,24 @@ export function choiceOf(view: PlayerView): Choice | undefined {
       return search(at, ask);
     case "maySearch":
       return maySearch(at);
-    // Untaps and a discard of a basic land or cards (picked on the board), crews, waterbends
-    // and payments (the board lights what pays) are decided on the board.
+    // Untaps and choices of cards from the hand (discards, a card exiled for a cost: the hand
+    // rises to pick them, game/tablePick.ts), crews, waterbends and payments (the board
+    // lights what pays) are decided on the board.
     case "untap":
     case "discardBasicLand":
+    case "cleanup":
     case "crew":
     case "waterbend":
     case "unlessPays":
       return undefined;
     case "payLife":
       return payLife(at, ask);
-    case "cleanup":
-      return discard(at, ask.count);
     case "manifestDread":
       return manifestDread(at);
     case "exileCards":
       return ask.zone === "graveyard"
         ? graveyardExile(at, ask.count)
-        : exileCost(at);
+        : undefined;
     default:
       return assertNever(ask);
   }
@@ -143,8 +143,6 @@ function plain(at: Situation): Choice | undefined {
       return small(at) ? undefined : chooseObject(at);
     case "yesNo":
       return yesNo(at);
-    case "discard":
-      return discard(at);
     case "legendRule":
       return small(at) ? undefined : legendRule(at);
     case "castOffer":
@@ -519,12 +517,21 @@ function explore(at: Situation): Ask {
 }
 
 /** A library search ([CR 701.23a](https://yawgatog.com/resources/magic-rules/#R70123a)) for
- * up to `max` cards, which the engine asks for one at a time, then done. The source card at
- * the right says what the search finds. Finding nothing is the second button
+ * up to `max` cards, which the engine asks for one at a time, then done, unless it has as many
+ * as it may take or none is left to take. The source card at the right says what the search
+ * finds. Each card of the library the search can find is shown, interchangeable ones too (the
+ * engine offers one of them, §7.2), so that two of one name can be picked; picks are counted
+ * on the confirm button. Finding nothing is the second button
  * ([CR 701.23b](https://yawgatog.com/resources/magic-rules/#R70123b): "that player isn't
  * required to find some or all of those cards"); a lone card found is picked to begin with. */
 function search(at: Situation, { max }: AskOf<"search">): Pick {
-  const cards = at.offered;
+  const copies = at.offeredAmong(at.library("you"));
+  const cards = (copies.length >= at.offered.length ? copies : at.offered)
+    .slice()
+    .sort(
+      (a, b) => (at.name(a) ?? "").localeCompare(at.name(b) ?? "") || a - b,
+    );
+  const most = Math.min(max, cards.length);
   return {
     kind: "pick",
     key: at.key,
@@ -533,13 +540,14 @@ function search(at: Situation, { max }: AskOf<"search">): Pick {
     cards,
     pickable: cards,
     min: 1,
-    max,
-    confirm: () => "Done",
+    max: most,
+    confirm: (n) => (most > 1 ? `Find ${n}/${most}` : "Find"),
     decline: "Find Nothing",
     picked: cards.length === 1 ? cards : [],
     plan: (picked) => [
       ...picked.map((slot) => at.pickCard("chooseUpTo", slot)),
-      done("chooseUpTo"),
+      // Not asked once the search has as many as it may take, or nothing is left to find.
+      { ...done("chooseUpTo"), optional: true },
     ],
   };
 }
@@ -573,29 +581,6 @@ function chooseObject(at: Situation): Pick {
     confirm: () => "Choose",
     plan: ([slot]) =>
       slot === undefined ? [] : [at.pickCard("chooseObject", slot)],
-  };
-}
-
-/** A discard of the player's choice ([CR 701.9b](https://yawgatog.com/resources/magic-rules/#R7019b)),
- * one card at a time; in the cleanup step, `cleanup` of them down to the maximum hand size
- * ([CR 514.1](https://yawgatog.com/resources/magic-rules/#R5141)), the hand size it leaves
- * said and the count picked on the button. */
-function discard(at: Situation, cleanup?: number): Pick {
-  const hand = at.hand("you");
-  const pickable = at.offeredAmong(hand);
-  const count = Math.max(1, cleanup ?? 1);
-  return {
-    kind: "pick",
-    key: at.key,
-    title: "Discard",
-    source: cleanup === undefined ? at.source : undefined,
-    cards: hand,
-    pickable,
-    min: count,
-    max: count,
-    confirm: (n) =>
-      cleanup === undefined ? "Discard" : `Discard ${n}/${count}`,
-    plan: (picked) => picked.map((slot) => at.pickCard("discard", slot)),
   };
 }
 
@@ -661,25 +646,6 @@ function graveyardExile(at: Situation, count: number): Pick {
       }
       return picks;
     },
-  };
-}
-
-/** A card from the hand to exile for a cost, as evoke's "Exile a blue card from your hand"
- * ([CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h)). */
-function exileCost(at: Situation): Pick {
-  const hand = at.hand("you");
-  return {
-    kind: "pick",
-    key: at.key,
-    title: "Exile",
-    source: at.source,
-    cards: hand,
-    pickable: at.offeredAmong(hand),
-    min: 1,
-    max: 1,
-    confirm: () => "Exile",
-    plan: ([slot]) =>
-      slot === undefined ? [] : [at.pickCard("exileCost", slot)],
   };
 }
 

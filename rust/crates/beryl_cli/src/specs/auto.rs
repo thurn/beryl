@@ -64,6 +64,10 @@ enum Kind {
     /// turn with the stack empty (they pass, or the game goes on to their next turn): kept
     /// unless an earlier moment ended the same.
     FollowOn,
+    /// The board just before a scenario's cast of a card with more than one way to play it
+    /// (an alternative or additional cost, cycling), the human live with more than one of them
+    /// offered: the first one kept.
+    Ways,
 }
 
 struct Candidate {
@@ -227,6 +231,10 @@ fn select(
                     })
             }),
             Kind::FollowOn => !earlier(&ended_alike),
+            Kind::Ways => {
+                r[0].contains(&format!("ways to play {}", def.name))
+                    && !earlier(&|cj, _| cj.kind == Kind::Ways)
+            }
         };
     }
     kept
@@ -826,6 +834,20 @@ fn from_scenario(def: &'static CardDef, scenario: &Scenario, out: &mut Vec<Candi
     for (i, action) in actions.iter().enumerate() {
         let setup = &actions[..i];
         let mine = label_of(def, action);
+        if matches!(*action,
+            Action::Cast { player: P0, card, .. }
+            | Action::PlayLand { player: P0, card }
+            | Action::Activate { player: P0, card, .. } if card == def.name)
+            && ways_to_play(def)
+        {
+            out.push(at(
+                format!("{short}-ways-{i}"),
+                "Ways to play".to_owned(),
+                setup,
+                Vec::new(),
+                Kind::Ways,
+            ));
+        }
         if let Some(what) = mine.clone() {
             out.push(at(
                 format!("{short}-{i}"),
@@ -879,6 +901,22 @@ fn from_scenario(def: &'static CardDef, scenario: &Scenario, out: &mut Vec<Candi
             }
         }
     }
+}
+
+/// Whether a card in hand offers more than one way to play it: an alternative or additional
+/// cost ([CR 118.9](https://yawgatog.com/resources/magic-rules/#R1189): "Some spells have
+/// alternative costs ... An alternative cost is a cost listed in a spell's text, or applied to
+/// it from another effect, that its controller may pay rather than paying the spell's mana
+/// cost"), an ability activated from the hand by discarding it (cycling, CR 702.29a), or a
+/// second castable face.
+fn ways_to_play(def: &'static CardDef) -> bool {
+    let front = def.front();
+    !front.casting.is_empty()
+        || front
+            .abilities
+            .iter()
+            .any(|a| a.kind == AbilityKind::Activated && a.cost.discard_self)
+        || def.faces.len() > 1 && !def.faces.iter().skip(1).all(|f| f.transformed)
 }
 
 /// A scenario's heading: its name, less the card's name it starts with ("Exiles its own
@@ -1031,8 +1069,10 @@ pub fn snapshot(view: &PlayerView, def: &'static CardDef) -> Vec<String> {
     }
     places(view, def, &mut out);
     let castable = format!("castable {}", def.name);
+    let ways = format!("ways to play {}", def.name);
     for flag in [
         castable.as_str(),
+        ways.as_str(),
         "attacking",
         "blocking",
         "castable from exile",

@@ -8,6 +8,7 @@ import { Button } from "../components/Controls";
 import { ManaCost, RulesText } from "../components/Mana";
 import {
   castName,
+  firstChoice,
   paymentOf,
   plansOf,
   xValues,
@@ -127,7 +128,7 @@ export function CastStep({
 
 /** A cast's button: "Cast" with the card's cost, or the keyword that names it ("Evoke",
  * "Overload {2}{B}{B}", "Kicker {1}"), its cost where the keyword has none. */
-function CastLabel({ label, cost }: { label: string; cost?: string }) {
+export function CastLabel({ label, cost }: { label: string; cost?: string }) {
   const word = label.split(/[,—]/)[0]!.trim();
   return (
     <>
@@ -139,5 +140,25 @@ function CastLabel({ label, cost }: { label: string; cost?: string }) {
         </>
       )}
     </>
+  );
+}
+
+/** A cast's caption in the mode chooser: as its button in the cast step says it, at its least
+ * X and default payment. */
+export function CastCaption({ act, name }: { act: Act; name: string }) {
+  const face =
+    act.option.kind === "cast"
+      ? cardEntry(name)?.faces[act.option.face]
+      : undefined;
+  const label = castName(act, name);
+  return (
+    <CastLabel
+      label={label}
+      cost={
+        paymentOf(firstChoice(act))?.cost ||
+        (label === "Cast" ? face?.mana_cost : undefined) ||
+        undefined
+      }
+    />
   );
 }

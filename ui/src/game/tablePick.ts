@@ -1,8 +1,8 @@
 // Choices of cards made on the table rather than in an overlay, with the table in view: an
-// untap's lands, and a discard of a basic land or cards from the hand. Pure functions of the
-// view.
+// untap's lands, and a choice of cards from the hand (a discard, a card exiled to pay a cost),
+// for which the hand rises whole into view. Pure functions of the view.
 import { faceEntry } from "../cards";
-import type { ObjectView, PlayerView } from "../generated/protocol";
+import type { Kind, ObjectView, PlayerView } from "../generated/protocol";
 import {
   slotOf,
   twins,
@@ -18,6 +18,8 @@ import {
 export interface TablePick {
   eligible: Set<number>;
   max: number;
+  /** The cards are the hand's: it rises whole into view to pick them. */
+  fromHand?: boolean;
   initial: number[];
   ready(picked: ReadonlySet<number>): boolean;
   label(picked: ReadonlySet<number>): string;
@@ -38,7 +40,86 @@ export function tablePick(
   if (ask.kind === "discardBasicLand" && decision.kind === "yesNo") {
     return basicLandOrCards(view, objects, ask.count);
   }
+  if (ask.kind === "plain" && decision.kind === "discard") {
+    return handPick(view, objects, "discard", 1, "Discard");
+  }
+  if (ask.kind === "cleanup" && decision.kind === "discard") {
+    // Down to the hand size, its picks counted on the button.
+    return handPick(
+      view,
+      objects,
+      "discard",
+      Math.max(1, ask.count),
+      "Discard",
+      true,
+    );
+  }
+  if (ask.kind === "exileCards" && ask.zone === "hand") {
+    return handPick(view, objects, "exileCost", 1, "Exile");
+  }
   return undefined;
+}
+
+/** The player's hand. */
+const handOf = (view: PlayerView) =>
+  view.objects
+    .filter((o) => o.zone === "hand" && o.owner === "you")
+    .map((o) => o.slot);
+
+/** Picks the card in `slot`, or one the engine offers in its place: an interchangeable one
+ * (`twins`), of which it offers one (architecture §7.2). */
+function pickOf(
+  kind: Kind,
+  slot: number,
+  objects: Map<number, ObjectView>,
+): Intent {
+  return {
+    kind,
+    wants: (o) => o.kind === "object" && o.slot === slot,
+    alike: (o) => {
+      const [a, b] = [objects.get(slot), objects.get(slotOf(o) ?? -1)];
+      return a !== undefined && b !== undefined && twins(a, b);
+    },
+  };
+}
+
+/** `count` cards from the hand, picked as the engine asks for them, one at a time: a discard
+ * of the player's choice ([CR 701.9b](https://yawgatog.com/resources/magic-rules/#R7019b)),
+ * the cleanup step's discard down to the maximum hand size
+ * ([CR 514.1](https://yawgatog.com/resources/magic-rules/#R5141)), or a card exiled from the
+ * hand to pay a cost, as evoke's "Exile a blue card from your hand"
+ * ([CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h)). The cards the engine
+ * offers glow, and those interchangeable with one; a count over one is said on the button. */
+function handPick(
+  view: PlayerView,
+  objects: Map<number, ObjectView>,
+  kind: Kind,
+  count: number,
+  verb: string,
+  counted = count > 1,
+): TablePick | undefined {
+  if (view.status.kind !== "deciding") return undefined;
+  const offered = view.status.decision.candidates.flatMap((c) => {
+    const o =
+      c.option.kind === "object" ? objects.get(c.option.slot) : undefined;
+    return o ? [o] : [];
+  });
+  const eligible = handOf(view).filter((slot) => {
+    const o = objects.get(slot)!;
+    return offered.some((c) => c.slot === slot || twins(c, o));
+  });
+  if (eligible.length === 0) return undefined;
+  const need = Math.min(count, eligible.length);
+  const ready = (picked: ReadonlySet<number>) => picked.size === need;
+  return {
+    eligible: new Set(eligible),
+    max: need,
+    fromHand: true,
+    initial: [],
+    ready,
+    label: (picked) => (counted ? `${verb} ${picked.size}/${need}` : verb),
+    plan: (picked) => [...picked].map((slot) => pickOf(kind, slot, objects)),
+  };
 }
 
 /** "Untap up to N lands", whoever controls them: the engine offers only tapped ones
@@ -74,9 +155,7 @@ function basicLandOrCards(
   objects: Map<number, ObjectView>,
   count: number,
 ): TablePick {
-  const hand = view.objects
-    .filter((o) => o.zone === "hand" && o.owner === "you")
-    .map((o) => o.slot);
+  const hand = handOf(view);
   const need = Math.min(count, hand.length);
   const basic = (slot: number) => {
     const name = objects.get(slot)?.name;
@@ -88,17 +167,11 @@ function basicLandOrCards(
     picked.size === 1 && basic([...picked][0]!);
   const ready = (picked: ReadonlySet<number>) =>
     landAlone(picked) || picked.size === need;
-  const discard = (slot: number): Intent => ({
-    kind: "discard",
-    wants: (o) => o.kind === "object" && o.slot === slot,
-    alike: (o) => {
-      const [a, b] = [objects.get(slot), objects.get(slotOf(o) ?? -1)];
-      return a !== undefined && b !== undefined && twins(a, b);
-    },
-  });
+  const discard = (slot: number) => pickOf("discard", slot, objects);
   return {
     eligible: new Set(hand),
     max: need,
+    fromHand: true,
     initial: [],
     ready,
     label: (picked) =>

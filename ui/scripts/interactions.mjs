@@ -2393,8 +2393,8 @@ await check(
     },
 );
 
-// Thieving Skydiver kicked: the cast with kicker and its X in one step, where the engine asks
-// the cast and then X.
+// Thieving Skydiver kicked: its casts offered as frames out of the card, then the kicked one's X
+// in the cast step, where the engine asks the cast and then X.
 const kickViews = await load("cast-kicker");
 const [kickBefore, kickAt] = kickViews.slice(-2);
 const kickCasts = kickBefore.status.decision.candidates;
@@ -2413,6 +2413,18 @@ await check(
         await page.clock.runFor(2000);
         await dragFromHand(page, skydiver, { x: 0, y: -320 });
         await page.mouse.up();
+        const frames = page.locator(".ability-choice");
+        await frames.first().waitFor();
+        assert.deepEqual(
+            (
+                await frames
+                    .locator(".ability-choice-caption")
+                    .allTextContents()
+            ).map((t) => t.split(" ")[0]),
+            ["Cast", "Kicker"],
+            "a frame for each cast, said by its cost",
+        );
+        await frames.nth(1).click();
         const step = page.getByRole("dialog", {
             name: "Cast Thieving Skydiver",
         });
@@ -2443,21 +2455,29 @@ await check(
 );
 
 // Spara's Headquarters in the same hand is played or cycled: cycling's effect, which only its
-// reminder text says, is in its menu line.
+// reminder text says, is in its frame.
 const spara = kickBefore.objects.find(
     (o) => o.name === "Spara's Headquarters" && o.zone === "hand",
 ).slot;
 await check(
-    "a menu line says what an ability does from its reminder text",
+    "a cycling frame says what it does from its reminder text",
     async (page) => {
         await page.clock.runFor(2000);
         await page.click(`[data-slot="${spara}"]`);
-        assert.deepEqual(
-            await page
-                .locator(".action-menu-effect:not(.action-menu-label)")
-                .allTextContents(),
-            ["Draw a card."],
-            "cycling draws",
+        const frames = page.locator(".ability-choice");
+        await frames.first().waitFor();
+        assert.equal(await frames.count(), 2, "played, or cycled");
+        assert.equal(
+            await frames
+                .nth(0)
+                .locator(".ability-choice-caption")
+                .textContent(),
+            "Play",
+        );
+        assert.match(
+            await frames.nth(1).locator(".card-rules").textContent(),
+            /Discard this card: Draw a card\./,
+            `cycling draws: ${await frames.nth(1).textContent()}`,
         );
     },
     {
@@ -2548,51 +2568,80 @@ const primaries = (page) =>
                 .length,
     );
 
+/** The mode chooser's frames. */
+const frames = (page) => page.locator(".ability-chooser .ability-choice");
+
 await check(
-    "the cast step is the one primary, and its card dragged back takes it back",
+    "a card's casts spring out as frames, closed by Escape, the X or Cancel",
     async (page) => {
         await page.clock.runFor(2000);
+        const from = center(await page.locator(subtlety).boundingBox());
         await page.click(subtlety);
-        const step = page.getByRole("dialog", { name: "Cast Subtlety" });
-        await step.waitFor();
-        assert.equal(await primaries(page), 1, "the cast step's Cast alone");
-        assert.equal(
-            await page.locator(".turn-action button").count(),
-            0,
-            "the cast step's buttons take the turn button's place",
-        );
-        // Let go in the hand, the card goes back and the step closes, casting nothing.
-        await dragHandCardTo(page, subtlety, { x: 700, y: 870 });
-        assert.equal(await step.count(), 0, "the cast step closed");
-        assert.deepEqual(await chosen(page), [], "nothing cast");
+        await frames(page).first().waitFor();
+        // Each frame starts on the card and springs to its place mid-table.
+        const start = center(await frames(page).first().boundingBox());
         assert.ok(
-            await page.locator(".turn-action button").isEnabled(),
-            "the turn button passes again",
+            Math.hypot(start.x - from.x, start.y - from.y) < 120,
+            "out of the card",
         );
-        // Let go on the battlefield, it is cast as the step had it.
-        await page.click(subtlety);
-        await dragHandCardTo(page, subtlety, { x: 800, y: 380 });
-        assert.deepEqual(
-            await settled(page, 1),
-            [plainCast],
-            "cast as the step had it",
+        await page.clock.runFor(1500);
+        const end = center(await frames(page).first().boundingBox());
+        assert.ok(
+            end.y < 520 && Math.abs(end.x - 800) < 300,
+            `mid-table: ${JSON.stringify(end)}`,
         );
+        assert.equal(await frames(page).count(), 2, "cast, and evoke");
+        assert.equal(
+            await page.locator(".turn-action").count(),
+            0,
+            "Cancel stands where the turn button stood",
+        );
+        for (const close of [
+            () => page.keyboard.press("Escape"),
+            () => page.getByRole("button", { name: "Close" }).click(),
+            () =>
+                page
+                    .locator(".chooser-dock")
+                    .getByRole("button", { name: "Cancel" })
+                    .click(),
+        ]) {
+            await close();
+            assert.equal(await frames(page).count(), 0, "closed");
+            assert.deepEqual(await chosen(page), [], "nothing cast");
+            await page.click(subtlety);
+            await frames(page).first().waitFor();
+        }
+        await frames(page).nth(0).click();
+        assert.deepEqual(await settled(page, 1), [plainCast], "cast");
     },
     evokeFixture,
 );
 
-// Each cast in the cast step is a button that says its cost, in symbols, and casts; the step
-// says nothing else.
+// Dropped on the battlefield, the card's casts spring out where it was let go.
 await check(
-    "the cast step's casts are buttons that say their costs",
+    "a card dropped with two casts offers them where it was let go",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await dragHandCardTo(page, subtlety, { x: 800, y: 380 });
+        await frames(page).first().waitFor();
+        assert.deepEqual(await chosen(page), [], "the drop asks first");
+        await frames(page).nth(1).click();
+        assert.deepEqual(await settled(page, 1), [evoked], "evoked");
+    },
+    evokeFixture,
+);
+
+// Each cast's frame is the card, its caption the cast's cost in symbols or its keyword.
+await check(
+    "a cast's frame says its cost",
     async (page) => {
         await page.clock.runFor(2000);
         await page.click(subtlety);
-        const step = page.getByRole("dialog", { name: "Cast Subtlety" });
-        await step.waitFor();
+        await frames(page).first().waitFor();
+        const captions = frames(page).locator(".ability-choice-caption");
         assert.deepEqual(
-            await step
-                .getByRole("button", { name: /^Cast/ })
+            await captions
+                .nth(0)
                 .locator("[role=img]")
                 .evaluateAll((es) =>
                     es.map((e) => e.getAttribute("aria-label")),
@@ -2600,67 +2649,58 @@ await check(
             ["{2}", "{U}", "{U}"],
             "the card's mana cost",
         );
-        const words = await step
-            .getByRole("button")
-            .evaluateAll((es) => es.map((e) => e.firstChild.textContent));
-        assert.deepEqual(words.slice(-1), ["Cancel"]);
-        assert.equal(words.length, 3, "a button for each cast, and Cancel");
-        assert.equal(await step.locator("p").count(), 0, "no prose");
+        assert.equal((await captions.nth(1).textContent()).trim(), "Evoke");
+        assert.equal(
+            await frames(page).locator(".card-name").first().textContent(),
+            "Subtlety",
+            "the card itself",
+        );
     },
     evokeFixture,
 );
 
+// Evoked, the exile is picked from the hand, raised whole into view, while the cast can still
+// be taken back.
 await check(
     "an evoke's exile is taken back by Escape, a right-click, Cancel and a drag",
     async (page) => {
-        const overlay = page.locator(".overlay.choice");
+        const prompt = page.getByRole("dialog", { name: "Exile a card" });
         const evoke = async () => {
             await page.clock.runFor(2000);
             await page.click(subtlety);
-            const step = page.getByRole("dialog", { name: "Cast Subtlety" });
-            await step.getByRole("button", { name: /^Evoke/ }).click();
-            await overlay.waitFor();
+            await frames(page).nth(1).click();
+            await prompt.waitFor();
+            await page.clock.runFor(1000);
         };
         const takenBack = async (n) => {
             await page.waitForSelector(`${subtlety}[data-zone="hand"]`);
             assert.equal(await cancels(page), n, `cancelled ${n}`);
-            assert.equal(await overlay.count(), 0, "the exile is not asked");
+            assert.equal(await prompt.count(), 0, "the exile is not asked");
         };
         await evoke();
-        // The card whose cost it is stands beside the choice.
-        assert.equal(
-            await overlay.locator(".overlay-aside .card-name").textContent(),
-            "Subtlety",
-        );
+        // The hand stands whole above the near edge, its eligible cards lit.
+        const hand = page.locator('.card-el-hand[data-zone="hand"]');
+        for (const box of await hand.evaluateAll((es) =>
+            es.map((e) => e.getBoundingClientRect().bottom),
+        )) {
+            assert.ok(box < 900, `a raised card ends at ${box}`);
+        }
         await page.keyboard.press("Escape");
         await takenBack(1);
         await evoke();
         await page.mouse.click(800, 450, { button: "right" });
         await takenBack(2);
         await evoke();
-        await overlay
+        await prompt
             .getByRole("button", { name: "Cancel", exact: true })
             .click();
         await takenBack(3);
-        // Put aside to see the table, the cast is taken back from there: Escape, or the
-        // spell dragged from the stack to the hand.
-        const peek = async () => {
-            await evoke();
-            await overlay
-                .getByRole("button", { name: "View Battlefield" })
-                .click();
-            await overlay.waitFor({ state: "detached" });
-            await page.clock.runFor(1000);
-        };
-        await peek();
-        await page.keyboard.press("Escape");
-        await takenBack(4);
-        await peek();
+        await evoke();
         const onStack = `${subtlety}[data-zone="stack"]`;
         const from = center(await page.locator(onStack).boundingBox());
         await drag(page, onStack, { by: { x: 700 - from.x, y: 870 - from.y } });
-        await takenBack(5);
-        assert.deepEqual(await chosen(page), Array(5).fill(evoked));
+        await takenBack(4);
+        assert.deepEqual(await chosen(page), Array(4).fill(evoked));
     },
     evokeFixture,
 );
@@ -3133,6 +3173,7 @@ await check(
             await page.click(`[data-slot="${slot}"]`);
             const text = await page
                 .locator(".action-menu, .ability-chooser")
+                .first()
                 .textContent();
             assert.ok(!text.includes("{"), `no braces in ${text}`);
             await page.keyboard.press("Escape");
@@ -3160,28 +3201,30 @@ await check(
             "each says what it does",
         );
         await page.keyboard.press("Escape");
-        const items = page.locator(".action-menu-item");
+        const items = page.locator(".ability-choice");
         await page.click(`[data-slot="${stupor}"]`);
+        await items.first().waitFor();
         assert.deepEqual(
-            await items.locator(".action-menu-label").allTextContents(),
+            await items.evaluateAll((es) =>
+                es.map((e) => e.getAttribute("aria-label")),
+            ),
             ["Play Soporific Springs", "Cast Sink into Stupor"],
+            "a frame for each use",
+        );
+        assert.equal(
+            await items.nth(0).locator(".card-name").textContent(),
+            "Soporific Springs",
             "the land is played by its land face",
         );
         assert.deepEqual(
             await items
                 .nth(1)
-                .locator(".action-menu-cost [role=img]")
+                .locator(".ability-choice-caption [role=img]")
                 .evaluateAll((es) =>
                     es.map((e) => e.getAttribute("aria-label")),
                 ),
             ["{1}", "{U}", "{U}"],
             "the cast by its mana cost",
-        );
-        await items.nth(0).hover();
-        assert.equal(
-            await page.locator(".inspect").getAttribute("aria-label"),
-            "Soporific Springs, inspected",
-            "pointing at it shows that face",
         );
     },
     { fixture: "menu-choices", at: menus.views.length, ready: ".turn-action" },
@@ -5461,14 +5504,29 @@ const lootDrawn = lootHand(loot.views.at(-1)).filter(
 assert.equal(lootDrawn.length, 1, "the loot draws one card");
 const jaceVp = named(loot.views[lootAt], "Jace, Vryn's Prodigy")[0];
 await check(
-    "a loot's draw shows before the discard is asked",
+    "a loot's draw shows before the discard is asked, from the raised hand",
     async (page) => {
         await page.clock.runFor(2000);
         await page.click(slotOf(jaceVp));
-        await page.waitForSelector(".choice");
+        await page.getByRole("dialog", { name: "Discard a card" }).waitFor();
+        assert.equal(await page.$(".choice"), null, "no overlay opens");
+        await page.clock.runFor(1500);
+        const drawn = page.locator(
+            `[data-slot="${lootDrawn[0]}"][data-zone="hand"]`,
+        );
         assert.ok(
-            await page.$(tray(lootDrawn[0])),
-            "the drawn card is offered",
+            (await drawn.locator(".card-target").count()) > 0,
+            "the drawn card is offered, lit",
+        );
+        const box = await drawn.boundingBox();
+        assert.ok(box.y + box.height < 900, "the hand is raised whole");
+        // A click picks it, raised higher; a second card takes its place.
+        const before = box.y;
+        await drawn.click();
+        await page.clock.runFor(1000);
+        assert.ok(
+            (await drawn.boundingBox()).y < before - 20,
+            "the pick stands higher",
         );
         const entries = await page.locator(".game-log-entry").allTextContents();
         assert.match(entries.at(-1), /You drew a card/);
@@ -5748,7 +5806,7 @@ await check(
 );
 
 // Trinket Mage's search (`choice-search`) finds up to one of two artifacts: a second click
-// lights the second card in place of the first, never both, and Done sends the one lit.
+// lights the second card in place of the first, never both, and Find sends the one lit.
 const searching = await lastDecision("choice-search");
 assert.equal(searching.decision.ask.max, 1, "the search finds up to one");
 assert.ok(
@@ -5782,11 +5840,11 @@ await check(
             (cards) => cards.map((c) => Number(c.dataset.slot)),
         );
         assert.deepEqual(lit, [converter], "one card is lit, the last");
-        await page.getByRole("button", { name: "Done" }).click();
+        await page.getByRole("button", { name: "Find", exact: true }).click();
         assert.deepEqual(
             await settled(page, 2),
             [searching.bySlot.get(converter)],
-            "Done sends one pick",
+            "Find sends one pick",
         );
     },
     {
@@ -5796,18 +5854,26 @@ await check(
     },
 );
 
-// The cleanup discard (`choice-cleanup`: eight cards, one over) counts its picks on its button.
+// The cleanup discard (`choice-cleanup`: eight cards, one over) is picked from the raised hand,
+// its picks counted on its button.
 const cleanup = await lastDecision("choice-cleanup");
 const [extra] = [...cleanup.bySlot.keys()];
+const inHand = (slot) => `[data-slot="${slot}"][data-zone="hand"]`;
 await check(
     "the cleanup discard counts its picks",
     async (page) => {
         await page.getByRole("button", { name: "Discard 0/1" }).waitFor();
-        await page.click(tray(extra));
+        assert.equal(await page.$(".choice"), null, "no overlay opens");
+        await page.clock.runFor(1500);
+        await page.click(inHand(extra));
         await page.getByRole("button", { name: "Discard 1/1" }).click();
         assert.deepEqual(await settled(page, 1), [cleanup.bySlot.get(extra)]);
     },
-    { fixture: "choice-cleanup", at: cleanup.views.length, ready: tray(extra) },
+    {
+        fixture: "choice-cleanup",
+        at: cleanup.views.length,
+        ready: inHand(extra),
+    },
 );
 
 // Every choice overlay the fixtures hold keeps its words in their places: the title above
@@ -5816,10 +5882,7 @@ for (const fixture of [
     "choice-scry",
     "choice-jace",
     "choice-explore",
-    "choice-loot",
     "choice-search",
-    "choice-thirst",
-    "choice-cleanup",
 ]) {
     const { views } = await lastDecision(fixture);
     await check(

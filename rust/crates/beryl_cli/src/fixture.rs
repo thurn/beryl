@@ -177,6 +177,9 @@ pub(crate) enum Condition {
     Castable(String),
     /// The human may play a card of this name as a land.
     Playable(String),
+    /// The human may play a card of this name off the battlefield more than one way: cast with
+    /// another cost, played as a land, or an ability activated from where it lies (cycling).
+    Ways(String),
     /// The human may activate more than one ability of a permanent of this name, so clicking
     /// it opens a menu.
     Abilities(String),
@@ -283,7 +286,7 @@ impl Condition {
     /// Parses "step <step>" (as the protocol names steps: "declareBlockers"), "attacking",
     /// "blocking", "targeted trigger on the stack", "targeted spell on the stack", "player
     /// targeted on the stack", "ability targeting beside its source", "opponent's spell on
-    /// the stack", "castable <card name>", "playable <card name>", "abilities of <card name>",
+    /// the stack", "castable <card name>", "playable <card name>", "ways to play <card name>", "abilities of <card name>",
     /// "namesake candidates", "resolving <card name>", "stack <card name>", "casting <card name>",
     /// "playable pair in hand", "exiled beneath a permanent", "exiled with a permanent",
     /// "attached across the table", "castable from exile", "castable from the graveyard",
@@ -377,6 +380,8 @@ impl Condition {
                     )
                 } else if let Some(name) = text.strip_prefix("castable ") {
                     Condition::Castable(name.to_owned())
+                } else if let Some(name) = text.strip_prefix("ways to play ") {
+                    Condition::Ways(name.to_owned())
                 } else if let Some(name) = text.strip_prefix("playable ") {
                     Condition::Playable(name.to_owned())
                 } else if let Some(name) = text.strip_prefix("abilities of ") {
@@ -457,6 +462,24 @@ impl Condition {
             Condition::Playable(card) => candidates(view).any(|c| {
                 matches!(c.option, Candidate::PlayLand { slot } if name(slot) == Some(card.as_str()))
             }),
+            Condition::Ways(card) => {
+                let off_battlefield = |slot: u16| {
+                    view.objects.iter().any(|o| {
+                        o.slot == slot
+                            && o.zone != ZoneName::Battlefield
+                            && o.name.as_deref() == Some(card.as_str())
+                    })
+                };
+                candidates(view)
+                    .filter(|c| match c.option {
+                        Candidate::Cast { slot, .. }
+                        | Candidate::PlayLand { slot }
+                        | Candidate::Activate { slot, .. } => off_battlefield(slot),
+                        _ => false,
+                    })
+                    .count()
+                    > 1
+            }
             Condition::Abilities(card) => abilities_of(view, card),
             Condition::NamesakeCandidates => namesake_candidates(view),
             Condition::Resolving(card) => match &view.status {

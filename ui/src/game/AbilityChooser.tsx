@@ -1,14 +1,13 @@
-// The choice of a permanent's activated ability: a click on a permanent with two or more
-// (other than mana abilities, which the payment taps for itself) always opens it, even when
-// only one can be activated now, so that activating is always two clicks, card then ability,
-// whichever it is (never a drag, which reads as moving the card). Each ability is shown as the
-// stack would show it, side by side mid-table, those that cannot be activated now dimmed.
-import { useEffect } from "react";
+// What the mode chooser (game/ModeChooser.tsx) offers. A click on a permanent with two or more
+// activated abilities (other than mana abilities, which the payment taps for itself) always
+// opens it, even when only one can be activated now, so that activating is always two clicks,
+// card then ability, whichever it is (never a drag, which reads as moving the card). A card off
+// the battlefield with two or more uses (casts by different costs, a land played, cycling)
+// opens it too, on a click or a drop. Pure functions of the acts.
 import { faceEntry } from "../cards";
-import { StackItem } from "../components/Stack";
 import type { ObjectView } from "../generated/protocol";
 import type { Act } from "./decisions";
-import { abilityParagraph, useAbilityFace, withoutReminder } from "./faces";
+import { abilityParagraph, withoutReminder } from "./faces";
 
 /** One ability of the chooser: its paragraph of the card's rules text, and its candidate if it
  * can be activated now. */
@@ -59,53 +58,45 @@ export function abilityChoices(
   }));
 }
 
-/** The ability frames' width on the stage. */
-const WIDTH = 230;
+/** A use of a card off the battlefield, as the mode chooser shows it: a cast or a land played
+ * shows the card; an ability activated from where it lies (cycling) shows its paragraph. */
+export interface PlayChoice {
+  act: Act;
+  /** The ability's paragraph, for an activation. */
+  text?: string;
+}
 
-export function AbilityChooser({
-  object,
-  choices,
-  onPick,
-  onClose,
-}: {
-  object: ObjectView;
-  choices: AbilityChoice[];
-  onPick(act: Act): void;
-  onClose(): void;
-}) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  const name = object.name ?? "";
-  const face = useAbilityFace(name, object, object);
-  const label = object.types.includes("planeswalker")
-    ? "Loyalty Ability"
-    : "Activated Ability";
-  return (
-    <>
-      <div className="menu-scrim chooser-scrim" onPointerDown={onClose} />
-      <div className="ability-chooser" role="group" aria-label={name}>
-        {choices.map((c) => (
-          <button
-            key={c.at}
-            type="button"
-            className="ability-choice"
-            disabled={!c.act}
-            aria-label={c.text}
-            onClick={() => c.act && onPick(c.act)}
-          >
-            <StackItem
-              source={face}
-              label={label}
-              text={c.text}
-              width={WIDTH}
-              showArt
-            />
-          </button>
-        ))}
-      </div>
-    </>
+/** The uses a click on a card off the battlefield chooses among: two or more, each a cast, a
+ * land played or an activation of its own ability; otherwise none. */
+export function playChoices(
+  o: ObjectView | undefined,
+  acts: Act[],
+): PlayChoice[] | undefined {
+  if (!o?.name || o.zone === "battlefield" || acts.length < 2) return;
+  const uses = acts.every(
+    (a) =>
+      a.option.kind === "cast" ||
+      a.option.kind === "playLand" ||
+      (a.option.kind === "activate" && !a.option.granted),
   );
+  if (!uses) return;
+  const text = faceEntry(o.name)?.oracle_text ?? "";
+  const paragraphs = text.split("\n");
+  return acts.map((act) => {
+    if (act.option.kind !== "activate") return { act };
+    const at =
+      act.nth === null ? undefined : abilityParagraph(text, false, act.nth);
+    // An activation off the battlefield is never a mana ability, which a land's paragraph
+    // counted among its abilities may be.
+    if (at !== undefined && !MANA_ABILITY.test(paragraphs[at]!)) {
+      return { act, text: withoutReminder(paragraphs[at]!) };
+    }
+    // A keyword ability ("Cycling {2}") says its cost, colon and effect in its reminder text:
+    // "{2}, Discard this card: Draw a card." (A land's mana reminder is no such ability.)
+    const reminder = paragraphs
+      .filter((p) => !ACTIVATED.test(p))
+      .map((p) => /\(([^)]*:[^)]*)\)/.exec(p)?.[1])
+      .find((r) => r !== undefined && !MANA_ABILITY.test(r));
+    return { act, text: reminder ?? act.label };
+  });
 }

@@ -438,15 +438,36 @@ function turned(
 /** How far the hand sinks under a screen over the table (scry.png). */
 const HAND_TUCK = 67;
 
-/** The hand fan, held at the near edge: the more cards, the closer they sit; `tucked`, the fan
- * sinks out of the way. */
-function handPlacements(cards: ObjectView[], tucked: boolean): Placement[] {
+/** The hand raised for a choice of its cards (a discard): the whole fan lifted into view,
+ * larger and flatter, each card whole above the near edge. */
+export const RAISED_HAND = {
+  top: 470,
+  scale: 1.12,
+  spacing: 214,
+  room: 1180,
+  sag: 3,
+  turn: 2,
+};
+
+/** How the hand is held: at the near edge; `tucked`, sunk out of the way under a screen over
+ * the table; `raised`, lifted whole into view for a choice of its cards. */
+export type HandHold = "held" | "tucked" | "raised";
+
+/** The hand fan, held at the near edge: the more cards, the closer they sit; tucked, the fan
+ * sinks out of the way; raised, it rises whole into view. */
+function handPlacements(cards: ObjectView[], hold: HandHold): Placement[] {
   const n = cards.length;
   const mid = (n - 1) / 2;
-  const spacing = n > 1 ? Math.min(HAND.spacing, 760 / (n - 1)) : 0;
+  const raised = hold === "raised";
+  const fan = raised ? RAISED_HAND : { ...HAND, scale: 1, room: 760 };
+  const width = FULL_WIDTH * fan.scale;
+  const spacing = n > 1 ? Math.min(fan.spacing, fan.room / (n - 1)) : 0;
   return cards.map((o, i) => {
-    const left = STAGE.width / 2 + (i - mid) * spacing - FULL_WIDTH / 2;
-    const top = HAND.top + (i - mid) ** 2 * HAND.sag + (tucked ? HAND_TUCK : 0);
+    const left = STAGE.width / 2 + (i - mid) * spacing - width / 2;
+    const top =
+      (raised ? RAISED_HAND.top : HAND.top) +
+      (i - mid) ** 2 * fan.sag +
+      (hold === "tucked" ? HAND_TUCK : 0);
     return {
       slot: o.slot,
       zone: o.zone,
@@ -454,11 +475,13 @@ function handPlacements(cards: ObjectView[], tucked: boolean): Placement[] {
       width: FULL_WIDTH,
       span: FULL_WIDTH,
       opacity: 1,
-      z: 200 + i,
-      ...turned(left, top, (i - mid) * HAND.turn + HAND.bias, [
-        FULL_WIDTH / 2,
+      // Raised, over the life orb (z 250) it rises past.
+      z: (raised ? 260 : 200) + i,
+      ...turned(left, top, (i - mid) * fan.turn + (raised ? 0 : HAND.bias), [
+        width / 2,
         0,
       ]),
+      scale: fan.scale,
     };
   });
 }
@@ -1316,13 +1339,13 @@ function onPile(look: PileLook) {
   };
 }
 
-/** Every object's placement. The hand is `tucked` under a screen over the table; the
- * permanents' rows keep clear of the game log while it is `logOpen` over them; the cards in a
- * `spotlight` are shown apart from where they lie. Hovering changes none of it (CardLayer
- * raises a hovered hand card). */
+/** Every object's placement. The hand is tucked under a screen over the table or raised for a
+ * choice of its cards (`hold`); the permanents' rows keep clear of the game log while it is
+ * `logOpen` over them; the cards in a `spotlight` are shown apart from where they lie.
+ * Hovering changes none of it (CardLayer raises a hovered hand card). */
 export function layout(
   view: PlayerView,
-  tucked = false,
+  hold: HandHold = "held",
   logOpen = false,
   spotlight: Spotlight = {},
 ): Layout {
@@ -1388,7 +1411,7 @@ export function layout(
   };
   out.push(
     ...handLifts(
-      handPlacements([...owned("you", "hand"), ...elsewhere], tucked),
+      handPlacements([...owned("you", "hand"), ...elsewhere], hold),
       yours.filter(backRow).map(footprint),
     ),
   );

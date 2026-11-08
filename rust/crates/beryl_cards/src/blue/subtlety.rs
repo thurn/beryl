@@ -164,4 +164,71 @@ pub const SCENARIOS: &[Scenario] = &[
                 count: 1,
             }),
         ]),
+    // With mana for its cost and two other blue cards in hand, both casts are offered; evoked,
+    // P0 picks which blue card to exile.
+    Scenario::new("Subtlety with mana and blue cards: cast or evoke, then which card to exile")
+        .at(2, P1, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(names::ISLAND),
+                Permanent::new(names::ISLAND),
+                Permanent::new(names::ISLAND),
+                Permanent::new(names::ISLAND),
+            ],
+        )
+        .hand(
+            P0,
+            &[names::SUBTLETY, names::TIME_SPIRAL, names::FRACTURED_IDENTITY],
+        )
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(names::PLAINS),
+                Permanent::new(names::PLAINS),
+                Permanent::new(names::PLAINS),
+            ],
+        )
+        .hand(P1, &[SPELLBINDER, names::PLAINS])
+        .library(P1, &[names::ISLAND])
+        .actions(&[
+            Action::cast(P1, SPELLBINDER),
+            // Passing, the cast for mana and the evoke.
+            Action::assert(Assertion::Decision {
+                player: P0,
+                kind: DecisionKind::Priority,
+                candidates: 3,
+            }),
+            Action::Cast {
+                player: P0,
+                card: names::SUBTLETY,
+                face: FaceIx::FRONT,
+                costs: Castings::only(0),
+            },
+            Action::assert(Assertion::Decision {
+                player: P0,
+                kind: DecisionKind::ExileCost,
+                candidates: 2,
+            }),
+            Action::choose(P0, DecisionKind::ExileCost, names::TIME_SPIRAL),
+            Action::assert(Assertion::Count {
+                player: P0,
+                zone: Zone::Exile,
+                card: Some(names::TIME_SPIRAL),
+                count: 1,
+            }),
+            Action::Resolve,
+            Action::choose(P0, DecisionKind::TriggerOrder, names::SUBTLETY),
+            Action::answer(P0, DecisionKind::TargetCount, Pick::Number { n: 1 }),
+            Action::Resolve,
+            Action::Resolve,
+            Action::answer(P1, DecisionKind::YesNo, Pick::Yes),
+            library(P1, &[SPELLBINDER, names::ISLAND]),
+            Action::assert(Assertion::Count {
+                player: P0,
+                zone: Zone::Graveyard,
+                card: Some(names::SUBTLETY),
+                count: 1,
+            }),
+        ]),
 ];

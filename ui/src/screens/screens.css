@@ -603,6 +603,21 @@
 .choice-card-out {
   filter: brightness(0.55) saturate(0.6);
 }
+/* A picked card wears a gold check at its top right, beside its gold glow and lift. */
+.choice-card[aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  right: -12px;
+  top: -12px;
+  width: 40px;
+  height: 40px;
+  border: 2px solid #fff3d6;
+  border-radius: 50%;
+  background: var(--gold)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 12.5l5 5L20 6.5' fill='none' stroke='%23211f1c' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / 24px no-repeat;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 55%);
+}
 .choice-card-dragging {
   cursor: grabbing;
 }
@@ -1469,6 +1484,11 @@
   pointer-events: auto;
   animation: dock-in 0.22s ease-out both;
 }
+/* Whole cards to choose among, large enough to read, the row as wide as five. */
+.prompt-body:has(.prompt-cards) {
+  top: 215px;
+  max-width: 900px;
+}
 .prompt-body > :is(.prompt-triggers) {
   align-self: stretch;
 }
@@ -1482,8 +1502,7 @@
 .prompt-cards {
   display: flex;
   justify-content: center;
-  gap: 6px;
-  overflow-x: auto;
+  gap: 14px;
 }
 .prompt-card {
   flex: none;
@@ -1491,6 +1510,17 @@
   border: 0;
   background: none;
   cursor: pointer;
+}
+.prompt-card:hover > .card,
+.prompt-card:focus-visible > .card {
+  transform: translateY(-6px);
+}
+/* A card a question is about, risen above its place on the table (game/Risen.tsx). */
+.risen-card {
+  position: absolute;
+  z-index: 1050;
+  pointer-events: none;
+  filter: drop-shadow(0 18px 24px rgb(0 0 0 / 55%));
 }
 /* The card a question is about, shown but not picked. */
 .prompt-subject {
@@ -2397,40 +2427,96 @@
   color: #ff8a80;
 }
 
-/* The ability chooser (game/AbilityChooser.tsx): a permanent's abilities side by side
-   mid-table over a dimmed table, as the stack draws them. */
+/* The mode chooser (game/ModeChooser.tsx): a card's uses side by side mid-table over a
+   dimmed table, each a full frame sprung out of the card, its caption under it; an X beside
+   the gear and Cancel in the action dock close it. */
 .chooser-scrim {
-  background: rgb(10 8 6 / 45%);
+  background: rgb(10 8 6 / 55%);
 }
 .ability-chooser {
   position: absolute;
   inset: 0;
   z-index: 1200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 36px;
   pointer-events: none;
 }
 .ability-choice {
+  position: absolute;
   padding: 0;
   border: 0;
-  border-radius: 12px;
   background: none;
   pointer-events: auto;
   cursor: pointer;
+}
+.ability-choice-lift {
+  position: relative;
+  display: block;
+  border-radius: 12px;
   transition:
     transform 120ms ease,
     box-shadow 120ms ease,
     filter 120ms ease;
 }
-.ability-choice:enabled:hover,
-.ability-choice:enabled:focus-visible {
+.ability-choice:enabled:hover .ability-choice-lift,
+.ability-choice:enabled:focus-visible .ability-choice-lift {
   transform: translateY(-8px);
   box-shadow: var(--glow-gold);
+}
+.ability-choice:focus-visible {
   outline: none;
 }
 .ability-choice:disabled {
   cursor: default;
+}
+.ability-choice:disabled .ability-choice-lift {
   filter: grayscale(0.85) brightness(0.55);
+}
+/* The use's cost or name, on a dark plaque across the frame's foot. */
+.ability-choice-caption {
+  position: absolute;
+  left: 50%;
+  bottom: -26px;
+  transform: translateX(-50%);
+  padding: 6px 18px;
+  border: 1px solid var(--metal);
+  border-radius: 999px;
+  background: rgb(18 15 12 / 92%);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 55%);
+}
+.ability-choice-caption .mana-cost {
+  vertical-align: -3px;
+}
+/* The X that closes the chooser, beside the gear, in the gear's grey metal. */
+.chooser-close {
+  position: absolute;
+  right: 72px;
+  top: 0;
+  z-index: 1210;
+  width: 72px;
+  height: 72px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.chooser-close svg {
+  position: absolute;
+  right: 18px;
+  top: 17px;
+  width: 36px;
+  fill: #8a8889;
+  filter: drop-shadow(0 1px 0 rgb(255 255 255 / 12%))
+    drop-shadow(0 2px 3px rgb(0 0 0 / 45%));
+}
+.chooser-close:hover svg,
+.chooser-close:focus-visible svg {
+  fill: #c9c6c4;
+}
+/* Its Cancel, in the action dock, over the dimmed table. */
+.chooser-dock {
+  z-index: 1210;
 }

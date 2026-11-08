@@ -12,6 +12,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type RefObject,
 } from "react";
 import {
   animate,
@@ -21,7 +22,7 @@ import {
   useReducedMotion,
 } from "motion/react";
 import { cardEntry, faceEntry, landFace } from "../cards";
-import { Card, type Highlight } from "../components/Card";
+import { CARD_ASPECT, Card, type Highlight } from "../components/Card";
 import {
   Button,
   Dock,
@@ -110,7 +111,9 @@ import {
   tapsOf,
   type CastChoice,
 } from "./casting";
-import { CastStep } from "./CastStep";
+import { CastCaption, CastStep } from "./CastStep";
+import { ModeChooser, type Mode, type Origin } from "./ModeChooser";
+import { Risen, useRiseFrom } from "./Risen";
 import { FloatPrompt, PromptRow } from "./FloatPrompt";
 import { stoppedPhases, togglePhase } from "./stops";
 import { useStandIns } from "./standIns";
@@ -123,6 +126,7 @@ import {
   held,
   footprint,
   isEmblem,
+  FULL_WIDTH,
   layout,
   linked,
   MANA_POOLS,
@@ -142,9 +146,10 @@ import {
   type ZonePile,
 } from "./layout";
 import {
-  AbilityChooser,
   abilityChoices,
+  playChoices,
   type AbilityChoice,
+  type PlayChoice,
 } from "./AbilityChooser";
 import type { LogEntry } from "./log";
 import { actingLabel, GameLog, opponentActivity } from "./Narration";
@@ -255,10 +260,12 @@ export function Board({
   // the pointer stays on it.
   const [refused, setRefused] = useState<number>();
   const [menu, setMenu] = useState<Menu>();
-  // The permanent whose activated abilities are being chosen among.
+  // The card whose uses are being chosen among (its casts, its activated abilities), and
+  // where they sprang from.
   const [chooser, setChooser] = useState<{
     slot: number;
-    choices: AbilityChoice[];
+    modes: Mode[];
+    from?: Origin;
   }>();
   const [casting, setCasting] = useState<Casting>();
   // The spell cast last and the permanents its payment taps.
@@ -342,21 +349,36 @@ export function Board({
   // column, the rows give it room.
   const [logOpen, setLogOpen] = useState(false);
   const toggleLog = useCallback(() => setLogOpen((o) => !o), []);
+  // The hand sinks under a screen over the table, and rises whole for a choice of its cards.
+  const hold = dimmed ? "tucked" : picking?.fromHand ? "raised" : "held";
   const resting = useMemo(
-    () => layout(shown, dimmed, false, spotlight),
-    [shown, dimmed, spotlight],
+    () => layout(shown, hold, false, spotlight),
+    [shown, hold, spotlight],
   );
   const crowdsLog = overLog(resting);
-  const placements = useMemo(
+  const laid = useMemo(
     () =>
-      crowdsLog && logOpen ? layout(shown, dimmed, true, spotlight) : resting,
-    [resting, crowdsLog, logOpen, shown, dimmed, spotlight],
+      crowdsLog && logOpen ? layout(shown, hold, true, spotlight) : resting,
+    [resting, crowdsLog, logOpen, shown, hold, spotlight],
   );
+  // In the raised hand, the cards picked stand higher than the rest.
+  const placements = useMemo(() => {
+    if (hold !== "raised" || picked.size === 0) return laid;
+    const out = new Map(laid);
+    for (const slot of picked) {
+      const p = out.get(slot);
+      if (p?.look === "hand") out.set(slot, { ...p, y: p.y - PICKED_RISE });
+    }
+    return out;
+  }, [laid, hold, picked]);
   // The hovered card, unless it has since gone where it is not shown alone.
   const hoveredPlace =
     hovered === undefined ? undefined : placements.get(hovered);
+  // The raised hand's cards are large enough to read where they stand.
   const inspected =
-    hoveredPlace?.look === "hidden" || hoveredPlace?.look === "pile"
+    hoveredPlace?.look === "hidden" ||
+    hoveredPlace?.look === "pile" ||
+    (hold === "raised" && hoveredPlace?.look === "hand")
       ? undefined
       : hoveredPlace;
   // Why the refused card under the pointer can't be played, as the engine says.
@@ -433,16 +455,116 @@ export function Board({
     setMenu(undefined);
     setCasting({ slot, casts, choice: firstChoice(casts[0]!) });
   };
+  /** Where the card in `slot` lies, for the mode chooser to spring from: at `at`, let go
+   * there, or else its place. */
+  const originOf = (slot: number, at?: Point): Origin | undefined => {
+    const p = placements.get(slot);
+    if (!p) return at && { ...at, width: FULL_WIDTH };
+    const width = p.width * p.scale;
+    if (at) return { ...at, width };
+    return { x: p.x + width / 2, y: p.y + width / CARD_ASPECT / 2, width };
+  };
+  /** Casts with `act` from the mode chooser: at once, or in the cast step for its X or, under
+   * full control, its payment. */
+  const castAct = (slot: number, act: Act) => {
+    if (stepsIn([act])) setUp(slot, [act]);
+    else cast(firstChoice(act));
+  };
+  /** Opens the mode chooser on a permanent's activated abilities. */
+  const chooseAbility = (
+    slot: number,
+    choices: AbilityChoice[],
+    at?: Point,
+  ) => {
+    const o = objects.get(slot);
+    const label = o?.types.includes("planeswalker")
+      ? "Loyalty Ability"
+      : "Activated Ability";
+    setMenu(undefined);
+    setChooser({
+      slot,
+      from: originOf(slot, at),
+      modes: choices.map((c) => ({
+        key: `ability-${c.at}`,
+        name: c.text,
+        look: { kind: "ability", label, text: c.text },
+        onPick:
+          c.act &&
+          (() => {
+            setChooser(undefined);
+            pickAct(slot, c.act!);
+          }),
+      })),
+    });
+  };
+  /** Opens the mode chooser on a card's uses off the battlefield: its casts, its land play,
+   * its abilities activated from where it lies. */
+  const choosePlay = (slot: number, choices: PlayChoice[], at?: Point) => {
+    const o = objects.get(slot);
+    const name = o?.name ?? "";
+    // A cast or a land played shows the face it is by: a modal card's back, a land's face.
+    const faceOf = (act: Act) => {
+      if (act.option.kind === "playLand") return pointedObject(o, act);
+      const face =
+        act.option.kind === "cast" && act.option.face > 0
+          ? cardEntry(name)?.faces[act.option.face]?.name
+          : undefined;
+      return face && o ? { ...o, name: face } : o;
+    };
+    setMenu(undefined);
+    setChooser({
+      slot,
+      from: originOf(slot, at),
+      modes: choices.map(({ act, text }) => {
+        const done = () => setChooser(undefined);
+        if (act.option.kind === "cast") {
+          return {
+            key: `act-${act.index}`,
+            name: act.label,
+            look: { kind: "card", object: faceOf(act) },
+            caption: <CastCaption act={act} name={name} />,
+            onPick: () => {
+              done();
+              castAct(slot, act);
+            },
+          };
+        }
+        return {
+          key: `act-${act.index}`,
+          name: act.label,
+          look:
+            act.option.kind === "playLand"
+              ? { kind: "card", object: faceOf(act) }
+              : {
+                  kind: "ability",
+                  label: "Activated Ability",
+                  text: text ?? act.label,
+                },
+          caption: act.option.kind === "playLand" ? "Play" : undefined,
+          onPick: () => {
+            done();
+            pick(act.index, act.then);
+          },
+        };
+      }),
+    });
+  };
   /** Whether casting from `casts` stops in the cast step: to choose which cast or X or, under
    * full control (Arena's), which permanents pay. Otherwise the client pays, as Arena's
    * auto-tapper does, the way the session ranks first. */
   const stepsIn = (casts: Act[]) =>
     asksCastStep(casts) ||
     (view.stops.fullControl && plansOf(firstChoice(casts[0]!)).length > 1);
-  /** Casts from a click: at once, as a drop does, unless the cast step has a choice to
-   * offer. */
-  const castOrSetUp = (slot: number, casts: Act[]) => {
-    if (stepsIn(casts)) setUp(slot, casts);
+  /** Casts from a click: at once, as a drop does, unless there is a choice to offer: which
+   * cast, in the mode chooser, or its X or payment, in the cast step. */
+  const castOrSetUp = (slot: number, casts: Act[], at?: Point) => {
+    if (casts.length > 1) {
+      choosePlay(
+        slot,
+        casts.map((act) => ({ act })),
+        at,
+      );
+    } else if (stepsIn(casts)) setUp(slot, casts);
     else cast(firstChoice(casts[0]!));
   };
   /** A menu's pick: a cast, with all of the card's casts, is made as a click makes it. */
@@ -511,6 +633,16 @@ export function Board({
       highlight: "source",
     });
   }
+  // The card a "you may" move asks about, where the table shows it: risen above its place,
+  // as above the graveyard it lies on top of.
+  const risen = useMemo(() => {
+    if (!prompting || decision?.ask.kind !== "mayMove") return undefined;
+    const slot = decision.ask.card;
+    const p = placements.get(slot);
+    if (!p || p.look === "hidden" || p.opacity === 0) return undefined;
+    const width = p.width * p.scale;
+    return { slot, at: { x: p.x + width / 2, y: p.y, width } };
+  }, [prompting, decision, placements]);
   // What paying "unless pays" would tap, lit as it is asked.
   const unlessTaps =
     deciding && decision?.ask.kind === "unlessPays"
@@ -666,6 +798,10 @@ export function Board({
         next.delete([...mates].reverse().find((s) => picked.has(s))!);
       } else if (next.size < picking.max) {
         next.add(mates.find((s) => !picked.has(s))!);
+      } else if (picking.max === 1) {
+        // One to pick: another card takes the pick's place.
+        next.clear();
+        next.add(mates.find((s) => !picked.has(s))!);
       }
       setPicks({ view, picked: next });
       return true;
@@ -685,11 +821,14 @@ export function Board({
     }
     const casts = castActs(acts);
     const choices = abilityChoices(clicked, acts);
+    const plays = playChoices(clicked, acts);
     if (choices) {
       // A permanent's abilities are chosen from all of them, even when only one can be
       // activated: activating is always the card, then the ability.
-      setMenu(undefined);
-      setChooser({ slot, choices });
+      chooseAbility(slot, choices);
+    } else if (plays) {
+      // A card's uses off the battlefield, chosen as its frames.
+      choosePlay(slot, plays);
     } else if (casts.length > 0 && casts.length === acts.length) {
       // A card that can only be cast is cast, or set up in the cast step.
       castOrSetUp(slot, casts);
@@ -726,21 +865,24 @@ export function Board({
     if (placements.get(slot)?.look === "hand") {
       const plays = inHand ? [] : playActs(acts);
       const casts = castActs(plays);
-      if (casts.length > 0 && casts.length === plays.length && stepsIn(casts)) {
-        // The cast asks for more (which cast, X, its payment): the cast step, with the card
-        // back in hand.
+      if (plays.length > 1) {
+        // Ways to play it (casts by different costs, a land played): their frames spring out
+        // of it where it was let go, as it goes back to the hand.
+        choosePlay(
+          slot,
+          plays.map((act) => ({ act })),
+          at,
+        );
+        return false;
+      }
+      if (casts.length === 1 && stepsIn(casts)) {
+        // The cast asks for more (X, its payment): the cast step, with the card back in hand.
         setUp(slot, casts);
         return false;
       }
       if (plays.length === 1) {
         play(plays[0]!);
         return true;
-      }
-      if (plays.length > 1) {
-        const listed = plays.filter(
-          (a) => a.option.kind !== "cast" || a === casts[0],
-        );
-        setMenu({ slot, at, acts: listed });
       }
       return false;
     }
@@ -891,7 +1033,7 @@ export function Board({
         // A right-click takes back what was begun, as Escape does.
         onContextMenu={(e) => {
           e.preventDefault();
-          if (menu) return;
+          if (menu || chooser) return;
           if (castingNow) setCasting(undefined);
           else if (cancellable) cancel?.();
         }}
@@ -1084,8 +1226,9 @@ export function Board({
               />
             ) : declaring ? (
               <Finish decision={declaring} done={finish} onPick={pick} />
-            ) : (decision?.kind === "priority" || waiting) && !castingNow ? (
-              // In the cast step, its buttons take the dock.
+            ) : ((decision?.kind === "priority" && !chooser) || waiting) &&
+              !castingNow ? (
+              // In the cast step or the mode chooser, its buttons take the dock.
               <Dock>
                 <div className="turn-action">
                   <TurnButton
@@ -1148,7 +1291,12 @@ export function Board({
               }
             }
             hovered={hovered}
+            risen={risen?.slot}
           />
+        )}
+
+        {risen && objects.get(risen.slot) && (
+          <Risen object={objects.get(risen.slot)!} at={risen.at} />
         )}
 
         {castingNow && !prompting && (
@@ -1174,13 +1322,10 @@ export function Board({
         )}
 
         {chooser && objects.get(chooser.slot) && deciding && (
-          <AbilityChooser
+          <ModeChooser
             object={objects.get(chooser.slot)!}
-            choices={chooser.choices}
-            onPick={(act) => {
-              setChooser(undefined);
-              pickAct(chooser.slot, act);
-            }}
+            modes={chooser.modes}
+            from={chooser.from}
             onClose={() => setChooser(undefined)}
           />
         )}
@@ -1794,6 +1939,7 @@ function Prompt({
   onPoint,
   confirm,
   hovered,
+  risen,
 }: {
   decision: DecisionView;
   /** Choosing no target, where the target is picked on the board with its count. */
@@ -1814,6 +1960,8 @@ function Prompt({
   confirm?: { label: string; disabled: boolean; onClick(): void } | false;
   /** The card the pointer is on, which a crew meter previews. */
   hovered?: number;
+  /** The card the question is about, shown risen above its place on the table. */
+  risen?: number;
 }) {
   const { ask } = decision;
   // A payment plan reads as what it taps, never as a number; a payment asked of a spell's
@@ -1852,9 +2000,10 @@ function Prompt({
       const o = c.option.kind === "object" && objects.get(c.option.slot);
       return o ? [{ object: o, index }] : [];
     });
-  // The card a "you may" would move, shown as the question's subject.
+  // The card a "you may" would move, shown as the question's subject: risen above its place
+  // on the table (`Risen`), or else here.
   const subject = ask.kind === "mayMove" ? objects.get(ask.card) : undefined;
-  if (subject) faces.unshift({ object: subject });
+  if (subject && subject.slot !== risen) faces.unshift({ object: subject });
   const ordering = decision.kind === "triggerOrder";
   // Its answers in the dock, a "you may" move's first.
   const buttons = ordering
@@ -1907,6 +2056,7 @@ function Prompt({
                 <PromptCard
                   key={index ?? `subject-${object.slot}`}
                   object={object}
+                  width={promptCardWidth(faces.length)}
                   onPick={index === undefined ? undefined : () => onPick(index)}
                   onPoint={(on) => onPoint(on ? object.slot : undefined)}
                 />
@@ -1969,29 +2119,30 @@ function Prompt({
 /** A candidate card off the table, as a graveyard's target, by its face. */
 function PromptCard({
   object,
+  width,
   onPick,
   onPoint,
 }: {
   object: ObjectView;
+  width: number;
   /** Picks the card; none for a card the question is about, shown but not picked. */
   onPick?(): void;
   onPoint(on: boolean): void;
 }) {
   const face = useFace(object);
+  const ref = useRef<HTMLElement>(null);
+  // It grows out of where it lies: its own card, or the permanent it lies exiled beneath.
+  useRiseFrom(ref, [object.slot, object.exiledWith, object.exiledBy]);
   const hover = {
     onPointerEnter: () => onPoint(true),
     onPointerLeave: () => onPoint(false),
   };
   const card = (
-    <Card
-      card={face}
-      variant="field"
-      width={PROMPT_CARD_WIDTH}
-      highlight={onPick ? "target" : undefined}
-    />
+    <Card card={face} width={width} highlight={onPick ? "target" : undefined} />
   );
   return onPick ? (
     <button
+      ref={ref as RefObject<HTMLButtonElement>}
       type="button"
       className="prompt-card"
       data-option={object.slot}
@@ -2003,6 +2154,7 @@ function PromptCard({
     </button>
   ) : (
     <span
+      ref={ref as RefObject<HTMLSpanElement>}
       className="prompt-card prompt-subject"
       aria-label={object.name ?? "A card"}
       {...hover}
@@ -2012,9 +2164,13 @@ function PromptCard({
   );
 }
 
-/** Faces in the prompt's one row, as the battlefield draws cards: low enough that the prompt
- * keeps to the middle of the table. */
-const PROMPT_CARD_WIDTH = 80;
+/** How much higher a card picked from the raised hand stands than the rest. */
+const PICKED_RISE = 44;
+
+/** The width of each of `count` faces in the prompt's one row: whole cards, large enough to
+ * read, a row of five clear of the stack at the right. */
+const promptCardWidth = (count: number) =>
+  count <= 3 ? 210 : count === 4 ? 180 : 160;
 
 /** The order of simultaneous triggers ([CR 603.3b](https://yawgatog.com/resources/magic-rules/#R6033b):
  * "If multiple players have triggered abilities that have triggered since the last time a
