@@ -89,6 +89,25 @@
     ]
   },
   {
+    "moment": "looting-to-five-cards-in-the-graveyard-transforms-him",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Jace, Vryn's Prodigy",
+      "controls 0 Jace, Telepath Unbound Emblem"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Jace, Vryn's Prodigy",
+      "controls 0 Jace, Telepath Unbound Emblem"
+    ]
+  },
+  {
     "moment": "looting-to-five-cards-in-the-graveyard-transforms-him-0",
     "yours": [
       "turn 1",
@@ -132,11 +151,11 @@
     ]
   },
   {
-    "moment": "looting-to-five-cards-in-the-graveyard-transforms-him-end",
+    "moment": "looting-to-five-cards-in-the-graveyard-transforms-him-pass",
     "yours": [
       "turn 3",
       "your turn",
-      "step precombatMain",
+      "step postcombatMain",
       "decision priority",
       "controls 0 Jace, Vryn's Prodigy",
       "controls 0 Jace, Telepath Unbound Emblem"
@@ -151,7 +170,7 @@
     ]
   },
   {
-    "moment": "1-shrinks-a-creature-until-his-controllers-next-turn-end",
+    "moment": "1-shrinks-a-creature-until-his-controllers-next-turn",
     "yours": [
       "turn 3",
       "your turn",
@@ -173,7 +192,29 @@
     ]
   },
   {
-    "moment": "3-recasts-a-sorcery-from-the-graveyard-which-is-then-exiled-end",
+    "moment": "1-shrinks-a-creature-until-his-controllers-next-turn-pass",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step postcombatMain",
+      "decision priority",
+      "controls 0 Jace, Vryn's Prodigy",
+      "they control 1 Jace, Vryn's Prodigy",
+      "controls 0 Jace, Telepath Unbound Emblem"
+    ],
+    "theirs": [
+      "turn 3",
+      "their turn",
+      "step end",
+      "decision priority",
+      "offers Jace, Vryn's Prodigy ability 0",
+      "controls 1 Jace, Vryn's Prodigy",
+      "controls 0 Jace, Telepath Unbound Emblem",
+      "not tapped Jace, Vryn's Prodigy"
+    ]
+  },
+  {
+    "moment": "3-recasts-a-sorcery-from-the-graveyard-which-is-then-exiled",
     "yours": [
       "turn 1",
       "your turn",
@@ -198,44 +239,22 @@
     ]
   },
   {
-    "moment": "looting-to-five-cards-in-the-graveyard-transforms-him-end-pass",
+    "moment": "9s-emblem-mills-an-opponent-five-whenever-its-owner-casts-a-spell",
     "yours": [
-      "turn 3",
-      "your turn",
-      "step postcombatMain",
-      "decision priority",
-      "controls 0 Jace, Vryn's Prodigy",
-      "controls 0 Jace, Telepath Unbound Emblem"
-    ],
-    "theirs": [
-      "turn 4",
+      "turn 1",
       "your turn",
       "step precombatMain",
       "decision priority",
       "controls 0 Jace, Vryn's Prodigy",
       "controls 0 Jace, Telepath Unbound Emblem"
-    ]
-  },
-  {
-    "moment": "1-shrinks-a-creature-until-his-controllers-next-turn-end-pass",
-    "yours": [
-      "turn 3",
-      "your turn",
-      "step postcombatMain",
-      "decision priority",
-      "controls 0 Jace, Vryn's Prodigy",
-      "they control 1 Jace, Vryn's Prodigy",
-      "controls 0 Jace, Telepath Unbound Emblem"
     ],
     "theirs": [
-      "turn 3",
-      "their turn",
-      "step end",
+      "turn 2",
+      "your turn",
+      "step precombatMain",
       "decision priority",
-      "offers Jace, Vryn's Prodigy ability 0",
-      "controls 1 Jace, Vryn's Prodigy",
-      "controls 0 Jace, Telepath Unbound Emblem",
-      "not tapped Jace, Vryn's Prodigy"
+      "controls 0 Jace, Vryn's Prodigy",
+      "controls 0 Jace, Telepath Unbound Emblem"
     ]
   }
 ]

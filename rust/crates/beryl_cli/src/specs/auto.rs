@@ -56,8 +56,8 @@ enum Kind {
     /// The other answer to the question at this index: kept if the card asks it, unless an
     /// earlier moment gave the same answer to the same question.
     Flip(usize),
-    /// A scenario's end: kept unless an earlier moment ended the same.
-    End,
+    /// A whole scenario from its start, played out once shown: always kept.
+    Whole,
     /// A scenario's activation of the card, the card bounced in response: kept unless an
     /// earlier one of the same label stopped at the same question.
     Bounced,
@@ -73,6 +73,9 @@ struct Candidate {
     board: Scenario,
     play: Vec<Action>,
     kind: Kind,
+    /// The scenario it is cut from, by its name: the page's heading over its moments. Empty
+    /// for the definition's moments.
+    group: &'static str,
     /// The card whose cast or activation last came before it, which a question is asked
     /// for: one question asked for two causes is two moments.
     cause: Option<&'static str>,
@@ -103,8 +106,8 @@ fn timeless(recorded: &[String]) -> Vec<&str> {
 
 pub fn generate(def: &'static CardDef, scenarios: &'static [Scenario]) -> Generated {
     let mut candidates = from_definition(def);
-    for (i, scenario) in scenarios.iter().enumerate() {
-        from_scenario(def, scenario, i + 1, &mut candidates);
+    for scenario in scenarios {
+        from_scenario(def, scenario, &mut candidates);
     }
     let mut recorded = record(def, &candidates);
     let mut kept = select(def, &candidates, &recorded, &mut Vec::new());
@@ -120,12 +123,15 @@ pub fn generate(def: &'static CardDef, scenarios: &'static [Scenario]) -> Genera
     }
     let mut dropped = Vec::new();
     kept = select(def, &candidates, &recorded, &mut dropped);
-    let moments = candidates
-        .iter()
-        .zip(&recorded)
-        .zip(kept)
-        .filter(|(_, k)| *k)
-        .filter_map(|((c, r), _)| {
+    // Each scenario's moments together, the follow-ons after the rest, in the order the
+    // scenarios first appear: the definition's first.
+    let first = |group: &str| candidates.iter().position(|c| c.group == group);
+    let mut order: Vec<usize> = (0..candidates.len()).filter(|&i| kept[i]).collect();
+    order.sort_by_key(|&i| first(candidates[i].group));
+    let moments = order
+        .into_iter()
+        .map(|i| (&candidates[i], &recorded[i]))
+        .filter_map(|(c, r)| {
             let r = r.as_ref().ok()?;
             let title = match c.kind {
                 Kind::Ask => format!("{}{}", c.title, question(&r[0])),
@@ -192,11 +198,13 @@ fn select(
             timeless(&rj[0]) == timeless(&r[0]) && timeless(&rj[1]) == timeless(&r[1])
         };
         kept[i] = match c.kind {
-            Kind::Probe => true,
+            Kind::Probe | Kind::Whole => true,
+            // An activation that ends its scenario shows what the whole of it shows.
             Kind::Play | Kind::Bounced => !earlier(&|cj, rj| {
                 (cj.kind == c.kind || cj.kind == Kind::Probe)
                     && label(cj) == label(c)
                     && question_of(&rj[0]) == question_of(&r[0])
+                    || cj.kind == Kind::Whole && cj.group == c.group && ended_alike(cj, rj)
             }),
             Kind::Ask => {
                 asks(r)
@@ -219,7 +227,7 @@ fn select(
                             }))
                     })
             }),
-            Kind::End | Kind::FollowOn => !earlier(&ended_alike),
+            Kind::FollowOn => !earlier(&ended_alike),
         };
     }
     kept
@@ -229,7 +237,7 @@ fn select(
 /// stack empty: they pass (where does the card stop them next?), and the game goes on to their
 /// next turn (what does it offer once their permanents untap?).
 fn follow_ons(c: &Candidate, r: &[Vec<String>; 2]) -> Vec<Candidate> {
-    if !matches!(c.kind, Kind::End | Kind::Flip(_)) {
+    if !matches!(c.kind, Kind::Whole | Kind::Flip(_)) {
         return Vec::new();
     }
     let yours = &r[0];
@@ -250,17 +258,22 @@ fn follow_ons(c: &Candidate, r: &[Vec<String>; 2]) -> Vec<Candidate> {
     let base = c.board.actions(setup);
     let next = |name: &str, title: &str, play: Vec<Action>| Candidate {
         name: format!("{}-{name}", c.name),
-        title: format!("{} · {title}", c.title),
+        title: if c.kind == Kind::Whole {
+            title.to_owned()
+        } else {
+            format!("{}, {}", c.title, title.to_lowercase())
+        },
         board: base,
         play,
         kind: Kind::FollowOn,
+        group: c.group,
         cause: c.cause,
     };
     vec![
-        next("pass", "pass", vec![Action::pass(P0)]),
+        next("pass", "Then pass", vec![Action::pass(P0)]),
         next(
             "next-turn",
-            "next turn",
+            "Next turn",
             vec![Action::AdvanceTo {
                 turn: turn + 2,
                 step: TurnStep::PrecombatMain,
@@ -296,6 +309,7 @@ fn moment(c: &Candidate, title: String, recorded: Option<&[Vec<String>; 2]>) -> 
         c.board,
     )
     .play(leak(c.play.clone()));
+    m.group = c.group;
     m.recorded = recorded.map(|[y, t]| [strs(y), strs(t)]);
     m
 }
@@ -454,6 +468,7 @@ fn probe(name: &str, title: &str, board: Scenario, play: Vec<Action>) -> Candida
         board,
         play,
         kind: Kind::Probe,
+        group: "",
         cause,
     }
 }
@@ -772,8 +787,9 @@ fn flipped(action: &Action) -> Option<(Action, &'static str)> {
     }
 }
 
-fn from_scenario(def: &'static CardDef, scenario: &Scenario, n: usize, out: &mut Vec<Candidate>) {
+fn from_scenario(def: &'static CardDef, scenario: &Scenario, out: &mut Vec<Candidate>) {
     let board = dressed(scenario);
+    let group = heading(def, scenario);
     let actions = playable(scenario);
     let card = slug(def.name);
     let full = slug(scenario.name);
@@ -790,14 +806,22 @@ fn from_scenario(def: &'static CardDef, scenario: &Scenario, n: usize, out: &mut
             .or(cause_of(&play)),
         play,
         kind,
+        group,
     };
+    out.push(at(
+        short.clone(),
+        "Start".to_owned(),
+        &[],
+        actions.clone(),
+        Kind::Whole,
+    ));
     for (i, action) in actions.iter().enumerate() {
         let setup = &actions[..i];
         let mine = label_of(def, action);
         if let Some(what) = mine.clone() {
             out.push(at(
                 format!("{short}-{i}"),
-                format!("S{n} · {what}"),
+                what,
                 setup,
                 vec![*action],
                 Kind::Play,
@@ -816,7 +840,7 @@ fn from_scenario(def: &'static CardDef, scenario: &Scenario, n: usize, out: &mut
                 board: with_a_bounce(&board).actions(leak(setup.to_vec())),
                 ..at(
                     format!("{short}-bounced-{i}"),
-                    format!("S{n} · {}, bounced", mine.clone().unwrap_or_default()),
+                    format!("{}, bounced", mine.clone().unwrap_or_default()),
                     setup,
                     play,
                     Kind::Bounced,
@@ -829,7 +853,7 @@ fn from_scenario(def: &'static CardDef, scenario: &Scenario, n: usize, out: &mut
             let ask = out.len();
             out.push(at(
                 format!("{short}-ask-{i}"),
-                format!("S{n} · "),
+                String::new(),
                 setup,
                 Vec::new(),
                 Kind::Ask,
@@ -837,7 +861,7 @@ fn from_scenario(def: &'static CardDef, scenario: &Scenario, n: usize, out: &mut
             if let Some((flip, answer)) = flipped(action) {
                 let mut c = at(
                     format!("{short}-{}-{i}", answer.to_lowercase()),
-                    format!("S{n} · Answer {answer}"),
+                    format!("Answer {answer}"),
                     setup,
                     vec![flip],
                     Kind::Flip(ask),
@@ -847,13 +871,24 @@ fn from_scenario(def: &'static CardDef, scenario: &Scenario, n: usize, out: &mut
             }
         }
     }
-    out.push(at(
-        format!("{short}-end"),
-        format!("S{n} · End"),
-        &actions,
-        Vec::new(),
-        Kind::End,
-    ));
+}
+
+/// A scenario's heading: its name, less the card's name it starts with ("Exiles its own
+/// loot's discard for a Rogue", "Ability returns a card after the Converter left").
+fn heading(def: &'static CardDef, scenario: &Scenario) -> &'static str {
+    let name = scenario.name;
+    let rest = name.strip_prefix(def.name).map_or(name, |r| {
+        r.strip_prefix("'s ")
+            .or_else(|| r.strip_prefix(": "))
+            .or_else(|| r.strip_prefix(' '))
+            .unwrap_or(name)
+    });
+    let mut chars = rest.chars();
+    let heading = chars
+        .next()
+        .map(|c| c.to_uppercase().chain(chars).collect::<String>())
+        .unwrap_or_default();
+    Box::leak(heading.into_boxed_str())
 }
 
 /// What a scenario's action of the card is, as its moment's label: "Cast", "{T}", "−3".

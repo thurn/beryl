@@ -1,5 +1,22 @@
 [
   {
+    "moment": "discarding-a-basic-land-instead",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Thirst for Discovery"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Thirst for Discovery"
+    ]
+  },
+  {
     "moment": "discarding-a-basic-land-instead-0",
     "yours": [
       "turn 1",
@@ -40,9 +57,9 @@
     ]
   },
   {
-    "moment": "discarding-a-basic-land-instead-end",
+    "moment": "discarding-two-cards-with-a-basic-land-in-hand",
     "yours": [
-      "turn 1",
+      "turn 3",
       "your turn",
       "step precombatMain",
       "decision priority",
@@ -93,6 +110,23 @@
     ]
   },
   {
+    "moment": "two-nonbasic-cards-with-no-basic-land",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Thirst for Discovery"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Thirst for Discovery"
+    ]
+  },
+  {
     "moment": "two-nonbasic-cards-with-no-basic-land-0",
     "yours": [
       "turn 1",
@@ -112,7 +146,7 @@
     ]
   },
   {
-    "moment": "with-fewer-than-two-cards-to-discard-0",
+    "moment": "with-fewer-than-two-cards-to-discard",
     "yours": [
       "turn 1",
       "your turn",

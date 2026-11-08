@@ -1,6 +1,6 @@
 [
   {
-    "moment": "s-u-with-a-tundra-end",
+    "moment": "s-u-with-a-tundra",
     "yours": [
       "turn 2",
       "their turn",
@@ -21,7 +21,7 @@
     ]
   },
   {
-    "moment": "s-u-without-a-plains-or-an-island-end",
+    "moment": "s-u-without-a-plains-or-an-island",
     "yours": [
       "turn 3",
       "your turn",
@@ -40,7 +40,7 @@
     ]
   },
   {
-    "moment": "s-u-with-a-plains-end",
+    "moment": "s-u-with-a-plains",
     "yours": [
       "turn 3",
       "your turn",
@@ -60,7 +60,7 @@
     ]
   },
   {
-    "moment": "s-w-end",
+    "moment": "s-w",
     "yours": [
       "turn 2",
       "their turn",

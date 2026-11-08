@@ -1,5 +1,26 @@
 [
   {
+    "moment": "kicked-steals-mana-crypt-over-a-map",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Thieving Skydiver",
+      "not tapped Thieving Skydiver",
+      "stolen permanent"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Thieving Skydiver",
+      "they control 1 Thieving Skydiver",
+      "stolen permanent"
+    ]
+  },
+  {
     "moment": "kicked-steals-mana-crypt-over-a-map-1",
     "yours": [
       "turn 1",
@@ -21,28 +42,7 @@
     ]
   },
   {
-    "moment": "kicked-steals-mana-crypt-over-a-map-end",
-    "yours": [
-      "turn 3",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 1 Thieving Skydiver",
-      "not tapped Thieving Skydiver",
-      "stolen permanent"
-    ],
-    "theirs": [
-      "turn 4",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 0 Thieving Skydiver",
-      "they control 1 Thieving Skydiver",
-      "stolen permanent"
-    ]
-  },
-  {
-    "moment": "unkicked-0",
+    "moment": "unkicked",
     "yours": [
       "turn 3",
       "your turn",
@@ -60,7 +60,7 @@
     ]
   },
   {
-    "moment": "kicked-with-no-artifact-around-end",
+    "moment": "kicked-with-no-artifact-around",
     "yours": [
       "turn 3",
       "your turn",

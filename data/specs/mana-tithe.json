@@ -1,5 +1,22 @@
 [
   {
+    "moment": "the-controller-pays-1",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Mana Tithe"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Mana Tithe"
+    ]
+  },
+  {
     "moment": "the-controller-pays-1-1",
     "yours": [
       "turn 1",
@@ -20,7 +37,7 @@
     ]
   },
   {
-    "moment": "the-controller-pays-1-end",
+    "moment": "lands-left-after-paying-for-the-spell-pay-1",
     "yours": [
       "turn 3",
       "your turn",
@@ -77,7 +94,7 @@
     ]
   },
   {
-    "moment": "a-controller-who-cant-pay-isnt-asked-1",
+    "moment": "a-controller-who-cant-pay-isnt-asked",
     "yours": [
       "turn 3",
       "your turn",

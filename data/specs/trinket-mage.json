@@ -1,5 +1,25 @@
 [
   {
+    "moment": "finds-mana-crypt",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Trinket Mage",
+      "not tapped Trinket Mage"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step end",
+      "decision priority",
+      "controls 0 Trinket Mage",
+      "they control 1 Trinket Mage",
+      "known card in the opponent's hand"
+    ]
+  },
+  {
     "moment": "finds-mana-crypt-0",
     "yours": [
       "turn 1",
@@ -41,27 +61,7 @@
     ]
   },
   {
-    "moment": "finds-mana-crypt-end",
-    "yours": [
-      "turn 1",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 1 Trinket Mage",
-      "not tapped Trinket Mage"
-    ],
-    "theirs": [
-      "turn 1",
-      "their turn",
-      "step end",
-      "decision priority",
-      "controls 0 Trinket Mage",
-      "they control 1 Trinket Mage",
-      "known card in the opponent's hand"
-    ]
-  },
-  {
-    "moment": "finds-portable-hole-end",
+    "moment": "finds-portable-hole",
     "yours": [
       "turn 3",
       "your turn",
@@ -77,6 +77,43 @@
       "controls 0 Trinket Mage",
       "they control 1 Trinket Mage",
       "known card in the opponent's hand"
+    ]
+  },
+  {
+    "moment": "finds-nothing-although-mana-crypt-is-there",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Trinket Mage",
+      "not tapped Trinket Mage"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step end",
+      "decision priority",
+      "controls 0 Trinket Mage",
+      "they control 1 Trinket Mage"
+    ]
+  },
+  {
+    "moment": "searches-a-library-without-a-trinket",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "controls 1 Trinket Mage",
+      "not tapped Trinket Mage"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step end",
+      "decision priority",
+      "controls 0 Trinket Mage",
+      "they control 1 Trinket Mage"
     ]
   },
   {
@@ -98,11 +135,12 @@
     ]
   },
   {
-    "moment": "searches-a-library-without-a-trinket-end",
+    "moment": "declines-to-search",
     "yours": [
-      "turn 5",
+      "turn 3",
       "your turn",
       "step precombatMain",
+      "decision priority",
       "controls 1 Trinket Mage",
       "not tapped Trinket Mage"
     ],

@@ -1,5 +1,24 @@
 [
   {
+    "moment": "a-creature-becomes-a-noncreature-vehicle-that-cant-crew-alone",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Swift Reconfiguration",
+      "not tapped Swift Reconfiguration"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Swift Reconfiguration",
+      "they control 1 Swift Reconfiguration"
+    ]
+  },
+  {
     "moment": "a-creature-becomes-a-noncreature-vehicle-that-cant-crew-alone-0",
     "yours": [
       "turn 2",
@@ -20,26 +39,7 @@
     ]
   },
   {
-    "moment": "a-creature-becomes-a-noncreature-vehicle-that-cant-crew-alone-end",
-    "yours": [
-      "turn 3",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 1 Swift Reconfiguration",
-      "not tapped Swift Reconfiguration"
-    ],
-    "theirs": [
-      "turn 4",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 0 Swift Reconfiguration",
-      "they control 1 Swift Reconfiguration"
-    ]
-  },
-  {
-    "moment": "crewing-the-vehicle-makes-it-a-creature-until-end-of-turn-end",
+    "moment": "crewing-the-vehicle-makes-it-a-creature-until-end-of-turn",
     "yours": [
       "turn 2",
       "their turn",
@@ -58,7 +58,7 @@
     ]
   },
   {
-    "moment": "thieving-skydiver-kicked-for-1-cant-take-a-reconfigured-2-drop-end",
+    "moment": "thieving-skydiver-kicked-for-1-cant-take-a-reconfigured-2-drop",
     "yours": [
       "turn 3",
       "your turn",
@@ -79,7 +79,7 @@
     ]
   },
   {
-    "moment": "thieving-skydiver-kicked-for-2-takes-the-reconfigured-creature-end",
+    "moment": "thieving-skydiver-kicked-for-2-takes-the-reconfigured-creature",
     "yours": [
       "turn 1",
       "your turn",

@@ -6,7 +6,7 @@
 // then again in the page's second half from the opponent's. Whatever would play after a frame's
 // first view (the moment's own actions, or the game going on to the viewer's first decision)
 // waits for its play button; replay starts it afresh.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { cardEntry } from "../cards";
 import type { RelayedEvent } from "../ipc";
 import "./specs.css";
@@ -17,6 +17,8 @@ const API = "/spec-api";
 interface MomentListing {
   name: string;
   title: string;
+  /** The scenario it comes from, by name; empty for the card's own moments. */
+  group: string;
   plays: boolean;
 }
 
@@ -133,10 +135,15 @@ function SpecPage({ spec }: { spec: SpecListing }) {
         </a>
         <CardImage name={spec.card} className="specs-card" />
         <ol className="specs-toc">
-          {spec.moments.map((m) => (
-            <li key={m.name}>
-              <a href={`#${anchor(m, "yours")}`}>{m.title}</a>
-            </li>
+          {spec.moments.map((m, i) => (
+            <Fragment key={m.name}>
+              {startsGroup(spec.moments, i) && (
+                <li className="specs-toc-group">{m.group}</li>
+              )}
+              <li>
+                <a href={`#${anchor(m, "yours")}`}>{m.title}</a>
+              </li>
+            </Fragment>
           ))}
         </ol>
         <a href="#theirs" className="specs-toc-them">
@@ -147,16 +154,20 @@ function SpecPage({ spec }: { spec: SpecListing }) {
         {VIEWS.map((view) => (
           <div key={view} id={view}>
             {view === "theirs" && <h1 className="specs-section-head">Them</h1>}
-            {spec.moments.map((m) => (
-              <MomentView
-                key={m.name}
-                slug={spec.slug}
-                moment={m}
-                view={view}
-                page={page}
-                open={open}
-                frames={frames.current}
-              />
+            {spec.moments.map((m, i) => (
+              <Fragment key={m.name}>
+                {startsGroup(spec.moments, i) && (
+                  <h2 className="specs-group-head">{m.group}</h2>
+                )}
+                <MomentView
+                  slug={spec.slug}
+                  moment={m}
+                  view={view}
+                  page={page}
+                  open={open}
+                  frames={frames.current}
+                />
+              </Fragment>
             ))}
           </div>
         ))}
@@ -179,6 +190,12 @@ function useReached(ref: React.RefObject<HTMLElement | null>): boolean {
     return () => observer.disconnect();
   }, [ref, reached]);
   return reached;
+}
+
+/** Whether the moment at `i` heads a scenario's moments: the first from it. */
+function startsGroup(moments: MomentListing[], i: number): boolean {
+  const group = moments[i]?.group;
+  return !!group && moments[i - 1]?.group !== group;
 }
 
 /** The seats a moment is seen from, in the spec server's words, each a frame of its own. */

@@ -60,7 +60,7 @@
     ]
   },
   {
-    "moment": "destroys-a-basic-land-end",
+    "moment": "destroys-a-basic-land",
     "yours": [
       "turn 3",
       "your turn",
@@ -76,7 +76,7 @@
     ]
   },
   {
-    "moment": "tells-itself-from-its-twin-end",
+    "moment": "tells-itself-from-its-twin",
     "yours": [
       "turn 1",
       "your turn",

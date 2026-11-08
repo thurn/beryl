@@ -1,6 +1,6 @@
 [
   {
-    "moment": "returns-a-spell-to-its-owners-hand-1",
+    "moment": "returns-a-spell-to-its-owners-hand",
     "yours": [
       "turn 2",
       "their turn",
@@ -19,7 +19,26 @@
     ]
   },
   {
-    "moment": "returns-a-nonland-permanent-never-a-land-end",
+    "moment": "returns-a-nonland-permanent-never-a-land",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack Sink into Stupor",
+      "controls 0 Sink into Stupor"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Sink into Stupor"
+    ]
+  },
+  {
+    "moment": "soporific-springs-3-life-paid-it-enters-untapped",
     "yours": [
       "turn 1",
       "your turn",
@@ -57,7 +76,7 @@
     ]
   },
   {
-    "moment": "soporific-springs-no-life-paid-it-enters-tapped-end",
+    "moment": "soporific-springs-no-life-paid-it-enters-tapped",
     "yours": [
       "turn 3",
       "your turn",
@@ -73,7 +92,7 @@
     ]
   },
   {
-    "moment": "soporific-springs-with-2-life-it-enters-tapped-unasked-0",
+    "moment": "soporific-springs-with-2-life-it-enters-tapped-unasked",
     "yours": [
       "turn 3",
       "your turn",

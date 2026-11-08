@@ -1,8 +1,8 @@
 [
   {
-    "moment": "with-two-other-lands-enters-untapped-0",
+    "moment": "with-two-other-lands-enters-untapped",
     "yours": [
-      "turn 1",
+      "turn 3",
       "your turn",
       "step precombatMain",
       "decision priority",
@@ -19,7 +19,7 @@
     ]
   },
   {
-    "moment": "with-three-other-lands-enters-tapped-0",
+    "moment": "with-three-other-lands-enters-tapped",
     "yours": [
       "turn 3",
       "your turn",
@@ -37,7 +37,7 @@
     ]
   },
   {
-    "moment": "s-white-mana-end",
+    "moment": "s-white-mana",
     "yours": [
       "turn 2",
       "their turn",

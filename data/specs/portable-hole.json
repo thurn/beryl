@@ -1,5 +1,24 @@
 [
   {
+    "moment": "exiles-until-it-leaves-the-battlefield",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Portable Hole",
+      "castable Portable Hole"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Portable Hole",
+      "known card in the opponent's hand"
+    ]
+  },
+  {
     "moment": "exiles-until-it-leaves-the-battlefield-0",
     "yours": [
       "turn 3",
@@ -20,26 +39,7 @@
     ]
   },
   {
-    "moment": "exiles-until-it-leaves-the-battlefield-end",
-    "yours": [
-      "turn 3",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 0 Portable Hole",
-      "castable Portable Hole"
-    ],
-    "theirs": [
-      "turn 2",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 0 Portable Hole",
-      "known card in the opponent's hand"
-    ]
-  },
-  {
-    "moment": "with-no-permanent-of-mana-value-2-or-less-to-exile-end",
+    "moment": "with-no-permanent-of-mana-value-2-or-less-to-exile",
     "yours": [
       "turn 3",
       "your turn",
@@ -58,7 +58,7 @@
     ]
   },
   {
-    "moment": "gone-before-its-trigger-resolves-end",
+    "moment": "gone-before-its-trigger-resolves",
     "yours": [
       "turn 3",
       "your turn",

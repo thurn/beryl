@@ -1,17 +1,15 @@
 [
   {
-    "moment": "malcolms-fourth-chorus-counter-casts-the-discard-ask-12",
+    "moment": "malcolms-fourth-chorus-counter-casts-the-discard",
     "yours": [
       "turn 7",
       "your turn",
-      "step combatDamage",
-      "decision discard",
-      "2 candidates",
-      "resolving Malcolm, Alluring Scoundrel",
+      "step postcombatMain",
+      "decision priority",
       "controls 1 Malcolm, Alluring Scoundrel",
       "tapped Malcolm, Alluring Scoundrel",
       "Malcolm, Alluring Scoundrel has 4 chorus",
-      "attacking"
+      "known card in the opponent's hand"
     ],
     "theirs": [
       "turn 8",
@@ -24,16 +22,18 @@
     ]
   },
   {
-    "moment": "malcolms-fourth-chorus-counter-casts-the-discard-end",
+    "moment": "malcolms-fourth-chorus-counter-casts-the-discard-ask-12",
     "yours": [
       "turn 7",
       "your turn",
-      "step postcombatMain",
-      "decision priority",
+      "step combatDamage",
+      "decision discard",
+      "2 candidates",
+      "resolving Malcolm, Alluring Scoundrel",
       "controls 1 Malcolm, Alluring Scoundrel",
       "tapped Malcolm, Alluring Scoundrel",
       "Malcolm, Alluring Scoundrel has 4 chorus",
-      "known card in the opponent's hand"
+      "attacking"
     ],
     "theirs": [
       "turn 8",

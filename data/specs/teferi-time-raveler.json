@@ -64,7 +64,7 @@
     ]
   },
   {
-    "moment": "an-opponents-flash-spell-waits-for-sorcery-timing-end",
+    "moment": "an-opponents-flash-spell-waits-for-sorcery-timing",
     "yours": [
       "turn 3",
       "your turn",
@@ -83,26 +83,45 @@
     ]
   },
   {
-    "moment": "3-returns-an-opposing-artifact-and-draws-a-card-bounced-0",
+    "moment": "an-opponents-flash-spell-waits-for-sorcery-timing-pass",
     "yours": [
       "turn 3",
       "your turn",
-      "step precombatMain",
+      "step postcombatMain",
       "decision priority",
       "controls 0 Teferi, Time Raveler",
-      "known card in the opponent's hand"
+      "exiled beneath a permanent"
     ],
     "theirs": [
-      "turn 2",
+      "turn 4",
       "your turn",
       "step precombatMain",
       "decision priority",
       "controls 0 Teferi, Time Raveler",
-      "known card in the opponent's hand"
+      "exiled beneath a permanent"
     ]
   },
   {
-    "moment": "3-returns-an-opposing-artifact-and-draws-a-card-end",
+    "moment": "an-opponents-flash-spell-waits-for-sorcery-timing-next-turn",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Teferi, Time Raveler",
+      "exiled beneath a permanent"
+    ],
+    "theirs": [
+      "turn 5",
+      "their turn",
+      "step end",
+      "decision priority",
+      "controls 0 Teferi, Time Raveler",
+      "exiled beneath a permanent"
+    ]
+  },
+  {
+    "moment": "3-returns-an-opposing-artifact-and-draws-a-card",
     "yours": [
       "turn 1",
       "your turn",
@@ -125,7 +144,26 @@
     ]
   },
   {
-    "moment": "1-lets-a-sorcery-be-cast-on-the-opponents-turn-until-the-next-end",
+    "moment": "3-returns-an-opposing-artifact-and-draws-a-card-bounced-0",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Teferi, Time Raveler",
+      "known card in the opponent's hand"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Teferi, Time Raveler",
+      "known card in the opponent's hand"
+    ]
+  },
+  {
+    "moment": "1-lets-a-sorcery-be-cast-on-the-opponents-turn-until-the-next",
     "yours": [
       "turn 3",
       "your turn",
@@ -148,45 +186,7 @@
     ]
   },
   {
-    "moment": "an-opponents-flash-spell-waits-for-sorcery-timing-end-pass",
-    "yours": [
-      "turn 3",
-      "your turn",
-      "step postcombatMain",
-      "decision priority",
-      "controls 0 Teferi, Time Raveler",
-      "exiled beneath a permanent"
-    ],
-    "theirs": [
-      "turn 4",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 0 Teferi, Time Raveler",
-      "exiled beneath a permanent"
-    ]
-  },
-  {
-    "moment": "an-opponents-flash-spell-waits-for-sorcery-timing-end-next-turn",
-    "yours": [
-      "turn 5",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 0 Teferi, Time Raveler",
-      "exiled beneath a permanent"
-    ],
-    "theirs": [
-      "turn 5",
-      "their turn",
-      "step end",
-      "decision priority",
-      "controls 0 Teferi, Time Raveler",
-      "exiled beneath a permanent"
-    ]
-  },
-  {
-    "moment": "1-lets-a-sorcery-be-cast-on-the-opponents-turn-until-the-next-end-pass",
+    "moment": "1-lets-a-sorcery-be-cast-on-the-opponents-turn-until-the-next-pass",
     "yours": [
       "turn 3",
       "your turn",

@@ -59,7 +59,7 @@
     ]
   },
   {
-    "moment": "1-mills-the-target-player-two-then-draws-end",
+    "moment": "1-mills-the-target-player-two-then-draws",
     "yours": [
       "turn 1",
       "your turn",
@@ -82,7 +82,53 @@
     ]
   },
   {
-    "moment": "1-milling-his-controller-empty-wins-on-the-draw-end",
+    "moment": "1-mills-the-target-player-two-then-draws-pass",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step postcombatMain",
+      "decision priority",
+      "not offers Jace, Wielder of Mysteries ability 1",
+      "not offers Jace, Wielder of Mysteries ability 2",
+      "controls 1 Jace, Wielder of Mysteries",
+      "not tapped Jace, Wielder of Mysteries",
+      "Jace, Wielder of Mysteries has 5 loyalty"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Jace, Wielder of Mysteries",
+      "they control 1 Jace, Wielder of Mysteries",
+      "Jace, Wielder of Mysteries has 5 loyalty"
+    ]
+  },
+  {
+    "moment": "1-mills-the-target-player-two-then-draws-next-turn",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "offers Jace, Wielder of Mysteries ability 1",
+      "not offers Jace, Wielder of Mysteries ability 2",
+      "controls 1 Jace, Wielder of Mysteries",
+      "not tapped Jace, Wielder of Mysteries",
+      "Jace, Wielder of Mysteries has 5 loyalty"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Jace, Wielder of Mysteries",
+      "they control 1 Jace, Wielder of Mysteries",
+      "Jace, Wielder of Mysteries has 5 loyalty"
+    ]
+  },
+  {
+    "moment": "1-milling-his-controller-empty-wins-on-the-draw",
     "yours": [
       "turn 1",
       "your turn",
@@ -103,7 +149,7 @@
     ]
   },
   {
-    "moment": "the-draw-steps-draw-from-an-empty-library-wins-end",
+    "moment": "the-draw-steps-draw-from-an-empty-library-wins",
     "yours": [
       "turn 3",
       "your turn",
@@ -124,7 +170,7 @@
     ]
   },
   {
-    "moment": "the-opponents-draw-from-an-empty-library-still-loses-end",
+    "moment": "the-opponents-draw-from-an-empty-library-still-loses",
     "yours": [
       "turn 2",
       "their turn",
@@ -145,7 +191,7 @@
     ]
   },
   {
-    "moment": "8-draws-the-library-empty-and-wins-0",
+    "moment": "8-draws-the-library-empty-and-wins",
     "yours": [
       "turn 1",
       "your turn",
@@ -162,25 +208,7 @@
     ]
   },
   {
-    "moment": "8-with-cards-left-after-the-seven-doesnt-win-bounced-0",
-    "yours": [
-      "turn 1",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 0 Jace, Wielder of Mysteries"
-    ],
-    "theirs": [
-      "turn 2",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 0 Jace, Wielder of Mysteries",
-      "known card in the opponent's hand"
-    ]
-  },
-  {
-    "moment": "8-with-cards-left-after-the-seven-doesnt-win-end",
+    "moment": "8-with-cards-left-after-the-seven-doesnt-win",
     "yours": [
       "turn 1",
       "your turn",
@@ -204,17 +232,13 @@
     ]
   },
   {
-    "moment": "1-mills-the-target-player-two-then-draws-end-pass",
+    "moment": "8-with-cards-left-after-the-seven-doesnt-win-bounced-0",
     "yours": [
       "turn 1",
       "your turn",
-      "step postcombatMain",
+      "step precombatMain",
       "decision priority",
-      "not offers Jace, Wielder of Mysteries ability 1",
-      "not offers Jace, Wielder of Mysteries ability 2",
-      "controls 1 Jace, Wielder of Mysteries",
-      "not tapped Jace, Wielder of Mysteries",
-      "Jace, Wielder of Mysteries has 5 loyalty"
+      "controls 0 Jace, Wielder of Mysteries"
     ],
     "theirs": [
       "turn 2",
@@ -222,35 +246,11 @@
       "step precombatMain",
       "decision priority",
       "controls 0 Jace, Wielder of Mysteries",
-      "they control 1 Jace, Wielder of Mysteries",
-      "Jace, Wielder of Mysteries has 5 loyalty"
+      "known card in the opponent's hand"
     ]
   },
   {
-    "moment": "1-mills-the-target-player-two-then-draws-end-next-turn",
-    "yours": [
-      "turn 3",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "offers Jace, Wielder of Mysteries ability 1",
-      "not offers Jace, Wielder of Mysteries ability 2",
-      "controls 1 Jace, Wielder of Mysteries",
-      "not tapped Jace, Wielder of Mysteries",
-      "Jace, Wielder of Mysteries has 5 loyalty"
-    ],
-    "theirs": [
-      "turn 4",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 0 Jace, Wielder of Mysteries",
-      "they control 1 Jace, Wielder of Mysteries",
-      "Jace, Wielder of Mysteries has 5 loyalty"
-    ]
-  },
-  {
-    "moment": "8-with-cards-left-after-the-seven-doesnt-win-end-pass",
+    "moment": "8-with-cards-left-after-the-seven-doesnt-win-pass",
     "yours": [
       "turn 1",
       "your turn",
@@ -273,7 +273,7 @@
     ]
   },
   {
-    "moment": "8-with-cards-left-after-the-seven-doesnt-win-end-next-turn",
+    "moment": "8-with-cards-left-after-the-seven-doesnt-win-next-turn",
     "yours": [
       "turn 3",
       "your turn",

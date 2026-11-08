@@ -121,6 +121,23 @@
     ]
   },
   {
+    "moment": "waterbend-taps-a-creature-and-an-artifact-scry-reorders-the-top",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Aang's Iceberg"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Aang's Iceberg"
+    ]
+  },
+  {
     "moment": "waterbend-taps-a-creature-and-an-artifact-scry-reorders-the-top-0",
     "yours": [
       "turn 1",
@@ -162,24 +179,7 @@
     ]
   },
   {
-    "moment": "waterbend-taps-a-creature-and-an-artifact-scry-reorders-the-top-end",
-    "yours": [
-      "turn 3",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 0 Aang's Iceberg"
-    ],
-    "theirs": [
-      "turn 2",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 0 Aang's Iceberg"
-    ]
-  },
-  {
-    "moment": "waterbend-taps-a-creature-and-an-artifact-scry-reorders-the-top-end-pass",
+    "moment": "waterbend-taps-a-creature-and-an-artifact-scry-reorders-the-top-pass",
     "yours": [
       "turn 3",
       "your turn",

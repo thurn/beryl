@@ -1,5 +1,26 @@
 [
   {
+    "moment": "flashback-a-counterspell-then-exile-it",
+    "yours": [
+      "turn 2",
+      "their turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack Counterspell",
+      "controls 1 Snapcaster Mage",
+      "not tapped Snapcaster Mage"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Snapcaster Mage",
+      "they control 1 Snapcaster Mage"
+    ]
+  },
+  {
     "moment": "flashback-a-counterspell-then-exile-it-1",
     "yours": [
       "turn 2",
@@ -21,28 +42,7 @@
     ]
   },
   {
-    "moment": "flashback-a-counterspell-then-exile-it-end",
-    "yours": [
-      "turn 2",
-      "their turn",
-      "step precombatMain",
-      "decision target",
-      "1 candidates",
-      "stack Counterspell",
-      "controls 1 Snapcaster Mage",
-      "not tapped Snapcaster Mage"
-    ],
-    "theirs": [
-      "turn 2",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 0 Snapcaster Mage",
-      "they control 1 Snapcaster Mage"
-    ]
-  },
-  {
-    "moment": "a-flashback-spell-returned-to-hand-is-exiled-end",
+    "moment": "a-flashback-spell-returned-to-hand-is-exiled",
     "yours": [
       "turn 3",
       "your turn",
@@ -60,7 +60,7 @@
     ]
   },
   {
-    "moment": "flashback-is-the-one-alternative-cost-end",
+    "moment": "flashback-is-the-one-alternative-cost",
     "yours": [
       "turn 3",
       "your turn",
@@ -79,7 +79,7 @@
     ]
   },
   {
-    "moment": "flashback-ends-with-the-turn-end",
+    "moment": "flashback-ends-with-the-turn",
     "yours": [
       "turn 3",
       "your turn",
@@ -97,7 +97,7 @@
     ]
   },
   {
-    "moment": "with-no-instant-or-sorcery-to-target-0",
+    "moment": "with-no-instant-or-sorcery-to-target",
     "yours": [
       "turn 3",
       "your turn",

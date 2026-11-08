@@ -1,5 +1,23 @@
 [
   {
+    "moment": "for-bb-destroys-its-target-alone",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step declareAttackers",
+      "decision attacker",
+      "2 candidates",
+      "controls 0 Damn"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Damn"
+    ]
+  },
+  {
     "moment": "for-bb-destroys-its-target-alone-0",
     "yours": [
       "turn 1",
@@ -19,25 +37,7 @@
     ]
   },
   {
-    "moment": "for-bb-destroys-its-target-alone-end",
-    "yours": [
-      "turn 1",
-      "your turn",
-      "step declareAttackers",
-      "decision attacker",
-      "2 candidates",
-      "controls 0 Damn"
-    ],
-    "theirs": [
-      "turn 2",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 0 Damn"
-    ]
-  },
-  {
-    "moment": "overloaded-destroys-each-creature-targeting-none-0",
+    "moment": "overloaded-destroys-each-creature-targeting-none",
     "yours": [
       "turn 3",
       "your turn",

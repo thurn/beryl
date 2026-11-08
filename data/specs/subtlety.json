@@ -1,5 +1,23 @@
 [
   {
+    "moment": "hard-cast-the-creature-spells-owner-puts-it-on-top",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "controls 1 Subtlety",
+      "not tapped Subtlety"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Subtlety",
+      "they control 1 Subtlety"
+    ]
+  },
+  {
     "moment": "hard-cast-the-creature-spells-owner-puts-it-on-top-1",
     "yours": [
       "turn 2",
@@ -58,6 +76,23 @@
       "decision priority",
       "controls 0 Subtlety",
       "they control 1 Subtlety"
+    ]
+  },
+  {
+    "moment": "evoked-sacrificed-its-trigger-still-tucks-a-planeswalker-spell",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step draw",
+      "controls 0 Subtlety",
+      "game over"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Subtlety"
     ]
   },
   {

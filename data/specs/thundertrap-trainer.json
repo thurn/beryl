@@ -1,5 +1,25 @@
 [
   {
+    "moment": "takes-a-spell",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Thundertrap Trainer",
+      "not tapped Thundertrap Trainer"
+    ],
+    "theirs": [
+      "turn 3",
+      "their turn",
+      "step end",
+      "decision priority",
+      "controls 0 Thundertrap Trainer",
+      "they control 1 Thundertrap Trainer",
+      "known card in the opponent's hand"
+    ]
+  },
+  {
     "moment": "takes-a-spell-0",
     "yours": [
       "turn 1",
@@ -64,27 +84,7 @@
     ]
   },
   {
-    "moment": "takes-a-spell-end",
-    "yours": [
-      "turn 3",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 1 Thundertrap Trainer",
-      "not tapped Thundertrap Trainer"
-    ],
-    "theirs": [
-      "turn 3",
-      "their turn",
-      "step end",
-      "decision priority",
-      "controls 0 Thundertrap Trainer",
-      "they control 1 Thundertrap Trainer",
-      "known card in the opponent's hand"
-    ]
-  },
-  {
-    "moment": "finds-no-spell-0",
+    "moment": "finds-no-spell",
     "yours": [
       "turn 3",
       "your turn",
@@ -103,7 +103,7 @@
     ]
   },
   {
-    "moment": "with-offspring-end",
+    "moment": "with-offspring",
     "yours": [
       "turn 3",
       "your turn",

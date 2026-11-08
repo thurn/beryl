@@ -1,6 +1,6 @@
 [
   {
-    "moment": "cant-be-cast-without-a-target-end",
+    "moment": "cant-be-cast-without-a-target",
     "yours": [
       "turn 3",
       "your turn",
@@ -16,7 +16,7 @@
     ]
   },
   {
-    "moment": "on-an-empty-library-makes-the-creature-its-only-card-0",
+    "moment": "on-an-empty-library-makes-the-creature-its-only-card",
     "yours": [
       "turn 1",
       "your turn",
@@ -34,7 +34,26 @@
     ]
   },
   {
-    "moment": "on-a-library-of-one-puts-the-creature-under-it-end",
+    "moment": "on-a-library-of-one-puts-the-creature-under-it",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack Oust",
+      "controls 0 Oust"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Oust"
+    ]
+  },
+  {
+    "moment": "puts-the-creature-second-from-the-top-and-its-controller-gains-3",
     "yours": [
       "turn 1",
       "your turn",

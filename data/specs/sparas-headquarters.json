@@ -1,6 +1,6 @@
 [
   {
-    "moment": "enters-tapped-0",
+    "moment": "enters-tapped",
     "yours": [
       "turn 3",
       "your turn",
@@ -18,7 +18,7 @@
     ]
   },
   {
-    "moment": "cycling-sparas-headquarters-0",
+    "moment": "cycling-sparas-headquarters",
     "yours": [
       "turn 1",
       "your turn",
@@ -35,7 +35,7 @@
     ]
   },
   {
-    "moment": "blue-mana-end",
+    "moment": "blue-mana",
     "yours": [
       "turn 1",
       "your turn",

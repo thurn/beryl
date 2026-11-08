@@ -92,6 +92,32 @@
     ]
   },
   {
+    "moment": "1-draws-and-at-the-end-step-untaps-up-to-two-lands",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "offers Teferi, Hero of Dominaria ability 0",
+      "offers Teferi, Hero of Dominaria ability 1",
+      "not offers Teferi, Hero of Dominaria ability 2",
+      "controls 1 Teferi, Hero of Dominaria",
+      "controls 0 Teferi, Hero of Dominaria Emblem",
+      "not tapped Teferi, Hero of Dominaria",
+      "Teferi, Hero of Dominaria has 5 loyalty"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Teferi, Hero of Dominaria",
+      "they control 1 Teferi, Hero of Dominaria",
+      "controls 0 Teferi, Hero of Dominaria Emblem",
+      "Teferi, Hero of Dominaria has 5 loyalty"
+    ]
+  },
+  {
     "moment": "1-draws-and-at-the-end-step-untaps-up-to-two-lands-ask-5",
     "yours": [
       "turn 1",
@@ -118,11 +144,11 @@
     ]
   },
   {
-    "moment": "1-draws-and-at-the-end-step-untaps-up-to-two-lands-end",
+    "moment": "1-draws-and-at-the-end-step-untaps-up-to-two-lands-pass",
     "yours": [
       "turn 3",
       "your turn",
-      "step precombatMain",
+      "step postcombatMain",
       "decision priority",
       "offers Teferi, Hero of Dominaria ability 0",
       "offers Teferi, Hero of Dominaria ability 1",
@@ -133,7 +159,7 @@
       "Teferi, Hero of Dominaria has 5 loyalty"
     ],
     "theirs": [
-      "turn 2",
+      "turn 4",
       "your turn",
       "step precombatMain",
       "decision priority",
@@ -141,6 +167,25 @@
       "they control 1 Teferi, Hero of Dominaria",
       "controls 0 Teferi, Hero of Dominaria Emblem",
       "Teferi, Hero of Dominaria has 5 loyalty"
+    ]
+  },
+  {
+    "moment": "1s-untap-comes-at-the-end-step-after-teferi-has-left",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Teferi, Hero of Dominaria",
+      "controls 0 Teferi, Hero of Dominaria Emblem"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step end",
+      "decision priority",
+      "controls 0 Teferi, Hero of Dominaria",
+      "controls 0 Teferi, Hero of Dominaria Emblem"
     ]
   },
   {
@@ -166,22 +211,49 @@
     ]
   },
   {
-    "moment": "1s-untap-comes-at-the-end-step-after-teferi-has-left-end",
+    "moment": "1s-untap-comes-at-the-end-step-after-teferi-has-left-pass",
     "yours": [
       "turn 3",
       "your turn",
-      "step precombatMain",
+      "step postcombatMain",
       "decision priority",
       "controls 0 Teferi, Hero of Dominaria",
       "controls 0 Teferi, Hero of Dominaria Emblem"
     ],
     "theirs": [
-      "turn 1",
+      "turn 3",
       "their turn",
       "step end",
       "decision priority",
       "controls 0 Teferi, Hero of Dominaria",
       "controls 0 Teferi, Hero of Dominaria Emblem"
+    ]
+  },
+  {
+    "moment": "3-puts-a-nonland-permanent-third-from-the-top-of-its-owners-library",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "not offers Teferi, Hero of Dominaria ability 0",
+      "not offers Teferi, Hero of Dominaria ability 1",
+      "not offers Teferi, Hero of Dominaria ability 2",
+      "controls 1 Teferi, Hero of Dominaria",
+      "controls 0 Teferi, Hero of Dominaria Emblem",
+      "not tapped Teferi, Hero of Dominaria",
+      "Teferi, Hero of Dominaria has 1 loyalty"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Teferi, Hero of Dominaria",
+      "controls 0 Teferi, Hero of Dominaria",
+      "they control 1 Teferi, Hero of Dominaria",
+      "controls 0 Teferi, Hero of Dominaria Emblem",
+      "Teferi, Hero of Dominaria has 1 loyalty"
     ]
   },
   {
@@ -206,7 +278,59 @@
     ]
   },
   {
-    "moment": "3-puts-a-nonland-permanent-third-from-the-top-of-its-owners-library-end",
+    "moment": "3-puts-a-nonland-permanent-third-from-the-top-of-its-owners-library-pass",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step postcombatMain",
+      "decision priority",
+      "not offers Teferi, Hero of Dominaria ability 0",
+      "not offers Teferi, Hero of Dominaria ability 1",
+      "not offers Teferi, Hero of Dominaria ability 2",
+      "controls 1 Teferi, Hero of Dominaria",
+      "controls 0 Teferi, Hero of Dominaria Emblem",
+      "not tapped Teferi, Hero of Dominaria",
+      "Teferi, Hero of Dominaria has 1 loyalty"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Teferi, Hero of Dominaria",
+      "they control 1 Teferi, Hero of Dominaria",
+      "controls 0 Teferi, Hero of Dominaria Emblem",
+      "Teferi, Hero of Dominaria has 1 loyalty"
+    ]
+  },
+  {
+    "moment": "3-puts-a-nonland-permanent-third-from-the-top-of-its-owners-library-next-turn",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "offers Teferi, Hero of Dominaria ability 0",
+      "not offers Teferi, Hero of Dominaria ability 1",
+      "not offers Teferi, Hero of Dominaria ability 2",
+      "controls 1 Teferi, Hero of Dominaria",
+      "controls 0 Teferi, Hero of Dominaria Emblem",
+      "not tapped Teferi, Hero of Dominaria",
+      "Teferi, Hero of Dominaria has 1 loyalty"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Teferi, Hero of Dominaria",
+      "they control 1 Teferi, Hero of Dominaria",
+      "controls 0 Teferi, Hero of Dominaria Emblem",
+      "Teferi, Hero of Dominaria has 1 loyalty"
+    ]
+  },
+  {
+    "moment": "3-into-a-library-of-fewer-than-two-cards-puts-it-on-the-bottom",
     "yours": [
       "turn 1",
       "your turn",
@@ -230,6 +354,32 @@
       "they control 1 Teferi, Hero of Dominaria",
       "controls 0 Teferi, Hero of Dominaria Emblem",
       "Teferi, Hero of Dominaria has 1 loyalty"
+    ]
+  },
+  {
+    "moment": "8s-emblem-exiles-a-permanent-whenever-its-owner-draws",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "not offers Teferi, Hero of Dominaria ability 0",
+      "not offers Teferi, Hero of Dominaria ability 1",
+      "not offers Teferi, Hero of Dominaria ability 2",
+      "controls 1 Teferi, Hero of Dominaria",
+      "controls 0 Teferi, Hero of Dominaria Emblem",
+      "not tapped Teferi, Hero of Dominaria",
+      "Teferi, Hero of Dominaria has 2 loyalty"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Teferi, Hero of Dominaria",
+      "they control 1 Teferi, Hero of Dominaria",
+      "controls 0 Teferi, Hero of Dominaria Emblem",
+      "Teferi, Hero of Dominaria has 2 loyalty"
     ]
   },
   {
@@ -302,11 +452,11 @@
     ]
   },
   {
-    "moment": "8s-emblem-exiles-a-permanent-whenever-its-owner-draws-end",
+    "moment": "8s-emblem-exiles-a-permanent-whenever-its-owner-draws-pass",
     "yours": [
       "turn 3",
       "your turn",
-      "step precombatMain",
+      "step postcombatMain",
       "decision priority",
       "not offers Teferi, Hero of Dominaria ability 0",
       "not offers Teferi, Hero of Dominaria ability 1",
@@ -325,6 +475,58 @@
       "they control 1 Teferi, Hero of Dominaria",
       "controls 0 Teferi, Hero of Dominaria Emblem",
       "Teferi, Hero of Dominaria has 2 loyalty"
+    ]
+  },
+  {
+    "moment": "8s-emblem-exiles-a-permanent-whenever-its-owner-draws-next-turn",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "offers Teferi, Hero of Dominaria ability 0",
+      "not offers Teferi, Hero of Dominaria ability 1",
+      "not offers Teferi, Hero of Dominaria ability 2",
+      "controls 1 Teferi, Hero of Dominaria",
+      "controls 0 Teferi, Hero of Dominaria Emblem",
+      "not tapped Teferi, Hero of Dominaria",
+      "Teferi, Hero of Dominaria has 2 loyalty"
+    ],
+    "theirs": [
+      "turn 6",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Teferi, Hero of Dominaria",
+      "they control 1 Teferi, Hero of Dominaria",
+      "controls 0 Teferi, Hero of Dominaria Emblem",
+      "Teferi, Hero of Dominaria has 2 loyalty"
+    ]
+  },
+  {
+    "moment": "8s-emblem-triggers-once-for-each-card-of-a-multiple-draw",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "not offers Teferi, Hero of Dominaria ability 0",
+      "not offers Teferi, Hero of Dominaria ability 1",
+      "not offers Teferi, Hero of Dominaria ability 2",
+      "controls 1 Teferi, Hero of Dominaria",
+      "controls 0 Teferi, Hero of Dominaria Emblem",
+      "not tapped Teferi, Hero of Dominaria",
+      "Teferi, Hero of Dominaria has 1 loyalty"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Teferi, Hero of Dominaria",
+      "they control 1 Teferi, Hero of Dominaria",
+      "controls 0 Teferi, Hero of Dominaria Emblem",
+      "Teferi, Hero of Dominaria has 1 loyalty"
     ]
   },
   {
@@ -348,181 +550,6 @@
       "they control 1 Teferi, Hero of Dominaria",
       "controls 0 Teferi, Hero of Dominaria Emblem",
       "Teferi, Hero of Dominaria has 1 loyalty"
-    ]
-  },
-  {
-    "moment": "8s-emblem-triggers-once-for-each-card-of-a-multiple-draw-end",
-    "yours": [
-      "turn 1",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "not offers Teferi, Hero of Dominaria ability 0",
-      "not offers Teferi, Hero of Dominaria ability 1",
-      "not offers Teferi, Hero of Dominaria ability 2",
-      "controls 1 Teferi, Hero of Dominaria",
-      "controls 0 Teferi, Hero of Dominaria Emblem",
-      "not tapped Teferi, Hero of Dominaria",
-      "Teferi, Hero of Dominaria has 1 loyalty"
-    ],
-    "theirs": [
-      "turn 2",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 0 Teferi, Hero of Dominaria",
-      "they control 1 Teferi, Hero of Dominaria",
-      "controls 0 Teferi, Hero of Dominaria Emblem",
-      "Teferi, Hero of Dominaria has 1 loyalty"
-    ]
-  },
-  {
-    "moment": "1-draws-and-at-the-end-step-untaps-up-to-two-lands-end-pass",
-    "yours": [
-      "turn 3",
-      "your turn",
-      "step postcombatMain",
-      "decision priority",
-      "offers Teferi, Hero of Dominaria ability 0",
-      "offers Teferi, Hero of Dominaria ability 1",
-      "not offers Teferi, Hero of Dominaria ability 2",
-      "controls 1 Teferi, Hero of Dominaria",
-      "controls 0 Teferi, Hero of Dominaria Emblem",
-      "not tapped Teferi, Hero of Dominaria",
-      "Teferi, Hero of Dominaria has 5 loyalty"
-    ],
-    "theirs": [
-      "turn 4",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 0 Teferi, Hero of Dominaria",
-      "they control 1 Teferi, Hero of Dominaria",
-      "controls 0 Teferi, Hero of Dominaria Emblem",
-      "Teferi, Hero of Dominaria has 5 loyalty"
-    ]
-  },
-  {
-    "moment": "1s-untap-comes-at-the-end-step-after-teferi-has-left-end-pass",
-    "yours": [
-      "turn 3",
-      "your turn",
-      "step postcombatMain",
-      "decision priority",
-      "controls 0 Teferi, Hero of Dominaria",
-      "controls 0 Teferi, Hero of Dominaria Emblem"
-    ],
-    "theirs": [
-      "turn 3",
-      "their turn",
-      "step end",
-      "decision priority",
-      "controls 0 Teferi, Hero of Dominaria",
-      "controls 0 Teferi, Hero of Dominaria Emblem"
-    ]
-  },
-  {
-    "moment": "3-puts-a-nonland-permanent-third-from-the-top-of-its-owners-library-end-pass",
-    "yours": [
-      "turn 1",
-      "your turn",
-      "step postcombatMain",
-      "decision priority",
-      "not offers Teferi, Hero of Dominaria ability 0",
-      "not offers Teferi, Hero of Dominaria ability 1",
-      "not offers Teferi, Hero of Dominaria ability 2",
-      "controls 1 Teferi, Hero of Dominaria",
-      "controls 0 Teferi, Hero of Dominaria Emblem",
-      "not tapped Teferi, Hero of Dominaria",
-      "Teferi, Hero of Dominaria has 1 loyalty"
-    ],
-    "theirs": [
-      "turn 2",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 0 Teferi, Hero of Dominaria",
-      "they control 1 Teferi, Hero of Dominaria",
-      "controls 0 Teferi, Hero of Dominaria Emblem",
-      "Teferi, Hero of Dominaria has 1 loyalty"
-    ]
-  },
-  {
-    "moment": "3-puts-a-nonland-permanent-third-from-the-top-of-its-owners-library-end-next-turn",
-    "yours": [
-      "turn 3",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "offers Teferi, Hero of Dominaria ability 0",
-      "not offers Teferi, Hero of Dominaria ability 1",
-      "not offers Teferi, Hero of Dominaria ability 2",
-      "controls 1 Teferi, Hero of Dominaria",
-      "controls 0 Teferi, Hero of Dominaria Emblem",
-      "not tapped Teferi, Hero of Dominaria",
-      "Teferi, Hero of Dominaria has 1 loyalty"
-    ],
-    "theirs": [
-      "turn 4",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 0 Teferi, Hero of Dominaria",
-      "they control 1 Teferi, Hero of Dominaria",
-      "controls 0 Teferi, Hero of Dominaria Emblem",
-      "Teferi, Hero of Dominaria has 1 loyalty"
-    ]
-  },
-  {
-    "moment": "8s-emblem-exiles-a-permanent-whenever-its-owner-draws-end-pass",
-    "yours": [
-      "turn 3",
-      "your turn",
-      "step postcombatMain",
-      "decision priority",
-      "not offers Teferi, Hero of Dominaria ability 0",
-      "not offers Teferi, Hero of Dominaria ability 1",
-      "not offers Teferi, Hero of Dominaria ability 2",
-      "controls 1 Teferi, Hero of Dominaria",
-      "controls 0 Teferi, Hero of Dominaria Emblem",
-      "not tapped Teferi, Hero of Dominaria",
-      "Teferi, Hero of Dominaria has 2 loyalty"
-    ],
-    "theirs": [
-      "turn 4",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 0 Teferi, Hero of Dominaria",
-      "they control 1 Teferi, Hero of Dominaria",
-      "controls 0 Teferi, Hero of Dominaria Emblem",
-      "Teferi, Hero of Dominaria has 2 loyalty"
-    ]
-  },
-  {
-    "moment": "8s-emblem-exiles-a-permanent-whenever-its-owner-draws-end-next-turn",
-    "yours": [
-      "turn 5",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "offers Teferi, Hero of Dominaria ability 0",
-      "not offers Teferi, Hero of Dominaria ability 1",
-      "not offers Teferi, Hero of Dominaria ability 2",
-      "controls 1 Teferi, Hero of Dominaria",
-      "controls 0 Teferi, Hero of Dominaria Emblem",
-      "not tapped Teferi, Hero of Dominaria",
-      "Teferi, Hero of Dominaria has 2 loyalty"
-    ],
-    "theirs": [
-      "turn 6",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 0 Teferi, Hero of Dominaria",
-      "they control 1 Teferi, Hero of Dominaria",
-      "controls 0 Teferi, Hero of Dominaria Emblem",
-      "Teferi, Hero of Dominaria has 2 loyalty"
     ]
   }
 ]

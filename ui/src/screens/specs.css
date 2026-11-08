@@ -97,7 +97,8 @@
 
 .specs-toc {
   margin: 20px 0 0;
-  padding: 0 0 0 20px;
+  padding: 0;
+  list-style: none;
   color: var(--text-faint);
   font-size: 13px;
   line-height: 1.4;
@@ -105,6 +106,15 @@
 
 .specs-toc li {
   margin: 6px 0;
+}
+
+.specs-toc-group {
+  margin: 16px 0 4px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .specs-toc a {
@@ -184,6 +194,16 @@
 }
 
 /* The opponent's seat: every moment again, below yours. */
+/* A scenario's name over its moments. */
+.specs-group-head {
+  max-width: 1600px;
+  margin: 72px auto 20px;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
 .specs-section-head {
   max-width: 1600px;
   margin: 96px auto 32px;

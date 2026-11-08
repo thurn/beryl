@@ -1,5 +1,22 @@
 [
   {
+    "moment": "takes-two-of-five-and-orders-the-rest-on-the-bottom",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Stock Up"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Stock Up"
+    ]
+  },
+  {
     "moment": "takes-two-of-five-and-orders-the-rest-on-the-bottom-0",
     "yours": [
       "turn 1",
@@ -40,7 +57,7 @@
     ]
   },
   {
-    "moment": "takes-two-of-five-and-orders-the-rest-on-the-bottom-end",
+    "moment": "with-four-cards-in-the-library",
     "yours": [
       "turn 1",
       "your turn",
@@ -57,7 +74,7 @@
     ]
   },
   {
-    "moment": "with-two-cards-in-the-library-0",
+    "moment": "with-two-cards-in-the-library",
     "yours": [
       "turn 1",
       "your turn",

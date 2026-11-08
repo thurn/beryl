@@ -1,6 +1,6 @@
 [
   {
-    "moment": "s-flip-lost-3-damage-to-its-controller-end",
+    "moment": "s-flip-lost-3-damage-to-its-controller",
     "yours": [
       "turn 3",
       "your turn",
@@ -18,7 +18,7 @@
     ]
   },
   {
-    "moment": "s-flip-won-no-damage-end",
+    "moment": "s-flip-won-no-damage",
     "yours": [
       "turn 3",
       "your turn",
@@ -38,7 +38,7 @@
     ]
   },
   {
-    "moment": "s-two-colorless-mana-end",
+    "moment": "s-two-colorless-mana",
     "yours": [
       "turn 1",
       "your turn",

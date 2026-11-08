@@ -1,6 +1,6 @@
 [
   {
-    "moment": "cant-be-cast-with-five-cards-in-the-graveyard-end",
+    "moment": "cant-be-cast-with-five-cards-in-the-graveyard",
     "yours": [
       "turn 1",
       "your turn",
@@ -13,6 +13,28 @@
       "your turn",
       "step precombatMain",
       "decision priority",
+      "controls 0 Abhorrent Oculus"
+    ]
+  },
+  {
+    "moment": "exiles-six-of-seven-graveyard-cards-as-its-cast",
+    "yours": [
+      "turn 2",
+      "their turn",
+      "step upkeep",
+      "decision chooseObject",
+      "ask manifestDread",
+      "2 candidates",
+      "resolving Abhorrent Oculus",
+      "controls 1 Abhorrent Oculus",
+      "not tapped Abhorrent Oculus"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Abhorrent Oculus",
       "controls 0 Abhorrent Oculus"
     ]
   },
@@ -38,25 +60,22 @@
     ]
   },
   {
-    "moment": "exiles-six-of-seven-graveyard-cards-as-its-cast-end",
+    "moment": "manifests-dread-on-each-opponents-upkeep-only",
     "yours": [
-      "turn 2",
-      "their turn",
-      "step upkeep",
-      "decision chooseObject",
-      "ask manifestDread",
-      "2 candidates",
-      "resolving Abhorrent Oculus",
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
       "controls 1 Abhorrent Oculus",
       "not tapped Abhorrent Oculus"
     ],
     "theirs": [
-      "turn 1",
+      "turn 3",
       "their turn",
-      "step precombatMain",
+      "step end",
       "decision priority",
-      "stack Abhorrent Oculus",
-      "controls 0 Abhorrent Oculus"
+      "controls 0 Abhorrent Oculus",
+      "they control 1 Abhorrent Oculus"
     ]
   },
   {
@@ -83,26 +102,7 @@
     ]
   },
   {
-    "moment": "manifests-dread-on-each-opponents-upkeep-only-end",
-    "yours": [
-      "turn 3",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 1 Abhorrent Oculus",
-      "not tapped Abhorrent Oculus"
-    ],
-    "theirs": [
-      "turn 3",
-      "their turn",
-      "step end",
-      "decision priority",
-      "controls 0 Abhorrent Oculus",
-      "they control 1 Abhorrent Oculus"
-    ]
-  },
-  {
-    "moment": "manifest-dread-with-one-card-in-the-library-manifests-it-end",
+    "moment": "manifest-dread-with-one-card-in-the-library-manifests-it",
     "yours": [
       "turn 3",
       "your turn",
@@ -121,7 +121,26 @@
     ]
   },
   {
-    "moment": "a-manifested-creature-turns-face-up-for-its-mana-cost-entering-no-more-end",
+    "moment": "manifest-dread-with-an-empty-library-does-nothing",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step draw",
+      "controls 1 Abhorrent Oculus",
+      "not tapped Abhorrent Oculus",
+      "game over"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Abhorrent Oculus",
+      "they control 1 Abhorrent Oculus"
+    ]
+  },
+  {
+    "moment": "a-manifested-creature-turns-face-up-for-its-mana-cost-entering-no-more",
     "yours": [
       "turn 3",
       "your turn",
@@ -139,7 +158,7 @@
     ]
   },
   {
-    "moment": "a-manifested-noncreature-card-cant-be-turned-face-up-end",
+    "moment": "a-manifested-noncreature-card-cant-be-turned-face-up",
     "yours": [
       "turn 2",
       "their turn",
@@ -158,7 +177,26 @@
     ]
   },
   {
-    "moment": "a-face-down-permanent-leaving-the-battlefield-is-revealed-end",
+    "moment": "a-face-down-permanent-leaving-the-battlefield-is-revealed",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Abhorrent Oculus",
+      "not tapped Abhorrent Oculus"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Abhorrent Oculus",
+      "they control 1 Abhorrent Oculus"
+    ]
+  },
+  {
+    "moment": "fractured-identity-copies-a-face-down-permanent-as-a-22",
     "yours": [
       "turn 3",
       "your turn",

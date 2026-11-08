@@ -87,8 +87,11 @@ pub struct Spec {
 pub struct Moment {
     /// Its name in the page's URL, unique within the spec: `card-exiled`.
     pub name: &'static str,
-    /// What made it, in a few words: "Stops: card exiled", "S1 · {T}".
+    /// What made it, in a few words: "Stops: card exiled", "{T}".
     pub title: &'static str,
+    /// The scenario it comes from, by its name, which the page heads its moments with; empty
+    /// for the moments of the card's definition.
+    pub group: &'static str,
     /// The game, the human in seat 0: its actions set the moment up before the page shows it.
     pub board: Scenario,
     /// The actions it plays out once shown, when the viewer presses play.
@@ -145,6 +148,7 @@ impl Moment {
         Moment {
             name,
             title,
+            group: "",
             board,
             play: &[],
             recorded: None,
@@ -270,6 +274,8 @@ pub struct Listing {
 pub struct MomentListing {
     name: &'static str,
     title: &'static str,
+    /// The scenario it comes from, empty for the card's own moments.
+    group: &'static str,
     /// Whether it plays actions out once shown, which a replay plays again.
     plays: bool,
 }
@@ -286,6 +292,7 @@ pub fn listing() -> Vec<Listing> {
                 .map(|m| MomentListing {
                     name: m.name,
                     title: m.title,
+                    group: m.group,
                     plays: !m.play.is_empty(),
                 })
                 .collect(),

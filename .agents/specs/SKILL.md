@@ -31,18 +31,20 @@ sources, with short general labels:
   (`Stops: card exiled`, through `Permanent::exiled_with`), each ability
   activated (labelled by its cost: `{2}{T}`, `+2`, `−1`), and one bounced in
   response (`{2}{T}, bounced`).
-- **The card's scenarios** (`beryl_cards::SCENARIOS`). Each is cut at each cast
-  or activation of the card (`S1 · {T}`, played out once shown), the same
-  activation with the card bounced in response (`S1 · {T}, bounced`), each
-  question the card asks for each cause (`S1 · Ask: mayMove`), with a yes or no
-  flipped (`S1 · Answer No`), and its end (`S1 · End`, held to the turn a
-  trailing `AdvanceTo` names). For a card with activated abilities, an end or
-  flipped answer where the human holds priority goes on twice more: they pass
-  (`· pass`: where does it stop them next?) and the game reaches their next
-  turn (`· next turn`: what does it offer untapped?). Scenario boards are
-  dressed to look like a game (life off 20, graveyards, the opponent's lands
-  and a response in hand, unplayable spells under each library) only where the
-  scenario still passes with the dressing.
+- **The card's scenarios** (`beryl_cards::SCENARIOS`), each under its own name
+  as a heading (less the card's name). `Start` opens on its first board, and
+  play runs the whole scenario (held to the turn a trailing `AdvanceTo` names).
+  It is cut at each cast or activation of the card (`{T}`, played out once
+  shown), the same activation with the card bounced in response
+  (`{T}, bounced`), each question the card asks for each cause
+  (`Ask: mayMove`), with a yes or no flipped (`Answer No`). For a card with
+  activated abilities, its end or a flipped answer where the human holds
+  priority goes on twice more: they pass (`Then pass`: where does it stop them
+  next?) and the game reaches their next turn (`Next turn`: what does it offer
+  untapped?). Scenario boards are dressed to look like a game (life off 20,
+  graveyards, the opponent's lands and a response in hand, unplayable spells
+  under each library) only where the scenario still passes with the dressing.
+  A scenario's name is its heading on the page, so name it for what it shows.
 
 Each candidate is played headless from both seats to its first live decision
 (or the game's end), and what holds there is recorded in the fixture conditions'

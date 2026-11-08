@@ -1,5 +1,26 @@
 [
   {
+    "moment": "one-plains-a-turn-untapped",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 2 Plains",
+      "they control 1 Plains",
+      "not tapped Plains"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Plains",
+      "they control 2 Plains",
+      "not tapped Plains"
+    ]
+  },
+  {
     "moment": "one-plains-a-turn-untapped-0",
     "yours": [
       "turn 3",
@@ -17,27 +38,6 @@
       "decision priority",
       "controls 1 Plains",
       "they control 1 Plains",
-      "not tapped Plains"
-    ]
-  },
-  {
-    "moment": "one-plains-a-turn-untapped-end",
-    "yours": [
-      "turn 5",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 2 Plains",
-      "they control 1 Plains",
-      "not tapped Plains"
-    ],
-    "theirs": [
-      "turn 4",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 1 Plains",
-      "they control 2 Plains",
       "not tapped Plains"
     ]
   }

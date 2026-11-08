@@ -1,5 +1,22 @@
 [
   {
+    "moment": "the-countered-spells-mana-value-at-the-casters-next-main-phase",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Mana Drain",
+      "mana floating"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "controls 0 Mana Drain"
+    ]
+  },
+  {
     "moment": "the-countered-spells-mana-value-at-the-casters-next-main-phase-1",
     "yours": [
       "turn 2",
@@ -18,24 +35,7 @@
     ]
   },
   {
-    "moment": "the-countered-spells-mana-value-at-the-casters-next-main-phase-end",
-    "yours": [
-      "turn 3",
-      "your turn",
-      "step precombatMain",
-      "decision priority",
-      "controls 0 Mana Drain",
-      "mana floating"
-    ],
-    "theirs": [
-      "turn 4",
-      "your turn",
-      "step precombatMain",
-      "controls 0 Mana Drain"
-    ]
-  },
-  {
-    "moment": "on-the-casters-own-turn-mana-at-that-turns-postcombat-main-end",
+    "moment": "on-the-casters-own-turn-mana-at-that-turns-postcombat-main",
     "yours": [
       "turn 1",
       "your turn",
