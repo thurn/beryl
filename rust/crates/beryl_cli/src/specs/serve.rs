@@ -275,7 +275,11 @@ fn current(feed: &SharedFeed) -> Value {
     shown.view.events.clear();
     // An instance named `hold-…` waits for its `play`, as a page's does: a driver starts it
     // when it is watching.
-    let held = f.key.rsplit('/').next().is_some_and(|id| id.starts_with("hold-"));
+    let held = f
+        .key
+        .rsplit('/')
+        .next()
+        .is_some_and(|id| id.starts_with("hold-"));
     if !f.released && f.page.is_none() && !held {
         let feed = Arc::clone(feed);
         std::thread::spawn(move || {

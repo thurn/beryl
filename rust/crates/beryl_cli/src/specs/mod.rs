@@ -475,8 +475,10 @@ pub fn describe(cards: &[String], moment: Option<&str>) -> Result<(), String> {
                 for e in events {
                     println!("  shown  {}", label(&e));
                 }
-                let holds: Vec<String> =
-                    auto::snapshot(&shown, def).iter().map(|c| label(c)).collect();
+                let holds: Vec<String> = auto::snapshot(&shown, def)
+                    .iter()
+                    .map(|c| label(c))
+                    .collect();
                 println!("  holds  {}", holds.join(", "));
             }
             println!();
@@ -485,7 +487,10 @@ pub fn describe(cards: &[String], moment: Option<&str>) -> Result<(), String> {
     if found {
         Ok(())
     } else {
-        Err(format!("no moment {cards:?} {}", moment.unwrap_or_default()))
+        Err(format!(
+            "no moment {cards:?} {}",
+            moment.unwrap_or_default()
+        ))
     }
 }
 
