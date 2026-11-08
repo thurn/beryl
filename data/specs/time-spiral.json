@@ -1,0 +1,39 @@
+[
+  {
+    "moment": "exiled-the-wheel-and-chosen-lands-untapped-0",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision chooseUpTo",
+      "ask untap",
+      "4 candidates",
+      "resolving Time Spiral",
+      "controls 0 Time Spiral"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Time Spiral"
+    ]
+  },
+  {
+    "moment": "exiled-the-wheel-and-chosen-lands-untapped-end",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Time Spiral"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Time Spiral"
+    ]
+  }
+]

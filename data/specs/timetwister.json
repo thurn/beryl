@@ -1,0 +1,19 @@
+[
+  {
+    "moment": "with-empty-graveyards-0",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Timetwister"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Timetwister"
+    ]
+  }
+]

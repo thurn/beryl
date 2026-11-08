@@ -1,0 +1,60 @@
+[
+  {
+    "moment": "exiles-until-it-leaves-the-battlefield-0",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Portable Hole",
+      "not tapped Portable Hole",
+      "exiled beneath a permanent"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Portable Hole",
+      "controls 0 Portable Hole"
+    ]
+  },
+  {
+    "moment": "exiles-until-it-leaves-the-battlefield-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Portable Hole",
+      "castable Portable Hole"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Portable Hole",
+      "known card in the opponent's hand"
+    ]
+  },
+  {
+    "moment": "with-no-permanent-of-mana-value-2-or-less-to-exile-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Portable Hole",
+      "not tapped Portable Hole"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Portable Hole",
+      "they control 1 Portable Hole"
+    ]
+  }
+]

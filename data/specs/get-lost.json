@@ -1,0 +1,65 @@
+[
+  {
+    "moment": "cant-be-cast-without-a-target-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Get Lost",
+      "controls 0 Map Token"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Get Lost",
+      "controls 0 Map Token"
+    ]
+  },
+  {
+    "moment": "costs-one-and-a-white-0",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack Get Lost",
+      "controls 0 Get Lost",
+      "controls 0 Map Token"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Get Lost",
+      "controls 2 Map Token"
+    ]
+  },
+  {
+    "moment": "on-a-creature-gives-two-maps-one-explores-a-land-into-hand-end",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Get Lost",
+      "controls 0 Map Token",
+      "they control 1 Map Token",
+      "known card in the opponent's hand"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack Map Token",
+      "controls 0 Get Lost",
+      "controls 2 Map Token"
+    ]
+  }
+]

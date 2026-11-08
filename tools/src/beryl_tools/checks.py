@@ -429,7 +429,8 @@ def fast(args: argparse.Namespace) -> int:
     lanes = [repo_lane()]
     if touched(r"^tools/"):
         lanes.append(python_lane())
-    if touched(r"^rust/"):
+    # The specs' approved records are checked by a Rust test.
+    if touched(r"^(rust/|data/specs/)"):
         lanes.append(rust_lane())
     if touched(r"^ui/"):
         lanes.append(ui_lane())

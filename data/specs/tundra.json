@@ -1,0 +1,21 @@
+[
+  {
+    "moment": "played-beside-a-plains-in-hand-0",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Tundra",
+      "not tapped Tundra"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Tundra",
+      "they control 1 Tundra"
+    ]
+  }
+]

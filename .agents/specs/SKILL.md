@@ -1,6 +1,6 @@
 ---
 name: specs
-description: Write or update a card's spec — the live, scrollable page at /specs/<card> showing every UI moment of that card (stops, prompts, ability choosers, tokens, statuses, exile links, stack interactions, payments) as playable game states, from both seats — and QA the card's UI through it. Use when asked to spec a card, add a card's UI states, QA a card end to end, or check that a card's UI follows the design.
+description: Review or extend a card's spec — the live, scrollable page at /specs/<card> showing every UI moment of that card (stops, prompts, ability choosers, tokens, statuses, exile links, stack interactions, payments) as playable game states, from both seats — and QA the card's UI through it. Every card's spec is generated; use when asked to spec a card, review its UI states, QA a card end to end, approve changed spec records, or check that a card's UI follows the design.
 ---
 
 # Card specs
@@ -10,121 +10,123 @@ play a card's UI must get right. Each moment is a real game, live and fully
 playable in the page: the engine behind it is the app's. Scrolling a spec is QA
 testing the card.
 
-Every moment shows twice: from your seat, then again at the bottom of the page
+Every moment shows twice, side by side and played in step: from your seat and
 from the opponent's (**Them**), the same game with the viewer across the table.
 What the opponent sees of a card counts as much as what its controller sees:
 which ability went on the stack, which card a choice took and where it went,
-where a token came from, what lies exiled under a permanent. The opponent's
-frame is live too: they get the stops and prompts they would in the app.
+where a token came from, what lies exiled under a permanent.
 
-Your job is the subjective part: deciding which moments the card needs, building
-boards that look like real games, and judging what you see. The automatable
-part (each moment reaching its state, and what must hold there) is checked by a
-test.
+**Every implemented card has a spec, generated.** Prefer reviewing the generated
+spec and adding missing general capabilities over hardcoding specific QA cases.
 
-## The pieces
+## How a spec is generated
 
-- `rust/crates/beryl_cli/src/specs/<card>.rs`: one file per card, a `Spec` of
-  `Moment`s, registered in `SPECS` in `specs/mod.rs`. Read
-  `specs/currency_converter.rs` first; it is the model.
-- A `Moment` is:
-  - `board`: a `Scenario` (the human is seat 0). Its `.actions(...)` are the
-    **setup**, played before the page shows anything.
-  - `.play(...)`: actions played out, animated, **when the viewer presses
-    play**. The replay button starts the moment over. Use it for what must be seen happening: a
-    counter, a bounce, a token appearing.
-  - `.expect(...)`: conditions on the human's **first live decision** once all
-    actions are taken, in the fixture vocabulary (`fixture.rs`'s
-    `Condition::parse`): `turn 7`, `your turn`, `their turn`,
-    `step postcombatMain`, `decision yesNo`, `ask mayMove`, `2 candidates`,
-    `resolving <card>`, `stack <card>`, `offers <card> ability <n>`,
-    `tapped <card>`, `controls <n> <card>`, `they control <n> <card>`,
-    `<n> exiled with <card>`, `castable from exile`, `not <condition>`, and the
-    rest listed there. Add a condition when you need one.
-  - `.theirs(look, expect)`: what the opponent should see, and conditions on
-    the opponent's first live decision, seated in their place (`your turn`
-    there is theirs). Required: a moment says what both seats see.
-  - `title` (a few words: what it shows) and `.look(...)` (a few words: what to
-    look at or try). Halve every sentence you write.
-- `just specs --check [slug]` plays every moment headless and checks it;
-  `cargo test -p beryl_cli specs` runs the same in CI.
-- `just specs --shots [slug]` screenshots every moment from both seats, settled,
-  into `$BERYL_CACHE/spec-shots/<checkout>/<slug>/` (`<moment>.png` and
-  `<moment>-theirs.png`) and prints the paths.
-- `just specs [slug]` serves the pages for a human and prints the URL
-  (`http://localhost:1430/specs/<slug>`). It opens no window.
+`rust/crates/beryl_cli/src/specs/auto.rs` builds each card's moments from two
+sources, with short general labels:
 
-## Choosing moments
+- **The definition.** A permanent with activated abilities (not mana abilities)
+  gets probes: `Stops: main 2` and `Stops: their end` (instant-speed abilities),
+  `Lands tapped` (what stays offered unpaid), `Nothing to do` (an ability whose
+  `Needs` is unmet must not stop), each ability activated (labelled by its cost:
+  `{2}{T}`, `+2`, `−1`), and `Bounced in response`.
+- **The card's scenarios** (`beryl_cards::SCENARIOS`). Each is cut at each cast
+  or activation of the card (`S1 · {T}`, played out once shown), at each
+  question the card asks (`S1 · Ask: mayMove`), with a yes or no flipped
+  (`S1 · Answer No`), and at its end (`S1 · End`). Scenario boards are dressed
+  to look like a game (life off 20, graveyards, the opponent's lands and a
+  response in hand, lands under each library) only where the scenario still
+  passes with the dressing.
 
-Go through the card's oracle text and its file's scenarios, and list a moment
-for each of these that applies. Most cards need 6 to 15.
+Each candidate is played headless from both seats to its first live decision
+(or the game's end), and what holds there is recorded in the fixture conditions'
+words (`fixture.rs`'s `Condition::parse`). Candidates that repeat an earlier
+question or end are dropped; candidates whose scripts cannot be played are
+reported as `skip` lines.
 
-1. **Priority and stops.** When does the card make the human stop, and when
-   must it not? A cheap instant-speed ability that is affordable stops them; one
-   that would do nothing (`Needs`) must not, though it stays activatable. Show
-   both sides: the turn passing unasked, and the stop it does make.
-2. **Each ability's path.** Clicking it, dragging it out. A permanent with two
-   or more non-mana activated abilities always opens the side-by-side chooser,
-   unaffordable ones dimmed. Show it affordable and unaffordable.
-3. **Costs and payments.** Mana, X, alternate and additional costs (kicker,
-   evoke, overload, impending), life, sacrifice, tapping creatures.
+The records are approved in `data/specs/<slug>.json`. `cargo test -p beryl_cli`
+(and so `just check`) fails on a moment whose record changed, one not yet
+approved, or an approved one no longer generated.
+
+## Commands
+
+- `just specs --check [slug]`: checks every moment; `skip` lines name the
+  candidates generation could not play, and why.
+- `just specs --approve [slug]`: records each generated moment as approved, then
+  checks. Approve only after looking (below); the diff of `data/specs/` is the
+  review record, so read it.
+- `just specs --shots --port 0 [slug]`: screenshots every moment from both
+  seats, settled, into `$BERYL_CACHE/spec-shots/<checkout>/<slug>/`
+  (`<moment>.png`, `<moment>-theirs.png`) and prints the paths.
+- `just specs [slug]` serves the pages for a human and prints the URL.
+
+## When a moment is missing or wrong
+
+Fix it in this order:
+
+1. **A scenario in the card's file** that reaches the state. It also tests the
+   rules and runs against XMage and Forge (`just oracle`), and the generator
+   picks it up.
+2. **A general capability in the generator**, which covers every card with the
+   same ability, cost or question: a new probe in `from_definition`, a better
+   cut or dedupe in `from_scenario`/`generate`, a condition `snapshot` records,
+   or a scripted-seat rule in `boards.rs`'s `Scripted`. Say which other cards'
+   records it changed.
+3. **Last resort: a moment written by hand**, in `specs/<card>.rs` registered in
+   `WRITTEN` (`specs/currency_converter.rs` is the example), with a line saying
+   why no general rule fits. Written moments carry their own `look`, `theirs`
+   and expectations.
+
+A record that shows behavior the design does not want is a bug to fix, in the
+engine, the session or the UI, not a record to approve. A fixed engine bug gets
+its entry in `docs/bugs.md`.
+
+## Choosing what a card needs
+
+Use this list to judge whether a generated spec is complete, and what general
+capability to add when it is not:
+
+1. **Priority and stops.** When the card makes the human stop, and when it must
+   not: an affordable instant-speed ability stops them; one that would do
+   nothing (`Needs`) must not, though it stays activatable.
+2. **Each ability's path.** Clicking it, dragging it out; two or more non-mana
+   activated abilities open the side-by-side chooser, unaffordable ones dimmed.
+3. **Costs and payments.** Mana, X, alternate and additional costs, life,
+   sacrifice, tapping creatures, loyalty.
 4. **Prompts.** Each question the card asks: may, choose, target, order,
-   discard. Show the prompt itself as the start of a moment, so the viewer
-   answers it.
+   discard.
 5. **What it makes and changes.** Tokens, emblems, counters, damage, control
-   changes, attachments, tapping: the board after it, and the moment it happens.
-6. **Zones.** Cards it exiles (and where they show: behind a permanent, down
-   and to the left), cards it makes playable from exile or the graveyard, what
-   it puts into a graveyard.
+   changes, attachments, tapping.
+6. **Zones.** Cards it exiles (and where they show), cards it makes playable
+   from exile or the graveyard, what it puts into a graveyard.
 7. **The stack.** Responses to it and from it: countered, bounced in response,
-   its targets gone, its source gone. The play button is for these.
-8. **The other side.** Every moment's Them frame covers watching the card
-   played; add a moment where the opponent's hands differ (they control the
-   card, a target on your permanent, a prompt you only watch).
-9. **Edges a player hits.** Empty hand, no legal target, nothing to choose,
-   one choice (answered silently), more than one.
-
-Skip a moment only when it cannot differ from another already there.
-
-## Building boards
-
-Boards should look like a real mid-game, so that a moment reads as play, not as
-a test fixture:
-
-- Both sides with lands (some tapped), nonland permanents, cards in hand, a
-  graveyard, life totals off 20. Use cube cards the WU decks play.
-- Share the opponent's side across moments with a helper (`table(...)` in the
-  Converter's file).
-- Give the opponent creatures only when combat is the point: the scripted
-  opponent attacks with the first candidate it is offered.
-- Untapped human creatures add a combat stop; tap them unless that is wanted.
+   its targets gone, its source gone.
+8. **The other side.** Each moment's Them frame: the opponent watches the card
+   played, and stops on it while they hold a response.
+9. **Edges a player hits.** Empty hand, no legal target, nothing to choose, one
+   choice (answered silently), more than one.
 
 ## How scripts run
 
 - Both seats' actions run in the order listed, across seats: a response waits
-  until what it answers has been played.
+  until what it answers has been played. An `AdvanceTo` holds the actions after
+  it until the game reaches its turn and step.
 - Short of its next action, a scripted seat passes priority, pays the first
-  way, and answers one-answer questions; a decision it cannot answer fails the
-  check, naming it.
+  way, answers one-answer questions, declares no attackers or blockers,
+  discards its first cards to hand size, and takes a scripted "may" the session
+  folds into the question it leads to (a search's choice: yes is the choice, no
+  is Done). Any other decision it cannot answer fails, naming it.
 - Once both seats' actions are taken, the viewer's seat plays live. The other
   seat then passes and takes the first candidate of anything else.
-- Until then, the viewer's decisions are the stand-in's: the page shows the game
-  going on through them, each held as long as the app holds the opponent's play.
-- Scripted seats order simultaneous triggers as the session orders the
-  human's, and are offered activations that would do nothing, so a script plays
-  the same from either chair.
-- The human is under the smart stops, as in the app, and the session halts
-  them at their own first main phase. Decisions the engine answers silently
-  need no action.
+- The human is under the smart stops, as in the app, and the session halts them
+  at the start of their own first main phase (not when a moment starts there).
 
 ## Judging
 
-1. `just specs --check <slug>` until every moment passes. A check that fails on
-   behavior the design wants is a bug to fix, not an expectation to loosen.
-2. `just specs --shots <slug>` and look at every screenshot, both seats,
-   against the design philosophy in `.agents/ui-review/SKILL.md`: common case
-   one gesture, the client does the bookkeeping, ask once in context, Arena as
-   the reference, show don't tell, few words.
+1. `just specs --check <slug>`; read the `skip` lines.
+2. `just specs --shots --port 0 <slug>` and look at every screenshot, both
+   seats, against the design philosophy in `.agents/ui-review/SKILL.md`: common
+   case one gesture, the client does the bookkeeping, ask once in context,
+   Arena as the reference, show don't tell, few words.
 3. For what a still cannot show (a click, a drag, a chooser, a browser), drive
    the moment's page with Playwright WebKit from `ui/scripts`, as
    `ui/scripts/specs.mjs` does: open
@@ -132,13 +134,8 @@ a test fixture:
    click `.card-el[data-zone=battlefield][data-card='<name>']`, screenshot.
 4. What the opponent sees is mostly motion, which stills miss. Record the Them
    frame as video (Playwright's `recordVideo`) while its actions play, and look
-   at it frame by frame (`ffmpeg -vf fps=20`): the ability on the stack long
-   enough to read, with an arrow from its source; each card moving from where it
-   was to where it went, face up when public; a token flying out of what made
-   it; nothing changing between two frames unexplained. Delete any probe script
-   after.
-5. Fix what is wrong, in the engine or the UI, inline. Fix it for every card
-   that shares the moment, not just this one, and say which others it touched.
-   A fixed engine bug gets its entry in `docs/bugs.md`.
-6. Report what each moment shows from each seat, what you fixed, and any moment
-   you could not build and why.
+   at it frame by frame (`ffmpeg -vf fps=20`). Delete any probe script after.
+5. Fix what is wrong, generally (above), then `just specs --approve <slug>`
+   and read the records' diff.
+6. Report what each moment shows from each seat, what you fixed, which other
+   cards' records changed, and any moment you could not get and why.

@@ -1,0 +1,19 @@
+[
+  {
+    "moment": "sphinx-dies-as-a-card-then-as-a-token-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step postcombatMain",
+      "decision priority",
+      "controls 0 Sphinx of False Conclusions"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Sphinx of False Conclusions"
+    ]
+  }
+]

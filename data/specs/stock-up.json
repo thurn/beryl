@@ -1,0 +1,76 @@
+[
+  {
+    "moment": "takes-two-of-five-and-orders-the-rest-on-the-bottom-0",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision chooseObject",
+      "ask take",
+      "5 candidates",
+      "resolving Stock Up",
+      "controls 0 Stock Up"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Stock Up"
+    ]
+  },
+  {
+    "moment": "takes-two-of-five-and-orders-the-rest-on-the-bottom-ask-3",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision chooseObject",
+      "ask bottom",
+      "3 candidates",
+      "resolving Stock Up",
+      "controls 0 Stock Up"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Stock Up"
+    ]
+  },
+  {
+    "moment": "takes-two-of-five-and-orders-the-rest-on-the-bottom-end",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Stock Up"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Stock Up"
+    ]
+  },
+  {
+    "moment": "with-two-cards-in-the-library-0",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Stock Up"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Stock Up"
+    ]
+  }
+]

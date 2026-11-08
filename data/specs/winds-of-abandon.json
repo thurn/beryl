@@ -1,0 +1,61 @@
+[
+  {
+    "moment": "exiles-a-creature-its-controller-fetches-a-tapped-basic-0",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack Winds of Abandon",
+      "controls 0 Winds of Abandon"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision chooseUpTo",
+      "ask search",
+      "3 candidates",
+      "resolving Winds of Abandon",
+      "controls 0 Winds of Abandon"
+    ]
+  },
+  {
+    "moment": "exiles-a-creature-its-controller-fetches-a-tapped-basic-end",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Winds of Abandon"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Winds of Abandon"
+    ]
+  },
+  {
+    "moment": "overloaded-a-basic-per-creature-exiled-0",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Winds of Abandon"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision chooseUpTo",
+      "ask search",
+      "3 candidates",
+      "resolving Winds of Abandon",
+      "controls 0 Winds of Abandon"
+    ]
+  }
+]

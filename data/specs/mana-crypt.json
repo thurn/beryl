@@ -1,0 +1,40 @@
+[
+  {
+    "moment": "s-flip-lost-3-damage-to-its-controller-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Mana Crypt",
+      "not tapped Mana Crypt"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Mana Crypt",
+      "they control 1 Mana Crypt"
+    ]
+  },
+  {
+    "moment": "s-two-colorless-mana-end",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Mana Crypt",
+      "tapped Mana Crypt"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Mana Crypt",
+      "they control 1 Mana Crypt"
+    ]
+  }
+]

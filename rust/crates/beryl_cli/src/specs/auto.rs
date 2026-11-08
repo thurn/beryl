@@ -1,0 +1,875 @@
+//! Generated specs: every card's moments, read from its definition and its scenarios rather
+//! than written by hand.
+//!
+//! Two sources give the candidate moments:
+//!
+//! - **The card's definition.** A permanent with activated abilities other than mana
+//!   abilities gets a stop in its controller's second main phase and on the opponent's end
+//!   step, a board with every land tapped (which abilities stay offered), each ability
+//!   activated, and the permanent bounced in response to one.
+//! - **The card's scenarios** (`beryl_cards::SCENARIOS`). Each is cut at each cast or
+//!   activation of the card (played out once shown), at each question its resolution or casting
+//!   asks (with a yes or no flipped as well), and at its end.
+//!
+//! Each candidate is played headless from both seats to its first live decision, and what
+//! holds there is recorded in the fixture conditions' words ([`snapshot`]). A candidate whose
+//! script cannot be played is dropped and reported; a question that is not the card's is
+//! dropped; a candidate that records the same as an earlier one of its scenario is dropped.
+//! The recorded conditions are checked against the approved ones in `data/specs/<slug>.json`.
+//!
+//! Labels are short and general: what made the moment, not prose.
+
+use std::fmt::Write as _;
+
+use beryl_cards::names::{
+    COUNTERSPELL, ISLAND, MANA_DRAIN, OUST, PLAINS, REPRIEVE, SINK_INTO_STUPOR, STOCK_UP, SWAMP,
+    THIEVING_SKYDIVER,
+};
+use beryl_engine::card::{AbilityIx, AbilityKind, CardDef, Face, Needs, Timing, Types};
+use beryl_engine::state::CounterKind;
+use beryl_engine::{DecisionKind, Seat, TurnStep};
+use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+use beryl_session::protocol::{Candidate as Offer, PlayerView, Side, StackItem, Status, ZoneName};
+use serde_json::json;
+
+use super::{Moment, View, reach, slug};
+use crate::fixture::Condition;
+
+/// One card's generated moments, and the candidates dropped because their scripts could not
+/// be played, each with why.
+pub struct Generated {
+    pub moments: Vec<Moment>,
+    pub dropped: Vec<(String, String)>,
+}
+
+/// What made a candidate, which decides whether it is kept once recorded.
+#[derive(Clone, PartialEq, Eq)]
+enum Kind {
+    /// From the definition: always kept.
+    Probe,
+    /// A scenario's cast or activation of the card, played out once shown: kept unless an
+    /// earlier one of the same label stopped at the same question.
+    Play,
+    /// A question in a scenario: kept if the card's resolution or casting asks it, unless an
+    /// earlier moment stopped at the same question.
+    Ask,
+    /// The other answer to the question at this index: kept if the card asks it, unless an
+    /// earlier moment gave the same answer to the same question.
+    Flip(usize),
+    /// A scenario's end: kept unless an earlier moment ended the same.
+    End,
+}
+
+struct Candidate {
+    name: String,
+    title: String,
+    board: Scenario,
+    play: Vec<Action>,
+    kind: Kind,
+}
+
+/// What a recorded seat's decision is: its kind, what it asks, what asks it.
+fn question_of(recorded: &[String]) -> Vec<&str> {
+    recorded
+        .iter()
+        .map(String::as_str)
+        .filter(|c| {
+            ["decision ", "ask ", "resolving ", "casting "]
+                .iter()
+                .any(|p| c.starts_with(p))
+        })
+        .collect()
+}
+
+/// A record with its turn and step left out: two moments that end the same way a turn apart
+/// show the same thing.
+fn timeless(recorded: &[String]) -> Vec<&str> {
+    recorded
+        .iter()
+        .map(String::as_str)
+        .filter(|c| !c.starts_with("turn ") && !c.starts_with("step "))
+        .collect()
+}
+
+pub fn generate(def: &'static CardDef, scenarios: &'static [Scenario]) -> Generated {
+    let mut candidates = from_definition(def);
+    for (i, scenario) in scenarios.iter().enumerate() {
+        from_scenario(def, scenario, i + 1, &mut candidates);
+    }
+    let recorded: Vec<Result<[Vec<String>; 2], String>> = candidates
+        .iter()
+        .map(|c| {
+            let m: &'static Moment = Box::leak(Box::new(moment(c, c.title.clone(), None)));
+            let yours = reach(m, View::Yours).map(|v| snapshot(&v, def));
+            let theirs = reach(m, View::Theirs).map(|v| snapshot(&v, def));
+            Ok([yours?, theirs?])
+        })
+        .collect();
+    let asks = |r: &[Vec<String>; 2]| {
+        let mine = [
+            format!("resolving {}", def.name),
+            format!("casting {}", def.name),
+        ];
+        r.iter().flatten().any(|c| mine.contains(c))
+    };
+    let mut kept = vec![false; candidates.len()];
+    let mut dropped = Vec::new();
+    let mut moments = Vec::new();
+    for (i, c) in candidates.iter().enumerate() {
+        let r = match &recorded[i] {
+            Ok(r) => r,
+            Err(e) => {
+                dropped.push((c.name.clone(), e.clone()));
+                continue;
+            }
+        };
+        let earlier = |same: &dyn Fn(&Candidate, &[Vec<String>; 2]) -> bool| {
+            (0..i).any(|j| {
+                kept[j]
+                    && recorded[j]
+                        .as_ref()
+                        .is_ok_and(|rj| same(&candidates[j], rj))
+            })
+        };
+        let keep = match c.kind {
+            Kind::Probe => true,
+            Kind::Play => !earlier(&|cj, rj| {
+                cj.kind == Kind::Play
+                    && cj.title.split(" · ").last() == c.title.split(" · ").last()
+                    && question_of(&rj[0]) == question_of(&r[0])
+            }),
+            Kind::Ask => {
+                asks(r)
+                    && !earlier(&|cj, rj| {
+                        matches!(cj.kind, Kind::Ask | Kind::Play | Kind::Probe)
+                            && question_of(&rj[0]) == question_of(&r[0])
+                    })
+            }
+            // The other answer to a question the card asks, unless an earlier moment gave it
+            // to the same question.
+            Kind::Flip(j) => recorded[j].as_ref().is_ok_and(|rj| {
+                asks(rj)
+                    && !(0..i).any(|k| {
+                        kept[k]
+                            && candidates[k].title.split(" · ").last()
+                                == c.title.split(" · ").last()
+                            && matches!(candidates[k].kind, Kind::Flip(p)
+                            if recorded[p].as_ref().is_ok_and(|rp| {
+                                question_of(&rp[0]) == question_of(&rj[0])
+                            }))
+                    })
+            }),
+            Kind::End => !earlier(&|_, rj| timeless(&rj[0]) == timeless(&r[0])),
+        };
+        if keep {
+            kept[i] = true;
+            let title = match c.kind {
+                Kind::Ask => format!("{}{}", c.title, question(&r[0])),
+                _ => c.title.clone(),
+            };
+            moments.push(moment(c, title, Some(r)));
+        }
+    }
+    Generated { moments, dropped }
+}
+
+/// A question's label, from what was recorded at it: "Ask: mayMove", or its kind.
+fn question(recorded: &[String]) -> String {
+    recorded
+        .iter()
+        .find_map(|c| c.strip_prefix("ask "))
+        .or_else(|| recorded.iter().find_map(|c| c.strip_prefix("decision ")))
+        .map_or_else(|| "Question".to_owned(), |q| format!("Ask: {q}"))
+}
+
+fn leak<T>(items: Vec<T>) -> &'static [T] {
+    Box::leak(items.into_boxed_slice())
+}
+
+fn moment(c: &Candidate, title: String, recorded: Option<&[Vec<String>; 2]>) -> Moment {
+    let strs = |v: &Vec<String>| -> &'static [&'static str] {
+        leak(
+            v.iter()
+                .map(|s| &*Box::leak(s.clone().into_boxed_str()))
+                .collect(),
+        )
+    };
+    let mut m = Moment::new(
+        Box::leak(c.name.clone().into_boxed_str()),
+        Box::leak(title.into_boxed_str()),
+        c.board,
+    )
+    .play(leak(c.play.clone()));
+    m.recorded = recorded.map(|[y, t]| [strs(y), strs(t)]);
+    m
+}
+
+// The definition's moments.
+
+/// Twelve lands for each library: enough to draw from for the turns a moment plays.
+const LANDS: &[&str] = &[
+    PLAINS, ISLAND, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS, ISLAND,
+];
+
+/// The opponent's lands: the {1}{U}{U} for Sink into Stupor, and two more.
+const THEIR_LANDS: &[Permanent] = &[
+    Permanent::new(ISLAND),
+    Permanent::new(ISLAND),
+    Permanent::new(ISLAND),
+    Permanent::new(PLAINS),
+    Permanent::new(PLAINS),
+];
+
+/// A land in the human's hand: it keeps them stopping in their main phase after what a moment
+/// plays, so the board shows what it left before the turn moves on.
+const LAND_IN_HAND: &[&str] = &[PLAINS];
+
+/// The opponent's lands and a tapped creature, for an ability that targets one.
+const TARGETS: &[Permanent] = &[
+    Permanent::new(ISLAND),
+    Permanent::new(ISLAND),
+    Permanent::new(ISLAND),
+    Permanent::new(PLAINS),
+    Permanent::new(PLAINS),
+    Permanent::new(THIEVING_SKYDIVER).tapped(),
+];
+
+/// The opponent's hand: Sink into Stupor answers any spell or ability with the card on the
+/// battlefield, so from their seat the game stops on each one, as an opponent holding a
+/// response does.
+const THEIR_HAND: &[&str] = &[SINK_INTO_STUPOR, COUNTERSPELL, PLAINS];
+
+/// A mid-game table around the card: life off 20, graveyards, the opponent's lands and hand.
+/// The human's hand stays empty: a land in it would add a stop of its own.
+fn table(name: &'static str, turn: u16, active: Seat, step: TurnStep) -> Scenario {
+    Scenario::new(name)
+        .at(turn, active, step)
+        .life(P0, 17)
+        .life(P1, 14)
+        .graveyard(P0, &[STOCK_UP, REPRIEVE])
+        .battlefield(P1, THEIR_LANDS)
+        .hand(P1, THEIR_HAND)
+        .graveyard(P1, &[OUST, MANA_DRAIN])
+        .library(P0, LANDS)
+        .library(P1, LANDS)
+}
+
+/// The abilities the definition's moments cover: activated abilities other than mana
+/// abilities, of the front face, by index among its abilities.
+fn activated(face: &Face) -> Vec<(u8, &'static beryl_engine::card::Ability)> {
+    face.abilities
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| a.kind == AbilityKind::Activated)
+        .filter(|(_, a)| !a.cost.discard_self && a.cost.crew == 0)
+        .filter_map(|(i, a)| Some((u8::try_from(i).ok()?, a)))
+        .collect()
+}
+
+/// An ability's label: its cost, as its card prints it ("{2}{T}", "+2", "−1"), or its index
+/// for a cost that is none of those.
+fn cost_label(a: &beryl_engine::card::Ability, k: u8) -> String {
+    if let Some(l) = a.cost.loyalty {
+        return match l {
+            0 => "0".to_owned(),
+            l if l > 0 => format!("+{l}"),
+            l => format!("\u{2212}{}", l.unsigned_abs()),
+        };
+    }
+    let mana = a.cost.mana;
+    let mut out = String::new();
+    if mana.generic > 0 {
+        let _ = write!(out, "{{{}}}", mana.generic);
+    }
+    for (symbol, &n) in ["W", "U", "B", "R", "G", "C"].iter().zip(&mana.symbols) {
+        for _ in 0..n {
+            let _ = write!(out, "{{{symbol}}}");
+        }
+    }
+    if a.cost.tap {
+        out += "{T}";
+    }
+    if a.cost.sacrifice_self {
+        out += if out.is_empty() {
+            "Sacrifice"
+        } else {
+            ", sacrifice"
+        };
+    }
+    if out.is_empty() {
+        format!("Ability {k}")
+    } else {
+        out
+    }
+}
+
+/// Lands that pay for every one of `abilities`, one at a time: each color's most, and
+/// Islands for the rest. None if a cost needs mana no implemented basic land makes.
+fn lands(abilities: &[(u8, &beryl_engine::card::Ability)]) -> Option<Vec<&'static str>> {
+    // W, U, B, R, G, C, by `ManaColor` index.
+    const BASICS: [Option<&str>; 6] = [Some(PLAINS), Some(ISLAND), Some(SWAMP), None, None, None];
+    let mut most = [0u8; 6];
+    let mut total = 0u8;
+    for (_, a) in abilities {
+        let cost = a.cost.mana;
+        for (m, n) in most.iter_mut().zip(cost.symbols) {
+            *m = (*m).max(n);
+        }
+        total = total.max(cost.generic + cost.symbols.iter().sum::<u8>());
+    }
+    let mut out = Vec::new();
+    for (color, &n) in most.iter().enumerate() {
+        if n > 0 {
+            let land = BASICS[color]?;
+            out.extend(std::iter::repeat_n(land, n.into()));
+        }
+    }
+    while out.len() < total.into() {
+        out.push(ISLAND);
+    }
+    Some(out)
+}
+
+/// The card as a permanent: with counters for an ability that removes them, and the loyalty
+/// `ability` costs where its printed loyalty is less.
+fn permanent(
+    def: &'static CardDef,
+    face: &Face,
+    ability: Option<&beryl_engine::card::Ability>,
+) -> Permanent {
+    let p = Permanent::new(def.name);
+    let cost = ability
+        .and_then(|a| a.cost.loyalty)
+        .map_or(0, i8::unsigned_abs);
+    if face.loyalty.is_some_and(|l| l < cost) {
+        return p.counters(CounterKind::Loyalty, cost);
+    }
+    match face.abilities.iter().find_map(|a| a.cost.remove) {
+        Some(kind) => p.counters(kind, 2),
+        None => p,
+    }
+}
+
+fn probe(name: &str, title: &str, board: Scenario, play: Vec<Action>) -> Candidate {
+    Candidate {
+        name: name.to_owned(),
+        title: title.to_owned(),
+        board,
+        play,
+        kind: Kind::Probe,
+    }
+}
+
+type Activated = [(u8, &'static beryl_engine::card::Ability)];
+
+fn from_definition(def: &'static CardDef) -> Vec<Candidate> {
+    let face = def.front();
+    if face.types.intersects(Types::INSTANT) || face.types.intersects(Types::SORCERY) {
+        return Vec::new();
+    }
+    let abilities = activated(face);
+    if abilities.is_empty() {
+        return Vec::new();
+    }
+    let Some(lands) = lands(&abilities) else {
+        return Vec::new();
+    };
+    let board = |ability: Option<&beryl_engine::card::Ability>, tapped: bool| {
+        let lands = lands.iter().map(|&l| {
+            let land = Permanent::new(l);
+            if tapped { land.tapped() } else { land }
+        });
+        leak(
+            std::iter::once(permanent(def, face, ability))
+                .chain(lands)
+                .collect(),
+        )
+    };
+    let mut out = stops(&abilities, board(None, false), board(None, true));
+    activations(def, &abilities, &|a| board(Some(a), false), &mut out);
+    out
+}
+
+/// The moments of when the card stops its controller, and when it must not.
+fn stops(
+    abilities: &Activated,
+    open: &'static [Permanent],
+    tapped: &'static [Permanent],
+) -> Vec<Candidate> {
+    let mut out = Vec::new();
+    // Loyalty abilities are activated only as a sorcery could be cast (CR 606.3), so only
+    // the others can stop a player outside their own main phase.
+    if abilities
+        .iter()
+        .any(|(_, a)| a.timing == Timing::Instant && a.cost.loyalty.is_none())
+    {
+        let main = table("stops-main", 5, P0, TurnStep::PostcombatMain);
+        out.push(probe(
+            "stops-main",
+            "Stops: main 2",
+            main.battlefield(P0, open),
+            Vec::new(),
+        ));
+        let end = table("stops-their-end", 6, P1, TurnStep::PrecombatMain);
+        out.push(probe(
+            "stops-their-end",
+            "Stops: their end",
+            end.battlefield(P0, open),
+            Vec::new(),
+        ));
+    }
+    if abilities
+        .iter()
+        .any(|(_, a)| a.cost.mana.generic > 0 || a.cost.mana.symbols.iter().any(|&n| n > 0))
+    {
+        // A land in hand stops the human here, to see what stays offered unpaid.
+        let board = table("lands-tapped", 5, P0, TurnStep::PrecombatMain)
+            .battlefield(P0, tapped)
+            .hand(P0, LAND_IN_HAND);
+        out.push(probe("lands-tapped", "Lands tapped", board, Vec::new()));
+    }
+    if abilities.iter().any(|(_, a)| a.needs != Needs::Nothing) {
+        // Nothing paid for and nothing for the ability that needs something: no stop.
+        let board = table("nothing-to-do", 5, P0, TurnStep::PostcombatMain).battlefield(P0, tapped);
+        out.push(probe("nothing-to-do", "Nothing to do", board, Vec::new()));
+    }
+    out
+}
+
+/// Each ability activated, and the card bounced in response to one.
+fn activations(
+    def: &'static CardDef,
+    abilities: &Activated,
+    open: &dyn Fn(&beryl_engine::card::Ability) -> &'static [Permanent],
+    out: &mut Vec<Candidate>,
+) {
+    for &(k, a) in abilities {
+        let board = table("ability", 5, P0, TurnStep::PrecombatMain)
+            .battlefield(P0, open(a))
+            .battlefield(P1, TARGETS)
+            .hand(P0, LAND_IN_HAND);
+        let play = vec![Action::activate(P0, def.name, k)];
+        out.push(probe(
+            &format!("ability-{k}"),
+            &cost_label(a, k),
+            board,
+            play,
+        ));
+    }
+    let bounceable = !def.front().types.intersects(Types::LAND);
+    if let Some(&(k, a)) = abilities
+        .iter()
+        .find(|(_, a)| a.timing == Timing::Instant && !a.cost.sacrifice_self)
+        .filter(|_| bounceable)
+    {
+        let board = table("bounced", 5, P0, TurnStep::PrecombatMain)
+            .battlefield(P0, with_decoy(open(a)))
+            .hand(P0, LAND_IN_HAND);
+        let play = vec![
+            Action::activate(P0, def.name, k),
+            Action::cast(P1, SINK_INTO_STUPOR),
+            Action::choose(P1, DecisionKind::Target, def.name),
+        ];
+        out.push(probe("bounced", "Bounced in response", board, play));
+    }
+}
+
+/// The board with a tapped Thieving Skydiver too: a second permanent for Sink into Stupor to
+/// target, so that its target is asked rather than answered silently.
+fn with_decoy(board: &'static [Permanent]) -> &'static [Permanent] {
+    leak(
+        board
+            .iter()
+            .copied()
+            .chain(std::iter::once(Permanent::new(THIEVING_SKYDIVER).tapped()))
+            .collect(),
+    )
+}
+
+// The scenarios' moments.
+
+/// Whether an action answers one decision, as a spec's scripts play them.
+fn decides(action: &Action) -> bool {
+    matches!(
+        action,
+        Action::PlayLand { .. }
+            | Action::Cast { .. }
+            | Action::Activate { .. }
+            | Action::TurnFaceUp { .. }
+            | Action::Answer { .. }
+    )
+}
+
+/// A scenario's actions as a spec's scripts play them: its decisions and its turns to advance
+/// to. Passing is what the scripts do anyway short of their next action, its assertions are
+/// its own, and the session orders simultaneous triggers itself.
+fn playable(scenario: &Scenario) -> Vec<Action> {
+    scenario
+        .actions
+        .iter()
+        .filter(|a| decides(a) || matches!(a, Action::AdvanceTo { .. }))
+        .filter(|a| {
+            !matches!(
+                a,
+                Action::Answer {
+                    kind: DecisionKind::TriggerOrder | DecisionKind::Priority,
+                    ..
+                }
+            )
+        })
+        .copied()
+        .collect()
+}
+
+/// The scenario on a table that looks like a game: life off 20, graveyards, and the
+/// opponent's lands and hand, where it has none of its own, and lands under each library so
+/// that the game goes on after its actions. Each part is kept only if the scenario still
+/// passes, its assertions and its scripted decisions alike, so nothing added changes it: the
+/// libraries are tried alone if the whole fails.
+fn dressed(scenario: &Scenario) -> Scenario {
+    let passes = |d: &Scenario| {
+        let checked = d.actions(leak(d.actions.iter().map(deeper).collect()));
+        beryl_scenario::run(&beryl_cards::CARDS, &checked).is_ok()
+    };
+    let deep = with_libraries(scenario);
+    let full = with_table(&deep);
+    if passes(&full) {
+        full
+    } else if passes(&deep) {
+        deep
+    } else {
+        *scenario
+    }
+}
+
+/// An assertion counting a whole library, counting the lands [`with_libraries`] adds too.
+fn deeper(action: &Action) -> Action {
+    match *action {
+        Action::Assert {
+            assertion:
+                Assertion::Count {
+                    player,
+                    zone: beryl_engine::Zone::Library,
+                    card: None,
+                    count,
+                },
+        } => Action::assert(Assertion::Count {
+            player,
+            zone: beryl_engine::Zone::Library,
+            card: None,
+            count: count + u8::try_from(LANDS.len()).unwrap_or(u8::MAX),
+        }),
+        a => a,
+    }
+}
+
+/// Lands under each player's library.
+fn with_libraries(scenario: &Scenario) -> Scenario {
+    let mut d = *scenario;
+    for seat in [P0, P1] {
+        let library = d.setup.players[seat.index()].library;
+        d = d.library(seat, leak([library, LANDS].concat()));
+    }
+    d
+}
+
+/// Life off 20, graveyards, and the opponent's lands and hand, where it has none of its own.
+fn with_table(scenario: &Scenario) -> Scenario {
+    const THEIRS: &[Permanent] = &[
+        Permanent::new(ISLAND),
+        Permanent::new(ISLAND),
+        Permanent::new(ISLAND),
+        Permanent::new(PLAINS).tapped(),
+    ];
+    let mut d = *scenario;
+    let life_asserted = scenario.actions.iter().any(|a| {
+        matches!(
+            a,
+            Action::Assert {
+                assertion: Assertion::Life { .. }
+            }
+        )
+    });
+    if !life_asserted && d.setup.players.iter().all(|p| p.life == 20) {
+        d = d.life(P0, 17).life(P1, 14);
+    }
+    let [mine, theirs] = d.setup.players;
+    if mine.graveyard.is_empty() {
+        d = d.graveyard(P0, &[STOCK_UP, REPRIEVE]);
+    }
+    if theirs.graveyard.is_empty() {
+        d = d.graveyard(P1, &[OUST, MANA_DRAIN]);
+    }
+    if theirs.battlefield.is_empty() {
+        d = d.battlefield(P1, THEIRS);
+    }
+    if theirs.hand.is_empty() {
+        d = d.hand(P1, THEIR_HAND);
+    }
+    d
+}
+
+fn flipped(action: &Action) -> Option<(Action, &'static str)> {
+    match *action {
+        Action::Answer {
+            player,
+            kind: DecisionKind::YesNo,
+            pick,
+        } => match pick {
+            Pick::Yes => Some((Action::answer(player, DecisionKind::YesNo, Pick::No), "No")),
+            Pick::No => Some((
+                Action::answer(player, DecisionKind::YesNo, Pick::Yes),
+                "Yes",
+            )),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn from_scenario(def: &'static CardDef, scenario: &Scenario, n: usize, out: &mut Vec<Candidate>) {
+    let board = dressed(scenario);
+    let actions = playable(scenario);
+    let card = slug(def.name);
+    let full = slug(scenario.name);
+    let short = full
+        .strip_prefix(&card)
+        .map_or(full.as_str(), |s| s.trim_start_matches('-'))
+        .to_owned();
+    let at = |name: String, title: String, setup: &[Action], play: Vec<Action>, kind| Candidate {
+        name,
+        title,
+        board: board.actions(leak(setup.to_vec())),
+        play,
+        kind,
+    };
+    for (i, action) in actions.iter().enumerate() {
+        let setup = &actions[..i];
+        let mine = match *action {
+            Action::Cast { card, .. } if card == def.name => Some("Cast".to_owned()),
+            Action::PlayLand { card, .. } if card == def.name => Some("Play".to_owned()),
+            Action::TurnFaceUp { card, .. } if card == def.name => Some("Turn up".to_owned()),
+            Action::Activate {
+                card,
+                ability: AbilityIx::Own(k),
+                ..
+            } if card == def.name => Some(
+                def.front()
+                    .abilities
+                    .get(usize::from(k))
+                    .map_or_else(|| format!("Ability {k}"), |a| cost_label(a, k)),
+            ),
+            _ => None,
+        };
+        if let Some(what) = mine {
+            out.push(at(
+                format!("{short}-{i}"),
+                format!("S{n} · {what}"),
+                setup,
+                vec![*action],
+                Kind::Play,
+            ));
+        }
+        if let Action::Answer { kind, .. } = *action
+            && kind != DecisionKind::Priority
+        {
+            let ask = out.len();
+            out.push(at(
+                format!("{short}-ask-{i}"),
+                format!("S{n} · "),
+                setup,
+                Vec::new(),
+                Kind::Ask,
+            ));
+            if let Some((flip, answer)) = flipped(action) {
+                out.push(at(
+                    format!("{short}-{}-{i}", answer.to_lowercase()),
+                    format!("S{n} · Answer {answer}"),
+                    setup,
+                    vec![flip],
+                    Kind::Flip(ask),
+                ));
+            }
+        }
+    }
+    out.push(at(
+        format!("{short}-end"),
+        format!("S{n} · End"),
+        &actions,
+        Vec::new(),
+        Kind::End,
+    ));
+}
+
+// What holds at a moment's first live decision.
+
+/// The conditions that hold of `view` at its first live decision, in the fixture conditions'
+/// words: the turn, the decision, the stack, and the card's and its tokens' places. Each is
+/// checked to hold, so the vocabulary and this stay in step.
+pub fn snapshot(view: &PlayerView, def: &'static CardDef) -> Vec<String> {
+    let mut out = Vec::new();
+    let name_of = |slot: u16| {
+        view.objects
+            .iter()
+            .find(|o| o.slot == slot)
+            .and_then(|o| o.name.clone())
+    };
+    let protocol = |v: serde_json::Value| v.as_str().map(str::to_owned).unwrap_or_default();
+    out.push(format!("turn {}", view.turn.number));
+    out.push(
+        if view.turn.active == Side::You {
+            "your turn"
+        } else {
+            "their turn"
+        }
+        .to_owned(),
+    );
+    out.push(format!("step {}", protocol(json!(view.turn.step))));
+    if let Status::Deciding { decision } = &view.status {
+        if !decision.halt {
+            out.push(format!("decision {}", protocol(json!(decision.kind))));
+        }
+        if let Some(kind) = serde_json::to_value(&decision.ask)
+            .ok()
+            .and_then(|v| v.get("kind").and_then(|k| k.as_str().map(str::to_owned)))
+            .filter(|k| k != "plain")
+        {
+            out.push(format!("ask {kind}"));
+        }
+        if json!(decision.kind) != json!("priority") {
+            out.push(format!("{} candidates", decision.candidates.len()));
+        }
+        match &decision.resolving {
+            Some(StackItem::Spell { slot, .. }) => {
+                if let Some(n) = name_of(*slot) {
+                    out.push(format!("resolving {n}"));
+                }
+            }
+            Some(StackItem::Ability { name, .. }) => out.push(format!("resolving {name}")),
+            None => {}
+        }
+        let offered: Vec<u8> = decision
+            .candidates
+            .iter()
+            .filter_map(|c| match c.option {
+                Offer::Activate {
+                    slot,
+                    ability,
+                    granted: false,
+                } if name_of(slot).as_deref() == Some(def.name) => Some(ability),
+                _ => None,
+            })
+            .collect();
+        let mine_on_battlefield = view.objects.iter().any(|o| {
+            o.zone == ZoneName::Battlefield
+                && o.controller == Side::You
+                && o.name.as_deref() == Some(def.name)
+        });
+        if json!(decision.kind) == json!("priority") && mine_on_battlefield {
+            for (k, _) in activated(def.front()) {
+                if offered.contains(&k) {
+                    out.push(format!("offers {} ability {k}", def.name));
+                } else {
+                    out.push(format!("not offers {} ability {k}", def.name));
+                }
+            }
+        }
+    }
+    places(view, def, &mut out);
+    let castable = format!("castable {}", def.name);
+    for flag in [
+        castable.as_str(),
+        "attacking",
+        "blocking",
+        "castable from exile",
+        "castable from the graveyard",
+        "mana floating",
+        "stolen permanent",
+        "known card in the opponent's hand",
+        "X on the stack",
+        "emblems a side",
+        "exiled beneath a permanent",
+        "game over",
+    ] {
+        if Condition::parse(flag).is_ok_and(|c| c.holds(view)) {
+            out.push(flag.to_owned());
+        }
+    }
+    debug_assert!(
+        out.iter()
+            .all(|c| Condition::parse(c).is_ok_and(|c| c.holds(view))),
+        "a recorded condition does not hold: {out:?}"
+    );
+    out
+}
+
+/// The stack's top, and where the card and its tokens are.
+fn places(view: &PlayerView, def: &'static CardDef, out: &mut Vec<String>) {
+    let name_of = |slot: u16| {
+        view.objects
+            .iter()
+            .find(|o| o.slot == slot)
+            .and_then(|o| o.name.clone())
+    };
+    match view.stack.last() {
+        Some(StackItem::Spell { slot, .. }) => {
+            if let Some(n) = name_of(*slot) {
+                out.push(format!("stack {n}"));
+            }
+        }
+        Some(StackItem::Ability { name, .. }) => out.push(format!("stack {name}")),
+        None => {}
+    }
+    let names = std::iter::once(def.name).chain(def.tokens.iter().map(|t| t.name));
+    for name in names {
+        let count = |side: Side| {
+            view.objects
+                .iter()
+                .filter(|o| {
+                    o.zone == ZoneName::Battlefield
+                        && o.controller == side
+                        && o.name.as_deref() == Some(name)
+                })
+                .count()
+        };
+        out.push(format!("controls {} {name}", count(Side::You)));
+        let theirs = count(Side::Opponent);
+        if theirs > 0 {
+            out.push(format!("they control {theirs} {name}"));
+        }
+    }
+    let tapped = view.objects.iter().filter(|o| {
+        o.zone == ZoneName::Battlefield
+            && o.controller == Side::You
+            && o.name.as_deref() == Some(def.name)
+    });
+    let tapped: Vec<bool> = tapped.map(|o| o.tapped).collect();
+    if tapped.iter().any(|&t| t) {
+        out.push(format!("tapped {}", def.name));
+    } else if !tapped.is_empty() {
+        out.push(format!("not tapped {}", def.name));
+    }
+    if let Some(host) = view
+        .objects
+        .iter()
+        .find(|o| o.zone == ZoneName::Battlefield && o.name.as_deref() == Some(def.name))
+    {
+        for c in &host.counters {
+            let kind = serde_json::to_value(c.kind).unwrap_or_default();
+            out.push(format!(
+                "{} has {} {}",
+                def.name,
+                c.count,
+                kind.as_str().unwrap_or("")
+            ));
+        }
+        let n = view
+            .objects
+            .iter()
+            .filter(|o| o.zone == ZoneName::Exile && o.exiled_with == Some(host.slot))
+            .count();
+        if n > 0 {
+            out.push(format!("{n} exiled with {}", def.name));
+        }
+    }
+}

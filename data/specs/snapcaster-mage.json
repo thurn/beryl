@@ -1,0 +1,82 @@
+[
+  {
+    "moment": "flashback-a-counterspell-then-exile-it-1",
+    "yours": [
+      "turn 2",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Timetwister",
+      "controls 1 Snapcaster Mage",
+      "not tapped Snapcaster Mage",
+      "castable from the graveyard"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Snapcaster Mage",
+      "they control 1 Snapcaster Mage"
+    ]
+  },
+  {
+    "moment": "flashback-a-counterspell-then-exile-it-end",
+    "yours": [
+      "turn 2",
+      "their turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack Counterspell",
+      "controls 1 Snapcaster Mage",
+      "not tapped Snapcaster Mage"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Snapcaster Mage",
+      "they control 1 Snapcaster Mage"
+    ]
+  },
+  {
+    "moment": "a-flashback-spell-returned-to-hand-is-exiled-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Snapcaster Mage",
+      "not tapped Snapcaster Mage"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Snapcaster Mage",
+      "they control 1 Snapcaster Mage"
+    ]
+  },
+  {
+    "moment": "flashback-ends-with-the-turn-end",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Snapcaster Mage",
+      "not tapped Snapcaster Mage",
+      "castable from the graveyard"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "controls 0 Snapcaster Mage",
+      "they control 1 Snapcaster Mage"
+    ]
+  }
+]

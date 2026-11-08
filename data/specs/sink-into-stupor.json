@@ -1,0 +1,93 @@
+[
+  {
+    "moment": "returns-a-spell-to-its-owners-hand-1",
+    "yours": [
+      "turn 2",
+      "their turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack Sink into Stupor",
+      "controls 0 Sink into Stupor"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Sink into Stupor"
+    ]
+  },
+  {
+    "moment": "returns-a-nonland-permanent-never-a-land-end",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack Sink into Stupor",
+      "controls 0 Sink into Stupor"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Sink into Stupor"
+    ]
+  },
+  {
+    "moment": "soporific-springs-3-life-paid-it-enters-untapped-0",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision payLife",
+      "ask payLife",
+      "2 candidates",
+      "controls 0 Sink into Stupor"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Sink into Stupor"
+    ]
+  },
+  {
+    "moment": "soporific-springs-no-life-paid-it-enters-tapped-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Sink into Stupor"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Sink into Stupor"
+    ]
+  },
+  {
+    "moment": "soporific-springs-with-2-life-it-enters-tapped-unasked-0",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Sink into Stupor"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Sink into Stupor"
+    ]
+  }
+]

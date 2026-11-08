@@ -1,0 +1,302 @@
+[
+  {
+    "moment": "ability-0",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "decision target",
+      "2 candidates",
+      "stack Jace, the Mind Sculptor",
+      "controls 1 Jace, the Mind Sculptor",
+      "not tapped Jace, the Mind Sculptor",
+      "Jace, the Mind Sculptor has 3 loyalty"
+    ],
+    "theirs": [
+      "turn 5",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Jace, the Mind Sculptor",
+      "controls 0 Jace, the Mind Sculptor",
+      "they control 1 Jace, the Mind Sculptor",
+      "Jace, the Mind Sculptor has 5 loyalty"
+    ]
+  },
+  {
+    "moment": "ability-1",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "decision chooseObject",
+      "ask putBack",
+      "2 candidates",
+      "resolving Jace, the Mind Sculptor",
+      "controls 1 Jace, the Mind Sculptor",
+      "not tapped Jace, the Mind Sculptor",
+      "Jace, the Mind Sculptor has 3 loyalty"
+    ],
+    "theirs": [
+      "turn 5",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Jace, the Mind Sculptor",
+      "controls 0 Jace, the Mind Sculptor",
+      "they control 1 Jace, the Mind Sculptor",
+      "Jace, the Mind Sculptor has 3 loyalty"
+    ]
+  },
+  {
+    "moment": "ability-2",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack Jace, the Mind Sculptor",
+      "controls 1 Jace, the Mind Sculptor",
+      "not tapped Jace, the Mind Sculptor",
+      "Jace, the Mind Sculptor has 3 loyalty"
+    ],
+    "theirs": [
+      "turn 5",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Jace, the Mind Sculptor",
+      "controls 0 Jace, the Mind Sculptor",
+      "they control 1 Jace, the Mind Sculptor",
+      "Jace, the Mind Sculptor has 2 loyalty"
+    ]
+  },
+  {
+    "moment": "ability-3",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "decision target",
+      "2 candidates",
+      "stack Jace, the Mind Sculptor",
+      "controls 1 Jace, the Mind Sculptor",
+      "not tapped Jace, the Mind Sculptor",
+      "Jace, the Mind Sculptor has 12 loyalty"
+    ],
+    "theirs": [
+      "turn 6",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Jace, the Mind Sculptor"
+    ]
+  },
+  {
+    "moment": "bounced",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "decision yesNo",
+      "ask fateseal",
+      "2 candidates",
+      "resolving Jace, the Mind Sculptor",
+      "controls 0 Jace, the Mind Sculptor"
+    ],
+    "theirs": [
+      "turn 6",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Jace, the Mind Sculptor",
+      "known card in the opponent's hand"
+    ]
+  },
+  {
+    "moment": "2-puts-the-top-of-an-opponents-library-on-the-bottom-0",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision target",
+      "2 candidates",
+      "stack Jace, the Mind Sculptor",
+      "controls 1 Jace, the Mind Sculptor",
+      "not tapped Jace, the Mind Sculptor",
+      "Jace, the Mind Sculptor has 3 loyalty"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "controls 0 Jace, the Mind Sculptor",
+      "they control 1 Jace, the Mind Sculptor",
+      "Jace, the Mind Sculptor has 5 loyalty"
+    ]
+  },
+  {
+    "moment": "2-puts-the-top-of-an-opponents-library-on-the-bottom-no-2",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "offers Jace, the Mind Sculptor ability 0",
+      "offers Jace, the Mind Sculptor ability 1",
+      "not offers Jace, the Mind Sculptor ability 2",
+      "not offers Jace, the Mind Sculptor ability 3",
+      "controls 1 Jace, the Mind Sculptor",
+      "not tapped Jace, the Mind Sculptor",
+      "Jace, the Mind Sculptor has 5 loyalty",
+      "known card in the opponent's hand"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "controls 0 Jace, the Mind Sculptor",
+      "they control 1 Jace, the Mind Sculptor",
+      "Jace, the Mind Sculptor has 5 loyalty"
+    ]
+  },
+  {
+    "moment": "2-puts-the-top-of-an-opponents-library-on-the-bottom-yes-6",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "not offers Jace, the Mind Sculptor ability 0",
+      "not offers Jace, the Mind Sculptor ability 1",
+      "not offers Jace, the Mind Sculptor ability 2",
+      "not offers Jace, the Mind Sculptor ability 3",
+      "controls 1 Jace, the Mind Sculptor",
+      "not tapped Jace, the Mind Sculptor",
+      "Jace, the Mind Sculptor has 7 loyalty"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Jace, the Mind Sculptor",
+      "they control 1 Jace, the Mind Sculptor",
+      "Jace, the Mind Sculptor has 7 loyalty"
+    ]
+  },
+  {
+    "moment": "0-draws-three-and-puts-two-back-in-the-order-chosen-0",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision chooseObject",
+      "ask putBack",
+      "4 candidates",
+      "resolving Jace, the Mind Sculptor",
+      "controls 1 Jace, the Mind Sculptor",
+      "not tapped Jace, the Mind Sculptor",
+      "Jace, the Mind Sculptor has 3 loyalty"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Jace, the Mind Sculptor",
+      "controls 0 Jace, the Mind Sculptor",
+      "they control 1 Jace, the Mind Sculptor",
+      "Jace, the Mind Sculptor has 3 loyalty"
+    ]
+  },
+  {
+    "moment": "0-draws-three-and-puts-two-back-in-the-order-chosen-end",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "not offers Jace, the Mind Sculptor ability 0",
+      "not offers Jace, the Mind Sculptor ability 1",
+      "not offers Jace, the Mind Sculptor ability 2",
+      "not offers Jace, the Mind Sculptor ability 3",
+      "controls 1 Jace, the Mind Sculptor",
+      "not tapped Jace, the Mind Sculptor",
+      "Jace, the Mind Sculptor has 3 loyalty"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step end",
+      "decision priority",
+      "controls 0 Jace, the Mind Sculptor",
+      "they control 1 Jace, the Mind Sculptor",
+      "Jace, the Mind Sculptor has 3 loyalty"
+    ]
+  },
+  {
+    "moment": "1-returns-a-creature-12-exiles-a-library-and-shuffles-in-the-hand-0",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack Jace, the Mind Sculptor",
+      "controls 1 Jace, the Mind Sculptor",
+      "not tapped Jace, the Mind Sculptor",
+      "Jace, the Mind Sculptor has 13 loyalty"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Jace, the Mind Sculptor",
+      "controls 0 Jace, the Mind Sculptor",
+      "they control 1 Jace, the Mind Sculptor",
+      "Jace, the Mind Sculptor has 12 loyalty"
+    ]
+  },
+  {
+    "moment": "1-returns-a-creature-12-exiles-a-library-and-shuffles-in-the-hand-2",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision target",
+      "2 candidates",
+      "stack Jace, the Mind Sculptor",
+      "controls 1 Jace, the Mind Sculptor",
+      "not tapped Jace, the Mind Sculptor",
+      "Jace, the Mind Sculptor has 12 loyalty",
+      "known card in the opponent's hand"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Jace, the Mind Sculptor"
+    ]
+  },
+  {
+    "moment": "1-returns-a-creature-12-exiles-a-library-and-shuffles-in-the-hand-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Jace, the Mind Sculptor"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Jace, the Mind Sculptor"
+    ]
+  }
+]

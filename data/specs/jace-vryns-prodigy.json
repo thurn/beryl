@@ -1,0 +1,180 @@
+[
+  {
+    "moment": "stops-main",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step postcombatMain",
+      "decision priority",
+      "offers Jace, Vryn's Prodigy ability 0",
+      "controls 1 Jace, Vryn's Prodigy",
+      "controls 0 Jace, Telepath Unbound Emblem",
+      "not tapped Jace, Vryn's Prodigy"
+    ],
+    "theirs": [
+      "turn 5",
+      "their turn",
+      "step end",
+      "decision priority",
+      "controls 0 Jace, Vryn's Prodigy",
+      "they control 1 Jace, Vryn's Prodigy",
+      "controls 0 Jace, Telepath Unbound Emblem"
+    ]
+  },
+  {
+    "moment": "stops-their-end",
+    "yours": [
+      "turn 6",
+      "their turn",
+      "step end",
+      "decision priority",
+      "offers Jace, Vryn's Prodigy ability 0",
+      "controls 1 Jace, Vryn's Prodigy",
+      "controls 0 Jace, Telepath Unbound Emblem",
+      "not tapped Jace, Vryn's Prodigy"
+    ],
+    "theirs": [
+      "turn 6",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Jace, Vryn's Prodigy",
+      "they control 1 Jace, Vryn's Prodigy",
+      "controls 0 Jace, Telepath Unbound Emblem"
+    ]
+  },
+  {
+    "moment": "ability-0",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "not offers Jace, Vryn's Prodigy ability 0",
+      "controls 1 Jace, Vryn's Prodigy",
+      "controls 0 Jace, Telepath Unbound Emblem",
+      "tapped Jace, Vryn's Prodigy"
+    ],
+    "theirs": [
+      "turn 5",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Jace, Vryn's Prodigy",
+      "controls 0 Jace, Vryn's Prodigy",
+      "they control 1 Jace, Vryn's Prodigy",
+      "controls 0 Jace, Telepath Unbound Emblem"
+    ]
+  },
+  {
+    "moment": "bounced",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "decision discard",
+      "2 candidates",
+      "resolving Jace, Vryn's Prodigy",
+      "controls 0 Jace, Vryn's Prodigy",
+      "controls 0 Jace, Telepath Unbound Emblem"
+    ],
+    "theirs": [
+      "turn 6",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Jace, Vryn's Prodigy",
+      "controls 0 Jace, Telepath Unbound Emblem",
+      "known card in the opponent's hand"
+    ]
+  },
+  {
+    "moment": "looting-to-five-cards-in-the-graveyard-transforms-him-0",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision discard",
+      "2 candidates",
+      "resolving Jace, Vryn's Prodigy",
+      "controls 1 Jace, Vryn's Prodigy",
+      "controls 0 Jace, Telepath Unbound Emblem",
+      "tapped Jace, Vryn's Prodigy"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Jace, Vryn's Prodigy",
+      "they control 1 Jace, Vryn's Prodigy",
+      "controls 0 Jace, Telepath Unbound Emblem"
+    ]
+  },
+  {
+    "moment": "looting-to-five-cards-in-the-graveyard-transforms-him-3",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Jace, Vryn's Prodigy",
+      "controls 0 Jace, Telepath Unbound Emblem"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Jace, Vryn's Prodigy",
+      "controls 0 Jace, Telepath Unbound Emblem"
+    ]
+  },
+  {
+    "moment": "1-shrinks-a-creature-until-his-controllers-next-turn-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Jace, Vryn's Prodigy",
+      "they control 1 Jace, Vryn's Prodigy",
+      "controls 0 Jace, Telepath Unbound Emblem"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step postcombatMain",
+      "decision priority",
+      "offers Jace, Vryn's Prodigy ability 0",
+      "controls 1 Jace, Vryn's Prodigy",
+      "controls 0 Jace, Telepath Unbound Emblem",
+      "not tapped Jace, Vryn's Prodigy"
+    ]
+  },
+  {
+    "moment": "3-recasts-a-sorcery-from-the-graveyard-which-is-then-exiled-end",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack Oust",
+      "controls 0 Jace, Vryn's Prodigy",
+      "they control 1 Jace, Vryn's Prodigy",
+      "controls 0 Jace, Telepath Unbound Emblem"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "offers Jace, Vryn's Prodigy ability 0",
+      "stack Oust",
+      "controls 1 Jace, Vryn's Prodigy",
+      "controls 0 Jace, Telepath Unbound Emblem",
+      "not tapped Jace, Vryn's Prodigy"
+    ]
+  }
+]

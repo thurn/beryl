@@ -1,0 +1,38 @@
+[
+  {
+    "moment": "counters-a-spell-into-its-owners-graveyard-1",
+    "yours": [
+      "turn 2",
+      "their turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack Counterspell",
+      "controls 0 Counterspell"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Counterspell"
+    ]
+  },
+  {
+    "moment": "chooses-among-spells-on-the-stack-end",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Counterspell"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Counterspell"
+    ]
+  }
+]

@@ -1,0 +1,63 @@
+[
+  {
+    "moment": "kicked-steals-mana-crypt-over-a-map-1",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision x",
+      "2 candidates",
+      "stack Thieving Skydiver",
+      "controls 0 Thieving Skydiver"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Thieving Skydiver",
+      "they control 1 Thieving Skydiver",
+      "stolen permanent"
+    ]
+  },
+  {
+    "moment": "kicked-steals-mana-crypt-over-a-map-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Thieving Skydiver",
+      "not tapped Thieving Skydiver",
+      "stolen permanent"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Thieving Skydiver",
+      "they control 1 Thieving Skydiver",
+      "stolen permanent"
+    ]
+  },
+  {
+    "moment": "unkicked-0",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Thieving Skydiver",
+      "not tapped Thieving Skydiver"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Thieving Skydiver",
+      "controls 0 Thieving Skydiver"
+    ]
+  }
+]

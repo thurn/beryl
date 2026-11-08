@@ -1,0 +1,104 @@
+[
+  {
+    "moment": "takes-a-spell-0",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision yesNo",
+      "ask look",
+      "2 candidates",
+      "resolving Thundertrap Trainer",
+      "controls 1 Thundertrap Trainer",
+      "not tapped Thundertrap Trainer"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Thundertrap Trainer",
+      "controls 0 Thundertrap Trainer"
+    ]
+  },
+  {
+    "moment": "takes-a-spell-no-1",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Thundertrap Trainer",
+      "not tapped Thundertrap Trainer"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step end",
+      "decision priority",
+      "controls 0 Thundertrap Trainer",
+      "they control 1 Thundertrap Trainer"
+    ]
+  },
+  {
+    "moment": "takes-a-spell-ask-2",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision chooseObject",
+      "ask look",
+      "2 candidates",
+      "resolving Thundertrap Trainer",
+      "controls 1 Thundertrap Trainer",
+      "not tapped Thundertrap Trainer"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step end",
+      "decision priority",
+      "controls 0 Thundertrap Trainer",
+      "they control 1 Thundertrap Trainer",
+      "known card in the opponent's hand"
+    ]
+  },
+  {
+    "moment": "finds-no-spell-0",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Thundertrap Trainer",
+      "not tapped Thundertrap Trainer"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Thundertrap Trainer",
+      "controls 0 Thundertrap Trainer"
+    ]
+  },
+  {
+    "moment": "with-offspring-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 2 Thundertrap Trainer",
+      "not tapped Thundertrap Trainer"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Thundertrap Trainer",
+      "controls 0 Thundertrap Trainer"
+    ]
+  }
+]

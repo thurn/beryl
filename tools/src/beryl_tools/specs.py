@@ -2,7 +2,8 @@
 `beryl_cli`, runs `beryl_cli specs-serve` and serves the UI with Vite, which proxies the spec
 server under /spec-api, and prints the pages' URLs until interrupted. `--shots` instead
 screenshots every moment headless into the cache (ui/scripts/specs.mjs) and prints the paths,
-for an agent to judge; `--check` plays every moment headless and checks what it expects.
+for an agent to judge; `--check` plays every moment headless and checks what it expects, and
+`--approve` first records each generated moment's state as approved in data/specs.
 `--release` builds `beryl_cli` optimized and serves the UI's production build.
 """
 
@@ -60,9 +61,10 @@ def specs(args: argparse.Namespace) -> int:
     binary = build(args.release)
     if binary is None:
         return 1
-    if args.check:
+    if args.check or args.approve:
+        approve = ["--approve"] if args.approve else []
         return subprocess.run(
-            [str(binary), "specs-check", *args.cards],
+            [str(binary), "specs-check", *approve, *args.cards],
             stdin=subprocess.DEVNULL,
             check=False,
         ).returncode
@@ -122,6 +124,11 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     )
     p.add_argument(
         "--check", action="store_true", help="play every moment headless and check it"
+    )
+    p.add_argument(
+        "--approve",
+        action="store_true",
+        help="record each generated moment as approved in data/specs, then check",
     )
     p.add_argument(
         "--release",

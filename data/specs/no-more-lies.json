@@ -1,0 +1,79 @@
+[
+  {
+    "moment": "the-controller-pays-3-1",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "stack No More Lies",
+      "controls 0 No More Lies"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack No More Lies",
+      "controls 0 No More Lies"
+    ]
+  },
+  {
+    "moment": "the-controller-pays-3-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 No More Lies"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 No More Lies"
+    ]
+  },
+  {
+    "moment": "lands-left-after-paying-for-the-spell-pay-3-1",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision yesNo",
+      "ask unlessPays",
+      "2 candidates",
+      "resolving No More Lies",
+      "stack Overlord of the Mistmoors",
+      "controls 0 No More Lies"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack No More Lies",
+      "controls 0 No More Lies"
+    ]
+  },
+  {
+    "moment": "lands-left-after-paying-for-the-spell-pay-3-no-2",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 No More Lies"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 No More Lies"
+    ]
+  }
+]

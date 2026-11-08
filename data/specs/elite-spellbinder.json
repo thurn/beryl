@@ -1,0 +1,66 @@
+[
+  {
+    "moment": "spellbinders-card-costs-its-owner-2-more-0",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision yesNo",
+      "ask look",
+      "2 candidates",
+      "resolving Elite Spellbinder",
+      "controls 1 Elite Spellbinder",
+      "not tapped Elite Spellbinder",
+      "known card in the opponent's hand"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Elite Spellbinder",
+      "they control 1 Elite Spellbinder",
+      "castable from exile"
+    ]
+  },
+  {
+    "moment": "spellbinders-card-costs-its-owner-2-more-no-1",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Elite Spellbinder",
+      "not tapped Elite Spellbinder",
+      "known card in the opponent's hand"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Elite Spellbinder",
+      "they control 1 Elite Spellbinder"
+    ]
+  },
+  {
+    "moment": "spellbinder-sees-a-hand-of-lands-0",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Elite Spellbinder",
+      "not tapped Elite Spellbinder",
+      "known card in the opponent's hand"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Elite Spellbinder",
+      "they control 1 Elite Spellbinder"
+    ]
+  }
+]

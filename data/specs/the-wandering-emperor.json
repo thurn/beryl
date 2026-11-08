@@ -1,0 +1,207 @@
+[
+  {
+    "moment": "ability-1",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "decision targetCount",
+      "2 candidates",
+      "stack The Wandering Emperor",
+      "controls 1 The Wandering Emperor",
+      "controls 0 Samurai Token",
+      "not tapped The Wandering Emperor",
+      "The Wandering Emperor has 3 loyalty"
+    ],
+    "theirs": [
+      "turn 5",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack The Wandering Emperor",
+      "controls 0 The Wandering Emperor",
+      "they control 1 The Wandering Emperor",
+      "controls 0 Samurai Token",
+      "The Wandering Emperor has 4 loyalty"
+    ]
+  },
+  {
+    "moment": "ability-2",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "not offers The Wandering Emperor ability 1",
+      "not offers The Wandering Emperor ability 2",
+      "not offers The Wandering Emperor ability 3",
+      "controls 1 The Wandering Emperor",
+      "controls 1 Samurai Token",
+      "not tapped The Wandering Emperor",
+      "The Wandering Emperor has 2 loyalty"
+    ],
+    "theirs": [
+      "turn 5",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack The Wandering Emperor",
+      "controls 0 The Wandering Emperor",
+      "they control 1 The Wandering Emperor",
+      "controls 0 Samurai Token",
+      "The Wandering Emperor has 2 loyalty"
+    ]
+  },
+  {
+    "moment": "ability-3",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack The Wandering Emperor",
+      "controls 1 The Wandering Emperor",
+      "controls 0 Samurai Token",
+      "not tapped The Wandering Emperor",
+      "The Wandering Emperor has 3 loyalty"
+    ],
+    "theirs": [
+      "turn 5",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack The Wandering Emperor",
+      "controls 0 The Wandering Emperor",
+      "they control 1 The Wandering Emperor",
+      "controls 0 Samurai Token",
+      "The Wandering Emperor has 1 loyalty"
+    ]
+  },
+  {
+    "moment": "bounced",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 The Wandering Emperor",
+      "controls 0 Samurai Token"
+    ],
+    "theirs": [
+      "turn 6",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 The Wandering Emperor",
+      "controls 0 Samurai Token",
+      "known card in the opponent's hand"
+    ]
+  },
+  {
+    "moment": "flashed-in-during-combat-2-exiles-the-tapped-attacker-1",
+    "yours": [
+      "turn 2",
+      "their turn",
+      "step declareAttackers",
+      "decision priority",
+      "offers The Wandering Emperor ability 1",
+      "offers The Wandering Emperor ability 2",
+      "offers The Wandering Emperor ability 3",
+      "controls 1 The Wandering Emperor",
+      "controls 0 Samurai Token",
+      "not tapped The Wandering Emperor",
+      "The Wandering Emperor has 3 loyalty",
+      "attacking"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step postcombatMain",
+      "decision priority",
+      "controls 0 The Wandering Emperor",
+      "they control 1 The Wandering Emperor",
+      "controls 0 Samurai Token",
+      "The Wandering Emperor has 3 loyalty"
+    ]
+  },
+  {
+    "moment": "flashed-in-during-combat-2-exiles-the-tapped-attacker-2",
+    "yours": [
+      "turn 2",
+      "their turn",
+      "step declareAttackers",
+      "decision target",
+      "1 candidates",
+      "stack The Wandering Emperor",
+      "controls 1 The Wandering Emperor",
+      "controls 0 Samurai Token",
+      "not tapped The Wandering Emperor",
+      "The Wandering Emperor has 3 loyalty",
+      "attacking"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step postcombatMain",
+      "decision priority",
+      "controls 0 The Wandering Emperor",
+      "they control 1 The Wandering Emperor",
+      "controls 0 Samurai Token",
+      "The Wandering Emperor has 1 loyalty"
+    ]
+  },
+  {
+    "moment": "1-grows-a-creature-and-gives-it-first-strike-0",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision targetCount",
+      "2 candidates",
+      "stack The Wandering Emperor",
+      "controls 1 The Wandering Emperor",
+      "controls 0 Samurai Token",
+      "not tapped The Wandering Emperor",
+      "The Wandering Emperor has 3 loyalty"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack The Wandering Emperor",
+      "controls 0 The Wandering Emperor",
+      "they control 1 The Wandering Emperor",
+      "controls 0 Samurai Token",
+      "The Wandering Emperor has 4 loyalty"
+    ]
+  },
+  {
+    "moment": "1-makes-a-22-samurai-0",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "not offers The Wandering Emperor ability 1",
+      "not offers The Wandering Emperor ability 2",
+      "not offers The Wandering Emperor ability 3",
+      "controls 1 The Wandering Emperor",
+      "controls 1 Samurai Token",
+      "not tapped The Wandering Emperor",
+      "The Wandering Emperor has 2 loyalty"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 The Wandering Emperor",
+      "they control 1 The Wandering Emperor",
+      "controls 0 Samurai Token",
+      "they control 1 Samurai Token",
+      "The Wandering Emperor has 2 loyalty"
+    ]
+  }
+]

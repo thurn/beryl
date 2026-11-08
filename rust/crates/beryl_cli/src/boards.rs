@@ -1226,6 +1226,9 @@ impl Progress {
 
 pub type Shared = Arc<Mutex<Progress>>;
 
+/// The turn and step a script's action waits for, if any.
+type Gate = Option<(u16, TurnStep)>;
+
 /// The progress of a board's scripts so far.
 pub fn lock(progress: &Shared) -> std::sync::MutexGuard<'_, Progress> {
     progress.lock().unwrap_or_else(PoisonError::into_inner)
@@ -1243,8 +1246,9 @@ pub fn lock(progress: &Shared) -> std::sync::MutexGuard<'_, Progress> {
 pub struct Scripted {
     table: GameTable,
     seat: Seat,
-    /// The seat's actions, each with its place among both seats' actions.
-    script: VecDeque<(usize, Action)>,
+    /// The seat's actions, each with its place among both seats' actions and the turn and
+    /// step it waits for, if any.
+    script: VecDeque<(usize, Action, Gate)>,
     progress: Shared,
 }
 
@@ -1260,7 +1264,9 @@ impl Scripted {
         Scripted::with_actions(board.actions, seat, table, progress)
     }
 
-    /// `seat`'s part of `actions`, played on `table`, as [`Scripted::new`] takes a board's.
+    /// `seat`'s part of `actions`, played on `table`, as [`Scripted::new`] takes a board's. An
+    /// [`Action::AdvanceTo`] holds the actions after it, both seats', until the game reaches its
+    /// turn and step; it is not itself taken.
     pub fn with_actions<'a>(
         actions: impl IntoIterator<Item = &'a Action>,
         seat: Seat,
@@ -1268,7 +1274,9 @@ impl Scripted {
         progress: Shared,
     ) -> Result<Scripted, String> {
         let mut script = VecDeque::new();
-        for (at, action) in actions.into_iter().enumerate() {
+        let mut gate = None;
+        let mut at = 0;
+        for action in actions {
             match *action {
                 Action::PlayLand { player, .. }
                 | Action::Cast { player, .. }
@@ -1276,13 +1284,15 @@ impl Scripted {
                 | Action::TurnFaceUp { player, .. }
                 | Action::Answer { player, .. } => {
                     if player == seat {
-                        script.push_back((at, *action));
+                        script.push_back((at, *action, gate));
                     }
+                    at += 1;
                 }
+                Action::AdvanceTo { turn, step } => gate = Some((turn, step)),
                 _ => return Err(format!("{action:?}: a board's action answers one decision")),
             }
         }
-        lock(&progress).next[seat.index()] = script.front().map(|&(_, a)| a);
+        lock(&progress).next[seat.index()] = script.front().map(|&(_, a, _)| a);
         Ok(Scripted {
             table: table.clone(),
             seat,
@@ -1295,13 +1305,41 @@ impl Scripted {
 impl<L: Layout> Agent<L> for Scripted {
     fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
         let s = obs.unmasked_root();
-        let next = self.script.front().map(|&(_, a)| a);
+        let next = self.script.front().map(|&(_, a, _)| a);
         // An action waits for the other seat's actions before it: a response is cast once
-        // what it answers is on the stack.
-        let due = self
-            .script
-            .front()
-            .is_some_and(|&(at, _)| lock(&self.progress).taken >= at);
+        // what it answers is on the stack. It waits for its turn and step too.
+        let turn = s.turn();
+        let due = self.script.front().is_some_and(|&(at, _, gate)| {
+            lock(&self.progress).taken >= at && gate.is_none_or(|g| (turn.number, turn.step) >= g)
+        });
+        // A "may" its script answers that the session folds into the question it leads to (a
+        // search's choice, with Done to find nothing): a yes is the choice itself, a no is Done.
+        if let Some(Action::Answer {
+            kind: DecisionKind::YesNo,
+            pick,
+            ..
+        }) = next.filter(|_| due)
+            && !matches!(d.kind, DecisionKind::YesNo | DecisionKind::Priority)
+            && d.player == self.seat
+        {
+            let done = beryl_scenario::answer(
+                &self.table,
+                s,
+                d,
+                &Action::answer(d.player, d.kind, Pick::Done),
+            );
+            if let Some(done) = done {
+                self.script.pop_front();
+                let mut progress = lock(&self.progress);
+                progress.next[self.seat.index()] = self.script.front().map(|&(_, a, _)| a);
+                progress.taken += 1;
+                drop(progress);
+                if matches!(pick, Pick::No) {
+                    return done;
+                }
+                return self.choose(obs, d);
+            }
+        }
         if let Some(action) = next.filter(|_| due) {
             let kind = match action {
                 Action::Answer { kind, .. } => kind,
@@ -1312,7 +1350,7 @@ impl<L: Layout> Agent<L> for Scripted {
             {
                 self.script.pop_front();
                 let mut progress = lock(&self.progress);
-                progress.next[self.seat.index()] = self.script.front().map(|&(_, a)| a);
+                progress.next[self.seat.index()] = self.script.front().map(|&(_, a, _)| a);
                 progress.taken += 1;
                 drop(progress);
                 return c;
@@ -1325,6 +1363,33 @@ impl<L: Layout> Agent<L> for Scripted {
         }
         if d.kind == DecisionKind::TriggerOrder {
             return trigger_to_stack(s, &self.table, d);
+        }
+        // Discarding to hand size in a cleanup its script does not answer: the first cards.
+        if d.kind == DecisionKind::Discard
+            && s.turn().step == TurnStep::Cleanup
+            && !matches!(
+                next,
+                Some(Action::Answer {
+                    kind: DecisionKind::Discard,
+                    ..
+                })
+            )
+        {
+            return Choice(0);
+        }
+        // Combat its script does not declare: no attackers, no blockers, as a scenario's
+        // passing does.
+        if matches!(d.kind, DecisionKind::Attacker | DecisionKind::Blocker)
+            && next.is_some()
+            && !matches!(next, Some(Action::Answer { kind, .. }) if kind == d.kind)
+            && let Some(c) = beryl_scenario::answer(
+                &self.table,
+                s,
+                d,
+                &Action::answer(d.player, d.kind, Pick::Done),
+            )
+        {
+            return c;
         }
         if let Some(action) = next
             && d.kind != DecisionKind::PaymentPlan

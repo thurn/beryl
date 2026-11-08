@@ -1,0 +1,420 @@
+[
+  {
+    "moment": "stops-main",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step postcombatMain",
+      "decision priority",
+      "offers Currency Converter ability 1",
+      "offers Currency Converter ability 2",
+      "controls 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token",
+      "not tapped Currency Converter"
+    ],
+    "theirs": [
+      "turn 5",
+      "their turn",
+      "step end",
+      "decision priority",
+      "controls 0 Currency Converter",
+      "they control 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token"
+    ]
+  },
+  {
+    "moment": "stops-their-end",
+    "yours": [
+      "turn 6",
+      "their turn",
+      "step end",
+      "decision priority",
+      "offers Currency Converter ability 1",
+      "offers Currency Converter ability 2",
+      "controls 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token",
+      "not tapped Currency Converter"
+    ],
+    "theirs": [
+      "turn 6",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Currency Converter",
+      "they control 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token"
+    ]
+  },
+  {
+    "moment": "lands-tapped",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "not offers Currency Converter ability 1",
+      "offers Currency Converter ability 2",
+      "controls 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token",
+      "not tapped Currency Converter"
+    ],
+    "theirs": [
+      "turn 5",
+      "their turn",
+      "step end",
+      "decision priority",
+      "controls 0 Currency Converter",
+      "they control 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token"
+    ]
+  },
+  {
+    "moment": "nothing-to-do",
+    "yours": [
+      "turn 7",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "offers Currency Converter ability 1",
+      "offers Currency Converter ability 2",
+      "controls 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token",
+      "not tapped Currency Converter"
+    ],
+    "theirs": [
+      "turn 5",
+      "their turn",
+      "step end",
+      "decision priority",
+      "controls 0 Currency Converter",
+      "they control 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token"
+    ]
+  },
+  {
+    "moment": "ability-1",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "decision yesNo",
+      "ask mayMove",
+      "2 candidates",
+      "resolving Currency Converter",
+      "controls 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token",
+      "tapped Currency Converter"
+    ],
+    "theirs": [
+      "turn 5",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Currency Converter",
+      "controls 0 Currency Converter",
+      "they control 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token"
+    ]
+  },
+  {
+    "moment": "ability-2",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "not offers Currency Converter ability 1",
+      "not offers Currency Converter ability 2",
+      "controls 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token",
+      "tapped Currency Converter"
+    ],
+    "theirs": [
+      "turn 5",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Currency Converter",
+      "controls 0 Currency Converter",
+      "they control 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token"
+    ]
+  },
+  {
+    "moment": "bounced",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "decision discard",
+      "2 candidates",
+      "resolving Currency Converter",
+      "controls 0 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token"
+    ],
+    "theirs": [
+      "turn 6",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token",
+      "known card in the opponent's hand"
+    ]
+  },
+  {
+    "moment": "exiles-its-own-loots-discard-for-a-rogue-0",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision discard",
+      "2 candidates",
+      "resolving Currency Converter",
+      "controls 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token",
+      "tapped Currency Converter"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Currency Converter",
+      "controls 0 Currency Converter",
+      "they control 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token"
+    ]
+  },
+  {
+    "moment": "exiles-its-own-loots-discard-for-a-rogue-no-2",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "not offers Currency Converter ability 1",
+      "not offers Currency Converter ability 2",
+      "controls 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token",
+      "tapped Currency Converter"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step end",
+      "decision priority",
+      "controls 0 Currency Converter",
+      "they control 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token"
+    ]
+  },
+  {
+    "moment": "exiles-its-own-loots-discard-for-a-rogue-4",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "not offers Currency Converter ability 1",
+      "not offers Currency Converter ability 2",
+      "controls 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 1 Rogue Token",
+      "tapped Currency Converter"
+    ],
+    "theirs": [
+      "turn 3",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Currency Converter",
+      "controls 0 Currency Converter",
+      "they control 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token",
+      "1 exiled with Currency Converter"
+    ]
+  },
+  {
+    "moment": "declines-to-exile-another-loots-discard-yes-2",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "not offers Currency Converter ability 1",
+      "offers Currency Converter ability 2",
+      "controls 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token",
+      "not tapped Currency Converter",
+      "1 exiled with Currency Converter"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step end",
+      "decision priority",
+      "controls 0 Currency Converter",
+      "they control 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token",
+      "1 exiled with Currency Converter"
+    ]
+  },
+  {
+    "moment": "exiles-thirst-for-discoverys-discards-end",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "not offers Currency Converter ability 1",
+      "offers Currency Converter ability 2",
+      "controls 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token",
+      "not tapped Currency Converter",
+      "2 exiled with Currency Converter"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step end",
+      "decision priority",
+      "controls 0 Currency Converter",
+      "they control 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token",
+      "2 exiled with Currency Converter"
+    ]
+  },
+  {
+    "moment": "chooses-among-its-exiled-cards-7",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision chooseObject",
+      "2 candidates",
+      "resolving Currency Converter",
+      "controls 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token",
+      "tapped Currency Converter",
+      "2 exiled with Currency Converter"
+    ],
+    "theirs": [
+      "turn 3",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Currency Converter",
+      "controls 0 Currency Converter",
+      "they control 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token",
+      "2 exiled with Currency Converter"
+    ]
+  },
+  {
+    "moment": "chooses-among-its-exiled-cards-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "not offers Currency Converter ability 1",
+      "not offers Currency Converter ability 2",
+      "controls 1 Currency Converter",
+      "controls 1 Treasure Token",
+      "controls 0 Rogue Token",
+      "tapped Currency Converter",
+      "1 exiled with Currency Converter"
+    ],
+    "theirs": [
+      "turn 3",
+      "their turn",
+      "step end",
+      "decision priority",
+      "controls 0 Currency Converter",
+      "they control 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "they control 1 Treasure Token",
+      "controls 0 Rogue Token",
+      "1 exiled with Currency Converter"
+    ]
+  },
+  {
+    "moment": "s-ability-returns-a-card-after-the-converter-left-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "not offers Currency Converter ability 1",
+      "not offers Currency Converter ability 2",
+      "stack Sink into Stupor",
+      "controls 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token",
+      "tapped Currency Converter",
+      "1 exiled with Currency Converter"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token",
+      "they control 1 Rogue Token",
+      "known card in the opponent's hand"
+    ]
+  },
+  {
+    "moment": "s-exiled-cards-stay-with-the-converter-that-exiled-them-4",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "offers Currency Converter ability 1",
+      "offers Currency Converter ability 2",
+      "controls 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token",
+      "not tapped Currency Converter"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Currency Converter",
+      "they control 1 Currency Converter",
+      "controls 0 Treasure Token",
+      "controls 0 Rogue Token"
+    ]
+  }
+]

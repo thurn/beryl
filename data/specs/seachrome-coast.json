@@ -1,0 +1,42 @@
+[
+  {
+    "moment": "with-two-other-lands-enters-untapped-0",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Seachrome Coast",
+      "not tapped Seachrome Coast"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Seachrome Coast",
+      "they control 1 Seachrome Coast"
+    ]
+  },
+  {
+    "moment": "s-white-mana-end",
+    "yours": [
+      "turn 2",
+      "their turn",
+      "step precombatMain",
+      "decision target",
+      "1 candidates",
+      "stack Mana Tithe",
+      "controls 1 Seachrome Coast",
+      "not tapped Seachrome Coast"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Seachrome Coast",
+      "they control 1 Seachrome Coast"
+    ]
+  }
+]

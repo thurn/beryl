@@ -256,7 +256,9 @@ function MomentView({
     <section className="specs-moment" id={anchor(moment, view)}>
       <header className="specs-moment-head">
         <h2>{moment.title}</h2>
-        <p>{view === "yours" ? moment.look : moment.theirs}</p>
+        {(view === "yours" ? moment.look : moment.theirs) && (
+          <p>{view === "yours" ? moment.look : moment.theirs}</p>
+        )}
         <div className="specs-moment-actions">
           {waiting ? (
             <button

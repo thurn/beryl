@@ -1,0 +1,99 @@
+[
+  {
+    "moment": "stops-main",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step postcombatMain",
+      "decision priority",
+      "offers Strip Mine ability 1",
+      "controls 1 Strip Mine",
+      "not tapped Strip Mine"
+    ],
+    "theirs": [
+      "turn 6",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Strip Mine",
+      "they control 1 Strip Mine"
+    ]
+  },
+  {
+    "moment": "stops-their-end",
+    "yours": [
+      "turn 6",
+      "their turn",
+      "step end",
+      "decision priority",
+      "offers Strip Mine ability 1",
+      "controls 1 Strip Mine",
+      "not tapped Strip Mine"
+    ],
+    "theirs": [
+      "turn 6",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Strip Mine",
+      "they control 1 Strip Mine"
+    ]
+  },
+  {
+    "moment": "ability-1",
+    "yours": [
+      "turn 5",
+      "your turn",
+      "step precombatMain",
+      "decision target",
+      "3 candidates",
+      "stack Strip Mine",
+      "controls 1 Strip Mine",
+      "not tapped Strip Mine"
+    ],
+    "theirs": [
+      "turn 6",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Strip Mine"
+    ]
+  },
+  {
+    "moment": "destroys-a-basic-land-0",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision target",
+      "2 candidates",
+      "stack Strip Mine",
+      "controls 1 Strip Mine",
+      "not tapped Strip Mine"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Strip Mine"
+    ]
+  },
+  {
+    "moment": "destroys-a-basic-land-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Strip Mine"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Strip Mine"
+    ]
+  }
+]

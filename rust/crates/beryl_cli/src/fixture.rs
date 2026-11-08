@@ -227,6 +227,10 @@ pub(crate) enum Condition {
     SpellOnStack,
     /// Each player has an emblem.
     Emblems,
+    /// The game is over.
+    GameOver,
+    /// A permanent of this name has this many counters of this kind.
+    Has(String, u8, Counter),
 }
 
 /// What the table draws on a permanent beyond its frame.
@@ -285,7 +289,8 @@ impl Condition {
     /// "attached across the table", "castable from exile", "castable from the graveyard",
     /// "known card in the opponent's hand", "token twins", "changed token", "token beside its
     /// card", "stolen permanent", "mana floating", "X on the stack", "spell on the stack",
-    /// "emblems a side", "<n> nonland permanents a side", or "<mark> beside a twin" with the
+    /// "emblems a side", "game over", "<card> has <n> <counter kind>" (as the protocol names
+    /// counters: "loyalty"), "<n> nonland permanents a side", or "<mark> beside a twin" with the
     /// mark "+1/+1 counters", "damage", "summoning sickness" or "story or time counters".
     /// Specs add "turn <n>", "your turn", "their turn", "decision <kind>", "ask <kind>",
     /// "<n> candidates", "tapped <card>", "controls <n> <card>", "they control <n> <card>", "offers <card> ability <n>",
@@ -313,6 +318,9 @@ impl Condition {
             && let Some((n, card)) = rest.split_once(' ')
         {
             return Ok(Condition::TheyControl(number(text, n)?, card.to_owned()));
+        }
+        if let Some(has) = Condition::parse_has(text) {
+            return has;
         }
         if let Some(n) = text.strip_suffix(" candidates")
             && let Ok(n) = n.parse()
@@ -349,6 +357,7 @@ impl Condition {
             "namesake candidates" => Condition::NamesakeCandidates,
             "spell on the stack" => Condition::SpellOnStack,
             "emblems a side" => Condition::Emblems,
+            "game over" => Condition::GameOver,
             _ => {
                 if let Some(n) = text.strip_prefix("turn ") {
                     Condition::Turn(number(text, n)?)
@@ -388,6 +397,18 @@ impl Condition {
         Ok(condition)
     }
 
+    /// "<card> has <n> <counter kind>", if `text` says that.
+    fn parse_has(text: &str) -> Option<Result<Condition, String>> {
+        let (card, rest) = text.rsplit_once(" has ")?;
+        let (n, kind) = rest.split_once(' ')?;
+        let n = n.parse().ok()?;
+        Some(
+            serde_json::from_value(json!(kind))
+                .map(|kind| Condition::Has(card.to_owned(), n, kind))
+                .map_err(|_| format!("{text:?}: no counter is named {kind:?}")),
+        )
+    }
+
     pub(crate) fn holds(&self, view: &PlayerView) -> bool {
         let name = |slot: u16| {
             view.objects
@@ -396,18 +417,6 @@ impl Condition {
                 .and_then(|o| o.name.as_deref())
         };
         match self {
-            Condition::Not(_)
-            | Condition::Turn(_)
-            | Condition::YourTurn(_)
-            | Condition::Decision(_)
-            | Condition::Ask(_)
-            | Condition::Candidates(_)
-            | Condition::Tapped(_)
-            | Condition::Controls(..)
-            | Condition::TheyControl(..)
-            | Condition::OnStack(..)
-            | Condition::Offers(..)
-            | Condition::ExiledWithCard(..) => self.holds_for_spec(view),
             Condition::Step(step) => view.turn.step == *step,
             Condition::Attacking => view
                 .objects
@@ -487,6 +496,8 @@ impl Condition {
             Condition::Crowded(n) => crowded(view, *n),
             Condition::SpellOnStack => matches!(view.stack.last(), Some(StackItem::Spell { .. })),
             Condition::Emblems => emblems_a_side(view),
+            // The conditions specs add.
+            _ => self.holds_for_spec(view),
         }
     }
     /// Whether one of the conditions specs add holds.
@@ -536,6 +547,16 @@ impl Condition {
                         .count()
                         == *n
                 }),
+            Condition::GameOver => matches!(view.status, Status::Over { .. }),
+            Condition::Has(card, n, kind) => view.objects.iter().any(|o| {
+                o.zone == ZoneName::Battlefield
+                    && o.name.as_deref() == Some(card)
+                    && o.counters
+                        .iter()
+                        .find(|c| c.kind == *kind)
+                        .map_or(0, |c| c.count)
+                        == *n
+            }),
             _ => unreachable!("not a spec's condition"),
         }
     }

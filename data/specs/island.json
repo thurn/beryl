@@ -1,0 +1,21 @@
+[
+  {
+    "moment": "an-island-only-in-its-owners-main-phase-0",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Island",
+      "they control 1 Island"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Island",
+      "not tapped Island"
+    ]
+  }
+]

@@ -1,0 +1,80 @@
+[
+  {
+    "moment": "finds-mana-crypt-0",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision chooseUpTo",
+      "ask search",
+      "3 candidates",
+      "resolving Trinket Mage",
+      "controls 1 Trinket Mage",
+      "not tapped Trinket Mage"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Trinket Mage",
+      "controls 0 Trinket Mage"
+    ]
+  },
+  {
+    "moment": "finds-mana-crypt-no-1",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Trinket Mage",
+      "not tapped Trinket Mage"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step end",
+      "decision priority",
+      "controls 0 Trinket Mage",
+      "they control 1 Trinket Mage"
+    ]
+  },
+  {
+    "moment": "searches-a-library-without-a-trinket-0",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "controls 1 Trinket Mage",
+      "not tapped Trinket Mage"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Trinket Mage",
+      "controls 0 Trinket Mage"
+    ]
+  },
+  {
+    "moment": "declines-to-search-yes-1",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Trinket Mage",
+      "not tapped Trinket Mage"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step end",
+      "decision priority",
+      "controls 0 Trinket Mage",
+      "they control 1 Trinket Mage"
+    ]
+  }
+]

@@ -1,0 +1,63 @@
+[
+  {
+    "moment": "a-creature-becomes-a-noncreature-vehicle-that-cant-crew-alone-0",
+    "yours": [
+      "turn 2",
+      "their turn",
+      "step end",
+      "decision target",
+      "1 candidates",
+      "stack Swift Reconfiguration",
+      "controls 0 Swift Reconfiguration"
+    ],
+    "theirs": [
+      "turn 2",
+      "your turn",
+      "step end",
+      "decision priority",
+      "stack Swift Reconfiguration",
+      "controls 0 Swift Reconfiguration"
+    ]
+  },
+  {
+    "moment": "a-creature-becomes-a-noncreature-vehicle-that-cant-crew-alone-end",
+    "yours": [
+      "turn 3",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Swift Reconfiguration",
+      "not tapped Swift Reconfiguration"
+    ],
+    "theirs": [
+      "turn 4",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 0 Swift Reconfiguration",
+      "they control 1 Swift Reconfiguration"
+    ]
+  },
+  {
+    "moment": "thieving-skydiver-kicked-for-2-takes-the-reconfigured-creature-end",
+    "yours": [
+      "turn 1",
+      "your turn",
+      "step precombatMain",
+      "decision priority",
+      "controls 1 Swift Reconfiguration",
+      "not tapped Swift Reconfiguration",
+      "stolen permanent"
+    ],
+    "theirs": [
+      "turn 1",
+      "their turn",
+      "step precombatMain",
+      "decision priority",
+      "stack Thieving Skydiver",
+      "controls 0 Swift Reconfiguration",
+      "they control 1 Swift Reconfiguration",
+      "X on the stack"
+    ]
+  }
+]

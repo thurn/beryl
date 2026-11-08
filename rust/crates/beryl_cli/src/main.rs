@@ -57,7 +57,7 @@ const USAGE: &str = "usage:
   beryl_cli eval-fit [--games N] [--seed N]
   beryl_cli serve [--port N]
   beryl_cli specs-serve [--port N]
-  beryl_cli specs-check [card...]
+  beryl_cli specs-check [--approve] [card...]
   beryl_cli review <replay.json> [--agent NAME] [--out FILE]
   beryl_cli anchor-replay <run-dir> <entrant> [--examples N] [--recheck N] [--guarded]
   beryl_cli agreement <run-dir> <entrant> [--positions N] [--budget B]";
@@ -91,7 +91,10 @@ fn main() -> ExitCode {
         [command, flag, port] if command == "specs-serve" && flag == "--port" => {
             number(flag, port).and_then(specs::serve::serve)
         }
-        [command, cards @ ..] if command == "specs-check" => specs::check_all(cards),
+        [command, flag, cards @ ..] if command == "specs-check" && flag == "--approve" => {
+            specs::check_all(cards, true)
+        }
+        [command, cards @ ..] if command == "specs-check" => specs::check_all(cards, false),
         [command, rest @ ..] if command == "play" => Flags::parse(rest).and_then(|f| play(&f)),
         [command, rest @ ..] if command == "tournament" => {
             Flags::parse(rest).and_then(|f| tournament(&f))
