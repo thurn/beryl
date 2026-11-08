@@ -2,7 +2,7 @@
 lists them, `by bugs file` files a bead for each open one, and `by bugs done` marks them fixed.
 
 Each report is a folder under $BERYL_BUGS, else
-`~/Library/Application Support/ca.thurn.beryl/bugs` (on Windows, `%APPDATA%\ca.thurn.beryl\bugs`):
+`~/Library/Application Support/ca.thurn.beryl/bugs` (on Windows, `%APPDATA%\\ca.thurn.beryl\\bugs`):
 `report.md`, whose front matter holds its
 `status` (open, filed, done) and `bead`, beside its screenshots, replay, views and logs. A done
 report moves to `done/`.
