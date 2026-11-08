@@ -6,8 +6,9 @@ use std::collections::BTreeSet;
 
 use beryl_cards::CARDS;
 use beryl_cards::decks::{VINTAGE_WU_CONTROL, WU_CONTROL};
-use beryl_engine::Decklist;
-use beryl_session::replay::Entry;
+use beryl_engine::{Decklist, GameTable};
+use beryl_session::checkpoint::Checkpoint;
+use beryl_session::replay::{Entry, FORMAT_VERSION};
 use beryl_session::save::{Act, Described};
 use beryl_session::{
     Game, PlayerView, ReplayFile, Seat, SessionError, SessionId, StartGame, Status, StopsSetting,
@@ -51,15 +52,36 @@ fn played(seed: u64, decks: [&Decklist; 2]) -> (Game, PlayerView) {
 }
 
 /// The log of a save as a later replay must reproduce it: each answer by what it does (its
-/// index depends on where the game's cards happen to lie), each other entry whole.
+/// index depends on where the game's cards happen to lie), each other entry but checkpoints
+/// whole ([`same_boards`] compares those).
 fn meaning(file: &ReplayFile) -> Vec<Result<Option<Described>, Entry>> {
     file.log
         .iter()
+        .filter(|e| !matches!(e, Entry::Checkpoint(_)))
         .map(|e| match e {
             Entry::Choice(c) | Entry::Auto(c) => Ok(c.what.clone()),
             e => Err(e.clone()),
         })
         .collect()
+}
+
+/// Asserts that `a` and `b` record the same board as each turn begins, as a replay checks.
+fn same_boards(t: &GameTable, a: &ReplayFile, b: &ReplayFile) {
+    let boards = |f: &ReplayFile| -> Vec<Checkpoint> {
+        f.log
+            .iter()
+            .filter_map(|e| match e {
+                Entry::Checkpoint(c) => Some((**c).clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    let (a, b) = (boards(a), boards(b));
+    assert_eq!(a.len(), b.len());
+    assert!(!a.is_empty());
+    for (a, b) in a.iter().zip(&b) {
+        assert_eq!(a.difference(t, b), None, "turn {}", a.turn);
+    }
 }
 
 /// What the human sees of the game, by name rather than by slot: the turn, the life totals,
@@ -89,6 +111,7 @@ fn replays_under_another_seed(file: &ReplayFile, view: &PlayerView) {
     other.seed ^= 0x5eed_0000_0000;
     let (again, replayed) = Game::from_replay(&CARDS, &other, SESSION).unwrap();
     assert_eq!(meaning(again.replay()), meaning(file), "seed {}", file.seed);
+    same_boards(again.table(), again.replay(), file);
     assert_eq!(again.replay().chooser, file.chooser);
     assert_eq!(seen(&replayed), seen(view), "seed {}", file.seed);
 }
@@ -148,7 +171,7 @@ fn events(file: &ReplayFile) -> BTreeSet<&'static str> {
 fn a_save_records_each_card_as_it_is_first_seen_and_the_flip_winner() {
     let (game, _) = played(1, [WU_CONTROL, WU_CONTROL]);
     let file = game.replay();
-    assert_eq!(file.format_version, 3);
+    assert_eq!(file.format_version, FORMAT_VERSION);
     let first_seen: Vec<&Entry> = file
         .log
         .iter()
@@ -256,11 +279,15 @@ fn a_version_2_save_replays_from_its_seed() {
     let mut old = game.replay().clone();
     old.format_version = 2;
     old.chooser = None;
-    old.log
-        .retain(|e| !matches!(e, Entry::Reveal { .. } | Entry::Flip { .. }));
+    old.log.retain(|e| {
+        !matches!(
+            e,
+            Entry::Reveal { .. } | Entry::Flip { .. } | Entry::Checkpoint(_)
+        )
+    });
     let (again, replayed) = Game::from_replay(&CARDS, &old, SESSION).unwrap();
     assert_eq!(replayed, view);
     // It is saved again in the format of today, with the outcomes its seed produced.
-    assert_eq!(again.replay().format_version, 3);
+    assert_eq!(again.replay().format_version, FORMAT_VERSION);
     assert_eq!(meaning(again.replay()), meaning(game.replay()));
 }

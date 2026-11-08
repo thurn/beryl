@@ -124,8 +124,12 @@ fn a_version_1_save_still_replays() {
     let mut old = game.replay().clone();
     old.commit = None;
     old.chooser = None;
-    old.log
-        .retain(|e| !matches!(e, Entry::Reveal { .. } | Entry::Flip { .. }));
+    old.log.retain(|e| {
+        !matches!(
+            e,
+            Entry::Reveal { .. } | Entry::Flip { .. } | Entry::Checkpoint(_)
+        )
+    });
     for entry in &mut old.log {
         if let Entry::Choice(c) | Entry::Auto(c) = entry {
             c.what = None;
@@ -248,6 +252,8 @@ fn an_answer_no_candidate_does_stops_the_replay_naming_the_step() {
         name: "No Such Card".to_owned(),
         ..card.clone()
     };
+    // With no turn's beginning to rebuild from (`tests/checkpoints.rs`).
+    file.log.retain(|e| !matches!(e, Entry::Checkpoint(_)));
     let Err(SessionError::BadReplay { reason }) = replayed(&file) else {
         panic!("the replay goes on past an answer no candidate does");
     };

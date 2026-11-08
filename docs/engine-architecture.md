@@ -892,6 +892,23 @@ zone.
   record and game part only if the rules leave nothing to choose: one candidate,
   a priority passed unasked, or a pass no priority asks. Anything else stops the
   replay at the turn and step.
+- **A save records the board as each turn begins** (save format 4,
+  `beryl_session::checkpoint`), taken as the upkeep begins: each zone's cards by
+  name (the library as a count and the cards someone knows in it), life, tapped,
+  summoning sickness, counters, damage, attachments, exile links, faces and who
+  knows each hidden card. A replay compares each turn's board with the record's;
+  a difference is divergence, reported with the turn and the first difference.
+  Interchangeable things are not differences: like permanents in another order,
+  a graveyard's order, a noncreature's summoning sickness, and knowledge, all of
+  which slot-order ties can move. Where a replay stops (an answer no candidate
+  does, a reveal it cannot deal, a board that differs), the game is rebuilt from
+  the latest board the replay reached at or before that turn:
+  `State::begin_before_turn` puts the board as it stood once the turn before
+  ended, and the engine begins the turn again. The rebuilt save records that
+  board (`from`) and logs from there. What lasts past a turn's beginning off the
+  board (an effect, a delayed trigger, a permission to cast) is not recorded:
+  `State::off_board` names it in the checkpoint, and that turn refuses to
+  rebuild rather than rebuild wrong.
 - `State` implements `Hash` over its fields, computed on demand for tests,
   divergence checks and the first transposition tables. The mutation chokepoints
   are placed so an incremental Zobrist hash can be added without touching card
@@ -1213,11 +1230,12 @@ human's decision the session waits for one `choose(decision, index)` command,
 naming the decision id it received; the session's record of the open decision is
 the one place an answer is checked. AI decisions run on the session thread, and
 a search may use a pool, so IPC never blocks. The webview never sees a `State`.
-Every session records seed, decklists, the choice log and what chance produced
-as a replay file (§14), rewritten at each decision of the human's, and the app
-resumes the newest unfinished one on launch. The protocol's TypeScript types are
-generated from the Rust types, and `ui/src/ipc.ts` keeps the typed wrappers for
-the commands and events.
+Every session records seed, decklists, the choice log, what chance produced and
+each turn's board as a replay file (§14), rewritten at each decision of the
+human's, and the app resumes the newest unfinished one on launch, from the
+latest turn's beginning where this build can no longer replay it to its end. The
+protocol's TypeScript types are generated from the Rust types, and
+`ui/src/ipc.ts` keeps the typed wrappers for the commands and events.
 
 The human plays under the smart stops of §15 by default. A setting switches to
 the exact profile, which offers every priority. Milestone 1 offers a game

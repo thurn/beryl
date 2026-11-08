@@ -1038,6 +1038,15 @@ impl<L: Layout> State<L> {
         }
     }
 
+    /// Who controls an object before continuous effects: for a permanent, the player who put
+    /// it onto the battlefield, usually its owner
+    /// ([CR 110.2](https://yawgatog.com/resources/magic-rules/#R1102)): "A permanent's owner
+    /// is the same as the owner of the card that represents it ... A permanent's controller
+    /// is, by default, the player under whose control it entered the battlefield."
+    pub fn base_controller(&self, slot: L::Slot) -> Seat {
+        self.object(slot).base_controller
+    }
+
     /// The name of the object in `slot`: its face up's, which is the card's own name
     /// everywhere but on the stack and the battlefield
     /// ([CR 712.8a](https://yawgatog.com/resources/magic-rules/#R7128a)): "While a

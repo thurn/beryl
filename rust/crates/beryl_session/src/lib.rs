@@ -7,6 +7,7 @@
 
 pub mod ai;
 pub mod bugs;
+pub mod checkpoint;
 mod game;
 pub mod ipc;
 pub mod journal;

@@ -26,6 +26,7 @@ use beryl_search::{Agent, AgentDecision, Budget, GameAgent};
 use serde_json::json;
 
 use crate::ai::{self, AgentMove, AgentMoves, SearchView};
+use crate::checkpoint::Checkpoint;
 use crate::protocol::{
     CandidateIndex, DecisionId, Moment, PlayerView, SessionId, Side, Status, StopsSetting,
     player_view,
@@ -444,8 +445,6 @@ struct UndoPoint {
     hurt_by: [Option<ObjectRef<Large>>; 2],
 }
 
-/// The human's pass on to their next stop ([`Game::pass_on`]), while the session passes their
-/// priority for them.
 /// Where a replay and its record parted ([`Game::from_replay`]): answers found away from
 /// their recorded index, and places it went on where the rules left nothing to choose.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -454,6 +453,89 @@ struct Drift {
     lenient: u32,
 }
 
+/// The record's turn-start checkpoints as a replay reaches them ([`Game::from_replay`]).
+struct Checks<'a> {
+    /// Those not reached yet, in order: the board the record was rebuilt from, if it was, then
+    /// those its log has.
+    ahead: VecDeque<&'a Checkpoint>,
+    /// Those reached, in order.
+    reached: Vec<&'a Checkpoint>,
+}
+
+impl<'a> Checks<'a> {
+    fn new(file: &'a ReplayFile) -> Checks<'a> {
+        let logged = file.log.iter().filter_map(|e| match e {
+            Entry::Checkpoint(c) => Some(&**c),
+            _ => None,
+        });
+        Checks {
+            ahead: file.from.as_deref().into_iter().chain(logged).collect(),
+            reached: Vec::new(),
+        }
+    }
+
+    /// Checks `board`, the board a replay reached as a turn began, against the record's
+    /// checkpoint of that turn, if it has one: where they differ, the replay has diverged.
+    /// Checkpoints of earlier turns not reached are dropped; an undo past a turn's beginning
+    /// begins it again, so a record may have two of a turn, which the replay reaches in turn.
+    fn reached(&mut self, t: &GameTable, board: &Checkpoint) -> Result<(), SessionError> {
+        while self.ahead.front().is_some_and(|c| c.turn < board.turn) {
+            self.ahead.pop_front();
+        }
+        let Some(recorded) = self.ahead.front().copied().filter(|c| c.turn == board.turn) else {
+            return Ok(());
+        };
+        self.ahead.pop_front();
+        self.reached.push(recorded);
+        match recorded.difference(t, board) {
+            None => Ok(()),
+            Some(difference) => Err(SessionError::BadReplay {
+                reason: format!(
+                    "turn {}: the board as it began is not the record's: {difference}",
+                    board.turn
+                ),
+            }),
+        }
+    }
+
+    /// `file` rebuilt from the latest checkpoint the replay reached of turn `turn` or before,
+    /// where the replay stopped for `reason` in turn `turn`: the board as that turn began, with
+    /// no log yet. Fails with `reason` where there is none, or where something lasting past
+    /// that turn's beginning off the board would be lost ([`Checkpoint::lingering`]).
+    fn rebuild(
+        &self,
+        file: &ReplayFile,
+        turn: u16,
+        reason: String,
+    ) -> Result<ReplayFile, SessionError> {
+        let Some(from) = self.reached.iter().rev().find(|c| c.turn <= turn) else {
+            return Err(SessionError::BadReplay { reason });
+        };
+        if let Some(lingering) = &from.lingering {
+            return Err(SessionError::BadReplay {
+                reason: format!(
+                    "{reason}; no rebuild from turn {}'s beginning, which would lose {lingering}",
+                    from.turn
+                ),
+            });
+        }
+        journal::warn(
+            "replay",
+            "rebuilt the game from a turn's beginning",
+            json!({ "turn": from.turn, "reason": reason }),
+        );
+        Ok(ReplayFile {
+            format_version: FORMAT_VERSION,
+            chooser: None,
+            from: Some(Box::new((*from).clone())),
+            log: Vec::new(),
+            ..file.clone()
+        })
+    }
+}
+
+/// The human's pass on to their next stop ([`Game::pass_on`]), while the session passes their
+/// priority for them.
 #[derive(Clone, Copy, Debug)]
 struct PassingOn {
     /// The turn and step of their next stop, where it ends.
@@ -531,6 +613,7 @@ impl Game {
             opponent: start.opponent.clone(),
             stops: start.stops,
             chooser: None,
+            from: None,
             log: Vec::new(),
             commit: None,
         };
@@ -576,6 +659,7 @@ impl Game {
             opponent: String::new(),
             stops,
             chooser: None,
+            from: None,
             log: Vec::new(),
             commit: None,
         };
@@ -662,50 +746,111 @@ impl Game {
     /// ([`beryl_engine::chance`]). The seed then decides only what no player has seen. An
     /// outcome the game cannot reproduce, one it makes that the record lacks, or one the record
     /// has that never happens stops the replay. An older record replays from its seed.
+    ///
+    /// Since version 4, the board as each turn begins is checked against the record's
+    /// ([`crate::checkpoint`]): where they differ, the replay stops. Where a replay stops, the
+    /// game is rebuilt from the latest board the replay reached as a turn began at or before the
+    /// turn it stopped in, journaled, and resumed there: the human plays that turn again. The
+    /// rebuilt game's record begins from that board ([`ReplayFile::from`]). Where no board was
+    /// reached, or the board's turn had something lasting past its beginning off the board
+    /// ([`crate::checkpoint::Checkpoint::lingering`]), the replay fails, saying why.
     pub fn from_replay(
         cards: &'static CardTable,
         file: &ReplayFile,
         session: SessionId,
     ) -> Result<(Game, PlayerView), SessionError> {
+        let mut game = Game::begin(cards, file, session)?;
+        let mut checks = Checks::new(file);
+        match game.replay_log(file, &mut checks) {
+            Ok(()) => {}
+            Err(SessionError::BadReplay { reason }) => {
+                let rebuilt = checks.rebuild(file, game.board.turn().number, reason)?;
+                game = Game::begin(cards, &rebuilt, session)?;
+                game.replay_log(&rebuilt, &mut Checks::new(&rebuilt))?;
+            }
+            Err(e) => return Err(e),
+        }
+        let view = game.view();
+        Ok((game, view))
+    }
+
+    /// Sets up the game `file` records, before its first entry: as a new game, or as the board
+    /// it was rebuilt from ([`ReplayFile::from`]) stood before that turn began.
+    fn begin(
+        cards: &'static CardTable,
+        file: &ReplayFile,
+        session: SessionId,
+    ) -> Result<Game, SessionError> {
         let mut game = Game::new(cards, &file.start()?, session)?;
+        let Some(from) = &file.from else {
+            return Ok(game);
+        };
+        let mut state = State::new(&game.table, file.seed, game.board.profile());
+        from.arrange(&game.table, &mut state, file.seed)
+            .map_err(|reason| SessionError::BadReplay {
+                reason: format!("the checkpoint of turn {}: {reason}", from.turn),
+            })?;
+        let turn = state.turn();
+        game.seen = (turn.number, turn.step);
+        game.board = Boards::new(&state);
+        game.flip_winner = None;
+        game.replay.chooser = None;
+        game.replay.from = Some(from.clone());
+        Ok(game)
+    }
+
+    /// Replays `file`'s log on the game [`Game::begin`] set up, to where it ends, checking each
+    /// turn's board against the record's checkpoint ([`Checks`]).
+    fn replay_log(&mut self, file: &ReplayFile, checks: &mut Checks) -> Result<(), SessionError> {
         let chance = file.format_version >= 3;
         if chance {
-            if let Some(chooser) = file.chooser {
+            // A game rebuilt from a turn's beginning is past the coin flip.
+            if let Some(chooser) = file.chooser.filter(|_| file.from.is_none()) {
                 let chooser = Seat::try_new(chooser).ok_or_else(|| SessionError::BadReplay {
                     reason: format!("no seat {chooser} won the coin flip"),
                 })?;
-                game.set_flip_winner(chooser);
+                self.set_flip_winner(chooser);
             }
-            game.chance.replay([]);
+            self.chance.replay([]);
         }
         // Each entry replay takes, with the outcomes of chance logged after it, and those logged
-        // before the first. The session's own answers are found again as it plays on.
+        // before the first. The session's own answers are found again as it plays on, and
+        // checkpoints are checked as each turn begins.
         let mut before = Vec::new();
         let mut steps: Vec<(&Entry, Vec<Random>)> = Vec::new();
         for entry in &file.log {
-            match entry.random(&game.table)? {
+            match entry.random(&self.table)? {
                 Some(outcome) => match steps.last_mut() {
                     Some((_, outcomes)) => outcomes.push(outcome),
                     None => before.push(outcome),
                 },
-                None if matches!(entry, Entry::Auto(_)) => {}
+                None if matches!(entry, Entry::Auto(_) | Entry::Checkpoint(_)) => {}
                 None => steps.push((entry, Vec::new())),
             }
         }
         if chance {
-            game.chance.replay(before);
+            self.chance.replay(before);
         }
         let mut steps = steps.into_iter().peekable();
         let mut drift = Drift::default();
         // Whether chance has the outcomes logged after the next entry.
         let mut dealt = false;
         loop {
-            if matches!(game.at, At::Playing) {
-                game.play_on();
-                game.chance_reproduced()?;
-                if matches!(game.at, At::Playing) {
+            if matches!(self.at, At::Playing) {
+                let logged = self.replay.log.len();
+                self.play_on();
+                self.chance_reproduced()?;
+                if let Some(Entry::Checkpoint(reached)) = self
+                    .replay
+                    .log
+                    .get(logged..)
+                    .and_then(|new| new.iter().find(|e| matches!(e, Entry::Checkpoint(_))))
+                {
+                    checks.reached(&self.table, reached)?;
+                }
+                if matches!(self.at, At::Playing) {
                     // A step began, and live play went on after its view.
-                    game.board.drain_events();
+                    self.board.drain_events();
                     continue;
                 }
             }
@@ -714,24 +859,24 @@ impl Game {
             };
             if !dealt {
                 // The entry before played out, and play went on to here.
-                game.chance_spent()?;
+                self.chance_spent()?;
                 if chance {
-                    game.chance.replay(std::mem::take(outcomes));
+                    self.chance.replay(std::mem::take(outcomes));
                 }
                 dealt = true;
             }
             let entry: &Entry = entry;
             // Live play's view here took the events so far.
-            game.board.drain_events();
-            let took = game.replay_entry(entry, &mut drift)?;
-            game.chance_reproduced()?;
+            self.board.drain_events();
+            let took = self.replay_entry(entry, &mut drift)?;
+            self.chance_reproduced()?;
             if took {
                 steps.next();
                 dealt = false;
             }
         }
-        game.chance_spent()?;
-        game.chance.stop_replaying();
+        self.chance_spent()?;
+        self.chance.stop_replaying();
         if drift != Drift::default() {
             journal::info(
                 "replay",
@@ -739,8 +884,7 @@ impl Game {
                 json!({ "moved": drift.moved, "lenient": drift.lenient }),
             );
         }
-        let view = game.view();
-        Ok((game, view))
+        Ok(())
     }
 
     /// Settles the coin flip of [CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031)
@@ -1418,8 +1562,16 @@ impl Game {
             self.at = match step {
                 None => {
                     let turn = self.board.turn();
+                    let began = turn.number != self.seen.0;
                     self.seen = (turn.number, turn.step);
                     self.answered = None;
+                    if began {
+                        let checkpoint =
+                            on_board!(&self.board, b => Checkpoint::of(&self.table, &b.state));
+                        self.replay
+                            .log
+                            .push(Entry::Checkpoint(Box::new(checkpoint)));
+                    }
                     if self.halts() {
                         self.seq += 1;
                         At::Human(self.decision_id(), Open::Halt)

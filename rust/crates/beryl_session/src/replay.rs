@@ -2,7 +2,9 @@
 //! reproduce it. Since version 2, a choice is recorded by what it does ([`crate::save`]), so a
 //! later build replays it though its candidates moved. Since version 3, what chance produced
 //! is recorded too, each hidden card as a player first learns it and each coin flip
-//! ([`beryl_engine::chance`]), so a replay does not depend on the seed.
+//! ([`beryl_engine::chance`]), so a replay does not depend on the seed. Since version 4, the
+//! board as each turn begins is recorded too ([`crate::checkpoint`]), which a replay checks
+//! itself against and rebuilds the game from where it can no longer go on.
 
 use std::path::Path;
 
@@ -10,6 +12,7 @@ use beryl_engine::chance::Random;
 use beryl_engine::{CardTable, GameTable, Seat, State, TableError};
 use serde::{Deserialize, Serialize};
 
+use crate::checkpoint::Checkpoint;
 use crate::game::with_stops;
 use crate::protocol::StopsSetting;
 use crate::save::Chosen;
@@ -19,8 +22,9 @@ use crate::{SessionError, StartGame};
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReplayFile {
-    /// The file's format: 1 recorded each choice as its index alone, 2 by what it does, and 3
-    /// also what chance produced. A file without one is version 1.
+    /// The file's format: 1 recorded each choice as its index alone, 2 by what it does, 3
+    /// also what chance produced, and 4 also the board as each turn begins. A file without one
+    /// is version 1.
     #[serde(default = "version_1")]
     pub format_version: u8,
     pub seed: u64,
@@ -35,6 +39,10 @@ pub struct ReplayFile {
     /// ([CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031)), since version 3.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chooser: Option<u8>,
+    /// The board the game was rebuilt from, as its turn began, where the record before it
+    /// could no longer replay ([`crate::Game::from_replay`]): the log goes on from there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from: Option<Box<Checkpoint>>,
     pub log: Vec<Entry>,
     /// The commit of the build that last wrote the file, if it said (older files do not).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -42,7 +50,7 @@ pub struct ReplayFile {
 }
 
 /// The format this build writes.
-pub const FORMAT_VERSION: u8 = 3;
+pub const FORMAT_VERSION: u8 = 4;
 
 fn version_1() -> u8 {
     1
@@ -74,6 +82,8 @@ pub enum Entry {
     Reveal { player: u8, card: String },
     /// Player `player` flipped a coin as the entry before it played out, and won or lost.
     Flip { player: u8, won: bool },
+    /// The board as a turn began, after the entry before it.
+    Checkpoint(Box<Checkpoint>),
 }
 
 impl Entry {

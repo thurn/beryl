@@ -83,9 +83,9 @@ fn agent_name<'a>(file: &'a ReplayFile, searcher_name: Option<&'a str>) -> &'a s
     }
 }
 
-/// With `only`, the agent searches that turn's decisions alone and the transcript ends with it.
-fn review(path: &Path, searcher_name: Option<&str>, only: Option<u16>) -> Result<String, String> {
-    let file = ReplayFile::load(path).map_err(|e| format!("{}: {e:?}", path.display()))?;
+/// Fails unless the game `file` records can be reviewed: a WU Control mirror, played from its
+/// start rather than rebuilt from a turn's beginning, so the seed deals it.
+fn reviewable(file: &ReplayFile) -> Result<(), String> {
     let mirror: Vec<(u8, String)> = WU_CONTROL
         .iter()
         .map(|&(n, name)| (n, name.to_owned()))
@@ -93,6 +93,16 @@ fn review(path: &Path, searcher_name: Option<&str>, only: Option<u16>) -> Result
     if file.decks.iter().any(|d| *d != mirror) {
         return Err("only WU Control mirror games can be reviewed".to_owned());
     }
+    if file.from.is_some() {
+        return Err("a game rebuilt from a turn's beginning cannot be reviewed".to_owned());
+    }
+    Ok(())
+}
+
+/// With `only`, the agent searches that turn's decisions alone and the transcript ends with it.
+fn review(path: &Path, searcher_name: Option<&str>, only: Option<u16>) -> Result<String, String> {
+    let file = ReplayFile::load(path).map_err(|e| format!("{}: {e:?}", path.display()))?;
+    reviewable(&file)?;
     let human = Seat::try_new(file.human).ok_or("no such human seat")?;
     let bot = human.opponent();
     let t = game::mirror();
@@ -109,7 +119,11 @@ fn review(path: &Path, searcher_name: Option<&str>, only: Option<u16>) -> Result
         [recorded, "human"]
     };
     let mut transcript = Transcript::new(names);
-    let mut log = file.log.iter();
+    // Each turn's board, as it began, is the session's to check.
+    let mut log = file
+        .log
+        .iter()
+        .filter(|e| !matches!(e, Entry::Checkpoint(_)));
     let mut stops = file.stops;
     // The positions an undo goes back to, one per answer of the human's, the latest last, as
     // `Game::undo` keeps them: the state at each decision or halt they answered, the oldest
