@@ -23,7 +23,7 @@
     "security": {
       "csp": {
         "default-src": "'self'",
-        "connect-src": "ipc: http://ipc.localhost",
+        "connect-src": "'self' ipc: http://ipc.localhost",
         "img-src": "'self' data: beryl-art: http://beryl-art.localhost",
         "style-src": "'self' 'unsafe-inline'"
       },

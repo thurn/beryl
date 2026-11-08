@@ -5,6 +5,7 @@
 
 mod art;
 mod games;
+mod links;
 mod snapshot;
 
 use std::time::{Duration, Instant};
@@ -171,6 +172,7 @@ pub fn run() {
     journal::install_panic_hook();
     bugs::set_build_commit(env!("BERYL_COMMIT"));
     tauri::Builder::default()
+        .plugin(links::plugin())
         .invoke_handler(handlers![
             app_info = ipc::APP_INFO,
             ui_ready = ipc::UI_READY,
