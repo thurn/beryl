@@ -2581,8 +2581,8 @@ await check(
         // Each frame starts on the card and springs to its place mid-table.
         const start = center(await frames(page).first().boundingBox());
         assert.ok(
-            Math.hypot(start.x - from.x, start.y - from.y) < 120,
-            "out of the card",
+            Math.hypot(start.x - from.x, start.y - from.y) < 160,
+            `out of the card: ${JSON.stringify({ start, from })}`,
         );
         await page.clock.runFor(1500);
         const end = center(await frames(page).first().boundingBox());

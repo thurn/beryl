@@ -283,6 +283,9 @@ export function GameScreen({
   return <Playing key={playback.update.session} playback={playback} />;
 }
 
+/** The longest a choice over the table waits for its view's events to be seen, in ms. */
+const CHOICE_WAIT = 1500;
+
 /** A game in progress: the board, and over it the opening, a choice or the game's end. */
 function Playing({ playback }: { playback: Playback }) {
   const [error, setError] = useState<string>();
@@ -395,7 +398,22 @@ function Playing({ playback }: { playback: Playback }) {
     // Only a new view answers (`answer` changes with every render).
   }, [view]);
 
-  const choice = held ?? (waiting ? undefined : choiceOf(view));
+  // A choice over the table waits until what its view shows has been seen (the spell that asks
+  // it cast and resolving, what it exiled), rather than covering it as it plays.
+  const [seen, setSeen] = useState<PlayerView>();
+  useEffect(() => {
+    if (!live || status.kind !== "deciding" || view.events.length === 0) {
+      setSeen(view);
+      return;
+    }
+    const wait = setTimeout(
+      () => setSeen(view),
+      Math.min(eventsHold(view), CHOICE_WAIT),
+    );
+    return () => clearTimeout(wait);
+  }, [view, live]);
+  const asked = held ?? (waiting ? undefined : choiceOf(view));
+  const choice = held ?? (seen === view ? asked : undefined);
   const plan = (picks: Intent[]) => {
     if (!decision || !choice) return;
     const { index, rest } = follow(decision, picks);
@@ -460,7 +478,8 @@ function Playing({ playback }: { playback: Playback }) {
           over ||
           (choice !== undefined && !floats(choice) && !peeking)
         }
-        inert={choice !== undefined}
+        // Nor does it take input while a choice waits to be shown.
+        inert={asked !== undefined}
       />
       {opening && (
         <Opening

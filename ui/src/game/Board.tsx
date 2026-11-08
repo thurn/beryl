@@ -113,6 +113,7 @@ import {
 } from "./casting";
 import { CastCaption, CastStep } from "./CastStep";
 import { ModeChooser, type Mode, type Origin } from "./ModeChooser";
+import { eventsHold } from "./playback";
 import { Risen, useRiseFrom } from "./Risen";
 import { FloatPrompt, PromptRow } from "./FloatPrompt";
 import { stoppedPhases, togglePhase } from "./stops";
@@ -349,8 +350,25 @@ export function Board({
   // column, the rows give it room.
   const [logOpen, setLogOpen] = useState(false);
   const toggleLog = useCallback(() => setLogOpen((o) => !o), []);
-  // The hand sinks under a screen over the table, and rises whole for a choice of its cards.
-  const hold = dimmed ? "tucked" : picking?.fromHand ? "raised" : "held";
+  // The hand sinks under a screen over the table, and rises whole for a choice of its cards,
+  // once what the view shows has been seen (the card a loot draws arriving in it).
+  const [seen, setSeen] = useState<PlayerView>();
+  useEffect(() => {
+    if (!live || !picking?.fromHand || view.events.length === 0) {
+      setSeen(view);
+      return;
+    }
+    const wait = setTimeout(
+      () => setSeen(view),
+      Math.min(eventsHold(view), RAISE_WAIT),
+    );
+    return () => clearTimeout(wait);
+  }, [view, live, picking]);
+  const hold = dimmed
+    ? "tucked"
+    : picking?.fromHand && seen === view
+      ? "raised"
+      : "held";
   const resting = useMemo(
     () => layout(shown, hold, false, spotlight),
     [shown, hold, spotlight],
@@ -2163,6 +2181,9 @@ function PromptCard({
     </span>
   );
 }
+
+/** The longest the hand waits for its view's events to be seen before it rises, in ms. */
+const RAISE_WAIT = 1200;
 
 /** How much higher a card picked from the raised hand stands than the rest. */
 const PICKED_RISE = 44;

@@ -179,7 +179,11 @@ pub const SCENARIOS: &[Scenario] = &[
         )
         .hand(
             P0,
-            &[names::SUBTLETY, names::TIME_SPIRAL, names::FRACTURED_IDENTITY],
+            &[
+                names::SUBTLETY,
+                names::TIME_SPIRAL,
+                names::FRACTURED_IDENTITY,
+            ],
         )
         .battlefield(
             P1,
