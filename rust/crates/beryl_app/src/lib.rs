@@ -154,7 +154,18 @@ async fn report_bug(app: tauri::AppHandle, request: BugReport) -> Result<BugSave
         json!({ "pngMs": encoded.as_millis(), "totalMs": started.elapsed().as_millis() }),
     );
     #[cfg(desktop)]
-    bugs::filing::enqueue(&root, &saved.id);
+    {
+        // A local bundle carries its filing tools so Finder can launch it without a shell.
+        let bundled = match (
+            option_env!("BERYL_BUNDLE_BUGS_REPO"),
+            option_env!("BERYL_BUNDLE_BUGS_UV"),
+            option_env!("BERYL_BUNDLE_BUGS_PATH"),
+        ) {
+            (Some(repo), Some(uv), Some(path)) => Some((repo, uv, path)),
+            _ => None,
+        };
+        bugs::filing::enqueue(&root, &saved.id, bundled);
+    }
     Ok(saved)
 }
 

@@ -429,7 +429,7 @@ fn write_report(sessions: &Sessions, args: Value, spec: SpecMoment, spec_viewer:
     let root = bugs::dir();
     match bugs::write(&root, &report, &Images::default(), sessions) {
         Ok(saved) => {
-            bugs::filing::enqueue(&root, &saved.id);
+            bugs::filing::enqueue(&root, &saved.id, None);
             json!({ "ok": saved })
         }
         Err(e) => json!({ "err": e }),

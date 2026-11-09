@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -20,6 +21,18 @@ def tauri(*args: str) -> int:
     env = paths.tauri_env()
     if args and args[0] == "dev":
         env["BERYL_FILE_BUGS"] = str(paths.REPO)
+    if args[:2] == ("build", "--bundles"):
+        # Launching the packaged app from Finder drops the terminal's environment.
+        uv, bd, dolt = (shutil.which(tool) for tool in ("uv", "bd", "dolt"))
+        if uv and bd:
+            tool_dirs = dict.fromkeys(
+                str(Path(tool).absolute().parent) for tool in (uv, bd, dolt) if tool
+            )
+            env.update(
+                BERYL_BUNDLE_BUGS_REPO=str(paths.REPO),
+                BERYL_BUNDLE_BUGS_UV=str(Path(uv).absolute()),
+                BERYL_BUNDLE_BUGS_PATH=os.pathsep.join([*tool_dirs, os.defpath]),
+            )
     return subprocess.run(
         [system.which("npx"), "--no-install", "tauri", *args],
         cwd=paths.UI,
