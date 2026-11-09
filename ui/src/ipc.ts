@@ -323,6 +323,11 @@ export function liveTransport(
 const liveBase = () =>
   new URLSearchParams(window.location.search).get("live") ?? undefined;
 
+/** Whether this game is a spec frame that receives updates from its parent. */
+export const isRelayedGame = () =>
+  window.parent !== window &&
+  new URLSearchParams(window.location.search).has("relay");
+
 /** What a plain browser gets without `?fixture=`: enough for the shell to render. */
 const browserFixture: Fixture = {
   messages: [
@@ -406,10 +411,7 @@ async function rawTransport(): Promise<Transport> {
   }
   const live = liveBase();
   if (live) {
-    const relayed =
-      window.parent !== window &&
-      new URLSearchParams(window.location.search).has("relay");
-    const transport = liveTransport(live, relayed);
+    const transport = liveTransport(live, isRelayedGame());
     (window as { berylLive?: unknown }).berylLive = transport;
     return transport;
   }

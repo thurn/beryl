@@ -4,6 +4,7 @@ import {
   appInfo,
   canExportBugs,
   canReportBugs,
+  isRelayedGame,
   uiReady,
   type OutcomeView,
 } from "./ipc";
@@ -49,8 +50,9 @@ function Main() {
   }, [path]);
 
   // The menu's music, the game's, then a sting for how it ended; the gallery is quiet.
+  // A spec page can keep many live games open. Its frames play only sound effects.
   useMusic(
-    path === "/gallery"
+    path === "/gallery" || isRelayedGame()
       ? undefined
       : path !== "/game"
         ? "menu"
