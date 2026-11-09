@@ -141,20 +141,20 @@ A sequential test (SPRT, as Stockfish's fishtest) ends each match as soon as the
 evidence is in, and a cap ends it undecided. The bars are set before a match and
 never moved during one.
 
-- **Stronger.** SPRT between "no gain" and "+50 Elo" at α = β = 0.001. Promoted
-  when it accepts the gain: a challenger no stronger than the champion passes
-  one match in a thousand. About 700 games end it either way at +50 Elo, or
-  about 5 hours at 3M. Cap: 2,000 games (an overnight run). A challenger worth
-  +25 Elo will usually hit the cap; it is not promoted, and its score is kept
-  for the record. +25 Elo at this confidence costs about 2,700 games, which is
-  more than one night, and the gains we have seen are not that small when they
-  are real.
+- **Stronger.** SPRT between "no gain" and "+50 Elo" at α = β = 0.001, and the
+  suite (§5) re-opens no fixed entry. Promoted when the test accepts the gain: a
+  challenger no stronger than the champion passes one match in a thousand. About
+  700 games end it either way at +50 Elo, or about 5 hours at 3M. Cap: 2,000
+  games (an overnight run). A challenger worth +25 Elo will usually hit the cap;
+  it is not promoted, and its score is kept for the record. +25 Elo at this
+  confidence costs about 2,700 games, which is more than one night, and the
+  gains we have seen are not that small when they are real.
 
 - **More plausible at the same strength.** For a challenger that fixes blunders,
   two conditions:
 
-  1. The blunder suite (§5) passes: it makes none of the suite's forbidden
-     plays, makes every required one, and regresses nothing.
+  1. The blunder suite (§5): it fixes at least one open entry its rung claimed
+     and re-opens no fixed one.
   2. The match shows it is not weaker: SPRT between "−25 Elo" and "no change" at
      α = β = 0.05, accepting "no change". About 1,100 games, or 8 hours at 3M.
      Cap 2,000.
@@ -178,9 +178,9 @@ never moved during one.
   the command line, the seed, and the result in its notes. One lane, so matches
   run one at a time and never share the machine.
 - `docs/ladder.md`, created with the first match, is the log: one row a match
-  (date, challenger, champion, budget, games, score, Elo interval, verdict),
-  newest first, and the current champion at the top. Logs, transcripts and
-  position files are never committed.
+  (date, challenger, champion, budget, games, score, Elo interval, verdict, and
+  the suite's open and fixed counts after it), newest first, and the current
+  champion at the top. Logs, transcripts and position files are never committed.
 - A promotion changes the registry's Deep Searcher and its doc comment names the
   match.
 
@@ -217,9 +217,44 @@ A regression gate built from every blunder a human has caught.
   - Trinket Mage, turn 7: taking Mana Crypt is required.
 - **The check** builds the agent from the game's seed as the app did, searches
   the position at the proxy budget and at the shipped budget, from five seeds
-  each, and fails on any forbidden play or any missed required one. It is a hard
-  gate for every promotion, strength or plausibility alike, run before the
-  match.
+  each, and fails on any forbidden play or any missed required one. It runs
+  before every match, for both bars.
+- **Open and fixed.** The champion made every play the suite forbids, so a new
+  entry fails for it by construction. An entry is *open* while the current
+  champion fails it at any seed or budget, and *fixed* once it passes at all of
+  them; the suite's report says which is which. The suite is a ledger of known
+  blunders, not a score the champion is expected to clear: at any time some
+  entries are open, and those are what the next rungs are for. The gate reads
+  the ledger. A plausibility promotion fixes at least one open entry its rung
+  claimed and re-opens none; a strength promotion re-opens none. A fixed entry
+  re-opening is the regression the suite exists to catch, whatever the Elo
+  beside it.
+- **Growth changes no past verdict.** A match's statistics are about Elo and
+  never read the suite, and a promotion was judged by the suite as it stood when
+  its bar was registered: an entry added while a match runs is reported with the
+  result, not made a condition of it. So a new entry re-decides nothing. It says
+  the current champion has a blunder we did not know of, which every promotion
+  before it also said. A plausibility promotion is relative, better than the
+  last champion on what we knew, never a certificate.
+- **Every new entry has a rung.** Its write-up names the class of the blunder,
+  not only the position: Snapcaster Mage in its own main phase is "a flash
+  creature cast at sorcery speed", and a Samurai token made in the agent's own
+  turn instead of at the opponent's end step (by-s0t) is the same class. A new
+  entry joins the rung that covers its class or opens a new rung, whose bar
+  claims it. The fix must address the class. A table entry that moves one card's
+  value in one spot passes the entry and leaves the class, and the human's next
+  games find the class again; entries caught after a fix landed are that fix's
+  held-out test.
+- **The measure over time is entries opened per human game.** Discovery comes
+  from humans playing the champion, so the suite grows with play, and the log
+  records with each promotion the suite's open and fixed counts and the human
+  games played since the last one. Progress is open entries closing and new ones
+  arriving more slowly. A champion that opens an entry every few games is not
+  plausible yet, whatever its Elo.
+- **Cost grows with the ledger.** An entry costs about a minute and a half at
+  both budgets and five seeds. Past about 30 entries, every entry runs at the
+  proxy budget, and the shipped budget runs only on the entries a rung claims
+  and on any whose state changed at the proxy budget.
 - **The human's games.** After each promotion, a human plays a few games against
   the new champion. Any play they would call wrong goes through the bug button
   (⌘B), whose report carries the replay and the agent's own searches, gets an
