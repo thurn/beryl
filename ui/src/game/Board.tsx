@@ -928,14 +928,14 @@ export function Board({
     if (placements.get(slot)?.look === "hand") {
       const plays = inHand ? [] : playActs(acts);
       const casts = castActs(plays);
-      if (plays.length > 1) {
-        // Ways to play it (casts by different costs, a land played): their frames spring out
-        // of it where it was let go, as it goes back to the hand.
-        choosePlay(
-          slot,
-          plays.map((act) => ({ act })),
-          at,
-        );
+      const choices =
+        plays.length > 0
+          ? (playChoices(objects.get(slot), acts) ??
+            (plays.length > 1 ? plays.map((act) => ({ act })) : undefined))
+          : undefined;
+      if (choices) {
+        // Offer the same uses as a click, including cycling a land instead of playing it.
+        choosePlay(slot, choices, at);
         return false;
       }
       if (casts.length === 1 && stepsIn(casts)) {

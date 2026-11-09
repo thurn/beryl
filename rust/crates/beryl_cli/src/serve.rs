@@ -184,7 +184,7 @@ pub(crate) fn invoke(sessions: &Sessions, command: &str, args: Value) -> Value {
         ),
         ipc::CHOOSE => answer(
             request::<ChooseRequest>(args)
-                .and_then(|r| sessions.choose(r.decision, r.index).map_err(|e| json!(e))),
+                .and_then(|r| sessions.choose_request(r).map_err(|e| json!(e))),
         ),
         ipc::SET_STOPS => answer(
             request::<SetStopsRequest>(args)

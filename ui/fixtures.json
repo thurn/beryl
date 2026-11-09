@@ -136,6 +136,12 @@
       "where": ["playable pair in hand"]
     },
     {
+      "name": "cast-oculus",
+      "board": "cast-oculus",
+      "until": "first priority decision for seat 0",
+      "after": 1
+    },
+    {
       "name": "cast-kicker",
       "board": "cast-kicker",
       "until": "first x decision for seat 0",

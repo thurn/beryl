@@ -133,6 +133,7 @@ export function fixtureTransport(
     return Promise.resolve(null);
   };
   /** Takes back the latest answer: the decision before the latest view's, again. */
+  const continuations = new Set<number>();
   const undo = () => {
     const latest = viewAt(released - 1);
     if (latest?.status.kind !== "deciding" || !latest.status.decision.undo) {
@@ -143,7 +144,8 @@ export function fixtureTransport(
     let at = released - 1;
     while (at > 0) {
       at -= 1;
-      if (viewAt(at)?.status.kind === "deciding") break;
+      if (viewAt(at)?.status.kind === "deciding" && !continuations.has(at))
+        break;
     }
     return showAgain(at, true);
   };
@@ -195,6 +197,14 @@ export function fixtureTransport(
         released < events.length
       ) {
         const from = released;
+        if (
+          command === "choose" &&
+          (args as Args<"choose">).request.continuation
+        ) {
+          continuations.add(from - 1);
+        } else {
+          continuations.delete(from - 1);
+        }
         let last;
         do {
           last = events[released];
@@ -469,8 +479,11 @@ export const startGame = (agent: string, seed?: number) =>
   call("start_game", { request: { agent, seed: seed ?? null } });
 
 /** Answers the human's decision `decision` with its candidate `index`. */
-export const choose = (decision: DecisionId, index: CandidateIndex) =>
-  call("choose", { request: { decision, index } });
+export const choose = (
+  decision: DecisionId,
+  index: CandidateIndex,
+  continuation?: boolean,
+) => call("choose", { request: { decision, index, continuation } });
 
 export const setStops = (session: SessionId, stops: StopsSetting) =>
   call("set_stops", { request: { session, stops } });

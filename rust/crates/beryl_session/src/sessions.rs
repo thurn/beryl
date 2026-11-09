@@ -15,6 +15,7 @@ use ts_rs::TS;
 
 use crate::ai::{self, AgentMove, AgentMoves};
 use crate::game::Game;
+use crate::ipc::ChooseRequest;
 use crate::protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status, StopsSetting};
 use crate::replay::ReplayFile;
 use crate::session::GameSession;
@@ -315,9 +316,23 @@ impl Sessions {
 
     /// Answers the human's open decision `decision` with its candidate `index`.
     pub fn choose(&self, decision: DecisionId, index: CandidateIndex) -> Result<(), SessionError> {
-        let data = json!({ "decision": decision.seq, "index": index.0 });
+        self.choose_request(ChooseRequest {
+            decision,
+            index,
+            continuation: None,
+        })
+    }
+
+    /// Answers the decision, optionally as part of the player's preceding choice.
+    pub fn choose_request(&self, request: ChooseRequest) -> Result<(), SessionError> {
+        let ChooseRequest {
+            decision,
+            index,
+            continuation,
+        } = request;
+        let data = json!({ "decision": decision.seq, "index": index.0, "continuation": continuation.unwrap_or(false) });
         self.with("choose", data, decision.session, |game| {
-            game.choose(decision, index)
+            game.choose(request)
         })
     }
 

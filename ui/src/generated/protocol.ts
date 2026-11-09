@@ -25,7 +25,11 @@ export type ChooseRequest = {
 /**
  * The decision the UI received.
  */
-decision: DecisionId, index: CandidateIndex, };
+decision: DecisionId, index: CandidateIndex, 
+/**
+ * Joins a follow-up answer to the preceding choice for Undo.
+ */
+continuation?: boolean, };
 
 export type SetStopsRequest = { session: SessionId, stops: StopsSetting, };
 
@@ -322,9 +326,9 @@ halt: boolean,
  */
 cancellable: boolean, 
 /**
- * How many of the viewer's answers the `undo` command can take back, one per command,
- * latest first, across the opponent's decisions and turns, as far back as the session
- * keeps them. Zero with nothing to take back.
+ * How many of the viewer's answers the `undo` command can take back, latest first, across
+ * the opponent's decisions and turns. Automatic cast follow-ups go back with the preceding
+ * answer. Zero with nothing to take back.
  */
 undo: number, 
 /**

@@ -399,13 +399,17 @@ function Playing({ playback }: { playback: Playback }) {
     send(index, then);
   };
   /** Sends an answer, the player's or one taken for them (a planned pick, a lone target). */
-  const send = (index: CandidateIndex, then: Intent[] = []) => {
+  const send = (
+    index: CandidateIndex,
+    then: Intent[] = [],
+    continuation?: boolean,
+  ) => {
     if (!decision || waiting) return;
     setError(undefined);
     setAnswered(view);
     // Picks still waiting for their decision come after the new ones.
     planned.current = [...then, ...planned.current];
-    choose(decision.id, index).catch(fail);
+    choose(decision.id, index, continuation).catch(fail);
   };
   /** Takes back the cast in progress, and any picks planned for it. The choice it was asking,
    * if put aside, is done with: asked again, it is shown. */
@@ -493,7 +497,7 @@ function Playing({ playback }: { playback: Playback }) {
       setHeld(undefined);
       return;
     }
-    send(index, rest);
+    send(index, rest, intent?.continuation);
     // Only a new view answers (`send` changes with every render).
   }, [view]);
 
@@ -505,10 +509,10 @@ function Playing({ playback }: { playback: Playback }) {
     const status = latest.view.status;
     if (status.kind === "deciding" && planned.current.length > 0) {
       const { decision } = status;
-      const { index, rest } = follow(decision, planned.current);
+      const { intent, index, rest } = follow(decision, planned.current);
       if (index !== undefined) {
         planned.current = rest;
-        choose(decision.id, index).catch(fail);
+        choose(decision.id, index, intent?.continuation).catch(fail);
         return;
       }
     }

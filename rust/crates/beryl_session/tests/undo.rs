@@ -8,14 +8,16 @@ use std::sync::{Arc, Mutex};
 
 use beryl_cards::CARDS;
 use beryl_cards::decks::WU_CONTROL;
-use beryl_cards::names::{ISLAND, PLAINS, TEFERI_HERO_OF_DOMINARIA};
+use beryl_cards::names::{
+    ISLAND, MANA_CRYPT, PLAINS, STAFF_OF_THE_STORYTELLER, TEFERI_HERO_OF_DOMINARIA,
+};
 use beryl_engine::{Choice, Decision, Layout, Observation, Seat, State, TurnStep};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_search::{Agent, AgentDecision, Budget};
 use beryl_session::protocol::{
     AskView, Candidate, DecisionView, Kind, PassTo, Side, Step, ZoneName,
 };
-use beryl_session::replay::Entry;
+use beryl_session::replay::{Entry, ReplayFile};
 use beryl_session::{
     CandidateIndex, Game, PlayerView, Prepared, SessionError, SessionId, StartGame, Status,
     StopsSetting, UNDO_POINTS,
@@ -70,6 +72,52 @@ fn answer(game: &mut Game, view: &PlayerView, index: usize) -> PlayerView {
             .unwrap(),
     );
     to_human(game)
+}
+
+#[test]
+fn undo_groups_a_casts_automatic_payment_even_after_resume() {
+    let start = StartGame {
+        seed: 7,
+        decks: [
+            owned(&[(4, MANA_CRYPT), (4, STAFF_OF_THE_STORYTELLER), (16, PLAINS)]),
+            owned(&[(24, ISLAND)]),
+        ],
+        human: Seat::P0,
+        opponent: "greedy".to_owned(),
+        stops: StopsSetting::SMART,
+    };
+    let mut game = Game::new(&CARDS, &start, SESSION).unwrap();
+    let mut view = to_human(&mut game);
+    let before = loop {
+        let d = deciding(&view).expect("the human can cast Staff before the game ends");
+        if let Some((cast, _)) = d.candidates.iter().enumerate().find(|(_, c)| {
+            c.label == format!("Cast {STAFF_OF_THE_STORYTELLER}") && c.payments.len() > 1
+        }) {
+            let before = view;
+            view = answer(&mut game, &before, cast);
+            break before;
+        }
+        let cast_crypt = d
+            .candidates
+            .iter()
+            .position(|c| c.label == format!("Cast {MANA_CRYPT}"));
+        view = answer(&mut game, &view, cast_crypt.unwrap_or_else(|| policy(d, 1)));
+    };
+    let payment = deciding(&view).unwrap();
+    assert_eq!(payment.kind, Kind::PaymentPlan);
+    let paid = game.answer(payment.id, CandidateIndex(0)).unwrap();
+    game.choose(paid.as_continuation());
+    to_human(&mut game);
+
+    let saved = serde_json::to_string(game.replay()).unwrap();
+    let file: ReplayFile = serde_json::from_str(&saved).unwrap();
+    let (mut resumed, _) = Game::from_replay(&CARDS, &file, SESSION).unwrap();
+    let undone = resumed.undo().unwrap();
+    assert_eq!(without_id(undone), without_id(before.clone()));
+
+    // The grouped Undo in the new record goes back to the same priority when replayed.
+    let (_, replayed) = Game::from_replay(&CARDS, resumed.replay(), SESSION).unwrap();
+    assert_eq!(without_id(replayed), without_id(before));
 }
 
 /// A human who plays a land when they can, casts every third spell they could, and otherwise

@@ -110,6 +110,7 @@ impl OpenDecision {
             Ok(Answer {
                 id,
                 choice: Choice(0),
+                continuation: false,
             })
         } else {
             Err(SessionError::NoPassOn)
@@ -133,6 +134,7 @@ impl OpenDecision {
         Ok(Answer {
             id,
             choice: Choice(index.0),
+            continuation: false,
         })
     }
 }
@@ -142,6 +144,23 @@ impl OpenDecision {
 pub struct Answer {
     id: DecisionId,
     choice: Choice,
+    continuation: bool,
+}
+
+impl Answer {
+    /// Joins a follow-up the client answers for the player to the preceding choice for Undo.
+    #[must_use]
+    pub fn as_continuation(mut self) -> Self {
+        self.continuation = true;
+        self
+    }
+}
+
+#[derive(Clone, Copy)]
+enum ChoiceOrigin {
+    Explicit,
+    Continuation,
+    Auto,
 }
 
 /// What the human must answer.
@@ -434,6 +453,7 @@ pub const UNDO_POINTS: usize = 500;
 /// drawn since come out again in the same order, and a shuffle falls the same way.
 struct UndoPoint {
     state: Snapshot,
+    continuation: bool,
     /// The open decision there.
     at: At,
     seen: (u16, TurnStep),
@@ -1026,7 +1046,10 @@ impl Game {
                 let answer = OpenDecision::new(id, &open, false, false)
                     .answer(id, CandidateIndex(c.0))
                     .expect("a found candidate is in range");
-                self.choose(answer);
+                self.choose(Answer {
+                    continuation: chosen.continuation,
+                    ..answer
+                });
             }
             (At::Human(..), Entry::Stops(stops)) => self.change_stops(*stops),
             (At::Human(_, Open::Decision(_)), Entry::PassOn) => {
@@ -1247,7 +1270,8 @@ impl Game {
     }
 
     /// Takes back the human's latest answer, at their open decision, and returns the view of
-    /// the decision or halt it answered, asked again: the game is exactly as it stood there.
+    /// the decision or halt it answered, asked again. A follow-up sent by the client as part
+    /// of that same choice (such as a cast's payment plan) goes back with it.
     /// Each call takes back one more, as far back as the [`UNDO_POINTS`] kept, across the
     /// agent's decisions and turns: the agent goes back with the game
     /// ([`Agent::rewind`]) and decides again as play goes on, from the seed it had, so the
@@ -1263,7 +1287,13 @@ impl Game {
         if !self.undoable() {
             return Err(SessionError::NothingToUndo);
         }
-        let point = self.undo.pop_back().expect("an undoable game has a point");
+        let mut point = self.undo.pop_back().expect("an undoable game has a point");
+        while point.continuation {
+            let Some(previous) = self.undo.pop_back() else {
+                break;
+            };
+            point = previous;
+        }
         self.board.restore(&point.state);
         self.answered = point.answered;
         self.seen = point.seen;
@@ -1313,9 +1343,10 @@ impl Game {
 
     /// Keeps the position at the human's open decision, before their answer is applied, as one
     /// they may go back to, dropping the oldest beyond [`UNDO_POINTS`].
-    fn keep_undo_point(&mut self) {
+    fn keep_undo_point(&mut self, continuation: bool) {
         self.undo.push_back(UndoPoint {
             state: self.board.snapshot(),
+            continuation,
             at: self.at.clone(),
             seen: self.seen,
             answered: self.answered.clone(),
@@ -1387,7 +1418,7 @@ impl Game {
         let At::Agent(d) = self.at.clone() else {
             unreachable!("the agent decides at its decision");
         };
-        self.apply(&d, c, false);
+        self.apply(&d, c, ChoiceOrigin::Explicit);
         self.at = At::Playing;
     }
 
@@ -1459,7 +1490,8 @@ impl Game {
             panic!("an answer is checked against the open decision");
         };
         debug_assert_eq!(id, answer.id, "an answer names the open decision");
-        self.keep_undo_point();
+        let continuation = answer.continuation && self.casting();
+        self.keep_undo_point(continuation);
         match open {
             Open::Decision(d) => {
                 // A cast or an activation from priority can be taken back until it is paid for.
@@ -1471,7 +1503,12 @@ impl Game {
                     stops: self.stops,
                     undo: self.undo_depth() - 1,
                 });
-                self.apply(&d, answer.choice, false);
+                let origin = if continuation {
+                    ChoiceOrigin::Continuation
+                } else {
+                    ChoiceOrigin::Explicit
+                };
+                self.apply(&d, answer.choice, origin);
                 if let Some(before) = before {
                     self.before_cast = self.casting().then_some(before);
                 }
@@ -1638,7 +1675,7 @@ impl Game {
                     if !self.reviewing()
                         && let Some(c) = self.auto_answer(&d)
                     {
-                        self.apply(&d, c, true);
+                        self.apply(&d, c, ChoiceOrigin::Auto);
                         self.answered = Some(self.board.stack());
                         continue;
                     }
@@ -1788,21 +1825,24 @@ impl Game {
         }
     }
 
-    /// Records candidate `c` of `d`, the session's own answer if `auto`, by what it does in the
+    /// Records candidate `c` of `d` by what it does in the
     /// position it is asked in (in a paused resolution, its body done up to the question: a
     /// card it drew is in the hand), and applies it.
-    fn apply(&mut self, d: &Decision<Large>, c: Choice, auto: bool) {
-        let chosen = on_board!(&mut self.board, b => Chosen::new(
+    fn apply(&mut self, d: &Decision<Large>, c: Choice, origin: ChoiceOrigin) {
+        let mut chosen = on_board!(&mut self.board, b => Chosen::new(
             &self.table,
             view(&b.state, &self.table, &mut b.peek),
             &d.relayout(),
             c,
         ));
-        self.replay.log.push(if auto {
-            Entry::Auto(chosen)
-        } else {
-            Entry::Choice(chosen)
-        });
+        chosen.continuation = matches!(origin, ChoiceOrigin::Continuation);
+        self.replay
+            .log
+            .push(if matches!(origin, ChoiceOrigin::Auto) {
+                Entry::Auto(chosen)
+            } else {
+                Entry::Choice(chosen)
+            });
         self.board.apply(&self.table, c, &mut self.chance);
         self.log_chance();
     }

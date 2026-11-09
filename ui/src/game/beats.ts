@@ -348,6 +348,17 @@ class Walk {
                 )
               : cur.stack,
         };
+        // The card goes on the stack before its costs are paid (CR 601.2a). A beat for
+        // those costs still shows the spell there, even before its cast event fills it in.
+        if (e.to === "stack" && e.reason === "cast") {
+          this.put({
+            kind: "spell",
+            slot: e.slot,
+            targets: [],
+            x: 0,
+            paid: [],
+          });
+        }
         return;
       }
       case "cast":

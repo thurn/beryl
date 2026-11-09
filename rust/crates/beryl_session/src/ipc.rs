@@ -63,6 +63,9 @@ pub struct ChooseRequest {
     /// The decision the UI received.
     pub decision: DecisionId,
     pub index: CandidateIndex,
+    /// Joins a follow-up answer to the preceding choice for Undo.
+    #[ts(optional)]
+    pub continuation: Option<bool>,
 }
 
 /// The [`SET_STOPS`] command's request.

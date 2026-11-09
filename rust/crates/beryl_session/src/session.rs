@@ -10,7 +10,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 use serde_json::json;
 
 use crate::game::{Answer, Game, OpenDecision};
-use crate::protocol::{CandidateIndex, DecisionId, PlayerView, Status, StopsSetting};
+use crate::ipc::ChooseRequest;
+use crate::protocol::{DecisionId, PlayerView, Status, StopsSetting};
 use crate::sessions::LatestReplay;
 use crate::{SessionError, journal};
 
@@ -83,9 +84,16 @@ impl GameSession {
 
     /// Answers the human's open decision `id` with its candidate `index`. It returns at once;
     /// the next view arrives through `emit`.
-    pub(crate) fn choose(&self, id: DecisionId, index: CandidateIndex) -> Result<(), SessionError> {
+    pub(crate) fn choose(&self, request: ChooseRequest) -> Result<(), SessionError> {
         let mut open = self.open.lock().unwrap_or_else(PoisonError::into_inner);
-        let answer = open.ok_or(SessionError::NotDeciding)?.answer(id, index)?;
+        let answer = open
+            .ok_or(SessionError::NotDeciding)?
+            .answer(request.decision, request.index)?;
+        let answer = if request.continuation == Some(true) {
+            answer.as_continuation()
+        } else {
+            answer
+        };
         *open = None;
         self.commands
             .send(Command::Choose(answer))

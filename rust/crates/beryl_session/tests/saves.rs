@@ -300,6 +300,7 @@ fn a_recorded_pass_where_no_priority_is_open_is_skipped() {
     let mut file = file.clone();
     let pass = Chosen {
         index: 0,
+        continuation: false,
         what: Some(Described {
             player: 0,
             turn,

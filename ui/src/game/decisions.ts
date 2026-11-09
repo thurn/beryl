@@ -61,6 +61,8 @@ export interface Intent {
   skipped?(): void;
   waits?: boolean;
   optional?: boolean;
+  /** A cast setup's follow-up, grouped with the previous answer for Undo. */
+  continuation?: boolean;
 }
 
 /** The candidate of `decision` that `intent` names, if it is of the intent's kind. */

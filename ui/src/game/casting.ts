@@ -57,6 +57,7 @@ export function castPlan(choice: CastChoice): Intent[] {
   if (x !== undefined) {
     plan.push({
       kind: "x",
+      continuation: true,
       wants: (o) => o.kind === "number" && o.n === x,
     });
   }
@@ -65,6 +66,7 @@ export function castPlan(choice: CastChoice): Intent[] {
     // Targets come between X and the payment (CR 601.2c to 601.2g): the plan waits for them.
     plan.push({
       kind: "paymentPlan",
+      continuation: true,
       wants: (o) => o.kind === "plan" && o.index === pays,
       waits: true,
     });

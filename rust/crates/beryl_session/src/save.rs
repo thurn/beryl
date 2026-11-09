@@ -19,6 +19,8 @@ use crate::perturb;
 pub struct Chosen {
     /// The answer's place among the candidates when it was made.
     pub index: u16,
+    /// Whether Undo groups this follow-up with the preceding answer.
+    pub continuation: bool,
     /// What it does; none in a version 1 save, which recorded the index alone.
     pub what: Option<Described>,
 }
@@ -45,6 +47,8 @@ enum ChosenFile {
     Index(u16),
     Described {
         index: u16,
+        #[serde(default, skip_serializing_if = "is_false")]
+        continuation: bool,
         player: u8,
         turn: u16,
         step: StepName,
@@ -58,9 +62,14 @@ enum ChosenFile {
 impl From<ChosenFile> for Chosen {
     fn from(file: ChosenFile) -> Chosen {
         match file {
-            ChosenFile::Index(index) => Chosen { index, what: None },
+            ChosenFile::Index(index) => Chosen {
+                index,
+                continuation: false,
+                what: None,
+            },
             ChosenFile::Described {
                 index,
+                continuation,
                 player,
                 turn,
                 step,
@@ -69,6 +78,7 @@ impl From<ChosenFile> for Chosen {
                 nth,
             } => Chosen {
                 index,
+                continuation,
                 what: Some(Described {
                     player,
                     turn,
@@ -95,6 +105,7 @@ impl From<Chosen> for ChosenFile {
                 nth,
             }) => ChosenFile::Described {
                 index: chosen.index,
+                continuation: chosen.continuation,
                 player,
                 turn,
                 step,
@@ -119,6 +130,7 @@ impl Chosen {
             .map(|i| u8::try_from(i).expect("a decision has under 256 candidates"));
         Chosen {
             index: c.0,
+            continuation: false,
             what: Some(Described {
                 player: d.player.get(),
                 turn: s.turn().number,

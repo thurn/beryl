@@ -324,9 +324,9 @@ pub struct DecisionView {
     /// activating from their priority, whose costs are not yet paid: the `cancel` command
     /// takes it back.
     pub cancellable: bool,
-    /// How many of the viewer's answers the `undo` command can take back, one per command,
-    /// latest first, across the opponent's decisions and turns, as far back as the session
-    /// keeps them. Zero with nothing to take back.
+    /// How many of the viewer's answers the `undo` command can take back, latest first, across
+    /// the opponent's decisions and turns. Automatic cast follow-ups go back with the preceding
+    /// answer. Zero with nothing to take back.
     pub undo: u16,
     /// How many of the viewer's answers stand before this decision, counting those too old
     /// to take back: its place among them, the same whenever an undo comes back to it, which

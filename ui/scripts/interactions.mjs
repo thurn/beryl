@@ -2644,33 +2644,42 @@ await check(
 const spara = kickBefore.objects.find(
     (o) => o.name === "Spara's Headquarters" && o.zone === "hand",
 ).slot;
-await check(
-    "a cycling frame says what it does from its reminder text",
-    async (page) => {
-        await page.clock.runFor(2000);
-        await page.click(`[data-slot="${spara}"]`);
-        const frames = page.locator(".ability-choice");
-        await frames.first().waitFor();
-        assert.equal(await frames.count(), 2, "played, or cycled");
-        assert.equal(
-            await frames
-                .nth(0)
-                .locator(".ability-choice-caption")
-                .textContent(),
-            "Play",
-        );
-        assert.match(
-            await frames.nth(1).locator(".card-rules").textContent(),
-            /Discard this card: Draw a card\./,
-            `cycling draws: ${await frames.nth(1).textContent()}`,
-        );
-    },
-    {
-        fixture: "cast-kicker",
-        at: kickViews.length - 1,
-        ready: `[data-slot="${spara}"]`,
-    },
-);
+for (const gesture of ["click", "drag"]) {
+    await check(
+        `a ${gesture} offers the land play and a cycling frame with its reminder text`,
+        async (page) => {
+            await page.clock.runFor(2000);
+            const land = `[data-slot="${spara}"]`;
+            if (gesture === "drag") {
+                await dragFromHand(page, land, { x: 0, y: -320 });
+                await page.mouse.up();
+            } else {
+                await page.click(land);
+            }
+            assert.deepEqual(await chosen(page), [], "the land stays in hand");
+            const frames = page.locator(".ability-choice");
+            await frames.first().waitFor();
+            assert.equal(await frames.count(), 2, "played, or cycled");
+            assert.equal(
+                await frames
+                    .nth(0)
+                    .locator(".ability-choice-caption")
+                    .textContent(),
+                "Play",
+            );
+            assert.match(
+                await frames.nth(1).locator(".card-rules").textContent(),
+                /Discard this card: Draw a card\./,
+                `cycling draws: ${await frames.nth(1).textContent()}`,
+            );
+        },
+        {
+            fixture: "cast-kicker",
+            at: kickViews.length - 1,
+            ready: `[data-slot="${spara}"]`,
+        },
+    );
+}
 
 // The X decision of a kicked Thieving Skydiver (`cast-kicker`'s last), asked over the table:
 // each value of X says the total cost it makes, in symbols.
@@ -2971,6 +2980,61 @@ for (const gesture of ["drag", "click"]) {
         },
     );
 }
+
+await check(
+    "undo returns an automatically paid spell to hand in one step",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.click(byDefault.spell);
+        await settled(page, 2);
+        await page.clock.runFor(2500);
+        await page.getByRole("button", { name: "Undo" }).click();
+        await page.clock.runFor(1500);
+        await page.locator(`${byDefault.spell}[data-zone="hand"]`).waitFor();
+        assert.equal(await page.getByText("Choose how to pay").count(), 0);
+    },
+    {
+        fixture: "pay-default",
+        at: byDefault.castAt + 1,
+        ready: byDefault.spell,
+    },
+);
+
+const oculusViews = await load("cast-oculus");
+const oculusSlot = oculusViews[0].objects.find(
+    (o) => o.name === "Abhorrent Oculus" && o.zone === "hand",
+).slot;
+const oculusCard = `[data-slot="${oculusSlot}"]`;
+await check(
+    "a cast stays on the stack while its graveyard exile cost plays",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await dragFromHand(page, oculusCard, { x: 0, y: -320 });
+        await page.mouse.up();
+        await settled(page, 1);
+        await page.clock.runFor(3500);
+        const stack = await page.evaluate(
+            () =>
+                window.berylShown.find(
+                    ({ live, update }) =>
+                        live &&
+                        update.view.events.some(
+                            (e) =>
+                                e.kind === "zoneChange" &&
+                                e.from === "graveyard" &&
+                                e.to === "exile",
+                        ),
+                )?.update.view.stack,
+        );
+        assert.ok(
+            stack?.some(
+                (item) => item.kind === "spell" && item.slot === oculusSlot,
+            ),
+            "the cost beat keeps Oculus on the stack",
+        );
+    },
+    { fixture: "cast-oculus", at: 1, ready: oculusCard },
+);
 
 const byChoice = await payment("pay-other");
 assert.notEqual(byChoice.chosenPlan, 0, "the stand-in paid another way");

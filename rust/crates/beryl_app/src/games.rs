@@ -36,7 +36,7 @@ pub fn start_game(
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
 pub fn choose(sessions: State<'_, Sessions>, request: ChooseRequest) -> Result<(), SessionError> {
-    sessions.choose(request.decision, request.index)
+    sessions.choose_request(request)
 }
 
 #[tauri::command]

@@ -857,6 +857,18 @@ pub const BOARDS: &[Scenario] = &[
         .battlefield(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[Action::cast(P0, STAFF_OF_THE_STORYTELLER)]),
+    // With exactly six cards in the graveyard, Oculus pays its exile cost without a choice.
+    Scenario::new("cast-oculus")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[ISLAND_, ISLAND_, PLAINS_])
+        .hand(P0, &[ABHORRENT_OCULUS])
+        .graveyard(
+            P0,
+            &[PLAINS, ISLAND, OUST, REPRIEVE, COUNTERSPELL, STOCK_UP],
+        )
+        .library(P0, LANDS)
+        .library(P1, LANDS)
+        .actions(&[Action::cast(P0, ABHORRENT_OCULUS)]),
     // Teferi, Hero of Dominaria's −3 with a Snapcaster Mage on each side.
     Scenario::new("namesake-target")
         .at(3, P0, TurnStep::PrecombatMain)

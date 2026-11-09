@@ -220,6 +220,7 @@ INTERACTION_FIXTURES = [
     "choice-pay",
     "choice-trigger-order",
     "hand-pair",
+    "cast-oculus",
     "cast-kicker",
     "cast-evoke",
     "pay-default",
