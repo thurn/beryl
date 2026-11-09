@@ -109,6 +109,11 @@ pub struct Options {
     /// ([`answered_by_policy`]), so an option followed by a wide choice is not valued as if
     /// that choice were made at random.
     pub mid: bool,
+    /// At the root, the candidate with the best tree-averaged mean replaces the one visited
+    /// most where it clearly leads ([`by_means`]). The vote lets visits overrule the means:
+    /// Jace, Wielder led an attack by 0.015 and lost on visits
+    /// (`docs/incidents/2026-11-07-snapcaster-and-jace-wielder.md`).
+    pub means: bool,
 }
 
 /// A searcher's settings.
@@ -163,6 +168,14 @@ pub const ANCHOR_MARGIN: f64 = 0.02;
 /// The standard errors, across the trees, by which an anchored search's lead over greedy's
 /// answer must clear zero.
 pub const ANCHOR_ERRORS: f64 = 2.0;
+
+/// The least share of the most visited candidate's visits that lets another be chosen by its
+/// mean ([`Options::means`]): a mean resting on fewer visits is too noisy to overrule the vote.
+const MEANS_FLOOR: u32 = 10;
+
+/// The standard errors, across the trees, by which a candidate's lead in mean over the one
+/// visited most must clear zero for [`Options::means`] to play it.
+const MEANS_ERRORS: f64 = 2.0;
 
 /// No node.
 const NONE: u32 = u32::MAX;
@@ -223,7 +236,8 @@ impl FromStr for Family {
             format!(
                 "{s:?} is no family: method/sight/leaf/knowledge[/options], as \
                  ismcts18/hidden/rollout/17l (pimcN or ismctsN; hidden, hands or omniscient; \
-                 rollout, cutN or eval; estimate, 17l or tuned; anchor, mid or anchor+mid)"
+                 rollout, cutN or eval; estimate, 17l or tuned; options anchor, mid and means \
+                 joined by + in that order)"
             )
         };
         let parts: Vec<&str> = s.split('/').collect();
@@ -239,6 +253,7 @@ impl FromStr for Family {
                     let flag = match name {
                         "anchor" => &mut o.anchor,
                         "mid" => &mut o.mid,
+                        "means" => &mut o.means,
                         _ => return Err(bad()),
                     };
                     if *flag {
@@ -293,14 +308,18 @@ impl FromStr for Family {
 }
 
 impl Options {
-    /// The options as a family's name spells them: `anchor`, `mid` or `anchor+mid`; empty
-    /// for none.
+    /// The options as a family's name spells them, joined by `+` in this order:
+    /// `anchor+mid+means`; empty for none.
     fn to_name(self) -> String {
-        [(self.anchor, "anchor"), (self.mid, "mid")]
-            .into_iter()
-            .filter_map(|(on, name)| on.then_some(name))
-            .collect::<Vec<_>>()
-            .join("+")
+        [
+            (self.anchor, "anchor"),
+            (self.mid, "mid"),
+            (self.means, "means"),
+        ]
+        .into_iter()
+        .filter_map(|(on, name)| on.then_some(name))
+        .collect::<Vec<_>>()
+        .join("+")
     }
 }
 
@@ -443,8 +462,7 @@ impl<L: Layout> LongSearch<L> {
             None => self.rounds(trees, &plan, 1..=ROUNDS, true),
             Some(g) => {
                 self.rounds(trees, &plan, 1..=FREE_ROUNDS, true);
-                let (visits, rewards) = totals(trees);
-                let (b, g) = (leader(&visits, &rewards), usize::from(g.0));
+                let (b, g) = (self.pick(trees), usize::from(g.0));
                 if b == g || !guards(Choice(b as u16)) {
                     if !settled(trees, &shares, &credit, &start) {
                         self.rounds(trees, &plan, FREE_ROUNDS + 1..=ROUNDS, true);
@@ -468,6 +486,17 @@ impl<L: Layout> LongSearch<L> {
                 (i + tree.iterations - i0, w + tree.work - w0)
             });
         (iterations, work, checked)
+    }
+
+    /// The root candidate the search would play before any anchor: the one visited most, or
+    /// with [`Options::means`], the one [`by_means`] picks.
+    fn pick(&self, trees: &[Tree<L>]) -> usize {
+        if self.settings.family.options.means {
+            by_means(&root_stats(trees))
+        } else {
+            let (visits, rewards) = totals(trees);
+            leader(&visits, &rewards)
+        }
     }
 
     /// For research: grows fresh trees on decision `d` for the whole budget with their roots
@@ -697,6 +726,71 @@ fn leader(visits: &[u32], rewards: &[f64]) -> usize {
     best
 }
 
+/// With [`Options::means`], the root candidate to play given each tree's root visits and
+/// rewards per candidate (`stats[tree][candidate]`): the one with the best tree-averaged mean
+/// among those with at least a [`MEANS_FLOOR`]th of the most visited candidate's visits,
+/// unless the most visited candidate's mean is within the noise across trees of it, in which
+/// case the most visited. The noise is [`MEANS_ERRORS`] standard errors of the lead, tree by
+/// tree, over the trees that visited both, and at least two must have: one tree's lead has no
+/// measured noise. Where the vote and the means agree, it is [`leader`]'s choice.
+fn by_means(stats: &[Vec<Option<(u32, f64)>>]) -> usize {
+    let n = stats.first().map_or(0, Vec::len);
+    let mut visits = vec![0u32; n];
+    let mut rewards = vec![0.0; n];
+    for tree in stats {
+        for (i, &(v, r)) in tree
+            .iter()
+            .enumerate()
+            .filter_map(|(i, c)| Some((i, c.as_ref()?)))
+        {
+            visits[i] += v;
+            rewards[i] += r;
+        }
+    }
+    let voted = leader(&visits, &rewards);
+    let means = crate::mcts::tree_means(n, stats.iter().map(|t| t.iter().copied()));
+    let floor = visits.get(voted).map_or(0, |&v| v.div_ceil(MEANS_FLOOR));
+    let mut best = voted;
+    for i in 0..n {
+        if visits[i] >= floor.max(1)
+            && let (Some(m), Some(b)) = (means[i], means[best])
+            && m > b
+        {
+            best = i;
+        }
+    }
+    if best == voted {
+        return voted;
+    }
+    let mean = |c: &Option<(u32, f64)>| c.filter(|&(v, _)| v > 0).map(|(v, r)| r / f64::from(v));
+    let leads: Vec<f64> = stats
+        .iter()
+        .filter_map(|tree| Some(mean(&tree[best])? - mean(&tree[voted])?))
+        .collect();
+    let (lead, error) = mean_and_error(&leads);
+    if leads.len() >= 2 && lead > MEANS_ERRORS * error && lead > 0.0 {
+        best
+    } else {
+        voted
+    }
+}
+
+/// Each tree's root visits and rewards per candidate of the root decision, `None` for a
+/// candidate it never expanded.
+fn root_stats<L: Layout>(trees: &[Tree<L>]) -> Vec<Vec<Option<(u32, f64)>>> {
+    trees
+        .iter()
+        .map(|tree| {
+            tree.root_children()
+                .into_iter()
+                .map(|node| {
+                    node.map(|n| (tree.nodes[n as usize].visits, tree.nodes[n as usize].reward))
+                })
+                .collect()
+        })
+        .collect()
+}
+
 /// The root visits and rewards per candidate of the root decision, summed across `trees` in
 /// order.
 fn totals<L: Layout>(trees: &[Tree<L>]) -> (Vec<u32>, Vec<f64>) {
@@ -747,7 +841,9 @@ impl Widen for LongSearch<Small> {
 }
 
 impl<L: Layout> Agent<L> for LongSearch<L> {
-    /// The candidate visited most across the trees, of equals the best by mean. A decision with one
+    /// The candidate visited most across the trees, of equals the best by mean; with
+    /// [`Options::means`], [`by_means`]'s; with [`Options::anchor`], greedy's answer unless
+    /// that is clearly beaten. A decision with one
     /// candidate is never searched, nor is passing with one's own object on top of the stack.
     fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
         let decision = self.decision;
@@ -778,15 +874,8 @@ impl<L: Layout> Agent<L> for LongSearch<L> {
         let guards = |b: Choice| greedy.is_some_and(|g| guarded(&self.policy, obs, d, g, b));
         let (iterations, work, checked) = self.grow(&mut trees, greedy, guards);
         let (visits, rewards) = totals(&trees);
-        let best = Choice(leader(&visits, &rewards) as u16);
-        let means = crate::mcts::tree_means(
-            visits.len(),
-            trees.iter().map(|tree| {
-                tree.root_children().into_iter().map(|node| {
-                    node.map(|n| (tree.nodes[n as usize].visits, tree.nodes[n as usize].reward))
-                })
-            }),
-        );
+        let best = Choice(self.pick(&trees) as u16);
+        let means = crate::mcts::tree_means(visits.len(), root_stats(&trees));
         // The candidate checked against greedy's answer after the two had the last of the work
         // to themselves, whichever then has more visits; else the leader, if guarded.
         let anchor = greedy.and_then(|g| {
@@ -1502,6 +1591,65 @@ mod tests {
         assert_eq!(leader(&[0, 0], &[0.0, 0.0]), 0);
     }
 
+    /// Root stats for [`by_means`] from each tree's `(visits, reward)` per candidate.
+    fn stats<const N: usize>(trees: &[[(u32, f64); N]]) -> Vec<Vec<Option<(u32, f64)>>> {
+        trees
+            .iter()
+            .map(|t| t.iter().map(|&c| Some(c)).collect())
+            .collect()
+    }
+
+    /// Where the vote and the tree-averaged means disagree by more than the noise across trees,
+    /// the means choose.
+    #[test]
+    fn means_overrule_the_vote_past_the_noise() {
+        // Candidate 0 has the most visits; 1 leads it by about 0.1 in every tree.
+        let trees = stats(&[
+            [(100, 50.0), (60, 36.0)],
+            [(100, 52.0), (60, 37.2)],
+            [(100, 48.0), (60, 34.8)],
+            [(100, 51.0), (60, 36.6)],
+        ]);
+        assert_eq!(leader(&[400, 240], &[201.0, 144.6]), 0);
+        assert_eq!(by_means(&trees), 1);
+    }
+
+    /// Where the vote and the means agree, or the lead is within the noise, the vote stands.
+    #[test]
+    fn the_vote_stands_where_the_means_agree_or_are_noise() {
+        let agree = stats(&[[(100, 60.0), (60, 24.0)], [(100, 62.0), (60, 25.0)]]);
+        assert_eq!(by_means(&agree), 0);
+        // Candidate 1 leads on average, but one tree says the opposite by as much.
+        let noisy = stats(&[
+            [(100, 50.0), (60, 42.0)],
+            [(100, 50.0), (60, 24.0)],
+            [(100, 50.0), (60, 33.0)],
+        ]);
+        assert_eq!(by_means(&noisy), 0);
+        // A lead measured by a single tree has no noise to clear, so it never overrules.
+        assert_eq!(by_means(&stats(&[[(100, 50.0), (60, 50.0)]])), 0);
+        // Equal visits go to the better mean, as `leader` has it.
+        assert_eq!(
+            by_means(&stats(&[[(10, 2.0), (10, 8.0)], [(10, 2.0), (10, 8.0)]])),
+            1
+        );
+    }
+
+    /// A candidate with fewer than a tenth of the leader's visits is never chosen, however
+    /// good its mean.
+    #[test]
+    fn means_never_choose_below_the_visit_floor() {
+        let trees = stats(&[
+            [(100, 50.0), (4, 4.0), (20, 11.0)],
+            [(100, 50.0), (5, 5.0), (20, 11.2)],
+            [(100, 50.0), (0, 0.0), (20, 10.8)],
+        ]);
+        // 1 has the best mean on every tree that tried it, but 9 visits of 300; 2 has 60.
+        assert_eq!(by_means(&trees), 2);
+        let starved = stats(&[[(100, 50.0), (4, 4.0)], [(100, 50.0), (5, 5.0)]]);
+        assert_eq!(by_means(&starved), 0);
+    }
+
     /// A family reads back as it prints.
     #[test]
     fn families_round_trip() {
@@ -1512,6 +1660,9 @@ mod tests {
             "pimc18/omniscient/rollout/tuned/anchor",
             "pimc18/omniscient/rollout/tuned/mid",
             "pimc72/hidden/rollout/tuned/anchor+mid",
+            "pimc72/hidden/rollout/tuned/anchor+means",
+            "pimc72/hidden/rollout/tuned/means",
+            "pimc72/hidden/rollout/tuned/anchor+mid+means",
         ] {
             let f: Family = s.parse().unwrap();
             assert_eq!(f.to_string(), s);
@@ -1527,6 +1678,8 @@ mod tests {
             "pimc18/hidden/rollout/tuned/anchor+anchor",
             "pimc18/hidden/rollout/tuned/deep",
             "pimc18/hidden/rollout/tuned/anchor/mid",
+            "pimc18/hidden/rollout/tuned/means+anchor",
+            "pimc18/hidden/rollout/tuned/means+means",
         ] {
             assert!(bad.parse::<Family>().is_err(), "{bad}");
         }
@@ -1612,8 +1765,8 @@ mod tests {
         let policy = RolloutPolicy::new(&t);
         let mut x = Scratch::new();
         let mid = family(Options {
-            anchor: false,
             mid: true,
+            ..Options::default()
         });
         let mut answered = 0;
         for (s, d) in positions(&t, 1).into_iter().take(10) {
@@ -1689,7 +1842,7 @@ mod tests {
         };
         let anchor = Options {
             anchor: true,
-            mid: false,
+            ..Options::default()
         };
         let (mut searched, mut checked) = (0, 0);
         // Where the guard can act: greedy passes, and a spell it would hold is on offer.

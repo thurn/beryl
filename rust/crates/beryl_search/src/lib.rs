@@ -377,6 +377,7 @@ pub const DEEP_SEARCHER: Family = Family {
 const ANCHORED: Options = Options {
     anchor: true,
     mid: false,
+    means: false,
 };
 
 /// `pimc18/omniscient/rollout/tuned@30M`, Deep Seer as docs/incidents/2026-11-06-deep-seer-misplays.md
