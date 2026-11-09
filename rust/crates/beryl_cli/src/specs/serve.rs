@@ -55,6 +55,14 @@ const SETUP: Duration = Duration::from_secs(20);
 /// How often an idle event stream is pinged, which finds a page gone.
 const PING: Duration = Duration::from_secs(5);
 
+#[derive(Default, PartialEq, Eq)]
+enum FeedMode {
+    #[default]
+    Replay,
+    Manual,
+    Playground,
+}
+
 /// One instance's views, as its game emits them.
 #[derive(Default)]
 struct Feed {
@@ -67,8 +75,7 @@ struct Feed {
     released: bool,
     /// Whether its moment has actions of its own to play, which a page holds for its button.
     plays: bool,
-    manual: bool,
-    playground: bool,
+    mode: FeedMode,
     opponent_move: Option<(DecisionId, CandidateIndex)>,
     streams: Vec<Sender<String>>,
     /// Its key, and the page stream it goes to as well, if its key names a page.
@@ -527,7 +534,11 @@ fn new_feed(pages: &Pages, key: &str, plays: bool, manual: bool) -> SharedFeed {
     let mut f = lock(&feed.0);
     key.clone_into(&mut f.key);
     f.plays = plays;
-    f.manual = manual;
+    f.mode = if manual {
+        FeedMode::Manual
+    } else {
+        FeedMode::Replay
+    };
     // An instance `<page>.<n>` goes to its page's stream.
     f.page = key
         .rsplit('/')
@@ -579,7 +590,9 @@ fn instance(
         super::playground::automated(v, view)
     });
     let feed = new_feed(pages, &key, plays, manual);
-    lock(&feed.0).playground = playground.is_some();
+    if playground.is_some() {
+        lock(&feed.0).mode = FeedMode::Playground;
+    }
     let emitted = Arc::clone(&feed);
     let (sessions, mirror) = if let Some(example) = playground {
         let sessions = super::playground::start(example, view, move |update, phase| {
@@ -646,7 +659,7 @@ fn record_view(shared: &SharedFeed, update: &GameUpdate, phase: Phase) {
     f.views.push(update.clone());
     if f.start.is_none()
         && phase != Phase::Setup
-        && !(f.playground && matches!(update.view.status, Status::Playing))
+        && !(f.mode == FeedMode::Playground && matches!(update.view.status, Status::Playing))
     {
         f.start = Some(f.views.len() - 1);
         let mut initial = update.clone();
@@ -767,10 +780,10 @@ fn current(feed: &SharedFeed) -> Value {
 /// Whether the instance, its first view shown, holds views to play: its moment's own actions,
 /// or a game that goes on without the viewer, not yet waiting on their decision.
 fn holds(f: &Feed) -> bool {
-    !f.manual
+    f.mode != FeedMode::Manual
         && !f.released
         && f.start.is_some_and(|start| {
-            (f.plays && !f.playground)
+            (f.plays && f.mode != FeedMode::Playground)
                 || !matches!(f.views[start].view.status, Status::Deciding { .. })
         })
 }
@@ -780,7 +793,7 @@ fn holds(f: &Feed) -> bool {
 fn release(feed: &SharedFeed) {
     let mut f = lock(&feed.0);
     let Some(start) = f.start else { return };
-    if f.manual || f.released {
+    if f.mode == FeedMode::Manual || f.released {
         return;
     }
     f.released = true;
