@@ -171,9 +171,9 @@ fn run(
     let stop = game.stop_flag();
     // A stops change re-emits the open decision, which may already be answered, so it does
     // not reopen it. Returns whether the session is over: the session was dropped.
-    let mut publish = |game: &Game, view: PlayerView, reopen: bool| {
-        let deciding = matches!(view.status, Status::Deciding { .. });
-        let decides = deciding || matches!(view.status, Status::Over { .. });
+    let mut publish = |game: &mut Game, view: PlayerView, reopen: bool| {
+        let open = game.open();
+        let decides = open.is_some() || matches!(view.status, Status::Over { .. });
         if let Some(path) = replay
             && decides
             && let Err(e) = game.replay().save(path)
@@ -187,23 +187,24 @@ fn run(
         }
         journal::debug("view", view_kind(&view), view_summary(game, &view));
         // A concession closes the human's decisions for good.
-        if reopen && deciding && !shared.conceded.load(Ordering::Relaxed) {
-            *shared.open.lock().unwrap_or_else(PoisonError::into_inner) = game.open();
+        if reopen && open.is_some() && !shared.conceded.load(Ordering::Relaxed) {
+            *shared.open.lock().unwrap_or_else(PoisonError::into_inner) = open;
         }
         if stop.load(Ordering::Relaxed) {
             return true;
         }
+        game.publish_review(&view);
         emit(view);
         false
     };
     if let Some(view) = first
-        && publish(&game, view, true)
+        && publish(&mut game, view, true)
     {
         return "replaced";
     }
     loop {
         while let Some(view) = game.next_view() {
-            if publish(&game, view, true) {
+            if publish(&mut game, view, true) {
                 return "replaced";
             }
             // The game plays on without the human: it takes their concession before the
@@ -211,7 +212,7 @@ fn run(
             if shared.conceded.load(Ordering::Relaxed)
                 && let Some(view) = game.concede()
             {
-                publish(&game, view, false);
+                publish(&mut game, view, false);
                 return "conceded";
             }
         }
@@ -240,7 +241,7 @@ fn run(
                 // The session checked that the open decision can go back.
                 Command::Undo => match game.undo() {
                     Ok(view) => {
-                        if publish(&game, view, true) {
+                        if publish(&mut game, view, true) {
                             return "replaced";
                         }
                     }
@@ -248,7 +249,7 @@ fn run(
                 },
                 Command::Cancel => match game.cancel() {
                     Ok(view) => {
-                        if publish(&game, view, true) {
+                        if publish(&mut game, view, true) {
                             return "replaced";
                         }
                     }
@@ -256,13 +257,13 @@ fn run(
                 },
                 Command::Concede => {
                     if let Some(view) = game.concede() {
-                        publish(&game, view, false);
+                        publish(&mut game, view, false);
                     }
                     return "conceded";
                 }
                 Command::SetStops(stops) => match game.set_stops(stops) {
                     Ok(view) => {
-                        if publish(&game, view, false) {
+                        if publish(&mut game, view, false) {
                             return "replaced";
                         }
                     }

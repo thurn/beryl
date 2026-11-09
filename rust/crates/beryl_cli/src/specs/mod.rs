@@ -68,6 +68,7 @@ fn generation() -> &'static Generation {
             if !moments.is_empty() {
                 specs.push(Spec {
                     card: def.name,
+                    checkpoints: OnceLock::new(),
                     moments: Box::leak(moments.into_boxed_slice()),
                 });
             }
@@ -81,6 +82,24 @@ fn generation() -> &'static Generation {
 pub struct Spec {
     pub card: &'static str,
     pub moments: &'static [Moment],
+    checkpoints: OnceLock<auto::ReviewSet>,
+}
+
+impl Spec {
+    pub fn checkpoints(&self) -> &auto::ReviewSet {
+        self.checkpoints.get_or_init(|| {
+            let def = CARDS
+                .cards()
+                .iter()
+                .find(|d| d.name == self.card)
+                .expect("spec card");
+            let scenarios = beryl_cards::SCENARIOS
+                .iter()
+                .find(|(name, _)| *name == self.card)
+                .map_or(&[][..], |(_, scenarios)| *scenarios);
+            auto::checkpoints(def, scenarios)
+        })
+    }
 }
 
 /// One moment of play a spec shows.
@@ -260,6 +279,89 @@ pub fn start(
         })
         .map_err(|e| e.to_string())?;
     Ok((sessions, progress))
+}
+
+/// Run the setup in one shared game, then publish both seats at every manual decision.
+fn start_review(
+    moment: &Moment,
+    emit: impl Fn([GameUpdate; 2], bool) + Send + 'static,
+) -> Result<Sessions, String> {
+    let progress = Shared::default();
+    let actions = || moment.board.actions.iter().chain(moment.play);
+    if let Some(Action::AdvanceTo { turn, .. }) = actions().last() {
+        boards::lock(&progress).until = Some(*turn);
+    }
+    let (table, state) =
+        beryl_scenario::position(&CARDS, &moment.board).map_err(|e| e.to_string())?;
+    let agent = |seat| {
+        Scripted::with_actions(actions(), seat, &table, Arc::clone(&progress))
+            .map(|a| Box::new(a) as Box<dyn GameAgent + Send>)
+    };
+    let watched = Arc::clone(&progress);
+    let sessions = Sessions::new(None, |_| {});
+    sessions
+        .start_review(
+            Prepared {
+                opponent: agent(Seat::P1)?,
+                stand_in: agent(Seat::P0)?,
+                scripted: true,
+                hand_over: Some(Box::new(move || boards::lock(&watched).done())),
+                table,
+                state,
+                human: Seat::P0,
+                stops: StopsSetting::SMART,
+            },
+            Box::new(move |session, views| {
+                let mut p = boards::lock(&progress);
+                let live = p.done() && p.failure.is_none();
+                p.turn = views[0].turn.number;
+                drop(p);
+                emit(views.map(|view| GameUpdate { session, view }), live);
+            }),
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(sessions)
+}
+
+fn at_checkpoint(updates: &[GameUpdate; 2], live: bool) -> bool {
+    live && updates
+        .iter()
+        .any(|u| matches!(u.view.status, Status::Deciding { .. } | Status::Over { .. }))
+}
+
+fn review_position(moment: &Moment) -> Result<([beryl_session::PlayerView; 2], bool), String> {
+    use beryl_session::protocol::{GameEvent, Why};
+
+    let (sent, received) = std::sync::mpsc::channel();
+    let _sessions = start_review(moment, move |updates, live| {
+        let _ = sent.send((updates, live));
+    })?;
+    let mut countered = false;
+    loop {
+        let (updates, live) = received
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .map_err(|_| "setup never reached a checkpoint".to_owned())?;
+        if live {
+            countered |= updates[0].view.events.iter().any(|e| {
+                matches!(
+                    e,
+                    GameEvent::ZoneChange {
+                        reason: Why::Counter,
+                        ..
+                    }
+                )
+            });
+        }
+        if at_checkpoint(&updates, live) {
+            return Ok((updates.map(|u| u.view), countered));
+        }
+        if matches!(
+            updates[0].view.status,
+            Status::Over { .. } | Status::Stopped
+        ) {
+            return Err("game ended during setup".to_owned());
+        }
+    }
 }
 
 /// The specs as the page lists them.
@@ -637,6 +739,67 @@ mod tests {
     fn slugs_name_cards() {
         assert_eq!(slug("Currency Converter"), "currency-converter");
         assert_eq!(slug("Jace, Vryn's Prodigy"), "jace-vryns-prodigy");
+    }
+
+    #[test]
+    fn review_shares_the_payment_choice_and_its_result() {
+        use beryl_cards::names::{MANA_TITHE, OVERLORD_OF_THE_MISTMOORS};
+        use beryl_session::CandidateIndex;
+        use beryl_session::protocol::{AskView, Candidate, ZoneName};
+
+        let def = CARDS
+            .cards()
+            .iter()
+            .copied()
+            .find(|d| d.name == MANA_TITHE)
+            .unwrap();
+        let (_, scenarios) = beryl_cards::SCENARIOS
+            .iter()
+            .find(|(n, _)| *n == MANA_TITHE)
+            .unwrap();
+        let checkpoints = auto::checkpoints(def, scenarios).examples;
+        assert_eq!(checkpoints.len(), 3);
+        let payment = checkpoints
+            .iter()
+            .find(|c| c.moment.title == "Pay {1}?")
+            .unwrap();
+        assert_eq!(payment.first, View::Yours);
+        for (answer, expected) in [
+            (Candidate::Yes, ZoneName::Battlefield),
+            (Candidate::No, ZoneName::Graveyard),
+        ] {
+            let (send, receive) = std::sync::mpsc::channel();
+            let sessions = start_review(&payment.moment, move |updates, live| {
+                if at_checkpoint(&updates, live) {
+                    let _ = send.send(updates);
+                }
+            })
+            .unwrap();
+            let [payer, caster] = receive
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap();
+            assert_eq!(caster.view.status, Status::Thinking);
+            let Status::Deciding { decision } = payer.view.status else {
+                panic!("payer has no prompt")
+            };
+            assert!(matches!(decision.ask, AskView::UnlessPays { .. }));
+            let index = decision
+                .candidates
+                .iter()
+                .position(|c| c.option == answer)
+                .unwrap();
+            sessions
+                .choose(decision.id, CandidateIndex(u16::try_from(index).unwrap()))
+                .unwrap();
+            let views = receive
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap();
+            for update in views {
+                assert!(update.view.objects.iter().any(|o| {
+                    o.name.as_deref() == Some(OVERLORD_OF_THE_MISTMOORS) && o.zone == expected
+                }));
+            }
+        }
     }
 
     /// A scripted action that never fits says so when the game ends without it: which action

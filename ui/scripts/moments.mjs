@@ -70,10 +70,13 @@ export async function chosen(base, slugs, moment) {
 /** Opens a moment's seat in `page`, held, and waits until its first view shows, retried (a
  * fresh game each try). Returns the page's live game URL on the spec server, which `play`
  * posts to. */
-export async function openSeat(page, base, slug, moment, seat) {
+export async function openSeat(page, base, slug, moment, seat, instance) {
     return retried(async (n) => {
         await page.goto(
-            new URL(`specs/${slug}/${moment}/${seat}?hold`, base).href,
+            new URL(
+                `specs/${slug}/${moment}/${seat}?hold${instance ? `&instance=${instance}` : ""}`,
+                base,
+            ).href,
         );
         // A cold Vite compiles the whole app for the first page: its first try waits longer.
         const timeout = n === 1 ? 2 * LONGEST : LONGEST;

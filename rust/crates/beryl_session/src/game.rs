@@ -558,6 +558,7 @@ pub struct Game {
     stand_in: Option<Box<dyn GameAgent + Send>>,
     /// When the stand-in hands the human's decisions back to them, if ever.
     hand_over: Option<HandOver>,
+    review: Option<crate::ReviewViews>,
     at: At,
     /// The turn and step the latest view began, or the game's first.
     seen: (u16, TurnStep),
@@ -672,6 +673,25 @@ impl Game {
         game
     }
 
+    /// After setup, let either seat answer its own decisions and publish both views.
+    pub(crate) fn review(&mut self, emit: crate::ReviewViews) {
+        self.review = Some(emit);
+    }
+
+    fn reviewing(&self) -> bool {
+        self.review.is_some() && self.hand_over.as_ref().is_none_or(|ready| ready())
+    }
+
+    pub(crate) fn publish_review(&mut self, first: &PlayerView) {
+        if self.review.is_none() {
+            return;
+        }
+        let second = self.draw_for(self.human.opponent());
+        if let Some(emit) = &self.review {
+            emit(self.session, [first.clone(), second]);
+        }
+    }
+
     fn assemble(
         table: GameTable,
         state: &State,
@@ -697,6 +717,7 @@ impl Game {
             moves: AgentMoves::default(),
             stand_in: None,
             hand_over: None,
+            review: None,
             at: At::Playing,
             seq: 0,
             replay,
@@ -1398,7 +1419,8 @@ impl Game {
     /// priority from which passing would stop them again in this one
     /// ([`crate::protocol::DecisionView::pass_on`]).
     fn pass_on_target(&mut self) -> Option<(u16, TurnStep)> {
-        if !matches!(&self.at, At::Human(_, Open::Decision(d)) if d.kind == DecisionKind::Priority)
+        if self.reviewing()
+            || !matches!(&self.at, At::Human(_, Open::Decision(d)) if d.kind == DecisionKind::Priority)
         {
             return None;
         }
@@ -1612,8 +1634,10 @@ impl Game {
                     cause: None,
                     hurt_by: None,
                 },
-                Some(Step::Decide(d)) if d.player == self.human => {
-                    if let Some(c) = self.auto_answer(&d) {
+                Some(Step::Decide(d)) if d.player == self.human || self.reviewing() => {
+                    if !self.reviewing()
+                        && let Some(c) = self.auto_answer(&d)
+                    {
                         self.apply(&d, c, true);
                         self.answered = Some(self.board.stack());
                         continue;
@@ -1740,7 +1764,7 @@ impl Game {
         let halting_step = turn.step == TurnStep::PrecombatMain
             && turn.active == self.human
             && self.stops.yours.has(TurnStep::PrecombatMain);
-        if self.stops.full_control || !halting_step {
+        if self.review.is_some() || self.stops.full_control || !halting_step {
             return false;
         }
         match self.board.ahead(&self.table, self.seen, &self.chance) {
@@ -1847,6 +1871,12 @@ impl Game {
 
     /// The human's view now, with the events of the latest view.
     fn draw(&mut self) -> PlayerView {
+        let view = self.draw_for(self.human);
+        self.passes_on = self.pass_on_target();
+        view
+    }
+
+    fn draw_for(&mut self, viewer: Seat) -> PlayerView {
         // A paused resolution's entry is still on top of the committed stack; the position
         // replayed to its question has taken it off.
         let resolving = self
@@ -1857,18 +1887,18 @@ impl Game {
         let mut view = on_board!(&mut self.board, b => {
             // The session's decision, stack entry and events, in the game's layout.
             let decision = match &self.at {
-                At::Human(_, Open::Decision(d)) => Some(d.relayout()),
+                At::Human(_, Open::Decision(d)) if d.player == viewer => Some(d.relayout()),
                 _ => None,
             };
             let resolving = resolving.as_ref().map(Relayout::relayout);
             let events: Vec<_> = self.events.iter().map(Relayout::relayout).collect();
             let moment = match (&self.at, &decision) {
                 (At::Playing, _) => Moment::Playing,
-                (At::Agent(_), _) => Moment::Thinking(resolving.as_ref()),
                 (At::Human(id, Open::Decision(_)), Some(d)) => {
                     Moment::Deciding(*id, d, resolving.as_ref())
                 }
-                (At::Human(id, _), _) => Moment::Halted(*id),
+                (At::Human(id, Open::Halt), _) if viewer == self.human => Moment::Halted(*id),
+                (At::Agent(_) | At::Human(..), _) => Moment::Thinking(resolving.as_ref()),
                 (
                     At::Over {
                         outcome,
@@ -1884,7 +1914,7 @@ impl Game {
                 (At::Stopped, _) => Moment::Stopped,
             };
             let shown = view(&b.state, &self.table, &mut b.scratch);
-            let obs = Observation::new(shown, self.human);
+            let obs = Observation::new(shown, viewer);
             let mut view = player_view(&self.table, obs, moment, self.stops, &events);
             if let Some(d) = &decision {
                 preview::add_previews(&mut view, &b.state, &self.table, d);
@@ -1892,14 +1922,16 @@ impl Game {
             view
         });
         view.turn.flip_winner = self.flip_winner.map(|p| {
-            if p == self.human {
+            if p == viewer {
                 Side::You
             } else {
                 Side::Opponent
             }
         });
-        self.passes_on = self.pass_on_target();
         if let Status::Deciding { decision } = &mut view.status {
+            if self.reviewing() {
+                decision.pass_on = None;
+            }
             decision.cancellable = self.cancellable();
             decision.undo = if self.undoable() {
                 u16::try_from(self.undo.len()).unwrap_or(u16::MAX)

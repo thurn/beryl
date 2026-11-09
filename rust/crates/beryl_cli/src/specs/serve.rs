@@ -66,6 +66,7 @@ struct Feed {
     released: bool,
     /// Whether its moment has actions of its own to play, which a page holds for its button.
     plays: bool,
+    manual: bool,
     streams: Vec<Sender<String>>,
     /// Its key, and the page stream it goes to as well, if its key names a page.
     key: String,
@@ -82,6 +83,7 @@ struct Instance {
     /// Keeps the game running; dropped, it stops.
     sessions: Sessions,
     feed: SharedFeed,
+    mirror: Option<SharedFeed>,
     used: Instant,
 }
 
@@ -137,6 +139,32 @@ fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result
     if method == "GET" && path == "/specs" {
         let body = annotated_listing().to_string();
         return respond(&mut stream, "200 OK", &body);
+    }
+    if let ("GET", Some(card)) = (method.as_str(), path.strip_prefix("/checkpoints/")) {
+        let Some(spec) = specs().iter().find(|s| slug(s.card) == card) else {
+            return respond(&mut stream, "404 Not Found", "{}");
+        };
+        let checkpoints = spec.checkpoints();
+        let listing: Vec<_> = checkpoints
+            .examples
+            .iter()
+            .map(|c| {
+                json!({
+                    "name": c.moment.name,
+                    "title": c.moment.title,
+                    "group": c.moment.group,
+                    "plays": false,
+                    "first": c.first.name(),
+                    "roles": c.roles,
+                    "actions": c.actions,
+                })
+            })
+            .collect();
+        return respond(
+            &mut stream,
+            "200 OK",
+            &json!({"examples": listing, "unreached": checkpoints.unreached}).to_string(),
+        );
     }
     if let ("POST", Some(card)) = (method.as_str(), path.strip_prefix("/review/")) {
         let answer = review(card, &body);
@@ -213,7 +241,10 @@ fn handle_moment(
                         release(&feed);
                     }
                     let list = lock(instances);
-                    let Some(i) = list.iter().find(|i| i.key == key) else {
+                    let Some(i) = list
+                        .iter()
+                        .find(|i| i.key == instance_key(card, name, view, id))
+                    else {
                         return respond(&mut stream, "200 OK", "{\"err\":{\"kind\":\"ended\"}}");
                     };
                     if command == ipc::REPORT_BUG {
@@ -337,10 +368,14 @@ fn report(instances: &Instances, body: &[u8]) -> Value {
         return json!({ "err": { "kind": "badRequest", "message": "an empty note" } });
     }
     let mut parts = key.splitn(4, '/');
-    let (Some(card), Some(moment), Some(view)) = (parts.next(), parts.next(), parts.next()) else {
+    let (Some(card), Some(moment), Some(view), Some(id)) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
         return json!({ "err": { "kind": "badRequest", "message": format!("no moment in {key}") } });
     };
-    if find(card, moment).is_none() || View::parse(view).is_none() {
+    if (find(card, moment).is_none() && checkpoint(card, moment).is_none())
+        || View::parse(view).is_none()
+    {
         return json!({ "err": { "kind": "spec", "message": format!("no moment {key}") } });
     }
     let spec = SpecMoment {
@@ -358,7 +393,10 @@ fn report(instances: &Instances, body: &[u8]) -> Value {
         "updates": [],
     }});
     let list = lock(instances);
-    match list.iter().find(|i| i.key == key) {
+    match list
+        .iter()
+        .find(|i| i.key == instance_key(card, moment, view, id))
+    {
         Some(i) => write_report(&i.sessions, args, spec),
         None => write_report(&Sessions::new(None, |_| {}), args, spec),
     }
@@ -386,7 +424,47 @@ fn write_report(sessions: &Sessions, args: Value, spec: SpecMoment) -> Value {
     }
 }
 
-/// The instance `key` names, started from the moment if new.
+fn checkpoint(card: &str, name: &str) -> Option<&'static super::Moment> {
+    if !name.starts_with("review-") {
+        return None;
+    }
+    specs()
+        .iter()
+        .find(|s| slug(s.card) == card)?
+        .checkpoints()
+        .examples
+        .iter()
+        .find(|c| c.moment.name == name)
+        .map(|c| &c.moment)
+}
+
+fn instance_key(card: &str, name: &str, view: &str, id: &str) -> String {
+    let view = if name.starts_with("review-") {
+        "yours"
+    } else {
+        view
+    };
+    format!("{card}/{name}/{view}/{id}")
+}
+
+fn new_feed(pages: &Pages, key: &str, plays: bool, manual: bool) -> SharedFeed {
+    let feed: SharedFeed = Arc::default();
+    let mut f = lock(&feed.0);
+    key.clone_into(&mut f.key);
+    f.plays = plays;
+    f.manual = manual;
+    // An instance `<page>.<n>` goes to its page's stream.
+    f.page = key
+        .rsplit('/')
+        .next()
+        .unwrap_or_default()
+        .split_once('.')
+        .map(|(page, _)| (Arc::clone(pages), page.to_owned()));
+    drop(f);
+    feed
+}
+
+/// Both seats of a manual checkpoint share one session and have their own feeds.
 fn instance(
     instances: &Instances,
     pages: &Pages,
@@ -395,36 +473,65 @@ fn instance(
     name: &str,
     view: &str,
 ) -> Result<SharedFeed, String> {
+    let view = View::parse(view).ok_or_else(|| format!("no view {view:?}"))?;
+    let manual = name.starts_with("review-");
+    let id = key.rsplit('/').next().unwrap_or_default();
+    let key = instance_key(card, name, view.name(), id);
+    // Generate the card's checkpoints outside the shared instances lock.
+    let moment = if manual {
+        checkpoint(card, name)
+    } else {
+        find(card, name).map(|(_, m)| m)
+    }
+    .ok_or_else(|| format!("no moment {card}/{name}"))?;
     let mut list = lock(instances);
+    let pick = |i: &Instance| {
+        Arc::clone(if view == View::Theirs {
+            i.mirror.as_ref().unwrap_or(&i.feed)
+        } else {
+            &i.feed
+        })
+    };
     if let Some(i) = list.iter_mut().find(|i| i.key == key) {
         i.used = Instant::now();
-        return Ok(Arc::clone(&i.feed));
+        return Ok(pick(i));
     }
-    let (_, moment) = find(card, name).ok_or_else(|| format!("no moment {card}/{name}"))?;
-    let view = View::parse(view).ok_or_else(|| format!("no view {view:?}"))?;
-    let feed: SharedFeed = Arc::default();
-    {
-        let mut f = lock(&feed.0);
-        key.clone_into(&mut f.key);
-        f.plays = !moment.play.is_empty();
-        // An instance `<page>.<n>` goes to its page's stream.
-        let id = key.rsplit('/').next().unwrap_or_default();
-        f.page = id
-            .split_once('.')
-            .map(|(page, _)| (Arc::clone(pages), page.to_owned()));
-    }
+    let feed = new_feed(pages, &key, !manual && !moment.play.is_empty(), manual);
     let emitted = Arc::clone(&feed);
-    let (sessions, _) = super::start(moment, view, move |update, phase| {
-        let (feed, ready) = &*emitted;
-        let mut f = lock(feed);
-        f.views.push(update.clone());
-        if f.start.is_none() && phase != Phase::Setup {
-            f.start = Some(f.views.len() - 1);
-            ready.notify_all();
-        } else if f.released {
-            broadcast(&mut f, &update);
-        }
-    })?;
+    let (sessions, mirror) = if manual {
+        let mirror = new_feed(pages, &format!("{card}/{name}/theirs/{id}"), false, true);
+        let other = Arc::clone(&mirror);
+        let sessions = super::start_review(moment, move |updates, live| {
+            let ready = super::at_checkpoint(&updates, live);
+            for (shared, update) in [&emitted, &other].into_iter().zip(updates) {
+                let (feed, changed) = &**shared;
+                let mut f = lock(feed);
+                if f.start.is_some() {
+                    broadcast(&mut f, &update);
+                } else if !ready {
+                    continue;
+                }
+                f.views.clear();
+                f.views.push(update);
+                f.start = Some(0);
+                changed.notify_all();
+            }
+        })?;
+        (sessions, Some(mirror))
+    } else {
+        let (sessions, _) = super::start(moment, view, move |update, phase| {
+            let (feed, ready) = &*emitted;
+            let mut f = lock(feed);
+            f.views.push(update.clone());
+            if f.start.is_none() && phase != Phase::Setup {
+                f.start = Some(f.views.len() - 1);
+                ready.notify_all();
+            } else if f.released {
+                broadcast(&mut f, &update);
+            }
+        })?;
+        (sessions, None)
+    };
     if list.len() >= INSTANCES
         && let Some(oldest) = list
             .iter()
@@ -434,13 +541,16 @@ fn instance(
     {
         list.swap_remove(oldest);
     }
-    list.push(Instance {
-        key: key.to_owned(),
+    let instance = Instance {
+        key,
         sessions,
-        feed: Arc::clone(&feed),
+        feed,
+        mirror,
         used: Instant::now(),
-    });
-    Ok(feed)
+    };
+    let selected = pick(&instance);
+    list.push(instance);
+    Ok(selected)
 }
 
 fn broadcast(feed: &mut Feed, update: &GameUpdate) {
@@ -489,7 +599,7 @@ fn current(feed: &SharedFeed) -> Value {
         .rsplit('/')
         .next()
         .is_some_and(|id| id.starts_with("hold-"));
-    if !f.released && f.page.is_none() && !held {
+    if !f.manual && !f.released && f.page.is_none() && !held {
         let feed = Arc::clone(feed);
         std::thread::spawn(move || {
             std::thread::sleep(BEAT);
@@ -502,7 +612,8 @@ fn current(feed: &SharedFeed) -> Value {
 /// Whether the instance, its first view shown, holds views to play: its moment's own actions,
 /// or a game that goes on without the viewer, not yet waiting on their decision.
 fn holds(f: &Feed) -> bool {
-    !f.released
+    !f.manual
+        && !f.released
         && f.start.is_some_and(|start| {
             f.plays || !matches!(f.views[start].view.status, Status::Deciding { .. })
         })
@@ -513,7 +624,7 @@ fn holds(f: &Feed) -> bool {
 fn release(feed: &SharedFeed) {
     let mut f = lock(&feed.0);
     let Some(start) = f.start else { return };
-    if f.released {
+    if f.manual || f.released {
         return;
     }
     f.released = true;

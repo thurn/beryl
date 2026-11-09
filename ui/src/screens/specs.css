@@ -182,6 +182,13 @@
   font-weight: 600;
 }
 
+.specs-mode,
+.specs-switch-seat {
+  color: var(--text);
+  align-self: center;
+  font-size: 14px;
+}
+
 .specs-moment-actions {
   grid-column: 2;
   display: flex;

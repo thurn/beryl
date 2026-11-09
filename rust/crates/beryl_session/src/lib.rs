@@ -75,6 +75,9 @@ pub struct Prepared {
 /// Whether a stand-in should hand the human's decisions back to them ([`Prepared::hand_over`]).
 pub type HandOver = Box<dyn Fn() -> bool + Send>;
 
+/// Both seats' views of a prepared review game, in the prepared human's seat order.
+pub type ReviewViews = Box<dyn Fn(SessionId, [PlayerView; 2]) + Send>;
+
 /// An agent a human can play against.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]

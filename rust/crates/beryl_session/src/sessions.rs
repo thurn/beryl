@@ -129,6 +129,25 @@ impl Sessions {
         )
     }
 
+    /// Starts a prepared game whose two seats are both played manually after setup.
+    pub fn start_review(
+        &self,
+        prepared: Prepared,
+        emit: crate::ReviewViews,
+    ) -> Result<SessionId, SessionError> {
+        self.launch(
+            |session| {
+                let mut game = Game::prepared(prepared, session);
+                game.review(emit);
+                Ok((game, None))
+            },
+            None,
+            None,
+            false,
+            json!({ "review": true }),
+        )
+    }
+
     /// Resumes the newest game in the replay directory if it is unfinished: what the app
     /// takes up on launch. With a game already in progress, it resumes nothing and returns
     /// that game's session. None with nothing to resume: no replay directory or file, the

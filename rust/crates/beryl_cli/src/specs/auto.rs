@@ -28,7 +28,9 @@ use beryl_engine::card::{AbilityIx, AbilityKind, CardDef, Face, Needs, Timing, T
 use beryl_engine::state::CounterKind;
 use beryl_engine::{DecisionKind, Seat, TurnStep};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
-use beryl_session::protocol::{Candidate as Offer, PlayerView, Side, StackItem, Status, ZoneName};
+use beryl_session::protocol::{
+    AskView, Candidate as Offer, Kind as Decision, PlayerView, Side, StackItem, Status, ZoneName,
+};
 use serde_json::json;
 
 use super::{Moment, View, reach, slug};
@@ -144,6 +146,258 @@ pub fn generate(def: &'static CardDef, scenarios: &'static [Scenario]) -> Genera
         })
         .collect();
     Generated { moments, dropped }
+}
+
+/// A playable setup and the interaction it exposes to a reviewer.
+pub struct Checkpoint {
+    pub moment: Moment,
+    pub first: View,
+    pub roles: [String; 2],
+    pub actions: Vec<String>,
+}
+
+pub struct ReviewSet {
+    pub examples: Vec<Checkpoint>,
+    /// Scenarios whose setup never yielded a review checkpoint.
+    pub unreached: Vec<&'static str>,
+}
+
+pub fn checkpoints(def: &'static CardDef, scenarios: &'static [Scenario]) -> ReviewSet {
+    let mut candidates = from_definition(def);
+    for scenario in scenarios {
+        from_scenario(def, scenario, &mut candidates);
+    }
+    // Prefer the choice itself to arriving at it through an earlier decision.
+    candidates.sort_by_key(|c| match c.kind {
+        Kind::Ask => 0,
+        Kind::Play | Kind::Probe | Kind::Ways | Kind::Bounced => 1,
+        _ => 2,
+    });
+    let mut seen = Vec::new();
+    let mut groups = Vec::new();
+    let mut result = Vec::new();
+    for c in candidates {
+        if matches!(c.kind, Kind::Flip(_) | Kind::FollowOn)
+            || c.kind == Kind::Whole && groups.contains(&c.group)
+        {
+            continue;
+        }
+        let m = moment(&c, c.title.clone(), None);
+        let Ok((views, countered)) = super::review_position(&m) else {
+            continue;
+        };
+        let Some((key, checkpoint)) = review_example(def, &c, m, &views, countered) else {
+            continue;
+        };
+        groups.push(c.group);
+        if !seen.contains(&key) {
+            seen.push(key);
+            let mut checkpoint = checkpoint;
+            if countered && c.kind == Kind::Play && checkpoint.moment.title == "Spell countered" {
+                use_cast_before_counter(def, &mut checkpoint);
+            }
+            result.push(checkpoint);
+        }
+    }
+    ReviewSet {
+        examples: result,
+        unreached: scenarios
+            .iter()
+            .map(|s| heading(def, s))
+            .filter(|name| !groups.contains(name))
+            .collect(),
+    }
+}
+
+/// Let the reviewer cast the spell that otherwise counters during setup.
+fn use_cast_before_counter(def: &CardDef, checkpoint: &mut Checkpoint) {
+    if !matches!(checkpoint.moment.play, [Action::Cast { card, .. }] if *card == def.name) {
+        return;
+    }
+    let mut before = Moment::new(
+        checkpoint.moment.name,
+        "Cast to counter",
+        checkpoint.moment.board,
+    );
+    before.group = checkpoint.moment.group;
+    let Ok((views, _)) = super::review_position(&before) else {
+        return;
+    };
+    for (i, view) in views.iter().enumerate() {
+        let Status::Deciding { decision } = &view.status else {
+            continue;
+        };
+        let casts_card = decision.candidates.iter().any(|c| {
+            matches!(c.option, Offer::Cast { slot, .. } if view.objects.iter().any(|o|
+                o.slot == slot && o.name.as_deref() == Some(def.name)))
+        });
+        if casts_card {
+            checkpoint.moment = before;
+            checkpoint.first = View::ALL[i];
+            checkpoint.roles = ["Spell controller".to_owned(), "Spell controller".to_owned()];
+            checkpoint.roles[i] = format!("{} caster", def.name);
+            checkpoint.actions = decision
+                .candidates
+                .iter()
+                .map(|c| c.label.clone())
+                .collect();
+            return;
+        }
+    }
+}
+
+fn review_example(
+    def: &'static CardDef,
+    c: &Candidate,
+    mut moment: Moment,
+    views: &[PlayerView; 2],
+    countered: bool,
+) -> Option<(serde_json::Value, Checkpoint)> {
+    let owner = usize::from(!matches!(views[0].status, Status::Deciding { .. }));
+    let view = &views[owner];
+    let decision = match &view.status {
+        Status::Deciding { decision } => Some(decision),
+        _ => None,
+    };
+    let name_of = |slot| {
+        view.objects
+            .iter()
+            .find(|o| o.slot == slot)
+            .and_then(|o| o.name.as_deref())
+    };
+    let card_item = |item: &StackItem| match item {
+        StackItem::Spell { slot, .. } => name_of(*slot) == Some(def.name),
+        StackItem::Ability { name, .. } => name == def.name,
+    };
+    let on_stack = view.stack.iter().rev().find(|item| card_item(item));
+    let source = decision
+        .and_then(|d| d.resolving.as_ref())
+        .filter(|item| card_item(item))
+        .or(on_stack);
+    let card_is_asking = decision.is_some_and(|d| {
+        d.kind != Decision::Priority
+            && (d.resolving.as_ref().is_some_and(card_item)
+                || d.source.and_then(name_of) == Some(def.name))
+    });
+    if c.kind == Kind::Ask && !card_is_asking {
+        return None;
+    }
+    let title = if card_is_asking {
+        review_prompt(decision?)
+    } else if countered && on_stack.is_none() {
+        "Spell countered".to_owned()
+    } else if on_stack.is_some() {
+        format!("Respond to {}", def.name)
+    } else if c.kind == Kind::Whole {
+        "After resolution".to_owned()
+    } else {
+        c.title.clone()
+    };
+    let source_side = match source {
+        Some(StackItem::Spell { slot, .. }) => view
+            .objects
+            .iter()
+            .find(|o| o.slot == *slot)
+            .map(|o| o.controller),
+        Some(StackItem::Ability { controller, .. }) => Some(*controller),
+        None => None,
+    };
+    let paying = decision.is_some_and(|d| matches!(d.ask, AskView::UnlessPays { .. }));
+    let roles = std::array::from_fn(|seat| match (seat == owner, source_side) {
+        (true, _) if paying => "Paying player".to_owned(),
+        (true, Some(Side::You)) | (false, Some(Side::Opponent)) => {
+            let role = if matches!(source, Some(StackItem::Spell { .. })) {
+                "caster"
+            } else {
+                "controller"
+            };
+            format!("{} {role}", def.name)
+        }
+        _ => format!("Player {}", seat + 1),
+    });
+    let actions = decision.map_or_else(Vec::new, |d| {
+        d.candidates
+            .iter()
+            .map(|c| match (&d.ask, &c.option) {
+                (AskView::UnlessPays { cost }, Offer::Yes) => format!("Pay {cost}"),
+                (AskView::UnlessPays { .. }, Offer::No) => "Don't Pay".to_owned(),
+                _ => c.label.clone(),
+            })
+            .collect()
+    });
+    let key = if card_is_asking {
+        review_choice_key(decision?, owner, source_side)
+    } else if on_stack.is_some() || countered {
+        json!([title, owner, source_side])
+    } else {
+        let snapshots = views.each_ref().map(|v| snapshot(v, def));
+        json!([title, snapshots.each_ref().map(|r| timeless(r))])
+    };
+    moment.name = Box::leak(format!("review-{}", moment.name).into_boxed_str());
+    moment.title = Box::leak(title.into_boxed_str());
+    Some((
+        key,
+        Checkpoint {
+            moment,
+            first: View::ALL[owner],
+            roles,
+            actions,
+        },
+    ))
+}
+
+/// Deduplicate choices by their presentation and options, independent of the surrounding
+/// board's card names and slot IDs.
+fn review_choice_key(
+    decision: &beryl_session::protocol::DecisionView,
+    owner: usize,
+    source: Option<Side>,
+) -> serde_json::Value {
+    let mut ask = json!(decision.ask);
+    if let Some(fields) = ask.as_object_mut() {
+        fields.remove("card");
+        if let Some(eligible) = fields.get_mut("eligible") {
+            *eligible = json!(eligible.as_array().map(Vec::len));
+        }
+    }
+    let options: Vec<_> = decision
+        .candidates
+        .iter()
+        .map(|c| {
+            let payments: Vec<_> = c.payments.iter().map(|p| (p.x, p.taps.len())).collect();
+            json!([json!(c.option)["kind"], payments, c.targets.len()])
+        })
+        .collect();
+    json!(["choice", owner, source, decision.kind, ask, options])
+}
+
+fn review_prompt(d: &beryl_session::protocol::DecisionView) -> String {
+    match &d.ask {
+        AskView::UnlessPays { cost } => format!("Pay {cost}?"),
+        AskView::PayLife { life } => format!("Pay {life} life?"),
+        AskView::Scry { count } => format!("Scry {count}"),
+        ask => {
+            let value = json!(ask);
+            let kind = json!(d.kind);
+            let label = value["kind"]
+                .as_str()
+                .filter(|&k| k != "plain")
+                .or_else(|| kind.as_str())
+                .unwrap_or("choice");
+            let mut title = String::new();
+            for (i, ch) in label.chars().enumerate() {
+                if i == 0 {
+                    title.extend(ch.to_uppercase());
+                } else if ch.is_ascii_uppercase() {
+                    title.push(' ');
+                    title.push(ch.to_ascii_lowercase());
+                } else {
+                    title.push(ch);
+                }
+            }
+            title
+        }
+    }
 }
 
 type Recorded = Result<[Vec<String>; 2], String>;

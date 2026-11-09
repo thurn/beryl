@@ -25,6 +25,13 @@ interface MomentListing {
   /** The scenario it comes from, by name; empty for the card's own moments. */
   group: string;
   plays: boolean;
+  first?: View;
+  roles?: [string, string];
+}
+
+interface ReviewListing {
+  examples: MomentListing[];
+  unreached: string[];
 }
 
 interface SpecListing {
@@ -79,6 +86,28 @@ export function Specs({ path }: { path: string }) {
     .replace(/^\/specs\/?/, "")
     .replace(/\/$/, "")
     .split("/");
+  const manual = !!slug && (!only || only.startsWith("review-"));
+  const [checkpoints, setCheckpoints] = useState<ReviewListing | string>();
+  useEffect(() => {
+    if (!manual) return;
+    let cancelled = false;
+    fetch(`${API}/checkpoints/${slug}`)
+      .then((r) => {
+        if (!r.ok) throw new Error();
+        return r.json() as Promise<ReviewListing>;
+      })
+      .then(
+        (moments) => {
+          if (!cancelled) setCheckpoints(moments);
+        },
+        () => {
+          if (!cancelled) setCheckpoints("Review examples could not load.");
+        },
+      );
+    return () => {
+      cancelled = true;
+    };
+  }, [manual, slug]);
   useEffect(() => {
     document.title = "Beryl specs";
   }, []);
@@ -92,12 +121,27 @@ export function Specs({ path }: { path: string }) {
   }
   if (!slug) return <SpecIndex specs={specs} />;
   const spec = specs.find((s) => s.slug === slug);
-  const moment = spec?.moments.find((m) => m.name === only);
+  if (spec && manual) {
+    if (!checkpoints)
+      return <div className="specs">Loading review examples…</div>;
+    if (typeof checkpoints === "string")
+      return <div className="specs">{checkpoints}</div>;
+  }
+  const review =
+    manual && typeof checkpoints !== "string" ? checkpoints : undefined;
+  const moments = review?.examples ?? spec?.moments ?? [];
+  const moment = moments.find((m) => m.name === only);
   if (spec && moment && seat) {
     return <SeatRedirect slug={spec.slug} moment={moment.name} seat={seat} />;
   }
-  return spec && (moment || !only) ? (
-    <SpecPage spec={spec} only={moment} />
+  return spec && (moment || !only || only === "replay") ? (
+    <SpecPage
+      spec={spec}
+      moments={moments}
+      only={moment}
+      manual={manual}
+      unreached={review?.unreached}
+    />
   ) : (
     <div className="specs">
       <p className="specs-empty">
@@ -122,8 +166,13 @@ function SeatRedirect({
   seat: string;
 }) {
   useEffect(() => {
-    const hold = new URLSearchParams(window.location.search).has("hold");
-    const id = `${hold ? "hold-" : "seat-"}${Math.random().toString(36).slice(2, 10)}`;
+    const search = new URLSearchParams(window.location.search);
+    const hold = search.has("hold");
+    const shared = search.get("instance");
+    const id =
+      shared && /^[a-z0-9-]+$/.test(shared)
+        ? shared
+        : `${hold ? "hold-" : "seat-"}${Math.random().toString(36).slice(2, 10)}`;
     const live = `${window.location.origin}${API}/m/${slug}/${moment}/${seat}/${id}`;
     window.location.replace(`/?live=${encodeURIComponent(live)}#/game`);
   }, [slug, moment, seat]);
@@ -247,7 +296,19 @@ type Frames = Map<string, Window>;
 
 /** A card's spec: every moment from your seat, then every moment from theirs; or, given
  * `only`, that moment from both seats side by side. */
-function SpecPage({ spec, only }: { spec: SpecListing; only?: MomentListing }) {
+function SpecPage({
+  spec,
+  moments,
+  only,
+  manual,
+  unreached,
+}: {
+  spec: SpecListing;
+  moments: MomentListing[];
+  only?: MomentListing;
+  manual: boolean;
+  unreached?: string[];
+}) {
   // One event stream for the page, named for it, which carries every frame's views
   // (`specs-serve`'s /stream): a frame holding its own would use up the few connections a
   // browser allows a host, and frames would have to leave as others came.
@@ -256,6 +317,11 @@ function SpecPage({ spec, only }: { spec: SpecListing; only?: MomentListing }) {
   const [open, setOpen] = useState(false);
   const [reports, setReports] = useState(spec.reports);
   const filed = () => setReports((n) => n + 1);
+  const [resets, setResets] = useState<Record<string, number>>({});
+  const reset = (name: string) =>
+    setResets((r) => ({ ...r, [name]: (r[name] ?? 0) + 1 }));
+  const shownMoments = only && manual ? [only] : moments;
+  const firstSeat = (m: MomentListing) => m.first ?? "yours";
   useEffect(() => {
     const stream = new EventSource(`${API}/stream/${page}`);
     stream.addEventListener("open", () => setOpen(true));
@@ -286,38 +352,98 @@ function SpecPage({ spec, only }: { spec: SpecListing; only?: MomentListing }) {
         <SoundPanel />
         <CardImage name={spec.card} className="specs-card" />
         <ReviewBar spec={spec} reports={reports} />
-        {(only ? (["yours"] as const) : VIEWS).map((view) => (
-          <ol key={view} className="specs-toc">
-            {view === "theirs" && (
-              <li>
-                <a href="#theirs" className="specs-toc-them">
-                  <SeatBadge view={view} />
+        <a
+          className="specs-mode"
+          href={manual ? `/specs/${spec.slug}/replay` : `/specs/${spec.slug}`}
+        >
+          {manual ? "Scenario replays" : "Manual review"}
+        </a>
+        {manual ? (
+          <ol className="specs-toc">
+            {moments.map((m) => (
+              <li key={m.name}>
+                <a
+                  href={
+                    only
+                      ? `/specs/${spec.slug}/${m.name}`
+                      : `#${anchor(m, firstSeat(m))}`
+                  }
+                >
+                  {m.title}
                 </a>
               </li>
-            )}
-            {spec.moments.map((m, i) => (
-              <Fragment key={m.name}>
-                {startsGroup(spec.moments, i) && (
-                  <li className="specs-toc-group">{m.group}</li>
-                )}
-                <li>
-                  <a
-                    href={
-                      only
-                        ? `/specs/${spec.slug}/${m.name}`
-                        : `#${anchor(m, view)}`
-                    }
-                    aria-current={m === only ? "page" : undefined}
-                  >
-                    {m.title}
-                  </a>
-                </li>
-              </Fragment>
             ))}
           </ol>
-        ))}
+        ) : (
+          (only ? (["yours"] as const) : VIEWS).map((view) => (
+            <ol key={view} className="specs-toc">
+              {view === "theirs" && (
+                <li>
+                  <a href="#theirs" className="specs-toc-them">
+                    <SeatBadge view={view} />
+                  </a>
+                </li>
+              )}
+              {moments.map((m, i) => (
+                <Fragment key={m.name}>
+                  {startsGroup(moments, i) && (
+                    <li className="specs-toc-group">{m.group}</li>
+                  )}
+                  <li>
+                    <a
+                      href={
+                        only
+                          ? `/specs/${spec.slug}/${m.name}`
+                          : `#${anchor(m, view)}`
+                      }
+                      aria-current={m === only ? "page" : undefined}
+                    >
+                      {m.title}
+                    </a>
+                  </li>
+                </Fragment>
+              ))}
+            </ol>
+          ))
+        )}
       </nav>
-      {only ? (
+      {manual ? (
+        <main className="specs-moments">
+          {shownMoments.length === 0 && (
+            <p className="specs-empty">No review checkpoints were reached.</p>
+          )}
+          {!!unreached?.length && (
+            <details>
+              <summary>Scenarios without review examples</summary>
+              <ul>
+                {unreached.map((name) => (
+                  <li key={name}>{name}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {shownMoments.map((m) => (
+            <div key={m.name}>
+              {[firstSeat(m), otherSeat(firstSeat(m))].map((view) => (
+                <MomentView
+                  key={view}
+                  slug={spec.slug}
+                  moment={m}
+                  view={view}
+                  page={page}
+                  open={open}
+                  frames={frames.current}
+                  onFiled={filed}
+                  review={{
+                    revision: resets[m.name] ?? 0,
+                    reset: () => reset(m.name),
+                  }}
+                />
+              ))}
+            </div>
+          ))}
+        </main>
+      ) : only ? (
         <main className="specs-moments specs-pair">
           {VIEWS.map((view) => (
             <MomentView
@@ -341,9 +467,9 @@ function SpecPage({ spec, only }: { spec: SpecListing; only?: MomentListing }) {
                   <SeatBadge view={view} /> Opponent's seat
                 </h1>
               )}
-              {spec.moments.map((m, i) => (
+              {moments.map((m, i) => (
                 <Fragment key={m.name}>
-                  {startsGroup(spec.moments, i) && (
+                  {startsGroup(moments, i) && (
                     <h2 className="specs-group-head">{m.group}</h2>
                   )}
                   <MomentView
@@ -391,6 +517,10 @@ function startsGroup(moments: MomentListing[], i: number): boolean {
 const VIEWS = ["yours", "theirs"] as const;
 type View = (typeof VIEWS)[number];
 
+function otherSeat(view: View): View {
+  return view === "yours" ? "theirs" : "yours";
+}
+
 /** Each seat as a moment's header names it. */
 const SEAT_NAMES: Record<View, string> = { yours: "You", theirs: "Them" };
 
@@ -415,6 +545,7 @@ function MomentView({
   open,
   frames,
   onFiled,
+  review,
 }: {
   slug: string;
   moment: MomentListing;
@@ -423,12 +554,13 @@ function MomentView({
   open: boolean;
   frames: Frames;
   onFiled: () => void;
+  review?: { revision: number; reset: () => void };
 }) {
   const holder = useRef<HTMLDivElement>(null);
   const reached = useReached(holder);
   // Each instance is a game of its own; a new one replays the moment.
   const [n, setN] = useState(0);
-  const key = `${slug}/${moment.name}/${view}/${page}.${n}`;
+  const key = `${slug}/${moment.name}/${view}/${page}.${review?.revision ?? n}`;
   const live = `${window.location.origin}${API}/m/${key}`;
   const src = `/?live=${encodeURIComponent(live)}&relay#/game`;
   // Hidden until it shows its first view, over a placeholder.
@@ -438,7 +570,7 @@ function MomentView({
   // The instance whose held views have been asked to play out.
   const [played, setPlayed] = useState<string>();
   useEffect(() => {
-    if (shown !== key || held[key] !== undefined) return;
+    if (review || shown !== key || held[key] !== undefined) return;
     void fetch(`${API}/m/${key}/held`)
       .then((r) => r.json() as Promise<{ ok?: boolean }>)
       .then(
@@ -446,7 +578,7 @@ function MomentView({
         () => false,
       )
       .then((holds) => setHeld((h) => ({ ...h, [key]: holds })));
-  }, [shown, key, held]);
+  }, [shown, key, held, review]);
   const waiting = held[key] !== false && played !== key;
   const frame = useRef<HTMLIFrameElement>(null);
   useEffect(() => {
@@ -472,11 +604,35 @@ function MomentView({
     <section className="specs-moment" id={anchor(moment, view)}>
       <header className="specs-moment-head">
         <h2>
-          <SeatBadge view={view} />
+          {review ? (
+            <span className="specs-seat">
+              {moment.roles?.[view === "yours" ? 0 : 1]}
+            </span>
+          ) : (
+            <SeatBadge view={view} />
+          )}
           {moment.title}
         </h2>
         <div className="specs-moment-actions">
-          {waiting ? (
+          {review && (
+            <a
+              className="specs-switch-seat"
+              href={`#${anchor(moment, otherSeat(view))}`}
+            >
+              Switch seat
+            </a>
+          )}
+          {review ? (
+            <button
+              type="button"
+              className="specs-icon-button"
+              title="Reset"
+              aria-label="Reset"
+              onClick={review.reset}
+            >
+              ↻
+            </button>
+          ) : waiting ? (
             <button
               type="button"
               className="specs-icon-button"

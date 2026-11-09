@@ -695,20 +695,30 @@ async function recorded(name) {
 }
 
 const spec = {
-    async open(card, moment, seat = "yours") {
+    async checkpoints(card) {
+        const response = await fetch(
+            new URL(`spec-api/checkpoints/${card}`, base),
+        );
+        if (!response.ok) throw new Error(`No review checkpoints for ${card}`);
+        return response.json();
+    },
+    async open(card, moment, seat = "yours", instance) {
         if (!seats[seat]) {
             const p = seat === "yours" ? first : await context.newPage();
             if (p !== first) watch(p, `${seat}: `);
             seats[seat] = { page: p };
         }
         const s = seats[seat];
-        s.live = await openSeat(s.page, base, card, moment, seat);
+        s.live = await openSeat(s.page, base, card, moment, seat, instance);
         current = s.page;
         return s.page;
     },
     async both(card, moment) {
-        const yours = await spec.open(card, moment, "yours");
-        const theirs = await spec.open(card, moment, "theirs");
+        const instance = moment.startsWith("review-")
+            ? `review-${Math.random().toString(36).slice(2)}`
+            : undefined;
+        const yours = await spec.open(card, moment, "yours", instance);
+        const theirs = await spec.open(card, moment, "theirs", instance);
         current = yours;
         return { yours, theirs };
     },
