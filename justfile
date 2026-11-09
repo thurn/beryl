@@ -31,7 +31,7 @@ awake := if os() == "windows" { by_anywhere + " low --awake --" } else { "caffei
 default:
     @just --list --unsorted
 
-# The app with hot reload, in a window (humans; agents use `smoke`)
+# The app with hot reload, in a window (--file-bugs files local beads; agents use `smoke`)
 [group('app')]
 dev *args:
     {{ by }} dev "$@"
@@ -91,7 +91,7 @@ ui-live *args:
 specs *args:
     {{ by }} specs "$@"
 
-# The app's bug reports: list them, `file` a bead for each open one, `done <id|bead>` (see .agents/bugfix)
+# The app's bug reports: list, import a ZIP, file as beads, or mark done
 [group('app')]
 bugs *args:
     {{ by }} bugs "$@"

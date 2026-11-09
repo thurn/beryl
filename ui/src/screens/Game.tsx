@@ -14,6 +14,7 @@ import {
   choose,
   CommandError,
   concede,
+  exportBugs,
   listAgents,
   setStops,
   type AgentView,
@@ -80,12 +81,14 @@ export function StartScreen({
   inProgress,
   resumed,
   onStart,
+  exportReports,
 }: {
   inProgress?: SessionId;
   /** The game in progress was resumed at launch and not yet gone back to: a new game
    * concedes it without asking. */
   resumed: boolean;
   onStart(agent: string, seed?: number): Promise<void>;
+  exportReports: boolean;
 }) {
   const [agents, setAgents] = useState<AgentView[]>([]);
   const [agent, setAgent] = useState<string>();
@@ -216,9 +219,46 @@ export function StartScreen({
             </Button>
           </div>
           {error && <p className="game-error">{error}</p>}
+          {exportReports && <ExportReports />}
         </section>
       </div>
     </Stage>
+  );
+}
+
+function ExportReports() {
+  const [pending, setPending] = useState(false);
+  const [status, setStatus] = useState("");
+  const save = async () => {
+    setPending(true);
+    setStatus("");
+    try {
+      const count = await exportBugs();
+      if (count === 0) setStatus("No reports to export.");
+      else if (count !== null) setStatus("ZIP saved.");
+    } catch {
+      setStatus("Couldn’t save reports.");
+    } finally {
+      setPending(false);
+    }
+  };
+  return (
+    <>
+      <Button
+        size="small"
+        variant="secondary"
+        disabled={pending}
+        title="Includes screenshots, replays, and logs"
+        onClick={() => void save()}
+      >
+        {pending ? "Exporting…" : "Export Bug Reports"}
+      </Button>
+      {status && (
+        <p className="start-working" role="status">
+          {status}
+        </p>
+      )}
+    </>
   );
 }
 

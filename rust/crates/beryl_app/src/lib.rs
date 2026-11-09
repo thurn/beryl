@@ -4,6 +4,7 @@
 //! where [`beryl_session::bugs::dir`] says.
 
 mod art;
+mod bug_reports;
 mod games;
 mod links;
 mod snapshot;
@@ -151,6 +152,8 @@ async fn report_bug(app: tauri::AppHandle, request: BugReport) -> Result<BugSave
         "report timing",
         json!({ "pngMs": encoded.as_millis(), "totalMs": started.elapsed().as_millis() }),
     );
+    #[cfg(desktop)]
+    bug_reports::file_local(&saved);
     Ok(saved)
 }
 
@@ -195,8 +198,10 @@ const fn names(path: &str, name: &str) -> bool {
 pub fn run() {
     journal::install_panic_hook();
     bugs::set_build_commit(env!("BERYL_COMMIT"));
-    tauri::Builder::default()
-        .plugin(links::plugin())
+    let builder = tauri::Builder::default().plugin(links::plugin());
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_dialog::init());
+    builder
         .invoke_handler(handlers![
             app_info = ipc::APP_INFO,
             ui_ready = ipc::UI_READY,
@@ -212,6 +217,7 @@ pub fn run() {
             games::resume_game = ipc::RESUME_GAME,
             capture_window = ipc::CAPTURE_WINDOW,
             report_bug = ipc::REPORT_BUG,
+            bug_reports::export_bugs = ipc::EXPORT_BUGS,
             ui_log = ipc::UI_LOG,
         ])
         .register_asynchronous_uri_scheme_protocol(art::SCHEME, |ctx, request, responder| {

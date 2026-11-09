@@ -48,6 +48,8 @@ pub const CAPTURE_WINDOW: &str = "capture_window";
 /// Writes a bug report ([`crate::bugs::BugReport`]); returns where
 /// ([`crate::bugs::BugSaved`]).
 pub const REPORT_BUG: &str = "report_bug";
+/// Saves the current bug reports as a ZIP. Returns the count, or None if canceled.
+pub const EXPORT_BUGS: &str = "export_bugs";
 /// Journals the UI's warnings and errors ([`crate::bugs::UiLogRequest`]).
 pub const UI_LOG: &str = "ui_log";
 
@@ -237,6 +239,12 @@ pub(crate) fn typescript(cfg: &Config) -> String {
             REPORT_BUG,
             request(name::<BugReport>(cfg)),
             name::<BugSaved>(cfg),
+            error.clone(),
+        ),
+        (
+            EXPORT_BUGS,
+            "Record<string, never>".to_owned(),
+            name::<Option<u32>>(cfg),
             error.clone(),
         ),
         (

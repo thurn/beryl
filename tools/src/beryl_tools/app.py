@@ -15,12 +15,15 @@ from . import paths, system, warm
 BINARY: Path = system.exe(paths.TAURI_TARGET / "debug" / "beryl")
 
 
-def tauri(*args: str) -> int:
+def tauri(*args: str, file_bugs: bool = False) -> int:
     warm.ensure(tauri=True)
+    env = paths.tauri_env()
+    if file_bugs:
+        env["BERYL_FILE_BUGS"] = str(paths.REPO)
     return subprocess.run(
         [system.which("npx"), "--no-install", "tauri", *args],
         cwd=paths.UI,
-        env=paths.tauri_env(),
+        env=env,
         check=False,
     ).returncode
 
@@ -32,7 +35,7 @@ def dev(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 2
-    return tauri("dev")
+    return tauri("dev", file_bugs=args.file_bugs)
 
 
 def smoke(args: argparse.Namespace) -> int:
@@ -64,6 +67,9 @@ def bundle(args: argparse.Namespace) -> int:
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser("dev", help="the app with hot reload, in a window (humans)")
     p.add_argument("--window", action="store_true", help="open it even for an agent")
+    p.add_argument(
+        "--file-bugs", action="store_true", help="file bug reports as local beads"
+    )
     p.set_defaults(func=dev)
     p = sub.add_parser(
         "smoke", help="build and launch the app headless until the UI loads"

@@ -1,4 +1,6 @@
+import json
 from pathlib import Path
+from zipfile import ZipFile
 
 import pytest
 
@@ -45,6 +47,8 @@ def test_file_and_done(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[list[str]] = []
 
     def fake_bd(args: list[str]) -> str:
+        if args[0] == "list":
+            return "[]"
         calls.append(args)
         body = Path(args[args.index("--body-file") + 1]).read_text()
         assert "The arrow\njumps." in body and "seed 77, turn 5" in body
@@ -79,6 +83,8 @@ def test_an_ai_report_files_an_incident_bead(
     calls: list[list[str]] = []
 
     def fake_bd(args: list[str]) -> str:
+        if args[0] == "list":
+            return "[]"
         calls.append(args)
         body = Path(args[args.index("--body-file") + 1]).read_text()
         assert "docs/incidents/" in body
@@ -87,3 +93,60 @@ def test_an_ai_report_files_an_incident_bead(
     monkeypatch.setattr(bugs, "run_bd", fake_bd)
     assert cli.main(["bugs", "file"]) == 0
     assert calls[0][calls[0].index("--labels") + 1] == "bug-report,ai-play"
+
+
+def test_retry_recovers_existing_bead(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BERYL_BUGS", str(tmp_path))
+    folder: Path = report(tmp_path)
+
+    def fake_bd(args: list[str]) -> str:
+        assert args == [
+            "list",
+            "--all",
+            "--external-ref",
+            f"bug-report:{folder.name}",
+            "--json",
+        ]
+        return '[{"id":"by-recovered"}]'
+
+    monkeypatch.setattr(bugs, "run_bd", fake_bd)
+    assert cli.main(["bugs", "file", "--", folder.name]) == 0
+    saved = bugs.load(folder)
+    assert (
+        saved is not None and saved.status == "filed" and saved.bead == "by-recovered"
+    )
+
+
+def test_import_resets_sender_status_and_preserves_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "bugs"
+    monkeypatch.setenv("BERYL_BUGS", str(root))
+    key = "20261108-143012-arrow-jumps"
+    bundle = tmp_path / "reports.zip"
+    with ZipFile(bundle, "w") as archive:
+        archive.writestr(
+            "manifest.json",
+            json.dumps({"format": "beryl-bug-reports", "version": 1, "reports": [key]}),
+        )
+        archive.writestr(
+            f"reports/{key}/report.md",
+            REPORT.replace("status: open\nbead:", "status: filed\nbead: by-sender"),
+        )
+        archive.writestr(f"reports/{key}/replay.json", "{}")
+
+    assert cli.main(["bugs", "import", str(bundle)]) == 0
+    folder = root / key
+    saved = bugs.load(folder)
+    assert saved is not None and saved.status == "open" and not saved.bead
+    assert (folder / "replay.json").read_text() == "{}"
+    assert cli.main(["bugs", "done", key]) == 0
+    assert cli.main(["bugs", "import", str(bundle)]) == 0
+    assert not folder.exists()
+
+    with ZipFile(bundle, "a") as archive:
+        archive.writestr(f"reports/{key}/../../unexpected", "unexpected")
+    assert cli.main(["bugs", "import", str(bundle)]) == 1
+    assert not (root / "unexpected").exists()

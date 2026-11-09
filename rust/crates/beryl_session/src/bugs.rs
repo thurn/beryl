@@ -20,6 +20,8 @@
 //! `by bugs` (`tools/src/beryl_tools/bugs.py`) lists the open reports, files a bead for each and
 //! marks them done; the `bugfix` skill (`.agents/bugfix`) works them.
 
+pub mod archive;
+
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -129,6 +131,9 @@ pub fn open_by_card(dir: &Path) -> std::collections::BTreeMap<String, usize> {
         return counts;
     };
     for entry in entries.flatten() {
+        if entry.file_name().as_encoded_bytes().starts_with(b".") {
+            continue;
+        }
         let Ok(text) = std::fs::read_to_string(entry.path().join("report.md")) else {
             continue;
         };
@@ -219,9 +224,18 @@ pub fn write(
 ) -> Result<BugSaved, SessionError> {
     let now = SystemTime::now();
     let title = title(&report.description);
-    let id = format!("{}-{}", stamp(now), slug(&title));
-    let folder = dir.join(&id);
-    std::fs::create_dir_all(&folder).map_err(SessionError::io(&folder))?;
+    let id = format!(
+        "{}-{}-{}",
+        stamp(now),
+        uuid::Uuid::new_v4().simple(),
+        slug(&title)
+    );
+    std::fs::create_dir_all(dir).map_err(SessionError::io(dir))?;
+    // Publish the folder only when the report is complete, so export and filing never see
+    // partially written evidence.
+    let staging = tempfile::tempdir_in(dir).map_err(SessionError::io(dir))?;
+    let folder = staging.path();
+    let destination = dir.join(&id);
     let put = |name: &str, bytes: &[u8]| {
         let path = folder.join(name);
         std::fs::write(&path, bytes).map_err(SessionError::io(&path))
@@ -291,7 +305,7 @@ pub fn write(
     journal::info(
         "bugs",
         "report written",
-        json!({ "id": id, "path": folder, "title": title }),
+        json!({ "id": id, "path": destination, "title": title }),
     );
     let mut lines = String::new();
     for record in journal::recent(JOURNAL_RECORDS) {
@@ -324,12 +338,12 @@ pub fn write(
         screenshot: images.screenshot.is_some(),
         game: &game,
         files: &files,
-        folder: &folder,
     });
     put("report.md", markdown.as_bytes())?;
+    std::fs::rename(folder, &destination).map_err(SessionError::io(&destination))?;
     Ok(BugSaved {
         id,
-        path: folder.display().to_string(),
+        path: destination.display().to_string(),
     })
 }
 
@@ -383,7 +397,6 @@ struct Markdown<'a> {
     screenshot: bool,
     game: &'a Game,
     files: &'a [(&'a str, String)],
-    folder: &'a Path,
 }
 
 fn markdown(m: &Markdown<'_>) -> String {
@@ -447,13 +460,12 @@ fn markdown(m: &Markdown<'_>) -> String {
     if let Some(spec) = &m.report.spec {
         spec_lines(&mut out, spec);
     }
-    let folder = m.folder.display();
     if g.seed.is_some() {
         let turn = g.turn.map(|t| format!(" --turn {t}")).unwrap_or_default();
         writeln!(
             out,
             "- The game, as a transcript to the reported turn:\n  \
-             `just review \"{folder}/replay.json\"{turn}`"
+             `just review \"<report folder>/replay.json\"{turn}`"
         )
         .expect("writes");
     }
@@ -462,7 +474,7 @@ fn markdown(m: &Markdown<'_>) -> String {
         writeln!(
             out,
             "- The agent's searches again, a fresh sample (slow: at low priority):\n  \
-             `just review \"{folder}/replay.json\" --agent recorded{turn}`"
+             `just review \"<report folder>/replay.json\" --agent recorded{turn}`"
         )
         .expect("writes");
     }

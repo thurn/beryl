@@ -28,6 +28,9 @@ png = "0.18"
 
 # Card art downloads (art.rs) over the system's TLS, except on Android, which has none a Rust
 # crate can link: rustls there.
+[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
+tauri-plugin-dialog = "2"
+
 [target.'cfg(not(target_os = "android"))'.dependencies]
 ureq = { version = "3", default-features = false, features = ["native-tls"] }
 

@@ -1,6 +1,12 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { MotionConfig } from "motion/react";
-import { appInfo, canReportBugs, uiReady, type OutcomeView } from "./ipc";
+import {
+  appInfo,
+  canExportBugs,
+  canReportBugs,
+  uiReady,
+  type OutcomeView,
+} from "./ipc";
 import { BugReporter } from "./components/BugReport";
 import { Gallery } from "./screens/Gallery";
 import { Specs } from "./screens/Specs";
@@ -57,9 +63,11 @@ function Main() {
 
   // The app hears the UI has loaded once it has answered a first command, which says whether
   // it runs on a phone.
+  const [exportReports, setExportReports] = useState(false);
   useEffect(() => {
     void appInfo().then((info) => {
       setMobile(info.mobile);
+      setExportReports(canExportBugs(info.mobile));
       uiReady();
     });
   }, []);
@@ -86,6 +94,7 @@ function Main() {
             inProgress !== undefined && inProgress === resumed && !returned
           }
           onStart={start}
+          exportReports={exportReports}
         />
       )}
       {canReportBugs() && <BugReporter route={path} />}

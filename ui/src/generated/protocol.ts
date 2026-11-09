@@ -499,6 +499,7 @@ export type Commands = {
   resume_game: { args: Record<string, never>; result: SessionId | null; error: never };
   capture_window: { args: Record<string, never>; result: number; error: SessionError };
   report_bug: { args: { request: BugReport }; result: BugSaved; error: SessionError };
+  export_bugs: { args: Record<string, never>; result: number | null; error: SessionError };
   ui_log: { args: { request: UiLogRequest }; result: null; error: never };
 };
 

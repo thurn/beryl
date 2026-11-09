@@ -13,17 +13,34 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
 import time
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import paths
+from . import paths, system
 
 REPORT = "report.md"
 DONE = "done"
+REPORT_ID: re.Pattern[str] = re.compile(r"[0-9]{8}-[0-9]{6}-[a-z0-9-]{1,80}")
+BUNDLE_FILES: frozenset[str] = frozenset(
+    (
+        REPORT,
+        "screenshot.png",
+        "window.png",
+        "replay.json",
+        "searches.json",
+        "view.json",
+        "fixture.json",
+        "ui.json",
+        "journal.jsonl",
+    )
+)
 # Every bead filed from a report carries it, so `bd list --label bug-report` finds them.
 LABEL = "bug-report"
 # And a report of a questionable play of the AI's (`kind: ai`) carries this one too.
@@ -107,13 +124,25 @@ def update(report: Report, **changes: str) -> None:
             seen.add(key)
     missing = [f"{k}: {v}".rstrip() for k, v in changes.items() if k not in seen]
     lines[end:end] = missing
-    path.write_text("\n".join(lines), newline="\n")
+    with tempfile.NamedTemporaryFile(
+        "w", encoding="utf-8", newline="\n", dir=path.parent, delete=False
+    ) as temp:
+        temporary = Path(temp.name)
+        temp.write("\n".join(lines))
+    try:
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
     report.fields.update(changes)
 
 
 def reports(root: Path, done: bool = False) -> list[Report]:
     """The reports under `root`, oldest first; with `done`, the done ones too."""
-    folders = sorted(p for p in root.iterdir() if p.is_dir()) if root.is_dir() else []
+    folders = (
+        sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith("."))
+        if root.is_dir()
+        else []
+    )
     found = [r for f in folders if f.name != DONE and (r := load(f))]
     if done and (root / DONE).is_dir():
         found += [r for f in sorted((root / DONE).iterdir()) if (r := load(f))]
@@ -148,7 +177,7 @@ def bead_description(report: Report) -> str:
     return (
         ai + f"Reported from the app's bug button. The report, with its screenshot "
         f"(`screenshot.png`), the game's replay, its latest views and the logs:\n\n"
-        f"`{report.folder}`\n\n"
+        f"Report ID: `{report.id}`. Local folder: `{report.folder}`\n\n"
         f"Read `{report.folder / REPORT}` first; the `bugfix` skill "
         f"(`.agents/bugfix/SKILL.md`) says how to reproduce and close it.\n\n"
         f"- Game: {game or 'none (not in a game)'}\n"
@@ -173,7 +202,13 @@ def description(report: Report) -> str:
 
 def run_bd(args: list[str]) -> str:
     run = subprocess.run(
-        ["bd", *args], cwd=paths.REPO, capture_output=True, text=True, check=False
+        ["bd", "--sandbox", *args],
+        cwd=paths.REPO,
+        env={**os.environ, "BD_NON_INTERACTIVE": "1"},
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
     )
     if run.returncode != 0:
         raise RuntimeError(f"bd {' '.join(args[:2])}: {run.stderr.strip()}")
@@ -181,6 +216,13 @@ def run_bd(args: list[str]) -> str:
 
 
 def file_bead(report: Report, priority: str) -> str:
+    reference = f"bug-report:{report.id}"
+    # A previous attempt may have created the bead before saving its ID to report.md.
+    existing = json.loads(
+        run_bd(["list", "--all", "--external-ref", reference, "--json"])
+    )
+    if existing:
+        return str(existing[0]["id"])
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as body:
         body.write(bead_description(report))
     try:
@@ -198,7 +240,7 @@ def file_bead(report: Report, priority: str) -> str:
                 "--priority",
                 priority,
                 "--external-ref",
-                f"bug-report:{report.id}",
+                reference,
                 "--silent",
             ]
         ).splitlines()[-1]
@@ -222,6 +264,13 @@ def list_cmd(args: argparse.Namespace) -> int:
 
 def file_cmd(args: argparse.Namespace) -> int:
     root = bugs_dir()
+    if args.dry_run or not root.is_dir():
+        return file_reports(args, root)
+    with system.file_lock(root / ".triage.lock"):
+        return file_reports(args, root)
+
+
+def file_reports(args: argparse.Namespace, root: Path) -> int:
     chosen = [find(root, k) for k in args.reports] if args.reports else None
     if chosen is not None and None in chosen:
         missing = [k for k, r in zip(args.reports, chosen) if r is None]
@@ -239,14 +288,96 @@ def file_cmd(args: argparse.Namespace) -> int:
         if args.dry_run:
             print(f"would file {r.id}: {r.title}")
             continue
-        bead = file_bead(r, args.priority)
-        update(r, status="filed", bead=bead)
+        try:
+            bead = file_bead(r, args.priority)
+            update(r, status="filed", bead=bead)
+        except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
+            print(f"bugs: {error}", file=sys.stderr)
+            return 1
         print(f"{bead} {r.id}: {r.title}")
+    return 0
+
+
+def stage_bundle(archive: zipfile.ZipFile, staging: Path) -> list[str]:
+    """Validates the v1 manifest and stages only recognized, bounded report files."""
+    entries = archive.infolist()
+    names = {entry.filename for entry in entries}
+    if (
+        len(entries) != len(names)
+        or len(entries) > 10_000
+        or sum(entry.file_size for entry in entries) > 1024**3
+        or "manifest.json" not in names
+        or archive.getinfo("manifest.json").file_size > 1024**2
+    ):
+        raise ValueError("invalid or oversized report bundle")
+    manifest = json.loads(archive.read("manifest.json"))
+    if (
+        not isinstance(manifest, dict)
+        or manifest.get("format") != "beryl-bug-reports"
+        or manifest.get("version") != 1
+    ):
+        raise ValueError("unsupported report bundle format")
+    ids = manifest.get("reports")
+    if not isinstance(ids, list) or not all(
+        isinstance(key, str) and REPORT_ID.fullmatch(key) for key in ids
+    ):
+        raise ValueError("invalid report IDs")
+    keys = set(ids)
+    if len(keys) != len(ids):
+        raise ValueError("duplicate report IDs")
+
+    for name in names - {"manifest.json"}:
+        parts = name.split("/")
+        if (
+            len(parts) != 3
+            or parts[0] != "reports"
+            or parts[1] not in keys
+            or parts[2] not in BUNDLE_FILES
+        ):
+            raise ValueError(f"unexpected report file {name!r}")
+        _, key, filename = parts
+        folder = staging / key
+        folder.mkdir(exist_ok=True)
+        with archive.open(name) as source, (folder / filename).open("wb") as target:
+            shutil.copyfileobj(source, target)
+    for key in ids:
+        report = load(staging / key)
+        if report is None or report.fields.get("id") != key:
+            raise ValueError(f"missing or invalid report {key}")
+        # Sender-side filing state has no authority in this tracker.
+        update(report, status="open", bead="", fixed="", fix="")
+    return ids
+
+
+def import_cmd(args: argparse.Namespace) -> int:
+    root = bugs_dir()
+    root.mkdir(parents=True, exist_ok=True)
+    try:
+        with tempfile.TemporaryDirectory(dir=root, prefix=".import-") as temp:
+            staging = Path(temp)
+            with zipfile.ZipFile(args.bundle) as archive:
+                keys = stage_bundle(archive, staging)
+            with system.file_lock(root / ".triage.lock"):
+                for key in keys:
+                    if (root / key).exists() or (root / DONE / key).exists():
+                        print(f"already saved {key}")
+                        continue
+                    (staging / key).rename(root / key)
+                    print(f"imported {key}")
+    except (OSError, ValueError, RuntimeError, zipfile.BadZipFile) as error:
+        print(f"bugs: {error}", file=sys.stderr)
+        return 1
     return 0
 
 
 def done_cmd(args: argparse.Namespace) -> int:
     root = bugs_dir()
+    root.mkdir(parents=True, exist_ok=True)
+    with system.file_lock(root / ".triage.lock"):
+        return finish_reports(args, root)
+
+
+def finish_reports(args: argparse.Namespace, root: Path) -> int:
     code = 0
     for key in args.reports:
         r = find(root, key)
@@ -277,6 +408,9 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     v.add_argument("--priority", default="1", help="the beads' priority (0-4)")
     v.add_argument("--dry-run", action="store_true")
     v.set_defaults(func=file_cmd)
+    v = verbs.add_parser("import", help="save reports from a ZIP for local triage")
+    v.add_argument("bundle", type=Path)
+    v.set_defaults(func=import_cmd)
     v = verbs.add_parser("done", help="mark reports fixed and move them to done/")
     v.add_argument("reports", nargs="+", help="report ids or their beads")
     v.add_argument("--commit", help="the fixing commit")

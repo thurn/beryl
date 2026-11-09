@@ -388,6 +388,10 @@ export const canReportBugs = () =>
 /** Whether the app can snapshot its window, for a report's frozen frame. */
 export const canCaptureWindow = () => "__TAURI_INTERNALS__" in window;
 
+/** Only the desktop app can open a native save dialog for report bundles. */
+export const canExportBugs = (mobile: boolean) => !mobile && canCaptureWindow();
+export const exportBugs = () => call("export_bugs", {});
+
 async function chooseTransport(): Promise<Transport> {
   const wrapped = instrumented(await rawTransport());
   if (canReportBugs()) {
