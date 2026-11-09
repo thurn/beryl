@@ -216,7 +216,11 @@ export function StepStops({
           <li
             key={stop.key}
             data-step={stop.key}
-            style={{ gridColumn: column < 3 ? column + 1 : column + 2 }}
+            style={{
+              gridColumn: column < 3 ? column + 1 : column + 2,
+              gridRow:
+                side === "you" ? 1 + Math.floor(i / 6) : 2 - Math.floor(i / 6),
+            }}
             className={[
               "step has-tip",
               here && "step-current",

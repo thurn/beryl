@@ -953,6 +953,10 @@
   --glow: 0.9;
   --glow-width: 1.9;
 }
+.block-link .arrow-line path {
+  stroke: rgb(242 211 152 / 65%);
+  stroke-width: 2;
+}
 .arrow-gold {
   --tone: #ffd27a;
   --tone-soft: rgb(255 120 10 / 90%);

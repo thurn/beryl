@@ -826,6 +826,7 @@ function AskChoice({
       actions={choice.answers.map((a) => ({
         label: <RulesText text={a.label} />,
         disabled: busy,
+        secondary: choice.equalAnswers,
         onClick: () => onPlan(a.plan),
       }))}
     >
@@ -875,7 +876,7 @@ function AskFloat({
         {choice.answers.map((a, i) => (
           <Button
             key={i}
-            variant={i === 0 ? "primary" : "secondary"}
+            variant={i === 0 && !choice.equalAnswers ? "primary" : "secondary"}
             disabled={busy}
             onClick={() => onPlan(a.plan)}
           >

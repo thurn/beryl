@@ -451,9 +451,6 @@ export function showcasePlace(
  * glance; the rows are too close for more. */
 const ADVANCE = 16;
 
-/** How far a blocker's center leans from its attacker's toward the table's middle. */
-const ACROSS_LEAN = 0.16;
-
 /** Places a thing `width` wide (before its `scale`, its depth's by default) lying on the table
  * at (x, y), or reaching `rise` above it (before scaling) while scaled and leaning as if it lay
  * there. */
@@ -1170,19 +1167,14 @@ function permanentRow(
     if (attacker === null || !attackers.has(attacker)) continue;
     blocking.set(attacker, [...(blocking.get(attacker) ?? []), o.slot]);
   }
-  // Each also faces its attacker straight across, which is where it stands when its row is too
-  // full to lean it.
+  // Each group faces its attacker straight across.
   const wants = new Map<number, number>();
-  const faces = new Map<number, number>();
   for (const [attacker, blockers] of blocking) {
     const a = attackers.get(attacker)!;
-    // Across the table, a little toward its middle, as combat.png's perspective draws it.
-    const below = a.x + (a.span * a.scale) / 2;
-    const center = below + (STAGE.width / 2 - below) * ACROSS_LEAN;
+    const center = a.x + (a.span * a.scale) / 2;
     blockers.forEach((slot, i) => {
       const offset = (i - (blockers.length - 1) / 2) * width * 1.04;
       wants.set(slot, center - width / 2 + offset);
-      faces.set(slot, below - width / 2 + offset);
     });
   }
   const wanted = groups.map((g, i) => wants.get(g[0]!.slot) ?? xs[i]!);
@@ -1192,7 +1184,7 @@ function permanentRow(
       ? { order: groups.map((_, i) => i), lefts: wanted }
       : arrange(
           wanted,
-          groups.map((g) => faces.get(g[0]!.slot)),
+          groups.map((g) => wants.get(g[0]!.slot)),
           widths,
           gap,
           start,

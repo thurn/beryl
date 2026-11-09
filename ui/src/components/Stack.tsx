@@ -136,23 +136,23 @@ export function StackMarks({
  * `data-oval` is met round its inscribed ellipse. One marked `data-within` with another's id
  * is a part of that one (the strip of a stack item that peeks out from under the next): the
  * arrow keeps off neither. Every arrow looks alike; only `tone` tells
- * a kind apart: gold for a source or a block, cyan for a target, red for an attack. */
+ * a kind apart: gold for a source, cyan for a target, red for an attack. */
 export interface ArrowSpec {
   from: string;
   to: string;
   tone: "gold" | "cyan" | "red";
+  /** A direct line between the facing edges of a blocker and its attacker. */
+  block?: boolean;
 }
 
-interface Drawn {
+type Drawn = {
   key: string;
   /** The ids of the elements it ties, as its spec names them. */
   from: string;
   to: string;
   d: string;
   tone: ArrowSpec["tone"];
-  end: Vector;
-  angle: number;
-}
+} & ({ block: true } | { block: false; end: Vector; angle: number });
 
 /** An element's box in the parent's own coordinates: client rects are in screen pixels, which
  * differ by `scale` inside a scaled stage. */
@@ -258,7 +258,8 @@ export function Arrows({
       if (still && seen.current.searched) return;
       // Each arrow keeps off every other card, not what holds or lies within its ends, or
       // within what its ends are part of.
-      const legs = ends.map(({ from, to, source, target }): Leg => {
+      const routed = ends.filter(({ a }) => !a.block);
+      const legs = routed.map(({ from, to, source, target }): Leg => {
         const own = [from, to].flatMap((end) => {
           const host = end.dataset.within;
           const whole = host ? document.getElementById(host) : null;
@@ -276,7 +277,7 @@ export function Arrows({
         };
       });
       // While anything moves, each follows its ports; standing still, or new, all are routed.
-      const traced = ends.map(({ a }, i) => {
+      const traced = routed.map(({ a }, i) => {
         const choice = choices.current.get(keyOf(a));
         return still || !choice ? undefined : retrace(legs[i]!, choice);
       });
@@ -285,14 +286,14 @@ export function Arrows({
         ? route(
             legs,
             size,
-            ends.map(({ a }) => choices.current.get(keyOf(a))),
+            routed.map(({ a }) => choices.current.get(keyOf(a))),
           )
         : traced;
       seen.current = { where, searched: still || searched };
       choices.current = new Map(
-        ends.map(({ a }, i) => [keyOf(a), routes[i]!.choice]),
+        routed.map(({ a }, i) => [keyOf(a), routes[i]!.choice]),
       );
-      const next = ends.map(({ a }, i): Drawn => {
+      const next = routed.map(({ a }, i): Drawn => {
         const r = routes[i]!;
         return {
           key: keyOf(a),
@@ -302,8 +303,27 @@ export function Arrows({
           d: shaft(r.p, r.angle, scale),
           end: r.end,
           angle: r.angle,
+          block: false,
         };
       });
+      for (const { a, source, target } of ends) {
+        if (!a.block) continue;
+        const above = source.y < target.y;
+        const start: Vector = [
+          source.x + source.width / 2,
+          source.y + (above ? source.height : 0),
+        ];
+        const end: Vector = [
+          target.x + target.width / 2,
+          target.y + (above ? 0 : target.height),
+        ];
+        next.push({
+          ...a,
+          key: keyOf(a),
+          d: `M${point(start)} L${point(end)}`,
+          block: true,
+        });
+      }
       // Unchanged, it keeps the drawn arrows.
       setDrawn((last) =>
         last.length === next.length &&
@@ -340,6 +360,20 @@ export function Arrows({
         </filter>
       </defs>
       {drawn.map((a) => {
+        if (a.block) {
+          return (
+            <g
+              key={a.key}
+              className="arrow block-link"
+              data-from={a.from}
+              data-to={a.to}
+            >
+              <g className="arrow-line">
+                <path d={a.d} />
+              </g>
+            </g>
+          );
+        }
         const head = `translate(${point(a.end)}) rotate(${a.angle.toFixed(1)}) scale(${scale})`;
         return (
           <g

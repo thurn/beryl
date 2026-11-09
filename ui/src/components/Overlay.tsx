@@ -12,6 +12,7 @@ export interface OverlayAction {
   label: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
+  secondary?: boolean;
 }
 
 export interface OverlayProps {
@@ -66,7 +67,7 @@ export function Overlay({
           {(actions ?? [{ label: confirm, onClick: onConfirm }]).map((a, i) => (
             <Button
               key={i}
-              variant={i === 0 ? "primary" : "secondary"}
+              variant={i === 0 && !a.secondary ? "primary" : "secondary"}
               className={i === 0 ? "overlay-confirm" : "overlay-alternative"}
               disabled={a.disabled}
               onClick={a.onClick}

@@ -1105,24 +1105,27 @@ await check(
         assert.equal(await page.locator(".turn-banner").count(), 0, "none yet");
         await page.getByRole("button", { name: "Take Nothing" }).click();
         await until(page, '.turn-banner[data-turn="opponent"]');
-        const rows = await page.$$eval(".step-stops-you .step", (steps) => {
-            const rows = new Map();
-            for (const step of steps) {
-                const { x, y } = step.getBoundingClientRect();
-                const row = rows.get(y) ?? [];
-                row.push([x, step.dataset.step]);
-                rows.set(y, row);
-            }
-            return [...rows]
-                .sort(([a], [b]) => a - b)
-                .map(([, row]) =>
-                    row.sort(([a], [b]) => a - b).map(([, step]) => step),
-                );
-        });
+        const stepRows = (side) =>
+            page.$$eval(`.step-stops-${side} .step`, (steps) => {
+                const rows = new Map();
+                for (const step of steps) {
+                    const { x, y } = step.getBoundingClientRect();
+                    const row = rows.get(y) ?? [];
+                    row.push([x, step.dataset.step]);
+                    rows.set(y, row);
+                }
+                return [...rows]
+                    .sort(([a], [b]) => a - b)
+                    .map(([, row]) =>
+                        row.sort(([a], [b]) => a - b).map(([, step]) => step),
+                    );
+            });
+        const rows = await stepRows("you");
         assert.deepEqual(rows, [
             ["untap", "upkeep", "draw", "main1", "beginCombat", "attackers"],
             ["blockers", "damage", "endCombat", "main2", "end", "cleanup"],
         ]);
+        assert.deepEqual(await stepRows("opponent"), [...rows].reverse());
         assert.equal(
             await page
                 .locator(
@@ -1553,7 +1556,16 @@ await check(
     "Attack All picks every creature that may attack; Clear none",
     async (page) => {
         await page.clock.runFor(2000);
-        await page.getByRole("button", { name: "Attack All" }).click();
+        const all = page.getByRole("button", { name: "Attack All" });
+        assert.ok((await all.getAttribute("class")).includes("button-primary"));
+        assert.ok(
+            (
+                await page
+                    .getByRole("button", { name: "No Attacks" })
+                    .getAttribute("class")
+            ).includes("button-secondary"),
+        );
+        await all.click();
         await page.clock.runFor(500);
         await page.getByText(`${mayAttack.length} attacking`).waitFor();
         await page.getByRole("button", { name: "Clear" }).click();
@@ -1862,6 +1874,26 @@ await check(
             (l) => !l.to.endsWith("-life-orb"),
         );
         assert.equal(links.length, declaredBlocks.size, "a line a blocker");
+        assert.equal(
+            await page.locator(".board-arrows .block-link").count(),
+            links.length,
+        );
+        for (const link of links) {
+            const from = await page
+                .locator(`[id="${link.from}"]`)
+                .boundingBox();
+            const to = await page.locator(`[id="${link.to}"]`).boundingBox();
+            assertNear(
+                link.start,
+                [center(from).x, from.y],
+                "blocker's top edge",
+            );
+            assertNear(
+                link.end,
+                [center(to).x, to.y + to.height],
+                "attacker's bottom edge",
+            );
+        }
         for (const [i, l] of links.entries()) {
             for (const m of links.slice(i + 1)) {
                 assert.ok(
@@ -3192,6 +3224,48 @@ await check(
 
 const jace = await lastDecision("choice-jace");
 const [first, second] = [...jace.bySlot.keys()];
+const fatesealFixture = "choice-jace-fateseal";
+await derive("choice-jace", fatesealFixture, jace.views.length - 1, (v) => ({
+    ...v,
+    status: {
+        kind: "deciding",
+        decision: {
+            ...v.status.decision,
+            kind: "yesNo",
+            ask: { kind: "fateseal", player: "you" },
+            candidates: ["yes", "no"].map((kind) => ({ option: { kind } })),
+        },
+    },
+}));
+await check(
+    "Jace's fateseal gives equal weight to both destinations",
+    async (page) => {
+        assert.equal(
+            await page.locator(".overlay-actions .button-secondary").count(),
+            2,
+        );
+    },
+    {
+        fixture: fatesealFixture,
+        at: jace.views.length,
+        ready: ".overlay-actions",
+    },
+);
+await check(
+    "Undo is accessible over Jace's put-back screen",
+    async (page) => {
+        await page.clock.runFor(1000);
+        await page.getByRole("button", { name: "Undo", exact: true }).click();
+        const sent = await page.evaluate(
+            () =>
+                window.berylFixture.calls.filter((c) => c.command === "undo")
+                    .length,
+        );
+        assert.equal(sent, 1);
+    },
+    { fixture: "choice-jace", at: jace.views.length, ready: tray(first) },
+);
+
 await check(
     "dragging two cards onto the library puts them back in order",
     async (page) => {
@@ -4958,6 +5032,12 @@ await check(
         const banner = page.locator(".step-banner");
         await banner.waitFor();
         assert.match(await banner.innerText(), /flip/i, "the flip's banner");
+        const coin = banner.locator(".step-banner-coin");
+        await coin.waitFor();
+        assert.equal(
+            await coin.evaluate((e) => getComputedStyle(e).animationDuration),
+            "0.3s",
+        );
         const shown = await banner.boundingBox();
         for (const side of ["you", "opponent"]) {
             const life = await page

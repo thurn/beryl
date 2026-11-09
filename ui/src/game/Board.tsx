@@ -40,6 +40,7 @@ import {
   RulesText,
 } from "../components/Mana";
 import {
+  Coin,
   FaceUpEdges,
   floating,
   Library,
@@ -357,8 +358,7 @@ export function Board({
   const acting = actingLabel(view);
   const cancellable = !waiting && !dimmed && decision?.cancellable === true;
   // An answer can be taken back, one per press.
-  const undoable =
-    !inert && !waiting && undo !== undefined && (decision?.undo ?? 0) > 0;
+  const undoable = !waiting && undo !== undefined && (decision?.undo ?? 0) > 0;
   // The prompt or the cast step sits over the turn controls; the stack rises to clear it.
   const asking = prompting || castingNow !== undefined;
   // The log stays folded to its button until opened; opened while the rows reach into its
@@ -1018,6 +1018,13 @@ export function Board({
     setDraft({ ...draft, attacks, selected: undefined });
   };
 
+  const moreAttackers =
+    drafting === "attacker" &&
+    [...can.bySlot.keys()].some(
+      (slot) => declarable(slot) && !draft.attacks.has(slot),
+    );
+  const attackAllFirst = moreAttackers && draft.attacks.size === 0;
+
   // The keyboard (Arena's): Space or Enter does the primary action, passing or confirming,
   // Shift with either passes on to the next stop, Escape takes back what was begun and
   // Cmd-Z (Ctrl-Z) the latest answer. A menu, the cast step and a pile's viewer close on
@@ -1031,7 +1038,6 @@ export function Board({
         cancel?.();
       return;
     }
-    if (inert) return;
     if (
       e.key.toLowerCase() === "z" &&
       (e.metaKey || e.ctrlKey) &&
@@ -1044,6 +1050,7 @@ export function Board({
       }
       return;
     }
+    if (inert) return;
     if ((e.key !== " " && e.key !== "Enter") || e.repeat || menu || viewed) {
       return;
     }
@@ -1064,7 +1071,7 @@ export function Board({
     const { pass } = can;
     let primary: (() => void) | undefined;
     if (castingNow) primary = () => cast(castingNow.choice);
-    else if (drafting) primary = declare;
+    else if (drafting) primary = attackAllFirst ? attackWithAll : declare;
     else if (picking) primary = confirmPicks;
     else if (declaring)
       primary = finish === undefined ? undefined : () => pick(finish);
@@ -1131,8 +1138,8 @@ export function Board({
       ),
     [shown, sourced],
   );
-  const announcement = combatBanner(view) ?? coinFlipBanner(view);
-  const banner = announcement;
+  const flip = coinFlipBanner(view);
+  const banner = flip ?? combatBanner(view);
   const bannerKey = banner && `${banner.title}|${banner.detail}`;
   const bannerUp = useBannerUp(bannerKey);
   // A combat declaration is finished with the turn button, where priority is passed.
@@ -1238,7 +1245,14 @@ export function Board({
           <ManaPool pool={you.mana} pulse={lost} />
         </div>
 
-        {banner && <StepBanner key={bannerKey} shown={bannerUp} {...banner} />}
+        {banner && (
+          <StepBanner
+            key={bannerKey}
+            shown={bannerUp}
+            coin={flip !== undefined}
+            {...banner}
+          />
+        )}
 
         <GameLog log={log} folded open={logOpen} onToggle={toggleLog} />
         <TurnBanner view={view} live={live} />
@@ -1352,12 +1366,7 @@ export function Board({
               <Declare
                 kind={drafting}
                 draft={draft}
-                everyone={
-                  drafting === "attacker" &&
-                  [...can.bySlot.keys()].some(
-                    (slot) => declarable(slot) && !draft.attacks.has(slot),
-                  )
-                }
+                moreAttackers={moreAttackers}
                 onDeclare={declare}
                 onAll={attackWithAll}
                 onClear={() => setDraft(emptyDraft())}
@@ -1545,7 +1554,6 @@ export function Board({
         >
           <BugIcon />
         </button>
-        {!inert && undoable && <UndoButton onUndo={undo} />}
         {/* Like the turn's controls, the gear gives way to a screen over the table. */}
         {!inert && (
           <button
@@ -1588,8 +1596,8 @@ export function Board({
           </div>
         )}
       </div>
-      {/* Outside the table, so it stays crisp over the dimmed table and any screen on it
-          (scry.png). */}
+      {/* Undo stays accessible while a choice covers the table. */}
+      {undoable && <UndoButton onUndo={undo} />}
     </>
   );
 }
@@ -1637,10 +1645,12 @@ function StepBanner({
   title,
   detail,
   shown,
+  coin,
 }: {
   title: string;
   detail: string;
   shown: boolean;
+  coin: boolean;
 }) {
   const reduce = useReducedMotion() ?? false;
   return (
@@ -1653,8 +1663,14 @@ function StepBanner({
             reduce ? undefined : { opacity: 0, transition: { duration: 0.4 } }
           }
         >
-          <i className="step-banner-rule step-banner-rule-left" />
-          <i className="step-banner-diamond" />
+          {coin ? (
+            <Coin className="step-banner-coin" first={false} size={40} />
+          ) : (
+            <>
+              <i className="step-banner-rule step-banner-rule-left" />
+              <i className="step-banner-diamond" />
+            </>
+          )}
           <span className="step-banner-title">{title}</span>
           <i className="step-banner-dot" />
           <i className="step-banner-rule step-banner-rule-right" />
@@ -2023,10 +2039,9 @@ function tokenOrigins(
   return new Map(made.map((slot) => [slot, from]));
 }
 
-/** Every arrow over the table, all routed alike (decision D10): each attacker's, red, at the
- * player or planeswalker it attacks, each blocker's, gold, at the attacker it blocks, and for
- * each item on the stack a cyan one to each target and, for the abilities at the places
- * `sourced` names, a gold one from the source (trigger_on_stack_with_target.png). */
+/** Combat links and stack arrows. A straight line joins a blocker to its attacker. An attack
+ * on a planeswalker draws a red arrow. Stack items draw cyan arrows to their targets, and
+ * abilities at the places `sourced` names draw a gold arrow from their source. */
 function boardArrows(view: PlayerView, sourced: Set<number>): ArrowSpec[] {
   const objects = new Map(view.objects.map((o) => [o.slot, o]));
   const out: ArrowSpec[] = [];
@@ -2038,6 +2053,7 @@ function boardArrows(view: PlayerView, sourced: Set<number>): ArrowSpec[] {
         from: cardId(slot),
         to: cardId(combat.attacker),
         tone: "gold",
+        block: true,
       });
     }
     // An attack on a planeswalker draws an arrow to it. One at the player draws none: the
@@ -2113,7 +2129,7 @@ function coinFlipBanner(
 function Declare({
   kind,
   draft,
-  everyone,
+  moreAttackers,
   onDeclare,
   onAll,
   onClear,
@@ -2121,7 +2137,7 @@ function Declare({
   kind: "attacker" | "blocker";
   draft: Draft;
   /** Some creature that may attack is not attacking yet. */
-  everyone: boolean;
+  moreAttackers: boolean;
   onDeclare(): void;
   onAll(): void;
   onClear(): void;
@@ -2135,6 +2151,7 @@ function Declare({
     : n > 0
       ? "Block"
       : "No Blocks";
+  const attackAllFirst = moreAttackers && n === 0;
   const caption =
     n === 0
       ? attack
@@ -2143,9 +2160,14 @@ function Declare({
       : `${n} ${attack ? "attacking" : "blocking"}`;
   return (
     <Dock>
-      {(everyone || n > 0) && (
+      {(moreAttackers || n > 0) && (
         <DockButtons>
-          {everyone && (
+          {attackAllFirst && (
+            <Button variant="secondary" onClick={onDeclare}>
+              No Attacks
+            </Button>
+          )}
+          {moreAttackers && !attackAllFirst && (
             <Button variant="secondary" onClick={onAll}>
               Attack All
             </Button>
@@ -2158,7 +2180,10 @@ function Declare({
         </DockButtons>
       )}
       <div className="turn-action">
-        <TurnButton label={label} onClick={onDeclare} />
+        <TurnButton
+          label={attackAllFirst ? "Attack All" : label}
+          onClick={attackAllFirst ? onAll : onDeclare}
+        />
         <span className="turn-caption">{caption}</span>
       </div>
     </Dock>

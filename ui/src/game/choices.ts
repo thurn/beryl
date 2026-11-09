@@ -79,6 +79,8 @@ export interface Ask extends Common {
   kind: "ask";
   cards: number[];
   answers: { label: string; plan: Intent[] }[];
+  /** None of the answers should be emphasized. */
+  equalAnswers?: boolean;
 }
 
 export type Choice = Arrange | Stack | Pick | Ask;
@@ -434,6 +436,7 @@ function fateseal(at: Situation, { player }: AskOf<"fateseal">): Ask {
     kind: "ask",
     key: at.key,
     title: "Top of Library",
+    equalAnswers: true,
     source: at.source,
     cards: top === undefined ? [] : [top],
     answers: [
@@ -449,6 +452,7 @@ function topOrBottom(at: Situation, { card }: AskOf<"topOrBottom">): Ask {
     kind: "ask",
     key: at.key,
     title: "Top or Bottom?",
+    equalAnswers: true,
     source: at.source,
     cards: [card],
     answers: [
