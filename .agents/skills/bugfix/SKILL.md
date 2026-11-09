@@ -59,14 +59,21 @@ reproduces it.
 2. **Read every report** and ask your questions (above). A report from a spec
    page has a `url` naming the card and moment (`/m/<card>/<moment>/…`).
 3. **Reproduce.** Pick by what went wrong:
-   - An AI play (`kind: ai`, bead label `ai-play`): an incident, as the ones in
-     `docs/incidents/` are. Start from the digest and `searches.json`, which are
-     the game's own searches, then search the decision again with
-     `just review "<folder>/replay.json" --agent recorded --turn N` (slow, at
-     low priority: a fresh sample, so a near-tie may go the other way). Copy the
-     replay beside the incident, find why the search chose as it did, and fix
-     it or file what it would take.
-   - Rules or AI: `just review "<folder>/replay.json" --turn N` prints the game
+   - An AI play (`kind: ai`, bead label `ai-play`): start from the digest and
+     `searches.json`, then review the position and rerun the recorded agent
+     with `just review "<folder>/replay.json" --agent recorded --turn N`.
+     A fresh sample can reverse a near tie. Judge the play by the information
+     available to the agent at the time. Identify a better line and explain
+     what it preserves or accomplishes.
+     - If you judge it a blunder, write an incident in `docs/incidents/` with
+       its replay and add the case to `data/blunders.json`. Verify that
+       `just blunders --only <id>` reaches the reported decision. Land the
+       case through the worktree workflow, then close and archive the report
+       with that commit as in step 5. The ladder owns later changes to the AI.
+     - Otherwise, or if the evidence is inconclusive, record your reasoning
+       in the bead and return it to the reporter through the human review
+       queue below.
+   - Rules: `just review "<folder>/replay.json" --turn N` prints the game
      as a transcript to the reported turn; `--agent recorded` adds the
      opponent's searches. If the report's `commit` is not `staging`'s, the
      replay may drift: the transcript says where.
@@ -81,23 +88,25 @@ reproduces it.
      part of the fix.
    - Errors: search `journal.jsonl` and `ui.json` for `"level":"error"`,
      `"warn"`, `panic` and `refused`.
-4. **Fix** it through a worktree as AGENTS.md says, with a test that fails
-   before the fix (a scenario, a session test, a ui-test). A rules engine bug
+4. **Fix** rules and UI bugs through a worktree as AGENTS.md says, with a
+   test that fails before the fix (a scenario, a session test, a ui-test). A rules engine bug
    also gets its `docs/bugs.md` entry. Claim the bead
    (`bd update <bead> --status in_progress`) while you work it.
-5. **Close** it once `enact push` has landed the fix:
+5. **Close** it once `enact push` has landed the fix or blunder case:
    `bd close <bead> --reason "<what was wrong>"`, then
    `just bugs done <bead> --commit <sha>`, which marks the report done and moves
    it to `done/`, then `enact sync`.
 
-If the reported behavior appears to be working as intended, use
+If the reported behavior appears to be working as intended, or an AI report
+needs the reporter’s judgment, use
 `bd note <bead> "<evidence and expected behavior>"`, then
 `bd update <bead> --status open --add-label human` and `enact sync`. Leave it in
 the `bd human list` queue for the reporter to review and skip it in later
 bugfix runs while it awaits a response. Once the reporter confirms, record
 the confirmation with `bd human respond <bead> "<confirmation>"`, mark the local
 report done with `just bugs done <bead>`, and run `enact sync`. If the reporter
-identifies a bug, remove the `human` label and resume the fix.
+identifies a bug or confirms a blunder, remove the `human` label and resume
+the corresponding workflow.
 
-A report you cannot reproduce, or whose expected behavior is still unclear,
-stays filed. Use `bd note <bead> "..."` to record what you tried.
+A rules or UI report you cannot reproduce, or whose expected behavior is
+still unclear, stays filed. Use `bd note <bead> "..."` to record what you tried.
