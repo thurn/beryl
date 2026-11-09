@@ -105,6 +105,16 @@ pub enum Source {
     Replay(String),
     /// A rebuilt board ([`Rebuilt`]).
     Board(String),
+    /// A seed and semantic engine choices from a reviewed hunt, using SMART for both seats.
+    Seeded(String),
+}
+
+/// A hunt's minimal reproducible fixture, including the recorded blunder itself.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Seeded {
+    seed: u64,
+    history: Vec<beryl_session::save::Chosen>,
 }
 
 /// A rebuilt position: the board and the record's answers from it.
@@ -357,6 +367,17 @@ pub fn reach(e: &Entry) -> Result<Reached, String> {
             let path = root().join(path);
             let file = ReplayFile::load(&path).map_err(|err| drift(format!("{err:?}")))?;
             Walk::of_file(&file).map_err(drift)?
+        }
+        Source::Seeded(path) => {
+            let path = root().join(path);
+            let text = fs::read_to_string(&path).map_err(|err| drift(err.to_string()))?;
+            let r: Seeded = serde_json::from_str(&text).map_err(|err| drift(err.to_string()))?;
+            let t = mirror();
+            let s = State::new(&t, r.seed, Profile::SMART);
+            let log = r.history.into_iter().map(LogEntry::Choice).collect();
+            // Hunt games have no human stops or automatic session answers. Do not use
+            // Walk::of_file, which changes one seat's profile to the app's human profile.
+            Walk::new(t, &s, log, StopsSetting::default(), seat(e.seat)?)
         }
         Source::Board(path) => {
             let path = root().join(path);
@@ -765,6 +786,32 @@ mod tests {
             &jace,
             &["attack with Snapcaster Mage", "Jace, the Mind Sculptor"]
         ));
+    }
+
+    /// Reviewed hunt positions reject the recorded mistake but retain a useful alternative.
+    #[test]
+    fn reviewed_hunt_choices_and_drift() {
+        for (name, bad, good) in [
+            (
+                "discard-emperor-over-spare-crypt",
+                "The Wandering Emperor",
+                "Mana Crypt",
+            ),
+            ("decline-second-teferi-untap", "done", "Island"),
+            (
+                "evoke-subtlety-empty-stack-hunt",
+                "cast Subtlety for evoke",
+                "pass",
+            ),
+        ] {
+            let mut e = entry(name);
+            assert!(!scripted(&e, &[bad]), "{name}");
+            assert!(scripted(&e, &[good]), "{name}");
+            e.played = "not the recorded choice".to_owned();
+            let why = reach(&e).err().expect("changed choice must report drift");
+            assert!(why.contains(name), "{why}");
+            assert!(why.contains(&e.incident), "{why}");
+        }
     }
 
     /// A record that no longer plays what the incident says is reported with its incident.

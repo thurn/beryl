@@ -130,5 +130,53 @@
       "pass"
     ],
     "why": "The draw gives another card to consider before deciding whether to loot and what to discard."
+  },
+  {
+    "name": "discard-emperor-over-spare-crypt",
+    "incident": "2026-11-09-reviewed-hunt",
+    "class": "useful spell discarded instead of surplus mana",
+    "source": {
+      "seeded": "data/blunders/2026-11-09-reviewed-hunt-discard-emperor-over-spare-crypt.json"
+    },
+    "seat": 0,
+    "turn": 16,
+    "index": 7,
+    "played": "The Wandering Emperor",
+    "forbidden": [
+      "The Wandering Emperor"
+    ],
+    "why": "At 4 life with ample mana and a Mana Crypt already in play, discard the spare Mana Crypt rather than a castable Emperor that can supply a blocker."
+  },
+  {
+    "name": "decline-second-teferi-untap",
+    "incident": "2026-11-09-reviewed-hunt",
+    "class": "a free land untap declined",
+    "source": {
+      "seeded": "data/blunders/2026-11-09-reviewed-hunt-decline-second-teferi-untap.json"
+    },
+    "seat": 0,
+    "turn": 14,
+    "index": 12,
+    "played": "done",
+    "forbidden": [
+      "done"
+    ],
+    "why": "Teferi has untapped only one land; another own tapped Island is available at no cost, with No More Lies and Reprieve in hand."
+  },
+  {
+    "name": "evoke-subtlety-empty-stack-hunt",
+    "incident": "2026-11-09-reviewed-hunt",
+    "class": "an evoked creature whose enters ability has no target",
+    "source": {
+      "seeded": "data/blunders/2026-11-09-reviewed-hunt-evoke-subtlety-empty-stack-hunt.json"
+    },
+    "seat": 0,
+    "turn": 16,
+    "index": 33,
+    "played": "cast Subtlety for evoke",
+    "forbidden": [
+      "cast Subtlety for evoke"
+    ],
+    "why": "The stack is empty: evoking Subtlety pitches Abhorrent Oculus and then sacrifices Subtlety without a creature or planeswalker spell to affect."
   }
 ]

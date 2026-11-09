@@ -1,0 +1,2172 @@
+{
+  "seed": 14553728089720835700,
+  "history": [
+    {
+      "index": 0,
+      "player": 1,
+      "turn": 0,
+      "step": "untap",
+      "kind": "playOrDraw",
+      "act": {
+        "act": "play"
+      }
+    },
+    {
+      "index": 1,
+      "player": 1,
+      "turn": 0,
+      "step": "untap",
+      "kind": "keepOrMulligan",
+      "act": {
+        "act": "mulligan"
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 0,
+      "step": "untap",
+      "kind": "keepOrMulligan",
+      "act": {
+        "act": "keep"
+      }
+    },
+    {
+      "index": 0,
+      "player": 1,
+      "turn": 0,
+      "step": "untap",
+      "kind": "keepOrMulligan",
+      "act": {
+        "act": "keep"
+      }
+    },
+    {
+      "index": 3,
+      "player": 1,
+      "turn": 0,
+      "step": "untap",
+      "kind": "putOnBottom",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Subtlety",
+          "zone": "hand",
+          "controller": 1
+        }
+      }
+    },
+    {
+      "index": 2,
+      "player": 1,
+      "turn": 1,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "playLand",
+        "card": {
+          "name": "Plains",
+          "zone": "hand",
+          "controller": 1
+        }
+      }
+    },
+    {
+      "index": 3,
+      "player": 0,
+      "turn": 2,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "playLand",
+        "card": {
+          "name": "Plains",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 2,
+      "player": 1,
+      "turn": 3,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "playLand",
+        "card": {
+          "name": "Spara's Headquarters",
+          "zone": "hand",
+          "controller": 1
+        }
+      }
+    },
+    {
+      "index": 3,
+      "player": 0,
+      "turn": 4,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "cast",
+        "card": {
+          "name": "Mana Crypt",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 2,
+      "player": 0,
+      "turn": 4,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "playLand",
+        "card": {
+          "name": "Tundra",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 2,
+      "player": 0,
+      "turn": 4,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "cast",
+        "card": {
+          "name": "Teferi, Time Raveler",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 4,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "activate",
+        "card": {
+          "name": "Teferi, Time Raveler",
+          "zone": "battlefield",
+          "controller": 0,
+          "counters": [
+            {
+              "kind": "loyalty",
+              "count": 4
+            }
+          ]
+        },
+        "ability": {
+          "n": 0
+        }
+      }
+    },
+    {
+      "index": 2,
+      "player": 1,
+      "turn": 5,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "playLand",
+        "card": {
+          "name": "Plains",
+          "zone": "hand",
+          "controller": 1
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 1,
+      "turn": 5,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "cast",
+        "card": {
+          "name": "Mana Crypt",
+          "zone": "hand",
+          "controller": 1
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 1,
+      "turn": 5,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "cast",
+        "card": {
+          "name": "Beza, the Bounding Spring",
+          "zone": "hand",
+          "controller": 1
+        }
+      }
+    },
+    {
+      "index": 2,
+      "player": 0,
+      "turn": 6,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "playLand",
+        "card": {
+          "name": "Island",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 6,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "cast",
+        "card": {
+          "name": "Teferi, Hero of Dominaria",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 6,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "activate",
+        "card": {
+          "name": "Teferi, Hero of Dominaria",
+          "zone": "battlefield",
+          "controller": 0,
+          "counters": [
+            {
+              "kind": "loyalty",
+              "count": 4
+            }
+          ]
+        },
+        "ability": {
+          "n": 0
+        }
+      }
+    },
+    {
+      "index": 3,
+      "player": 0,
+      "turn": 6,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "activate",
+        "card": {
+          "name": "Teferi, Time Raveler",
+          "zone": "battlefield",
+          "controller": 0,
+          "counters": [
+            {
+              "kind": "loyalty",
+              "count": 5
+            }
+          ]
+        },
+        "ability": {
+          "n": 1
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 6,
+      "step": "precombatMain",
+      "kind": "targetCount",
+      "act": {
+        "act": "number",
+        "n": 1
+      }
+    },
+    {
+      "index": 2,
+      "player": 0,
+      "turn": 6,
+      "step": "precombatMain",
+      "kind": "target",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Beza, the Bounding Spring",
+          "zone": "battlefield",
+          "controller": 1,
+          "sick": true
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 6,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 6,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 6,
+      "step": "postcombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 6,
+      "step": "end",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 2,
+      "player": 0,
+      "turn": 6,
+      "step": "end",
+      "kind": "chooseUpTo",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Tundra",
+          "zone": "battlefield",
+          "controller": 0,
+          "tapped": true
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 6,
+      "step": "end",
+      "kind": "chooseUpTo",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Island",
+          "zone": "battlefield",
+          "controller": 0,
+          "tapped": true
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 7,
+      "step": "upkeep",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 2,
+      "player": 1,
+      "turn": 7,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "playLand",
+        "card": {
+          "name": "Plains",
+          "zone": "hand",
+          "controller": 1
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 1,
+      "turn": 7,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "cast",
+        "card": {
+          "name": "Beza, the Bounding Spring",
+          "zone": "hand",
+          "controller": 1,
+          "shown": true
+        }
+      }
+    },
+    {
+      "index": 2,
+      "player": 0,
+      "turn": 7,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "cast",
+        "card": {
+          "name": "Counterspell",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 8,
+      "step": "upkeep",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 4,
+      "player": 0,
+      "turn": 8,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "cast",
+        "card": {
+          "name": "Subtlety",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 3,
+      "player": 0,
+      "turn": 8,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "activate",
+        "card": {
+          "name": "Teferi, Hero of Dominaria",
+          "zone": "battlefield",
+          "controller": 0,
+          "counters": [
+            {
+              "kind": "loyalty",
+              "count": 5
+            }
+          ]
+        },
+        "ability": {
+          "n": 0
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 8,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "playLand",
+        "card": {
+          "name": "Island",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 2,
+      "player": 0,
+      "turn": 8,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "cast",
+        "card": {
+          "name": "Staff of the Storyteller",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 8,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 8,
+      "step": "postcombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 4,
+      "player": 0,
+      "turn": 8,
+      "step": "end",
+      "kind": "chooseUpTo",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Plains",
+          "zone": "battlefield",
+          "controller": 0,
+          "tapped": true
+        }
+      }
+    },
+    {
+      "index": 4,
+      "player": 0,
+      "turn": 8,
+      "step": "end",
+      "kind": "chooseUpTo",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Plains",
+          "zone": "battlefield",
+          "controller": 1,
+          "tapped": true
+        }
+      },
+      "nth": 0
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 9,
+      "step": "upkeep",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 2,
+      "player": 1,
+      "turn": 9,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "playLand",
+        "card": {
+          "name": "Seachrome Coast",
+          "zone": "hand",
+          "controller": 1
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 9,
+      "step": "end",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 10,
+      "step": "upkeep",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 4,
+      "player": 0,
+      "turn": 10,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "cast",
+        "card": {
+          "name": "Trinket Mage",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 10,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 10,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 10,
+      "step": "precombatMain",
+      "kind": "yesNo",
+      "act": {
+        "act": "yes"
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 10,
+      "step": "precombatMain",
+      "kind": "chooseUpTo",
+      "act": {
+        "act": "done"
+      }
+    },
+    {
+      "index": 4,
+      "player": 0,
+      "turn": 10,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "activate",
+        "card": {
+          "name": "Teferi, Hero of Dominaria",
+          "zone": "battlefield",
+          "controller": 0,
+          "counters": [
+            {
+              "kind": "loyalty",
+              "count": 6
+            }
+          ]
+        },
+        "ability": {
+          "n": 0
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 10,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 3,
+      "player": 0,
+      "turn": 10,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "cast",
+        "card": {
+          "name": "Jace, Vryn's Prodigy",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 10,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 10,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "playLand",
+        "card": {
+          "name": "Plains",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 10,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 10,
+      "step": "declareAttackers",
+      "kind": "attacker",
+      "act": {
+        "act": "attack",
+        "creature": {
+          "name": "Subtlety",
+          "zone": "battlefield",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 10,
+      "step": "declareAttackers",
+      "kind": "attacker",
+      "act": {
+        "act": "attack",
+        "creature": {
+          "name": "Spirit Token",
+          "zone": "battlefield",
+          "controller": 0,
+          "token": true
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 10,
+      "step": "declareAttackers",
+      "kind": "priority",
+      "act": {
+        "act": "activate",
+        "card": {
+          "name": "Staff of the Storyteller",
+          "zone": "battlefield",
+          "controller": 0,
+          "counters": [
+            {
+              "kind": "story",
+              "count": 1
+            }
+          ]
+        },
+        "ability": {
+          "n": 0
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 10,
+      "step": "postcombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 10,
+      "step": "end",
+      "kind": "chooseUpTo",
+      "act": {
+        "act": "done"
+      }
+    },
+    {
+      "index": 2,
+      "player": 1,
+      "turn": 11,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "cast",
+        "card": {
+          "name": "Teferi, Hero of Dominaria",
+          "zone": "hand",
+          "controller": 1
+        }
+      }
+    },
+    {
+      "index": 3,
+      "player": 1,
+      "turn": 11,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "activate",
+        "card": {
+          "name": "Teferi, Hero of Dominaria",
+          "zone": "battlefield",
+          "controller": 1,
+          "counters": [
+            {
+              "kind": "loyalty",
+              "count": 4
+            }
+          ]
+        },
+        "ability": {
+          "n": 1
+        }
+      }
+    },
+    {
+      "index": 2,
+      "player": 1,
+      "turn": 11,
+      "step": "precombatMain",
+      "kind": "target",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Subtlety",
+          "zone": "battlefield",
+          "controller": 0,
+          "tapped": true
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 1,
+      "turn": 11,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "playLand",
+        "card": {
+          "name": "Island",
+          "zone": "hand",
+          "controller": 1
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 12,
+      "step": "upkeep",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 6,
+      "player": 0,
+      "turn": 12,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "activate",
+        "card": {
+          "name": "Teferi, Hero of Dominaria",
+          "zone": "battlefield",
+          "controller": 0,
+          "counters": [
+            {
+              "kind": "loyalty",
+              "count": 7
+            }
+          ]
+        },
+        "ability": {
+          "n": 0
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 12,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 6,
+      "player": 0,
+      "turn": 12,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "activate",
+        "card": {
+          "name": "Jace, Vryn's Prodigy",
+          "zone": "battlefield",
+          "controller": 0
+        },
+        "ability": {
+          "n": 0
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 12,
+      "step": "precombatMain",
+      "kind": "discard",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Portable Hole",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 5,
+      "player": 0,
+      "turn": 12,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "cast",
+        "card": {
+          "name": "Subtlety",
+          "zone": "hand",
+          "controller": 0,
+          "shown": true
+        }
+      }
+    },
+    {
+      "index": 2,
+      "player": 0,
+      "turn": 12,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "cast",
+        "card": {
+          "name": "Stock Up",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 4,
+      "player": 0,
+      "turn": 12,
+      "step": "precombatMain",
+      "kind": "chooseObject",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Reprieve",
+          "zone": "library",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 3,
+      "player": 0,
+      "turn": 12,
+      "step": "precombatMain",
+      "kind": "chooseObject",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Plains",
+          "zone": "library",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 2,
+      "player": 0,
+      "turn": 12,
+      "step": "precombatMain",
+      "kind": "chooseObject",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Jace, the Mind Sculptor",
+          "zone": "library",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 12,
+      "step": "precombatMain",
+      "kind": "chooseObject",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Seachrome Coast",
+          "zone": "library",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 3,
+      "player": 0,
+      "turn": 12,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "activate",
+        "card": {
+          "name": "Teferi, Time Raveler",
+          "zone": "battlefield",
+          "controller": 0,
+          "counters": [
+            {
+              "kind": "loyalty",
+              "count": 2
+            }
+          ]
+        },
+        "ability": {
+          "n": 0
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 12,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "playLand",
+        "card": {
+          "name": "Plains",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 12,
+      "step": "declareAttackers",
+      "kind": "attacker",
+      "act": {
+        "act": "attack",
+        "creature": {
+          "name": "Trinket Mage",
+          "zone": "battlefield",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 12,
+      "step": "declareAttackers",
+      "kind": "attackTarget",
+      "act": {
+        "act": "defender",
+        "planeswalker": null
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 12,
+      "step": "declareAttackers",
+      "kind": "attacker",
+      "act": {
+        "act": "attack",
+        "creature": {
+          "name": "Spirit Token",
+          "zone": "battlefield",
+          "controller": 0,
+          "token": true
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 12,
+      "step": "declareAttackers",
+      "kind": "attackTarget",
+      "act": {
+        "act": "defender",
+        "planeswalker": {
+          "name": "Teferi, Hero of Dominaria",
+          "zone": "battlefield",
+          "controller": 1,
+          "counters": [
+            {
+              "kind": "loyalty",
+              "count": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "index": 3,
+      "player": 0,
+      "turn": 12,
+      "step": "end",
+      "kind": "chooseUpTo",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Tundra",
+          "zone": "battlefield",
+          "controller": 0,
+          "tapped": true
+        }
+      }
+    },
+    {
+      "index": 2,
+      "player": 0,
+      "turn": 12,
+      "step": "end",
+      "kind": "chooseUpTo",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Plains",
+          "zone": "battlefield",
+          "controller": 0,
+          "tapped": true
+        }
+      }
+    },
+    {
+      "index": 2,
+      "player": 1,
+      "turn": 13,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "cast",
+        "card": {
+          "name": "Staff of the Storyteller",
+          "zone": "hand",
+          "controller": 1
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 1,
+      "turn": 13,
+      "step": "precombatMain",
+      "kind": "paymentPlan",
+      "act": {
+        "act": "plan",
+        "i": 1
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 13,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 13,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 1,
+      "player": 1,
+      "turn": 13,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "playLand",
+        "card": {
+          "name": "Island",
+          "zone": "hand",
+          "controller": 1
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 1,
+      "turn": 13,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "activate",
+        "card": {
+          "name": "Staff of the Storyteller",
+          "zone": "battlefield",
+          "controller": 1,
+          "counters": [
+            {
+              "kind": "story",
+              "count": 1
+            }
+          ]
+        },
+        "ability": {
+          "n": 0
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 13,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 13,
+      "step": "end",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 14,
+      "step": "upkeep",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 10,
+      "player": 0,
+      "turn": 14,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "activate",
+        "card": {
+          "name": "Teferi, Time Raveler",
+          "zone": "battlefield",
+          "controller": 0,
+          "counters": [
+            {
+              "kind": "loyalty",
+              "count": 3
+            }
+          ]
+        },
+        "ability": {
+          "n": 0
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 14,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 2,
+      "player": 0,
+      "turn": 14,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "cast",
+        "card": {
+          "name": "Winds of Abandon",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 14,
+      "step": "precombatMain",
+      "kind": "paymentPlan",
+      "act": {
+        "act": "plan",
+        "i": 1
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 14,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 1,
+      "player": 1,
+      "turn": 14,
+      "step": "precombatMain",
+      "kind": "chooseUpTo",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Plains",
+          "zone": "library",
+          "controller": 1
+        }
+      }
+    },
+    {
+      "index": 7,
+      "player": 0,
+      "turn": 14,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "activate",
+        "card": {
+          "name": "Teferi, Hero of Dominaria",
+          "zone": "battlefield",
+          "controller": 0,
+          "counters": [
+            {
+              "kind": "loyalty",
+              "count": 8
+            }
+          ]
+        },
+        "ability": {
+          "n": 2
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 14,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 2,
+      "player": 0,
+      "turn": 14,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "cast",
+        "card": {
+          "name": "Snapcaster Mage",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 14,
+      "step": "precombatMain",
+      "kind": "paymentPlan",
+      "act": {
+        "act": "plan",
+        "i": 1
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 14,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 14,
+      "step": "precombatMain",
+      "kind": "target",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Winds of Abandon",
+          "zone": "graveyard",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 14,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 2,
+      "player": 0,
+      "turn": 14,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "cast",
+        "card": {
+          "name": "Beza, the Bounding Spring",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 14,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 14,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 2,
+      "player": 0,
+      "turn": 14,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "activate",
+        "card": {
+          "name": "Jace, Vryn's Prodigy",
+          "zone": "battlefield",
+          "controller": 0
+        },
+        "ability": {
+          "n": 0
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 14,
+      "step": "precombatMain",
+      "kind": "discard",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Currency Converter",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 3,
+      "player": 0,
+      "turn": 14,
+      "step": "precombatMain",
+      "kind": "target",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Plains",
+          "zone": "battlefield",
+          "controller": 1,
+          "tapped": true
+        }
+      },
+      "nth": 1
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 14,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "playLand",
+        "card": {
+          "name": "Island",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 2,
+      "player": 0,
+      "turn": 14,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "activate",
+        "card": {
+          "name": "Jace, Telepath Unbound",
+          "zone": "battlefield",
+          "controller": 0,
+          "counters": [
+            {
+              "kind": "loyalty",
+              "count": 5
+            }
+          ]
+        },
+        "ability": {
+          "n": 1
+        }
+      }
+    },
+    {
+      "index": 2,
+      "player": 0,
+      "turn": 14,
+      "step": "precombatMain",
+      "kind": "target",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Counterspell",
+          "zone": "graveyard",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 2,
+      "player": 0,
+      "turn": 14,
+      "step": "declareAttackers",
+      "kind": "attacker",
+      "act": {
+        "act": "attack",
+        "creature": {
+          "name": "Subtlety",
+          "zone": "battlefield",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 14,
+      "step": "declareAttackers",
+      "kind": "attacker",
+      "act": {
+        "act": "attack",
+        "creature": {
+          "name": "Trinket Mage",
+          "zone": "battlefield",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 14,
+      "step": "declareAttackers",
+      "kind": "attacker",
+      "act": {
+        "act": "attack",
+        "creature": {
+          "name": "Spirit Token",
+          "zone": "battlefield",
+          "controller": 0,
+          "token": true
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 1,
+      "turn": 15,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "playLand",
+        "card": {
+          "name": "Island",
+          "zone": "hand",
+          "controller": 1
+        }
+      }
+    },
+    {
+      "index": 5,
+      "player": 0,
+      "turn": 16,
+      "step": "draw",
+      "kind": "target",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Island",
+          "zone": "battlefield",
+          "controller": 1
+        }
+      },
+      "nth": 1
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 16,
+      "step": "draw",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 5,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "activate",
+        "card": {
+          "name": "Teferi, Time Raveler",
+          "zone": "battlefield",
+          "controller": 0,
+          "counters": [
+            {
+              "kind": "loyalty",
+              "count": 4
+            }
+          ]
+        },
+        "ability": {
+          "n": 1
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "targetCount",
+      "act": {
+        "act": "number",
+        "n": 1
+      }
+    },
+    {
+      "index": 3,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "target",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Subtlety",
+          "zone": "battlefield",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 3,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "target",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Plains",
+          "zone": "battlefield",
+          "controller": 1
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 2,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "cast",
+        "card": {
+          "name": "Jace, Wielder of Mysteries",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "paymentPlan",
+      "act": {
+        "act": "plan",
+        "i": 1
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "cast",
+        "card": {
+          "name": "Thirst for Discovery",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "paymentPlan",
+      "act": {
+        "act": "plan",
+        "i": 0
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "yesNo",
+      "act": {
+        "act": "no"
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "discard",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Plains",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 2,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "discard",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Reprieve",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 5,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "target",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Plains",
+          "zone": "battlefield",
+          "controller": 1
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "target",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Mana Crypt",
+          "zone": "battlefield",
+          "controller": 1
+        }
+      }
+    },
+    {
+      "index": 2,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "target",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Island",
+          "zone": "battlefield",
+          "controller": 1
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 6,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "activate",
+        "card": {
+          "name": "Jace, Wielder of Mysteries",
+          "zone": "battlefield",
+          "controller": 0,
+          "counters": [
+            {
+              "kind": "loyalty",
+              "count": 4
+            }
+          ]
+        },
+        "ability": {
+          "n": 0
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "target",
+      "act": {
+        "act": "player",
+        "seat": 1
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 3,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "target",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Spara's Headquarters",
+          "zone": "battlefield",
+          "controller": 1
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 6,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "activate",
+        "card": {
+          "name": "Jace, Telepath Unbound",
+          "zone": "battlefield",
+          "controller": 0,
+          "counters": [
+            {
+              "kind": "loyalty",
+              "count": 2
+            }
+          ]
+        },
+        "ability": {
+          "n": 0
+        }
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "targetCount",
+      "act": {
+        "act": "number",
+        "n": 1
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "target",
+      "act": {
+        "act": "object",
+        "object": {
+          "name": "Beza, the Bounding Spring",
+          "zone": "battlefield",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 0,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "pass"
+      }
+    },
+    {
+      "index": 1,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "playLand",
+        "card": {
+          "name": "Island",
+          "zone": "hand",
+          "controller": 0
+        }
+      }
+    },
+    {
+      "index": 4,
+      "player": 0,
+      "turn": 16,
+      "step": "precombatMain",
+      "kind": "priority",
+      "act": {
+        "act": "cast",
+        "card": {
+          "name": "Subtlety",
+          "zone": "hand",
+          "controller": 0,
+          "shown": true
+        },
+        "costs": [
+          "evoke"
+        ]
+      }
+    }
+  ]
+}
