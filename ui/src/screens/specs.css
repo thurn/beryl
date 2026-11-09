@@ -13,9 +13,16 @@
   color: var(--text-dim);
 }
 
+.specs-index-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  align-items: center;
+  padding: 40px 48px 8px;
+}
+
 .specs-heading {
   margin: 0;
-  padding: 40px 48px 8px;
   font-family: var(--font-display);
   font-weight: 600;
   color: var(--gold);
@@ -84,6 +91,14 @@
   color: var(--text-dim);
   text-decoration: none;
   font-size: 20px;
+}
+
+.specs-nav .sound-panel {
+  margin-bottom: 16px;
+}
+
+.specs-nav .sound-level input {
+  width: 100px;
 }
 
 .specs-card {

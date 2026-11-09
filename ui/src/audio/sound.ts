@@ -93,6 +93,11 @@ export function subscribeAudio(listener: () => void) {
   return () => void listeners.delete(listener);
 }
 
+function settingsChanged() {
+  applyLevels();
+  for (const listener of listeners) listener();
+}
+
 export function setAudioSettings(change: Partial<AudioSettings>) {
   settings = { ...settings, ...change };
   try {
@@ -100,9 +105,16 @@ export function setAudioSettings(change: Partial<AudioSettings>) {
   } catch {
     // Storage may be blocked: the settings last until the page goes.
   }
-  applyLevels();
-  for (const l of listeners) l();
+  settingsChanged();
 }
+
+// Spec moments play in separate frames. Keep their gains and controls in sync with
+// the parent page, other frames, and full-size moments in other tabs.
+window.addEventListener("storage", (event) => {
+  if (event.key !== SETTINGS_KEY && event.key !== null) return;
+  settings = readSettings();
+  settingsChanged();
+});
 
 // ---- The log ----
 

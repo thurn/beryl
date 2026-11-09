@@ -11,6 +11,7 @@
 // it (the spec server keeps the marks, `specs/reviews.rs`). Each moment's 🐞 files a note on it
 // as a bug report, for `just bugs` and the `bugfix` skill, naming the moment and seat.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { SoundPanel } from "../audio/SoundControls";
 import { cardEntry } from "../cards";
 import type { RelayedEvent } from "../ipc";
 import "./specs.css";
@@ -134,12 +135,15 @@ function SpecIndex({ specs }: { specs: SpecListing[] }) {
   const done = specs.filter((s) => s.reviewed);
   return (
     <div className="specs">
-      <h1 className="specs-heading">
-        Specs{" "}
-        <span className="specs-heading-count">
-          {done.length}/{specs.length}
-        </span>
-      </h1>
+      <header className="specs-index-head">
+        <h1 className="specs-heading">
+          Specs{" "}
+          <span className="specs-heading-count">
+            {done.length}/{specs.length}
+          </span>
+        </h1>
+        <SoundPanel />
+      </header>
       <SpecCards specs={todo} />
       {done.length > 0 && todo.length > 0 && (
         <hr className="specs-index-rule" />
@@ -190,13 +194,21 @@ function SpecCards({ specs }: { specs: SpecListing[] }) {
 function ReviewBar({ spec, reports }: { spec: SpecListing; reports: number }) {
   const [reviewed, setReviewed] = useState(spec.reviewed !== null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
   const toggle = () => {
     setBusy(true);
-    post<{ reviewed: string | null }>(`/review/${spec.slug}`, {
-      reviewed: !reviewed,
-    })
-      .then((r) => setReviewed(r.reviewed !== null))
-      .catch((e: unknown) => console.error("review failed", e))
+    setError(false);
+    post<{ reviewed: string | null; next: string | null }>(
+      `/review/${spec.slug}`,
+      { reviewed: !reviewed },
+    )
+      .then((r) => {
+        setReviewed(r.reviewed !== null);
+        if (r.reviewed !== null) {
+          window.location.replace(r.next ? `/specs/${r.next}` : "/specs");
+        }
+      })
+      .catch(() => setError(true))
       .finally(() => setBusy(false));
   };
   return (
@@ -212,6 +224,7 @@ function ReviewBar({ spec, reports }: { spec: SpecListing; reports: number }) {
       >
         ✓ {reviewed ? "Reviewed" : "Mark reviewed"}
       </button>
+      {error && <span role="alert">Save failed</span>}
       {reports > 0 && (
         <span className="specs-bugs" title="Open bug reports">
           🐞{reports}
@@ -262,6 +275,7 @@ function SpecPage({ spec, only }: { spec: SpecListing; only?: MomentListing }) {
         <a href="/specs" className="specs-back" aria-label="All specs">
           ←
         </a>
+        <SoundPanel />
         <CardImage name={spec.card} className="specs-card" />
         <ReviewBar spec={spec} reports={reports} />
         {(only ? (["yours"] as const) : VIEWS).map((view) => (

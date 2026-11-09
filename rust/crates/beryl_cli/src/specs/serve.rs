@@ -222,9 +222,10 @@ fn annotated_listing() -> Value {
     listing
 }
 
-/// `POST /review/<card>`: marks the card `card` slugs reviewed, or not, as `body` says.
+/// `POST /review/<card>`: sets the review mark and, when marking, finds the next unreviewed spec.
 fn review(card: &str, body: &[u8]) -> Value {
-    let Some(spec) = specs().iter().find(|s| slug(s.card) == card) else {
+    let specs = specs();
+    let Some(index) = specs.iter().position(|s| slug(s.card) == card) else {
         return json!({ "err": { "kind": "spec", "message": format!("no spec {card}") } });
     };
     let Some(reviewed) = serde_json::from_slice::<Value>(body)
@@ -233,8 +234,20 @@ fn review(card: &str, body: &[u8]) -> Value {
     else {
         return json!({ "err": { "kind": "badRequest", "message": "want {\"reviewed\": bool}" } });
     };
+    let spec = &specs[index];
     match reviews::set(&reviews::path(), spec.card, reviewed) {
-        Ok(all) => json!({ "ok": { "reviewed": all.get(spec.card) } }),
+        Ok(all) => {
+            let next = if reviewed {
+                specs[index + 1..]
+                    .iter()
+                    .chain(&specs[..index])
+                    .find(|s| !all.contains_key(s.card))
+                    .map(|s| slug(s.card))
+            } else {
+                None
+            };
+            json!({ "ok": { "reviewed": all.get(spec.card), "next": next } })
+        }
         Err(message) => json!({ "err": { "kind": "io", "message": message } }),
     }
 }
