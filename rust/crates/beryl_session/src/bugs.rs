@@ -67,6 +67,10 @@ pub struct BugReport {
     #[serde(skip)]
     #[ts(skip)]
     pub spec: Option<SpecMoment>,
+    /// The spec server marks reports about the viewer page itself.
+    #[serde(skip)]
+    #[ts(skip)]
+    pub spec_viewer: bool,
 }
 
 /// A moment of a card's spec, seen from one seat: `/specs/<card>/<moment>/<view>`.
@@ -401,12 +405,18 @@ struct Markdown<'a> {
     files: &'a [(&'a str, String)],
 }
 
-fn markdown(m: &Markdown<'_>) -> String {
+fn front_matter(out: &mut String, m: &Markdown<'_>, viewport: &str) {
     let quote = |s: &str| serde_json::to_string(s).expect("a string serializes");
     let opt = |v: Option<String>| v.unwrap_or_default();
     let (commit, dirty) = commit();
-    let mut out = String::new();
     let g = m.game;
+    let kind = if m.report.spec_viewer {
+        "spec-viewer"
+    } else if m.report.ai {
+        "ai"
+    } else {
+        "bug"
+    };
     // JSON strings are YAML strings: the front matter parses as YAML whatever the title holds.
     writeln!(
         out,
@@ -420,6 +430,7 @@ fn markdown(m: &Markdown<'_>) -> String {
          version: {}\n\
          commit: {}{}\n\
          url: {}\n\
+         viewport: {viewport}\n\
          spec: {}\n\
          session: {}\n\
          seed: {}\n\
@@ -430,7 +441,7 @@ fn markdown(m: &Markdown<'_>) -> String {
          ---\n",
         m.id,
         quote(m.title),
-        if m.report.ai { "ai" } else { "bug" },
+        kind,
         m.created,
         env!("CARGO_PKG_VERSION"),
         commit,
@@ -445,6 +456,21 @@ fn markdown(m: &Markdown<'_>) -> String {
         opt(g.decision.map(|d| d.to_string())),
     )
     .expect("a String takes writes");
+}
+
+fn markdown(m: &Markdown<'_>) -> String {
+    let mut out = String::new();
+    let g = m.game;
+    let viewport = if m.report.spec_viewer {
+        let page = &m.report.page;
+        format!(
+            "{}×{} CSS px at {}× scale",
+            page.width, page.height, page.scale
+        )
+    } else {
+        String::new()
+    };
+    front_matter(&mut out, m, &viewport);
     writeln!(
         out,
         "# {}\n\n{}\n",
@@ -459,6 +485,14 @@ fn markdown(m: &Markdown<'_>) -> String {
         ai_section(&mut out, m.moves);
     }
     out.push_str("## Reproduce\n\n");
+    if m.report.spec_viewer {
+        writeln!(
+            out,
+            "- Spec viewer page: `{}` ({viewport})",
+            m.report.page.url
+        )
+        .expect("writes");
+    }
     if let Some(spec) = &m.report.spec {
         spec_lines(&mut out, spec);
     }
@@ -704,6 +738,7 @@ mod tests {
             ui_log: json!([]),
             updates: vec![json!({ "session": 1 })],
             spec: None,
+            spec_viewer: false,
         };
         let images = Images {
             screenshot: Some(b"hi".to_vec()),
@@ -746,6 +781,7 @@ mod tests {
             ui_log: json!([]),
             updates: Vec::new(),
             spec: SpecMoment::parse("llanowar-elves/tap/theirs"),
+            spec_viewer: false,
         };
         let first = write(
             &dir,
@@ -754,7 +790,23 @@ mod tests {
             &sessions,
         )
         .unwrap();
-        write(&dir, &note("Arrow is wrong"), &Images::default(), &sessions).unwrap();
+        let viewer_note = BugReport {
+            spec_viewer: true,
+            page: PageInfo {
+                url: "/specs/llanowar-elves#tap-theirs".to_owned(),
+                width: 1280.0,
+                height: 800.0,
+                scale: 2.0,
+            },
+            ..note("Arrow is wrong")
+        };
+        let viewer = write(&dir, &viewer_note, &Images::default(), &sessions).unwrap();
+        let viewer_md =
+            std::fs::read_to_string(PathBuf::from(viewer.path).join("report.md")).unwrap();
+        assert!(viewer_md.contains("kind: spec-viewer\n"));
+        assert!(viewer_md.contains("spec: llanowar-elves/tap/theirs\n"));
+        assert!(viewer_md.contains("viewport: 1280×800 CSS px at 2× scale\n"));
+        assert!(viewer_md.contains("/specs/llanowar-elves#tap-theirs"));
         let md = std::fs::read_to_string(PathBuf::from(&first.path).join("report.md")).unwrap();
         assert!(md.contains("spec: llanowar-elves/tap/theirs\n"));
         assert!(md.contains("`just specs llanowar-elves --describe --moment tap`"));

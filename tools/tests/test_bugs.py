@@ -95,6 +95,37 @@ def test_an_ai_report_files_an_incident_bead(
     assert calls[0][calls[0].index("--labels") + 1] == "bug-report,ai-play"
 
 
+def test_spec_viewer_report_files_reproduction_context(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BERYL_BUGS", str(tmp_path))
+    folder = report(tmp_path)
+    md = folder / "report.md"
+    page: str = "/specs/oust#review-0-theirs"
+    md.write_text(
+        REPORT.replace('url: "http://localhost/#/game"', f'url: "{page}"').replace(
+            "status: open",
+            "kind: spec-viewer\nspec: oust/review-0/theirs\n"
+            "viewport: 1280×800 CSS px at 2× scale\nstatus: open",
+        )
+    )
+
+    def fake_bd(args: list[str]) -> str:
+        if args[0] == "list":
+            return "[]"
+        body = Path(args[args.index("--body-file") + 1]).read_text()
+        assert "bug in the spec viewer" in body
+        assert page in body and "oust/review-0/theirs" in body
+        assert "1280×800 CSS px at 2× scale" in body
+        assert args[args.index("--labels") + 1] == "bug-report,spec-viewer"
+        return "by-viewer"
+
+    monkeypatch.setattr(bugs, "run_bd", fake_bd)
+    assert cli.main(["bugs", "file"]) == 0
+    saved = bugs.load(folder)
+    assert saved is not None and saved.bead == "by-viewer"
+
+
 def test_retry_recovers_existing_bead(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

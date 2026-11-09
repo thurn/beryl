@@ -257,7 +257,7 @@ fn handle_moment(
                             moment: name.to_owned(),
                             view: view.to_owned(),
                         };
-                        write_report(&i.sessions, args, spec)
+                        write_report(&i.sessions, args, spec, false)
                     } else {
                         invoke(&i.sessions, command, args)
                     }
@@ -386,12 +386,24 @@ fn report(instances: &Instances, body: &[u8]) -> Value {
         moment: moment.to_owned(),
         view: view.to_owned(),
     };
+    let viewer_page: Option<PageInfo> = match serde_json::from_value(request["viewerPage"].clone())
+    {
+        Ok(page) => page,
+        Err(e) => return json!({ "err": { "kind": "badRequest", "message": e.to_string() } }),
+    };
+    let spec_viewer = viewer_page.is_some();
+    let page = viewer_page.unwrap_or_else(|| PageInfo {
+        url: format!("/specs/{spec}"),
+        width: 0.0,
+        height: 0.0,
+        scale: 1.0,
+    });
     let args = json!({ "request": {
         "description": description,
         "ai": false,
         "snapshot": null,
         "region": null,
-        "page": PageInfo { url: format!("/specs/{spec}"), width: 0.0, height: 0.0, scale: 1.0 },
+        "page": page,
         "uiLog": [],
         "updates": [],
     }});
@@ -400,14 +412,14 @@ fn report(instances: &Instances, body: &[u8]) -> Value {
         .iter()
         .find(|i| i.key == instance_key(card, moment, view, id))
     {
-        Some(i) => write_report(&i.sessions, args, spec),
-        None => write_report(&Sessions::new(None, |_| {}), args, spec),
+        Some(i) => write_report(&i.sessions, args, spec, spec_viewer),
+        None => write_report(&Sessions::new(None, |_| {}), args, spec, spec_viewer),
     }
 }
 
 /// Writes the `report_bug` request in `args` as a report about `spec`, with what `sessions`
 /// knows of its game.
-fn write_report(sessions: &Sessions, args: Value, spec: SpecMoment) -> Value {
+fn write_report(sessions: &Sessions, args: Value, spec: SpecMoment, spec_viewer: bool) -> Value {
     #[derive(serde::Deserialize)]
     struct Request {
         request: BugReport,
@@ -417,6 +429,7 @@ fn write_report(sessions: &Sessions, args: Value, spec: SpecMoment) -> Value {
         Err(e) => return json!({ "err": { "kind": "badRequest", "message": e.to_string() } }),
     };
     report.spec = Some(spec);
+    report.spec_viewer = spec_viewer;
     let root = bugs::dir();
     match bugs::write(&root, &report, &Images::default(), sessions) {
         Ok(saved) => {

@@ -437,6 +437,14 @@
   border-color: var(--gold);
 }
 
+.specs-note-viewer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
 .specs-note-actions {
   display: flex;
   gap: 8px;

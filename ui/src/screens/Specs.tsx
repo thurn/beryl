@@ -707,6 +707,7 @@ function MomentView({
       {noting && (
         <BugNote
           instance={key}
+          target={anchor(moment, view)}
           onClose={() => setNoting(false)}
           onFiled={() => {
             setNoting(false);
@@ -738,14 +739,17 @@ function MomentView({
  * the instance's game as it stands. ⌘↩ files it; Esc closes it. */
 function BugNote({
   instance,
+  target,
   onClose,
   onFiled,
 }: {
   instance: string;
+  target: string;
   onClose: () => void;
   onFiled: () => void;
 }) {
   const [text, setText] = useState("");
+  const [viewerBug, setViewerBug] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const file = () => {
@@ -755,6 +759,14 @@ function BugNote({
     post<{ id: string; path: string }>("/report", {
       key: instance,
       description: text,
+      viewerPage: viewerBug
+        ? {
+            url: `${window.location.pathname}${window.location.search}#${target}`,
+            width: window.innerWidth,
+            height: window.innerHeight,
+            scale: window.devicePixelRatio,
+          }
+        : undefined,
     }).then(onFiled, (e: unknown) => {
       setError(e instanceof Error ? e.message : String(e));
       setBusy(false);
@@ -784,6 +796,14 @@ function BugNote({
           }
         }}
       />
+      <label className="specs-note-viewer">
+        <input
+          type="checkbox"
+          checked={viewerBug}
+          onChange={(e) => setViewerBug(e.target.checked)}
+        />
+        Bug in the spec viewer
+      </label>
       <div className="specs-note-actions">
         {error && <span className="specs-note-error">{error}</span>}
         <button type="button" className="specs-note-cancel" onClick={onClose}>

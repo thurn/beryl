@@ -45,6 +45,7 @@ BUNDLE_FILES: frozenset[str] = frozenset(
 LABEL = "bug-report"
 # And a report of a questionable play of the AI's (`kind: ai`) carries this one too.
 AI_LABEL = "ai-play"
+SPEC_VIEWER_LABEL = "spec-viewer"
 
 
 def bugs_dir() -> Path:
@@ -73,7 +74,7 @@ class Report:
 
     @property
     def kind(self) -> str:
-        """`ai` for a questionable play of the AI's, else `bug`."""
+        """The report kind, defaulting to a gameplay bug."""
         return self.fields.get("kind", "bug")
 
     @property
@@ -174,15 +175,27 @@ def bead_description(report: Report) -> str:
         if report.kind == "ai"
         else ""
     )
+    source = (
+        "Reported as a bug in the spec viewer."
+        if report.kind == "spec-viewer"
+        else "Reported from the app's bug button. The report, with its screenshot "
+        "(`screenshot.png`), the game's replay, its latest views and the logs:"
+    )
+    viewer = (
+        f"- Spec moment and seat: `{f.get('spec', '')}`\n"
+        f"- Viewport: {f.get('viewport', '')}\n"
+        if report.kind == "spec-viewer"
+        else ""
+    )
     return (
-        ai + f"Reported from the app's bug button. The report, with its screenshot "
-        f"(`screenshot.png`), the game's replay, its latest views and the logs:\n\n"
+        f"{ai}{source}\n\n"
         f"Report ID: `{report.id}`. Local folder: `{report.folder}`\n\n"
         f"Read `{report.folder / REPORT}` first; the `bugfix` skill "
         f"(`.agents/skills/bugfix/SKILL.md`) says how to reproduce and close it.\n\n"
         f"- Game: {game or 'none (not in a game)'}\n"
         f"- Built from: {f.get('commit', 'unknown')}\n"
-        f"- Page: {f.get('url', '')}\n\n"
+        f"- Page: {f.get('url', '')}\n"
+        f"{viewer}\n"
         f"## What the player said\n\n{description(report)}\n"
     )
 
@@ -223,6 +236,11 @@ def file_bead(report: Report, priority: str) -> str:
     )
     if existing:
         return str(existing[0]["id"])
+    labels = [LABEL]
+    if report.kind == "ai":
+        labels.append(AI_LABEL)
+    elif report.kind == "spec-viewer":
+        labels.append(SPEC_VIEWER_LABEL)
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as body:
         body.write(bead_description(report))
     try:
@@ -236,7 +254,7 @@ def file_bead(report: Report, priority: str) -> str:
                 "--body-file",
                 body.name,
                 "--labels",
-                f"{LABEL},{AI_LABEL}" if report.kind == "ai" else LABEL,
+                ",".join(labels),
                 "--priority",
                 priority,
                 "--external-ref",
