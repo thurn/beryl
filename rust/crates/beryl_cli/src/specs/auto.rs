@@ -951,7 +951,7 @@ fn decides(action: &Action) -> bool {
 /// A scenario's actions as a spec's scripts play them: its decisions and its turns to advance
 /// to. Passing is what the scripts do anyway short of their next action, its assertions are
 /// its own, and the session orders simultaneous triggers itself.
-fn playable(scenario: &Scenario) -> Vec<Action> {
+pub(super) fn playable(scenario: &Scenario) -> Vec<Action> {
     scenario
         .actions
         .iter()
@@ -1043,7 +1043,7 @@ const FILLER: &[&str] = &[
 ];
 
 /// [`FILLER`] under each player's library.
-fn with_libraries(scenario: &Scenario) -> Scenario {
+pub(super) fn with_libraries(scenario: &Scenario) -> Scenario {
     let mut d = *scenario;
     for seat in [P0, P1] {
         let library = d.setup.players[seat.index()].library;
@@ -1224,7 +1224,7 @@ fn ways_to_play(def: &'static CardDef) -> bool {
 
 /// A scenario's heading: its name, less the card's name it starts with ("Exiles its own
 /// loot's discard for a Rogue", "Ability returns a card after the Converter left").
-fn heading(def: &'static CardDef, scenario: &Scenario) -> &'static str {
+pub(super) fn heading(def: &'static CardDef, scenario: &Scenario) -> &'static str {
     let name = scenario.name;
     let rest = name.strip_prefix(def.name).map_or(name, |r| {
         r.strip_prefix("'s ")
@@ -1241,7 +1241,7 @@ fn heading(def: &'static CardDef, scenario: &Scenario) -> &'static str {
 }
 
 /// What a scenario's action of the card is, as its moment's label: "Cast", "{T}", "−3".
-fn label_of(def: &'static CardDef, action: &Action) -> Option<String> {
+pub(super) fn label_of(def: &'static CardDef, action: &Action) -> Option<String> {
     match *action {
         Action::Cast { card, .. } if card == def.name => Some("Cast".to_owned()),
         Action::PlayLand { card, .. } if card == def.name => Some("Play".to_owned()),
@@ -1469,4 +1469,38 @@ fn places(view: &PlayerView, def: &'static CardDef, out: &mut Vec<String>) {
             out.push(format!("{n} exiled with {}", def.name));
         }
     }
+}
+
+/// Reuse the definition's prepared ability boards, without its stop and failure probes.
+pub(super) fn playground_probes(def: &'static CardDef) -> Vec<Moment> {
+    from_definition(def)
+        .into_iter()
+        .filter(|c| c.name.starts_with("ability-"))
+        .map(|mut c| {
+            c.name = format!("playground-{}", c.name);
+            moment(&c, c.title.clone(), None)
+        })
+        .collect()
+}
+
+/// Supply printed casting resources to a play-from-hand fallback. The engine still owns
+/// affordability and payment; this only builds a testing position.
+pub(super) fn fund_cast(def: &CardDef, mut board: Scenario) -> Scenario {
+    let cost = def.front().cost;
+    let mut permanents = board.setup.players[0].battlefield.to_vec();
+    let basics = ["Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes"];
+    for (name, count) in basics.into_iter().zip(cost.symbols) {
+        if beryl_cards::CARDS.cards().iter().any(|d| d.name == name) {
+            permanents.extend(std::iter::repeat_n(
+                Permanent::new(name),
+                usize::from(count),
+            ));
+        }
+    }
+    permanents.extend(std::iter::repeat_n(
+        Permanent::new(ISLAND),
+        usize::from(cost.generic) + 2,
+    ));
+    board = board.battlefield(P0, leak(permanents));
+    board
 }

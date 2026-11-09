@@ -43,7 +43,7 @@ import { usePhone } from "../mobile/phone";
 import { sameStops, savedStops, saveStops } from "../game/stops";
 import { play } from "../audio/sound";
 import { SoundCorner } from "../audio/SoundControls";
-import { SpecOpponentMove, SpecReplayPlay } from "./Specs";
+import { SpecOpponentMove, SpecReplayPlay } from "./Testing";
 
 /** The agent that plays on the true state, hidden cards included. */
 const CHEATING = "mcts-omniscient";

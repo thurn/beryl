@@ -1,6 +1,6 @@
 // Opening a spec moment headless and playing it: what the film, the motion audit and the
 // driver share (`by specs --film | --motion | --drive`, tools/). A moment's seat page,
-// `/specs/<card>/<moment>/<yours|theirs>?hold`, is a fresh game that waits for its play, so
+// `/scenarios/<card>/<moment>/<yours|theirs>?hold`, is a fresh game that waits for its play, so
 // a script starts watching before anything moves. Motion is not reduced: how things move is
 // what these look at.
 
@@ -74,7 +74,7 @@ export async function openSeat(page, base, slug, moment, seat, instance) {
     return retried(async (n) => {
         await page.goto(
             new URL(
-                `specs/${slug}/${moment}/${seat}?hold${instance ? `&instance=${instance}` : ""}`,
+                `scenarios/${slug}/${moment}/${seat}?hold${instance ? `&instance=${instance}` : ""}`,
                 base,
             ).href,
         );

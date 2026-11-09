@@ -10,7 +10,7 @@ import {
 } from "./ipc";
 import { BugReporter } from "./components/BugReport";
 import { Gallery } from "./screens/Gallery";
-import { Specs } from "./screens/Specs";
+import { Testing } from "./screens/Testing";
 import { GameScreen, StartScreen } from "./screens/Game";
 import { usePlayback } from "./game/playback";
 import { useMusic } from "./audio/SoundControls";
@@ -26,8 +26,8 @@ const route = () => window.location.hash.replace(/^#/, "") || "/";
 export function App() {
   // The spec pages live at real paths, served by Vite (`just specs`).
   const page = window.location.pathname;
-  return page === "/specs" || page.startsWith("/specs/") ? (
-    <Specs path={page} />
+  return /^\/(playground|scenarios|specs|spec)(\/|$)/.test(page) ? (
+    <Testing path={page} />
   ) : (
     <Main />
   );

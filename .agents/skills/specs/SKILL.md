@@ -1,6 +1,6 @@
 ---
 name: specs
-description: Reproduce, debug, verify or QA a card's behavior in Beryl's UI through its spec — every UI moment of the card (stops, prompts, ability choosers, tokens, exile links, stack interactions, payments) as a live game from both seats at /specs/<card>/<moment>. Gives text descriptions, filmstrips, an animation audit and a Playwright driver for any moment. Use when implementing or fixing a card's UI, checking that what happens is animated clearly for both players, reproducing a UI bug report about a card, or extending what specs generate.
+description: Reproduce, debug, verify or QA a card's behavior in Beryl's UI through its spec — every UI moment of the card (stops, prompts, ability choosers, tokens, exile links, stack interactions, payments) as a live game from both seats at /scenarios/<card>/<moment>. Gives text descriptions, filmstrips, an animation audit and a Playwright driver for any moment. Use when implementing or fixing a card's UI, checking that what happens is animated clearly for both players, reproducing a UI bug report about a card, or extending what specs generate.
 ---
 
 # Card specs
@@ -121,17 +121,30 @@ show the mechanics it shares.
 
 ## Moment URLs
 
-- `/specs/<card>`: every moment, yours, then theirs.
-- `/specs/<card>/<moment>`: one moment, both seats side by side.
-- `/specs/<card>/<moment>/<yours|theirs>`: one seat full size, a fresh game each
+- `/scenarios/<card>`: every moment, yours, then theirs.
+- `/scenarios/<card>/<moment>`: one moment, both seats side by side.
+- `/scenarios/<card>/<moment>/<yours|theirs>`: one seat full size, a fresh game each
   load, which plays a beat after it shows; with `?hold` it waits for its spec
   server instance's `play` (`spec.play()`, or `POST <live>/play` where `<live>`
   is the page's `?live=` URL).
 
-`just specs [card]` serves them for a human. `/specs` lists the cards a human
-has not marked reviewed first (the ✓ on a card's page; the marks live in
-`~/Library/Application Support/ca.thurn.beryl/spec-reviews.json`), and each
-moment's 🐞 files a note on it as a bug report (the `bugfix` skill).
+`just scenarios [card]` (or the compatible `just specs`) serves the scenario viewer.
+`/scenarios/<card>` groups named scenarios with a checkpoint selector; direct moment and
+seat URLs continue to work. The headless describe, film, motion and drive tools remain.
+
+`just playground [card]` serves the same host with `/playground` for human card review.
+Each card page stacks its examples, starting with play from hand, and each example has
+independent full-width boards for both perspectives. The viewer answers their own prompts;
+the unseen player is automated. Play releases opponent playback; Reset affects only its
+board. Variations reuse the boards for alternative interactions. A board's bug button
+captures its current game. Reviewed is manual, independent of open bugs, and never expires;
+existing marks remain in `~/Library/Application Support/ca.thurn.beryl/spec-reviews.json`.
+
+Playground generation lives in `rust/crates/beryl_cli/src/specs/playground.rs`. It reuses
+scenario setup data and ability definitions, adding support cards through the engine's target
+filters. Change a general generator capability first; use a scenario in the card's file for
+a missing interaction. The scenario viewer's replay setups are not modified by Playground.
+
 `just specs --shots --port 0 [card...]` screenshots every moment settled from
 both seats, for a quick look at end states: `--moment M` one moment,
 `--select .prompt-title` only the seats where that selector shows, and
@@ -146,7 +159,7 @@ records from seat 1 with `"until": "first <kind> decision for seat 1"`.
 
 ## How a spec is generated
 
-`rust/crates/beryl_cli/src/specs/auto.rs` builds each card's moments from two
+`rust/crates/beryl_cli/src/scenarios/auto.rs` builds each card's moments from two
 sources, with short general labels:
 
 - **The definition.** A permanent with activated abilities (not mana abilities)

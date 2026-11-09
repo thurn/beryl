@@ -324,7 +324,7 @@ export function usePlayback(): {
     // What it shows sounds as it shows; a view from the past is silent, as it is still.
     if (state.live) soundBeat(shown.view, at);
   }, [shown]);
-  // A spec page framing the game shows it once it has a view (screens/Specs.tsx).
+  // A spec page framing the game shows it once it has a view (screens/Testing.tsx).
   const showing = shown !== undefined;
   useEffect(() => {
     if (showing && window.parent !== window) {

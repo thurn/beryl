@@ -91,6 +91,13 @@ ui-live *args:
 specs *args:
     {{ by }} specs "$@"
 
+# Playable card review and the reproducible scenario viewer.
+playground *args:
+    {{ by }} playground "$@"
+
+scenarios *args:
+    {{ by }} scenarios "$@"
+
 # The app's bug reports: list, import a ZIP, file as beads, or mark done
 [group('app')]
 bugs *args:

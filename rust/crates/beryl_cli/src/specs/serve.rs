@@ -59,6 +59,8 @@ const PING: Duration = Duration::from_secs(5);
 #[derive(Default)]
 struct Feed {
     views: Vec<GameUpdate>,
+    /// Views delivered to this board, retained for reproducible UI bug fixtures.
+    history: Vec<GameUpdate>,
     /// The first view after the setup: what the page shows at once.
     start: Option<usize>,
     /// Whether views past the start go to the streams yet.
@@ -139,6 +141,16 @@ fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result
     if method == "GET" && path == "/specs" {
         let body = annotated_listing().to_string();
         return respond(&mut stream, "200 OK", &body);
+    }
+    if let ("GET", Some(card)) = (method.as_str(), path.strip_prefix("/playground/")) {
+        let Some(spec) = specs().iter().find(|s| slug(s.card) == card) else {
+            return respond(&mut stream, "404 Not Found", "{}");
+        };
+        return respond(
+            &mut stream,
+            "200 OK",
+            &super::playground::listing(spec.playground()).to_string(),
+        );
     }
     if let ("GET", Some(card)) = (method.as_str(), path.strip_prefix("/checkpoints/")) {
         let Some(spec) = specs().iter().find(|s| slug(s.card) == card) else {
@@ -396,7 +408,9 @@ fn report(instances: &Instances, body: &[u8]) -> Value {
     else {
         return json!({ "err": { "kind": "badRequest", "message": format!("no moment in {key}") } });
     };
-    if (find(card, moment).is_none() && checkpoint(card, moment).is_none())
+    if (find(card, moment).is_none()
+        && checkpoint(card, moment).is_none()
+        && super::playground::find(card, moment).is_none())
         || View::parse(view).is_none()
     {
         return json!({ "err": { "kind": "spec", "message": format!("no moment {key}") } });
@@ -413,7 +427,14 @@ fn report(instances: &Instances, body: &[u8]) -> Value {
     };
     let spec_viewer = viewer_page.is_some();
     let page = viewer_page.unwrap_or_else(|| PageInfo {
-        url: format!("/specs/{spec}"),
+        url: format!(
+            "/{}/{spec}",
+            if moment.starts_with("playground-") {
+                "playground"
+            } else {
+                "scenarios"
+            }
+        ),
         width: 0.0,
         height: 0.0,
         scale: 1.0,
@@ -432,8 +453,19 @@ fn report(instances: &Instances, body: &[u8]) -> Value {
         .iter()
         .find(|i| i.key == instance_key(card, moment, view, id))
     {
-        Some(i) => write_report(&i.sessions, args, spec, spec_viewer),
-        None => write_report(&Sessions::new(None, |_| {}), args, spec, spec_viewer),
+        Some(i) => {
+            let feed = if view == "theirs" {
+                i.mirror.as_ref().unwrap_or(&i.feed)
+            } else {
+                &i.feed
+            };
+            let mut args = args;
+            args["request"]["updates"] = json!(lock(&feed.0).history);
+            write_report(&i.sessions, args, spec, spec_viewer)
+        }
+        None => {
+            json!({ "err": { "kind": "ended", "message": "This board expired. Reset it before reporting." } })
+        }
     }
 }
 
@@ -514,7 +546,10 @@ fn instance(
     let key = instance_key(card, name, view.name(), id);
     // Generate the card's checkpoints outside the shared instances lock.
     let review = checkpoint(card, name);
-    let moment = if manual {
+    let playground = super::playground::find(card, name);
+    let moment = if let Some(example) = playground {
+        Some(&example.moment)
+    } else if manual {
         review.map(|c| &c.moment)
     } else {
         find(card, name).map(|(_, m)| m)
@@ -532,9 +567,17 @@ fn instance(
         i.used = Instant::now();
         return Ok(pick(i));
     }
-    let feed = new_feed(pages, &key, !manual && !moment.play.is_empty(), manual);
+    let plays = playground.map_or(!manual && !moment.play.is_empty(), |v| {
+        super::playground::automated(v, view)
+    });
+    let feed = new_feed(pages, &key, plays, manual);
     let emitted = Arc::clone(&feed);
-    let (sessions, mirror) = if manual {
+    let (sessions, mirror) = if let Some(example) = playground {
+        let sessions = super::playground::start(example, view, move |update, phase| {
+            record_view(&emitted, &update, phase);
+        })?;
+        (sessions, None)
+    } else if manual {
         let mirror = new_feed(pages, &format!("{card}/{name}/theirs/{id}"), false, true);
         let other = Arc::clone(&mirror);
         let casts = Mutex::new(review.map_or(&[][..], |c| c.review_casts));
@@ -563,15 +606,7 @@ fn instance(
         (sessions, Some(mirror))
     } else {
         let (sessions, _) = super::start(moment, view, move |update, phase| {
-            let (feed, ready) = &*emitted;
-            let mut f = lock(feed);
-            f.views.push(update.clone());
-            if f.start.is_none() && phase != Phase::Setup {
-                f.start = Some(f.views.len() - 1);
-                ready.notify_all();
-            } else if f.released {
-                broadcast(&mut f, &update);
-            }
+            record_view(&emitted, &update, phase);
         })?;
         (sessions, None)
     };
@@ -594,6 +629,21 @@ fn instance(
     let selected = pick(&instance);
     list.push(instance);
     Ok(selected)
+}
+
+fn record_view(shared: &SharedFeed, update: &GameUpdate, phase: Phase) {
+    let (feed, ready) = &**shared;
+    let mut f = lock(feed);
+    f.views.push(update.clone());
+    if f.start.is_none() && phase != Phase::Setup {
+        f.start = Some(f.views.len() - 1);
+        let mut initial = update.clone();
+        initial.view.events.clear();
+        remember(&mut f, &initial);
+        ready.notify_all();
+    } else if f.released {
+        broadcast(&mut f, update);
+    }
 }
 
 /// Follow the recorded casts only while the game takes them in order. The other seat may
@@ -652,7 +702,16 @@ fn named(view: &PlayerView, slot: u16, card: &str) -> bool {
         .any(|o| o.slot == slot && o.name.as_deref() == Some(card))
 }
 
+fn remember(feed: &mut Feed, update: &GameUpdate) {
+    const HISTORY: usize = 128;
+    if feed.history.len() == HISTORY {
+        feed.history.remove(0);
+    }
+    feed.history.push(update.clone());
+}
+
 fn broadcast(feed: &mut Feed, update: &GameUpdate) {
+    remember(feed, update);
     let Ok(data) = serde_json::to_string(update) else {
         return;
     };

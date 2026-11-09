@@ -251,7 +251,7 @@ export type LiveEntry =
     }
   | { at: number; kind: "event"; event: keyof Events; payload: unknown };
 
-/** A message a spec page (screens/Specs.tsx) hands the frame playing one of its moments: an
+/** A message a spec page (screens/Testing.tsx) hands the frame playing one of its moments: an
  * event from the page's one stream, which carries every frame's. */
 export interface RelayedEvent {
   kind: "beryl-relay";

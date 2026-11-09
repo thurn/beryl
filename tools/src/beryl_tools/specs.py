@@ -297,7 +297,7 @@ def drive(
 
     def start_driver() -> subprocess.Popen[bytes]:
         driver = subprocess.Popen(
-            ["node", "scripts/drive.mjs", str(port), f"{url}specs", str(out)],
+            ["node", "scripts/drive.mjs", str(port), f"{url}scenarios", str(out)],
             cwd=paths.UI,
             env=env,
             stdin=subprocess.DEVNULL,
@@ -307,7 +307,8 @@ def drive(
         return driver
 
     driver = start_driver()
-    print(f"specs: pages {url}specs", flush=True)
+    print(f"scenarios: {url}scenarios", flush=True)
+    print(f"playground: {url}playground", flush=True)
     print(f"specs: drive {address} (POST a Playwright snippet)", flush=True)
     print(f"specs: screenshots {out}", flush=True)
     rust, js = newest(crates, ".rs"), newest(scripts, ".mjs")
@@ -397,9 +398,10 @@ def specs(args: argparse.Namespace) -> int:
         env = {**os.environ, "BERYL_SPECS_PORT": str(spec_port)}
         with served_ui(env, args.port or None, preview=args.release) as url:
             base = url.replace("127.0.0.1", "localhost")
-            print(f"specs: {base}specs", flush=True)
+            print(f"playground: {base}playground", flush=True)
+            print(f"scenarios: {base}scenarios", flush=True)
             for card in args.cards:
-                print(f"specs: {base}specs/{card}", flush=True)
+                print(f"playground: {base}playground/{card}", flush=True)
             while servers[-1].poll() is None:
                 time.sleep(0.5)
             raise UiError("the spec server exited")
@@ -413,6 +415,7 @@ def specs(args: argparse.Namespace) -> int:
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser(
         "specs",
+        aliases=["playground", "scenarios"],
         help="card specs: serve, describe, film, audit motion or drive each moment",
     )
     p.add_argument(

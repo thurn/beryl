@@ -16,6 +16,7 @@
 //! (`.agents/skills/specs/SKILL.md`) says which.
 
 mod auto;
+mod playground;
 pub mod reviews;
 pub mod serve;
 
@@ -69,6 +70,7 @@ fn generation() -> &'static Generation {
                 specs.push(Spec {
                     card: def.name,
                     checkpoints: OnceLock::new(),
+                    playground: OnceLock::new(),
                     moments: Box::leak(moments.into_boxed_slice()),
                 });
             }
@@ -83,9 +85,15 @@ pub struct Spec {
     pub card: &'static str,
     pub moments: &'static [Moment],
     checkpoints: OnceLock<auto::ReviewSet>,
+    playground: OnceLock<playground::Playground>,
 }
 
 impl Spec {
+    fn playground(&self) -> &playground::Playground {
+        self.playground
+            .get_or_init(|| playground::generate(self.card))
+    }
+
     pub fn checkpoints(&self) -> &auto::ReviewSet {
         self.checkpoints.get_or_init(|| {
             let def = CARDS
