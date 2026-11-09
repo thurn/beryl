@@ -62,11 +62,13 @@ export function ModeChooser({
   object,
   modes,
   from,
+  split,
   onClose,
 }: {
   object: ObjectView;
   modes: Mode[];
   from?: Origin;
+  split?: boolean;
   onClose(): void;
 }) {
   useOpenSound();
@@ -107,6 +109,7 @@ export function ModeChooser({
             object={object}
             x={xs[i]!}
             from={from}
+            split={split}
             delay={i * 0.04}
           />
         ))}
@@ -142,12 +145,14 @@ function Frame({
   object,
   x: centerX,
   from,
+  split,
   delay,
 }: {
   mode: Mode;
   object: ObjectView;
   x: number;
   from?: Origin;
+  split?: boolean;
   delay: number;
 }) {
   const reduce = useReducedMotion() ?? false;
@@ -155,7 +160,7 @@ function Frame({
   const x = useMotionValue(out ? from.x - centerX : 0);
   const y = useMotionValue(out ? from.y - MIDDLE : 0);
   const scale = useMotionValue(out ? from.width / WIDTH : 1);
-  const opacity = useMotionValue(out ? 0.4 : 1);
+  const opacity = useMotionValue(out && !split ? 0.4 : 1);
   useEffect(() => {
     const how = { ...SPRING, delay };
     const runs = [

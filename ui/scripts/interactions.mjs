@@ -2723,6 +2723,13 @@ for (const gesture of ["click", "drag"]) {
             const frames = page.locator(".ability-choice");
             await frames.first().waitFor();
             assert.equal(await frames.count(), 2, "played, or cycled");
+            if (gesture === "drag") {
+                assert.equal(
+                    await page.locator(land).isVisible(),
+                    false,
+                    "the dropped land splits into its two options",
+                );
+            }
             assert.equal(
                 await frames
                     .nth(0)
@@ -2867,6 +2874,85 @@ await check(
     evokeFixture,
 );
 
+// An opponent's library choice is public, even when both answers reach the same position.
+for (const [libraryTop, alone] of [
+    [true, false],
+    [false, false],
+    [false, true],
+]) {
+    const name = `spell-library-${libraryTop ? "top" : "bottom"}${alone ? "-empty" : ""}`;
+    const fixture = JSON.parse(
+        await readFile(join(fixtures, "cast-evoke.json"), "utf8"),
+    );
+    const event = fixture.messages.findLast((m) => m.kind === "event");
+    const view = evokeViews.at(-2);
+    const slot = evokeCasts[evoked].option.slot;
+    const opponent = view.players.opponent;
+    const library = alone
+        ? [slot]
+        : libraryTop
+          ? [...opponent.library, slot]
+          : [slot, ...opponent.library];
+    event.payload.view = {
+        ...view,
+        status: {
+            ...view.status,
+            decision: {
+                ...view.status.decision,
+                candidates: view.status.decision.candidates.filter(
+                    (c) => c.option.slot !== slot,
+                ),
+            },
+        },
+        players: { ...view.players, opponent: { ...opponent, library } },
+        objects: view.objects.map((o) =>
+            o.slot === slot
+                ? {
+                      ...o,
+                      zone: "library",
+                      owner: "opponent",
+                      controller: "opponent",
+                  }
+                : o,
+        ),
+        events: [
+            {
+                kind: "zoneChange",
+                slot,
+                from: "stack",
+                to: "library",
+                reason: "effect",
+                libraryTop,
+            },
+        ],
+    };
+    await writeFile(join(fixtures, `${name}.json`), JSON.stringify(fixture));
+    await check(
+        `the opponent picks the ${libraryTop ? "top" : "bottom"} of ${alone ? "an empty" : "their"} library`,
+        async (page) => {
+            const choice = page.getByRole("button", {
+                name: libraryTop ? "Top of Library" : "Bottom of Library",
+            });
+            await choice.waitFor();
+            await page.clock.runFor(2000);
+            const top = await page
+                .locator(`${subtlety}[data-zone="library"]`)
+                .evaluate((e) => getComputedStyle(e).opacity);
+            assert.equal(
+                top,
+                libraryTop || alone ? "1" : "0",
+                "only the known top card shows",
+            );
+            await choice.click();
+            await page
+                .locator(".game-log")
+                .getByText(/Opponent put Subtlety/)
+                .waitFor();
+        },
+        { fixture: name, at: evokeViews.length, ready: ".step-stops-opponent" },
+    );
+}
+
 // Dropped on the battlefield, the card's casts spring out where it was let go.
 await check(
     "a card dropped with two casts offers them where it was let go",
@@ -2875,6 +2961,20 @@ await check(
         await dragHandCardTo(page, subtlety, { x: 800, y: 380 });
         await frames(page).first().waitFor();
         assert.deepEqual(await chosen(page), [], "the drop asks first");
+        assert.equal(
+            await page.locator(subtlety).isVisible(),
+            false,
+            "no third card springs back to the hand",
+        );
+        await page.keyboard.press("Escape");
+        await page.locator(subtlety).waitFor({ state: "visible" });
+        await page.clock.runFor(1500);
+        assert.deepEqual(
+            await chosen(page),
+            [],
+            "cancel returns the card without casting",
+        );
+        await dragHandCardTo(page, subtlety, { x: 800, y: 380 });
         await frames(page).nth(1).click();
         assert.deepEqual(await settled(page, 1), [evoked], "evoked");
     },
@@ -5022,6 +5122,25 @@ await check(
             "declareBlockers",
             "upkeep",
         ]);
+    },
+);
+
+await check(
+    "a phase icon has a round keyboard focus ring that clears on pointer use",
+    async (page) => {
+        const icon = page.locator('.step-stops-you [data-step="main1"] button');
+        await page.keyboard.press("Tab");
+        await icon.focus();
+        const ring = () =>
+            icon.evaluate((e) => {
+                const style = getComputedStyle(e);
+                return [style.outlineStyle, style.borderRadius];
+            });
+        assert.deepEqual(await ring(), ["solid", "50%"]);
+        await page
+            .getByRole("button", { name: "Report bug", exact: true })
+            .click();
+        assert.equal((await ring())[0], "none");
     },
 );
 

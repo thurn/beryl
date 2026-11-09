@@ -105,6 +105,8 @@ pub enum Event<L: Layout = Small> {
         from: Zone,
         to: Zone,
         reason: Reason,
+        /// A public spell moved to the top (`true`) or bottom (`false`) of its owner's library.
+        library_top: Option<bool>,
     },
     Damage {
         source: ObjectRef<L>,
@@ -540,6 +542,20 @@ pub(crate) fn move_batch_to<L: Layout>(
             returning |= exiled_until(s, slot);
         }
     }
+    let changed = |object, from, to| Event::ZoneChange {
+        object,
+        from,
+        to,
+        reason,
+        // [CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002): "Public zones
+        // are zones in which all players can see the cards' faces" including the stack.
+        // Keep the end chosen for a spell, even when the library was empty.
+        library_top: match (from, to, place) {
+            (Zone::Stack, Zone::Library, Place::Top) => Some(true),
+            (Zone::Stack, Zone::Library, Place::Bottom) => Some(false),
+            _ => None,
+        },
+    };
     for &(slot, from, dest, entry) in moves.iter() {
         if dest == Zone::Battlefield && entry.pay_life {
             pay_life_to_enter(s, t, sink, slot, entry)?;
@@ -573,22 +589,11 @@ pub(crate) fn move_batch_to<L: Layout>(
                 s.entered_x.push((r, entry.x))?;
             }
         }
-        sink.push(Event::ZoneChange {
-            object: s.object_ref(slot),
-            from,
-            to: dest,
-            reason,
-        });
+        sink.push(changed(s.object_ref(slot), from, dest));
     }
     layers::refresh(s, t, sink);
     for &(slot, from, dest, _) in moves.iter() {
-        let e = Event::ZoneChange {
-            object: s.object_ref(slot),
-            from,
-            to: dest,
-            reason,
-        };
-        trigger::match_event(s, t, &e)?;
+        trigger::match_event(s, t, &changed(s.object_ref(slot), from, dest))?;
     }
     if !returning.is_empty() {
         // CR 610.3c: "An object returned to the battlefield this way returns under its

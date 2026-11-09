@@ -502,11 +502,13 @@ impl<L: Layout> Relayout for Event<L> {
                 from,
                 to,
                 reason,
+                library_top,
             } => Event::ZoneChange {
                 object: object.relayout(),
                 from,
                 to,
                 reason,
+                library_top,
             },
             Event::Damage {
                 source,

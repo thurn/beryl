@@ -60,6 +60,7 @@ export type Onto = { slot: number } | { player: Side };
 export interface Drop {
   start: Point;
   at: Point;
+  card?: Point & { width: number };
   onto?: Onto;
 }
 
@@ -75,6 +76,8 @@ export interface CardState {
   draggable?: boolean;
   /** The payment of the cast being dragged or set up taps it. */
   paying?: boolean;
+  /** The dropped card is represented by its mode choices. */
+  splitting?: boolean;
   /** It is attached to the card the pointer is over, or that card is attached to it. */
   linked?: boolean;
   /** On the stack, the X its spell was announced with. */
@@ -106,9 +109,9 @@ export interface CardLayerProps {
   /** A card was clicked (or tapped without dragging) at `at`; returns whether that did
    * something. A hand card that offers nothing shakes. */
   onClick(slot: number, at: Point): boolean;
-  /** A dragged card was let go; returns whether that did something, so the card stays where
-   * it was dropped until the next view moves it, rather than flying back to its place. */
-  onDrop(slot: number, drop: Drop): boolean;
+  /** A played drop holds until the next view moves it. A split holds until the chooser
+   * closes or the played card moves. A refused drop returns to its place. */
+  onDrop(slot: number, drop: Drop): boolean | "split";
   onHover(slot: number | undefined): void;
   /** A card was picked up to drag, or put down again (`undefined`). */
   onLift?(slot: number | undefined): void;
@@ -277,7 +280,8 @@ interface GlideOptions {
 
 /** Where the pointer has a card: dragging it, or dropped where it was played until the view
  * it was played on (its epoch) is replaced. */
-type Held = { dragging: true } | { dragging: false; epoch: unknown };
+type Held =
+  { dragging: true } | { dragging: false; epoch: unknown; split: boolean };
 
 const CardElement = memo(function CardElement({
   object,
@@ -323,7 +327,10 @@ const CardElement = memo(function CardElement({
   // The pointer places the card while it holds it, whatever its placement does meanwhile. A
   // dropped card is let go with the view it was played on, whatever the engine did with it (a
   // twin of it may be the card played), and from then on is drawn as if never held.
-  const holding = held !== undefined && (held.dragging || held.epoch === epoch);
+  const holding =
+    held !== undefined &&
+    (held.dragging ||
+      (held.epoch === epoch && (!held.split || state.splitting)));
   // A struck spell leaves the stack for where it went: after its shake, slowly, over the
   // table.
   const returning = struck && (place.look === "hand" || place.look === "held");
@@ -533,12 +540,23 @@ const CardElement = memo(function CardElement({
     layer.onLift?.(undefined);
     // A played card stays where it was dropped until the next view moves it on; any other
     // goes back to its place.
+    const box = body.current?.getBoundingClientRect();
+    const card = box && {
+      x: at.x + (box.left + box.width / 2 - e.clientX) / stageScale,
+      y: at.y + (box.top + box.height / 2 - e.clientY) / stageScale,
+      width: box.width / stageScale,
+    };
     const played = layer.onDrop(object.slot, {
       start: d.start,
       at,
+      card,
       onto: under(e, e.currentTarget as HTMLElement),
     });
-    setHeld(played ? { dragging: false, epoch } : undefined);
+    setHeld(
+      played
+        ? { dragging: false, epoch, split: played === "split" }
+        : undefined,
+    );
   };
 
   const classes = [
@@ -561,6 +579,7 @@ const CardElement = memo(function CardElement({
         data-card={object.name ?? undefined}
         style={{
           ...frame,
+          visibility: state.splitting ? "hidden" : undefined,
           // A library's cards, drawn only while they travel, never take the pointer.
           pointerEvents: place.look === "hidden" ? "none" : undefined,
           // A card travelling into the hand keeps its place in the fan's order all the way,

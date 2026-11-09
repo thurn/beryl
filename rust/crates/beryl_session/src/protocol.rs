@@ -750,6 +750,10 @@ pub enum GameEvent {
         from: ZoneName,
         to: ZoneName,
         reason: Why,
+        /// Whether a spell went to the top or the bottom of its owner's library.
+        #[serde(rename = "libraryTop", skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        library_top: Option<bool>,
     },
     Damage {
         source: u16,
@@ -2136,11 +2140,13 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
             from,
             to,
             reason,
+            library_top,
         } => GameEvent::ZoneChange {
             slot: object.slot.num(),
             from: from.into(),
             to: to.into(),
             reason: reason.into(),
+            library_top,
         },
         Event::Damage {
             source,

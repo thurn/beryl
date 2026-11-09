@@ -778,6 +778,19 @@
 .table .life-orb {
   --orb: calc(1px / 1.045);
 }
+/* A choice of library end made by the opponent, just below their life. */
+.library-choice-hud {
+  left: calc(800px + var(--shift-mid, 0px));
+  top: 160px;
+  translate: -50% 0;
+  z-index: 250;
+}
+.library-choice-hud .button {
+  min-width: 0;
+  min-height: 28px;
+  padding: 2px 12px;
+  font-size: 14px;
+}
 /* The opponent thinking, under their orb, clear of its rays. */
 .thinking-hud {
   left: calc(782px + var(--shift-mid, 0px));

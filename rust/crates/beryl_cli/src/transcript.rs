@@ -189,6 +189,7 @@ impl Transcript {
                     from,
                     to,
                     reason,
+                    ..
                 } => zone_change(
                     &self.called(t, s, object),
                     self.owner(s, object),

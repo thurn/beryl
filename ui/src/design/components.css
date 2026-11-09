@@ -1261,6 +1261,11 @@
   color: inherit;
   cursor: pointer;
 }
+.step-toggle:focus-visible {
+  border-radius: 50%;
+  outline: 1px solid #f0e2c4;
+  outline-offset: 2px;
+}
 .step-icon {
   width: var(--step-size, 22px);
   height: var(--step-size, 22px);

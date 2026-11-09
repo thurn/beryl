@@ -280,6 +280,11 @@ export function Board({
     slot: number;
     modes: Mode[];
     from?: Origin;
+    split?: boolean;
+  }>();
+  const [modePlayed, setModePlayed] = useState<{
+    slot: number;
+    view: PlayerView;
   }>();
   const [casting, setCasting] = useState<Casting>();
   // The spell cast last and the permanents its payment taps.
@@ -367,6 +372,14 @@ export function Board({
   // column, the rows give it room.
   const [logOpen, setLogOpen] = useState(false);
   const toggleLog = useCallback(() => setLogOpen((o) => !o), []);
+  const libraryTop = useMemo(
+    () =>
+      [...log]
+        .reverse()
+        .find((entry) => entry.side === "opponent" && entry.kind !== "turn")
+        ?.libraryTop,
+    [log],
+  );
   // The hand sinks under a screen over the table, and rises whole for a choice of its cards,
   // once what the view shows has been seen (the card a loot draws arriving in it).
   const [seen, setSeen] = useState<PlayerView>();
@@ -521,12 +534,6 @@ export function Board({
     if (at) return { ...at, width };
     return { x: p.x + width / 2, y: p.y + width / CARD_ASPECT / 2, width };
   };
-  /** Casts with `act` from the mode chooser: at once, or in the cast step for its X or, under
-   * full control, its payment. */
-  const castAct = (slot: number, act: Act) => {
-    if (stepsIn([act])) setUp(slot, [act]);
-    else cast(firstChoice(act));
-  };
   /** Opens the mode chooser on a permanent's activated abilities. */
   const chooseAbility = (
     slot: number,
@@ -556,7 +563,12 @@ export function Board({
   };
   /** Opens the mode chooser on a card's uses off the battlefield: its casts, its land play,
    * its abilities activated from where it lies. */
-  const choosePlay = (slot: number, choices: PlayChoice[], at?: Point) => {
+  const choosePlay = (
+    slot: number,
+    choices: PlayChoice[],
+    from = originOf(slot),
+    split = false,
+  ) => {
     const o = objects.get(slot);
     const name = o?.name ?? "";
     // A cast or a land played shows the face it is by: a modal card's back, a land's face.
@@ -571,7 +583,8 @@ export function Board({
     setMenu(undefined);
     setChooser({
       slot,
-      from: originOf(slot, at),
+      from,
+      split,
       modes: choices.map(({ act, text }) => {
         const done = () => setChooser(undefined);
         if (act.option.kind === "cast") {
@@ -582,7 +595,11 @@ export function Board({
             caption: <CastCaption act={act} name={name} />,
             onPick: () => {
               done();
-              castAct(slot, act);
+              if (stepsIn([act])) setUp(slot, [act]);
+              else {
+                if (split) setModePlayed({ slot, view });
+                cast(firstChoice(act));
+              }
             },
           };
         }
@@ -600,6 +617,7 @@ export function Board({
           caption: act.option.kind === "playLand" ? "Play" : undefined,
           onPick: () => {
             done();
+            if (split) setModePlayed({ slot, view });
             pick(act.index, act.then);
           },
         };
@@ -619,7 +637,7 @@ export function Board({
       choosePlay(
         slot,
         casts.map((act) => ({ act })),
-        at,
+        originOf(slot, at),
       );
     } else if (stepsIn(casts)) setUp(slot, casts);
     else cast(firstChoice(casts[0]!));
@@ -650,6 +668,14 @@ export function Board({
           ),
       });
     }
+  }
+  const splitting = chooser?.split
+    ? chooser.slot
+    : waiting && modePlayed?.view === view
+      ? modePlayed.slot
+      : undefined;
+  if (splitting !== undefined) {
+    states.set(splitting, { ...states.get(splitting), splitting: true });
   }
   for (const item of view.stack) {
     if (item.kind === "spell") {
@@ -908,7 +934,7 @@ export function Board({
     }
     return true;
   };
-  const onDrop = (slot: number, { start, at, onto }: Drop) => {
+  const onDrop = (slot: number, { start, at, card, onto }: Drop) => {
     standIns.touch(slot, deciding ? can.bySlot.get(slot) : undefined);
     // The card being cast let go in the hand goes back: the cast step closes, or the spell not
     // yet paid for is taken back. The cast step's card let go on the battlefield is cast as set.
@@ -937,8 +963,8 @@ export function Board({
           : undefined;
       if (choices) {
         // Offer the same uses as a click, including cycling a land instead of playing it.
-        choosePlay(slot, choices, at);
-        return false;
+        choosePlay(slot, choices, card ?? originOf(slot, at), true);
+        return "split";
       }
       if (casts.length === 1 && stepsIn(casts)) {
         // The cast asks for more (X, its payment): the cast step, with the card back in hand.
@@ -1226,8 +1252,18 @@ export function Board({
           target={deciding ? can.players.get("opponent") : undefined}
           onPick={(act) => pick(act.index, act.then)}
         />
+        {libraryTop !== undefined && (
+          <div className="hud library-choice-hud">
+            <Button variant="secondary" onClick={toggleLog}>
+              {libraryTop ? "Top of Library" : "Bottom of Library"}
+            </Button>
+          </div>
+        )}
         {opponentActing(view, waiting) && !bannerUp && (
-          <div className="hud thinking-hud">
+          <div
+            className="hud thinking-hud"
+            style={libraryTop === undefined ? undefined : { top: 200 }}
+          >
             <Thinking />
           </div>
         )}
@@ -1501,6 +1537,7 @@ export function Board({
             object={objects.get(chooser.slot)!}
             modes={chooser.modes}
             from={chooser.from}
+            split={chooser.split}
             onClose={() => setChooser(undefined)}
           />
         )}

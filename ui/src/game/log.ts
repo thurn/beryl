@@ -20,6 +20,8 @@ export interface LogEntry {
   /** The player it is about, for its marker. */
   side: Side;
   text: string;
+  /** A spell's owner chose an end of their library. */
+  libraryTop?: boolean;
 }
 
 export type LogLine = Omit<LogEntry, "key">;
@@ -283,9 +285,31 @@ export function logLines(view: PlayerView, names: Names): LogLine[] {
       case "exile":
         say(side, `${card} was exiled`);
         return;
-      case "library":
-        say(side, `${card} was put into ${whose(side)} library`);
+      case "library": {
+        const library = view.players[side].library;
+        // Older recordings omit the choice. Infer it only when the ends differ.
+        const inferred =
+          e.from === "stack" && library.length > 1
+            ? library.at(-1) === e.slot
+              ? true
+              : library[0] === e.slot
+                ? false
+                : undefined
+            : undefined;
+        const libraryTop = e.libraryTop ?? inferred;
+        if (libraryTop === undefined) {
+          say(side, `${card} was put into ${whose(side)} library`);
+        } else {
+          const end = libraryTop ? "top" : "bottom";
+          out.push({
+            kind: "action",
+            side,
+            text: `${who(side)} put ${card} on the ${end} of ${side === "you" ? "your" : "their"} library`,
+            libraryTop,
+          });
+        }
         return;
+      }
       case "stack":
       case "nowhere":
         return;

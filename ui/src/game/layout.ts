@@ -1556,17 +1556,19 @@ export function layout(
   for (const side of ["opponent", "you"] as const) {
     const player = view.players[side];
     const library = pileLook(side, PILES[side].library, player.library.length);
-    // Library cards wait, unseen, on their library.
+    // Only a top card whose identity is known to this viewer shows over the back.
+    const top = player.library.at(-1);
     for (const o of owned(side, "library")) {
       if (inHand.has(o.slot)) continue;
+      const known = o.slot === top && o.name !== null;
       out.push({
         slot: o.slot,
         zone: o.zone,
-        look: "hidden",
+        look: known ? "pile" : "hidden",
         width: FULL_WIDTH,
         span: FULL_WIDTH,
-        opacity: 0,
-        z: 1,
+        opacity: known ? 1 : 0,
+        z: known ? 2 : 1,
         ...onPile(library),
       });
     }
