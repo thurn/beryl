@@ -13,7 +13,7 @@
 //! scenarios ([`auto`]), each played headless from both seats to its first live decision, and
 //! what holds there is recorded for `specs-describe`. A moment a card needs that nothing generates comes from
 //! a scenario in its file, or a general capability of the generator: the `specs` skill
-//! (`.agents/specs/SKILL.md`) says which.
+//! (`.agents/skills/specs/SKILL.md`) says which.
 
 mod auto;
 pub mod reviews;

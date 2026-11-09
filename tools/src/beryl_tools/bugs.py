@@ -179,7 +179,7 @@ def bead_description(report: Report) -> str:
         f"(`screenshot.png`), the game's replay, its latest views and the logs:\n\n"
         f"Report ID: `{report.id}`. Local folder: `{report.folder}`\n\n"
         f"Read `{report.folder / REPORT}` first; the `bugfix` skill "
-        f"(`.agents/bugfix/SKILL.md`) says how to reproduce and close it.\n\n"
+        f"(`.agents/skills/bugfix/SKILL.md`) says how to reproduce and close it.\n\n"
         f"- Game: {game or 'none (not in a game)'}\n"
         f"- Built from: {f.get('commit', 'unknown')}\n"
         f"- Page: {f.get('url', '')}\n\n"

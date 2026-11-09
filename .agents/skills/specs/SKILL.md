@@ -244,7 +244,7 @@ file. A fixed engine bug gets its entry in `docs/bugs.md`.
 ## Judging against the design
 
 Beyond motion, judge each moment from both seats against the design philosophy
-in `.agents/ui-review/SKILL.md`: common case one gesture, the client does the
+in `.agents/skills/ui-review/SKILL.md`: common case one gesture, the client does the
 bookkeeping, ask once in context, Arena as the reference, show don't tell, few
 words. Report what each moment shows from each seat, what you fixed, which other
 cards' moments changed, and any moment you could not get and why.

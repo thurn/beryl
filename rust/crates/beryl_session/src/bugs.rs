@@ -18,7 +18,7 @@
 //! counts the open ones by card, for the spec index.
 //!
 //! `by bugs` (`tools/src/beryl_tools/bugs.py`) lists the open reports, files a bead for each and
-//! marks them done; the `bugfix` skill (`.agents/bugfix`) works them.
+//! marks them done; the `bugfix` skill (`.agents/skills/bugfix`) works them.
 
 pub mod archive;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
