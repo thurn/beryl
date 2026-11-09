@@ -154,6 +154,7 @@ pub struct Checkpoint {
     pub first: View,
     pub roles: [String; 2],
     pub actions: Vec<String>,
+    pub counter_demo: bool,
 }
 
 pub struct ReviewSet {
@@ -186,15 +187,19 @@ pub fn checkpoints(def: &'static CardDef, scenarios: &'static [Scenario]) -> Rev
         let Ok((views, countered)) = super::review_position(&m) else {
             continue;
         };
-        let Some((key, checkpoint)) = review_example(def, &c, m, &views, countered) else {
+        let Some((key, checkpoint)) = review_example(def, &c, m, &views, countered.is_some())
+        else {
             continue;
         };
         groups.push(c.group);
         if !seen.contains(&key) {
             seen.push(key);
             let mut checkpoint = checkpoint;
-            if countered && c.kind == Kind::Play && checkpoint.moment.title == "Spell countered" {
-                use_cast_before_counter(def, &mut checkpoint);
+            if let Some(card) = countered
+                && c.kind == Kind::Play
+                && checkpoint.moment.title == "Spell countered"
+            {
+                use_cast_before_counter(def, &mut checkpoint, &card);
             }
             result.push(checkpoint);
         }
@@ -209,41 +214,66 @@ pub fn checkpoints(def: &'static CardDef, scenarios: &'static [Scenario]) -> Rev
     }
 }
 
-/// Let the reviewer cast the spell that otherwise counters during setup.
-fn use_cast_before_counter(def: &CardDef, checkpoint: &mut Checkpoint) {
-    if !matches!(checkpoint.moment.play, [Action::Cast { card, .. }] if *card == def.name) {
+/// Start the counter example before the original spell, so either cast can be tried.
+fn use_cast_before_counter(def: &CardDef, checkpoint: &mut Checkpoint, countered: &str) {
+    let m = &checkpoint.moment;
+    let [
+        Action::Cast {
+            card,
+            player: answerer,
+            ..
+        },
+    ] = m.play
+    else {
+        return;
+    };
+    if *card != def.name {
         return;
     }
+    let Some((
+        index,
+        &Action::Cast {
+            player: caster,
+            card,
+            ..
+        },
+    )) = m.board.actions.iter().enumerate().rev().find(|(_, a)| {
+        matches!(a, Action::Cast { card, player, .. }
+            if *card == countered && player != answerer)
+    })
+    else {
+        return;
+    };
+    let first = View::ALL[caster.index()];
     let mut before = Moment::new(
-        checkpoint.moment.name,
-        "Cast to counter",
-        checkpoint.moment.board,
+        m.name,
+        "Cast into a counter",
+        m.board.actions(&m.board.actions[..index]),
     );
-    before.group = checkpoint.moment.group;
+    before.group = m.group;
     let Ok((views, _)) = super::review_position(&before) else {
         return;
     };
-    for (i, view) in views.iter().enumerate() {
-        let Status::Deciding { decision } = &view.status else {
-            continue;
-        };
-        let casts_card = decision.candidates.iter().any(|c| {
-            matches!(c.option, Offer::Cast { slot, .. } if view.objects.iter().any(|o|
-                o.slot == slot && o.name.as_deref() == Some(def.name)))
-        });
-        if casts_card {
-            checkpoint.moment = before;
-            checkpoint.first = View::ALL[i];
-            checkpoint.roles = ["Spell controller".to_owned(), "Spell controller".to_owned()];
-            checkpoint.roles[i] = format!("{} caster", def.name);
-            checkpoint.actions = decision
-                .candidates
-                .iter()
-                .map(|c| c.label.clone())
-                .collect();
-            return;
-        }
+    let view = &views[caster.index()];
+    let Status::Deciding { decision } = &view.status else {
+        return;
+    };
+    if !decision.candidates.iter().any(|c| {
+        matches!(c.option, Offer::Cast { slot, .. } if view.objects.iter().any(|o|
+            o.slot == slot && o.name.as_deref() == Some(card)))
+    }) {
+        return;
     }
+    checkpoint.moment = before;
+    checkpoint.first = first;
+    checkpoint.roles[caster.index()] = format!("{card} caster");
+    checkpoint.roles[answerer.index()] = format!("{} caster", def.name);
+    checkpoint.actions = decision
+        .candidates
+        .iter()
+        .map(|c| c.label.clone())
+        .collect();
+    checkpoint.counter_demo = true;
 }
 
 fn review_example(
@@ -342,6 +372,7 @@ fn review_example(
             first: View::ALL[owner],
             roles,
             actions,
+            counter_demo: false,
         },
     ))
 }

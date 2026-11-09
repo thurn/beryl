@@ -157,6 +157,9 @@ fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result
                     "first": c.first.name(),
                     "roles": c.roles,
                     "actions": c.actions,
+                    "replay": c.counter_demo.then(|| spec.moments.iter().find(|m|
+                        m.group == c.moment.group && m.title == "Start"
+                    )).flatten().map(|m| m.name),
                 })
             })
             .collect();

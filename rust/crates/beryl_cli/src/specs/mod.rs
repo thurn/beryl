@@ -329,28 +329,37 @@ fn at_checkpoint(updates: &[GameUpdate; 2], live: bool) -> bool {
         .any(|u| matches!(u.view.status, Status::Deciding { .. } | Status::Over { .. }))
 }
 
-fn review_position(moment: &Moment) -> Result<([beryl_session::PlayerView; 2], bool), String> {
+fn review_position(
+    moment: &Moment,
+) -> Result<([beryl_session::PlayerView; 2], Option<String>), String> {
     use beryl_session::protocol::{GameEvent, Why};
 
     let (sent, received) = std::sync::mpsc::channel();
     let _sessions = start_review(moment, move |updates, live| {
         let _ = sent.send((updates, live));
     })?;
-    let mut countered = false;
+    let mut countered = None;
     loop {
         let (updates, live) = received
             .recv_timeout(std::time::Duration::from_secs(5))
             .map_err(|_| "setup never reached a checkpoint".to_owned())?;
         if live {
-            countered |= updates[0].view.events.iter().any(|e| {
-                matches!(
-                    e,
-                    GameEvent::ZoneChange {
-                        reason: Why::Counter,
-                        ..
-                    }
-                )
-            });
+            let view = &updates[0].view;
+            for event in &view.events {
+                if let GameEvent::ZoneChange {
+                    slot,
+                    reason: Why::Counter,
+                    ..
+                } = *event
+                {
+                    countered = view
+                        .objects
+                        .iter()
+                        .find(|o| o.slot == slot)
+                        .and_then(|o| o.name.clone())
+                        .or(countered);
+                }
+            }
         }
         if at_checkpoint(&updates, live) {
             return Ok((updates.map(|u| u.view), countered));
@@ -799,6 +808,62 @@ mod tests {
                     o.name.as_deref() == Some(OVERLORD_OF_THE_MISTMOORS) && o.zone == expected
                 }));
             }
+        }
+    }
+
+    #[test]
+    fn counter_review_starts_before_the_target_spell_is_cast() {
+        use beryl_cards::names::{MANA_CRYPT, MANA_TITHE};
+        use beryl_session::CandidateIndex;
+        use beryl_session::protocol::{AskView, ZoneName};
+
+        let def = CARDS
+            .cards()
+            .iter()
+            .copied()
+            .find(|d| d.name == MANA_TITHE)
+            .unwrap();
+        let (_, scenarios) = beryl_cards::SCENARIOS
+            .iter()
+            .find(|(n, _)| *n == MANA_TITHE)
+            .unwrap();
+        let checkpoints = auto::checkpoints(def, scenarios).examples;
+        let counter = checkpoints.iter().find(|c| c.counter_demo).unwrap();
+        assert_eq!(counter.first, View::Yours);
+
+        let (send, receive) = std::sync::mpsc::channel();
+        let sessions = start_review(&counter.moment, move |updates, live| {
+            if at_checkpoint(&updates, live) {
+                let _ = send.send(updates);
+            }
+        })
+        .unwrap();
+        let next = || {
+            receive
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap()
+        };
+        for (seat, card) in [(0, MANA_CRYPT), (1, MANA_TITHE)] {
+            let views = next();
+            let Status::Deciding { decision } = &views[seat].view.status else {
+                panic!("expected the {card} caster to act");
+            };
+            let label = format!("Cast {card}");
+            let index = decision
+                .candidates
+                .iter()
+                .position(|c| c.label == label)
+                .unwrap();
+            sessions
+                .choose(decision.id, CandidateIndex(u16::try_from(index).unwrap()))
+                .unwrap();
+        }
+        for update in next() {
+            assert!(!matches!(update.view.status, Status::Deciding { decision }
+                if matches!(decision.ask, AskView::UnlessPays { .. })));
+            assert!(update.view.objects.iter().any(|o| {
+                o.name.as_deref() == Some(MANA_CRYPT) && o.zone == ZoneName::Graveyard
+            }));
         }
     }
 

@@ -27,6 +27,7 @@ interface MomentListing {
   plays: boolean;
   first?: View;
   roles?: [string, string];
+  replay?: string | null;
 }
 
 interface ReviewListing {
@@ -614,6 +615,16 @@ function MomentView({
           {moment.title}
         </h2>
         <div className="specs-moment-actions">
+          {review && moment.replay && (
+            <a
+              className="specs-switch-seat"
+              href={`/specs/${slug}/${moment.replay}/${view}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Watch counter
+            </a>
+          )}
           {review && (
             <a
               className="specs-switch-seat"
@@ -690,6 +701,9 @@ function MomentView({
           </a>
         </div>
       </header>
+      {review && moment.replay && view === moment.first && (
+        <p className="specs-review-hint">Cast, then switch seats to respond.</p>
+      )}
       {noting && (
         <BugNote
           instance={key}
