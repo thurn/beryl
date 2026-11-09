@@ -90,5 +90,29 @@
     "played": "The Wandering Emperor -1",
     "forbidden": ["The Wandering Emperor -1"],
     "why": "The Samurai made now sits in front of the resolving Jace's -1; made at the human's end step it dodges it."
+  },
+  {
+    "name": "staff-in-upkeep",
+    "incident": "2026-11-09-staff-timing",
+    "class": "an optional instant-speed activation that spends interaction mana early",
+    "source": { "replay": "docs/incidents/2026-11-09-staff-timing.replay.json" },
+    "seat": 1,
+    "turn": 8,
+    "index": 0,
+    "played": "activate Staff of the Storyteller #2",
+    "required": ["pass"],
+    "why": "Spending its only untapped white source turns off Reprieve for the human's whole turn. It can draw at the end step if it still has the mana."
+  },
+  {
+    "name": "staff-before-combat-damage",
+    "incident": "2026-11-09-staff-timing",
+    "class": "an optional instant-speed activation that spends interaction mana early",
+    "source": { "replay": "docs/incidents/2026-11-09-staff-timing.replay.json" },
+    "seat": 1,
+    "turn": 11,
+    "index": 23,
+    "played": "activate Staff of the Storyteller #2",
+    "required": ["pass"],
+    "why": "Nothing in its deck can use the remaining white mana to affect combat. Waiting preserves the option to exile Subtlety with Winds of Abandon in its second main."
   }
 ]
