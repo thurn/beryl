@@ -143,12 +143,11 @@ export interface ArrowSpec {
   tone: "gold" | "cyan" | "red" | "green";
   /** A direct line between the facing edges of a blocker and its attacker. */
   block?: boolean;
-  /** A target link shown once after both ends settle, and invalidated by a zone change. */
+  /** A target link shown while both ends are settled, invalidated by a zone change. */
   pulse?: {
     key: string;
     zone: string | undefined;
     departed: boolean;
-    duration?: number;
   };
 }
 
@@ -265,12 +264,10 @@ export function Arrows({
           const since = was?.ends === at ? was.since : now;
           resting.set(key, { ends: at, since });
           if (now - since < REST_MS) {
-            // Once shown, a moving endpoint ends this pulse, even if it later settles.
-            if (pulse?.until !== undefined) pulse.until = now;
             return [];
           }
           if (pulse && pulse.until === undefined) {
-            pulse.until = now + (a.pulse?.duration ?? PULSE_MS);
+            pulse.until = Number.POSITIVE_INFINITY;
           }
         }
         return [{ a, from, to, source, target }];
@@ -438,7 +435,6 @@ export function Arrows({
 /** How long both ends of a followed arrow stand still before it shows, in ms. */
 const REST_MS = 90;
 /** A settled target link gets one brief moment of emphasis. */
-const PULSE_MS = 650;
 
 /** The arrowhead, its tip at the origin, pointing along +x: a solid barbed head, three and a
  * half tubes wide, whose base the shaft runs into. */

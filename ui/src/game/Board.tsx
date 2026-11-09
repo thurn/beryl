@@ -68,7 +68,7 @@ import type {
   StackItem as StackItemView,
   StopsSetting,
 } from "../generated/protocol";
-import { announcedItem, HOLD, sameItem } from "./beats";
+import { announcedItem, sameItem } from "./beats";
 import {
   CardLayer,
   cardId,
@@ -2216,7 +2216,6 @@ function boardArrows(
       const other = announcedItem(e);
       return other !== undefined && sameItem(item, other);
     });
-    const preview = announced >= 0 && view.status.kind === "playing";
     if (item.kind === "ability" && item.source !== null && sourced.has(i)) {
       out.push({ from: cardId(item.source), to: from, tone: "gold" });
     }
@@ -2259,7 +2258,6 @@ function boardArrows(
               key: `${stackKey(i, item)}:${target.slot}`,
               zone: object?.zone,
               departed,
-              duration: preview ? HOLD.stack : undefined,
             }
           : undefined,
       });

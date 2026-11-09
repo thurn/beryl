@@ -4400,7 +4400,7 @@ for (const fixture of [
 }
 
 // Play the target announcement live. Static fixture views keep arrows for inspection.
-if (wanted("a live card target gets one brief arrow")) {
+if (wanted("a live card target keeps its arrow while stationary")) {
     const current = (await load("arrow-ability")).at(-1);
     const item = current.stack.at(-1);
     const target = item.targets[0].slot;
@@ -4423,7 +4423,7 @@ if (wanted("a live card target gets one brief arrow")) {
         }),
     );
     await check(
-        "a live card target gets one brief arrow",
+        "a live card target keeps its arrow while stationary",
         async (page) => {
             const arrow = ".board-arrows .arrow:is(.arrow-red, .arrow-green)";
             assert.equal(await page.locator(arrow).count(), 0);
@@ -4435,8 +4435,8 @@ if (wanted("a live card target gets one brief arrow")) {
                 await page.locator(arrow).getAttribute("data-to"),
                 `card-${target}`,
             );
-            await page.clock.runFor(750);
-            assert.equal(await page.locator(arrow).count(), 0);
+            await page.clock.runFor(5000);
+            assert.equal(await page.locator(arrow).count(), 1);
         },
         { fixture, at: 1, ready: "#stack-0" },
     );
