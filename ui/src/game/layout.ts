@@ -1411,7 +1411,7 @@ export function zonePiles(view: PlayerView): ZonePile[] {
         o.owner === side &&
         o.zone === "exile" &&
         !inHand.has(o.slot) &&
-        !held(o, holding),
+        held(o, holding) === undefined,
     );
     return [
       { zone: "graveyard" as const, cards: graveyard },
@@ -1456,16 +1456,13 @@ function onPile(look: PileLook) {
   };
 }
 
-/** Your hand in its order (standIns.ts' `order`): by slot, as the view gives it, but for the
- * twin left in hand when the engine moved the one you did not touch, which takes that one's
- * place in the fan, so nothing in the hand shifts. */
+/** Your hand in its order of arrival (standIns.ts), falling back to the view's slot order. */
 function inOrder(
   hand: ObjectView[],
   order: ReadonlyMap<number, number> | undefined,
 ): ObjectView[] {
   if (!order?.size) return hand;
-  // Ties go to the card standing in, the one shown where the other was.
-  const key = (o: ObjectView) => order.get(o.slot) ?? o.slot + 0.5;
+  const key = (o: ObjectView) => order.get(o.slot) ?? Infinity;
   return [...hand].sort((a, b) => key(a) - key(b));
 }
 

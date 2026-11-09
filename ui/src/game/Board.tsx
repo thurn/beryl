@@ -1019,12 +1019,10 @@ export function Board({
     setDraft({ ...draft, attacks, selected: undefined });
   };
 
-  const moreAttackers =
+  const attackAllFirst =
     drafting === "attacker" &&
-    [...can.bySlot.keys()].some(
-      (slot) => declarable(slot) && !draft.attacks.has(slot),
-    );
-  const attackAllFirst = moreAttackers && draft.attacks.size === 0;
+    draft.attacks.size === 0 &&
+    [...can.bySlot.keys()].some(declarable);
 
   // The keyboard (Arena's): Space or Enter does the primary action, passing or confirming,
   // Shift with either passes on to the next stop, Escape takes back what was begun and
@@ -1373,7 +1371,7 @@ export function Board({
               <Declare
                 kind={drafting}
                 draft={draft}
-                moreAttackers={moreAttackers}
+                attackAllFirst={attackAllFirst}
                 onDeclare={declare}
                 onAll={attackWithAll}
                 onClear={() => setDraft(emptyDraft())}
@@ -2178,15 +2176,15 @@ function coinFlipBanner(
 function Declare({
   kind,
   draft,
-  moreAttackers,
+  attackAllFirst,
   onDeclare,
   onAll,
   onClear,
 }: {
   kind: "attacker" | "blocker";
   draft: Draft;
-  /** Some creature that may attack is not attacking yet. */
-  moreAttackers: boolean;
+  /** There are eligible attackers and none has been selected. */
+  attackAllFirst: boolean;
   onDeclare(): void;
   onAll(): void;
   onClear(): void;
@@ -2200,7 +2198,6 @@ function Declare({
     : n > 0
       ? "Block"
       : "No Blocks";
-  const attackAllFirst = moreAttackers && n === 0;
   const caption =
     n === 0
       ? attack
@@ -2209,16 +2206,11 @@ function Declare({
       : `${n} ${attack ? "attacking" : "blocking"}`;
   return (
     <Dock>
-      {(moreAttackers || n > 0) && (
+      {(attackAllFirst || n > 0) && (
         <DockButtons>
           {attackAllFirst && (
             <Button variant="secondary" onClick={onDeclare}>
               No Attacks
-            </Button>
-          )}
-          {moreAttackers && !attackAllFirst && (
-            <Button variant="secondary" onClick={onAll}>
-              Attack All
             </Button>
           )}
           {n > 0 && (
@@ -2230,7 +2222,7 @@ function Declare({
       )}
       <div className="turn-action">
         <TurnButton
-          label={attackAllFirst ? "Attack All" : label}
+          label={attackAllFirst ? "Attack With All" : label}
           onClick={attackAllFirst ? onAll : onDeclare}
         />
         <span className="turn-caption">{caption}</span>

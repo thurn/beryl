@@ -1122,10 +1122,10 @@ await check(
             });
         const rows = await stepRows("you");
         assert.deepEqual(rows, [
-            ["untap", "upkeep", "draw", "main1", "beginCombat", "attackers"],
-            ["blockers", "damage", "endCombat", "main2", "end", "cleanup"],
+            ["untap", "upkeep", "draw", "blockers", "damage", "endCombat"],
+            ["main1", "beginCombat", "attackers", "main2", "end", "cleanup"],
         ]);
-        assert.deepEqual(await stepRows("opponent"), [...rows].reverse());
+        assert.deepEqual(await stepRows("opponent"), rows);
         assert.equal(
             await page
                 .locator(
@@ -1532,6 +1532,13 @@ await check(
             assert.ok(await shows(page, slot, "attacker"), `${slot} attacks`);
         }
         assert.deepEqual(await chosen(page), [], "nothing is sent yet");
+        assert.equal(
+            await page
+                .getByRole("button", { name: /^Attack (With )?All$/i })
+                .count(),
+            0,
+            "the shortcut is hidden when only some creatures attack",
+        );
         await page.getByText(`${declaredAttackers.length} attacking`).waitFor();
         await page.getByRole("button", { name: "Attack", exact: true }).click();
         assert.deepEqual(
@@ -1556,7 +1563,11 @@ await check(
     "Attack All picks every creature that may attack; Clear none",
     async (page) => {
         await page.clock.runFor(2000);
-        const all = page.getByRole("button", { name: "Attack All" });
+        const all = page.getByRole("button", {
+            name: "Attack With All",
+            exact: true,
+        });
+        assert.equal(await all.count(), 1);
         assert.ok((await all.getAttribute("class")).includes("button-primary"));
         assert.ok(
             (
@@ -1568,9 +1579,11 @@ await check(
         await all.click();
         await page.clock.runFor(500);
         await page.getByText(`${mayAttack.length} attacking`).waitFor();
+        assert.equal(await all.count(), 0);
         await page.getByRole("button", { name: "Clear" }).click();
         await page.clock.runFor(500);
         await page.getByRole("button", { name: "No Attacks" }).waitFor();
+        await all.waitFor();
         assert.deepEqual(await chosen(page), []);
     },
     attackRun,
@@ -2153,6 +2166,45 @@ await check(
     beneathRun,
 );
 
+// The first slot is a valid exile host, just like any other battlefield slot.
+{
+    const fixture = JSON.parse(
+        await readFile(join(fixtures, "exiled-beneath.json"), "utf8"),
+    );
+    const last = fixture.messages.findLast((m) => m.kind === "event");
+    const host = exiled.exiledBy;
+    const swap = (slot) => (slot === host ? 0 : slot === 0 ? host : slot);
+    last.payload.view = {
+        ...beneathView,
+        battlefield: beneathView.battlefield.map(swap),
+        objects: beneathView.objects.map((o) => ({
+            ...o,
+            slot: swap(o.slot),
+            exiledBy: swap(o.exiledBy),
+        })),
+    };
+    await writeFile(
+        join(fixtures, "exiled-beneath-first.json"),
+        JSON.stringify(fixture),
+    );
+}
+
+await check(
+    "a card exiled by the first slot stays under its host",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const host = await page.locator('[data-slot="0"]').boundingBox();
+        const under = await page.locator(beneathRun.ready).boundingBox();
+        assert.ok(under.x < host.x && under.x + under.width > host.x);
+        const at = { x: (under.x + host.x) / 2, y: under.y + under.height / 2 };
+        await page.mouse.click(at.x, at.y);
+        await page
+            .locator(`.zone-viewer [data-viewer-slot="${exiled.slot}"]`)
+            .waitFor();
+    },
+    { ...beneathRun, fixture: "exiled-beneath-first" },
+);
+
 // The human's Swift Reconfiguration on the opponent's Sphinx of False Conclusions (or whatever the
 // fixture attaches across the table): an Aura one player controls on a permanent the other does.
 const attachedView = (await load("attached-across")).at(-1);
@@ -2568,8 +2620,18 @@ await check(
             reordered(await rest(pairViews.length + 1), twin.slot, pairLand),
             "the land played",
         );
-        // Once it has left the hand and come back, it takes its own place again.
-        inFan(drawn, await rest(pairViews.length + 3), "the twin drawn again");
+        const slots = (positions) =>
+            Object.keys(positions).sort(
+                (a, b) => positions[a][0] - positions[b][0],
+            );
+        assert.deepEqual(
+            slots(drawn),
+            [
+                ...slots(played).filter((s) => Number(s) !== twin.slot),
+                String(twin.slot),
+            ],
+            "the returning draw arrives at the right, keeping the others in order",
+        );
     },
     {
         fixture: "hand-pair-played",

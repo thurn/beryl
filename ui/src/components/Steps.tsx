@@ -89,7 +89,7 @@ export interface StepStop {
   stops: boolean;
 }
 
-/** The twelve, in the turn's order: the top row across the orb, then the bottom row. */
+/** The twelve, in the turn's order: two rows on the left, then two on the right. */
 export const STEP_STOPS: StepStop[] = [
   {
     key: "untap",
@@ -199,7 +199,7 @@ export function StepStops({
   return (
     <ol className={`step-stops step-stops-${side}`}>
       {STEP_STOPS.map((stop, i) => {
-        const column = i % 6;
+        const column = i % 3;
         const on = stop.stops && stopsAt(stops, stop);
         const here = current !== undefined && stop.steps.includes(current);
         const icon = (
@@ -217,9 +217,8 @@ export function StepStops({
             key={stop.key}
             data-step={stop.key}
             style={{
-              gridColumn: column < 3 ? column + 1 : column + 2,
-              gridRow:
-                side === "you" ? 1 + Math.floor(i / 6) : 2 - Math.floor(i / 6),
+              gridColumn: column + (i < 6 ? 1 : 5),
+              gridRow: 1 + (Math.floor(i / 3) % 2),
             }}
             className={[
               "step has-tip",
