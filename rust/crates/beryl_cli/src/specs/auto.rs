@@ -154,7 +154,7 @@ pub struct Checkpoint {
     pub first: View,
     pub roles: [String; 2],
     pub actions: Vec<String>,
-    pub counter_demo: bool,
+    pub review_casts: &'static [Action],
 }
 
 pub struct ReviewSet {
@@ -244,6 +244,11 @@ fn use_cast_before_counter(def: &CardDef, checkpoint: &mut Checkpoint, countered
     else {
         return;
     };
+    // A recorded cast step can advance a cast, while separate scripted choices still
+    // belong to the full replay.
+    if index + 1 != m.board.actions.len() {
+        return;
+    }
     let first = View::ALL[caster.index()];
     let mut before = Moment::new(
         m.name,
@@ -264,6 +269,7 @@ fn use_cast_before_counter(def: &CardDef, checkpoint: &mut Checkpoint, countered
     }) {
         return;
     }
+    checkpoint.review_casts = leak(vec![m.board.actions[index], m.play[0]]);
     checkpoint.moment = before;
     checkpoint.first = first;
     checkpoint.roles[caster.index()] = format!("{card} caster");
@@ -273,7 +279,6 @@ fn use_cast_before_counter(def: &CardDef, checkpoint: &mut Checkpoint, countered
         .iter()
         .map(|c| c.label.clone())
         .collect();
-    checkpoint.counter_demo = true;
 }
 
 fn review_example(
@@ -372,7 +377,7 @@ fn review_example(
             first: View::ALL[owner],
             roles,
             actions,
-            counter_demo: false,
+            review_casts: &[],
         },
     ))
 }

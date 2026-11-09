@@ -14,7 +14,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { SoundPanel } from "../audio/SoundControls";
 import { cardEntry } from "../cards";
 import { Button } from "../components/Controls";
-import type { RelayedEvent } from "../ipc";
+import type { DecisionId, GameUpdate, RelayedEvent } from "../ipc";
 import "./specs.css";
 
 /** Where Vite proxies the spec server (vite.config.ts). */
@@ -29,7 +29,7 @@ interface MomentListing {
   first?: View;
   roles?: [string, string];
   replay?: string | null;
-  counterDemo?: boolean;
+  opponentMove?: boolean;
 }
 
 interface ReviewListing {
@@ -135,7 +135,7 @@ export function Specs({ path }: { path: string }) {
   const moments = review?.examples ?? spec?.moments ?? [];
   const moment = moments.find((m) => m.name === only);
   if (spec && moment && seat) {
-    return <SeatRedirect slug={spec.slug} moment={moment.name} seat={seat} />;
+    return <SeatRedirect slug={spec.slug} moment={moment} seat={seat} />;
   }
   return spec && (moment || !only || only === "replay") ? (
     <SpecPage
@@ -164,7 +164,7 @@ function SeatRedirect({
   seat,
 }: {
   slug: string;
-  moment: string;
+  moment: MomentListing;
   seat: string;
 }) {
   useEffect(() => {
@@ -175,10 +175,12 @@ function SeatRedirect({
       shared && /^[a-z0-9-]+$/.test(shared)
         ? shared
         : `seat-${Math.random().toString(36).slice(2, 10)}`;
-    const live = `${window.location.origin}${API}/m/${slug}/${moment}/${seat}/${id}`;
-    const replay = !hold && !moment.startsWith("review-") ? "&specReplay" : "";
+    const live = `${window.location.origin}${API}/m/${slug}/${moment.name}/${seat}/${id}`;
+    const replay =
+      !hold && !moment.name.startsWith("review-") ? "&specReplay" : "";
+    const opponent = moment.opponentMove ? "&specOpponent" : "";
     window.location.replace(
-      `/?live=${encodeURIComponent(live)}&spec${replay}#/game`,
+      `/?live=${encodeURIComponent(live)}&spec${replay}${opponent}#/game`,
     );
   }, [slug, moment, seat]);
   return <div className="specs" />;
@@ -210,6 +212,49 @@ export function SpecReplayPlay({ url }: { url: string }) {
       Play
     </Button>
   ) : null;
+}
+
+/** Step an available recorded opponent cast, without handing the reviewer a different seat. */
+export function SpecOpponentMove({
+  url,
+  update,
+}: {
+  url: string;
+  update: GameUpdate;
+}) {
+  const [offer, setOffer] = useState<{
+    update: GameUpdate;
+    decision: DecisionId;
+  }>();
+  useEffect(() => {
+    if (update.view.status.kind !== "thinking") return;
+    const request = new AbortController();
+    void fetch(`${url}/opponent-move`, { signal: request.signal })
+      .then((response) => response.json() as Promise<{ ok: DecisionId | null }>)
+      .then(
+        ({ ok }) => {
+          if (ok && !request.signal.aborted) setOffer({ update, decision: ok });
+        },
+        () => {},
+      );
+    return () => request.abort();
+  }, [url, update]);
+  if (offer?.update !== update) return null;
+  return (
+    <Button
+      className="spec-replay-play"
+      onClick={() => {
+        setOffer(undefined);
+        void fetch(`${url}/opponent-move`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(offer.decision),
+        }).catch(() => setOffer(offer));
+      }}
+    >
+      Play opponent’s move
+    </Button>
+  );
 }
 
 function SpecIndex({ specs }: { specs: SpecListing[] }) {
@@ -595,7 +640,8 @@ function MomentView({
   const [n, setN] = useState(0);
   const key = `${slug}/${moment.name}/${view}/${page}.${review?.revision ?? n}`;
   const live = `${window.location.origin}${API}/m/${key}`;
-  const src = `/?live=${encodeURIComponent(live)}&relay&spec#/game`;
+  const opponent = moment.opponentMove ? "&specOpponent" : "";
+  const src = `/?live=${encodeURIComponent(live)}&relay&spec${opponent}#/game`;
   // Hidden until it shows its first view, over a placeholder.
   const [shown, setShown] = useState<string>();
   // Whether it holds views to play, by instance, asked once it has shown.
@@ -733,9 +779,6 @@ function MomentView({
           </a>
         </div>
       </header>
-      {review && moment.counterDemo && view === moment.first && (
-        <p className="specs-review-hint">Cast, then switch seats to respond.</p>
-      )}
       {noting && (
         <BugNote
           instance={key}

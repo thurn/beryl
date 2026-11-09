@@ -189,11 +189,6 @@
   font-size: 14px;
 }
 
-.specs-review-hint {
-  font-size: 14px;
-  margin: 0 0 10px;
-}
-
 .specs-moment-actions {
   grid-column: 2;
   display: flex;

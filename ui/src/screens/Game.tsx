@@ -43,7 +43,7 @@ import { usePhone } from "../mobile/phone";
 import { sameStops, savedStops, saveStops } from "../game/stops";
 import { play } from "../audio/sound";
 import { SoundCorner } from "../audio/SoundControls";
-import { SpecReplayPlay } from "./Specs";
+import { SpecOpponentMove, SpecReplayPlay } from "./Specs";
 
 /** The agent that plays on the true state, hidden cards included. */
 const CHEATING = "mcts-omniscient";
@@ -336,11 +336,14 @@ export function GameScreen({
   }
   // Each game starts with a clean screen.
   const params = new URLSearchParams(window.location.search);
-  const replay = params.has("specReplay") ? params.get("live") : null;
+  const live = params.get("live");
   return (
     <>
       <Playing key={playback.update.session} playback={playback} />
-      {replay && <SpecReplayPlay url={replay} />}
+      {live && params.has("specReplay") && <SpecReplayPlay url={live} />}
+      {live && params.has("specOpponent") && (
+        <SpecOpponentMove url={live} update={playback.update} />
+      )}
     </>
   );
 }

@@ -831,7 +831,6 @@ mod tests {
     #[test]
     fn counter_review_starts_before_the_target_spell_is_cast() {
         use beryl_cards::names::{MANA_CRYPT, MANA_TITHE};
-        use beryl_session::CandidateIndex;
         use beryl_session::protocol::{AskView, ZoneName};
 
         let def = CARDS
@@ -845,13 +844,20 @@ mod tests {
             .find(|(n, _)| *n == MANA_TITHE)
             .unwrap();
         let checkpoints = auto::checkpoints(def, scenarios).examples;
-        let counter = checkpoints.iter().find(|c| c.counter_demo).unwrap();
+        let counter = checkpoints
+            .iter()
+            .find(|c| !c.review_casts.is_empty())
+            .unwrap();
         assert_eq!(counter.first, View::Yours);
 
         let (send, receive) = std::sync::mpsc::channel();
+        let casts = std::sync::Mutex::new(counter.review_casts);
         let sessions = start_review(&counter.moment, move |updates, live| {
-            if at_checkpoint(&updates, live) {
-                let _ = send.send(updates);
+            if live {
+                let steps = serve::recorded_cast_moves(&mut casts.lock().unwrap(), &updates);
+                if at_checkpoint(&updates, live) {
+                    let _ = send.send((updates, steps));
+                }
             }
         })
         .unwrap();
@@ -860,22 +866,23 @@ mod tests {
                 .recv_timeout(std::time::Duration::from_secs(5))
                 .unwrap()
         };
-        for (seat, card) in [(0, MANA_CRYPT), (1, MANA_TITHE)] {
-            let views = next();
-            let Status::Deciding { decision } = &views[seat].view.status else {
+        for (actor, card) in [(0, MANA_CRYPT), (1, MANA_TITHE)] {
+            let (views, steps) = next();
+            let Status::Deciding { decision } = &views[actor].view.status else {
                 panic!("expected the {card} caster to act");
             };
-            let label = format!("Cast {card}");
-            let index = decision
-                .candidates
-                .iter()
-                .position(|c| c.label == label)
-                .unwrap();
-            sessions
-                .choose(decision.id, CandidateIndex(u16::try_from(index).unwrap()))
-                .unwrap();
+            assert!(steps[actor].is_none());
+            let (id, index) = steps[1 - actor].expect("the observer can play the cast");
+            assert_eq!(id, decision.id);
+            assert_eq!(
+                decision.candidates[usize::from(index.0)].label,
+                format!("Cast {card}")
+            );
+            sessions.choose(id, index).unwrap();
         }
-        for update in next() {
+        let (views, steps) = next();
+        assert!(steps.iter().all(Option::is_none));
+        for update in views {
             assert!(!matches!(update.view.status, Status::Deciding { decision }
                 if matches!(decision.ask, AskView::UnlessPays { .. })));
             assert!(update.view.objects.iter().any(|o| {

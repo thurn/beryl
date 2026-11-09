@@ -37,9 +37,11 @@ use std::sync::mpsc::{RecvTimeoutError, Sender, channel};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
+use beryl_scenario::Action;
 use beryl_session::bugs::{self, BugReport, Images, PageInfo, SpecMoment};
 use beryl_session::ipc;
-use beryl_session::{GameUpdate, Sessions, Status};
+use beryl_session::protocol::{Candidate, GameEvent, PlayerView, Side};
+use beryl_session::{CandidateIndex, DecisionId, GameUpdate, Sessions, Status};
 use serde_json::{Value, json};
 
 use super::{Phase, View, find, listing, reviews, slug, specs};
@@ -64,6 +66,7 @@ struct Feed {
     /// Whether its moment has actions of its own to play, which a page holds for its button.
     plays: bool,
     manual: bool,
+    opponent_move: Option<(DecisionId, CandidateIndex)>,
     streams: Vec<Sender<String>>,
     /// Its key, and the page stream it goes to as well, if its key names a page.
     key: String,
@@ -154,7 +157,7 @@ fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result
                     "first": c.first.name(),
                     "roles": c.roles,
                     "actions": c.actions,
-                    "counterDemo": c.counter_demo,
+                    "opponentMove": !c.review_casts.is_empty(),
                     "replay": spec.replay_from_hand(c.moment.group),
                 })
             })
@@ -222,6 +225,27 @@ fn handle_moment(
         ("GET", "held") => {
             let answer = json!({ "ok": holds(&lock(&feed.0)) });
             respond(&mut stream, "200 OK", &answer.to_string())
+        }
+        ("GET", "opponent-move") => {
+            let decision = lock(&feed.0).opponent_move.map(|(id, _)| id);
+            respond(
+                &mut stream,
+                "200 OK",
+                &json!({ "ok": decision }).to_string(),
+            )
+        }
+        ("POST", "opponent-move") => {
+            let expected = serde_json::from_slice::<DecisionId>(body).ok();
+            let list = lock(instances);
+            let step = lock(&feed.0).opponent_move;
+            let played = step.is_some_and(|(decision, index)| {
+                expected == Some(decision)
+                    && list
+                        .iter()
+                        .find(|i| i.key == instance_key(card, name, view, id))
+                        .is_some_and(|i| i.sessions.choose(decision, index).is_ok())
+            });
+            respond(&mut stream, "200 OK", &json!({ "ok": played }).to_string())
         }
         ("POST", command) if command.starts_with("invoke/") => {
             let command = &command["invoke/".len()..];
@@ -436,7 +460,7 @@ fn write_report(sessions: &Sessions, args: Value, spec: SpecMoment, spec_viewer:
     }
 }
 
-fn checkpoint(card: &str, name: &str) -> Option<&'static super::Moment> {
+fn checkpoint(card: &str, name: &str) -> Option<&'static super::auto::Checkpoint> {
     if !name.starts_with("review-") {
         return None;
     }
@@ -447,7 +471,6 @@ fn checkpoint(card: &str, name: &str) -> Option<&'static super::Moment> {
         .examples
         .iter()
         .find(|c| c.moment.name == name)
-        .map(|c| &c.moment)
 }
 
 fn instance_key(card: &str, name: &str, view: &str, id: &str) -> String {
@@ -490,8 +513,9 @@ fn instance(
     let id = key.rsplit('/').next().unwrap_or_default();
     let key = instance_key(card, name, view.name(), id);
     // Generate the card's checkpoints outside the shared instances lock.
+    let review = checkpoint(card, name);
     let moment = if manual {
-        checkpoint(card, name)
+        review.map(|c| &c.moment)
     } else {
         find(card, name).map(|(_, m)| m)
     }
@@ -513,11 +537,18 @@ fn instance(
     let (sessions, mirror) = if manual {
         let mirror = new_feed(pages, &format!("{card}/{name}/theirs/{id}"), false, true);
         let other = Arc::clone(&mirror);
+        let casts = Mutex::new(review.map_or(&[][..], |c| c.review_casts));
         let sessions = super::start_review(moment, move |updates, live| {
             let ready = super::at_checkpoint(&updates, live);
-            for (shared, update) in [&emitted, &other].into_iter().zip(updates) {
+            let moves = if live {
+                recorded_cast_moves(&mut lock(&casts), &updates)
+            } else {
+                [None; 2]
+            };
+            for ((shared, update), step) in [&emitted, &other].into_iter().zip(updates).zip(moves) {
                 let (feed, changed) = &**shared;
                 let mut f = lock(feed);
+                f.opponent_move = step;
                 if f.start.is_some() {
                     broadcast(&mut f, &update);
                 } else if !ready {
@@ -563,6 +594,62 @@ fn instance(
     let selected = pick(&instance);
     list.push(instance);
     Ok(selected)
+}
+
+/// Follow the recorded casts only while the game takes them in order. The other seat may
+/// take the next legal cast explicitly, by the same decision ID as a click in the game.
+pub(super) fn recorded_cast_moves(
+    remaining: &mut &'static [Action],
+    updates: &[GameUpdate; 2],
+) -> [Option<(DecisionId, CandidateIndex)>; 2] {
+    if remaining.is_empty() {
+        return [None; 2];
+    }
+    let first = &updates[0].view;
+    for event in &first.events {
+        if let GameEvent::Cast {
+            slot, controller, ..
+        } = *event
+        {
+            let matches = remaining.first().is_some_and(|action| {
+                matches!(*action, Action::Cast { player, card, .. }
+                    if (player.index() == 0) == (controller == Side::You)
+                        && named(first, slot, card))
+            });
+            *remaining = if matches { &remaining[1..] } else { &[] };
+        }
+    }
+    let Some(Action::Cast {
+        player,
+        card,
+        face,
+        costs,
+    }) = remaining.first().copied()
+    else {
+        return [None; 2];
+    };
+    let view = &updates[player.index()].view;
+    let Status::Deciding { decision } = &view.status else {
+        return [None; 2];
+    };
+    let mut choices = decision.candidates.iter().enumerate().filter(|(_, c)| {
+        matches!(&c.option, Candidate::Cast { slot, face: f, costs: paid }
+            if *f == face.get() && paid.iter().copied().eq(costs.indices()) && named(view, *slot, card))
+    });
+    let mut moves = [None; 2];
+    if let Some((i, _)) = choices.next()
+        && choices.next().is_none()
+        && let Ok(index) = u16::try_from(i)
+    {
+        moves[1 - player.index()] = Some((decision.id, CandidateIndex(index)));
+    }
+    moves
+}
+
+fn named(view: &PlayerView, slot: u16, card: &str) -> bool {
+    view.objects
+        .iter()
+        .any(|o| o.slot == slot && o.name.as_deref() == Some(card))
 }
 
 fn broadcast(feed: &mut Feed, update: &GameUpdate) {
