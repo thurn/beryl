@@ -349,6 +349,7 @@ impl Runner<'_> {
             entrants: [&spec.entrants[0], &spec.entrants[1]],
             from: game::resume_points(&logged),
             until: None,
+            start: None,
         };
         let asking = |i: GameDecision, s: &State, d: &Decision| {
             if self.upgraded() {
@@ -516,6 +517,7 @@ fn crashed(spec: &Spec, logged: &[Line], at: GameDecision) -> GameRecord {
         iterations,
         work,
         crashed_at: Some(at),
+        position: None,
     }
 }
 
@@ -605,6 +607,7 @@ fn commit(dir: &Path, spec: &Spec, played: &Played) -> Result<GameRecord, String
         iterations,
         work,
         crashed_at: None,
+        position: None,
     })
 }
 

@@ -236,20 +236,13 @@ pub struct Game<'a> {
     pub from: [Resume; 2],
     /// Stop before asking this decision.
     pub until: Option<GameDecision>,
+    /// The state the game starts from, where not the shuffle of `seed`: a ladder position
+    /// ([`crate::positions`]).
+    pub start: Option<State>,
 }
 
-/// Plays `g` to its end through the `logged` answers, calling `asking` with the index, the
-/// position and the decision before an agent is asked one not in the log, which stops the
-/// game there if it returns an error, and `answered` with each new decision's index, line
-/// and the transcript's label of its answer before it is applied.
-pub fn play(
-    t: &GameTable,
-    g: &Game<'_>,
-    build: &Build<'_>,
-    logged: &[Line],
-    mut asking: impl FnMut(GameDecision, &State, &Decision) -> Result<(), Stop>,
-    mut answered: impl FnMut(GameDecision, &Line, &str) -> Result<(), String>,
-) -> Result<Played, Stop> {
+/// Each seat's agent for game `g`, built as its log says a rebuilt agent must start.
+fn seat(t: &GameTable, g: &Game<'_>, build: &Build<'_>) -> Result<Vec<Seated>, Stop> {
     let seeds = seat_seeds(g.seed);
     let mut players = Vec::with_capacity(2);
     for ((e, seed), from) in g.entrants.iter().zip(seeds).zip(g.from) {
@@ -267,7 +260,25 @@ pub fn play(
             }),
         });
     }
-    let mut s = State::new(t, g.seed, Profile::SMART);
+    Ok(players)
+}
+
+/// Plays `g` to its end through the `logged` answers, calling `asking` with the index, the
+/// position and the decision before an agent is asked one not in the log, which stops the
+/// game there if it returns an error, and `answered` with each new decision's index, line
+/// and the transcript's label of its answer before it is applied.
+pub fn play(
+    t: &GameTable,
+    g: &Game<'_>,
+    build: &Build<'_>,
+    logged: &[Line],
+    mut asking: impl FnMut(GameDecision, &State, &Decision) -> Result<(), Stop>,
+    mut answered: impl FnMut(GameDecision, &Line, &str) -> Result<(), String>,
+) -> Result<Played, Stop> {
+    let mut players = seat(t, g, build)?;
+    let mut s = g
+        .start
+        .unwrap_or_else(|| State::new(t, g.seed, Profile::SMART));
     let mut x = Scratch::recording();
     let mut transcript = Transcript::new([
         g.entrants[0].label().as_str(),

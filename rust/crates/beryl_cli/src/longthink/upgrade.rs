@@ -166,6 +166,7 @@ impl Check<'_> {
             entrants: [&spec.entrants[0], &spec.entrants[1]],
             from,
             until,
+            start: None,
         };
         let key = &spec.key;
         match game::play(

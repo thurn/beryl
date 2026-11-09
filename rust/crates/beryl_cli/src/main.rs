@@ -8,9 +8,12 @@
 //!   prints the table; `--json` also writes the results, `--check` checks the invariants at
 //!   every decision. Games run in parallel, one thread each.
 //! - `beryl_cli ladder <challenger> [--vs NAME] [--work 3M] [--bar stronger|plausible]
-//!   [--cap N] [--seed N] [--out DIR]` plays a paired match against the champion until a
-//!   sequential test decides it or the cap ends it, and prints a `docs/ladder.md` row
-//!   ([`ladder`], `just ladder`).
+//!   [--cap N] [--seed N] [--positions DIR] [--out DIR]` plays a paired match against the
+//!   champion until a sequential test decides it or the cap ends it, and prints a
+//!   `docs/ladder.md` row ([`ladder`], `just ladder`).
+//! - `beryl_cli positions build [--games N] [--seed N] [--work 3M] [--out DIR]` cuts the
+//!   ladder's balanced start positions from champion games; `beryl_cli positions sample
+//!   [--count N] DIR` prints some as transcripts ([`positions`], `just positions`).
 //! - The budget flags `--iterations N` and `--trees K` set a searching agent's iterations
 //!   per decision and how many independent trees share them (`beryl_search::Budget`).
 //! - `beryl_cli record-fixture <definitions.json> <out-dir> [name...]` plays the seeded games
@@ -47,6 +50,7 @@ mod freeze;
 mod game;
 mod ladder;
 mod longthink;
+mod positions;
 mod review;
 mod serve;
 mod specs;
@@ -65,7 +69,9 @@ const USAGE: &str = "usage:
       [--paired] [--iterations N] [--trees K]
       (an agent is a registered one or a long-think entrant, family@budget)
   beryl_cli ladder <challenger> [--vs NAME] [--work 3M] [--bar stronger|plausible]
-      [--cap N] [--seed N] [--out DIR]
+      [--cap N] [--seed N] [--positions DIR] [--out DIR]
+  beryl_cli positions build [--games N] [--seed N] [--work 3M] [--out DIR]
+  beryl_cli positions sample [--count N] DIR
   beryl_cli record-fixture <definitions.json> <out-dir> [name...]
   beryl_cli longthink [--status | --upgrade | --add FAMILY] [--new | --run DIR] [--games N]
   beryl_cli eval-fit [--games N] [--seed N]
@@ -96,6 +102,7 @@ fn main() -> ExitCode {
         [command, rest @ ..] if command == "anchor-replay" => anchor_replay::main(rest),
         [command, rest @ ..] if command == "agreement" => agreement::main(rest),
         [command, rest @ ..] if command == "ladder" => ladder::main(rest),
+        [command, rest @ ..] if command == "positions" => positions::main(rest),
         [command, dir] if command == "longthink-run" => longthink::runner(Path::new(dir), None),
         [command, dir, flag, n] if command == "longthink-run" && flag == "--games" => {
             number(flag, n).and_then(|n| longthink::runner(Path::new(dir), Some(n)))

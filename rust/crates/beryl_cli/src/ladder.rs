@@ -21,13 +21,16 @@
 //!   replays the game from its seed, as `anchor_replay::walk` does), `transcripts/<game>.txt`
 //!   and `decisions.jsonl` (each searched decision's root visits and means).
 //!
-//! Matches start from the shuffle: `--positions`, the curated start positions of §4.1, is
-//! refused until the position set exists (by-97g.2).
+//! With `--positions DIR`, a set of curated start positions ([`crate::positions`]), four pairs
+//! in five start from a position, both games from the same one with the libraries reshuffled
+//! by the pair's seed, and the fifth from the shuffle, so mulligans and openings stay tested
+//! (§4.1). The positions used are copied to the match's `positions/`, which each game's record
+//! names, and the report sets the spread of pair scores from positions beside the shuffle's.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::thread;
@@ -40,6 +43,7 @@ use crate::game::{mirror, parse_work};
 use crate::longthink::files::{self, Log};
 use crate::longthink::game::{self as arena, Entrant, Game, GameDecision, Line, Resume};
 use crate::longthink::{DecisionRecord, GameRecord, Verdict as GameVerdict, cache, rung_name};
+use crate::positions::{Position, start};
 use crate::tournament::{game_seed, wilson};
 
 /// Games played at once, one thread each (docs/ai-strategy.md §4.1).
@@ -49,7 +53,8 @@ pub const GAMES_AT_ONCE: usize = 18;
 const PROXY: u64 = 3_000_000;
 
 const USAGE: &str = "usage: beryl_cli ladder <challenger> [--vs NAME] [--work 3M] \
-                     [--bar stronger|plausible] [--cap N] [--seed N] [--out DIR]";
+                     [--bar stronger|plausible] [--cap N] [--seed N] [--positions DIR] \
+                     [--out DIR]";
 
 /// The pre-registered bars of docs/ai-strategy.md §4.2. Each passes when its test accepts
 /// `elo1`.
@@ -198,6 +203,20 @@ pub struct Match {
     pub cap: u32,
     pub seed: u64,
     pub out: PathBuf,
+    /// The start positions, by file name; none to start every pair from the shuffle.
+    pub positions: Vec<(String, Position)>,
+}
+
+impl Match {
+    /// The position pair `pair` starts from: four pairs in five, cycling through the set so
+    /// each is used once before any twice; none for the fifth, or without a set.
+    pub fn position(&self, pair: u32) -> Option<&(String, Position)> {
+        if self.positions.is_empty() || pair % 5 == 4 {
+            return None;
+        }
+        let k = (pair - pair / 5) as usize;
+        self.positions.get(k % self.positions.len())
+    }
 }
 
 /// A match's result, as `match.json` keeps it.
@@ -213,6 +232,12 @@ pub struct Report {
     pub cap: u32,
     pub games: u32,
     pub pairs: Pairs,
+    /// The pairs by how they started, and the spread (standard deviation) of their pair
+    /// scores, 1 swept, a half split, 0 lost: what the positions buy (§4.1).
+    pub from_positions: Pairs,
+    pub from_shuffle: Pairs,
+    pub spread_positions: f64,
+    pub spread_shuffle: f64,
     /// The challenger's games won, lost and drawn (a stall counts as a draw).
     pub wins: u32,
     pub losses: u32,
@@ -242,6 +267,8 @@ impl Report {
         let [lo, hi] = wilson(f64::from(self.pairs.swept), decided);
         self.elo_interval = [elo_of_swept_share(lo), elo_of_swept_share(hi)];
         self.llr = self.sprt.llr(self.pairs);
+        self.spread_positions = spread(self.from_positions);
+        self.spread_shuffle = spread(self.from_shuffle);
     }
 
     /// The match as a `docs/ladder.md` row, under [`ROW_HEADER`]. The suite's open and fixed
@@ -296,6 +323,23 @@ impl Report {
             self.pairs.split,
             self.pairs.lost
         );
+        if self.from_positions.total() > 0 {
+            let _ = writeln!(
+                out,
+                "from positions {}: {} swept, {} split, {} lost, spread {:.3}; from the shuffle \
+                 {}: {} swept, {} split, {} lost, spread {:.3}",
+                self.from_positions.total(),
+                self.from_positions.swept,
+                self.from_positions.split,
+                self.from_positions.lost,
+                self.spread_positions,
+                self.from_shuffle.total(),
+                self.from_shuffle.swept,
+                self.from_shuffle.split,
+                self.from_shuffle.lost,
+                self.spread_shuffle
+            );
+        }
         let _ = writeln!(
             out,
             "score {:.1}% [{:.1}, {:.1}]; Elo {} [{}, {}]",
@@ -321,6 +365,17 @@ pub const ROW_HEADER: &str = "| Date | Challenger | Champion | Budget | Games | 
                               | Verdict | Suite open / fixed | Human games |\n\
                               | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |";
 
+/// The standard deviation of pairs' scores: 1 swept, a half split, 0 lost.
+pub fn spread(p: Pairs) -> f64 {
+    let n = f64::from(p.total());
+    if n == 0.0 {
+        return 0.0;
+    }
+    let mean = (f64::from(p.swept) + 0.5 * f64::from(p.split)) / n;
+    let square = (f64::from(p.swept) + 0.25 * f64::from(p.split)) / n;
+    (square - mean * mean).max(0.0).sqrt()
+}
+
 /// An Elo figure with its sign, whole.
 fn signed(elo: f64) -> String {
     if elo.is_finite() {
@@ -340,6 +395,7 @@ pub fn main(args: &[String]) -> Result<(), String> {
     let mut cap = 2_000;
     let mut seed = 0;
     let mut out = None;
+    let mut positions = Vec::new();
     let mut args = args.iter();
     while let Some(arg) = args.next() {
         let mut value = || {
@@ -363,13 +419,7 @@ pub fn main(args: &[String]) -> Result<(), String> {
             "--cap" => cap = crate::number(arg, &value()?)?,
             "--seed" => seed = crate::number(arg, &value()?)?,
             "--out" => out = Some(PathBuf::from(value()?)),
-            "--positions" => {
-                return Err(
-                    "--positions: the position set does not exist yet (by-97g.2); \
-                            matches start from the shuffle"
-                        .to_owned(),
-                );
-            }
+            "--positions" => positions = crate::positions::load(Path::new(&value()?))?,
             flag if flag.starts_with("--") => return Err(format!("unknown flag {flag}\n{USAGE}")),
             name if challenger.is_none() => challenger = Some(name.to_owned()),
             _ => return Err(USAGE.to_owned()),
@@ -394,6 +444,7 @@ pub fn main(args: &[String]) -> Result<(), String> {
         cap,
         seed,
         out,
+        positions,
     };
     let report = run(&m, |pairs, llr, bounds| {
         eprintln!(
@@ -466,8 +517,10 @@ fn key(game: u32) -> String {
 struct Shared {
     /// Each finished game's challenger half points, by game.
     halves: BTreeMap<u32, u32>,
-    /// The pairs counted, in order, and the challenger's games.
+    /// The pairs counted, in order, all and by how they started, and the challenger's games.
     pairs: Pairs,
+    from_positions: Pairs,
+    from_shuffle: Pairs,
     counted: u32,
     wins: u32,
     losses: u32,
@@ -493,6 +546,9 @@ pub fn run(
     for sub in ["logs", "transcripts"] {
         fs::create_dir_all(m.out.join(sub)).map_err(|e| format!("{}: {e}", m.out.display()))?;
     }
+    if !m.positions.is_empty() {
+        crate::positions::write(&m.out.join("positions"), &m.positions)?;
+    }
     let entrants = [entrant(&m.challenger)?, entrant(&m.champion)?];
     let sprt = m.bar.sprt();
     let t = mirror();
@@ -502,6 +558,8 @@ pub fn run(
     let shared = Mutex::new(Shared {
         halves: BTreeMap::new(),
         pairs: Pairs::default(),
+        from_positions: Pairs::default(),
+        from_shuffle: Pairs::default(),
         counted: 0,
         wins: 0,
         losses: 0,
@@ -531,7 +589,7 @@ pub fn run(
                             _ => 1,
                         };
                         sh.halves.insert(g, halves);
-                        Ok(count_pairs(&mut sh, sprt))
+                        Ok(count_pairs(&mut sh, m, sprt))
                     });
                     match counted {
                         Ok(new) => {
@@ -556,6 +614,14 @@ pub fn run(
     if let Some(e) = sh.failure {
         return Err(e);
     }
+    let report = report(m, sprt, &sh);
+    let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())? + "\n";
+    files::write_whole(&m.out.join("match.json"), json.as_bytes())?;
+    Ok(report)
+}
+
+/// The report of match `m` from what its workers counted.
+fn report(m: &Match, sprt: Sprt, sh: &Shared) -> Report {
     let mut report = Report {
         date: beryl_session::corpus::today(),
         challenger: m.challenger.clone(),
@@ -567,6 +633,10 @@ pub fn run(
         cap: m.cap,
         games: sh.counted,
         pairs: sh.pairs,
+        from_positions: sh.from_positions,
+        from_shuffle: sh.from_shuffle,
+        spread_positions: 0.0,
+        spread_shuffle: 0.0,
         wins: sh.wins,
         losses: sh.losses,
         draws: sh.draws,
@@ -580,14 +650,12 @@ pub fn run(
         out: m.out.display().to_string(),
     };
     report.tally();
-    let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())? + "\n";
-    files::write_whole(&m.out.join("match.json"), json.as_bytes())?;
-    Ok(report)
+    report
 }
 
 /// Counts the pairs both of whose games are in, in order, until the test decides. Returns
 /// whether any was counted.
-fn count_pairs(sh: &mut Shared, sprt: Sprt) -> bool {
+fn count_pairs(sh: &mut Shared, m: &Match, sprt: Sprt) -> bool {
     let mut any = false;
     while sh.verdict.is_none() {
         let first = sh.counted;
@@ -602,6 +670,11 @@ fn count_pairs(sh: &mut Shared, sprt: Sprt) -> bool {
             }
         }
         sh.pairs.add(a + b);
+        if m.position(first / 2).is_some() {
+            sh.from_positions.add(a + b);
+        } else {
+            sh.from_shuffle.add(a + b);
+        }
         sh.counted += 2;
         sh.verdict = sprt.decide(sh.pairs);
         any = true;
@@ -623,11 +696,13 @@ fn play_one(
         [&entrants[1], &entrants[0]]
     };
     let seed = game_seed(m.seed, 0, g / 2);
+    let position = m.position(g / 2);
     let game = Game {
         seed,
         entrants: seated,
         from: [Resume::At(AgentDecision(0)); 2],
         until: None,
+        start: position.map(|(_, p)| start(t, p, seed)).transpose()?,
     };
     let key = key(g);
     let played = arena::play(t, &game, &build, &[], |_, _, _| Ok(()), |_, _, _| Ok(()))
@@ -674,6 +749,7 @@ fn play_one(
         iterations,
         work,
         crashed_at: None,
+        position: position.map(|(name, _)| name.clone()),
     };
     Ok((record, played))
 }
@@ -869,6 +945,7 @@ mod tests {
             cap: 6,
             seed: 11,
             out: out.clone(),
+            positions: Vec::new(),
         };
         let r = run(&m, |_, _, _| {}).unwrap();
         assert_eq!(
@@ -916,6 +993,63 @@ mod tests {
         let _ = fs::remove_dir_all(&again.out);
     }
 
+    /// With positions, four pairs in five start from one, both games from the same, the set
+    /// cycled through; the fifth starts from the shuffle. The games replay from their records.
+    #[test]
+    fn positions_start_four_pairs_in_five() {
+        let set = crate::positions::build(
+            &crate::positions::Build {
+                games: 1,
+                seed: 2,
+                settings: Settings {
+                    family: "pimc2/hidden/rollout/tuned".parse().unwrap(),
+                    work: 2_000,
+                    threads: 1,
+                },
+                band: [0.0, 1.0],
+            },
+            |_| {},
+        )
+        .unwrap()
+        .positions;
+        assert!(set.len() >= 2, "{}", set.len());
+        let out = scratch("positions");
+        let m = Match {
+            challenger: "greedy".to_owned(),
+            champion: "random".to_owned(),
+            work: PROXY,
+            bar: Bar::Stronger,
+            cap: 12,
+            seed: 4,
+            out: out.clone(),
+            positions: set.clone(),
+        };
+        let names: Vec<Option<&str>> = (0..6)
+            .map(|p| m.position(p).map(|(n, _)| n.as_str()))
+            .collect();
+        let name = |k: usize| Some(set[k % set.len()].0.as_str());
+        assert_eq!(names, [name(0), name(1), name(2), name(3), None, name(4)]);
+        let r = run(&m, |_, _, _| {}).unwrap();
+        assert_eq!((r.from_positions.total(), r.from_shuffle.total()), (5, 1));
+        assert!(r.text().contains("from positions 5"));
+        let games: Vec<GameRecord> = files::read(&out.join("games.jsonl")).unwrap();
+        for g in &games {
+            let expected = m.position(g.pair).map(|(n, _)| n.clone());
+            assert_eq!(g.position, expected, "{}", g.game);
+        }
+        let mut visited = 0;
+        let walked = crate::anchor_replay::walk(&out, "greedy", |_, _, _, _, _, _| visited += 1);
+        assert_eq!(walked.unwrap(), 12);
+        let _ = fs::remove_dir_all(&out);
+    }
+
+    #[test]
+    fn the_spread_of_pair_scores() {
+        assert!(spread(Pairs::default()).abs() < 1e-12);
+        assert!(spread(pairs(0, 9, 0)).abs() < 1e-12);
+        assert!((spread(pairs(5, 0, 5)) - 0.5).abs() < 1e-12);
+    }
+
     #[test]
     fn names_resolve_at_the_budget() {
         assert_eq!(
@@ -947,6 +1081,10 @@ mod tests {
             cap: 2_000,
             games: 700,
             pairs: pairs(120, 162, 68),
+            from_positions: Pairs::default(),
+            from_shuffle: pairs(120, 162, 68),
+            spread_positions: 0.0,
+            spread_shuffle: 0.0,
             wins: 400,
             losses: 290,
             draws: 10,

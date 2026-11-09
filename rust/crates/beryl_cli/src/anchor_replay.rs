@@ -31,6 +31,7 @@ use beryl_search::{ANCHOR_ERRORS, Family, LongSearch, RolloutPolicy, Settings, g
 use serde::Deserialize;
 
 use crate::game::{mirror, parse_work};
+use crate::positions::{self, Position};
 use crate::transcript::Transcript;
 
 /// The margins reported, in mean reward.
@@ -50,6 +51,9 @@ struct GameLine {
     /// The seat of `a`.
     seat: u8,
     outcome: String,
+    /// The ladder position it started from, under the run's `positions/`.
+    #[serde(default)]
+    position: Option<String>,
 }
 
 /// The fields of a game log's line this reads.
@@ -208,7 +212,17 @@ pub fn walk(
         } else {
             ["opponent", entrant]
         };
-        let mut s = State::new(&t, g.seed, Profile::SMART);
+        let mut s = match &g.position {
+            Some(name) => {
+                let path = dir.join("positions").join(name);
+                let text =
+                    fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+                let p: Position =
+                    serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+                positions::start(&t, &p, g.seed)?
+            }
+            None => State::new(&t, g.seed, Profile::SMART),
+        };
         let mut x = Scratch::new();
         for line in log.lines().map(serde_json::from_str::<LogLine>) {
             let line = line.map_err(|e| format!("{}: {e}", path.display()))?;

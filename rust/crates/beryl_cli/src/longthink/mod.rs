@@ -125,6 +125,10 @@ pub struct GameRecord {
     /// The decision a crashed game crashed at.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub crashed_at: Option<GameDecision>,
+    /// The ladder position the game started from, by its file's name under the run's
+    /// `positions/`; none for a game from the shuffle.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub position: Option<String>,
 }
 
 impl GameRecord {
@@ -275,6 +279,7 @@ impl GameRecord {
             iterations: [600, 600],
             work: [work(&m.a), work(&m.b)],
             crashed_at: None,
+            position: None,
         }
     }
 }
