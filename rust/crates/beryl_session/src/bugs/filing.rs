@@ -1,4 +1,4 @@
-//! Opt-in filing shared by the desktop app and the local spec server.
+//! Local bead filing for reports submitted from a project checkout.
 
 use std::ffi::OsStr;
 use std::path::Path;
@@ -9,6 +9,7 @@ use crate::journal;
 
 /// Queues a saved report for local filing. The saved report remains available if filing fails.
 pub fn enqueue(root: &Path, id: &str) {
+    // The local launchers provide the checkout. A standalone app can still save reports.
     let Some(repo) = std::env::var_os("BERYL_FILE_BUGS") else {
         return;
     };

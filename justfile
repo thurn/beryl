@@ -31,7 +31,7 @@ awake := if os() == "windows" { by_anywhere + " low --awake --" } else { "caffei
 default:
     @just --list --unsorted
 
-# The app with hot reload, in a window (--file-bugs files local beads; agents use `smoke`)
+# The app with hot reload, in a window (agents use `smoke`)
 [group('app')]
 dev *args:
     {{ by }} dev "$@"
@@ -86,7 +86,7 @@ ui-test *args:
 ui-live *args:
     {{ by }} ui-live "$@"
 
-# The cards' spec pages, each moment a live game (--file-bugs files local beads)
+# The cards' spec pages, each moment a live game
 [group('app')]
 specs *args:
     {{ by }} specs "$@"

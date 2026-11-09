@@ -232,16 +232,15 @@ def capture(args: argparse.Namespace, url: str, env: dict[str, str]) -> int:
     ).returncode
 
 
-def serve_specs(binary: Path, port: int, *, file_bugs: bool) -> subprocess.Popen[bytes]:
+def serve_specs(binary: Path, port: int) -> subprocess.Popen[bytes]:
     """Starts `beryl_cli specs-serve` on `port`. It runs from this checkout as `cargo run`
     would, so a bug report filed from a spec page names the commit (`bugs.rs`'s `commit`).
     """
     env = {
         **os.environ,
+        "BERYL_FILE_BUGS": str(paths.REPO),
         "CARGO_MANIFEST_DIR": str(paths.REPO / "rust" / "crates" / "beryl_cli"),
     }
-    if file_bugs:
-        env["BERYL_FILE_BUGS"] = str(paths.REPO)
     return subprocess.Popen(
         [str(binary), "specs-serve", "--port", str(port)],
         cwd=paths.REPO,
@@ -332,7 +331,7 @@ def drive(
                 servers[-1].terminate()
                 servers[-1].wait()
                 binary = built or binary
-                servers.append(serve_specs(binary, spec_port, file_bugs=args.file_bugs))
+                servers.append(serve_specs(binary, spec_port))
                 warm_specs(spec_port)
                 print("specs: spec server restarted; open moments again", flush=True)
             changed = newest(scripts, ".mjs")
@@ -380,7 +379,7 @@ def specs(args: argparse.Namespace) -> int:
     if args.release and not build_ui():
         return 1
     spec_port = free_port()
-    servers = [serve_specs(binary, spec_port, file_bugs=args.file_bugs)]
+    servers = [serve_specs(binary, spec_port)]
     # A plain SIGTERM would end Python without the cleanup below, orphaning the server.
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     try:
@@ -471,8 +470,5 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         "--release",
         action="store_true",
         help="optimized beryl_cli and the UI's production build",
-    )
-    p.add_argument(
-        "--file-bugs", action="store_true", help="file bug reports as local beads"
     )
     p.set_defaults(func=specs)
