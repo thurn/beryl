@@ -150,6 +150,7 @@ import {
   STEP_NAMES,
   STAGE,
   zonePiles,
+  knownLibraries,
   type Box,
   type Layout,
   type Placement,
@@ -489,7 +490,8 @@ export function Board({
   }, [hoveredPlace]);
   useEffect(() => () => clearTimeout(recheck.current), []);
   const piles = useMemo(() => zonePiles(shown), [shown, stageWidth]);
-  const pile = piles.find(
+  const libraries = useMemo(() => knownLibraries(shown), [shown, stageWidth]);
+  const pile = [...piles, ...libraries].find(
     (p) => p.side === viewing?.side && p.zone === viewing.zone,
   );
   const viewed =
@@ -1350,9 +1352,9 @@ export function Board({
         <ManaFlow motes={motes} />
 
         {/* Over the cards on them: a pile is opened, never pointed at card by card. */}
-        {piles.map(
+        {[...piles, ...libraries].map(
           (pile) =>
-            pile.cards.length > 0 && (
+            (pile.cards.length > 0 || pile.zone === "library") && (
               <PileButton
                 key={`${pile.side}-${pile.zone}`}
                 pile={pile}
@@ -1576,9 +1578,11 @@ export function Board({
           <ZoneViewer
             pile={viewed}
             title={
-              viewing?.linked === undefined
-                ? undefined
-                : (objects.get(viewing.linked)?.name ?? undefined)
+              viewed.zone === "library"
+                ? `Known cards · ${viewed.side === "you" ? "Your" : "Opponent’s"} library`
+                : viewing?.linked === undefined
+                  ? undefined
+                  : (objects.get(viewing.linked)?.name ?? undefined)
             }
             states={states}
             offers={(slot) => deciding && can.bySlot.has(slot)}

@@ -24,6 +24,7 @@ import {
   CardBack,
   type Highlight,
 } from "../components/Card";
+import { Library } from "../components/Player";
 import { Button } from "../components/Controls";
 import { useOpenSound } from "../audio/SoundControls";
 import { Overlay, type OverlayAction } from "../components/Overlay";
@@ -235,10 +236,6 @@ const GHOST = -2;
  * the held card lifted, tilted and scaled up in the frame's aspect, its slot in the row
  * opened only `HELD_STEP`. */
 const FACE = { width: 282, y: 237, turn: 3.2 };
-const BACKS = [
-  { dx: -31, y: 174, turn: -10 },
-  { dx: 31, y: 171, turn: 5 },
-];
 const HELD = { width: 297, turn: -8.6 };
 const STEP = 264;
 const HELD_STEP = 166;
@@ -337,18 +334,18 @@ function ArrangeChoice({
           animate={{ x: center.get(LIBRARY)! }}
           transition={SPRING}
         >
-          {BACKS.map((b, i) => (
-            <CardBack
-              key={i}
+          <div
+            style={{
+              position: "absolute",
+              left: -BACK_WIDTH / 2,
+              top: 174 - BACK_WIDTH / CARD_ASPECT / 2,
+            }}
+          >
+            <Library
+              count={view.players.you.library.length}
               width={BACK_WIDTH}
-              style={{
-                position: "absolute",
-                left: b.dx - BACK_WIDTH / 2,
-                top: b.y - BACK_WIDTH / CARD_ASPECT / 2,
-                rotate: `${b.turn}deg`,
-              }}
             />
-          ))}
+          </div>
         </motion.div>
         {ghosts.map((ghost) => (
           <div

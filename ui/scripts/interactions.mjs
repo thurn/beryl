@@ -3437,6 +3437,19 @@ await check(
     { fixture: "choice-scry", at: scry.views.length, ready: ".choice" },
 );
 
+await check(
+    "scry shows the table library stack",
+    async (page) => {
+        await page.clock.runFor(1000);
+        assert.equal(await page.locator(".choice-library .pile").count(), 1);
+        assert.equal(
+            await page.locator(".choice-library .card-back").count(),
+            1,
+        );
+    },
+    { fixture: "choice-scry", at: scry.views.length, ready: tray(scryNext) },
+);
+
 // The scry's source, Aang's Iceberg, has four paragraphs of rules: they shrink to fit its box.
 await check(
     "long rules text fits its card rather than being cut off",
@@ -3484,6 +3497,42 @@ const pileRun = {
     at: pilesAt + 1,
     ready: pile("you", "graveyard"),
 };
+await derive("choice-scry", "known-library", pilesAt, (v) => ({
+    ...v,
+    objects: v.objects.map((o) =>
+        o.zone === "library"
+            ? {
+                  ...o,
+                  name:
+                      o.slot === v.players[o.owner].library.at(-2)
+                          ? "Jace, Vryn's Prodigy"
+                          : null,
+              }
+            : o,
+    ),
+}));
+await check(
+    "known library browser never reveals unknown cards",
+    async (page) => {
+        await page.clock.runFor(2000);
+        for (const side of ["you", "opponent"]) {
+            await page
+                .locator(`button[data-pile="library"][data-side="${side}"]`)
+                .click();
+            await page.clock.runFor(1000);
+            const dialog = page.getByRole("dialog");
+            assert.match(await dialog.innerText(), /Known cards/);
+            assert.equal(await dialog.locator(".zone-viewer-card").count(), 1);
+            assert.match(await dialog.innerText(), /Jace/);
+            await dialog
+                .getByRole("button", { name: "Close", exact: true })
+                .click();
+            await page.clock.runFor(1000);
+        }
+    },
+    { ...pileRun, fixture: "known-library", at: 1 },
+);
+
 const overlaps = (a, b) =>
     a.x < b.x + b.width &&
     b.x < a.x + a.width &&

@@ -1368,10 +1368,28 @@ export function playableElsewhere(view: PlayerView): number[] {
  * or what they own in exile that no permanent holds beneath it (those lie under it). */
 export interface ZonePile {
   side: Side;
-  zone: "graveyard" | "exile";
+  zone: "graveyard" | "exile" | "library";
   /** Bottom first: the last lies on top. */
   cards: ObjectView[];
   look: PileLook;
+}
+
+/** Only identities already disclosed by the session may be browsed in a library. */
+export function knownLibraries(view: PlayerView): ZonePile[] {
+  const objects = new Map(view.objects.map((o) => [o.slot, o]));
+  return (["you", "opponent"] as const).map((side) => ({
+    side,
+    zone: "library",
+    look: pileLook(
+      side,
+      PILES[side].library,
+      view.players[side].library.length,
+    ),
+    cards: view.players[side].library.flatMap((slot) => {
+      const object = objects.get(slot);
+      return object?.name ? [object] : [];
+    }),
+  }));
 }
 
 /** The permanent among `onField` holding the card `o` in exile, drawn behind it: the one that
