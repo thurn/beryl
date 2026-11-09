@@ -17,6 +17,9 @@
 //! - `beryl_cli blunders [agent] [--work 3M,30M] [--seeds 5] [--only NAME,...] [--json FILE]`
 //!   runs the blunder suite of `data/blunders.json` for an agent, the champion by default
 //!   ([`blunders`], `just blunders`).
+//! - `beryl_cli screen <challenger> <match-dir> [--vs NAME] [--recheck N] [--work 3M]
+//!   [--games N]` replays the champion's match games, asks a challenger each of the
+//!   champion's decisions and re-searches where they differ ([`screen`], `just screen`).
 //! - The budget flags `--iterations N` and `--trees K` set a searching agent's iterations
 //!   per decision and how many independent trees share them (`beryl_search::Budget`).
 //! - `beryl_cli record-fixture <definitions.json> <out-dir> [name...]` plays the seeded games
@@ -56,6 +59,7 @@ mod ladder;
 mod longthink;
 mod positions;
 mod review;
+mod screen;
 mod serve;
 mod specs;
 mod tournament;
@@ -77,6 +81,7 @@ const USAGE: &str = "usage:
       [--cap N] [--seed N] [--positions DIR] [--out DIR]
   beryl_cli positions build [--games N] [--seed N] [--work 3M] [--out DIR]
   beryl_cli positions sample [--count N] DIR
+  beryl_cli screen <challenger> <match-dir> [--vs NAME] [--recheck N] [--work 3M] [--games N]
   beryl_cli blunders [agent] [--work 3M,30M] [--seeds 5] [--only NAME,...] [--json FILE]
   beryl_cli record-fixture <definitions.json> <out-dir> [name...]
   beryl_cli longthink [--status | --upgrade | --add FAMILY] [--new | --run DIR] [--games N]
@@ -109,6 +114,7 @@ fn main() -> ExitCode {
         [command, rest @ ..] if command == "agreement" => agreement::main(rest),
         [command, rest @ ..] if command == "ladder" => ladder::main(rest),
         [command, rest @ ..] if command == "blunders" => blunders::main(rest),
+        [command, rest @ ..] if command == "screen" => screen::main(rest),
         [command, rest @ ..] if command == "positions" => positions::main(rest),
         [command, dir] if command == "longthink-run" => longthink::runner(Path::new(dir), None),
         [command, dir, flag, n] if command == "longthink-run" && flag == "--games" => {

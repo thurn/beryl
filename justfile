@@ -209,6 +209,12 @@ ladder *args:
 positions *args:
     RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- positions "$@"
 
+# A challenger's differing moves over the champion's last match, re-searched, at low priority (<challenger> <match-dir> --vs NAME, --recheck N, --work 3M, --games N)
+[group('agents')]
+[no-cd]
+screen *args:
+    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- screen "$@"
+
 # The blunder suite against an agent, the champion by default, at low priority ([agent] --work 3M,30M, --seeds 5, --only NAME,..., --json FILE)
 [group('agents')]
 [no-cd]

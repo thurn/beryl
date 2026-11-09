@@ -25,10 +25,12 @@ use std::fs;
 use std::path::Path;
 
 use beryl_engine::{
-    Choice, Decision, DecisionKind, Profile, Replay, Scratch, State, Step, apply, next, observe,
+    Choice, Decision, DecisionKind, GameTable, Profile, Replay, Scratch, State, Step, apply, next,
+    observe,
 };
 use beryl_search::{ANCHOR_ERRORS, Family, LongSearch, RolloutPolicy, Settings, guarded};
 use serde::Deserialize;
+use serde::de::DeserializeOwned;
 
 use crate::game::{mirror, parse_work};
 use crate::positions::{self, Position};
@@ -42,18 +44,86 @@ const MARGINS: [f64; 5] = [0.0, 0.005, 0.01, 0.02, 0.04];
 const COST_MAX: f64 = 0.01;
 
 /// The fields of a `games.jsonl` line this reads.
-#[derive(Deserialize)]
-struct GameLine {
-    game: String,
-    a: String,
-    b: String,
-    seed: u64,
+#[derive(Clone, Debug, Deserialize)]
+pub struct GameLine {
+    pub game: String,
+    pub a: String,
+    pub b: String,
+    pub seed: u64,
     /// The seat of `a`.
-    seat: u8,
-    outcome: String,
+    pub seat: u8,
+    pub outcome: String,
     /// The ladder position it started from, under the run's `positions/`.
     #[serde(default)]
-    position: Option<String>,
+    pub position: Option<String>,
+}
+
+impl GameLine {
+    /// The seat `entrant` played, if it played this game.
+    pub fn seat_of(&self, entrant: &str) -> Option<u8> {
+        if self.a == entrant {
+            Some(self.seat)
+        } else if self.b == entrant {
+            Some(1 - self.seat)
+        } else {
+            None
+        }
+    }
+}
+
+/// The finished games of the run or match in `dir`, crashed ones left out.
+pub fn games(dir: &Path) -> Result<Vec<GameLine>, String> {
+    let path = dir.join("games.jsonl");
+    let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut games = Vec::new();
+    for g in text.lines().map(serde_json::from_str::<GameLine>) {
+        let g = g.map_err(|e| format!("{}: {e}", path.display()))?;
+        if g.outcome != "crashed" {
+            games.push(g);
+        }
+    }
+    Ok(games)
+}
+
+/// The state game `g` of the run in `dir` started from: its seed's shuffle, or its ladder
+/// position.
+pub fn start(dir: &Path, t: &GameTable, g: &GameLine) -> Result<State, String> {
+    match &g.position {
+        Some(name) => {
+            let path = dir.join("positions").join(name);
+            let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+            let p: Position =
+                serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+            positions::start(t, &p, g.seed)
+        }
+        None => Ok(State::new(t, g.seed, Profile::SMART)),
+    }
+}
+
+/// The lines of game `g`'s log in `dir`, as `T` reads them.
+pub fn log<T: DeserializeOwned>(dir: &Path, g: &GameLine) -> Result<Vec<T>, String> {
+    let path = dir.join("logs").join(format!("{}.jsonl", g.game));
+    let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    text.lines()
+        .map(|l| serde_json::from_str(l).map_err(|e| format!("{}: {e}", path.display())))
+        .collect()
+}
+
+/// A fresh duel of candidates `a` and `b` at decision `d` of `s`, the whole budget of
+/// `settings` split between them (`LongSearch::duel`), from `seed`: `a`'s lead over `b`, tree
+/// by tree, without the bias of a lead the search chose.
+pub fn duel(
+    t: &GameTable,
+    settings: Settings,
+    seed: u64,
+    s: &State,
+    d: &Decision,
+    a: Choice,
+    b: Choice,
+) -> beryl_search::AnchorCheck {
+    let mut x = Scratch::new();
+    let search = LongSearch::new(t, settings, seed);
+    search.duel(observe(s, t, &mut x, d.player), d, a, b)
 }
 
 /// The fields of a game log's line this reads.
@@ -189,43 +259,21 @@ pub fn walk(
     mut visit: impl FnMut(&str, &State, &Decision, u16, &Searched, [&str; 2]),
 ) -> Result<u32, String> {
     let t = mirror();
-    let games = fs::read_to_string(dir.join("games.jsonl"))
-        .map_err(|e| format!("{}: {e}", dir.join("games.jsonl").display()))?;
     let mut played = 0;
-    for g in games.lines().map(serde_json::from_str::<GameLine>) {
-        let g = g.map_err(|e| format!("games.jsonl: {e}"))?;
-        let seat = if g.a == entrant {
-            g.seat
-        } else if g.b == entrant {
-            1 - g.seat
-        } else {
+    for g in games(dir)? {
+        let Some(seat) = g.seat_of(entrant) else {
             continue;
         };
-        if g.outcome == "crashed" {
-            continue;
-        }
         played += 1;
-        let path = dir.join("logs").join(format!("{}.jsonl", g.game));
-        let log = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let lines: Vec<LogLine> = log(dir, &g)?;
         let names = if seat == 0 {
             [entrant, "opponent"]
         } else {
             ["opponent", entrant]
         };
-        let mut s = match &g.position {
-            Some(name) => {
-                let path = dir.join("positions").join(name);
-                let text =
-                    fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-                let p: Position =
-                    serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
-                positions::start(&t, &p, g.seed)?
-            }
-            None => State::new(&t, g.seed, Profile::SMART),
-        };
+        let mut s = start(dir, &t, &g)?;
         let mut x = Scratch::new();
-        for line in log.lines().map(serde_json::from_str::<LogLine>) {
-            let line = line.map_err(|e| format!("{}: {e}", path.display()))?;
+        for line in lines {
             let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) else {
                 return Err(format!("{}: the game ended before its log", g.game));
             };
@@ -258,14 +306,19 @@ fn rechecked(
         return Vec::new();
     }
     let step = (switched.len() as f64 / n as f64).max(1.0);
-    let mut x = Scratch::new();
     (0..n.min(switched.len()))
         .map(|k| switched[(k as f64 * step) as usize])
         .map(|i| {
             let d = &differs[i];
-            let search = LongSearch::new(t, settings, 0x5EED_A11C ^ i as u64);
-            let obs = observe(&d.state, t, &mut x, d.decision.player);
-            let duel = search.duel(obs, &d.decision, d.search, d.greedy);
+            let duel = duel(
+                t,
+                settings,
+                0x5EED_A11C ^ i as u64,
+                &d.state,
+                &d.decision,
+                d.search,
+                d.greedy,
+            );
             eprintln!(
                 "rechecked {}: lead {:+.4} ± {:.4}",
                 i, duel.lead, duel.error
@@ -387,7 +440,7 @@ fn report(
 }
 
 /// The mean of `xs` and its standard error.
-fn mean_and_error(xs: &[f64]) -> (f64, f64) {
+pub fn mean_and_error(xs: &[f64]) -> (f64, f64) {
     let n = xs.len() as f64;
     let mean = xs.iter().sum::<f64>() / n;
     if xs.len() < 2 {
