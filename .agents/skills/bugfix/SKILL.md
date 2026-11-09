@@ -5,9 +5,12 @@ description: Work the bug reports filed from Beryl's in-app bug button (âŒ˜B) â€
 
 # Fixing reported bugs
 
-Please investigate and fix the following issues. Mostly fix these yourself, but
-you can run child sessions for the big ones. Please feel free to use and extend
-the `/specs` tool to assist with this. Please ask any follow-up questions at the
+Please investigate and fix the following issues. Handle small fixes directly;
+use child sessions for larger investigations and fixes to keep context
+manageable. Give each child the report, acceptance criteria, and relevant prior
+findings. The parent session owns report accounting and reviews the child's
+verification evidence before closure. Please feel free to use and extend the
+`/specs` tool to assist with this. Please ask any follow-up questions at the
 start of this session needed to clarify expected behavior: read every report
 first, then ask them all in one go before you fix anything.
 
