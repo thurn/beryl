@@ -456,9 +456,9 @@ def card_names_in(directory: Path, names: Iterable[str]) -> list[str]:
 
 
 def all_card_names() -> set[str]:
-    """The cube's cards, and the cards and tokens of the card data, but a token named by one
-    word, such as Copy, which is no name in prose."""
-    names = set(cards.cube_names(cards.CUBE))
+    """The cards and tokens of the card data, but a token named by one word, such as Copy,
+    which is no name in prose."""
+    names: set[str] = set()
     data = json.loads(cards.OUTPUT.read_text())
     tokens = {t["name"] for t in data["tokens"]}
     for entry in [*data["cards"], *data["tokens"]]:

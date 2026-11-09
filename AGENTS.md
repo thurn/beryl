@@ -1,20 +1,19 @@
 # Working on Project Beryl
 
-Project Beryl is a research project to create a Magic: The Gathering AI for cube
-draft, which can draft cards and play the game at the level of a strong human
-player. It is a Tauri 2 desktop app for Apple silicon Macs: a Rust workspace
-behind a React and TypeScript UI. The repository is public.
+Project Beryl is a research project to create a Magic: The Gathering AI for
+Legacy constructed, which can play the format's top decks at the level of a
+strong human player. It is a Tauri 2 desktop app for Apple silicon Macs: a Rust
+workspace behind a React and TypeScript UI. The repository is public.
 
-V1 starts with the 540 cards of the MTG Arena Powered Cube run that began
-October 30, 2025, listed in `data/arena-powered-cube-2025-10-30.csv` (the card
-columns of that run's 17lands public data). Six carry their Arena names from
-Through the Omenpaths (Ademi of the Silkchutes is Scryfall's Spectacular
-Spider-Man). Rules support, drafting and AI need only handle these cards. Three
-implemented cards are outside it (Aang's Iceberg, Swift Reconfiguration and
-Sphinx of False Conclusions, played by `decks::VINTAGE_WU_CONTROL`); never
-delete a card implementation. The mirror match target is
-`docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt`, a mythic
-drafter's deck from that run.
+The project began targeting cube draft and moved to Legacy on 2026-11-09. Games
+are two-player, between fixed tournament decklists, best of three with
+sideboards; there is no drafting. V1's card pool is the main decks and
+sideboards of the Legacy metagame decks we choose to support, kept as decklists
+in `docs/sample-decks/`. Rules support and AI need only handle those cards.
+Until those decks are implemented, the testbed is the WU Control mirror from the
+cube era: `docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt`
+(`decks::WU_CONTROL`), with `decks::VINTAGE_WU_CONTROL` before it. Never delete
+a card implementation.
 
 The eventual goal of Project Beryl is to support 50,000+ different cards. We
 should attempt to write modular, dramatically scalable code.
@@ -27,9 +26,8 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
 
 - `rust/`: the Cargo workspace. `crates/beryl_app` is the Tauri shell (window,
   IPC commands, `tauri.conf.json`, capabilities, icons). Keep it thin: game
-  rules, drafting and AI go in their own library crates under `rust/crates/`,
-  which build and test without Tauri. `docs/engine-architecture.md` §16 maps the
-  crates.
+  rules and AI go in their own library crates under `rust/crates/`, which build
+  and test without Tauri. `docs/engine-architecture.md` §16 maps the crates.
 - `ui/`: the frontend, Vite + React + TypeScript (strict). `src/ipc.ts` holds
   typed wrappers for the Rust commands; call Rust only through it. Its fixture
   transport replays sessions recorded from seeded games or scripted boards
@@ -37,13 +35,12 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
   in the states `shots.json` names. `src/generated/protocol.ts` is generated
   from `beryl_session` by ts-rs: a test fails when it is stale, and its header
   says how to regenerate it.
-- `data/`: the V1 cube cardlist (`color,name` CSV); `cards.json`, the card data
-  `just cards` writes from Scryfall (printing, artist, per-face text and image
-  URLs); `card-printings.csv`, the printings it pins; `oracle-divergences.json`,
-  the scenarios where an oracle is wrong, each with its CR citation;
-  `save-breaks.json`, the corpus saves no migration carries past a change. The
-  app downloads images on demand into its cache (`beryl_app`'s `art.rs`); none
-  are committed.
+- `data/`: `cards.json`, the card data `just cards` writes from Scryfall
+  (printing, artist, per-face text and image URLs); `card-printings.csv`, the
+  printings it pins; `oracle-divergences.json`, the scenarios where an oracle is
+  wrong, each with its CR citation; `save-breaks.json`, the corpus saves no
+  migration carries past a change. The app downloads images on demand into its
+  cache (`beryl_app`'s `art.rs`); none are committed.
 - `docs/ui_mockups/`: generated images of the UI, kept as visual references.
   They disagree with one another in details, so they are not a spec: never tune
   the UI's values to match one image.
@@ -51,10 +48,8 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
   Forge exporters and their Java harnesses. `just` lists the commands.
 - Outside the tree: `~/Library/Caches/beryl` (`$BERYL_CACHE`: warm `rust/target`
   and `ui/node_modules` shared by worktrees, the oracle builds and their last
-  report in `oracles/logs/oracle.json`, and the screenshots), and
-  `~/17lands/Cube_-_Powered` (17lands' draft, game and replay data for the cube,
-  PremierDraft and TradDraft, as gzipped CSVs). Never crawl `~` or `/` with
-  `find`.
+  report in `oracles/logs/oracle.json`, and the screenshots). Never crawl `~` or
+  `/` with `find`.
 
 ## Enact
 
@@ -101,9 +96,9 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
 
 Cheapest first. Agents never open a window: `just dev` refuses to for them.
 
-1. Logic: `just test-rust` runs the workspace's tests. Engine, draft and AI
-   behavior is tested here, not through the app. A card's scenarios live in its
-   file; `just oracle <card names>` checks them against XMage and Forge, and
+1. Logic: `just test-rust` runs the workspace's tests. Engine and AI behavior is
+   tested here, not through the app. A card's scenarios live in its file;
+   `just oracle <card names>` checks them against XMage and Forge, and
    `just fuzz` plays random games at length.
 2. UI: `cd ui && npm run typecheck`. `just ui-shots [names]` screenshots UI
    states headless and prints their paths; `just ui-test` plays the game screen

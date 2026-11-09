@@ -35,7 +35,7 @@ A strong opponent that **does not cheat** and **plays like a plausible human**.
 - **General by data, not by code.** Per-card knowledge is allowed as table
   entries (`values.rs`: a value, a flag) that the policy and search read
   generically. Card-specific code paths are not: the expert is 3,200 lines for
-  29 cards, and the cube has 540.
+  29 cards, and the Legacy decks will have hundreds.
 
 ## 2. What we learned
 
@@ -374,13 +374,15 @@ to 30M, and the ladder's cost is wall clock.
   obvious play. In netrunner-rs, 0 of 6 AlphaZero-style runs were promoted, and
   a well-calibrated value head made search worse. Good calibration is not
   evidence.
-- **Evaluation leaves and 17lands card values**, until something changes what
-  run-003 measured.
+- **Evaluation leaves**, until something changes what run-003 measured. The
+  17lands card values it measured are gone with the cube.
 - **ISMCTS beyond rung 7.** PIMC with few worlds led it in the hidden game.
 - **Card-specific code.** Table entries only (§1).
-- **Decks beyond the WU Control mirror.** The engine covers the mirror's cards
-  ([rules-coverage.md](rules-coverage.md)); the ladder moves to held-out cube
-  decks as the engine does, and the position set grows a family per deck.
+- **Decks beyond the WU Control mirror.** The project's target is now Legacy
+  constructed, but the engine covers only the mirror's cards
+  ([rules-coverage.md](rules-coverage.md)), so the mirror stays the ladder's
+  testbed. The ladder moves to Legacy metagame decks as the engine covers them,
+  and the position set grows a family per deck.
 
 ## 9. Open questions
 

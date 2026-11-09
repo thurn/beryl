@@ -44,10 +44,10 @@ fn search(t: &GameTable, settings: Settings, seed: u64, s: &State, d: &Decision)
 const FAMILIES: [&str; 6] = [
     "ismcts3/hidden/rollout/tuned",
     "pimc3/hidden/rollout/tuned",
-    "pimc2/hands/cut1/17l",
+    "pimc2/hands/cut1/estimate",
     "ismcts2/omniscient/eval/estimate",
     "ismcts3/hands/cut2/estimate",
-    "pimc4/omniscient/rollout/17l",
+    "pimc4/omniscient/rollout/estimate",
 ];
 
 #[test]
@@ -73,7 +73,7 @@ fn the_hidden_searches_decide_the_same_on_a_redeterminized_state() {
     for (i, (s, d)) in positions(&t, &[23, 12, 5]).iter().enumerate() {
         let det = observe(s, &t, &mut Scratch::new(), d.player).determinize(&t, &mut rng);
         assert!(Slot::all().any(|slot| det.card(slot) != s.card(slot)));
-        for family in ["ismcts2/hidden/rollout/tuned", "pimc2/hidden/cut1/17l"] {
+        for family in ["ismcts2/hidden/rollout/tuned", "pimc2/hidden/cut1/estimate"] {
             let set = settings(family, 4_000, 1);
             assert_eq!(
                 search(&t, set, 3, &det, d),
@@ -168,6 +168,6 @@ fn every_family_plays_a_game_to_its_end() {
 
 #[test]
 fn families_name_themselves() {
-    let f: Family = "ismcts18/hidden/rollout/17l".parse().unwrap();
-    assert_eq!(f.to_string(), "ismcts18/hidden/rollout/17l");
+    let f: Family = "ismcts18/hidden/rollout/estimate".parse().unwrap();
+    assert_eq!(f.to_string(), "ismcts18/hidden/rollout/estimate");
 }

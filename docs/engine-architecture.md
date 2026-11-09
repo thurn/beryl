@@ -4,23 +4,25 @@
 evidence in [rules-engine-research.md](rules-engine-research.md); measured the
 way [benchmarking.md](benchmarking.md) describes.*
 
-This is the design of the Rust rules engine and of the boundaries that search,
-the desktop UI and drafting build on. It is not an implementation plan:
-milestone plans are Enact epics in beads, written against this document.
-Milestone 1 built the engine, the game UI and the first AI opponents for a
-mirror match of the deck in
+This is the design of the Rust rules engine and of the boundaries that search
+and the desktop UI build on. It is not an implementation plan: milestone plans
+are Enact epics in beads, written against this document. It was written when the
+target was cube draft (the MTG Arena Powered Cube), and the project moved to
+Legacy constructed on 2026-11-09. Cube cards stay as examples throughout, since
+Legacy plays many of them. Milestone 1 built the engine, the game UI and the
+first AI opponents for a mirror match of the deck in
 `docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt`, a mythic
 drafter's WU Control deck from the cube's Arena run. It built the structures
-described here, but only the mechanics its cards use. Drafting and the rest of
-the cube come in later milestones. The twenty-two decisions it rests on are
-marked **D1** to **D22** where they apply and listed again in the appendix.
+described here, but only the mechanics its cards use. The Legacy decks come in
+later milestones. The twenty-two decisions it rests on are marked **D1** to
+**D22** where they apply and listed again in the appendix.
 
 ## 1. Goals
 
-- **Exact rules for one card pool.** The 540 cards of the V1 cube in
-  `data/arena-powered-cube-2025-10-30.csv`, plus the five basic lands that decks
-  add at deckbuilding. Two players, 40-card decks, both decklists public
-  (**D19**). Nothing is approximated inside the engine.
+- **Exact rules for one card pool.** The main decks and sideboards of the Legacy
+  metagame decks V1 supports, kept in `docs/sample-decks/`. Two players, 60-card
+  decks with 15-card sideboards, best of three, both decklists public (**D19**).
+  Nothing is approximated inside the engine.
 
 - **Search throughput.** The targets, in the `search` build (§18),
   single-threaded on a Super core, with caches hot, measured on the cube rollout
@@ -61,26 +63,28 @@ marked **D1** to **D22** where they apply and listed again in the appendix.
   12 Performance cores with 64 KiB, 128-byte cache lines, 64 GiB of memory. A 20
   KiB state and its scratch buffers fit in L1 on either kind of core.
 
-**Non-goals.** Cards outside the cube, more than two players, hidden decklists,
-WebAssembly, parsing Oracle text, and any mode that plays a different game from
-the real one.
+**Non-goals.** Cards outside the supported decks, more than two players, hidden
+decklists, WebAssembly, parsing Oracle text, and any mode that plays a different
+game from the real one.
 
-**The rules surface the cube needs.** From the card list: the full stack with
-APNAP trigger ordering, replacement and prevention effects, layers including a
-type-changing land (Yavimaya), copy effects (Phyrexian Metamorph, Phantasmal
-Image, Thespian's Stage, Shifting Woodland, Lutri, Fractured Identity), control
-change (Oko, Dack Fayden, Wishclaw Talisman, Coveted Jewel), energy (Galvanic
-Discharge), poison (Etali, Primal Conqueror), sagas (Urza's Saga, Fable of the
-Mirror-Breaker), vehicles and crew, equipment and reconfigure, transforming
-double-faced cards, modal double-faced cards, split and adventure cards, extra
-turns (Time Walk, Emrakul), emblems, storm (Brain Freeze, Tendrils of Agony),
-delve, improvise, overload, evoke, flashback, Phyrexian mana, day and night
-(Outland Liberator), opponent choices during resolution (Karn, Scion of Urza),
-piles (Liliana of the Veil), face-down exile (Memory Jar, Shelldock Isle),
-manifest dread (Abhorrent Oculus), coin flips (Mana Crypt), and an alternative
-win condition (Jace, Wielder of Mysteries). Absent, and so not designed for:
-controlling another player, game restarts, the monarch, votes, phasing, infect,
-dungeons, wishes, dredge and morph.
+**The rules surface the cube needed.** Written for the cube, and kept because
+Legacy shares much of it; the Legacy decks' own list is drawn up once they are
+chosen. From the cube's card list: the full stack with APNAP trigger ordering,
+replacement and prevention effects, layers including a type-changing land
+(Yavimaya), copy effects (Phyrexian Metamorph, Phantasmal Image, Thespian's
+Stage, Shifting Woodland, Lutri, Fractured Identity), control change (Oko, Dack
+Fayden, Wishclaw Talisman, Coveted Jewel), energy (Galvanic Discharge), poison
+(Etali, Primal Conqueror), sagas (Urza's Saga, Fable of the Mirror-Breaker),
+vehicles and crew, equipment and reconfigure, transforming double-faced cards,
+modal double-faced cards, split and adventure cards, extra turns (Time Walk,
+Emrakul), emblems, storm (Brain Freeze, Tendrils of Agony), delve, improvise,
+overload, evoke, flashback, Phyrexian mana, day and night (Outland Liberator),
+opponent choices during resolution (Karn, Scion of Urza), piles (Liliana of the
+Veil), face-down exile (Memory Jar, Shelldock Isle), manifest dread (Abhorrent
+Oculus), coin flips (Mana Crypt), and an alternative win condition (Jace,
+Wielder of Mysteries). Absent, and so not designed for: controlling another
+player, game restarts, the monarch, votes, phasing, infect, dungeons, wishes,
+dredge and morph.
 
 ## 2. Principles
 
@@ -293,10 +297,9 @@ About 21 bytes, so the table is under 6 KiB.
   exiled, imprinted or hid it, so Skyclave Apparition, Chrome Mox, Memory Jar,
   Shelldock Isle and Agatha's Soul Cauldron need no side tables. Dauthi
   Voidwalker's void counters are ordinary counters on exiled objects.
-- **Companions.** Lurrus and Lutri can serve as companions when a drafted deck
-  qualifies, and Lutri's condition is trivially met in singleton. Whether to
-  support the mechanic is open (§20); if so, a per-player companion slot is the
-  whole cost.
+- **Companions.** A companion starts outside the game, in the sideboard. Whether
+  to support the mechanic is open (§20); if so, a per-player companion slot is
+  the whole cost.
 
 ### 4.4 Players and turn
 
@@ -366,8 +369,8 @@ other things:
   legal target now, what mana a permanent can make, which events a trigger
   listens to, what layer a static effect sits in, whether an activated ability
   is a mana ability. Search and evaluation want the same facts. As opaque code
-  these become hand-maintained metadata on 540 cards, and a mismatch is a silent
-  rules bug.
+  these become hand-maintained metadata on hundreds of cards, and a mismatch is
+  a silent rules bug.
 - **Hot predicates.** Target and affected-set filters run per candidate per
   legality check. They must be bitboard operations, never tree walks.
 
@@ -410,8 +413,9 @@ pub type Flow = Result<(), Pending>; // Err carries the question to ask
 - `fn` pointers are fine in the table because the table is `&'static` data
   shared by all threads; they are banned from `State`, which stores only
   game-table indices and ability indices.
-- A generated `names` module (`names::LIGHTNING_BOLT`, built from the cube CSV)
-  makes a misspelled card a compile error in both card files and scenarios.
+- A generated `names` module (`names::LIGHTNING_BOLT`, built from the decklists
+  in `docs/sample-decks/`) makes a misspelled card a compile error in both card
+  files and scenarios.
 - One file per card under color directories in `beryl_cards`. The file holds the
   `CardDef`, its bodies, and its black-box scenarios (§17).
 
@@ -471,8 +475,7 @@ bodies and filters inlined) gains in the same places the table already targets.
 What remains is constant-folding table reads; dispatch to inlined bodies still
 compiles to a jump table, an indirect branch like the call through a `fn`
 pointer. It is estimated at single-digit percent over the table, costs a minute
-or more of compilation per matchup, and does nothing for draft simulation, where
-every candidate pick is a new deck. It is tried once the cube rollout benchmark
+or more of compilation per matchup. It is tried once the cube rollout benchmark
 exists and adopted only if it clears 10%. Engine variants compiled per
 combination of mechanics (about 1 to 2%) and a JIT, which would need the engine
 expressed as an IR (the path **D1** rejected), were considered and dropped.
@@ -983,7 +986,6 @@ searcher optimistic, which is tuned, not fixed.
 | `beryl_search`   | The `Agent` trait, `RandomAgent`, the greedy agent that is also the rollout policy, the expert system, MCTS, evaluation                                                                    | `beryl_engine`                                                   |
 | `beryl_session`  | `Sessions` and their threads, the `PlayerView` protocol and IPC names with generated TypeScript types, replay files                                                                        | `beryl_cards`, `beryl_engine`, `beryl_search`                    |
 | `beryl_cli`      | Headless games between agents, tournaments, the long-think ladder, transcripts, UI fixtures recorded from sessions of seeded games or of scripted boards                                   | `beryl_cards`, `beryl_scenario`, `beryl_search`, `beryl_session` |
-| `beryl_draft`    | Pack generation, draft state, the draft bot, deckbuilding (not yet created)                                                                                                                | `beryl_cards`                                                    |
 | `beryl_bench`    | Benchmark support and the `_counts`, `_abba` and `_timing` targets of the example and of the cube rollout benchmark                                                                        | `beryl_cards`, `beryl_engine`, `beryl_search`                    |
 | `beryl_app`      | The Tauri shell: IPC commands and events around `beryl_session`, the card-art cache                                                                                                        | all of the above                                                 |
 
@@ -1286,28 +1288,19 @@ now knows. An agent seeded by decision index goes back with it (`Agent::rewind`)
 and decides again as play goes on. The choice log keeps everything taken back
 and an `Undo` entry, so a replay goes back too. The engine is untouched.
 
-### 19.3 Draft
-
-`beryl_draft` generates eight seats of three 15-card packs from the 540-card
-list, tracks picks and pass direction, and exposes a `DraftAgent` with the same
-shape as `Agent`. Drafting is a later milestone than Milestone 1. Its first bot
-is a pick-order rating with color commitment, the Forge and XMage baseline, and
-the deckbuilder picks a two-color 23 with 17 lands including basics. A human
-drafts and builds in the UI. Learned card representations and simulation-based
-evaluation are later work, and the latter is one more reason the engine must be
-fast. Simulation plays a new deck for every candidate pick, so it runs on the
-generic engine with per-game tables (§6.4), never on builds compiled per
-matchup.
-
 ## 20. Open questions
 
-- **Companions.** Lurrus and Lutri can be companions in cube. Supporting the
-  mechanic costs a sideboard slot per player and a special action; whether the
-  cube experience wants it is a decision for the drafting milestone.
+- **Companions.** Supporting the mechanic costs a companion slot per player and
+  a special action; whether to is decided once the Legacy decks are chosen.
+- **Hidden decklists.** A Legacy opponent's 75 is not shown, but the metagame
+  narrows it to a few lists. Whether the AI keeps D19's public decklists or
+  deals each world's list from the metagame is open.
+- **Sideboarding.** Best of three needs an agent that swaps cards between games,
+  and a session that carries a match across them.
 - **Loop shortcuts.** The "repeat N times" meta-action of §12.3, and how search
   should propose counts.
-- **613.8 corpus.** Which cube interactions, if any, exercise same-layer
-  dependencies; the scenario suite should contain the candidates.
+- **613.8 corpus.** Which interactions in the supported decks, if any, exercise
+  same-layer dependencies; the scenario suite should contain the candidates.
 - **Rollout horizon and node storage beyond Milestone 1** (§19.1): whether a few
   turns and an evaluation beat full games, and whether states in nodes visited
   twice beat replay from the root.
@@ -1332,7 +1325,7 @@ matchup.
 | D9  | Engine-tracked knowledge over public slots; shuffles rebind identities; Observation as a borrowed view                                                     | The chokepoints are in the engine; every engine that tracked knowledge elsewhere leaked; a masked copy per decision would cost over 10% of the budget                                |
 | D10 | Typed `Event` enum for about 30 kinds, per-kind indexes, set-carrying events                                                                               | One replacement and trigger protocol; everything-is-an-event is slow; per-primitive hooks drift                                                                                      |
 | D11 | Distinct `Stalled(reason)` terminal scored as a draw                                                                                                       | Budgets are unavoidable; a stall must be distinguishable from a rules draw in tests and statistics                                                                                   |
-| D12 | Crates: engine, cards, scenario, search, session, cli, draft, bench, app                                                                                   | The engine knows no card; card edits do not rebuild rules tests; the AI cannot reach engine internals                                                                                |
+| D12 | Crates: engine, cards, scenario, search, session, cli, bench, app                                                                                          | The engine knows no card; card edits do not rebuild rules tests; the AI cannot reach engine internals                                                                                |
 | D13 | Scenarios as Rust-built serde values, strict runner, exported to XMage and Forge                                                                           | Typo-safe authoring with the compiler's help; one scenario, three engines                                                                                                            |
 | D14 | Rust `GameSession` on its own thread; Observations over IPC; replay files                                                                                  | AI thinking never blocks the window; hidden identities never reach the webview                                                                                                       |
 | D15 | A scripted expert system behind an `Agent` trait over Observations                                                                                         | Plays sanely in Milestone 1 and supplies the benchmark's positions; no API change for MCTS                                                                                           |
@@ -1340,6 +1333,6 @@ matchup.
 | D17 | This document at `docs/engine-architecture.md`, engine plus boundaries                                                                                     | Reference material every session reads; the interfaces the UI and AI consume are written down                                                                                        |
 | D18 | Search profiles give priority only at smart stops                                                                                                          | A held fetchland or instant makes most of a turn's 16 to 20 priority passes into decisions; smart stops cut decisions 2.5 to 3 times, which no codegen recovers                      |
 | D19 | Decklists are public; hidden information is where the known cards are                                                                                      | The AI is built for open decklists; determinization deals each list's unknown remainder, so no belief model is needed                                                                |
-| D20 | A dense per-game table over the game's known cards; per-matchup builds only on a measured gain of 10% or more                                              | Decision cost is generic machinery whose work depends on the board; the table gets most of specialization's gain and serves draft simulation, where every pick is a new deck         |
+| D20 | A dense per-game table over the game's known cards; per-matchup builds only on a measured gain of 10% or more                                              | Decision cost is generic machinery whose work depends on the board; the table gets most of specialization's gain                                                                     |
 | D21 | A table-driven rollout policy with no copies or lookahead, about 300 ns per decision                                                                       | Policy cost multiplies every rollout decision; lookahead costs seven times the engine; weaker rollout players gave better estimates in Cowling et al.                                |
 | D22 | A `search` build with fat LTO, abort and the M4 CPU target, then PGO trained on the rollout benchmark                                                      | An estimated 5 to 20% for a build profile; the app follows only once the gain is measured                                                                                            |

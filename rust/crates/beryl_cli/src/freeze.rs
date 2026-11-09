@@ -27,9 +27,6 @@ use beryl_session::{Game, ReplayFile, Seat, SessionId, StartGame, Status, StopsS
 
 const USAGE: &str = "usage: beryl_cli freeze-saves <dir> [--games N] [--seed N] [--replay FILE]";
 
-/// The cube's cardlist, `color,name` rows with a header.
-const CUBE: &str = include_str!("../../../../data/arena-powered-cube-2025-10-30.csv");
-
 /// The agents that play the games: cheap ones, which search nothing.
 const AGENTS: [&str; 2] = ["greedy", "random"];
 
@@ -138,26 +135,17 @@ fn freeze_games(dir: &Path, seed: u64, games: u64) -> Result<(), String> {
     Ok(())
 }
 
-/// Every card of the cube and of the vintage WU Control deck implemented so far, but the
-/// basic lands, every kind of decision and a game of that deck.
+/// Every implemented card but the basic lands, every kind of decision and a game of the
+/// vintage WU Control deck.
 fn targets() -> BTreeSet<Target> {
-    let vintage = VINTAGE_WU_CONTROL.iter().map(|&(_, name)| name);
-    cube()
-        .chain(vintage)
-        .filter_map(|name| CARDS.get(name))
+    CARDS
+        .cards()
+        .iter()
         .filter(|c| !c.front().supertypes.contains(Supertypes::BASIC))
         .map(|c| Target::Card(c.name.to_owned()))
         .chain(Kind::ALL.into_iter().map(Target::Kind))
         .chain([Target::Vintage])
         .collect()
-}
-
-/// The names of the cube's cards.
-fn cube() -> impl Iterator<Item = &'static str> {
-    CUBE.lines().skip(1).map(|row| {
-        let (_, name) = row.split_once(',').expect("a color,name row");
-        name.trim_matches('"')
-    })
 }
 
 /// Prints what the games `kept` of `games` cover of `targets`, and what they miss.
@@ -169,10 +157,8 @@ fn report(kept: &[&Played], targets: &BTreeSet<Target>, games: u64) {
     let cards = of(|t| matches!(t, Target::Card(_)));
     let kinds = of(|t| matches!(t, Target::Kind(_)));
     let reached = |ts: &[&Target]| ts.iter().filter(|t| covered.contains(*t)).count();
-    let unimplemented = cube().filter(|name| CARDS.get(name).is_none()).count();
     println!(
-        "kept {} of {games} games: {} of {} cards, {} of {} kinds of decision \
-         ({unimplemented} of the cube's cards are not implemented yet)",
+        "kept {} of {games} games: {} of {} cards, {} of {} kinds of decision",
         kept.len(),
         reached(&cards),
         cards.len(),

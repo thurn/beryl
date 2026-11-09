@@ -51,7 +51,7 @@ pub enum Entrant {
 }
 
 impl Entrant {
-    /// Its name in the arena: `ismcts18/hidden/rollout/17l@3M`, or the fixed agent's.
+    /// Its name in the arena: `ismcts18/hidden/rollout/tuned@3M`, or the fixed agent's.
     pub fn label(&self) -> String {
         match self {
             Entrant::Search(s) => format!("{}@{}", s.family, super::rung_name(s.work)),

@@ -36,4 +36,4 @@ def test_files_are_formatted_by_the_tool_their_check_uses() -> None:
     assert tool("rust/crates/beryl_app/src/main.rs") == "cargo /tree/rust"
     assert tool("ui/src/App.tsx") == "prettier /tree/ui"
     assert tool("justfile") == "just /tree"
-    assert tool("data/arena-powered-cube-2025-10-30.csv") is None
+    assert tool("data/card-printings.csv") is None

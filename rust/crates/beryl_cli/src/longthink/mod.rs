@@ -778,13 +778,13 @@ mod tests {
     #[test]
     fn a_pair_plays_one_seed_from_both_seats() {
         let c = Config::default();
-        let m = Matchup::new("expert-frozen", "ismcts18/hidden/rollout/17l@1M");
+        let m = Matchup::new("expert-frozen", "ismcts18/hidden/rollout/estimate@1M");
         let [a, b] = [0, 1].map(|g| Spec::new(&c, &m, g).unwrap());
         assert_eq!((a.seed, a.seat, b.seat), (b.seed, 0, 1));
         assert_eq!(a.entrants[0], b.entrants[1]);
         assert_eq!(
             a.key,
-            "expert-frozen~ismcts18.hidden.rollout.17l@1M-p0000-s0"
+            "expert-frozen~ismcts18.hidden.rollout.estimate@1M-p0000-s0"
         );
         let other = Spec::new(&c, &Matchup::new("greedy", "expert-frozen"), 1).unwrap();
         assert_eq!(other.seed, a.seed);
@@ -802,7 +802,10 @@ mod tests {
                 Matchup::new("expert-frozen", "pimc72/hidden/rollout/tuned@30M"),
                 7,
             ),
-            (Matchup::new("greedy", "ismcts18/hidden/cut2/17l@1500"), 0),
+            (
+                Matchup::new("greedy", "ismcts18/hidden/cut2/estimate@1500"),
+                0,
+            ),
         ] {
             let spec = Spec::new(&c, &m, g).unwrap();
             let parsed = Spec::parse(&c, &spec.key).unwrap();

@@ -5,7 +5,7 @@ and the image of Magic's card back. The app downloads the images themselves on d
 (rust/crates/beryl_app/src/art.rs).
 
 The default list is the main decks of the mirror and of the Vintage deck before it, and the
-basic lands; `--cube` takes the whole cube CSV. data/card-printings.csv pins each card's
+basic lands. data/card-printings.csv pins each card's
 printing (name, set, collector_number), which a run looks up for any card without a pin and
 adds to the file (`printing`); to apply a new rule to a card, delete its pin. A card shows its
 original art, the illustration of its first printing, in the newest printing of that art that
@@ -95,7 +95,6 @@ STAMPED_PROMOS: frozenset[str] = frozenset(
 TREATMENTS: frozenset[str] = frozenset(
     {"showcase", "extendedart", "etched", "inverted", "shatteredglass", "fullart"}
 )
-CUBE: Path = DATA / "arena-powered-cube-2025-10-30.csv"
 PRINTINGS: Path = DATA / "card-printings.csv"
 OUTPUT: Path = DATA / "cards.json"
 IMAGE_VERSIONS = ("art_crop", "normal", "large")
@@ -131,11 +130,6 @@ def m1_names() -> list[str]:
     return list(
         dict.fromkeys(deck_names(VINTAGE_DECK) + deck_names(DECK) + list(BASICS))
     )
-
-
-def cube_names(path: Path) -> list[str]:
-    with path.open(newline="") as f:
-        return [row["name"] for row in csv.DictReader(f)]
 
 
 def printings(path: Path) -> dict[str, Identifier]:
@@ -507,7 +501,7 @@ def render(data: Json) -> str:
 
 
 def cards(args: argparse.Namespace) -> int:
-    names = cube_names(CUBE) if args.cube else m1_names()
+    names = m1_names()
     log: list[Json] = []
     pins = printings(PRINTINGS)
     if args.replay:
@@ -531,9 +525,6 @@ def cards(args: argparse.Namespace) -> int:
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser(
         "cards", help="look up card data on Scryfall into data/cards.json"
-    )
-    p.add_argument(
-        "--cube", action="store_true", help="the whole cube, not the M1 decks"
     )
     p.add_argument("--output", default=str(OUTPUT))
     # A replay records nothing, so --record with it would overwrite FILE with an empty log.

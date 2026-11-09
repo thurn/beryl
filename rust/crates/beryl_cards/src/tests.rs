@@ -21,15 +21,9 @@ fn crate_dir() -> PathBuf {
     PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR"))
 }
 
-const CSV: &str = "data/arena-powered-cube-2025-10-30.csv";
+/// The decklists whose cards have name constants, read at test time.
+const DECKS: &str = "docs/sample-decks";
 const BASIC_LANDS: [&str; 5] = ["Plains", "Island", "Swamp", "Mountain", "Forest"];
-/// Implemented cards outside the cube, which `decks::VINTAGE_WU_CONTROL` plays. Beryl keeps
-/// every card it implements.
-const OUTSIDE_CUBE: [&str; 3] = [
-    "Aang's Iceberg",
-    "Swift Reconfiguration",
-    "Sphinx of False Conclusions",
-];
 
 /// A card name as a Rust constant: "Jace, Vryn's Prodigy" is `JACE_VRYNS_PRODIGY`.
 fn constant(name: &str) -> String {
@@ -58,27 +52,35 @@ fn constant(name: &str) -> String {
     out
 }
 
-/// The names in the cube list, in its order.
-fn cube_names(csv: &str) -> Vec<String> {
-    csv.lines()
-        .skip(1)
-        .filter(|line| !line.is_empty())
-        .map(|line| {
-            let (_color, name) = line.split_once(',').expect("a color,name row");
-            match name.strip_prefix('"') {
-                Some(quoted) => quoted.strip_suffix('"').unwrap().replace("\"\"", "\""),
-                None => name.to_string(),
+/// The card names of the decklists in `dir`, main deck and sideboard, each once, by file name
+/// and then in each list's order.
+fn deck_names(dir: &std::path::Path) -> Vec<String> {
+    let mut paths: Vec<PathBuf> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().is_some_and(|e| e == "txt"))
+        .collect();
+    paths.sort();
+    let mut names = Vec::new();
+    for path in paths {
+        for line in std::fs::read_to_string(&path).unwrap().lines() {
+            if let Some((count, name)) = line.split_once(' ')
+                && count.parse::<u8>().is_ok()
+                && !names.iter().any(|n| n == name.trim())
+            {
+                names.push(name.trim().to_string());
             }
-        })
-        .collect()
+        }
+    }
+    names
 }
 
-fn generate(csv: &str) -> String {
+fn generate(decks: &[String]) -> String {
     let mut out = String::from(
         "//! Every card name as a constant, so a misspelled card is a compile error.\n\
          //!\n\
-         //! Generated from `data/arena-powered-cube-2025-10-30.csv`, the basic lands and the\n\
-         //! implemented cards outside the cube by the `names_are_current` test. Regenerate with\n\
+         //! Generated from the decklists in `docs/sample-decks` and the basic lands by the\n\
+         //! `names_are_current` test. Regenerate with\n\
          //! `BERYL_UPDATE_NAMES=1 cargo test -p beryl_cards names_are_current`.\n\n",
     );
     let mut seen = std::collections::BTreeSet::new();
@@ -87,15 +89,17 @@ fn generate(csv: &str) -> String {
         assert!(seen.insert(c.clone()), "two names give {c}");
         writeln!(out, "pub const {c}: &str = {name:?};").unwrap();
     };
-    for name in cube_names(csv) {
-        emit(&mut out, &name);
-    }
-    out.push_str("\n// The basic lands, which decks add at deckbuilding.\n");
-    for name in BASIC_LANDS {
+    let mut names: Vec<&str> = decks
+        .iter()
+        .map(String::as_str)
+        .filter(|name| !BASIC_LANDS.contains(name))
+        .collect();
+    names.sort_unstable();
+    for name in names {
         emit(&mut out, name);
     }
-    out.push_str("\n// Implemented cards outside the cube.\n");
-    for name in OUTSIDE_CUBE {
+    out.push_str("\n// The basic lands.\n");
+    for name in BASIC_LANDS {
         emit(&mut out, name);
     }
     out
@@ -104,8 +108,8 @@ fn generate(csv: &str) -> String {
 #[test]
 fn names_are_current() {
     let crate_dir = crate_dir();
-    let csv = std::fs::read_to_string(crate_dir.join("../../..").join(CSV)).unwrap();
-    let expected = generate(&csv);
+    let decks = deck_names(&crate_dir.join("../../..").join(DECKS));
+    let expected = generate(&decks);
     let path = crate_dir.join("src/names.rs");
     if std::env::var_os("BERYL_UPDATE_NAMES").is_some() {
         std::fs::write(&path, &expected).unwrap();
@@ -123,8 +127,8 @@ fn constants_spell_names_plainly() {
     assert_eq!(constant("Life // Death"), "LIFE_DEATH");
     assert_eq!(constant("Troll of Khazad-dûm"), "TROLL_OF_KHAZAD_DUM");
     assert_eq!(
-        names::KROXA_TITAN_OF_DEATHS_HUNGER,
-        "Kroxa, Titan of Death's Hunger"
+        names::JACE_WIELDER_OF_MYSTERIES,
+        "Jace, Wielder of Mysteries"
     );
 }
 

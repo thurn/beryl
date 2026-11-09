@@ -1,549 +1,143 @@
 name,set,collector_number
 Aang's Iceberg,tla,5
 Abhorrent Oculus,dsk,42
-Abrade,soc,234
 "Adeline, Resplendent Cathar",moc,167
 Ademi of the Silkchutes,om1,1
-Aether Spellbomb,fdc,244
 Agatha's Soul Cauldron,woe,242
 "Ajani, Nacatl Pariah",mh3,237
-Ancestral Recall,leb,48
 Ancient Tomb,vma,289
-Animate Dead,td0,A36
-Archon of Cruelty,frc,47
-Arena of Glory,mh3,215
-Arid Mesa,mh2,244
-"Atraxa, Grand Unifier",one,196
-Avacyn's Pilgrim,scd,171
-Badlands,me4,241
 Balance,me4,6
-Baleful Strix,otc,215
-Barrowgoyf,m3c,102
-Batterskull,2xm,234
-Bayou,me4,242
 "Beza, the Bounding Spring",blb,2
-Birds of Paradise,dmr,336
-Bitter Triumph,lci,91
-Black Lotus,leb,233
-Blackcleave Cliffs,som,224
-Blade Splicer,blc,136
-Blazemire Verge,dsk,256
-Bleachbone Verge,dft,250
-Blood Crypt,rvr,273
-Bloodbraid Elf,arb,50
-Bloodstained Mire,ons,313
-Bloodtithe Harvester,inr,233
-Blooming Marsh,kld,243
-Bolas's Citadel,war,79
-Bomat Courier,kld,199
-Bone Shards,mh2,76
-Bonecrusher Giant,clb,781
-Booster Tutor,unh,51
-"Boseiju, Who Endures",neo,266
 Botanical Sanctum,kld,244
-Brain Freeze,vma,57
-Brainstorm,me2,42
 Brazen Borrower,soc,190
 Breeding Pool,rvr,275
-"Bristly Bill, Spine Sower",otj,157
-Broadside Bombardiers,lcc,86
-Burst Lightning,fdn,192
-Candelabra of Tawnos,me4,187
-Cankerbloom,one,161
-Carnage Interpreter,clu,26
 Cathar Commando,inr,15
-Caustic Bronco,otj,82
 Celestial Colonnade,uma,238
-Chain Lightning,td0,A55
-"Chandra, Torch of Defiance",cmm,876
-Channel,me4,145
 Chromatic Star,2xm,239
-Chrome Host Seedshark,eoc,68
-Chrome Mox,mrd,152
-Coalition Relic,m3c,286
-Collective Brutality,inr,101
-"Comet, Stellar Pup",mb2,79
-Commercial District,mkm,259
-Concealed Courtyard,kld,245
-Concealing Curtains,vow,101
 Consider,clu,84
-Consult the Star Charts,eoe,51
 Containment Priest,m21,13
-Copperline Gorge,som,225
-Cori-Steel Cutter,tdm,103
-Cosmogrand Zenith,eoe,9
 Counterspell,dmr,457
-Courser of Kruphix,cmm,888
-Coveted Jewel,blc,268
-Crabomination,mh3,85
-Craterhoof Behemoth,cmm,280
-Creeping Tar Pit,clb,888
-Crop Rotation,dmr,154
-Crucible of Worlds,2x2,303
-Cryptic Command,mm2,43
 Currency Converter,frc,55
-Cut Down,dmu,89
-Dack Fayden,ema,199
 Damn,drc,89
-Dark Confidant,rav,81
-Dark Depths,csp,145
-Dark Ritual,me4,74
-Darkslick Shores,som,226
-Dauthi Voidwalker,mh2,81
-Daze,jvc,23
-Death-Greeter's Champion,moc,30
-Deathrite Shaman,rvr,175
-Deep-Cavern Bat,lci,102
-Demonic Tutor,me4,77
-Descendant of Storms,tdm,8
-Detective's Phoenix,mh3,116
-Dig Through Time,soc,195
-Dismember,mm2,79
-Displacer Kitten,clb,63
-Draconautics Engineer,dft,121
-Dragon's Rage Channeler,mh2,121
-Dreams of Steel and Oil,bro,92
-Dress Down,mh2,39
-Duelist of the Mind,otj,45
-Duress,usg,132
 Echo of Eons,mh1,46
-Elder Gargaroth,fdc,200
-Elegant Parlor,mkm,260
-Elegy Acolyte,eoe,97
 Elite Spellbinder,stx,17
 "Elspeth, Storm Slayer",tdm,11
-Elvish Mystic,fdc,202
 Elvish Reclaimer,m20,169
-Emperor of Bones,mh3,90
-"Emrakul, the Aeons Torn",2x2,1
-Endurance,mh2,157
-Enduring Curiosity,dsk,51
 Enduring Innocence,dsk,6
 Enlightened Tutor,td0,A6
-Entomb,ody,132
-Ephemerate,mh1,7
 Ertai Resurrected,dmu,199
-Esika's Chariot,blc,215
-Esper Sentinel,mh2,12
-"Etali, Primal Conqueror",mom,137
-Eternal Witness,cm2,136
-Expedition Map,fdn,724
-Exploration,usg,250
-Explore,otc,192
-Expressive Iteration,soc,309
-Fable of the Mirror-Breaker,neo,141
 Fabled Passage,m21,246
-Faerie Mastermind,mom,58
 Faithless Looting,soc,244
-Fallen Shinobi,ncc,338
-Fanatic of Rhonas,mh3,152
-Fastbond,me4,152
-Fatal Push,2xm,93
-Fear of Missing Out,dsk,136
-Field of the Dead,m20,247
-Fiery Confluence,lcc,226
 Fiery Islet,mh1,238
-Figure of Destiny,2x2,213
-Fire Covenant,me1,145
-Fireblast,jvc,55
-Flame Slash,cn2,157
 Flash,mir,66
 Flickerwisp,2x2,11
-Flooded Strand,ons,316
 Floodfarm Verge,dsk,259
 Force of Negation,2x2,50
 Force of Will,me1,33
 Forest,ust,216
 Fractured Identity,c17,37
 Frantic Search,vma,70
-Fury,mh2,126
-Gaea's Cradle,usg,321
-Galvanic Blast,2xm,125
-Galvanic Discharge,mh3,122
-Generous Plunderer,big,11
 Get Lost,lci,14
-Ghostfire Slice,mh3,123
-"Gideon, Ally of Zendikar",bfz,29
 Gitaxian Probe,nph,35
 Giver of Runes,mh1,13
 Glimmer Lens,onc,6
-Gloomlake Verge,dsk,260
-Glorybringer,akh,134
-Go for the Throat,fdc,100
-"Goben, Gene-Splice Savant",om1,30
-Goblin Bombardment,tpr,136
-Goblin Rabblemaster,j25,558
 Godless Shrine,rvr,277
-Goldspan Dragon,soc,245
-"Golos, Tireless Pilgrim",m20,226
-Grave Titan,fdc,102
-Green Sun's Zenith,2x2,150
-Grief,mh2,87
-Grim Lavamancer,tor,100
-Grim Monolith,ulg,126
-Griselbrand,inr,115
-"Grist, the Hunger Tide",dsc,220
-Guide of Souls,mh3,29
-"Gut, True Soul Zealot",clb,180
 Hallowed Fountain,rvr,280
-Harvester of Misery,big,9
-Haywire Mite,soc,349
-Hazoret the Fervent,akh,136
 Hedge Maze,mkm,262
-Hellrider,jmp,334
-Hired Claw,blb,140
-Hullbreacher,cmr,74
 Hushwood Verge,dsk,261
-Hymn to Tourach,fem,38a
-Icetill Explorer,eoe,192
-Ignoble Hierarch,m3c,234
-Indatha Triome,iko,248
-Inquisition of Kozilek,2x2,80
-Inspiring Vantage,kld,246
-"Inti, Seneschal of the Sun",lci,156
 Intrepid Adversary,mid,25
 Island,ust,213
-"Ivora, Insatiable Heir",j25,50
 "Jace, Vryn's Prodigy",ori,60
 "Jace, Wielder of Mysteries",war,54
 "Jace, the Mind Sculptor",2xm,56
-"Jadar, Ghoulcaller of Nephalia",soc,217
-Jetmir's Garden,snc,250
 Kaldra Compleat,cmm,958
-Kappa Cannoneer,fdc,64
-Karakas,td0,B32
-"Kari Zev, Skyship Raider",lcc,227
-"Karn, Scion of Urza",dom,1
-Keen-Eyed Curator,blb,181
-"Kellan, Planar Trailblazer",fdn,91
-Ketria Triome,iko,250
-Knight of the Reliquary,ima,203
-Kolaghan's Command,m3c,268
-"Kroxa, Titan of Death's Hunger",thb,221
-Kumano Faces Kakkazan,neo,152
-"Kytheon, Hero of Akros",ori,23
-"Laelia, the Blade Reforged",soc,246
-Lavaspur Boots,otj,243
-Legion Extruder,big,12
-"Leovold, Emissary of Trest",uma,202
 Leyline Binding,dmu,24
-Library of Alexandria,me4,245
-Life // Death,apc,130
-Lightning Bolt,td0,A60
-Lightning Greaves,otc,260
-Lightning Helix,rvr,197
-Lightstall Inquisitor,eoe,24
-Liliana of the Veil,uma,104
-Lingering Souls,md1,11
 Lion Sash,neo,26
-Lion's Eye Diamond,mir,307
-Llanowar Elves,leb,211
-"Loot, the Pathfinder",dft,212
 Loran of the Third Path,blc,143
-Lotus Cobra,ima,174
-Lotus Petal,tpr,225
-"Luis, Pompous Pillager",om1,60
-Luminarch Aspirant,ncc,205
-Lurrus of the Dream-Den,q06,9
-Lush Portico,mkm,263
 "Lutri, the Spellchaser",iko,227
-"Magda, Brazen Outlaw",khm,142
-"Makdee and Itla, Skysnarers",om1,145
 "Malcolm, Alluring Scoundrel",lci,63
 Malevolent Rumble,mh3,161
-Mana Confluence,jou,163
 Mana Crypt,2xm,270
 Mana Drain,me3,43
 Mana Leak,tpr,58
 Mana Tithe,tsr,26
-Mana Vault,me4,214
-Manamorphose,shm,211
-March of Otherworldly Light,neo,28
 Marsh Flats,mh2,248
-Memory Jar,vma,276
 Memory Lapse,hml,32a
 Meticulous Archive,mkm,264
-Mind Twist,me3,72
-Mine Collapse,mh2,135
-"Minsc & Boo, Timeless Heroes",clb,285
 Miscalculation,ulg,36
-Mishra's Bauble,2xm,274
-Mishra's Workshop,me4,247
-Misty Rainforest,mh2,250
 Monastery Mentor,2x2,21
-Monastery Swiftspear,2x2,119
-Monstrous Rage,woe,142
-Mosswood Dreadknight,woe,231
-Mother of Runes,clb,702
 Mountain,ust,215
-Mox Diamond,tpr,228
-Mox Emerald,leb,262
-Mox Jet,leb,263
-Mox Opal,2xm,275
-Mox Pearl,leb,264
 Mox Ruby,leb,265
-Mox Sapphire,leb,266
-Multiversal Passage,spm,180
-Murderous Cut,ktk,81
-Myr Battlesphere,fdc,273
 Mystic Confluence,cmm,108
-Mystical Tutor,mir,80
-"Nadu, Winged Wisdom",mh3,193
 "Narset, Parter of Veils",cmm,853
 Natural Order,ema,177
-Necromancy,vis,64
 Nethergoyf,mh3,103
-Nettlecyst,fdc,275
-Nexus of Becoming,big,25
-"Nia, Skysail Storyteller",om1,89
-Night's Whisper,5dn,55
-"Nissa, Ascended Animist",one,175
-"Nissa, Resurgent Animist",mat,22
-"Nissa, Who Shakes the World",war,169
 No More Lies,mkm,221
 Noble Hierarch,2xm,177
-Nova Hellkite,eoe,148
 Ocelot Pride,mh3,38
-"Oko, Thief of Crowns",eld,197
 "Omnath, Locus of Creation",znr,232
-Once Upon a Time,eld,169
-"Otawara, Soaring City",neo,271
-Ouroboroid,eoe,201
 Oust,clu,67
-Outland Liberator,mid,190
-Overgrown Tomb,rvr,283
-Overlord of the Balemurk,dsk,113
-Overlord of the Boilerbilges,dsk,146
 Overlord of the Mistmoors,frc,29
 Parallax Wave,vma,37
 Path to Exile,frc,30
-Pentad Prism,2xm,281
-Persist,ecc,83
-Pest Infestation,soc,282
-Phantasmal Image,afc,89
 "Phelia, Exuberant Shepherd",mh3,40
 "Phlage, Titan of Fire's Fury",mh3,197
-Phyrexian Metamorph,eoc,75
-Phyrexian Revoker,clb,868
-Pick Your Poison,mkm,170
-Pillage the Bog,otj,224
-Pinnacle Emissary,eoe,223
 Plains,ust,212
 Plateau,leb,280
-Polluted Delta,ons,321
 Ponder,lrw,79
 Portable Hole,afr,33
 Portal to Phyrexia,bro,240
-Preacher of the Schism,lci,113
-Preordain,otc,107
-Primeval Titan,ima,183
-Prismatic Ending,mh2,25
 Prismatic Vista,mh1,244
-Proft's Eidetic Memory,mkm,67
-Psychic Frog,mh3,199
-Pyrite Spellbomb,2xm,283
-Pyrogoyf,m3c,111
-Pyrokinesis,me2,147
-Qarsi Revenant,tdm,86
-Quantum Riddler,eoe,72
-Questing Beast,eld,171
-Questing Druid,woe,234
-Raffine's Tower,snc,254
-"Ragavan, Nimble Pilferer",mh2,138
-Ramunap Excavator,m3c,241
-Raucous Theater,mkm,266
 Raugrin Triome,iko,251
-Razorverge Thicket,som,228
-Reanimate,tpr,112
-Reckoner Bankbuster,neo,255
-Reclamation Sage,fdn,231
-Recurring Nightmare,tpr,113
-Regrowth,me4,163
-Remand,j25,349
 Reprieve,ltr,26
-Restless Cottage,woe,258
-Restless Fortress,woe,259
 Restless Prairie,lci,281
-Restless Ridgeline,lci,283
-Restless Vents,lci,284
-Restless Vinestalk,woe,261
-Retrofitter Foundry,drc,136
-Riverpyre Verge,dft,260
-Robber of the Rich,eld,138
-"Rofellos, Llanowar Emissary",vma,229
-Sacred Foundry,rvr,285
 Sage of the Skies,tdm,22
-"Saheeli, Sublime Artificer",drc,119
 Sanguine Evangelist,lci,34
-Savai Triome,iko,253
-Savannah,me4,250
-Scalding Tarn,mh2,254
-Scavenging Ooze,fdc,227
-Screaming Nemesis,dsk,157
 Scrubland,me4,251
-Scythecat Cub,j25,24
 Seachrome Coast,som,229
-Seasoned Pyromancer,2x2,123
-Seething Song,c21,179
 Sentinel of the Nameless City,lci,211
-Serra Paragon,soc,169
-Shadowspear,thb,236
-Shadowy Backstreet,mkm,268
-Shelldock Isle,lrw,272
-Sheoldred's Edict,one,108
-"Sheoldred, the Apocalypse",dmu,107
-Shifting Woodland,mh3,228
 Show and Tell,usg,96
-Showdown of the Skalds,khm,229
 Sink into Stupor,mh3,241
-Six,mh3,169
-Skullclamp,moc,379
-Skyclave Apparition,soc,173
-Sleight of Hand,me4,62
-Smuggler's Copter,nec,160
 Snapcaster Mage,isd,78
-Sneak Attack,dmr,331
-Snuff Out,mmq,162
-Sol Ring,me4,227
 Solitude,mh2,32
-Sorin of House Markov,mh3,245
 Soul-Guide Lantern,drc,139
 Souls of the Lost,lci,121
-Sowing Mycospawn,mh3,170
 Spara's Headquarters,snc,257
-Spell Pierce,2x2,63
 Sphinx of False Conclusions,fra,40
-Spirebluff Canal,kld,249
-Splitskin Doll,dsk,33
-Springheart Nantuko,mh3,171
 Staff of the Storyteller,frc,34
 Steam Vents,rvr,288
 Stock Up,dft,67
-Stomping Ground,rvr,289
-Stoneforge Mystic,2xm,31
 Strip Mine,atq,82a
 Subtlety,mh2,67
-Sunbaked Canyon,mh1,247
-Sunbillow Verge,dft,264
-Sundering Titan,arc,118
 Sunfall,frc,36
-"Surrak, Elusive Hunter",tdm,161
-Survival of the Fittest,tpr,199
 Swamp,ust,214
 Swift Reconfiguration,nec,10
-Sword of Fire and Ice,dst,148
-Swords to Plowshares,me4,30
-Sylvan Caryatid,ths,180
-Sylvan Safekeeper,jud,133
 Taiga,me4,253
-"Takenuma, Abandoned Mire",neo,278
-Talisman of Conviction,m3c,307
-Talisman of Creativity,frc,61
-Talisman of Curiosity,drc,140
-Talisman of Dominance,frc,62
-Talisman of Hierarchy,soc,358
-Talisman of Impulse,blc,287
-Talisman of Indulgence,frc,63
-Talisman of Progress,frc,64
-Talisman of Resilience,dsc,255
-Talisman of Unity,mkc,244
-"Tamiyo, Collector of Tales",war,220
 "Tamiyo, Inquisitive Student",mh3,242
-Tarmogoyf,fut,153
-Tear Asunder,eoc,109
 "Teferi, Hero of Dominaria",dom,207
 "Teferi, Time Raveler",rvr,232
-Temple Garden,rvr,290
-Tendrils of Agony,scg,75
-Territorial Kavu,mh2,216
-Tersa Lightshatter,tdm,127
-"Tezzeret, Cruel Captain",eoe,2
-"Thalia, Guardian of Thraben",a25,36
-The Endstone,eoe,240
-The Mightstone and Weakstone,bro,238
 The Wandering Emperor,neo,42
-Thespian's Stage,m3c,395
 Thieving Skydiver,otc,118
-Third Path Iconoclast,otc,244
 Thirst for Discovery,vow,85
-Thornspire Verge,dsk,270
-Thoughtseize,2xm,109
 Thraben Inspector,inr,45
-Three Steps Ahead,otj,75
-Thundering Falls,mkm,269
 Thundertrap Trainer,blb,78
 Time Spiral,usg,103
 Time Walk,leb,84
-Time Warp,tpr,74
 Timetwister,leb,85
-Tinker,ulg,45
 Tireless Tracker,eoc,110
 Tishana's Tidebinder,lci,81
-"Titania, Protector of Argoth",eoc,111
-Tolarian Academy,vma,319
-"Torsten, Founder of Benalia",dmc,47
 Touch the Spirit Realm,neo,40
-Toxic Deluge,mh3,277
-Treasure Cruise,soc,205
-Tribal Flames,dde,51
 Trinket Mage,ddf,49
-Triplicate Titan,drc,143
 Tropical Island,me4,254
-Trumpeting Carnosaur,lci,171
 Tundra,me4,255
 "Ugin, Eye of the Storms",tdm,1
-"Ulamog, the Ceaseless Hunger",cmm,5
-"Ulamog, the Infinite Gyre",2x2,3
-Ulvenwald Oddity,vow,225
-Umezawa's Jitte,td0,B30
-Unburial Rites,2x2,95
-Undercity Sewers,mkm,270
-Underground Mortuary,mkm,271
-Underground Sea,me4,256
-Underworld Breach,thb,161
-Unearth,ulg,72
 Unexpectedly Absent,c20,106
-Unholy Heat,otc,182
-Unlicensed Hearse,snc,246
-Up the Beanstalk,woe,195
-Upheaval,mh2,270
 "Uro, Titan of Nature's Wrath",m3c,277
-Urza's Bauble,me1,170
-Urza's Saga,mh2,259
-"Urza, Lord High Artificer",cmm,130
 Utopia Sprawl,rvr,159
-"Valki, God of Lies",khm,114
-Vampire Hexmage,2xm,112
-Vampiric Tutor,vma,145
 Vaultborn Tyrant,big,20
-Verdant Catacombs,mh2,260
-Vindicate,mh2,294
-Virtue of Loyalty,woe,38
-Virtue of Persistence,woe,115
-Voice of Victory,tdm,33
-Volcanic Island,me4,260
-Voldaren Epicure,inr,182
-Wasteland,tpr,249
-Wastewood Verge,dft,268
 Watery Grave,rvr,291
-Wheel of Fortune,me4,140
-Wight of the Reliquary,soc,338
 Willowrush Verge,dft,270
 Winds of Abandon,mh1,37
-Windswept Heath,ons,328
-Wishclaw Talisman,fdn,617
 Witch Enchanter,mh3,239
 Woe Strider,soc,231
-Wooded Foothills,ons,330
-Woodfall Primus,ncc,322
-Worldspine Wurm,dsc,206
-Wrath of God,leb,46
 Wrenn and Six,2x2,296
-Xander's Lounge,snc,260
-"Yavimaya, Cradle of Growth",m3c,409
-Yawgmoth's Will,vma,148
-"Yawgmoth, Thran Physician",dmr,110
-"Yera and Oski, Weaver and Guide",om1,23
-Zagoth Triome,iko,259
-Ziatora's Proving Ground,snc,261
-Zuran Orb,me1,174

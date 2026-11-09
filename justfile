@@ -121,15 +121,10 @@ bench-count *args:
 count-gate:
     {{ by }} count-gate
 
-# Look up card data on Scryfall into data/cards.json (--cube for the whole cube)
+# Look up card data on Scryfall into data/cards.json
 [group('data')]
 cards *args:
     {{ by }} cards "$@"
-
-# 17lands games-in-hand win rates into data/card-quality.csv
-[group('data')]
-card-quality *args:
-    {{ by }} card-quality "$@"
 
 # Transcode the UI's music and sounds from the staged CC0 packs into ui/public/audio (--check)
 [group('data')]

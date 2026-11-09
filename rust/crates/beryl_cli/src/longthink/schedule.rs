@@ -2,7 +2,7 @@
 //! it has finished, so a resumed run picks up the very game a stop interrupted.
 //!
 //! - An entrant is a fixed agent (`expert-frozen`), or a search family at a budget of
-//!   engine steps a decision (`ismcts18/hidden/rollout/17l@3M`). Each family opens at the
+//!   engine steps a decision (`ismcts18/hidden/rollout/tuned@3M`). Each family opens at the
 //!   first of the configured budgets; the next opens once the last has played
 //!   [`OPEN_GAMES`] games, and past the configured ones (or the first two, with one
 //!   configured), ×3 each, only while the last step up still gained rating with 80%
@@ -51,7 +51,7 @@ pub struct Config {
 /// values come from. Seeing only the hands is left out, a split of what hiding costs that the
 /// omniscient twins already bound, and so are leaves scored by the evaluation alone, the
 /// weakest at every budget to 10M in the first runs: `cut2` keeps evaluated leaves here.
-pub const FAMILIES: [&str; 9] = [
+pub const FAMILIES: [&str; 8] = [
     "pimc18/hidden/rollout/tuned",
     "pimc72/hidden/rollout/tuned",
     "pimc288/hidden/rollout/tuned",
@@ -59,7 +59,6 @@ pub const FAMILIES: [&str; 9] = [
     "ismcts18/hidden/rollout/tuned",
     "ismcts18/omniscient/rollout/tuned",
     "ismcts18/hidden/cut2/tuned",
-    "ismcts18/hidden/rollout/17l",
     "ismcts18/hidden/rollout/estimate",
 ];
 

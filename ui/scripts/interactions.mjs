@@ -3624,16 +3624,15 @@ await check(
 );
 
 // The trigger-order prompt names each trigger's source in full,
-// even the cube's longest names: `choice-trigger-order` stops on one between two permanents,
-// renamed here to the two longest names in the cube list, and no text on the page is cut.
-const cube = await readFile(
-    new URL("../../data/arena-powered-cube-2025-10-30.csv", import.meta.url),
+// even the longest card names Beryl knows: `choice-trigger-order` stops on one between two
+// permanents, renamed here to the two longest names in `beryl_cards`' generated name list, and
+// no text on the page is cut.
+const known = await readFile(
+    new URL("../../rust/crates/beryl_cards/src/names.rs", import.meta.url),
     "utf8",
 );
-const longest = cube
-    .split("\n")
-    .slice(1)
-    .map((line) => line.replace(/^[^,]*,/, "").replace(/^"(.*)"$/, "$1"))
+const longest = [...known.matchAll(/^pub const \w+: &str = "(.*)";$/gm)]
+    .map((m) => JSON.parse(`"${m[1]}"`))
     .sort((a, b) => b.length - a.length)
     .slice(0, 2);
 const sources = order.decision.candidates.map(

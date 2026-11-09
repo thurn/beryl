@@ -195,7 +195,7 @@ const NONE: u32 = u32::MAX;
 pub const TURN_DISCOUNT: f64 = 0.98;
 
 impl fmt::Display for Family {
-    /// `ismcts18/hidden/rollout/17l`: method, sight, leaf, knowledge, then any options, as
+    /// `ismcts18/hidden/rollout/tuned`: method, sight, leaf, knowledge, then any options, as
     /// `pimc18/omniscient/rollout/tuned/anchor+mid`.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.method {
@@ -209,7 +209,6 @@ impl fmt::Display for Family {
         };
         let knowledge = match self.knowledge {
             Knowledge::Estimate => "estimate",
-            Knowledge::Lands17 => "17l",
             Knowledge::Tuned => "tuned",
         };
         write!(f, "/{sight}/")?;
@@ -235,8 +234,8 @@ impl FromStr for Family {
         let bad = || {
             format!(
                 "{s:?} is no family: method/sight/leaf/knowledge[/options], as \
-                 ismcts18/hidden/rollout/17l (pimcN or ismctsN; hidden, hands or omniscient; \
-                 rollout, cutN or eval; estimate, 17l or tuned; options anchor, mid and means \
+                 ismcts18/hidden/rollout/tuned (pimcN or ismctsN; hidden, hands or omniscient; \
+                 rollout, cutN or eval; estimate or tuned; options anchor, mid and means \
                  joined by + in that order)"
             )
         };
@@ -293,7 +292,6 @@ impl FromStr for Family {
         };
         let knowledge = match knowledge {
             "estimate" => Knowledge::Estimate,
-            "17l" => Knowledge::Lands17,
             "tuned" => Knowledge::Tuned,
             _ => return Err(bad()),
         };
@@ -1655,7 +1653,7 @@ mod tests {
     fn families_round_trip() {
         for s in [
             "pimc18/hidden/rollout/tuned",
-            "ismcts18/hands/cut2/17l",
+            "ismcts18/hands/cut2/estimate",
             "ismcts4/omniscient/eval/estimate",
             "pimc18/omniscient/rollout/tuned/anchor",
             "pimc18/omniscient/rollout/tuned/mid",

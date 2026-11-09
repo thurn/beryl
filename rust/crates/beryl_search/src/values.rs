@@ -148,51 +148,9 @@ pub struct CardValues {
 pub enum Knowledge {
     /// Every card estimated from what its face shows: mana value, stats, loyalty.
     Estimate,
-    /// Nonland cards valued by their 17lands games-in-hand win rate in this cube
-    /// (`data/card-quality.csv`, `just card-quality`); lands and cards without one estimated.
-    Lands17,
     /// The values hand-tuned for the WU Control mirror, estimated for the rest.
     #[default]
     Tuned,
-}
-
-/// 17lands' card quality for the cube: name, games in hand, GIH WR, IWD.
-const QUALITY: &str = include_str!("../../../../data/card-quality.csv");
-
-/// Cards seen in fewer games than this get no 17lands value.
-const QUALITY_GAMES: u32 = 500;
-
-/// The value of a games-in-hand win rate: 50 at the cube's mean over cards with enough games,
-/// 20 more per standard deviation (0.031 in the cube), within 5 to 95. The cube's nonland
-/// cards run from 0.47 to 0.65, so about 0 to 110 before the clamp.
-fn quality_value(wr: f64, mean: f64, sd: f64) -> i16 {
-    (50.0 + 20.0 * (wr - mean) / sd).round().clamp(5.0, 95.0) as i16
-}
-
-/// Each card name's games-in-hand win rate, with enough games, and their mean and standard
-/// deviation.
-fn quality() -> (Vec<(String, f64)>, f64, f64) {
-    let mut out = Vec::new();
-    for line in QUALITY.lines().skip(1) {
-        let (name, rest) = if let Some(quoted) = line.strip_prefix('"') {
-            quoted.split_once("\",").expect("a quoted name")
-        } else {
-            line.split_once(',').expect("a name")
-        };
-        let mut cells = rest.split(',');
-        let games: u32 = cells.next().and_then(|c| c.parse().ok()).expect("games");
-        let wr: f64 = cells
-            .next()
-            .and_then(|c| c.parse().ok())
-            .expect("a win rate");
-        if games >= QUALITY_GAMES {
-            out.push((name.to_owned(), wr));
-        }
-    }
-    let n = out.len() as f64;
-    let mean = out.iter().map(|(_, w)| w).sum::<f64>() / n;
-    let sd = (out.iter().map(|(_, w)| (w - mean).powi(2)).sum::<f64>() / n).sqrt();
-    (out, mean, sd)
 }
 
 impl CardValues {
@@ -203,7 +161,6 @@ impl CardValues {
 
     /// The values of the tier `knowledge`.
     pub fn with(t: &GameTable, knowledge: Knowledge) -> CardValues {
-        let quality = (knowledge == Knowledge::Lands17).then(quality);
         let mut cards = [CardInfo::default(); CardIx::COUNT];
         for (i, info) in cards.iter_mut().enumerate().take(t.len()) {
             let def = t.def(CardIx::new(i as u8));
@@ -213,18 +170,12 @@ impl CardValues {
                     .fold(0, |bits, &(_, a)| bits | 1 << a)
             };
             *info = CardInfo {
-                value: match (&quality, knowledge) {
-                    (_, Knowledge::Tuned) => VALUES
+                value: match knowledge {
+                    Knowledge::Tuned => VALUES
                         .iter()
                         .find(|(name, _)| *name == def.name)
                         .map_or_else(|| estimate(def.front()), |&(_, v)| v),
-                    (Some((cards, mean, sd)), _) if !def.front().types.intersects(Types::LAND) => {
-                        cards.iter().find(|(name, _)| name == def.name).map_or_else(
-                            || estimate(def.front()),
-                            |&(_, wr)| quality_value(wr, *mean, *sd),
-                        )
-                    }
-                    _ => estimate(def.front()),
+                    Knowledge::Estimate => estimate(def.front()),
                 },
                 wheel: WHEELS.contains(&def.name),
                 never_cast: NEVER_CAST.contains(&def.name),
@@ -267,32 +218,5 @@ fn estimate(face: &Face) -> i16 {
         10
     } else {
         5 + 4 * mana_value
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use beryl_cards::CARDS;
-    use beryl_cards::decks::WU_CONTROL;
-
-    use super::*;
-
-    /// 17lands knows every card of the mirror by the name the engine gives it, so the
-    /// 17lands tier values every spell from data, not an estimate.
-    #[test]
-    fn every_mirror_card_has_a_17lands_quality() {
-        let (cards, mean, sd) = quality();
-        assert!(cards.len() > 500 && (0.5..0.6).contains(&mean) && sd > 0.0);
-        for &(_, name) in WU_CONTROL {
-            assert!(cards.iter().any(|(n, _)| n == name), "{name}");
-        }
-        let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
-        let tuned = CardValues::with(&t, Knowledge::Tuned);
-        let data = CardValues::with(&t, Knowledge::Lands17);
-        let differ = (0..t.len())
-            .map(|i| CardIx::new(i as u8))
-            .filter(|&c| tuned.get(c).value != data.get(c).value)
-            .count();
-        assert!(differ > 10, "{differ} cards valued differently");
     }
 }

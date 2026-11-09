@@ -1,14 +1,20 @@
 # Rules Coverage
 
-How the engine grows from the cards implemented so far to the whole 540-card
-cube, and past it, without slowing rollouts. The rule throughout: a mechanism
+How the engine grows from the cards implemented so far to the supported Legacy
+decks, and past them, without slowing rollouts. The rule throughout: a mechanism
 that nothing in the game uses costs one predictable branch.
+
+This plan was written for the 540-card Arena Powered Cube, the target before the
+project moved to Legacy on 2026-11-09, and its examples are cube cards. The
+mechanisms and their designs carry over; the order follows the Legacy decks once
+they are chosen, so a mechanism no supported deck needs waits, and some "beyond
+the cube" ones (Blood Moon, for one) come early.
 
 - **Why expand.** The engine handles what the implemented cards need. Its layer
   system has no text-changing (layer 3), color-setting (5), ability-removing (6)
   or P/T-setting (7b) effects yet, so Oko, Thief of Crowns cannot be written
-  today. The rest of the cube needs those and about a dozen other hard
-  mechanisms.
+  today. The rest of the cube needed those and about a dozen other hard
+  mechanisms, and Legacy needs most of them.
 - **The tension.** Every rule added to a hot path (priority, casting, events,
   layers) is paid in every rollout. A 100-game MCTS pairing already holds the
   machine for about 20 minutes.
@@ -434,8 +440,8 @@ whose best strategy is mixed.
 
 - By D6, every name outside both decklists has the same consequences, so the
   exact candidates are the game table's names plus one "any other name". The AI
-  names from its belief about the opponent's deck, drawn from the cube's names,
-  through a two-level pick.
+  names from its belief about the opponent's deck, drawn from the metagame's
+  names, through a two-level pick.
 - A secret choice is stored in `pending` with a knowledge bit that hides it
   until the reveal. Search samples a mixed strategy rather than maximizing.
 
@@ -455,14 +461,14 @@ and a second bitboard for the phased-out ones, which only the untap step reads.
 ### 22. Zones outside the game
 
 **Examples:** wishes (Burning Wish, Karn, the Great Creator), learn and lessons,
-companions; Conspiracy's draft-matters cards (Cogwork Librarian, Lore Seeker).
+companions.
 
-**Why it's hard:** These read a sideboard the state doesn't have. In cube draft
-it is the unused part of each player's pool. Draft-matters cards change the
-draft itself, not the game.
+**Why it's hard:** These read a sideboard the state doesn't have. In Legacy it
+is each player's 15-card sideboard, which best of three also swaps cards with
+between games.
 
 **Plan:** A per-player sideboard zone with fixed slots beside the deck's, within
-the 255. Draft-matters cards belong to the draft crate, not the engine.
+the 255.
 
 ### 23. Rewriting a card's whole text
 
@@ -569,7 +575,7 @@ nothing when absent.
 | Card scenarios      | Each ability does what its text says, with CR citations                                                   | `just test-rust`                      |
 | Ability coverage    | Every ability of a supported card is exercised by some scenario (the `coverage` feature)                  | `just test-rust`                      |
 | Oracles             | Scenarios agree with XMage and Forge, or the divergence is in `oracle-divergences.json` with its citation | `just oracle <cards>`                 |
-| Mechanism corpus    | Classic interactions per mechanism, before a cube card needs them                                         | `just test-rust`                      |
+| Mechanism corpus    | Classic interactions per mechanism, before a supported card needs them                                    | `just test-rust`                      |
 | Fuzzing             | Long random games never break an invariant or stall unexpectedly                                          | `just fuzz`                           |
 | Replay differential | Inline rollout answers and paused replay reach the same state hash                                        | `just test-rust`                      |
 | Instruction counts  | The rollout benchmark is unchanged when the mechanism is absent                                           | `just bench-count`, `just count-gate` |
@@ -579,9 +585,9 @@ saying how its class could be prevented, ideally through the type system.
 
 ## Open questions
 
-- **Scope beyond the cube.** Build text changes and same-layer dependencies now,
-  or wait for the first card that needs them? Which of types 17 to 26, if any,
-  are worth their design changes?
+- **Scope beyond the supported decks.** Build text changes and same-layer
+  dependencies now, or wait for the first card that needs them? Which of types
+  17 to 26, if any, are worth their design changes?
 - **Dirty-flag granularity.** How often does equipment keep layers dirty all
   game? Measure before splitting the flag per layer.
 - **Batched events.** Is splitting a batched draw only when a per-card listener
