@@ -5874,7 +5874,7 @@ for (const viewport of [
             await at("opponent-first-strike", 11);
             await at("combat-declare", attackRecord.at);
             await at("combat-declare", attackRecord.at, () =>
-                page.getByRole("button", { name: "Attack All" }).click(),
+                page.getByRole("button", { name: "Attack With All" }).click(),
             );
             const says = seen.map((s) => s.says);
             assert.equal(new Set(says).size, seen.length, says.join(" | "));
