@@ -158,6 +158,15 @@ head-to-head matches instead. Its last run is `docs/longthink-run-003.md`.
 - A fresh worktree clones the cached `rust/target` and `ui/node_modules` in
   seconds (copy-on-write); removing it saves them back.
 
+## UI
+
+Everything in the Beryl client acts like a physical object. Cards cast shadows
+and animate and flip realistically. Things usually don't just appear, they come
+from somewhere. We never show multiple copies of the same game object. Browsers
+and prompts are not an exception to this: we animate the existing objects to
+appear in the browser, we don't make a new copy of them. Animations are fast and
+fluid. Everything you see makes sense as the motion of real cards in 3D space.
+
 ## Workflow
 
 - When launching more than one subagent at a time, please always use Sonnet.
