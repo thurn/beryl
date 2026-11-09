@@ -1576,6 +1576,14 @@ impl Scripted {
 }
 
 impl Scripted {
+    /// Restore a Playground script after Undo by consuming the actions it had already
+    /// taken at that decision. Use on a freshly constructed script so its turn gates remain.
+    pub fn skip_taken(&mut self, count: usize) {
+        for _ in 0..count {
+            self.take();
+        }
+    }
+
     /// Takes the seat's next action: it is answered.
     fn take(&mut self) {
         self.script.pop_front();

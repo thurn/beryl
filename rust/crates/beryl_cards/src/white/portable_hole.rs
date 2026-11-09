@@ -75,6 +75,8 @@ pub const SCENARIOS: &[Scenario] = &[
     // On P1's turn Teferi's -3 returns the Hole to P0's hand, and Jace comes back under P1's
     // control.
     Scenario::new("Portable Hole exiles until it leaves the battlefield")
+        // by-8g5: Playground keeps the Hole in slot zero, exercising linked-exile UI.
+        .seed(12)
         .battlefield(
             P0,
             &[

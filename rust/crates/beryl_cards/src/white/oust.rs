@@ -137,4 +137,30 @@ pub const SCENARIOS: &[Scenario] = &[
         }),
         life(P1, 23),
     ]),
+    // UI regression by-97z: the lower spell's target stays legible beneath a response.
+    Scenario::new("Oust beneath an opposing counterspell")
+        .battlefield(P0, &[Permanent::new(names::PLAINS); 3])
+        .hand(P0, &[names::OUST, names::REPRIEVE, names::PLAINS])
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(SPELLBINDER),
+                Permanent::new(names::ISLAND),
+                Permanent::new(names::PLAINS),
+            ],
+        )
+        .hand(P1, &[names::NO_MORE_LIES])
+        .library(P0, &[names::ISLAND])
+        .library(P1, &[names::ISLAND])
+        .actions(&[
+            Action::cast(P0, names::OUST),
+            Action::pass(P0),
+            Action::cast(P1, names::NO_MORE_LIES),
+            Action::pass(P0),
+            Action::assert(Assertion::Controls {
+                player: P1,
+                card: SPELLBINDER,
+                count: 1,
+            }),
+        ]),
 ];

@@ -955,18 +955,20 @@ pub(super) fn playable(scenario: &Scenario) -> Vec<Action> {
     scenario
         .actions
         .iter()
-        .filter(|a| decides(a) || matches!(a, Action::AdvanceTo { .. }))
-        .filter(|a| {
-            !matches!(
-                a,
-                Action::Answer {
-                    kind: DecisionKind::TriggerOrder | DecisionKind::Priority,
-                    ..
-                }
-            )
-        })
+        .filter(|a| playground_action(a))
         .copied()
         .collect()
+}
+
+pub(super) fn playground_action(action: &Action) -> bool {
+    (decides(action) || matches!(action, Action::AdvanceTo { .. }))
+        && !matches!(
+            action,
+            Action::Answer {
+                kind: DecisionKind::TriggerOrder | DecisionKind::Priority,
+                ..
+            }
+        )
 }
 
 /// The scenario on a table that looks like a game: life off 20, graveyards, and the

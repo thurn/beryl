@@ -171,4 +171,17 @@ pub const SCENARIOS: &[Scenario] = &[
             }),
             story(1),
         ]),
+    // UI regression by-xd4: resolving a response must not demand a pass on one's own spell.
+    Scenario::new("Staff resolves after an opposing flash creature")
+        .battlefield(P0, &[Permanent::new(PLAINS), Permanent::new(PLAINS)])
+        .hand(P0, &[STAFF, PLAINS])
+        .battlefield(P1, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
+        .hand(P1, &[names::SNAPCASTER_MAGE])
+        .library(P0, &[ISLAND])
+        .library(P1, &[ISLAND])
+        .actions(&[
+            Action::cast(P0, STAFF),
+            Action::cast(P1, names::SNAPCASTER_MAGE),
+            story(1),
+        ]),
 ];

@@ -74,7 +74,7 @@ export async function openSeat(page, base, slug, moment, seat, instance) {
     return retried(async (n) => {
         await page.goto(
             new URL(
-                `scenarios/${slug}/${moment}/${seat}?hold${instance ? `&instance=${instance}` : ""}`,
+                `${moment.startsWith("playground-") ? "playground" : "scenarios"}/${slug}/${moment}/${seat}?hold${instance ? `&instance=${instance}` : ""}`,
                 base,
             ).href,
         );

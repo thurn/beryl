@@ -695,6 +695,13 @@ async function recorded(name) {
 }
 
 const spec = {
+    async playground(card) {
+        const response = await fetch(
+            new URL(`spec-api/playground/${card}`, base),
+        );
+        if (!response.ok) throw new Error(`No Playground for ${card}`);
+        return response.json();
+    },
     async checkpoints(card) {
         const response = await fetch(
             new URL(`spec-api/checkpoints/${card}`, base),

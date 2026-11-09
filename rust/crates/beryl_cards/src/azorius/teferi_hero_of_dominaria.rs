@@ -374,4 +374,31 @@ pub const SCENARIOS: &[Scenario] = &[
                 count: 1,
             }),
         ]),
+    // UI regressions by-svq/by-2ml: useful colors among three lands, then undo next turn.
+    Scenario::new("+1 untaps a dual land with an instant in hand")
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(TEFERI),
+                Permanent::new(PLAINS).tapped(),
+                Permanent::new(ISLAND).tapped(),
+                Permanent::new(names::TUNDRA).tapped(),
+            ],
+        )
+        .hand(P0, &[names::REPRIEVE])
+        .library(P0, &[PLAINS, ISLAND])
+        .library(P1, &[ISLAND, PLAINS])
+        .actions(&[
+            Action::activate(P0, TEFERI, 0),
+            Action::Resolve,
+            Action::AdvanceTo {
+                turn: 1,
+                step: TurnStep::End,
+            },
+            Action::Resolve,
+            Action::choose(P0, DecisionKind::ChooseUpTo, names::TUNDRA),
+            Action::choose(P0, DecisionKind::ChooseUpTo, ISLAND),
+            tapped(P0, names::TUNDRA, 0),
+            tapped(P0, ISLAND, 0),
+        ]),
 ];

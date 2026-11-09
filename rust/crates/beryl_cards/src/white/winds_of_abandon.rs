@@ -239,4 +239,30 @@ pub const SCENARIOS: &[Scenario] = &[
                 count: 2,
             }),
         ]),
+    // UI regression by-yfw: the token leaves while Winds stays on the stack for the search.
+    Scenario::new("Winds of Abandon exiles a token before its controller searches")
+        .battlefield(
+            P0,
+            &[Permanent::new(names::PLAINS), Permanent::new(names::PLAINS)],
+        )
+        .hand(P0, &[names::WINDS_OF_ABANDON, names::PLAINS])
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(names::STAFF_OF_THE_STORYTELLER),
+                Permanent::token("Spirit Token"),
+            ],
+        )
+        .library(P0, &[names::ISLAND])
+        .library(P1, &[names::ISLAND, names::PLAINS])
+        .actions(&[
+            Action::cast(P0, names::WINDS_OF_ABANDON),
+            Action::Resolve,
+            Action::choose(P1, DecisionKind::ChooseUpTo, names::ISLAND),
+            Action::assert(Assertion::Controls {
+                player: P1,
+                card: "Spirit Token",
+                count: 0,
+            }),
+        ]),
 ];

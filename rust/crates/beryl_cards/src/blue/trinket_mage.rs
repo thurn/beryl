@@ -169,4 +169,29 @@ pub const SCENARIOS: &[Scenario] = &[
                 top: LIBRARY,
             }),
         ]),
+    // UI regression by-kac: a known library top must not add a separate Search? prompt.
+    Scenario::new("Trinket Mage searches with a known library top")
+        .hand(P0, &[MAGE])
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(names::JACE_THE_MIND_SCULPTOR),
+                Permanent::new(names::ISLAND),
+                Permanent::new(names::ISLAND),
+                Permanent::new(names::ISLAND),
+            ],
+        )
+        .library(P0, LIBRARY)
+        .library(P1, &[names::PLAINS])
+        .actions(&[
+            Action::activate(P0, names::JACE_THE_MIND_SCULPTOR, 0),
+            Action::answer(P0, DecisionKind::Target, Pick::Player { player: P0 }),
+            Action::answer(P0, DecisionKind::YesNo, Pick::No),
+            ENTER[0],
+            ENTER[1],
+            ENTER[2],
+            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+            Action::choose(P0, DecisionKind::ChooseUpTo, names::MANA_CRYPT),
+            count(Zone::Hand, Some(names::MANA_CRYPT), 1),
+        ]),
 ];

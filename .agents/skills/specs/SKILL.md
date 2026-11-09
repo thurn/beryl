@@ -146,6 +146,19 @@ scenario setup data and ability definitions, adding support cards through the en
 filters. Change a general generator capability first; use a scenario in the card's file for
 a missing interaction. The scenario viewer's replay setups are not modified by Playground.
 
+To audit Playground itself, use `await spec.playground(card)` to list its examples, then
+`spec.open(card, variant.name, seat)` or `spec.both(card, variant.name)`. Names starting
+with `playground-` open the real independent Playground sessions. `spec.play()` releases
+an opponent-play board; the viewer's own cast and choices stay interactive. Use
+`spec.audit(action)` for those gestures. A fully scripted Scenarios replay alone does not
+prove that a human Playground board offers the same interaction.
+
+When checking a historical bug, verify its distinguishing conditions, not just the card:
+token versus ordinary target, a lower stack item, known library top, both casting costs
+affordable, and the affected seat's prompt. The unseen player retains scenario choices,
+including originally automatic targets, and waits for the scenario's stack context before
+responding. New scenario data needs no card-specific viewer code and appears by scrolling.
+
 `just specs --shots --port 0 [card...]` screenshots every moment settled from
 both seats, for a quick look at end states: `--moment M` one moment,
 `--select .prompt-title` only the seats where that selector shows, and
@@ -160,7 +173,7 @@ records from seat 1 with `"until": "first <kind> decision for seat 1"`.
 
 ## How a spec is generated
 
-`rust/crates/beryl_cli/src/scenarios/auto.rs` builds each card's moments from two
+`rust/crates/beryl_cli/src/specs/auto.rs` builds each card's moments from two
 sources, with short general labels:
 
 - **The definition.** A permanent with activated abilities (not mana abilities)

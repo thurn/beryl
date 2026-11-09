@@ -142,7 +142,9 @@ fn trinket_mage_may_search_for_up_to_one_card() {
         asks(names::TRINKET_MAGE),
         [
             (Kind::YesNo, AskView::MaySearch),
-            (Kind::ChooseUpTo, AskView::Search { max: 1 })
+            (Kind::ChooseUpTo, AskView::Search { max: 1 }),
+            // The known-top search scenario first uses Jace to look at that card.
+            (Kind::YesNo, AskView::Fateseal { player: Side::You })
         ]
     );
 }

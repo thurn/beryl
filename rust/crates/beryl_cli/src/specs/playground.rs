@@ -16,11 +16,16 @@ use serde_json::{Value, json};
 use super::{Moment, Phase, View, auto, slug};
 use crate::boards::{self, Scripted, Shared};
 
+#[cfg(test)]
+mod history_tests;
+mod opponent;
+
 pub struct Variant {
     pub moment: Moment,
     pub controller: View,
     pub label: String,
     quality: usize,
+    contexts: Vec<Option<opponent::Context>>,
 }
 
 pub struct Example {
@@ -49,7 +54,7 @@ fn actor(action: &Action) -> Option<Seat> {
 }
 
 /// Existing scenario setups are reusable data, not card-name branches in the viewer.
-/// Group alternate plays into variants, rather than repeating a full-size board for each.
+/// Each distinct variant has its own pair of full-width boards on the scrolling page.
 pub fn generate(card: &'static str) -> Playground {
     let def = CARDS
         .cards()
@@ -72,6 +77,7 @@ pub fn generate(card: &'static str) -> Playground {
                 controller: View::Yours,
                 label: title,
                 quality: 0,
+                contexts: Vec::new(),
             }]
         });
     }
@@ -127,6 +133,7 @@ pub fn generate(card: &'static str) -> Playground {
                     controller: View::Yours,
                     label: "Default".to_owned(),
                     quality: 0,
+                    contexts: Vec::new(),
                 }],
             });
         } else {
@@ -193,6 +200,7 @@ fn fold_loyalty_abilities(
             controller: base.controller,
             label,
             quality: 0,
+            contexts: Vec::new(),
         };
         if interaction_signature(&candidate).is_none() {
             return true;
@@ -234,7 +242,8 @@ fn interaction_signature(variant: &Variant) -> Option<String> {
                         object.keywords,
                         object.counters,
                         object.attached_to.is_some(),
-                        object.facing
+                        object.facing,
+                        object.token
                     ])
                 ));
             }
@@ -325,7 +334,7 @@ fn add_scenarios(
 ) {
     let card = def.name;
     for scenario in scenarios {
-        let actions = auto::playable(scenario);
+        let (actions, contexts, ordinals) = opponent::plan(scenario);
         let mut points: Vec<_> = actions
             .iter()
             .enumerate()
@@ -361,8 +370,9 @@ fn add_scenarios(
                 label
             };
             let variants = groups.entry(title).or_default();
-            let name =
-                Box::leak(format!("playground-{}-{i}", slug(scenario.name)).into_boxed_str());
+            let name = Box::leak(
+                format!("playground-{}-{}", slug(scenario.name), ordinals[i]).into_boxed_str(),
+            );
             let mut moment = Moment::new(
                 name,
                 auto::heading(def, scenario),
@@ -375,6 +385,7 @@ fn add_scenarios(
                 moment,
                 controller: View::ALL[controller],
                 label: auto::heading(def, scenario).to_owned(),
+                contexts: contexts[i..].to_vec(),
                 quality: scenario
                     .setup
                     .players
@@ -406,18 +417,23 @@ fn target_position(
 fn support_cards() -> &'static [&'static CardDef] {
     static SUPPORTS: std::sync::OnceLock<Vec<&'static CardDef>> = std::sync::OnceLock::new();
     SUPPORTS.get_or_init(|| {
-        let mut supports: Vec<_> =
-            CARDS
-                .cards()
-                .iter()
-                .copied()
-                .filter(|d| {
-                    !d.front().types.intersects(Types::LAND)
-                        && !d.front().abilities.iter().any(|a| {
-                            matches!(a.kind, AbilityKind::Static | AbilityKind::Replacement)
-                        })
-                })
-                .collect();
+        let mut supports: Vec<_> = CARDS
+            .cards()
+            .iter()
+            .copied()
+            .filter(|d| {
+                d.front().types.intersects(
+                    Types::CREATURE
+                        .union(Types::ARTIFACT)
+                        .union(Types::ENCHANTMENT)
+                        .union(Types::PLANESWALKER),
+                ) && !d
+                    .front()
+                    .abilities
+                    .iter()
+                    .any(|a| matches!(a.kind, AbilityKind::Static | AbilityKind::Replacement))
+            })
+            .collect();
         supports.sort_by_key(|d| (d.front().abilities.len(), d.front().cost.generic, d.name));
         supports
     })
@@ -588,17 +604,7 @@ pub fn start(
     emit: impl Fn(GameUpdate, Phase) + Send + Sync + 'static,
 ) -> Result<Sessions, String> {
     let (table, state) = prepare(variant)?;
-    let actions: Vec<_> = if automated(variant, view) {
-        variant
-            .moment
-            .play
-            .iter()
-            .filter(|a| actor(a) == Some(view.other()) || matches!(a, Action::AdvanceTo { .. }))
-            .collect()
-    } else {
-        Vec::new()
-    };
-    let opponent = Scripted::with_actions(actions, view.other(), &table, Shared::default())?;
+    let opponent = opponent::Opponent::new(variant, view.other(), &table)?;
     let stand_in = Scripted::with_actions(&[], view.seat(), &table, Shared::default())?;
     let sessions = Sessions::new(None, move |update| emit(update, Phase::Live));
     sessions
@@ -680,8 +686,25 @@ mod tests {
         for spec in super::super::specs() {
             for example in &spec.playground().examples {
                 for variant in &example.variants {
-                    if let Err(error) = prepare(variant) {
-                        failures.push(format!("{} / {}: {error}", spec.card, variant.label));
+                    match prepare(variant) {
+                        Err(error) => {
+                            failures.push(format!("{} / {}: {error}", spec.card, variant.label));
+                        }
+                        Ok((table, state)) => {
+                            // A generic nonland target filler once put Counterspell on the battlefield.
+                            for &slot in state.battlefield() {
+                                assert!(
+                                    !state
+                                        .derived(slot)
+                                        .types
+                                        .intersects(Types::INSTANT.union(Types::SORCERY)),
+                                    "{} / {}: {} is not a permanent",
+                                    spec.card,
+                                    variant.label,
+                                    state.name(&table, slot)
+                                );
+                            }
+                        }
                     }
                 }
             }
