@@ -7,6 +7,13 @@
       "url": "https://not-jam.itch.io/not-jam-music-pack",
       "dir": "notjam"
     },
+    "notjam-2": {
+      "title": "Not Jam Music Pack 2",
+      "author": "NotJam",
+      "license": "CC0",
+      "url": "https://not-jam.itch.io/not-jam-music-pack-2",
+      "dir": "notjam-2/WAV"
+    },
     "kenney-casino": {
       "title": "Casino Audio",
       "author": "Kenney",
@@ -49,7 +56,19 @@
       "variants": [
         {
           "source": "notjam",
-          "file": "Loopable/ChillMenu_Loopable.wav"
+          "file": "Loopable/KleptoLindaTitles_Loopable.wav"
+        },
+        {
+          "source": "notjam-2",
+          "file": "Loopable/grumpy_shopkeep_loopable.wav"
+        },
+        {
+          "source": "notjam",
+          "file": "Loopable/TitleTheme_PhoneHome_Loopable.wav"
+        },
+        {
+          "source": "notjam-2",
+          "file": "Loopable/safe_space_loopable.wav"
         }
       ]
     },
@@ -58,19 +77,107 @@
       "variants": [
         {
           "source": "notjam",
-          "file": "Loopable/KleptoLindaMountainA_Loopable.wav"
+          "file": "Loopable/BreakbeatChips_Loopable.wav"
+        },
+        {
+          "source": "notjam-2",
+          "file": "Loopable/baroque_chips_loopable.wav"
         },
         {
           "source": "notjam",
-          "file": "Loopable/TypeCastTheme_Loopable.wav"
+          "file": "Loopable/CrashingOut_Loopable.wav"
+        },
+        {
+          "source": "notjam-2",
+          "file": "Loopable/battle_commences_loopable.wav"
         },
         {
           "source": "notjam",
-          "file": "Loopable/KleptoLindaCavernsA_Loopable.wav"
+          "file": "Loopable/CriticalTheme_Loopable.wav"
+        },
+        {
+          "source": "notjam-2",
+          "file": "Loopable/crystal_caverns_loopable.wav"
         },
         {
           "source": "notjam",
-          "file": "Loopable/HaroldParanormalInstigatorTheme_Loopable.wav"
+          "file": "Loopable/DescendGameplay_Loopable.wav"
+        },
+        {
+          "source": "notjam-2",
+          "file": "Loopable/lazy_river_rally_loopable.wav"
+        },
+        {
+          "source": "notjam",
+          "file": "Loopable/DragAndDreadTheme_Loopable.wav"
+        },
+        {
+          "source": "notjam-2",
+          "file": "Loopable/leading_the_charge_loopable.wav"
+        },
+        {
+          "source": "notjam",
+          "file": "Loopable/KleptoLindaCavernsB_Loopable.wav"
+        },
+        {
+          "source": "notjam-2",
+          "file": "Loopable/lich_king_ascendant_loopable.wav"
+        },
+        {
+          "source": "notjam",
+          "file": "Loopable/KleptoLindaMountainB_Loopable.wav"
+        },
+        {
+          "source": "notjam-2",
+          "file": "Loopable/locrian_chipdoom_loopable.wav"
+        },
+        {
+          "source": "notjam",
+          "file": "Loopable/MeltdownTheme_Loopable.wav"
+        },
+        {
+          "source": "notjam-2",
+          "file": "Loopable/peak_performance_loopable.wav"
+        },
+        {
+          "source": "notjam",
+          "file": "Loopable/PitcherPerfectTheme_Loopable.wav"
+        },
+        {
+          "source": "notjam-2",
+          "file": "Loopable/pool_party_loopable.wav"
+        },
+        {
+          "source": "notjam",
+          "file": "Loopable/SeeingDouble_Loopable.wav"
+        },
+        {
+          "source": "notjam-2",
+          "file": "Loopable/rainy_foothills_loopable.wav"
+        },
+        {
+          "source": "notjam",
+          "file": "Loopable/SwitchWithMeTheme_Loopable.wav"
+        },
+        {
+          "source": "notjam-2",
+          "file": "Loopable/really_long_arms_loopable.wav"
+        },
+        {
+          "source": "notjam",
+          "file": "Loopable/UntitledTrack01_Loopable.wav"
+        },
+        {
+          "source": "notjam-2",
+          "file": "Loopable/solemn_advance_loopable.wav"
+        },
+        {
+          "source": "notjam-2",
+          "file": "Loopable/the_wall_loopable.wav"
+        },
+        {
+          "source": "notjam-2",
+          "file": "Loopable/waltz_of_the_lich_king_loopable.wav"
         }
       ]
     },
@@ -78,8 +185,12 @@
       "loop": false,
       "variants": [
         {
-          "source": "notjam",
-          "file": "Standalone/VictoryLap.wav"
+          "source": "notjam-2",
+          "file": "Standalone/battle_ceases.wav"
+        },
+        {
+          "source": "notjam-2",
+          "file": "Standalone/let_us_begin.wav"
         }
       ]
     },
@@ -87,8 +198,12 @@
       "loop": false,
       "variants": [
         {
+          "source": "notjam-2",
+          "file": "Standalone/you_died.wav"
+        },
+        {
           "source": "notjam",
-          "file": "Standalone/KleptoLindaCredits.wav"
+          "file": "Standalone/DarkCavern_PhoneHome.wav"
         }
       ]
     }

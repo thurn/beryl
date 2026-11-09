@@ -35,7 +35,8 @@ LOOPS: Path = paths.UI / "src" / "audio" / "loops.json"
 FFMPEG = "ffmpeg"
 MUSIC_LUFS = -18.0
 PEAK_DB = -1.0
-MUSIC_BITRATE = "128k"
+# Fit the full rotation into the committed audio budget.
+MUSIC_BITRATE = "46k"
 # Below this level a sound's start is silence, cut so the cue sounds when it is played.
 SILENCE_DB = -50
 # The committed audio's budget: the repository is public and every clone carries it.
