@@ -1,0 +1,519 @@
+{
+ "board": {
+  "active": 1,
+  "battlefield": [
+   {
+    "card": "Island",
+    "controller": 0,
+    "owner": 0
+   },
+   {
+    "card": "Currency Converter",
+    "controller": 0,
+    "owner": 0
+   },
+   {
+    "card": "Plains",
+    "controller": 1,
+    "owner": 1
+   },
+   {
+    "card": "Currency Converter",
+    "controller": 1,
+    "owner": 1
+   },
+   {
+    "card": "Plains",
+    "controller": 0,
+    "owner": 0
+   },
+   {
+    "card": "Portable Hole",
+    "controller": 1,
+    "owner": 1
+   },
+   {
+    "card": "Plains",
+    "controller": 0,
+    "owner": 0
+   },
+   {
+    "card": "Plains",
+    "controller": 1,
+    "owner": 1
+   },
+   {
+    "card": "Island",
+    "controller": 0,
+    "owner": 0
+   },
+   {
+    "card": "Island",
+    "controller": 1,
+    "owner": 1
+   },
+   {
+    "card": "Island",
+    "controller": 0,
+    "owner": 0
+   },
+   {
+    "card": "Rogue Token",
+    "controller": 1,
+    "owner": 1,
+    "token": true
+   },
+   {
+    "card": "Floodfarm Verge",
+    "controller": 1,
+    "owner": 1
+   },
+   {
+    "card": "Jace, the Mind Sculptor",
+    "controller": 1,
+    "counters": [
+     [
+      "Loyalty",
+      4
+     ]
+    ],
+    "owner": 1
+   },
+   {
+    "card": "Plains",
+    "controller": 0,
+    "owner": 0
+   },
+   {
+    "card": "Island",
+    "controller": 1,
+    "owner": 1
+   },
+   {
+    "card": "Subtlety",
+    "controller": 0,
+    "owner": 0,
+    "tapped": true
+   }
+  ],
+  "human": 0,
+  "players": [
+   {
+    "exile": [
+     {
+      "card": "Mana Crypt",
+      "with": 1
+     },
+     {
+      "card": "Damn",
+      "with": 1
+     },
+     {
+      "card": "Oust",
+      "with": 1
+     },
+     {
+      "card": "Jace, Vryn's Prodigy",
+      "until": 5
+     },
+     {
+      "card": "Winds of Abandon",
+      "with": 1
+     }
+    ],
+    "graveyard": [
+     "Stock Up",
+     "No More Lies"
+    ],
+    "hand": [
+     {
+      "card": "The Wandering Emperor"
+     },
+     {
+      "card": "Spara's Headquarters"
+     },
+     {
+      "card": "Counterspell"
+     },
+     {
+      "card": "Snapcaster Mage"
+     }
+    ],
+    "library": [
+     "Teferi, Hero of Dominaria",
+     "Fractured Identity",
+     "Plains",
+     "Tundra",
+     "Beza, the Bounding Spring",
+     "Reprieve",
+     "Floodfarm Verge",
+     "Jace, Wielder of Mysteries",
+     "Jace, the Mind Sculptor",
+     "Plains",
+     "Seachrome Coast",
+     "Island",
+     "Staff of the Storyteller",
+     "Thirst for Discovery",
+     "Island",
+     "Portable Hole",
+     "Teferi, Time Raveler",
+     "Plains",
+     "Abhorrent Oculus",
+     "Island",
+     "Trinket Mage"
+    ],
+    "life": 20
+   },
+   {
+    "exile": [
+     {
+      "card": "Trinket Mage",
+      "with": 3
+     },
+     {
+      "card": "Stock Up"
+     }
+    ],
+    "graveyard": [
+     "Snapcaster Mage"
+    ],
+    "hand": [
+     {
+      "card": "Teferi, Time Raveler",
+      "shown": true
+     },
+     {
+      "card": "Island"
+     },
+     {
+      "card": "Jace, Wielder of Mysteries"
+     },
+     {
+      "card": "Oust"
+     }
+    ],
+    "library": [
+     "Winds of Abandon",
+     "Plains",
+     "Subtlety",
+     "Spara's Headquarters",
+     "Counterspell",
+     "Tundra",
+     "Island",
+     "No More Lies",
+     "Abhorrent Oculus",
+     "Seachrome Coast",
+     "Damn",
+     "Island",
+     "Reprieve",
+     "Teferi, Hero of Dominaria",
+     "Plains",
+     "Beza, the Bounding Spring",
+     "The Wandering Emperor",
+     "Plains",
+     "Island",
+     "Plains",
+     "Fractured Identity",
+     "Jace, Vryn's Prodigy",
+     "Staff of the Storyteller",
+     "Thirst for Discovery",
+     "Mana Crypt"
+    ],
+    "life": 20
+   }
+  ],
+  "seed": 1794011728940076000,
+  "step": "PrecombatMain",
+  "stops": {
+   "fullControl": false,
+   "theirs": [
+    "declareAttackers",
+    "declareBlockers",
+    "end"
+   ],
+   "yours": [
+    "precombatMain",
+    "declareAttackers",
+    "declareBlockers",
+    "postcombatMain"
+   ]
+  },
+  "turn": 14
+ },
+ "path": [
+  {
+   "choice": {
+    "act": {
+     "act": "playLand",
+     "card": {
+      "controller": 1,
+      "name": "Island",
+      "zone": "hand",
+      "beforeV5": true,
+      "beforeV6": true
+     }
+    },
+    "index": 1,
+    "kind": "priority",
+    "player": 1,
+    "step": "precombatMain",
+    "turn": 14
+   }
+  },
+  {
+   "choice": {
+    "act": {
+     "act": "cast",
+     "card": {
+      "controller": 1,
+      "name": "Teferi, Time Raveler",
+      "zone": "hand",
+      "beforeV5": true,
+      "beforeV6": true
+     }
+    },
+    "index": 1,
+    "kind": "priority",
+    "player": 1,
+    "step": "precombatMain",
+    "turn": 14
+   }
+  },
+  {
+   "choice": {
+    "act": {
+     "act": "pass"
+    },
+    "index": 0,
+    "kind": "priority",
+    "player": 1,
+    "step": "precombatMain",
+    "turn": 14
+   }
+  },
+  {
+   "choice": {
+    "act": {
+     "act": "cast",
+     "card": {
+      "controller": 0,
+      "name": "Counterspell",
+      "zone": "hand",
+      "beforeV5": true,
+      "beforeV6": true
+     }
+    },
+    "index": 2,
+    "kind": "priority",
+    "player": 0,
+    "step": "precombatMain",
+    "turn": 14
+   }
+  },
+  {
+   "choice": {
+    "act": {
+     "act": "object",
+     "object": {
+      "controller": 1,
+      "name": "Teferi, Time Raveler",
+      "zone": "stack",
+      "beforeV5": true,
+      "beforeV6": true
+     }
+    },
+    "index": 0,
+    "kind": "target",
+    "player": 0,
+    "step": "precombatMain",
+    "turn": 14
+   }
+  },
+  {
+   "auto": {
+    "act": {
+     "act": "pass"
+    },
+    "index": 0,
+    "kind": "priority",
+    "player": 0,
+    "step": "precombatMain",
+    "turn": 14
+   }
+  },
+  {
+   "choice": {
+    "act": {
+     "act": "pass"
+    },
+    "index": 0,
+    "kind": "priority",
+    "player": 1,
+    "step": "precombatMain",
+    "turn": 14
+   }
+  },
+  {
+   "choice": {
+    "act": {
+     "ability": {
+      "n": 1
+     },
+     "act": "activate",
+     "card": {
+      "controller": 1,
+      "name": "Currency Converter",
+      "zone": "battlefield",
+      "beforeV5": true,
+      "beforeV6": true
+     }
+    },
+    "index": 3,
+    "kind": "priority",
+    "player": 1,
+    "step": "precombatMain",
+    "turn": 14
+   }
+  },
+  {
+   "choice": {
+    "act": {
+     "act": "pass"
+    },
+    "index": 0,
+    "kind": "priority",
+    "player": 0,
+    "step": "precombatMain",
+    "turn": 14
+   }
+  },
+  {
+   "choice": {
+    "act": {
+     "act": "pass"
+    },
+    "index": 0,
+    "kind": "priority",
+    "player": 1,
+    "step": "precombatMain",
+    "turn": 14
+   }
+  },
+  {
+   "choice": {
+    "act": {
+     "act": "attack",
+     "creature": {
+      "controller": 1,
+      "name": "Rogue Token",
+      "zone": "battlefield",
+      "beforeV5": true,
+      "beforeV6": true
+     }
+    },
+    "index": 1,
+    "kind": "attacker",
+    "player": 1,
+    "step": "declareAttackers",
+    "turn": 14
+   }
+  },
+  {
+   "choice": {
+    "act": {
+     "act": "pass"
+    },
+    "index": 0,
+    "kind": "priority",
+    "player": 0,
+    "step": "declareAttackers",
+    "turn": 14
+   }
+  },
+  {
+   "auto": {
+    "act": {
+     "act": "pass"
+    },
+    "index": 0,
+    "kind": "priority",
+    "player": 0,
+    "step": "declareBlockers",
+    "turn": 14
+   }
+  },
+  {
+   "choice": {
+    "act": {
+     "ability": {
+      "n": 2
+     },
+     "act": "activate",
+     "card": {
+      "controller": 1,
+      "name": "Jace, the Mind Sculptor",
+      "zone": "battlefield",
+      "beforeV5": true,
+      "beforeV6": true
+     }
+    },
+    "index": 4,
+    "kind": "priority",
+    "player": 1,
+    "step": "postcombatMain",
+    "turn": 14
+   }
+  },
+  {
+   "choice": {
+    "act": {
+     "act": "object",
+     "object": {
+      "controller": 0,
+      "name": "Subtlety",
+      "tapped": true,
+      "zone": "battlefield",
+      "beforeV5": true,
+      "beforeV6": true
+     }
+    },
+    "index": 0,
+    "kind": "target",
+    "player": 1,
+    "step": "postcombatMain",
+    "turn": 14
+   }
+  },
+  {
+   "choice": {
+    "act": {
+     "act": "pass"
+    },
+    "index": 0,
+    "kind": "priority",
+    "player": 0,
+    "step": "postcombatMain",
+    "turn": 14
+   }
+  },
+  {
+   "choice": {
+    "act": {
+     "act": "cast",
+     "card": {
+      "controller": 1,
+      "name": "Oust",
+      "zone": "hand",
+      "beforeV5": true,
+      "beforeV6": true
+     }
+    },
+    "index": 1,
+    "kind": "priority",
+    "player": 1,
+    "step": "postcombatMain",
+    "turn": 14
+   }
+  }
+ ]
+}

@@ -25,6 +25,14 @@ pub struct Transcript {
     seen: HashMap<Slot, (u16, String, Seat)>,
 }
 
+/// Each candidate of `d` in `s` as a transcript labels it, in the decision's order.
+pub fn labels(t: &GameTable, s: &State, d: &Decision) -> Vec<String> {
+    match &d.candidates {
+        Candidates::Objects(b) => b.iter().map(|slot| candidate(t, s, slot)).collect(),
+        Candidates::Options(o) => o.iter().map(|&o| option(t, s, o)).collect(),
+    }
+}
+
 impl Transcript {
     /// A transcript of a game between the agents named for each seat.
     pub fn new(names: [&str; 2]) -> Transcript {
@@ -80,10 +88,7 @@ impl Transcript {
         }
         self.events(t, s, &happened[split..]);
         self.remember(t, s);
-        let mut labels: Vec<String> = match &d.candidates {
-            Candidates::Objects(b) => b.iter().map(|slot| candidate(t, s, slot)).collect(),
-            Candidates::Options(o) => o.iter().map(|&o| option(t, s, o)).collect(),
-        };
+        let mut labels = labels(t, s, d);
         let _ = writeln!(
             self.text,
             "  {:<9} {:<14} {}  -> {}",

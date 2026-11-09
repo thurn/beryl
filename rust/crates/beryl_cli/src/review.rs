@@ -10,21 +10,18 @@
 //! `N`'s decisions and ends the transcript there; skipping the searches before it moves the
 //! agent's random stream, so its searches sample afresh rather than repeat the game's.
 
-use std::collections::VecDeque;
 use std::fmt::Write as _;
 use std::path::Path;
 
-use beryl_cards::decks::WU_CONTROL;
-use beryl_engine::event::Event;
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::{Choice, Profile, Replay, Scratch, Seat, Small, State, Step};
-use beryl_engine::{apply, next, observe, view};
+use beryl_engine::{Choice, Seat, Small};
+use beryl_engine::{observe, view};
 use beryl_search::{Agent, Budget, GameAgent, Search, agent};
-use beryl_session::replay::Entry;
-use beryl_session::{ReplayFile, UNDO_POINTS, with_stops};
+use beryl_session::ReplayFile;
 
 use crate::game;
 use crate::transcript::Transcript;
+use crate::walk::{Walk, Walked};
 
 pub fn main(args: &[String]) -> Result<(), String> {
     let usage = || {
@@ -83,129 +80,55 @@ fn agent_name<'a>(file: &'a ReplayFile, searcher_name: Option<&'a str>) -> &'a s
     }
 }
 
-/// Fails unless the game `file` records can be reviewed: a WU Control mirror, played from its
-/// start rather than rebuilt from a turn's beginning, so the seed deals it.
-fn reviewable(file: &ReplayFile) -> Result<(), String> {
-    let mirror: Vec<(u8, String)> = WU_CONTROL
-        .iter()
-        .map(|&(n, name)| (n, name.to_owned()))
-        .collect();
-    if file.decks.iter().any(|d| *d != mirror) {
-        return Err("only WU Control mirror games can be reviewed".to_owned());
-    }
-    if file.from.is_some() {
-        return Err("a game rebuilt from a turn's beginning cannot be reviewed".to_owned());
-    }
-    Ok(())
-}
-
 /// With `only`, the agent searches that turn's decisions alone and the transcript ends with it.
 fn review(path: &Path, searcher_name: Option<&str>, only: Option<u16>) -> Result<String, String> {
     let file = ReplayFile::load(path).map_err(|e| format!("{}: {e:?}", path.display()))?;
-    reviewable(&file)?;
-    let human = Seat::try_new(file.human).ok_or("no such human seat")?;
-    let bot = human.opponent();
-    let t = game::mirror();
+    let mut walk = Walk::of_file(&file)?;
+    let bot = walk.human.opponent();
     let name = agent_name(&file, searcher_name);
     // As `beryl_session`'s `Game::new`: the agent draws from its own stream.
-    let mut opponent = searcher(&t, name, SplitMix64::new(file.seed).next_u64())?;
-    let mut s = State::new(&t, file.seed, with_stops(Profile::SMART, file.stops, human));
-    let mut x = Scratch::recording();
+    let mut opponent = searcher(&walk.t, name, SplitMix64::new(file.seed).next_u64())?;
     // The answers are the recorded agent's, whichever agent searches beside them.
     let recorded = file.opponent.as_str();
-    let names = if human == Seat::P0 {
+    let names = if walk.human == Seat::P0 {
         ["human", recorded]
     } else {
         [recorded, "human"]
     };
     let mut transcript = Transcript::new(names);
-    // Each turn's board, as it began, is the session's to check.
-    let mut log = file
-        .log
-        .iter()
-        .filter(|e| !matches!(e, Entry::Checkpoint(_)));
-    let mut stops = file.stops;
-    // The positions an undo goes back to, one per answer of the human's, the latest last, as
-    // `Game::undo` keeps them: the state at each decision or halt they answered, the oldest
-    // dropped beyond `UNDO_POINTS`.
-    let mut points: VecDeque<State> = VecDeque::new();
-    let keep = |points: &mut VecDeque<State>, point: State| {
-        points.push_back(point);
-        if points.len() > UNDO_POINTS {
-            points.pop_front();
-        }
-    };
     loop {
-        match next(&mut s, &t, &mut x, &mut Replay) {
-            Step::Over(outcome) => {
-                let happened: Vec<Event> = x.events.drain().collect();
-                transcript.end(&t, &s, outcome, &happened);
+        match walk.next()? {
+            Walked::Over { outcome, happened } => {
+                transcript.end(&walk.t, &walk.s, outcome, &happened);
                 break;
             }
-            Step::Decide(d) => {
-                // As `beryl_session`'s `Game::replay`: a stops change takes effect at the
-                // decision open when it was made, and a halt is the session's, not the engine's.
-                let before = s;
-                if only.is_some_and(|n| before.turn().number > n) {
+            Walked::Undone => transcript.note("(the human takes back an answer)"),
+            Walked::Conceded => {
+                transcript.note("(the human conceded)");
+                break;
+            }
+            Walked::Ends => {
+                transcript.note("(the record ends here)");
+                break;
+            }
+            Walked::Decide { d, c, happened } => {
+                let turn = walk.s.turn().number;
+                if only.is_some_and(|n| turn > n) {
                     transcript.note("(the review stops after the turn it was asked for)");
                     break;
                 }
-                let entry = loop {
-                    match log.next() {
-                        Some(&Entry::Stops(changed)) => {
-                            stops = changed;
-                            s.set_profile(with_stops(s.profile(), stops, human));
-                        }
-                        // A halt is the session's: only decisionless play separates it from
-                        // this decision.
-                        Some(Entry::Halt) => keep(&mut points, before),
-                        // The session passes for the human after it; each pass is logged. The
-                        // review plays from the seed on the build that wrote the file, which deals
-                        // and flips as the game did.
-                        Some(Entry::PassOn | Entry::Reveal { .. } | Entry::Flip { .. }) => {}
-                        Some(Entry::Concede) => {
-                            transcript.note("(the human conceded)");
-                            break None;
-                        }
-                        entry => break entry.cloned(),
-                    }
-                };
-                if matches!(entry, Some(Entry::Choice(_))) && d.player == human {
-                    keep(&mut points, before);
-                }
-                let c = match entry {
-                    Some(Entry::Choice(chosen) | Entry::Auto(chosen)) => chosen
-                        .find(&t, view(&s, &t, &mut x), &d)
-                        .ok_or("no candidate does what the record did")?,
-                    Some(Entry::Undo) => {
-                        let Some(point) = points.pop_back() else {
-                            return Err("an undo with nothing to take back".to_owned());
-                        };
-                        // Stops changed since stay changed, as `Game::undo` keeps them.
-                        s = point;
-                        s.set_profile(with_stops(s.profile(), stops, human));
-                        x.events.drain().for_each(drop);
-                        transcript.note("(the human takes back an answer)");
-                        continue;
-                    }
-                    _ => {
-                        transcript.note("(the record ends here)");
-                        break;
-                    }
-                };
-                let happened: Vec<Event> = x.events.drain().collect();
-                let search = if d.player == bot && only.is_none_or(|n| before.turn().number == n) {
-                    let chose =
-                        Agent::<Small>::choose(&mut opponent, observe(&s, &t, &mut x, bot), &d);
+                let (t, s, x) = (&walk.t, &walk.s, &mut walk.x);
+                let search = if d.player == bot && only.is_none_or(|n| turn == n) {
+                    let chose = Agent::<Small>::choose(&mut opponent, observe(s, t, x, bot), &d);
                     Some((chose, Agent::<Small>::last_search(&opponent).cloned()))
                 } else {
                     None
                 };
-                transcript.decision(&t, view(&s, &t, &mut x), &d, c, &happened);
+                transcript.decision(t, view(s, t, x), &d, c, &happened);
                 if let Some((chose, Some(search))) = search {
                     transcript.note(&search_line(&search, chose, c));
                 }
-                apply(&mut s, &t, &mut x, &mut Replay, c);
+                walk.apply(c);
             }
         }
     }
@@ -244,7 +167,9 @@ fn search_line(search: &Search, chose: Choice, logged: Choice) -> String {
 #[cfg(test)]
 mod tests {
     use beryl_cards::CARDS;
+    use beryl_cards::decks::WU_CONTROL;
     use beryl_session::protocol::{Candidate, DecisionView, Kind};
+    use beryl_session::replay::Entry;
     use beryl_session::{
         CandidateIndex, Game, PlayerView, SessionId, StartGame, Status, StopsSetting,
     };

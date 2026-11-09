@@ -14,6 +14,9 @@
 //! - `beryl_cli positions build [--games N] [--seed N] [--work 3M] [--out DIR]` cuts the
 //!   ladder's balanced start positions from champion games; `beryl_cli positions sample
 //!   [--count N] DIR` prints some as transcripts ([`positions`], `just positions`).
+//! - `beryl_cli blunders [agent] [--work 3M,30M] [--seeds 5] [--only NAME,...] [--json FILE]`
+//!   runs the blunder suite of `data/blunders.json` for an agent, the champion by default
+//!   ([`blunders`], `just blunders`).
 //! - The budget flags `--iterations N` and `--trees K` set a searching agent's iterations
 //!   per decision and how many independent trees share them (`beryl_search::Budget`).
 //! - `beryl_cli record-fixture <definitions.json> <out-dir> [name...]` plays the seeded games
@@ -43,6 +46,7 @@
 
 mod agreement;
 mod anchor_replay;
+mod blunders;
 mod boards;
 mod evalfit;
 mod fixture;
@@ -56,6 +60,7 @@ mod serve;
 mod specs;
 mod tournament;
 mod transcript;
+mod walk;
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -72,6 +77,7 @@ const USAGE: &str = "usage:
       [--cap N] [--seed N] [--positions DIR] [--out DIR]
   beryl_cli positions build [--games N] [--seed N] [--work 3M] [--out DIR]
   beryl_cli positions sample [--count N] DIR
+  beryl_cli blunders [agent] [--work 3M,30M] [--seeds 5] [--only NAME,...] [--json FILE]
   beryl_cli record-fixture <definitions.json> <out-dir> [name...]
   beryl_cli longthink [--status | --upgrade | --add FAMILY] [--new | --run DIR] [--games N]
   beryl_cli eval-fit [--games N] [--seed N]
@@ -102,6 +108,7 @@ fn main() -> ExitCode {
         [command, rest @ ..] if command == "anchor-replay" => anchor_replay::main(rest),
         [command, rest @ ..] if command == "agreement" => agreement::main(rest),
         [command, rest @ ..] if command == "ladder" => ladder::main(rest),
+        [command, rest @ ..] if command == "blunders" => blunders::main(rest),
         [command, rest @ ..] if command == "positions" => positions::main(rest),
         [command, dir] if command == "longthink-run" => longthink::runner(Path::new(dir), None),
         [command, dir, flag, n] if command == "longthink-run" && flag == "--games" => {

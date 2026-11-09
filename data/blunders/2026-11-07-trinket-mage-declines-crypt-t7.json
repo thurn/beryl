@@ -1,0 +1,217 @@
+{
+ "board": {
+  "active": 1,
+  "battlefield": [
+   {
+    "card": "Island",
+    "controller": 1,
+    "owner": 1
+   },
+   {
+    "card": "Currency Converter",
+    "controller": 1,
+    "owner": 1
+   },
+   {
+    "card": "Tundra",
+    "controller": 0,
+    "owner": 0,
+    "tapped": true
+   },
+   {
+    "card": "Seachrome Coast",
+    "controller": 1,
+    "owner": 1
+   },
+   {
+    "card": "Island",
+    "controller": 0,
+    "owner": 0,
+    "tapped": true
+   },
+   {
+    "card": "Rogue Token",
+    "controller": 1,
+    "owner": 1,
+    "token": true
+   },
+   {
+    "card": "Floodfarm Verge",
+    "controller": 1,
+    "owner": 1
+   },
+   {
+    "card": "Island",
+    "controller": 0,
+    "owner": 0,
+    "sick": true,
+    "tapped": true
+   }
+  ],
+  "human": 0,
+  "players": [
+   {
+    "exile": [],
+    "graveyard": [
+     "Trinket Mage"
+    ],
+    "hand": [
+     {
+      "card": "The Wandering Emperor"
+     },
+     {
+      "card": "Jace, Wielder of Mysteries"
+     },
+     {
+      "card": "Winds of Abandon"
+     },
+     {
+      "card": "Floodfarm Verge"
+     },
+     {
+      "card": "Counterspell"
+     }
+    ],
+    "library": [
+     "Jace, Vryn's Prodigy",
+     "Plains",
+     "Plains",
+     "Teferi, Time Raveler",
+     "Plains",
+     "Currency Converter",
+     "Thirst for Discovery",
+     "Subtlety",
+     "Island",
+     "Plains",
+     "Beza, the Bounding Spring",
+     "Oust",
+     "Island",
+     "Island",
+     "Jace, the Mind Sculptor",
+     "No More Lies",
+     "Portable Hole",
+     "Plains",
+     "Stock Up",
+     "Reprieve",
+     "Teferi, Hero of Dominaria",
+     "Mana Crypt",
+     "Staff of the Storyteller",
+     "Plains",
+     "Seachrome Coast",
+     "Snapcaster Mage",
+     "Abhorrent Oculus",
+     "Island",
+     "Spara's Headquarters",
+     "Damn",
+     "Fractured Identity"
+    ],
+    "life": 23
+   },
+   {
+    "exile": [],
+    "graveyard": [
+     "Counterspell",
+     "Subtlety",
+     "Oust"
+    ],
+    "hand": [
+     {
+      "card": "Plains"
+     },
+     {
+      "card": "Beza, the Bounding Spring"
+     },
+     {
+      "card": "Portable Hole"
+     },
+     {
+      "card": "Trinket Mage"
+     }
+    ],
+    "library": [
+     "Mana Crypt",
+     "Snapcaster Mage",
+     "Damn",
+     "No More Lies",
+     "Staff of the Storyteller",
+     "Island",
+     "Thirst for Discovery",
+     "Plains",
+     "Island",
+     "Tundra",
+     "Winds of Abandon",
+     "Jace, Wielder of Mysteries",
+     "Plains",
+     "Jace, the Mind Sculptor",
+     "Teferi, Time Raveler",
+     "Spara's Headquarters",
+     "Plains",
+     "Island",
+     "Fractured Identity",
+     "Reprieve",
+     "Island",
+     "Island",
+     "The Wandering Emperor",
+     "Stock Up",
+     "Plains",
+     "Teferi, Hero of Dominaria",
+     "Plains",
+     "Jace, Vryn's Prodigy",
+     "Abhorrent Oculus"
+    ],
+    "life": 20
+   }
+  ],
+  "seed": 1794110186720940000,
+  "step": "PrecombatMain",
+  "stops": {
+   "fullControl": false,
+   "theirs": [
+    "declareAttackers",
+    "declareBlockers",
+    "end"
+   ],
+   "yours": [
+    "precombatMain",
+    "declareAttackers",
+    "declareBlockers",
+    "postcombatMain",
+    "end"
+   ]
+  },
+  "turn": 7
+ },
+ "path": [
+  {
+   "choice": {
+    "act": {
+     "act": "cast",
+     "card": {
+      "controller": 1,
+      "name": "Trinket Mage",
+      "zone": "hand",
+      "beforeV5": true,
+      "beforeV6": true
+     }
+    },
+    "index": 3,
+    "kind": "priority",
+    "player": 1,
+    "step": "precombatMain",
+    "turn": 7
+   }
+  },
+  {
+   "choice": {
+    "act": {
+     "act": "yes"
+    },
+    "index": 0,
+    "kind": "yesNo",
+    "player": 1,
+    "step": "precombatMain",
+    "turn": 7
+   }
+  }
+ ]
+}

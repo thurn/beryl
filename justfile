@@ -209,6 +209,12 @@ ladder *args:
 positions *args:
     RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- positions "$@"
 
+# The blunder suite against an agent, the champion by default, at low priority ([agent] --work 3M,30M, --seeds 5, --only NAME,..., --json FILE)
+[group('agents')]
+[no-cd]
+blunders *args:
+    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- blunders "$@"
+
 # The long-think arena: starts or resumes the latest run, low priority, kept awake (--status, --new, --run DIR, --upgrade, --add FAMILY, --games N, --power full|light)
 [group('agents')]
 [no-cd]

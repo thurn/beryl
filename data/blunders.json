@@ -1,0 +1,94 @@
+[
+  {
+    "name": "oust-own-token",
+    "incident": "2026-11-06-deep-seer-misplays",
+    "class": "removal spent on its own permanent",
+    "source": { "board": "data/blunders/2026-11-06-deep-seer-misplays-t14.json" },
+    "seat": 1,
+    "turn": 14,
+    "index": 16,
+    "played": "cast Oust",
+    "forbidden": ["cast Oust"],
+    "why": "Oust's only targets are its own two Rogue tokens: a card and a 2/2 for 3 life."
+  },
+  {
+    "name": "snapcaster-sorcery-speed",
+    "incident": "2026-11-07-snapcaster-and-jace-wielder",
+    "class": "a flash creature cast at sorcery speed",
+    "source": { "board": "data/blunders/2026-11-07-snapcaster-and-jace-wielder-t12.json" },
+    "seat": 1,
+    "turn": 12,
+    "index": 11,
+    "played": "cast Snapcaster Mage",
+    "forbidden": ["cast Snapcaster Mage"],
+    "why": "Its last 2 mana leaves the flashback unpayable; at the human's end step it does the same and dodges Winds of Abandon."
+  },
+  {
+    "name": "spare-jace-wielder",
+    "incident": "2026-11-07-snapcaster-and-jace-wielder",
+    "class": "an attack that leaves a lethal planeswalker alive",
+    "source": { "board": "data/blunders/2026-11-07-snapcaster-and-jace-wielder-t16.json" },
+    "seat": 1,
+    "turn": 16,
+    "index": 14,
+    "played": "attack with Snapcaster Mage",
+    "through": ["AttackTarget", "Attacker"],
+    "required": [
+      "attack with Snapcaster Mage",
+      "attack with Spirit Token",
+      "Jace, Wielder of Mysteries",
+      "Jace, Wielder of Mysteries"
+    ],
+    "why": "The human is tapped out with no creatures; Snapcaster Mage and the Spirit deal exactly Jace, Wielder's 3 loyalty, the card that later decks the agent."
+  },
+  {
+    "name": "decline-mana-crypt",
+    "incident": "2026-11-07-trinket-mage-declines-crypt",
+    "class": "a free find declined",
+    "source": { "board": "data/blunders/2026-11-07-trinket-mage-declines-crypt-t7.json" },
+    "seat": 1,
+    "turn": 7,
+    "index": 1,
+    "played": "yes",
+    "through": ["ChooseUpTo"],
+    "required": ["Mana Crypt"],
+    "why": "The Crypt costs nothing to take: the library is shuffled either way and a card in hand need never be cast."
+  },
+  {
+    "name": "evoke-subtlety-no-target",
+    "incident": "2026-11-08-subtlety-spirits-samurai",
+    "class": "an evoked creature whose enters ability has no target",
+    "source": { "replay": "docs/incidents/2026-11-08-subtlety-spirits-samurai.replay.json" },
+    "seat": 1,
+    "turn": 9,
+    "index": 4,
+    "played": "cast Subtlety for evoke",
+    "forbidden": ["cast Subtlety for evoke"],
+    "why": "The stack is empty: Subtlety's trigger targets only a creature or planeswalker spell, so evoking it spends two cards on nothing."
+  },
+  {
+    "name": "spirits-stay-home",
+    "incident": "2026-11-08-subtlety-spirits-samurai",
+    "class": "a free attack not made",
+    "source": { "replay": "docs/incidents/2026-11-08-subtlety-spirits-samurai.replay.json" },
+    "seat": 1,
+    "turn": 10,
+    "index": 2,
+    "played": "done",
+    "through": ["Attacker", "AttackTarget"],
+    "required": ["attack with Spirit Token", "attack with Spirit Token"],
+    "why": "The human has no creatures and no untapped answer that punishes two tapped 1/1 fliers."
+  },
+  {
+    "name": "samurai-into-jace",
+    "incident": "2026-11-08-subtlety-spirits-samurai",
+    "class": "an instant-speed planeswalker ability spent at once",
+    "source": { "replay": "docs/incidents/2026-11-08-subtlety-spirits-samurai.replay.json" },
+    "seat": 1,
+    "turn": 11,
+    "index": 8,
+    "played": "The Wandering Emperor -1",
+    "forbidden": ["The Wandering Emperor -1"],
+    "why": "The Samurai made now sits in front of the resolving Jace's -1; made at the human's end step it dodges it."
+  }
+]

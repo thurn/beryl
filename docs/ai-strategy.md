@@ -262,8 +262,13 @@ A regression gate built from every blunder a human has caught.
   an hour of `just review --agent recorded`; the suite entry takes a line.
 - **Drift.** A replay from before an engine change may stop reproducing its
   position (`just review` fails on it, as the Snapcaster replay's old undo did).
-  An entry that no longer replays is rebuilt as a scenario (`beryl_scenario`, as
-  `boards.rs` builds its boards) or retired with a note, never silently skipped.
+  An entry that no longer replays is rebuilt or retired with a note, never
+  silently skipped. The first four entries' replays had drifted before the suite
+  existed: f3f4baeb changed which lands a payment taps, so their games go
+  elsewhere on every later build. They are rebuilt boards
+  (`data/blunders/*.json`): the game at the blunder turn's first priority, cut
+  on cae2787d, the last build that replayed them, with the record's answers from
+  there.
 
 ## 6. The first rungs
 
