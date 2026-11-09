@@ -216,6 +216,12 @@ screen *args:
 blunders *args:
     RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- blunders "$@"
 
+# Discover candidate blunders for later LLM review; six hours by default (--hours 6, --out DIR, --seed N, --inspect CASE.json)
+[group('agents')]
+[no-cd]
+blunder-hunt *args:
+    RUSTFLAGS="{{ search_cpu }}" {{ low }} {{ awake }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- blunder-hunt "$@"
+
 # The long-think arena: starts or resumes the latest run, low priority, kept awake (--status, --new, --run DIR, --upgrade, --add FAMILY, --games N, --power full|light)
 [group('agents')]
 [no-cd]

@@ -55,6 +55,7 @@ mod evalfit;
 mod fixture;
 mod freeze;
 mod game;
+mod hunt;
 mod ladder;
 mod longthink;
 mod positions;
@@ -90,6 +91,7 @@ const USAGE: &str = "usage:
   beryl_cli specs-serve [--port N]
   beryl_cli specs-check [card...]
   beryl_cli specs-describe [--views] <card> [moment]
+  beryl_cli blunder-hunt [--hours 6] [--out DIR] [--seed N] [--inspect CASE.json]
   beryl_cli review <replay.json> [--agent NAME] [--turn N] [--out FILE]
   beryl_cli freeze-saves <dir> [--games N] [--seed N] [--replay FILE]
   beryl_cli anchor-replay <run-dir> <entrant> [--examples N] [--recheck N] [--guarded]
@@ -113,6 +115,7 @@ fn main() -> ExitCode {
         [command, rest @ ..] if command == "anchor-replay" => anchor_replay::main(rest),
         [command, rest @ ..] if command == "agreement" => agreement::main(rest),
         [command, rest @ ..] if command == "ladder" => ladder::main(rest),
+        [command, rest @ ..] if command == "blunder-hunt" => hunt::main(rest),
         [command, rest @ ..] if command == "blunders" => blunders::main(rest),
         [command, rest @ ..] if command == "screen" => screen::main(rest),
         [command, rest @ ..] if command == "positions" => positions::main(rest),
