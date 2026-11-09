@@ -292,8 +292,7 @@
   margin-right: auto;
   font-size: 20px;
 }
-.testing-selectors label,
-.testing-example-title label {
+.testing-selectors label {
   display: flex;
   align-items: center;
   gap: 12px;

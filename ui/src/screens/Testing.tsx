@@ -390,21 +390,26 @@ function TestingCard({
             </p>
           ))}
           {data?.examples
-            .filter(
-              (e) =>
-                !selected ||
-                e.variants.includes(
-                  selected as PlaygroundExample["variants"][number],
-                ),
+            .flatMap((example) =>
+              example.variants.map((moment) => ({
+                moment,
+                title:
+                  example.variants.length > 1 && moment.label !== "Default"
+                    ? `${example.title} — ${moment.label}`
+                    : example.title,
+              })),
             )
-            .map((example, i) => (
-              <ExampleBoards
-                key={example.title}
-                example={example}
-                number={i + 1}
-                board={board}
-                selected={selected}
-              />
+            .filter(({ moment }) => !selected || moment.name === selected.name)
+            .map(({ moment, title }, i) => (
+              <section className="testing-example" key={moment.name}>
+                <div className="testing-example-title">
+                  <h2>
+                    {i + 1}. {title}
+                  </h2>
+                </div>
+                {board(moment, moment.first ?? "yours")}
+                {board(moment, otherSeat(moment.first ?? "yours"))}
+              </section>
             ))}
         </>
       ) : (
@@ -442,51 +447,6 @@ function TestingCard({
         </>
       )}
     </main>
-  );
-}
-
-function ExampleBoards({
-  example,
-  number,
-  board,
-  selected,
-}: {
-  example: PlaygroundExample;
-  number: number;
-  board: (m: MomentListing, v: View) => React.ReactNode;
-  selected?: MomentListing;
-}) {
-  const [variant, setVariant] = useState(
-    selected?.name ?? example.variants[0]?.name,
-  );
-  const moment =
-    example.variants.find((v) => v.name === variant) ?? example.variants[0];
-  if (!moment) return null;
-  return (
-    <section className="testing-example">
-      <div className="testing-example-title">
-        <h2>
-          {number}. {example.title}
-        </h2>
-        {example.variants.length > 1 && (
-          <label>
-            Variation
-            <select
-              value={moment.name}
-              onChange={(e) => setVariant(e.target.value)}
-            >
-              {example.variants.map((v) => (
-                <option key={v.name} value={v.name}>
-                  {v.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-      </div>
-      {board(moment, moment.first ?? "yours")}
-      {board(moment, otherSeat(moment.first ?? "yours"))}
-    </section>
   );
 }
 

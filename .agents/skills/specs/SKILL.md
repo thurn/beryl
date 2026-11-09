@@ -136,7 +136,8 @@ seat URLs continue to work. The headless describe, film, motion and drive tools 
 Each card page stacks its examples, starting with play from hand, and each example has
 independent full-width boards for both perspectives. The viewer answers their own prompts;
 the unseen player is automated. Play releases opponent playback; Reset affects only its
-board. Variations reuse the boards for alternative interactions. A board's bug button
+board. Every variation has its own visible board pair, discovered by scrolling; Playground
+has no example selector. A board's bug button
 captures its current game. Reviewed is manual, independent of open bugs, and never expires;
 existing marks remain in `~/Library/Application Support/ca.thurn.beryl/spec-reviews.json`.
 
