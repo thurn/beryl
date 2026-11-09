@@ -12,7 +12,7 @@ use beryl_engine::card::{
 use beryl_engine::effect::EffectCtx;
 use beryl_engine::event::Reason;
 use beryl_engine::filter::{Filter, Whose};
-use beryl_engine::{DecisionKind, Seat, Zone};
+use beryl_engine::{DecisionKind, Seat, TurnStep, Zone};
 use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 
@@ -241,6 +241,7 @@ pub const SCENARIOS: &[Scenario] = &[
         ]),
     // UI regression by-yfw: the token leaves while Winds stays on the stack for the search.
     Scenario::new("Winds of Abandon exiles a token before its controller searches")
+        .at(2, P1, TurnStep::PrecombatMain)
         .battlefield(
             P0,
             &[Permanent::new(names::PLAINS), Permanent::new(names::PLAINS)],
@@ -248,14 +249,18 @@ pub const SCENARIOS: &[Scenario] = &[
         .hand(P0, &[names::WINDS_OF_ABANDON, names::PLAINS])
         .battlefield(
             P1,
-            &[
-                Permanent::new(names::STAFF_OF_THE_STORYTELLER),
-                Permanent::token("Spirit Token"),
-            ],
+            &[Permanent::new(names::PLAINS), Permanent::new(names::PLAINS)],
         )
-        .library(P0, &[names::ISLAND])
+        .hand(P1, &[names::STAFF_OF_THE_STORYTELLER])
+        .library(P0, &[names::ISLAND, names::ISLAND])
         .library(P1, &[names::ISLAND, names::PLAINS])
         .actions(&[
+            // Create the token in play: external engines do not share Beryl token names.
+            Action::cast(P1, names::STAFF_OF_THE_STORYTELLER),
+            Action::AdvanceTo {
+                turn: 3,
+                step: TurnStep::PrecombatMain,
+            },
             Action::cast(P0, names::WINDS_OF_ABANDON),
             Action::Resolve,
             Action::choose(P1, DecisionKind::ChooseUpTo, names::ISLAND),

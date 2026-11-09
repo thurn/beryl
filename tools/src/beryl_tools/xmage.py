@@ -764,7 +764,7 @@ class Exporter:
             self.unless_pays.pop(source, None)
         first = ASKED_FIRST.get((source or "", kind))
         if first is not None and self.last_answer != (source, kind):
-            self.emit(f"setChoice({who}, {java_string(first)});")
+            self.emit(f"setOptionalChoice({who}, {self.at(p)}, {java_string(first)});")
         self.last_answer = (source, kind)
         pick = cast(Json, action["pick"])
         what = cast(str, pick["pick"])

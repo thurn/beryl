@@ -214,3 +214,38 @@ def test_oracle_needs_the_oracles_built(
 ) -> None:
     monkeypatch.setenv("BERYL_CACHE", str(tmp_path))
     assert oracles.oracle(argparse.Namespace(cards=[])) == 1
+
+
+@pytest.mark.parametrize("source", ["Time Spiral", "Teferi, Hero of Dominaria"])
+def test_untap_shortcut_is_optional_before_explicit_land_picks(source: str) -> None:
+    # XMage asks to untap all only when tapped lands <= the limit. With three tapped
+    # lands and Teferi's limit of two, a mandatory No consumes the first land choice.
+    entry: xmage.Json = {
+        "setup": {"turn": 1, "active": 0, "step": "PrecombatMain"},
+        "actions": [],
+    }
+    export = xmage.Export(card=source, scenario="untap choices", method="untap_choices")
+    writer = xmage.Exporter(entry, xmage.Faces.load(cards.OUTPUT), export)
+    position = xmage.Position(
+        turn=1,
+        step="End",
+        decider=0,
+        kind="ChooseUpTo",
+        stack=[{"name": source}],
+        flips=[],
+        taps=[],
+        forced=[],
+        flashback=[],
+        face_down=[],
+        creatures=[0, 0],
+    )
+    for card in ["Tundra", "Island"]:
+        writer.answer(
+            {"player": 0, "kind": "ChooseUpTo", "pick": {"pick": "Card", "card": card}},
+            position,
+        )
+    assert export.body == [
+        'setOptionalChoice(playerA, 1, PhaseStep.END_TURN, "No");',
+        'setChoice(playerA, "Tundra");',
+        'setChoice(playerA, "Island");',
+    ]

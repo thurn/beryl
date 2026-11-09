@@ -380,15 +380,20 @@ pub const SCENARIOS: &[Scenario] = &[
             P0,
             &[
                 Permanent::new(TEFERI),
-                Permanent::new(PLAINS).tapped(),
-                Permanent::new(ISLAND).tapped(),
-                Permanent::new(names::TUNDRA).tapped(),
+                Permanent::new(PLAINS),
+                Permanent::new(ISLAND),
+                Permanent::new(names::TUNDRA),
             ],
         )
-        .hand(P0, &[names::REPRIEVE])
+        .hand(P0, &[names::REPRIEVE, names::TRINKET_MAGE])
         .library(P0, &[PLAINS, ISLAND])
         .library(P1, &[ISLAND, PLAINS])
         .actions(&[
+            // Pay for a spell so these lands are tapped in every engine, after its untap step.
+            Action::cast(P0, names::TRINKET_MAGE),
+            Action::Resolve,
+            Action::Resolve,
+            Action::answer(P0, DecisionKind::YesNo, Pick::No),
             Action::activate(P0, TEFERI, 0),
             Action::Resolve,
             Action::AdvanceTo {
