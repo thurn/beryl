@@ -166,6 +166,9 @@ from somewhere. We never show multiple copies of the same game object. Browsers
 and prompts are not an exception to this: we animate the existing objects to
 appear in the browser, we don't make a new copy of them. Animations are fast and
 fluid. Everything you see makes sense as the motion of real cards in 3D space.
+All transitions are animated, nothing jumps to a new state. When the opponent is
+doing things, you see what is happening too, e.g. if they are looking at cards
+you might see the backs of those cards animate up.
 
 ## Workflow
 
