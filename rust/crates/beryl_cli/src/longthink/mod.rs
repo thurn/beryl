@@ -1,4 +1,5 @@
-//! The long-think arena (docs/ai-strategy.md §5): an open-ended tournament of search
+//! The long-think arena (retired, docs/ai-strategy.md §8; its last run is
+//! docs/longthink-run-003.md): an open-ended tournament of search
 //! families at budgets that grow while they climb, every entrant in one rating pool, the
 //! next game always the one that teaches the most per engine step ([`schedule`]), which any
 //! stop costs at most the decision being searched.

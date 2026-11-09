@@ -1,4 +1,4 @@
-//! `expert-frozen` never changes (docs/ai-strategy.md §6): its moves on a few seeded games are
+//! `expert-frozen` never changes (docs/ai-strategy.md §3): its moves on a few seeded games are
 //! pinned, so that a refactor of it, or of what it builds on, cannot move the bar silently.
 
 mod common;

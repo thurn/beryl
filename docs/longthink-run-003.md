@@ -1,10 +1,10 @@
 # Long-think run-003
 
-The third run of the long-think arena (`just longthink`, see
-[ai-strategy.md §5](ai-strategy.md#5-how-we-get-there)), in the cb8d5d5f WU
-Control mirror. It ran from 2026-11-06 13:41 to 2026-11-08 19:15 (about 54 hours
-wall clock, 104 game-hours at two games at a time) and played 2,777 games. Its
-data is in `$BERYL_CACHE/longthink/run-003`: `summary.txt`, `games.jsonl`,
+The third run of the long-think arena (`just longthink`, retired since:
+[ai-strategy.md §8](ai-strategy.md#8-not-now)), in the cb8d5d5f WU Control
+mirror. It ran from 2026-11-06 13:41 to 2026-11-08 19:15 (about 54 hours wall
+clock, 104 game-hours at two games at a time) and played 2,777 games. Its data
+is in `$BERYL_CACHE/longthink/run-003`: `summary.txt`, `games.jsonl`,
 `decisions.jsonl` (378k searched decisions) and per-game logs and transcripts.
 
 ## Setup
@@ -79,6 +79,10 @@ The full table, with every budget, is in the run's `summary.txt`.
   tuned +283, estimate +245, 17lands +189. At 1M, 17lands lags by about 90.
 
 ### What this means for the plan
+
+*Written for the 2026-11-05 plan, whose numbered steps these are.
+[ai-strategy.md](ai-strategy.md) has since replaced it with the ladder, on this
+run's evidence.*
 
 - Full-game rollouts with modest determinization are the strongest recipe found.
   A board evaluation cannot replace them as a leaf yet: the evaluator in step 3

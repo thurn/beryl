@@ -356,6 +356,9 @@ fn deep_seer(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + S
 /// `pimc72/hidden/rollout/tuned/anchor@30M`: Deep Seer without the cheat, from the long-think
 /// arena's strongest fair family in run-003 (72 worlds dealt from what it can see), anchored
 /// as Deep Seer is. 30M engine steps a decision whatever `budget` says, on every core.
+///
+/// The ladder's champion (docs/ai-strategy.md §3): always the current best fair agent, so a
+/// promotion changes this function, and its comment names the match that made it.
 fn deep_searcher(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
     deep(
         t,

@@ -1,4 +1,4 @@
-//! A generic board evaluation (docs/ai-strategy.md §4): the chance the first seat wins a
+//! A generic board evaluation (docs/ai-strategy.md §2): the chance the first seat wins a
 //! position, from what a player has, read off card data and the card values of a
 //! [`crate::Knowledge`] tier, never card names. It is a logistic function of the difference
 //! between the two players' [`Features`], with weights fitted by `beryl_cli eval-fit` on

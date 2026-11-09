@@ -1,219 +1,354 @@
 # AI Strategy
 
-*Our best guess, as of 2026-11-05, at how Beryl gets a general game-playing AI
-that is stronger than its expert system, and how we would know. It builds on
-[engine-architecture.md](engine-architecture.md) §19.1 and the evidence in
-[rules-engine-research.md](rules-engine-research.md).*
+*The plan, as of 2026-11-08, for Beryl's AI opponent: what it must be, which
+agent we start from, and how each change to it earns its place. It replaces the
+2026-11-05 plan, which asked how search scales and what limits it; the
+long-think arena answered that ([longthink-run-003.md](longthink-run-003.md)),
+and five games against humans showed what it did not measure
+([incidents/](incidents/)).*
 
 ## 1. Goal
 
-A **general** AI: no per-card code, able to play any deck drafted from the
-540-card cube.
+A strong opponent that **does not cheat** and **plays like a plausible human**.
 
-- In the WU Control mirror, it beats the frozen `expert`, which has hand-written
-  knowledge of every card in that deck.
-- On decks with no expert, it beats `greedy` by more than the expert beats
-  `greedy` in the mirror.
-- The long-term target is a strong human player. The expert is a milestone, not
-  the destination.
+- **Fair.** It sees what a player sees (`Sight::Hidden`). The cheating searches
+  stay in the registry, labeled, as yardsticks; none is ever the opponent we
+  improve.
+- **No apparent blunders.** A debatable play is fine: Snapcaster Mage as a 2/1
+  on turn two is sometimes right, and Reprieve on an Oust the opponent can
+  recast was sound ([incident](incidents/2026-11-08-reprieve-on-oust.md)). A
+  play no strong player would make under any reading is not, whatever the game's
+  result:
+  - Oust on its own Rogue token
+    ([Deep Seer](incidents/2026-11-06-deep-seer-misplays.md));
+  - Snapcaster Mage in its own main phase, flashing back a Counterspell it could
+    never pay for
+    ([Snapcaster](incidents/2026-11-07-snapcaster-and-jace-wielder.md));
+  - Trinket Mage's search offered a free Mana Crypt and took nothing
+    ([Trinket Mage](incidents/2026-11-07-trinket-mage-declines-crypt.md));
+  - the Spirit token held back when attacking Jace, Wielder of Mysteries with
+    everything killed the opponent's only quick win (Snapcaster incident).
+- **Blunders weigh more than strength.** We will trade some Elo for the last of
+  them, and we hold the line hardest where search is least reliable: positions
+  the agent rates as nearly won or nearly lost, where every move looks the same
+  to its rollouts and noise chooses.
+- **General by data, not by code.** Per-card knowledge is allowed as table
+  entries (`values.rs`: a value, a flag) that the policy and search read
+  generically. Card-specific code paths are not: the expert is 3,200 lines for
+  29 cards, and the cube has 540.
 
-## 2. Where we are
+## 2. What we learned
 
-From the Milestone 1 round robins on epic by-b0q, in the earlier MTGO mirror
-(`decks::VINTAGE_WU_CONTROL`, whose 29 cards the expert knows; 100 games per
-pairing, seats alternated, MCTS at 300 iterations and 4 trees):
+From run-003 (2,777 games over 54 hours) and the incidents:
 
-| Pairing                       | Seed 2026 | Fresh seeds    |
-| ----------------------------- | --------- | -------------- |
-| expert v mcts-hidden          | 88%       | 89% [81, 94]   |
-| expert v mcts-omniscient      | 88%       | 91% [84, 95]   |
-| mcts-omniscient v mcts-hidden | 52%       | 50% [40, 60]   |
-| expert v greedy               | 79%       | 80% [71, 87]   |
-| mcts-hidden v greedy          | 67%       | 72% [62.5, 80] |
+- **Full rollouts win.** Leaves cut off and evaluated by
+  `beryl_search::evaluate` trailed full rollouts by 180 to 260 Elo at every
+  budget, and sat at the frozen expert's level. The general evaluator the old
+  plan was built on is not a leaf yet.
+- **Budget pays, less and less.** Each ×3 of engine steps a decision gained +23
+  to +57 Elo, flattening past 10M to 30M. The 90M entrants were within noise of
+  30M.
+- **Hidden information costs little at length.** The omniscient twins led the
+  fair searches by +65 to +160 Elo at 1M to 10M, and by nothing measurable at
+  30M.
+- **Hand-tuned card values beat 17lands win rates** by about 90 Elo, at every
+  budget.
+- **Fewer worlds, deeper trees.** PIMC with 18 worlds rated +356 at 30M, 72
+  worlds +262 and 288 worlds +295, within wide intervals.
+- **Most moves are coin flips by the search's own estimate.** The chosen move
+  led the runner-up's mean by under 0.01 in 62% of the leader's decisions and
+  under 0.02 in 73%. Every incident blunder was one of these ties, settled by
+  visit counts, which is noise. Visits can even overrule the means: Jace,
+  Wielder led by 0.015 and lost on visits.
+- **The rollout policy is where the blunders start.** The search prices a move
+  by games the greedy policy plays out, so what greedy cannot do the search
+  cannot value: holding a flash creature, milling oneself with Jace, Wielder,
+  casting Mana Crypt, or a Mana Crypt in hand that the tree casts badly and the
+  rollouts never cast. Fixes there are a line each.
+- **The anchor works where it applies.** Playing greedy's answer unless the
+  search leads it clearly (`Options::anchor`, epic by-7wl) stopped the Oust and
+  costs about 0.005 a game by the search's estimate. It guards only priority
+  casts; three of the five incidents fell outside it.
+- **Round robins and the arena cannot answer today's questions.** After 54 hours
+  the arena's intervals were ±60 to ±80 Elo, and a 600-game head-to-head
+  (by-7wl.8) was dropped as powerless against an effect of half a percent. The
+  questions left are small effects between two agents, which take a different
+  design.
 
-What this says:
+## 3. The champion
 
-- **MCTS is barely searching.** The 300 iterations are shared by 4 trees, so
-  each tree gets 75, and each iteration is a noisy full-game rollout.
-- **Hidden information is not the bottleneck yet.** Seeing every hidden card
-  gains MCTS nothing.
-- **It is one budget point.** It says nothing about how MCTS scales.
-- **The bar is lower than 88% suggests.** The expert beats `greedy` only about
-  80%, and transcript reviews find a blunder in about 3 of 4 fresh games
-  (by-ovn).
-- **The expert does not scale.** It is about 3,200 lines for 29 cards. The cube
-  has 540.
+The ladder improves one agent, the **champion**. The app's Deep Searcher is
+always the current champion, and a promotion is a change to it.
 
-## 3. What other projects tell us
+The starting champion is Deep Searcher as it ships:
+`pimc72/hidden/rollout/tuned/anchor@30M` (`beryl_search::AGENTS`).
 
-**Monolith**, our Netrunner AI prototype on the Jinteki.net engine:
+| Axis      | Setting                                                   |
+| --------- | --------------------------------------------------------- |
+| Method    | PIMC, 72 worlds dealt from what it can see, a tree each   |
+| Sight     | Hidden                                                    |
+| Leaf      | Softmax rollout to the end of the game, temperature 10    |
+| Knowledge | Hand-tuned card values (`Knowledge::Tuned`)               |
+| Options   | `anchor`: greedy's answer unless the search leads clearly |
+| Scores    | Turn discount 0.98: win sooner, lose later                |
+| Budget    | 30M engine steps a decision, on every core                |
 
-- Its turn planner beat MCTS, and MCTS ranked below the plain heuristic.
-- More search did nothing: a bigger beam and twice the engine budget was a null
-  (p = 1.0). The evaluator was the bottleneck.
-- The winning agent ran the heuristic by default. The planner overrode it only
-  when its line won by a margin, and rollouts reranked the top 3 lines.
-- R-NaD learned nothing in 145,000 self-play games.
-- A learned value model was neutral as a correction to the evaluator. On one
-  side it was harmful (p = 0.002). Its training games came from a bot that
-  always made the obvious play, so the data had no contrast.
-- The planner farmed any overvalued feature. New evaluator terms need traces
-  before A/Bs.
-- Reviews by a language model plateaued near 3.3 of 5, with noise of about ±0.3
-  per 10 games. Decks mined for fixes over-predicted fresh decks by 0.3–0.65.
+Why this one and not run-003's best fair entrant (18 worlds, +356): it is what
+humans have played, every incident was measured against it, and the 18-world
+twin's lead is within noise. "Fewer worlds" is the cheapest rung on the ladder
+(§6), not an assumption.
 
-**netrunner-rs**: its turn planner beat MCTS 0.84 and 0.95 by side, and 0 of 6
-AlphaZero-style runs were promoted. A well-calibrated value head made search
-worse.
+Yardsticks, never candidates: `expert-frozen` (the fixed bar of the old plan,
+pinned by a test), `greedy` (the rollout policy as a player) and Deep Seer (the
+champion's omniscient twin, an upper reference for what search could know).
 
-**Cowling, Ward & Powley (2012)**, in simplified Magic: MCTS reached 50.5%
-against an expert player, using many shallow determinizations, yes/no splitting
-of multi-card choices, pruning of dominated moves and weak rollout policies.
+## 4. The ladder
 
-**DeepScry** claims MCTS beats its heuristic 71%, but the evidence is weak:
+One challenger at a time plays the champion. The challenger differs in one thing
+we can name. It is promoted only by a pre-registered bar, and the match's result
+is recorded whether it passes or not.
 
-- It documents nothing about its MCTS.
-- Almost every arena game is one deck's mirror.
-- Random beats its MCTS 30–0 in the arena data.
-- 1,000 ms MCTS scores the same against the heuristic as 300 ms (71.4% v 71.2%),
-  even though it beats 300 ms MCTS 78.5%. Self-play gains need not show up
-  against a fixed opponent.
+### 4.1 The match
 
-## 4. The bet
+- **Paired seeds, seats swapped.** Every seed is played twice, each agent in
+  each seat (`beryl_cli tournament --paired`). The unit of evidence is the
+  seed's pair: swept, split or lost. A seed on which both agents play the same
+  moves splits 1–1 and carries no information, which is right: it is a seed the
+  change did not touch.
+- **Curated start positions.** Most games start from a fixed set of mid-game
+  positions rather than the shuffle, to take the openings' luck out of the
+  variance: positions cut at the start of a turn, before the draw, from seeded
+  champion games, kept where the champion's own estimate from each seat lies
+  within 0.45 to 0.55, then a sample read by a human. The hidden cards are
+  reshuffled by the game's seed below what either player knows. A fifth of each
+  match still starts from the shuffle, so mulligans and openings stay tested.
+  The first match measures what the positions buy, comparing the spread of
+  paired scores from positions against the shuffle; if they buy nothing, they
+  go.
+- **The proxy budget.** Matches run at 3M engine steps a decision, one thread a
+  game, 18 games at a time: roughly 20 to 30 s of wall clock a game. Run-003's
+  families kept their order from 3M to 30M, which is the assumption the
+  confirmation step checks.
+- **Confirmation at 10M.** A challenger that passes at 3M plays 400 games at 10M
+  (about 8 hours). Its Wilson 95% interval must clear 50%. A pass is shipped at
+  30M.
+- **The shipped budget** stays 30M. It rises to 90M only when a budget rung (§6)
+  shows strong evidence, since run-003 saw little past 30M.
 
-**Shallow determinized search over a strong general evaluator.**
+### 4.2 The bars
 
-- **Search** looks ahead to the end of the turn or into the next one, across
-  many sampled hidden hands, and searches the opponent's replies one level deep.
-- **The evaluator** reads card data, never card names: life, cards, board, mana,
-  plus a quality score for each card.
-- **17lands supplies what nobody else had.** For this cube there are about
-  266,000 PremierDraft games:
-  - Per-card win rates give every cube card a quality score.
-  - The replay files have an end-of-turn snapshot of every turn (hand, both
-    boards, life, mana spent), labeled with the winner. That is millions of
-    positions from human games, with real contrast. They lack targets, timing
-    inside a turn, counters, tapped status and loyalty, so they train a value
-    estimate, not a policy.
-- **Most of the expert's card knowledge is something search should find.** Strip
-  Mine targets and planeswalker abilities are lookahead plus evaluation. Saving
-  a counterspell for a bigger threat is sampling the opponent's hand.
+A sequential test (SPRT, as Stockfish's fishtest) ends each match as soon as the
+evidence is in, and a cap ends it undecided. The bars are set before a match and
+never moved during one.
 
-## 5. How we get there
+- **Stronger.** SPRT between "no gain" and "+50 Elo" at α = β = 0.001. Promoted
+  when it accepts the gain: a challenger no stronger than the champion passes
+  one match in a thousand. About 700 games end it either way at +50 Elo, or
+  about 5 hours at 3M. Cap: 2,000 games (an overnight run). A challenger worth
+  +25 Elo will usually hit the cap; it is not promoted, and its score is kept
+  for the record. +25 Elo at this confidence costs about 2,700 games, which is
+  more than one night, and the gains we have seen are not that small when they
+  are real.
 
-1. **Find what limits MCTS (days).** Play `mcts-hidden` against the expert at
-   300, 1,200 and 4,800 iterations, about 50 games each. At a fixed budget, also
-   try more trees with fewer iterations, and rollouts cut off after a few turns
-   and scored by a simple evaluation. If strength climbs with budget, speed is
-   the lever. If it is flat, rollouts and evaluation are.
-2. **Make the engine fast.** The goal is more full-game rollouts per core-second
-   on the cube rollout benchmark: one `next` plus `apply` at 1.5 µs per
-   decision. On 2026-11-05 it took 4.0 µs, about 1,740 rollouts per core-second
-   on a busy machine; by-2l8.6 has since cut a rollout's instructions by a
-   third, untimed. This also speeds research: one 300-seed paired A/B costs
-   about 2 hours on 16 cores today.
-3. **Build the general evaluator and shallow search.** Start from generic
-   features and 17lands card scores. Add each term in its own paired A/B.
-4. **Learn a value model** from 17lands snapshots, then from self-play once the
-   engine is fast. Add it as a correction on top of the hand-written evaluator,
-   and keep it only if it wins a paired A/B. Good calibration is not evidence.
-5. **Leave the WU mirror.** Measure on cube decks the evaluator was never tuned
-   on.
+- **More plausible at the same strength.** For a challenger that fixes blunders,
+  two conditions:
 
-**The long-think arena** runs beside these steps. It asks what the strongest
-agent is with unlimited CPU, how much hidden information costs it, and whether
-full rollouts beat board evaluation when search runs long. An agent known to be
-strong, however slow, is also a teacher and a yardstick for steps 3 and 4.
-`just longthink` plays search families against each other and `expert-frozen` in
-the cb8d5d5f mirror:
+  1. The blunder suite (§5) passes: it makes none of the suite's forbidden
+     plays, makes every required one, and regresses nothing.
+  2. The match shows it is not weaker: SPRT between "−25 Elo" and "no change" at
+     α = β = 0.05, accepting "no change". About 1,100 games, or 8 hours at 3M.
+     Cap 2,000.
 
-- **A family** varies one axis of `beryl_search::LongSearch` at a time. The
-  method is PIMC with N fixed worlds or ISMCTS with a fresh world every
-  iteration. Sight is hidden, the hands or everything. A leaf is a full rollout,
-  one cut off after k turns and evaluated, or the evaluation alone. Card values
-  are an estimate, 17lands' games-in-hand win rate or hand-tuned. Options
-  (by-7wl) may follow: `anchor` plays greedy's answer unless the search's own
-  choice leads it clearly, tree by tree; `mid` lets greedy answer the questions
-  asked below the root while casting or resolving.
-- **A result counts less each turn it is put off** (`TURN_DISCOUNT`, 0.98 a
-  turn, by-a8g), so a decided position still has a best move: close a won game
-  out, drag a lost one on. Runs before run-004 scored every win alike.
-- **Rollouts draw their moves** by a softmax over the greedy policy's scores, at
-  a temperature as strong as greedy. A greedy rollout always plays the same game
-  from a position, so in a world the search knows it would exploit one line of
-  play. Equal UCB bounds are broken at random and equal visits by mean, not
-  toward passing, the first candidate.
-- **Budgets are engine steps** a decision: every decision `next` returns or
-  settles, plus a world dealt and an evaluation in steps' time. A mid-game
-  rollout is about 360 steps and an evaluation one, so every leaf compares at
-  matched CPU, and a seed still reproduces a move on any machine.
-- **Every entrant shares one Bradley-Terry rating pool**, the anchor at 0, with
-  a covariance, so any two compare with a margin.
-- **The next game is the most informative per engine step.** For each pair of
-  open entrants it weighs the drop in each search's rating variance by its
-  chance of being the best overall, the best fair one and the best in its
-  family, over what the two cost. A fair search sees what a player sees; the
-  cheats bound what search can do. Fixed agents are references, never targets.
-- **A family grows** from 1M, 3M, 10M and 30M steps by ×3 while its last step up
-  gained rating with 80% confidence. 30M is about 80,000 mid-game rollouts a
-  decision. Same seeds in every matchup, so entrants compare pair by pair.
-- **Two games play at a time**, since one alone leaves cores idle.
-  `just longthink --power light` plays one at a time on half the threads, to
-  leave room for other work, and `--power full` goes back, even mid-run. A seed
-  plays the same game either way.
-- Every searched decision's root visits and mean rewards go to
-  `decisions.jsonl`, as training data. `--add FAMILY` adds a family to a running
-  arena once the run's binary can play it; one needing new code comes after
-  `--upgrade`, whose binary the runner moves to before its next decision. It has
-  no end and no pre-registered bar: the summary streams, and we stop when we
-  have learned enough.
+  The lower confidence is deliberate: we would trade a little strength for a
+  blunder, and most such changes touch few moves a game, so the match's power is
+  low by construction.
 
-The evaluation is `beryl_search::evaluate`: a logistic function of each side's
-life, cards, lands, permanents, power, loyalty and library, fitted by
-`beryl_cli eval-fit` on seeded games. 17lands' card quality comes from
-`just card-quality`.
+- **A screen before the match.** A challenger that changes few moves is first
+  replayed over the champion's last match games: at each decision where it would
+  choose differently, both candidates are searched again from fresh seeds with
+  the whole budget split between them (`LongSearch::duel`, as
+  `beryl_cli anchor-replay --recheck` does) and the cost is summed by the
+  search's own estimate. A screen showing a cost above 0.03 a game does not stop
+  the match, but it is written down beside the result. The screen costs minutes;
+  the match hours.
 
-## 6. How we prove it works
+### 4.3 The record
 
-- **A frozen reference opponent.** Freeze the current `expert` as a separate
-  agent before tuning anything. Improving the live expert must not move the bar,
-  and every general-agent result is reported against the frozen copy. That copy
-  is `expert-frozen`, frozen once retuned for the cb8d5d5f mirror: it beats
-  `greedy` 78% and `random` 99% over 400 games (seed 20261106). It carries its
-  own rollout policy and card values, and a test pins its moves.
-- **Paired, seat-alternated games.** Both seats play the same shuffle seeds. Use
-  McNemar's test on discordant pairs, Wilson 95% intervals on rates, and at
-  least 300 paired seeds per A/B. No conclusions from partial runs.
-- **Matched budgets.** Compare agents at the same iterations or wall-clock per
-  decision, and record it with every result.
-- **Pre-registered bars,** set by a human before measuring. Proposed:
-  - Mirror: the general agent beats the frozen expert with the 95% interval's
-    lower bound above 50%, over at least 400 games, at the UI's default budget.
-  - Held-out decks: it beats `greedy` by more than the expert beats `greedy` in
-    the mirror.
-- **Held-out decks.** A set of cube decks is never used for tuning, debugging or
-  reading traces. It is played only to confirm.
-- **A tactical puzzle suite.** Positions with a known best play (take lethal,
-  hold the counterspell, block or die), built with the scenario framework, split
-  into development and held-out puzzles. Monolith's suite found its worst bug.
-- **Reviews only find problems.** Transcript reviews by a language model are for
-  diagnosis, then fixes through replays and constructed positions. They are not
-  gates.
+- Every match is a bead labeled `lane:ladder`, holding its pre-registered bar,
+  the command line, the seed, and the result in its notes. One lane, so matches
+  run one at a time and never share the machine.
+- `docs/ladder.md`, created with the first match, is the log: one row a match
+  (date, challenger, champion, budget, games, score, Elo interval, verdict),
+  newest first, and the current champion at the top. Logs, transcripts and
+  position files are never committed.
+- A promotion changes the registry's Deep Searcher and its doc comment names the
+  match.
 
-## 7. Not now
+### 4.4 What we build
 
-- AlphaZero-style or R-NaD training from scratch.
-- Card-specific expert work beyond what Milestone 1 needs. A generic core
-  (combat math, lethal checks, mana) stays useful as a fallback and in rollouts.
-- ISMCTS and other information-set methods, until search is strong enough that
-  hidden information costs it something.
-- A learned move policy, until a value model has proven itself.
+Each is its own bead; name the files.
 
-## 8. Open questions
+- `just ladder <challenger> [--vs <champion>] [--work 3M] [--cap N]`: a paired
+  match from the position set with the SPRT, printing a row for `ladder.md`.
+  Builds on `beryl_cli tournament --paired` (`tournament.rs`), long-think
+  entrant names (`game.rs`, `family@budget` with options) and a trinomial SPRT
+  over paired seeds. Runs at utility QoS as `just tournament` does.
+- The position set: cut by a `beryl_cli positions` from seeded champion games
+  into the save format (`beryl_session::save`, which the frozen corpus already
+  migrates), with each file's source seed and turn, under
+  `$BERYL_CACHE/ladder/positions`. A fixed seed rebuilds it.
+- `just blunders [agent]`: the suite (§5).
+- The screen: `beryl_cli anchor-replay`'s `--recheck`, generalized from "the
+  anchor's answer" to "another entrant's answer".
 
-- Can a general evaluator match the expert's card knowledge in the WU mirror?
-  Step 1 shows soonest which way this goes.
-- How far past the end of the turn should search look, and how should the
-  opponent's instant-speed replies be searched?
-- Do the 17lands snapshots, which lack targets, counters and tapped status,
-  carry enough to train a value estimate that helps search?
+## 5. The blunder suite
+
+A regression gate built from every blunder a human has caught.
+
+- **An entry** is a position (an incident's replay file and a decision's log
+  index, `docs/incidents/*.replay.json`), the forbidden choices and, where one
+  exists, the required choice. The list is `data/blunders.json`, each entry
+  citing its incident. The first entries:
+  - Deep Seer, turn 14: Oust on its own token is forbidden.
+  - Snapcaster, turn 12: Snapcaster Mage in the agent's own main phase is
+    forbidden.
+  - Snapcaster, turn 16: attacking Jace, Wielder of Mysteries with both
+    creatures is required.
+  - Trinket Mage, turn 7: taking Mana Crypt is required.
+- **The check** builds the agent from the game's seed as the app did, searches
+  the position at the proxy budget and at the shipped budget, from five seeds
+  each, and fails on any forbidden play or any missed required one. It is a hard
+  gate for every promotion, strength or plausibility alike, run before the
+  match.
+- **The human's games.** After each promotion, a human plays a few games against
+  the new champion. Any play they would call wrong goes through the bug button
+  (⌘B), whose report carries the replay and the agent's own searches, gets an
+  incident write-up, and becomes a suite entry. A replay-reviewed incident takes
+  an hour of `just review --agent recorded`; the suite entry takes a line.
+- **Drift.** A replay from before an engine change may stop reproducing its
+  position (`just review` fails on it, as the Snapcaster replay's old undo did).
+  An entry that no longer replays is rebuilt as a scenario (`beryl_scenario`, as
+  `boards.rs` builds its boards) or retired with a note, never silently skipped.
+
+## 6. The first rungs
+
+Ten challengers, in the order we would play them. Each names its change, its
+evidence, whether it aims at strength (S) or blunders (B), and what would make
+us drop it. Each is one setting (`Options`, `Settings`) or one table entry away
+from the champion, so a loser is dropped by not setting it.
+
+01. **Means over visits at near-ties** (B, S). `leader` (`long.rs`) and `Mcts`
+    play the most visited candidate. Play the best tree-averaged mean
+    (`Search::means`) instead when the two differ, or the most visited unless
+    another's mean leads it by more than the noise across trees. Evidence: Jace,
+    Wielder led by 0.015 and lost on visits; the Searcher mulligan showed the
+    vote and the expectation disagree at 9% of hidden decisions. Cost: one
+    function. Drop it if the match loses: a losing candidate's mean within a
+    tree rests on few visits, which is the case for the vote.
+
+02. **Anchor at combat and finds** (B). `guarded` covers only a priority
+    decision where greedy passes and the search casts. Extend it to `Attacker`
+    and `AttackTarget` at near-ties, and to a search's find (`ChooseUpTo` under
+    `Ask::Search`), where a card to hand is never worse than nothing. Evidence:
+    the Spirit held back and the Crypt declined, both outside the anchor. Risk:
+    by-7wl.1 put a broad anchor at 0.04 to 0.07 a game by the search's biased
+    estimate; the screen and the match measure it properly.
+
+03. **Decided positions default to greedy** (B). Where the root's estimate is
+    above 0.9 or below 0.1, widen the anchor to every decision kind and raise
+    its margin. Evidence: 45% of the leader's decisions at 10M came in such
+    positions; the turn discount lifted seed agreement there from 60% to 78%,
+    against 90% in contested positions, so a fifth of these moves still turn on
+    noise. A human closing out a won game makes the obvious play; so should the
+    champion.
+
+04. **Rollout common sense, from card data** (B, S). One challenger bundling
+    four table-and-policy fixes, each a line or two in `rollout.rs` and
+    `values.rs`, each checked by the suite on its own:
+
+    - a creature with flash waits in its controller's main phase and is cast at
+      the opponent's end step (read from `Keywords`, not a card name);
+    - Jace, Wielder of Mysteries's +1 is `FRIENDLY`, and the card is valued as
+      the expert's `appraise` does when its controller's library is short;
+    - Mana Crypt is castable while short of lands, as the expert's `CRYPT_LANDS`
+      says, and the tree and the rollouts agree on it (a never-cast card is
+      pruned from the tree too);
+    - a counterspell or Reprieve answers only a spell its caster cannot recast
+      this turn, read from their untapped mana.
+
+    The suite tests each fix; the match tests the bundle; a loss is bisected.
+
+05. **Greedy answers mid-resolution choices below the root** (S, B).
+    `Options::mid` exists and was never measured head-to-head. Evidence: Jace's
+    0 scored 0.498 against the +2's 0.782 because its put-back was a tree node
+    of random children; in the Deep Seer re-search, `mid` changed 16 of 62
+    moves.
+
+06. **18 worlds** (S). `Method::Pimc { worlds: 18 }`. Evidence: +356 against
+    +262 at 30M in run-003. Cost: a number. If it wins, rung 7 must answer the
+    mulligan incident's "18 worlds are few".
+
+07. **Once-a-game draws over many worlds** (B, S). Mulligans, and any decision
+    whose value is mostly its world (the trees scored Keep 0.000 or above 0.95),
+    searched by `Method::Ismcts` or 288 worlds at the same budget, the rest of
+    the game as before.
+
+08. **Children tried in greedy's order** (S). `Tree::select` plays each new
+    child once in random order before UCB1 compares them, so a node's mean
+    averages its exploration. Order expansion by the rollout policy's scores, so
+    the sensible options are tried first and a wide choice is priced by its best
+    answers. This is `mid` for the decisions `mid` leaves to the tree.
+
+09. **Turn discount 0.95** (B). The discount is 0.98 by the agreement
+    measurement alone: 0.95 agreed in 80% and 90% of positions against 78% and
+    77%, at a cost in close games nobody measured. The ladder measures it.
+
+10. **The budget rung** (S). Champion at 90M against itself at 30M, 300 paired
+    games at those budgets, about a day. Run only when the cheaper rungs are
+    exhausted or the engine has sped up enough that 90M costs what 30M does
+    today.
+
+## 7. Speed
+
+Engine speed is a multiplier on every rung: strength rose with steps up to 10M
+to 30M, and the ladder's cost is wall clock.
+
+- The cube rollout benchmark and `count-gate.toml` stay the measure
+  ([benchmarking.md](benchmarking.md)).
+- A speed-up that keeps every answer (`rollouts_never_change` pinned) changes no
+  move, so it needs no ladder match: it ships on the fast check.
+- A speed-up that moves answers is a challenger like any other.
+
+## 8. Not now
+
+- **The long-think arena is retired.** `just longthink` and its runner stay
+  buildable, and run-003's data stays the record of how search scales. No new
+  run unless a question needs many families rated at once.
+- **Round robins.** `just tournament` remains for a quick table; nothing is
+  decided by one.
+- **Learned value models, AlphaZero-style or R-NaD training.** Evaluation leaves
+  lost by 180 to 260 Elo here, and the record elsewhere stands. In Monolith, our
+  Netrunner prototype, R-NaD learned nothing in 145,000 self-play games, and a
+  learned value model was neutral as a correction to the evaluator and harmful
+  on one side (p = 0.002), trained on games from a bot that always made the
+  obvious play. In netrunner-rs, 0 of 6 AlphaZero-style runs were promoted, and
+  a well-calibrated value head made search worse. Good calibration is not
+  evidence.
+- **Evaluation leaves and 17lands card values**, until something changes what
+  run-003 measured.
+- **ISMCTS beyond rung 7.** PIMC with few worlds led it in the hidden game.
+- **Card-specific code.** Table entries only (§1).
+- **Decks beyond the WU Control mirror.** The engine covers the mirror's cards
+  ([rules-coverage.md](rules-coverage.md)); the ladder moves to held-out cube
+  decks as the engine does, and the position set grows a family per deck.
+
+## 9. Open questions
+
+- Do curated start positions cut the variance of paired scores enough to pay for
+  building them, against paired seeds from the shuffle alone?
+- Does a gain at 3M transfer to 30M for changes to the root choice (rungs 1 to
+  3), which fire on margins that shrink as the budget grows?
+- How far can the anchor widen before the champion plays greedy's game? The
+  rungs 2 and 3 matches put a number on it.
+- What does a plausibility promotion cost in Elo over a year of them? The log
+  answers that, if every match is recorded.

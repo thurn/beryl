@@ -79,7 +79,7 @@ fn pairings(agents: &[String]) -> Vec<(usize, usize)> {
 }
 
 /// Plays the tournament, searching agents with `budget`'s iterations and trees. With `paired`,
-/// games come in pairs on one seed, seats swapped (docs/ai-strategy.md §6). The first
+/// games come in pairs on one seed, seats swapped (docs/ai-strategy.md §4). The first
 /// invariant violation fails it.
 pub fn run(
     agents: &[String],

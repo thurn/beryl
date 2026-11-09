@@ -1,6 +1,8 @@
 //! The long-think searcher: one Monte Carlo tree search with every axis the long-think
-//! arena varies (docs/ai-strategy.md §5), so that its entrants differ in one setting at a
-//! time. [`Mcts`](crate::Mcts), the UI's opponent, stays as it is.
+//! arena varied (docs/longthink-run-003.md; the arena is retired, docs/ai-strategy.md §8),
+//! so that its entrants differ in one setting at a time. The ladder's champion and its
+//! challengers (docs/ai-strategy.md §3, §6) are its settings. [`Mcts`](crate::Mcts), the
+//! UI's quick opponent, stays as it is.
 //!
 //! - **Method.** [`Method::Pimc`] searches a fixed number of worlds, each sampled once at the
 //!   root and searched by a tree of its own (perfect-information Monte Carlo, as `Mcts`).
