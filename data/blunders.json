@@ -114,5 +114,21 @@
     "played": "activate Staff of the Storyteller #2",
     "required": ["pass"],
     "why": "Nothing in its deck can use the remaining white mana to affect combat. Waiting preserves the option to exile Subtlety with Winds of Abandon in its second main."
+  },
+  {
+    "name": "jace-loots-before-draw",
+    "incident": "2026-11-09-jace-upkeep",
+    "class": "optional activation before gaining draw-step information",
+    "source": {
+      "replay": "docs/incidents/2026-11-09-jace-upkeep.replay.json"
+    },
+    "seat": 1,
+    "turn": 21,
+    "index": 0,
+    "played": "activate Jace, Vryn's Prodigy #0",
+    "required": [
+      "pass"
+    ],
+    "why": "The draw gives another card to consider before deciding whether to loot and what to discard."
   }
 ]
