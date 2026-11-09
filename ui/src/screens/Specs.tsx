@@ -13,6 +13,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { SoundPanel } from "../audio/SoundControls";
 import { cardEntry } from "../cards";
+import { Button } from "../components/Controls";
 import type { RelayedEvent } from "../ipc";
 import "./specs.css";
 
@@ -28,6 +29,7 @@ interface MomentListing {
   first?: View;
   roles?: [string, string];
   replay?: string | null;
+  counterDemo?: boolean;
 }
 
 interface ReviewListing {
@@ -155,8 +157,7 @@ export function Specs({ path }: { path: string }) {
 
 /** `/specs/<card>/<moment>/<yours|theirs>`: the moment from one seat, full size, as the game
  * screen plays it: a fresh game each load, for a driver (`by specs --drive`) or a link. With
- * `?hold` it waits for its spec server instance's `play`, so a driver can start watching
- * first; otherwise it plays a beat after it shows. */
+ * `?hold` it leaves replay controls to the driver. */
 function SeatRedirect({
   slug,
   moment,
@@ -173,11 +174,42 @@ function SeatRedirect({
     const id =
       shared && /^[a-z0-9-]+$/.test(shared)
         ? shared
-        : `${hold ? "hold-" : "seat-"}${Math.random().toString(36).slice(2, 10)}`;
+        : `seat-${Math.random().toString(36).slice(2, 10)}`;
     const live = `${window.location.origin}${API}/m/${slug}/${moment}/${seat}/${id}`;
-    window.location.replace(`/?live=${encodeURIComponent(live)}#/game`);
+    const replay = !hold && !moment.startsWith("review-") ? "&specReplay" : "";
+    window.location.replace(
+      `/?live=${encodeURIComponent(live)}&spec${replay}#/game`,
+    );
   }, [slug, moment, seat]);
   return <div className="specs" />;
+}
+
+/** Full-size replays show their paused game before offering playback. */
+export function SpecReplayPlay({ url }: { url: string }) {
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    void fetch(`${url}/held`)
+      .then((response) => response.json() as Promise<{ ok?: boolean }>)
+      .then(
+        ({ ok }) => setHeld(ok === true),
+        () => setHeld(false),
+      );
+  }, [url]);
+  return held ? (
+    <Button
+      className="spec-replay-play"
+      onClick={() => {
+        void fetch(`${url}/play`, { method: "POST" }).then(
+          (response) => {
+            if (response.ok) setHeld(false);
+          },
+          () => {},
+        );
+      }}
+    >
+      Play
+    </Button>
+  ) : null;
 }
 
 function SpecIndex({ specs }: { specs: SpecListing[] }) {
@@ -563,7 +595,7 @@ function MomentView({
   const [n, setN] = useState(0);
   const key = `${slug}/${moment.name}/${view}/${page}.${review?.revision ?? n}`;
   const live = `${window.location.origin}${API}/m/${key}`;
-  const src = `/?live=${encodeURIComponent(live)}&relay#/game`;
+  const src = `/?live=${encodeURIComponent(live)}&relay&spec#/game`;
   // Hidden until it shows its first view, over a placeholder.
   const [shown, setShown] = useState<string>();
   // Whether it holds views to play, by instance, asked once it has shown.
@@ -615,14 +647,14 @@ function MomentView({
           {moment.title}
         </h2>
         <div className="specs-moment-actions">
-          {review && moment.replay && (
+          {moment.replay && moment.name !== moment.replay && (
             <a
               className="specs-switch-seat"
               href={`/specs/${slug}/${moment.replay}/${view}`}
               target="_blank"
               rel="noreferrer"
             >
-              Watch counter
+              Replay from hand
             </a>
           )}
           {review && (
@@ -701,7 +733,7 @@ function MomentView({
           </a>
         </div>
       </header>
-      {review && moment.replay && view === moment.first && (
+      {review && moment.counterDemo && view === moment.first && (
         <p className="specs-review-hint">Cast, then switch seats to respond.</p>
       )}
       {noting && (

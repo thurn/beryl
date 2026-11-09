@@ -27,9 +27,8 @@
 //! actions and of the game playing on to the viewer's first decision (as it does from the
 //! opponent's seat), are held until the viewer asks for them (`play`, or acting on the game in
 //! the frame), so the page animates them from that view on, when the viewer is watching; a new
-//! instance (the page's replay button) plays them again. An instance outside a page (a
-//! full-size frame, or a headless screenshot) has no play button, so it sends them a beat after
-//! its first view.
+//! instance (the page's replay button) plays them again. Full-size and headless views hold
+//! their replay the same way.
 
 use std::collections::HashMap;
 use std::io::{self, Seek, Write};
@@ -51,8 +50,6 @@ use crate::serve::{CORS, HttpRequest, invoke, read_request, respond};
 const INSTANCES: usize = 64;
 /// How long `current_game` waits for a moment's setup.
 const SETUP: Duration = Duration::from_secs(20);
-/// The beat between a moment outside a page showing and its actions playing out.
-const BEAT: Duration = Duration::from_millis(900);
 /// How often an idle event stream is pinged, which finds a page gone.
 const PING: Duration = Duration::from_secs(5);
 
@@ -157,9 +154,8 @@ fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result
                     "first": c.first.name(),
                     "roles": c.roles,
                     "actions": c.actions,
-                    "replay": c.counter_demo.then(|| spec.moments.iter().find(|m|
-                        m.group == c.moment.group && m.title == "Start"
-                    )).flatten().map(|m| m.name),
+                    "counterDemo": c.counter_demo,
+                    "replay": spec.replay_from_hand(c.moment.group),
                 })
             })
             .collect();
@@ -588,8 +584,7 @@ fn broadcast(feed: &mut Feed, update: &GameUpdate) {
     }
 }
 
-/// The view the page shows at once, once the setup is done. Outside a page, the views since
-/// go to its streams a beat later.
+/// The view the page shows at once, once the setup is done.
 fn current(feed: &SharedFeed) -> Value {
     let (lockable, ready) = &**feed;
     let deadline = Instant::now() + SETUP;
@@ -608,20 +603,6 @@ fn current(feed: &SharedFeed) -> Value {
     let mut shown = f.views[start].clone();
     // Shown at once, it animates nothing.
     shown.view.events.clear();
-    // An instance named `hold-…` waits for its `play`, as a page's does: a driver starts it
-    // when it is watching.
-    let held = f
-        .key
-        .rsplit('/')
-        .next()
-        .is_some_and(|id| id.starts_with("hold-"));
-    if !f.manual && !f.released && f.page.is_none() && !held {
-        let feed = Arc::clone(feed);
-        std::thread::spawn(move || {
-            std::thread::sleep(BEAT);
-            release(&feed);
-        });
-    }
     json!({ "ok": shown })
 }
 

@@ -11,7 +11,7 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { launch, openPage, settle, workers } from "./capture.mjs";
-import { chosen, option, retried, viewport, warm } from "./moments.mjs";
+import { chosen, option, play, retried, viewport, warm } from "./moments.mjs";
 
 /** How long the page must hear nothing before it counts as settled, and the most to wait. */
 const QUIET = 2500;
@@ -91,12 +91,13 @@ for (const spec of specs) {
                     ).href;
                     try {
                         await page.goto(
-                            `${base}?live=${encodeURIComponent(live)}#/game`,
+                            `${base}?live=${encodeURIComponent(live)}&spec#/game`,
                             { waitUntil: "load" },
                         );
                         await page.waitForSelector("[data-life]", {
                             timeout: LONGEST,
                         });
+                        await play(live);
                         await page.waitForFunction(
                             ([quiet, longest, started]) => {
                                 const log = window.berylLive?.log ?? [];

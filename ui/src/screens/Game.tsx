@@ -43,6 +43,7 @@ import { usePhone } from "../mobile/phone";
 import { sameStops, savedStops, saveStops } from "../game/stops";
 import { play } from "../audio/sound";
 import { SoundCorner } from "../audio/SoundControls";
+import { SpecReplayPlay } from "./Specs";
 
 /** The agent that plays on the true state, hidden cards included. */
 const CHEATING = "mcts-omniscient";
@@ -334,7 +335,14 @@ export function GameScreen({
     );
   }
   // Each game starts with a clean screen.
-  return <Playing key={playback.update.session} playback={playback} />;
+  const params = new URLSearchParams(window.location.search);
+  const replay = params.has("specReplay") ? params.get("live") : null;
+  return (
+    <>
+      <Playing key={playback.update.session} playback={playback} />
+      {replay && <SpecReplayPlay url={replay} />}
+    </>
+  );
 }
 
 /** The longest a choice over the table waits for its view's events to be seen, in ms. */
@@ -375,12 +383,18 @@ function Playing({ playback }: { playback: Playback }) {
     }
   };
   const decision = status.kind === "deciding" ? status.decision : undefined;
+  // A spec may open directly at a target choice. Give the reviewer its paused state
+  // before applying the normal shortcut for a lone target.
+  const canAutoPick = useRef(
+    !new URLSearchParams(window.location.search).has("spec"),
+  );
   /** Answers the decision as the player picked: heard, or refused while the game is busy. */
   const answer = (index: CandidateIndex, then: Intent[] = []) => {
     if (!decision || waiting) {
       play("no");
       return;
     }
+    canAutoPick.current = true;
     play("select");
     send(index, then);
   };
@@ -467,7 +481,10 @@ function Playing({ playback }: { playback: Playback }) {
         planned.current = [intent, ...rest];
       } else {
         // A target with no alternative is taken for the player, as Arena takes it.
-        const lone = decision && loneTarget(decision, view);
+        const lone =
+          canAutoPick.current && decision
+            ? loneTarget(decision, view)
+            : undefined;
         if (lone !== undefined) {
           send(lone, []);
           return;

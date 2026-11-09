@@ -100,6 +100,21 @@ impl Spec {
             auto::checkpoints(def, scenarios)
         })
     }
+    /// The original replay, if it shows this card being cast from hand.
+    fn replay_from_hand(&self, group: &str) -> Option<&'static str> {
+        self.moments
+            .iter()
+            .find(|m| {
+                m.group == group
+                    && m.title == "Start"
+                    && m.play.iter().any(|a| {
+                        matches!(a, Action::Cast { player, card, .. }
+                        if *card == self.card
+                            && m.board.setup.players[player.index()].hand.contains(card))
+                    })
+            })
+            .map(|m| m.name)
+    }
 }
 
 /// One moment of play a spec shows.
@@ -389,6 +404,7 @@ pub struct MomentListing {
     group: &'static str,
     /// Whether it plays actions out once shown, which a replay plays again.
     plays: bool,
+    replay: Option<&'static str>,
 }
 
 pub fn listing() -> Vec<Listing> {
@@ -405,6 +421,7 @@ pub fn listing() -> Vec<Listing> {
                     title: m.title,
                     group: m.group,
                     plays: !m.play.is_empty(),
+                    replay: s.replay_from_hand(m.group),
                 })
                 .collect(),
         })
