@@ -144,7 +144,8 @@ async fn report_bug(app: tauri::AppHandle, request: BugReport) -> Result<BugSave
     };
     let encoded = started.elapsed();
     let sessions = app.state::<Sessions>();
-    let saved = bugs::write(&bugs::dir(), &request, &images, &sessions).inspect_err(|e| {
+    let root = bugs::dir();
+    let saved = bugs::write(&root, &request, &images, &sessions).inspect_err(|e| {
         journal::error("bugs", format!("report not written: {e}"), json!(null));
     })?;
     journal::debug(
@@ -153,7 +154,7 @@ async fn report_bug(app: tauri::AppHandle, request: BugReport) -> Result<BugSave
         json!({ "pngMs": encoded.as_millis(), "totalMs": started.elapsed().as_millis() }),
     );
     #[cfg(desktop)]
-    bug_reports::file_local(&saved);
+    bugs::filing::enqueue(&root, &saved.id);
     Ok(saved)
 }
 

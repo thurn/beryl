@@ -21,6 +21,10 @@
   padding: 40px 48px 8px;
 }
 
+.specs-index-export {
+  color: var(--text-dim);
+}
+
 .specs-heading {
   margin: 0;
   font-family: var(--font-display);

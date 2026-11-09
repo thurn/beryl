@@ -23,6 +23,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 # resumed game's decisions.jsonl drifts by an ulp once rewards are not multiples of 0.5.
 serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 terminal_size = "0.4.4"
+tempfile = "3"
 
 [target.'cfg(windows)'.dependencies]
 winapi-util = "0.1.11"

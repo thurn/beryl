@@ -21,6 +21,8 @@
 //! marks them done; the `bugfix` skill (`.agents/bugfix`) works them.
 
 pub mod archive;
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+pub mod filing;
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};

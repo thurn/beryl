@@ -143,6 +143,14 @@ function SpecIndex({ specs }: { specs: SpecListing[] }) {
           </span>
         </h1>
         <SoundPanel />
+        <a
+          className="specs-index-export"
+          href={`${API}/bug-reports.zip`}
+          download
+          title="Includes screenshots, replays, and logs"
+        >
+          Export Bug Reports
+        </a>
       </header>
       <SpecCards specs={todo} />
       {done.length > 0 && todo.length > 0 && (

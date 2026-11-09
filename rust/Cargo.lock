@@ -175,6 +175,7 @@ dependencies = [
  "libc",
  "serde",
  "serde_json",
+ "tempfile",
  "terminal_size",
  "winapi-util",
 ]

@@ -86,7 +86,7 @@ ui-test *args:
 ui-live *args:
     {{ by }} ui-live "$@"
 
-# The cards' spec pages, each moment a live game, until interrupted (card slugs; --shots, --check, --port N)
+# The cards' spec pages, each moment a live game (--file-bugs files local beads)
 [group('app')]
 specs *args:
     {{ by }} specs "$@"

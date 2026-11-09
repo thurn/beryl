@@ -11,6 +11,7 @@
 //! Requests are small and local, so this is a minimal HTTP/1.1 server on the standard library:
 //! one thread per connection, one request per connection.
 
+use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::{Sender, channel};
@@ -68,7 +69,9 @@ pub(crate) const CORS: &str = "Access-Control-Allow-Origin: *\r\n\
                     Access-Control-Allow-Headers: Content-Type\r\n";
 
 fn handle(stream: TcpStream, sessions: &Sessions, streams: &Streams) -> Result<(), String> {
-    let (method, path, body) = read_request(&stream)?;
+    let HttpRequest {
+        method, path, body, ..
+    } = read_request(&stream)?;
     let mut stream = stream;
     match (method.as_str(), path.as_str()) {
         ("OPTIONS", _) => respond(&mut stream, "204 No Content", ""),
@@ -82,14 +85,20 @@ fn handle(stream: TcpStream, sessions: &Sessions, streams: &Streams) -> Result<(
     }
 }
 
-/// A request's method, path and body.
-pub(crate) fn read_request(stream: &TcpStream) -> Result<(String, String, Vec<u8>), String> {
+pub(crate) struct HttpRequest {
+    pub method: String,
+    pub path: String,
+    pub headers: HashMap<String, String>,
+    pub body: Vec<u8>,
+}
+
+pub(crate) fn read_request(stream: &TcpStream) -> Result<HttpRequest, String> {
     let mut reader = BufReader::new(stream.try_clone().map_err(|e| e.to_string())?);
     let mut line = String::new();
     reader.read_line(&mut line).map_err(|e| e.to_string())?;
     let mut parts = line.split_whitespace();
     let (method, path) = (parts.next().unwrap_or(""), parts.next().unwrap_or(""));
-    let mut length = 0;
+    let mut headers = HashMap::new();
     loop {
         let mut header = String::new();
         reader.read_line(&mut header).map_err(|e| e.to_string())?;
@@ -97,15 +106,21 @@ pub(crate) fn read_request(stream: &TcpStream) -> Result<(String, String, Vec<u8
         if header.is_empty() {
             break;
         }
-        if let Some((name, value)) = header.split_once(':')
-            && name.eq_ignore_ascii_case("content-length")
-        {
-            length = value.trim().parse().map_err(|_| "bad Content-Length")?;
+        if let Some((name, value)) = header.split_once(':') {
+            headers.insert(name.to_ascii_lowercase(), value.trim().to_owned());
         }
     }
+    let length = headers.get("content-length").map_or(Ok(0), |value| {
+        value.parse().map_err(|_| "bad Content-Length")
+    })?;
     let mut body = vec![0; length];
     reader.read_exact(&mut body).map_err(|e| e.to_string())?;
-    Ok((method.to_owned(), path.to_owned(), body))
+    Ok(HttpRequest {
+        method: method.to_owned(),
+        path: path.to_owned(),
+        headers,
+        body,
+    })
 }
 
 pub(crate) fn respond(stream: &mut TcpStream, status: &str, body: &str) -> Result<(), String> {

@@ -2,7 +2,7 @@
 //! The format is independent of the file picker or any future transport.
 
 use std::fs::{self, File};
-use std::io::{self, Write};
+use std::io::{self, Seek, Write};
 use std::path::{Path, PathBuf};
 
 use serde_json::json;
@@ -55,7 +55,14 @@ pub fn save(folders: &[PathBuf], destination: &Path) -> io::Result<()> {
         .parent()
         .ok_or_else(|| io::Error::other("missing destination directory"))?;
     let mut temp = tempfile::NamedTempFile::new_in(directory)?;
-    let mut zip = ZipWriter::new(temp.as_file_mut());
+    write(folders, temp.as_file_mut())?;
+    temp.persist(destination)?;
+    Ok(())
+}
+
+/// Writes a report bundle to a seekable destination.
+pub fn write(folders: &[PathBuf], target: impl Write + Seek) -> io::Result<()> {
+    let mut zip = ZipWriter::new(target);
     let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
     let mut ids = Vec::new();
     for folder in folders {
@@ -85,7 +92,6 @@ pub fn save(folders: &[PathBuf], destination: &Path) -> io::Result<()> {
         "reports": ids,
     }))?)?;
     zip.finish()?;
-    temp.persist(destination)?;
     Ok(())
 }
 
