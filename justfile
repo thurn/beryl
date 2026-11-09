@@ -197,6 +197,12 @@ review *args:
 tournament *args:
     RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- tournament "$@"
 
+# A paired match against the champion until the SPRT decides, at low priority (--vs NAME, --work 3M, --bar stronger|plausible, --cap N, --seed N, --out DIR)
+[group('agents')]
+[no-cd]
+ladder *args:
+    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- ladder "$@"
+
 # The long-think arena: starts or resumes the latest run, low priority, kept awake (--status, --new, --run DIR, --upgrade, --add FAMILY, --games N, --power full|light)
 [group('agents')]
 [no-cd]

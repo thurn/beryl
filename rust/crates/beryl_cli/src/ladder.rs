@@ -1,0 +1,976 @@
+//! `beryl_cli ladder <challenger> [--vs NAME] [--work 3M] [--bar stronger|plausible] [--cap N]
+//! [--seed N] [--out DIR]` (`just ladder`): a paired match between a challenger and the
+//! champion, ended by a sequential test (docs/ai-strategy.md §4).
+//!
+//! - **The agents.** Each is a registered agent or a long-think entrant (`family@budget`); a
+//!   family named without a budget plays at `--work`, the proxy budget of 3M engine steps a
+//!   decision by default. The champion defaults to the registry's Deep Searcher family
+//!   ([`beryl_search::DEEP_SEARCHER`]).
+//! - **Paired seeds.** Pair `p` plays seed [`game_seed`]`(seed, 0, p)` twice, the challenger
+//!   in the first seat and then in the second, [`GAMES_AT_ONCE`] games at a time on one thread
+//!   each. A seed reproduces the match: the verdict is read off the pairs in order, so games
+//!   still running when it comes are not counted.
+//! - **The test.** A sequential probability ratio test over the pairs, swept, split or lost
+//!   ([`Sprt`]), between the two Elo hypotheses of the bar ([`Bar`]), stopping on a decision
+//!   or at the cap.
+//! - **The record.** It prints the games, the pairs, the challenger's score, an Elo estimate
+//!   with its 95% interval, the verdict and a ready `docs/ladder.md` row, and writes
+//!   `match.json` beside the games. The games go to `--out`, by default
+//!   `$BERYL_CACHE/ladder/<date>-<challenger>/`, laid out as a long-think run's
+//!   ([`crate::longthink`]): `games.jsonl`, `logs/<game>.jsonl` (each decision's answer, which
+//!   replays the game from its seed, as `anchor_replay::walk` does), `transcripts/<game>.txt`
+//!   and `decisions.jsonl` (each searched decision's root visits and means).
+//!
+//! Matches start from the shuffle: `--positions`, the curated start positions of §4.1, is
+//! refused until the position set exists (by-97g.2).
+
+use std::collections::BTreeMap;
+use std::fmt::Write as _;
+use std::fs;
+use std::path::PathBuf;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::thread;
+
+use beryl_engine::{GameTable, Outcome};
+use beryl_search::{Agent, AgentDecision, Budget, DEEP_SEARCHER, Family, LongSearch, Settings};
+use serde::Serialize;
+
+use crate::game::{mirror, parse_work};
+use crate::longthink::files::{self, Log};
+use crate::longthink::game::{self as arena, Entrant, Game, GameDecision, Line, Resume};
+use crate::longthink::{DecisionRecord, GameRecord, Verdict as GameVerdict, cache, rung_name};
+use crate::tournament::{game_seed, wilson};
+
+/// Games played at once, one thread each (docs/ai-strategy.md §4.1).
+pub const GAMES_AT_ONCE: usize = 18;
+
+/// The proxy budget, in engine steps a decision.
+const PROXY: u64 = 3_000_000;
+
+const USAGE: &str = "usage: beryl_cli ladder <challenger> [--vs NAME] [--work 3M] \
+                     [--bar stronger|plausible] [--cap N] [--seed N] [--out DIR]";
+
+/// The pre-registered bars of docs/ai-strategy.md §4.2. Each passes when its test accepts
+/// `elo1`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Bar {
+    /// "No gain" against "+50 Elo" at α = β = 0.001.
+    Stronger,
+    /// "−25 Elo" against "no change" at α = β = 0.05: not weaker.
+    Plausible,
+}
+
+impl Bar {
+    pub fn name(self) -> &'static str {
+        match self {
+            Bar::Stronger => "stronger",
+            Bar::Plausible => "plausible",
+        }
+    }
+
+    pub fn sprt(self) -> Sprt {
+        match self {
+            Bar::Stronger => Sprt {
+                elo0: 0.0,
+                elo1: 50.0,
+                alpha: 0.001,
+                beta: 0.001,
+            },
+            Bar::Plausible => Sprt {
+                elo0: -25.0,
+                elo1: 0.0,
+                alpha: 0.05,
+                beta: 0.05,
+            },
+        }
+    }
+}
+
+/// A match's seed pairs by the challenger's score over the two games: both won, split (a
+/// game each, or any draw or stall), both lost.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct Pairs {
+    pub swept: u32,
+    pub split: u32,
+    pub lost: u32,
+}
+
+impl Pairs {
+    pub fn total(self) -> u32 {
+        self.swept + self.split + self.lost
+    }
+
+    /// Counts a pair by the challenger's half points over its two games, 0 to 4.
+    pub fn add(&mut self, halves: u32) {
+        match halves {
+            4 => self.swept += 1,
+            0 => self.lost += 1,
+            _ => self.split += 1,
+        }
+    }
+}
+
+/// How a sequential test stands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Verdict {
+    /// The test accepted `elo1`.
+    Pass,
+    /// The test accepted `elo0`.
+    Fail,
+    /// The cap came first.
+    Undecided,
+}
+
+/// A trinomial sequential probability ratio test over seed pairs, between Elo `elo0` and
+/// `elo1`, with error rates `alpha` (accepting `elo1` when `elo0` holds) and `beta`.
+///
+/// As fishtest's pentanomial test, it reads the pairs' distribution rather than the games',
+/// so the correlation between a seed's two games (the same deal, seats swapped) is not taken
+/// for evidence. Its hypotheses fix the share of the decided pairs the challenger sweeps,
+/// `q = P(swept) / (P(swept) + P(lost))`, and leave the share of splits free. An agent `elo`
+/// stronger wins a game with chance `s = 1 / (1 + 10^(-elo/400))`, so with the two games of a
+/// pair independent, `q = s² / (s² + (1 - s)²) = 1 / (1 + 10^(-elo/200))`. The generalized
+/// log-likelihood ratio of the counts, splits profiled out, is then the binomial ratio of
+/// swept against lost: the split share's estimate is the same under both hypotheses and
+/// cancels. A split adds nothing to it, which is right for a seed on which the two agents
+/// played alike (§4.1), so a run of splits never decides a match. At +50 Elo about half the
+/// pairs are decided and the stronger bar ends in about 700 games, as §4.2 expects.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+pub struct Sprt {
+    pub elo0: f64,
+    pub elo1: f64,
+    pub alpha: f64,
+    pub beta: f64,
+}
+
+impl Sprt {
+    /// Wald's bounds on the log-likelihood ratio: below the first it accepts `elo0`, above the
+    /// second `elo1`.
+    pub fn bounds(self) -> [f64; 2] {
+        [
+            (self.beta / (1.0 - self.alpha)).ln(),
+            ((1.0 - self.beta) / self.alpha).ln(),
+        ]
+    }
+
+    /// The log-likelihood ratio of `elo1` to `elo0` given `pairs`.
+    pub fn llr(self, pairs: Pairs) -> f64 {
+        let (q0, q1) = (swept_share(self.elo0), swept_share(self.elo1));
+        f64::from(pairs.swept) * (q1 / q0).ln()
+            + f64::from(pairs.lost) * ((1.0 - q1) / (1.0 - q0)).ln()
+    }
+
+    /// The test's decision on `pairs`, if it has reached one.
+    pub fn decide(self, pairs: Pairs) -> Option<Verdict> {
+        let llr = self.llr(pairs);
+        let [lower, upper] = self.bounds();
+        if llr >= upper {
+            Some(Verdict::Pass)
+        } else if llr <= lower {
+            Some(Verdict::Fail)
+        } else {
+            None
+        }
+    }
+}
+
+/// The share of decided pairs an agent `elo` stronger sweeps ([`Sprt`]).
+pub fn swept_share(elo: f64) -> f64 {
+    1.0 / (1.0 + 10f64.powf(-elo / 200.0))
+}
+
+/// The Elo whose [`swept_share`] is `q`.
+pub fn elo_of_swept_share(q: f64) -> f64 {
+    200.0 * (q / (1.0 - q)).log10()
+}
+
+/// A match to play.
+#[derive(Clone, Debug)]
+pub struct Match {
+    pub challenger: String,
+    pub champion: String,
+    /// The `--work` budget the names were resolved at, for the record.
+    pub work: u64,
+    pub bar: Bar,
+    /// The most games played.
+    pub cap: u32,
+    pub seed: u64,
+    pub out: PathBuf,
+}
+
+/// A match's result, as `match.json` keeps it.
+#[derive(Clone, Debug, Serialize)]
+pub struct Report {
+    pub date: String,
+    pub challenger: String,
+    pub champion: String,
+    pub budget: String,
+    pub bar: &'static str,
+    pub sprt: Sprt,
+    pub seed: u64,
+    pub cap: u32,
+    pub games: u32,
+    pub pairs: Pairs,
+    /// The challenger's games won, lost and drawn (a stall counts as a draw).
+    pub wins: u32,
+    pub losses: u32,
+    pub draws: u32,
+    /// The challenger's share of the points, and its Wilson 95% interval.
+    pub score: f64,
+    pub score_interval: [f64; 2],
+    /// The challenger's Elo over the champion from the decided pairs, and its 95% interval.
+    pub elo: f64,
+    pub elo_interval: [f64; 2],
+    pub llr: f64,
+    pub bounds: [f64; 2],
+    pub verdict: Verdict,
+    pub out: String,
+}
+
+impl Report {
+    /// Fills in the statistics from the counts.
+    fn tally(&mut self) {
+        let points = f64::from(self.wins) + 0.5 * f64::from(self.draws);
+        self.score = points / f64::from(self.games.max(1));
+        self.score_interval = wilson(points, self.games);
+        let decided = self.pairs.swept + self.pairs.lost;
+        // Half a pair each way keeps the estimate finite on a clean sweep.
+        let q = (f64::from(self.pairs.swept) + 0.5) / (f64::from(decided) + 1.0);
+        self.elo = elo_of_swept_share(q);
+        let [lo, hi] = wilson(f64::from(self.pairs.swept), decided);
+        self.elo_interval = [elo_of_swept_share(lo), elo_of_swept_share(hi)];
+        self.llr = self.sprt.llr(self.pairs);
+    }
+
+    /// The match as a `docs/ladder.md` row, under [`ROW_HEADER`]. The suite's open and fixed
+    /// counts and the human games since the last promotion (§4.3, §5) are left as `?` for the
+    /// hand that adds the row.
+    pub fn row(&self) -> String {
+        format!(
+            "| {} | {} | {} | {} | {} | {:.1}% | {} [{}, {}] | {} | ? / ? | ? |",
+            self.date,
+            self.challenger,
+            self.champion,
+            self.budget,
+            self.games,
+            100.0 * self.score,
+            signed(self.elo),
+            signed(self.elo_interval[0]),
+            signed(self.elo_interval[1]),
+            match self.verdict {
+                Verdict::Pass => "pass",
+                Verdict::Fail => "fail",
+                Verdict::Undecided => "undecided",
+            },
+        )
+    }
+
+    /// The match as text, ending with its row.
+    pub fn text(&self) -> String {
+        let mut out = String::new();
+        let _ = writeln!(
+            out,
+            "{} v {} at {}, bar {} (elo {} v {}, alpha {}, beta {}), seed {}",
+            self.challenger,
+            self.champion,
+            self.budget,
+            self.bar,
+            self.sprt.elo0,
+            self.sprt.elo1,
+            self.sprt.alpha,
+            self.sprt.beta,
+            self.seed
+        );
+        let _ = writeln!(
+            out,
+            "games {} (cap {}): {} won, {} lost, {} drawn",
+            self.games, self.cap, self.wins, self.losses, self.draws
+        );
+        let _ = writeln!(
+            out,
+            "pairs {}: {} swept, {} split, {} lost",
+            self.pairs.total(),
+            self.pairs.swept,
+            self.pairs.split,
+            self.pairs.lost
+        );
+        let _ = writeln!(
+            out,
+            "score {:.1}% [{:.1}, {:.1}]; Elo {} [{}, {}]",
+            100.0 * self.score,
+            100.0 * self.score_interval[0],
+            100.0 * self.score_interval[1],
+            signed(self.elo),
+            signed(self.elo_interval[0]),
+            signed(self.elo_interval[1])
+        );
+        let _ = writeln!(
+            out,
+            "LLR {:.2} in [{:.2}, {:.2}]: {:?}",
+            self.llr, self.bounds[0], self.bounds[1], self.verdict
+        );
+        let _ = writeln!(out, "games in {}\n\n{ROW_HEADER}\n{}", self.out, self.row());
+        out
+    }
+}
+
+/// The header of `docs/ladder.md`'s table.
+pub const ROW_HEADER: &str = "| Date | Challenger | Champion | Budget | Games | Score | Elo (95%) \
+                              | Verdict | Suite open / fixed | Human games |\n\
+                              | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |";
+
+/// An Elo figure with its sign, whole.
+fn signed(elo: f64) -> String {
+    if elo.is_finite() {
+        format!("{elo:+.0}")
+    } else if elo > 0.0 {
+        "+inf".to_owned()
+    } else {
+        "-inf".to_owned()
+    }
+}
+
+pub fn main(args: &[String]) -> Result<(), String> {
+    let mut challenger = None;
+    let mut champion = None;
+    let mut work = PROXY;
+    let mut bar = Bar::Stronger;
+    let mut cap = 2_000;
+    let mut seed = 0;
+    let mut out = None;
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        let mut value = || {
+            args.next()
+                .cloned()
+                .ok_or_else(|| format!("{arg} needs a value\n{USAGE}"))
+        };
+        match arg.as_str() {
+            "--vs" => champion = Some(value()?),
+            "--work" => {
+                let v = value()?;
+                work = parse_work(&v).ok_or_else(|| format!("--work: no budget {v:?}"))?;
+            }
+            "--bar" => {
+                bar = match value()?.as_str() {
+                    "stronger" => Bar::Stronger,
+                    "plausible" => Bar::Plausible,
+                    other => return Err(format!("--bar: no bar {other:?}\n{USAGE}")),
+                }
+            }
+            "--cap" => cap = crate::number(arg, &value()?)?,
+            "--seed" => seed = crate::number(arg, &value()?)?,
+            "--out" => out = Some(PathBuf::from(value()?)),
+            "--positions" => {
+                return Err(
+                    "--positions: the position set does not exist yet (by-97g.2); \
+                            matches start from the shuffle"
+                        .to_owned(),
+                );
+            }
+            flag if flag.starts_with("--") => return Err(format!("unknown flag {flag}\n{USAGE}")),
+            name if challenger.is_none() => challenger = Some(name.to_owned()),
+            _ => return Err(USAGE.to_owned()),
+        }
+    }
+    let challenger = resolve(&challenger.ok_or(USAGE)?, work)?;
+    let champion = resolve(&champion.unwrap_or_else(|| DEEP_SEARCHER.to_string()), work)?;
+    if cap < 2 {
+        return Err("--cap: a match plays at least one pair".to_owned());
+    }
+    let out = out.unwrap_or_else(|| {
+        let name = challenger.replace(['/', '@'], "_");
+        cache()
+            .join("ladder")
+            .join(format!("{}-{name}", beryl_session::corpus::today()))
+    });
+    let m = Match {
+        challenger,
+        champion,
+        work,
+        bar,
+        cap,
+        seed,
+        out,
+    };
+    let report = run(&m, |pairs, llr, bounds| {
+        eprintln!(
+            "pairs {}: {} swept, {} split, {} lost; LLR {llr:.2} in [{:.2}, {:.2}]",
+            pairs.total(),
+            pairs.swept,
+            pairs.split,
+            pairs.lost,
+            bounds[0],
+            bounds[1]
+        );
+    })?;
+    print!("{}", report.text());
+    Ok(())
+}
+
+/// The entrant `name` names, as a long-think label: a registered agent as it is, a family
+/// without a budget at `work`.
+pub fn resolve(name: &str, work: u64) -> Result<String, String> {
+    if name.contains('@') || beryl_search::agent(name).is_some() {
+        entrant(name)?;
+        return Ok(name.to_owned());
+    }
+    let family: Family = name.parse()?;
+    Ok(format!("{family}@{}", rung_name(work)))
+}
+
+/// The arena's entrant for `name`, searching on one thread: games run one to a core.
+fn entrant(name: &str) -> Result<Entrant, String> {
+    match name.rsplit_once('@') {
+        Some((family, work)) => Ok(Entrant::Search(Settings {
+            family: family.parse()?,
+            work: parse_work(work).ok_or_else(|| format!("{name:?}: no budget {work:?}"))?,
+            threads: 1,
+        })),
+        None if beryl_search::agent(name).is_some() => Ok(Entrant::Fixed(name.to_owned())),
+        None => Err(format!(
+            "no agent {name:?}: a registered agent, a family or family@budget"
+        )),
+    }
+}
+
+/// Builds a seat's agent; a registered one searches on its own thread.
+fn build(
+    t: &GameTable,
+    e: &Entrant,
+    seed: u64,
+    from: AgentDecision,
+) -> Result<Box<dyn Agent>, String> {
+    match e {
+        Entrant::Search(settings) => Ok(Box::new(LongSearch::resumed(t, *settings, seed, from))),
+        Entrant::Fixed(name) => {
+            let info =
+                beryl_search::agent(name).ok_or_else(|| format!("no agent is named {name:?}"))?;
+            let budget = Budget {
+                parallel: false,
+                ..Budget::DEFAULT
+            };
+            Ok((info.new)(t, seed, budget))
+        }
+    }
+}
+
+/// Game `game` of a match: pair `game / 2`, the challenger in seat `game % 2`.
+fn key(game: u32) -> String {
+    format!("pair{:04}-seat{}", game / 2, game % 2)
+}
+
+/// What the workers share.
+struct Shared {
+    /// Each finished game's challenger half points, by game.
+    halves: BTreeMap<u32, u32>,
+    /// The pairs counted, in order, and the challenger's games.
+    pairs: Pairs,
+    counted: u32,
+    wins: u32,
+    losses: u32,
+    draws: u32,
+    verdict: Option<Verdict>,
+    games: Log,
+    decisions: Log,
+    failure: Option<String>,
+}
+
+/// Plays match `m`, calling `progress` with the pairs, the LLR and the bounds each time a
+/// pair is counted, and writes its games and `match.json` to `m.out`.
+pub fn run(
+    m: &Match,
+    mut progress: impl FnMut(Pairs, f64, [f64; 2]) + Send,
+) -> Result<Report, String> {
+    if m.out.join("games.jsonl").exists() {
+        return Err(format!(
+            "{} already holds a match: pass another --out",
+            m.out.display()
+        ));
+    }
+    for sub in ["logs", "transcripts"] {
+        fs::create_dir_all(m.out.join(sub)).map_err(|e| format!("{}: {e}", m.out.display()))?;
+    }
+    let entrants = [entrant(&m.challenger)?, entrant(&m.champion)?];
+    let sprt = m.bar.sprt();
+    let t = mirror();
+    let games = m.cap - m.cap % 2;
+    let next = AtomicU32::new(0);
+    let stop = AtomicBool::new(false);
+    let shared = Mutex::new(Shared {
+        halves: BTreeMap::new(),
+        pairs: Pairs::default(),
+        counted: 0,
+        wins: 0,
+        losses: 0,
+        draws: 0,
+        verdict: None,
+        games: Log::open(&m.out.join("games.jsonl"))?,
+        decisions: Log::open(&m.out.join("decisions.jsonl"))?,
+        failure: None,
+    });
+    let progress = Mutex::new(&mut progress);
+    let workers = GAMES_AT_ONCE.min(games as usize);
+    thread::scope(|scope| {
+        for _ in 0..workers {
+            scope.spawn(|| {
+                while !stop.load(Ordering::Relaxed) {
+                    let g = next.fetch_add(1, Ordering::Relaxed);
+                    if g >= games {
+                        break;
+                    }
+                    let played = play_one(&t, m, &entrants, g);
+                    let mut sh = shared.lock().unwrap();
+                    let counted = played.and_then(|(record, played)| {
+                        record_game(&mut sh, m, &record, &played)?;
+                        let halves = match record.outcome {
+                            GameVerdict::Win => 2,
+                            GameVerdict::Loss => 0,
+                            _ => 1,
+                        };
+                        sh.halves.insert(g, halves);
+                        Ok(count_pairs(&mut sh, sprt))
+                    });
+                    match counted {
+                        Ok(new) => {
+                            if new {
+                                let pairs = sh.pairs;
+                                (progress.lock().unwrap())(pairs, sprt.llr(pairs), sprt.bounds());
+                            }
+                            if sh.verdict.is_some() {
+                                stop.store(true, Ordering::Relaxed);
+                            }
+                        }
+                        Err(e) => {
+                            sh.failure.get_or_insert(e);
+                            stop.store(true, Ordering::Relaxed);
+                        }
+                    }
+                }
+            });
+        }
+    });
+    let sh = shared.into_inner().unwrap();
+    if let Some(e) = sh.failure {
+        return Err(e);
+    }
+    let mut report = Report {
+        date: beryl_session::corpus::today(),
+        challenger: m.challenger.clone(),
+        champion: m.champion.clone(),
+        budget: rung_name(m.work),
+        bar: m.bar.name(),
+        sprt,
+        seed: m.seed,
+        cap: m.cap,
+        games: sh.counted,
+        pairs: sh.pairs,
+        wins: sh.wins,
+        losses: sh.losses,
+        draws: sh.draws,
+        score: 0.0,
+        score_interval: [0.0, 1.0],
+        elo: 0.0,
+        elo_interval: [0.0, 0.0],
+        llr: 0.0,
+        bounds: sprt.bounds(),
+        verdict: sh.verdict.unwrap_or(Verdict::Undecided),
+        out: m.out.display().to_string(),
+    };
+    report.tally();
+    let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())? + "\n";
+    files::write_whole(&m.out.join("match.json"), json.as_bytes())?;
+    Ok(report)
+}
+
+/// Counts the pairs both of whose games are in, in order, until the test decides. Returns
+/// whether any was counted.
+fn count_pairs(sh: &mut Shared, sprt: Sprt) -> bool {
+    let mut any = false;
+    while sh.verdict.is_none() {
+        let first = sh.counted;
+        let (Some(&a), Some(&b)) = (sh.halves.get(&first), sh.halves.get(&(first + 1))) else {
+            break;
+        };
+        for h in [a, b] {
+            match h {
+                2 => sh.wins += 1,
+                0 => sh.losses += 1,
+                _ => sh.draws += 1,
+            }
+        }
+        sh.pairs.add(a + b);
+        sh.counted += 2;
+        sh.verdict = sprt.decide(sh.pairs);
+        any = true;
+    }
+    any
+}
+
+/// Plays game `g` of match `m` and writes its log and transcript.
+fn play_one(
+    t: &GameTable,
+    m: &Match,
+    entrants: &[Entrant; 2],
+    g: u32,
+) -> Result<(GameRecord, arena::Played), String> {
+    let seat = (g % 2) as usize;
+    let seated = if seat == 0 {
+        [&entrants[0], &entrants[1]]
+    } else {
+        [&entrants[1], &entrants[0]]
+    };
+    let seed = game_seed(m.seed, 0, g / 2);
+    let game = Game {
+        seed,
+        entrants: seated,
+        from: [Resume::At(AgentDecision(0)); 2],
+        until: None,
+    };
+    let key = key(g);
+    let played = arena::play(t, &game, &build, &[], |_, _, _| Ok(()), |_, _, _| Ok(()))
+        .map_err(|stop| format!("{key} (seed {seed}): {stop:?}"))?;
+    let mut log = String::new();
+    for line in &played.lines {
+        log += &serde_json::to_string(line).map_err(|e| e.to_string())?;
+        log.push('\n');
+    }
+    files::write_whole(
+        &m.out.join("logs").join(format!("{key}.jsonl")),
+        log.as_bytes(),
+    )?;
+    files::write_whole(
+        &m.out.join("transcripts").join(format!("{key}.txt")),
+        played.transcript.as_bytes(),
+    )?;
+    let (mut searched, mut iterations, mut work) = ([0; 2], [0; 2], [0; 2]);
+    for l in &played.lines {
+        // Sides are the challenger's then the champion's.
+        let side = usize::from(usize::from(l.seat) != seat);
+        if let Some(s) = &l.search {
+            searched[side] += 1;
+            iterations[side] += u64::from(s.rollouts);
+            work[side] += s.work;
+        }
+    }
+    let record = GameRecord {
+        game: key,
+        a: m.challenger.clone(),
+        b: m.champion.clone(),
+        pair: g / 2,
+        seed,
+        seat: seat as u8,
+        outcome: match played.outcome {
+            Outcome::Win(w) if w.index() == seat => GameVerdict::Win,
+            Outcome::Win(_) => GameVerdict::Loss,
+            Outcome::Draw => GameVerdict::Draw,
+            Outcome::Stalled(_) => GameVerdict::Stalled,
+        },
+        turns: played.turns,
+        decisions: played.lines.len() as u32,
+        searched,
+        iterations,
+        work,
+        crashed_at: None,
+    };
+    Ok((record, played))
+}
+
+/// Appends a finished game's searched decisions and its record.
+fn record_game(
+    sh: &mut Shared,
+    m: &Match,
+    record: &GameRecord,
+    played: &arena::Played,
+) -> Result<(), String> {
+    for (i, line) in played.lines.iter().enumerate() {
+        let Some(s) = &line.search else { continue };
+        sh.decisions
+            .write(&decision(m, record, i, line, s), false)?;
+    }
+    sh.decisions.sync()?;
+    sh.games.append(record)
+}
+
+/// The `decisions.jsonl` line of searched decision `i` of `record`'s game.
+fn decision(
+    m: &Match,
+    record: &GameRecord,
+    i: usize,
+    line: &Line,
+    s: &arena::Searched,
+) -> DecisionRecord {
+    let challenger = line.seat == record.seat;
+    let agent = if challenger {
+        &m.challenger
+    } else {
+        &m.champion
+    };
+    DecisionRecord {
+        game: record.game.clone(),
+        decision: GameDecision(i),
+        seat: line.seat,
+        agent: agent.clone(),
+        budget: entrant(agent).ok().and_then(|e| e.budget()).unwrap_or(0),
+        choice: line.choice,
+        agent_decision: s.decision,
+        chain: s.chain,
+        iterations: s.rollouts,
+        work: s.work,
+        inherited: s.inherited,
+        visits: s.visits.clone(),
+        mean: if s.means.len() == s.visits.len() {
+            s.means.clone()
+        } else {
+            s.visits
+                .iter()
+                .zip(&s.rewards)
+                .map(|(&v, &r)| (v > 0).then(|| r / f64::from(v)))
+                .collect()
+        },
+        anchor: s.anchor,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use beryl_engine::rng::SplitMix64;
+
+    use super::*;
+
+    fn pairs(swept: u32, split: u32, lost: u32) -> Pairs {
+        Pairs { swept, split, lost }
+    }
+
+    #[test]
+    fn the_bounds_match_alpha_and_beta() {
+        let [lo, hi] = Bar::Stronger.sprt().bounds();
+        assert!((lo - (0.001f64 / 0.999).ln()).abs() < 1e-12, "{lo}");
+        assert!((hi - (0.999f64 / 0.001).ln()).abs() < 1e-12, "{hi}");
+        assert!((hi - 6.906_755).abs() < 1e-6);
+        let [lo, hi] = Bar::Plausible.sprt().bounds();
+        assert!((lo + 2.944_439).abs() < 1e-6 && (hi - 2.944_439).abs() < 1e-6);
+    }
+
+    #[test]
+    fn the_swept_share_inverts() {
+        assert!((swept_share(0.0) - 0.5).abs() < 1e-12);
+        for elo in [-200.0, -25.0, 50.0, 400.0] {
+            assert!((elo_of_swept_share(swept_share(elo)) - elo).abs() < 1e-9);
+        }
+        // +50 Elo wins a game 57.1% of the time and sweeps 64.0% of its decided pairs.
+        let s: f64 = 1.0 / (1.0 + 10f64.powf(-50.0 / 400.0));
+        let q = s * s / (s * s + (1.0 - s) * (1.0 - s));
+        assert!((swept_share(50.0) - q).abs() < 1e-12);
+    }
+
+    /// Sweeps alone accept `elo1` at the first pair whose ratio crosses the bound, and losses
+    /// alone `elo0`.
+    #[test]
+    fn sweeps_accept_elo1_within_the_expected_pairs() {
+        for bar in [Bar::Stronger, Bar::Plausible] {
+            let sprt = bar.sprt();
+            let step = (swept_share(sprt.elo1) / swept_share(sprt.elo0)).ln();
+            let expected = (sprt.bounds()[1] / step).ceil() as u32;
+            for n in 0..expected {
+                assert_eq!(sprt.decide(pairs(n, 0, 0)), None, "{bar:?} after {n}");
+            }
+            assert_eq!(
+                sprt.decide(pairs(expected, 0, 0)),
+                Some(Verdict::Pass),
+                "{bar:?}"
+            );
+            let step = ((1.0 - swept_share(sprt.elo1)) / (1.0 - swept_share(sprt.elo0))).ln();
+            let expected = (sprt.bounds()[0] / step).ceil() as u32;
+            assert_eq!(sprt.decide(pairs(0, 0, expected - 1)), None, "{bar:?}");
+            assert_eq!(
+                sprt.decide(pairs(0, 0, expected)),
+                Some(Verdict::Fail),
+                "{bar:?}"
+            );
+        }
+        assert_eq!(
+            Bar::Stronger.sprt().decide(pairs(27, 0, 0)),
+            None,
+            "28 sweeps"
+        );
+        assert_eq!(
+            Bar::Stronger.sprt().decide(pairs(28, 0, 0)),
+            Some(Verdict::Pass)
+        );
+    }
+
+    #[test]
+    fn splits_never_decide() {
+        for bar in [Bar::Stronger, Bar::Plausible] {
+            let sprt = bar.sprt();
+            assert!(sprt.llr(pairs(0, 1_000_000, 0)).abs() < 1e-12);
+            assert_eq!(sprt.decide(pairs(0, 1_000_000, 0)), None);
+            // Nor do they move the test on the decided pairs.
+            assert!((sprt.llr(pairs(10, 500, 3)) - sprt.llr(pairs(10, 0, 3))).abs() < 1e-12);
+        }
+    }
+
+    /// Simulated matches at each hypothesis accept the other no more often than the bar's
+    /// error rate allows (Wald's bounds are conservative).
+    #[test]
+    fn simulated_errors_stay_within_alpha_and_beta() {
+        let sprt = Bar::Plausible.sprt();
+        let mut rng = SplitMix64::new(7);
+        let mut wrong = |elo: f64, wrong: Verdict| {
+            let q = swept_share(elo);
+            let mut errors = 0;
+            for _ in 0..2_000 {
+                let mut p = Pairs::default();
+                let verdict = loop {
+                    // Half the pairs split, which changes nothing.
+                    if rng.next_u64().is_multiple_of(2) {
+                        p.split += 1;
+                        continue;
+                    }
+                    let u = (rng.next_u64() >> 11) as f64 / (1u64 << 53) as f64;
+                    if u < q {
+                        p.swept += 1;
+                    } else {
+                        p.lost += 1;
+                    }
+                    if let Some(v) = sprt.decide(p) {
+                        break v;
+                    }
+                };
+                errors += u32::from(verdict == wrong);
+            }
+            f64::from(errors) / 2_000.0
+        };
+        let alpha = wrong(sprt.elo0, Verdict::Pass);
+        let beta = wrong(sprt.elo1, Verdict::Fail);
+        assert!(alpha <= 0.06, "alpha {alpha}");
+        assert!(beta <= 0.06, "beta {beta}");
+    }
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("beryl-ladder-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        dir
+    }
+
+    /// A pair's two games share their seed and swap the seats; every game leaves its log and
+    /// transcript, and `match.json` the result.
+    #[test]
+    fn a_pair_shares_its_seed_and_swaps_seats() {
+        let out = scratch("pairs");
+        let m = Match {
+            challenger: "greedy".to_owned(),
+            champion: "random".to_owned(),
+            work: PROXY,
+            bar: Bar::Stronger,
+            cap: 6,
+            seed: 11,
+            out: out.clone(),
+        };
+        let r = run(&m, |_, _, _| {}).unwrap();
+        assert_eq!(
+            (r.games, r.pairs.total(), r.verdict),
+            (6, 3, Verdict::Undecided)
+        );
+        assert!(r.wins >= 4, "{r:?}");
+        let games: Vec<GameRecord> = files::read(&out.join("games.jsonl")).unwrap();
+        assert_eq!(games.len(), 6);
+        for pair in 0..3 {
+            let mut both: Vec<&GameRecord> = games.iter().filter(|g| g.pair == pair).collect();
+            both.sort_by_key(|g| g.seat);
+            assert_eq!(both.len(), 2);
+            assert_eq!(both[0].seed, both[1].seed);
+            assert_eq!(both[0].seed, game_seed(11, 0, pair));
+            assert_eq!((both[0].seat, both[1].seat), (0, 1));
+            for g in both {
+                assert!(out.join("logs").join(format!("{}.jsonl", g.game)).exists());
+                assert!(
+                    out.join("transcripts")
+                        .join(format!("{}.txt", g.game))
+                        .exists()
+                );
+            }
+        }
+        assert!(out.join("match.json").exists());
+        // The same seed plays the same games.
+        let again = run(
+            &Match {
+                out: scratch("again"),
+                ..m.clone()
+            },
+            |_, _, _| {},
+        )
+        .unwrap();
+        assert_eq!(
+            (again.wins, again.losses, again.pairs),
+            (r.wins, r.losses, r.pairs)
+        );
+        assert!(
+            run(&m, |_, _, _| {}).is_err(),
+            "a second match in one directory"
+        );
+        let _ = fs::remove_dir_all(&out);
+        let _ = fs::remove_dir_all(&again.out);
+    }
+
+    #[test]
+    fn names_resolve_at_the_budget() {
+        assert_eq!(
+            resolve("pimc72/hidden/rollout/tuned/anchor", 3_000_000).unwrap(),
+            "pimc72/hidden/rollout/tuned/anchor@3M"
+        );
+        assert_eq!(
+            resolve(&DEEP_SEARCHER.to_string(), 3_000_000).unwrap(),
+            "pimc72/hidden/rollout/tuned/anchor@3M"
+        );
+        assert_eq!(
+            resolve("pimc18/hidden/rollout/tuned@10M", 3_000_000).unwrap(),
+            "pimc18/hidden/rollout/tuned@10M"
+        );
+        assert_eq!(resolve("greedy", 3_000_000).unwrap(), "greedy");
+        assert!(resolve("nonsense", 3_000_000).is_err());
+    }
+
+    #[test]
+    fn the_row_renders() {
+        let mut r = Report {
+            date: "2026-11-08".to_owned(),
+            challenger: "pimc72/hidden/rollout/tuned/anchor+mid@3M".to_owned(),
+            champion: "pimc72/hidden/rollout/tuned/anchor@3M".to_owned(),
+            budget: "3M".to_owned(),
+            bar: "stronger",
+            sprt: Bar::Stronger.sprt(),
+            seed: 1,
+            cap: 2_000,
+            games: 700,
+            pairs: pairs(120, 162, 68),
+            wins: 400,
+            losses: 290,
+            draws: 10,
+            score: 0.0,
+            score_interval: [0.0, 1.0],
+            elo: 0.0,
+            elo_interval: [0.0, 0.0],
+            llr: 0.0,
+            bounds: Bar::Stronger.sprt().bounds(),
+            verdict: Verdict::Pass,
+            out: "/tmp/x".to_owned(),
+        };
+        r.tally();
+        assert_eq!(
+            r.row(),
+            "| 2026-11-08 | pimc72/hidden/rollout/tuned/anchor+mid@3M | \
+             pimc72/hidden/rollout/tuned/anchor@3M | 3M | 700 | 57.9% | +49 [+24, +75] | pass | \
+             ? / ? | ? |"
+        );
+        let columns = |s: &str| s.matches('|').count();
+        assert_eq!(
+            columns(&r.row()),
+            columns(ROW_HEADER.lines().next().unwrap())
+        );
+        assert!(r.text().ends_with(&format!("{}\n", r.row())));
+    }
+}

@@ -358,16 +358,20 @@ fn deep_seer(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + S
 /// as Deep Seer is. 30M engine steps a decision whatever `budget` says, on every core.
 ///
 /// The ladder's champion (docs/ai-strategy.md §3): always the current best fair agent, so a
-/// promotion changes this function, and its comment names the match that made it.
+/// promotion changes [`DEEP_SEARCHER`], and its comment names the match that made it.
 fn deep_searcher(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
-    deep(
-        t,
-        seed,
-        Method::Pimc { worlds: 72 },
-        Sight::Hidden,
-        ANCHORED,
-    )
+    deep_family(t, seed, DEEP_SEARCHER)
 }
+
+/// The Deep Searcher's family, the ladder's champion, which `beryl_cli ladder` plays at the
+/// proxy budget unless told otherwise (docs/ai-strategy.md §4).
+pub const DEEP_SEARCHER: Family = Family {
+    method: Method::Pimc { worlds: 72 },
+    sight: Sight::Hidden,
+    leaf: Leaf::Rollout,
+    knowledge: Knowledge::Tuned,
+    options: ANCHORED,
+};
 
 /// The options of the deep searches offered: the anchor alone.
 const ANCHORED: Options = Options {
@@ -396,14 +400,20 @@ fn deep(
     sight: Sight,
     options: Options,
 ) -> Box<dyn GameAgent + Send> {
+    let family = Family {
+        method,
+        sight,
+        leaf: Leaf::Rollout,
+        knowledge: Knowledge::Tuned,
+        options,
+    };
+    deep_family(t, seed, family)
+}
+
+/// A long-think search of `family` at 30M engine steps a decision, on every core.
+fn deep_family(t: &GameTable, seed: u64, family: Family) -> Box<dyn GameAgent + Send> {
     let settings = Settings {
-        family: Family {
-            method,
-            sight,
-            leaf: Leaf::Rollout,
-            knowledge: Knowledge::Tuned,
-            options,
-        },
+        family,
         work: 30_000_000,
         threads: std::thread::available_parallelism()
             .map_or(1, |n| u32::try_from(n.get()).unwrap_or(u32::MAX)),

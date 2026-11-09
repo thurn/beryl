@@ -31,8 +31,8 @@
 //!
 //! The runner shows the run on a live panel ([`term`]), which `--status` prints once.
 
-mod files;
-mod game;
+pub mod files;
+pub mod game;
 mod panel;
 mod ratings;
 mod run;
@@ -515,7 +515,7 @@ fn follows(lock: &str) -> bool {
 
 /// The per-machine cache: `$BERYL_CACHE`, else `~/Library/Caches/beryl`, or on Windows
 /// `%LOCALAPPDATA%\beryl`.
-fn cache() -> PathBuf {
+pub fn cache() -> PathBuf {
     match std::env::var_os("BERYL_CACHE") {
         Some(dir) if !dir.is_empty() => PathBuf::from(dir),
         _ if cfg!(windows) => {
