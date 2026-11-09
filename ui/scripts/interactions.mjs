@@ -137,6 +137,7 @@ async function check(
         reducedMotion = "no-preference",
         hash = "#/game",
         init,
+        clock = true,
     } = {},
 ) {
     if (!wanted(title)) return;
@@ -164,7 +165,7 @@ async function check(
             (m) => m.type() === "error" && errors.push(`${title}: ${m.text()}`),
         );
         try {
-            await page.clock.install();
+            if (clock) await page.clock.install();
             if (init) await page.addInitScript(init);
             const route = `/?fixture=${fixture}&at=${at}${hash}`;
             await page.goto(new URL(route, base).href, { waitUntil: "load" });
@@ -3976,7 +3977,9 @@ for (const fixture of [
         await check(
             "target arrows disappear while a card moves",
             async (page) => {
-                const arrow = page.locator(".board-arrows .arrow-cyan");
+                const arrow = page.locator(
+                    ".board-arrows .arrow:is(.arrow-red, .arrow-green)",
+                );
                 const target = await arrow.getAttribute("data-to");
                 const card = page.locator(`#${target}`);
                 // Even movement below a pixel breaks the arrow's rest period.
@@ -3987,7 +3990,10 @@ for (const fixture of [
                     await page.clock.runFor(50);
                     assert.equal(await arrow.count(), 0);
                 }
-                await until(page, ".board-arrows .arrow-cyan");
+                await until(
+                    page,
+                    ".board-arrows .arrow:is(.arrow-red, .arrow-green)",
+                );
             },
             { fixture, at: views.length, ready: ".arrow" },
         );
@@ -4143,7 +4149,7 @@ if (wanted("a live card target gets one brief arrow")) {
     await check(
         "a live card target gets one brief arrow",
         async (page) => {
-            const arrow = ".board-arrows .arrow-cyan";
+            const arrow = ".board-arrows .arrow:is(.arrow-red, .arrow-green)";
             assert.equal(await page.locator(arrow).count(), 0);
             await page
                 .getByRole("button", { name: "Resolve", exact: true })
@@ -4157,6 +4163,302 @@ if (wanted("a live card target gets one brief arrow")) {
             assert.equal(await page.locator(arrow).count(), 0);
         },
         { fixture, at: 1, ready: "#stack-0" },
+    );
+}
+
+/** A cut from a fixture, played from its first view into the rest on the next answer. */
+async function motionFixture(name, views) {
+    await writeFile(
+        join(fixtures, `${name}.json`),
+        JSON.stringify({
+            messages: [
+                { kind: "response", command: "choose", value: null },
+                ...views.map((view) => ({
+                    kind: "event",
+                    event: "game-update",
+                    payload: { session: 1, view },
+                })),
+            ],
+        }),
+    );
+    return { fixture: name, at: 1 };
+}
+
+const targetDeparture =
+    "a resolving spell's arrow stays until its target leaves";
+if (wanted(targetDeparture)) {
+    const view = (await load("arrow-stacked")).at(-1);
+    const item = view.stack[0];
+    const target = item.targets[0].slot;
+    for (const to of ["graveyard", "exile"]) {
+        const before = {
+            ...view,
+            events: [],
+            stack: [{ ...item, targets: [] }],
+        };
+        const object = view.objects.find((o) => o.slot === target);
+        const departure = {
+            ...view,
+            stack: [item],
+            status: { kind: "playing" },
+            battlefield: view.battlefield.filter((slot) => slot !== target),
+            objects: view.objects.map((o) =>
+                o.slot === target ? { ...o, zone: to } : o,
+            ),
+            players: {
+                ...view.players,
+                [object.owner]: {
+                    ...view.players[object.owner],
+                    graveyard:
+                        to === "graveyard"
+                            ? [...view.players[object.owner].graveyard, target]
+                            : view.players[object.owner].graveyard,
+                },
+            },
+            events: [
+                { kind: "cast", slot: item.slot, controller: "opponent", item },
+                {
+                    kind: "zoneChange",
+                    slot: target,
+                    from: "battlefield",
+                    to,
+                    reason: "effect",
+                },
+            ],
+        };
+        const run = await motionFixture(`arrow-leaves-${to}`, [
+            before,
+            departure,
+            { ...departure, status: view.status, events: [] },
+        ]);
+        await check(
+            `${targetDeparture} for ${to}`,
+            async (page) => {
+                const color = object.controller === "you" ? "green" : "red";
+                const arrow = `.board-arrows .arrow-${color}[data-to="card-${target}"]`;
+                const targetCard = page.locator(slotOf(target));
+                await page.clock.runFor(1000);
+                await page
+                    .getByRole("button", { name: "Resolve", exact: true })
+                    .click();
+                await until(page, arrow, 25);
+                assert.equal(
+                    await targetCard.getAttribute("data-zone"),
+                    "battlefield",
+                );
+                await page.clock.runFor(800);
+                assert.equal(
+                    await page.locator(arrow).count(),
+                    1,
+                    "the target cue fills the pause",
+                );
+                await until(page, `${slotOf(target)}[data-zone="${to}"]`, 25);
+                assert.equal(
+                    await page.locator(arrow).count(),
+                    0,
+                    "the arrow is gone when the move begins",
+                );
+                await page.clock.runFor(1500);
+                assert.equal(
+                    await page.locator(arrow).count(),
+                    0,
+                    "no arrow reappears on the pile",
+                );
+                assert.equal(
+                    await page
+                        .locator(slotOf(item.slot))
+                        .getAttribute("data-zone"),
+                    "stack",
+                );
+            },
+            { ...run, ready: slotOf(target) },
+        );
+    }
+}
+
+const tokenFlight =
+    "a spell's token starts over the spell and flies to the battlefield";
+if (wanted(tokenFlight)) {
+    const view = (await load("arrow-spell")).at(-1);
+    const item = view.stack.at(-1);
+    const token = (await load("tokens"))
+        .at(-1)
+        .objects.find((o) => o.name === "Map Token");
+    const before = { ...view, events: [], stack: [{ ...item, targets: [] }] };
+    const after = {
+        ...view,
+        stack: [],
+        battlefield: [...view.battlefield, token.slot],
+        objects: [
+            ...view.objects.map((o) =>
+                o.slot === item.slot ? { ...o, zone: "graveyard" } : o,
+            ),
+            token,
+        ],
+        events: [
+            {
+                kind: "zoneChange",
+                slot: token.slot,
+                from: "nowhere",
+                to: "battlefield",
+                reason: "created",
+            },
+            {
+                kind: "tokensCreated",
+                tokens: [token.slot],
+                controller: token.controller,
+            },
+            {
+                kind: "zoneChange",
+                slot: item.slot,
+                from: "stack",
+                to: "graveyard",
+                reason: "resolve",
+            },
+        ],
+    };
+    const run = await motionFixture("token-flies-from-spell", [before, after]);
+    await check(
+        tokenFlight,
+        async (page) => {
+            await page.clock.runFor(1000);
+            const source = await page.locator(slotOf(item.slot)).boundingBox();
+            await page
+                .getByRole("button", { name: "Resolve", exact: true })
+                .click();
+            await until(page, slotOf(token.slot), 20);
+            const tokenCard = page.locator(slotOf(token.slot));
+            const start = center(await tokenCard.boundingBox());
+            assert.ok(
+                start.x >= source.x && start.x <= source.x + source.width,
+                "token starts inside the spell",
+            );
+            assert.ok(
+                start.y >= source.y && start.y <= source.y + source.height,
+                "token starts inside the spell",
+            );
+            assert.equal(
+                await tokenCard.evaluate((el) =>
+                    Number(getComputedStyle(el).opacity),
+                ),
+                1,
+            );
+            await page.clock.runFor(650);
+            const end = center(await tokenCard.boundingBox());
+            assert.ok(
+                Math.hypot(end.x - start.x, end.y - start.y) > 80,
+                "token reaches its own slot",
+            );
+            assert.equal(
+                await tokenCard.getAttribute("data-zone"),
+                "battlefield",
+            );
+        },
+        { ...run, ready: slotOf(item.slot) },
+    );
+}
+
+const triggerLift =
+    "an ETB trigger visibly lifts away from the permanent before crossing";
+if (wanted(triggerLift)) {
+    const view = (await load("arrow-stacked")).at(-1);
+    const slot = view.stack[0].targets[0].slot;
+    const source = view.objects.find((o) => o.slot === slot);
+    const item = {
+        kind: "ability",
+        source: slot,
+        name: source.name,
+        controller: source.controller,
+        triggered: true,
+        ability: 0,
+        nth: 0,
+        granted: false,
+        targets: [],
+        x: 0,
+    };
+    const before = {
+        ...view,
+        stack: [
+            { kind: "spell", slot: source.slot, x: 0, paid: [], targets: [] },
+        ],
+        battlefield: view.battlefield.filter((slot) => slot !== source.slot),
+        objects: view.objects.map((o) =>
+            o.slot === source.slot ? { ...o, zone: "stack" } : o,
+        ),
+        events: [],
+    };
+    const after = {
+        ...view,
+        stack: [item],
+        events: [
+            {
+                kind: "zoneChange",
+                slot: source.slot,
+                from: "stack",
+                to: "battlefield",
+                reason: "resolve",
+            },
+            { kind: "ability", item, loyalty: null },
+        ],
+    };
+    const run = await motionFixture("trigger-lifts-from-permanent", [
+        before,
+        after,
+    ]);
+    await check(
+        triggerLift,
+        async (page) => {
+            // Motion plays the stack card on the browser's compositor clock.
+            await page.evaluate((source) => {
+                window.triggerFrames = [];
+                const end = performance.now() + 4500;
+                const sample = () => {
+                    const permanent = document.querySelector(source);
+                    const trigger = document.querySelector(".stack-ability");
+                    if (permanent && trigger) {
+                        const bounds = (el) =>
+                            el.getBoundingClientRect().toJSON();
+                        window.triggerFrames.push([
+                            bounds(permanent),
+                            bounds(trigger),
+                        ]);
+                    }
+                    if (performance.now() < end) requestAnimationFrame(sample);
+                };
+                requestAnimationFrame(sample);
+            }, slotOf(source.slot));
+            await page
+                .getByRole("button", { name: "Resolve", exact: true })
+                .click();
+            await page.waitForFunction(() => window.triggerFrames.length > 35);
+            const frames = await page.evaluate(() => window.triggerFrames);
+            const [from, start] = frames[0];
+            assert.ok(
+                Math.abs(from.x - start.x) < 20 &&
+                    Math.abs(from.y - start.y) < 20,
+                "trigger starts over its permanent",
+            );
+            assert.ok(
+                frames.some(
+                    ([permanent, trigger]) =>
+                        trigger.y < permanent.y - 12 &&
+                        Math.abs(trigger.x - permanent.x) < 20,
+                ),
+                "the lift reads before the cross-table movement",
+            );
+            assert.ok(
+                frames.some(
+                    ([permanent, trigger]) =>
+                        trigger.width > permanent.width * 1.5,
+                ),
+                "trigger grows into the large stack item",
+            );
+            assert.equal(
+                await page.locator(".board-arrows .arrow-gold").count(),
+                0,
+            );
+        },
+        { ...run, clock: false, ready: slotOf(source.slot) },
     );
 }
 

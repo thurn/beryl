@@ -967,6 +967,11 @@
   --tone-soft: rgb(2 225 254 / 90%);
   --tone-core: #0fc4f2;
 }
+.arrow-green {
+  --tone: #d2ffd4;
+  --tone-soft: rgb(50 230 90 / 90%);
+  --tone-core: #38da62;
+}
 .arrow-red {
   --tone: #ffc9bd;
   --tone-soft: rgb(255 50 30 / 90%);

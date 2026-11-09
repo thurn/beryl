@@ -37,7 +37,13 @@ import type {
 } from "../generated/protocol";
 import { StageScale } from "./Stage";
 import { faceDownFace, marksOf, useFace } from "./faces";
-import { RAISE, type Layout, type Look, type Placement } from "./layout";
+import {
+  RAISE,
+  type Box,
+  type Layout,
+  type Look,
+  type Placement,
+} from "./layout";
 import { useCardPhysics } from "./physics";
 
 /** Where on the stage a pointer is, in stage pixels. */
@@ -86,9 +92,9 @@ export interface CardLayerProps {
   events?: GameEvent[];
   objects: ObjectView[];
   placements: Layout;
-  /** Where a card new to the table starts: a token flies out of the permanent that made it,
+  /** Where a card new to the table starts: a token flies out of the spell or permanent that made it,
    * rather than only fading in where it lands. */
-  origins?: Map<number, Placement>;
+  origins?: Map<number, Box>;
   /** The card the pointer is over: a hand card rises out of the fan (RAISE), drawn over the
    * rest of the hand while its element keeps its place in the fan, so that nothing else moves
    * and the pointer keeps the card. */
@@ -121,7 +127,7 @@ const CARRIED: Transition = {
   ease: [0.4, 0, 0.2, 1],
   delay: STRUCK_FOR,
 };
-/** A token flies out of the permanent that made it at a pace the eye follows, over the table. */
+/** A token flies out of what made it at a pace the eye follows, over the table. */
 const EMERGING: Transition = {
   type: "tween",
   duration: 0.6,
@@ -292,17 +298,23 @@ const CardElement = memo(function CardElement({
   epoch: unknown;
   callbacks: Callbacks;
   appearing: boolean;
-  origin?: Placement;
+  origin?: Box;
 }) {
   const reduce = useReducedMotion() ?? false;
   const stageScale = useContext(StageScale);
   const grow = appearing && !reduce;
   // A card new to the table grows in where it lands, or flies there from where it came from.
   const [emerging, setEmerging] = useState(() => grow && origin !== undefined);
-  const from = (emerging && origin) || place;
-  const x = useMotionValue(from.x);
-  const y = useMotionValue(from.y);
-  const scale = useMotionValue(from.scale * (grow ? 0.6 : 1));
+  // Start the token small and centered over the spell or permanent that made it.
+  const from = emerging ? origin : undefined;
+  const sizeAtStart = place.width * place.scale * 0.6;
+  const x = useMotionValue(
+    from ? (from.left + from.right - sizeAtStart) / 2 : place.x,
+  );
+  const y = useMotionValue(
+    from ? (from.top + from.bottom - sizeAtStart / CARD_ASPECT) / 2 : place.y,
+  );
+  const scale = useMotionValue(grow ? sizeAtStart / place.width : place.scale);
   const rotate = useMotionValue(place.rotate);
   const skewX = useMotionValue(place.skew);
   const opacity = useMotionValue(grow && !emerging ? 0 : place.opacity);

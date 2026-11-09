@@ -3,7 +3,7 @@
 // land piles, permanents, libraries and graveyards, player badges, the phase tracker and the
 // turn button, with the hand fanned at the near edge (decisions D10 to D13). Combat and the
 // stack follow combat.png and trigger_on_stack_with_target.png: attack and block lines and the
-// step banner; spells and abilities large at the right, cyan lines to targets and, while one is
+// step banner; spells and abilities large at the right, red or green lines to targets and, while one is
 // pointed at, a gold line from an ability's source.
 import {
   useCallback,
@@ -68,6 +68,7 @@ import type {
   StackItem as StackItemView,
   StopsSetting,
 } from "../generated/protocol";
+import { announcedItem, HOLD, sameItem } from "./beats";
 import {
   CardLayer,
   cardId,
@@ -1293,7 +1294,12 @@ export function Board({
           objects={drawn}
           keys={standIns.keys}
           placements={placements}
-          origins={tokenOrigins(views.current.before, view, placements)}
+          origins={tokenOrigins(
+            views.current.before,
+            view,
+            placements,
+            previousTable,
+          )}
           hovered={hovered}
           states={states}
           onClick={onClick}
@@ -1902,6 +1908,10 @@ function AbilityOnStack({
   const face = useAbilityFace(item.name, source, BLANK);
   const present = useIsPresent();
   const place = stackPlace(index, count);
+  const reduce = useReducedMotion() ?? false;
+  const [lifting, setLifting] = useState(
+    () => from !== undefined && item.triggered && !reduce,
+  );
   // Out of its source it comes whole, the size of the card it lifts off, so that the eye
   // follows it from there; with no source drawn, it fades in where it stays.
   const start = from
@@ -1926,8 +1936,15 @@ function AbilityOnStack({
         pointerEvents: present ? undefined : "none",
       }}
       initial={start}
-      animate={{ opacity: 1, scale: 1, x: place.x, y: place.y, rotate: 0 }}
-      transition={ABILITY_FLIGHT}
+      animate={{
+        opacity: 1,
+        scale: lifting && from ? [null, Math.min(1, start.scale * 1.12), 1] : 1,
+        x: lifting && from ? [null, from.x, place.x] : place.x,
+        y: lifting && from ? [null, from.y - 32, place.y] : place.y,
+        rotate: 0,
+      }}
+      transition={lifting ? TRIGGER_FLIGHT : ABILITY_FLIGHT}
+      onAnimationComplete={() => setLifting(false)}
       onPointerEnter={() => onPoint(true)}
       onPointerLeave={() => onPoint(false)}
       // Leaving, it drops beneath whatever takes its place on the stack, which would
@@ -1955,6 +1972,23 @@ function AbilityOnStack({
 /** An ability's flight from its source onto the stack: long enough for the eye to follow it
  * across the table, easing into its place. */
 const ABILITY_FLIGHT = { duration: 0.5, ease: [0.2, 0.7, 0.3, 1] } as const;
+
+/** The first part of the trigger's flight lifts away from the source in place, so the
+ * viewer sees the connection before the card crosses to the stack. */
+const TRIGGER_LEG = {
+  duration: 0.64,
+  times: [0, 0.27, 1],
+  ease: [
+    [0.25, 0.1, 0.3, 1],
+    [0.3, 0, 0.25, 1],
+  ],
+} as const;
+const TRIGGER_FLIGHT = {
+  ...ABILITY_FLIGHT,
+  x: TRIGGER_LEG,
+  y: TRIGGER_LEG,
+  scale: TRIGGER_LEG,
+};
 
 /** A stack item's identity during its flight and exit. Targets can change while it is there. */
 const stackKey = (index: number, item: StackItemView) =>
@@ -2041,14 +2075,13 @@ const AVOID = ".card-el .card-slot, .stack-item, .life-orb, .game-log";
 const lifeId = (side: Side) => `${side}-life-orb`;
 
 /** Where each token `view`'s events made, and each emblem new since `before`, comes from: the
- * permanent whose ability made it, resolving at the top of the stack `before`, so that either
- * player sees which permanent made it, as Arena shows. One whose maker is gone, or no
- * ability's, just appears. */
+ * spell or permanent whose ability made it, resolving at the top of the stack `before`. */
 function tokenOrigins(
   before: PlayerView | undefined,
   view: PlayerView,
-  placements: Map<number, Placement>,
-): Map<number, Placement> | undefined {
+  placements: Layout,
+  previous?: Layout,
+): Map<number, Box> | undefined {
   if (!before) return undefined;
   // The tokens made, and the emblems: those past the ones each player had.
   const made = [
@@ -2063,17 +2096,31 @@ function tokenOrigins(
   ];
   if (made.length === 0) return undefined;
   const top = before.stack.at(-1);
+  if (!top) return undefined;
   const from =
-    top?.kind === "ability" && top.source !== null
-      ? placements.get(top.source)
-      : undefined;
-  if (!from) return undefined;
-  return new Map(made.map((slot) => [slot, from]));
+    top.kind === "spell"
+      ? previous?.get(top.slot)
+      : abilityPlacement(before, top, placements, previous);
+  if (from?.opacity)
+    return new Map(made.map((slot) => [slot, footprint(from)]));
+  if (top.kind === "spell") return undefined;
+  // An ability whose source is gone can still make a token from its card on the stack.
+  const { x, y, width } = stackPlace(
+    before.stack.length - 1,
+    before.stack.length,
+  );
+  const box = {
+    left: x,
+    top: y,
+    right: x + width,
+    bottom: y + width / CARD_ASPECT,
+  };
+  return new Map(made.map((slot) => [slot, box]));
 }
 
 /** Combat links and stack arrows. A straight line joins a blocker to its attacker. An attack
- * on a planeswalker draws a red arrow. Stack items draw cyan arrows to their targets, and
- * abilities at the places `sourced` names draw a gold arrow from their source. */
+ * on a planeswalker draws a red arrow. Stack targets are red for opposing cards and green
+ * for yours. Abilities at the places `sourced` names draw a gold arrow from their source. */
 function boardArrows(
   view: PlayerView,
   sourced: Set<number>,
@@ -2121,35 +2168,59 @@ function boardArrows(
   for (let i = top; i >= 0; i--) {
     const item = view.stack[i]!;
     const from = i === top ? itemId(item, i) : peekId(i);
+    if (item.kind === "spell" && objects.get(item.slot)?.zone !== "stack") {
+      continue;
+    }
+    const announced = view.events.findIndex((e) => {
+      const other = announcedItem(e);
+      return other !== undefined && sameItem(item, other);
+    });
+    const preview = announced >= 0 && view.status.kind === "playing";
     if (item.kind === "ability" && item.source !== null && sourced.has(i)) {
       out.push({ from: cardId(item.source), to: from, tone: "gold" });
     }
     for (const target of item.targets) {
-      let to: string;
       if (target.kind === "player") {
-        to = lifeId(target.player);
-      } else {
-        const index = spells.get(target.slot);
-        // Two stacked items already show which spell is being answered. A spell that
-        // returned to hand is no longer a target even though it still has the same slot.
-        if (index !== undefined && top === 1) continue;
-        if (objects.get(target.slot)?.zone === "hand") continue;
-        to =
-          index !== undefined && index < top
-            ? peekId(index)
-            : cardId(target.slot);
+        out.push({
+          from,
+          to: lifeId(target.player),
+          tone: target.player === "you" ? "green" : "red",
+        });
+        continue;
       }
+      const object = objects.get(target.slot);
+      const index = spells.get(target.slot);
+      // Two stacked items already show which spell is being answered.
+      if (index !== undefined && top === 1) continue;
+      // A skipped beat can contain both an announcement and its target leaving. The slot
+      // is the same, but what the stack item was aimed at has left.
+      const departed =
+        !object ||
+        object.zone === "hand" ||
+        object.zone === "library" ||
+        view.events.some(
+          (e, at) =>
+            at > announced &&
+            e.kind === "zoneChange" &&
+            e.slot === target.slot &&
+            e.from !== e.to,
+        );
+      if (departed && !live) continue;
       out.push({
         from,
-        to,
-        tone: "cyan",
-        pulse:
-          live && target.kind === "object"
-            ? {
-                key: `${stackKey(i, item)}:${target.slot}`,
-                zone: objects.get(target.slot)?.zone,
-              }
-            : undefined,
+        to:
+          index !== undefined && index < top
+            ? peekId(index)
+            : cardId(target.slot),
+        tone: object?.controller === "you" ? "green" : "red",
+        pulse: live
+          ? {
+              key: `${stackKey(i, item)}:${target.slot}`,
+              zone: object?.zone,
+              departed,
+              duration: preview ? HOLD.stack : undefined,
+            }
+          : undefined,
       });
     }
   }

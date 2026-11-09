@@ -1,5 +1,5 @@
 // The stack-item frame (a spell or ability on the stack) and the arrows that tie it to its source
-// (gold) and targets (cyan).
+// (gold) and targets (red or green).
 import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import {
   AbilityPlate,
@@ -136,15 +136,20 @@ export function StackMarks({
  * `data-oval` is met round its inscribed ellipse. One marked `data-within` with another's id
  * is a part of that one (the strip of a stack item that peeks out from under the next): the
  * arrow keeps off neither. Every arrow looks alike; only `tone` tells
- * a kind apart: gold for a source, cyan for a target, red for an attack. */
+ * a kind apart: gold for a source, red for an attack, red or green for a target. */
 export interface ArrowSpec {
   from: string;
   to: string;
-  tone: "gold" | "cyan" | "red";
+  tone: "gold" | "cyan" | "red" | "green";
   /** A direct line between the facing edges of a blocker and its attacker. */
   block?: boolean;
   /** A target link shown once after both ends settle, and invalidated by a zone change. */
-  pulse?: { key: string; zone: string | undefined };
+  pulse?: {
+    key: string;
+    zone: string | undefined;
+    departed: boolean;
+    duration?: number;
+  };
 }
 
 type Drawn = {
@@ -229,7 +234,8 @@ export function Arrows({
           (pulses.current.get(a.pulse.key) ?? { zone: a.pulse.zone });
         if (a.pulse && pulse) {
           pulsing.set(a.pulse.key, pulse);
-          if (pulse.zone !== a.pulse.zone) return [];
+          if (a.pulse.departed || pulse.zone !== a.pulse.zone)
+            pulse.until = now;
           if (pulse.until !== undefined && pulse.until <= now) return [];
         }
         const from = document.getElementById(a.from);
@@ -263,7 +269,9 @@ export function Arrows({
             if (pulse?.until !== undefined) pulse.until = now;
             return [];
           }
-          if (pulse && pulse.until === undefined) pulse.until = now + PULSE_MS;
+          if (pulse && pulse.until === undefined) {
+            pulse.until = now + (a.pulse?.duration ?? PULSE_MS);
+          }
         }
         return [{ a, from, to, source, target }];
       });
@@ -271,7 +279,7 @@ export function Arrows({
       pulses.current = pulsing;
       const where = JSON.stringify([
         size,
-        ends.map((e) => keyOf(e.a)),
+        ends.map((e) => [keyOf(e.a), e.a.tone]),
         ...[
           ...ends.flatMap((e) => [e.source, e.target]),
           ...obstacles.map((o) => o.box),
@@ -350,7 +358,12 @@ export function Arrows({
       // Unchanged, it keeps the drawn arrows.
       setDrawn((last) =>
         last.length === next.length &&
-        last.every((l, i) => l.key === next[i]!.key && l.d === next[i]!.d)
+        last.every(
+          (l, i) =>
+            l.key === next[i]!.key &&
+            l.d === next[i]!.d &&
+            l.tone === next[i]!.tone,
+        )
           ? last
           : next,
       );

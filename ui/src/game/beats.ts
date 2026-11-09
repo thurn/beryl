@@ -88,6 +88,15 @@ function castItem(e: Extract<GameEvent, { kind: "cast" }>): StackItem {
   return e.item ?? { kind: "spell", slot: e.slot, targets: [], x: 0, paid: [] };
 }
 
+/** A spell or ability whose announcement the viewer sees in this event. */
+export function announcedItem(e: GameEvent): StackItem | undefined {
+  return e.kind === "cast"
+    ? castItem(e)
+    : e.kind === "ability"
+      ? e.item
+      : undefined;
+}
+
 /** Zones whose cards the viewer may not see: a library, and the opponent's hand. */
 function hiddenTo(zone: ZoneName, owner: Side): boolean {
   return zone === "library" || (zone === "hand" && owner === "opponent");
@@ -156,6 +165,19 @@ class Walk {
             turn: { ...this.view.turn, active: e.active, step: e.step },
           };
         }
+      }
+      if (
+        e.kind === "zoneChange" &&
+        e.from !== e.to &&
+        this.pending.some((pending) =>
+          announcedItem(pending)?.targets.some(
+            (target) => target.kind === "object" && target.slot === e.slot,
+          ),
+        )
+      ) {
+        // The spell may still be resolving at the view's end (a search after an exile).
+        // Show the announcement before its target moves, even while the spell stays.
+        this.cut();
       }
       if (e.kind === "zoneChange" && this.showcased(e)) {
         // Every card of the move at once: the events of one effect come together.
@@ -245,8 +267,7 @@ class Walk {
         if (drawn.size > 0) this.cut(HOLD.draw, { drawn });
         continue;
       }
-      const item =
-        e.kind === "cast" ? castItem(e) : e.kind === "ability" ? e.item : null;
+      const item = announcedItem(e);
       if (item && !onStack(this.view.stack, item)) {
         // Gone by the view's end: shown on the stack before it resolves.
         this.cut(stackHold(item));
