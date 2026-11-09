@@ -90,6 +90,14 @@ reproduces it.
    `just bugs done <bead> --commit <sha>`, which marks the report done and moves
    it to `done/`, then `enact sync`.
 
-A report you cannot reproduce, or whose expected behavior the player has not
-answered, stays filed: note on its bead what you tried (`bd note <bead> "..."`)
-rather than closing it.
+If the reported behavior appears to be working as intended, use
+`bd note <bead> "<evidence and expected behavior>"`, then
+`bd update <bead> --status open --add-label human` and `enact sync`. Leave it in
+the `bd human list` queue for the reporter to review and skip it in later
+bugfix runs while it awaits a response. Once the reporter confirms, record
+the confirmation with `bd human respond <bead> "<confirmation>"`, mark the local
+report done with `just bugs done <bead>`, and run `enact sync`. If the reporter
+identifies a bug, remove the `human` label and resume the fix.
+
+A report you cannot reproduce, or whose expected behavior is still unclear,
+stays filed. Use `bd note <bead> "..."` to record what you tried.
