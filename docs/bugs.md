@@ -154,3 +154,9 @@ fixed in the same session. Newest first.
   something the rules see (battlefield order, library order, name). Run the
   perturbation tests over freshly frozen saves after any change to how answers
   are described.
+
+- A triggered ability with no targets went on the stack (CR 603.3) without
+  emitting the stack announcement. If it resolved before the next view, the UI
+  could show its effect without animating the ability from its source.
+  Prevention: finish putting abilities on the stack through a shared
+  announcement path, regardless of whether they ask for targets.

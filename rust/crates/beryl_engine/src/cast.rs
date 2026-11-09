@@ -1080,6 +1080,10 @@ pub(crate) fn target_trigger<L: Layout>(
         return Ok(());
     };
     if ability.targets.is_empty() {
+        // The trigger is already on the stack, with no choices to announce first
+        // ([CR 603.3](https://yawgatog.com/resources/magic-rules/#R6033)):
+        // "its controller puts it on the stack as an object that's not a card".
+        sink.note(ability_event(&entry));
         return Ok(());
     }
     if !targetable(

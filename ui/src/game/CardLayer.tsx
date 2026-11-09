@@ -314,7 +314,8 @@ const CardElement = memo(function CardElement({
   const holding = held !== undefined && (held.dragging || held.epoch === epoch);
   // A struck spell leaves the stack for where it went: after its shake, slowly, over the
   // table.
-  const carried = struck && place.look !== "stack";
+  const returning = struck && (place.look === "hand" || place.look === "held");
+  const carried = struck && place.look !== "stack" && !returning;
   // A card changing looks to or from a pile, a library or the showcase travels there; the
   // transition holds until its look changes again, so that a render meanwhile keeps it going.
   const moved = useRef<{ look: Look; travel: boolean }>({
@@ -325,7 +326,7 @@ const CardElement = memo(function CardElement({
     const was = moved.current.look;
     moved.current = {
       look: place.look,
-      travel: TRAVELLED.has(was) || TRAVELLED.has(place.look),
+      travel: returning || TRAVELLED.has(was) || TRAVELLED.has(place.look),
     };
   }
   const change = moved.current;
@@ -356,7 +357,9 @@ const CardElement = memo(function CardElement({
   // straightens.
   const hand = place.look === "hand";
   const lifted = hand && (raised || holding);
-  useGlide(rotate, dragging && !hand ? 0 : place.rotate, reduce);
+  useGlide(rotate, dragging && !hand ? 0 : place.rotate, reduce, {
+    how: returning ? TRAVEL : SPRING,
+  });
   useGlide(skewX, place.skew, reduce);
   // Out of a library, the card is in sight from the start, on the pile; into one, until it is
   // there.
@@ -401,7 +404,7 @@ const CardElement = memo(function CardElement({
     },
     handling: dragging ? "held" : holding ? "dropped" : "free",
     size,
-    enabled: place.look !== "hidden",
+    enabled: place.look !== "hidden" && !returning,
     reduce,
     body,
     shadow,

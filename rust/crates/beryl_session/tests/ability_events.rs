@@ -5,7 +5,10 @@
 //! rules 601.2b-i." It may have resolved by the time a view shows.
 
 use beryl_cards::{CARDS, SCENARIOS, names};
-use beryl_engine::{Choice, DecisionKind, Observation, Replay, Scratch, Seat, Step, apply, next};
+use beryl_engine::{
+    Choice, DecisionKind, Observation, Opt, Replay, Scratch, Seat, Step, apply, next,
+};
+use beryl_scenario::Action;
 use beryl_session::StopsSetting;
 use beryl_session::protocol::{GameEvent, Moment, Side, StackItem, TargetRef, player_view};
 
@@ -33,6 +36,16 @@ fn events(
         Step::Over(o) => panic!("the game ended: {o:?}"),
     };
     for action in &scenario.actions[..actions] {
+        if matches!(action, Action::Resolve) {
+            let mut d = decide(&mut s, &mut x);
+            let top = *s.stack().last().expect("something to resolve");
+            while s.stack().last() == Some(&top) {
+                assert_eq!(d.candidates.option(Choice(0)), Some(Opt::Pass));
+                apply(&mut s, &t, &mut x, &mut Replay, Choice(0));
+                d = decide(&mut s, &mut x);
+            }
+            continue;
+        }
         loop {
             let d = decide(&mut s, &mut x);
             if let Some(c) = beryl_scenario::answer(&t, &s, &d, action) {
@@ -191,4 +204,34 @@ fn a_cast_names_its_spell_and_targets_as_the_stack_showed_them() {
     };
     assert_eq!(*slot, oust);
     assert_eq!(targets, &[TargetRef::Object { slot: creature }]);
+}
+
+#[test]
+fn an_unanswered_nontargeted_trigger_is_announced() {
+    let (events, slot) = events(
+        names::STAFF_OF_THE_STORYTELLER,
+        "its own Spirit and a Samurai each add a story counter, spent to draw",
+        4,
+        Seat::new(1),
+    );
+    let staff = slot(names::STAFF_OF_THE_STORYTELLER);
+    assert_eq!(
+        abilities(&events)
+            .iter()
+            .filter(|(item, _)| matches!(
+                item,
+                StackItem::Ability {
+                    source: Some(source),
+                    name,
+                    triggered: true,
+                    nth: 1,
+                    controller: Side::Opponent,
+                    targets,
+                    ..
+                } if *source == staff && name == names::STAFF_OF_THE_STORYTELLER && targets.is_empty()
+            ))
+            .count(),
+        1,
+        "{events:?}"
+    );
 }

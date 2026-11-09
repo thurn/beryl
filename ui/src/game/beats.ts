@@ -220,6 +220,22 @@ class Walk {
         // What the spell did, while it is still on the stack, before it leaves.
         this.cut();
       }
+      const trigger =
+        e.kind === "ability" && e.item.kind === "ability" && e.item.triggered
+          ? e.item
+          : undefined;
+      if (
+        trigger &&
+        this.pending.some(
+          (pending) =>
+            pending.kind === "zoneChange" &&
+            pending.slot === trigger.source &&
+            pending.to === "battlefield",
+        )
+      ) {
+        // The permanent has to land before the trigger can visibly lift off it.
+        this.cut();
+      }
       const drawing = this.drawn.size;
       this.apply(e);
       this.pending.push(e);

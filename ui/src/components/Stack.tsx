@@ -143,6 +143,8 @@ export interface ArrowSpec {
   tone: "gold" | "cyan" | "red";
   /** A direct line between the facing edges of a blocker and its attacker. */
   block?: boolean;
+  /** A target link shown once after both ends settle, and invalidated by a zone change. */
+  pulse?: { key: string; zone: string | undefined };
 }
 
 type Drawn = {
@@ -195,6 +197,9 @@ export function Arrows({
   // a card on its way (a countered spell to the graveyard, a creature still landing when its
   // trigger goes on the stack), and it goes the moment either end starts moving.
   const rest = useRef(new Map<string, { ends: string; since: number }>());
+  const pulses = useRef(
+    new Map<string, { zone: string | undefined; until?: number }>(),
+  );
 
   // Measured against the svg's own parent: a parent's ref is not attached yet when this runs.
   useLayoutEffect(() => {
@@ -213,8 +218,20 @@ export function Arrows({
         : [];
       const now = performance.now();
       const keyOf = (a: ArrowSpec) => `${a.from}-${a.to}`;
+      const pulsing = new Map<
+        string,
+        { zone: string | undefined; until?: number }
+      >();
       const resting = new Map<string, { ends: string; since: number }>();
       const ends = arrows.flatMap((a) => {
+        const pulse =
+          a.pulse &&
+          (pulses.current.get(a.pulse.key) ?? { zone: a.pulse.zone });
+        if (a.pulse && pulse) {
+          pulsing.set(a.pulse.key, pulse);
+          if (pulse.zone !== a.pulse.zone) return [];
+          if (pulse.until !== undefined && pulse.until <= now) return [];
+        }
         const from = document.getElementById(a.from);
         const to = document.getElementById(a.to);
         if (!from || !to) return [];
@@ -241,11 +258,17 @@ export function Arrows({
           const was = rest.current.get(key);
           const since = was?.ends === at ? was.since : now;
           resting.set(key, { ends: at, since });
-          if (now - since < REST_MS) return [];
+          if (now - since < REST_MS) {
+            // Once shown, a moving endpoint ends this pulse, even if it later settles.
+            if (pulse?.until !== undefined) pulse.until = now;
+            return [];
+          }
+          if (pulse && pulse.until === undefined) pulse.until = now + PULSE_MS;
         }
         return [{ a, from, to, source, target }];
       });
       if (follow) rest.current = resting;
+      pulses.current = pulsing;
       const where = JSON.stringify([
         size,
         ends.map((e) => keyOf(e.a)),
@@ -401,6 +424,8 @@ export function Arrows({
 
 /** How long both ends of a followed arrow stand still before it shows, in ms. */
 const REST_MS = 90;
+/** A settled target link gets one brief moment of emphasis. */
+const PULSE_MS = 650;
 
 /** The arrowhead, its tip at the origin, pointing along +x: a solid barbed head, three and a
  * half tubes wide, whose base the shaft runs into. */

@@ -4055,6 +4055,49 @@ for (const fixture of [
     );
 }
 
+// Play the target announcement live. Static fixture views keep arrows for inspection.
+if (wanted("a live card target gets one brief arrow")) {
+    const current = (await load("arrow-ability")).at(-1);
+    const item = current.stack.at(-1);
+    const target = item.targets[0].slot;
+    const fixture = "arrow-live";
+    const untargeted = { ...item, targets: [] };
+    await writeFile(
+        join(fixtures, `${fixture}.json`),
+        JSON.stringify({
+            messages: [
+                { kind: "response", command: "choose", value: null },
+                ...[
+                    { ...current, stack: [untargeted], events: [] },
+                    current,
+                ].map((view) => ({
+                    kind: "event",
+                    event: "game-update",
+                    payload: { session: 1, view },
+                })),
+            ],
+        }),
+    );
+    await check(
+        "a live card target gets one brief arrow",
+        async (page) => {
+            const arrow = ".board-arrows .arrow-cyan";
+            assert.equal(await page.locator(arrow).count(), 0);
+            await page
+                .getByRole("button", { name: "Resolve", exact: true })
+                .click();
+            await until(page, arrow, 25);
+            assert.equal(
+                await page.locator(arrow).getAttribute("data-to"),
+                `card-${target}`,
+            );
+            await page.clock.runFor(750);
+            assert.equal(await page.locator(arrow).count(), 0);
+        },
+        { fixture, at: 1, ready: "#stack-0" },
+    );
+}
+
 // `marks` and `marks-damage` end on boards where a permanent bearing one mark and no other
 // stands beside a twin of the same name bearing none: +1/+1 counters, summoning sickness and
 // story or time counters in one, damage in the other.

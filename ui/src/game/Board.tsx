@@ -18,6 +18,7 @@ import {
   animate,
   AnimatePresence,
   motion,
+  useIsPresent,
   useMotionValue,
   useReducedMotion,
 } from "motion/react";
@@ -1124,6 +1125,7 @@ export function Board({
   const sourced = shown.stack
     .flatMap((item, i) =>
       item.kind === "ability" &&
+      !item.triggered &&
       item.source !== null &&
       (pointedItem === stackKey(i, item) || hovered === item.source)
         ? [i]
@@ -1135,8 +1137,9 @@ export function Board({
       boardArrows(
         shown,
         new Set(sourced === "" ? [] : sourced.split(",").map(Number)),
+        live,
       ),
-    [shown, sourced],
+    [shown, sourced, live],
   );
   const flip = coinFlipBanner(view);
   const banner = flip ?? combatBanner(view);
@@ -1263,14 +1266,18 @@ export function Board({
             (item, i) =>
               item.kind === "ability" && (
                 <AbilityOnStack
-                  key={`${i}-${item.name}`}
+                  key={stackKey(i, item)}
                   index={i}
                   count={view.stack.length}
                   item={item}
                   source={
                     item.source === null ? undefined : objects.get(item.source)
                   }
-                  from={placements.get(abilityOrigin(view, item))}
+                  from={
+                    live
+                      ? abilityPlacement(view, item, placements, previousTable)
+                      : undefined
+                  }
                   onPoint={(on) => {
                     const key = stackKey(i, item);
                     setPointedItem((k) =>
@@ -1895,6 +1902,7 @@ function AbilityOnStack({
   onPoint(on: boolean): void;
 }) {
   const face = useAbilityFace(item.name, source, BLANK);
+  const present = useIsPresent();
   const place = stackPlace(index, count);
   // Out of its source it comes whole, the size of the card it lifts off, so that the eye
   // follows it from there; with no source drawn, it fades in where it stays.
@@ -1903,7 +1911,8 @@ function AbilityOnStack({
         opacity: 1,
         x: from.x,
         y: from.y,
-        scale: Math.max(0.2, (from.width * from.scale) / place.width),
+        scale: (from.width * from.scale) / place.width,
+        rotate: from.rotate,
       }
     : { opacity: 0, x: place.x, y: place.y, scale: 0.8 };
   return (
@@ -1911,10 +1920,15 @@ function AbilityOnStack({
       className="hud stack-ability"
       // Which item it is, by place and the ability's own name, for a motion audit: two
       // items sharing a source's face (an emblem's and its planeswalker's) stay apart.
-      data-stack-key={stackKey(index, item)}
-      style={{ zIndex: STACK_Z + index }}
+      data-stack-key={`${index}:${item.name}`}
+      style={{
+        left: 0,
+        top: 0,
+        zIndex: STACK_Z + index,
+        pointerEvents: present ? undefined : "none",
+      }}
       initial={start}
-      animate={{ opacity: 1, scale: 1, x: place.x, y: place.y }}
+      animate={{ opacity: 1, scale: 1, x: place.x, y: place.y, rotate: 0 }}
       transition={ABILITY_FLIGHT}
       onPointerEnter={() => onPoint(true)}
       onPointerLeave={() => onPoint(false)}
@@ -1928,7 +1942,7 @@ function AbilityOnStack({
       }}
     >
       <StackItem
-        id={stackId(index)}
+        id={present ? stackId(index) : undefined}
         source={face}
         label={item.triggered ? "Triggered Ability" : "Activated Ability"}
         text={abilityText(face.text ?? "", item.triggered, item.nth)}
@@ -1944,9 +1958,11 @@ function AbilityOnStack({
  * across the table, easing into its place. */
 const ABILITY_FLIGHT = { duration: 0.5, ease: [0.2, 0.7, 0.3, 1] } as const;
 
-/** A stack item's key, by its place and its own name. */
+/** A stack item's identity during its flight and exit. Targets can change while it is there. */
 const stackKey = (index: number, item: StackItemView) =>
-  `${index}:${item.kind === "ability" ? item.name : item.slot}`;
+  item.kind === "spell"
+    ? `${index}:${item.slot}`
+    : `${index}:${item.name}:${item.source}:${item.ability}:${item.granted}:${item.controller}`;
 
 /** The slot of what an ability on the stack comes from: its source, or for an emblem's ability,
  * which the view gives no source ([CR 114.4](https://yawgatog.com/resources/magic-rules/#R1144):
@@ -1959,6 +1975,24 @@ function abilityOrigin(
   if (item.source !== null) return item.source;
   const index = view.players[item.controller].emblems.indexOf(item.name);
   return index < 0 ? Number.NaN : emblemSlot(item.controller, index);
+}
+
+/** Fly from the visible source before this beat moved or tapped it. A permanent that
+ * just entered has no battlefield position in the preceding view. */
+function abilityPlacement(
+  view: PlayerView,
+  item: Extract<StackItemView, { kind: "ability" }>,
+  placements: Layout,
+  previous?: Layout,
+): Placement | undefined {
+  const slot = abilityOrigin(view, item);
+  const from = previous?.get(slot);
+  const current = placements.get(slot);
+  return from?.zone === "battlefield" || (from && item.source === null)
+    ? from
+    : current?.opacity
+      ? current
+      : undefined;
 }
 
 /** The element id of the ability on the stack at `index`. */
@@ -2042,7 +2076,11 @@ function tokenOrigins(
 /** Combat links and stack arrows. A straight line joins a blocker to its attacker. An attack
  * on a planeswalker draws a red arrow. Stack items draw cyan arrows to their targets, and
  * abilities at the places `sourced` names draw a gold arrow from their source. */
-function boardArrows(view: PlayerView, sourced: Set<number>): ArrowSpec[] {
+function boardArrows(
+  view: PlayerView,
+  sourced: Set<number>,
+  live: boolean,
+): ArrowSpec[] {
   const objects = new Map(view.objects.map((o) => [o.slot, o]));
   const out: ArrowSpec[] = [];
   for (const slot of view.battlefield) {
@@ -2103,7 +2141,18 @@ function boardArrows(view: PlayerView, sourced: Set<number>): ArrowSpec[] {
             ? peekId(index)
             : cardId(target.slot);
       }
-      out.push({ from, to, tone: "cyan" });
+      out.push({
+        from,
+        to,
+        tone: "cyan",
+        pulse:
+          live && target.kind === "object"
+            ? {
+                key: `${stackKey(i, item)}:${target.slot}`,
+                zone: objects.get(target.slot)?.zone,
+              }
+            : undefined,
+      });
     }
   }
   return out;
