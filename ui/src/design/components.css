@@ -1230,12 +1230,11 @@
    dimmer where there is none; untap and cleanup, never stops, dimmer still. The current step
    burns gold. */
 .step-stops {
-  display: flex;
-  justify-content: space-between;
-}
-.step-group {
   display: grid;
-  grid-template-columns: repeat(3, var(--step-size, 22px));
+  grid-template-columns: repeat(3, var(--step-size, 22px)) 1fr repeat(
+      3,
+      var(--step-size, 22px)
+    );
   gap: var(--step-row-gap, 6px) var(--step-gap, 9px);
   margin: 0;
   padding: 0;

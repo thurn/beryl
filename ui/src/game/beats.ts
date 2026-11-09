@@ -145,6 +145,18 @@ class Walk {
     const events = this.view.events;
     for (let i = 0; i < events.length; i++) {
       const e = events[i]!;
+      if (e.kind === "stepBegins") {
+        // Untap has no priority of its own, so its events arrive with upkeep.
+        const leavingUntap = this.cur.turn.step === "untap";
+        if (leavingUntap) this.cut(HOLD.turn);
+        if (e.step === "untap") this.cut();
+        if (e.step === "untap" || leavingUntap) {
+          this.cur = {
+            ...this.cur,
+            turn: { ...this.view.turn, active: e.active, step: e.step },
+          };
+        }
+      }
       if (e.kind === "zoneChange" && this.showcased(e)) {
         // Every card of the move at once: the events of one effect come together.
         const group = [e];

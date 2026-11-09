@@ -222,10 +222,21 @@ export function Arrows({
         const target = box(to.getBoundingClientRect(), origin, scale);
         if (follow) {
           const key = keyOf(a);
+          // A stack peek is laid out at its destination while its card is still flying.
+          const hosts = [from, to].flatMap((end) => {
+            const id = end.dataset.within;
+            const host = id && document.getElementById(id);
+            return host
+              ? [box(host.getBoundingClientRect(), origin, scale)]
+              : [];
+          });
           const at = JSON.stringify(
-            [source, target].map((b) =>
-              [b.x, b.y, b.width, b.height].map(Math.round),
-            ),
+            [source, target, ...hosts].map((b) => [
+              b.x,
+              b.y,
+              b.width,
+              b.height,
+            ]),
           );
           const was = rest.current.get(key);
           const since = was?.ends === at ? was.since : now;

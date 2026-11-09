@@ -391,7 +391,10 @@ export function stackPlace(index: number, count: number) {
   const scale = Math.min(1, (foot - STACK_TOP) / (height + (count - 1) * step));
   const width = STACK.width * scale;
   return {
-    x: STACK.x + (STACK.width - width) / 2,
+    x:
+      STACK.x +
+      (STACK.width - width) / 2 -
+      (count - 1 - index) * step * scale * 0.4,
     y: foot - (height + (count - 1 - index) * step) * scale,
     width,
   };
@@ -1686,14 +1689,8 @@ export function passButton(
   to: PassTo,
 ): { label: string; caption: string } {
   switch (to.kind) {
-    case "resolve": {
-      const top = view.stack[view.stack.length - 1];
-      const name =
-        top?.kind === "spell"
-          ? (view.objects.find((o) => o.slot === top.slot)?.name ?? "the spell")
-          : (top?.name ?? "the stack");
-      return { label: "Resolve", caption: name };
-    }
+    case "resolve":
+      return { label: "Resolve", caption: "" };
     case "combatDamage":
       // combat.png's Resolve Damage.
       return { label: "Resolve Damage", caption: "Combat damage" };

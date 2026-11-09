@@ -3,7 +3,7 @@
 // the player stops with the stack empty in that player's turns, outlined where they do not,
 // and a click sets or clears that stop. The current step burns gold in the active player's
 // rows. No one gets priority in the untap step or, normally, cleanup (CR 502.4, 514.3), so
-// those two are never stops and stay dim.
+// those two are never stops.
 import type { Step } from "../generated/protocol";
 import { Tip } from "./Controls";
 
@@ -89,8 +89,7 @@ export interface StepStop {
   stops: boolean;
 }
 
-/** The twelve, in the turn's order: the first six left of the orb, the rest right of it, each
- * six in two rows of three. */
+/** The twelve, in the turn's order: the top row across the orb, then the bottom row. */
 export const STEP_STOPS: StepStop[] = [
   {
     key: "untap",
@@ -197,9 +196,10 @@ export function StepStops({
   stops: Step[];
   onStops(stops: Step[]): void;
 }) {
-  const group = (from: number) => (
-    <ol className="step-group">
-      {STEP_STOPS.slice(from, from + 6).map((stop) => {
+  return (
+    <ol className={`step-stops step-stops-${side}`}>
+      {STEP_STOPS.map((stop, i) => {
+        const column = i % 6;
         const on = stop.stops && stopsAt(stops, stop);
         const here = current !== undefined && stop.steps.includes(current);
         const icon = (
@@ -216,6 +216,7 @@ export function StepStops({
           <li
             key={stop.key}
             data-step={stop.key}
+            style={{ gridColumn: column < 3 ? column + 1 : column + 2 }}
             className={[
               "step has-tip",
               here && "step-current",
@@ -244,11 +245,5 @@ export function StepStops({
         );
       })}
     </ol>
-  );
-  return (
-    <div className={`step-stops step-stops-${side}`}>
-      {group(0)}
-      {group(6)}
-    </div>
   );
 }

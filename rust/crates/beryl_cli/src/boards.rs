@@ -526,8 +526,8 @@ pub const BOARDS: &[Scenario] = &[
             Action::cast(P1, COUNTERSPELL),
         ]),
     // The human's Oust aimed at the opponent's Trinket Mage, under the opponent's Counterspell
-    // aimed at Oust, which the human may save: each spell's target is drawn, the one beneath
-    // the top's too.
+    // aimed at Oust, which the human may save: Oust's arrow still points to the battlefield
+    // even though the stack itself needs no arrow between its two spells.
     Scenario::new("arrow-stacked")
         .at(3, P0, TurnStep::PrecombatMain)
         .battlefield(P0, &[PLAINS_, PLAINS_, PLAINS_, ISLAND_])

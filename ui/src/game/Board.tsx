@@ -1402,11 +1402,11 @@ export function Board({
                   )}
                   {/* While you wait, the priority pill takes the caption's place under the
                   button, leaving the tracker showing the phase. */}
-                  {waiting ? (
-                    acting && <PriorityPill>{acting}</PriorityPill>
-                  ) : (
-                    <span className="turn-caption">{stop.caption}</span>
-                  )}
+                  {waiting
+                    ? acting && <PriorityPill>{acting}</PriorityPill>
+                    : stop.caption && (
+                        <span className="turn-caption">{stop.caption}</span>
+                      )}
                 </div>
               </Dock>
             ) : null}
@@ -2061,6 +2061,11 @@ function boardArrows(view: PlayerView, sourced: Set<number>): ArrowSpec[] {
   // source only while it, or the source, is pointed at: its glow says it otherwise.
   // One beneath the top ties its arrows to the strip of it that shows.
   const top = view.stack.length - 1;
+  const spells = new Map(
+    view.stack.flatMap((item, i) =>
+      item.kind === "spell" ? [[item.slot, i] as const] : [],
+    ),
+  );
   for (let i = top; i >= 0; i--) {
     const item = view.stack[i]!;
     const from = i === top ? itemId(item, i) : peekId(i);
@@ -2068,14 +2073,21 @@ function boardArrows(view: PlayerView, sourced: Set<number>): ArrowSpec[] {
       out.push({ from: cardId(item.source), to: from, tone: "gold" });
     }
     for (const target of item.targets) {
-      out.push({
-        from,
-        to:
-          target.kind === "player"
-            ? lifeId(target.player)
-            : cardId(target.slot),
-        tone: "cyan",
-      });
+      let to: string;
+      if (target.kind === "player") {
+        to = lifeId(target.player);
+      } else {
+        const index = spells.get(target.slot);
+        // Two stacked items already show which spell is being answered. A spell that
+        // returned to hand is no longer a target even though it still has the same slot.
+        if (index !== undefined && top === 1) continue;
+        if (objects.get(target.slot)?.zone === "hand") continue;
+        to =
+          index !== undefined && index < top
+            ? peekId(index)
+            : cardId(target.slot);
+      }
+      out.push({ from, to, tone: "cyan" });
     }
   }
   return out;

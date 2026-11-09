@@ -1105,6 +1105,24 @@ await check(
         assert.equal(await page.locator(".turn-banner").count(), 0, "none yet");
         await page.getByRole("button", { name: "Take Nothing" }).click();
         await until(page, '.turn-banner[data-turn="opponent"]');
+        const rows = await page.$$eval(".step-stops-you .step", (steps) => {
+            const rows = new Map();
+            for (const step of steps) {
+                const { x, y } = step.getBoundingClientRect();
+                const row = rows.get(y) ?? [];
+                row.push([x, step.dataset.step]);
+                rows.set(y, row);
+            }
+            return [...rows]
+                .sort(([a], [b]) => a - b)
+                .map(([, row]) =>
+                    row.sort(([a], [b]) => a - b).map(([, step]) => step),
+                );
+        });
+        assert.deepEqual(rows, [
+            ["untap", "upkeep", "draw", "main1", "beginCombat", "attackers"],
+            ["blockers", "damage", "endCombat", "main2", "end", "cleanup"],
+        ]);
         assert.equal(
             await page
                 .locator(
@@ -1113,9 +1131,23 @@ await check(
                 .textContent(),
             "Opponent's Turn",
         );
+        assert.equal(
+            await page
+                .locator(
+                    '.step-stops-opponent [data-step="untap"].step-current',
+                )
+                .count(),
+            1,
+        );
         // A new turn's banner replaces any still showing: one at a time.
         await until(page, '.turn-banner[data-turn="you"]');
         assert.equal(await page.locator(".turn-banner").count(), 1, "one");
+        assert.equal(
+            await page
+                .locator('.step-stops-you [data-step="untap"].step-current')
+                .count(),
+            1,
+        );
         // Its timer, on the page's clock, removes it; React commits on the real one.
         for (let i = 0; i < 40 && (await page.$(".turn-banner")); i++) {
             await page.clock.runFor(100);
@@ -3672,7 +3704,7 @@ await check(
 
 // The stack's arrows (by-l1w.8): a spell aimed at a card beside the stack, an ability aimed at
 // its source's neighbor, one aimed at a player, and a spell aimed at a creature under one aimed
-// at it (by-97z). Every item's targets are drawn, the top's first; an ability's source only
+// at it (by-97z). A spell aimed at the only other spell needs no arrow; an ability's source only
 // while the pointer is on the ability (by-wkr). Each arrow ties the elements its item names,
 // starts and ends on their edges apart from every other arrow's ends, is long enough to read,
 // and runs mostly clear of the other cards on the table.
@@ -3695,10 +3727,23 @@ for (const fixture of [
               : `stack-${i}`;
     const targets = view.stack
         .map((item, i) =>
-            item.targets.map((t) => [
-                idOf(item, i),
-                t.kind === "player" ? `${t.player}-life-orb` : `card-${t.slot}`,
-            ]),
+            item.targets
+                .filter(
+                    (t) =>
+                        !(
+                            top === 1 &&
+                            t.kind === "object" &&
+                            view.stack.some(
+                                (s) => s.kind === "spell" && s.slot === t.slot,
+                            )
+                        ),
+                )
+                .map((t) => [
+                    idOf(item, i),
+                    t.kind === "player"
+                        ? `${t.player}-life-orb`
+                        : `card-${t.slot}`,
+                ]),
         )
         .reverse()
         .flat();
@@ -3727,6 +3772,26 @@ for (const fixture of [
             { fixture, at: views.length, ready: ".arrow" },
         );
     }
+    if (fixture === "arrow-ability") {
+        await check(
+            "target arrows disappear while a card moves",
+            async (page) => {
+                const arrow = page.locator(".board-arrows .arrow-cyan");
+                const target = await arrow.getAttribute("data-to");
+                const card = page.locator(`#${target}`);
+                // Even movement below a pixel breaks the arrow's rest period.
+                for (const x of [0.1, 0.2, 0.3]) {
+                    await card.evaluate((el, x) => {
+                        el.style.translate = `${x}px`;
+                    }, x);
+                    await page.clock.runFor(50);
+                    assert.equal(await arrow.count(), 0);
+                }
+                await until(page, ".board-arrows .arrow-cyan");
+            },
+            { fixture, at: views.length, ready: ".arrow" },
+        );
+    }
     await check(
         `${fixture}: each arrow's source and target read distinctly`,
         async (page) => {
@@ -3734,6 +3799,25 @@ for (const fixture of [
             if (sourced) {
                 await page.hover(`#stack-${top}`);
                 await page.clock.runFor(500);
+            }
+            if (top === 1) {
+                assert.equal(
+                    await page
+                        .getByRole("button", { name: "Resolve", exact: true })
+                        .count(),
+                    1,
+                );
+                assert.equal(await page.locator(".turn-caption").count(), 0);
+                const bottom = await page
+                    .locator("#stack-peek-0")
+                    .boundingBox();
+                const front = await page
+                    .locator(`#${idOf(item, top)}`)
+                    .boundingBox();
+                assert.ok(
+                    front.x > bottom.x && front.y > bottom.y,
+                    "the top spell sits down and to the right",
+                );
             }
             const drawn = await page.evaluate(() => {
                 const box = (e) => {
@@ -3783,7 +3867,7 @@ for (const fixture of [
             assert.deepEqual(
                 drawn.map((a) => a.ends),
                 expected,
-                "an arrow from the source and one to each target",
+                "targets are marked except the only other item on the stack",
             );
             const within = ([x, y], b, m) =>
                 x > b.x - m &&
@@ -3825,7 +3909,11 @@ for (const fixture of [
                 }
             }
         },
-        { fixture, at: views.length, ready: ".arrow" },
+        {
+            fixture,
+            at: views.length,
+            ready: targets.length ? ".arrow" : "#stack-peek-0",
+        },
     );
 }
 
