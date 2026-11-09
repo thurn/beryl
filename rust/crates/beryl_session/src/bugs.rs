@@ -133,6 +133,17 @@ pub struct Images {
 /// The open reports (not done) about spec moments, counted by card slug.
 pub fn open_by_card(dir: &Path) -> std::collections::BTreeMap<String, usize> {
     let mut counts = std::collections::BTreeMap::new();
+    for (moment, count) in open_by_moment(dir) {
+        if let Some(spec) = SpecMoment::parse(&moment) {
+            *counts.entry(spec.card).or_default() += count;
+        }
+    }
+    counts
+}
+
+/// Open report counts by stable card/moment/seat, across viewer reloads.
+pub fn open_by_moment(dir: &Path) -> std::collections::BTreeMap<String, usize> {
+    let mut counts = std::collections::BTreeMap::new();
     let Ok(entries) = std::fs::read_dir(dir) else {
         return counts;
     };
@@ -153,7 +164,7 @@ pub fn open_by_card(dir: &Path) -> std::collections::BTreeMap<String, usize> {
             continue;
         }
         if let Some(spec) = field("spec").and_then(SpecMoment::parse) {
-            *counts.entry(spec.card).or_default() += 1;
+            *counts.entry(spec.to_string()).or_default() += 1;
         }
     }
     counts
@@ -811,9 +822,17 @@ mod tests {
         assert!(md.contains("spec: llanowar-elves/tap/theirs\n"));
         assert!(md.contains("`just specs llanowar-elves --describe --moment tap`"));
         assert_eq!(open_by_card(&dir).get("llanowar-elves"), Some(&2));
+        assert_eq!(
+            open_by_moment(&dir).get("llanowar-elves/tap/theirs"),
+            Some(&2)
+        );
         let report = PathBuf::from(&first.path).join("report.md");
         std::fs::write(&report, md.replace("status: open", "status: done")).unwrap();
         assert_eq!(open_by_card(&dir).get("llanowar-elves"), Some(&1));
+        assert_eq!(
+            open_by_moment(&dir).get("llanowar-elves/tap/theirs"),
+            Some(&1)
+        );
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

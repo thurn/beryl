@@ -219,6 +219,10 @@
 
 /* Testing tools keep the game at full width. The controls never occupy a game column. */
 .testing-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--surface-sunk);
   display: flex;
   align-items: center;
   gap: 24px;
@@ -334,9 +338,4 @@
   .testing-main .specs-frame {
     aspect-ratio: 4/5;
   }
-}
-
-.testing-more {
-  color: var(--text-dim);
-  text-decoration: none;
 }

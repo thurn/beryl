@@ -68,6 +68,7 @@ struct Feed {
     /// Whether its moment has actions of its own to play, which a page holds for its button.
     plays: bool,
     manual: bool,
+    playground: bool,
     opponent_move: Option<(DecisionId, CandidateIndex)>,
     streams: Vec<Sender<String>>,
     /// Its key, and the page stream it goes to as well, if its key names a page.
@@ -349,6 +350,7 @@ fn export_reports(stream: &mut TcpStream) -> Result<(), String> {
 fn annotated_listing() -> Value {
     let reviewed = reviews::load(&reviews::path());
     let reports = bugs::open_by_card(&bugs::dir());
+    let moment_reports = bugs::open_by_moment(&bugs::dir());
     let mut listing = serde_json::to_value(listing()).unwrap_or_else(|_| json!([]));
     if let Some(specs) = listing.as_array_mut() {
         for spec in specs {
@@ -356,6 +358,12 @@ fn annotated_listing() -> Value {
             let slug = spec["slug"].as_str().unwrap_or_default().to_owned();
             spec["reviewed"] = json!(reviewed.get(&card));
             spec["reports"] = json!(reports.get(&slug).copied().unwrap_or(0));
+            spec["momentReports"] = json!(
+                moment_reports
+                    .iter()
+                    .filter(|(key, _)| key.starts_with(&format!("{slug}/")))
+                    .collect::<HashMap<_, _>>()
+            );
         }
     }
     listing
@@ -571,6 +579,7 @@ fn instance(
         super::playground::automated(v, view)
     });
     let feed = new_feed(pages, &key, plays, manual);
+    lock(&feed.0).playground = playground.is_some();
     let emitted = Arc::clone(&feed);
     let (sessions, mirror) = if let Some(example) = playground {
         let sessions = super::playground::start(example, view, move |update, phase| {
@@ -635,7 +644,10 @@ fn record_view(shared: &SharedFeed, update: &GameUpdate, phase: Phase) {
     let (feed, ready) = &**shared;
     let mut f = lock(feed);
     f.views.push(update.clone());
-    if f.start.is_none() && phase != Phase::Setup {
+    if f.start.is_none()
+        && phase != Phase::Setup
+        && !(f.playground && matches!(update.view.status, Status::Playing))
+    {
         f.start = Some(f.views.len() - 1);
         let mut initial = update.clone();
         initial.view.events.clear();
@@ -758,7 +770,8 @@ fn holds(f: &Feed) -> bool {
     !f.manual
         && !f.released
         && f.start.is_some_and(|start| {
-            f.plays || !matches!(f.views[start].view.status, Status::Deciding { .. })
+            (f.plays && !f.playground)
+                || !matches!(f.views[start].view.status, Status::Deciding { .. })
         })
 }
 
@@ -810,6 +823,23 @@ fn pump(mut stream: TcpStream, received: &std::sync::mpsc::Receiver<String>) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn playground_priority_needs_no_play_button() {
+        let instances = Arc::new(Mutex::new(Vec::new()));
+        let pages = Arc::new(Mutex::new(HashMap::new()));
+        let card = "aangs-iceberg";
+        let moment =
+            "playground-exiles-a-permanent-until-it-leaves-waterbend-taps-a-creature-to-pay-4";
+        let key = format!("{card}/{moment}/yours/priority-test");
+        let feed = instance(&instances, &pages, &key, card, moment, "yours").unwrap();
+        let shown = current(&feed);
+        assert_eq!(shown["ok"]["view"]["status"]["kind"], "deciding");
+        assert!(
+            !holds(&lock(&feed.0)),
+            "a human decision is already playable"
+        );
+    }
 
     #[test]
     fn report_routes_only_accept_local_requests() {

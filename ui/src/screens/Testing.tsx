@@ -28,6 +28,7 @@ interface SpecListing {
   reviewed: string | null;
   /** Its open bug reports. */
   reports: number;
+  momentReports?: Record<string, number>;
 }
 
 /** A spec server answer: `{ok}` or `{err}`, as `serve`'s commands answer. */
@@ -357,6 +358,9 @@ function TestingCard({
       frames={frames.current}
       onFiled={filed}
       playground={playground}
+      initialFiled={
+        spec.momentReports?.[`${spec.slug}/${moment.name}/${view}`] ?? 0
+      }
     />
   );
   const moment =
@@ -365,11 +369,6 @@ function TestingCard({
     <main className="testing-main">
       <div className="testing-title">
         <h1>{spec.card}</h1>
-        {playground && (
-          <a className="testing-more" href={`/scenarios/${spec.slug}`}>
-            More cases →
-          </a>
-        )}
         {playground && (
           <button
             onClick={() => void save()}
@@ -493,6 +492,7 @@ function MomentView({
   frames,
   onFiled,
   playground = false,
+  initialFiled = 0,
 }: {
   slug: string;
   moment: MomentListing;
@@ -502,6 +502,7 @@ function MomentView({
   frames: Frames;
   onFiled: () => void;
   playground?: boolean;
+  initialFiled?: number;
 }) {
   const holder = useRef<HTMLDivElement>(null);
   const reached = useReached(holder);
@@ -527,7 +528,7 @@ function MomentView({
       )
       .then((holds) => setHeld((h) => ({ ...h, [key]: holds })));
   }, [shown, key, held]);
-  const waiting = held[key] !== false && played !== key;
+  const waiting = held[key] === true && played !== key;
   const frame = useRef<HTMLIFrameElement>(null);
   useEffect(() => {
     const onMessage = (e: MessageEvent<{ kind?: string }>) => {
@@ -542,7 +543,7 @@ function MomentView({
     return () => window.removeEventListener("message", onMessage);
   }, [key]);
   const [noting, setNoting] = useState(false);
-  const [filed, setFiled] = useState(0);
+  const [filed, setFiled] = useState(initialFiled);
   const mount = (iframe: HTMLIFrameElement | null) => {
     frame.current = iframe;
     if (iframe?.contentWindow) frames.set(key, iframe.contentWindow);
@@ -625,6 +626,7 @@ function MomentView({
       {noting && (
         <BugNote
           instance={key}
+          playground={playground}
           target={anchor(moment, view)}
           onClose={() => setNoting(false)}
           onFiled={() => {
@@ -657,17 +659,37 @@ function MomentView({
  * the instance's game as it stands. ⌘↩ files it; Esc closes it. */
 function BugNote({
   instance,
+  playground,
   target,
   onClose,
   onFiled,
 }: {
   instance: string;
+  playground: boolean;
   target: string;
   onClose: () => void;
   onFiled: () => void;
 }) {
-  const [text, setText] = useState("");
-  const [viewerBug, setViewerBug] = useState(false);
+  const draftKey = `beryl-bug-draft:${instance.split("/").slice(0, 3).join("/")}`;
+  const [draft] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(draftKey) ?? "null") as {
+        text: string;
+        viewerBug: boolean;
+      } | null;
+    } catch {
+      return null;
+    }
+  });
+  const [text, setText] = useState(draft?.text ?? "");
+  const [viewerBug, setViewerBug] = useState(draft?.viewerBug ?? false);
+  useEffect(() => {
+    try {
+      localStorage.setItem(draftKey, JSON.stringify({ text, viewerBug }));
+    } catch {
+      /* Reporting still works when browser storage is unavailable. */
+    }
+  }, [draftKey, text, viewerBug]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const file = () => {
@@ -685,10 +707,20 @@ function BugNote({
             scale: window.devicePixelRatio,
           }
         : undefined,
-    }).then(onFiled, (e: unknown) => {
-      setError(e instanceof Error ? e.message : String(e));
-      setBusy(false);
-    });
+    }).then(
+      () => {
+        try {
+          localStorage.removeItem(draftKey);
+        } catch {
+          /* Storage is optional. */
+        }
+        onFiled();
+      },
+      (e: unknown) => {
+        setError(e instanceof Error ? e.message : String(e));
+        setBusy(false);
+      },
+    );
   };
   return (
     <form
@@ -720,7 +752,7 @@ function BugNote({
           checked={viewerBug}
           onChange={(e) => setViewerBug(e.target.checked)}
         />
-        Bug in the spec viewer
+        Bug in the {playground ? "playground" : "scenario"} viewer
       </label>
       <div className="specs-note-actions">
         {error && <span className="specs-note-error">{error}</span>}

@@ -225,6 +225,129 @@ async function assertSounded(page) {
 }
 
 await check(
+    "playground reports and navigation survive refresh",
+    async (page) => {
+        await page.addInitScript(() => {
+            window.EventSource = class {
+                constructor() {
+                    setTimeout(() => this.onopen?.(), 0);
+                }
+                addEventListener() {}
+                close() {}
+            };
+        });
+        const moment = "playground-payment";
+        let reports = 2;
+        await page.route("**/spec-api/**", async (route) => {
+            const path = new URL(route.request().url()).pathname;
+            let body;
+            if (path.endsWith("/specs"))
+                body = [
+                    {
+                        card: "Aang’s Iceberg",
+                        slug: "aangs-iceberg",
+                        moments: [],
+                        reviewed: null,
+                        reports,
+                        momentReports: {
+                            [`aangs-iceberg/${moment}/yours`]: reports,
+                        },
+                    },
+                ];
+            else if (path.includes("/playground/"))
+                body = {
+                    examples: [
+                        {
+                            title: "Payment",
+                            variants: [
+                                {
+                                    name: moment,
+                                    title: "Payment",
+                                    label: "Default",
+                                    plays: true,
+                                },
+                            ],
+                        },
+                    ],
+                    missing: [],
+                };
+            else if (path.includes("/stream/"))
+                return route.fulfill({
+                    contentType: "text/event-stream",
+                    body: "",
+                });
+            else if (path.endsWith("/held"))
+                body = { ok: path.includes("/theirs/") };
+            else if (path.endsWith("/report")) {
+                reports++;
+                body = { ok: { id: "test", path: "test" } };
+            } else body = { ok: null };
+            await route.fulfill({ json: body });
+        });
+        await page.route("**/?live=*", (route) =>
+            route.fulfill({
+                contentType: "text/html",
+                body: `<script>parent.postMessage({kind:"beryl-shown"},location.origin)</script>`,
+            }),
+        );
+        await page.goto(new URL("/playground/aangs-iceberg", base).href);
+        const board = page.locator(".specs-moment").first();
+        const bug = board.getByRole("button", {
+            name: "Report a bug",
+            exact: true,
+        });
+        await bug.waitFor();
+        assert.equal(await bug.getAttribute("data-filed"), "2");
+        assert.equal(await page.getByText("More cases →").count(), 0);
+        await bug.click();
+        await board.getByRole("textbox").fill("Keep my report draft");
+        await board
+            .getByRole("checkbox", { name: "Bug in the playground viewer" })
+            .check();
+        await page.reload();
+        await bug.click();
+        assert.equal(
+            await board.getByRole("textbox").inputValue(),
+            "Keep my report draft",
+        );
+        assert.ok(await board.getByRole("checkbox").isChecked());
+        await board.getByRole("button", { name: "File", exact: true }).click();
+        await page.waitForFunction(() => !document.querySelector("textarea"));
+        await page.reload();
+        await bug.waitFor();
+        assert.equal(await bug.getAttribute("data-filed"), "3");
+        await bug.click();
+        assert.equal(await board.getByRole("textbox").inputValue(), "");
+        await board
+            .getByRole("button", { name: "Cancel", exact: true })
+            .click();
+        assert.equal(
+            await board
+                .getByRole("button", { name: "Play", exact: true })
+                .count(),
+            0,
+        );
+        const theirs = page.locator(".specs-moment").nth(1);
+        await theirs.scrollIntoViewIfNeeded();
+        await theirs
+            .getByRole("button", { name: "Play", exact: true })
+            .waitFor();
+        const header = await page.locator(".testing-header").boundingBox();
+        assert.ok(
+            header.y >= 0 && header.y < 2,
+            "navigation stays at the top after scrolling",
+        );
+        await page
+            .getByRole("link", { name: "Playground", exact: true })
+            .click();
+        await page
+            .getByRole("heading", { name: "Playground", exact: true })
+            .waitFor();
+    },
+    { clock: false },
+);
+
+await check(
     "dragging a hand card onto the battlefield casts it",
     async (page) => {
         const handle = await page.$(card);
