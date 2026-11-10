@@ -4862,6 +4862,8 @@ for (const fixture of [
                 );
                 const target = await arrow.getAttribute("data-to");
                 const card = page.locator(`#${target}`);
+                // Time between browser calls must not count toward the arrow's rest.
+                await page.clock.pauseAt(Date.now() + 60_000);
                 // Even movement below a pixel breaks the arrow's rest period.
                 for (const x of [0.1, 0.2, 0.3]) {
                     await card.evaluate((el, x) => {
