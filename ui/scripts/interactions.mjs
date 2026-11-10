@@ -4172,10 +4172,10 @@ for (const count of [1, 10, 11]) {
                 ordered.every(
                     (layer, i) =>
                         i === 0 ||
-                        (layer.top > ordered[i - 1].top &&
+                        (layer.top < ordered[i - 1].top &&
                             layer.z < ordered[i - 1].z),
                 ),
-                "every card under the top has its own position and layer",
+                "deeper cards fan behind the top card in distinct layers",
             );
             await button.click();
             const dialog = page.getByRole("dialog", { name: "Your graveyard" });
