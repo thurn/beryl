@@ -9934,13 +9934,16 @@ if (wanted(regroup)) {
                     .getByText("Choose attackers, then a target")
                     .isVisible(),
             );
+            await page.clock.pauseAt(Date.now() + 60_000);
             await page.click(slotOf(first));
             assert.equal(
                 await links(first).count(),
                 1,
                 "selection draws the line immediately",
             );
-            for (let i = 0; i < 12; i++) {
+            const mark = page.locator(`#card-${first}-mark`);
+            const [, startY] = await where(mark);
+            for (let i = 0; i < 20; i++) {
                 await page.clock.runFor(16);
                 const gap = await chevronGap(page, first);
                 assert.ok(
@@ -9948,6 +9951,12 @@ if (wanted(regroup)) {
                     `line tracks the tip during the glide (gap ${gap}px)`,
                 );
             }
+            const [, endY] = await where(mark);
+            assert.ok(
+                startY - endY > 10,
+                "the sampled frames include the card's glide",
+            );
+            await page.clock.resume();
             await page.click(slotOf(second));
             await page.click(slotOf(walker));
             assert.deepEqual(

@@ -1,6 +1,7 @@
 // The stack-item frame (a spell or ability on the stack) and the arrows that tie it to its source
 // (gold) and targets (red or green).
 import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { cancelFrame, frame } from "motion/react";
 import {
   AbilityPlate,
   CardArt,
@@ -408,15 +409,11 @@ export function Arrows({
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(root);
-    let frame = 0;
-    const tick = () => {
-      measure();
-      frame = requestAnimationFrame(tick);
-    };
-    if (follow && arrows.length > 0) frame = requestAnimationFrame(tick);
+    // Read positions after Motion has written the card transforms for this frame.
+    if (follow && arrows.length > 0) frame.postRender(measure, true);
     return () => {
       observer.disconnect();
-      cancelAnimationFrame(frame);
+      cancelFrame(measure);
     };
   }, [arrows, follow, avoid]);
 
