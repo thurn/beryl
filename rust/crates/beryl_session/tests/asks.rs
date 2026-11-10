@@ -180,7 +180,10 @@ fn stock_up_observer_sees_the_group_size_without_seeing_its_cards_or_choices() {
 fn aangs_iceberg_waterbends_its_cost_then_scries_two() {
     let scry = AskView::Scry { count: 2 };
     assert_eq!(
-        asks(names::AANGS_ICEBERG),
+        asks(names::AANGS_ICEBERG)
+            .into_iter()
+            .filter(|(_, ask)| matches!(ask, AskView::Waterbend { .. } | AskView::Scry { .. }))
+            .collect::<Vec<_>>(),
         [
             (
                 Kind::Waterbend,

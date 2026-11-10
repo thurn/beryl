@@ -204,17 +204,29 @@ pub const SCENARIOS: &[Scenario] = &[
                 Permanent::new(ICEBERG),
                 Permanent::new(PLAINS),
                 Permanent::new(names::MANA_CRYPT),
-                Permanent::token(TREASURE_TOKEN),
+                Permanent::new(JACE),
+                Permanent::new(names::CURRENCY_CONVERTER),
             ],
         )
-        .library(P0, &[ISLAND, PLAINS])
-        .library(P1, &[PLAINS, names::BEZA_THE_BOUNDING_SPRING])
+        .hand(P0, &[PLAINS])
+        .library(P0, &[ISLAND, PLAINS, ISLAND])
+        .library(P1, &[PLAINS])
         .actions(&[
+            // Jace and the Converter create the Treasure while tapping themselves.
+            Action::activate(P0, JACE, 0),
+            Action::Resolve,
+            Action::choose(P0, DecisionKind::Discard, PLAINS),
+            Action::Resolve,
+            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+            Action::activate(P0, names::CURRENCY_CONVERTER, 2),
+            Action::Resolve,
             Action::activate(P0, ICEBERG, 1),
             // A Treasure tapped to waterbend does not activate its own mana ability or
             // sacrifice itself (CR 701.67a and CR 111.10a).
             Action::choose(P0, DecisionKind::Waterbend, TREASURE_TOKEN),
             Action::choose(P0, DecisionKind::Waterbend, names::MANA_CRYPT),
+            Action::choose(P0, DecisionKind::ChooseUpTo, ISLAND),
+            Action::answer(P0, DecisionKind::ChooseUpTo, Pick::Done),
             Action::assert(Assertion::Tapped {
                 player: P0,
                 card: TREASURE_TOKEN,
@@ -225,7 +237,5 @@ pub const SCENARIOS: &[Scenario] = &[
                 card: names::MANA_CRYPT,
                 count: 1,
             }),
-            Action::answer(P0, DecisionKind::ChooseUpTo, Pick::Done),
-            Action::choose(P0, DecisionKind::ChooseObject, PLAINS),
         ]),
 ];
