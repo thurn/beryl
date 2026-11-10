@@ -2867,8 +2867,15 @@ await check(
             `X=${wantX}`,
         );
         const taps = kickCasts[kicked].payments.find((p) => p.x === wantX).taps;
-        assert.deepEqual(await lit(page), ascending(taps), "lit to pay");
-        await step.getByRole("button", { name: /^Kicker/ }).click();
+        const payKicker = step.getByRole("button", { name: /^Kicker/ });
+        assert.deepEqual(await lit(page), []);
+        await payKicker.hover();
+        assert.deepEqual(
+            await lit(page),
+            ascending(taps),
+            "preview at the chosen X",
+        );
+        await payKicker.click();
         assert.deepEqual(
             await settled(page, 2),
             [kicked, xs.findIndex((c) => c.option.n === wantX)],
