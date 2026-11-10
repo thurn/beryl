@@ -48,8 +48,10 @@ https://yawgatog.com/resources/magic-rules/ URLs with selected quotations.
   Forge exporters and their Java harnesses. `just` lists the commands.
 - Outside the tree: `~/Library/Caches/beryl` (`$BERYL_CACHE`: warm `rust/target`
   and `ui/node_modules` shared by worktrees, the oracle builds and their last
-  report in `oracles/logs/oracle.json`, and the screenshots). Never crawl `~` or
-  `/` with `find`.
+  report in `oracles/logs/oracle.json`, and the screenshots), and
+  `~/Movies/arena` (`$BERYL_ARENA`: recordings of Arena play and their indexes,
+  the reference for the UI's flow; `just video`, the `arena-video` skill). Never
+  crawl `~` or `/` with `find`.
 
 ## Enact
 

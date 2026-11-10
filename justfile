@@ -91,7 +91,7 @@ ui-live *args:
 specs *args:
     {{ by }} specs "$@"
 
-# Index an Arena recording as a UI reference: index, find or film (by video --help)
+# Arena recordings in ~/Movies/arena as a UI reference: list, index, find or film
 video *args:
     {{ by }} video "$@"
 

@@ -1,7 +1,8 @@
 """`by video`: a searchable index of an Arena gameplay recording, as a reference for the UI.
 
-`index` reads the text on screen twice a second (ffmpeg decodes, Apple's Vision framework
-recognizes: video_ocr.swift) and writes, under $BERYL_CACHE/video/<id>/:
+The recordings and their indexes live together, outside the tree, in ~/Movies/arena
+($BERYL_ARENA): `list` shows them. `index` reads the text on screen twice a second (ffmpeg
+decodes, Apple's Vision framework recognizes: video_ocr.swift) and writes, into <id>/ there:
 
 - `text.jsonl`: every sampled frame's text with its position, in 1920x1080 pixels.
 - `events.jsonl` and `timeline.txt`: what that text says happened. Arena shows the top of the
@@ -25,6 +26,7 @@ import difflib
 import hashlib
 import json
 import math
+import os
 import re
 import shutil
 import subprocess
@@ -37,6 +39,10 @@ from pathlib import Path
 
 from . import paths
 
+# Where the recordings are kept, each one's index in a folder beside it named by its id.
+ARENA_ENV = "BERYL_ARENA"
+ARENA_DEFAULT: Path = Path.home() / "Movies" / "arena"
+RECORDINGS = (".webm", ".mp4", ".mkv", ".mov")
 FFMPEG = "ffmpeg"
 OCR_SOURCE: Path = Path(__file__).with_name("video_ocr.swift")
 # Positions are in these pixels whatever the recording's size.
@@ -414,17 +420,28 @@ def video_id(source: Path) -> str:
 
 
 def root() -> Path:
-    return paths.cache_root() / "video"
+    """The folder of recordings and their indexes: $BERYL_ARENA, else ~/Movies/arena."""
+    folder = os.environ.get(ARENA_ENV)
+    return Path(folder).expanduser() if folder else ARENA_DEFAULT
+
+
+def recordings(folder: Path) -> dict[str, Path]:
+    """The recordings in a folder, by id."""
+    files = sorted(folder.iterdir()) if folder.is_dir() else []
+    return {video_id(f): f for f in files if f.suffix.lower() in RECORDINGS}
 
 
 def resolve(name: str) -> tuple[Path, Path]:
-    """A recording and its index folder, from the recording's path or an indexed id."""
+    """A recording and its index folder, from the recording's path or its id."""
     path = Path(name).expanduser()
     if path.is_file():
         return path.resolve(), root() / video_id(path)
+    found = recordings(root()).get(name)
+    if found is not None:
+        return found, root() / name
     meta = root() / name / "meta.json"
     if not meta.is_file():
-        raise VideoError(f"{name}: neither a file nor an indexed id under {root()}")
+        raise VideoError(f"{name}: neither a file nor a recording's id in {root()}")
     return Path(str(json.loads(meta.read_text())["source"])), meta.parent
 
 
@@ -433,7 +450,7 @@ def recognizer() -> Path:
     if sys.platform != "darwin":
         raise VideoError("`by video index` needs macOS: it reads text with Vision")
     digest = hashlib.sha256(OCR_SOURCE.read_bytes()).hexdigest()[:12]
-    binary = root() / "bin" / f"ocr-{digest}"
+    binary = paths.cache_root() / "video" / f"ocr-{digest}"
     if not binary.exists():
         binary.parent.mkdir(parents=True, exist_ok=True)
         run = subprocess.run(
@@ -604,6 +621,17 @@ def find(args: argparse.Namespace) -> int:
     return 0
 
 
+def listing(_: argparse.Namespace) -> int:
+    """Prints each recording's id, whether it is indexed, and its name."""
+    found = recordings(root())
+    for name, source in found.items():
+        indexed = (root() / name / "timeline.txt").is_file()
+        print(f"{name:<14} {'indexed' if indexed else '-':<8} {source.name}")
+    if not found:
+        print(f"no recordings in {root()}", file=sys.stderr)
+    return 0
+
+
 def film(args: argparse.Namespace) -> int:
     """Tiles the frames from `at` on into one image, left to right then down, and prints its
     path and each row's times."""
@@ -643,10 +671,11 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     video = sub.add_parser("video", help="index an Arena recording as a UI reference")
     commands = video.add_subparsers(dest="video_command", required=True)
 
+    p = commands.add_parser("list", help="the recordings and which are indexed")
+    p.set_defaults(func=listing)
+
     p = commands.add_parser("index", help="write a recording's text, events and shots")
-    p.add_argument(
-        "video", help="the recording, or an indexed id to derive events again"
-    )
+    p.add_argument("video", help="the recording or its id")
     p.add_argument("--fps", default="2", help="samples a second (default 2)")
     p.add_argument("--jobs", default="6", help="recognizer processes (default 6)")
     p.add_argument("--force", action="store_true", help="read the frames again")
@@ -655,14 +684,14 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = commands.add_parser(
         "find", help="search a recording's timeline and on-screen text"
     )
-    p.add_argument("video", help="the recording or its indexed id")
+    p.add_argument("video", help="the recording or its id")
     p.add_argument("pattern", help="a regular expression, case-insensitive")
     p.set_defaults(func=find)
 
     p = commands.add_parser(
         "film", help="tile the frames around a moment into one image"
     )
-    p.add_argument("video", help="the recording or its indexed id")
+    p.add_argument("video", help="the recording or its id")
     p.add_argument("at", help="where to start: 24:32, 1:02:03.5 or seconds")
     p.add_argument("--span", default="3", help="seconds to cover (default 3)")
     p.add_argument("--fps", default="10", help="frames a second (default 10)")

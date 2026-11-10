@@ -120,3 +120,12 @@ def test_timeline_lines() -> None:
     assert video.timeline([event]) == (
         "  24:32.0  spell    Sheoldred | Legendary Creature [Resolve]\n"
     )
+
+
+def test_recordings_are_found_by_id(tmp_path: Path) -> None:
+    (tmp_path / "Cube Draft #443 [SswBO8aOOgc].webm").write_bytes(b"")
+    (tmp_path / "SswBO8aOOgc").mkdir()
+    (tmp_path / "notes.txt").write_text("")
+    found = video.recordings(tmp_path)
+    assert list(found) == ["SswBO8aOOgc"]
+    assert video.recordings(tmp_path / "missing") == {}
