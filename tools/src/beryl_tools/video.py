@@ -678,11 +678,14 @@ def film(args: argparse.Namespace) -> int:
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    from . import video_cards  # It imports this module.
+
     video = sub.add_parser("video", help="index an Arena recording as a UI reference")
     commands = video.add_subparsers(dest="video_command", required=True)
 
     p = commands.add_parser("list", help="the recordings and which are indexed")
     p.set_defaults(func=listing)
+    video_cards.register(commands)
 
     p = commands.add_parser("index", help="write a recording's text, events and shots")
     p.add_argument("video", help="the recording or its id")

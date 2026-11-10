@@ -27,10 +27,35 @@ indexed recording has a folder `~/arena/<id>/`:
   in 1920x1080 pixels. `just video find` searches it.
 - `film/`: the filmstrips you make.
 
+`~/arena/cards/` holds the card dumps and their sheets.
+
 To index one, run `just video index <id>`. It takes about four minutes an hour
 of video and all the machine's cores, so index one recording at a time, and
 never as part of a check. It costs no tokens. Indexing again only derives the
 events again unless `--force` is given.
+
+## Starting from a card
+
+To study one card, start from its dump, which is every appearance of it in
+every recording as a page of text:
+
+```
+just video card "Teferi, Time Raveler" --sheet
+```
+
+It prints, and saves to `~/arena/cards/`, the card's type line, each distinct
+ability text lettered once, then per recording a numbered line for every cast
+and every ability: the time, how long it stayed on the stack, whose turn, the
+buttons offered, the shot's path, and what followed within ten seconds
+(prompts, other stack objects, life changes). After those come the stretches
+it was in hand, shown (a hover preview, a browser, a reveal) or in a draft
+pack. `--sheet` tiles the numbered events' shots, twelve to an image, so one
+image shows how the card looks on the stack across games. Read the text, pick
+the instances worth seeing by number, then film them (below).
+
+`just video cards` shows which of Beryl's own cards the recordings cover and
+how well, and `just video cards --top 40` the cards seen most across the
+corpus, which is where the recordings have the most to teach.
 
 The kinds of event:
 
@@ -153,8 +178,9 @@ a recording, a shot or a filmstrip: they stay outside the tree.
 
 ## Extending the index
 
-The tool is `tools/src/beryl_tools/video.py` (regions, event rules, commands),
-with the recognizer in `video_ocr.swift` and tests on synthetic screens in
+The tool is `tools/src/beryl_tools/video.py` (regions, event rules, commands)
+and `video_cards.py` (matching card names across recordings), with the
+recognizer in `video_ocr.swift` and tests on synthetic screens in
 `tools/tests/test_video.py`. A new kind of event is a `Box` for where its text
 appears and a function from frames to events: check the region against
 `text.jsonl` first, then run `just video index <id>` to derive again in
