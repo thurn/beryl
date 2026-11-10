@@ -9604,6 +9604,9 @@ if (wanted("tokens reach their destination before ceasing")) {
                         "Token",
                     );
                     await page.evaluate(record);
+                    // Only explicit steps may advance the flight: awaited browser calls
+                    // otherwise consume its hold under load before the 650ms sample.
+                    await page.clock.pauseAt(Date.now() + 60_000);
                     await page
                         .getByRole("button", { name: "Resolve", exact: true })
                         .click();
