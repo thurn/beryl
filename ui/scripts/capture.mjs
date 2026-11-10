@@ -298,8 +298,8 @@ export function cutText(page) {
 /** Where the game screen disagrees with the view the fixture last released
  * (`window.berylFixture.view()`, src/ipc.ts), once it has settled: each permanent, spell and
  * card in the viewer's hand drawn exactly once, in its zone, under its name; a permanent's
- * power and toughness (less marked damage), loyalty, counters and orientation, including the
- * initial waterbend preview; both life totals; and no card drawn that the view does not have.
+ * power and toughness (less marked damage), loyalty, counters and orientation; both life
+ * totals; and no card drawn that the view does not have.
  * Each is described for a failure message. Nothing on a page without a fixture. */
 export async function screenFaults(page) {
     return page.evaluate(() => {
@@ -307,13 +307,6 @@ export async function screenFaults(page) {
         // A screen other than the game's, as the menu, draws no table to check.
         if (!view || !document.querySelector("[data-life]")) return [];
         const phone = document.querySelector(".phone-board") !== null;
-        const decision =
-            view.status.kind === "deciding" ? view.status.decision : undefined;
-        // The desktop board turns the suggested waterbend contributors before confirmation.
-        const benders =
-            !phone && decision?.kind === "waterbend"
-                ? (decision.waterbend?.benders ?? [])
-                : [];
         const faults = [];
         const drawn = new Map();
         for (const e of document.querySelectorAll(".card-el[data-slot]")) {
@@ -382,7 +375,7 @@ export async function screenFaults(page) {
             }
             // A tapped card lies turned a quarter, wider than tall.
             const box = e.getBoundingClientRect();
-            const tapped = o.tapped || benders.includes(o.slot);
+            const tapped = o.tapped;
             if (box.width > box.height !== tapped) {
                 faults.push(`${what} drawn ${tapped ? "untapped" : "tapped"}`);
             }

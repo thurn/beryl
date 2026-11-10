@@ -160,6 +160,9 @@ head-to-head matches instead. Its last run is `docs/longthink-run-003.md`.
 
 ## UI
 
+Keep [UI Conventions](docs/ui-conventions.md) up to date as the user gives UI
+feedback.
+
 Everything in the Beryl client acts like a physical object. Cards cast shadows
 and animate and flip realistically. Things usually don't just appear, they come
 from somewhere. We never show multiple copies of the same game object. Browsers

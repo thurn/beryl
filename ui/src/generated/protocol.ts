@@ -33,7 +33,7 @@ continuation?: boolean, };
 
 export type WaterbendRequest = { decision: DecisionId, 
 /**
- * The complete selection, including any suggested mana sources the player kept.
+ * Only the permanents the player picked manually.
  */
 selected: Array<number>, };
 
@@ -305,7 +305,7 @@ export type TargetRef = { "kind": "player", player: Side, } | { "kind": "object"
 
 export type DecisionView = { 
 /**
- * The suggested waterbend payment, editable without committing the taps.
+ * The initial Auto Pay proposal for Waterbend.
  */
 waterbend?: WaterbendPreview, 
 /**

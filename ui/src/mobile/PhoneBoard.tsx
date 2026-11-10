@@ -36,6 +36,8 @@ import { attackPlan, blockPlan } from "../game/combat";
 import { follow, interactions, tapsOnly, type Intent } from "../game/decisions";
 import { faceDownFace, marksOf, SCAN, useFace } from "../game/faces";
 import { HALT_BUTTON, passButton } from "../game/layout";
+import { PaymentButton } from "../game/PaymentButton";
+import { useWaterbend } from "../game/waterbend";
 import { useCardArt } from "../cards";
 import {
   phaseOf,
@@ -50,6 +52,7 @@ import "./phone.css";
 interface Glow {
   highlight?: Highlight;
   playable?: boolean;
+  paying?: boolean;
 }
 
 /** The em of the badges on a card `width` wide (phone.css `--badge`): a loyalty or a face-down
@@ -74,6 +77,7 @@ export function PhoneBoard({
   waiting,
   choose,
   passOn,
+  cancel,
   onLeave,
 }: {
   view: PlayerView;
@@ -81,24 +85,39 @@ export function PhoneBoard({
   waiting: boolean;
   choose(index: CandidateIndex, then?: Intent[]): void;
   passOn(): void;
+  cancel(): void;
   onLeave(): void;
 }) {
   const { ref, viewport } = useViewport();
-  const placed = useMemo(
-    () => viewport && phoneLayout(view, viewport),
-    [view, viewport],
-  );
-  const objects = useMemo(
-    () => new Map(view.objects.map((o) => [o.slot, o])),
-    [view],
-  );
-  const can = useMemo(() => interactions(view), [view]);
   const status = view.status;
   const decision =
     status.kind === "deciding" && !waiting ? status.decision : undefined;
-
+  const waterbend = useWaterbend(decision, choose);
+  const [paymentPreview, setPaymentPreview] = useState<PlayerView>();
+  const previewingPayment = paymentPreview === view;
+  const shown = useMemo(
+    () =>
+      waterbend.manual.length === 0
+        ? view
+        : {
+            ...view,
+            objects: view.objects.map((o) =>
+              waterbend.manual.includes(o.slot) ? { ...o, tapped: true } : o,
+            ),
+          },
+    [view, waterbend.manual],
+  );
+  const placed = useMemo(
+    () => viewport && phoneLayout(shown, viewport),
+    [shown, viewport],
+  );
+  const objects = useMemo(
+    () => new Map(shown.objects.map((o) => [o.slot, o])),
+    [shown],
+  );
+  const can = useMemo(() => interactions(view), [view]);
   const glows = new Map<number, Glow>();
-  if (decision) {
+  if (decision && !waterbend.active) {
     for (const [slot, acts] of can.bySlot) {
       const single = can.picking && acts.length === 1;
       glows.set(slot, {
@@ -117,9 +136,15 @@ export function PhoneBoard({
     ),
   ];
   for (const [slot, highlight] of marks) {
-    if (slot == null || glows.get(slot)?.highlight) continue;
+    if (waterbend.active || slot == null || glows.get(slot)?.highlight)
+      continue;
     glows.set(slot, { ...glows.get(slot), highlight });
   }
+
+  const paymentSlots = previewingPayment
+    ? [...waterbend.manual, ...waterbend.proposed]
+    : waterbend.manual;
+  for (const slot of paymentSlots) glows.set(slot, { paying: true });
 
   const { you, opponent } = view.players;
   const active = view.turn.active;
@@ -194,17 +219,39 @@ export function PhoneBoard({
             style={placed.bands.yourStrip}
           >
             {pile("you")}
+            {waterbend.active && decision?.cancellable && (
+              <button
+                type="button"
+                className="icon-button phone-payment-cancel"
+                aria-label="Cancel"
+                onClick={cancel}
+              >
+                ×
+              </button>
+            )}
             <div className="phone-orb" data-life="you">
               <LifeOrb life={you.life} active={active === "you"} seat="you" />
             </div>
-            <PhoneDock
-              view={view}
-              waiting={waiting}
-              can={can}
-              objects={objects}
-              choose={choose}
-              passOn={passOn}
-            />
+            {waterbend.active ? (
+              <div className="phone-dock">
+                <PaymentButton
+                  disabled={!waterbend.ready}
+                  onPreview={(on) => setPaymentPreview(on ? view : undefined)}
+                  onPay={waterbend.autoPay}
+                >
+                  Auto Pay
+                </PaymentButton>
+              </div>
+            ) : (
+              <PhoneDock
+                view={view}
+                waiting={waiting}
+                can={can}
+                objects={objects}
+                choose={choose}
+                passOn={passOn}
+              />
+            )}
           </div>
           <div className="card-layer phone-cards">
             {placed.cards.map((spot) => (
@@ -213,6 +260,11 @@ export function PhoneBoard({
                 object={objects.get(spot.slot)!}
                 spot={spot}
                 glow={glows.get(spot.slot) ?? {}}
+                onClick={
+                  waterbend.active && spot.zone === "battlefield"
+                    ? () => waterbend.toggle(spot.slot)
+                    : undefined
+                }
               />
             ))}
             {placed.stack.map((spot) => (
@@ -262,10 +314,12 @@ function PhoneCard({
   object,
   spot,
   glow,
+  onClick,
 }: {
   object: ObjectView;
   spot: Spot;
   glow: Glow;
+  onClick?(): void;
 }) {
   const face = useFace(object);
   const field = spot.zone === "battlefield";
@@ -279,6 +333,7 @@ function PhoneCard({
       data-slot={object.slot}
       data-zone={object.zone}
       data-card={object.name ?? undefined}
+      onClick={onClick}
       style={
         {
           left: spot.x,
@@ -301,7 +356,11 @@ function PhoneCard({
           tapped={field && object.tapped}
           highlight={glow.highlight}
           className={
-            glow.playable && !glow.highlight ? "card-playable" : undefined
+            glow.paying
+              ? "card-paying"
+              : glow.playable && !glow.highlight
+                ? "card-playable"
+                : undefined
           }
           marks={
             field

@@ -23,6 +23,7 @@ import {
   useReducedMotion,
 } from "motion/react";
 import { useWaterbend } from "./waterbend";
+import { PaymentButton } from "./PaymentButton";
 import { cardEntry, faceEntry, landFace } from "../cards";
 import { BugIcon, requestBugReport } from "../components/BugReport";
 import { CARD_ASPECT, Card, type Highlight } from "../components/Card";
@@ -241,6 +242,7 @@ interface Casting {
   slot: number;
   casts: Act[];
   choice: CastChoice;
+  selected: number[];
 }
 
 const NO_SPOTLIGHT: Spotlight = {};
@@ -365,7 +367,14 @@ export function Board({
       ? previousGroup.slots
       : handlingSlots(view, standIns.order);
   heldGroup.current = { view, slots: handledSlots };
-  const waterbend = useWaterbend(decision);
+  const waterbend = useWaterbend(deciding ? decision : undefined, choose);
+  const [paymentPreview, setPaymentPreview] = useState<{
+    view: PlayerView;
+    slots?: number[];
+  }>();
+  const previewingPayment = paymentPreview?.view === view;
+  const previewPayment = (on: boolean, slots?: number[]) =>
+    setPaymentPreview(on ? { view, slots } : undefined);
   // Declaring attackers or blockers: the creatures are picked on the table, in any order.
   const drafting =
     deciding && (decision?.kind === "attacker" || decision?.kind === "blocker")
@@ -425,10 +434,10 @@ export function Board({
     return {
       ...declaredView,
       objects: declaredView.objects.map((o) =>
-        waterbend.previewTaps.includes(o.slot) ? { ...o, tapped: true } : o,
+        waterbend.manual.includes(o.slot) ? { ...o, tapped: true } : o,
       ),
     };
-  }, [view, draft, decision, waterbend.active, waterbend.previewTaps]);
+  }, [view, draft, decision, waterbend.active, waterbend.manual]);
   // Every card the table draws: the objects shown, and the emblems.
   const drawn = useMemo(() => [...shown.objects, ...emblems], [shown, emblems]);
   // Until combat damage is dealt, what each player's unblocked attackers will deal them.
@@ -755,7 +764,7 @@ export function Board({
   /** Opens the cast step for the card in `slot` with its casts. */
   const setUp = (slot: number, casts: Act[]) => {
     setMenu(undefined);
-    setCasting({ slot, casts, choice: firstChoice(casts[0]!) });
+    setCasting({ slot, casts, choice: firstChoice(casts[0]!), selected: [] });
   };
   /** Where the card in `slot` lies, for the mode chooser to spring from: at `at`, let go
    * there, or else its place. */
@@ -990,50 +999,32 @@ export function Board({
     const width = p.width * p.scale;
     return { slot, at: { x: p.x + width / 2, y: p.y } };
   }, [prompting, decision, placements]);
-  // What paying "unless pays" would tap, lit as it is asked.
-  const unlessTaps =
-    deciding && decision?.ask.kind === "unlessPays"
-      ? decision.candidates.find((c) => c.option.kind === "yes")?.payments[0]
-          ?.taps
-      : undefined;
-  // The permanents the payment taps glow as it is set up, or while the card is dragged, its
-  // first cast's (the one a drop makes when it asks nothing more). In the cast step, the ones
-  // only another payment taps can be clicked to pay that way.
+  const previewedSlots = previewingPayment ? paymentPreview.slots : undefined;
+  // Dragging previews the first cast, the one a drop makes when it asks nothing more.
   const liftedCast =
     deciding && lifted !== undefined
       ? castActs(can.bySlot.get(lifted) ?? [])[0]
       : undefined;
-  const paying = castingNow
-    ? castingNow.choice
-    : liftedCast && firstChoice(liftedCast);
+  const paying = liftedCast && firstChoice(liftedCast);
   // The spell cast last keeps its payment lit while it is on top of the stack: as its
   // targets are chosen, before the payment is made (CR 601.2c to 601.2h), and once its
   // permanents are tapped.
   const taps = new Set(
     waterbend.active
-      ? waterbend.selected
-      : paying
-        ? tapsOf(paying)
-        : (unlessTaps ??
-          (paid && top?.kind === "spell" && top.slot === paid.slot
-            ? paid.taps
-            : [])),
+      ? previewingPayment
+        ? [...waterbend.manual, ...waterbend.proposed]
+        : waterbend.manual
+      : castingNow
+        ? (previewedSlots ?? castingNow.selected)
+        : paying
+          ? tapsOf(paying)
+          : (previewedSlots ??
+            (paid && top?.kind === "spell" && top.slot === paid.slot
+              ? paid.taps
+              : [])),
   );
-  const others =
-    castingNow && !waterbend.active
-      ? plansOf(castingNow.choice).flatMap((p) =>
-          p.taps.filter((slot) => !taps.has(slot)),
-        )
-      : [];
-  for (const slot of others) {
-    states.set(slot, { ...states.get(slot), playable: true });
-  }
   for (const slot of taps) {
     states.set(slot, { ...states.get(slot), paying: true, playable: false });
-  }
-  for (const slot of waterbend.eligible) {
-    if (!taps.has(slot))
-      states.set(slot, { ...states.get(slot), highlight: "target" });
   }
   for (const slot of waterbend.benders) {
     states.set(slot, { ...states.get(slot), waterbending: true });
@@ -1122,22 +1113,35 @@ export function Board({
   /** A click on the card in `slot`: what it offers, or nothing (false). */
   const onClick = (slot: number, at: Point): boolean => {
     if (isEmblem(slot)) return false;
-    if (deciding && waterbend.active) return editWaterbend(slot);
+    if (deciding && waterbend.active) {
+      const pile = placements.get(slot)?.pile ?? [slot];
+      return editWaterbend(
+        waterbend.manual.includes(slot)
+          ? slot
+          : (pile.find((s) => !waterbend.manual.includes(s)) ?? slot),
+      );
+    }
     standIns.touch(slot, deciding ? can.bySlot.get(slot) : undefined);
     if (castingNow) {
-      // A permanent another payment taps pays that way.
-      const plan = plansOf(castingNow.choice).find((p) =>
-        p.taps.includes(slot),
-      );
-      if (plan && !taps.has(slot)) {
-        playSound("select");
-        setCasting({
-          ...castingNow,
-          choice: { ...castingNow.choice, plan: plan.plan ?? undefined },
-        });
+      const { choice, selected } = castingNow;
+      const plans = plansOf(choice);
+      if (plans.some((p) => p.taps.includes(slot))) {
+        const next = selected.includes(slot)
+          ? selected.filter((s) => s !== slot)
+          : [...selected, slot];
+        const plan = plans.find((p) => next.every((s) => p.taps.includes(s)));
+        if (plan) {
+          playSound("select");
+          setCasting({
+            ...castingNow,
+            selected: next,
+            choice: { ...choice, plan: plan.plan ?? undefined },
+          });
+        }
         return true;
       }
-      if (slot === castingNow.slot) return true;
+      if (slot === castingNow.slot || objects.get(slot)?.zone === "battlefield")
+        return true;
       setCasting(undefined);
     }
     // A pile of identical permanents is taken from the top, whichever of its cards is
@@ -1844,24 +1848,14 @@ export function Board({
                     disabled: false,
                     onClick: stackConfirmation,
                   }
-                : waterbend.active
-                  ? {
-                      label: "Confirm",
-                      disabled: !waterbend.ready,
-                      onClick: () => {
-                        const { index, rest } = follow(
-                          decision,
-                          waterbend.plan(),
-                        );
-                        if (index !== undefined) pick(index, rest);
-                      },
-                    }
-                  : picking && {
-                      label: picking.label(picked),
-                      disabled: !picking.ready(picked),
-                      onClick: confirmPicks,
-                    }
+                : picking && {
+                    label: picking.label(picked),
+                    disabled: !picking.ready(picked),
+                    onClick: confirmPicks,
+                  }
             }
+            autoPay={waterbend.active ? waterbend : undefined}
+            onPaymentPreview={previewPayment}
             hovered={hovered}
             risen={risen?.slot}
           />
@@ -1876,7 +1870,12 @@ export function Board({
             name={objects.get(castingNow.slot)?.name ?? "a card"}
             casts={castingNow.casts}
             choice={castingNow.choice}
-            onChoose={(choice) => setCasting({ ...castingNow, choice })}
+            onChoose={(choice) =>
+              setCasting({ ...castingNow, choice, selected: [] })
+            }
+            onPaymentPreview={(on, choice) =>
+              previewPayment(on, tapsOf(choice))
+            }
             onCast={cast}
             onCancel={() => setCasting(undefined)}
           />
@@ -2934,6 +2933,8 @@ function Prompt({
   onPoint,
   targetLabel,
   confirm,
+  autoPay,
+  onPaymentPreview,
   hovered,
   risen,
 }: {
@@ -2955,6 +2956,8 @@ function Prompt({
   targetLabel?: string;
   /** Confirms the cards picked on the table, which leaves the prompt no candidate to offer. */
   confirm?: { label: string; disabled: boolean; onClick(): void } | false;
+  autoPay?: { ready: boolean; autoPay(): void };
+  onPaymentPreview(on: boolean, slots?: number[]): void;
   /** The card the pointer is on, which a crew meter previews. */
   hovered?: number;
   /** The card the question is about, shown risen above its place on the table. */
@@ -2976,16 +2979,17 @@ function Prompt({
     return taps.length > 0 ? `Tap ${tapList(taps.map(nameOf))}` : "Tap nothing";
   };
   // Cards picked on the table are not offered again; those off it show their faces.
-  const offered = confirm
-    ? []
-    : decision.candidates
-        .map((c, index) => ({ c, index, label: label(c) }))
-        .filter(({ c }) =>
-          // Players are picked on their life orbs, which light for them.
-          c.option.kind === "player"
-            ? false
-            : c.option.kind !== "object" || !onTable(c.option.slot),
-        );
+  const offered =
+    confirm || autoPay
+      ? []
+      : decision.candidates
+          .map((c, index) => ({ c, index, label: label(c) }))
+          .filter(({ c }) =>
+            // Players are picked on their life orbs, which light for them.
+            c.option.kind === "player"
+              ? false
+              : c.option.kind !== "object" || !onTable(c.option.slot),
+          );
   // Up to one target asks for the target, which the board takes with its count; the prompt
   // offers none.
   const listed =
@@ -3096,21 +3100,42 @@ function Prompt({
         </>
       }
     >
-      {(buttons.length > 0 || onCancel || confirm) && (
+      {(buttons.length > 0 || onCancel || confirm || autoPay) && (
         <PromptRow>
-          {buttons.map((b, i) => (
-            <Button
-              key={b.index}
-              variant={
-                i === 0 && !confirm && skip === undefined
-                  ? "primary"
-                  : "secondary"
-              }
-              onClick={() => onPick(b.index)}
+          {autoPay && (
+            <PaymentButton
+              disabled={!autoPay.ready}
+              onPreview={onPaymentPreview}
+              onPay={autoPay.autoPay}
             >
-              <RulesText text={b.label} />
-            </Button>
-          ))}
+              Auto Pay
+            </PaymentButton>
+          )}
+          {buttons.map((b, i) =>
+            b.c.option.kind === "plan" ||
+            (ask.kind === "unlessPays" && b.c.option.kind === "yes") ? (
+              <PaymentButton
+                key={b.index}
+                variant={i === 0 ? "primary" : "secondary"}
+                onPreview={(on) => onPaymentPreview(on, b.c.payments[0]?.taps)}
+                onPay={() => onPick(b.index)}
+              >
+                <RulesText text={b.label} />
+              </PaymentButton>
+            ) : (
+              <Button
+                key={b.index}
+                variant={
+                  i === 0 && !confirm && skip === undefined
+                    ? "primary"
+                    : "secondary"
+                }
+                onClick={() => onPick(b.index)}
+              >
+                <RulesText text={b.label} />
+              </Button>
+            ),
+          )}
           {confirm && (
             <Button disabled={confirm.disabled} onClick={confirm.onClick}>
               {confirm.label}

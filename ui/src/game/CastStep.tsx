@@ -1,7 +1,4 @@
-// The cast step (game/casting.ts): a card's casts, each by its cost, with its X where it has
-// one, as the floating prompt's buttons in the action dock: a button casts. What the payment taps is lit on the
-// board, where a payment the engine offers a choice of is picked by clicking a glowing
-// permanent that another payment taps.
+// The cast step chooses the spell and X, and can preview the payment on the board.
 import { useEffect } from "react";
 import { cardEntry } from "../cards";
 import { Button } from "../components/Controls";
@@ -17,6 +14,7 @@ import {
 } from "./casting";
 import type { Act } from "./decisions";
 import { FloatPrompt, PromptRow } from "./FloatPrompt";
+import { PaymentButton } from "./PaymentButton";
 
 export interface CastStepProps {
   /** The card being cast. */
@@ -26,6 +24,7 @@ export interface CastStepProps {
   onChoose(choice: CastChoice): void;
   /** Casts with `choice`. */
   onCast(choice: CastChoice): void;
+  onPaymentPreview(on: boolean, choice: CastChoice): void;
   onCancel(): void;
 }
 
@@ -35,6 +34,7 @@ export function CastStep({
   choice,
   onChoose,
   onCast,
+  onPaymentPreview,
   onCancel,
 }: CastStepProps) {
   useEffect(() => {
@@ -93,30 +93,49 @@ export function CastStep({
       )}
       <PromptRow>
         {/* Choosing among casts paid on the board, Cast is the primary, at the foot. */}
-        {selects && <Button onClick={() => onCast(choice)}>Cast</Button>}
+        {selects && (
+          <PaymentButton
+            onPreview={(on) => onPaymentPreview(on, choice)}
+            onPay={() => onCast(choice)}
+          >
+            Auto Pay
+          </PaymentButton>
+        )}
         {casts.map((a, i) => {
           const c = choiceFor(a);
           const face =
             a.option.kind === "cast" ? card?.faces[a.option.face] : undefined;
           const label = castName(a, name);
-          return (
+          const caption = (
+            <CastLabel
+              label={
+                !selects && paysOnBoard && label === "Cast" ? "Auto Pay" : label
+              }
+              cost={
+                paymentOf(c)?.cost ||
+                (label === "Cast" ? face?.mana_cost : undefined) ||
+                undefined
+              }
+            />
+          );
+          return selects ? (
             <Button
               key={a.index}
-              variant={i === 0 && !selects ? "primary" : "secondary"}
-              aria-pressed={selects ? a === choice.act : undefined}
-              onClick={() => (selects ? onChoose(c) : onCast(c))}
+              variant="secondary"
+              aria-pressed={a === choice.act}
+              onClick={() => onChoose(c)}
             >
-              <CastLabel
-                label={label}
-                // Only the plain cast falls back to the printed cost: an alternative one paid
-                // without mana (Evoke by exiling a card) shows none.
-                cost={
-                  paymentOf(c)?.cost ||
-                  (label === "Cast" ? face?.mana_cost : undefined) ||
-                  undefined
-                }
-              />
+              {caption}
             </Button>
+          ) : (
+            <PaymentButton
+              key={a.index}
+              variant={i === 0 ? "primary" : "secondary"}
+              onPreview={(on) => onPaymentPreview(on, c)}
+              onPay={() => onCast(c)}
+            >
+              {caption}
+            </PaymentButton>
           );
         })}
         <Button variant="secondary" onClick={onCancel}>

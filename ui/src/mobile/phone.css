@@ -102,6 +102,12 @@ body.phone {
 .phone-menu {
   margin-left: auto;
 }
+.phone-board .phone-payment-cancel {
+  width: 32px;
+  height: 32px;
+  margin-left: 4px;
+  font-size: 20px;
+}
 
 /* The middle: the phase icon on the gold line, glowing while it is your turn; left of the
    stack when there is one. */

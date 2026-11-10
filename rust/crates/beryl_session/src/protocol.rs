@@ -326,7 +326,7 @@ pub enum TargetRef {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct DecisionView {
-    /// The suggested waterbend payment, editable without committing the taps.
+    /// The initial Auto Pay proposal for Waterbend.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub waterbend: Option<Box<crate::ipc::WaterbendPreview>>,

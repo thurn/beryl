@@ -28,7 +28,7 @@ pub const PREVIEW_WATERBEND: &str = "preview_waterbend";
 #[serde(rename_all = "camelCase")]
 pub struct WaterbendRequest {
     pub decision: DecisionId,
-    /// The complete selection, including any suggested mana sources the player kept.
+    /// Only the permanents the player picked manually.
     pub selected: Vec<u16>,
 }
 
@@ -40,7 +40,7 @@ pub struct WaterbendPreview {
     pub benders: Vec<u16>,
     pub taps: Vec<u16>,
     pub plan: Option<u16>,
-    // Whether these permanents suffice to pay the full cost.
+    // Whether the proposed payment can pay the full cost.
     pub ready: bool,
     // Other permanents that could be added without a redundant contribution.
     pub eligible: Vec<u16>,

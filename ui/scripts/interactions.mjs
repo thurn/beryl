@@ -157,6 +157,7 @@ async function check(
         reducedMotion = "no-preference",
         hash = "#/game",
         init,
+        phone = false,
         clock = true,
     } = {},
 ) {
@@ -167,6 +168,7 @@ async function check(
             viewport,
             deviceScaleFactor: 1,
             reducedMotion,
+            hasTouch: phone,
         });
         await context.route("**/fixtures/*.json", (route) =>
             route.fulfill({
@@ -187,7 +189,7 @@ async function check(
         try {
             if (clock) await page.clock.install();
             if (init) await page.addInitScript(init);
-            const route = `/?fixture=${fixture}&at=${at}${hash}`;
+            const route = `/?fixture=${fixture}&at=${at}${phone ? "&phone" : ""}${hash}`;
             await page.goto(new URL(route, base).href, { waitUntil: "load" });
             await page.waitForSelector(ready);
             await body(page);
@@ -3560,14 +3562,22 @@ await check(
         await page.click(byChoice.spell);
         const step = page.getByRole("dialog", { name: /^Cast / });
         await step.waitFor();
+        const autoPay = step.getByRole("button", { name: /^Auto Pay/ });
+        assert.deepEqual(await lit(page), []);
+        await autoPay.hover();
         assert.deepEqual(
             await lit(page),
             ascending(byChoice.cast.payments[0].taps),
-            "the default payment lit first",
         );
         await page.click(`[data-slot="${clicked}"]`);
-        assert.deepEqual(await lit(page), byChoice.tapped, "the clicked way");
-        await step.getByRole("button", { name: /^Cast/ }).click();
+        assert.deepEqual(await lit(page), [clicked], "only the manual pick");
+        await autoPay.hover();
+        assert.deepEqual(
+            await lit(page),
+            byChoice.tapped,
+            "the completed proposal",
+        );
+        await autoPay.click();
         // The decisions before the payment (its targets) are the player's, on the board.
         const picks = [byChoice.castIndex];
         for (const v of byChoice.between) {
@@ -4280,7 +4290,7 @@ await check(
 );
 
 // Mana Tithe asks the human to pay {1} on the board, the table in view: the land the payment
-// would tap glows, and no other; the prompt answers from its buttons.
+// would tap glows on hover; the prompt answers from its buttons.
 const pay = await lastDecision("choice-pay");
 const decline = pay.decision.candidates.findIndex(
     (c) => c.option.kind === "no",
@@ -4294,17 +4304,9 @@ await check(
         await page.clock.runFor(2000);
         assert.equal(await page.$(".choice"), null, "no overlay opens");
         assert.equal(await page.$(".table-dimmed"), null, "the table shows");
-        const lit = await page.$$eval(
-            '[data-zone="battlefield"] .card-paying',
-            (els) => [
-                ...new Set(
-                    els.map((e) =>
-                        Number(e.closest("[data-slot]").dataset.slot),
-                    ),
-                ),
-            ],
-        );
-        assert.deepEqual(lit, payTaps, "the paying land glows");
+        assert.deepEqual(await lit(page), []);
+        await page.getByRole("button", { name: /^Pay/ }).hover();
+        assert.deepEqual(await lit(page), payTaps, "the paying land glows");
         await page.getByRole("button", { name: "Don't Pay" }).click();
         assert.deepEqual(await settled(page, 1), [decline]);
     },
@@ -10942,187 +10944,114 @@ await check(
     { fixture: "crew", at: crewAt + 2, ready: ".crew-meter" },
 );
 
-// Even with enough lands, the player reviews the payment before any permanent taps.
+// Auto Pay previews on hover, with no selected permanents until the player picks.
 const scryViews = await load("choice-scry");
 const bendAt = scryViews.findIndex(
     (v) => v.status.decision?.kind === "waterbend",
 );
 assert.ok(bendAt >= 0, "waterbend opens a payment review");
+const bending = scryViews[bendAt].status.decision;
+const suggested = bending.waterbend;
+const autoPayButton = (page) =>
+    page.getByRole("button", { name: "Auto Pay", exact: true });
 await check(
-    "a waterbend payable by lands waits for confirmation",
+    "waterbend Auto Pay highlights only on hover and accepts on click",
     async (page) => {
         await page.clock.runFor(2000);
-        assert.equal(
-            await page
-                .getByRole("button", { name: "Confirm", exact: true })
-                .isEnabled(),
-            true,
-        );
-        assert.equal((await chosen(page)).length, 0);
-        const taps = scryViews[bendAt].status.decision.waterbend.taps;
-        for (const slot of taps) {
-            assert.equal(
-                await page.locator(`${slotOf(slot)} .card-paying`).count(),
-                1,
-            );
-        }
-        await page
-            .getByRole("button", { name: "Confirm", exact: true })
-            .click();
+        const autoPay = autoPayButton(page);
+        assert.ok(await autoPay.isEnabled());
+        assert.deepEqual(await lit(page), []);
+        assert.deepEqual(await glowing(page, "target"), []);
+        await autoPay.hover();
+        assert.deepEqual(await lit(page), ascending(suggested.taps));
+        assert.deepEqual(await chosen(page), []);
+        await page.mouse.move(0, 0);
+        assert.deepEqual(await lit(page), []);
+        await autoPay.click();
         await settled(page, 1);
         await page.waitForSelector(".choice");
     },
     { fixture: "choice-scry", at: bendAt + 1, ready: ".prompt-cost" },
 );
 
-// The player can drop a suggested land, replace it with a creature, then cancel
-// the draft. An extra creature cannot contribute while all three lands are selected.
-if (wanted("waterbend selections")) {
-    const bending = scryViews[bendAt].status.decision;
-    const slot = bending.candidates.find((c) => c.option.kind === "object")
+const mixedBend = "waterbend Auto Pay keeps manual picks";
+if (wanted(mixedBend)) {
+    const bender = bending.candidates.find((c) => c.option.kind === "object")
         .option.slot;
-    const suggested = bending.waterbend;
-    const [land, ...otherLands] = suggested.taps;
-    const short = {
+    const mixed = {
         ...suggested,
-        mana: suggested.mana.filter((m) => m.slot !== land),
-        ready: false,
-        eligible: [land, slot],
-        taps: otherLands,
-    };
-    const replacement = {
-        ...short,
-        benders: [slot],
-        ready: true,
-        eligible: [],
-        taps: [...otherLands, slot],
+        benders: [bender],
+        taps: [bender, ...suggested.taps.slice(0, 2)],
     };
     const fixture = JSON.parse(
         await readFile(join(fixtures, "choice-scry.json"), "utf8"),
     );
     fixture.messages.unshift(
-        ...[short, replacement, short, suggested].map((value) => ({
+        ...[mixed, suggested, mixed].map((value) => ({
             kind: "response",
             command: "preview_waterbend",
             value,
         })),
     );
     await writeFile(
-        join(fixtures, "waterbend-edit.json"),
+        join(fixtures, "waterbend-mixed.json"),
         JSON.stringify(fixture),
     );
     await check(
-        "waterbend selections are reversible until confirmation",
+        mixedBend,
         async (page) => {
-            const confirm = page.getByRole("button", { name: "Confirm" });
-            const marked = (slot, mark) =>
-                page.locator(`${slotOf(slot)} .${mark}`);
-            const lit = () =>
-                page
-                    .locator(".card-paying")
-                    .evaluateAll((es) =>
-                        es
-                            .map((e) =>
-                                Number(e.closest("[data-slot]").dataset.slot),
-                            )
-                            .sort((a, b) => a - b),
-                    );
-            const click = async (slot) => {
-                await page.locator(slotOf(slot)).click();
-                await page.waitForTimeout(750);
-            };
-            assert.match(
-                await page.locator(".prompt-title").innerText(),
-                /Tap permanents to Waterbend\s*\(3\)/,
-            );
-            assert.equal(await confirm.isEnabled(), true);
-            assert.deepEqual(await glowing(page, "target"), []);
-            assert.equal(await page.locator(".card-playable").count(), 0);
-            await click(slot);
-            assert.deepEqual(
-                await lit(),
-                suggested.taps.toSorted((a, b) => a - b),
-            );
-            assert.equal(
-                await confirm.isEnabled(),
-                true,
-                "excess click does nothing",
-            );
-
-            await click(land);
-            assert.equal(await confirm.isEnabled(), false);
-            assert.equal(await marked(slot, "card-target").count(), 1);
-            assert.equal(await marked(land, "card-target").count(), 1);
-            await click(slot);
-            assert.equal(await confirm.isEnabled(), true);
-            assert.equal(await marked(slot, "waterbend-tap").count(), 1);
-            assert.equal(await marked(slot, "card-target").count(), 0);
-            assert.equal(
-                await page.locator(".action-menu, .mana-picker").count(),
-                0,
-            );
-            assert.deepEqual(
-                await lit(),
-                replacement.taps.toSorted((a, b) => a - b),
-            );
-            const rotation = () =>
-                marked(slot, "card").evaluate((e) =>
-                    Math.abs(new DOMMatrix(getComputedStyle(e).transform).b),
-                );
-            assert.ok(
-                (await rotation()) > 0.95,
-                "selected card physically taps",
-            );
-
-            await click(slot);
-            assert.equal(await confirm.isEnabled(), false);
-            assert.ok((await rotation()) < 0.05, "deselected card untaps");
-            await click(land);
-            assert.equal(await confirm.isEnabled(), true);
-            assert.deepEqual(
-                await lit(),
-                suggested.taps.toSorted((a, b) => a - b),
-            );
+            const autoPay = autoPayButton(page);
+            const permanent = page.locator(slotOf(bender));
+            const marked = permanent.locator(".waterbend-tap");
+            await permanent.click();
+            await marked.waitFor();
+            assert.deepEqual(await lit(page), [bender]);
+            await autoPay.hover();
+            assert.deepEqual(await lit(page), ascending(mixed.taps));
+            await permanent.click();
+            await marked.waitFor({ state: "detached" });
+            assert.deepEqual(await lit(page), []);
             assert.deepEqual(await chosen(page), []);
-            await page
-                .getByRole("button", { name: "Cancel", exact: true })
-                .click();
-            await page.waitForTimeout(1000);
-            assert.deepEqual(await chosen(page), []);
-            assert.equal(await confirm.count(), 0);
+            await permanent.click();
+            await marked.waitFor();
+            await autoPay.click();
+            assert.deepEqual(await settled(page, 1), [
+                bending.candidates.findIndex(
+                    (c) =>
+                        c.option.kind === "object" && c.option.slot === bender,
+                ),
+            ]);
         },
-        {
-            fixture: "waterbend-edit",
-            at: bendAt + 1,
-            ready: ".prompt-cost",
-            clock: false,
-        },
+        { fixture: "waterbend-mixed", at: bendAt + 1, ready: ".prompt-cost" },
     );
 }
 
-// The safe Plains is suggested even though it cannot fund the payment alone.
 const tapBend = await lastDecision("waterbend-tap");
-const bendByHand = "waterbend waits for manually selected benders";
+const bendByHand = "waterbend finishes when manual picks cover the cost";
 if (wanted(bendByHand)) {
-    const benders = tapBend.decision.candidates
-        .filter((c) => c.option.kind === "object")
-        .map((c) => c.option.slot);
     const suggested = tapBend.decision.waterbend;
-    const [land] = suggested.taps;
     const fixture = JSON.parse(
         await readFile(join(fixtures, "waterbend-tap.json"), "utf8"),
     );
+    const [land] = suggested.taps.filter(
+        (slot) => !suggested.benders.includes(slot),
+    );
+    const mana = tapBend.decision.candidates.find(
+        (c) => c.option.kind === "mana" && c.option.slot === land,
+    ).option;
     fixture.messages.unshift(
-        ...benders.map((_, i) => ({
+        ...[
+            suggested,
+            suggested,
+            {
+                ...suggested,
+                mana: [{ slot: land, color: mana.color }],
+                eligible: [],
+            },
+        ].map((value) => ({
             kind: "response",
             command: "preview_waterbend",
-            value: {
-                ...suggested,
-                benders: benders.slice(0, i + 1),
-                taps: [land, ...benders.slice(0, i + 1)],
-                eligible: benders.slice(i + 1),
-                ready: i === benders.length - 1,
-            },
+            value,
         })),
     );
     await writeFile(
@@ -11132,36 +11061,14 @@ if (wanted(bendByHand)) {
     await check(
         bendByHand,
         async (page) => {
-            const confirm = page.getByRole("button", { name: "Confirm" });
-            assert.equal(await confirm.isEnabled(), false);
-            assert.equal(
-                await page.locator(`${slotOf(land)} .card-paying`).count(),
-                1,
-            );
-            assert.equal(
-                await page.locator(`${slotOf(land)} .card-target`).count(),
-                0,
-            );
-            assert.deepEqual(
-                await glowing(page, "target"),
-                [...benders].sort((a, b) => a - b),
-            );
-            for (const slot of benders) {
-                assert.equal(await confirm.isEnabled(), false);
+            for (const slot of suggested.benders) {
                 await page.locator(slotOf(slot)).click();
-                await page.clock.runFor(600);
+                await page.locator(`${slotOf(slot)} .waterbend-tap`).waitFor();
+                assert.deepEqual(await chosen(page), []);
             }
-            assert.equal(await confirm.isEnabled(), true);
-            assert.equal(
-                await page.locator(".waterbend-tap").count(),
-                benders.length,
-            );
-            assert.deepEqual(await chosen(page), []);
-            await confirm.click();
+            await page.locator(slotOf(land)).click();
             assert.deepEqual(await settled(page, 1), [
-                tapBend.decision.candidates.findIndex(
-                    (c) => c.option.kind === "mana",
-                ),
+                tapBend.decision.candidates.findIndex((c) => c.option === mana),
             ]);
         },
         {
@@ -11171,6 +11078,33 @@ if (wanted(bendByHand)) {
         },
     );
 }
+
+await check(
+    "phone waterbend long press previews without accepting",
+    async (page) => {
+        const autoPay = autoPayButton(page);
+        assert.deepEqual(await lit(page), []);
+        await autoPay.dispatchEvent("pointerdown", { pointerType: "touch" });
+        await page.clock.runFor(500);
+        assert.deepEqual(
+            await lit(page),
+            ascending(tapBend.decision.waterbend.taps),
+        );
+        await autoPay.dispatchEvent("pointerup", { pointerType: "touch" });
+        await autoPay.dispatchEvent("click", { detail: 1 });
+        assert.deepEqual(await lit(page), []);
+        assert.deepEqual(await chosen(page), []);
+        await autoPay.tap();
+        assert.equal((await settled(page, 1)).length, 1);
+    },
+    {
+        fixture: "waterbend-tap",
+        at: tapBend.views.length,
+        ready: ".phone-dock",
+        phone: true,
+        viewport: { width: 390, height: 844 },
+    },
+);
 
 // The opening: `opening-bottom` ends on the human's first card to put on the bottom after two
 // mulligans and a keep. The picks fill two slots and go back on a click; nothing is sent until

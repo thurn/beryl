@@ -194,7 +194,7 @@ fn old_waterbend_saves_restore_a_required_implicit_tap() {
         .unwrap();
     view = answer(&mut game, &view, activate);
     assert_eq!(decision(&view).kind, Kind::Waterbend);
-    assert!(!decision(&view).waterbend.as_ref().unwrap().ready);
+    assert_eq!(decision(&view).waterbend.as_ref().unwrap().benders.len(), 1);
     let after = answer(&mut game, &view, 0);
     let mut old = serde_json::to_value(game.replay()).unwrap();
     old["formatVersion"] = 7.into();
@@ -250,7 +250,7 @@ fn old_waterbend_saves_restore_an_automatic_mana_rock() {
     assert_eq!(decision(&view).kind, Kind::Waterbend);
     let suggested = decision(&view).waterbend.as_ref().unwrap();
     assert!(suggested.ready, "the rock supplies the two mana still due");
-    assert_eq!(suggested.mana.len(), 1);
+    assert_eq!(suggested.taps.len(), 1);
     let rock = decision(&view)
         .candidates
         .iter()

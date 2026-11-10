@@ -1577,7 +1577,7 @@ impl Game {
             return Ok(None);
         }
         Ok(
-            on_board!(&self.board, b => crate::preview::waterbend(&b.state, &self.table, &d.relayout(), Some(&request.selected))),
+            on_board!(&self.board, b => crate::preview::waterbend(&b.state, &self.table, &d.relayout(), &request.selected)),
         )
     }
 

@@ -1,92 +1,110 @@
-// Waterbend is edited locally. Only Confirm sends the tap choices to the engine; previews
-// run the real payment rules on a copy and stale replies never replace a newer selection.
-import { useEffect, useMemo, useRef, useState } from "react";
+// Manual picks stay local while the engine computes how to finish the payment on a copy.
+import { useEffect, useRef, useState } from "react";
 import { previewWaterbend } from "../ipc";
-import type { DecisionView, WaterbendPreview } from "../generated/protocol";
-import type { Intent } from "./decisions";
+import type {
+  CandidateIndex,
+  DecisionView,
+  WaterbendPreview,
+} from "../generated/protocol";
+import { follow, type Intent } from "./decisions";
 
 const NO_SLOTS: number[] = [];
 
-export function useWaterbend(decision: DecisionView | undefined) {
+function paymentPlan(preview: WaterbendPreview): Intent[] {
+  const { mana, benders, plan } = preview;
+  return [
+    ...mana.map(({ slot, color }): Intent => ({
+      kind: "waterbend",
+      wants: (o) => o.kind === "mana" && o.slot === slot && o.color === color,
+      continuation: true,
+    })),
+    ...benders.map((slot): Intent => ({
+      kind: "waterbend",
+      wants: (o) => o.kind === "object" && o.slot === slot,
+      continuation: true,
+    })),
+    {
+      kind: "waterbend",
+      wants: (o) => o.kind === "done",
+      optional: true,
+      continuation: true,
+    },
+    ...(plan === null
+      ? []
+      : [
+          {
+            kind: "paymentPlan" as const,
+            wants: (o: Parameters<Intent["wants"]>[0]) =>
+              o.kind === "plan" && o.index === plan,
+            optional: true,
+            continuation: true,
+          },
+        ]),
+  ];
+}
+
+export function useWaterbend(
+  decision: DecisionView | undefined,
+  onPay: (index: CandidateIndex, then: Intent[]) => void,
+) {
   const active = decision?.kind === "waterbend" ? decision : undefined;
   const key = active ? `${active.id.session}:${active.id.seq}` : undefined;
   const revision = useRef(0);
   const [edit, setEdit] = useState<{
     key: string;
     preview: WaterbendPreview;
+    selected: number[];
     pending?: number[];
   }>();
   useEffect(() => {
     revision.current += 1;
+    return () => {
+      revision.current += 1;
+    };
   }, [key]);
   const current = edit?.key === key ? edit : undefined;
-  const suggestion = active?.waterbend;
-  const preview = current?.preview ?? suggestion;
-  const selected = current?.pending ?? preview?.taps ?? NO_SLOTS;
-  const eligible = preview?.eligible ?? NO_SLOTS;
-  // Suggested sources stay upright until payment. An explicit addition can preview its tap.
-  const previewTaps = useMemo(
-    () => selected.filter((slot) => !suggestion?.taps.includes(slot)),
-    [selected, suggestion],
-  );
+  const preview = current?.preview ?? active?.waterbend;
+  const selected = current?.selected ?? NO_SLOTS;
+  const manual = current?.pending ?? selected;
+  const ready = !!preview?.ready && !current?.pending;
+
+  const pay = (proposal: WaterbendPreview) => {
+    if (!active || !proposal.ready) return;
+    const { index, rest } = follow(active, paymentPlan(proposal));
+    if (index !== undefined) onPay(index, rest);
+  };
 
   const toggle = (slot: number) => {
     if (!active || !key || !preview || current?.pending) return false;
     const removing = selected.includes(slot);
-    if (!removing && !eligible.includes(slot)) return false;
+    if (!removing && !preview.eligible.includes(slot)) return false;
     const next = removing
       ? selected.filter((s) => s !== slot)
       : [...selected, slot];
     const request = ++revision.current;
-    setEdit({ key, preview, pending: next });
+    setEdit({ key, preview, selected, pending: next });
     const settle = (result: WaterbendPreview | null) => {
-      if (request === revision.current)
-        setEdit({ key, preview: result ?? preview });
+      if (request !== revision.current) return;
+      setEdit({
+        key,
+        preview: result ?? preview,
+        selected: result ? next : selected,
+      });
+      if (result?.ready && result.taps.length === next.length) pay(result);
     };
     void previewWaterbend(active.id, next).then(settle, () => settle(null));
     return true;
   };
-  const plan = (): Intent[] =>
-    preview?.ready && !current?.pending
-      ? [
-          ...(preview.mana ?? []).map(({ slot, color }): Intent => ({
-            kind: "waterbend",
-            wants: (o) =>
-              o.kind === "mana" && o.slot === slot && o.color === color,
-            continuation: true,
-          })),
-          ...preview.benders.map((slot): Intent => ({
-            kind: "waterbend",
-            wants: (o) => o.kind === "object" && o.slot === slot,
-            continuation: true,
-          })),
-          {
-            kind: "waterbend",
-            wants: (o) => o.kind === "done",
-            optional: true,
-            continuation: true,
-          },
-          ...(preview.plan === null
-            ? []
-            : [
-                {
-                  kind: "paymentPlan" as const,
-                  wants: (o: Parameters<Intent["wants"]>[0]) =>
-                    o.kind === "plan" && o.index === preview.plan,
-                  optional: true,
-                  continuation: true,
-                },
-              ]),
-        ]
-      : [];
+
   return {
     active: !!active,
-    selected,
-    previewTaps,
-    benders: (preview?.benders ?? []).filter((s) => selected.includes(s)),
-    eligible,
-    ready: !!preview?.ready && !current?.pending,
+    manual,
+    benders: (preview?.benders ?? NO_SLOTS).filter((s) => manual.includes(s)),
+    proposed: ready ? preview.taps : NO_SLOTS,
+    ready,
     toggle,
-    plan,
+    autoPay: () => {
+      if (ready) pay(preview);
+    },
   };
 }

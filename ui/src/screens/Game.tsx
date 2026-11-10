@@ -768,6 +768,7 @@ function Playing({ playback }: { playback: Playback }) {
         waiting={waiting || confirmingRemoval !== undefined}
         choose={answer}
         passOn={passOnward}
+        cancel={cancelCast}
         onLeave={leave}
       />
       {overlaid && <Stage>{overlays}</Stage>}
