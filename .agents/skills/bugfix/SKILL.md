@@ -10,9 +10,10 @@ use child sessions for larger investigations and fixes to keep context
 manageable. Give each child the report, acceptance criteria, and relevant prior
 findings. The parent session owns report accounting and reviews the child's
 verification evidence before closure. Please feel free to use and extend the
-`/specs` tool to assist with this. Please ask any follow-up questions at the
-start of this session needed to clarify expected behavior: read every report
-first, then ask them all in one go before you fix anything.
+`/specs` tool to assist with this. Surface questions about expected behavior
+during the initial review: read every report first, then ask material questions
+together before implementing fixes. Continue independent reports while answers
+are pending; only work that depends on an unanswered question waits.
 
 A plausible code change is a candidate fix. For rules and UI reports, closure
 requires evidence that the player's requested behavior works, including the
@@ -84,10 +85,22 @@ reproduces it.
      check whether its app build contains the prior fix, and explain what that
      fix or its verification missed before proposing another patch.
 
-   Ask the initial clarification questions together after this review. Ask only
-   about material ambiguity the evidence cannot resolve; do not ask the player
-   to repeat a clear expectation. If reproduction later exposes a new ambiguity,
-   clarify it rather than silently narrowing the complaint.
+   Before delegating implementation or choosing a patch, check each complaint
+   for materially different interpretations. For sequencing words such as
+   "before", "after", or "when", identify the visible milestones: opening a
+   chooser, confirming a choice, paying a cost, and moving cards can be separate
+   events. Inspect the recorded views or do a short reproduction during this
+   review if needed to distinguish them. For example, "tap before exiling"
+   might mean before the exile chooser opens or before selected cards depart;
+   do not defer that question until a flight-order patch is already underway.
+
+   Ask unresolved material questions together now, preferably asynchronously.
+   Do not ask the player to repeat a clear expectation. Record which acceptance
+   criteria depend on each answer, and continue reproduction, independent
+   fixes, and verification while waiting. A pending question on one report
+   does not block the rest of the run. Do not implement a guessed narrower
+   interpretation and count it as completion. If reproduction later reveals a
+   genuinely new ambiguity, ask promptly and pause only its dependent work.
 
 3. **Reproduce.** Pick by what went wrong:
 
