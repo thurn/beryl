@@ -1546,11 +1546,14 @@ export function sameHandling(before: PlayerView, after: PlayerView): boolean {
   );
 }
 
-/** A full-library search keeps the deck parked. */
+/** Keep the opponent's hand and a full-library search at their table positions.
+ * A limited library look can lift the specific cards it examines. */
 export function liftsHandling({ handling }: PlayerView): boolean {
   return (
     handling !== undefined &&
-    (handling.zone === "hand" || handling.count !== null)
+    (handling.zone === "hand"
+      ? handling.side === "you"
+      : handling.count !== null)
   );
 }
 
@@ -1561,7 +1564,7 @@ export function handlingSlots(
   handOrder: ReadonlyMap<number, number>,
 ): number[] {
   const handling = view.handling;
-  if (!handling) return [];
+  if (!handling || !liftsHandling(view)) return [];
   if (handling.zone === "library") {
     const library = view.players[handling.side].library;
     return handling.count ? library.slice(-handling.count).reverse() : [];
@@ -1569,9 +1572,7 @@ export function handlingSlots(
   const cards = view.objects.filter(
     (o) => o.owner === handling.side && o.zone === "hand",
   );
-  return (handling.side === "you" ? inOrder(cards, handOrder) : cards).map(
-    (o) => o.slot,
-  );
+  return inOrder(cards, handOrder).map((o) => o.slot);
 }
 
 /** Private looks spread out their original backs. Scry lifts a small fan over its pile. */

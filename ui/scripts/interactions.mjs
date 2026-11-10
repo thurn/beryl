@@ -5019,6 +5019,86 @@ async function motionFixture(name, views) {
     return { fixture: name, at: 1 };
 }
 
+const parkedHand = "opponent hand stays parked during a private choice";
+if (wanted(parkedHand)) {
+    const opening = (await load("opening-bottom")).find(
+        (v) => v.status.decision?.kind === "keepOrMulligan",
+    );
+    for (const [choice, view] of [
+        ["mulligan", opening],
+        ["discard", turnViews[mainHalt]],
+    ]) {
+        const before = { ...view, events: [] };
+        const thinking = {
+            ...before,
+            status: { kind: "thinking" },
+            handling: { zone: "hand", side: "opponent" },
+        };
+        const hand = before.objects.filter(
+            (o) => o.zone === "hand" && o.owner === "opponent",
+        );
+        assert.ok(hand.length > 1, "there is a hand to keep parked");
+        const watched = [
+            ...hand.map((o) => o.slot),
+            before.players.opponent.library.at(-1),
+        ];
+        const run = await motionFixture(`parked-opponent-${choice}`, [
+            before,
+            thinking,
+        ]);
+        await check(
+            `${parkedHand} (${choice})`,
+            async (page) => {
+                await page.clock.runFor(800);
+                await page.evaluate(record);
+                await page.clock.pauseAt(Date.now() + 60_000);
+                const answer =
+                    choice === "mulligan"
+                        ? page.getByRole("button", {
+                              name: "Keep",
+                              exact: true,
+                          })
+                        : page.locator(".turn-action button").first();
+                await answer.evaluate((button) => button.click());
+                await page.clock.runFor(950);
+                assert.equal(
+                    await page.evaluate(
+                        () => window.berylFixture.view().handling?.zone,
+                    ),
+                    "hand",
+                );
+                const motion = await page.evaluate(collect, 0);
+                for (const slot of watched) {
+                    const poses = posesOf(motion, slot);
+                    assert.ok(
+                        poses.length > 1,
+                        `slot ${slot} stays visible in the recording`,
+                    );
+                    const home = [poses[0].x, poses[0].y];
+                    for (const pose of poses) {
+                        assertNear(
+                            [pose.x, pose.y],
+                            home,
+                            `slot ${slot} stays seated`,
+                        );
+                    }
+                }
+                assert.equal(
+                    await page.locator(".card-el-handling").count(),
+                    0,
+                );
+            },
+            {
+                ...run,
+                ready:
+                    choice === "mulligan"
+                        ? ".opening-hand"
+                        : ".turn-action button",
+            },
+        );
+    }
+}
+
 const privateHandling =
     "an opponent's private library look lifts and returns the original backs";
 if (wanted(privateHandling)) {
