@@ -551,7 +551,8 @@ export const artAvailable = () =>
 
 /** Whether the page plays sound (audio/sound.ts): the app, a live browser (`?live=`) or one
  * asked to (`?audio`), and never a page under automation (Playwright: `just ui-shots`,
- * `ui-test`, the specs, an agent driving a live game), which only logs its cues. */
+ * `ui-test`, the specs, an agent driving a live game), which only logs its cues. Native
+ * smoke mode is checked asynchronously by installAudio before creating its context. */
 export const audioAvailable = () =>
   !navigator.webdriver &&
   ("__TAURI_INTERNALS__" in window ||

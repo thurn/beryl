@@ -7,13 +7,14 @@
 // but logs every cue it is asked for, on the page's clock, in `window.berylSounds` and
 // `window.berylMusic`, for tests to assert on.
 //
-// The context is made at once, so the effects decode ahead, and music starts as soon as it
-// runs. In the app that is at launch: Tauri's wry sets WKWebView's
+// The context is made after ruling out native smoke mode, so the effects decode ahead,
+// and music starts as soon as it runs. In the app that is at launch: Tauri's wry sets
+// WKWebView's
 // `mediaTypesRequiringUserActionForPlayback` to none, lifting the gesture rule. In a browser
 // (`just dev` in Safari, the spec pages) the context stays suspended until the first pointer
 // or key press resumes it.
 import { note } from "../diagnostics";
-import { audioAvailable } from "../ipc";
+import { appInfo, audioAvailable } from "../ipc";
 import manifest from "./manifest.json";
 import loops from "./loops.json";
 
@@ -159,11 +160,23 @@ function applyLevels() {
 }
 
 /** Makes the engine and decodes every sound; once per page, and only where audio plays. */
-export function installAudio() {
+export async function installAudio() {
   installListeners();
   if (engine || !audioAvailable() || typeof AudioContext === "undefined") {
     return;
   }
+  // Native smoke runs are real webviews, not WebDriver pages. They must remain silent
+  // from launch, including while app_info is pending or fails; muting after it returns
+  // would let the menu music escape during CI's brief hidden launch.
+  if ("__TAURI_INTERNALS__" in window) {
+    try {
+      if ((await appInfo()).smoke) return;
+    } catch (error) {
+      note("warn", "audio", `Cannot check smoke mode: ${String(error)}`);
+      return;
+    }
+  }
+  if (engine) return;
   const context = new AudioContext();
   const music = context.createGain();
   const sfx = context.createGain();

@@ -11,7 +11,7 @@ import { installDiagnostics } from "./diagnostics";
 import { installAudio } from "./audio/sound";
 
 installDiagnostics();
-installAudio();
+void installAudio();
 
 createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>
