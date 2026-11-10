@@ -5813,10 +5813,23 @@ await check(
         // The board's layout of variants of the fixture's view, by the page's own module.
         const counts = await page.evaluate(
             async ({ view, map }) => {
-                const { layout } = await import("/src/game/layout.ts");
+                const { layout, zonePiles } =
+                    await import("/src/game/layout.ts");
+                const order = new Map();
+                const borrowed = new Set();
                 // Each card of the pile of `map`'s copies that wears a count, with the count.
                 const counted = (v) =>
-                    [...layout(v).values()]
+                    [
+                        ...layout(
+                            v,
+                            "held",
+                            false,
+                            {},
+                            order,
+                            borrowed,
+                            zonePiles(v, order),
+                        ).values(),
+                    ]
                         .filter((p) => p.count !== undefined)
                         .filter((p) =>
                             v.objects.some(

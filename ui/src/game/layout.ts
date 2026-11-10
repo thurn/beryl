@@ -298,11 +298,12 @@ export function overLog(placements: Layout): boolean {
  * of the hand's widest fan, the library outermost, then the graveyard and exile toward the
  * middle; the opponent's in the far right corner, their library outermost, then their graveyard
  * and exile toward the middle, left of the gear. Their top cards end above the opponent's back
- * row (`ROWS`), whose permanents, nearer, lie over the edges of a thick pile. */
+ * row (`ROWS`), whose permanents, nearer, lie over the edges of a thick pile. Leave room
+ * between piles for both the sideways rise of a thick pile and the lean at ultrawide widths. */
 export const PILES = {
   // In the far right corner, held to the stage's right edge.
   opponent: {
-    width: 96,
+    width: 88,
     get library() {
       return { x: fromRight(1432), y: 8 };
     },
@@ -315,9 +316,9 @@ export const PILES = {
   },
   you: {
     width: 80,
-    library: { x: 28, y: 772 },
-    graveyard: { x: 126, y: 772 },
-    exile: { x: 226, y: 772 },
+    library: { x: 36, y: 772 },
+    graveyard: { x: 151, y: 772 },
+    exile: { x: 266, y: 772 },
   },
 };
 

@@ -108,7 +108,7 @@ export function PileButton({
   const { look, cards } = pile;
   return (
     <Lying
-      look={pile.zone === "library" ? { ...look, skew: 0 } : look}
+      look={look}
       className="pile-at"
       tip={
         <Tip side={pile.side === "you" ? "over" : "below"}>
