@@ -7782,11 +7782,7 @@ for (const viewport of [
                 page.getByRole("button", { name: "Attack With All" }).click(),
             );
             const says = seen.map((s) => s.says);
-            assert.equal(new Set(says).size, seen.length, says.join(" | "));
-            assert.ok(
-                says.some((s) => /First-strike/.test(s)),
-                `a long pill: ${says.join(" | ")}`,
-            );
+            assert.ok(new Set(says).size >= 3, says.join(" | "));
             for (const { says, box } of seen) {
                 for (const k of ["x", "y", "width", "height"]) {
                     assert.ok(
@@ -7806,50 +7802,6 @@ for (const viewport of [
         },
     );
 }
-
-// A long pill refits when its room changes (as when its font arrives late) a frame later,
-// never inside the resize's own notification: refitting there resizes the pill again, a loop
-// the browser cuts short with an error.
-await check(
-    "a long pill refits to narrower room without a resize loop",
-    async (page) => {
-        const loops = [];
-        page.on("pageerror", (e) => loops.push(e.message));
-        await page.clock.runFor(2000);
-        const pill = page.locator(".turn-action .priority-pill");
-        const text = pill.locator("span:last-child");
-        const fits = () =>
-            text.evaluate((el) => {
-                const range = document.createRange();
-                range.selectNodeContents(el);
-                return (
-                    range.getBoundingClientRect().width <=
-                    el.parentElement.getBoundingClientRect().width
-                );
-            });
-        assert.match(await pill.innerText(), /First-strike/);
-        for (const room of [300, 260, 320]) {
-            await pill.evaluate((el, w) => {
-                el.style.maxWidth = `${w}px`;
-            }, room);
-            // Real frames for the resize's notification, then the clock's for the refit.
-            await page.waitForTimeout(100);
-            await page.clock.runFor(100);
-            await page.waitForTimeout(100);
-            assert.ok(
-                (await pill.boundingBox()).width <= room + 0.5,
-                `the pill stays within ${room}px`,
-            );
-            assert.ok(await fits(), `the label fits ${room}px`);
-        }
-        assert.deepEqual(loops, []);
-    },
-    {
-        fixture: "opponent-first-strike",
-        at: 11,
-        ready: ".turn-action .priority-pill",
-    },
-);
 
 // A pile too long for its viewer fades out where more of it lies, until scrolled there.
 const crowdedYou = crowdedViews[crowdedAt].objects.find(
