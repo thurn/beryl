@@ -103,6 +103,7 @@ export interface CardLayerProps {
   /** What happened in the view shown: a spell it took off the stack other than by resolving
    * (countered, bounced, exiled) is struck, then carried to where it went. */
   events?: GameEvent[];
+  linkedReturns?: ReadonlySet<number>;
   objects: ObjectView[];
   placements: Layout;
   /** Where a card new to the table starts: a token flies out of the spell or permanent that made it,
@@ -253,11 +254,12 @@ export function CardLayer(props: CardLayerProps) {
       e.kind === "libraryShuffled" ? [e.player] : [],
     ),
   );
-  const departures = (props.events ?? []).flatMap((e) => {
+  const departures = events.flatMap((e) => {
     if (e.kind === "draw") return e.slots ?? [];
     if (
       e.kind === "zoneChange" &&
       e.from !== e.to &&
+      !props.linkedReturns?.has(e.slot) &&
       (e.from === "library" || e.to === "exile" || e.to === "library")
     )
       return [e.slot];
@@ -299,6 +301,7 @@ export function CardLayer(props: CardLayerProps) {
                 raised={props.hovered === o.slot}
                 struck={struck.has(o.slot)}
                 followingCounter={followingCounter.has(o.slot)}
+                linkedReturn={props.linkedReturns?.has(o.slot) ?? false}
                 departureDelay={
                   departure === undefined
                     ? 0
@@ -374,6 +377,7 @@ const CardElement = memo(function CardElement({
   raised,
   struck,
   followingCounter,
+  linkedReturn,
   departureDelay,
   departureLayer,
   epoch,
@@ -390,6 +394,7 @@ const CardElement = memo(function CardElement({
   raised: boolean;
   struck: boolean;
   followingCounter: boolean;
+  linkedReturn: boolean;
   departureDelay: number;
   departureLayer: number;
   epoch: unknown;
@@ -458,7 +463,10 @@ const CardElement = memo(function CardElement({
       tucking: was === "scry-bottom" && place.librarySide === "opponent",
       travel:
         !samePile &&
-        (returning || TRAVELLED.has(was) || TRAVELLED.has(place.look)),
+        (linkedReturn ||
+          returning ||
+          TRAVELLED.has(was) ||
+          TRAVELLED.has(place.look)),
     };
   }
   const change = moved.current;

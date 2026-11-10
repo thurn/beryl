@@ -163,6 +163,40 @@ export function counterDeparture(hit: GameEvent, next?: GameEvent) {
     : undefined;
 }
 
+/** The source and its immediate returns travel together when the exile ends. */
+export function linkedReturnFlights(
+  before: PlayerView | undefined,
+  view: PlayerView,
+): ReadonlySet<number> {
+  const flights = new Set<number>();
+  if (!before || view.undone) return flights;
+  const leaving = new Set(
+    view.events.flatMap((e) =>
+      e.kind === "zoneChange" &&
+      e.from === "battlefield" &&
+      e.to !== "battlefield"
+        ? [e.slot]
+        : [],
+    ),
+  );
+  if (!leaving.size) return flights;
+  for (const e of view.events) {
+    if (
+      e.kind !== "zoneChange" ||
+      e.from !== "exile" ||
+      e.to !== "battlefield" ||
+      e.reason !== "return"
+    )
+      continue;
+    const source = before.objects.find((o) => o.slot === e.slot)?.exiledBy;
+    if (source != null && leaving.has(source)) {
+      flights.add(source);
+      flights.add(e.slot);
+    }
+  }
+  return flights;
+}
+
 /** Whether a spell or ability is still on `stack`. */
 function onStack(stack: StackItem[], item: StackItem): boolean {
   return stack.some((s) => sameItem(s, item));

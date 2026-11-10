@@ -6955,6 +6955,119 @@ if (wanted(costOrder)) {
     }
 }
 
+const linkedReturn = "a linked return flies in sync with its departing source";
+if (wanted(linkedReturn)) {
+    const base = (await load("arrow-spell")).at(-1);
+    const model = base.objects.find((o) => o.zone === "battlefield");
+    for (const owner of ["you", "opponent"]) {
+        const other = owner === "you" ? "opponent" : "you";
+        const source = {
+            ...model,
+            slot: 800,
+            name: "Aang's Iceberg",
+            types: ["enchantment"],
+            controller: owner,
+            owner,
+        };
+        const captive = {
+            ...model,
+            slot: 801,
+            name: "Staff of the Storyteller",
+            types: ["artifact"],
+            zone: "exile",
+            exiledBy: source.slot,
+            controller: other,
+            owner: other,
+        };
+        const before = {
+            ...base,
+            objects: [...base.objects, source, captive],
+            battlefield: [...base.battlefield, source.slot],
+            events: [],
+        };
+        const after = {
+            ...before,
+            battlefield: [...base.battlefield, captive.slot],
+            objects: [
+                ...base.objects,
+                { ...source, zone: "graveyard" },
+                { ...captive, zone: "battlefield", exiledBy: null },
+            ],
+            players: {
+                ...base.players,
+                [owner]: {
+                    ...base.players[owner],
+                    graveyard: [...base.players[owner].graveyard, source.slot],
+                },
+            },
+            events: [
+                {
+                    kind: "zoneChange",
+                    slot: source.slot,
+                    from: "battlefield",
+                    to: "graveyard",
+                    reason: "sacrifice",
+                },
+                {
+                    kind: "zoneChange",
+                    slot: captive.slot,
+                    from: "exile",
+                    to: "battlefield",
+                    reason: "return",
+                },
+            ],
+        };
+        const run = await motionFixture(`linked-return-${owner}`, [
+            before,
+            after,
+        ]);
+        await check(
+            `${linkedReturn}: ${owner}`,
+            async (page) => {
+                await page.clock.runFor(1000);
+                const pair = [source.slot, captive.slot].map(slotOf);
+                const positions = () =>
+                    page.evaluate(
+                        (selectors) =>
+                            selectors.map((selector) => {
+                                const el = document.querySelector(selector);
+                                const transform = new DOMMatrix(
+                                    getComputedStyle(el).transform,
+                                );
+                                return [transform.e, transform.f];
+                            }),
+                        pair,
+                    );
+                const start = await positions();
+                await page.clock.pauseAt(Date.now() + 60_000);
+                await page
+                    .getByRole("button", { name: "Resolve", exact: true })
+                    .evaluate((button) => button.click());
+                await until(page, `${pair[0]}[data-zone="graveyard"]`, 20);
+                assert.equal(
+                    await page.locator(pair[1]).getAttribute("data-zone"),
+                    "battlefield",
+                );
+                await page.clock.runFor(200);
+                const mid = await positions();
+                await page.clock.runFor(1000);
+                const end = await positions();
+                const progress = start.map(
+                    ([x, y], i) =>
+                        Math.hypot(mid[i][0] - x, mid[i][1] - y) /
+                        Math.hypot(end[i][0] - x, end[i][1] - y),
+                );
+                assert.ok(
+                    progress.every((p) => p > 0.05 && p < 0.95) &&
+                        Math.abs(progress[0] - progress[1]) < 0.08,
+                    `both cards should be equally far through their flights at 200ms: ${progress}`,
+                );
+            },
+            { ...run, ready: `.card-el-beneath${slotOf(captive.slot)}` },
+        );
+    }
+}
+
 const exileStagger =
     "simultaneous exile departures span three hundred milliseconds";
 if (wanted(exileStagger)) {

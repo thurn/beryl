@@ -68,7 +68,12 @@ import type {
   StackItem as StackItemView,
   StopsSetting,
 } from "../generated/protocol";
-import { announcedItem, sameItem, stackKey } from "./beats";
+import {
+  announcedItem,
+  linkedReturnFlights,
+  sameItem,
+  stackKey,
+} from "./beats";
 import { DIRECT_FLIGHT, EMERGENCE_FADE } from "./flight";
 import {
   CardLayer,
@@ -1643,6 +1648,7 @@ export function Board({
         <CardLayer
           epoch={view}
           events={view.events}
+          linkedReturns={linkedReturnFlights(views.current.before, view)}
           objects={drawn}
           keys={standIns.keys}
           placements={placements}
