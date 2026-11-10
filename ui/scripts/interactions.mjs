@@ -5635,6 +5635,100 @@ if (wanted(modeHandoff)) {
     );
 }
 
+const tapBeforeSacrifice = "a mana token turns before leaving the battlefield";
+if (wanted(tapBeforeSacrifice)) {
+    const view = (await load("arrow-spell")).at(-1);
+    const map = (await load("tokens")).at(-1).objects.find((o) => o.token);
+    for (const side of ["you", "opponent"]) {
+        const token = { ...map, owner: side, controller: side, tapped: false };
+        const before = {
+            ...view,
+            objects: [...view.objects, token],
+            battlefield: [...view.battlefield, token.slot],
+            events: [],
+        };
+        const retained = side === "opponent";
+        const after = {
+            ...view,
+            objects: retained
+                ? [...view.objects, { ...token, zone: "graveyard" }]
+                : view.objects,
+            players: retained
+                ? {
+                      ...view.players,
+                      [side]: {
+                          ...view.players[side],
+                          graveyard: [
+                              ...view.players[side].graveyard,
+                              token.slot,
+                          ],
+                      },
+                  }
+                : view.players,
+            events: [
+                { kind: "tap", slot: token.slot },
+                {
+                    kind: "zoneChange",
+                    slot: token.slot,
+                    from: "battlefield",
+                    to: "graveyard",
+                    reason: "sacrifice",
+                },
+                {
+                    kind: "mana",
+                    source: token.slot,
+                    player: side,
+                    amount: 1,
+                    color: "blue",
+                },
+            ],
+        };
+        const run = await motionFixture(`tap-before-sacrifice-${side}`, [
+            before,
+            after,
+        ]);
+        await check(
+            `${tapBeforeSacrifice} (${side})`,
+            async (page) => {
+                const field = `${slotOf(token.slot)}[data-zone="battlefield"]`;
+                await page.evaluate((field) => {
+                    const angle = () => {
+                        const card = document.querySelector(`${field} .card`);
+                        return (
+                            card &&
+                            Math.abs(
+                                new DOMMatrix(getComputedStyle(card).transform)
+                                    .b,
+                            )
+                        );
+                    };
+                    window.tokenTap = { initial: angle(), rotated: false };
+                    const observe = () => {
+                        const turn = angle();
+                        if (turn === null) return;
+                        if (turn > 0.9) window.tokenTap.rotated = true;
+                        requestAnimationFrame(observe);
+                    };
+                    requestAnimationFrame(observe);
+                }, field);
+                await page
+                    .getByRole("button", { name: "Resolve", exact: true })
+                    .click();
+                await page
+                    .locator(`${slotOf(token.slot)}[data-zone="graveyard"]`)
+                    .waitFor({ state: "attached" });
+                assert.deepEqual(
+                    await page.evaluate(() => window.tokenTap),
+                    { initial: 0, rotated: true },
+                    "visible rotation completes on the battlefield before departure",
+                );
+                assert.equal(await page.locator(field).count(), 0);
+            },
+            { ...run, ready: slotOf(token.slot), clock: false },
+        );
+    }
+}
+
 const tokenDissolve =
     "a ceasing token breaks apart while its spell stays whole";
 if (wanted(tokenDissolve)) {

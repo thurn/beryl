@@ -50,6 +50,8 @@ export const HOLD = {
   /** A card drawn and put elsewhere by the same resolution (a loot's discard), shown arriving
    * in its owner's hand before it leaves. */
   drawn: 700,
+  /** Time for a permanent's tap rotation to finish before its departure. */
+  tapBeforeMove: 450,
   /** Cards milled, discarded by the opponent or moved between piles, shown face up in a row
    * before they land: all of one move at once, so six cards take no longer than one. */
   showcase: 1100,
@@ -286,6 +288,14 @@ class Walk {
         // The spell may still be resolving at the view's end (a search after an exile).
         // Show the announcement before its target moves, even while the spell stays.
         this.cut();
+      }
+      if (
+        e.kind === "zoneChange" &&
+        e.from === "battlefield" &&
+        this.pending.some((p) => p.kind === "tap" && p.slot === e.slot)
+      ) {
+        // The same physical card turns on the battlefield before it flies away.
+        this.cut(HOLD.tapBeforeMove);
       }
       if (
         e.kind === "zoneChange" &&
