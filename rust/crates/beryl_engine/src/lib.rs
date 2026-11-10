@@ -49,8 +49,8 @@ pub use decision::{
     StallReason, Step,
 };
 pub use engine::{
-    Counts, Scratch, apply, apply_decided, concede, next, next_in_step, observe, paused_events,
-    refusal, view,
+    Counts, Scratch, apply, apply_decided, concede, interchangeable, next, next_in_step, observe,
+    paused_events, refusal, view,
 };
 pub use ids::{CardIx, LargeSlot, Seat, Slot, SlotId};
 pub use invariants::{At, Violation};

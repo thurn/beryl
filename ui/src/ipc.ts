@@ -485,6 +485,10 @@ export const choose = (
   continuation?: boolean,
 ) => call("choose", { request: { decision, index, continuation } });
 
+/** Computes a payment without changing the game. */
+export const previewWaterbend = (decision: DecisionId, selected: number[]) =>
+  call("preview_waterbend", { request: { decision, selected } });
+
 export const setStops = (session: SessionId, stops: StopsSetting) =>
   call("set_stops", { request: { session, stops } });
 

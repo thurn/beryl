@@ -336,6 +336,19 @@ impl Sessions {
         })
     }
 
+    /// Reads a proposed payment without answering the open decision.
+    pub fn preview_waterbend(
+        &self,
+        request: crate::ipc::WaterbendRequest,
+    ) -> Result<Option<crate::ipc::WaterbendPreview>, SessionError> {
+        self.with(
+            "preview_waterbend",
+            json!({"decision": request.decision.seq}),
+            request.decision.session,
+            |game| game.preview_waterbend(request),
+        )
+    }
+
     /// Takes back the cast the human's open decision `decision` is part of.
     pub fn cancel(&self, decision: DecisionId) -> Result<(), SessionError> {
         let data = json!({ "decision": decision.seq });
@@ -367,20 +380,20 @@ impl Sessions {
     /// Runs the human's `command` on game `session`, journaling it with `data` and how it
     /// went: a refused command is how a UI out of step with the game shows itself, though
     /// most are a double click, so they go to the journal without a warning.
-    fn with(
+    fn with<R>(
         &self,
         command: &str,
         mut data: serde_json::Value,
         session: SessionId,
-        f: impl FnOnce(&GameSession) -> Result<(), SessionError>,
-    ) -> Result<(), SessionError> {
+        f: impl FnOnce(&GameSession) -> Result<R, SessionError>,
+    ) -> Result<R, SessionError> {
         let result = match &self.lock().game {
             Some((current, game)) if *current == session => f(game),
             _ => Err(SessionError::StaleSession { session }),
         };
         data["session"] = json!(session.0);
         match &result {
-            Ok(()) => journal::debug("command", command, data),
+            Ok(_) => journal::debug("command", command, data),
             Err(e) => {
                 data["error"] = json!(e);
                 journal::info("command", format!("{command} refused: {e}"), data);

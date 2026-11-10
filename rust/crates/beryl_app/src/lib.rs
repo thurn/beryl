@@ -220,6 +220,7 @@ pub fn run() {
             games::list_agents = ipc::LIST_AGENTS,
             games::start_game = ipc::START_GAME,
             games::choose = ipc::CHOOSE,
+            games::preview_waterbend = ipc::PREVIEW_WATERBEND,
             games::set_stops = ipc::SET_STOPS,
             games::cancel = ipc::CANCEL,
             games::undo = ipc::UNDO,

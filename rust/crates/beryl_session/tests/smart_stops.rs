@@ -358,6 +358,43 @@ fn asked_after_waterbend(stops: StopsSetting) -> Vec<Kind> {
                 break;
             }
         }
+        if decision.kind == Kind::Waterbend {
+            let suggested = decision.waterbend.as_ref().expect("a suggested payment");
+            assert!(suggested.benders.is_empty());
+            assert_eq!(suggested.taps.len(), 3);
+            let jace = view
+                .objects
+                .iter()
+                .find(|o| o.name.as_deref() == Some(JACE_VRYNS_PRODIGY))
+                .unwrap()
+                .slot;
+            let request = beryl_session::ipc::WaterbendRequest {
+                decision: decision.id,
+                selected: Some(vec![jace]),
+            };
+            let mut outdated = request.clone();
+            outdated.decision.seq += 1;
+            assert!(game.preview_waterbend(&outdated).is_err());
+            let changed = game.preview_waterbend(&request).unwrap().unwrap();
+            assert_eq!(changed.benders, vec![jace]);
+            assert_eq!(changed.taps.len(), 3);
+            assert!(changed.taps.contains(&jace));
+            assert_eq!(changed.taps.iter().filter(|s| **s != jace).count(), 2);
+            let none = beryl_session::ipc::WaterbendRequest {
+                selected: Some(vec![]),
+                ..request.clone()
+            };
+            assert_eq!(
+                game.preview_waterbend(&none).unwrap().as_ref(),
+                Some(suggested)
+            );
+            let invalid = beryl_session::ipc::WaterbendRequest {
+                selected: Some(vec![u16::MAX]),
+                ..request
+            };
+            assert!(game.preview_waterbend(&invalid).unwrap().is_none());
+            assert!(game.answer(decision.id, CandidateIndex(0)).is_ok());
+        }
         let iceberg = view
             .objects
             .iter()
@@ -379,11 +416,14 @@ fn asked_after_waterbend(stops: StopsSetting) -> Vec<Kind> {
     asked.expect("the waterbend was activated")
 }
 
-/// Mana can pay the whole waterbend, so the smart stops pay it so; exact stops ask whether to
-/// tap the creature for some of it (CR 701.67a).
+/// Even with enough mana, the player reviews the proposal and may substitute a creature
+/// without tapping anything until they confirm (CR 701.67a).
 #[test]
-fn smart_stops_pay_a_waterbend_with_mana_when_mana_can() {
-    assert!(!asked_after_waterbend(StopsSetting::SMART).contains(&Kind::Waterbend));
+fn smart_stops_offer_waterbend_even_when_mana_can_pay() {
+    assert_eq!(
+        asked_after_waterbend(StopsSetting::SMART).first(),
+        Some(&Kind::Waterbend)
+    );
     assert_eq!(
         asked_after_waterbend(StopsSetting::EXACT).first(),
         Some(&Kind::Waterbend)

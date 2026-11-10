@@ -22,6 +22,7 @@ import {
   useMotionValue,
   useReducedMotion,
 } from "motion/react";
+import { useWaterbend } from "./waterbend";
 import { cardEntry, faceEntry, landFace } from "../cards";
 import { BugIcon, requestBugReport } from "../components/BugReport";
 import { CARD_ASPECT, Card, type Highlight } from "../components/Card";
@@ -324,6 +325,7 @@ export function Board({
     () => new Map([...view.objects, ...emblems].map((o) => [o.slot, o])),
     [view, emblems],
   );
+  const waterbend = useWaterbend(deciding ? decision : undefined, objects);
   // Declaring attackers or blockers: the creatures are picked on the table, in any order.
   const drafting =
     deciding && (decision?.kind === "attacker" || decision?.kind === "blocker")
@@ -758,9 +760,11 @@ export function Board({
   // targets are chosen, before the payment is made (CR 601.2c to 601.2h), and once its
   // permanents are tapped.
   const taps = new Set(
-    paying
-      ? tapsOf(paying)
-      : (unlessTaps ??
+    waterbend.active
+      ? waterbend.taps
+      : paying
+        ? tapsOf(paying)
+        : (unlessTaps ??
           (paid && top?.kind === "spell" && top.slot === paid.slot
             ? paid.taps
             : [])),
@@ -860,6 +864,10 @@ export function Board({
   /** A click on the card in `slot`: what it offers, or nothing (false). */
   const onClick = (slot: number, at: Point): boolean => {
     if (isEmblem(slot)) return false;
+    if (waterbend.toggle(slot)) {
+      playSound("select");
+      return true;
+    }
     standIns.touch(slot, deciding ? can.bySlot.get(slot) : undefined);
     if (castingNow) {
       // A permanent another payment taps pays that way.
@@ -1498,11 +1506,23 @@ export function Board({
             onCancel={cancellable ? cancel : undefined}
             onPoint={setPointedOff}
             confirm={
-              picking && {
-                label: picking.label(picked),
-                disabled: !picking.ready(picked),
-                onClick: confirmPicks,
-              }
+              waterbend.active
+                ? {
+                    label: "Confirm",
+                    disabled: !waterbend.ready,
+                    onClick: () => {
+                      const { index, rest } = follow(
+                        decision,
+                        waterbend.plan(),
+                      );
+                      if (index !== undefined) pick(index, rest);
+                    },
+                  }
+                : picking && {
+                    label: picking.label(picked),
+                    disabled: !picking.ready(picked),
+                    onClick: confirmPicks,
+                  }
             }
             hovered={hovered}
             risen={risen?.slot}

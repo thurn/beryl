@@ -21,6 +21,25 @@ pub const LIST_AGENTS: &str = "list_agents";
 pub const START_GAME: &str = "start_game";
 /// Answers the human's open decision with a candidate.
 pub const CHOOSE: &str = "choose";
+/// Reads a proposed waterbend payment without changing the game.
+pub const PREVIEW_WATERBEND: &str = "preview_waterbend";
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct WaterbendRequest {
+    pub decision: DecisionId,
+    /// None requests the suggested payment; an empty list explicitly uses no benders.
+    pub selected: Option<Vec<u16>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct WaterbendPreview {
+    pub benders: Vec<u16>,
+    pub taps: Vec<u16>,
+    pub plan: Option<u16>,
+}
+
 /// Switches the human's priority stops.
 pub const SET_STOPS: &str = "set_stops";
 /// Takes back the spell the human is casting, or the ability they are activating, before its
@@ -182,6 +201,12 @@ pub(crate) fn typescript(cfg: &Config) -> String {
             START_GAME,
             request(name::<StartRequest>(cfg)),
             name::<SessionId>(cfg),
+            error.clone(),
+        ),
+        (
+            PREVIEW_WATERBEND,
+            request(name::<WaterbendRequest>(cfg)),
+            name::<Option<WaterbendPreview>>(cfg),
             error.clone(),
         ),
         (

@@ -31,6 +31,14 @@ decision: DecisionId, index: CandidateIndex,
  */
 continuation?: boolean, };
 
+export type WaterbendRequest = { decision: DecisionId, 
+/**
+ * None requests the suggested payment; an empty list explicitly uses no benders.
+ */
+selected: Array<number> | null, };
+
+export type WaterbendPreview = { benders: Array<number>, taps: Array<number>, plan: number | null, };
+
 export type SetStopsRequest = { session: SessionId, stops: StopsSetting, };
 
 export type CancelRequest = { 
@@ -281,6 +289,10 @@ export type TargetRef = { "kind": "player", player: Side, } | { "kind": "object"
 
 export type DecisionView = { 
 /**
+ * The suggested waterbend payment, editable without committing the taps.
+ */
+waterbend?: WaterbendPreview, 
+/**
  * What an answer names.
  */
 id: DecisionId, kind: Kind, candidates: Array<CandidateView>, 
@@ -497,6 +509,7 @@ export type Commands = {
   ui_ready: { args: Record<string, never>; result: null; error: never };
   list_agents: { args: Record<string, never>; result: Array<AgentView>; error: never };
   start_game: { args: { request: StartRequest }; result: SessionId; error: SessionError };
+  preview_waterbend: { args: { request: WaterbendRequest }; result: WaterbendPreview | null; error: SessionError };
   choose: { args: { request: ChooseRequest }; result: null; error: SessionError };
   set_stops: { args: { request: SetStopsRequest }; result: null; error: SessionError };
   cancel: { args: { request: CancelRequest }; result: null; error: SessionError };

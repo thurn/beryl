@@ -27,6 +27,9 @@ pub fn add_previews<L: Layout>(
     d: &Decision<L>,
 ) {
     if let Status::Deciding { decision } = &mut view.status {
+        if d.kind == DecisionKind::Waterbend {
+            decision.waterbend = waterbend(s, t, d, None);
+        }
         for (((c, p), b), targets) in decision
             .candidates
             .iter_mut()
@@ -279,6 +282,77 @@ fn priced<L: Layout>(at: Payment, s: &State<L>, t: &GameTable) -> Payment {
     }
 }
 
+/// A proposed waterbend payment, computed on a copy. The supplied benders replace generic
+/// mana one at a time; the remainder uses the engine's usual mana plan. No preview changes
+/// the real state. [CR 701.67a](https://yawgatog.com/resources/magic-rules/#R70167a):
+/// "you may tap an untapped artifact or creature you control rather than pay that mana."
+pub(crate) fn waterbend<L: Layout>(
+    before: &State<L>,
+    t: &GameTable,
+    first: &Decision<L>,
+    selected: Option<&[u16]>,
+) -> Option<crate::ipc::WaterbendPreview> {
+    if selected.is_some_and(|slots| {
+        slots
+            .iter()
+            .enumerate()
+            .any(|(i, slot)| slots[..i].contains(slot))
+    }) {
+        return None;
+    }
+    let mut copy = forced(before);
+    let mut scratch = Scratch::new();
+    let mut decision = first.clone();
+    let mut benders = Vec::new();
+    let mut plan = None;
+    loop {
+        let index = match decision.kind {
+            DecisionKind::Waterbend => {
+                let desired = selected.and_then(|slots| slots.get(benders.len())).copied();
+                (0..decision.len()).find(|&i| {
+                    match (decision.candidates.option(choice(i)), desired, selected) {
+                        (Some(Opt::Object(slot)), Some(wanted), _) => before
+                            .battlefield()
+                            .iter()
+                            .copied()
+                            .find(|s| s.num() == wanted)
+                            .is_some_and(|wanted| {
+                                beryl_engine::interchangeable(before, slot, wanted)
+                            }),
+                        (Some(Opt::Done), None, _) => true,
+                        (_, None, None) => i == 0,
+                        _ => false,
+                    }
+                })?
+            }
+            DecisionKind::PaymentPlan => 0,
+            _ => return None,
+        };
+        match decision.candidates.option(choice(index)) {
+            Some(Opt::Object(slot)) => benders.push(slot.num()),
+            Some(Opt::Plan(p)) => plan = Some(p.into()),
+            _ => {}
+        }
+        apply(&mut copy, t, &mut scratch, &mut Replay, choice(index));
+        let step = next(&mut copy, t, &mut scratch, &mut Replay);
+        if !matches!(copy.pending(), Pending::Casting(_)) {
+            break;
+        }
+        let Step::Decide(next) = step else {
+            return None;
+        };
+        decision = next;
+    }
+    if selected.is_some_and(|slots| slots.len() != benders.len()) {
+        return None;
+    }
+    Some(crate::ipc::WaterbendPreview {
+        benders,
+        taps: tapped(before, &copy, t),
+        plan,
+    })
+}
+
 /// The permanents untapped in `before` and tapped in `after`, by slot, with those the payment
 /// sacrificed for mana, as a Treasure
 /// ([CR 111.10a](https://yawgatog.com/resources/magic-rules/#R11110a)): "{T}, Sacrifice this
@@ -318,6 +392,52 @@ mod tests {
     use beryl_scenario::{P0, P1, Permanent, Scenario};
 
     use super::*;
+
+    #[test]
+    fn waterbend_preview_uses_identical_benders_and_rejects_unpayable_edits() {
+        const SCENARIO: Scenario = Scenario::new("waterbend previews").battlefield(
+            P0,
+            &[
+                Permanent::new(names::AANGS_ICEBERG),
+                Permanent::new(names::PLAINS),
+                Permanent::new(names::SNAPCASTER_MAGE),
+                Permanent::new(names::SNAPCASTER_MAGE),
+            ],
+        );
+        let (t, mut s) = beryl_scenario::position(&CARDS, &SCENARIO).unwrap();
+        s = forced(&s);
+        let mut scratch = Scratch::new();
+        let Step::Decide(d) = next(&mut s, &t, &mut scratch, &mut Replay) else {
+            panic!("priority");
+        };
+        let activate = (0..d.len()).find(|&i| matches!(d.candidates.option(choice(i)), Some(Opt::Activate { slot, .. }) if t.def(s.card(slot)).name == names::AANGS_ICEBERG)).unwrap();
+        apply(&mut s, &t, &mut scratch, &mut Replay, choice(activate));
+        let Step::Decide(d) = next(&mut s, &t, &mut scratch, &mut Replay) else {
+            panic!("waterbend");
+        };
+        assert_eq!(d.kind, DecisionKind::Waterbend);
+        let benders: Vec<_> = s
+            .battlefield()
+            .iter()
+            .filter(|&&slot| t.def(s.card(slot)).name == names::SNAPCASTER_MAGE)
+            .map(|slot| slot.num())
+            .collect();
+        let suggested = waterbend(&s, &t, &d, None).unwrap();
+        assert_eq!(suggested.benders.len(), 2);
+        assert_eq!(suggested.taps.len(), 3);
+        let reversed: Vec<_> = benders.iter().rev().copied().collect();
+        assert_eq!(
+            waterbend(&s, &t, &d, Some(&reversed)).unwrap().taps,
+            suggested.taps
+        );
+        assert!(waterbend(&s, &t, &d, Some(&benders[..1])).is_none());
+        assert!(waterbend(&s, &t, &d, Some(&[benders[0], benders[0]])).is_none());
+        assert!(
+            s.battlefield()
+                .iter()
+                .all(|&slot| !s.object(slot).flags.has(ObjectFlags::TAPPED))
+        );
+    }
 
     /// The first decision of a scenario with `hand` and `battlefield` for the first player,
     /// in their main phase, and the ways each of its candidates pays.

@@ -7694,32 +7694,107 @@ await check(
     { fixture: "crew", at: crewAt + 2, ready: ".crew-meter" },
 );
 
-// A waterbend lands alone can pay (`choice-scry`: Aang's Iceberg's {3}, three Plains and a
-// Snapcaster Mage) asks nothing: the activation goes straight on to the scry.
+// Even with enough lands, the player reviews the payment before any permanent taps.
 const scryViews = await load("choice-scry");
-assert.ok(
-    scryViews.every((v) => v.status.decision?.kind !== "waterbend"),
-    "no waterbend is asked",
+const bendAt = scryViews.findIndex(
+    (v) => v.status.decision?.kind === "waterbend",
 );
-const bendAt = scryViews.findLastIndex(
-    (v) => v.status.decision?.kind === "priority",
-);
-const bending = scryViews[bendAt].status.decision;
-const bend = bending.candidates.findIndex(
-    (c) => c.option.kind === "activate" && c.label.includes("Waterbend"),
-);
-const iceberg = bending.candidates[bend].option.slot;
+assert.ok(bendAt >= 0, "waterbend opens a payment review");
 await check(
-    "a waterbend payable by lands alone asks nothing",
+    "a waterbend payable by lands waits for confirmation",
     async (page) => {
         await page.clock.runFor(2000);
-        await page.click(slotOf(iceberg));
-        assert.deepEqual(await settled(page, 1), [bend]);
+        assert.equal(
+            await page
+                .getByRole("button", { name: "Confirm", exact: true })
+                .isEnabled(),
+            true,
+        );
+        assert.equal((await chosen(page)).length, 0);
+        const taps = scryViews[bendAt].status.decision.waterbend.taps;
+        for (const slot of taps) {
+            assert.equal(
+                await page.locator(`${slotOf(slot)} .card-paying`).count(),
+                1,
+            );
+        }
+        await page
+            .getByRole("button", { name: "Confirm", exact: true })
+            .click();
+        await settled(page, 1);
         await page.waitForSelector(".choice");
-        assert.equal(await page.$(".prompt"), null, "nothing is asked first");
     },
-    { fixture: "choice-scry", at: bendAt + 1, ready: slotOf(iceberg) },
+    { fixture: "choice-scry", at: bendAt + 1, ready: ".prompt-cost" },
 );
+
+// Editing the proposal sends only a read request; toggling back restores the lands.
+if (wanted("waterbend selections")) {
+    const bending = scryViews[bendAt].status.decision;
+    const slot = bending.candidates.find((c) => c.option.kind === "object")
+        .option.slot;
+    const suggested = bending.waterbend;
+    const selected = {
+        ...suggested,
+        benders: [slot],
+        taps: [slot, ...suggested.taps.slice(0, 2)],
+    };
+    const fixture = JSON.parse(
+        await readFile(join(fixtures, "choice-scry.json"), "utf8"),
+    );
+    fixture.messages.unshift(
+        ...[selected, suggested].map((value) => ({
+            kind: "response",
+            command: "preview_waterbend",
+            value,
+        })),
+    );
+    await writeFile(
+        join(fixtures, "waterbend-edit.json"),
+        JSON.stringify(fixture),
+    );
+    await check(
+        "waterbend selections are reversible until confirmation",
+        async (page) => {
+            await page.clock.runFor(1000);
+            await page.locator(slotOf(slot)).click();
+            await page.clock.runFor(300);
+            assert.deepEqual(await chosen(page), []);
+            const lit = () =>
+                page
+                    .locator(".card-paying")
+                    .evaluateAll((es) =>
+                        es
+                            .map((e) =>
+                                Number(e.closest("[data-slot]").dataset.slot),
+                            )
+                            .sort((a, b) => a - b),
+                    );
+            assert.deepEqual(
+                await lit(),
+                selected.taps.toSorted((a, b) => a - b),
+            );
+            await page.locator(slotOf(slot)).click();
+            await page.clock.runFor(300);
+            assert.deepEqual(await chosen(page), []);
+            assert.deepEqual(
+                await lit(),
+                suggested.taps.toSorted((a, b) => a - b),
+            );
+            await page
+                .getByRole("button", { name: "Cancel", exact: true })
+                .click();
+            await page.clock.runFor(1000);
+            assert.deepEqual(await chosen(page), []);
+            assert.equal(
+                await page
+                    .getByRole("button", { name: "Confirm", exact: true })
+                    .count(),
+                0,
+            );
+        },
+        { fixture: "waterbend-edit", at: bendAt + 1, ready: ".prompt-cost" },
+    );
+}
 
 // A waterbend mana can't pay (`waterbend-tap`: one Plains for {3}) shows its cost in symbols
 // and lights the artifact and creature that may tap for it.

@@ -1484,6 +1484,23 @@ impl Game {
             .answer(id, index)
     }
 
+    /// Previews the human's selected waterbenders on a copy, without advancing the game.
+    pub fn preview_waterbend(
+        &self,
+        request: &crate::ipc::WaterbendRequest,
+    ) -> Result<Option<crate::ipc::WaterbendPreview>, SessionError> {
+        self.answer(request.decision, CandidateIndex(0))?;
+        let At::Human(_, Open::Decision(d)) = &self.at else {
+            return Err(SessionError::NotDeciding);
+        };
+        if d.kind != DecisionKind::Waterbend {
+            return Ok(None);
+        }
+        Ok(
+            on_board!(&self.board, b => crate::preview::waterbend(&b.state, &self.table, &d.relayout(), request.selected.as_deref())),
+        )
+    }
+
     /// Applies an answer to the human's open decision; [`Game::next_view`] plays on from it.
     pub fn choose(&mut self, answer: Answer) {
         let At::Human(id, open) = self.at.clone() else {
@@ -1695,10 +1712,8 @@ impl Game {
     /// smart stops, it passes their priority while only their own doings sit on the stack
     /// ([`Game::own_top`]) or in combat with nothing new to answer ([`Game::quiet_combat`]),
     /// orders their simultaneous triggers ([`trigger_to_stack`]), searches their library
-    /// whenever they may ([`Game::searches_unasked`]), and
-    /// pays a waterbend cost with mana whenever mana can pay it, tapping no artifact or
-    /// creature ([CR 701.67a](https://yawgatog.com/resources/magic-rules/#R70167a): "you may
-    /// tap an untapped artifact or creature you control rather than pay that mana").
+    /// whenever they may ([`Game::searches_unasked`]). Waterbend remains a human payment
+    /// choice even when mana alone could pay it.
     /// Like halts, these are the session's alone: the engine's smart stops, which the agent's
     /// search shares, are unchanged, and exact stops ask every one. A function of the position,
     /// the stops and the human's answers, so a replay finds each again; the replay records
@@ -1722,9 +1737,6 @@ impl Game {
             DecisionKind::YesNo if Self::searches_unasked(d) => (0..d.len() as u16)
                 .map(Choice)
                 .find(|&c| d.candidates.option(c) == Some(Opt::Yes)),
-            DecisionKind::Waterbend => (0..d.len() as u16)
-                .map(Choice)
-                .find(|&c| d.candidates.option(c) == Some(Opt::Done)),
             _ => None,
         }
     }

@@ -855,6 +855,12 @@ pub(crate) fn collapse<L: Layout>(
     collapse_ordered(s, candidates.iter())
 }
 
+/// Whether two object slots are represented by one candidate (architecture §7.2). Read-only
+/// payment previews use the same equivalence as real decisions, including referenced objects.
+pub fn interchangeable<L: Layout>(s: &State<L>, a: L::Slot, b: L::Slot) -> bool {
+    collapse(s, Bitboard::single(a) | Bitboard::single(b)).count() == 1
+}
+
 /// [`collapse`] keeping the first of interchangeable objects in the order of `slots`
 /// rather than the lowest slot.
 pub(crate) fn collapse_in_order<L: Layout>(s: &State<L>, slots: &[L::Slot]) -> Bitboard<L::Slot> {

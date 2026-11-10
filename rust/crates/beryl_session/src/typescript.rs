@@ -7,7 +7,7 @@ use ts_rs::{Config, TS};
 use crate::bugs::{BugReport, BugSaved, PageInfo, Region, UiLogEntry, UiLogRequest};
 use crate::ipc::{
     AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, Fixture, FixtureMessage, PassOnRequest,
-    SetStopsRequest, UndoRequest,
+    SetStopsRequest, UndoRequest, WaterbendPreview, WaterbendRequest,
 };
 use crate::journal::Level;
 use crate::protocol::{
@@ -31,6 +31,8 @@ pub fn typescript() -> String {
         FixtureMessage::decl(&cfg),
         StartRequest::decl(&cfg),
         ChooseRequest::decl(&cfg),
+        WaterbendRequest::decl(&cfg),
+        WaterbendPreview::decl(&cfg),
         SetStopsRequest::decl(&cfg),
         CancelRequest::decl(&cfg),
         UndoRequest::decl(&cfg),
