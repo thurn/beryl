@@ -5543,6 +5543,9 @@ if (wanted(faceFlip)) {
         faceFlip,
         async (page) => {
             await page.clock.runFor(1000);
+            // Installed clocks otherwise keep ticking during click/IPC under load. Hold the
+            // gesture at a fixed instant so 100 ms remains before the 160 ms face switch.
+            await page.clock.pauseAt(Date.now() + 60_000);
             const card = page.locator(slotOf(slot));
             assert.equal(await card.locator(".card-face-down").count(), 1);
             await page
