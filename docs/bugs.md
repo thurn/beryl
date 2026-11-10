@@ -6,6 +6,15 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- Moving mana payment before exile selection changed the order of saved cast
+  decisions. A historical explicit exile choice followed by a mana plan could no
+  longer replay. Version 7 reorders completed costs with their undo boundaries;
+  an interrupted cast without a payment choice resumes at that choice with
+  unfinished exile picks restored. Prevention: test historical complete and
+  partial cost sequences, alongside migration idempotence and current-save
+  reloads, when changing decision order. Exact replay also counts a resumed
+  checkpoint only once when the new log repeats its opening board.
+
 - Exile costs counted a Treasure sacrificed for mana as a graveyard card while
   the cast was still pending. Moving mana payment before the exile chooser
   exposed the extra candidate and could let a token pay a card cost. Tokens are

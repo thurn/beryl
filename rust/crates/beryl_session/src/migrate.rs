@@ -34,7 +34,7 @@ pub type Step = fn(Value, &'static CardTable) -> Result<Value, SessionError>;
 /// The migrations, in order: the first upgrades a version 1 file to version 2. Its length is
 /// [`FORMAT_VERSION`] less one.
 pub const CHAIN: [Step; FORMAT_VERSION as usize - 1] =
-    [v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6];
+    [v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6, v6_to_v7];
 
 /// `file`, a replay file of any version this build knows, in the format it writes. `cards`
 /// are the cards its games are played with, which the migrations that replay need.
@@ -131,6 +131,88 @@ fn v4_to_v5(mut file: Value, _: &'static CardTable) -> Result<Value, SessionErro
 fn v5_to_v6(mut file: Value, _: &'static CardTable) -> Result<Value, SessionError> {
     mark_objects(&mut file, "beforeV6");
     set_version(&mut file, 6)?;
+    Ok(file)
+}
+
+/// Version 6 to 7: mana payment now precedes exile costs. Keep every recorded payment
+/// choice, moving it before the same cast's exile choices. A partially selected old cost
+/// with no payment chosen yet resumes at that payment decision (see `Game::replay_log`),
+/// with the unfinished exile selections restored. Preserve older descriptor compatibility
+/// markers instead of re-recording unrelated choices.
+fn v6_to_v7(mut file: Value, cards: &'static CardTable) -> Result<Value, SessionError> {
+    fn cost(entry: &Value) -> Option<&Value> {
+        let answer = entry.get("choice").or_else(|| entry.get("auto"))?;
+        matches!(
+            answer["kind"].as_str(),
+            Some("exileCost" | "paymentPlan" | "manaPayment")
+        )
+        .then_some(answer)
+    }
+    let mut unfinished = None;
+    if let Some(log) = file.get_mut("log").and_then(Value::as_array_mut) {
+        let mut start = 0;
+        while start < log.len() {
+            let Some(first) = cost(&log[start]) else {
+                start += 1;
+                continue;
+            };
+            let same_cast = |entry: &Value| {
+                cost(entry).is_some_and(|answer| {
+                    ["player", "turn", "step"]
+                        .iter()
+                        .all(|key| answer[key] == first[key])
+                })
+            };
+            let end = start + log[start..].iter().take_while(|e| same_cast(e)).count();
+            let exiles = log[start..end]
+                .iter()
+                .any(|e| cost(e).unwrap()["kind"] == "exileCost");
+            if exiles {
+                if end == log.len()
+                    && log[start..end]
+                        .iter()
+                        .all(|e| cost(e).unwrap()["kind"] == "exileCost")
+                {
+                    unfinished = Some(start);
+                }
+                // Group boundaries belong to positions, not the cost moved there: an
+                // automatic plan after a user exile pick must not join the preceding cast
+                // and leave that exile pick as an independent Undo after reordering.
+                let groups: Vec<_> = log[start..end]
+                    .iter()
+                    .map(|e| cost(e).unwrap().get("continuation").cloned())
+                    .collect();
+                log[start..end].sort_by_key(|e| cost(e).unwrap()["kind"] == "exileCost");
+                for (entry, group) in log[start..end].iter_mut().zip(groups) {
+                    let key = if entry.get("choice").is_some() {
+                        "choice"
+                    } else {
+                        "auto"
+                    };
+                    let answer = entry[key].as_object_mut().expect("a cost answer");
+                    if let Some(group) = group {
+                        answer.insert("continuation".to_owned(), group);
+                    } else {
+                        answer.remove("continuation");
+                    }
+                }
+            }
+            start = end;
+        }
+    }
+    if let Some(start) = unfinished {
+        let old: ReplayFile = serde_json::from_value(file.clone()).map_err(|e| bad(&e))?;
+        let (_, view) = Game::replay_exactly(cards, &old, SessionId(0))?;
+        if matches!(view.status, crate::Status::Deciding { decision }
+            if matches!(decision.kind, crate::protocol::Kind::PaymentPlan | crate::protocol::Kind::ManaPayment))
+        {
+            file["log"]
+                .as_array_mut()
+                .expect("a cost log")
+                .truncate(start);
+        }
+    }
+    set_version(&mut file, 7)?;
     Ok(file)
 }
 

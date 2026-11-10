@@ -810,3 +810,83 @@ fn sacrificed_mana_token_cannot_pay_a_graveyard_card_cost() {
             ]);
     beryl_scenario::run(&CARDS, &SCENARIO).unwrap();
 }
+
+/// Every engine payment mode completes mana before an additional card cost (CR 601.2h).
+#[test]
+fn each_payment_mode_finishes_mana_before_exile_choices() {
+    use beryl_engine::Payment;
+    use beryl_engine::event::Event;
+    use beryl_scenario::{P0, Permanent, Scenario};
+    const SETUP: Scenario = Scenario::new("payment modes before exile")
+        .battlefield(P0, &[Permanent::new(names::ISLAND); 3])
+        .hand(P0, &[names::ABHORRENT_OCULUS])
+        .graveyard(
+            P0,
+            &[
+                names::ISLAND,
+                names::PLAINS,
+                names::OUST,
+                names::REPRIEVE,
+                names::COUNTERSPELL,
+                names::STOCK_UP,
+                names::THIRST_FOR_DISCOVERY,
+            ],
+        );
+    for payment in [Payment::KeepMostPayable, Payment::Greedy, Payment::Manual] {
+        let (t, mut s) = beryl_scenario::position(&CARDS, &SETUP).unwrap();
+        s.set_profile(Profile {
+            payment,
+            stops: beryl_engine::Stops::Forced,
+            full_control: Some(P0),
+            ..Profile::EXACT
+        });
+        let mut x = Scratch::recording();
+        let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) else {
+            panic!("cast offered")
+        };
+        let cast = (0..d.len())
+            .map(|i| Choice(u16::try_from(i).unwrap()))
+            .find(|&c| matches!(d.candidates.option(c), Some(Opt::Cast { .. })))
+            .unwrap();
+        apply(&mut s, &t, &mut x, &mut Replay, cast);
+        let mut manual = 0;
+        loop {
+            let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) else {
+                panic!("cost choice")
+            };
+            if d.kind == DecisionKind::ExileCost {
+                break;
+            }
+            assert_eq!(d.kind, DecisionKind::ManaPayment);
+            manual += 1;
+            apply(&mut s, &t, &mut x, &mut Replay, Choice(0));
+        }
+        assert_eq!(manual, if payment == Payment::Manual { 3 } else { 0 });
+        assert_eq!(
+            s.battlefield()
+                .iter()
+                .filter(|&&slot| s.object(slot).flags.has(ObjectFlags::TAPPED))
+                .count(),
+            3
+        );
+        assert_eq!(s.graveyard(P0).len(), 7);
+        x.events.drain().for_each(drop);
+        loop {
+            apply(&mut s, &t, &mut x, &mut Replay, Choice(0));
+            let Step::Decide(after) = next(&mut s, &t, &mut x, &mut Replay) else {
+                panic!("cast finishes")
+            };
+            assert!(
+                !x.events
+                    .drain()
+                    .any(|e| matches!(e, Event::Mana { .. } | Event::Tap { .. })),
+                "cost completion never pays twice"
+            );
+            if after.kind != DecisionKind::ExileCost {
+                break;
+            }
+        }
+        assert_eq!(s.graveyard(P0).len(), 1);
+        assert_eq!(s.stack().len(), 1);
+    }
+}

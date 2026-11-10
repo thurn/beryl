@@ -486,10 +486,19 @@ struct Checks<'a> {
 
 impl<'a> Checks<'a> {
     fn new(file: &'a ReplayFile) -> Checks<'a> {
-        let logged = file.log.iter().filter_map(|e| match e {
-            Entry::Checkpoint(c) => Some(&**c),
-            _ => None,
-        });
+        let mut logged = file
+            .log
+            .iter()
+            .filter_map(|e| match e {
+                Entry::Checkpoint(c) => Some(&**c),
+                _ => None,
+            })
+            .peekable();
+        // Resuming from a checkpoint records that same opening board in the new log.
+        // It is one reached board, not a second turn that exact replay must reach again.
+        if logged.peek().copied() == file.from.as_deref() {
+            logged.next();
+        }
         Checks {
             ahead: file.from.as_deref().into_iter().chain(logged).collect(),
             reached: Vec::new(),
@@ -923,6 +932,18 @@ impl Game {
                     continue;
                 }
             }
+            // Before v7, an interrupted cast could have exile picks but no mana plan yet.
+            // Stop at the newly required payment instead of inventing its answer. The v7
+            // migration re-records this prefix, restoring those unfinished exile picks.
+            if file.format_version < 7
+                && self.unpaid_cast()
+                && steps.clone().all(|(entry, _)| {
+                    matches!(entry, Entry::Choice(c)
+                    if c.what.as_ref().is_some_and(|w| w.kind == save::Kind::ExileCost))
+                })
+            {
+                break;
+            }
             let Some((entry, outcomes)) = steps.peek_mut() else {
                 break;
             };
@@ -962,6 +983,13 @@ impl Game {
         on_board!(&mut self.board, b => b.state.set_flip_winner(chooser));
         self.flip_winner = Some(chooser);
         self.replay.chooser = Some(chooser.get());
+    }
+
+    /// Whether replay is waiting for the mana choice of an unfinished cast.
+    fn unpaid_cast(&self) -> bool {
+        matches!(&self.at,
+            At::Agent(d) | At::Human(_, Open::Decision(d))
+                if matches!(d.kind, DecisionKind::PaymentPlan | DecisionKind::ManaPayment))
     }
 
     /// Fails where a replay's chance could not reproduce what its record says chance produced.
