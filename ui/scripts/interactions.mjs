@@ -2030,7 +2030,11 @@ await check(
         );
         assert.equal(links.length, declaredBlocks.size, "a line a blocker");
         assert.equal(
-            await page.locator(".board-arrows .block-link").count(),
+            await page
+                .locator(
+                    '.board-arrows .combat-link:not([data-to$="-life-orb"])',
+                )
+                .count(),
             links.length,
         );
         for (const link of links) {
@@ -4981,6 +4985,64 @@ if (wanted(taxFlow)) {
     );
 }
 
+const costOrder = "mana payment precedes graveyard exile departures";
+if (wanted(costOrder)) {
+    for (const seat of ["you", "opponent"]) {
+        const source = structuredClone(oculusViews.slice(0, 2));
+        if (seat === "opponent") {
+            for (const v of source) {
+                [v.players.you, v.players.opponent] = [
+                    v.players.opponent,
+                    v.players.you,
+                ];
+                for (const o of v.objects) {
+                    o.controller = o.controller === "you" ? "opponent" : "you";
+                    o.owner = o.owner === "you" ? "opponent" : "you";
+                }
+                for (const e of v.events) {
+                    if (e.player)
+                        e.player = e.player === "you" ? "opponent" : "you";
+                    if (e.controller)
+                        e.controller =
+                            e.controller === "you" ? "opponent" : "you";
+                }
+            }
+        }
+        source[0].status.decision.passTo = { kind: "resolve" };
+        const exiles = source[1].events.filter(
+            (e) => e.kind === "zoneChange" && e.from === "graveyard",
+        );
+        const run = await motionFixture(`cost-order-${seat}`, source);
+        await check(
+            `${costOrder}: ${seat}`,
+            async (page) => {
+                await page.clock.runFor(1000);
+                await page
+                    .getByRole("button", { name: "Resolve", exact: true })
+                    .click();
+                await until(page, ".mana-mote", 20);
+                for (const e of exiles)
+                    assert.equal(
+                        await page
+                            .locator(slotOf(e.slot))
+                            .getAttribute("data-zone"),
+                        "graveyard",
+                        "cards wait while payment flies",
+                    );
+                await page.clock.runFor(4000);
+                for (const e of exiles)
+                    assert.equal(
+                        await page
+                            .locator(slotOf(e.slot))
+                            .getAttribute("data-zone"),
+                        "exile",
+                    );
+            },
+            { ...run, ready: slotOf(oculusSlot) },
+        );
+    }
+}
+
 const exileStagger =
     "simultaneous exile departures span three hundred milliseconds";
 if (wanted(exileStagger)) {
@@ -7737,6 +7799,30 @@ await check(
     },
 );
 
+await check(
+    "ability frames have square tops and shield bottoms",
+    async (page) => {
+        await page.clock.runFor(1000);
+        const corners = await page
+            .locator(".stack-item")
+            .first()
+            .evaluate((e) => {
+                const s = getComputedStyle(e);
+                return [s.borderTopLeftRadius, s.borderBottomLeftRadius];
+            });
+        assert.equal(parseFloat(corners[0]), 0);
+        assert.ok(
+            parseFloat(corners[1]) >= 20,
+            `rounded shield bottom ${corners[1]}`,
+        );
+    },
+    {
+        fixture: "arrow-ability",
+        at: (await load("arrow-ability")).length,
+        ready: ".stack-item",
+    },
+);
+
 // The cleanup discard (`choice-cleanup`: eight cards, one over) is picked from the raised hand,
 // its picks counted on its button.
 const cleanup = await lastDecision("choice-cleanup");
@@ -7851,12 +7937,10 @@ await check(
             0,
         );
         assert.ok(await page.locator(`${slotOf(human)} .card-source`).count());
-        assert.ok(
-            await page
-                .locator(
-                    `.arrow[data-from="card-${human}"][data-to="opponent-life-orb"]`,
-                )
-                .count(),
+        assert.equal(
+            await page.locator(`.arrow[data-from="card-${human}"]`).count(),
+            0,
+            "an undecided attacker has no destination link",
         );
         assert.equal(
             await page
@@ -7871,6 +7955,50 @@ await check(
     },
     adelineRun,
 );
+
+// Resolved destinations use the same quiet geometry as blocking links, from either seat.
+if (wanted("attack destinations use thin lines")) {
+    for (const seat of ["you", "opponent"]) {
+        const v = structuredClone(tokenAim.views.at(-1));
+        v.status = { kind: "playing" };
+        v.events = [];
+        if (seat === "opponent") {
+            for (const o of v.objects) {
+                o.controller = o.controller === "you" ? "opponent" : "you";
+                o.owner = o.owner === "you" ? "opponent" : "you";
+            }
+        }
+        for (const walker of [null, emperor]) {
+            v.objects.find((o) => o.slot === human).combat.planeswalker =
+                walker;
+            const run = await motionFixture(`attack-line-${seat}-${walker}`, [
+                structuredClone(v),
+            ]);
+            await check(
+                `attack destinations use thin lines: ${seat} ${walker ?? "player"}`,
+                async (page) => {
+                    await page.clock.runFor(2000);
+                    const link = page.locator(
+                        `.arrow[data-from="card-${human}"]`,
+                    );
+                    assert.equal(await link.count(), 1);
+                    assert.equal(
+                        await link.locator("path").count(),
+                        1,
+                        "no arrowhead or glow",
+                    );
+                    const width = await link
+                        .locator("path")
+                        .evaluate((e) =>
+                            parseFloat(getComputedStyle(e).strokeWidth),
+                        );
+                    assert.ok(width <= 2, `subtle line width ${width}`);
+                },
+                { ...run, ready: slotOf(human) },
+            );
+        }
+    }
+}
 
 // Crewing (`crew`: Swift Reconfiguration's crew 5) is picked on the board, a meter of pips
 // showing the power tapped against the cost, and what the creature pointed at would add.
@@ -7977,9 +8105,25 @@ if (wanted("waterbend selections")) {
     await check(
         "waterbend selections are reversible until confirmation",
         async (page) => {
-            await page.clock.runFor(1000);
+            await page.waitForTimeout(1000);
             await page.locator(slotOf(slot)).click();
-            await page.clock.runFor(300);
+            await page.waitForTimeout(1000);
+            assert.equal(
+                await page.locator(`${slotOf(slot)} .waterbend-tap`).count(),
+                1,
+            );
+            await page.waitForTimeout(1000);
+            assert.ok(
+                await page
+                    .locator(`${slotOf(slot)} .card`)
+                    .evaluate(
+                        (e) =>
+                            Math.abs(
+                                new DOMMatrix(getComputedStyle(e).transform).b,
+                            ) > 0.95,
+                    ),
+                `selected card physically taps: ${await page.locator(slotOf(slot)).innerHTML()}`,
+            );
             assert.deepEqual(await chosen(page), []);
             const lit = () =>
                 page
@@ -7996,16 +8140,32 @@ if (wanted("waterbend selections")) {
                 selected.taps.toSorted((a, b) => a - b),
             );
             await page.locator(slotOf(slot)).click();
-            await page.clock.runFor(300);
+            await page.waitForTimeout(300);
             assert.deepEqual(await chosen(page), []);
             assert.deepEqual(
                 await lit(),
                 suggested.taps.toSorted((a, b) => a - b),
             );
+            assert.equal(
+                await page.locator(`${slotOf(slot)} .waterbend-tap`).count(),
+                0,
+            );
+            await page.waitForTimeout(700);
+            assert.ok(
+                await page
+                    .locator(`${slotOf(slot)} .card`)
+                    .evaluate(
+                        (e) =>
+                            Math.abs(
+                                new DOMMatrix(getComputedStyle(e).transform).b,
+                            ) < 0.05,
+                    ),
+                "deselected card untaps",
+            );
             await page
                 .getByRole("button", { name: "Cancel", exact: true })
                 .click();
-            await page.clock.runFor(1000);
+            await page.waitForTimeout(1000);
             assert.deepEqual(await chosen(page), []);
             assert.equal(
                 await page
@@ -8014,7 +8174,12 @@ if (wanted("waterbend selections")) {
                 0,
             );
         },
-        { fixture: "waterbend-edit", at: bendAt + 1, ready: ".prompt-cost" },
+        {
+            fixture: "waterbend-edit",
+            at: bendAt + 1,
+            ready: ".prompt-cost",
+            clock: false,
+        },
     );
 }
 

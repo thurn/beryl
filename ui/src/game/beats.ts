@@ -121,6 +121,40 @@ function crosses(from: ZoneName, to: ZoneName): boolean {
   return from !== to && open.includes(from) && open.includes(to);
 }
 
+/** Cost selections arrive before automatic mana payment. Present the completed payment
+ * first, then the selected graveyard cards leaving. Only reorder the contiguous cost batch
+ * immediately before a cast; resolution exiles and unrelated taps retain their order. The
+ * engine's recorded events and decisions remain untouched. */
+function paymentFirst(events: GameEvent[]): GameEvent[] {
+  const out = [...events];
+  for (let i = 0; i < out.length; i++) {
+    if (out[i]?.kind !== "cast") continue;
+    let start = i;
+    while (start > 0) {
+      const e = out[start - 1]!;
+      if (
+        e.kind === "tap" ||
+        e.kind === "mana" ||
+        (e.kind === "zoneChange" && e.from === "graveyard" && e.to === "exile")
+      )
+        start--;
+      else break;
+    }
+    const costs = out.slice(start, i);
+    const exiles = costs.filter((e) => e.kind === "zoneChange");
+    if (!exiles.length || !costs.some((e) => e.kind === "mana")) continue;
+    // Include the cast announcement with its mana so ManaFlow can route into its spell.
+    out.splice(
+      start,
+      i - start + 1,
+      ...costs.filter((e) => e.kind !== "zoneChange"),
+      out[i]!,
+      ...exiles,
+    );
+  }
+  return out;
+}
+
 /** The opponent's spell or ability on the stack, held long enough to read; a trigger a little
  * less; the player's own, which they chose, an action's beat. */
 function stackHold(item: StackItem): number {
@@ -154,7 +188,7 @@ class Walk {
   }
 
   run(): Beat[] {
-    const events = this.view.events;
+    const events = paymentFirst(this.view.events);
     for (let i = 0; i < events.length; i++) {
       const e = events[i]!;
       if (e.kind === "stepBegins") {

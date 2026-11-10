@@ -30,6 +30,7 @@ import {
   CardBack,
   type Highlight,
 } from "../components/Card";
+import { ManaSymbol } from "../components/Mana";
 import { StackMarks } from "../components/Stack";
 import type {
   GameEvent,
@@ -79,6 +80,8 @@ export interface CardState {
   draggable?: boolean;
   /** The payment of the cast being dragged or set up taps it. */
   paying?: boolean;
+  /** A selected waterbend contributor, distinct from a mana source. */
+  waterbending?: boolean;
   /** The dropped card is represented by its mode choices. */
   splitting?: boolean;
   /** It is attached to the card the pointer is over, or that card is attached to it. */
@@ -890,7 +893,14 @@ function Look({
     );
   }
   return field ? (
-    <div className="on-table">{card_}</div>
+    <div className="on-table">
+      {card_}
+      {state.waterbending && (
+        <span className="waterbend-tap" aria-label="Waterbend contribution">
+          <ManaSymbol symbol="T" />
+        </span>
+      )}
+    </div>
   ) : place.look === "hand" ? (
     <div className="hand-card">{card_}</div>
   ) : (

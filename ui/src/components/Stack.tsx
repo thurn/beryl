@@ -141,8 +141,8 @@ export interface ArrowSpec {
   from: string;
   to: string;
   tone: "gold" | "cyan" | "red" | "green";
-  /** A direct line between the facing edges of a blocker and its attacker. */
-  block?: boolean;
+  /** A subtle direct combat line between facing edges, without an arrowhead. */
+  direct?: boolean;
   /** A target link shown while both ends are settled, invalidated by a zone change. */
   pulse?: {
     key: string;
@@ -158,7 +158,7 @@ type Drawn = {
   to: string;
   d: string;
   tone: ArrowSpec["tone"];
-} & ({ block: true } | { block: false; end: Vector; angle: number });
+} & ({ direct: true } | { direct: false; end: Vector; angle: number });
 
 /** An element's box in the parent's own coordinates: client rects are in screen pixels, which
  * differ by `scale` inside a scaled stage. */
@@ -286,7 +286,7 @@ export function Arrows({
       if (still && seen.current.searched) return;
       // Each arrow keeps off every other card, not what holds or lies within its ends, or
       // within what its ends are part of.
-      const routed = ends.filter(({ a }) => !a.block);
+      const routed = ends.filter(({ a }) => !a.direct);
       const legs = routed.map(({ from, to, source, target }): Leg => {
         const own = [from, to].flatMap((end) => {
           const host = end.dataset.within;
@@ -331,11 +331,11 @@ export function Arrows({
           d: shaft(r.p, r.angle, scale),
           end: r.end,
           angle: r.angle,
-          block: false,
+          direct: false,
         };
       });
       for (const { a, source, target } of ends) {
-        if (!a.block) continue;
+        if (!a.direct) continue;
         const above = source.y < target.y;
         const start: Vector = [
           source.x + source.width / 2,
@@ -349,7 +349,7 @@ export function Arrows({
           ...a,
           key: keyOf(a),
           d: `M${point(start)} L${point(end)}`,
-          block: true,
+          direct: true,
         });
       }
       // Unchanged, it keeps the drawn arrows.
@@ -393,11 +393,11 @@ export function Arrows({
         </filter>
       </defs>
       {drawn.map((a) => {
-        if (a.block) {
+        if (a.direct) {
           return (
             <g
               key={a.key}
-              className="arrow block-link"
+              className="arrow combat-link"
               data-from={a.from}
               data-to={a.to}
             >

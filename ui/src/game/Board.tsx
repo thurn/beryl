@@ -344,10 +344,17 @@ export function Board({
   const picked =
     picks?.view === view ? picks.picked : new Set(picking?.initial ?? []);
   // The table as the declaration would leave it.
-  const shown = useMemo(
-    () => (drafting ? declared(view, draft) : view),
-    [view, draft, drafting],
-  );
+  const shown = useMemo(() => {
+    const declaredView = drafting ? declared(view, draft) : view;
+    if (!waterbend.active) return declaredView;
+    // Preview the selected physical cards without committing the payment.
+    return {
+      ...declaredView,
+      objects: declaredView.objects.map((o) =>
+        waterbend.selected.includes(o.slot) ? { ...o, tapped: true } : o,
+      ),
+    };
+  }, [view, draft, drafting, waterbend.active, waterbend.selected]);
   // Every card the table draws: the objects shown, and the emblems.
   const drawn = useMemo(() => [...shown.objects, ...emblems], [shown, emblems]);
   // Until combat damage is dealt, what each player's unblocked attackers will deal them.
@@ -785,6 +792,9 @@ export function Board({
   }
   for (const slot of taps) {
     states.set(slot, { ...states.get(slot), paying: true, playable: false });
+  }
+  for (const slot of waterbend.selected) {
+    states.set(slot, { ...states.get(slot), waterbending: true });
   }
   // The pointer over a permanent or what is attached to it shows the other.
   for (const slot of linked(shown, hovered)) {
@@ -2191,8 +2201,8 @@ function tokenOrigins(
   return new Map(made.map((slot) => [slot, box]));
 }
 
-/** Combat links and stack arrows. A straight line joins a blocker to its attacker. An attack
- * on a planeswalker draws a red arrow. Stack targets are red for opposing cards and green
+/** Combat links and stack arrows. Thin straight lines join blockers to attackers and
+ * attackers to their chosen destinations. Stack targets are red for opposing cards and green
  * for yours. Abilities at the places `sourced` names draw a gold arrow from their source. */
 function boardArrows(
   view: PlayerView,
@@ -2212,12 +2222,15 @@ function boardArrows(
     const o = objects.get(slot);
     if (!o) continue;
     const combat = o.combat;
+    const ask =
+      view.status.kind === "deciding" ? view.status.decision.ask : undefined;
+    if (ask?.kind === "attackTarget" && ask.attackers.includes(slot)) continue;
     if (combat?.kind === "blocking" && combat.attacker !== null) {
       out.push({
         from: cardId(slot),
         to: cardId(combat.attacker),
         tone: "gold",
-        block: true,
+        direct: true,
       });
     }
     // When the defender has a planeswalker, show every attack destination, including the
@@ -2237,6 +2250,7 @@ function boardArrows(
           ? lifeId(o.controller === "you" ? "opponent" : "you")
           : cardId(combat.planeswalker),
       tone: "red",
+      direct: true,
     });
   }
   // Each item's targets, the top's first so that it routes clearest: what a spell or ability
