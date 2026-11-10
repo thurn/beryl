@@ -19,6 +19,7 @@ import type {
   ZoneName,
 } from "../generated/protocol";
 import { choiceOf, choiceSlots } from "./choices";
+import { pendingAttackers } from "./combat";
 import { withResolving } from "./decisions";
 import { liftsHandling, sameHandling, type Spotlight } from "./layout";
 import { FLIGHT_HOLD } from "./flight";
@@ -272,6 +273,8 @@ class Walk {
   private readonly view: PlayerView;
   private readonly final: Map<number, ObjectView>;
   private cur: PlayerView;
+  private readonly aiming: Set<number>;
+  private readonly nextAiming: Set<number>;
   private pending: GameEvent[] = [];
   private readonly out: Beat[] = [];
   /** Slots drawn in this view so far, to be seen in a hand before they leave it. */
@@ -298,6 +301,8 @@ class Walk {
         this.directToGraveyard.add(slot);
     }
     this.view = update.view;
+    this.aiming = new Set(pendingAttackers(before));
+    this.nextAiming = new Set(pendingAttackers(this.view));
     this.startsHandling =
       liftsHandling(this.view) &&
       (!sameHandling(before, this.view) ||
@@ -750,7 +755,11 @@ class Walk {
    * stands), held `hold` or as long as its events need. */
   private cut(hold?: number, spotlight?: Spotlight, always = false) {
     if (this.pending.length === 0 && !always) return;
-    const view: PlayerView = { ...this.cur, events: this.pending };
+    const view: PlayerView = {
+      ...this.cur,
+      events: this.pending,
+      pendingAttackers: [...this.aiming],
+    };
     const landing = this.landing;
     this.landing =
       spotlight !== undefined && spotlight.payingSource === undefined;
@@ -841,7 +850,13 @@ class Walk {
         players[side] = player;
         const rest = cur.objects.filter((o) => o.slot !== e.slot);
         const battlefield = cur.battlefield.filter((s) => s !== e.slot);
-        if (e.to === "battlefield") battlefield.push(e.slot);
+        if (e.to === "battlefield") {
+          battlefield.push(e.slot);
+          // A creature entering attacking can have its own defender question.
+          if (this.nextAiming.has(e.slot)) this.aiming.add(e.slot);
+        } else {
+          this.aiming.delete(e.slot);
+        }
         this.cur = {
           ...cur,
           objects: [...rest, object].sort((a, b) => a.slot - b.slot),
@@ -865,6 +880,24 @@ class Walk {
             paid: [],
           });
         }
+        return;
+      }
+      case "attack": {
+        // The declaration is already complete when its triggers go on the stack.
+        // Replay its destinations on the same objects before cutting those beats.
+        const declared = new Set(e.attackers);
+        for (const slot of declared) this.aiming.delete(slot);
+        this.cur = {
+          ...cur,
+          objects: cur.objects.map((object) => {
+            if (!declared.has(object.slot) || object.zone !== "battlefield")
+              return object;
+            const combat = this.final.get(object.slot)?.combat;
+            return combat?.kind === "attacking"
+              ? { ...object, combat: { ...combat, blocked: false } }
+              : object;
+          }),
+        };
         return;
       }
       case "cast":

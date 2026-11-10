@@ -10739,6 +10739,79 @@ await check(
 
 const combatLink = (slot) => `.combat-link[data-from="card-${slot}"]`;
 
+const tokenHandoff = "declared attack lines survive a token's defender choice";
+if (wanted(tokenHandoff)) {
+    const adeline = named(
+        tokenAim.views.at(-1),
+        "Adeline, Resplendent Cathar",
+    )[0];
+    const start = tokenAim.views.findIndex(
+        (v) => v.status.decision?.kind === "attacker",
+    );
+    const [declaration, defender] = tokenAim.views.slice(start);
+    const pending = structuredClone(tokenAim.views.at(-1));
+    // Playground batches declaration and trigger resolution into the Human's question.
+    pending.events = tokenAim.views.slice(start + 2).flatMap((v) => v.events);
+    pending.objects.find((o) => o.slot === adeline).combat.planeswalker =
+        emperor;
+    const answered = structuredClone(pending);
+    answered.events = [];
+    answered.pendingAttackers = undefined;
+    answered.status = { kind: "playing" };
+    const run = await motionFixture("attack-token-handoff", [
+        declaration,
+        defender,
+        pending,
+        answered,
+    ]);
+    await check(
+        tokenHandoff,
+        async (page) => {
+            const line = page.locator(combatLink(adeline));
+            const tokenLine = page.locator(combatLink(human));
+            const heading = page.getByRole("heading", {
+                name: "Choose attack target for Human",
+                exact: true,
+            });
+            await page.click(slotOf(adeline));
+            await page.click(slotOf(emperor));
+            assert.equal(await line.getAttribute("data-to"), `card-${emperor}`);
+            await page
+                .getByRole("button", { name: "Attack", exact: true })
+                .click();
+            for (let frame = 0; frame < 100; frame++) {
+                await page.clock.runFor(16);
+                assert.equal(
+                    await line.count(),
+                    1,
+                    `declared line in frame ${frame}`,
+                );
+                assert.equal(
+                    await line.getAttribute("data-to"),
+                    `card-${emperor}`,
+                );
+                assert.equal(
+                    await tokenLine.count(),
+                    0,
+                    "no line before choosing",
+                );
+                if (await heading.isVisible()) break;
+            }
+            assert.ok(await heading.isVisible(), "the Human's chooser opened");
+            await page
+                .getByRole("button", { name: "Target opponent", exact: true })
+                .click();
+            await page.clock.runFor(500);
+            assert.equal(await line.getAttribute("data-to"), `card-${emperor}`);
+            assert.equal(
+                await tokenLine.getAttribute("data-to"),
+                "opponent-life-orb",
+            );
+        },
+        { ...run, ready: slotOf(adeline) },
+    );
+}
+
 async function chevronGap(page, slot) {
     return page.locator(`${combatLink(slot)} path`).evaluate((path, slot) => {
         const mark = document.querySelector(`#card-${slot}-mark`);
