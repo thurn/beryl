@@ -273,5 +273,17 @@
     "through": ["Attacker", "AttackTarget"],
     "required": ["attack with Beza, the Bounding Spring"],
     "why": "Overloaded Winds left no blockers. Send Beza at the two-loyalty Teferi and keep the smaller creatures back to protect the Jaces; even a flashed 3/3 can only chump Beza."
+  },
+  {
+    "name": "beza-trinket-into-blockers",
+    "incident": "2026-11-10-beza-trinket-attack",
+    "class": "a losing attack into visible blockers",
+    "source": { "replay": "docs/incidents/2026-11-10-beza-trinket-attack.replay.json" },
+    "seat": 1,
+    "turn": 22,
+    "index": 5,
+    "played": "attack with Beza, the Bounding Spring",
+    "required": ["done"],
+    "why": "The opposing Beza and a Fish can kill Beza, and Subtlety can kill Trinket Mage, while all planeswalkers survive. Keep both creatures back when entering combat without improving the attack."
   }
 ]

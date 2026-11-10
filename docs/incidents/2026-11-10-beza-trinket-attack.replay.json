@@ -1,0 +1,7924 @@
+{
+  "formatVersion": 9,
+  "seed": 1794327231803974000,
+  "decks": [
+    [
+      [
+        1,
+        "Jace, Vryn's Prodigy"
+      ],
+      [
+        1,
+        "Snapcaster Mage"
+      ],
+      [
+        1,
+        "Trinket Mage"
+      ],
+      [
+        1,
+        "Abhorrent Oculus"
+      ],
+      [
+        1,
+        "Beza, the Bounding Spring"
+      ],
+      [
+        1,
+        "Subtlety"
+      ],
+      [
+        1,
+        "Counterspell"
+      ],
+      [
+        1,
+        "No More Lies"
+      ],
+      [
+        1,
+        "Reprieve"
+      ],
+      [
+        1,
+        "Oust"
+      ],
+      [
+        1,
+        "Thirst for Discovery"
+      ],
+      [
+        1,
+        "Stock Up"
+      ],
+      [
+        1,
+        "Damn"
+      ],
+      [
+        1,
+        "Winds of Abandon"
+      ],
+      [
+        1,
+        "Fractured Identity"
+      ],
+      [
+        1,
+        "Teferi, Time Raveler"
+      ],
+      [
+        1,
+        "The Wandering Emperor"
+      ],
+      [
+        1,
+        "Jace, Wielder of Mysteries"
+      ],
+      [
+        1,
+        "Jace, the Mind Sculptor"
+      ],
+      [
+        1,
+        "Teferi, Hero of Dominaria"
+      ],
+      [
+        1,
+        "Mana Crypt"
+      ],
+      [
+        1,
+        "Portable Hole"
+      ],
+      [
+        1,
+        "Currency Converter"
+      ],
+      [
+        1,
+        "Staff of the Storyteller"
+      ],
+      [
+        1,
+        "Tundra"
+      ],
+      [
+        1,
+        "Seachrome Coast"
+      ],
+      [
+        1,
+        "Floodfarm Verge"
+      ],
+      [
+        1,
+        "Spara's Headquarters"
+      ],
+      [
+        6,
+        "Plains"
+      ],
+      [
+        6,
+        "Island"
+      ]
+    ],
+    [
+      [
+        1,
+        "Jace, Vryn's Prodigy"
+      ],
+      [
+        1,
+        "Snapcaster Mage"
+      ],
+      [
+        1,
+        "Trinket Mage"
+      ],
+      [
+        1,
+        "Abhorrent Oculus"
+      ],
+      [
+        1,
+        "Beza, the Bounding Spring"
+      ],
+      [
+        1,
+        "Subtlety"
+      ],
+      [
+        1,
+        "Counterspell"
+      ],
+      [
+        1,
+        "No More Lies"
+      ],
+      [
+        1,
+        "Reprieve"
+      ],
+      [
+        1,
+        "Oust"
+      ],
+      [
+        1,
+        "Thirst for Discovery"
+      ],
+      [
+        1,
+        "Stock Up"
+      ],
+      [
+        1,
+        "Damn"
+      ],
+      [
+        1,
+        "Winds of Abandon"
+      ],
+      [
+        1,
+        "Fractured Identity"
+      ],
+      [
+        1,
+        "Teferi, Time Raveler"
+      ],
+      [
+        1,
+        "The Wandering Emperor"
+      ],
+      [
+        1,
+        "Jace, Wielder of Mysteries"
+      ],
+      [
+        1,
+        "Jace, the Mind Sculptor"
+      ],
+      [
+        1,
+        "Teferi, Hero of Dominaria"
+      ],
+      [
+        1,
+        "Mana Crypt"
+      ],
+      [
+        1,
+        "Portable Hole"
+      ],
+      [
+        1,
+        "Currency Converter"
+      ],
+      [
+        1,
+        "Staff of the Storyteller"
+      ],
+      [
+        1,
+        "Tundra"
+      ],
+      [
+        1,
+        "Seachrome Coast"
+      ],
+      [
+        1,
+        "Floodfarm Verge"
+      ],
+      [
+        1,
+        "Spara's Headquarters"
+      ],
+      [
+        6,
+        "Plains"
+      ],
+      [
+        6,
+        "Island"
+      ]
+    ]
+  ],
+  "human": 0,
+  "opponent": "pimc72-hidden-30m-anchor",
+  "stops": {
+    "fullControl": false,
+    "yours": [
+      "precombatMain",
+      "declareAttackers",
+      "declareBlockers",
+      "postcombatMain"
+    ],
+    "theirs": [
+      "declareAttackers",
+      "declareBlockers",
+      "end"
+    ]
+  },
+  "chooser": 0,
+  "log": [
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 0,
+        "step": "untap",
+        "kind": "playOrDraw",
+        "act": {
+          "act": "play"
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Plains"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Seachrome Coast"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Winds of Abandon"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Plains"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Reprieve"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Abhorrent Oculus"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Stock Up"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Stock Up"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Jace, Vryn's Prodigy"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Tundra"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Island"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Winds of Abandon"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "The Wandering Emperor"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Jace, the Mind Sculptor"
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 0,
+        "step": "untap",
+        "kind": "keepOrMulligan",
+        "act": {
+          "act": "keep"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 0,
+        "step": "untap",
+        "kind": "keepOrMulligan",
+        "act": {
+          "act": "keep"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 1,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Abhorrent Oculus",
+              "Plains",
+              "Plains",
+              "Reprieve",
+              "Seachrome Coast",
+              "Stock Up",
+              "Winds of Abandon"
+            ],
+            "graveyard": [],
+            "library": 33
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Island",
+              "Jace, Vryn's Prodigy",
+              "Jace, the Mind Sculptor",
+              "Stock Up",
+              "The Wandering Emperor",
+              "Tundra",
+              "Winds of Abandon"
+            ],
+            "graveyard": [],
+            "library": 33
+          }
+        ],
+        "battlefield": []
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 1,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Seachrome Coast",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 2,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Abhorrent Oculus",
+              "Plains",
+              "Plains",
+              "Reprieve",
+              "Stock Up",
+              "Winds of Abandon"
+            ],
+            "graveyard": [],
+            "library": 33
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Island",
+              "Jace, Vryn's Prodigy",
+              "Jace, the Mind Sculptor",
+              "Stock Up",
+              "The Wandering Emperor",
+              "Tundra",
+              "Winds of Abandon"
+            ],
+            "graveyard": [],
+            "library": 33
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Seachrome Coast",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Damn"
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 1,
+        "turn": 2,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Tundra",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 3,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Abhorrent Oculus",
+              "Plains",
+              "Plains",
+              "Reprieve",
+              "Stock Up",
+              "Winds of Abandon"
+            ],
+            "graveyard": [],
+            "library": 33
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Damn",
+              "Island",
+              "Jace, Vryn's Prodigy",
+              "Jace, the Mind Sculptor",
+              "Stock Up",
+              "The Wandering Emperor",
+              "Winds of Abandon"
+            ],
+            "graveyard": [],
+            "library": 32
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Seachrome Coast",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Tundra",
+            "owner": 1,
+            "controller": 1,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Subtlety"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 3,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Plains",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 3,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 3,
+        "step": "postcombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 4,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Abhorrent Oculus",
+              "Plains",
+              "Reprieve",
+              "Stock Up",
+              "Subtlety",
+              "Winds of Abandon"
+            ],
+            "graveyard": [],
+            "library": 32
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Damn",
+              "Island",
+              "Jace, Vryn's Prodigy",
+              "Jace, the Mind Sculptor",
+              "Stock Up",
+              "The Wandering Emperor",
+              "Winds of Abandon"
+            ],
+            "graveyard": [],
+            "library": 32
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Seachrome Coast",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Tundra",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Teferi, Hero of Dominaria"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 4,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Island",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 4,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Jace, Vryn's Prodigy",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 4,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Reprieve",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "continuation": true,
+        "player": 0,
+        "turn": 4,
+        "step": "precombatMain",
+        "kind": "target",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Jace, Vryn's Prodigy",
+            "zone": "stack",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 4,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Island"
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 4,
+        "step": "end",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 5,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Abhorrent Oculus",
+              "Island",
+              "Plains",
+              "Stock Up",
+              "Subtlety",
+              "Winds of Abandon"
+            ],
+            "graveyard": [
+              "Reprieve"
+            ],
+            "library": 31
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Damn",
+              "Jace, Vryn's Prodigy",
+              "Jace, the Mind Sculptor",
+              "Stock Up",
+              "Teferi, Hero of Dominaria",
+              "The Wandering Emperor",
+              "Winds of Abandon"
+            ],
+            "shown": [
+              "Jace, Vryn's Prodigy"
+            ],
+            "graveyard": [],
+            "library": 31
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Seachrome Coast",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Tundra",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Thirst for Discovery"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 5,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Island",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 3,
+        "player": 0,
+        "turn": 5,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Stock Up",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 5,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Staff of the Storyteller"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Counterspell"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Fractured Identity"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Trinket Mage"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Island"
+      }
+    },
+    {
+      "choice": {
+        "index": 4,
+        "player": 0,
+        "turn": 5,
+        "step": "precombatMain",
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Staff of the Storyteller",
+            "zone": "library",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 5,
+        "step": "precombatMain",
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Fractured Identity",
+            "zone": "library",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 5,
+        "step": "precombatMain",
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Counterspell",
+            "zone": "library",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 5,
+        "step": "precombatMain",
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Trinket Mage",
+            "zone": "library",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 5,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 5,
+        "step": "postcombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 6,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Abhorrent Oculus",
+              "Fractured Identity",
+              "Plains",
+              "Staff of the Storyteller",
+              "Subtlety",
+              "Thirst for Discovery",
+              "Winds of Abandon"
+            ],
+            "graveyard": [
+              "Stock Up",
+              "Reprieve"
+            ],
+            "library": 28,
+            "known": [
+              {
+                "depth": 25,
+                "card": "Counterspell",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 26,
+                "card": "Trinket Mage",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 27,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Damn",
+              "Jace, Vryn's Prodigy",
+              "Jace, the Mind Sculptor",
+              "Stock Up",
+              "Teferi, Hero of Dominaria",
+              "The Wandering Emperor",
+              "Winds of Abandon"
+            ],
+            "shown": [
+              "Jace, Vryn's Prodigy"
+            ],
+            "graveyard": [],
+            "library": 31
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Seachrome Coast",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Tundra",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Plains"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 6,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Plains",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 1,
+        "turn": 6,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Stock Up",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 6,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Mana Crypt"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Jace, Wielder of Mysteries"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Island"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Spara's Headquarters"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Currency Converter"
+      }
+    },
+    {
+      "choice": {
+        "index": 4,
+        "player": 1,
+        "turn": 6,
+        "step": "precombatMain",
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Mana Crypt",
+            "zone": "library",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 3,
+        "player": 1,
+        "turn": 6,
+        "step": "precombatMain",
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Jace, Wielder of Mysteries",
+            "zone": "library",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 6,
+        "step": "precombatMain",
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Currency Converter",
+            "zone": "library",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 6,
+        "step": "precombatMain",
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Island",
+            "zone": "library",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 6,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Mana Crypt",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 6,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 6,
+        "step": "end",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 7,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Abhorrent Oculus",
+              "Fractured Identity",
+              "Plains",
+              "Staff of the Storyteller",
+              "Subtlety",
+              "Thirst for Discovery",
+              "Winds of Abandon"
+            ],
+            "graveyard": [
+              "Stock Up",
+              "Reprieve"
+            ],
+            "library": 28,
+            "known": [
+              {
+                "depth": 25,
+                "card": "Counterspell",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 26,
+                "card": "Trinket Mage",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 27,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Damn",
+              "Jace, Vryn's Prodigy",
+              "Jace, Wielder of Mysteries",
+              "Jace, the Mind Sculptor",
+              "Teferi, Hero of Dominaria",
+              "The Wandering Emperor",
+              "Winds of Abandon"
+            ],
+            "shown": [
+              "Jace, Vryn's Prodigy"
+            ],
+            "graveyard": [
+              "Stock Up"
+            ],
+            "library": 28,
+            "known": [
+              {
+                "depth": 25,
+                "card": "Currency Converter",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 26,
+                "card": "Island",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 27,
+                "card": "Spara's Headquarters",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Seachrome Coast",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Tundra",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true,
+            "sick": true
+          },
+          {
+            "card": "Mana Crypt",
+            "owner": 1,
+            "controller": 1,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Island"
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 7,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Plains",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 7,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 7,
+        "step": "postcombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 8,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Abhorrent Oculus",
+              "Fractured Identity",
+              "Island",
+              "Staff of the Storyteller",
+              "Subtlety",
+              "Thirst for Discovery",
+              "Winds of Abandon"
+            ],
+            "graveyard": [
+              "Stock Up",
+              "Reprieve"
+            ],
+            "library": 27,
+            "known": [
+              {
+                "depth": 24,
+                "card": "Counterspell",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 25,
+                "card": "Trinket Mage",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 26,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Damn",
+              "Jace, Vryn's Prodigy",
+              "Jace, Wielder of Mysteries",
+              "Jace, the Mind Sculptor",
+              "Teferi, Hero of Dominaria",
+              "The Wandering Emperor",
+              "Winds of Abandon"
+            ],
+            "shown": [
+              "Jace, Vryn's Prodigy"
+            ],
+            "graveyard": [
+              "Stock Up"
+            ],
+            "library": 28,
+            "known": [
+              {
+                "depth": 25,
+                "card": "Currency Converter",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 26,
+                "card": "Island",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 27,
+                "card": "Spara's Headquarters",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Seachrome Coast",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Tundra",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Mana Crypt",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 8,
+        "step": "upkeep",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 8,
+        "step": "upkeep",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "flip": {
+        "player": 1,
+        "won": true
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Counterspell"
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 8,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 8,
+        "step": "postcombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 8,
+        "step": "end",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Thirst for Discovery",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 8,
+        "step": "end",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 1,
+        "turn": 8,
+        "step": "end",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "The Wandering Emperor",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 8,
+        "step": "end",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 1,
+        "turn": 8,
+        "step": "end",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "The Wandering Emperor",
+            "zone": "battlefield",
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 3
+              }
+            ]
+          },
+          "ability": {
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 8,
+        "step": "end",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 8,
+        "step": "end",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Oust"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Damn"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Teferi, Time Raveler"
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 8,
+        "step": "end",
+        "kind": "yesNo",
+        "act": {
+          "act": "yes"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 8,
+        "step": "end",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 9,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Abhorrent Oculus",
+              "Damn",
+              "Fractured Identity",
+              "Oust",
+              "Staff of the Storyteller",
+              "Subtlety",
+              "Teferi, Time Raveler",
+              "Winds of Abandon"
+            ],
+            "graveyard": [
+              "Thirst for Discovery",
+              "Island",
+              "Stock Up",
+              "Reprieve"
+            ],
+            "library": 24,
+            "known": [
+              {
+                "depth": 21,
+                "card": "Counterspell",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 22,
+                "card": "Trinket Mage",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 23,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Counterspell",
+              "Damn",
+              "Jace, Vryn's Prodigy",
+              "Jace, Wielder of Mysteries",
+              "Jace, the Mind Sculptor",
+              "Teferi, Hero of Dominaria",
+              "Winds of Abandon"
+            ],
+            "shown": [
+              "Jace, Vryn's Prodigy"
+            ],
+            "graveyard": [
+              "Stock Up"
+            ],
+            "library": 27,
+            "known": [
+              {
+                "depth": 24,
+                "card": "Currency Converter",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 25,
+                "card": "Island",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 26,
+                "card": "Spara's Headquarters",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Seachrome Coast",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Tundra",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Mana Crypt",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "The Wandering Emperor",
+            "owner": 1,
+            "controller": 1,
+            "sick": true,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "card": "Samurai Token",
+            "owner": 1,
+            "controller": 1,
+            "token": true,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Portable Hole"
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 9,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Teferi, Time Raveler",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 9,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 5,
+        "player": 0,
+        "turn": 9,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Teferi, Time Raveler",
+            "zone": "battlefield",
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 4
+              }
+            ]
+          },
+          "ability": {
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 9,
+        "step": "precombatMain",
+        "kind": "targetCount",
+        "act": {
+          "act": "number",
+          "n": 1
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 9,
+        "step": "precombatMain",
+        "kind": "target",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Samurai Token",
+            "zone": "battlefield",
+            "controller": 1,
+            "token": true,
+            "sick": true
+          }
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 9,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Jace, Wielder of Mysteries"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 9,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Portable Hole",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 9,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 9,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 9,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 9,
+        "step": "postcombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 9,
+        "step": "cleanup",
+        "kind": "discard",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Damn",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 10,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Abhorrent Oculus",
+              "Fractured Identity",
+              "Jace, Wielder of Mysteries",
+              "Oust",
+              "Staff of the Storyteller",
+              "Subtlety",
+              "Winds of Abandon"
+            ],
+            "graveyard": [
+              "Damn",
+              "Thirst for Discovery",
+              "Island",
+              "Stock Up",
+              "Reprieve"
+            ],
+            "library": 22,
+            "known": [
+              {
+                "depth": 19,
+                "card": "Counterspell",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 20,
+                "card": "Trinket Mage",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 21,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Counterspell",
+              "Damn",
+              "Jace, Vryn's Prodigy",
+              "Jace, Wielder of Mysteries",
+              "Jace, the Mind Sculptor",
+              "Teferi, Hero of Dominaria",
+              "Winds of Abandon"
+            ],
+            "shown": [
+              "Jace, Vryn's Prodigy"
+            ],
+            "graveyard": [
+              "Stock Up"
+            ],
+            "exile": [
+              {
+                "card": "Mana Crypt",
+                "until": 9
+              }
+            ],
+            "library": 27,
+            "known": [
+              {
+                "depth": 24,
+                "card": "Currency Converter",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 25,
+                "card": "Island",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 26,
+                "card": "Spara's Headquarters",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Seachrome Coast",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Tundra",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "The Wandering Emperor",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 0,
+            "controller": 0,
+            "sick": true,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "card": "Portable Hole",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Teferi, Time Raveler"
+      }
+    },
+    {
+      "choice": {
+        "index": 4,
+        "player": 1,
+        "turn": 10,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "The Wandering Emperor",
+            "zone": "battlefield",
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          "ability": {
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 10,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 10,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Teferi, Time Raveler",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 10,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 10,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Teferi, Time Raveler",
+            "zone": "battlefield",
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 4
+              }
+            ]
+          },
+          "ability": {
+            "n": 0
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 11,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Abhorrent Oculus",
+              "Fractured Identity",
+              "Jace, Wielder of Mysteries",
+              "Oust",
+              "Staff of the Storyteller",
+              "Subtlety",
+              "Winds of Abandon"
+            ],
+            "graveyard": [
+              "Damn",
+              "Thirst for Discovery",
+              "Island",
+              "Stock Up",
+              "Reprieve"
+            ],
+            "library": 22,
+            "known": [
+              {
+                "depth": 19,
+                "card": "Counterspell",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 20,
+                "card": "Trinket Mage",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 21,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Counterspell",
+              "Damn",
+              "Jace, Vryn's Prodigy",
+              "Jace, Wielder of Mysteries",
+              "Jace, the Mind Sculptor",
+              "Teferi, Hero of Dominaria",
+              "Winds of Abandon"
+            ],
+            "shown": [
+              "Jace, Vryn's Prodigy"
+            ],
+            "graveyard": [
+              "Stock Up"
+            ],
+            "exile": [
+              {
+                "card": "Mana Crypt",
+                "until": 9
+              }
+            ],
+            "library": 26,
+            "known": [
+              {
+                "depth": 23,
+                "card": "Currency Converter",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 24,
+                "card": "Island",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 25,
+                "card": "Spara's Headquarters",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Seachrome Coast",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Tundra",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "The Wandering Emperor",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 0,
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "card": "Portable Hole",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Samurai Token",
+            "owner": 1,
+            "controller": 1,
+            "token": true,
+            "sick": true
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 1,
+            "controller": 1,
+            "sick": true,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 5
+              }
+            ]
+          }
+        ],
+        "lingering": "player 1 casting sorceries as though they had flash until their next turn"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Plains"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 11,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Plains",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 7,
+        "player": 0,
+        "turn": 11,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Teferi, Time Raveler",
+            "zone": "battlefield",
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 1
+              }
+            ]
+          },
+          "ability": {
+            "n": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 11,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Oust",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "continuation": true,
+        "player": 0,
+        "turn": 11,
+        "step": "precombatMain",
+        "kind": "target",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Samurai Token",
+            "zone": "battlefield",
+            "controller": 1,
+            "token": true,
+            "sick": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 11,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Subtlety",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 12,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Abhorrent Oculus",
+              "Fractured Identity",
+              "Jace, Wielder of Mysteries",
+              "Staff of the Storyteller",
+              "Winds of Abandon"
+            ],
+            "graveyard": [
+              "Oust",
+              "Damn",
+              "Thirst for Discovery",
+              "Island",
+              "Stock Up",
+              "Reprieve"
+            ],
+            "library": 21,
+            "known": [
+              {
+                "depth": 18,
+                "card": "Counterspell",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 19,
+                "card": "Trinket Mage",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 20,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 23,
+            "hand": [
+              "Counterspell",
+              "Damn",
+              "Jace, Vryn's Prodigy",
+              "Jace, Wielder of Mysteries",
+              "Jace, the Mind Sculptor",
+              "Teferi, Hero of Dominaria",
+              "Winds of Abandon"
+            ],
+            "shown": [
+              "Jace, Vryn's Prodigy"
+            ],
+            "graveyard": [
+              "Stock Up"
+            ],
+            "exile": [
+              {
+                "card": "Mana Crypt",
+                "until": 9
+              }
+            ],
+            "library": 26,
+            "known": [
+              {
+                "depth": 23,
+                "card": "Currency Converter",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 24,
+                "card": "Island",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 25,
+                "card": "Spara's Headquarters",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Seachrome Coast",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Tundra",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "The Wandering Emperor",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 0,
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "card": "Portable Hole",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 5
+              }
+            ]
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true,
+            "sick": true
+          },
+          {
+            "card": "Subtlety",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          }
+        ],
+        "lingering": "player 0 casting sorceries as though they had flash until their next turn"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Snapcaster Mage"
+      }
+    },
+    {
+      "choice": {
+        "index": 5,
+        "player": 1,
+        "turn": 12,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Teferi, Time Raveler",
+            "zone": "battlefield",
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 5
+              }
+            ]
+          },
+          "ability": {
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 12,
+        "step": "precombatMain",
+        "kind": "targetCount",
+        "act": {
+          "act": "number",
+          "n": 1
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 12,
+        "step": "precombatMain",
+        "kind": "target",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Subtlety",
+            "zone": "battlefield",
+            "controller": 0,
+            "sick": true
+          }
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Fractured Identity"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 12,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Snapcaster Mage",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 12,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "The Wandering Emperor",
+            "zone": "battlefield",
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 1
+              }
+            ]
+          },
+          "ability": {
+            "n": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 12,
+        "step": "precombatMain",
+        "kind": "targetCount",
+        "act": {
+          "act": "number",
+          "n": 1
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 7,
+        "player": 1,
+        "turn": 12,
+        "step": "cleanup",
+        "kind": "discard",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Jace, Vryn's Prodigy",
+            "zone": "hand",
+            "controller": 1,
+            "shown": true
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 13,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Abhorrent Oculus",
+              "Fractured Identity",
+              "Jace, Wielder of Mysteries",
+              "Staff of the Storyteller",
+              "Subtlety",
+              "Winds of Abandon"
+            ],
+            "shown": [
+              "Subtlety"
+            ],
+            "graveyard": [
+              "Oust",
+              "Damn",
+              "Thirst for Discovery",
+              "Island",
+              "Stock Up",
+              "Reprieve"
+            ],
+            "library": 21,
+            "known": [
+              {
+                "depth": 18,
+                "card": "Counterspell",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 19,
+                "card": "Trinket Mage",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 20,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 23,
+            "hand": [
+              "Counterspell",
+              "Damn",
+              "Fractured Identity",
+              "Jace, Wielder of Mysteries",
+              "Jace, the Mind Sculptor",
+              "Teferi, Hero of Dominaria",
+              "Winds of Abandon"
+            ],
+            "graveyard": [
+              "Jace, Vryn's Prodigy",
+              "Stock Up"
+            ],
+            "exile": [
+              {
+                "card": "Mana Crypt",
+                "until": 9
+              }
+            ],
+            "library": 24,
+            "known": [
+              {
+                "depth": 21,
+                "card": "Currency Converter",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 22,
+                "card": "Island",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 23,
+                "card": "Spara's Headquarters",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Seachrome Coast",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Tundra",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "The Wandering Emperor",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 0,
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "card": "Portable Hole",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Snapcaster Mage",
+            "owner": 1,
+            "controller": 1,
+            "sick": true,
+            "counters": [
+              {
+                "kind": "+1/+1",
+                "count": 1
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Teferi, Hero of Dominaria"
+      }
+    },
+    {
+      "choice": {
+        "index": 6,
+        "player": 0,
+        "turn": 13,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Abhorrent Oculus",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 13,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Staff of the Storyteller",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 13,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Teferi, Time Raveler",
+            "zone": "battlefield",
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          "ability": {
+            "n": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 13,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 13,
+        "step": "postcombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 14,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Fractured Identity",
+              "Jace, Wielder of Mysteries",
+              "Subtlety",
+              "Teferi, Hero of Dominaria",
+              "Winds of Abandon"
+            ],
+            "shown": [
+              "Subtlety"
+            ],
+            "graveyard": [],
+            "exile": [
+              {
+                "card": "Damn"
+              },
+              {
+                "card": "Island"
+              },
+              {
+                "card": "Oust"
+              },
+              {
+                "card": "Reprieve"
+              },
+              {
+                "card": "Stock Up"
+              },
+              {
+                "card": "Thirst for Discovery"
+              }
+            ],
+            "library": 20,
+            "known": [
+              {
+                "depth": 17,
+                "card": "Counterspell",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 18,
+                "card": "Trinket Mage",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 19,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 23,
+            "hand": [
+              "Counterspell",
+              "Damn",
+              "Fractured Identity",
+              "Jace, Wielder of Mysteries",
+              "Jace, the Mind Sculptor",
+              "Teferi, Hero of Dominaria",
+              "Winds of Abandon"
+            ],
+            "graveyard": [
+              "Jace, Vryn's Prodigy",
+              "Stock Up"
+            ],
+            "exile": [
+              {
+                "card": "Mana Crypt",
+                "until": 9
+              }
+            ],
+            "library": 24,
+            "known": [
+              {
+                "depth": 21,
+                "card": "Currency Converter",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 22,
+                "card": "Island",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 23,
+                "card": "Spara's Headquarters",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Seachrome Coast",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Tundra",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "The Wandering Emperor",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 0,
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 3
+              }
+            ]
+          },
+          {
+            "card": "Portable Hole",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Snapcaster Mage",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "+1/+1",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "card": "Abhorrent Oculus",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          },
+          {
+            "card": "Staff of the Storyteller",
+            "owner": 0,
+            "controller": 0,
+            "sick": true,
+            "counters": [
+              {
+                "kind": "story",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "card": "Spirit Token",
+            "owner": 0,
+            "controller": 0,
+            "token": true,
+            "sick": true
+          }
+        ],
+        "lingering": "player 0 casting sorceries as though they had flash until their next turn"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Spara's Headquarters"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Island"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 14,
+        "step": "upkeep",
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Spara's Headquarters",
+            "zone": "library",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Plains"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 14,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Plains",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 14,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Damn",
+            "zone": "hand",
+            "controller": 1
+          },
+          "costs": [
+            "overload"
+          ]
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 3,
+        "player": 1,
+        "turn": 14,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "The Wandering Emperor",
+            "zone": "battlefield",
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          "ability": {
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 14,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 14,
+        "step": "postcombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Teferi, Time Raveler",
+            "zone": "battlefield",
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          "ability": {
+            "n": 0
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 15,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Fractured Identity",
+              "Jace, Wielder of Mysteries",
+              "Subtlety",
+              "Teferi, Hero of Dominaria",
+              "Winds of Abandon"
+            ],
+            "shown": [
+              "Subtlety"
+            ],
+            "graveyard": [
+              "Spara's Headquarters",
+              "Abhorrent Oculus",
+              "Island"
+            ],
+            "exile": [
+              {
+                "card": "Damn"
+              },
+              {
+                "card": "Island"
+              },
+              {
+                "card": "Oust"
+              },
+              {
+                "card": "Reprieve"
+              },
+              {
+                "card": "Stock Up"
+              },
+              {
+                "card": "Thirst for Discovery"
+              }
+            ],
+            "library": 18,
+            "known": [
+              {
+                "depth": 15,
+                "card": "Counterspell",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 16,
+                "card": "Trinket Mage",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 17,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 23,
+            "hand": [
+              "Counterspell",
+              "Fractured Identity",
+              "Jace, Wielder of Mysteries",
+              "Jace, the Mind Sculptor",
+              "Teferi, Hero of Dominaria",
+              "Winds of Abandon"
+            ],
+            "graveyard": [
+              "Damn",
+              "Snapcaster Mage",
+              "Jace, Vryn's Prodigy",
+              "Stock Up"
+            ],
+            "exile": [
+              {
+                "card": "Mana Crypt",
+                "until": 9
+              }
+            ],
+            "library": 23,
+            "known": [
+              {
+                "depth": 20,
+                "card": "Currency Converter",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 21,
+                "card": "Island",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 22,
+                "card": "Spara's Headquarters",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Seachrome Coast",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Tundra",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "The Wandering Emperor",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 0,
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 3
+              }
+            ]
+          },
+          {
+            "card": "Portable Hole",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 3
+              }
+            ]
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Staff of the Storyteller",
+            "owner": 0,
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "story",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true,
+            "sick": true
+          },
+          {
+            "card": "Samurai Token",
+            "owner": 1,
+            "controller": 1,
+            "token": true,
+            "sick": true
+          }
+        ],
+        "lingering": "player 1 casting sorceries as though they had flash until their next turn"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Jace, the Mind Sculptor"
+      }
+    },
+    {
+      "choice": {
+        "index": 7,
+        "player": 0,
+        "turn": 15,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Teferi, Time Raveler",
+            "zone": "battlefield",
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 3
+              }
+            ]
+          },
+          "ability": {
+            "n": 0
+          }
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 15,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 15,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Teferi, Hero of Dominaria",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 15,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Teferi, Hero of Dominaria",
+            "zone": "battlefield",
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 4
+              }
+            ]
+          },
+          "ability": {
+            "n": 0
+          }
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Plains"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 15,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Plains",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 15,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 15,
+        "step": "postcombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 15,
+        "step": "end",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 15,
+        "step": "end",
+        "kind": "chooseUpTo",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Plains",
+            "zone": "battlefield",
+            "controller": 0,
+            "tapped": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 3,
+        "player": 0,
+        "turn": 15,
+        "step": "end",
+        "kind": "chooseUpTo",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Seachrome Coast",
+            "zone": "battlefield",
+            "controller": 0,
+            "tapped": true
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 16,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Fractured Identity",
+              "Jace, Wielder of Mysteries",
+              "Jace, the Mind Sculptor",
+              "Subtlety",
+              "Winds of Abandon"
+            ],
+            "shown": [
+              "Subtlety"
+            ],
+            "graveyard": [
+              "Spara's Headquarters",
+              "Abhorrent Oculus",
+              "Island"
+            ],
+            "exile": [
+              {
+                "card": "Damn"
+              },
+              {
+                "card": "Island"
+              },
+              {
+                "card": "Oust"
+              },
+              {
+                "card": "Reprieve"
+              },
+              {
+                "card": "Stock Up"
+              },
+              {
+                "card": "Thirst for Discovery"
+              }
+            ],
+            "library": 16,
+            "known": [
+              {
+                "depth": 13,
+                "card": "Counterspell",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 14,
+                "card": "Trinket Mage",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 15,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 23,
+            "hand": [
+              "Counterspell",
+              "Fractured Identity",
+              "Jace, Wielder of Mysteries",
+              "Jace, the Mind Sculptor",
+              "Teferi, Hero of Dominaria",
+              "Winds of Abandon"
+            ],
+            "graveyard": [
+              "Damn",
+              "Snapcaster Mage",
+              "Jace, Vryn's Prodigy",
+              "Stock Up"
+            ],
+            "exile": [
+              {
+                "card": "Mana Crypt",
+                "until": 9
+              }
+            ],
+            "library": 23,
+            "known": [
+              {
+                "depth": 20,
+                "card": "Currency Converter",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 21,
+                "card": "Island",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 22,
+                "card": "Spara's Headquarters",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Seachrome Coast",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Tundra",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "The Wandering Emperor",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 0,
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 4
+              }
+            ]
+          },
+          {
+            "card": "Portable Hole",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 3
+              }
+            ]
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Staff of the Storyteller",
+            "owner": 0,
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "story",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Samurai Token",
+            "owner": 1,
+            "controller": 1,
+            "token": true
+          },
+          {
+            "card": "Teferi, Hero of Dominaria",
+            "owner": 0,
+            "controller": 0,
+            "sick": true,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 5
+              }
+            ]
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          }
+        ],
+        "lingering": "player 0 casting sorceries as though they had flash until their next turn"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Island"
+      }
+    },
+    {
+      "choice": {
+        "index": 3,
+        "player": 1,
+        "turn": 16,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Teferi, Time Raveler",
+            "zone": "battlefield",
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 3
+              }
+            ]
+          },
+          "ability": {
+            "n": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 16,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 16,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Island",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 3,
+        "player": 1,
+        "turn": 16,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Teferi, Hero of Dominaria",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 16,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 1,
+        "turn": 16,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Teferi, Hero of Dominaria",
+            "zone": "battlefield",
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 4
+              }
+            ]
+          },
+          "ability": {
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 16,
+        "step": "precombatMain",
+        "kind": "target",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Teferi, Hero of Dominaria",
+            "zone": "battlefield",
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 5
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 16,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 16,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "The Wandering Emperor",
+            "zone": "battlefield",
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 1
+              }
+            ]
+          },
+          "ability": {
+            "n": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 16,
+        "step": "precombatMain",
+        "kind": "targetCount",
+        "act": {
+          "act": "number",
+          "n": 1
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 16,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 16,
+        "step": "declareAttackers",
+        "kind": "attacker",
+        "act": {
+          "act": "attack",
+          "creature": {
+            "name": "Samurai Token",
+            "zone": "battlefield",
+            "controller": 1,
+            "token": true,
+            "counters": [
+              {
+                "kind": "+1/+1",
+                "count": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 16,
+        "step": "declareAttackers",
+        "kind": "attackTarget",
+        "act": {
+          "act": "defender",
+          "planeswalker": {
+            "name": "Teferi, Time Raveler",
+            "zone": "battlefield",
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 4
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 16,
+        "step": "declareAttackers",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "auto": {
+        "index": 0,
+        "player": 0,
+        "turn": 16,
+        "step": "declareBlockers",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 16,
+        "step": "end",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Staff of the Storyteller",
+            "zone": "battlefield",
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "story",
+                "count": 1
+              }
+            ]
+          },
+          "ability": {
+            "n": 0
+          }
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "No More Lies"
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 17,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Fractured Identity",
+              "Jace, Wielder of Mysteries",
+              "Jace, the Mind Sculptor",
+              "No More Lies",
+              "Subtlety",
+              "Winds of Abandon"
+            ],
+            "shown": [
+              "Subtlety"
+            ],
+            "graveyard": [
+              "Spara's Headquarters",
+              "Abhorrent Oculus",
+              "Island"
+            ],
+            "exile": [
+              {
+                "card": "Damn"
+              },
+              {
+                "card": "Island"
+              },
+              {
+                "card": "Oust"
+              },
+              {
+                "card": "Reprieve"
+              },
+              {
+                "card": "Stock Up"
+              },
+              {
+                "card": "Thirst for Discovery"
+              }
+            ],
+            "library": 16,
+            "known": [
+              {
+                "depth": 1,
+                "card": "Teferi, Hero of Dominaria",
+                "by": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "depth": 13,
+                "card": "Counterspell",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 14,
+                "card": "Trinket Mage",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 15,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 23,
+            "hand": [
+              "Counterspell",
+              "Fractured Identity",
+              "Jace, Wielder of Mysteries",
+              "Jace, the Mind Sculptor",
+              "Winds of Abandon"
+            ],
+            "graveyard": [
+              "Damn",
+              "Snapcaster Mage",
+              "Jace, Vryn's Prodigy",
+              "Stock Up"
+            ],
+            "exile": [
+              {
+                "card": "Mana Crypt",
+                "until": 9
+              }
+            ],
+            "library": 22,
+            "known": [
+              {
+                "depth": 19,
+                "card": "Currency Converter",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 20,
+                "card": "Island",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 21,
+                "card": "Spara's Headquarters",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Seachrome Coast",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Tundra",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "The Wandering Emperor",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 0,
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "card": "Portable Hole",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 4
+              }
+            ]
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Staff of the Storyteller",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Samurai Token",
+            "owner": 1,
+            "controller": 1,
+            "token": true,
+            "counters": [
+              {
+                "kind": "+1/+1",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true,
+            "sick": true
+          },
+          {
+            "card": "Teferi, Hero of Dominaria",
+            "owner": 1,
+            "controller": 1,
+            "sick": true,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 1
+              }
+            ]
+          }
+        ],
+        "lingering": "player 1 casting sorceries as though they had flash until their next turn"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Island"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Island",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 3,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Fractured Identity",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 4,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "kind": "target",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Teferi, Hero of Dominaria",
+            "zone": "battlefield",
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 3,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Teferi, Time Raveler",
+            "zone": "battlefield",
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 1
+              }
+            ]
+          },
+          "ability": {
+            "n": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 4,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Teferi, Hero of Dominaria",
+            "zone": "battlefield",
+            "controller": 0,
+            "token": true,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 4
+              }
+            ]
+          },
+          "ability": {
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 5,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "kind": "target",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Samurai Token",
+            "zone": "battlefield",
+            "controller": 1,
+            "token": true,
+            "counters": [
+              {
+                "kind": "+1/+1",
+                "count": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 17,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 17,
+        "step": "postcombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 18,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Jace, Wielder of Mysteries",
+              "Jace, the Mind Sculptor",
+              "No More Lies",
+              "Subtlety",
+              "Winds of Abandon"
+            ],
+            "shown": [
+              "Subtlety"
+            ],
+            "graveyard": [
+              "Fractured Identity",
+              "Spara's Headquarters",
+              "Abhorrent Oculus",
+              "Island"
+            ],
+            "exile": [
+              {
+                "card": "Damn"
+              },
+              {
+                "card": "Island"
+              },
+              {
+                "card": "Oust"
+              },
+              {
+                "card": "Reprieve"
+              },
+              {
+                "card": "Stock Up"
+              },
+              {
+                "card": "Thirst for Discovery"
+              }
+            ],
+            "library": 15,
+            "known": [
+              {
+                "depth": 0,
+                "card": "Teferi, Hero of Dominaria",
+                "by": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "depth": 12,
+                "card": "Counterspell",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 13,
+                "card": "Trinket Mage",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 14,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 23,
+            "hand": [
+              "Counterspell",
+              "Fractured Identity",
+              "Jace, Wielder of Mysteries",
+              "Jace, the Mind Sculptor",
+              "Winds of Abandon"
+            ],
+            "graveyard": [
+              "Damn",
+              "Snapcaster Mage",
+              "Jace, Vryn's Prodigy",
+              "Stock Up"
+            ],
+            "exile": [
+              {
+                "card": "Mana Crypt",
+                "until": 9
+              },
+              {
+                "card": "Teferi, Hero of Dominaria"
+              }
+            ],
+            "library": 22,
+            "known": [
+              {
+                "depth": 19,
+                "card": "Currency Converter",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 20,
+                "card": "Island",
+                "by": [
+                  1
+                ]
+              },
+              {
+                "depth": 21,
+                "card": "Spara's Headquarters",
+                "by": [
+                  1
+                ]
+              }
+            ]
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Seachrome Coast",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Tundra",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "The Wandering Emperor",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 0,
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "card": "Portable Hole",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 4
+              }
+            ]
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Staff of the Storyteller",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true,
+            "sick": true
+          },
+          {
+            "card": "Teferi, Hero of Dominaria",
+            "owner": 0,
+            "controller": 0,
+            "token": true,
+            "sick": true,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 1
+              }
+            ]
+          }
+        ],
+        "lingering": "player 0 casting sorceries as though they had flash until their next turn"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Plains"
+      }
+    },
+    {
+      "choice": {
+        "index": 4,
+        "player": 1,
+        "turn": 18,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Jace, the Mind Sculptor",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 5,
+        "player": 1,
+        "turn": 18,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Jace, the Mind Sculptor",
+            "zone": "battlefield",
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 3
+              }
+            ]
+          },
+          "ability": {
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Island"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Trinket Mage"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "No More Lies"
+      }
+    },
+    {
+      "choice": {
+        "index": 7,
+        "player": 1,
+        "turn": 18,
+        "step": "precombatMain",
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Winds of Abandon",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 18,
+        "step": "precombatMain",
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Trinket Mage",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 4,
+        "player": 1,
+        "turn": 18,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Teferi, Time Raveler",
+            "zone": "battlefield",
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 4
+              }
+            ]
+          },
+          "ability": {
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 18,
+        "step": "precombatMain",
+        "kind": "targetCount",
+        "act": {
+          "act": "number",
+          "n": 1
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 18,
+        "step": "precombatMain",
+        "kind": "target",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Portable Hole",
+            "zone": "battlefield",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 3,
+        "player": 1,
+        "turn": 18,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Trinket Mage",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 18,
+        "step": "precombatMain",
+        "kind": "yesNo",
+        "act": {
+          "act": "yes"
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Portable Hole"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Staff of the Storyteller"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Plains"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Island"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Beza, the Bounding Spring"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Plains"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Oust"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Plains"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Floodfarm Verge"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Abhorrent Oculus"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Seachrome Coast"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Thirst for Discovery"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Subtlety"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Island"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Reprieve"
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 1,
+        "turn": 18,
+        "step": "precombatMain",
+        "kind": "chooseUpTo",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Currency Converter",
+            "zone": "library",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 18,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Island",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 18,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Currency Converter",
+            "zone": "hand",
+            "controller": 1,
+            "shown": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 18,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "The Wandering Emperor",
+            "zone": "battlefield",
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          "ability": {
+            "n": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 18,
+        "step": "precombatMain",
+        "kind": "targetCount",
+        "act": {
+          "act": "number",
+          "n": 1
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 19,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Jace, Wielder of Mysteries",
+              "Jace, the Mind Sculptor",
+              "No More Lies",
+              "Portable Hole",
+              "Subtlety",
+              "Winds of Abandon"
+            ],
+            "shown": [
+              "Portable Hole",
+              "Subtlety"
+            ],
+            "graveyard": [
+              "Fractured Identity",
+              "Spara's Headquarters",
+              "Abhorrent Oculus",
+              "Island"
+            ],
+            "exile": [
+              {
+                "card": "Damn"
+              },
+              {
+                "card": "Island"
+              },
+              {
+                "card": "Oust"
+              },
+              {
+                "card": "Reprieve"
+              },
+              {
+                "card": "Stock Up"
+              },
+              {
+                "card": "Thirst for Discovery"
+              }
+            ],
+            "library": 15,
+            "known": [
+              {
+                "depth": 0,
+                "card": "Teferi, Hero of Dominaria",
+                "by": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "depth": 12,
+                "card": "Counterspell",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 13,
+                "card": "Trinket Mage",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 14,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 23,
+            "hand": [
+              "Counterspell",
+              "Fractured Identity",
+              "Jace, Wielder of Mysteries",
+              "No More Lies",
+              "Plains"
+            ],
+            "graveyard": [
+              "Damn",
+              "Snapcaster Mage",
+              "Jace, Vryn's Prodigy",
+              "Stock Up"
+            ],
+            "exile": [
+              {
+                "card": "Teferi, Hero of Dominaria"
+              }
+            ],
+            "library": 18
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Seachrome Coast",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Tundra",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "The Wandering Emperor",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 3
+              }
+            ]
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 0,
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Staff of the Storyteller",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Teferi, Hero of Dominaria",
+            "owner": 0,
+            "controller": 0,
+            "token": true,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "card": "Jace, the Mind Sculptor",
+            "owner": 1,
+            "controller": 1,
+            "sick": true,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 3
+              }
+            ]
+          },
+          {
+            "card": "Mana Crypt",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true,
+            "sick": true
+          },
+          {
+            "card": "Trinket Mage",
+            "owner": 1,
+            "controller": 1,
+            "sick": true,
+            "counters": [
+              {
+                "kind": "+1/+1",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true,
+            "sick": true
+          },
+          {
+            "card": "Currency Converter",
+            "owner": 1,
+            "controller": 1,
+            "sick": true
+          }
+        ]
+      }
+    },
+    {
+      "choice": {
+        "index": 10,
+        "player": 0,
+        "turn": 19,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Teferi, Hero of Dominaria",
+            "zone": "battlefield",
+            "controller": 0,
+            "token": true,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 1
+              }
+            ]
+          },
+          "ability": {
+            "n": 0
+          }
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Beza, the Bounding Spring"
+      }
+    },
+    {
+      "choice": {
+        "index": 10,
+        "player": 0,
+        "turn": 19,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Teferi, Time Raveler",
+            "zone": "battlefield",
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          "ability": {
+            "n": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 19,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Jace, the Mind Sculptor",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 6,
+        "player": 0,
+        "turn": 19,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Jace, the Mind Sculptor",
+            "zone": "battlefield",
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 3
+              }
+            ]
+          },
+          "ability": {
+            "n": 2
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "continuation": true,
+        "player": 0,
+        "turn": 19,
+        "step": "precombatMain",
+        "kind": "target",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Trinket Mage",
+            "zone": "battlefield",
+            "controller": 1,
+            "sick": true,
+            "counters": [
+              {
+                "kind": "+1/+1",
+                "count": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 19,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Portable Hole",
+            "zone": "hand",
+            "controller": 0,
+            "shown": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 19,
+        "step": "precombatMain",
+        "kind": "target",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Currency Converter",
+            "zone": "battlefield",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 19,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 19,
+        "step": "postcombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 19,
+        "step": "end",
+        "kind": "chooseUpTo",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Island",
+            "zone": "battlefield",
+            "controller": 0,
+            "tapped": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 19,
+        "step": "end",
+        "kind": "chooseUpTo",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Plains",
+            "zone": "battlefield",
+            "controller": 0,
+            "tapped": true
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 20,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Beza, the Bounding Spring",
+              "Jace, Wielder of Mysteries",
+              "No More Lies",
+              "Subtlety",
+              "Teferi, Hero of Dominaria",
+              "Winds of Abandon"
+            ],
+            "shown": [
+              "Subtlety",
+              "Teferi, Hero of Dominaria"
+            ],
+            "graveyard": [
+              "Fractured Identity",
+              "Spara's Headquarters",
+              "Abhorrent Oculus",
+              "Island"
+            ],
+            "exile": [
+              {
+                "card": "Damn"
+              },
+              {
+                "card": "Island"
+              },
+              {
+                "card": "Oust"
+              },
+              {
+                "card": "Reprieve"
+              },
+              {
+                "card": "Stock Up"
+              },
+              {
+                "card": "Thirst for Discovery"
+              }
+            ],
+            "library": 13,
+            "known": [
+              {
+                "depth": 10,
+                "card": "Counterspell",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 11,
+                "card": "Trinket Mage",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 12,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 23,
+            "hand": [
+              "Counterspell",
+              "Fractured Identity",
+              "Jace, Wielder of Mysteries",
+              "No More Lies",
+              "Plains",
+              "Trinket Mage"
+            ],
+            "shown": [
+              "Trinket Mage"
+            ],
+            "graveyard": [
+              "Damn",
+              "Snapcaster Mage",
+              "Jace, Vryn's Prodigy",
+              "Stock Up"
+            ],
+            "exile": [
+              {
+                "card": "Currency Converter",
+                "until": 21
+              },
+              {
+                "card": "Teferi, Hero of Dominaria"
+              }
+            ],
+            "library": 18
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Seachrome Coast",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Tundra",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "The Wandering Emperor",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 3
+              }
+            ]
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 0,
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 3
+              }
+            ]
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Staff of the Storyteller",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Teferi, Hero of Dominaria",
+            "owner": 0,
+            "controller": 0,
+            "token": true,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "card": "Jace, the Mind Sculptor",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 3
+              }
+            ]
+          },
+          {
+            "card": "Mana Crypt",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Jace, the Mind Sculptor",
+            "owner": 0,
+            "controller": 0,
+            "sick": true,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "card": "Portable Hole",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          }
+        ],
+        "lingering": "player 0 casting sorceries as though they had flash until their next turn"
+      }
+    },
+    {
+      "flip": {
+        "player": 1,
+        "won": false
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Reprieve"
+      }
+    },
+    {
+      "choice": {
+        "index": 7,
+        "player": 1,
+        "turn": 20,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Jace, the Mind Sculptor",
+            "zone": "battlefield",
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 3
+              }
+            ]
+          },
+          "ability": {
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Thirst for Discovery"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Winds of Abandon"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Beza, the Bounding Spring"
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 1,
+        "turn": 20,
+        "step": "precombatMain",
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Winds of Abandon",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 1,
+        "turn": 20,
+        "step": "precombatMain",
+        "kind": "chooseObject",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "No More Lies",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 4,
+        "player": 1,
+        "turn": 20,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Trinket Mage",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 20,
+        "step": "precombatMain",
+        "kind": "yesNo",
+        "act": {
+          "act": "yes"
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Subtlety"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Seachrome Coast"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Staff of the Storyteller"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Plains"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Abhorrent Oculus"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Plains"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Plains"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Island"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Island"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Island"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Floodfarm Verge"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Oust"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Portable Hole"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Spara's Headquarters"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 20,
+        "step": "precombatMain",
+        "kind": "chooseUpTo",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Portable Hole",
+            "zone": "library",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 4,
+        "player": 1,
+        "turn": 20,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Beza, the Bounding Spring",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 1,
+        "turn": 20,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Portable Hole",
+            "zone": "hand",
+            "controller": 1,
+            "shown": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 20,
+        "step": "precombatMain",
+        "kind": "target",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Staff of the Storyteller",
+            "zone": "battlefield",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 4,
+        "player": 1,
+        "turn": 20,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "The Wandering Emperor",
+            "zone": "battlefield",
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 3
+              }
+            ]
+          },
+          "ability": {
+            "n": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 20,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Plains",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 20,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 20,
+        "step": "postcombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Teferi, Time Raveler",
+            "zone": "battlefield",
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 1
+              }
+            ]
+          },
+          "ability": {
+            "n": 0
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 21,
+        "active": 0,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Beza, the Bounding Spring",
+              "Jace, Wielder of Mysteries",
+              "No More Lies",
+              "Subtlety",
+              "Teferi, Hero of Dominaria",
+              "Winds of Abandon"
+            ],
+            "shown": [
+              "Subtlety",
+              "Teferi, Hero of Dominaria"
+            ],
+            "graveyard": [
+              "Fractured Identity",
+              "Spara's Headquarters",
+              "Abhorrent Oculus",
+              "Island"
+            ],
+            "exile": [
+              {
+                "card": "Damn"
+              },
+              {
+                "card": "Island"
+              },
+              {
+                "card": "Oust"
+              },
+              {
+                "card": "Reprieve"
+              },
+              {
+                "card": "Staff of the Storyteller",
+                "until": 24
+              },
+              {
+                "card": "Stock Up"
+              },
+              {
+                "card": "Thirst for Discovery"
+              }
+            ],
+            "library": 13,
+            "known": [
+              {
+                "depth": 10,
+                "card": "Counterspell",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 11,
+                "card": "Trinket Mage",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 12,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Counterspell",
+              "Fractured Identity",
+              "Jace, Wielder of Mysteries",
+              "Reprieve",
+              "Thirst for Discovery"
+            ],
+            "graveyard": [
+              "Damn",
+              "Snapcaster Mage",
+              "Jace, Vryn's Prodigy",
+              "Stock Up"
+            ],
+            "exile": [
+              {
+                "card": "Currency Converter",
+                "until": 20
+              },
+              {
+                "card": "Teferi, Hero of Dominaria"
+              }
+            ],
+            "library": 15
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Seachrome Coast",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Tundra",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "The Wandering Emperor",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 0,
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 3
+              }
+            ]
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Teferi, Hero of Dominaria",
+            "owner": 0,
+            "controller": 0,
+            "token": true,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "card": "Jace, the Mind Sculptor",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 3
+              }
+            ]
+          },
+          {
+            "card": "Mana Crypt",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1,
+            "tapped": true
+          },
+          {
+            "card": "Jace, the Mind Sculptor",
+            "owner": 0,
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "card": "Portable Hole",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Trinket Mage",
+            "owner": 1,
+            "controller": 1,
+            "sick": true
+          },
+          {
+            "card": "Beza, the Bounding Spring",
+            "owner": 1,
+            "controller": 1,
+            "sick": true
+          },
+          {
+            "card": "Treasure Token",
+            "owner": 1,
+            "controller": 1,
+            "token": true,
+            "sick": true
+          },
+          {
+            "card": "Portable Hole",
+            "owner": 1,
+            "controller": 1,
+            "sick": true
+          },
+          {
+            "card": "Samurai Token",
+            "owner": 1,
+            "controller": 1,
+            "token": true,
+            "sick": true
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1,
+            "sick": true
+          }
+        ],
+        "lingering": "player 1 casting sorceries as though they had flash until their next turn"
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Currency Converter"
+      }
+    },
+    {
+      "choice": {
+        "index": 14,
+        "player": 0,
+        "turn": 21,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Teferi, Hero of Dominaria",
+            "zone": "battlefield",
+            "controller": 0,
+            "token": true,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          "ability": {
+            "n": 0
+          }
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 0,
+        "card": "Tundra"
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 21,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "playLand",
+          "card": {
+            "name": "Tundra",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 5,
+        "player": 0,
+        "turn": 21,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Subtlety",
+            "zone": "hand",
+            "controller": 0,
+            "shown": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 2,
+        "player": 0,
+        "turn": 21,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Beza, the Bounding Spring",
+            "zone": "hand",
+            "controller": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 3,
+        "player": 0,
+        "turn": 21,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Jace, the Mind Sculptor",
+            "zone": "battlefield",
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          "ability": {
+            "n": 2
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 4,
+        "player": 0,
+        "turn": 21,
+        "step": "precombatMain",
+        "kind": "target",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Samurai Token",
+            "zone": "battlefield",
+            "controller": 1,
+            "token": true,
+            "sick": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 21,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Teferi, Time Raveler",
+            "zone": "battlefield",
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 3
+              }
+            ]
+          },
+          "ability": {
+            "n": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 21,
+        "step": "end",
+        "kind": "chooseUpTo",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Tundra",
+            "zone": "battlefield",
+            "controller": 0,
+            "tapped": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 3,
+        "player": 0,
+        "turn": 21,
+        "step": "end",
+        "kind": "chooseUpTo",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Seachrome Coast",
+            "zone": "battlefield",
+            "controller": 0,
+            "tapped": true
+          }
+        }
+      }
+    },
+    {
+      "checkpoint": {
+        "turn": 22,
+        "active": 1,
+        "players": [
+          {
+            "life": 20,
+            "hand": [
+              "Currency Converter",
+              "Jace, Wielder of Mysteries",
+              "No More Lies",
+              "Teferi, Hero of Dominaria",
+              "Winds of Abandon"
+            ],
+            "shown": [
+              "Teferi, Hero of Dominaria"
+            ],
+            "graveyard": [
+              "Fractured Identity",
+              "Spara's Headquarters",
+              "Abhorrent Oculus",
+              "Island"
+            ],
+            "exile": [
+              {
+                "card": "Damn"
+              },
+              {
+                "card": "Island"
+              },
+              {
+                "card": "Oust"
+              },
+              {
+                "card": "Reprieve"
+              },
+              {
+                "card": "Staff of the Storyteller",
+                "until": 24
+              },
+              {
+                "card": "Stock Up"
+              },
+              {
+                "card": "Thirst for Discovery"
+              }
+            ],
+            "library": 11,
+            "known": [
+              {
+                "depth": 8,
+                "card": "Counterspell",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 9,
+                "card": "Trinket Mage",
+                "by": [
+                  0
+                ]
+              },
+              {
+                "depth": 10,
+                "card": "Island",
+                "by": [
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "life": 20,
+            "hand": [
+              "Counterspell",
+              "Fractured Identity",
+              "Jace, Wielder of Mysteries",
+              "Reprieve",
+              "Thirst for Discovery"
+            ],
+            "graveyard": [
+              "Damn",
+              "Snapcaster Mage",
+              "Jace, Vryn's Prodigy",
+              "Stock Up"
+            ],
+            "exile": [
+              {
+                "card": "Currency Converter",
+                "until": 20
+              },
+              {
+                "card": "Teferi, Hero of Dominaria"
+              }
+            ],
+            "library": 15
+          }
+        ],
+        "battlefield": [
+          {
+            "card": "Seachrome Coast",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Tundra",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "The Wandering Emperor",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 0,
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 4
+              }
+            ]
+          },
+          {
+            "card": "Teferi, Time Raveler",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 0,
+            "controller": 0,
+            "tapped": true
+          },
+          {
+            "card": "Teferi, Hero of Dominaria",
+            "owner": 0,
+            "controller": 0,
+            "token": true,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 3
+              }
+            ]
+          },
+          {
+            "card": "Jace, the Mind Sculptor",
+            "owner": 1,
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 3
+              }
+            ]
+          },
+          {
+            "card": "Mana Crypt",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Island",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Jace, the Mind Sculptor",
+            "owner": 0,
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "card": "Portable Hole",
+            "owner": 0,
+            "controller": 0
+          },
+          {
+            "card": "Trinket Mage",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Beza, the Bounding Spring",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Treasure Token",
+            "owner": 1,
+            "controller": 1,
+            "token": true
+          },
+          {
+            "card": "Portable Hole",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Plains",
+            "owner": 1,
+            "controller": 1
+          },
+          {
+            "card": "Tundra",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          },
+          {
+            "card": "Subtlety",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          },
+          {
+            "card": "Beza, the Bounding Spring",
+            "owner": 0,
+            "controller": 0,
+            "sick": true
+          },
+          {
+            "card": "Fish Token",
+            "owner": 0,
+            "controller": 0,
+            "token": true,
+            "sick": true
+          },
+          {
+            "card": "Fish Token",
+            "owner": 0,
+            "controller": 0,
+            "token": true,
+            "sick": true
+          }
+        ],
+        "lingering": "player 0 casting sorceries as though they had flash until their next turn"
+      }
+    },
+    {
+      "flip": {
+        "player": 1,
+        "won": false
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Floodfarm Verge"
+      }
+    },
+    {
+      "choice": {
+        "index": 4,
+        "player": 1,
+        "turn": 22,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "cast",
+          "card": {
+            "name": "Jace, Wielder of Mysteries",
+            "zone": "hand",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 22,
+        "step": "precombatMain",
+        "kind": "paymentPlan",
+        "act": {
+          "act": "plan",
+          "i": 0
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 5,
+        "player": 1,
+        "turn": 22,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "activate",
+          "card": {
+            "name": "Jace, Wielder of Mysteries",
+            "zone": "battlefield",
+            "controller": 1,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 4
+              }
+            ]
+          },
+          "ability": {
+            "n": 0
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 22,
+        "step": "precombatMain",
+        "kind": "target",
+        "act": {
+          "act": "player",
+          "seat": 1
+        }
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Plains"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Island"
+      }
+    },
+    {
+      "reveal": {
+        "player": 1,
+        "card": "Island"
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 1,
+        "turn": 22,
+        "step": "precombatMain",
+        "kind": "priority",
+        "act": {
+          "act": "pass"
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 22,
+        "step": "declareAttackers",
+        "kind": "attacker",
+        "act": {
+          "act": "attack",
+          "creature": {
+            "name": "Beza, the Bounding Spring",
+            "zone": "battlefield",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 3,
+        "player": 1,
+        "turn": 22,
+        "step": "declareAttackers",
+        "kind": "attackTarget",
+        "act": {
+          "act": "defender",
+          "planeswalker": {
+            "name": "Jace, the Mind Sculptor",
+            "zone": "battlefield",
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 22,
+        "step": "declareAttackers",
+        "kind": "attacker",
+        "act": {
+          "act": "attack",
+          "creature": {
+            "name": "Trinket Mage",
+            "zone": "battlefield",
+            "controller": 1
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 1,
+        "turn": 22,
+        "step": "declareAttackers",
+        "kind": "attackTarget",
+        "act": {
+          "act": "defender",
+          "planeswalker": {
+            "name": "Teferi, Time Raveler",
+            "zone": "battlefield",
+            "controller": 0,
+            "counters": [
+              {
+                "kind": "loyalty",
+                "count": 4
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 22,
+        "step": "declareBlockers",
+        "kind": "blocker",
+        "act": {
+          "act": "block",
+          "creature": {
+            "name": "Beza, the Bounding Spring",
+            "zone": "battlefield",
+            "controller": 0,
+            "sick": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 22,
+        "step": "declareBlockers",
+        "kind": "blockTarget",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Beza, the Bounding Spring",
+            "zone": "battlefield",
+            "controller": 1,
+            "tapped": true,
+            "attacking": true,
+            "against": "Jace, the Mind Sculptor"
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 22,
+        "step": "declareBlockers",
+        "kind": "blocker",
+        "act": {
+          "act": "block",
+          "creature": {
+            "name": "Subtlety",
+            "zone": "battlefield",
+            "controller": 0,
+            "sick": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 22,
+        "step": "declareBlockers",
+        "kind": "blockTarget",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Trinket Mage",
+            "zone": "battlefield",
+            "controller": 1,
+            "tapped": true,
+            "attacking": true,
+            "against": "Teferi, Time Raveler"
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 22,
+        "step": "declareBlockers",
+        "kind": "blocker",
+        "act": {
+          "act": "block",
+          "creature": {
+            "name": "Fish Token",
+            "zone": "battlefield",
+            "controller": 0,
+            "token": true,
+            "sick": true
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 0,
+        "player": 0,
+        "turn": 22,
+        "step": "declareBlockers",
+        "kind": "blockTarget",
+        "act": {
+          "act": "object",
+          "object": {
+            "name": "Beza, the Bounding Spring",
+            "zone": "battlefield",
+            "controller": 1,
+            "tapped": true,
+            "attacking": true,
+            "blocked": true,
+            "against": "Jace, the Mind Sculptor"
+          }
+        }
+      }
+    },
+    {
+      "choice": {
+        "index": 1,
+        "player": 0,
+        "turn": 22,
+        "step": "declareBlockers",
+        "kind": "blocker",
+        "act": {
+          "act": "block",
+          "creature": {
+            "name": "Fish Token",
+            "zone": "battlefield",
+            "controller": 0,
+            "token": true,
+            "sick": true
+          }
+        }
+      }
+    }
+  ],
+  "commit": "7d72fb5a5d1ae08dab7d4f5e0e8d501d470a1bf3"
+}
