@@ -651,6 +651,21 @@ mod tests {
     }
 
     #[test]
+    fn one_card_manifest_example_has_no_filler_to_choose_or_mill() {
+        let generated = Box::leak(Box::new(generate("Abhorrent Oculus")));
+        let variant = generated
+            .examples
+            .iter()
+            .flat_map(|e| &e.variants)
+            .find(|v| v.label == "Manifest dread with one card in the library manifests it")
+            .expect("the one-card variant");
+        let (table, state) = prepare(variant).unwrap();
+        let library = state.library(variant.controller.seat());
+        assert_eq!(library.len(), 1);
+        assert_eq!(state.name(&table, library[0]), "Island");
+    }
+
+    #[test]
     fn first_example_offers_the_card_in_hand() {
         for spec in super::super::specs() {
             let card = spec.card;

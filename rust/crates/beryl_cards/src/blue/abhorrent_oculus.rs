@@ -190,7 +190,17 @@ pub const SCENARIOS: &[Scenario] = &[
     // CR 701.62a: with one card to look at, that one is manifested, unasked.
     Scenario::new("Manifest dread with one card in the library manifests it")
         .at(1, P0, TurnStep::PostcombatMain)
-        .battlefield(P0, &[Permanent::new(OCULUS)])
+        // A playable instant-speed action lets the Playground pause on the
+        // result during the opponent's turn, before the next empty draw.
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(OCULUS),
+                Permanent::new(names::ISLAND),
+                Permanent::new(names::ISLAND),
+            ],
+        )
+        .hand(P0, &[names::SNAPCASTER_MAGE])
         .library(P0, &[names::ISLAND])
         .library(P1, &[names::PLAINS])
         .actions(&[

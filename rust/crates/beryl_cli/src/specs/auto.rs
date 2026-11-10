@@ -981,7 +981,12 @@ pub(super) fn playground_action(action: &Action) -> bool {
 /// whole fails.
 fn dressed(def: &'static CardDef, scenario: &Scenario) -> Scenario {
     let passes = |d: &Scenario| {
-        let checked = d.actions(leak(d.actions.iter().map(deeper).collect()));
+        let checked = d.actions(leak(
+            d.actions
+                .iter()
+                .map(|action| deeper(action, scenario, d))
+                .collect(),
+        ));
         beryl_scenario::run(&beryl_cards::CARDS, &checked).is_ok()
     };
     let deep = with_libraries(scenario);
@@ -1006,7 +1011,7 @@ fn with_twin(def: &'static CardDef, scenario: &Scenario) -> Option<Scenario> {
 }
 
 /// An assertion counting a whole library, counting the lands [`with_libraries`] adds too.
-fn deeper(action: &Action) -> Action {
+fn deeper(action: &Action, original: &Scenario, dressed: &Scenario) -> Action {
     match *action {
         Action::Assert {
             assertion:
@@ -1020,7 +1025,13 @@ fn deeper(action: &Action) -> Action {
             player,
             zone: beryl_engine::Zone::Library,
             card: None,
-            count: count + u8::try_from(FILLER.len()).unwrap_or(u8::MAX),
+            count: count.saturating_add(
+                u8::try_from(
+                    dressed.setup.players[player.index()].library.len()
+                        - original.setup.players[player.index()].library.len(),
+                )
+                .unwrap_or(u8::MAX),
+            ),
         }),
         a => a,
     }
@@ -1044,12 +1055,29 @@ const FILLER: &[&str] = &[
     FRACTURED_IDENTITY,
 ];
 
-/// [`FILLER`] under each player's library.
+/// [`FILLER`] under each player's library. A scenario about consuming a short
+/// library needs its original size in both the spec and the playable example.
 pub(super) fn with_libraries(scenario: &Scenario) -> Scenario {
     let mut d = *scenario;
     for seat in [P0, P1] {
         let library = d.setup.players[seat.index()].library;
-        d = d.library(seat, leak([library, FILLER].concat()));
+        let needs_short_library = library.len() <= 1
+            && scenario.actions.iter().any(|action| {
+                matches!(
+                    action,
+                    Action::Assert {
+                        assertion: Assertion::Count {
+                            player,
+                            zone: beryl_engine::Zone::Library,
+                            card: None,
+                            count: 0,
+                        },
+                    } if *player == seat
+                )
+            });
+        if !needs_short_library {
+            d = d.library(seat, leak([library, FILLER].concat()));
+        }
     }
     d
 }
