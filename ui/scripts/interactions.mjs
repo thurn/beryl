@@ -7323,14 +7323,16 @@ for (const controller of wanted(triggerLift) ? ["you", "opponent"] : []) {
             await page.waitForFunction(
                 (exitAt) =>
                     window.triggerFrames.some(
-                        ({ at, opacity }) => at > exitAt && opacity < 0.9,
+                        ({ at, opacity }) =>
+                            at > exitAt && opacity !== null && opacity < 0.9,
                     ),
                 exitAt,
             );
             const exit = await page.evaluate(
                 (exitAt) =>
                     window.triggerFrames.filter(
-                        ({ at, opacity }) => at > exitAt && opacity < 0.9,
+                        ({ at, opacity }) =>
+                            at > exitAt && opacity !== null && opacity < 0.9,
                     ),
                 exitAt,
             );
