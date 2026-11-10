@@ -1,8 +1,9 @@
 """`by video`: a searchable index of an Arena gameplay recording, as a reference for the UI.
 
-The recordings and their indexes live together, outside the tree, in ~/Movies/arena
-($BERYL_ARENA): `list` shows them. `index` reads the text on screen twice a second (ffmpeg
-decodes, Apple's Vision framework recognizes: video_ocr.swift) and writes, into <id>/ there:
+The indexes live outside the tree in ~/arena ($BERYL_ARENA), a folder per recording named by
+its id; the recordings are there or in ~/Movies/arena, and `list` shows them. `index` reads
+the text on screen twice a second (ffmpeg decodes, Apple's Vision framework recognizes:
+video_ocr.swift) and writes, into ~/arena/<id>/:
 
 - `text.jsonl`: every sampled frame's text with its position, in 1920x1080 pixels.
 - `events.jsonl` and `timeline.txt`: what that text says happened. Arena shows the top of the
@@ -39,9 +40,11 @@ from pathlib import Path
 
 from . import paths
 
-# Where the recordings are kept, each one's index in a folder beside it named by its id.
+# Where the indexes are written, each recording's in a folder named by its id.
 ARENA_ENV = "BERYL_ARENA"
-ARENA_DEFAULT: Path = Path.home() / "Movies" / "arena"
+ARENA_DEFAULT: Path = Path.home() / "arena"
+# Where recordings are looked for by id, after that folder.
+MOVIES: Path = Path.home() / "Movies" / "arena"
 RECORDINGS = (".webm", ".mp4", ".mkv", ".mov")
 FFMPEG = "ffmpeg"
 OCR_SOURCE: Path = Path(__file__).with_name("video_ocr.swift")
@@ -420,7 +423,7 @@ def video_id(source: Path) -> str:
 
 
 def root() -> Path:
-    """The folder of recordings and their indexes: $BERYL_ARENA, else ~/Movies/arena."""
+    """The folder of indexes: $BERYL_ARENA, else ~/arena."""
     folder = os.environ.get(ARENA_ENV)
     return Path(folder).expanduser() if folder else ARENA_DEFAULT
 
@@ -431,17 +434,24 @@ def recordings(folder: Path) -> dict[str, Path]:
     return {video_id(f): f for f in files if f.suffix.lower() in RECORDINGS}
 
 
+def known() -> dict[str, Path]:
+    """The recordings in the index folder and in ~/Movies/arena, by id."""
+    return {**recordings(MOVIES), **recordings(root())}
+
+
 def resolve(name: str) -> tuple[Path, Path]:
     """A recording and its index folder, from the recording's path or its id."""
     path = Path(name).expanduser()
     if path.is_file():
         return path.resolve(), root() / video_id(path)
-    found = recordings(root()).get(name)
+    found = known().get(name)
     if found is not None:
         return found, root() / name
     meta = root() / name / "meta.json"
     if not meta.is_file():
-        raise VideoError(f"{name}: neither a file nor a recording's id in {root()}")
+        raise VideoError(
+            f"{name}: neither a file nor a recording's id (`by video list`)"
+        )
     return Path(str(json.loads(meta.read_text())["source"])), meta.parent
 
 
@@ -623,12 +633,12 @@ def find(args: argparse.Namespace) -> int:
 
 def listing(_: argparse.Namespace) -> int:
     """Prints each recording's id, whether it is indexed, and its name."""
-    found = recordings(root())
+    found = known()
     for name, source in found.items():
         indexed = (root() / name / "timeline.txt").is_file()
         print(f"{name:<14} {'indexed' if indexed else '-':<8} {source.name}")
     if not found:
-        print(f"no recordings in {root()}", file=sys.stderr)
+        print(f"no recordings in {root()} or {MOVIES}", file=sys.stderr)
     return 0
 
 

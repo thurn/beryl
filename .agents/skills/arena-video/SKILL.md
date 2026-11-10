@@ -1,13 +1,13 @@
 ---
 name: arena-video
-description: Find out exactly how MTG Arena presents something (a card's cast or trigger, a prompt, a choice, a targeting arrow, an animation's timing) from the indexed gameplay recordings in ~/Movies/arena, and compare it with Beryl's UI. Gives a searchable timeline of every spell, ability, prompt and button with timestamps, a screenshot per event, and filmstrips of any moment at any frame rate and crop. Use when matching Beryl to Arena, when asked how Arena shows or animates something, or before designing a prompt, chooser or animation Arena already has.
+description: Find out exactly how MTG Arena presents something (a card's cast or trigger, a prompt, a choice, a targeting arrow, an animation's timing) from the gameplay recordings indexed in ~/arena, and compare it with Beryl's UI. Gives a searchable timeline of every spell, ability, prompt and button with timestamps, a screenshot per event, and filmstrips of any moment at any frame rate and crop. Use when matching Beryl to Arena, when asked how Arena shows or animates something, or before designing a prompt, chooser or animation Arena already has.
 ---
 
 # Arena video reference
 
 Arena's flow is Beryl's reference (AGENTS.md, Workflow). The recordings in
-`~/Movies/arena` (`$BERYL_ARENA`) are hours of real Arena play, and `just video`
-makes them answer questions like "how does Arena let you attack a planeswalker?"
+`~/Movies/arena` are hours of real Arena play, indexed into `~/arena`
+(`$BERYL_ARENA`), and `just video` makes them answer questions like "how does Arena let you attack a planeswalker?"
 for the price of a few images.
 
 You cannot watch video. You read a text index to find the second something
@@ -17,7 +17,7 @@ recording frame by frame: find first, then film a few seconds.
 ## What is there
 
 `just video list` shows each recording's id and whether it is indexed. An
-indexed recording has a folder `~/Movies/arena/<id>/`:
+indexed recording has a folder `~/arena/<id>/`:
 
 - `timeline.txt`: one line per event, `time  kind  name | detail [buttons]`.
   Read it with `grep`, or whole (about 600 lines an hour).
@@ -53,7 +53,7 @@ The kinds of event:
 2. **Find the moments.**
 
    ```
-   grep -n -i "planeswalker\|choose attackers" ~/Movies/arena/<id>/timeline.txt
+   grep -n -i "planeswalker\|choose attackers" ~/arena/<id>/timeline.txt
    just video find <id> "search your library"
    ```
 
@@ -130,7 +130,7 @@ decline, what is highlighted, how long things take. Beryl's own rules still
 win where they differ: everything is a physical object, nothing is shown
 twice, every transition is animated (AGENTS.md, UI; `docs/ui-conventions.md`).
 Do not copy Arena's art, frames, effects or wording wholesale, and never commit
-a recording, a shot or a filmstrip: they stay in `~/Movies/arena`.
+a recording, a shot or a filmstrip: they stay outside the tree.
 
 ## A worked example
 
