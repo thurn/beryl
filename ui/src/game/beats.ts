@@ -424,21 +424,48 @@ class Walk {
       if (e.kind === "zoneChange" && e.from === "battlefield") {
         this.revealDepartures(events, i);
       }
-      if (
-        e.kind === "zoneChange" &&
-        e.from === "battlefield" &&
-        e.to !== "battlefield" &&
-        e.to !== "nowhere" &&
-        this.cur.objects.some((o) => o.slot === e.slot && o.token) &&
-        !this.final.has(e.slot)
-      ) {
-        // Tokens reach the destination before ceasing to exist (CR 704.5d).
-        // The final view omits them, so retain their physical card for the flight.
-        this.cut();
-        this.apply(e);
-        this.pending.push(e);
-        this.cut(HOLD.action);
-        continue;
+      if (e.kind === "zoneChange" && departs(e)) {
+        // Permanents leaving in one run of events for one reason (a sweeper's creatures,
+        // destroyed at once) leave together, in one beat, whatever kind they are; a cost
+        // paid and then an effect stay apart. A token among
+        // them reaches the destination before ceasing to exist
+        // ([CR 704.5d](https://yawgatog.com/resources/magic-rules/#R7045d): "If a token is
+        // in a zone other than the battlefield, it ceases to exist"), so that beat holds
+        // it there: the final view omits it, and it would otherwise have no card to fly.
+        let end = i + 1;
+        while (end < events.length) {
+          const next = events[end]!;
+          if (
+            next.kind !== "zoneChange" ||
+            !departs(next) ||
+            next.reason !== e.reason
+          )
+            break;
+          end++;
+        }
+        const run = events.slice(i, end) as Extract<
+          GameEvent,
+          { kind: "zoneChange" }
+        >[];
+        if (run.some((move) => this.vanishes(move))) {
+          if (
+            run.some((move) =>
+              this.pending.some(
+                (p) => p.kind === "tap" && p.slot === move.slot,
+              ),
+            )
+          )
+            this.cut(HOLD.tapBeforeMove);
+          this.cut();
+          for (const move of run) {
+            this.apply(move);
+            this.pending.push(move);
+          }
+          // Held until the last staggered flight lands, before the token ceases to exist.
+          this.cut(run.length > 1 ? HOLD.deal : HOLD.action);
+          i = end - 1;
+          continue;
+        }
       }
       if (e.kind === "libraryShuffled") {
         this.cut();
@@ -796,6 +823,15 @@ class Walk {
     this.cut(HOLD.action, spotlight, true);
   }
 
+  /** Whether `move` takes a token off the battlefield to a zone it then ceases to exist in. */
+  private vanishes(move: Extract<GameEvent, { kind: "zoneChange" }>): boolean {
+    return (
+      move.to !== "nowhere" &&
+      this.cur.objects.some((o) => o.slot === move.slot && o.token) &&
+      !this.final.has(move.slot)
+    );
+  }
+
   /** Whether the zone change `e` is shown in a showcase. */
   private showcased(e: Extract<GameEvent, { kind: "zoneChange" }>): boolean {
     // Cards just read in a choice travel directly to their destinations.
@@ -1094,6 +1130,11 @@ class Walk {
       ),
     };
   }
+}
+
+/** Whether `e` takes a permanent off the battlefield. */
+function departs(e: Extract<GameEvent, { kind: "zoneChange" }>): boolean {
+  return e.from === "battlefield" && e.to !== "battlefield";
 }
 
 /** Whether `e` is something a spell did, rather than its casting: what a beat before the

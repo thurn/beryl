@@ -13,6 +13,7 @@ use beryl_engine::{Layout, bodies};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
 
 use crate::names;
+use crate::white::adeline_resplendent_cathar::HUMAN_TOKEN;
 
 const CREATURES: Filter = Filter::Types(Types::CREATURE);
 
@@ -157,6 +158,57 @@ pub const SCENARIOS: &[Scenario] = &[
                 zone: Zone::Graveyard,
                 card: None,
                 count: 2,
+            }),
+        ]),
+    // Overloaded, it takes every kind of creature in one move: a token, which ceases to exist
+    // once in the graveyard ([CR 704.5d](https://yawgatog.com/resources/magic-rules/#R7045d):
+    // "If a token is in a zone other than the battlefield, it ceases to exist"), and P1's
+    // face-down creature, revealed as it leaves
+    // ([CR 708.9](https://yawgatog.com/resources/magic-rules/#R7089): "If a face-down
+    // permanent ... moves from the battlefield to any other zone, its owner must reveal it").
+    Scenario::new("Damn overloaded takes tokens and face-down creatures at once")
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(names::PLAINS),
+                Permanent::new(names::PLAINS),
+                Permanent::new(names::PLAINS),
+                Permanent::new(names::PLAINS),
+                Permanent::new(ADELINE),
+                Permanent::token(HUMAN_TOKEN),
+            ],
+        )
+        .hand(P0, &[names::DAMN])
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(SPELLBINDER),
+                Permanent::new(names::SNAPCASTER_MAGE).face_down(),
+            ],
+        )
+        .library(P1, &[names::ISLAND])
+        .actions(&[
+            Action::Cast {
+                player: P0,
+                card: names::DAMN,
+                face: FaceIx::FRONT,
+                costs: Castings::only(0),
+            },
+            Action::Resolve,
+            creatures(P0, ADELINE, 0),
+            creatures(P0, HUMAN_TOKEN, 0),
+            creatures(P1, SPELLBINDER, 0),
+            Action::assert(Assertion::Count {
+                player: P0,
+                zone: Zone::Graveyard,
+                card: None,
+                count: 2,
+            }),
+            Action::assert(Assertion::Count {
+                player: P1,
+                zone: Zone::Graveyard,
+                card: Some(names::SNAPCASTER_MAGE),
+                count: 1,
             }),
         ]),
 ];

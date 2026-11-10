@@ -261,12 +261,29 @@ export function CardLayer(props: CardLayerProps) {
       e.kind === "zoneChange" &&
       e.from !== e.to &&
       !props.linkedReturns?.has(e.slot) &&
+      e.from !== "battlefield" &&
       (e.from === "library" || e.to === "exile" || e.to === "library")
     )
       return [e.slot];
     return [];
   });
-  const departureOrder = new Map(departures.map((slot, i) => [slot, i]));
+  // A sweeper's permanents leave in one beat (beats.ts), staggered among themselves so that
+  // cards bound for one pile do not hide one another on the way.
+  const sweep = events.flatMap((e) =>
+    e.kind === "zoneChange" &&
+    e.from === "battlefield" &&
+    e.to !== "battlefield" &&
+    e.to !== "nowhere" &&
+    !props.linkedReturns?.has(e.slot)
+      ? [e.slot]
+      : [],
+  );
+  const departureOrder = new Map<number, { at: number; of: number }>([
+    ...departures.map(
+      (slot, at) => [slot, { at, of: departures.length }] as const,
+    ),
+    ...sweep.map((slot, at) => [slot, { at, of: sweep.length }] as const),
+  ]);
   // The board builds each card's state afresh on every render: one equal to the last keeps
   // the last's identity.
   const states = useRef(new Map<number, CardState>());
@@ -306,14 +323,14 @@ export function CardLayer(props: CardLayerProps) {
                 departureDelay={
                   departure === undefined
                     ? 0
-                    : (departure * 0.3) / Math.max(1, departures.length - 1)
+                    : (departure.at * 0.3) / Math.max(1, departure.of - 1)
                 }
                 departureLayer={
                   departure === undefined
                     ? 0
                     : Math.min(
                         DRAGGING_Z - FLYING_Z - 1,
-                        departures.length - departure,
+                        departure.of - departure.at,
                       )
                 }
                 epoch={props.epoch}

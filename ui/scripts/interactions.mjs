@@ -7456,6 +7456,184 @@ if (wanted(exileStagger)) {
     );
 }
 
+const sweepTogether =
+    "a sweeper's creatures, token and face-down card leave together";
+if (wanted(sweepTogether)) {
+    // An overloaded Damn: one resolution destroys a creature from each seat, a token
+    // (which ceases to exist in the graveyard) and the opponent's face-down card (which
+    // turns face up first). They leave in one move, not one wave per kind (by-f0ax).
+    const base = (await load("arrow-spell")).at(-1);
+    const [trinket, counter] = base.stack;
+    const damn = { ...counter, targets: [] };
+    const sample = base.objects.find((o) => o.slot === trinket.slot);
+    const creature = (slot, side, extra) => ({
+        ...sample,
+        slot,
+        zone: "battlefield",
+        owner: side,
+        controller: side,
+        types: ["creature"],
+        pt: { power: 2, toughness: 2 },
+        ...extra,
+    });
+    const swept = [
+        creature(800, "you", { name: "Snapcaster Mage" }),
+        creature(801, "opponent", { name: "Abhorrent Oculus" }),
+        creature(802, "you", { name: "Spirit Token", token: true }),
+        creature(803, "opponent", { name: null, facing: "down" }),
+    ];
+    const slots = swept.map((o) => o.slot);
+    const before = {
+        ...base,
+        stack: [trinket, damn],
+        battlefield: [...base.battlefield, ...slots],
+        objects: [
+            ...base.objects.map((o) =>
+                o.slot === damn.slot ? { ...o, name: "Damn" } : o,
+            ),
+            ...swept,
+        ],
+        events: [],
+    };
+    const grave = (side, ...more) => [
+        ...before.players[side].graveyard,
+        ...more,
+    ];
+    const after = {
+        ...before,
+        stack: [trinket],
+        battlefield: base.battlefield,
+        players: {
+            you: { ...before.players.you, graveyard: grave("you", 800) },
+            opponent: {
+                ...before.players.opponent,
+                graveyard: grave("opponent", 801, 803, damn.slot),
+            },
+        },
+        objects: before.objects.flatMap((o) =>
+            o.slot === 802
+                ? []
+                : o.slot === 803
+                  ? [
+                        {
+                            ...o,
+                            zone: "graveyard",
+                            facing: "up",
+                            name: "Brazen Borrower",
+                        },
+                    ]
+                  : o.slot === damn.slot || slots.includes(o.slot)
+                    ? [{ ...o, zone: "graveyard" }]
+                    : [o],
+        ),
+        events: [
+            ...slots.map((slot) => ({
+                kind: "zoneChange",
+                slot,
+                from: "battlefield",
+                to: "graveyard",
+                reason: "destroy",
+            })),
+            {
+                kind: "zoneChange",
+                slot: damn.slot,
+                from: "stack",
+                to: "graveyard",
+                reason: "resolve",
+            },
+        ],
+    };
+    const run = await motionFixture("sweep-together", [before, after]);
+    await check(
+        sweepTogether,
+        async (page) => {
+            await page.clock.runFor(1000);
+            await page.clock.pauseAt(Date.now() + 60_000);
+            await page
+                .getByRole("button", { name: "Resolve", exact: true })
+                .evaluate((button) => button.click());
+            const left = new Map();
+            const zones = new Map(slots.map((slot) => [slot, new Set()]));
+            let damnLeft;
+            for (let t = 0; t <= 6000; t += 50) {
+                for (const slot of slots) {
+                    const cards = page.locator(`.card-layer ${slotOf(slot)}`);
+                    const count = await cards.count();
+                    assert.ok(count <= 1, `one card for ${slot} at ${t}ms`);
+                    const zone =
+                        count &&
+                        (await cards.first().getAttribute("data-zone"));
+                    if (zone) zones.get(slot).add(zone);
+                    if (zone !== "battlefield" && !left.has(slot))
+                        left.set(slot, t);
+                }
+                const spell = await page
+                    .locator(`.card-layer ${slotOf(damn.slot)}`)
+                    .getAttribute("data-zone");
+                if (spell === "graveyard" && damnLeft === undefined)
+                    damnLeft = t;
+                await page.clock.runFor(50);
+            }
+            const starts = slots.map((slot) => left.get(slot));
+            assert.ok(
+                starts.every((t) => t !== undefined),
+                `every permanent leaves the battlefield: ${starts}`,
+            );
+            assert.ok(
+                Math.max(...starts) - Math.min(...starts) <= 350,
+                `the swept permanents leave together, not in waves: ${starts}`,
+            );
+            assert.ok(
+                damnLeft > Math.max(...starts),
+                `Damn stays on the stack until its creatures have gone: ${damnLeft}`,
+            );
+            assert.ok(
+                zones.get(802).has("graveyard"),
+                "the token reaches the graveyard before it ceases to exist",
+            );
+            assert.equal(
+                await page.locator(`.card-layer ${slotOf(802)}`).count(),
+                0,
+                "the token ceases to exist",
+            );
+            assert.equal(
+                await page
+                    .locator(`.card-layer ${slotOf(803)}`)
+                    .getAttribute("data-zone"),
+                "graveyard",
+            );
+            // Sequential departures stay apart: a token sacrificed for a cost leaves
+            // in a beat of its own, before the creature an effect then destroys.
+            const apart = await page.evaluate(
+                async ({ before, after }) => {
+                    const { beats } = await import("/src/game/beats.ts");
+                    const [, , token, creature] = after.events;
+                    const sequential = {
+                        ...after,
+                        events: [{ ...token, reason: "sacrifice" }, creature],
+                    };
+                    return beats(
+                        { session: 1, view: before },
+                        { session: 1, view: sequential },
+                    ).map((beat) =>
+                        beat.update.view.events.flatMap((e) =>
+                            e.kind === "zoneChange" ? [e.slot] : [],
+                        ),
+                    );
+                },
+                { before, after },
+            );
+            assert.ok(
+                apart.some(
+                    (slots) => slots.includes(802) && !slots.includes(803),
+                ),
+                `the sacrificed token leaves before the destroyed creature: ${JSON.stringify(apart)}`,
+            );
+        },
+        { ...run, ready: slotOf(803) },
+    );
+}
+
 const manifestFlight =
     "manifest cards travel directly from their chooser to their zones";
 if (wanted(manifestFlight)) {
