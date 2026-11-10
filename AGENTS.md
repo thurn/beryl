@@ -170,6 +170,10 @@ All transitions are animated, nothing jumps to a new state. When the opponent is
 doing things, you see what is happening too, e.g. if they are looking at cards
 you might see the backs of those cards animate up.
 
+Hover inspection is an exception: a separate readable preview may show a card
+without moving the original into a huge close-up. Where the source card is
+already fairly large and space permits, prefer modest enlargement in place.
+
 ## Workflow
 
 - When launching more than one subagent at a time, please always use Sonnet.
