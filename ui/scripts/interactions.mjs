@@ -3836,12 +3836,23 @@ for (const { viewport, reducedMotion } of motionConfigs) {
         async (page) => {
             await page.clock.runFor(800);
             await page.evaluate(record);
+            await page.clock.pauseAt(Date.now() + 60_000);
+            const release = new Map();
             for (const side of ["you", "opponent"]) {
                 await page.click(pile(side, "graveyard"));
                 await page.waitForSelector(".zone-viewer-card");
                 // Close one opening in mid-flight, then let the other settle.
                 await page.clock.runFor(side === "you" ? 100 : 650);
+                const top = pilesView.players[side].graveyard.at(-1);
+                const point = await page
+                    .locator(`[data-viewer-slot="${top}"]`)
+                    .evaluate((e) => {
+                        const r = e.getBoundingClientRect();
+                        return [r.left + r.width / 2, r.top + r.height / 2];
+                    });
+                release.set(side, point);
                 await page.keyboard.press("Escape");
+                await page.clock.runFor(300);
                 await page.waitForSelector(".zone-viewer", {
                     state: "detached",
                 });
@@ -3909,7 +3920,7 @@ for (const { viewport, reducedMotion } of motionConfigs) {
                     );
                     assertBetween(
                         returning.map(({ x, y }) => [x, y]),
-                        [last.x, last.y],
+                        release.get(side),
                         [end.x, end.y],
                         `the ${side}'s card flies back to its pile`,
                     );
@@ -3923,6 +3934,7 @@ for (const { viewport, reducedMotion } of motionConfigs) {
         async (page) => {
             await page.clock.runFor(650);
             await page.evaluate(record);
+            await page.clock.pauseAt(Date.now() + 60_000);
             await page
                 .getByRole("button", { name: "View Battlefield" })
                 .click();
@@ -4911,6 +4923,7 @@ if (wanted(privateHandling)) {
                 for (const card of cards)
                     await card.evaluate((e) => (e.dataset.original = "true"));
 
+                await page.clock.pauseAt(Date.now() + 60_000);
                 await page.locator(".turn-action button").first().click();
                 await until(page, ".card-el-handling", 16);
                 await page.clock.runFor(300);
@@ -5375,6 +5388,7 @@ if (wanted(tokenDissolve)) {
             `${tokenDissolve} (${viewport.width}x${viewport.height} ${reducedMotion})`,
             async (page) => {
                 await page.evaluate(record);
+                await page.clock.pauseAt(Date.now() + 60_000);
                 const dying = `[data-ceasing-slot="${token.slot}"]`;
                 await page
                     .getByRole("button", { name: "Resolve", exact: true })

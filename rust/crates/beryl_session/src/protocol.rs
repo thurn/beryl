@@ -1211,10 +1211,9 @@ fn card_handling<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>) -> Option<
             zone: Zone::Hand, ..
         } => hand(d.player),
         _ => match d.kind {
-            DecisionKind::KeepOrMulligan
-            | DecisionKind::PutOnBottom
-            | DecisionKind::Discard
-            | DecisionKind::ExileCost => hand(d.player),
+            DecisionKind::KeepOrMulligan | DecisionKind::PutOnBottom | DecisionKind::Discard => {
+                hand(d.player)
+            }
             _ => None,
         },
     }

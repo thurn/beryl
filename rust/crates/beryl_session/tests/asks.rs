@@ -276,3 +276,57 @@ fn abhorrent_oculus_asks_for_graveyard_cards_then_a_card_to_manifest() {
         ]
     );
 }
+
+#[test]
+fn the_observer_does_not_see_handling_for_a_graveyard_exile_cost() {
+    use beryl_engine::{DecisionKind, Zone};
+    use beryl_scenario::{Action, P0, Permanent, Scenario};
+
+    const SCENARIO: Scenario =
+        Scenario::new("Oculus paid from the graveyard with a card still in hand")
+            .battlefield(P0, &[Permanent::new(names::ISLAND); 3])
+            .hand(P0, &[names::ABHORRENT_OCULUS, names::ISLAND])
+            .graveyard(
+                P0,
+                &[
+                    names::COUNTERSPELL,
+                    names::MANA_DRAIN,
+                    names::STOCK_UP,
+                    names::REPRIEVE,
+                    names::OUST,
+                    names::THIRST_FOR_DISCOVERY,
+                    names::PLAINS,
+                ],
+            )
+            .actions(&[
+                Action::cast(P0, names::ABHORRENT_OCULUS),
+                Action::choose(P0, DecisionKind::ExileCost, names::THIRST_FOR_DISCOVERY),
+            ]);
+    let mut checked = false;
+    beryl_scenario::visit(&CARDS, &SCENARIO, |t, s, d| {
+        if !matches!(
+            d.ask,
+            Ask::ExileCards {
+                zone: Zone::Graveyard,
+                ..
+            }
+        ) {
+            return;
+        }
+        let mut scratch = Scratch::new();
+        let observer = player_view(
+            t,
+            Observation::new(view(s, t, &mut scratch), d.player.opponent()),
+            Moment::Thinking {
+                resolving: None,
+                decision: Some(d),
+            },
+            StopsSetting::SMART,
+            &[],
+        );
+        assert!(observer.handling.is_none());
+        checked = true;
+    })
+    .unwrap();
+    assert!(checked, "Oculus reached the graveyard exile payment");
+}
