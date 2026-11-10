@@ -11353,23 +11353,32 @@ if (wanted(mixedBend)) {
 const tapBend = await lastDecision("waterbend-tap");
 const bendByHand = "waterbend finishes when manual picks cover the cost";
 if (wanted(bendByHand)) {
-    const suggested = tapBend.decision.waterbend;
+    const { decision } = tapBend;
+    const suggested = decision.waterbend;
+    const benders = decision.candidates
+        .filter((c) => c.option.kind === "object")
+        .map((c) => c.option.slot);
+    const mana = decision.candidates.find(
+        (c) => c.option.kind === "mana",
+    ).option;
     const fixture = JSON.parse(
         await readFile(join(fixtures, "waterbend-tap.json"), "utf8"),
     );
-    const [land] = suggested.taps.filter(
-        (slot) => !suggested.benders.includes(slot),
-    );
-    const mana = tapBend.decision.candidates.find(
-        (c) => c.option.kind === "mana" && c.option.slot === land,
-    ).option;
     fixture.messages.unshift(
         ...[
-            suggested,
-            suggested,
+            { ...suggested, benders: benders.slice(0, 1) },
             {
                 ...suggested,
-                mana: [{ slot: land, color: mana.color }],
+                benders,
+                taps: [...benders, mana.slot],
+                ready: true,
+            },
+            {
+                ...suggested,
+                benders,
+                taps: [...benders, mana.slot],
+                ready: true,
+                mana: [{ slot: mana.slot, color: mana.color }],
                 eligible: [],
             },
         ].map((value) => ({
@@ -11385,12 +11394,15 @@ if (wanted(bendByHand)) {
     await check(
         bendByHand,
         async (page) => {
-            for (const slot of suggested.benders) {
+            const autoPay = autoPayButton(page);
+            assert.ok(await autoPay.isDisabled());
+            for (const slot of benders) {
                 await page.locator(slotOf(slot)).click();
                 await page.locator(`${slotOf(slot)} .waterbend-tap`).waitFor();
                 assert.deepEqual(await chosen(page), []);
             }
-            await page.locator(slotOf(land)).click();
+            assert.ok(await autoPay.isEnabled());
+            await page.locator(slotOf(mana.slot)).click();
             assert.deepEqual(await settled(page, 1), [
                 tapBend.decision.candidates.findIndex((c) => c.option === mana),
             ]);
@@ -11410,10 +11422,7 @@ await check(
         assert.deepEqual(await lit(page), []);
         await autoPay.dispatchEvent("pointerdown", { pointerType: "touch" });
         await page.clock.runFor(500);
-        assert.deepEqual(
-            await lit(page),
-            ascending(tapBend.decision.waterbend.taps),
-        );
+        assert.deepEqual(await lit(page), ascending(suggested.taps));
         await autoPay.dispatchEvent("pointerup", { pointerType: "touch" });
         await autoPay.dispatchEvent("click", { detail: 1 });
         assert.deepEqual(await lit(page), []);
@@ -11422,8 +11431,8 @@ await check(
         assert.equal((await settled(page, 1)).length, 1);
     },
     {
-        fixture: "waterbend-tap",
-        at: tapBend.views.length,
+        fixture: "choice-scry",
+        at: bendAt + 1,
         ready: ".phone-dock",
         phone: true,
         viewport: { width: 390, height: 844 },
