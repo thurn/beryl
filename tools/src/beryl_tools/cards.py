@@ -428,6 +428,12 @@ def entry(card: Json, **extra: object) -> Json:
     }
 
 
+# Prefer the Double Masters Copy illustration over the generic token Scryfall links.
+TOKEN_PRINTINGS = {
+    "2115c141-f2fb-4bfd-a8b5-2943bad9f418": "6870a2af-80e1-4813-a332-2b1bd789f1c1",
+}
+
+
 def token_parts(cards: Iterable[Json]) -> dict[str, list[str]]:
     """The tokens and emblems these cards make, by Scryfall id, with the cards making each.
     Scryfall lists a token as a "token" part, and an emblem as a "combo_piece" whose type is
@@ -439,7 +445,9 @@ def token_parts(cards: Iterable[Json]) -> dict[str, list[str]]:
                 "Emblem"
             )
             if makes and part["id"] != card["id"]:
-                makers = made.setdefault(str(part["id"]), [])
+                linked = str(part["id"])
+                printing = TOKEN_PRINTINGS.get(linked, linked)
+                makers = made.setdefault(printing, [])
                 if card["name"] not in makers:
                     makers.append(str(card["name"]))
     return made

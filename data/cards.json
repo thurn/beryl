@@ -1219,11 +1219,11 @@
   "tokens": [
     {
       "name": "Copy",
-      "scryfall_id": "2115c141-f2fb-4bfd-a8b5-2943bad9f418",
-      "set": "ttrc",
-      "collector_number": "8",
+      "scryfall_id": "6870a2af-80e1-4813-a332-2b1bd789f1c1",
+      "set": "t2xm",
+      "collector_number": "31",
       "layout": "token",
-      "artist": "Nicky Barkla",
+      "artist": "David Palumbo",
       "made_by": [
         "Fractured Identity",
         "Sphinx of False Conclusions"
@@ -1236,9 +1236,9 @@
           "oracle_text": "(This token can be used to represent a token that's a copy of a permanent.)",
           "colors": [],
           "images": {
-            "art_crop": "https://cards.scryfall.io/art_crop/front/2/1/2115c141-f2fb-4bfd-a8b5-2943bad9f418.jpg?1793363498",
-            "normal": "https://cards.scryfall.io/normal/front/2/1/2115c141-f2fb-4bfd-a8b5-2943bad9f418.jpg?1793363498",
-            "large": "https://cards.scryfall.io/large/front/2/1/2115c141-f2fb-4bfd-a8b5-2943bad9f418.jpg?1793363498"
+            "art_crop": "https://cards.scryfall.io/art_crop/front/6/8/6870a2af-80e1-4813-a332-2b1bd789f1c1.jpg?1783930223",
+            "normal": "https://cards.scryfall.io/normal/front/6/8/6870a2af-80e1-4813-a332-2b1bd789f1c1.jpg?1783930223",
+            "large": "https://cards.scryfall.io/large/front/6/8/6870a2af-80e1-4813-a332-2b1bd789f1c1.jpg?1783930223"
           }
         }
       ]

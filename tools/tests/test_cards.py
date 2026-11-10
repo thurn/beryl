@@ -23,6 +23,8 @@ def test_the_recording_regenerates_the_data_file(tmp_path: Path) -> None:
     assert len(deck) == 49
     assert {"Swamp", "Mountain", "Forest"} <= deck
     assert {c["faces"][0]["name"] for c in data["cards"]} == deck
+    copy = next(t for t in data["tokens"] if t["name"] == "Copy")
+    assert (copy["set"], copy["collector_number"]) == ("t2xm", "31")
     tokens = {
         (t["name"], t["faces"][0].get("power"), t["faces"][0].get("toughness"))
         for t in data["tokens"]

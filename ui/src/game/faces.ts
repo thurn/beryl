@@ -127,7 +127,7 @@ export const BLANK: ObjectView = {
 };
 
 /** A token with no name, a copy of a face-down permanent (CR 708.2): no card data, so its
- * types and current power and toughness on a blank frame. */
+ * types and current power and toughness on a custom frame with generic Copy art. */
 const namelessFace = (o: ObjectView): FrameFace => ({
   name: "",
   typeLine:
@@ -153,7 +153,13 @@ export const SCAN = "large";
 
 /** The frame for object `o`, as the game draws it. */
 export function useFace(o: ObjectView): FrameFace {
-  const art = useCardArt(o.name ?? "", undefined, SCAN);
+  const namelessCopy = o.token && o.name === "";
+  const art = useCardArt(
+    namelessCopy ? "Copy" : (o.name ?? ""),
+    undefined,
+    namelessCopy ? "art_crop" : SCAN,
+  );
+  if (namelessCopy) return { ...namelessFace(o), art: art?.src };
   if (art) return frameFace(o, art);
   return o.name === "" ? namelessFace(o) : unknownFace(o.name ?? "");
 }
