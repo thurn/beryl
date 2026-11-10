@@ -981,9 +981,10 @@ function resultTitle(outcome?: OutcomeView): string {
   }
 }
 
+type ShownLossReason = Exclude<LossReason, "life">;
+
 /** Why the game ended, in a word beside its icon. */
-const LOSSES: Record<LossReason, string> = {
-  life: "Life",
+const LOSSES: Record<ShownLossReason, string> = {
   library: "Library",
   effect: "Card effect",
   concede: "Conceded",
@@ -998,9 +999,10 @@ function GameOver({
   onClose(): void;
 }) {
   const title = resultTitle(outcome);
+  const win = outcome?.kind === "win" ? outcome : undefined;
   const reason =
-    outcome?.kind === "win"
-      ? { icon: outcome.reason, text: LOSSES[outcome.reason] }
+    win && win.reason !== "life"
+      ? { icon: win.reason, text: LOSSES[win.reason] }
       : outcome?.kind === "stalled"
         ? { icon: "stall" as const, text: STALLS[outcome.reason] }
         : undefined;
@@ -1014,9 +1016,7 @@ function GameOver({
           {reason.text}
         </p>
       )}
-      {outcome?.kind === "win" && outcome.by && (
-        <CulpritCard culprit={outcome.by} />
-      )}
+      {reason && win?.by && <CulpritCard culprit={win.by} />}
       <Dock>
         <DockButtons>
           <Button onClick={() => (window.location.hash = "#/")}>
@@ -1047,10 +1047,8 @@ function CulpritCard({ culprit }: { culprit: Culprit }) {
 }
 
 /** A small line icon for why the game ended. */
-function ReasonIcon({ reason }: { reason: LossReason | "stall" }) {
-  const paths: Record<LossReason | "stall", string> = {
-    // A heart: life.
-    life: "M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z",
+function ReasonIcon({ reason }: { reason: ShownLossReason | "stall" }) {
+  const paths: Record<ShownLossReason | "stall", string> = {
     // A stack of cards: the library.
     library: "M7 4h10v16H7z M5 6v14h10 M3 8v14h10",
     // A spark: a card's effect.

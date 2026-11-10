@@ -860,10 +860,8 @@ interface SideGroups {
   untapped: number;
 }
 
-/** How many lands a side has before its mana's twins share piles, unless left apart they would
- * shrink the table's cards (`layout`) below `LANDS_APART_ZOOM` of their piled size. */
+/** How many lands a side has before its mana's twins share piles. */
 const LANDS_PILED = 7;
-const LANDS_APART_ZOOM = 0.9;
 
 /** Groups one side's permanents `objects` into piles. Twins (decisions.ts) with nothing on them
  * share a pile, the top card wearing their count, as Arena stacks them; everything else stands
@@ -878,7 +876,7 @@ function sideGroups(
   beneath: Map<number, ObjectView[]>,
   attached: Map<number, ObjectView[]>,
   named: Set<number>,
-  pileLands?: boolean,
+  pileLands: boolean,
 ): SideGroups {
   const plain = (o: ObjectView) =>
     o.facing === "up" &&
@@ -907,13 +905,12 @@ function sideGroups(
   // lands: fewer read best one by one, a basic's frameless art hiding a pile's edges.
   const name = (o: ObjectView) => o.name ?? `#${o.slot}`;
   const sources = objects.filter(isManaSource);
-  const piling = pileLands ?? sources.filter(isLand).length >= LANDS_PILED;
   const names = [...new Set(sources.map(name))];
   const order = (a: ObjectView, b: ObjectView) =>
     Number(isLand(b)) - Number(isLand(a)) ||
     names.indexOf(name(a)) - names.indexOf(name(b));
   const sourcePiles = (tapped: boolean) =>
-    grouped(sources.filter((o) => o.tapped === tapped).sort(order), piling);
+    grouped(sources.filter((o) => o.tapped === tapped).sort(order), pileLands);
   const untapped = sourcePiles(false);
   return {
     creatures: grouped(objects.filter(isCreature)),
@@ -1684,27 +1681,23 @@ export function layout(
   out.push(...heldPlacements(owned("opponent", "hand"), spotlight.drawn));
   // Blockers stand across from their attackers, which stand where they would anyway: only the
   // defending side's row depends on the other's.
-  const grouping = (pileLands?: boolean) =>
-    new Map(
-      (["opponent", "you"] as const).map((side) => [
+  const groups = new Map(
+    (["opponent", "you"] as const).map((side) => {
+      const controlled = permanents.filter((o) => o.controller === side);
+      return [
         side,
         sideGroups(
-          permanents.filter(
-            (o) => o.controller === side && !behindHost.has(o.slot),
-          ),
+          controlled.filter((o) => !behindHost.has(o.slot)),
           beneath,
           attached,
           named,
-          pileLands,
+          controlled.filter((o) => o.types.includes("land")).length >=
+            LANDS_PILED,
         ),
-      ]),
-    );
-  // Lands left apart that would shrink the table's cards much pile after all.
-  let groups = grouping();
-  let zoom = battlefieldZoom([...groups], beneath, attached, logOpen);
-  const piled = grouping(true);
-  const piledZoom = battlefieldZoom([...piled], beneath, attached, logOpen);
-  if (zoom < piledZoom * LANDS_APART_ZOOM) [groups, zoom] = [piled, piledZoom];
+      ];
+    }),
+  );
+  const zoom = battlefieldZoom([...groups], beneath, attached, logOpen);
   const field = (side: Side, across?: Placement[]) =>
     battlefieldPlacements(
       side,

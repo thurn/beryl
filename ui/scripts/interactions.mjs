@@ -7516,6 +7516,97 @@ const coveredBy = (page, by) =>
  * a raised hand card. */
 const COVERS = "[data-life], .tip, .game-log, .hand-hit";
 
+// Each side of the crowded table has six lands. Add one Island to either side in turn,
+// then remove it. Only the side that crosses seven should change its piling.
+const landThreshold = JSON.parse(
+    await readFile(join(fixtures, "crowded.json"), "utf8"),
+);
+const landUpdate = landThreshold.messages.filter((m) => m.kind === "event")[
+    crowdedAt
+];
+const sixLands = landUpdate.payload.view;
+const seventhLand = Object.fromEntries(
+    ["you", "opponent"].map((side, i) => [
+        side,
+        {
+            ...sixLands.objects.find(
+                (o) =>
+                    o.controller === side &&
+                    o.name === "Island" &&
+                    o.zone === "battlefield",
+            ),
+            slot: 9300 + i,
+        },
+    ]),
+);
+await writeFile(
+    join(fixtures, "land-threshold.json"),
+    JSON.stringify({
+        messages: [
+            ...landThreshold.messages.filter((m) => m.kind === "response"),
+            { kind: "response", command: "choose", value: null },
+            ...[undefined, "you", "opponent", undefined].map((side, i) => {
+                const land = seventhLand[side];
+                return {
+                    ...landUpdate,
+                    payload: {
+                        ...landUpdate.payload,
+                        view: {
+                            ...sixLands,
+                            events: [],
+                            battlefield: land
+                                ? [...sixLands.battlefield, land.slot]
+                                : sixLands.battlefield,
+                            objects: land
+                                ? [...sixLands.objects, land]
+                                : sixLands.objects,
+                            status: {
+                                ...sixLands.status,
+                                decision: {
+                                    ...sixLands.status.decision,
+                                    id: sixLands.status.decision.id + i,
+                                },
+                            },
+                        },
+                    },
+                };
+            }),
+        ],
+    }),
+);
+await check(
+    "lands pile only from seven on each side and separate again at six",
+    async (page) => {
+        for (const [i, stacked] of [
+            undefined,
+            "you",
+            "opponent",
+            undefined,
+        ].entries()) {
+            if (i) await page.keyboard.press(" ");
+            await page.clock.runFor(1500);
+            for (const side of ["you", "opponent"]) {
+                const lands = page.locator(`.card-el-land.card-el-${side}`);
+                const seventh = lands.locator(
+                    `xpath=self::*[@data-slot="${seventhLand[side].slot}"]`,
+                );
+                const counts = lands.locator(".card-count");
+                assert.equal(
+                    await seventh.count(),
+                    side === stacked ? 1 : 0,
+                    `view ${i}: ${side}'s seventh land`,
+                );
+                assert.equal(
+                    (await counts.count()) > 0,
+                    side === stacked,
+                    `view ${i}: ${side}'s land piles`,
+                );
+            }
+        }
+    },
+    { ...crowdedRun(0), fixture: "land-threshold" },
+);
+
 // Eight cards in your hand while you may pass on to the next stop: the fan, each card at rest
 // and raised in turn, stays clear of the round button left of the turn button (by-biv).
 await derive("crowded", "crowded-eight", crowdedAt, (v) => {
@@ -9180,7 +9271,7 @@ const lifeShown = async (page) =>
         ).replace("\u2212", "-"),
     );
 await check(
-    "the result waits for the killing blow, says why, and can be put aside",
+    "the life-loss result waits for the killing blow and can be put aside",
     async (page) => {
         await page.clock.runFor(2000);
         await page.keyboard.press(" ");
@@ -9206,8 +9297,9 @@ await check(
             `the end plays first: ${ended}, then ${t}`,
         );
         assert.equal(
-            await result.locator(".game-over-reason").textContent(),
-            "Life",
+            await result.locator(".game-over-reason, .game-over-card").count(),
+            0,
+            "the life-loss result only shows the outcome and controls",
         );
         const entries = await page.locator(".game-log-entry").allTextContents();
         assert.ok(
@@ -9228,6 +9320,63 @@ await check(
     },
     overAt,
 );
+
+for (const [reason, title, description, by] of [
+    ["life", "Victory", null, { name: "Trinket Mage", ability: null }],
+    [
+        "effect",
+        "Victory",
+        "Card effect",
+        { name: "Trinket Mage", ability: null },
+    ],
+    ["library", "Victory", "Library", null],
+    ["concede", "Defeat", "Conceded", null],
+]) {
+    const fixture = `result-${reason}`;
+    await derive("game-over", fixture, overViews.length - 1, (view) => ({
+        ...view,
+        status: {
+            kind: "over",
+            outcome: {
+                kind: "win",
+                winner: title === "Victory" ? "you" : "opponent",
+                reason,
+                by,
+            },
+        },
+    }));
+    await check(
+        `the ${reason} result shows ${title} and the applicable details`,
+        async (page) => {
+            const result = page.getByRole("dialog", { name: title });
+            await result.waitFor();
+            assert.deepEqual(
+                await result.locator(".game-over-reason").allTextContents(),
+                description ? [description] : [],
+            );
+            assert.deepEqual(
+                await result
+                    .locator(".game-over-card")
+                    .evaluateAll((cards) =>
+                        cards.map((card) => card.dataset.card),
+                    ),
+                reason === "effect" ? [by.name] : [],
+            );
+            await result
+                .getByRole("button", { name: "New Game", exact: true })
+                .waitFor();
+            await result
+                .getByRole("button", { name: "View Battlefield" })
+                .click();
+            assert.equal(await result.count(), 0);
+            await page
+                .getByRole("button", { name: `Back to ${title}` })
+                .click();
+            await result.waitFor();
+        },
+        { ...overAt, fixture, at: overViews.length },
+    );
+}
 
 await check(
     "the settings concede the game once confirmed in place",
