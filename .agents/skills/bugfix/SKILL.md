@@ -130,14 +130,15 @@ reproduces it.
      searches. If the report's `commit` is not `staging`'s, the replay may
      drift: the transcript says where.
    - The screen: copy `fixture.json` to `ui/public/fixtures/bug-<id>.json`
-     (gitignored), start `just ui-live`, and drive its page there:
+     (gitignored), start `just ui-live --port 0`, and drive its page there:
      `await page.goto(new URL("/?fixture=bug-<id>#/game", page.url()).href)`,
      then `shot(...)` and `probe`. `&at=-1` stops a view short so the last one
-     plays live when you answer.
+     plays live when you answer. Follow the `ui-review` skill's harness cleanup
+     when you finish.
    - A card's UI moment, or a report with a `spec`: use the `specs` skill
-     (`just specs --describe`, `--film`, `--motion`, `--drive`). If no moment
-     covers the report, write a scenario that reaches it, which turns it into
-     one: extending the specs is part of the fix.
+     (`just specs --describe`, `--film`, `--motion`, `--drive --port 0`). If no
+     moment covers the report, write a scenario that reaches it, which turns it
+     into one: extending the specs is part of the fix.
    - Errors: search `journal.jsonl` and `ui.json` for `"level":"error"`,
      `"warn"`, `panic` and `refused`.
 

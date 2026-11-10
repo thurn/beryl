@@ -15,6 +15,19 @@ both players.** What the opponent sees counts as much as what the controller
 sees: which ability went on the stack, which card a choice took and where it
 went, where a token came from, what lies exiled under a permanent.
 
+## Server lifecycle
+
+Use `--port 0` whenever you start a long-running `just specs`, `just scenarios`,
+or `just playground` session, including with `--release`. Use the URL it
+prints. This gives parallel sessions separate ports and leaves 1430 available
+for manual use.
+
+Keep the terminal session or record the PID of your `by specs` process. When
+finished, including after a failed check, stop your session with Ctrl-C or
+send SIGTERM to that process so it cleans up its children. Verify that its
+printed UI and driver ports no longer have listeners. Leave other sessions
+alone.
+
 ## The loop
 
 Cards are named by slug or by name
@@ -60,8 +73,8 @@ show the mechanics it shares.
 
 5. **Drive it.** `just specs --drive --port 0` serves the pages and a headless
    WebKit page that runs Playwright snippets POSTed to the printed driver URL
-   (`ui/scripts/drive.mjs`). Start it with the Bash tool's background mode, not
-   `&`. Snippets run one at a time in the order they arrive:
+   (`ui/scripts/drive.mjs`). Keep it in a terminal session you can interrupt.
+   Snippets run one at a time in the order they arrive:
 
    ```sh
    curl -s localhost:<port> -d '
@@ -129,11 +142,12 @@ show the mechanics it shares.
   server instance's `play` (`spec.play()`, or `POST <live>/play` where `<live>`
   is the page's `?live=` URL).
 
-`just scenarios [card]` (or the compatible `just specs`) serves the scenario viewer.
-`/scenarios/<card>` groups named scenarios with a checkpoint selector; direct moment and
+`just scenarios --port 0 [card]` (or `just specs --port 0`) serves the scenario
+viewer. `/scenarios/<card>` groups named scenarios with a checkpoint selector; direct moment and
 seat URLs continue to work. The headless describe, film, motion and drive tools remain.
 
-`just playground [card]` serves the same host with `/playground` for human card review.
+`just playground --port 0 [card]` serves the same host with `/playground`
+for human card review.
 Each card page stacks its examples, starting with play from hand, and each example has
 independent full-width boards for both perspectives. The viewer answers their own prompts;
 the unseen player is automated. Play releases opponent playback; Reset affects only its

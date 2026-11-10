@@ -101,10 +101,11 @@ when it affects something players do every turn, and Design otherwise.
 (`beryl_cli serve`), serves the UI against them (`?live=`), and holds a headless
 WebKit page open. It prints three lines: `app`, `drive` (a URL) and
 `screenshots` (a folder). Start it in the background and keep it running for
-the whole review:
+the whole review. Use `--port 0` and the printed URLs so parallel reviews
+get separate ports. Keep track of the job you started.
 
 ```bash
-just ui-live > "$SCRATCH/live.log" 2>&1 &
+just ui-live --port 0 > "$SCRATCH/live.log" 2>&1 &
 until grep -q "ui-live: screenshots" "$SCRATCH/live.log"; do sleep 1; done; cat "$SCRATCH/live.log"
 ```
 
@@ -157,7 +158,10 @@ curl -s "$DRIVE" -d 'await page.getByRole("button", {name: "Start", exact: true}
 
 A change to `ui/scripts/drive.mjs` needs a restart, and a change under `ui/src/`
 reloads the page (which loses the game, as it would in the app). Stop the
-harness when you are done: `kill %1`, or kill the `by ui-live` process.
+harness when you finish, including after a failed check. Interrupt its
+terminal session with Ctrl-C, or send SIGTERM to your `by ui-live` process
+so it cleans up its children. Verify that its printed app and driver ports
+no longer have listeners.
 
 The page is 1600×900. Restart with `--width 1280 --height 800` once to check a
 small window. The default debug build gives the agents the same speed as
