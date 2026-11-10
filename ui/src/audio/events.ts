@@ -47,6 +47,7 @@ const EVENTS: Sounds = {
   tap: () => "tap",
   untap: () => "untap",
   mana: () => "mana",
+  resolutionPayment: () => null,
   tokensCreated: () => "place",
   cast: () => "cast",
   ability: () => "ability",

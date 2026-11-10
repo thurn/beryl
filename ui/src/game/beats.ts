@@ -138,6 +138,7 @@ class Walk {
   private readonly out: Beat[] = [];
   /** Slots drawn in this view so far, to be seen in a hand before they leave it. */
   private readonly drawn = new Set<number>();
+  private readonly seenInChoice: Set<number>;
   /** The beat cut last showed cards in a showcase: the next one lands them. */
   private landing = false;
 
@@ -145,6 +146,8 @@ class Walk {
     before: PlayerView,
     private readonly update: GameUpdate,
   ) {
+    const choice = choiceOf(before);
+    this.seenInChoice = new Set(choice?.kind === "pick" ? choice.cards : []);
     this.view = update.view;
     this.final = new Map(this.view.objects.map((o) => [o.slot, o]));
     this.cur = { ...before, status: { kind: "playing" }, events: [] };
@@ -210,7 +213,13 @@ class Walk {
           this.pending.push(next);
           i++;
         }
-        this.cut(HOLD.landing);
+        this.cut(
+          this.pending.filter(
+            (e) => e.kind === "zoneChange" && e.to === "exile",
+          ).length > 1
+            ? 1000
+            : HOLD.landing,
+        );
         continue;
       }
       if (e.kind === "zoneChange" && this.struck(e)) {
@@ -261,6 +270,12 @@ class Walk {
       const drawing = this.drawn.size;
       this.apply(e);
       this.pending.push(e);
+      if (e.kind === "resolutionPayment") {
+        // Keep the paid-for item in view while mana reaches it, before resolution continues.
+        this.put(e.item);
+        this.cut(HOLD.action);
+        continue;
+      }
       if (e.kind === "draw" && e.player === "opponent") {
         // The opponent's hand lies at the table's edge: what they drew dips into view first.
         const drawn = new Set([...this.drawn].slice(drawing));
@@ -273,6 +288,21 @@ class Walk {
         this.cut(stackHold(item));
       }
     }
+    // A targeted ETB is on the stack before its targets are announced: its ability
+    // event arrives in a later view. Keep that pending trigger off the landing beat too.
+    const arrivingTrigger = this.view.stack.some(
+      (item) =>
+        item.kind === "ability" &&
+        item.triggered &&
+        !onStack(this.cur.stack, item) &&
+        this.pending.some(
+          (e) =>
+            e.kind === "zoneChange" &&
+            e.to === "battlefield" &&
+            e.slot === item.source,
+        ),
+    );
+    if (arrivingTrigger) this.cut(HOLD.action);
     // A question asked over the table (a search, a scry) waits for what led to it to land: a
     // card exiled, a spell resolving, seen rather than moving under the overlay.
     if (this.pending.some(effect) && choiceOf(this.view)) this.cut();
@@ -293,6 +323,8 @@ class Walk {
 
   /** Whether the zone change `e` is shown in a showcase. */
   private showcased(e: Extract<GameEvent, { kind: "zoneChange" }>): boolean {
+    // Cards just read in a choice travel directly to their destinations.
+    if (this.seenInChoice.has(e.slot)) return false;
     const owner =
       this.final.get(e.slot)?.owner ??
       this.cur.objects.find((o) => o.slot === e.slot)?.owner;

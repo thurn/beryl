@@ -492,6 +492,17 @@ impl<L: Layout> Relayout for LossCause<L> {
     }
 }
 
+/// A resolution payment's public stack item in another layout.
+fn resolution_payment<L: Layout, M: Layout>(event: &Event<L>) -> Event<M> {
+    let Event::ResolutionPayment { player, item } = event else {
+        unreachable!("a resolution payment");
+    };
+    Event::ResolutionPayment {
+        player: *player,
+        item: item.relayout(),
+    }
+}
+
 impl<L: Layout> Relayout for Event<L> {
     type In<M: Layout> = Event<M>;
 
@@ -549,6 +560,7 @@ impl<L: Layout> Relayout for Event<L> {
                 object: object.relayout(),
             },
             Event::Mana { .. } => mana(self),
+            Event::ResolutionPayment { .. } => resolution_payment(self),
             &Event::TokensCreated { controller, tokens } => Event::TokensCreated {
                 controller,
                 tokens: bits(tokens),

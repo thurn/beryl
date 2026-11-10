@@ -426,6 +426,10 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             return Ok(false);
         }
         self.pay(player, cost)?;
+        self.sink.note(event::Event::ResolutionPayment {
+            player,
+            item: self.entry.clone(),
+        });
         Ok(true)
     }
 

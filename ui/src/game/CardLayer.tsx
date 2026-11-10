@@ -3,12 +3,14 @@
 // cast, resolved, killed, bounced or exiled travels rather than jumps (decision D10). Hand
 // cards with something to play drag onto the battlefield, attackers forward and blockers onto
 // attackers; a click on any card asks the board what it offers.
+import { takeChoiceFlight } from "./choiceFlight";
 import { play } from "../audio/sound";
 import {
   memo,
   useContext,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -213,6 +215,11 @@ export function CardLayer(props: CardLayerProps) {
         : [],
     ),
   );
+  const exiling = (props.events ?? []).flatMap((e) =>
+    e.kind === "zoneChange" && e.to === "exile" && e.from !== "exile"
+      ? [e.slot]
+      : [],
+  );
   const states = useRef(new Map<number, CardState>());
   const stateOf = (slot: number) => {
     const given = props.states.get(slot) ?? NO_STATE;
@@ -235,6 +242,11 @@ export function CardLayer(props: CardLayerProps) {
                 state={stateOf(o.slot)}
                 raised={props.hovered === o.slot}
                 struck={struck.has(o.slot)}
+                departureDelay={
+                  exiling.length > 1 && exiling.includes(o.slot)
+                    ? (0.3 * exiling.indexOf(o.slot)) / (exiling.length - 1)
+                    : 0
+                }
                 epoch={props.epoch}
                 callbacks={callbacks}
                 appearing={shown.current}
@@ -289,6 +301,7 @@ const CardElement = memo(function CardElement({
   state,
   raised,
   struck,
+  departureDelay,
   epoch,
   callbacks: layer,
   appearing,
@@ -299,6 +312,7 @@ const CardElement = memo(function CardElement({
   state: CardState;
   raised: boolean;
   struck: boolean;
+  departureDelay: number;
   epoch: unknown;
   callbacks: Callbacks;
   appearing: boolean;
@@ -349,13 +363,42 @@ const CardElement = memo(function CardElement({
     };
   }
   const change = moved.current;
-  const how = carried
-    ? CARRIED
-    : emerging
-      ? EMERGING
-      : change.travel
-        ? TRAVEL
-        : SPRING;
+  const how = useMemo(() => {
+    const base = carried
+      ? CARRIED
+      : emerging
+        ? EMERGING
+        : change.travel
+          ? TRAVEL
+          : SPRING;
+    return departureDelay
+      ? { ...base, delay: (base.delay ?? 0) + departureDelay }
+      : base;
+  }, [carried, emerging, change.travel, departureDelay]);
+  const handed = useRef<unknown>(undefined);
+  useLayoutEffect(() => {
+    const from = takeChoiceFlight(object.slot, object.zone);
+    if (!from || reduce) return;
+    handed.current = epoch;
+    x.jump(from.x);
+    y.jump(from.y);
+    scale.jump(from.width / place.width);
+    rotate.jump(0);
+    skewX.jump(0);
+    opacity.jump(1);
+  }, [
+    epoch,
+    object.slot,
+    object.zone,
+    reduce,
+    x,
+    y,
+    scale,
+    rotate,
+    skewX,
+    opacity,
+    place.width,
+  ]);
   useGlide(x, place.x, reduce, { holding, how });
   useGlide(y, place.y, reduce, { holding, how });
   // A card changing looks, or tapping, is drawn at another width (a back, a whole card, a
@@ -367,10 +410,14 @@ const CardElement = memo(function CardElement({
   useLayoutEffect(() => {
     const was = drawn.current;
     drawn.current = { width, frameKind };
-    if (was.width !== width && was.frameKind !== frameKind) {
+    if (
+      handed.current !== epoch &&
+      was.width !== width &&
+      was.frameKind !== frameKind
+    ) {
       scale.jump((scale.get() * was.width) / width);
     }
-  }, [scale, width, frameKind]);
+  }, [scale, width, frameKind, epoch]);
   useGlide(scale, place.scale, reduce, { restart: width, how });
   // A hand card is raised while hovered and while the pointer holds it; anything else dragged
   // straightens.
@@ -456,9 +503,12 @@ const CardElement = memo(function CardElement({
   useEffect(() => {
     if (!change.travel || reduce) return;
     setTravelling(true);
-    const timer = setTimeout(() => setTravelling(false), TRAVEL_FOR);
+    const timer = setTimeout(
+      () => setTravelling(false),
+      TRAVEL_FOR + departureDelay * 1000,
+    );
     return () => clearTimeout(timer);
-  }, [change, reduce]);
+  }, [change, reduce, departureDelay]);
   // An emerging token crosses over the table, then is a card like the rest.
   useEffect(() => {
     if (!emerging) return;
@@ -615,7 +665,7 @@ const CardElement = memo(function CardElement({
         >
           <motion.div style={{ x: shake, filter: flash }}>
             <div className="card-body" ref={body}>
-              <Look object={object} place={place} state={state} />
+              <FlippingLook object={object} place={place} state={state} />
               <span className="card-shade" ref={shade} />
             </div>
             <span
@@ -681,6 +731,46 @@ function under(e: ReactPointerEvent, self: HTMLElement): Onto | undefined {
     if (life === "you" || life === "opponent") return { player: life };
   }
   return undefined;
+}
+
+/** A facing change turns the one card over, switching its face only while edge-on. */
+function FlippingLook(props: {
+  object: ObjectView;
+  place: Placement;
+  state: CardState;
+}) {
+  const { object } = props;
+  const reduce = useReducedMotion() ?? false;
+  const [facing, setFacing] = useState(object.facing);
+  const turn = useMotionValue(0);
+  useLayoutEffect(() => {
+    if (facing === object.facing) return;
+    if (reduce || object.zone !== "battlefield") {
+      setFacing(object.facing);
+      turn.jump(0);
+      return;
+    }
+    let cancelled = false;
+    const first = animate(turn, 90, { duration: 0.18, ease: "easeIn" });
+    void first.then(() => {
+      if (cancelled) return;
+      turn.jump(-90);
+      setFacing(object.facing);
+      void animate(turn, 0, { duration: 0.18, ease: "easeOut" });
+    });
+    return () => {
+      cancelled = true;
+      first.stop();
+    };
+  }, [object.facing, object.zone, reduce, turn]);
+  return (
+    <motion.div
+      className="card-flip"
+      style={{ rotateY: turn, transformPerspective: 800 }}
+    >
+      <Look {...props} object={{ ...object, facing }} />
+    </motion.div>
+  );
 }
 
 /** The card itself, as its placement draws it. */

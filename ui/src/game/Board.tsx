@@ -1332,12 +1332,7 @@ export function Board({
           objects={drawn}
           keys={standIns.keys}
           placements={placements}
-          origins={tokenOrigins(
-            views.current.before,
-            view,
-            placements,
-            previousTable,
-          )}
+          origins={tokenOrigins(views.current.before, view, previousTable)}
           hovered={hovered}
           states={states}
           onClick={onClick}
@@ -2120,7 +2115,6 @@ const lifeId = (side: Side) => `${side}-life-orb`;
 function tokenOrigins(
   before: PlayerView | undefined,
   view: PlayerView,
-  placements: Layout,
   previous?: Layout,
 ): Map<number, Box> | undefined {
   if (!before) return undefined;
@@ -2138,14 +2132,12 @@ function tokenOrigins(
   if (made.length === 0) return undefined;
   const top = before.stack.at(-1);
   if (!top) return undefined;
-  const from =
-    top.kind === "spell"
-      ? previous?.get(top.slot)
-      : abilityPlacement(before, top, placements, previous);
+  const from = top.kind === "spell" ? previous?.get(top.slot) : undefined;
   if (from?.opacity)
     return new Map(made.map((slot) => [slot, footprint(from)]));
   if (top.kind === "spell") return undefined;
-  // An ability whose source is gone can still make a token from its card on the stack.
+  // An ability makes its tokens from the resolving indicator, even while its source
+  // permanent remains on the battlefield.
   const { x, y, width } = stackPlace(
     before.stack.length - 1,
     before.stack.length,

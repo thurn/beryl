@@ -801,6 +801,11 @@ pub enum GameEvent {
         color: Mana,
         amount: u8,
     },
+    /// Mana paid into the named resolving spell or ability.
+    ResolutionPayment {
+        player: Side,
+        item: StackItem,
+    },
     TokensCreated {
         controller: Side,
         tokens: Vec<u16>,
@@ -2179,6 +2184,10 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
             slot: object.slot.num(),
         },
         Event::Mana { .. } => mana_event(obs, e),
+        Event::ResolutionPayment { player, ref item } => GameEvent::ResolutionPayment {
+            player: side(player),
+            item: stack_item(t, obs, item),
+        },
         Event::TokensCreated { controller, tokens } => GameEvent::TokensCreated {
             controller: side(controller),
             tokens: slots(tokens.iter()),

@@ -31,6 +31,7 @@ import {
   type TargetRef,
 } from "../ipc";
 import { Board } from "../game/Board";
+import { rememberChoiceCards } from "../game/choiceFlight";
 import { ChoiceOverlay } from "../game/ChoiceOverlay";
 import { choiceOf, floats, type Choice } from "../game/choices";
 import { follow, isOpening, twins, type Intent } from "../game/decisions";
@@ -542,6 +543,7 @@ function Playing({ playback }: { playback: Playback }) {
     if (!decision || !choice) return;
     const { index, rest } = follow(decision, picks);
     if (index === undefined) return;
+    rememberChoiceCards(view);
     setHeld(choice);
     // The picks after this one go out unseen under the choice, and what they all did plays
     // once it gives way to the table.

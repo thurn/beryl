@@ -455,7 +455,7 @@ libraryTop?: boolean, } | { "kind": "damage", source: number, to: TargetRef, amo
  * The mana ability's permanent, or the spell or ability that added it, in the slot
  * it had then: a source sacrificed for mana has left it by the time the view shows.
  */
-source: number | null, color: Mana, amount: number, } | { "kind": "tokensCreated", controller: Side, tokens: Array<number>, } | { "kind": "cast", slot: number, controller: Side, 
+source: number | null, color: Mana, amount: number, } | { "kind": "resolutionPayment", player: Side, item: StackItem, } | { "kind": "tokensCreated", controller: Side, tokens: Array<number>, } | { "kind": "cast", slot: number, controller: Side, 
 /**
  * The spell as it went on the stack: an opponent's spell that resolves unanswered
  * is gone from the stack by the next view, which shows its cast and resolution

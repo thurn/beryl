@@ -4634,6 +4634,437 @@ if (wanted(tokenFlight)) {
     );
 }
 
+const abilityTokenFlight =
+    "an ability token starts over the resolving indicator";
+if (wanted(abilityTokenFlight)) {
+    const view = (await load("arrow-spell")).at(-1);
+    const sourceObject = view.objects.find((o) => o.zone === "battlefield");
+    const item = {
+        kind: "ability",
+        source: sourceObject.slot,
+        name: sourceObject.name,
+        ability: 0,
+        nth: 0,
+        granted: false,
+        controller: "you",
+        triggered: true,
+        targets: [],
+        x: 0,
+    };
+    const token = (await load("tokens"))
+        .at(-1)
+        .objects.find((o) => o.name === "Map Token");
+    const before = { ...view, events: [], stack: [{ ...item, targets: [] }] };
+    const after = {
+        ...view,
+        stack: [],
+        battlefield: [...view.battlefield, token.slot],
+        objects: [
+            ...view.objects.map((o) =>
+                o.slot === item.slot ? { ...o, zone: "graveyard" } : o,
+            ),
+            token,
+        ],
+        events: [
+            {
+                kind: "zoneChange",
+                slot: token.slot,
+                from: "nowhere",
+                to: "battlefield",
+                reason: "created",
+            },
+            {
+                kind: "tokensCreated",
+                tokens: [token.slot],
+                controller: token.controller,
+            },
+        ],
+    };
+    const run = await motionFixture("token-flies-from-ability", [
+        before,
+        after,
+    ]);
+    await check(
+        abilityTokenFlight,
+        async (page) => {
+            await page.clock.runFor(1000);
+            const source = await page.locator("#stack-0").boundingBox();
+            await page
+                .getByRole("button", { name: "Resolve", exact: true })
+                .click();
+            await until(page, slotOf(token.slot), 20);
+            const tokenCard = page.locator(slotOf(token.slot));
+            const start = center(await tokenCard.boundingBox());
+            assert.ok(
+                start.x >= source.x && start.x <= source.x + source.width,
+                "token starts inside the spell",
+            );
+            assert.ok(
+                start.y >= source.y && start.y <= source.y + source.height,
+                "token starts inside the spell",
+            );
+            assert.equal(
+                await tokenCard.evaluate((el) =>
+                    Number(getComputedStyle(el).opacity),
+                ),
+                1,
+            );
+            await page.clock.runFor(650);
+            const end = center(await tokenCard.boundingBox());
+            assert.ok(
+                Math.hypot(end.x - start.x, end.y - start.y) > 80,
+                "token reaches its own slot",
+            );
+            assert.equal(
+                await tokenCard.getAttribute("data-zone"),
+                "battlefield",
+            );
+        },
+        { ...run, ready: "#stack-0" },
+    );
+}
+
+const faceFlip = "a face-down permanent turns over before revealing its face";
+if (wanted(faceFlip)) {
+    const base = (await load("arrow-spell")).at(-1);
+    const card = (await load("combat-blockers"))
+        .at(-1)
+        .objects.find((o) => o.zone === "battlefield" && o.facing === "down");
+    assert.ok(card);
+    const slot = 800;
+    const before = {
+        ...base,
+        battlefield: [...base.battlefield, slot],
+        objects: [...base.objects, { ...card, slot }],
+        events: [],
+    };
+    const after = {
+        ...before,
+        objects: before.objects.map((o) =>
+            o.slot === slot
+                ? { ...o, facing: "up", name: "Snapcaster Mage" }
+                : o,
+        ),
+    };
+    const run = await motionFixture("face-up-flip", [before, after]);
+    await check(
+        faceFlip,
+        async (page) => {
+            await page.clock.runFor(1000);
+            const card = page.locator(slotOf(slot));
+            assert.equal(await card.locator(".card-face-down").count(), 1);
+            await page
+                .getByRole("button", { name: "Resolve", exact: true })
+                .click();
+            await page.clock.runFor(100);
+            assert.equal(
+                await card.locator(".card-face-down").count(),
+                1,
+                "old face remains until edge-on",
+            );
+            const matrix = await card
+                .locator(".card-flip")
+                .evaluate(
+                    (el) => new DOMMatrix(getComputedStyle(el).transform).m11,
+                );
+            assert.ok(Math.abs(matrix) < 0.95, "card is visibly turning");
+            await page.clock.runFor(500);
+            assert.equal(await card.locator(".card-face-down").count(), 0);
+            assert.equal(await page.locator(slotOf(slot)).count(), 1);
+        },
+        { ...run, ready: slotOf(slot) },
+    );
+}
+
+const taxFlow = "resolution payment mana reaches its spell before it leaves";
+if (wanted(taxFlow)) {
+    const base = (await load("arrow-spell")).at(-1);
+    const item = base.stack.at(-1);
+    const land = base.objects.find((o) => o.zone === "battlefield");
+    const before = { ...base, events: [] };
+    const owner = base.objects.find((o) => o.slot === item.slot).owner;
+    const after = {
+        ...base,
+        stack: [],
+        players: {
+            ...base.players,
+            [owner]: {
+                ...base.players[owner],
+                graveyard: [...base.players[owner].graveyard, item.slot],
+            },
+        },
+        objects: base.objects.map((o) =>
+            o.slot === item.slot ? { ...o, zone: "graveyard" } : o,
+        ),
+        events: [
+            {
+                kind: "mana",
+                player: "you",
+                source: land.slot,
+                color: "white",
+                amount: 1,
+            },
+            { kind: "resolutionPayment", player: "you", item },
+            {
+                kind: "zoneChange",
+                slot: item.slot,
+                from: "stack",
+                to: "graveyard",
+                reason: "resolve",
+            },
+        ],
+    };
+    const run = await motionFixture("tax-flow", [before, after]);
+    await check(
+        taxFlow,
+        async (page) => {
+            await page.clock.runFor(1000);
+            const source = await page.locator(slotOf(item.slot)).boundingBox();
+            await page
+                .getByRole("button", { name: "Resolve", exact: true })
+                .click();
+            await until(page, ".mana-mote", 20);
+            const end = await page
+                .locator(".mana-mote")
+                .first()
+                .evaluate((el) => {
+                    const a = el.getAnimations()[0];
+                    const frame = a.effect.getKeyframes().at(-1);
+                    const m = new DOMMatrix(frame.transform);
+                    return { x: m.m41, y: m.m42 };
+                });
+            const scale =
+                (await page.locator(".table").boundingBox()).width /
+                (await page.locator(".table").evaluate((el) => el.offsetWidth));
+            assert.ok(
+                Math.abs(end.x * scale - (source.x + source.width / 2)) <
+                    source.width / 2,
+            );
+            assert.equal(
+                await page.locator(slotOf(item.slot)).getAttribute("data-zone"),
+                "stack",
+            );
+            await page.clock.runFor(500);
+            assert.equal(
+                await page.locator(slotOf(item.slot)).getAttribute("data-zone"),
+                "stack",
+            );
+            await page.clock.runFor(3000);
+            await until(
+                page,
+                `${slotOf(item.slot)}[data-zone="graveyard"]`,
+                50,
+            );
+            assert.equal(
+                await page.locator(slotOf(item.slot)).getAttribute("data-zone"),
+                "graveyard",
+            );
+        },
+        { ...run, ready: slotOf(item.slot) },
+    );
+}
+
+const exileStagger =
+    "simultaneous exile departures span three hundred milliseconds";
+if (wanted(exileStagger)) {
+    const base = (await load("arrow-spell")).at(-1);
+    const sample = base.objects.find((o) => o.zone === "battlefield");
+    const cards = Array.from({ length: 6 }, (_, i) => ({
+        ...sample,
+        slot: 800 + i,
+        zone: "graveyard",
+        owner: "you",
+        controller: "you",
+        tapped: false,
+    }));
+    const before = {
+        ...base,
+        players: {
+            ...base.players,
+            you: { ...base.players.you, graveyard: cards.map((o) => o.slot) },
+        },
+        objects: [...base.objects, ...cards],
+        events: [],
+    };
+    const after = {
+        ...before,
+        players: {
+            ...before.players,
+            you: { ...before.players.you, graveyard: [] },
+        },
+        objects: before.objects.map((o) =>
+            o.slot >= 800 ? { ...o, zone: "exile" } : o,
+        ),
+        events: cards.map((o) => ({
+            kind: "zoneChange",
+            slot: o.slot,
+            from: "graveyard",
+            to: "exile",
+            reason: "exile",
+        })),
+    };
+    const run = await motionFixture("exile-stagger", [before, after]);
+    await check(
+        exileStagger,
+        async (page) => {
+            await page.clock.runFor(1000);
+            const first = page.locator(slotOf(800));
+            const last = page.locator(slotOf(805));
+            const a = center(await first.boundingBox());
+            const b = center(await last.boundingBox());
+            await page
+                .getByRole("button", { name: "Resolve", exact: true })
+                .click();
+            await until(page, `${slotOf(800)}[data-zone="exile"]`, 20);
+            await page.clock.runFor(150);
+            const c = center(await first.boundingBox());
+            const d = center(await last.boundingBox());
+            assert.ok(
+                Math.hypot(c.x - a.x, c.y - a.y) > 2,
+                "first card has left",
+            );
+            assert.ok(
+                Math.hypot(d.x - b.x, d.y - b.y) < 2,
+                "last waits for its stagger",
+            );
+            await page.clock.runFor(300);
+            const e = center(await last.boundingBox());
+            assert.ok(
+                Math.hypot(e.x - b.x, e.y - b.y) > 2,
+                "last leaves within 300ms",
+            );
+            await page.clock.runFor(1000);
+            assert.equal(await page.locator('[data-zone="exile"]').count(), 6);
+        },
+        { ...run, ready: slotOf(805) },
+    );
+}
+
+const manifestFlight =
+    "manifest cards travel directly from their chooser to their zones";
+if (wanted(manifestFlight)) {
+    const base = (await load("arrow-spell")).at(-1);
+    const model = base.objects.find((o) => o.zone === "battlefield");
+    const cards = [800, 801].map((slot, i) => ({
+        ...model,
+        slot,
+        zone: "library",
+        owner: "you",
+        controller: "you",
+        facing: "up",
+        name: i === 0 ? "Snapcaster Mage" : "Island",
+        tapped: false,
+    }));
+    const candidates = cards.map((o) => ({
+        label: o.name,
+        option: { kind: "object", slot: o.slot },
+        payments: [],
+        blocks: [],
+        nth: null,
+        targets: [],
+    }));
+    const before = {
+        ...base,
+        objects: [...base.objects, ...cards],
+        players: {
+            ...base.players,
+            you: {
+                ...base.players.you,
+                library: [...base.players.you.library, 801, 800],
+            },
+        },
+        status: {
+            kind: "deciding",
+            decision: {
+                ...base.status.decision,
+                kind: "chooseObject",
+                ask: { kind: "manifestDread" },
+                candidates,
+            },
+        },
+        events: [],
+    };
+    const after = {
+        ...before,
+        objects: before.objects.map((o) =>
+            o.slot === 800
+                ? {
+                      ...o,
+                      zone: "battlefield",
+                      facing: "down",
+                      types: ["creature"],
+                      pt: { power: 2, toughness: 2 },
+                  }
+                : o.slot === 801
+                  ? { ...o, zone: "graveyard" }
+                  : o,
+        ),
+        battlefield: [...before.battlefield, 800],
+        players: {
+            ...before.players,
+            you: {
+                ...before.players.you,
+                library: base.players.you.library,
+                graveyard: [...base.players.you.graveyard, 801],
+            },
+        },
+        status: base.status,
+        events: [
+            {
+                kind: "zoneChange",
+                slot: 800,
+                from: "library",
+                to: "battlefield",
+                reason: "effect",
+            },
+            {
+                kind: "zoneChange",
+                slot: 801,
+                from: "library",
+                to: "graveyard",
+                reason: "effect",
+            },
+        ],
+    };
+    const run = await motionFixture("manifest-flight", [before, after]);
+    await check(
+        manifestFlight,
+        async (page) => {
+            await page.locator('.choice-card[data-slot="800"]').click();
+            await page.clock.runFor(700);
+            const origin = center(
+                await page
+                    .locator('.choice-card[data-slot="800"]')
+                    .boundingBox(),
+            );
+            await page
+                .getByRole("button", { name: "Manifest", exact: true })
+                .click();
+            await until(page, `${slotOf(800)}[data-zone="battlefield"]`, 20);
+            const start = center(
+                await page.locator(`.card-layer ${slotOf(800)}`).boundingBox(),
+            );
+            assert.ok(
+                Math.hypot(origin.x - start.x, origin.y - start.y) < 90,
+                "card starts in chooser, not library",
+            );
+            await page.clock.runFor(1800);
+            assert.equal(
+                await page
+                    .locator(`.card-layer ${slotOf(800)} .card-face-down`)
+                    .count(),
+                1,
+            );
+            assert.equal(
+                await page.locator('.choice-card[data-slot="800"]').count(),
+                0,
+            );
+            await until(page, `${slotOf(801)}[data-zone="graveyard"]`, 50);
+        },
+        { ...run, ready: '.choice-card[data-slot="800"]' },
+    );
+}
+
 const triggerLift =
     "an ETB trigger visibly lifts away from the permanent before crossing";
 if (wanted(triggerLift)) {
@@ -4666,6 +5097,8 @@ if (wanted(triggerLift)) {
     const after = {
         ...view,
         stack: [item],
+        // A targeted trigger is already on the stack while its targets are being chosen;
+        // the ability announcement comes in a later view (by-5uh).
         events: [
             {
                 kind: "zoneChange",
@@ -4674,7 +5107,6 @@ if (wanted(triggerLift)) {
                 to: "battlefield",
                 reason: "resolve",
             },
-            { kind: "ability", item, loyalty: null },
         ],
     };
     const run = await motionFixture("trigger-lifts-from-permanent", [

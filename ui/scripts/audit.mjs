@@ -33,7 +33,13 @@ const LEAD = 60;
  * for nothing: they come with what they pay for. */
 const CROWDED = 3;
 /** Events that need no animation of their own. */
-const QUIET_EVENTS = new Set(["stepBegins", "coinFlip", "win", "lose"]);
+const QUIET_EVENTS = new Set([
+    "stepBegins",
+    "coinFlip",
+    "win",
+    "lose",
+    "resolutionPayment",
+]);
 /** Events that come with another and count for nothing in a crowd. */
 const MINOR_EVENTS = new Set(["tap", "untap", "draw", "cast", "mana"]);
 /** How long a card may show twice before it counts as a duplicate: a hand-off between two

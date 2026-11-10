@@ -109,6 +109,7 @@ function spentOn(
   player: Side,
 ): StackItem | undefined {
   for (const e of events.slice(i + 1)) {
+    if (e.kind === "resolutionPayment" && e.player === player) return e.item;
     if (e.kind === "cast" && e.controller === player) return e.item;
     if (
       e.kind === "ability" &&
@@ -179,6 +180,7 @@ export function manaMotes(
     for (const side of ["you", "opponent"] as const) {
       const index = events.findIndex(
         (e) =>
+          (e.kind === "resolutionPayment" && e.player === side) ||
           (e.kind === "cast" && e.controller === side) ||
           (e.kind === "ability" &&
             e.item.kind === "ability" &&

@@ -16,8 +16,8 @@ use crate::layers;
 use crate::layout::{Layout, Queue, Small};
 use crate::relayout::Relayout;
 use crate::state::{
-    Continuous, CounterKind, ObjectFlags, ObjectRef, State, TARGETS, Target, TurnStep, Zone,
-    token_slots,
+    Continuous, CounterKind, ObjectFlags, ObjectRef, StackEntry, State, TARGETS, Target, TurnStep,
+    Zone, token_slots,
 };
 use crate::table::GameTable;
 use crate::trigger;
@@ -152,6 +152,13 @@ pub enum Event<L: Layout = Small> {
         source: Option<ObjectRef<L>>,
         color: ManaColor,
         amount: u8,
+    },
+    /// Mana paid during resolution ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)):
+    /// "If an effect gives a player the option to pay mana, they may activate mana abilities".
+    /// Names the resolving item so its payment can be shown before it leaves the stack.
+    ResolutionPayment {
+        player: Seat,
+        item: StackEntry<L>,
     },
     /// "Whenever you create one or more tokens" reads this once per event.
     TokensCreated {
