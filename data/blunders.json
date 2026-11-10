@@ -210,5 +210,68 @@
       "pass"
     ],
     "why": "The final main-phase pass skips an available Teferi +1: a card, loyalty and delayed land untaps at no mana cost, with 23 library cards and no visible draw penalty."
+  },
+  {
+    "name": "decline-both-teferi-untaps",
+    "incident": "2026-11-09-teferi-combat-upkeep",
+    "class": "a free land untap declined",
+    "source": {
+      "replay": "docs/incidents/2026-11-09-teferi-combat-upkeep.replay.json"
+    },
+    "seat": 1,
+    "turn": 11,
+    "index": 4,
+    "played": "done",
+    "forbidden": [
+      "done"
+    ],
+    "why": "All five of the agent's lands are tapped. Untapping two of its own is free and lets it represent instant-speed interaction on the human's turn."
+  },
+  {
+    "name": "manifest-into-samurai",
+    "incident": "2026-11-09-teferi-combat-upkeep",
+    "class": "a losing attack into a visible blocker",
+    "source": {
+      "replay": "docs/incidents/2026-11-09-teferi-combat-upkeep.replay.json"
+    },
+    "seat": 1,
+    "turn": 21,
+    "index": 16,
+    "played": "attack with face-down Spara's Headquarters",
+    "required": [
+      "done"
+    ],
+    "why": "The 2/2 manifest cannot turn face up or beat the untapped 3/3 Samurai. Keep the creature to block rather than letting the Samurai save Teferi at no cost."
+  },
+  {
+    "name": "subtlety-before-own-draw",
+    "incident": "2026-11-09-teferi-combat-upkeep",
+    "class": "a flash creature cast before the draw step",
+    "source": {
+      "replay": "docs/incidents/2026-11-09-teferi-combat-upkeep.replay.json"
+    },
+    "seat": 1,
+    "turn": 23,
+    "index": 7,
+    "played": "cast Subtlety",
+    "required": [
+      "pass"
+    ],
+    "why": "The pending Mana Crypt and Abhorrent Oculus abilities are not legal targets. Waiting sees the draw and preserves Subtlety as interaction without giving up an attack that turn."
+  },
+  {
+    "name": "skip-beza-after-winds",
+    "incident": "2026-11-09-teferi-combat-upkeep",
+    "class": "an attack on an exposed planeswalker skipped",
+    "source": {
+      "replay": "docs/incidents/2026-11-09-teferi-combat-upkeep.replay.json"
+    },
+    "seat": 1,
+    "turn": 23,
+    "index": 24,
+    "played": "done",
+    "through": ["Attacker", "AttackTarget"],
+    "required": ["attack with Beza, the Bounding Spring"],
+    "why": "Overloaded Winds left no blockers. Send Beza at the two-loyalty Teferi and keep the smaller creatures back to protect the Jaces; even a flashed 3/3 can only chump Beza."
   }
 ]
