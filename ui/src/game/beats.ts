@@ -84,11 +84,27 @@ export function beats(
   update: GameUpdate,
 ): Beat[] {
   const { view } = update;
+  const reveal = new Set<number>();
+  if (before) {
+    const faceDown = new Set(
+      before.view.objects
+        .filter((o) => o.zone === "battlefield" && o.facing === "down")
+        .map((o) => o.slot),
+    );
+    for (const o of view.objects) {
+      if (o.zone === "battlefield" && o.facing === "up" && faceDown.has(o.slot))
+        reveal.add(o.slot);
+    }
+    for (const e of view.events) {
+      if (e.kind === "zoneChange") reveal.delete(e.slot);
+    }
+  }
   const poolBeforeChoice =
     before && choiceOf(view) && spentPool(before.view, view);
   if (
     before &&
     !poolBeforeChoice &&
+    reveal.size === 0 &&
     sameHandling(before.view, view) &&
     view.events.length === 0
   )
@@ -98,10 +114,11 @@ export function beats(
     view.undone ||
     (view.events.length === 0 &&
       !poolBeforeChoice &&
+      reveal.size === 0 &&
       !packHandling(before.view, view))
   )
     return [{ update }];
-  return new Walk(withResolving(before.view), update).run();
+  return new Walk(withResolving(before.view), update).run(reveal);
 }
 
 /** Return a private arrangement as one packet before the pile settles. */
@@ -114,6 +131,20 @@ function packHandling(before: PlayerView, after: PlayerView): boolean {
     !handling.scry &&
     !sameHandling(before, after)
   );
+}
+
+/** The resolving counterspell follows its target to the graveyard in the same beat. */
+export function counterDeparture(hit: GameEvent, next?: GameEvent) {
+  return hit.kind === "zoneChange" &&
+    hit.from === "stack" &&
+    hit.to === "graveyard" &&
+    hit.reason === "counter" &&
+    next?.kind === "zoneChange" &&
+    next.from === "stack" &&
+    next.to === "graveyard" &&
+    next.reason === "resolve"
+    ? next
+    : undefined;
 }
 
 /** Whether a spell or ability is still on `stack`. */
@@ -180,6 +211,7 @@ class Walk {
   /** Slots drawn in this view so far, to be seen in a hand before they leave it. */
   private readonly drawn = new Set<number>();
   private readonly seenInChoice: Set<number>;
+  private readonly directToGraveyard = new Set<number>();
   private readonly startsHandling: boolean;
   /** The beat cut last showed cards in a showcase: the next one lands them. */
   private landing = false;
@@ -190,14 +222,43 @@ class Walk {
   ) {
     const choice = choiceOf(before);
     this.seenInChoice = new Set(choice?.kind === "pick" ? choice.cards : []);
+    const handling = before.handling;
+    if (handling?.zone === "library" && handling.count) {
+      // The other seat also saw these cards lift. Their departure can continue
+      // from that group instead of opening a separate showcase.
+      for (const slot of before.players[handling.side].library.slice(
+        -handling.count,
+      ))
+        this.directToGraveyard.add(slot);
+    }
     this.view = update.view;
     this.startsHandling =
       liftsHandling(this.view) && !sameHandling(before, this.view);
     this.final = new Map(this.view.objects.map((o) => [o.slot, o]));
+    // A scripted or automatic choice may leave no visible picker. The card
+    // put into the graveyard alongside a manifest still travels there directly.
+    for (let i = 1; i < this.view.events.length; i++) {
+      const first = this.view.events[i - 1]!;
+      const next = this.view.events[i]!;
+      if (
+        first.kind === "zoneChange" &&
+        first.from === "library" &&
+        first.to === "battlefield" &&
+        first.reason === "effect" &&
+        this.final.get(first.slot)?.facing === "down" &&
+        next.kind === "zoneChange" &&
+        next.from === "library" &&
+        next.to === "graveyard" &&
+        next.reason === "effect" &&
+        this.final.get(first.slot)?.owner === this.final.get(next.slot)?.owner
+      ) {
+        this.directToGraveyard.add(next.slot);
+      }
+    }
     this.cur = { ...before, status: { kind: "playing" }, events: [] };
   }
 
-  run(): Beat[] {
+  run(reveal: ReadonlySet<number>): Beat[] {
     const events = this.view.events;
     for (let i = 0; i < events.length; i++) {
       const e = events[i]!;
@@ -363,6 +424,17 @@ class Walk {
         }
         this.apply(e);
         this.pending = [e];
+        const leaving = counterDeparture(e, events[i + 1]);
+        const resolving = this.cur.stack.at(-1);
+        if (
+          leaving &&
+          resolving?.kind === "spell" &&
+          resolving.slot === leaving.slot
+        ) {
+          this.apply(leaving);
+          this.pending.push(leaving);
+          i++;
+        }
         this.cut(HOLD.hit);
         continue;
       }
@@ -425,6 +497,15 @@ class Walk {
         // Gone by the view's end: shown on the stack before it resolves.
         this.cut(stackHold(item));
       }
+    }
+    if (reveal.size) {
+      this.cut();
+      const spotlight = { shown: reveal };
+      // Lift the same face-down object first. The existing card turn then shows
+      // the public face at the midpoint of the flip while the card is large.
+      this.cut(HOLD.landing + 100, spotlight, true);
+      for (const slot of reveal) this.patch(slot, this.final.get(slot)!);
+      this.cut(HOLD.action, spotlight, true);
     }
     // A targeted ETB is on the stack before its targets are announced: its ability
     // event arrives in a later view. Keep that pending trigger off the landing beat too.
@@ -492,7 +573,11 @@ class Walk {
   /** Whether the zone change `e` is shown in a showcase. */
   private showcased(e: Extract<GameEvent, { kind: "zoneChange" }>): boolean {
     // Cards just read in a choice travel directly to their destinations.
-    if (this.seenInChoice.has(e.slot)) return false;
+    if (
+      this.seenInChoice.has(e.slot) ||
+      (e.to === "graveyard" && this.directToGraveyard.has(e.slot))
+    )
+      return false;
     const owner =
       this.final.get(e.slot)?.owner ??
       this.cur.objects.find((o) => o.slot === e.slot)?.owner;

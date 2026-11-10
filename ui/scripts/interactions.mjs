@@ -5819,15 +5819,21 @@ if (wanted(faceFlip)) {
         faceFlip,
         async (page) => {
             await page.clock.runFor(1000);
-            // Installed clocks otherwise keep ticking during click/IPC under load. Hold the
-            // gesture at a fixed instant so 100 ms remains before the 160 ms face switch.
+            // Hold the gesture at a fixed instant while sampling the lift and flip.
             await page.clock.pauseAt(Date.now() + 60_000);
             const card = page.locator(slotOf(slot));
+            const rest = await card.boundingBox();
             assert.equal(await card.locator(".card-face-down").count(), 1);
             await page
                 .getByRole("button", { name: "Resolve", exact: true })
                 .click();
-            await page.clock.runFor(100);
+            await page.clock.runFor(650);
+            assert.equal(await card.locator(".card-face-down").count(), 1);
+            assert.ok(
+                (await card.boundingBox()).width > rest.width * 1.5,
+                "the back is enlarged before revealing the face",
+            );
+            await page.clock.runFor(150);
             assert.equal(
                 await card.locator(".card-face-down").count(),
                 1,
@@ -5839,9 +5845,252 @@ if (wanted(faceFlip)) {
                     (el) => new DOMMatrix(getComputedStyle(el).transform).m11,
                 );
             assert.ok(Math.abs(matrix) < 0.95, "card is visibly turning");
-            await page.clock.runFor(500);
+            await page.clock.runFor(250);
             assert.equal(await card.locator(".card-face-down").count(), 0);
-            assert.equal(await page.locator(slotOf(slot)).count(), 1);
+            const revealed = await card.boundingBox();
+            assert.ok(
+                revealed.width > rest.width * 1.3,
+                `the face stays enlarged (${revealed.width} vs ${rest.width})`,
+            );
+            await until(page, `${slotOf(slot)}.card-el-field`, 50);
+            await page.clock.runFor(800);
+            const settled = await card.boundingBox();
+            assertNear([settled.x, settled.y], [rest.x, rest.y], "same slot");
+            assert.ok(Math.abs(settled.width - rest.width) < 3);
+            assert.equal(await card.count(), 1);
+        },
+        { ...run, ready: slotOf(slot) },
+    );
+}
+
+const directPrivateMill =
+    "cards in a private library look skip the graveyard showcase";
+if (wanted(directPrivateMill)) {
+    const base = (await load("arrow-spell")).at(-1);
+    await check(directPrivateMill, async (page) => {
+        const shown = await page.evaluate(async (base) => {
+            const { beats } = await import("/src/game/beats.ts");
+            const side = "opponent";
+            const library = base.players[side].library;
+            const [other, manifest] = library.slice(-2);
+            const before = {
+                ...base,
+                handling: { zone: "library", side, count: 2 },
+            };
+            const mill = {
+                kind: "zoneChange",
+                slot: other,
+                from: "library",
+                to: "graveyard",
+                reason: "effect",
+            };
+            const up = (events) => {
+                const moved = new Map(events.map((e) => [e.slot, e.to]));
+                return {
+                    ...base,
+                    events,
+                    objects: base.objects.map((o) =>
+                        moved.has(o.slot)
+                            ? {
+                                  ...o,
+                                  zone: moved.get(o.slot),
+                                  name: "Island",
+                                  facing: o.slot === manifest ? "down" : "up",
+                              }
+                            : o,
+                    ),
+                };
+            };
+            const showcased = (from, to) =>
+                beats(
+                    { session: 1, view: from },
+                    { session: 1, view: to },
+                ).some((beat) => beat.spotlight?.shown?.has(other));
+            const manifestDread = up([
+                {
+                    kind: "zoneChange",
+                    slot: manifest,
+                    from: "library",
+                    to: "battlefield",
+                    reason: "effect",
+                },
+                mill,
+            ]);
+            return [
+                showcased(before, manifestDread),
+                showcased(base, manifestDread),
+                showcased(before, up([mill])),
+                showcased(base, up([mill])),
+            ];
+        }, base);
+        assert.deepEqual(
+            shown,
+            [false, false, false, true],
+            "Manifest and surveil skip the extra reveal; a blind mill still shows its face",
+        );
+    });
+}
+
+const counterFlight =
+    "counterspell and its target fly to opposite graveyards together";
+if (wanted(counterFlight)) {
+    const base = (await load("arrow-spell")).at(-1);
+    const spell = base.stack.at(-1);
+    const spellCard = base.objects.find((o) => o.slot === spell.slot);
+    const otherSide = spellCard.owner === "you" ? "opponent" : "you";
+    const slot = 800;
+    const counter = {
+        ...spell,
+        slot,
+        targets: [{ kind: "object", slot: spell.slot }],
+    };
+    const before = {
+        ...base,
+        events: [],
+        stack: [spell, counter],
+        objects: [
+            ...base.objects,
+            {
+                ...spellCard,
+                slot,
+                owner: otherSide,
+                controller: otherSide,
+                name: "Counterspell",
+            },
+        ],
+    };
+    const after = {
+        ...before,
+        stack: [],
+        objects: before.objects.map((o) =>
+            o.slot === slot || o.slot === spell.slot
+                ? { ...o, zone: "graveyard" }
+                : o,
+        ),
+        players: {
+            ...before.players,
+            [spellCard.owner]: {
+                ...before.players[spellCard.owner],
+                graveyard: [
+                    ...before.players[spellCard.owner].graveyard,
+                    spell.slot,
+                ],
+            },
+            [otherSide]: {
+                ...before.players[otherSide],
+                graveyard: [...before.players[otherSide].graveyard, slot],
+            },
+        },
+        events: [
+            {
+                kind: "zoneChange",
+                slot: spell.slot,
+                from: "stack",
+                to: "graveyard",
+                reason: "counter",
+            },
+            {
+                kind: "zoneChange",
+                slot,
+                from: "stack",
+                to: "graveyard",
+                reason: "resolve",
+            },
+        ],
+    };
+    const run = await motionFixture("paired-counter-flight", [before, after]);
+    await check(
+        counterFlight,
+        async (page) => {
+            await page.clock.runFor(800);
+            await page.evaluate(record);
+            await page
+                .getByRole("button", { name: "Resolve", exact: true })
+                .click();
+            await page.clock.runFor(4200);
+            const recording = await page.evaluate(collect, 0);
+            assert.deepEqual(duplicatesIn(recording), []);
+            const poses = [spell.slot, slot].map((s) => posesOf(recording, s));
+            const box = (p) => [p.x, p.y];
+            for (const track of poses) {
+                assert.equal(track[0].zone, "stack");
+                assert.equal(track.at(-1).zone, "graveyard");
+                assert.equal(new Set(track.map((p) => p.id)).size, 1);
+                assertBetween(
+                    track.map(box),
+                    box(track[0]),
+                    box(track.at(-1)),
+                    "flight is direct",
+                );
+            }
+            const midFlight = recording.frames.filter(({ instances }) =>
+                poses.every((track) => {
+                    const p = instances.find((c) => c.id === track[0].id);
+                    return (
+                        p?.zone === "graveyard" &&
+                        Math.hypot(p.x - track[0].x, p.y - track[0].y) > 40 &&
+                        Math.hypot(p.x - track.at(-1).x, p.y - track.at(-1).y) >
+                            40
+                    );
+                }),
+            );
+            assert.ok(
+                midFlight.length >= 4,
+                "both cards visibly move in the same frames",
+            );
+            assert.ok(
+                Math.abs(poses[0].at(-1).y - poses[1].at(-1).y) > 200,
+                "each lands on its owner's side",
+            );
+        },
+        { ...run, ready: slotOf(slot) },
+    );
+}
+
+const copyArt = "a nameless two-two token shows the Double Masters Copy art";
+if (wanted(copyArt)) {
+    const base = (await load("arrow-spell")).at(-1);
+    const creature = (await load("combat-blockers"))
+        .at(-1)
+        .objects.find((o) => o.zone === "battlefield" && o.facing === "down");
+    assert.ok(creature);
+    const slot = 800;
+    const token = { ...creature, slot, name: "", facing: "up", token: true };
+    const run = await motionFixture("nameless-copy-art", [
+        {
+            ...base,
+            objects: [...base.objects, token],
+            battlefield: [...base.battlefield, slot],
+        },
+    ]);
+    await check(
+        copyArt,
+        async (page) => {
+            await page.route("https://*.scryfall.io/**", (route) =>
+                route.fulfill({
+                    contentType: "image/svg+xml",
+                    body: '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>',
+                }),
+            );
+            const url = new URL(page.url());
+            url.searchParams.set("art", "");
+            await page.goto(url.href);
+            const copy = page.locator(slotOf(slot));
+            const art = copy.locator("img.card-art");
+            await art.waitFor();
+            assert.match(
+                await art.getAttribute("src"),
+                /art_crop.*6870a2af-80e1-4813-a332-2b1bd789f1c1/,
+            );
+            assert.match(
+                await copy.locator(".card-pt").textContent(),
+                /2\s*\/\s*2/,
+            );
+            assert.equal(await copy.getAttribute("data-card"), "");
+            assert.equal(
+                await copy.locator(".card-scan, .card-face-down").count(),
+                0,
+            );
         },
         { ...run, ready: slotOf(slot) },
     );

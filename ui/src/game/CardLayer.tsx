@@ -3,6 +3,7 @@
 // cast, resolved, killed, bounced or exiled travels rather than jumps (decision D10). Hand
 // cards with something to play drag onto the battlefield, attackers forward and blockers onto
 // attackers; a click on any card asks the board what it offers.
+import { counterDeparture } from "./beats";
 import { CARD_RETURN, takeMovedCard, type CardHandoff } from "./choiceFlight";
 import { play } from "../audio/sound";
 import {
@@ -240,6 +241,13 @@ export function CardLayer(props: CardLayerProps) {
         : [],
     ),
   );
+  const events = props.events ?? [];
+  const followingCounter = new Set(
+    events.flatMap((event, index) => {
+      const departure = counterDeparture(event, events[index + 1]);
+      return departure ? [departure.slot] : [];
+    }),
+  );
   const shuffled = new Set(
     (props.events ?? []).flatMap((e) =>
       e.kind === "libraryShuffled" ? [e.player] : [],
@@ -290,6 +298,7 @@ export function CardLayer(props: CardLayerProps) {
                 state={stateOf(o.slot)}
                 raised={props.hovered === o.slot}
                 struck={struck.has(o.slot)}
+                followingCounter={followingCounter.has(o.slot)}
                 departureDelay={
                   departure === undefined
                     ? 0
@@ -364,6 +373,7 @@ const CardElement = memo(function CardElement({
   state,
   raised,
   struck,
+  followingCounter,
   departureDelay,
   departureLayer,
   epoch,
@@ -379,6 +389,7 @@ const CardElement = memo(function CardElement({
   state: CardState;
   raised: boolean;
   struck: boolean;
+  followingCounter: boolean;
   departureDelay: number;
   departureLayer: number;
   epoch: unknown;
@@ -419,7 +430,8 @@ const CardElement = memo(function CardElement({
   // A struck spell leaves the stack for where it went: after its shake, slowly, over the
   // table.
   const returning = struck && (place.look === "hand" || place.look === "held");
-  const carried = struck && place.look !== "stack" && !returning;
+  const carried =
+    followingCounter || (struck && place.look !== "stack" && !returning);
   // A card changing looks to or from a pile, a library or the showcase travels there; the
   // transition holds for this view, so that a render meanwhile keeps it going.
   const moved = useRef({
@@ -606,23 +618,32 @@ const CardElement = memo(function CardElement({
   const flash = useMotionValue("brightness(1)");
   const [flying, setFlying] = useState(false);
   useEffect(() => {
-    if (!carried || reduce) return;
-    const controls = [
-      animate(shake, STRUCK_SHAKE, {
-        duration: STRUCK_FOR,
-        ease: "easeInOut",
-      }),
-      animate(flash, ["brightness(1)", "brightness(2.4)", "brightness(1)"], {
-        duration: STRUCK_FOR,
-      }),
-    ];
+    if (!carried || reduce) {
+      setFlying(false);
+      return;
+    }
+    const controls = struck
+      ? [
+          animate(shake, STRUCK_SHAKE, {
+            duration: STRUCK_FOR,
+            ease: "easeInOut",
+          }),
+          animate(
+            flash,
+            ["brightness(1)", "brightness(2.4)", "brightness(1)"],
+            {
+              duration: STRUCK_FOR,
+            },
+          ),
+        ]
+      : [];
     setFlying(true);
     const timer = setTimeout(() => setFlying(false), CARRIED_FOR);
     return () => {
       controls.forEach((c) => c.stop());
       clearTimeout(timer);
     };
-  }, [carried, reduce, shake, flash]);
+  }, [carried, struck, reduce, shake, flash]);
   // A travelling card crosses over the table, then lies where it went.
   const lastHandoff = useRef(handoff);
   useLayoutEffect(() => {
@@ -991,10 +1012,14 @@ function Look({
 }) {
   const card = useFace(object);
   const under = place.look === "beneath" || place.look === "attached";
-  const field = under || place.look === "field" || place.look === "land";
   // A face-down permanent shows its back to both players; its controller's hover still names
   // its card (CR 708.5). On the table it keeps a permanent's frame, its marks and its 2/2.
   const down = object.facing === "down";
+  const field =
+    under ||
+    place.look === "field" ||
+    place.look === "land" ||
+    (down && place.look === "shown" && object.zone === "battlefield");
   if (down ? !field : object.name === null) {
     return <CardBack width={place.width} />;
   }
