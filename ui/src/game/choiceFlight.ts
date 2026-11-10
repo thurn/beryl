@@ -102,7 +102,7 @@ function flyIn(element: HTMLElement, from: DOMRect, stage: HTMLElement) {
   animations.set(element, flight);
 }
 
-function stageBox(stage: HTMLElement, box: DOMRect) {
+export function stageBox(stage: HTMLElement, box: DOMRect) {
   const origin = stage.getBoundingClientRect();
   const scale = stageScale(stage);
   return {

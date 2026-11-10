@@ -5,10 +5,13 @@
 // an ability shows its paragraph as the stack would. A use that cannot be made now is dimmed.
 // The X beside the gear, Cancel in the action dock, Escape, a right-click or a click off the frames
 // closes it.
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import {
   animate,
+  AnimatePresence,
   motion,
+  useIsPresent,
+  usePresenceData,
   useMotionValue,
   useReducedMotion,
 } from "motion/react";
@@ -16,9 +19,11 @@ import { CARD_ASPECT, Card } from "../components/Card";
 import { useOpenSound } from "../audio/SoundControls";
 import { Button, Dock, DockButtons } from "../components/Controls";
 import { StackItem } from "../components/Stack";
-import type { ObjectView } from "../generated/protocol";
+import type { Candidate, ObjectView } from "../generated/protocol";
 import { useAbilityFace, useFace } from "./faces";
 import { STAGE } from "./layout";
+import { dissolve } from "./dissolve";
+import { stageBox, type CardHandoff } from "./choiceFlight";
 
 /** One use of the card. */
 export interface Mode {
@@ -35,6 +40,7 @@ export interface Mode {
   name: string;
   /** Unset: the use cannot be made now. */
   onPick?(): void;
+  action?: Candidate;
 }
 
 /** Where the card the uses spring from lies on the stage: its center and its width. */
@@ -59,29 +65,69 @@ function centers(count: number): number[] {
 }
 
 export function ModeChooser({
+  id,
   object,
   modes,
   from,
   split,
+  selected,
+  onPick,
   onClose,
 }: {
+  id: number;
   object: ObjectView;
   modes: Mode[];
   from?: Origin;
   split?: boolean;
-  onClose(): void;
+  selected?: string;
+  onPick(mode: Mode, from: CardHandoff): void;
+  onClose(returned?: {
+    key: string;
+    from: CardHandoff;
+    faceName: string | null;
+  }): void;
 }) {
   useOpenSound();
+  const present = useIsPresent();
+  const handoff = usePresenceData() as { id: number; key: string } | undefined;
+  const handed = handoff?.id === id ? handoff?.key : undefined;
+  const active = present && selected === undefined;
   const reduce = useReducedMotion() ?? false;
+  const group = useRef<HTMLDivElement>(null);
+  const close = () => {
+    // A dropped card lent its place to the chooser. Return one frame to the table
+    // as that original and let the other projections dissolve.
+    const cards = split ? modes.filter((m) => m.look.kind === "card") : [];
+    const returning =
+      cards.find(
+        (m) =>
+          m.look.kind === "card" &&
+          (m.look.object ?? object).name === object.name,
+      ) ?? cards[0];
+    const element =
+      returning &&
+      group.current?.querySelector<HTMLElement>(
+        `[data-mode="${returning.key}"] .ability-choice-lift`,
+      );
+    const stage = element?.closest<HTMLElement>(".stage");
+    if (element && stage && returning?.look.kind === "card") {
+      onClose({
+        key: returning.key,
+        from: stageBox(stage, element.getBoundingClientRect()),
+        faceName: (returning.look.object ?? object).name,
+      });
+    } else onClose();
+  };
   useEffect(() => {
+    if (!active) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
-      onClose();
+      close();
     };
     const onMenu = (e: MouseEvent) => {
       e.preventDefault();
-      onClose();
+      close();
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("contextmenu", onMenu);
@@ -89,53 +135,80 @@ export function ModeChooser({
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("contextmenu", onMenu);
     };
-  }, [onClose]);
+  }, [active, close]);
   const name = object.name ?? "";
   const xs = centers(modes.length);
   return (
     <>
-      <motion.div
-        className="menu-scrim chooser-scrim"
-        onPointerDown={onClose}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: reduce ? 0 : 0.18 }}
-      />
-      <div className="ability-chooser" role="group" aria-label={name}>
-        {modes.map((m, i) => (
-          <Frame
-            key={m.key}
-            mode={m}
-            object={object}
-            x={xs[i]!}
-            from={from}
-            split={split}
-            delay={i * 0.04}
-          />
-        ))}
-      </div>
-      {/* The X turns in beside the gear as the frames spring out. */}
-      <motion.button
-        type="button"
-        className="icon-button chooser-close"
-        aria-label="Close"
-        onClick={onClose}
-        initial={{ opacity: 0, scale: 0.6, rotate: -90 }}
-        animate={{ opacity: 1, scale: 1, rotate: 0 }}
-        transition={reduce ? { duration: 0 } : SPRING}
+      <AnimatePresence propagate>
+        {active && <ChooserScrim close={close} reduce={reduce} />}
+      </AnimatePresence>
+      <div
+        ref={group}
+        className="ability-chooser"
+        role="group"
+        aria-label={name}
+        inert={!active}
       >
-        <svg viewBox="0 0 24 24" role="img" aria-hidden>
-          <path d="M5.6 3.5 12 9.9l6.4-6.4 2.1 2.1-6.4 6.4 6.4 6.4-2.1 2.1-6.4-6.4-6.4 6.4-2.1-2.1 6.4-6.4-6.4-6.4z" />
-        </svg>
-      </motion.button>
-      <Dock className="chooser-dock">
-        <DockButtons>
-          <Button variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-        </DockButtons>
-      </Dock>
+        <AnimatePresence custom={handed} propagate>
+          {modes.map(
+            (m, i) =>
+              (active || (present && selected === m.key)) && (
+                <Frame
+                  key={m.key}
+                  mode={m}
+                  object={object}
+                  x={xs[i]!}
+                  from={from}
+                  split={split}
+                  selected={!active}
+                  onPick={onPick}
+                  delay={i * 0.04}
+                />
+              ),
+          )}
+        </AnimatePresence>
+      </div>
+      {active && (
+        <>
+          <motion.button
+            type="button"
+            className="icon-button chooser-close"
+            aria-label="Close"
+            onClick={close}
+            initial={{ opacity: 0, scale: 0.6, rotate: -90 }}
+            animate={{ opacity: 1, scale: 1, rotate: 0 }}
+            transition={reduce ? { duration: 0 } : SPRING}
+          >
+            <svg viewBox="0 0 24 24" role="img" aria-hidden>
+              <path d="M5.6 3.5 12 9.9l6.4-6.4 2.1 2.1-6.4 6.4 6.4 6.4-2.1 2.1-6.4-6.4-6.4 6.4-2.1-2.1 6.4-6.4-6.4-6.4z" />
+            </svg>
+          </motion.button>
+          <Dock className="chooser-dock">
+            <DockButtons>
+              <Button variant="secondary" onClick={close}>
+                Cancel
+              </Button>
+            </DockButtons>
+          </Dock>
+        </>
+      )}
     </>
+  );
+}
+
+function ChooserScrim({ close, reduce }: { close(): void; reduce: boolean }) {
+  const present = useIsPresent();
+  return (
+    <motion.div
+      className="menu-scrim chooser-scrim"
+      onPointerDown={present ? close : undefined}
+      style={{ pointerEvents: present ? undefined : "none" }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: reduce ? 0 : 0.18 }}
+    />
   );
 }
 
@@ -146,6 +219,8 @@ function Frame({
   x: centerX,
   from,
   split,
+  selected,
+  onPick,
   delay,
 }: {
   mode: Mode;
@@ -153,15 +228,20 @@ function Frame({
   x: number;
   from?: Origin;
   split?: boolean;
+  selected: boolean;
+  onPick(mode: Mode, from: CardHandoff): void;
   delay: number;
 }) {
   const reduce = useReducedMotion() ?? false;
+  const present = useIsPresent();
+  const handed = usePresenceData() === m.key;
   const out = from && !reduce;
   const x = useMotionValue(out ? from.x - centerX : 0);
   const y = useMotionValue(out ? from.y - MIDDLE : 0);
   const scale = useMotionValue(out ? from.width / WIDTH : 1);
   const opacity = useMotionValue(out && !split ? 0.4 : 1);
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (selected || !present) return;
     const how = { ...SPRING, delay };
     const runs = [
       animate(x, 0, how),
@@ -170,14 +250,16 @@ function Frame({
       animate(opacity, 1, how),
     ];
     return () => runs.forEach((r) => r.stop());
-  }, [x, y, scale, opacity, delay]);
+  }, [x, y, scale, opacity, delay, selected, present]);
   const height = WIDTH / CARD_ASPECT;
   return (
     <motion.button
       type="button"
-      className="ability-choice"
+      className={present && !selected ? "ability-choice" : "mode-departing"}
+      data-dissolving={!present && !handed && !reduce ? "" : undefined}
       data-mode={m.key}
       disabled={!m.onPick}
+      tabIndex={present && !selected ? undefined : -1}
       aria-label={m.name}
       style={{
         left: centerX - WIDTH / 2,
@@ -187,8 +269,20 @@ function Frame({
         y,
         scale,
         opacity,
+        visibility: !present && handed ? "hidden" : undefined,
       }}
-      onClick={() => m.onPick?.()}
+      exit={
+        handed ? { opacity: 0, transition: { duration: 0 } } : dissolve(reduce)
+      }
+      onClick={(e) => {
+        const button = e.currentTarget;
+        const stage = button.closest<HTMLElement>(".stage");
+        const lift = button.querySelector<HTMLElement>(".ability-choice-lift");
+        if (!stage || !lift) return;
+        const box = stageBox(stage, lift.getBoundingClientRect());
+        lift.style.transform = getComputedStyle(lift).transform;
+        onPick(m, box);
+      }}
     >
       <span className="ability-choice-lift">
         {m.look.kind === "card" ? (

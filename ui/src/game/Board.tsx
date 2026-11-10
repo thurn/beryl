@@ -57,6 +57,7 @@ import {
   type ArrowSpec,
 } from "../components/Stack";
 import type {
+  Candidate,
   CandidateIndex,
   DecisionView,
   Kind,
@@ -121,7 +122,8 @@ import { CastCaption, CastStep } from "./CastStep";
 import { ModeChooser, type Mode, type Origin } from "./ModeChooser";
 import { eventsHold } from "./playback";
 import { Risen } from "./Risen";
-import { useBorrowedCard } from "./choiceFlight";
+import { useBorrowedCard, type CardHandoff } from "./choiceFlight";
+import { dissolve } from "./dissolve";
 import { useStageWidth } from "./Stage";
 import { FloatPrompt, PromptRow } from "./FloatPrompt";
 import { useStandIns } from "./standIns";
@@ -282,14 +284,27 @@ export function Board({
   // The card whose uses are being chosen among (its casts, its activated abilities), and
   // where they sprang from.
   const [chooser, setChooser] = useState<{
-    slot: number;
+    id: number;
+    view: PlayerView;
+    object: ObjectView;
     modes: Mode[];
     from?: Origin;
     split?: boolean;
   }>();
-  const [modePlayed, setModePlayed] = useState<{
+  const chooserId = useRef(0);
+  const [pickedMode, setPickedMode] = useState<{
+    chooser: NonNullable<typeof chooser>;
+    key: string;
+    action: Candidate;
+    from: CardHandoff;
+    faceName?: string | null;
+  }>();
+  const [returnedMode, setReturnedMode] = useState<{
+    id: number;
+    key: string;
     slot: number;
-    view: PlayerView;
+    from: CardHandoff;
+    faceName?: string | null;
   }>();
   const [casting, setCasting] = useState<Casting>();
   // The spell cast last and the permanents its payment taps.
@@ -381,6 +396,60 @@ export function Board({
     !isCombat(decision.kind) &&
     !isOpening(decision.kind);
   const castingNow = deciding ? casting : undefined;
+  const pickedAction = pickedMode?.action;
+  const chosenAbility =
+    pickedAction?.kind === "activate"
+      ? view.stack.findIndex((item, i) => {
+          const prior = pickedMode!.chooser.view.stack[i];
+          return (
+            item.kind === "ability" &&
+            !item.triggered &&
+            item.controller === "you" &&
+            item.source === pickedAction.slot &&
+            item.ability === pickedAction.ability &&
+            item.granted === pickedAction.granted &&
+            (!prior || stackKey(i, item) !== stackKey(i, prior))
+          );
+        })
+      : -1;
+  const choosingCard =
+    pickedAction?.kind === "playLand" || pickedAction?.kind === "cast";
+  const acted = choosingCard ? objects.get(pickedAction.slot) : undefined;
+  const sourceSlot = pickedMode?.chooser.object.slot;
+  const chosenCard =
+    choosingCard && castingNow?.slot === sourceSlot
+      ? sourceSlot
+      : acted && acted.zone !== pickedMode?.chooser.object.zone
+        ? acted.slot
+        : undefined;
+  const handedMode =
+    returnedMode ??
+    (pickedMode && (chosenAbility >= 0 || chosenCard !== undefined)
+      ? { id: pickedMode.chooser.id, key: pickedMode.key }
+      : undefined);
+  const handedRef = useRef<typeof handedMode>(undefined);
+  if (handedMode) handedRef.current = handedMode;
+  const pendingMode = waiting && !handedMode ? pickedMode : undefined;
+  const activeChooser =
+    deciding && chooser?.view === view ? chooser : undefined;
+  const shownChooser = activeChooser ?? pendingMode?.chooser;
+  const modeHandoff =
+    returnedMode ??
+    (chosenCard !== undefined && pickedMode
+      ? {
+          slot: chosenCard,
+          from: pickedMode.from,
+          faceName: pickedMode.faceName,
+        }
+      : undefined);
+  useEffect(() => {
+    // Hold the selected frame while the engine accepts the action. A rejected action
+    // releases it to the same exit as Cancel.
+    if (pickedMode && (!waiting || handedMode)) setPickedMode(undefined);
+  }, [pickedMode, waiting, handedMode?.id]);
+  useEffect(() => {
+    if (returnedMode) setReturnedMode(undefined);
+  }, [returnedMode]);
   // The cast under way, which the engine is asking about, can still be taken back: on the
   // table, or from it while a screen asking about the cast is put aside to see the table
   // (inert, but not dimmed).
@@ -512,6 +581,7 @@ export function Board({
     tables.current.laid = laid;
   }
   const previousTable = tables.current.before;
+  const sourcePlaces = useRef(new Map<number, Placement>());
   // Mana flowing from its sources into what it paid for, as the game plays on.
   const motes = useMemo(
     () =>
@@ -529,6 +599,11 @@ export function Board({
     }
     return out;
   }, [laid, hold, picked]);
+  useEffect(() => {
+    for (const [slot, place] of placements) {
+      if (place.opacity > 0) sourcePlaces.current.set(slot, place);
+    }
+  }, [placements]);
   // The hovered card, unless it has since gone where it is not shown alone.
   const hoveredPlace =
     hovered === undefined ? undefined : placements.get(hovered);
@@ -621,23 +696,22 @@ export function Board({
     at?: Point,
   ) => {
     const o = objects.get(slot);
-    const label = o?.types.includes("planeswalker")
+    if (!o) return;
+    const label = o.types.includes("planeswalker")
       ? "Loyalty Ability"
       : "Activated Ability";
     setMenu(undefined);
     setChooser({
-      slot,
+      id: ++chooserId.current,
+      view,
+      object: o,
       from: originOf(slot, at),
       modes: choices.map((c) => ({
         key: `ability-${c.at}`,
         name: c.text,
+        action: c.act?.option,
         look: { kind: "ability", label, text: c.text },
-        onPick:
-          c.act &&
-          (() => {
-            setChooser(undefined);
-            pickAct(slot, c.act!);
-          }),
+        onPick: c.act && (() => pickAct(slot, c.act!)),
       })),
     });
   };
@@ -650,7 +724,8 @@ export function Board({
     split = false,
   ) => {
     const o = objects.get(slot);
-    const name = o?.name ?? "";
+    if (!o) return;
+    const name = o.name ?? "";
     // A cast or a land played shows the face it is by: a modal card's back, a land's face.
     const faceOf = (act: Act) => {
       if (act.option.kind === "playLand") return pointedObject(o, act);
@@ -658,34 +733,33 @@ export function Board({
         act.option.kind === "cast" && act.option.face > 0
           ? cardEntry(name)?.faces[act.option.face]?.name
           : undefined;
-      return face && o ? { ...o, name: face } : o;
+      return face ? { ...o, name: face } : o;
     };
     setMenu(undefined);
     setChooser({
-      slot,
+      id: ++chooserId.current,
+      view,
+      object: o,
       from,
       split,
       modes: choices.map(({ act, text }) => {
-        const done = () => setChooser(undefined);
         if (act.option.kind === "cast") {
           return {
             key: `act-${act.index}`,
             name: act.label,
+            action: act.option,
             look: { kind: "card", object: faceOf(act) },
             caption: <CastCaption act={act} name={name} />,
             onPick: () => {
-              done();
               if (stepsIn([act])) setUp(slot, [act]);
-              else {
-                if (split) setModePlayed({ slot, view });
-                cast(firstChoice(act));
-              }
+              else cast(firstChoice(act));
             },
           };
         }
         return {
           key: `act-${act.index}`,
           name: act.label,
+          action: act.option,
           look:
             act.option.kind === "playLand"
               ? { kind: "card", object: faceOf(act) }
@@ -695,11 +769,7 @@ export function Board({
                   text: text ?? act.label,
                 },
           caption: act.option.kind === "playLand" ? "Play" : undefined,
-          onPick: () => {
-            done();
-            if (split) setModePlayed({ slot, view });
-            pick(act.index, act.then);
-          },
+          onPick: () => pick(act.index, act.then),
         };
       }),
     });
@@ -749,10 +819,10 @@ export function Board({
       });
     }
   }
-  const splitting = chooser?.split
-    ? chooser.slot
-    : waiting && modePlayed?.view === view
-      ? modePlayed.slot
+  const splitting = activeChooser?.split
+    ? activeChooser.object.slot
+    : pendingMode && choosingCard
+      ? pendingMode.chooser.object.slot
       : undefined;
   if (splitting !== undefined) {
     states.set(splitting, { ...states.get(splitting), splitting: true });
@@ -1370,7 +1440,7 @@ export function Board({
         <GameLog log={log} folded open={logOpen} onToggle={toggleLog} />
         <TurnBanner view={view} live={live} />
 
-        {/* An ability leaving the stack fades rather than blinking out. */}
+        {/* Stack abilities keep their frame through their exit. */}
         <AnimatePresence>
           {view.stack.map(
             (item, i) =>
@@ -1385,9 +1455,16 @@ export function Board({
                   }
                   from={
                     live
-                      ? abilityPlacement(view, item, placements, previousTable)
+                      ? abilityPlacement(
+                          view,
+                          item,
+                          placements,
+                          previousTable,
+                          sourcePlaces.current,
+                        )
                       : undefined
                   }
+                  chosen={i === chosenAbility ? pickedMode?.from : undefined}
                   onPoint={(on) => {
                     const key = stackKey(i, item);
                     setPointedItem((k) =>
@@ -1405,7 +1482,13 @@ export function Board({
           objects={drawn}
           keys={standIns.keys}
           placements={placements}
-          origins={tokenOrigins(views.current.before, view, previousTable)}
+          origins={tokenOrigins(
+            views.current.before,
+            view,
+            previousTable,
+            placements,
+          )}
+          modeHandoff={modeHandoff}
           hovered={hovered}
           states={states}
           onClick={onClick}
@@ -1614,15 +1697,43 @@ export function Board({
           />
         )}
 
-        {chooser && objects.get(chooser.slot) && deciding && (
-          <ModeChooser
-            object={objects.get(chooser.slot)!}
-            modes={chooser.modes}
-            from={chooser.from}
-            split={chooser.split}
-            onClose={() => setChooser(undefined)}
-          />
-        )}
+        <AnimatePresence custom={handedRef.current}>
+          {shownChooser && (
+            <ModeChooser
+              key={shownChooser.id}
+              id={shownChooser.id}
+              object={shownChooser.object}
+              modes={shownChooser.modes}
+              from={shownChooser.from}
+              split={shownChooser.split}
+              selected={activeChooser ? undefined : pendingMode?.key}
+              onPick={(mode, from) => {
+                if (!mode.action) return;
+                setChooser(undefined);
+                setPickedMode({
+                  chooser: shownChooser,
+                  key: mode.key,
+                  action: mode.action,
+                  from,
+                  faceName:
+                    mode.look.kind === "card"
+                      ? (mode.look.object ?? shownChooser.object).name
+                      : undefined,
+                });
+                mode.onPick?.();
+              }}
+              onClose={(returned) => {
+                setChooser(undefined);
+                if (returned)
+                  setReturnedMode({
+                    id: shownChooser.id,
+                    slot: shownChooser.object.slot,
+                    ...returned,
+                  });
+              }}
+            />
+          )}
+        </AnimatePresence>
 
         {/* The card the pointer is on or, while its menu points at an ability, the card that
             ability's paragraph lit. */}
@@ -2016,6 +2127,7 @@ function AbilityOnStack({
   item,
   source,
   from,
+  chosen,
   onPoint,
 }: {
   index: number;
@@ -2024,6 +2136,7 @@ function AbilityOnStack({
   source?: ObjectView;
   /** Where its source is drawn: it springs out of it onto the stack. */
   from?: Placement;
+  chosen?: CardHandoff;
   /** The pointer coming onto it, or leaving: its source's arrow shows meanwhile. */
   onPoint(on: boolean): void;
 }) {
@@ -2032,32 +2145,42 @@ function AbilityOnStack({
   const place = stackPlace(index, count);
   const reduce = useReducedMotion() ?? false;
   const [lifting, setLifting] = useState(
-    () => from !== undefined && item.triggered && !reduce,
+    () => from !== undefined && item.triggered && !reduce && !chosen,
   );
   // Out of its source it comes whole, the size of the card it lifts off, so that the eye
   // follows it from there; with no source drawn, it fades in where it stays.
-  const start = from
+  const start = chosen
     ? {
         opacity: 1,
-        x: from.x,
-        y: from.y,
-        scale: (from.width * from.scale) / place.width,
-        rotate: from.rotate,
+        x: chosen.x,
+        y: chosen.y,
+        scale: chosen.width / place.width,
+        rotate: 0,
       }
-    : { opacity: 0, x: place.x, y: place.y, scale: 0.8 };
+    : from
+      ? {
+          opacity: 1,
+          x: from.x,
+          y: from.y,
+          scale: (from.width * from.scale) / place.width,
+          rotate: from.rotate,
+        }
+      : { opacity: 0, x: place.x, y: place.y, scale: 0.8 };
   return (
     <motion.div
       className="hud stack-ability"
       // Which item it is, by place and the ability's own name, for a motion audit: two
       // items sharing a source's face (an emblem's and its planeswalker's) stay apart.
       data-stack-key={`${index}:${item.name}`}
+      data-dissolving={!present && !reduce ? "" : undefined}
       style={{
         left: 0,
         top: 0,
-        zIndex: STACK_Z + index,
+        zIndex: present ? STACK_Z + index : STACK_Z - 1,
+        transformOrigin: "0 0",
         pointerEvents: present ? undefined : "none",
       }}
-      initial={start}
+      initial={reduce ? false : start}
       animate={{
         opacity: 1,
         scale: lifting && from ? [null, Math.min(1, start.scale * 1.12), 1] : 1,
@@ -2069,14 +2192,7 @@ function AbilityOnStack({
       onAnimationComplete={() => setLifting(false)}
       onPointerEnter={() => onPoint(true)}
       onPointerLeave={() => onPoint(false)}
-      // Leaving, it drops beneath whatever takes its place on the stack, which would
-      // otherwise arrive hidden under it.
-      exit={{
-        opacity: 0,
-        scale: 0.9,
-        zIndex: STACK_Z - 1,
-        transition: { duration: 0.35, zIndex: { duration: 0 } },
-      }}
+      exit={dissolve(reduce)}
     >
       <StackItem
         id={present ? stackId(index) : undefined}
@@ -2137,16 +2253,22 @@ function abilityPlacement(
   view: PlayerView,
   item: Extract<StackItemView, { kind: "ability" }>,
   placements: Layout,
-  previous?: Layout,
+  previous: Layout | undefined,
+  last: Layout,
 ): Placement | undefined {
   const slot = abilityOrigin(view, item);
   const from = previous?.get(slot);
   const current = placements.get(slot);
-  return from?.zone === "battlefield" || (from && item.source === null)
+  return from?.opacity &&
+    (from.zone === "battlefield" ||
+      from.zone === "hand" ||
+      item.source === null)
     ? from
     : current?.opacity
       ? current
-      : undefined;
+      : from?.opacity
+        ? from
+        : last.get(slot);
 }
 
 /** The element id of the ability on the stack at `index`. */
@@ -2201,7 +2323,8 @@ const lifeId = (side: Side) => `${side}-life-orb`;
 function tokenOrigins(
   before: PlayerView | undefined,
   view: PlayerView,
-  previous?: Layout,
+  previous: Layout | undefined,
+  current: Layout,
 ): Map<number, Box> | undefined {
   if (!before) return undefined;
   // The tokens made, and the emblems: those past the ones each player had.
@@ -2217,7 +2340,22 @@ function tokenOrigins(
   ];
   if (made.length === 0) return undefined;
   const top = before.stack.at(-1);
-  if (!top) return undefined;
+  if (!top) {
+    // If entry and creation arrive in one beat without a resolving item, the entering
+    // permanent is the only visible source available. Ambiguous batches grow in place.
+    const arrivals = view.events.filter(
+      (e) =>
+        e.kind === "zoneChange" &&
+        e.to === "battlefield" &&
+        e.from !== "nowhere",
+    );
+    const arrival = arrivals.length === 1 ? arrivals[0] : undefined;
+    const source =
+      arrival?.kind === "zoneChange" ? current.get(arrival.slot) : undefined;
+    return source?.opacity
+      ? new Map(made.map((slot) => [slot, footprint(source)]))
+      : undefined;
+  }
   const from = top.kind === "spell" ? previous?.get(top.slot) : undefined;
   if (from?.opacity)
     return new Map(made.map((slot) => [slot, footprint(from)]));

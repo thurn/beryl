@@ -19,6 +19,7 @@ import {
   animate,
   AnimatePresence,
   motion,
+  useIsPresent,
   useMotionValue,
   useReducedMotion,
   type MotionValue,
@@ -42,12 +43,14 @@ import { StageScale } from "./Stage";
 import { faceDownFace, marksOf, useFace } from "./faces";
 import {
   RAISE,
+  isEmblem,
   type Box,
   type Layout,
   type Look,
   type Placement,
 } from "./layout";
 import { useCardPhysics } from "./physics";
+import { dissolve } from "./dissolve";
 
 /** Where on the stage a pointer is, in stage pixels. */
 export interface Point {
@@ -103,6 +106,7 @@ export interface CardLayerProps {
   /** Where a card new to the table starts: a token flies out of the spell or permanent that made it,
    * rather than only fading in where it lands. */
   origins?: Map<number, Box>;
+  modeHandoff?: { slot: number; from: CardHandoff; faceName?: string | null };
   /** The card the pointer is over: a hand card rises out of the fan (RAISE), drawn over the
    * rest of the hand while its element keeps its place in the fan, so that nothing else moves
    * and the pointer keeps the card. */
@@ -205,8 +209,25 @@ export function CardLayer(props: CardLayerProps) {
     },
     onLift: (slot) => latest.current.onLift?.(slot),
   }));
-  // The board builds each card's state afresh on every render: one equal to the last keeps
-  // the last's identity.
+  // The engine can recycle a token slot while the old token is still dissolving.
+  const tokens = useRef({
+    epoch: props.epoch,
+    keys: new Map<number, number>(),
+    next: 0,
+  });
+  const identities = tokens.current;
+  if (identities.epoch !== props.epoch) {
+    identities.epoch = props.epoch;
+    for (const e of props.events ?? []) {
+      if (
+        e.kind === "zoneChange" &&
+        e.from === "nowhere" &&
+        e.reason === "created"
+      ) {
+        identities.keys.set(e.slot, ++identities.next);
+      }
+    }
+  }
   const struck = new Set(
     (props.events ?? []).flatMap((e) =>
       e.kind === "zoneChange" &&
@@ -217,6 +238,11 @@ export function CardLayer(props: CardLayerProps) {
       e.reason !== "play"
         ? [e.slot]
         : [],
+    ),
+  );
+  const shuffled = new Set(
+    (props.events ?? []).flatMap((e) =>
+      e.kind === "libraryShuffled" ? [e.player] : [],
     ),
   );
   const departures = (props.events ?? []).flatMap((e) => {
@@ -230,6 +256,8 @@ export function CardLayer(props: CardLayerProps) {
     return [];
   });
   const departureOrder = new Map(departures.map((slot, i) => [slot, i]));
+  // The board builds each card's state afresh on every render: one equal to the last keeps
+  // the last's identity.
   const states = useRef(new Map<number, CardState>());
   const stateOf = (slot: number) => {
     const given = props.states.get(slot) ?? NO_STATE;
@@ -247,8 +275,13 @@ export function CardLayer(props: CardLayerProps) {
           return (
             place && (
               <CardElement
-                key={props.keys?.get(o.slot) ?? o.slot}
+                key={
+                  o.token
+                    ? `token:${o.slot}:${identities.keys.get(o.slot) ?? 0}`
+                    : (props.keys?.get(o.slot) ?? o.slot)
+                }
                 object={o}
+                shuffling={o.zone === "library" && shuffled.has(o.owner)}
                 place={place}
                 state={stateOf(o.slot)}
                 raised={props.hovered === o.slot}
@@ -270,6 +303,11 @@ export function CardLayer(props: CardLayerProps) {
                 callbacks={callbacks}
                 appearing={shown.current}
                 origin={props.origins?.get(o.slot)}
+                modeHandoff={
+                  props.modeHandoff?.slot === o.slot
+                    ? props.modeHandoff
+                    : undefined
+                }
               />
             )
           );
@@ -316,6 +354,7 @@ type Held =
 
 const CardElement = memo(function CardElement({
   object,
+  shuffling,
   place,
   state,
   raised,
@@ -326,8 +365,10 @@ const CardElement = memo(function CardElement({
   callbacks: layer,
   appearing,
   origin,
+  modeHandoff,
 }: {
   object: ObjectView;
+  shuffling: boolean;
   place: Placement;
   state: CardState;
   raised: boolean;
@@ -338,8 +379,11 @@ const CardElement = memo(function CardElement({
   callbacks: Callbacks;
   appearing: boolean;
   origin?: Box;
+  modeHandoff?: CardLayerProps["modeHandoff"];
 }) {
   const reduce = useReducedMotion() ?? false;
+  const present = useIsPresent();
+  const temporary = object.token || isEmblem(object.slot);
   const stageScale = useContext(StageScale);
   const grow = appearing && !reduce;
   // A card new to the table grows in where it lands, or flies there from where it came from.
@@ -412,6 +456,7 @@ const CardElement = memo(function CardElement({
   const [handoff, setHandoff] = useState(0);
   const [travelling, setTravelling] = useState(false);
   const previousZone = useRef(object.zone);
+  const lastModeHandoff = useRef<CardHandoff>(undefined);
   const fromLibrary = useRef(place.look === "hidden");
   useLayoutEffect(() => {
     const table = element.current;
@@ -433,12 +478,17 @@ const CardElement = memo(function CardElement({
       if (from) start(from);
       previousZone.current = object.zone;
     }
+    if (modeHandoff && lastModeHandoff.current !== modeHandoff.from) {
+      lastModeHandoff.current = modeHandoff.from;
+      start(modeHandoff.from);
+    }
     const onReturn = (event: Event) =>
       start((event as CustomEvent<CardHandoff>).detail);
     table.addEventListener(CARD_RETURN, onReturn);
     return () => table.removeEventListener(CARD_RETURN, onReturn);
   }, [
     epoch,
+    modeHandoff,
     object.slot,
     object.zone,
     place.width,
@@ -502,10 +552,17 @@ const CardElement = memo(function CardElement({
   // passes through (Ghost), while its element keeps the fan's order: each card's visible part
   // in the fan is what the pointer hits, the raised card included, and above the fan the raised
   // card's top, which its element reaches up to.
-  const ghosted = hand && raised && !holding;
+  const ghosted = hand && raised && !holding && !travelling;
   const parked = !travelling && !carried && !emerging;
   const rim = parked && place.rim;
   const concealed = parked && place.look === "hidden";
+  const { turn, shown } = useCardTurn(
+    object,
+    place.back === true,
+    // Anonymize the packet before it moves so a previously known card cannot be tracked.
+    reduce || shuffling,
+    modeHandoff,
+  );
   // Over the felt, the card is a physical thing (physics.ts): held up while dragged, falling
   // where it is dropped, carried while it glides.
   const body = useRef<HTMLDivElement>(null);
@@ -693,8 +750,10 @@ const CardElement = memo(function CardElement({
       <motion.div
         ref={element}
         className={classes}
-        data-slot={object.slot}
+        data-slot={present || !temporary ? object.slot : undefined}
+        data-ceasing-slot={!present && temporary ? object.slot : undefined}
         data-zone={object.zone}
+        data-dissolving={!present && temporary && !reduce ? "" : undefined}
         data-card={place.back ? undefined : (object.name ?? undefined)}
         data-library-pile={parked ? place.librarySide : undefined}
         style={{
@@ -702,7 +761,7 @@ const CardElement = memo(function CardElement({
           visibility: state.splitting ? "hidden" : undefined,
           // A library's cards, drawn only while they travel, never take the pointer.
           pointerEvents:
-            place.look === "hidden" || place.look === "handling"
+            !present || place.look === "hidden" || place.look === "handling"
               ? "none"
               : undefined,
           // A card travelling into the hand keeps its place in the fan's order all the way,
@@ -717,7 +776,11 @@ const CardElement = memo(function CardElement({
                 : place.z,
         }}
         exit={
-          reduce ? undefined : { opacity: 0, transition: { duration: 0.3 } }
+          temporary
+            ? dissolve(reduce)
+            : reduce
+              ? undefined
+              : { opacity: 0, transition: { duration: 0.3 } }
         }
         onPointerDown={untouchable ? undefined : onPointerDown}
         onPointerMove={onPointerMove}
@@ -745,11 +808,21 @@ const CardElement = memo(function CardElement({
           >
             <motion.div style={{ x: shake, filter: flash }}>
               <div className="card-body" ref={body}>
-                {place.back ? (
-                  <CardBack width={width} />
-                ) : (
-                  <FlippingLook object={object} place={place} state={state} />
-                )}
+                <motion.div
+                  className="card-flip"
+                  style={{ rotateY: turn, transformPerspective: 800 }}
+                >
+                  {shown.back ? (
+                    <CardBack width={width} />
+                  ) : (
+                    <Look
+                      object={shown.object}
+                      place={place}
+                      state={state}
+                      ghost={!present}
+                    />
+                  )}
+                </motion.div>
                 <span className="card-shade" ref={shade} />
               </div>
               <span
@@ -778,7 +851,13 @@ const CardElement = memo(function CardElement({
           style={{ ...frame, zIndex: RAISED_Z }}
         >
           <motion.div style={raise}>
-            <Look object={object} place={place} state={state} ghost />
+            <motion.div style={{ rotateY: turn, transformPerspective: 800 }}>
+              {shown.back ? (
+                <CardBack width={width} />
+              ) : (
+                <Look object={shown.object} place={place} state={state} ghost />
+              )}
+            </motion.div>
           </motion.div>
         </motion.div>
       )}
@@ -818,44 +897,71 @@ function under(e: ReactPointerEvent, self: HTMLElement): Onto | undefined {
   return undefined;
 }
 
-/** A facing change turns the one card over, switching its face only while edge-on. */
-function FlippingLook(props: {
-  object: ObjectView;
-  place: Placement;
-  state: CardState;
-}) {
-  const { object } = props;
-  const reduce = useReducedMotion() ?? false;
-  const [facing, setFacing] = useState(object.facing);
+/** Turn the same card as its visible surface changes. Use only the previously projected
+ * face until the turn is edge-on, even if the newest view already knows more. */
+function useCardTurn(
+  object: ObjectView,
+  back: boolean,
+  reduce: boolean,
+  handoff?: CardLayerProps["modeHandoff"],
+) {
+  const face = cardSurface(object, back);
+  const [facing, setFacing] = useState(face);
+  const previous = useRef({ object, back });
+  const last = useRef<CardHandoff>(undefined);
+  const from =
+    handoff && handoff.from !== last.current && handoff.faceName !== undefined
+      ? { ...object, name: handoff.faceName, facing: "up" as const }
+      : undefined;
+  const turning = (from ? cardSurface(from, false) : facing) !== face;
+  const shown =
+    !turning || reduce
+      ? { object, back }
+      : from
+        ? { object: from, back: false }
+        : previous.current;
+  const stamp = handoff?.from ?? last.current;
   const turn = useMotionValue(0);
   useLayoutEffect(() => {
-    if (facing === object.facing) return;
-    if (reduce || object.zone !== "battlefield") {
-      setFacing(object.facing);
+    previous.current = shown;
+  }, [shown]);
+  useLayoutEffect(() => {
+    if (handoff) last.current = handoff.from;
+    if (reduce || (from && !turning)) {
       turn.jump(0);
+      setFacing(face);
       return;
     }
+    if (from) setFacing(cardSurface(from, false));
+    if (!turning && turn.get() === 0) return;
     let cancelled = false;
-    const first = animate(turn, 90, { duration: 0.18, ease: "easeIn" });
-    void first.then(() => {
-      if (cancelled) return;
-      turn.jump(-90);
-      setFacing(object.facing);
-      void animate(turn, 0, { duration: 0.18, ease: "easeOut" });
+    const first = animate(turn, turning ? 90 : 0, {
+      duration: turning ? 0.16 : 0.17,
+      ease: turning ? "easeIn" : "easeOut",
     });
+    let second: ReturnType<typeof animate> | undefined;
+    if (turning) {
+      void first.then(() => {
+        if (cancelled) return;
+        turn.jump(-90);
+        setFacing(face);
+        second = animate(turn, 0, { duration: 0.17, ease: "easeOut" });
+      });
+    }
     return () => {
       cancelled = true;
       first.stop();
+      second?.stop();
     };
-  }, [object.facing, object.zone, reduce, turn]);
-  return (
-    <motion.div
-      className="card-flip"
-      style={{ rotateY: turn, transformPerspective: 800 }}
-    >
-      <Look {...props} object={{ ...object, facing }} />
-    </motion.div>
-  );
+    // Updating facing midway through a turn must not restart it.
+  }, [face, reduce, turn, stamp]);
+  return { turn, shown };
+}
+
+function cardSurface(object: ObjectView, back: boolean) {
+  if (back) return "back";
+  if (object.facing === "down") return "down";
+  return object.name === null ? "back" : `face:${object.name}`;
 }
 
 /** The card itself, as its placement draws it. */

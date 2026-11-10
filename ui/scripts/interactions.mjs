@@ -3007,8 +3007,36 @@ await check(
                     .getByRole("button", { name: "Cancel" })
                     .click(),
         ]) {
+            await frames(page).evaluateAll((current) => {
+                const stage = current[0].closest(".stage");
+                delete stage.dataset.modeExit;
+                const observer = new MutationObserver(() => {
+                    if (
+                        !current.every((el) =>
+                            el.hasAttribute("data-dissolving"),
+                        )
+                    )
+                        return;
+                    stage.dataset.modeExit = JSON.stringify(
+                        current.map(
+                            (el) => getComputedStyle(el).maskImage !== "none",
+                        ),
+                    );
+                    observer.disconnect();
+                });
+                observer.observe(stage, {
+                    subtree: true,
+                    attributes: true,
+                    attributeFilter: ["data-dissolving"],
+                });
+            });
             await close();
             assert.equal(await frames(page).count(), 0, "closed");
+            assert.equal(
+                await page.locator(".stage").getAttribute("data-mode-exit"),
+                "[true,true]",
+                "the two frames just closed break apart",
+            );
             assert.deepEqual(await chosen(page), [], "nothing cast");
             await page.click(subtlety);
             await frames(page).first().waitFor();
@@ -5008,6 +5036,219 @@ if (wanted(abilityTokenFlight)) {
             );
         },
         { ...run, ready: "#stack-0" },
+    );
+}
+
+const modeHandoff = "a picked loyalty option carries its frame to the stack";
+if (wanted(modeHandoff)) {
+    const base = (await load("walker-low")).at(-1);
+    const walker = base.objects.find((o) => o.name === "Teferi, Time Raveler");
+    const { option } = base.status.decision.candidates.find(
+        (c) => c.option.kind === "activate" && c.option.slot === walker.slot,
+    );
+    const ability = {
+        kind: "ability",
+        source: walker.slot,
+        ability: option.ability,
+        granted: option.granted,
+        name: walker.name,
+        triggered: false,
+        nth: 0,
+        controller: "you",
+        targets: [],
+        x: 0,
+    };
+    const run = await motionFixture("loyalty-mode-flight", [
+        { ...base, events: [] },
+        { ...base, stack: [...base.stack, ability], events: [] },
+    ]);
+    await check(
+        modeHandoff,
+        async (page) => {
+            await page.click(slotOf(walker.slot));
+            const frame = page.locator(".ability-choice:enabled");
+            await page.clock.runFor(600);
+            await frame.evaluate((button) => {
+                const stage = button.closest(".stage");
+                button.addEventListener(
+                    "click",
+                    () => {
+                        const from = button
+                            .querySelector(".ability-choice-lift")
+                            .getBoundingClientRect();
+                        const observer = new MutationObserver(() => {
+                            const stack = stage.querySelector(".stack-ability");
+                            if (!stack) return;
+                            observer.disconnect();
+                            const to = stack.getBoundingClientRect();
+                            stage.dataset.modeFlight = JSON.stringify({
+                                distance: Math.hypot(
+                                    from.left - to.left,
+                                    from.top - to.top,
+                                ),
+                                scale: to.width / from.width,
+                                oldVisible:
+                                    button.isConnected &&
+                                    getComputedStyle(button).visibility !==
+                                        "hidden",
+                            });
+                        });
+                        observer.observe(stage, {
+                            subtree: true,
+                            childList: true,
+                        });
+                    },
+                    { capture: true, once: true },
+                );
+            });
+            await frame.click();
+            await until(page, "[data-mode-flight]", 10);
+            const result = JSON.parse(
+                await page.locator(".stage").getAttribute("data-mode-flight"),
+            );
+            assert.ok(result.distance < 12, JSON.stringify(result));
+            assert.ok(
+                Math.abs(result.scale - 1) < 0.08,
+                JSON.stringify(result),
+            );
+            assert.equal(result.oldVisible, false);
+            await page.clock.runFor(550);
+            assert.equal(await page.locator(".stack-ability").count(), 1);
+        },
+        { ...run, ready: slotOf(walker.slot) },
+    );
+}
+
+const tokenDissolve =
+    "a ceasing token breaks apart while its spell stays whole";
+if (wanted(tokenDissolve)) {
+    const base = (await load("arrow-spell")).at(-1);
+    const token = (await load("tokens")).at(-1).objects.find((o) => o.token);
+    const before = {
+        ...base,
+        objects: [...base.objects, token],
+        battlefield: [...base.battlefield, token.slot],
+        events: [],
+    };
+    const after = {
+        ...base,
+        events: [
+            {
+                kind: "zoneChange",
+                slot: token.slot,
+                from: "battlefield",
+                to: "graveyard",
+                reason: "destroy",
+            },
+        ],
+    };
+    const run = await motionFixture("token-dissolve", [before, after]);
+    for (const reducedMotion of ["no-preference", "reduce"]) {
+        await check(
+            `${tokenDissolve} (${reducedMotion})`,
+            async (page) => {
+                const dying = `[data-ceasing-slot="${token.slot}"]`;
+                await page
+                    .getByRole("button", { name: "Resolve", exact: true })
+                    .click();
+                await until(page, dying, 10);
+                const card = page.locator(dying);
+                assert.equal(
+                    (await card.getAttribute("data-dissolving")) !== null,
+                    reducedMotion === "no-preference",
+                );
+                if (reducedMotion === "no-preference") {
+                    const mask = () =>
+                        card.evaluate(
+                            (el) => getComputedStyle(el).maskPosition,
+                        );
+                    const initial = await mask();
+                    await page.clock.runFor(120);
+                    assert.notEqual(
+                        await mask(),
+                        initial,
+                        "the mask advances over the token",
+                    );
+                    assert.equal(
+                        await card.evaluate(
+                            (el) => getComputedStyle(el).opacity,
+                        ),
+                        "1",
+                    );
+                }
+                assert.equal(
+                    await page
+                        .locator(".card-el-stack[data-dissolving]")
+                        .count(),
+                    0,
+                );
+                await page.clock.runFor(400);
+                assert.equal(await card.count(), 0, "the token has ceased");
+            },
+            { ...run, ready: slotOf(token.slot), reducedMotion },
+        );
+    }
+}
+
+const revealFlip = "a hidden opponent card turns before showing its cast face";
+if (wanted(revealFlip)) {
+    const base = (await load("arrow-spell")).at(-1);
+    const spell = base.stack.at(-1);
+    const slot = Math.max(...base.objects.map((o) => o.slot)) + 1;
+    const card = {
+        ...base.objects.find((o) => o.slot === spell.slot),
+        slot,
+        owner: "opponent",
+        controller: "opponent",
+    };
+    const before = {
+        ...base,
+        objects: [...base.objects, { ...card, name: null, zone: "hand" }],
+        events: [],
+    };
+    const after = {
+        ...base,
+        objects: [...base.objects, { ...card, zone: "stack" }],
+        stack: [...base.stack, { ...spell, slot }],
+        events: [],
+    };
+    const run = await motionFixture("cast-reveal", [before, after]);
+    await check(
+        revealFlip,
+        async (page) => {
+            const card = page.locator(slotOf(slot));
+            assert.equal(await card.locator(".card-back").count(), 1);
+            const sameCard = await card.elementHandle();
+            await page
+                .getByRole("button", { name: "Resolve", exact: true })
+                .click();
+            await until(page, `${slotOf(slot)}[data-zone="stack"]`, 10);
+            await page.clock.runFor(75);
+            assert.equal(
+                await card.locator(".card-back").count(),
+                1,
+                "the hidden face stays covered during the first half",
+            );
+            assert.ok(
+                await card
+                    .locator(".card-flip")
+                    .evaluate(
+                        (el) =>
+                            new DOMMatrix(getComputedStyle(el).transform).m11 <
+                            0.98,
+                    ),
+                "the card is turning",
+            );
+            await page.clock.runFor(500);
+            assert.equal(await card.locator(".card-back").count(), 0);
+            assert.equal(await card.locator(".card").count(), 1);
+            assert.ok(
+                await sameCard.evaluate(
+                    (el) => el.isConnected && el.dataset.zone === "stack",
+                ),
+            );
+        },
+        { ...run, ready: slotOf(slot) },
     );
 }
 

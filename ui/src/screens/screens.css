@@ -1417,6 +1417,17 @@
     0 0 6px 2px rgb(186 120 255 / 45%),
     var(--card-shadow, var(--shadow-card));
 }
+/* The over-height mask sweeps an irregular, perforated edge across an exiting frame. */
+[data-dissolving] {
+  mask-image: url("../design/dissolve-mask.svg");
+  mask-size: 100% 240%;
+  mask-position: 50% 100%;
+  mask-repeat: no-repeat;
+  pointer-events: none;
+}
+.mode-departing {
+  pointer-events: none;
+}
 .stack-ability {
   transform-origin: 0 0;
 }
@@ -2588,7 +2599,8 @@
   z-index: 1200;
   pointer-events: none;
 }
-.ability-choice {
+.ability-choice,
+.mode-departing {
   position: absolute;
   padding: 0;
   border: 0;
@@ -2616,7 +2628,7 @@
 .ability-choice:disabled {
   cursor: default;
 }
-.ability-choice:disabled .ability-choice-lift {
+:is(.ability-choice, .mode-departing):disabled .ability-choice-lift {
   filter: grayscale(0.85) brightness(0.55);
 }
 /* The use's cost or name, on a dark plaque across the frame's foot. */
