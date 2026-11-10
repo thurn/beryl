@@ -453,11 +453,16 @@ await check(
         );
         const targets = after.status.decision.candidates;
         const target = targets.findIndex(
-            (c) =>
-                c.option.kind === "object" &&
-                after.objects.find((o) => o.slot === c.option.slot)?.zone ===
-                    "battlefield",
+            ({ option }) =>
+                option.kind === "object" &&
+                after.objects.some(
+                    (o) =>
+                        o.slot === option.slot &&
+                        o.zone === "battlefield" &&
+                        o.controller === "opponent",
+                ),
         );
+        assert.ok(target >= 0, "the spell can target an opposing permanent");
         const targetCard = `[data-slot="${targets[target].option.slot}"]`;
         assert.ok(
             await page.$(`${targetCard} .card-target`),
