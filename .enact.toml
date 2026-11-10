@@ -18,3 +18,32 @@ remove = 'f="$ENACT_WORKTREE_PATH/tools/src/beryl_tools/warm.py"; [ -f "$f" ] ||
 # Beads labeled tier:light (mechanical work) run on a cheaper model.
 [tiers.light.claude]
 model = "sonnet"
+
+# Codex Enact sessions default to Sol High for every spawned role.
+[roles.executor.codex]
+model = "gpt-6.1-sol"
+effort = "high"
+
+[roles.warden.codex]
+model = "gpt-6.1-sol"
+effort = "high"
+
+[roles.steward.codex]
+model = "gpt-6.1-sol"
+effort = "high"
+
+[roles.mason.codex]
+model = "gpt-6.1-sol"
+effort = "high"
+
+[roles.sage.codex]
+model = "gpt-6.1-sol"
+effort = "high"
+
+[roles.archivist.codex]
+model = "gpt-6.1-sol"
+effort = "high"
+
+[roles.justiciar.codex]
+model = "gpt-6.1-sol"
+effort = "high"
