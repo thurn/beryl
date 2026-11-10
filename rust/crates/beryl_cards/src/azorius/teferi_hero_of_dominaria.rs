@@ -44,7 +44,8 @@ pub static CARD: CardDef = CardDef {
                 targets: &[TargetSpec::one(
                     TargetKind::Permanent,
                     Filter::Not(&Filter::Types(Types::LAND)),
-                )],
+                )
+                .removal()],
                 body: bodies!(third_from_the_top),
                 ..Ability::NONE
             },
@@ -74,10 +75,9 @@ pub static EMBLEM: CardDef = CardDef {
     name: "Teferi, Hero of Dominaria Emblem",
     faces: &[Face {
         abilities: &[Ability {
-            targets: &[TargetSpec::one(
-                TargetKind::Permanent,
-                Filter::Whose(Whose::Opponent),
-            )],
+            targets: &[
+                TargetSpec::one(TargetKind::Permanent, Filter::Whose(Whose::Opponent)).removal(),
+            ],
             ..Ability::triggered(Trigger::YouDraw, bodies!(exile_target))
         }],
         ..Face::EMPTY

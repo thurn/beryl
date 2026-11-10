@@ -60,7 +60,8 @@ pub static CARD: CardDef = CardDef {
                 targets: &[TargetSpec::one(
                     TargetKind::Permanent,
                     Filter::All(&[Filter::Types(Types::CREATURE), Filter::Tapped]),
-                )],
+                )
+                .removal()],
                 body: bodies!(exile_and_gain),
                 ..Ability::NONE
             },

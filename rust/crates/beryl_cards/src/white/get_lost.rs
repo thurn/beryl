@@ -34,7 +34,8 @@ pub static CARD: CardDef = CardDef {
                         .union(Types::ENCHANTMENT)
                         .union(Types::PLANESWALKER),
                 ),
-            )],
+            )
+            .removal()],
             body: bodies!(destroy_and_map),
             ..Ability::NONE
         }],

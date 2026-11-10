@@ -56,7 +56,7 @@ pub static CARD: CardDef = CardDef {
         abilities: &[
             Ability {
                 kind: AbilityKind::Spell,
-                targets: &[TargetSpec::one(TargetKind::Permanent, CREATURES)],
+                targets: &[TargetSpec::one(TargetKind::Permanent, CREATURES).removal()],
                 body: bodies!(destroy_target),
                 ..Ability::NONE
             },

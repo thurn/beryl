@@ -20,10 +20,9 @@ pub static CARD: CardDef = CardDef {
         colors: Colors::WHITE,
         abilities: &[Ability {
             kind: AbilityKind::Spell,
-            targets: &[TargetSpec::one(
-                TargetKind::Permanent,
-                Filter::Types(Types::CREATURE),
-            )],
+            targets: &[
+                TargetSpec::one(TargetKind::Permanent, Filter::Types(Types::CREATURE)).removal(),
+            ],
             body: bodies!(oust),
             ..Ability::NONE
         }],

@@ -52,10 +52,10 @@ pub static CARD: CardDef = CardDef {
             Ability {
                 kind: AbilityKind::Activated,
                 cost: Cost::loyalty(-1),
-                targets: &[TargetSpec::one(
-                    TargetKind::Permanent,
-                    Filter::Types(Types::CREATURE),
-                )],
+                targets: &[
+                    TargetSpec::one(TargetKind::Permanent, Filter::Types(Types::CREATURE))
+                        .removal(),
+                ],
                 body: bodies!(bounce),
                 ..Ability::NONE
             },

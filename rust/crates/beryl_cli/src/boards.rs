@@ -1058,11 +1058,18 @@ pub const BOARDS: &[Scenario] = &[
             Action::cast(P1, PORTABLE_HOLE),
             choose(P1, DecisionKind::Target, SNAPCASTER_MAGE),
         ]),
-    // Teferi, Time Raveler's −3 announces how many targets, up to one, with an artifact and a
-    // creature across the table; the human then announces one.
+    // Teferi, Time Raveler's −3 announces how many targets, up to one, with targets on both sides; the human then announces one.
     Scenario::new("target-up-to-one")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, &[Permanent::new(TEFERI_TIME_RAVELER), ISLAND_, PLAINS_])
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(TEFERI_TIME_RAVELER),
+                Permanent::new(JACE_VRYNS_PRODIGY),
+                ISLAND_,
+                PLAINS_,
+            ],
+        )
         .library(P0, LANDS)
         .battlefield(
             P1,

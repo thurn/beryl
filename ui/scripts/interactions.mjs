@@ -9313,6 +9313,32 @@ await check(
     upToRun,
 );
 
+await check(
+    "optional self-removal waits for confirmation before sending either pick",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const ownIndex = targeted.candidates.findIndex(
+            (c) => c.label === "Jace, Vryn's Prodigy",
+        );
+        const slot = targeted.candidates[ownIndex].option.slot;
+        const warning = page.getByRole("dialog", {
+            name: "Target your Jace, Vryn's Prodigy?",
+        });
+        await page.click(slotOf(slot));
+        await warning.waitFor();
+        assert.deepEqual(await chosen(page), []);
+        await warning.getByRole("button", { name: "Cancel" }).click();
+        await page.getByRole("button", { name: "No Target" }).waitFor();
+        assert.equal(await cancels(page), 0);
+        assert.deepEqual(await chosen(page), []);
+
+        await page.click(slotOf(slot));
+        await warning.getByRole("button", { name: "Confirm" }).click();
+        assert.deepEqual(await settled(page, 2), [countOf(1), ownIndex]);
+    },
+    upToRun,
+);
+
 // A click never aims a spell for the player (`target-own`: Oust, whose one legal target is
 // the human's own Jace, Vryn's Prodigy): the click starts the cast, the target is asked on the
 // board, and Escape takes the cast back.
@@ -9357,6 +9383,22 @@ await check(
         at: own.length - 1,
         ready: `${slotOf(oust)}[data-zone="hand"]`,
     },
+);
+
+await check(
+    "required self-removal sends its target once on confirmation",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.click(slotOf(ownTarget.candidates[0].option.slot));
+        const warning = page.getByRole("dialog", {
+            name: "Target your Jace, Vryn's Prodigy?",
+        });
+        await warning.waitFor();
+        assert.deepEqual(await chosen(page), []);
+        await warning.getByRole("button", { name: "Confirm" }).click();
+        assert.deepEqual(await settled(page, 1), [0]);
+    },
+    { fixture: "target-own", at: own.length, ready: ".prompt" },
 );
 
 // A target picked on the stack remains tentative until Confirm. The committed link below
@@ -9670,6 +9712,26 @@ await check(
 // Explore (`choice-explore`, a Map's) shows the card it revealed, each answer named by where
 // the card goes.
 const explore = await lastDecision("choice-explore");
+await check(
+    "a beneficial own permanent target submits directly",
+    async (page) => {
+        const at = explore.views.findLastIndex(
+            (v) => v.status.decision?.kind === "target",
+        );
+        const candidate = explore.views[at].status.decision.candidates[0];
+        await page.clock.runFor(2000);
+        await page.click(slotOf(candidate.option.slot));
+        assert.deepEqual(await settled(page, 1), [0]);
+    },
+    {
+        fixture: "choice-explore",
+        at:
+            explore.views.findLastIndex(
+                (v) => v.status.decision?.kind === "target",
+            ) + 1,
+        ready: ".prompt",
+    },
+);
 const revealed = explore.views.at(-1).players.you.library.at(-1);
 await check(
     "explore shows the revealed card and answers by where it goes",
@@ -11462,6 +11524,7 @@ if (wanted("undo does not repeat an automatic target")) {
         object.owner = "opponent";
         object.controller = "opponent";
     }
+    delete target.status.decision.selfRemovalTargets;
     const resolved = structuredClone(target);
     resolved.status = structuredClone(before.status);
     resolved.status.decision.id.seq += 100;

@@ -326,6 +326,10 @@ pub struct DecisionView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub waterbend: Option<Box<crate::ipc::WaterbendPreview>>,
+    /// Legal targets that remove a permanent controlled by the viewer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub self_removal_targets: Option<Vec<u16>>,
     /// What an answer names.
     pub id: DecisionId,
     pub kind: Kind,
@@ -1497,6 +1501,7 @@ fn decision_view<L: Layout>(
     };
     DecisionView {
         waterbend: None,
+        self_removal_targets: None,
         id,
         kind: d.kind.into(),
         candidates,
@@ -1553,6 +1558,7 @@ fn halt_view<L: Layout>(
 ) -> DecisionView {
     DecisionView {
         waterbend: None,
+        self_removal_targets: None,
         id,
         kind: Kind::Priority,
         candidates: vec![CandidateView {

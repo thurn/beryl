@@ -26,7 +26,8 @@ pub static CARD: CardDef = CardDef {
             targets: &[TargetSpec::one(
                 TargetKind::Permanent,
                 Filter::Not(&Filter::Types(Types::LAND)),
-            )],
+            )
+            .removal()],
             body: bodies!(fracture),
             ..Ability::NONE
         }],

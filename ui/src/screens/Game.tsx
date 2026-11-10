@@ -32,6 +32,7 @@ import {
   type TargetRef,
 } from "../ipc";
 import { Board } from "../game/Board";
+import { FloatPrompt, PromptRow } from "../game/FloatPrompt";
 import { ChoiceOverlay } from "../game/ChoiceOverlay";
 import { choiceOf, choiceSlots, floats, type Choice } from "../game/choices";
 import { follow, isOpening, twins, type Intent } from "../game/decisions";
@@ -357,6 +358,12 @@ function Playing({ playback }: { playback: Playback }) {
   const [error, setError] = useState<string>();
   // The view an answer was sent from: until another arrives, the opponent is acting.
   const [answered, setAnswered] = useState<PlayerView>();
+  const [removal, setRemoval] = useState<{
+    view: PlayerView;
+    slot: number;
+    index: CandidateIndex;
+    then: Intent[];
+  }>();
   // The picks still to send for a choice already made (a drag's follow-up, an overlay's
   // whole scry), one per decision as each arrives; and the overlay that made them, shown
   // until they are sent.
@@ -369,6 +376,7 @@ function Playing({ playback }: { playback: Playback }) {
   const { gather, release, latest } = playback;
   const { session, view } = update;
   const status = view.status;
+  const confirmingRemoval = removal?.view === view ? removal : undefined;
   // An answer is on its way, or the game plays on without the player: the opponent deciding,
   // or a step passing, shown or still to show.
   const waiting =
@@ -393,8 +401,30 @@ function Playing({ playback }: { playback: Playback }) {
   const canAutoPick = useRef(
     !new URLSearchParams(window.location.search).has("spec"),
   );
-  /** Answers the decision as the player picked: heard, or refused while the game is busy. */
+  /** Stages a removal before sending even the count of an optional target. */
   const answer = (index: CandidateIndex, then: Intent[] = []) => {
+    if (confirmingRemoval) return;
+    if (!decision || waiting) {
+      play("no");
+      return;
+    }
+    const option = decision.candidates[index]?.option;
+    const target = then[0];
+    const slot = decision.selfRemovalTargets?.find((slot) =>
+      option?.kind === "object"
+        ? option.slot === slot
+        : option?.kind === "number" &&
+          target?.kind === "target" &&
+          target.wants({ kind: "object", slot }),
+    );
+    if (slot !== undefined) {
+      setRemoval({ view, slot, index, then });
+      return;
+    }
+    submit(index, then);
+  };
+  /** Answers the decision as the player picked: heard, or refused while the game is busy. */
+  const submit = (index: CandidateIndex, then: Intent[]) => {
     if (!decision || waiting) {
       play("no");
       return;
@@ -592,8 +622,8 @@ function Playing({ playback }: { playback: Playback }) {
       waiting={waiting}
       onSkip={behind ? skip : undefined}
       choose={answer}
-      cancel={cancelCast}
-      undo={undoAnswer}
+      cancel={confirmingRemoval ? undefined : cancelCast}
+      undo={confirmingRemoval ? undefined : undoAnswer}
       passOn={passOnward}
       stops={stops}
       setStops={chooseStops}
@@ -614,7 +644,7 @@ function Playing({ playback }: { playback: Playback }) {
         opening || over || (choice !== undefined && !floats(choice) && !peeking)
       }
       // Nor does it take input while a choice waits to be shown.
-      inert={asked !== undefined}
+      inert={asked !== undefined || confirmingRemoval !== undefined}
       traySlots={
         choice && !peeking && !floats(choice)
           ? [
@@ -627,6 +657,38 @@ function Playing({ playback }: { playback: Playback }) {
   );
   const overlays = (
     <>
+      {confirmingRemoval && (
+        <div
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              setRemoval(undefined);
+            }
+          }}
+        >
+          <FloatPrompt
+            title={`Target your ${view.objects.find((o) => o.slot === confirmingRemoval.slot)?.name ?? "permanent"}?`}
+          >
+            <PromptRow>
+              <Button
+                onClick={() => {
+                  setRemoval(undefined);
+                  submit(confirmingRemoval.index, confirmingRemoval.then);
+                }}
+              >
+                Confirm
+              </Button>
+              <Button
+                variant="secondary"
+                autoFocus
+                onClick={() => setRemoval(undefined)}
+              >
+                Cancel
+              </Button>
+            </PromptRow>
+          </FloatPrompt>
+        </div>
+      )}
       {opening && (
         <Opening
           view={view}
@@ -695,6 +757,7 @@ function Playing({ playback }: { playback: Playback }) {
   const overlaid =
     opening ||
     choice !== undefined ||
+    confirmingRemoval !== undefined ||
     over ||
     result.state === "aside" ||
     error !== undefined;
@@ -702,7 +765,7 @@ function Playing({ playback }: { playback: Playback }) {
     <>
       <PhoneBoard
         view={view}
-        waiting={waiting}
+        waiting={waiting || confirmingRemoval !== undefined}
         choose={answer}
         passOn={passOnward}
         onLeave={leave}

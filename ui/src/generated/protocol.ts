@@ -305,6 +305,10 @@ export type DecisionView = {
  */
 waterbend?: WaterbendPreview, 
 /**
+ * Legal targets that remove a permanent controlled by the viewer.
+ */
+selfRemovalTargets?: Array<number>, 
+/**
  * What an answer names.
  */
 id: DecisionId, kind: Kind, candidates: Array<CandidateView>, 

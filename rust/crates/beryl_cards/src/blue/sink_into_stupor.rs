@@ -38,7 +38,8 @@ pub static CARD: CardDef = CardDef {
                         Filter::Whose(Whose::Opponent),
                         Filter::Not(&Filter::Types(Types::LAND)),
                     ]),
-                )],
+                )
+                .removal()],
                 body: bodies!(bounce),
                 ..Ability::NONE
             }],

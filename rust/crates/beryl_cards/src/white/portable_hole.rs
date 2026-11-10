@@ -26,7 +26,8 @@ pub static CARD: CardDef = CardDef {
                     Filter::Whose(Whose::Opponent),
                     Filter::ManaValueAtMost(2),
                 ]),
-            )],
+            )
+            .removal()],
             ..Ability::triggered(Trigger::Enters, bodies!(exile_until_this_leaves))
         }],
         ..Face::EMPTY

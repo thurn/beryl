@@ -802,6 +802,9 @@ pub struct TargetSpec {
     pub optional: bool,
     /// "Other target": not the object whose ability this is.
     pub other: bool,
+    /// This effect removes a targeted permanent from the battlefield. Presentation metadata
+    /// for confirming a player's own target, independent of target legality (CR 115.1).
+    pub removes_permanent: bool,
 }
 
 impl TargetSpec {
@@ -813,6 +816,7 @@ impl TargetSpec {
             count: 1,
             optional: false,
             other: false,
+            removes_permanent: false,
         }
     }
 
@@ -821,6 +825,15 @@ impl TargetSpec {
         TargetSpec {
             optional: true,
             ..TargetSpec::one(kind, filter)
+        }
+    }
+
+    /// Marks effects such as destroy, exile, or bounce that remove the target from play.
+    #[must_use]
+    pub const fn removal(self) -> Self {
+        Self {
+            removes_permanent: true,
+            ..self
         }
     }
 

@@ -25,10 +25,9 @@ pub static CARD: CardDef = CardDef {
                     sacrifice_self: true,
                     ..Cost::NONE
                 },
-                targets: &[TargetSpec::one(
-                    TargetKind::Permanent,
-                    Filter::Types(Types::LAND),
-                )],
+                targets: &[
+                    TargetSpec::one(TargetKind::Permanent, Filter::Types(Types::LAND)).removal(),
+                ],
                 body: bodies!(destroy_land),
                 ..Ability::NONE
             },

@@ -55,7 +55,8 @@ pub static CARD: CardDef = CardDef {
                             .union(Types::CREATURE)
                             .union(Types::ENCHANTMENT),
                     ),
-                )],
+                )
+                .removal()],
                 body: bodies!(bounce_and_draw),
                 ..Ability::NONE
             },

@@ -33,7 +33,8 @@ pub static CARD: CardDef = CardDef {
                     TargetKind::Permanent,
                     Filter::Not(&Filter::Types(Types::LAND)),
                 )
-                .other()],
+                .other()
+                .removal()],
                 ..Ability::triggered(Trigger::Enters, bodies!(exile_until_this_leaves))
             },
             Ability {
