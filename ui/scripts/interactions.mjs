@@ -5225,10 +5225,17 @@ if (wanted(privateHandling)) {
                     );
                 }
 
-                await until(page, ".turn-action button:not([disabled])", 16);
+                // The look holds for 850 ms. The backs should start their
+                // final flight as soon as it ends, without a packing beat.
+                const wait = await until(
+                    page,
+                    `${slotOf(held.at(-1))}.card-el-pile`,
+                    16,
+                );
+                assert.ok(wait <= 240, `the fan held for ${wait} ms more`);
                 await page.clock.runFor(240);
                 const returning = await where(top);
-                await page.clock.runFor(800);
+                await page.clock.runFor(560);
                 const returned = await where(top);
                 assert.equal(await group.count(), 0);
                 for (const card of cards) {
@@ -5259,7 +5266,7 @@ if (wanted(privateHandling)) {
                 assertNear(
                     bottom,
                     returned,
-                    "the reordered card returns to the bottom of the pile",
+                    "the card reaches the bottom without a waypoint hold",
                 );
             },
             {

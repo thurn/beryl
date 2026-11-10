@@ -119,25 +119,10 @@ export function beats(
   if (
     !before ||
     view.undone ||
-    (view.events.length === 0 &&
-      !poolBeforeChoice &&
-      reveal.size === 0 &&
-      !packHandling(before.view, view))
+    (view.events.length === 0 && !poolBeforeChoice && reveal.size === 0)
   )
     return [{ update }];
   return new Walk(withResolving(before.view), update).run(reveal);
-}
-
-/** Return a private arrangement as one packet before the pile settles. */
-function packHandling(before: PlayerView, after: PlayerView): boolean {
-  const handling = before.handling;
-  return (
-    handling?.zone === "library" &&
-    handling.count !== null &&
-    handling.count > 1 &&
-    !handling.scry &&
-    !sameHandling(before, after)
-  );
 }
 
 /** The resolving counterspell follows its target to the graveyard in the same beat. */
@@ -653,8 +638,6 @@ class Walk {
       (this.pending.some(effect) && choiceOf(this.view))
     )
       this.cut();
-    if (packHandling(this.cur, this.view))
-      this.cut(HOLD.handling, { packHandling: true }, true);
     if (this.out.length === 0) return [{ update: this.update }];
     const last: GameUpdate = {
       ...this.update,

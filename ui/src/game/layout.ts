@@ -423,8 +423,6 @@ export interface Spotlight {
   drawn?: ReadonlySet<number>;
   /** Libraries lifted into two face-down packets during a shuffle. */
   shuffle?: ReadonlySet<Side>;
-  /** The lifted backs come together before returning to the library. */
-  packHandling?: boolean;
   /** The backs taking the lower route into the opponent’s library. */
   scryBottom?: ReadonlySet<number>;
   /** Mana reaches this permanent while its ability is still being paid for. */
@@ -1584,7 +1582,6 @@ export function handlingSlots(
 function handlingPlacements(
   view: PlayerView,
   cards: ObjectView[],
-  packed: boolean,
 ): Placement[] {
   const handling = view.handling;
   if (!handling || cards.length === 0) return [];
@@ -1592,33 +1589,28 @@ function handlingPlacements(
   const scry = handling.zone === "library" && handling.scry;
   const library = view.players[side].library;
   const opening = view.turn.number === 0;
-  const columns = packed
-    ? 1
-    : Math.min(handling.zone === "library" ? 5 : 7, cards.length);
+  const columns = Math.min(handling.zone === "library" ? 5 : 7, cards.length);
   const packet = Math.ceil(cards.length / columns);
-  const pile =
-    scry || packed
-      ? pileLook(side, PILES[side].library, scry ? library.length : 1)
-      : undefined;
+  const pile = scry
+    ? pileLook(side, PILES[side].library, library.length)
+    : undefined;
   const opponentScry = scry && side === "opponent";
   const width = (pile?.width ?? (opening ? 72 : 104)) * (opponentScry ? 2 : 1);
   const step = width * (scry ? 0.24 : handling.zone === "hand" ? 0.72 : 1.12);
-  const center = pile
-    ? opponentScry
-      ? fromRight(1465)
-      : pile.x + width / 2 + (scry ? 0 : side === "you" ? 125 : -125)
-    : fromMiddle(opening ? 465 : handling.zone === "hand" ? 800 : 565);
-  const top = pile
-    ? opponentScry
-      ? 144
-      : scry
-        ? Math.max(1, pile.y - 28)
-        : pile.y + (side === "you" ? -65 : 48)
-    : opening
-      ? 8
-      : handling.zone === "hand" && side === "you"
-        ? 575
-        : 222;
+  const center = opponentScry
+    ? fromRight(1465)
+    : pile
+      ? pile.x + width / 2
+      : fromMiddle(opening ? 465 : handling.zone === "hand" ? 800 : 565);
+  const top = opponentScry
+    ? 144
+    : pile
+      ? Math.max(1, pile.y - 28)
+      : opening
+        ? 8
+        : handling.zone === "hand" && side === "you"
+          ? 575
+          : 222;
   return cards.map((card, i) => {
     const column = i % columns;
     const depth = Math.floor(i / columns);
@@ -1889,9 +1881,7 @@ export function layout(
       skew: 0,
     });
   });
-  out.push(
-    ...handlingPlacements(view, handled, spotlight.packHandling === true),
-  );
+  out.push(...handlingPlacements(view, handled));
   return new Map(out.map((p) => [p.slot, p]));
 }
 
