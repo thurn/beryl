@@ -31,9 +31,8 @@ import {
   type TargetRef,
 } from "../ipc";
 import { Board } from "../game/Board";
-import { clearChoiceFlights, rememberChoiceCards } from "../game/choiceFlight";
 import { ChoiceOverlay } from "../game/ChoiceOverlay";
-import { choiceOf, floats, type Choice } from "../game/choices";
+import { choiceOf, choiceSlots, floats, type Choice } from "../game/choices";
 import { follow, isOpening, twins, type Intent } from "../game/decisions";
 import { BLANK, paragraphOf, useAbilityFace, useFace } from "../game/faces";
 import { useHoverInspect, type HoverHandlers } from "../game/Piles";
@@ -361,19 +360,14 @@ function Playing({ playback }: { playback: Playback }) {
   // whole scry), one per decision as each arrives; and the overlay that made them, shown
   // until they are sent.
   const planned = useRef<Intent[]>([]);
-  const [held, setHeld] = useState<Choice>();
+  // Keep the tray's faces as shown while its planned answers play through newer views.
+  const [held, setHeld] = useState<{ choice: Choice; view: PlayerView }>();
   // The choice whose overlay is put aside to see the battlefield.
   const [peek, setPeek] = useState<number>();
   const { update, live, spotlight, behind, skip, log } = playback;
   const { gather, release, latest } = playback;
   const { session, view } = update;
   const status = view.status;
-  // Layout effects consume the answer's flights first. Once playback reaches a new
-  // decision/idle state, unused cards must not fly from an old chooser on a later move.
-  useEffect(() => {
-    if (view.status.kind !== "playing") clearChoiceFlights();
-  }, [view]);
-  useEffect(() => () => clearChoiceFlights(), []);
   // An answer is on its way, or the game plays on without the player: the opponent deciding,
   // or a step passing, shown or still to show.
   const waiting =
@@ -382,7 +376,6 @@ function Playing({ playback }: { playback: Playback }) {
     status.kind === "thinking" ||
     status.kind === "playing";
   const fail = (e: unknown) => {
-    clearChoiceFlights();
     setAnswered(undefined);
     planned.current = [];
     release();
@@ -544,14 +537,13 @@ function Playing({ playback }: { playback: Playback }) {
     );
     return () => clearTimeout(wait);
   }, [view, live]);
-  const asked = held ?? (waiting ? undefined : choiceOf(view));
-  const choice = held ?? (seen === view ? asked : undefined);
+  const asked = held?.choice ?? (waiting ? undefined : choiceOf(view));
+  const choice = held?.choice ?? (seen === view ? asked : undefined);
   const plan = (picks: Intent[]) => {
     if (!decision || !choice) return;
     const { index, rest } = follow(decision, picks);
     if (index === undefined) return;
-    rememberChoiceCards(view);
-    setHeld(choice);
+    setHeld({ choice, view });
     // The picks after this one go out unseen under the choice, and what they all did plays
     // once it gives way to the table.
     if (rest.length > 0) gather();
@@ -614,6 +606,14 @@ function Playing({ playback }: { playback: Playback }) {
       }
       // Nor does it take input while a choice waits to be shown.
       inert={asked !== undefined}
+      traySlots={
+        choice && !peeking && !floats(choice)
+          ? [
+              ...choiceSlots(choice),
+              ...(choice.source?.slot == null ? [] : [choice.source.slot]),
+            ]
+          : undefined
+      }
     />
   );
   const overlays = (
@@ -629,7 +629,7 @@ function Playing({ playback }: { playback: Playback }) {
       {choice && !peeking && (
         <ChoiceOverlay
           key={choice.key}
-          view={view}
+          view={held?.view ?? view}
           choice={choice}
           busy={waiting || held !== undefined}
           onPlan={plan}

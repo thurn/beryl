@@ -28,6 +28,8 @@ export interface OverlayProps {
   actions?: OverlayAction[];
   onViewBattlefield?: () => void;
   className?: string;
+  /** Cards already visible on the table stay visible while the backdrop comes in. */
+  borrowedCards?: boolean;
 }
 
 export function Overlay({
@@ -40,17 +42,23 @@ export function Overlay({
   actions,
   onViewBattlefield,
   className,
+  borrowedCards = false,
 }: OverlayProps) {
   // Reduced motion (and so `just ui-shots`) shows it at once rather than fading it in.
   const reduce = useReducedMotion();
   return (
     <motion.div
       className={["overlay", className].filter(Boolean).join(" ")}
-      initial={reduce ? false : { opacity: 0 }}
+      initial={reduce || borrowedCards ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.25 }}
     >
-      <div className="overlay-backdrop" />
+      <motion.div
+        className="overlay-backdrop"
+        initial={reduce || !borrowedCards ? false : { opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.25 }}
+      />
       <div className="overlay-main">
         <header
           className={

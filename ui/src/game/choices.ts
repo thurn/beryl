@@ -85,6 +85,13 @@ export interface Ask extends Common {
 
 export type Choice = Arrange | Stack | Pick | Ask;
 
+/** The real cards placed in the tray, apart from its source. */
+export function choiceSlots(choice: Choice): number[] {
+  if (choice.kind === "stack") return choice.hand;
+  if (choice.kind === "arrange") return [...choice.left, ...choice.right];
+  return choice.cards;
+}
+
 /** Whether a choice is asked in the floating prompt over the table, as a title and a row of
  * buttons, rather than in the overlay over the dimmed table: a question with no cards. */
 export const floats = (choice: Choice): choice is Ask =>

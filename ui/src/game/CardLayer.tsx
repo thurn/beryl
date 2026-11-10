@@ -3,7 +3,7 @@
 // cast, resolved, killed, bounced or exiled travels rather than jumps (decision D10). Hand
 // cards with something to play drag onto the battlefield, attackers forward and blockers onto
 // attackers; a click on any card asks the board what it offers.
-import { takeChoiceFlight } from "./choiceFlight";
+import { CARD_RETURN, takeMovedCard, type CardHandoff } from "./choiceFlight";
 import { play } from "../audio/sound";
 import {
   memo,
@@ -36,6 +36,7 @@ import type {
   ObjectView,
   PaidCost,
   Side,
+  ZoneName,
 } from "../generated/protocol";
 import { StageScale } from "./Stage";
 import { faceDownFace, marksOf, useFace } from "./faces";
@@ -161,6 +162,7 @@ const RAISING: Transition = { type: "tween", duration: 0.14, ease: "easeOut" };
 const RAISED_Z = 300;
 /** A struck spell is carried over everything else on the table. */
 const FLYING_Z = 900;
+const DRAGGING_Z = 1000;
 /** A refused click's shake, side to side in stage pixels. */
 const SHAKE = [0, -7, 6, -4, 2, 0];
 
@@ -233,6 +235,7 @@ export function CardLayer(props: CardLayerProps) {
       <AnimatePresence>
         {objects.map((o) => {
           const place = placements.get(o.slot);
+          const departure = exiling.indexOf(o.slot);
           return (
             place && (
               <CardElement
@@ -243,9 +246,17 @@ export function CardLayer(props: CardLayerProps) {
                 raised={props.hovered === o.slot}
                 struck={struck.has(o.slot)}
                 departureDelay={
-                  exiling.length > 1 && exiling.includes(o.slot)
-                    ? (0.3 * exiling.indexOf(o.slot)) / (exiling.length - 1)
+                  exiling.length > 1 && departure >= 0
+                    ? (0.3 * departure) / (exiling.length - 1)
                     : 0
+                }
+                departureLayer={
+                  departure < 0
+                    ? 0
+                    : Math.min(
+                        DRAGGING_Z - FLYING_Z - 1,
+                        exiling.length - departure,
+                      )
                 }
                 epoch={props.epoch}
                 callbacks={callbacks}
@@ -302,6 +313,7 @@ const CardElement = memo(function CardElement({
   raised,
   struck,
   departureDelay,
+  departureLayer,
   epoch,
   callbacks: layer,
   appearing,
@@ -313,6 +325,7 @@ const CardElement = memo(function CardElement({
   raised: boolean;
   struck: boolean;
   departureDelay: number;
+  departureLayer: number;
   epoch: unknown;
   callbacks: Callbacks;
   appearing: boolean;
@@ -351,14 +364,16 @@ const CardElement = memo(function CardElement({
   const carried = struck && place.look !== "stack" && !returning;
   // A card changing looks to or from a pile, a library or the showcase travels there; the
   // transition holds until its look changes again, so that a render meanwhile keeps it going.
-  const moved = useRef<{ look: Look; travel: boolean }>({
+  const moved = useRef<{ look: Look; zone: ZoneName; travel: boolean }>({
     look: place.look,
+    zone: object.zone,
     travel: false,
   });
-  if (moved.current.look !== place.look) {
+  if (moved.current.look !== place.look || moved.current.zone !== object.zone) {
     const was = moved.current.look;
     moved.current = {
       look: place.look,
+      zone: object.zone,
       travel: returning || TRAVELLED.has(was) || TRAVELLED.has(place.look),
     };
   }
@@ -375,21 +390,41 @@ const CardElement = memo(function CardElement({
       ? { ...base, delay: (base.delay ?? 0) + departureDelay }
       : base;
   }, [carried, emerging, change.travel, departureDelay]);
+  const element = useRef<HTMLDivElement>(null);
   const handed = useRef<unknown>(undefined);
+  const [handoff, setHandoff] = useState(0);
+  const [travelling, setTravelling] = useState(false);
+  const previousZone = useRef(object.zone);
+  const fromLibrary = useRef(place.look === "hidden");
   useLayoutEffect(() => {
-    const from = takeChoiceFlight(object.slot, object.zone);
-    if (!from || reduce) return;
-    handed.current = epoch;
-    x.jump(from.x);
-    y.jump(from.y);
-    scale.jump(from.width / place.width);
-    rotate.jump(0);
-    skewX.jump(0);
-    opacity.jump(1);
+    const table = element.current;
+    if (!table) return;
+    const start = (from: CardHandoff) => {
+      if (reduce || !from.width) return;
+      handed.current = epoch;
+      x.jump(from.x);
+      y.jump(from.y);
+      scale.jump(from.width / place.width);
+      rotate.jump(0);
+      skewX.jump(0);
+      opacity.jump(1);
+      setTravelling(true);
+      setHandoff((count) => count + 1);
+    };
+    if (previousZone.current !== object.zone) {
+      const from = takeMovedCard(table, object.slot);
+      if (from) start(from);
+      previousZone.current = object.zone;
+    }
+    const onReturn = (event: Event) =>
+      start((event as CustomEvent<CardHandoff>).detail);
+    table.addEventListener(CARD_RETURN, onReturn);
+    return () => table.removeEventListener(CARD_RETURN, onReturn);
   }, [
     epoch,
     object.slot,
     object.zone,
+    place.width,
     reduce,
     x,
     y,
@@ -397,13 +432,10 @@ const CardElement = memo(function CardElement({
     rotate,
     skewX,
     opacity,
-    place.width,
   ]);
-  // A chooser handoff resets every transform, including coordinates shared by the old and
-  // new piles. Restart on zone changes even when that destination value did not change.
-  const zone = object.zone;
-  useGlide(x, place.x, reduce, { holding, how, restart: zone });
-  useGlide(y, place.y, reduce, { holding, how, restart: zone });
+  const restart = `${object.zone}:${handoff}`;
+  useGlide(x, place.x, reduce, { holding, how, restart });
+  useGlide(y, place.y, reduce, { holding, how, restart });
   // A card changing looks, or tapping, is drawn at another width (a back, a whole card, a
   // battlefield card): before that is painted, its scale makes up the difference, and then
   // glides, so the card's size changes smoothly too.
@@ -421,27 +453,29 @@ const CardElement = memo(function CardElement({
       scale.jump((scale.get() * was.width) / width);
     }
   }, [scale, width, frameKind, epoch]);
-  useGlide(scale, place.scale, reduce, { restart: `${width}:${zone}`, how });
+  useGlide(scale, place.scale, reduce, { restart: `${width}:${restart}`, how });
   // A hand card is raised while hovered and while the pointer holds it; anything else dragged
   // straightens.
   const hand = place.look === "hand";
   const lifted = hand && (raised || holding);
   useGlide(rotate, dragging && !hand ? 0 : place.rotate, reduce, {
     how: returning ? TRAVEL : SPRING,
-    restart: zone,
+    restart,
   });
-  useGlide(skewX, place.skew, reduce, { restart: zone });
+  useGlide(skewX, place.skew, reduce, { restart });
   // Out of a library, the card is in sight from the start, on the pile; into one, until it is
   // there.
-  const fromLibrary = useRef(place.look === "hidden");
   useLayoutEffect(() => {
     const was = fromLibrary.current;
     fromLibrary.current = place.look === "hidden";
     if (was && place.look !== "hidden" && !reduce) opacity.jump(place.opacity);
   }, [place.look, place.opacity, opacity, reduce]);
   useGlide(opacity, place.opacity, reduce, {
-    how: change.travel && place.look === "hidden" ? INTO_LIBRARY : SPRING,
-    restart: zone,
+    how:
+      (change.travel || handoff > 0) && place.look === "hidden"
+        ? INTO_LIBRARY
+        : SPRING,
+    restart,
   });
   // Raised, the card turns back upright about its top center and rises straight up the screen,
   // inside its element, which stays turned in the fan.
@@ -504,16 +538,21 @@ const CardElement = memo(function CardElement({
     };
   }, [carried, reduce, shake, flash]);
   // A travelling card crosses over the table, then lies where it went.
-  const [travelling, setTravelling] = useState(false);
+  const lastHandoff = useRef(handoff);
   useEffect(() => {
-    if (!change.travel || reduce) return;
+    const fromTray = handoff !== lastHandoff.current;
+    lastHandoff.current = handoff;
+    if ((!change.travel && !fromTray) || reduce) {
+      setTravelling(false);
+      return;
+    }
     setTravelling(true);
     const timer = setTimeout(
       () => setTravelling(false),
       TRAVEL_FOR + departureDelay * 1000,
     );
     return () => clearTimeout(timer);
-  }, [change, reduce, departureDelay]);
+  }, [change, reduce, departureDelay, handoff]);
   // An emerging token crosses over the table, then is a card like the rest.
   useEffect(() => {
     if (!emerging) return;
@@ -628,6 +667,7 @@ const CardElement = memo(function CardElement({
   return (
     <>
       <motion.div
+        ref={element}
         className={classes}
         data-slot={object.slot}
         data-zone={object.zone}
@@ -641,9 +681,9 @@ const CardElement = memo(function CardElement({
           // sliding in under the cards to its right, rather than landing over them and then
           // dropping behind.
           zIndex: dragging
-            ? 1000
+            ? DRAGGING_Z
             : flying || emerging || (travelling && !hand)
-              ? FLYING_Z
+              ? FLYING_Z + departureLayer
               : lifted && !ghosted
                 ? RAISED_Z
                 : place.z,

@@ -3464,6 +3464,18 @@ await check(
             await page.locator(".choice-library .card-back").count(),
             1,
         );
+        const library = page.locator('[data-table-library="you"]');
+        assert.equal(
+            await library.isVisible(),
+            false,
+            "only the tray shows the library",
+        );
+        await page.getByRole("button", { name: "View Battlefield" }).click();
+        assert.equal(
+            await library.isVisible(),
+            true,
+            "the library returns to the table",
+        );
     },
     { fixture: "choice-scry", at: scry.views.length, ready: tray(scryNext) },
 );
@@ -3626,18 +3638,109 @@ await check(
                 [...names].sort(),
                 `the ${side}'s ${zone} lists each of its cards`,
             );
-            // Each card shows whole on hover.
+            const slots = await page.$$eval(
+                `${viewer} [data-viewer-slot]`,
+                (cards) => cards.map((c) => c.dataset.viewerSlot),
+            );
+            for (const slot of slots) {
+                const original = page.locator(
+                    `.card-layer > [data-slot="${slot}"]`,
+                );
+                assert.equal(await original.count(), 1);
+                assert.equal(
+                    await original.isVisible(),
+                    false,
+                    "the browser owns the card",
+                );
+            }
+            // Once the flight has arrived, each card shows whole on hover.
+            await page.clock.runFor(500);
             await page.hover(`${viewer} [data-card="${listed[0]}"]`);
             await page
                 .getByLabel(`${listed[0]}, inspected`)
                 .waitFor({ state: "visible" });
             await close[i](page);
             await page.waitForSelector(viewer, { state: "detached" });
+            for (const slot of slots) {
+                assert.equal(
+                    await page
+                        .locator(`.card-layer > [data-slot="${slot}"]`)
+                        .isVisible(),
+                    true,
+                    "the table takes the original back",
+                );
+            }
         }
         assert.deepEqual(await chosen(page), [], "browsing answers nothing");
     },
     pileRun,
 );
+
+await check(
+    "an empty known library opens without revealing cards",
+    async (page) => {
+        await page.locator(`button${pile("you", "library")}`).click();
+        const dialog = page.getByRole("dialog", { name: /Known cards/ });
+        assert.match(await dialog.innerText(), /Nothing here/);
+        assert.equal(await dialog.locator("[data-viewer-slot]").count(), 0);
+        await dialog.getByRole("button", { name: "Close" }).click();
+    },
+    { ...pileRun, reducedMotion: "reduce" },
+);
+
+// A full row and a scrolling row both borrow from the same live pile. Use distinct slots
+// even where the fixture repeats the same printing.
+for (const count of [1, 10, 11]) {
+    const fixture = `graveyard-${count}`;
+    await derive("choice-scry", fixture, pilesAt, (view) => {
+        const you = view.players.you;
+        const top = view.objects.find((o) => o.slot === you.graveyard.at(-1));
+        const first = Math.max(...view.objects.map((o) => o.slot)) + 1;
+        const cards = Array.from({ length: count }, (_, i) => ({
+            ...top,
+            slot: first + i,
+        }));
+        return {
+            ...view,
+            objects: [
+                ...view.objects.filter((o) => !you.graveyard.includes(o.slot)),
+                ...cards,
+            ],
+            players: {
+                ...view.players,
+                you: { ...you, graveyard: cards.map((o) => o.slot) },
+            },
+        };
+    });
+    await check(
+        `a ${count}-card graveyard opens with the table cards borrowed`,
+        async (page) => {
+            const button = page.locator(`button${pile("you", "graveyard")}`);
+            await button.click();
+            const dialog = page.getByRole("dialog", { name: "Your graveyard" });
+            const listed = dialog.locator("[data-viewer-slot]");
+            assert.equal(await listed.count(), count);
+            const slot = await listed.last().getAttribute("data-viewer-slot");
+            const original = page.locator(
+                `.card-layer > [data-slot="${slot}"]`,
+            );
+            assert.equal(await original.isVisible(), false);
+            if (count === 11) {
+                await page.clock.runFor(500);
+                await listed.last().scrollIntoViewIfNeeded();
+                const within = await listed.last().evaluate((card) => {
+                    const list = card.parentElement.getBoundingClientRect();
+                    const box = card.getBoundingClientRect();
+                    return box.bottom <= list.bottom;
+                });
+                assert.ok(within, "the last card scrolls into view");
+            }
+            await dialog.getByRole("button", { name: "Close" }).click();
+            assert.equal(await original.isVisible(), true);
+        },
+        { ...pileRun, fixture, viewport: { width: 1180, height: 820 } },
+    );
+}
 
 const jace = await lastDecision("choice-jace");
 const [first, second] = [...jace.bySlot.keys()];
@@ -5120,28 +5223,35 @@ if (wanted(manifestFlight)) {
     await check(
         "manifest cards travel without carrying flights into another game",
         async (page) => {
-            const discarded = await page.evaluate(async () => {
-                const { rememberChoiceCards, takeChoiceFlight } =
+            const isolated = await page.evaluate(async () => {
+                const { takeMovedCard } =
                     await import("/src/game/choiceFlight.ts");
-                rememberChoiceCards({
-                    objects: [
-                        { slot: 800, zone: "library" },
-                        { slot: 801, zone: "library" },
-                    ],
-                });
-                document.querySelector(".stage").remove();
-                return takeChoiceFlight(800, "battlefield") === undefined;
+                const stage = document.createElement("div");
+                stage.className = "stage";
+                const other = document.createElement("div");
+                stage.append(other);
+                document.body.append(stage);
+                try {
+                    return takeMovedCard(other, 800) === undefined;
+                } finally {
+                    stage.remove();
+                }
             });
-            assert.ok(
-                discarded,
-                "an unmounted game's chooser must not supply a new game's origin",
-            );
+            assert.ok(isolated, "another stage cannot take this tray's card");
         },
         { ...run, ready: '.choice-card[data-slot="800"]' },
     );
     await check(
         manifestFlight,
         async (page) => {
+            for (const slot of [800, 801]) {
+                const table = page.locator(`.card-layer ${slotOf(slot)}`);
+                assert.equal(
+                    await table.isVisible(),
+                    false,
+                    "the tray owns the card",
+                );
+            }
             await page.locator('.choice-card[data-slot="800"]').click();
             await page.clock.runFor(700);
             const origin = center(
@@ -5773,7 +5883,7 @@ for (const fixture of recorded) {
         {
             fixture,
             at: last + 1,
-            ready: ".card-el:is(.card-el-hand, .card-el-land, .card-el-field)",
+            ready: ".table",
             reducedMotion: "reduce",
         },
     );
@@ -5934,7 +6044,7 @@ for (const { fixture, at, budget } of WORD_BUDGETS) {
         {
             fixture,
             at: at ?? (await load(fixture)).length,
-            ready: ".card-el:is(.card-el-hand, .card-el-land, .card-el-field)",
+            ready: ".table",
             reducedMotion: "reduce",
         },
     );

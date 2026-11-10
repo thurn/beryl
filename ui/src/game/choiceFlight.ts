@@ -1,55 +1,202 @@
-// A choice hands its visible cards back to the table when the answer moves them to a zone.
-// Snapshot at confirmation, before the chooser unmounts; consume only on a zone change.
-import type { PlayerView, ZoneName } from "../generated/protocol";
+// Browsers and prompts borrow a card from the table while they need their own hit area
+// and layout. Keep the table element and its slot alive so it can take the card back.
+import { useLayoutEffect, type RefObject } from "react";
+import { animate, useReducedMotion } from "motion/react";
+
+type Slot = number | "library";
+
+interface Borrower {
+  element: HTMLElement;
+  released: boolean;
+}
+
+interface Departure {
+  element: HTMLElement;
+  box: DOMRect;
+  visible: boolean;
+}
+
+interface CardLoan {
+  owners: Borrower[];
+  departure?: Departure;
+}
 
 interface Flight {
-  zone: ZoneName;
-  x: number;
-  y: number;
-  width: number;
-  at: number;
-  element: HTMLElement;
-  stage: HTMLElement;
-}
-const flights = new Map<number, Flight>();
-
-export function clearChoiceFlights() {
-  flights.clear();
+  moving: boolean;
+  stop(): void;
 }
 
-export function rememberChoiceCards(view: PlayerView) {
-  flights.clear();
-  const stage = document.querySelector<HTMLElement>(".stage");
-  if (!stage) return;
-  const origin = stage.getBoundingClientRect();
-  const scale = origin.width / stage.offsetWidth;
-  for (const element of document.querySelectorAll<HTMLElement>(
-    ".choice-card[data-slot]",
-  )) {
-    const slot = Number(element.dataset.slot);
-    const object = view.objects.find((o) => o.slot === slot);
-    if (!object) continue;
-    const box = element.getBoundingClientRect();
-    flights.set(slot, {
-      zone: object.zone,
-      x: (box.left - origin.left) / scale,
-      y: (box.top - origin.top) / scale,
-      width: box.width / scale,
-      at: performance.now(),
-      element,
-      stage,
-    });
+const loans = new WeakMap<HTMLElement, Map<Slot, CardLoan>>();
+const animations = new WeakMap<HTMLElement, Flight>();
+
+function tableCard(stage: HTMLElement, slot: Slot) {
+  return stage.querySelector<HTMLElement>(
+    slot === "library"
+      ? '[data-table-library="you"]'
+      : `.card-layer > .card-el[data-slot="${slot}"]`,
+  );
+}
+
+function stageScale(stage: HTMLElement) {
+  return stage.getBoundingClientRect().width / stage.offsetWidth;
+}
+
+export const BORROW_FLIGHT_MS = 340;
+
+function flyIn(element: HTMLElement, from: DOMRect, stage: HTMLElement) {
+  animations.get(element)?.stop();
+  const to = element.getBoundingClientRect();
+  if (!from.width || !to.width) return;
+  const scale = stageScale(stage);
+  // Measure the flight in screen pixels, then undo any tilt of the tray or pile.
+  let axes = new DOMMatrix();
+  for (let p = element.parentElement; p && p !== stage; p = p.parentElement) {
+    const transform = getComputedStyle(p).transform;
+    if (transform !== "none") axes = new DOMMatrix(transform).multiply(axes);
   }
+  const { x, y } = axes
+    .inverse()
+    .transformPoint(
+      new DOMPoint(
+        (from.left + from.width / 2 - to.left - to.width / 2) / scale,
+        (from.top + from.height / 2 - to.top - to.height / 2) / scale,
+        0,
+        0,
+      ),
+    );
+  const size = from.width / to.width;
+  const paint = (progress: number) => {
+    const left = 1 - progress;
+    element.style.translate = `${x * left}px ${y * left}px`;
+    element.style.scale = String(size + (1 - size) * progress);
+  };
+  const finish = () => {
+    flight.moving = false;
+    element.style.translate = "";
+    element.style.scale = "";
+  };
+  paint(0);
+  const run = animate(0, 1, {
+    duration: BORROW_FLIGHT_MS / 1000,
+    ease: [0.2, 0.75, 0.3, 1],
+    onUpdate: paint,
+    onComplete: finish,
+  });
+  const flight = {
+    moving: true,
+    stop() {
+      run.stop();
+      finish();
+    },
+  };
+  animations.set(element, flight);
 }
 
-export function takeChoiceFlight(slot: number, zone: ZoneName) {
-  const flight = flights.get(slot);
-  if (!flight || flight.zone === zone) return undefined;
-  flights.delete(slot);
-  if (!flight.stage.isConnected || performance.now() - flight.at > 15000)
-    return undefined;
-  // During the commit that changes the view the old chooser may remain for one render.
-  // Its representation goes away before the table representation starts moving.
-  flight.element.style.visibility = "hidden";
-  return flight;
+function stageBox(stage: HTMLElement, box: DOMRect) {
+  const origin = stage.getBoundingClientRect();
+  const scale = stageScale(stage);
+  return {
+    x: (box.left - origin.left) / scale,
+    y: (box.top - origin.top) / scale,
+    width: box.width / scale,
+  };
+}
+
+export type CardHandoff = ReturnType<typeof stageBox>;
+export const CARD_RETURN = "beryl-card-return";
+
+/** A held tray can outlast the view that moves one of its cards. Hand it over at the
+ * start of the zone animation instead of leaving it behind in the tray. */
+export function takeMovedCard(table: HTMLElement, slot: number) {
+  const stage = table.closest<HTMLElement>(".stage");
+  const slots = stage && loans.get(stage);
+  const loan = slots?.get(slot);
+  if (!stage || !slots || !loan) return;
+  const top = loan.owners.at(-1);
+  const box =
+    top?.element.getBoundingClientRect() ??
+    (loan.departure?.visible ? loan.departure.box : undefined);
+  for (const owner of loan.owners) {
+    owner.released = true;
+    owner.element.setAttribute("data-card-borrowed", "");
+  }
+  loan.departure = undefined;
+  slots.delete(slot);
+  table.removeAttribute("data-card-borrowed");
+  return box && stageBox(stage, box);
+}
+
+/** The ref wraps the visual, inside any wrapper used for hit testing or dragging. */
+export function useBorrowedCard(
+  ref: RefObject<HTMLElement | null>,
+  slot: Slot | undefined,
+) {
+  const reduce = useReducedMotion();
+  useLayoutEffect(() => {
+    const element = ref.current;
+    const stage = element?.closest<HTMLElement>(".stage");
+    if (!element || !stage || slot === undefined) return;
+
+    let slots = loans.get(stage);
+    if (!slots) loans.set(stage, (slots = new Map()));
+    let loan = slots.get(slot);
+    if (!loan) slots.set(slot, (loan = { owners: [] }));
+    const before = loan.owners.at(-1)?.element ?? tableCard(stage, slot);
+    const origin = before?.querySelector(".card-body") ?? before;
+    const last = loan.departure;
+    loan.departure = undefined;
+    const from =
+      last?.visible && last.element !== element
+        ? last.box
+        : origin?.getBoundingClientRect();
+
+    const owner = { element, released: false };
+    loan.owners.push(owner);
+    element.removeAttribute("data-card-borrowed");
+    before?.setAttribute("data-card-borrowed", "");
+
+    const list = element.closest(".zone-viewer-cards");
+    const inView = (box: DOMRect) => {
+      const clip = list?.getBoundingClientRect();
+      return !clip || (box.top < clip.bottom && box.bottom > clip.top);
+    };
+    if (!reduce && from && inView(element.getBoundingClientRect())) {
+      flyIn(element, from, stage);
+    }
+
+    return () => {
+      const box = element.getBoundingClientRect();
+      const animation = animations.get(element);
+      const visible = animation?.moving === true || inView(box);
+      animation?.stop();
+      if (owner.released) return;
+      const wasTop = loan.owners.at(-1) === owner;
+      loan.owners.splice(loan.owners.indexOf(owner), 1);
+      if (!wasTop) return;
+
+      const departure = { element, box, visible };
+      loan.departure = departure;
+      // Use the destination from the completed commit. A new prompt in this commit
+      // can also take the departure directly without an intermediate table frame.
+      queueMicrotask(() => {
+        if (loan.departure !== departure) return;
+        loan.departure = undefined;
+        const next = loan.owners.at(-1)?.element;
+        if (!next) slots.delete(slot);
+        const target = next ?? tableCard(stage, slot);
+        if (!target) return;
+        target.removeAttribute("data-card-borrowed");
+        if (reduce || !visible || !box.width) return;
+        if (next || slot === "library") {
+          flyIn(target, box, stage);
+        } else {
+          target.dispatchEvent(
+            new CustomEvent<CardHandoff>(CARD_RETURN, {
+              detail: stageBox(stage, box),
+            }),
+          );
+        }
+      });
+    };
+  }, [ref, slot, reduce]);
 }

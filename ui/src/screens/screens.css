@@ -1928,9 +1928,7 @@
   background: rgb(33 31 28 / 97%);
   box-shadow: 0 18px 48px rgb(0 0 0 / 65%);
 }
-/* As the viewer opens its panel comes up around the cards flying out of the pile (Piles.tsx
-   useFlight), and as it closes it goes while they fly back: the panel's own face and its header
-   fade, not the cards. */
+/* The viewer panel fades around the cards, which stay visible as they travel. */
 .zone-viewer,
 .viewer-scrim,
 .zone-viewer-header {
@@ -1950,7 +1948,10 @@
 .zone-viewer-going .zone-viewer-header {
   opacity: 0;
 }
-/* What flies is not clipped by the list's scrolling box. */
+/* The visible rows can fly across the table without exposing the rows below them. */
+.zone-viewer-flying .zone-viewer-card:nth-child(n + 11) {
+  visibility: hidden;
+}
 .zone-viewer-flying .zone-viewer-cards {
   overflow: visible;
   mask-image: none;
@@ -1958,6 +1959,18 @@
 .viewer-scrim:has(+ .zone-viewer-rising),
 .viewer-scrim:has(+ .zone-viewer-going) {
   opacity: 0;
+}
+/* Returning cards fly in front of the closing panel. */
+.zone-viewer-going {
+  z-index: 890;
+  pointer-events: none;
+}
+.viewer-scrim:has(+ .zone-viewer-going) {
+  z-index: 880;
+  pointer-events: none;
+}
+.zone-viewer-going .zone-viewer-card {
+  visibility: hidden;
 }
 .zone-viewer-header {
   display: flex;
@@ -2900,4 +2913,11 @@
 /* While the page is frozen, a CSS animation that starts stays on its first frame. */
 .page-frozen *:not([data-unfrozen], [data-unfrozen] *) {
   animation-play-state: paused !important;
+}
+
+/* A browser or prompt owns this card's visual while it is off the table. */
+[data-card-borrowed],
+.card-el[data-card-borrowed] + .card-ghost {
+  visibility: hidden;
+  pointer-events: none;
 }

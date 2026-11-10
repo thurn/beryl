@@ -33,6 +33,7 @@ import type { ObjectView, PlayerView } from "../generated/protocol";
 import { StageScale, useStageWidth } from "./Stage";
 import { STAGE, STAGE_WIDTHS } from "./layout";
 import {
+  choiceSlots,
   floats,
   type Arrange,
   type Ask,
@@ -42,7 +43,8 @@ import {
   type Stack,
 } from "./choices";
 import type { Intent } from "./decisions";
-import { useFace } from "./faces";
+import { BLANK, useFace } from "./faces";
+import { useBorrowedCard } from "./choiceFlight";
 import { FloatPrompt, PromptRow } from "./FloatPrompt";
 import { INSPECT_PAD, useHoverInspect, type HoverHandlers } from "./Piles";
 
@@ -125,7 +127,9 @@ function Shell({
   onCancel?(): void;
   children?: ReactNode;
 }) {
-  const source = choice.source;
+  const source = choiceSlots(choice).includes(choice.source?.slot ?? -1)
+    ? undefined
+    : choice.source;
   useEffect(() => {
     if (!onCancel || busy) return;
     const onKey = (e: KeyboardEvent) => {
@@ -144,6 +148,7 @@ function Shell({
   }, [onCancel, busy]);
   return (
     <Overlay
+      borrowedCards
       className={`choice choice-${choice.kind}`}
       title={<RulesText text={choice.title} />}
       aside={source && <SourceCard view={view} source={source} />}
@@ -176,39 +181,22 @@ function ShownCard({
   width: number;
   highlight?: Highlight;
 }) {
-  const shown = object?.name ?? name;
-  const known = object ?? { ...NOWHERE, name: shown ?? null };
-  const face = useFace(known);
+  const face = useFace(object ?? BLANK);
   const inspect = useContext(Inspecting);
-  if (!shown) return <CardBack width={width} />;
+  const ref = useRef<HTMLSpanElement>(null);
+  useBorrowedCard(ref, object?.slot);
   return (
-    <span className="shown-card" {...inspect?.(known)}>
-      <Card card={face} width={width} highlight={highlight} />
+    <span ref={ref} className="shown-card" {...inspect?.(object)}>
+      {object?.name ? (
+        <Card card={face} width={width} highlight={highlight} />
+      ) : name ? (
+        <span>{name}</span>
+      ) : (
+        <CardBack width={width} />
+      )}
     </span>
   );
 }
-
-/** A card known only by name, for frameFace. */
-const NOWHERE: ObjectView = {
-  slot: 0,
-  zone: "nowhere",
-  owner: "you",
-  controller: "you",
-  name: null,
-  facing: "up",
-  token: false,
-  tapped: false,
-  summoningSick: false,
-  damage: 0,
-  counters: [],
-  types: [],
-  keywords: [],
-  pt: null,
-  attachedTo: null,
-  exiledBy: null,
-  exiledWith: null,
-  combat: null,
-};
 
 /** Centers for `count` cards in a row across the tray, at most `step` apart. */
 function row(count: number, width: number, step: number): number[] {
@@ -312,6 +300,8 @@ function ArrangeChoice({
     choice.rightCount === undefined || piles.right.length === choice.rightCount;
   const objects = new Map(view.objects.map((o) => [o.slot, o]));
   const libraryAt = shown.indexOf(LIBRARY);
+  const libraryRef = useRef<HTMLDivElement>(null);
+  useBorrowedCard(libraryRef, "library");
   return (
     <Shell
       view={view}
@@ -335,6 +325,7 @@ function ArrangeChoice({
           transition={SPRING}
         >
           <div
+            ref={libraryRef}
             style={{
               position: "absolute",
               left: -BACK_WIDTH / 2,
@@ -342,7 +333,13 @@ function ArrangeChoice({
             }}
           >
             <Library
-              count={view.players.you.library.length}
+              count={Math.max(
+                0,
+                view.players.you.library.length -
+                  sequence.filter(
+                    (slot) => objects.get(slot)?.zone === "library",
+                  ).length,
+              )}
               width={BACK_WIDTH}
             />
           </div>
@@ -629,6 +626,8 @@ function StackChoice({
   const library = view.players.you.library.length;
   const backs = Math.min(library, 6, 2 + Math.ceil(library / 10));
   const deckY = column.top - 14;
+  const libraryRef = useRef<HTMLDivElement>(null);
+  useBorrowedCard(libraryRef, "library");
   // A click moves a card across: from the hand onto the top of the library while it has room,
   // from the library back to the hand.
   const toggle = (slot: number) =>
@@ -656,6 +655,7 @@ function StackChoice({
     >
       <div className="scry-zone stack-zone choice-zone" data-choice="stack">
         <div
+          ref={libraryRef}
           className="choice-library"
           data-count={library}
           style={{

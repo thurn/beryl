@@ -122,7 +122,8 @@ import {
 import { CastCaption, CastStep } from "./CastStep";
 import { ModeChooser, type Mode, type Origin } from "./ModeChooser";
 import { eventsHold } from "./playback";
-import { Risen, useRiseFrom } from "./Risen";
+import { Risen } from "./Risen";
+import { useBorrowedCard } from "./choiceFlight";
 import { useStageWidth } from "./Stage";
 import { FloatPrompt, PromptRow } from "./FloatPrompt";
 import { useStandIns } from "./standIns";
@@ -218,6 +219,8 @@ export interface BoardProps {
   dimmed?: boolean;
   /** A screen over it answers the decision: the table only shows. */
   inert?: boolean;
+  /** Cards in an open choice tray, excluded from the table pile counts. */
+  traySlots?: number[];
 }
 
 /** Dropped above this line, a hand card is on the battlefield rather than back in the hand. */
@@ -258,6 +261,7 @@ export function Board({
   onConcede,
   dimmed = false,
   inert = false,
+  traySlots,
 }: BoardProps) {
   // The table shows what is resolving on the stack while its resolution asks a question.
   const view = useMemo(() => withResolving(given), [given]);
@@ -500,6 +504,8 @@ export function Board({
     pile && viewing?.linked !== undefined
       ? { ...pile, cards: exiledWith(shown, viewing.linked) }
       : pile;
+  const away = new Set(traySlots);
+  if (!dimmed) for (const card of viewed?.cards ?? []) away.add(card.slot);
 
   // A new view closes whatever was open on the old one, and starts any declaration afresh.
   useEffect(() => {
@@ -738,7 +744,7 @@ export function Board({
     const p = placements.get(slot);
     if (!p || p.look === "hidden" || p.opacity === 0) return undefined;
     const width = p.width * p.scale;
-    return { slot, at: { x: p.x + width / 2, y: p.y, width } };
+    return { slot, at: { x: p.x + width / 2, y: p.y } };
   }, [prompting, decision, placements]);
   // What paying "unless pays" would tap, lit as it is asked.
   const unlessTaps =
@@ -1219,6 +1225,13 @@ export function Board({
         {(["opponent", "you"] as const).map((side) => {
           const { library } = view.players[side];
           const pile = pileLook(side, PILES[side].library, library.length);
+          // A disclosed top card has its own element over the backs.
+          const top = library.at(-1);
+          const hasFace =
+            top !== undefined && placements.get(top)?.look === "pile";
+          const count = library.filter(
+            (slot) => !away.has(slot) && !(hasFace && slot === top),
+          ).length;
           return (
             <Lying
               key={side}
@@ -1229,26 +1242,26 @@ export function Board({
                 </Tip>
               }
             >
-              <Library
-                count={library.length}
-                width={pile.width}
-                depth={pile.depth}
-              />
+              <div data-table-library={side}>
+                <Library count={count} width={pile.width} depth={pile.depth} />
+              </div>
             </Lying>
           );
         })}
-        {piles.map(
-          ({ side, zone, cards, look }) =>
-            cards.length > 1 && (
+        {piles.map(({ side, zone, cards, look }) => {
+          const count = cards.filter((card) => !away.has(card.slot)).length;
+          return (
+            count > 1 && (
               <Lying key={`${side}-${zone}`} look={look}>
                 <FaceUpEdges
-                  count={cards.length}
+                  count={count}
                   width={look.width}
                   depth={look.depth}
                 />
               </Lying>
-            ),
-        )}
+            )
+          );
+        })}
 
         <div className="hud" style={{ left: 18, top: 62 }}>
           <PlayerBadge
@@ -1597,6 +1610,7 @@ export function Board({
 
         {viewed && !dimmed && (
           <ZoneViewer
+            key={`${viewed.side}:${viewed.zone}:${viewing?.linked ?? ""}`}
             pile={viewed}
             title={
               viewed.zone === "library"
@@ -2618,8 +2632,7 @@ function PromptCard({
 }) {
   const face = useFace(object);
   const ref = useRef<HTMLElement>(null);
-  // It grows out of where it lies: its own card, or the permanent it lies exiled beneath.
-  useRiseFrom(ref, [object.slot, object.exiledWith, object.exiledBy]);
+  useBorrowedCard(ref, object.slot);
   const hover = {
     onPointerEnter: () => onPoint(true),
     onPointerLeave: () => onPoint(false),
