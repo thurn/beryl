@@ -6879,10 +6879,18 @@ if (wanted(manifestFlight)) {
 
 const triggerLift =
     "an ETB trigger visibly lifts away from the permanent before crossing";
-if (wanted(triggerLift)) {
-    const view = (await load("arrow-stacked")).at(-1);
-    const slot = view.stack[0].targets[0].slot;
-    const source = view.objects.find((o) => o.slot === slot);
+for (const controller of wanted(triggerLift) ? ["you", "opponent"] : []) {
+    const board = (await load("arrow-stacked")).at(-1);
+    const slot = board.stack[0].targets[0].slot;
+    const source = {
+        ...board.objects.find((o) => o.slot === slot),
+        controller,
+        owner: controller,
+    };
+    const view = {
+        ...board,
+        objects: board.objects.map((o) => (o.slot === slot ? source : o)),
+    };
     const item = {
         kind: "ability",
         source: slot,
@@ -6898,7 +6906,13 @@ if (wanted(triggerLift)) {
     const before = {
         ...view,
         stack: [
-            { kind: "spell", slot: source.slot, x: 0, paid: [], targets: [] },
+            {
+                kind: "spell",
+                slot: source.slot,
+                x: 0,
+                paid: [],
+                targets: [],
+            },
         ],
         battlefield: view.battlefield.filter((slot) => slot !== source.slot),
         objects: view.objects.map((o) =>
@@ -6921,13 +6935,12 @@ if (wanted(triggerLift)) {
             },
         ],
     };
-    const run = await motionFixture("trigger-lifts-from-permanent", [
-        before,
-        after,
-        { ...view, stack: [], events: [] },
-    ]);
+    const run = await motionFixture(
+        `trigger-lifts-from-permanent-${controller}`,
+        [before, after, { ...view, stack: [], events: [] }],
+    );
     await check(
-        triggerLift,
+        `${triggerLift} (${controller})`,
         async (page) => {
             // Motion plays the stack card on the browser's compositor clock.
             await page.evaluate((source) => {
@@ -6959,9 +6972,12 @@ if (wanted(triggerLift)) {
             const frames = await page.evaluate(() => window.triggerFrames);
             const [{ permanent: from, ability: start, at }] = frames;
             assert.ok(
-                Math.abs(from.x - start.x) < 20 &&
-                    Math.abs(from.y - start.y) < 20,
-                "trigger starts over its permanent",
+                start.width < from.width * 0.85 &&
+                    start.x >= from.x &&
+                    start.y >= from.y &&
+                    start.x + start.width <= from.x + from.width &&
+                    start.y + start.height <= from.y + from.height,
+                "trigger starts small inside the settled permanent",
             );
             assert.ok(
                 frames.some(
@@ -6969,7 +6985,11 @@ if (wanted(triggerLift)) {
                         now - at <= 220 &&
                         ability.y < start.y - 38 &&
                         ability.width > start.width * 1.2 &&
-                        Math.abs(ability.x - start.x) < 20,
+                        Math.abs(
+                            ability.x +
+                                ability.width / 2 -
+                                (start.x + start.width / 2),
+                        ) < 20,
                 ),
                 "the ability lifts and grows immediately, before crossing",
             );
@@ -6999,6 +7019,201 @@ if (wanted(triggerLift)) {
             await page.locator(".stack-ability").waitFor({ state: "detached" });
         },
         { ...run, clock: false, ready: slotOf(source.slot) },
+    );
+}
+
+// A single recorded update casts and resolves Staff, makes the Spirit, and
+// resolves the story-counter trigger. Older reports have no resolution marker.
+const staffChain = "Staff's Spirit and story counter triggers play in sequence";
+if (wanted(staffChain)) {
+    const base = (await load("target-up-to-one")).at(-1);
+    const staff = {
+        ...base.objects.find((o) => o.name === "Staff of the Storyteller"),
+        slot: 800,
+        counters: [],
+    };
+    const token = {
+        ...staff,
+        slot: 801,
+        name: "Spirit Token",
+        token: true,
+        types: ["creature"],
+        power: 1,
+        toughness: 1,
+    };
+    for (const controller of ["you", "opponent"]) {
+        const source = { ...staff, controller, owner: controller };
+        const spirit = { ...token, controller, owner: controller };
+        const spell = {
+            kind: "spell",
+            slot: staff.slot,
+            x: 0,
+            paid: [],
+            targets: [],
+        };
+        const enters = {
+            kind: "ability",
+            source: staff.slot,
+            name: staff.name,
+            controller,
+            triggered: true,
+            ability: 0,
+            nth: 0,
+            granted: false,
+            targets: [],
+            x: 0,
+        };
+        const counter = { ...enters, ability: 1, nth: 1 };
+        const before = {
+            ...turnViews[mainHalt],
+            stack: [],
+            events: [],
+            objects: [
+                ...turnViews[mainHalt].objects,
+                { ...source, zone: "hand" },
+            ],
+        };
+        const finished =
+            controller === "opponent" ? [{ kind: "abilityFinished" }] : [];
+        const after = {
+            ...before,
+            objects: [
+                ...before.objects.filter((o) => o.slot !== staff.slot),
+                { ...source, counters: [{ kind: "story", count: 1 }] },
+                spirit,
+            ],
+            battlefield: [...before.battlefield, staff.slot, token.slot],
+            events: [
+                {
+                    kind: "zoneChange",
+                    slot: staff.slot,
+                    from: "hand",
+                    to: "stack",
+                    reason: "cast",
+                },
+                { kind: "cast", slot: staff.slot, controller, item: spell },
+                {
+                    kind: "zoneChange",
+                    slot: staff.slot,
+                    from: "stack",
+                    to: "battlefield",
+                    reason: "resolve",
+                },
+                { kind: "ability", item: enters, loyalty: null },
+                {
+                    kind: "zoneChange",
+                    slot: token.slot,
+                    from: "nowhere",
+                    to: "battlefield",
+                    reason: "created",
+                },
+                { kind: "tokensCreated", controller, tokens: [token.slot] },
+                ...finished,
+                { kind: "ability", item: counter, loyalty: null },
+                {
+                    kind: "countersAdded",
+                    slot: staff.slot,
+                    counter: "story",
+                    amount: 1,
+                },
+                ...finished,
+            ],
+        };
+        const run = await motionFixture(`staff-trigger-chain-${controller}`, [
+            before,
+            after,
+        ]);
+        await check(
+            `${staffChain} (${controller})`,
+            async (page) => {
+                await page.keyboard.press("Space");
+                const abilities = page.locator(".stack-ability");
+                await abilities.first().waitFor();
+                assert.match(
+                    await abilities.innerText(),
+                    /white Spirit creature token/,
+                );
+                await abilities
+                    .filter({ hasText: "put a story counter" })
+                    .waitFor();
+                assert.equal(await abilities.count(), 1);
+                assert.match(
+                    await abilities.innerText(),
+                    /put a story counter/,
+                );
+                assert.equal(await page.locator(slotOf(token.slot)).count(), 1);
+                const storyCount = () =>
+                    page.evaluate(
+                        (slot) =>
+                            window.berylShown
+                                .at(-1)
+                                .update.view.objects.find(
+                                    (o) => o.slot === slot,
+                                )
+                                .counters.find((c) => c.kind === "story")
+                                ?.count,
+                        staff.slot,
+                    );
+                assert.equal(await storyCount(), undefined);
+                await abilities.waitFor({ state: "detached" });
+                assert.equal(await storyCount(), 1);
+                assert.equal(await abilities.count(), 0);
+                assert.equal(await page.locator(slotOf(staff.slot)).count(), 1);
+            },
+            { ...run, clock: false, ready: slotOf(staff.slot) },
+        );
+    }
+    // Multiple real items sharing a source stay on the stack. The covered
+    // ability's title exposes its own rules text instead of just its source name.
+    const enters = {
+        kind: "ability",
+        source: staff.slot,
+        name: staff.name,
+        controller: "you",
+        triggered: true,
+        ability: 0,
+        nth: 0,
+        granted: false,
+        targets: [],
+        x: 0,
+    };
+    const counter = { ...enters, ability: 1, nth: 1 };
+    const field = {
+        ...turnViews[mainHalt],
+        battlefield: [...turnViews[mainHalt].battlefield, staff.slot],
+        objects: [...turnViews[mainHalt].objects, staff],
+        stack: [],
+        events: [],
+    };
+    const run = await motionFixture("staff-concurrent-triggers", [
+        field,
+        {
+            ...field,
+            stack: [enters, counter],
+            events: [enters, counter].map((item) => ({
+                kind: "ability",
+                item,
+                loyalty: null,
+            })),
+        },
+    ]);
+    await check(
+        `${staffChain} (concurrent stack neighbor)`,
+        async (page) => {
+            await page.keyboard.press("Space");
+            await page.locator("#stack-1").waitFor();
+            const abilities = page.locator(".stack-ability");
+            assert.equal(await abilities.count(), 2);
+            assert.match(
+                await abilities.first().getAttribute("title"),
+                /white Spirit creature token/,
+            );
+            assert.match(
+                await abilities.last().innerText(),
+                /put a story counter/,
+            );
+        },
+        { ...run, ready: slotOf(staff.slot) },
     );
 }
 

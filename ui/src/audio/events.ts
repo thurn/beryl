@@ -50,6 +50,7 @@ const EVENTS: Sounds = {
   untap: () => "untap",
   mana: () => "mana",
   resolutionPayment: () => null,
+  abilityFinished: () => null,
   tokensCreated: () => "place",
   cast: () => "cast",
   ability: () => "ability",

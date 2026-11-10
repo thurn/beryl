@@ -600,6 +600,7 @@ impl<L: Layout> Relayout for Event<L> {
             },
             Event::Mana { .. } => mana(self),
             Event::ResolutionPayment { .. } => resolution_payment(self),
+            Event::AbilityFinished => Event::AbilityFinished,
             &Event::TokensCreated { controller, tokens } => Event::TokensCreated {
                 controller,
                 tokens: bits(tokens),

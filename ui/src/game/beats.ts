@@ -9,6 +9,7 @@
 // its events need (`HOLD`); the last is the view itself. Every card and every event kind
 // gets the same beats: none of this knows a card.
 import type {
+  Counter,
   GameEvent,
   GameUpdate,
   ObjectView,
@@ -262,6 +263,9 @@ class Walk {
 
   run(reveal: ReadonlySet<number>): Beat[] {
     const events = this.view.events;
+    const marksAbilityResolution = events.some(
+      (e) => e.kind === "abilityFinished",
+    );
     for (let i = 0; i < events.length; i++) {
       const e = events[i]!;
       if (e.kind === "stepBegins") {
@@ -483,6 +487,22 @@ class Walk {
         // The permanent has to land before the trigger can visibly lift off it.
         this.cut();
       }
+      if (e.kind === "abilityFinished") {
+        this.finishAbility();
+        continue;
+      }
+      if (trigger && this.pending.some(effect)) {
+        // Older recordings have no resolution boundary. Effects between two
+        // announcements can belong to a trigger that has already left the stack.
+        const top = this.cur.stack.at(-1);
+        if (
+          !marksAbilityResolution &&
+          top?.kind === "ability" &&
+          !onStack(this.view.stack, top)
+        )
+          this.finishAbility();
+        this.cut();
+      }
       if (e.kind === "draw" && e.cards > 1) this.cut();
       const drawing = this.drawn.size;
       this.apply(e);
@@ -626,14 +646,46 @@ class Walk {
   /** The object in `slot` once it has moved to `to`: as the view's end shows it where the
    * viewer may see it there, else as it was (a card going into a library, or into the
    * opponent's hand, shows no more than it did). */
-  private moved(slot: number, to: ZoneName): ObjectView | undefined {
+  private moved(
+    move: Extract<GameEvent, { kind: "zoneChange" }>,
+  ): ObjectView | undefined {
+    const { slot, from, to } = move;
     const was = this.cur.objects.find((o) => o.slot === slot);
     const now = this.final.get(slot);
     const owner = now?.owner ?? was?.owner;
     if (!owner) return undefined;
     const seen =
       now && (now.zone === to || !hiddenTo(to, owner)) ? now : (was ?? now);
-    return seen && { ...seen, zone: to };
+    if (!seen) return undefined;
+    if (from !== to && to === "battlefield" && now?.zone === to) {
+      // The final object already carries counters added by later effects.
+      // Keep any counters it entered with, and let later beats show their changes.
+      const later = new Map<Counter, number>();
+      for (const e of this.view.events.slice(
+        this.view.events.indexOf(move) + 1,
+      )) {
+        if (!("slot" in e) || e.slot !== slot) continue;
+        if (e.kind === "zoneChange") return { ...seen, zone: to };
+        if (e.kind === "countersAdded" || e.kind === "countersRemoved") {
+          const delta = e.kind === "countersAdded" ? e.amount : -e.amount;
+          later.set(e.counter, (later.get(e.counter) ?? 0) + delta);
+        }
+      }
+      if (later.size === 0) return { ...seen, zone: to };
+      const counts = new Map(seen.counters.map((c) => [c.kind, c.count]));
+      for (const [kind, delta] of later)
+        counts.set(kind, (counts.get(kind) ?? 0) - delta);
+      return {
+        ...seen,
+        zone: to,
+        counters: [...counts].flatMap(([kind, count]) =>
+          count > 0 || (count === 0 && kind === "loyalty")
+            ? [{ kind, count }]
+            : [],
+        ),
+      };
+    }
+    return { ...seen, zone: to };
   }
 
   /** Plays `e` on the table so far. Only what a beat must show is played; anything else the
@@ -642,7 +694,7 @@ class Walk {
     const cur = this.cur;
     switch (e.kind) {
       case "zoneChange": {
-        const moved = this.moved(e.slot, e.to);
+        const moved = this.moved(e);
         if (!moved) return;
         const object = collecting ? { ...moved, name: null } : moved;
         const players = { ...cur.players };
@@ -781,6 +833,12 @@ class Walk {
     };
   }
 
+  /** The effects of a resolving ability remain, but its stack surface is gone. */
+  private finishAbility() {
+    if (this.cur.stack.at(-1)?.kind === "ability")
+      this.cur = { ...this.cur, stack: this.cur.stack.slice(0, -1) };
+  }
+
   /** Puts `item` on top of the stack, in place of itself in the making: a spell or ability
    * goes on the stack as its casting begins, before its targets are chosen
    * ([CR 601.2a](https://yawgatog.com/resources/magic-rules/#R6012a)), and a view shown
@@ -819,6 +877,7 @@ function effect(e: GameEvent): boolean {
   switch (e.kind) {
     case "cast":
     case "ability":
+    case "abilityFinished":
     case "tap":
     case "untap":
     case "mana":
@@ -838,6 +897,8 @@ export function eventsHold(view: PlayerView): number {
 
 function eventHold(e: GameEvent): number {
   switch (e.kind) {
+    case "abilityFinished":
+      return 0;
     case "stepBegins":
       // A new turn holds while it is announced (TurnBanner), before anything is played in it.
       return e.step === "untap" ? HOLD.turn : HOLD.step;

@@ -291,6 +291,9 @@ fn run<L: Layout>(
             };
         }
     }
+    if !entry.is_spell() {
+        sink.note(Event::AbilityFinished);
+    }
     // CR 117.3b: "The active player receives priority after a spell or ability (other than a
     // mana ability) resolves."
     s.turn.priority = s.turn.active;

@@ -38,6 +38,7 @@ const QUIET_EVENTS = new Set([
     "win",
     "lose",
     "resolutionPayment",
+    "abilityFinished",
 ]);
 /** Events that come with another and count for nothing in a crowd. */
 const MINOR_EVENTS = new Set(["tap", "untap", "draw", "cast", "mana"]);

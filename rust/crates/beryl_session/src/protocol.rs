@@ -850,6 +850,8 @@ pub enum GameEvent {
         player: Side,
         item: StackItem,
     },
+    /// The top ability finished resolving and left the stack.
+    AbilityFinished,
     TokensCreated {
         controller: Side,
         tokens: Vec<u16>,
@@ -2384,6 +2386,7 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
             player: side(player),
             item: stack_item(t, obs, item),
         },
+        Event::AbilityFinished => GameEvent::AbilityFinished,
         Event::TokensCreated { controller, tokens } => GameEvent::TokensCreated {
             controller: side(controller),
             tokens: slots(tokens.iter()),

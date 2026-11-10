@@ -2356,8 +2356,9 @@ function AbilityOnStack({
   const [liftFrom, setLiftFrom] = useState(() =>
     !reduce && !chosen ? from : undefined,
   );
-  // Out of its source it comes whole, the size of the card it lifts off, so that the eye
-  // follows it from there; with no source drawn, it fades in where it stays.
+  const origin = liftFrom && abilityLift(liftFrom, item.triggered);
+  const text = abilityText(face.text ?? "", item.triggered, item.nth);
+  // A trigger starts inside its source. With no source drawn, it fades in at the stack.
   const start = chosen
     ? {
         opacity: 1,
@@ -2366,18 +2367,27 @@ function AbilityOnStack({
         scale: chosen.width / place.width,
         rotate: 0,
       }
-    : from
+    : origin && item.triggered
       ? {
           opacity: 1,
-          x: from.x,
-          y: from.y,
-          scale: (from.width * from.scale) / place.width,
-          rotate: from.rotate,
+          x: origin.start.x,
+          y: origin.start.y,
+          scale: origin.start.width / place.width,
+          rotate: 0,
         }
-      : { opacity: 0, x: place.x, y: place.y, scale: 0.8 };
+      : from
+        ? {
+            opacity: 1,
+            x: from.x,
+            y: from.y,
+            scale: (from.width * from.scale) / place.width,
+            rotate: from.rotate,
+          }
+        : { opacity: 0, x: place.x, y: place.y, scale: 0.8 };
   return (
     <motion.div
       className="hud stack-ability"
+      title={present && index < count - 1 ? text : undefined}
       // Which item it is, by place and the ability's own name, for a motion audit: two
       // items sharing a source's face (an emblem's and its planeswalker's) stay apart.
       data-stack-key={`${index}:${item.name}`}
@@ -2391,18 +2401,11 @@ function AbilityOnStack({
       initial={reduce ? false : start}
       animate={{
         opacity: 1,
-        scale: liftFrom
-          ? [
-              null,
-              Math.min(
-                1,
-                (liftFrom.width * liftFrom.scale * 1.35) / place.width,
-              ),
-              1,
-            ]
+        scale: origin
+          ? [null, Math.min(1, origin.lift.width / place.width), 1]
           : 1,
-        x: liftFrom ? [null, liftFrom.x, place.x] : place.x,
-        y: liftFrom ? [null, liftFrom.y - 54, place.y] : place.y,
+        x: origin ? [null, origin.lift.x, place.x] : place.x,
+        y: origin ? [null, origin.lift.y, place.y] : place.y,
         rotate: 0,
       }}
       transition={liftFrom ? SOURCE_FLIGHT : ABILITY_FLIGHT}
@@ -2415,13 +2418,40 @@ function AbilityOnStack({
         id={present ? stackId(index) : undefined}
         source={face}
         label={item.triggered ? "Triggered Ability" : "Activated Ability"}
-        text={abilityText(face.text ?? "", item.triggered, item.nth)}
+        text={text}
         width={place.width}
         showArt
       />
       <StackMarks controller={item.controller} x={item.x} />
     </motion.div>
   );
+}
+
+/** Let a trigger emerge at the center of the visible card before it crosses the board. */
+function abilityLift(from: Placement, triggered: boolean) {
+  const width = from.width * from.scale;
+  if (!triggered)
+    return {
+      start: { x: from.x, y: from.y, width },
+      lift: { x: from.x, y: from.y - 54, width: width * 1.35 },
+    };
+  const { left, right, top, bottom } = footprint(from);
+  const centerX = (left + right) / 2;
+  const centerY = (top + bottom) / 2;
+  const startWidth = Math.min(right - left, (bottom - top) * CARD_ASPECT) * 0.6;
+  const liftWidth = width * 1.16;
+  return {
+    start: {
+      x: centerX - startWidth / 2,
+      y: centerY - startWidth / CARD_ASPECT / 2,
+      width: startWidth,
+    },
+    lift: {
+      x: centerX - liftWidth / 2,
+      y: centerY - liftWidth / CARD_ASPECT / 2 - 38,
+      width: liftWidth,
+    },
+  };
 }
 
 /** An ability's flight from its source onto the stack: long enough for the eye to follow it

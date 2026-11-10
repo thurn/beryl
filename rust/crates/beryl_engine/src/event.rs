@@ -173,6 +173,11 @@ pub enum Event<L: Layout = Small> {
         player: Seat,
         item: StackEntry<L>,
     },
+    /// An ability left the stack at the end of resolution
+    /// ([CR 608.2n](https://yawgatog.com/resources/magic-rules/#R6082n)): "the
+    /// ability is removed from the stack and ceases to exist." Playback needs
+    /// this boundary even when the next trigger arrives in the same view.
+    AbilityFinished,
     /// "Whenever you create one or more tokens" reads this once per event.
     TokensCreated {
         controller: Seat,
