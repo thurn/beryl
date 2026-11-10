@@ -234,6 +234,8 @@ INTERACTION_FIXTURES = [
     "arrow-ability",
     "arrow-player",
     "arrow-stacked",
+    "counterspell-targets",
+    "reprieve-target",
     "marks",
     "marks-damage",
     "tokens",

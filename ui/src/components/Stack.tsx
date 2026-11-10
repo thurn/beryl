@@ -171,6 +171,23 @@ function box(rect: DOMRect, origin: DOMRect, scale: number): Box {
   };
 }
 
+/** A covered stack card exposes its name above the next card's edge. Read both rendered
+ * cards so that the visible strip can never get ahead of either one during a glide. */
+function arrowEnd(element: HTMLElement, origin: DOMRect, scale: number) {
+  const rect = (node: Element) =>
+    box(node.getBoundingClientRect(), origin, scale);
+  const nextId = element.dataset.stackNext;
+  if (!nextId) return { box: rect(element), hosts: [] };
+  const card = document.getElementById(element.dataset.within ?? "");
+  const next = document.getElementById(nextId);
+  if (!card || !next) return undefined;
+  const whole = rect(card);
+  const covering = rect(next);
+  const height = Math.min(whole.height, covering.y - whole.y);
+  if (height <= 0) return undefined;
+  return { box: { ...whole, height }, hosts: [whole, covering] };
+}
+
 const point = ([x, y]: Vector) => `${x.toFixed(1)} ${y.toFixed(1)}`;
 
 /** Draws arrows between elements (by id) over its parent, which must be positioned, above
@@ -240,20 +257,15 @@ export function Arrows({
         const from = document.getElementById(a.from);
         const to = document.getElementById(a.to);
         if (!from || !to) return [];
-        const source = box(from.getBoundingClientRect(), origin, scale);
-        const target = box(to.getBoundingClientRect(), origin, scale);
+        const start = arrowEnd(from, origin, scale);
+        const end = arrowEnd(to, origin, scale);
+        if (!start || !end) return [];
+        const source = start.box;
+        const target = end.box;
         if (follow) {
           const key = keyOf(a);
-          // A stack peek is laid out at its destination while its card is still flying.
-          const hosts = [from, to].flatMap((end) => {
-            const id = end.dataset.within;
-            const host = id && document.getElementById(id);
-            return host
-              ? [box(host.getBoundingClientRect(), origin, scale)]
-              : [];
-          });
           const at = JSON.stringify(
-            [source, target, ...hosts].map((b) => [
+            [source, target, ...start.hosts, ...end.hosts].map((b) => [
               b.x,
               b.y,
               b.width,
@@ -294,8 +306,16 @@ export function Arrows({
           return whole ? [end, whole] : [end];
         });
         return {
-          from: { box: source, oval: from.hasAttribute("data-oval") },
-          to: { box: target, oval: to.hasAttribute("data-oval") },
+          from: {
+            box: source,
+            oval: from.hasAttribute("data-oval"),
+            stackPeek: !!from.dataset.stackNext,
+          },
+          to: {
+            box: target,
+            oval: to.hasAttribute("data-oval"),
+            stackPeek: !!to.dataset.stackNext,
+          },
           avoid: obstacles
             .filter(
               ({ element: e }) =>

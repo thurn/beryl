@@ -325,6 +325,7 @@ export function Board({
     view: PlayerView;
     picked: ReadonlySet<number>;
   }>();
+  const [stackPick, setStackPick] = useState<{ view: PlayerView; act: Act }>();
   // The card being dragged.
   const [lifted, setLifted] = useState<number>();
   // The card off the table the pointer is on in the prompt, shown whole.
@@ -376,6 +377,42 @@ export function Board({
   );
   const picked =
     picks?.view === view ? picks.picked : new Set(picking?.initial ?? []);
+  // A stack spell may be preselected, but it becomes a target only on confirmation.
+  const stackTargets =
+    deciding && decision?.kind === "target"
+      ? decision.candidates.flatMap(({ option, ...candidate }, index) => {
+          const object = option.kind === "object" && objects.get(option.slot);
+          return object && object.zone === "stack"
+            ? [{ act: { index, option, ...candidate }, object }]
+            : [];
+        })
+      : [];
+  const opposingSpells = stackTargets.filter(
+    ({ object }) => object.controller === "opponent",
+  );
+  const defaultSpell =
+    stackTargets.length > 1 &&
+    stackTargets.length === decision?.candidates.length &&
+    opposingSpells.length === 1
+      ? opposingSpells[0]?.act
+      : undefined;
+  const selectedSpell =
+    stackTargets.length > 0 && stackPick?.view === view
+      ? stackPick.act
+      : defaultSpell;
+  const sourceSpell =
+    decision?.source == null ? undefined : objects.get(decision.source);
+  const counteringSpell =
+    sourceSpell?.zone === "stack" &&
+    sourceSpell.name &&
+    /^Counter target /m.test(faceEntry(sourceSpell.name)?.oracle_text ?? "");
+  const selfCounter = (act: Act) =>
+    counteringSpell &&
+    stackTargets.some(
+      ({ act: target, object }) =>
+        target.index === act.index && object.controller === "you",
+    );
+  const stackConfirmation = selectedSpell && (() => pick(selectedSpell.index));
   // The table as the declaration would leave it.
   const shown = useMemo(() => {
     const declaredView = drafting ? declared(view, draft) : view;
@@ -848,6 +885,10 @@ export function Board({
       });
     }
   }
+  if (selectedSpell?.option.kind === "object") {
+    const slot = selectedSpell.option.slot;
+    states.set(slot, { ...states.get(slot), highlight: "source" });
+  }
   const splitting = activeChooser?.split
     ? activeChooser.object.slot
     : pendingMode && choosingCard
@@ -1136,7 +1177,15 @@ export function Board({
       castOrSetUp(slot, casts);
     } else if (acts.length === 1) {
       // One use acts on the click: a land is played, an ability activated, a target picked.
-      pick(acts[0]!.index, acts[0]!.then);
+      const act = acts[0]!;
+      if (
+        stackTargets.some((target) => target.act.index === act.index) &&
+        (selectedSpell || selfCounter(act))
+      ) {
+        setStackPick({ view, act });
+      } else {
+        pick(act.index, act.then);
+      }
     } else {
       // One entry for all of a card's casts, which the cast step tells apart.
       const listed = acts.filter(
@@ -1317,6 +1366,7 @@ export function Board({
     if (castingNow) primary = () => cast(castingNow.choice);
     else if (drafting) primary = attackAllFirst ? attackWithAll : declare;
     else if (picking) primary = confirmPicks;
+    else if (stackConfirmation) primary = stackConfirmation;
     else if (declaring)
       primary = finish === undefined ? undefined : () => pick(finish);
     else if (deciding && decision?.kind === "priority" && pass !== undefined) {
@@ -1596,6 +1646,7 @@ export function Board({
                 index={i}
                 count={view.stack.length}
                 within={itemId(item, i)}
+                nextItem={itemId(view.stack[i + 1]!, i + 1)}
               />
             ),
         )}
@@ -1712,24 +1763,36 @@ export function Board({
             }}
             onCancel={cancellable ? cancel : undefined}
             onPoint={setPointedOff}
+            targetLabel={
+              selectedSpell &&
+              (selfCounter(selectedSpell)
+                ? `Counter your own spell, ${selectedSpell.label}?`
+                : `Target ${selectedSpell.label}`)
+            }
             confirm={
-              waterbend.active
+              stackConfirmation
                 ? {
                     label: "Confirm",
-                    disabled: !waterbend.ready,
-                    onClick: () => {
-                      const { index, rest } = follow(
-                        decision,
-                        waterbend.plan(),
-                      );
-                      if (index !== undefined) pick(index, rest);
-                    },
+                    disabled: false,
+                    onClick: stackConfirmation,
                   }
-                : picking && {
-                    label: picking.label(picked),
-                    disabled: !picking.ready(picked),
-                    onClick: confirmPicks,
-                  }
+                : waterbend.active
+                  ? {
+                      label: "Confirm",
+                      disabled: !waterbend.ready,
+                      onClick: () => {
+                        const { index, rest } = follow(
+                          decision,
+                          waterbend.plan(),
+                        );
+                        if (index !== undefined) pick(index, rest);
+                      },
+                    }
+                  : picking && {
+                      label: picking.label(picked),
+                      disabled: !picking.ready(picked),
+                      onClick: confirmPicks,
+                    }
             }
             hovered={hovered}
             risen={risen?.slot}
@@ -2379,10 +2442,12 @@ function StackPeek({
   index,
   count,
   within,
+  nextItem,
 }: {
   index: number;
   count: number;
   within: string;
+  nextItem: string;
 }) {
   const place = stackPlace(index, count);
   const next = stackPlace(index + 1, count);
@@ -2391,6 +2456,7 @@ function StackPeek({
       id={peekId(index)}
       className="hud stack-peek"
       data-within={within}
+      data-stack-next={nextItem}
       style={{
         left: place.x,
         top: place.y,
@@ -2720,6 +2786,7 @@ function Prompt({
   onPlan,
   onCancel,
   onPoint,
+  targetLabel,
   confirm,
   hovered,
   risen,
@@ -2739,6 +2806,7 @@ function Prompt({
   onCancel?(): void;
   /** The card off the table the pointer is on, if any, to show whole. */
   onPoint(slot: number | undefined): void;
+  targetLabel?: string;
   /** Confirms the cards picked on the table, which leaves the prompt no candidate to offer. */
   confirm?: { label: string; disabled: boolean; onClick(): void } | false;
   /** The card the pointer is on, which a crew meter previews. */
@@ -2799,15 +2867,17 @@ function Prompt({
             Number(a.c.option.kind === "yes"),
         );
   const [order, setOrder] = useState<CandidateIndex[]>([]);
-  const title = ordering
-    ? order.length === 0
-      ? "Resolve first"
-      : "Resolve next"
-    : prompt(
-        skip === undefined ? decision : { ...decision, kind: "target" },
-        source,
-        subject?.zone,
-      );
+  const title =
+    targetLabel ??
+    (ordering
+      ? order.length === 0
+        ? "Resolve first"
+        : "Resolve next"
+      : prompt(
+          skip === undefined ? decision : { ...decision, kind: "target" },
+          source,
+          subject?.zone,
+        ));
   const body = (
     <>
       {ask.kind === "crew" && (
@@ -2856,9 +2926,12 @@ function Prompt({
       body={(ask.kind === "crew" || ordering || faces.length > 0) && body}
       title={
         <>
-          {/* The source of a target is on the stack, with its arrow. */}
           <RulesText
-            text={decision.kind === "target" ? prompt(decision) : title}
+            text={
+              decision.kind === "target" && !targetLabel
+                ? prompt(decision)
+                : title
+            }
           />
           {ask.kind === "waterbend" && (
             <span className="prompt-cost">

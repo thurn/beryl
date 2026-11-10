@@ -8823,6 +8823,262 @@ await check(
     },
 );
 
+// A target picked on the stack remains tentative until Confirm. The committed link below
+// Counterspell is Mana Tithe's, and both ends touch the exposed name strips.
+const counterViews = await load("counterspell-targets");
+const counterTarget = counterViews.at(-1);
+const counterDecision = counterTarget.status.decision;
+const cryptSlot = counterDecision.candidates.find(
+    (c) => c.label === "Mana Crypt",
+).option.slot;
+const titheIndex = counterDecision.candidates.findIndex(
+    (c) => c.label === "Mana Tithe",
+);
+const titheSlot = counterDecision.candidates[titheIndex].option.slot;
+const counterSlot = counterDecision.source;
+const counterRun = {
+    fixture: "counterspell-targets",
+    at: counterViews.length,
+    ready: ".prompt",
+};
+
+async function pickStackCard(page, slot) {
+    const rect = await page.locator(`#card-${slot}`).boundingBox();
+    await page.mouse.click(rect.x + rect.width / 2, rect.y + 8);
+}
+
+await check(
+    "Counterspell previews its opposing target and confirms changes",
+    async (page) => {
+        const prompt = page.getByRole("dialog");
+        assert.match(await prompt.innerText(), /Target Mana Tithe/);
+        assert.deepEqual(await chosen(page), []);
+        await pickStackCard(page, cryptSlot);
+        assert.match(
+            await prompt.innerText(),
+            /Counter your own spell, Mana Crypt\?/,
+        );
+        assert.deepEqual(await chosen(page), []);
+        await pickStackCard(page, titheSlot);
+        assert.match(await prompt.innerText(), /Target Mana Tithe/);
+        await prompt.getByRole("button", { name: "Confirm" }).click();
+        assert.deepEqual(await settled(page, 1), [titheIndex]);
+    },
+    counterRun,
+);
+
+await check(
+    "Counterspell can back out of its self-target warning",
+    async (page) => {
+        await pickStackCard(page, cryptSlot);
+        const prompt = page.getByRole("dialog");
+        assert.match(
+            await prompt.innerText(),
+            /Counter your own spell, Mana Crypt\?/,
+        );
+        await prompt.getByRole("button", { name: "Cancel" }).click();
+        assert.equal(await cancels(page), 1);
+        assert.deepEqual(await chosen(page), []);
+    },
+    counterRun,
+);
+
+await check(
+    "Counterspell can confirm the warned-about self-target",
+    async (page) => {
+        await pickStackCard(page, cryptSlot);
+        await page.getByRole("button", { name: "Confirm" }).click();
+        const ownIndex = counterDecision.candidates.findIndex(
+            (c) => c.label === "Mana Crypt",
+        );
+        assert.deepEqual(await settled(page, 1), [ownIndex]);
+    },
+    counterRun,
+);
+
+const stackLinks =
+    "pending Counterspell preserves only Mana Tithe's committed link";
+if (wanted(stackLinks)) {
+    for (const seat of ["yours", "theirs"]) {
+        const view = structuredClone(counterTarget);
+        if (seat === "theirs") {
+            for (const o of view.objects) {
+                o.controller = o.controller === "you" ? "opponent" : "you";
+            }
+            view.status = { kind: "thinking" };
+        }
+        const run = await motionFixture(`counterspell-links-${seat}`, [view]);
+        await check(
+            stackLinks + ` (${seat})`,
+            async (page) => {
+                await page.clock.runFor(1300);
+                const links = page.locator(".board-arrows .arrow");
+                assert.equal(await links.count(), 1);
+                assert.equal(
+                    await links.getAttribute("data-from"),
+                    "stack-peek-1",
+                );
+                assert.equal(
+                    await links.getAttribute("data-to"),
+                    "stack-peek-0",
+                );
+                assert.ok(
+                    await links.evaluate((link) =>
+                        link.classList.contains("arrow-red"),
+                    ),
+                );
+                const edges = await page.evaluate(
+                    ({ cryptSlot, titheSlot, counterSlot }) => {
+                        const crypt = document
+                            .getElementById(`card-${cryptSlot}`)
+                            .getBoundingClientRect();
+                        const tithe = document
+                            .getElementById(`card-${titheSlot}`)
+                            .getBoundingClientRect();
+                        const counter = document
+                            .getElementById(`card-${counterSlot}`)
+                            .getBoundingClientRect();
+                        const shaft = document.querySelector(
+                            ".board-arrows .arrow-line path",
+                        );
+                        const head = document.querySelector(
+                            ".board-arrows .arrow-head",
+                        );
+                        const actualStart = shaft.getPointAtLength(0);
+                        const from = new DOMPoint(
+                            actualStart.x,
+                            actualStart.y,
+                        ).matrixTransform(shaft.getScreenCTM());
+                        const to = new DOMPoint().matrixTransform(
+                            head.getScreenCTM(),
+                        );
+                        return [
+                            Math.min(
+                                Math.abs(from.x - tithe.left),
+                                Math.abs(from.x - tithe.right),
+                            ),
+                            Math.abs(from.y - (tithe.top + counter.top) / 2),
+                            Math.min(
+                                Math.abs(to.x - crypt.left),
+                                Math.abs(to.x - crypt.right),
+                            ),
+                            Math.abs(to.y - (crypt.top + tithe.top) / 2),
+                        ];
+                    },
+                    { cryptSlot, titheSlot, counterSlot },
+                );
+                assert.ok(
+                    edges.every((distance) => distance < 1),
+                    `arrow offsets: ${edges}`,
+                );
+                // Moving the covering spell changes the usable strip even if both
+                // linked cards are otherwise stationary.
+                const cover = page.locator(`#card-${counterSlot}`);
+                await page.clock.pauseAt(Date.now() + 60_000);
+                for (const y of [3, 6, 9]) {
+                    await cover.evaluate((card, y) => {
+                        card.style.translate = `0 ${y}px`;
+                    }, y);
+                    await page.clock.runFor(50);
+                    assert.equal(
+                        await links.count(),
+                        0,
+                        "the old strip no longer anchors a link",
+                    );
+                }
+                await page.clock.runFor(200);
+                assert.equal(
+                    await links.count(),
+                    1,
+                    "the link returns once the strip is still",
+                );
+            },
+            { ...run, ready: `#card-${counterSlot}` },
+        );
+    }
+}
+
+const objectColors =
+    "target arrow color follows the effect and object controllers";
+if (wanted(objectColors)) {
+    const base = (await load("arrow-ability")).at(-1);
+    for (const controller of ["you", "opponent"]) {
+        for (const hostile of [false, true]) {
+            const view = structuredClone(base);
+            const item = view.stack.at(-1);
+            item.controller = controller;
+            const target = view.objects.find(
+                (o) => o.slot === item.targets[0].slot,
+            );
+            target.controller = hostile
+                ? controller === "you"
+                    ? "opponent"
+                    : "you"
+                : controller;
+            const tone = hostile ? "red" : "green";
+            const run = await motionFixture(
+                `object-arrow-${controller}-${tone}`,
+                [view],
+            );
+            await check(
+                `${objectColors}: ${controller} ${tone}`,
+                async (page) => {
+                    const selector = `.arrow[data-to="card-${target.slot}"]`;
+                    await until(page, selector, 30);
+                    const links = page.locator(selector);
+                    assert.equal(await links.count(), 1);
+                    assert.ok(
+                        await links.evaluate(
+                            (link, tone) =>
+                                link.classList.contains(`arrow-${tone}`),
+                            tone,
+                        ),
+                    );
+                },
+                { ...run, ready: ".board-arrows .arrow" },
+            );
+        }
+    }
+}
+
+const reprieveTitle =
+    "Reprieve answers its lone stack target before planned payment";
+if (wanted(reprieveTitle)) {
+    const recording = await load("reprieve-target");
+    const targetAt = recording.findIndex(
+        (v) => v.status.decision?.kind === "target",
+    );
+    const start = recording.findLastIndex(
+        (v, i) => i < targetAt && v.status.decision?.kind === "priority",
+    );
+    const castAt = recording[start].status.decision.candidates.findIndex(
+        (c) => c.label === "Cast Reprieve",
+    );
+    const cast = recording[start].status.decision.candidates[castAt];
+    assert.ok(
+        cast.payments.length > 1,
+        "the cast has an explicit payment plan",
+    );
+    const payment = recording.find(
+        (v, i) => i > targetAt && v.status.decision?.kind === "paymentPlan",
+    );
+    const planAt = payment.status.decision.candidates.findIndex(
+        (c) => c.option.index === cast.payments[0].plan,
+    );
+    await check(
+        reprieveTitle,
+        async (page) => {
+            await page.click(slotOf(cast.option.slot));
+            assert.deepEqual(await settled(page, 3), [castAt, 0, planAt]);
+        },
+        {
+            fixture: "reprieve-target",
+            at: start + 1,
+            ready: slotOf(cast.option.slot),
+        },
+    );
+}
+
 // An attack on a player who controls a planeswalker (`attack-past-walker`: Snapcaster Mage
 // against The Wandering Emperor) attacks the player unasked: the engine's question of what it
 // attacks (CR 508.1b) is answered from the declaration.

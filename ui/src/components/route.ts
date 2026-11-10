@@ -29,8 +29,16 @@ const SPACING = 40;
 
 /** Where an arrow may meet `b`: ports along each side of a box, or for an `oval`, twelve round
  * the ellipse inscribed in it. */
-function ports(b: Box, oval: boolean): Port[] {
+function ports({ box: b, oval, stackPeek }: End): Port[] {
   const [cx, cy] = [b.x + b.width / 2, b.y + b.height / 2];
+  // Meet the exposed name strip at its sides. Its bottom edge is another card's
+  // top edge, and a port near that edge can read as belonging to the card above it.
+  if (stackPeek) {
+    return [
+      { at: [b.x, cy], normal: [-1, 0], off: 0 },
+      { at: [b.x + b.width, cy], normal: [1, 0], off: 0 },
+    ];
+  }
   if (oval) {
     const [rx, ry] = [b.width / 2, b.height / 2];
     return Array.from({ length: 12 }, (_, i) => {
@@ -71,6 +79,7 @@ function ports(b: Box, oval: boolean): Port[] {
 export interface End {
   box: Box;
   oval?: boolean;
+  stackPeek?: boolean;
 }
 
 /** What routing weighs, in pixels of length: a pixel over another card costs this many. */
@@ -218,8 +227,8 @@ function anchored(
 /** The candidate `choice` names for `leg` now: its ports found by where they lay, or by index
  * for a choice that does not say; undefined if its ends no longer have them. */
 function again(leg: Leg, choice: Choice): Candidate | undefined {
-  const starts = ports(leg.from.box, leg.from.oval ?? false);
-  const ends = ports(leg.to.box, leg.to.oval ?? false);
+  const starts = ports(leg.from);
+  const ends = ports(leg.to);
   const start = choice.from
     ? anchored(starts, leg.from.box, choice.from)
     : choice.start;
@@ -347,8 +356,8 @@ function drawn(leg: Leg, c: Candidate, cost: number, samples: Vector[]): Route {
 /** `leg`'s likeliest candidates on a `table`: all priced roughly as if it were the only arrow,
  * the cheapest `SHORTLIST` kept. */
 function shortlist(leg: Leg, table: Box): Candidate[] {
-  const starts = ports(leg.from.box, leg.from.oval ?? false);
-  const ends = ports(leg.to.box, leg.to.oval ?? false);
+  const starts = ports(leg.from);
+  const ends = ports(leg.to);
   return starts
     .flatMap((s, start) =>
       ends.flatMap((e, end) =>

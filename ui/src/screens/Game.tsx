@@ -7,6 +7,7 @@ import { Button, Dock, DockButtons } from "../components/Controls";
 import { Card, CardBack } from "../components/Card";
 import { Coin } from "../components/Player";
 import { RulesText } from "../components/Mana";
+import { faceEntry } from "../cards";
 import {
   cancel,
   undo,
@@ -487,17 +488,17 @@ function Playing({ playback }: { playback: Playback }) {
       // A pick that waits stays planned while the player answers the decisions before it.
       if (intent?.waits && decision && decision.kind !== "priority") {
         planned.current = [intent, ...rest];
-      } else {
-        // A target with no alternative is part of the preceding action. Undo must
-        // reach before that action rather than silently answering the target again.
-        const lone =
-          canAutoPick.current && !view.undone && decision
-            ? loneTarget(decision, view)
-            : undefined;
-        if (lone !== undefined) {
-          send(lone, [], true);
-          return;
-        }
+      }
+      // A target with no alternative is part of the preceding action. Undo must
+      // reach before that action rather than silently answering the target again.
+      // A payment waiting for its decision must survive the automatic answer.
+      const lone =
+        canAutoPick.current && !view.undone && decision
+          ? loneTarget(decision, view)
+          : undefined;
+      if (lone !== undefined) {
+        send(lone, [], true);
+        return;
       }
       setHeld(undefined);
       return;
@@ -1074,7 +1075,7 @@ function ReasonIcon({ reason }: { reason: ShownLossReason | "stall" }) {
  * of one, whose target the engine then takes as the only one (CR 115.6: "A spell or ability
  * that requires targets may allow zero targets to be chosen"). A lone target of the player's
  * own is still asked, as Oust's when their own creature is the only one: aiming at it
- * unasked would hurt them. Full control asks anyway. */
+ * unasked would hurt them. Returning a spell to hand can save either player's spell. Full control asks anyway. */
 function loneTarget(
   decision: DecisionView,
   view: PlayerView,
@@ -1091,7 +1092,18 @@ function loneTarget(
     const option = candidates[0]!.option;
     if (option.kind === "player") return opposing(option) ? 0 : undefined;
     if (option.kind !== "object") return undefined;
-    return opposing({ kind: "object", slot: option.slot }) ? 0 : undefined;
+    const target = view.objects.find((o) => o.slot === option.slot);
+    const source = view.objects.find((o) => o.slot === decision.source);
+    const returningSpell =
+      source?.zone === "stack" &&
+      source.name &&
+      /^Return target spell to its owner's hand\./m.test(
+        faceEntry(source.name)?.oracle_text ?? "",
+      );
+    return target?.controller === "opponent" ||
+      (target?.zone === "stack" && returningSpell)
+      ? 0
+      : undefined;
   }
   if (decision.kind !== "targetCount" || candidates.length !== 2)
     return undefined;

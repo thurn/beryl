@@ -225,6 +225,17 @@
       "where": ["stack Counterspell", "targeted spell on the stack"]
     },
     {
+      "name": "counterspell-targets",
+      "board": "counterspell-targets",
+      "until": "first target decision for seat 0"
+    },
+    {
+      "name": "reprieve-target",
+      "board": "reprieve-target",
+      "until": "first target decision for seat 0",
+      "after": 1
+    },
+    {
       "name": "arrow-ability",
       "board": "arrow-ability",
       "until": "first priority decision for seat 0",

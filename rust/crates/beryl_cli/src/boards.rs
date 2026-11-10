@@ -557,6 +557,33 @@ pub const BOARDS: &[Scenario] = &[
             choose(P0, DecisionKind::Target, TRINKET_MAGE),
             Action::cast(P1, COUNTERSPELL),
         ]),
+    // Counterspell can answer Mana Tithe or the human's Mana Crypt below it.
+    Scenario::new("counterspell-targets")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[ISLAND_, ISLAND_])
+        .hand(P0, &[MANA_CRYPT, COUNTERSPELL])
+        .library(P0, LANDS)
+        .battlefield(P1, &[PLAINS_])
+        .hand(P1, &[MANA_TITHE])
+        .library(P1, LANDS)
+        .actions(&[
+            Action::cast(P0, MANA_CRYPT),
+            Action::cast(P1, MANA_TITHE),
+            Action::cast(P0, COUNTERSPELL),
+        ]),
+    // Reprieve has one target and can pay the generic mana with either a land or Mana Crypt.
+    Scenario::new("reprieve-target")
+        .at(3, P1, TurnStep::PrecombatMain)
+        .battlefield(P0, &[PLAINS_, ISLAND_, Permanent::new(MANA_CRYPT)])
+        .hand(P0, &[REPRIEVE])
+        .library(P0, LANDS)
+        .battlefield(P1, &[ISLAND_, ISLAND_, PLAINS_])
+        .hand(P1, &[TEFERI_TIME_RAVELER])
+        .library(P1, LANDS)
+        .actions(&[
+            Action::cast(P1, TEFERI_TIME_RAVELER),
+            Action::cast(P0, REPRIEVE),
+        ]),
     // The opponent's Jace, the Mind Sculptor returns their own Trinket Mage, beside it.
     Scenario::new("arrow-ability")
         .at(4, P1, TurnStep::PrecombatMain)
