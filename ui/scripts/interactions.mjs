@@ -6699,9 +6699,10 @@ if (wanted(exileStagger)) {
             const last = page.locator(slotOf(805));
             const a = center(await first.boundingBox());
             const b = center(await last.boundingBox());
+            await page.clock.pauseAt(Date.now() + 60_000);
             await page
                 .getByRole("button", { name: "Resolve", exact: true })
-                .click();
+                .evaluate((button) => button.click());
             await until(page, `${slotOf(800)}[data-zone="exile"]`, 20);
             await page.clock.runFor(150);
             const c = center(await first.boundingBox());
