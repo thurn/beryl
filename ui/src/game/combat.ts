@@ -8,16 +8,19 @@ import { twins, type Intent } from "./decisions";
 
 /** A declaration in the making: each attacker and what it attacks (a planeswalker's slot, or
  * null for the defending player); each blocker and the attacker it blocks; and the creature
- * last picked, which a planeswalker or an attacker clicked next is for. */
+ * last picked for blocking, or the group currently choosing an attack destination. */
 export interface Draft {
   attacks: Map<number, number | null>;
   blocks: Map<number, number>;
   selected?: number;
+  attackGroup: number[];
+  aimed?: boolean;
 }
 
 export const emptyDraft = (): Draft => ({
   attacks: new Map(),
   blocks: new Map(),
+  attackGroup: [],
 });
 
 /** `view` with `draft` declared: its attackers attacking, its blockers blocking and their
@@ -45,6 +48,22 @@ export function declared(view: PlayerView, draft: Draft): PlayerView {
   return { ...view, objects };
 }
 
+/** Older recordings named the attackers only in the attacking player's question. */
+export function pendingAttackers(view: PlayerView): number[] {
+  const ask =
+    view.status.kind === "deciding" ? view.status.decision.ask : undefined;
+  return (
+    view.pendingAttackers ?? (ask?.kind === "attackTarget" ? ask.attackers : [])
+  );
+}
+
+/** Assigns the current group together. It stays available for changing the destination. */
+export function aimAttacks(draft: Draft, target: number | null): Draft {
+  const attacks = new Map(draft.attacks);
+  for (const slot of draft.attackGroup) attacks.set(slot, target);
+  return { ...draft, attacks, aimed: true };
+}
+
 /** The combat damage `side` stands to take from the creatures attacking them that `view`
  * shows unblocked, or undefined if none attacks them
  * ([CR 510.1a](https://yawgatog.com/resources/magic-rules/#R5101a)): "An unblocked creature
@@ -53,9 +72,11 @@ export function declared(view: PlayerView, draft: Draft): PlayerView {
  * deals its power once. */
 export function incoming(view: PlayerView, side: Side): number | undefined {
   let total: number | undefined;
+  const pending = pendingAttackers(view);
   for (const o of view.objects) {
     const c = o.combat;
     if (c?.kind !== "attacking" || c.planeswalker !== null) continue;
+    if (pending.includes(o.slot)) continue;
     if (o.controller === side) continue;
     total = (total ?? 0) + (c.blocked ? 0 : Math.max(0, o.pt?.power ?? 0));
   }

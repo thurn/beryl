@@ -82,7 +82,7 @@ export interface Playback {
   /** Holds back the views that arrive from now on, as the player's picks for a choice already
    * made go out one decision at a time (an overlay's six cards to exile), so the table stays
    * as it was under the choice rather than playing each pick's events in turn. */
-  gather(): void;
+  gather(kind?: "combat"): void;
   /** Ends `gather`: the views held back show as one, with all their events, as the choice
    * gives way to the table, so what the picks did plays together where it can be seen. */
   release(): void;
@@ -112,14 +112,14 @@ interface State {
   /** The game in progress has not been asked for yet (`currentGame`). */
   resuming: boolean;
   /** The views held back while gathering (`Playback.gather`), oldest first; none when not. */
-  gathered?: GameUpdate[];
+  gathered?: { updates: GameUpdate[]; kind?: "combat" };
 }
 
 type Action =
   | { kind: "arrive"; update: GameUpdate; past: boolean; now: number }
   | { kind: "advance"; now: number }
   | { kind: "skip"; now: number }
-  | { kind: "gather" }
+  | { kind: "gather"; for?: "combat" }
   | { kind: "release"; now: number }
   | { kind: "starting"; on: boolean }
   | { kind: "resume"; update?: GameUpdate; awaiting?: boolean; now: number };
@@ -229,18 +229,40 @@ function reduce(state: State, action: Action): State {
         );
       }
       if (state.gathered && !past) {
-        return { ...state, gathered: [...state.gathered, update] };
+        return {
+          ...state,
+          gathered: {
+            ...state.gathered,
+            updates: [...state.gathered.updates, update],
+          },
+        };
       }
       return enqueue(state, update, past, now);
     }
     case "gather":
-      return { ...state, gathered: state.gathered ?? [] };
+      return {
+        ...state,
+        gathered: state.gathered ?? { updates: [], kind: action.for },
+      };
     case "release": {
       const gathered = state.gathered;
       if (!gathered) return state;
       const rest = { ...state, gathered: undefined };
-      if (gathered.length === 0) return rest;
-      return enqueue(rest, merged(gathered), false, action.now);
+      const { updates } = gathered;
+      if (updates.length === 0) return rest;
+      // Collapse the decisions that assembled the declaration. Once combat plays
+      // on, keep the successive steps even if they arrived in the same burst.
+      const firstPlaying =
+        gathered.kind === "combat"
+          ? updates.findIndex(({ view }) => view.status.kind !== "deciding")
+          : -1;
+      const end = firstPlaying < 0 ? updates.length : firstPlaying + 1;
+      return updates
+        .slice(end)
+        .reduce(
+          (state, update) => enqueue(state, update, false, action.now),
+          enqueue(rest, merged(updates.slice(0, end)), false, action.now),
+        );
     }
     case "advance": {
       if (state.queue.length === 0) return state;
@@ -361,9 +383,9 @@ export function usePlayback(): {
       spotlight: state.spotlight,
       behind: queue.length > 0,
       skip: () => dispatch({ kind: "skip", now: Date.now() }),
-      gather: () => dispatch({ kind: "gather" }),
+      gather: (kind) => dispatch({ kind: "gather", for: kind }),
       release: () => dispatch({ kind: "release", now: Date.now() }),
-      latest: state.gathered?.at(-1),
+      latest: state.gathered?.updates.at(-1),
       log: state.log,
     },
     starting: state.starting,

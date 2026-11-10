@@ -137,7 +137,11 @@ export type PlayerView = { status: Status,
 /**
  * Public scope of the opponent's card handling while their decision is open.
  */
-handling?: CardHandling, turn: TurnView, players: Players, 
+handling?: CardHandling, 
+/**
+ * Public attackers whose destination is still being chosen.
+ */
+pendingAttackers?: Array<number>, turn: TurnView, players: Players, 
 /**
  * Permanents, in the order they entered.
  */

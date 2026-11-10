@@ -401,6 +401,13 @@ function Playing({ playback }: { playback: Playback }) {
     }
     canAutoPick.current = true;
     play("select");
+    // A declaration is made as a unit. Its intermediate picks should not replace
+    // the preview with a partial attack or block.
+    if (
+      then.length &&
+      (decision.kind === "attacker" || decision.kind === "blocker")
+    )
+      gather("combat");
     send(index, then);
   };
   /** Sends an answer, the player's or one taken for them (a planned pick, a lone target). */

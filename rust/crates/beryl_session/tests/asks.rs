@@ -47,6 +47,73 @@ fn asks(card: &str) -> Vec<(Kind, AskView)> {
 }
 
 #[test]
+fn a_token_awaiting_its_attack_target_is_public_from_both_seats() {
+    let (_, scenarios) = SCENARIOS
+        .iter()
+        .find(|&&(name, _)| name == names::ADELINE_RESPLENDENT_CATHAR)
+        .unwrap();
+    let scenario = scenarios
+        .iter()
+        .find(|scenario| scenario.name == "Adeline's Human attacks a planeswalker")
+        .unwrap();
+    let mut checked = false;
+    beryl_scenario::visit(&CARDS, scenario, |t, s, d| {
+        let Ask::AttackTarget { attackers } = d.ask else {
+            return;
+        };
+        let mut x = Scratch::new();
+        let shown = view(s, t, &mut x);
+        let resolving = matches!(s.pending(), Pending::Resolving(_))
+            .then(|| s.stack().last())
+            .flatten();
+        if resolving.is_none() {
+            return;
+        }
+        let id = DecisionId {
+            session: SessionId(1),
+            seq: 1,
+        };
+        let controller = player_view(
+            t,
+            Observation::new(shown, d.player),
+            Moment::Deciding(id, d, resolving),
+            StopsSetting::SMART,
+            &[],
+        );
+        let observer = player_view(
+            t,
+            Observation::new(shown, d.player.opponent()),
+            Moment::Thinking {
+                resolving,
+                decision: Some(d),
+            },
+            StopsSetting::SMART,
+            &[],
+        );
+        let Status::Deciding { decision } = controller.status else {
+            panic!("the attack target is open");
+        };
+        let AskView::AttackTarget { attackers: slots } = decision.ask else {
+            panic!("the target choice names its attackers");
+        };
+        assert_eq!(slots.len(), 1);
+        assert_eq!(observer.status, Status::Thinking);
+        assert_eq!(observer.pending_attackers, Some(slots.clone()));
+        assert_eq!(controller.pending_attackers, Some(slots.clone()));
+        assert_eq!(attackers.iter().count(), slots.len());
+        assert!(
+            observer
+                .objects
+                .iter()
+                .any(|o| { o.slot == slots[0] && o.name.as_deref() == Some("Human Token") })
+        );
+        checked = true;
+    })
+    .unwrap();
+    assert!(checked, "Adeline reached the Human's attack target");
+}
+
+#[test]
 fn stock_up_observer_sees_the_group_size_without_seeing_its_cards_or_choices() {
     let (_, scenarios) = SCENARIOS
         .iter()

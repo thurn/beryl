@@ -91,12 +91,14 @@ import {
   type Intent,
 } from "./decisions";
 import {
+  aimAttacks,
   attackPlan,
   blockable,
   blockPlan,
   declared,
   emptyDraft,
   incoming,
+  pendingAttackers,
   type Draft,
 } from "./combat";
 import {
@@ -415,7 +417,9 @@ export function Board({
   const stackConfirmation = selectedSpell && (() => pick(selectedSpell.index));
   // The table as the declaration would leave it.
   const shown = useMemo(() => {
-    const declaredView = drafting ? declared(view, draft) : view;
+    const declaration =
+      decision?.kind === "attacker" || decision?.kind === "blocker";
+    const declaredView = declaration ? declared(view, draft) : view;
     if (!waterbend.active) return declaredView;
     // Preview the selected physical cards without committing the payment.
     return {
@@ -424,7 +428,7 @@ export function Board({
         waterbend.selected.includes(o.slot) ? { ...o, tapped: true } : o,
       ),
     };
-  }, [view, draft, drafting, waterbend.active, waterbend.selected]);
+  }, [view, draft, decision, waterbend.active, waterbend.selected]);
   // Every card the table draws: the objects shown, and the emblems.
   const drawn = useMemo(() => [...shown.objects, ...emblems], [shown, emblems]);
   // Until combat damage is dealt, what each player's unblocked attackers will deal them.
@@ -1020,7 +1024,10 @@ export function Board({
       ? blockable(declarable(draft.selected)?.blocks ?? [], objects)
       : new Set<number>();
   // The creature picked last waits for what it attacks or blocks.
-  const aiming = drafting === "blocker" || walkers.length > 0;
+  const aimingAttack =
+    drafting === "attacker" &&
+    walkers.length > 0 &&
+    draft.attackGroup.length > 0;
   if (drafting) {
     for (const [slot, state] of states) {
       if (!declarable(slot)) continue;
@@ -1028,7 +1035,8 @@ export function Board({
       states.set(slot, {
         ...state,
         highlight:
-          slot === draft.selected && aiming
+          (drafting === "blocker" && slot === draft.selected) ||
+          (aimingAttack && draft.attackGroup.includes(slot))
             ? "source"
             : picked || (drafting === "blocker" && draft.selected !== undefined)
               ? undefined
@@ -1037,11 +1045,7 @@ export function Board({
       });
     }
     const aims =
-      drafting === "blocker"
-        ? [...blockTargets]
-        : draft.selected !== undefined
-          ? walkers
-          : [];
+      drafting === "blocker" ? [...blockTargets] : aimingAttack ? walkers : [];
     for (const slot of aims) {
       states.set(slot, { ...states.get(slot), highlight: "target" });
     }
@@ -1252,28 +1256,43 @@ export function Board({
       const atPlayer = onto && "player" in onto && onto.player === "opponent";
       if (walker !== null || atPlayer || start.y - at.y >= FORWARD) {
         playSound("select");
-        const attacks = new Map(draft.attacks).set(slot, walker);
-        setDraft({ ...draft, attacks, selected: slot });
+        setDraft(aimAttacks({ ...draft, attackGroup: [slot] }, walker));
       }
     }
     return false;
   };
 
-  /** The declaration with the card in `slot` clicked: a creature to attack with joins it or
-   * leaves it, and a planeswalker clicked next is what it attacks; a creature to block with is
-   * chosen, or taken back to choose again, and the attacker clicked next is what it blocks. */
+  /** Clicking an attacker adds it to the group choosing a destination. An assigned attacker
+   * can be focused on its own. Clicking the focused creature again takes it out of combat.
+   * A blocker is paired with the attacker clicked next. */
   const drafted = (d: Draft, slot: number): Draft => {
     const { selected } = d;
     if (drafting === "attacker") {
       const attacks = new Map(d.attacks);
-      if (attacks.delete(slot)) return { ...d, attacks, selected: undefined };
-      if (declarable(slot)) {
-        return { ...d, attacks: attacks.set(slot, null), selected: slot };
+      if (d.attackGroup.length && walkers.includes(slot))
+        return aimAttacks(d, slot);
+      if (!declarable(slot)) return d;
+      if (attacks.has(slot)) {
+        if (
+          walkers.length &&
+          (!d.attackGroup.includes(slot) ||
+            (d.aimed && d.attackGroup.length > 1))
+        ) {
+          return { ...d, attackGroup: [slot], aimed: true };
+        }
+        attacks.delete(slot);
+        return {
+          ...d,
+          attacks,
+          attackGroup: d.attackGroup.filter((s) => s !== slot),
+        };
       }
-      if (selected !== undefined && walkers.includes(slot)) {
-        return { ...d, attacks: attacks.set(selected, slot) };
-      }
-      return { ...d, selected: undefined };
+      return {
+        ...d,
+        attacks: attacks.set(slot, null),
+        attackGroup: d.aimed ? [slot] : [...d.attackGroup, slot],
+        aimed: false,
+      };
     }
     const blocks = new Map(d.blocks);
     if (declarable(slot)) {
@@ -1304,7 +1323,12 @@ export function Board({
     for (const slot of can.bySlot.keys()) {
       if (declarable(slot) && !attacks.has(slot)) attacks.set(slot, null);
     }
-    setDraft({ ...draft, attacks, selected: undefined });
+    setDraft({
+      ...draft,
+      attacks,
+      attackGroup: [...attacks.keys()],
+      aimed: false,
+    });
   };
 
   const attackAllFirst =
@@ -1494,6 +1518,9 @@ export function Board({
           style={{ left: fromMiddle(670), top: 48 }}
           target={deciding ? can.players.get("opponent") : undefined}
           onPick={(act) => pick(act.index, act.then)}
+          onAttack={
+            aimingAttack ? () => setDraft(aimAttacks(draft, null)) : undefined
+          }
         />
         {libraryChoice !== undefined && (
           <div className="hud library-choice-hud">
@@ -1687,12 +1714,18 @@ export function Board({
                 kind={drafting}
                 draft={draft}
                 attackAllFirst={attackAllFirst}
+                hasWalkers={walkers.length > 0}
                 onDeclare={declare}
                 onAll={attackWithAll}
                 onClear={() => setDraft(emptyDraft())}
               />
             ) : declaring ? (
-              <Finish decision={declaring} done={finish} onPick={pick} />
+              <Finish
+                decision={declaring}
+                done={finish}
+                onPick={pick}
+                objects={objects}
+              />
             ) : ((decision?.kind === "priority" && !chooser) || waiting) &&
               !castingNow ? (
               // In the cast step or the mode chooser, its buttons take the dock.
@@ -2179,6 +2212,7 @@ function Life({
   style,
   target,
   onPick,
+  onAttack,
 }: {
   side: Side;
   life: number;
@@ -2188,6 +2222,7 @@ function Life({
   style: CSSProperties;
   target?: Act;
   onPick(act: Act): void;
+  onAttack?(): void;
 }) {
   const reduce = useReducedMotion() ?? false;
   const value = useMotionValue(life);
@@ -2208,7 +2243,7 @@ function Life({
       beat?.stop();
     };
   }, [life, value, pulse, reduce]);
-  const targetable = target !== undefined;
+  const targetable = target !== undefined || onAttack !== undefined;
   return (
     <motion.div
       className={targetable ? "hud life life-aimed" : "hud life"}
@@ -2221,8 +2256,14 @@ function Life({
         <span
           className="life-hit life-target"
           role="button"
-          aria-label={side === "you" ? "Target yourself" : "Target opponent"}
-          onClick={() => onPick(target)}
+          aria-label={
+            onAttack
+              ? "Attack opponent"
+              : side === "you"
+                ? "Target yourself"
+                : "Target opponent"
+          }
+          onClick={onAttack ?? (() => target && onPick(target))}
         />
       )}
       <LifeOrb
@@ -2548,13 +2589,12 @@ function boardArrows(
       )
       .map((o) => o.controller),
   );
+  const pending = new Set(pendingAttackers(view));
   for (const slot of view.battlefield) {
     const o = objects.get(slot);
     if (!o) continue;
     const combat = o.combat;
-    const ask =
-      view.status.kind === "deciding" ? view.status.decision.ask : undefined;
-    if (ask?.kind === "attackTarget" && ask.attackers.includes(slot)) continue;
+    if (pending.has(slot)) continue;
     if (combat?.kind === "blocking" && combat.attacker !== null) {
       out.push({
         from: cardId(slot),
@@ -2581,6 +2621,7 @@ function boardArrows(
           : cardId(combat.planeswalker),
       tone: "red",
       direct: true,
+      fromChevron: true,
     });
   }
   // Each item's targets, the top's first so that it routes clearest: what a spell or ability
@@ -2678,6 +2719,7 @@ function Declare({
   kind,
   draft,
   attackAllFirst,
+  hasWalkers,
   onDeclare,
   onAll,
   onClear,
@@ -2686,6 +2728,7 @@ function Declare({
   draft: Draft;
   /** There are eligible attackers and none has been selected. */
   attackAllFirst: boolean;
+  hasWalkers: boolean;
   onDeclare(): void;
   onAll(): void;
   onClear(): void;
@@ -2726,7 +2769,13 @@ function Declare({
           label={attackAllFirst ? "Attack With All" : label}
           onClick={attackAllFirst ? onAll : onDeclare}
         />
-        <span className="turn-caption">{caption}</span>
+        <span className="turn-caption">
+          {attack && hasWalkers && !draft.aimed
+            ? n === 0
+              ? "Choose attackers, then a target"
+              : "Choose attack target"
+            : caption}
+        </span>
       </div>
     </Dock>
   );
@@ -2739,18 +2788,27 @@ function Finish({
   decision,
   done,
   onPick,
+  objects,
 }: {
   decision: DecisionView;
+  objects: Map<number, ObjectView>;
   done?: CandidateIndex;
   onPick(index: CandidateIndex): void;
 }) {
   if (decision.kind === "attackTarget") {
+    const attackers =
+      decision.ask.kind === "attackTarget" ? decision.ask.attackers : [];
+    const attacker =
+      attackers.length === 1 ? objects.get(attackers[0]!) : undefined;
+    const name = attacker?.token
+      ? attacker.name?.replace(/ Token$/, "")
+      : attacker?.name;
     return (
-      <Dock>
-        <div className="turn-action">
-          <span className="turn-caption">Choose attack target</span>
-        </div>
-      </Dock>
+      <Dock
+        title={
+          name ? `Choose attack target for ${name}` : "Choose attack target"
+        }
+      />
     );
   }
   const labels: Partial<Record<Kind, [string, string]>> = {

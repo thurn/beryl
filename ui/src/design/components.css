@@ -976,6 +976,9 @@
   --glow: 0.9;
   --glow-width: 1.9;
 }
+.arrow.combat-link {
+  animation: none;
+}
 .combat-link .arrow-line path {
   stroke: rgb(242 211 152 / 65%);
   stroke-width: 2;

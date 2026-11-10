@@ -143,6 +143,8 @@ export interface ArrowSpec {
   tone: "gold" | "cyan" | "red" | "green";
   /** A subtle direct combat line between facing edges, without an arrowhead. */
   direct?: boolean;
+  /** Attack lines start at the tip of the card's chevron. */
+  fromChevron?: boolean;
   /** A target link shown while both ends are settled, invalidated by a zone change. */
   pulse?: {
     key: string;
@@ -207,13 +209,17 @@ export function Arrows({
 }) {
   const svg = useRef<SVGSVGElement>(null);
   const [drawn, setDrawn] = useState<Drawn[]>([]);
+  // Direct links move with the cards. Write their geometry before the browser
+  // paints the frame, without waiting for React to commit an update.
+  const directPaths = useRef(new Map<string, SVGPathElement>());
+  const directGeometry = useRef(new Map<string, string>());
   // Each arrow's ports and reach, which it keeps while its ends or the cards it avoids move:
   // routing afresh on every frame of a glide would cost too much and could flicker.
   const choices = useRef(new Map<string, Choice>());
   // Where everything was on the last frame, and whether the arrows were routed afresh there:
   // once nothing moves, they are, once.
   const seen = useRef({ where: "", searched: false });
-  // Following, where each arrow's ends were and since when they have stood there: an arrow
+  // Following, where each stack arrow's ends were and since when they have stood there: it
   // shows only once both its ends have stood still for `REST_MS`, so it never stretches after
   // a card on its way (a countered spell to the graveyard, a creature still landing when its
   // trigger goes on the stack), and it goes the moment either end starts moving.
@@ -257,15 +263,25 @@ export function Arrows({
         const from = document.getElementById(a.from);
         const to = document.getElementById(a.to);
         if (!from || !to) return [];
-        const start = arrowEnd(from, origin, scale);
-        const end = arrowEnd(to, origin, scale);
-        if (!start || !end) return [];
-        const source = start.box;
-        const target = end.box;
-        if (follow) {
+        const fromEnd = arrowEnd(from, origin, scale);
+        const toEnd = arrowEnd(to, origin, scale);
+        if (!fromEnd || !toEnd) return [];
+        const source = fromEnd.box;
+        const target = toEnd.box;
+        const chevron = a.fromChevron
+          ? from.querySelector<SVGSVGElement>(".attack-chevron")?.getScreenCTM()
+          : undefined;
+        if (a.fromChevron && !chevron) return [];
+        const tip = chevron
+          ? new DOMPoint(50, 0.5).matrixTransform(chevron)
+          : undefined;
+        const start: Vector | undefined = tip
+          ? [(tip.x - origin.left) / scale, (tip.y - origin.top) / scale]
+          : undefined;
+        if (follow && !a.direct) {
           const key = keyOf(a);
           const at = JSON.stringify(
-            [source, target, ...start.hosts, ...end.hosts].map((b) => [
+            [source, target, ...fromEnd.hosts, ...toEnd.hosts].map((b) => [
               b.x,
               b.y,
               b.width,
@@ -282,13 +298,13 @@ export function Arrows({
             pulse.until = Number.POSITIVE_INFINITY;
           }
         }
-        return [{ a, from, to, source, target }];
+        return [{ a, from, to, source, target, start }];
       });
       if (follow) rest.current = resting;
       pulses.current = pulsing;
       const where = JSON.stringify([
         size,
-        ends.map((e) => [keyOf(e.a), e.a.tone]),
+        ends.map((e) => [keyOf(e.a), e.a.tone, e.start?.map(Math.round)]),
         ...[
           ...ends.flatMap((e) => [e.source, e.target]),
           ...obstacles.map((o) => o.box),
@@ -354,10 +370,11 @@ export function Arrows({
           direct: false,
         };
       });
-      for (const { a, source, target } of ends) {
+      const geometry = new Map<string, string>();
+      for (const { a, source, target, start } of ends) {
         if (!a.direct) continue;
         const above = source.y < target.y;
-        const start: Vector = [
+        const origin: Vector = start ?? [
           source.x + source.width / 2,
           source.y + (above ? source.height : 0),
         ];
@@ -365,20 +382,23 @@ export function Arrows({
           target.x + target.width / 2,
           target.y + (above ? 0 : target.height),
         ];
-        next.push({
-          ...a,
-          key: keyOf(a),
-          d: `M${point(start)} L${point(end)}`,
-          direct: true,
-        });
+        const key = keyOf(a);
+        const d = `M${point(origin)} L${point(end)}`;
+        geometry.set(key, d);
+        if (directGeometry.current.get(key) !== d) {
+          directPaths.current.get(key)?.setAttribute("d", d);
+        }
+        next.push({ ...a, key, d, direct: true });
       }
+      directGeometry.current = geometry;
       // Unchanged, it keeps the drawn arrows.
       setDrawn((last) =>
         last.length === next.length &&
         last.every(
           (l, i) =>
             l.key === next[i]!.key &&
-            l.d === next[i]!.d &&
+            l.direct === next[i]!.direct &&
+            (l.direct || l.d === next[i]!.d) &&
             l.tone === next[i]!.tone,
         )
           ? last
@@ -422,7 +442,19 @@ export function Arrows({
               data-to={a.to}
             >
               <g className="arrow-line">
-                <path d={a.d} />
+                <path
+                  ref={(path) => {
+                    if (!path) {
+                      directPaths.current.delete(a.key);
+                      return;
+                    }
+                    directPaths.current.set(a.key, path);
+                    path.setAttribute(
+                      "d",
+                      directGeometry.current.get(a.key) ?? a.d,
+                    );
+                  }}
+                />
               </g>
             </g>
           );

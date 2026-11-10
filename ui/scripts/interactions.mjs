@@ -7477,6 +7477,22 @@ await check(
 );
 
 await check(
+    "the beginning of combat tooltip names the step for both seats",
+    async (page) => {
+        for (const [side, expected] of [
+            ["you", "Your beginning of combat"],
+            ["opponent", "Opponent's beginning of combat"],
+        ]) {
+            const stop = page.locator(
+                `.step-stops-${side} [data-step="beginCombat"]`,
+            );
+            await stop.locator("button").hover();
+            assert.equal(await stop.locator(".tip").innerText(), expected);
+        }
+    },
+);
+
+await check(
     "a phase icon has a round keyboard focus ring that clears on pointer use",
     async (page) => {
         const icon = page.locator('.step-stops-you [data-step="main1"] button');
@@ -9755,7 +9771,10 @@ await check(
         );
         assert.equal(
             await page
-                .getByText("Choose attack target", { exact: true })
+                .getByRole("heading", {
+                    name: "Choose attack target for Human",
+                    exact: true,
+                })
                 .count(),
             1,
         );
@@ -9767,11 +9786,216 @@ await check(
     adelineRun,
 );
 
+const combatLink = (slot) => `.combat-link[data-from="card-${slot}"]`;
+
+async function chevronGap(page, slot) {
+    return page.locator(`${combatLink(slot)} path`).evaluate((path, slot) => {
+        const mark = document.querySelector(`#card-${slot}-mark`);
+        const tip = new DOMPoint(50, 0.5).matrixTransform(mark.getScreenCTM());
+        const start = path
+            .getPointAtLength(0)
+            .matrixTransform(path.getScreenCTM());
+        return Math.hypot(tip.x - start.x, tip.y - start.y);
+    }, slot);
+}
+
+const regroup =
+    "attack targeting previews immediately, follows moving chevrons, and regroups";
+if (wanted(regroup)) {
+    const v = structuredClone(pastWalker[attackAt]);
+    const original = attacking.candidates[attacker];
+    const first = original.option.slot;
+    const second = Math.max(...v.objects.map((o) => o.slot)) + 1;
+    const copy = { ...v.objects.find((o) => o.slot === first), slot: second };
+    const walker = named(v, "The Wandering Emperor")[0];
+    v.objects.push(copy);
+    v.battlefield.push(second);
+    v.status.decision.candidates.push({
+        ...original,
+        option: { kind: "attack", slot: second },
+    });
+    const run = await motionFixture("attack-retarget-group", [v]);
+    await check(
+        regroup,
+        async (page) => {
+            await page.clock.runFor(600);
+            const links = (slot) => page.locator(combatLink(slot));
+            const target = (slot) => links(slot).getAttribute("data-to");
+            const walkerId = `card-${walker}`;
+            const player = page.getByRole("button", {
+                name: "Attack opponent",
+                exact: true,
+            });
+            assert.ok(
+                await page
+                    .getByText("Choose attackers, then a target")
+                    .isVisible(),
+            );
+            await page.click(slotOf(first));
+            assert.equal(
+                await links(first).count(),
+                1,
+                "selection draws the line immediately",
+            );
+            for (let i = 0; i < 12; i++) {
+                await page.clock.runFor(16);
+                const gap = await chevronGap(page, first);
+                assert.ok(
+                    gap < 3,
+                    `line tracks the tip during the glide (gap ${gap}px)`,
+                );
+            }
+            await page.click(slotOf(second));
+            await page.click(slotOf(walker));
+            assert.deepEqual(
+                await Promise.all([target(first), target(second)]),
+                [walkerId, walkerId],
+            );
+            await player.click();
+            assert.deepEqual(
+                await Promise.all([target(first), target(second)]),
+                ["opponent-life-orb", "opponent-life-orb"],
+            );
+            await page.click(slotOf(walker));
+            assert.deepEqual(
+                await Promise.all([target(first), target(second)]),
+                [walkerId, walkerId],
+            );
+            await page.click(slotOf(first));
+            await player.click();
+            assert.deepEqual(
+                await Promise.all([target(first), target(second)]),
+                ["opponent-life-orb", walkerId],
+            );
+            await page.click(slotOf(walker));
+            assert.deepEqual(
+                await Promise.all([target(first), target(second)]),
+                [walkerId, walkerId],
+            );
+            await page
+                .getByRole("button", { name: "Clear", exact: true })
+                .click();
+            await page
+                .getByRole("button", { name: "Attack With All", exact: true })
+                .click();
+            await page.click(slotOf(walker));
+            assert.deepEqual(
+                await Promise.all([target(first), target(second)]),
+                [walkerId, walkerId],
+            );
+        },
+        { ...run, ready: slotOf(first) },
+    );
+}
+
+const ordering =
+    "attack lines sort by destination and stay present through blockers";
+if (wanted(ordering)) {
+    const v = structuredClone(tokenAim.views.at(-1));
+    const first = named(v, "Adeline, Resplendent Cathar")[0];
+    v.pendingAttackers = undefined;
+    const a = v.objects.find((o) => o.slot === first);
+    const b = v.objects.find((o) => o.slot === human);
+    // The fixture's first attacker stands left of the Human before sorting.
+    a.combat = { kind: "attacking", planeswalker: emperor, blocked: false };
+    b.combat = { kind: "attacking", planeswalker: null, blocked: false };
+    v.status.decision.ask = { kind: "plain" };
+    v.status.decision.kind = "priority";
+    v.status.decision.candidates = [
+        { ...v.status.decision.candidates[0], option: { kind: "pass" } },
+    ];
+    const blockers = structuredClone(v);
+    blockers.turn.step = "declareBlockers";
+    blockers.status = { kind: "playing" };
+    blockers.events = [];
+    a.tapped = false;
+    blockers.objects.find((o) => o.slot === first).tapped = true;
+    const run = await motionFixture("attack-continuity", [v, blockers]);
+    await check(
+        ordering,
+        async (page) => {
+            const ordered = () =>
+                page.evaluate(() =>
+                    [...document.querySelectorAll(".combat-link path")]
+                        .map((p) => [
+                            p.getPointAtLength(0).x,
+                            p.getPointAtLength(p.getTotalLength()).x,
+                        ])
+                        .sort((a, b) => a[0] - b[0]),
+                );
+            await page.clock.runFor(800);
+            const before = await ordered();
+            assert.equal(before.length, 2);
+            assert.ok(
+                before[0][1] < before[1][1],
+                "source and target order agree",
+            );
+            await page.keyboard.press("Space");
+            for (let i = 0; i < 22; i++) {
+                await page.clock.runFor(16);
+                assert.equal(
+                    (await ordered()).length,
+                    2,
+                    "both lines survive the blockers transition",
+                );
+            }
+            assert.equal(
+                await page.evaluate(
+                    () => window.berylShown.at(-1).update.view.turn.step,
+                ),
+                "declareBlockers",
+            );
+        },
+        { ...run, ready: slotOf(first) },
+    );
+}
+
+const observerLink =
+    "the defending seat draws only the resolved token attack destination";
+if (wanted(observerLink)) {
+    const waiting = structuredClone(tokenAim.views.at(-1));
+    waiting.status = { kind: "thinking" };
+    for (const o of waiting.objects) {
+        o.controller = o.controller === "you" ? "opponent" : "you";
+        o.owner = o.owner === "you" ? "opponent" : "you";
+    }
+    const chosen = structuredClone(waiting);
+    chosen.pendingAttackers = undefined;
+    chosen.objects.find((o) => o.slot === human).combat.planeswalker = emperor;
+    const run = await motionFixture("observed-token-target", [waiting, chosen]);
+    const line = combatLink(human);
+    await check(
+        observerLink,
+        async (page) => {
+            await page.clock.runFor(800);
+            assert.equal(
+                await page.locator(line).count(),
+                0,
+                "no provisional attack on the life total",
+            );
+        },
+        { ...run, ready: `#card-${human}-mark` },
+    );
+    await check(
+        observerLink + " once chosen",
+        async (page) => {
+            const link = page.locator(line);
+            assert.equal(await link.getAttribute("data-to"), `card-${emperor}`);
+            assert.ok(
+                (await chevronGap(page, human)) < 3,
+                "line starts at the reversed chevron tip",
+            );
+        },
+        { ...run, at: 2, ready: line },
+    );
+}
+
 // Resolved destinations use the same quiet geometry as blocking links, from either seat.
 if (wanted("attack destinations use thin lines")) {
     for (const seat of ["you", "opponent"]) {
         const v = structuredClone(tokenAim.views.at(-1));
         v.status = { kind: "playing" };
+        v.pendingAttackers = undefined;
         v.events = [];
         if (seat === "opponent") {
             for (const o of v.objects) {

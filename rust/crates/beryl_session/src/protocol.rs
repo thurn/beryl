@@ -35,6 +35,10 @@ pub struct PlayerView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub handling: Option<CardHandling>,
+    /// Public attackers whose destination is still being chosen.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub pending_attackers: Option<Vec<u16>>,
     pub turn: TurnView,
     pub players: Players,
     /// Permanents, in the order they entered.
@@ -1138,6 +1142,7 @@ pub fn player_view<L: Layout>(
     PlayerView {
         status,
         handling,
+        pending_attackers: pending_attackers(moment),
         turn: TurnView {
             number: turn.number,
             active: side(obs, turn.active),
@@ -1154,6 +1159,20 @@ pub fn player_view<L: Layout>(
         events: game_events(t, obs, events),
         undone: false,
     }
+}
+
+fn pending_attackers<L: Layout>(moment: Moment<'_, L>) -> Option<Vec<u16>> {
+    let decision = match moment {
+        Moment::Deciding(_, d, _)
+        | Moment::Thinking {
+            decision: Some(d), ..
+        } => Some(d),
+        _ => None,
+    };
+    decision.and_then(|d| match d.ask {
+        Ask::AttackTarget { attackers } => Some(slots(attackers.iter())),
+        _ => None,
+    })
 }
 
 fn player_state<L: Layout>(t: &GameTable, obs: Observation<'_, L>, p: Seat) -> PlayerState {

@@ -115,7 +115,7 @@ export const STEP_STOPS: StepStop[] = [
   },
   {
     key: "beginCombat",
-    label: "Combat",
+    label: "Beginning of combat",
     steps: ["beginningOfCombat"],
     icon: "flag",
     stops: true,

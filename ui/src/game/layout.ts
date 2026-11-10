@@ -1030,9 +1030,9 @@ function battlefieldZoom(
  * by `zoom` (`battlefieldZoom`). A blocker stands across the table from the attacker it blocks
  * among the other side's placements `across`, as combat.png does, an attacker's blockers side
  * by side about its center, so a block reads as a short line; the rest of the row makes room.
- * An attacker keeps its place in the row, standing out of it toward the other side, so
- * declaring one moves no other. The cards each permanent exiled until it leaves (`beneath`, by
- * its slot) lie tucked under it, peeking out to its left, and the Auras and Equipment attached
+ * Attackers stand forward in the row, ordered by destination so their lines cross less.
+ * Cards exiled until a permanent leaves (`beneath`, by its slot) peek out to its left.
+ * The Auras and Equipment attached
  * to it (`attached`, by its slot, whoever controls them, which its groups leave out) behind it,
  * peeking out to its right; its row makes room for both. Each tapped card takes its turned
  * width (`lying`). */
@@ -1151,14 +1151,36 @@ function peeking(
  * holds `beneath` it and has `attached` to it tucked under it (`battlefieldPlacements`). */
 function permanentRow(
   side: Side,
-  groups: ObjectView[][],
+  rowGroups: ObjectView[][],
   spec: RowSpec,
   across: Placement[],
   beneath: Map<number, ObjectView[]>,
   attached: Map<number, ObjectView[]>,
 ): Placement[] {
   const out: Placement[] = [];
-  if (groups.length === 0) return out;
+  if (rowGroups.length === 0) return out;
+  const acrossBySlot = new Map(across.map((p) => [p.slot, p]));
+  const center = (p: Placement) => p.x + (p.span * p.scale) / 2;
+  const destination = ([o]: ObjectView[]) => {
+    const combat = o?.combat;
+    if (combat?.kind !== "attacking") return undefined;
+    const target =
+      combat.planeswalker === null
+        ? undefined
+        : acrossBySlot.get(combat.planeswalker);
+    return target ? center(target) : STAGE.width / 2;
+  };
+  // Keep the nonattacking groups in order. Only swap attackers' places.
+  const advancing = rowGroups
+    .flatMap((group) => {
+      const x = destination(group);
+      return x === undefined ? [] : [{ group, x }];
+    })
+    .sort((a, b) => a.x - b.x);
+  let next = 0;
+  const groups = rowGroups.map((group) =>
+    destination(group) === undefined ? group : advancing[next++]!.group,
+  );
   const frameWidth = spec.width;
   const standing = (tapped: boolean) => lying(frameWidth, tapped);
   const height = frameWidth / CARD_ASPECT;
@@ -1184,21 +1206,19 @@ function permanentRow(
   const { start, end } = spec;
   const xs = row(widths, gap, start, end, spec.center);
   // Where each blocker wants to stand: its attacker's blockers side by side about its center.
-  const attackers = new Map(across.map((p) => [p.slot, p]));
   const blocking = new Map<number, number[]>();
   for (const o of groups.flat()) {
     const attacker = o.combat?.kind === "blocking" ? o.combat.attacker : null;
-    if (attacker === null || !attackers.has(attacker)) continue;
+    if (attacker === null || !acrossBySlot.has(attacker)) continue;
     blocking.set(attacker, [...(blocking.get(attacker) ?? []), o.slot]);
   }
   // Each group faces its attacker straight across.
   const wants = new Map<number, number>();
   for (const [attacker, blockers] of blocking) {
-    const a = attackers.get(attacker)!;
-    const center = a.x + (a.span * a.scale) / 2;
+    const x = center(acrossBySlot.get(attacker)!);
     blockers.forEach((slot, i) => {
       const offset = (i - (blockers.length - 1) / 2) * width * 1.04;
-      wants.set(slot, center - width / 2 + offset);
+      wants.set(slot, x - width / 2 + offset);
     });
   }
   const wanted = groups.map((g, i) => wants.get(g[0]!.slot) ?? xs[i]!);
@@ -1844,7 +1864,7 @@ export const STEP_NAMES: Record<Step, string> = {
   upkeep: "Upkeep",
   draw: "Draw",
   precombatMain: "Main 1",
-  beginningOfCombat: "Combat",
+  beginningOfCombat: "Beginning of combat",
   declareAttackers: "Attackers",
   declareBlockers: "Blockers",
   firstStrikeDamage: "First-strike damage",
