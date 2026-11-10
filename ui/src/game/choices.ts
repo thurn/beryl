@@ -97,6 +97,8 @@ export function choiceOf(view: PlayerView): Choice | undefined {
   const at = new Situation(view, view.status.decision);
   const ask = at.decision.ask;
   switch (ask.kind) {
+    case "attackTarget":
+      return undefined;
     case "plain":
       return plain(at);
     case "scry":

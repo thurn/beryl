@@ -129,7 +129,9 @@ pub(crate) fn attack_decision<L: Layout>(
         player,
         kind,
         candidates: Candidates::Options(list),
-        ask: Ask::Plain,
+        ask: attacker.map_or(Ask::Plain, |slot| Ask::AttackTarget {
+            attackers: Bitboard::single(slot),
+        }),
     })
 }
 

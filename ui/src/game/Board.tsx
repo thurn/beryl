@@ -703,7 +703,12 @@ export function Board({
     states.set(unpaid, { ...states.get(unpaid), draggable: true });
   }
   const marks: [number | null | undefined, Highlight][] = [
-    [top?.kind === "ability" ? top.source : undefined, "source"],
+    [
+      top?.kind === "ability" && decision?.ask.kind !== "attackTarget"
+        ? top.source
+        : undefined,
+      "source",
+    ],
   ];
   for (const t of top?.targets ?? []) {
     if (t.kind === "object") marks.push([t.slot, "target"]);
@@ -712,11 +717,16 @@ export function Board({
     if (slot == null || states.get(slot)?.highlight) continue;
     states.set(slot, { ...states.get(slot), highlight });
   }
-  if (can.source !== undefined) {
+  if (can.source !== undefined && decision?.ask.kind !== "attackTarget") {
     states.set(can.source, {
       ...states.get(can.source),
       highlight: "source",
     });
+  }
+  if (decision?.ask.kind === "attackTarget") {
+    for (const slot of decision.ask.attackers) {
+      states.set(slot, { ...states.get(slot), highlight: "source" });
+    }
   }
   // The card a "you may" move asks about, where the table shows it: risen above its place,
   // as above the graveyard it lies on top of.
@@ -1175,12 +1185,8 @@ export function Board({
   // A combat declaration is finished with the turn button, where priority is passed.
   const declaring =
     deciding && decision && isCombat(decision.kind) ? decision : undefined;
-  // What finishes it: what a creature put onto the battlefield attacking (Adeline's Human,
-  // shown attacking the player as it is asked) attacks defaults to the player (CR 508.4).
-  const finish =
-    declaring?.kind === "attackTarget"
-      ? can.players.get("opponent")?.index
-      : can.done;
+  // Attack destinations are chosen on the player or planeswalker itself.
+  const finish = can.done;
 
   return (
     <>
@@ -2161,6 +2167,13 @@ function boardArrows(
 ): ArrowSpec[] {
   const objects = new Map(view.objects.map((o) => [o.slot, o]));
   const out: ArrowSpec[] = [];
+  const walkerControllers = new Set(
+    view.objects
+      .filter(
+        (o) => o.zone === "battlefield" && o.types.includes("planeswalker"),
+      )
+      .map((o) => o.controller),
+  );
   for (const slot of view.battlefield) {
     const o = objects.get(slot);
     const combat = o?.combat;
@@ -2172,19 +2185,22 @@ function boardArrows(
         block: true,
       });
     }
-    // An attack on a planeswalker draws an arrow to it. One at the player draws none: the
-    // attacker's chevron and the damage badge on the orb say it, and a fan of arrows into one
-    // orb only crowds the table. A blocked attacker's damage goes to its blockers.
+    // When the defender has a planeswalker, show every attack destination, including the
+    // life orb. With only one destination the chevron suffices. Blocked attacks link to blockers.
     if (
       combat?.kind !== "attacking" ||
       combat.blocked ||
-      combat.planeswalker === null
+      (combat.planeswalker === null &&
+        !walkerControllers.has(o.controller === "you" ? "opponent" : "you"))
     ) {
       continue;
     }
     out.push({
       from: cardId(slot),
-      to: cardId(combat.planeswalker),
+      to:
+        combat.planeswalker === null
+          ? lifeId(o.controller === "you" ? "opponent" : "you")
+          : cardId(combat.planeswalker),
       tone: "red",
     });
   }
@@ -2345,8 +2361,16 @@ function Finish({
   done?: CandidateIndex;
   onPick(index: CandidateIndex): void;
 }) {
+  if (decision.kind === "attackTarget") {
+    return (
+      <Dock>
+        <div className="turn-action">
+          <span className="turn-caption">Choose attack target</span>
+        </div>
+      </Dock>
+    );
+  }
   const labels: Partial<Record<Kind, [string, string]>> = {
-    attackTarget: ["Attack", "Choose what it attacks"],
     blockTarget: ["Block", "Choose an attacker to block"],
     damageDivision: ["Assign Damage", "Choose blockers to destroy"],
   };

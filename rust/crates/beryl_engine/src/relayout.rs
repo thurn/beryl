@@ -325,6 +325,9 @@ impl<L: Layout> Relayout for Ask<L> {
     fn relayout<M: Layout>(&self) -> Ask<M> {
         match *self {
             Ask::Plain => Ask::Plain,
+            Ask::AttackTarget { attackers } => Ask::AttackTarget {
+                attackers: bits(attackers),
+            },
             Ask::Scry { count } => Ask::Scry { count },
             Ask::Look {
                 player,

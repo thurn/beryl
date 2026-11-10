@@ -116,6 +116,9 @@ pub enum Ask<L: Layout = Small> {
     /// Nothing more than the kind says.
     #[default]
     Plain,
+    /// Creatures whose attack destination is chosen. [CR 508.4](https://yawgatog.com/resources/magic-rules/#R5084):
+    /// "their controller chooses which defending player, which planeswalker ... each one is attacking".
+    AttackTarget { attackers: Bitboard<L::Slot> },
     /// Scry `count`
     /// ([CR 701.22a](https://yawgatog.com/resources/magic-rules/#R70122a)): "look at the top
     /// N cards of your library, then put any number of them on the bottom of your library in

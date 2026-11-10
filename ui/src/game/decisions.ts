@@ -298,7 +298,7 @@ const PROMPTS: Partial<Record<Kind, string>> = {
   triggerOrder: "Put a trigger on the stack",
   payLife: "Pay life?",
   attacker: "Declare attackers",
-  attackTarget: "Choose what to attack",
+  attackTarget: "Choose attack target",
   blocker: "Declare blockers",
   blockTarget: "Choose what to block",
   damageDivision: "Assign combat damage",

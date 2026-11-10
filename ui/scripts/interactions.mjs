@@ -7619,10 +7619,32 @@ await check(
     adelineRun,
 );
 await check(
-    "Adeline's Human attacks the player from the turn button",
+    "Adeline's Human requires a highlighted direct attack target",
     async (page) => {
         await page.clock.runFor(2000);
-        await page.getByRole("button", { name: "Attack", exact: true }).click();
+        assert.equal(
+            await page
+                .getByRole("button", { name: "Attack", exact: true })
+                .count(),
+            0,
+        );
+        assert.ok(await page.locator(`${slotOf(human)} .card-source`).count());
+        assert.ok(
+            await page
+                .locator(
+                    `.arrow[data-from="card-${human}"][data-to="opponent-life-orb"]`,
+                )
+                .count(),
+        );
+        assert.equal(
+            await page
+                .getByText("Choose attack target", { exact: true })
+                .count(),
+            1,
+        );
+        await page
+            .getByRole("button", { name: "Target opponent", exact: true })
+            .click();
         assert.deepEqual(await settled(page, 1), [defending(null)]);
     },
     adelineRun,

@@ -1204,8 +1204,12 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
             // controller of the spell or ability follows its instructions in the order
             // written").
             let opts = crate::combat::attack_targets(self.state, you.opponent());
-            let Opt::Defender(walker) =
-                self.ask_options(you, DecisionKind::AttackTarget, opts.as_slice(), Ask::Plain)?
+            let Opt::Defender(walker) = self.ask_options(
+                you,
+                DecisionKind::AttackTarget,
+                opts.as_slice(),
+                Ask::AttackTarget { attackers: tokens },
+            )?
             else {
                 unreachable!("a defender")
             };

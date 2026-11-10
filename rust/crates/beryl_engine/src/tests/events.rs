@@ -1552,6 +1552,12 @@ fn a_token_created_attacking_may_attack_a_planeswalker() {
                     .copied()
                     .find(|&slot| t.def(paused.object(slot).card).name == "Test Human")
                     .expect("the Human on the battlefield as it is asked about");
+                assert_eq!(
+                    d.ask,
+                    crate::Ask::AttackTarget {
+                        attackers: crate::Bitboard::single(shown)
+                    }
+                );
                 let o = paused.object(shown);
                 assert!(o.flags.has(ObjectFlags::ATTACKING) && o.flags.has(ObjectFlags::TAPPED));
                 assert_eq!(o.combat, None);

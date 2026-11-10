@@ -396,6 +396,12 @@ fn an_attacked_planeswalker_loses_loyalty_and_dies_at_zero() {
     // With a planeswalker to attack, the defender is a real choice (CR 508.1b).
     let target = g.expect(DecisionKind::AttackTarget);
     assert_eq!(
+        target.ask,
+        crate::Ask::AttackTarget {
+            attackers: crate::Bitboard::single(ogre)
+        }
+    );
+    assert_eq!(
         options(&target),
         vec![Opt::Defender(None), Opt::Defender(Some(walker))]
     );

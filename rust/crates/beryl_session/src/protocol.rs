@@ -368,6 +368,8 @@ pub enum RefusalView {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum AskView {
+    /// Creatures whose attack destination the player must choose.
+    AttackTarget { attackers: Vec<u16> },
     /// Nothing more than the decision's kind says.
     Plain,
     /// Scry `count`: a `chooseUpTo` picks a card for the bottom, a `chooseObject` the next
@@ -1447,6 +1449,9 @@ fn halt_view<L: Layout>(
 fn ask_view<L: Layout>(obs: Observation<'_, L>, ask: Ask<L>) -> AskView {
     match ask {
         Ask::Plain => AskView::Plain,
+        Ask::AttackTarget { attackers } => AskView::AttackTarget {
+            attackers: attackers.iter().map(SlotId::num).collect(),
+        },
         Ask::Scry { count } => AskView::Scry { count },
         Ask::Look {
             player,
