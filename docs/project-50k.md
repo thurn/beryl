@@ -2,8 +2,9 @@
 
 *A plan to rebuild Beryl's engine, card and UI structure so it could hold every
 known Magic card. Decided 2026-11-10 in a design interview, on an audit of the
-code and on measurements taken that day. The work is tracked as an Enact epic in
-beads; this document is the plan the epic's beads are written against.*
+code and on measurements taken that day, and revised the same day after an audit
+of the plan itself. The work is tracked as an Enact epic in beads; this document
+is the plan the epic's beads are written against.*
 
 Beryl supports 47 cards. Its structure was built for that pool: one cards crate,
 hand-kept registries, one Rust function per ability, and an enum variant or
@@ -15,8 +16,8 @@ structure with one that would still work with the full Comprehensive Rules and
   shared rules library, the prompt protocol, the card data pipeline,
   verification, and the tools a fleet of cheap models needs to write cards.
 - **Not in scope:** new rules features. Expanding what the engine can do is the
-  next project, [rules-coverage.md](rules-coverage.md). No new cards are written
-  here either.
+  next project, [rules-coverage.md](rules-coverage.md). The only new cards are
+  the ten of the closing authoring pilot.
 - **The card pool** is every card in Scryfall's Oracle data except un-set cards,
   dexterity cards and Alchemy cards.
 - **Unchanged:** the engine stays one exact, flat, `Copy` state machine built
@@ -71,25 +72,25 @@ same cards build in about 90 seconds.
 
 ## Decisions
 
-| ID  | Decision                                                                                                                                             | Why                                                                                                                                |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| K1  | A card's behavior is typed effect data run by one interpreter. A Rust function is the escape hatch. Held to the count gate with no bump.             | Opaque bodies force hand-kept metadata on every card. Bodies run 10 to 20 times a game, so dispatch is about 0.02% of a rollout.   |
-| K2  | Printed characteristics are generated from Scryfall for the whole pool. A card file holds abilities and scenarios under a generated header.          | Nobody types a cost or type line, every card exists as a stub, and keyword-only creatures need no authoring.                       |
-| K3  | The bar for a card is tiered. Library effects carry hand-written scenarios; a card built only from them gets generated scenarios.                    | Hand-written scenarios for every card would be about 5.8 million lines and hours of oracle time.                                   |
-| K4  | Struct fields hold only state the Comprehensive Rules give that thing. Everything a card creates lives in three stores: Effects, Memos and Trackers. | Each flag hand-rolls its own duration, expiry, layout conversion, save description and observation.                                |
-| K5  | `EffectCtx` becomes free functions over `Game` and `Resolution`, in modules that mirror the Comprehensive Rules.                                     | An agent reading "Scry 2" or a rule number finds the file by name, and each file stays small.                                      |
-| K6  | A kernel crate owns the state. Fields are private; other crates use typed mutators, queries and order-free sets.                                     | Ten of 17 logged bugs needed a chokepoint that nothing enforced. A crate boundary enforces it at compile time.                     |
-| K7  | Card data says what the card says ("each opponent", "defending player"). The kernel's API is format-neutral. No multiplayer logic is written.        | Card data cannot be re-audited cheaply; the kernel refactor touches every two-player site anyway.                                  |
-| K8  | Card files are grouped by first-printing set, in many crates, with registries generated at build time.                                               | A set is how work is batched; a one-card edit rebuilds one crate; parallel agents never edit a shared list.                        |
-| K9  | Generic agents derive card knowledge from definitions. Hand-tuned numbers survive only as an optional overlay for supported decks.                   | A name-keyed table cannot cover the pool. The overlay keeps the WU mirror's strength, in the same category as the expert.          |
-| K10 | Prompts are about ten shapes plus a closed list of purpose tags.                                                                                     | Half of today's prompt kinds serve one card. Shapes are built once; a new card needs no protocol or UI change.                     |
-| K11 | The rewrite happens in place. At every push all cards work, frozen saves replay, rollouts are unchanged and the count gate holds.                    | Three machine checks already define "behavior did not change", which makes an unattended refactor safe.                            |
-| K12 | The kernel, rules and card crates have no runtime dependencies. Tests adopt `proptest` and `insta`; tools use mature crates freely.                  | The hot path needs exact layout control. Fuzz failures need shrinking. Tooling should not hand-roll parsing and threading.         |
-| K13 | A definition renders back to Oracle-style text, which is compared with Scryfall's.                                                                   | A cheap model's typical error is a plausible definition that differs from the card. Rendering makes that error mechanical to find. |
-| K14 | The project ends at parity plus a scale rehearsal. No pilot authoring.                                                                               | Foundations first. The 47 ported cards are the test bed for the authoring tools.                                                   |
-| K15 | Enact review: a Mason audit gates each milestone, one Warden per milestone, no Sage, one Archivist.                                                  | Parity is machine-checked. Architecture drift is what the checks cannot see.                                                       |
-| K16 | Beryl moves to GPL-3.0-or-later and gains a translator from Forge's card scripts. Forge is a source of card data only, never of engine design.       | Forge's 34,134 scripts are a formal statement of nearly every card. Beryl is not a port of Forge.                                  |
-| K17 | `just check` fails a source file over 800 lines. Today's offenders are on an allowlist that may only shrink.                                         | Appending to a big file is an agent's path of least resistance; conventions alone did not hold.                                    |
+| ID  | Decision                                                                                                                                                                                                         | Why                                                                                                                                                                                                                              |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| K1  | A card's behavior is typed effect data run by one interpreter. A Rust function is the escape hatch. Held to the count gate with no bump; if it cannot hold, the run stops for a human decision.                  | Opaque bodies force hand-kept metadata on every card. Bodies run 10 to 20 times a game, so dispatch is about 0.02% of a rollout. K3, K9 and K13 all read the data, so there is no substitute to fall back to.                    |
+| K2  | Printed characteristics are generated from Scryfall for the whole pool into the card store. A card gets a Rust file, under a generated header, when it gets written abilities.                                   | Nobody types a cost or type line, and keyword-only creatures need no authoring. About 30,000 stub files would be rebuilt by every vocabulary edit and rewritten by every Scryfall refresh.                                       |
+| K3  | The bar for a card is tiered. Library effects carry hand-written scenarios; a card built only from them gets generated scenarios.                                                                                | Hand-written scenarios for every card would be about 5.8 million lines and hours of oracle time.                                                                                                                                 |
+| K4  | Struct fields hold only state the Comprehensive Rules give that thing. Everything a card creates lives in three stores: Effects, Memos and Trackers.                                                             | Each flag hand-rolls its own duration, expiry, layout conversion, save description and observation.                                                                                                                              |
+| K5  | `EffectCtx` becomes free functions over `Game` and `Resolution`, in modules that mirror the Comprehensive Rules.                                                                                                 | An agent reading "Scry 2" or a rule number finds the file by name, and each file stays small.                                                                                                                                    |
+| K6  | A kernel crate owns the state. Fields are private; other crates use typed mutators, queries and order-free sets.                                                                                                 | Ten of 17 logged bugs needed a chokepoint that nothing enforced. A crate boundary enforces it at compile time.                                                                                                                   |
+| K7  | Card data says what the card says ("each opponent", "defending player"). The kernel's API is format-neutral. No multiplayer logic is written.                                                                    | Card data cannot be re-audited cheaply; the kernel refactor touches every two-player site anyway.                                                                                                                                |
+| K8  | Card files are grouped by first-printing set, in many crates, with registries generated at build time.                                                                                                           | A set is how work is batched; a one-card edit rebuilds one crate; parallel agents never edit a shared list.                                                                                                                      |
+| K9  | Generic agents derive card knowledge from definitions. Hand-tuned numbers survive only as an optional overlay for supported decks.                                                                               | A name-keyed table cannot cover the pool. The overlay keeps the WU mirror's strength, in the same category as the expert.                                                                                                        |
+| K10 | Prompts are about ten shapes plus a closed list of purpose tags.                                                                                                                                                 | Half of today's prompt kinds serve one card. Shapes are built once; a new card needs no protocol or UI change.                                                                                                                   |
+| K11 | The rewrite happens in place. At every push all cards work, frozen saves replay, rollouts are unchanged and the count gate holds.                                                                                | Three machine checks already define "behavior did not change", which makes an unattended refactor safe.                                                                                                                          |
+| K12 | The kernel, rules and card crates have no runtime dependencies. Tests adopt `proptest` and `insta`; tools use mature crates freely.                                                                              | The hot path needs exact layout control. Fuzz failures need shrinking. Tooling should not hand-roll parsing and threading.                                                                                                       |
+| K13 | A definition renders back to Oracle-style text, which is compared with Scryfall's.                                                                                                                               | A cheap model's typical error is a plausible definition that differs from the card. Rendering makes that error mechanical to find.                                                                                               |
+| K14 | The project ends at parity, a scale rehearsal and a ten-card authoring pilot.                                                                                                                                    | Foundations first. The pilot is the only test that a cheap model can write a card from the brief; its cards are Legacy cards the project needs anyway.                                                                           |
+| K15 | Four parallel tracks. One Warden per milestone. A Mason audit gates each step of the engine chain (after milestones 2, 3, 4 and 5) and one closes the run. No Sage, one Archivist.                               | Parity is machine-checked. Architecture drift is what the checks cannot see, and it is expensive in the vocabulary, kernel, stores and library.                                                                                  |
+| K16 | Beryl stays Apache-2.0 and takes no card data from Forge. Forge is a test oracle and a census of mechanics. A card brief cites Oracle text, rulings and the MIT-licensed XMage class.                            | A translator from Forge's scripts would be a second vocabulary: about 1,600 hand-mapped script entries for 83% of its cards ([Measurements](#measurements)), built from the idioms Beryl avoids, at the cost of a permanent GPL. |
+| K17 | `just check` fails a source file over 800 lines. Today's offenders are on an allowlist that may only shrink. Tests, test drivers, generated files, the expert system and the retired long-think code are exempt. | Appending to a big file is an agent's path of least resistance; conventions alone did not hold.                                                                                                                                  |
 
 ## Target architecture
 
@@ -201,6 +202,8 @@ shape.
 
 - `just cards` generates characteristics for the whole pool and builds an
   indexed card store. The app serves records over IPC on demand.
+- An unimplemented card is a record in the store, not a file. `just card new`
+  creates a card's Rust file with its generated header.
 - Subtypes, counter kinds and similar lists are generated from Scryfall's
   catalogs, not written by hand.
 - A build script lists each set directory. No registry is kept by hand.
@@ -212,7 +215,7 @@ shape.
 - Invariant and reference checks run in debug builds on every `apply`.
 - Every scenario is re-run under permuted slot assignments.
 - Bounded exhaustive search plays every decision sequence from scenario
-  positions to a fixed depth, checking invariants at each state.
+  positions to a fixed depth, checking invariants at each state (milestone 1).
 - `proptest` shrinks a failing fuzz game to a minimal sequence.
 - Oracles run per changed card in CI. The full sweep runs nightly.
 - Scenarios use basic lands and a small set of designated prop cards, so one
@@ -221,24 +224,21 @@ shape.
 ### Authoring tools
 
 1. **No model.** Vanilla and keyword-only creatures are complete from generated
-   characteristics: 1,882 of Forge's 34,134 scripts.
-2. **Translator.** A tool in `tools/` turns a Forge script into a Beryl
-   definition where the mapping is clean, and declines otherwise.
-3. **One cheap model, one card.** `just card brief` prints a packet: Oracle text
+   characteristics.
+2. **One cheap model, one card.** `just card brief` prints a packet: Oracle text
    and rulings, matching vocabulary entries, the nearest implemented cards, and
-   the Forge script and XMage class as references. `just card check` builds one
-   set crate and runs the generated scenarios on all three engines.
-4. **Escalation.** A card the vocabulary cannot express is tagged with the
+   the XMage class as a reference. `just card check` builds one set crate and
+   runs the generated scenarios on all three engines.
+3. **Escalation.** A card the vocabulary cannot express is tagged with the
    mechanic it needs. A stronger model takes mechanics in order of cards
    unblocked.
-5. **Render and diff.** Every definition, from any source, renders to text that
-   is compared with Scryfall's.
+4. **Render and diff.** Every definition renders to text that is compared with
+   Scryfall's.
 
-Forge guardrails: the vocabulary is designed from the Comprehensive Rules, and
-each entry is justified by its rule and the cards that need it. The translator
-maps into it; the vocabulary never bends to a script. No Forge engine code is
-ported or used as a design reference. A translated card cannot be checked by
-Forge, so XMage and the render check are its independent checks.
+Forge's scripts are never an input to a definition (K16). The vocabulary is
+designed from the Comprehensive Rules, and each entry is justified by its rule
+and the cards that need it. A census tool parses the scripts only to count which
+mechanics block the most cards.
 
 ### Conventions
 
@@ -254,29 +254,46 @@ These go into AGENTS.md in the first milestone.
 
 ## Milestones
 
-Each lands in place under K11. A Mason audit gates the next.
+Each lands in place under K11. They run as four tracks (K15).
+
+| Track   | Milestones                    | Starts after                |
+| ------- | ----------------------------- | --------------------------- |
+| Engine  | 2, 3, 4, 5, in order          | milestone 1                 |
+| Prompts | 6                             | milestone 2; lands before 5 |
+| Data    | 7a                            | milestone 1                 |
+| Hygiene | file splits no milestone owns | milestone 1                 |
+| Tail    | 7b, then 8                    | milestone 5                 |
 
 1. **Guardrails.** The scale-rehearsal harness; the card-names test, seeded with
    the audit's inventory as a shrinking allowlist; the file-length check;
    invariants on every debug `apply`; permuted-slot scenario runs; shrinking;
-   the conventions above.
+   bounded exhaustive search; the conventions above.
 2. **Effect data proof.** The `beryl_card` vocabulary, the interpreter, and the
-   benchmark corpus's cards ported. The count gate holds at 405,276,238
-   instructions with no bump. If it cannot after three attempts, the fallback is
-   Rust bodies over the same shared library, and the plan continues.
+   benchmark corpus's cards ported. Two proofs. Reach: before the types harden,
+   the vocabulary's designer writes unimplemented definitions for 60 random
+   in-scope cards and records how many fit, need one more entry, need a new kind
+   of expression, or need a Rust body. Speed: the count gate holds at
+   405,276,238 instructions with no bump. If it cannot after three attempts, the
+   run stops for a human decision.
 3. **Kernel.** Private state, mutators, queries, order-free sets, index types,
-   the format-neutral API, capacities as layout parameters.
+   the format-neutral API, capacities as layout parameters. No mutators for the
+   fields milestone 4 removes.
 4. **Stores.** Effects, Memos and Trackers; the one-card state fields and
    variants from the audit removed.
 5. **Rules library and card port.** `EffectCtx` dissolved; all 47 cards as
-   effect data; generated scenarios; prop cards.
+   effect data, written against milestone 6's prompt shapes; generated
+   scenarios; prop cards.
 6. **Prompts.** Shapes and purposes through engine, session, protocol and UI,
-   with the save-format migration.
-7. **Card pool.** Generated characteristics, set crates, build-time registries,
-   the card store, derived oracle exporters, and the rehearsal budgets met.
+   with the save-format migration. Runs beside milestones 3 and 4.
+7. **Card pool.** 7a, with no engine dependency: generated characteristics for
+   the whole pool, the card store over IPC, specs per requested card, the
+   indexed card table. 7b: set crates, build-time registries, derived oracle
+   exporters, and the rehearsal budgets met.
 8. **AI knowledge and authoring tools.** Derived card knowledge and the per-deck
-   overlay; the relicense; `just card brief` and `just card check`; render and
-   diff; the Forge translator, as a dry run.
+   overlay; `just card brief`, `just card new` and `just card check`; render and
+   diff; the Forge census; the authoring pilot, in which a cheap model writes
+   ten Legacy cards that today's mechanics can express, each from its brief.
+   Cards that pass are kept.
 
 New cards and engine mechanics wait until milestone 5 lands. UI, mobile and AI
 ladder work continue.
@@ -291,9 +308,9 @@ ladder work continue.
 
 - **No oversized files.** The file-length allowlist is empty.
 
-- **Scale rehearsal.** Every in-scope card exists as a generated stub. A scratch
-  workspace of 50,000 implemented definitions, cloned from the real ones, meets
-  these budgets on the development machine:
+- **Scale rehearsal.** Every in-scope card has a record in the card store. A
+  scratch workspace of 50,000 implemented definitions, cloned from the real
+  ones, meets these budgets on the development machine:
 
   | Measure                  | Budget |
   | ------------------------ | ------ |
@@ -306,24 +323,28 @@ ladder work continue.
   cannot be met after three attempts is recorded with its measured value and
   cause, and a follow-up bead is filed.
 
-- **Reported, with no bar:** the render-match rate on the 47 cards; the
-  translator's agreement with the 47 hand-ported definitions; its coverage over
-  all 34,134 scripts, with the missing mechanics ordered by cards blocked; the
-  derived-only agent's results against the tuned one.
+- **Reported, with no bar:** the paper test's four-way split; the render-match
+  rate on the 47 cards; the pilot's pass count, cards blocked by missing
+  vocabulary and tokens per card; the Forge census, with the missing mechanics
+  ordered by cards blocked; the derived-only agent's results against the tuned
+  one.
 
 ## Risks
 
+- **The vocabulary cannot say enough.** Amounts, references and conditions
+  ("that many", "the exiled card", "if you do") are where a card language turns
+  into string variables. Milestone 2's paper test measures it on 60 cards before
+  anything is built on the types.
 - **The interpreter costs more than estimated.** Milestone 2 measures it before
-  anything is built on it, with a fallback agreed.
+  anything is built on it, and the run stops if the gate cannot hold.
+- **Tracks collide.** Prompts and the kernel both edit `decision.rs`,
+  `relayout.rs` and the ask sites in `effect.rs`. `enact push` rebases; the
+  later push fixes the conflict.
 - **The save corpus constrains prompt changes.** Milestone 6 ships a format
   migration; the old vocabulary is closed and small.
 - **Dual APIs linger.** Old bodies and effect data coexist from milestone 2 to
   milestone 5. The card-names and file-length allowlists make the remainder
   visible.
-- **GPL and app stores.** GPL version 3 is widely held to conflict with Apple's
-  App Store terms. Installing to one's own phone is not distribution.
-- **Forge's shapes leak in.** Each Mason gate checks for string-typed
-  parameters, script-variable indirection and per-card AI hints.
 
 ## Measurements
 
@@ -342,9 +363,10 @@ each, against today's `beryl_engine` and `beryl_scenario`.
 
 A release binary linking all 10,000 cards with their scenarios is 27.5 MiB.
 
-**Forge's vocabulary.** Distinct effect types, static modes, trigger modes and
-replacement events across 34,134 scripts, ignoring parameters: 450 in all (195,
-82, 139 and 34), plus 222 keywords.
+**Forge's vocabulary.** A census of mechanics, not a design input (K16).
+Distinct effect types, static modes, trigger modes and replacement events across
+34,134 scripts, ignoring parameters: 450 in all (195, 82, 139 and 34), plus 222
+keywords.
 
 | Most common entries | Scripts fully covered |
 | ------------------- | --------------------- |
@@ -353,3 +375,15 @@ replacement events across 34,134 scripts, ignoring parameters: 450 in all (195,
 | 100                 | 88.0%                 |
 | 200                 | 97.2%                 |
 | 450                 | 100%                  |
+
+Counted at the level a translator would have to map, the scripts are far wider.
+Share of scripts fully covered by the most common entries:
+
+| Counted                                                   | Distinct | Top 200 | Top 800 | Top 1,600 |
+| --------------------------------------------------------- | -------- | ------- | ------- | --------- |
+| Effect, mode and keyword names                            | 710      | 84.9%   | 100%    | 100%      |
+| Plus parameter keys                                       | 1,888    | 44.1%   | 90.0%   | 99.3%     |
+| Plus filter properties, references and computed variables | 6,199    | 23.9%   | 63.2%   | 82.8%     |
+
+36% of scripts compute a value through a script variable, 28% chain
+sub-abilities and 12% keep remembered state.
