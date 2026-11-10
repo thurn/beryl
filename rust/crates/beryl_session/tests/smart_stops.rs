@@ -567,3 +567,117 @@ fn smart_stops_search_unasked() {
     let exact = asked_after_trinket_mage(&TRINKET, StopsSetting::EXACT);
     assert!(exact.contains(&Kind::YesNo), "{exact:?}");
 }
+
+/// Blocks with every legal creature, then passes.
+struct BlockAll;
+
+impl<L: beryl_engine::Layout> beryl_search::Agent<L> for BlockAll {
+    fn choose(
+        &mut self,
+        _: beryl_engine::Observation<'_, L>,
+        decision: &beryl_engine::Decision<L>,
+    ) -> beryl_engine::Choice {
+        use beryl_engine::{Choice, Opt};
+
+        (0..decision.len() as u16)
+            .map(Choice)
+            .find(|&c| matches!(decision.candidates.option(c), Some(Opt::Block(_))))
+            .unwrap_or(Choice(0))
+    }
+}
+
+#[test]
+fn smart_damage_takes_the_only_lethal_outcome_and_defaults_real_choices() {
+    use beryl_cards::names::{
+        ABHORRENT_OCULUS, BEZA_THE_BOUNDING_SPRING, SPARAS_HEADQUARTERS, SUBTLETY,
+    };
+    use beryl_engine::TurnStep;
+    use beryl_session::protocol::Step;
+
+    const BEZA: &[Permanent] = &[Permanent::new(BEZA_THE_BOUNDING_SPRING)];
+    const OCULUS: &[Permanent] = &[
+        Permanent::new(SPARAS_HEADQUARTERS).face_down(),
+        Permanent::new(ABHORRENT_OCULUS),
+    ];
+    const FLASH: &[Permanent] = &[Permanent::new(TRINKET_MAGE), Permanent::new(SUBTLETY)];
+    const BOTH: &[Permanent] = &[
+        Permanent::new(TRINKET_MAGE),
+        Permanent::new(JACE_VRYNS_PRODIGY),
+    ];
+
+    for (stops, opponents, big, ask, kill) in [
+        (StopsSetting::SMART, OCULUS, ABHORRENT_OCULUS, false, true),
+        (StopsSetting::EXACT, OCULUS, ABHORRENT_OCULUS, true, false),
+        (StopsSetting::SMART, FLASH, SUBTLETY, true, true),
+        (StopsSetting::SMART, BOTH, JACE_VRYNS_PRODIGY, false, true),
+    ] {
+        let scenario = Scenario::new("Divide combat damage")
+            .at(3, P0, TurnStep::PrecombatMain)
+            .battlefield(P0, BEZA)
+            .battlefield(P1, opponents)
+            .library(P0, &[ISLAND, ISLAND, ISLAND])
+            .library(P1, &[ISLAND, ISLAND, ISLAND]);
+        let (table, state) = beryl_scenario::position(&CARDS, &scenario).unwrap();
+        let mut game = Game::prepared(
+            Prepared {
+                table,
+                state,
+                human: P0,
+                stops,
+                opponent: Box::new(BlockAll),
+                stand_in: Box::new(BlockAll),
+                hand_over: None,
+                scripted: false,
+            },
+            SESSION,
+        );
+        let small = (big != ABHORRENT_OCULUS).then_some(TRINKET_MAGE);
+        let mut asked = false;
+        loop {
+            let view = game.next_view().expect("a view before postcombat main");
+            if view.turn.step == Step::PostcombatMain {
+                let survives = |name| {
+                    view.objects.iter().any(|object| {
+                        object.zone == ZoneName::Battlefield && object.name.as_deref() == name
+                    })
+                };
+                assert_eq!(survives(small), !kill, "{big}");
+                assert_eq!(survives(Some(big)), big != JACE_VRYNS_PRODIGY, "{big}");
+                assert_eq!(asked, ask, "{big}");
+                break;
+            }
+            let Status::Deciding { decision } = &view.status else {
+                continue;
+            };
+            let index =
+                match decision.kind {
+                    Kind::Attacker => decision
+                        .candidates
+                        .iter()
+                        .position(|c| matches!(c.option, Candidate::Attack { .. }))
+                        .map_or(CandidateIndex(0), |i| CandidateIndex(i as u16)),
+                    Kind::DamageDivision => {
+                        asked = true;
+                        let preferred = decision.damage_default.expect("a recommended blocker");
+                        let Candidate::Lethal { slot } =
+                            decision.candidates[preferred.0 as usize].option
+                        else {
+                            panic!("the recommendation must deal lethal damage");
+                        };
+                        assert!(view.objects.iter().any(|object| {
+                            object.slot == slot && object.name.as_deref() == small
+                        }));
+                        if stops.full_control {
+                            let done = &decision.candidates[0].option;
+                            assert_eq!(*done, Candidate::Done);
+                            CandidateIndex(0)
+                        } else {
+                            preferred
+                        }
+                    }
+                    _ => CandidateIndex(0),
+                };
+            game.choose(game.answer(decision.id, index).unwrap());
+        }
+    }
+}

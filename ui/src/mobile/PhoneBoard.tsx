@@ -25,7 +25,12 @@ import {
   type CardProps,
   type Highlight,
 } from "../components/Card";
-import { FastForwardIcon, PhaseIcon, TurnButton } from "../components/Controls";
+import {
+  Button,
+  FastForwardIcon,
+  PhaseIcon,
+  TurnButton,
+} from "../components/Controls";
 import { LifeOrb } from "../components/Player";
 import { attackPlan, blockPlan } from "../game/combat";
 import { follow, interactions, tapsOnly, type Intent } from "../game/decisions";
@@ -447,6 +452,27 @@ function PhoneDock({
           label="No Blocks"
           onClick={declare(blockPlan(new Map(), objects))}
         />
+      </div>
+    );
+  }
+  if (!waiting && decision?.kind === "damageDivision") {
+    const preferred = view.stops.fullControl
+      ? undefined
+      : decision.damageDefault;
+    const done = can.done;
+    const primary = preferred ?? done;
+    return (
+      <div className="phone-dock">
+        <TurnButton
+          label="Assign Damage"
+          disabled={primary === undefined}
+          onClick={() => primary !== undefined && choose(primary)}
+        />
+        {preferred !== undefined && done !== undefined && (
+          <Button variant="secondary" onClick={() => choose(done)}>
+            Done
+          </Button>
+        )}
       </div>
     );
   }

@@ -334,6 +334,10 @@ pub struct DecisionView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub self_removal_targets: Option<Vec<u16>>,
+    /// The recommended lethal pick in a combat damage division.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub damage_default: Option<CandidateIndex>,
     /// What an answer names.
     pub id: DecisionId,
     pub kind: Kind,
@@ -1507,6 +1511,7 @@ fn decision_view<L: Layout>(
     DecisionView {
         waterbend: None,
         self_removal_targets: None,
+        damage_default: None,
         id,
         kind: d.kind.into(),
         candidates,
@@ -1564,6 +1569,7 @@ fn halt_view<L: Layout>(
     DecisionView {
         waterbend: None,
         self_removal_targets: None,
+        damage_default: None,
         id,
         kind: Kind::Priority,
         candidates: vec![CandidateView {

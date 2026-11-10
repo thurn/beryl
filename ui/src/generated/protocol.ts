@@ -313,6 +313,10 @@ waterbend?: WaterbendPreview,
  */
 selfRemovalTargets?: Array<number>, 
 /**
+ * The recommended lethal pick in a combat damage division.
+ */
+damageDefault?: CandidateIndex, 
+/**
  * What an answer names.
  */
 id: DecisionId, kind: Kind, candidates: Array<CandidateView>, 

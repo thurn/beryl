@@ -1755,6 +1755,9 @@ export function Board({
               <Finish
                 decision={declaring}
                 done={finish}
+                damageDefault={
+                  stops.fullControl ? undefined : declaring.damageDefault
+                }
                 onPick={pick}
                 objects={objects}
               />
@@ -2862,12 +2865,14 @@ function Declare({
 function Finish({
   decision,
   done,
+  damageDefault,
   onPick,
   objects,
 }: {
   decision: DecisionView;
   objects: Map<number, ObjectView>;
   done?: CandidateIndex;
+  damageDefault?: CandidateIndex;
   onPick(index: CandidateIndex): void;
 }) {
   if (decision.kind === "attackTarget") {
@@ -2891,13 +2896,21 @@ function Finish({
     damageDivision: ["Assign Damage", "Choose blockers to destroy"],
   };
   const [label, caption] = labels[decision.kind] ?? ["Done", prompt(decision)];
+  const primary = damageDefault ?? done;
   return (
     <Dock>
+      {damageDefault !== undefined && done !== undefined && (
+        <DockButtons>
+          <Button variant="secondary" onClick={() => onPick(done)}>
+            Done
+          </Button>
+        </DockButtons>
+      )}
       <div className="turn-action">
         <TurnButton
           label={label}
-          disabled={done === undefined}
-          onClick={() => done !== undefined && onPick(done)}
+          disabled={primary === undefined}
+          onClick={() => primary !== undefined && onPick(primary)}
         />
         <span className="turn-caption">{caption}</span>
       </div>

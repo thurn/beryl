@@ -7,7 +7,7 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{Keywords, Types};
-use crate::decision::{Ask, Candidates, Decision, DecisionKind, Opt};
+use crate::decision::{Ask, Candidates, Choice, Decision, DecisionKind, Opt};
 use crate::engine::collapse;
 use crate::event::{self, Event, Recipient, Sink};
 use crate::fixed::Full;
@@ -467,6 +467,45 @@ pub(crate) fn division_decision<L: Layout>(
         candidates: Candidates::Options(list),
         ask: Ask::Plain,
     })
+}
+
+/// The smart-stop recommendation for the next pick under [CR 510.1c](https://yawgatog.com/resources/magic-rules/#R5101c)
+/// ("divided as its controller chooses among them"). Prefer killing more blockers by
+/// taking the cheapest lethal assignment first, breaking ties by power. The pick
+/// can be silent if it is the only distinct lethal pick or all killable blockers fit.
+pub fn preferred_damage<L: Layout>(s: &State<L>, d: &Decision<L>) -> Option<(Choice, bool)> {
+    let Pending::CombatDamage {
+        done,
+        lethal: chosen,
+    } = s.pending
+    else {
+        return None;
+    };
+    let Candidates::Options(options) = &d.candidates else {
+        return None;
+    };
+    let attacker = next_division(s, done)?;
+    let blockers = blockers_of(s, attacker);
+    let spent: u32 = (blockers & chosen)
+        .iter()
+        .map(|b| u32::from(lethal(s, b)))
+        .sum();
+    let left = u32::from(power(s, attacker)) - spent;
+    let cost: u32 = (blockers & !chosen)
+        .iter()
+        .map(|b| u32::from(lethal(s, b)))
+        .filter(|&cost| cost <= left)
+        .sum();
+    let picks = options.iter().enumerate().filter_map(|(i, option)| {
+        let Opt::Lethal(slot) = *option else {
+            return None;
+        };
+        Some((Choice(i as u16), lethal(s, slot), s.derived(slot).power))
+    });
+    let unambiguous = cost <= left || picks.clone().count() == 1;
+    picks
+        .min_by_key(|&(_, cost, power)| (cost, std::cmp::Reverse(power)))
+        .map(|(pick, _, _)| (pick, unambiguous))
 }
 
 /// Applies one pick of a damage division, dealing the damage once every division is made.

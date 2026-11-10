@@ -906,6 +906,13 @@ impl Game {
                     Some((_, outcomes)) => outcomes.push(outcome),
                     None => before.push(outcome),
                 },
+                // Damage assignments are recorded choices, even when suggested
+                // automatically. Replaying them preserves earlier manual choices.
+                None if matches!(entry, Entry::Auto(c)
+                    if c.what.as_ref().is_some_and(|w| w.kind == save::Kind::DamageDivision)) =>
+                {
+                    steps.push((entry, Vec::new()));
+                }
                 None if matches!(entry, Entry::Auto(_) | Entry::Checkpoint(_)) => {}
                 None => steps.push((entry, Vec::new())),
             }
@@ -920,7 +927,7 @@ impl Game {
         loop {
             if matches!(self.at, At::Playing) {
                 let logged = self.replay.log.len();
-                self.play_on();
+                self.play_on(true);
                 self.chance_reproduced()?;
                 if let Some(Entry::Checkpoint(reached)) = self
                     .replay
@@ -1101,6 +1108,14 @@ impl Game {
                 };
                 self.agent_decides(c);
             }
+            (At::Human(_, Open::Decision(d)), Entry::Auto(chosen)) => {
+                let Some(c) = self.found(&d, chosen, drift) else {
+                    return self.lenient(&d, chosen, drift);
+                };
+                self.apply(&d, c, ChoiceOrigin::Auto);
+                self.answered = Some(self.board.stack());
+                self.at = At::Playing;
+            }
             (At::Human(id, open @ Open::Decision(_)), Entry::Choice(chosen)) => {
                 let Open::Decision(d) = &open else {
                     unreachable!("matched a decision")
@@ -1254,9 +1269,9 @@ impl Game {
                 });
                 self.note_agent_move(kind, candidates, c, started);
                 self.agent_decides(c);
-                self.play_on();
+                self.play_on(false);
             }
-            At::Playing => self.play_on(),
+            At::Playing => self.play_on(false),
         }
         Some(self.view())
     }
@@ -1724,7 +1739,7 @@ impl Game {
 
     /// Plays on from [`At::Playing`] to the next place a view shows: a step beginning, where
     /// the human may be halted, a decision, or the end.
-    fn play_on(&mut self) {
+    fn play_on(&mut self, replaying: bool) {
         debug_assert!(matches!(self.at, At::Playing));
         loop {
             let step = self
@@ -1762,7 +1777,7 @@ impl Game {
                 },
                 Some(Step::Decide(d)) if d.player == self.human || self.reviewing() => {
                     if !self.reviewing()
-                        && let Some(c) = self.auto_answer(&d)
+                        && let Some(c) = self.auto_answer(&d, replaying)
                     {
                         self.apply(&d, c, ChoiceOrigin::Auto);
                         self.answered = Some(self.board.stack());
@@ -1784,13 +1799,15 @@ impl Game {
     /// smart stops, it passes their priority while only their own doings sit on the stack
     /// ([`Game::own_top`]) or in combat with nothing new to answer ([`Game::quiet_combat`]),
     /// orders their simultaneous triggers ([`trigger_to_stack`]), searches their library
-    /// whenever they may ([`Game::searches_unasked`]). Waterbend remains a human payment
+    /// whenever they may ([`Game::searches_unasked`]), and takes unambiguous lethal combat
+    /// assignments ([`beryl_engine::preferred_damage`]). Waterbend remains a human payment
     /// choice even when mana alone could pay it.
     /// Like halts, these are the session's alone: the engine's smart stops, which the agent's
     /// search shares, are unchanged, and exact stops ask every one. A function of the position,
     /// the stops and the human's answers, so a replay finds each again; the replay records
-    /// each as an [`Entry::Auto`].
-    fn auto_answer(&self, d: &Decision<Large>) -> Option<Choice> {
+    /// each as an [`Entry::Auto`]. Replays play recorded damage assignments directly,
+    /// including any manual choices made before automatic assignment was added.
+    fn auto_answer(&self, d: &Decision<Large>, replaying: bool) -> Option<Choice> {
         if d.kind == DecisionKind::Priority && self.passing.is_some_and(|p| self.passes_for(p)) {
             debug_assert_eq!(d.candidates.option(Choice(0)), Some(Opt::Pass));
             return Some(Choice(0));
@@ -1806,6 +1823,10 @@ impl Game {
             DecisionKind::TriggerOrder => Some(on_board!(&self.board, b => {
                 trigger_to_stack(&b.state, &self.table, &d.relayout())
             })),
+            DecisionKind::DamageDivision if !replaying => on_board!(&self.board, b => {
+                beryl_engine::preferred_damage(&b.state, &d.relayout())
+                    .and_then(|(choice, unambiguous)| unambiguous.then_some(choice))
+            }),
             DecisionKind::YesNo if Self::searches_unasked(d) => (0..d.len() as u16)
                 .map(Choice)
                 .find(|&c| d.candidates.option(c) == Some(Opt::Yes)),

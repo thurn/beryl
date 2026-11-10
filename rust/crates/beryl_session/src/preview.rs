@@ -45,6 +45,10 @@ pub fn add_previews<L: Layout>(
             c.blocks = b;
             c.targets = targets;
         }
+        if d.kind == DecisionKind::DamageDivision {
+            decision.damage_default = beryl_engine::preferred_damage(s, d)
+                .map(|(choice, _)| crate::CandidateIndex(choice.0));
+        }
         if matches!(d.kind, DecisionKind::Target | DecisionKind::TargetCount)
             && target_removes_permanent(s, t)
         {

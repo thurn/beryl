@@ -44,6 +44,7 @@ mod zone;
 
 pub use bitboard::Bitboard;
 pub use cast::{cost_being_cast, pointless, target_removes_permanent};
+pub use combat::preferred_damage;
 pub use decision::{
     Answers, Ask, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, Refusal, Replay,
     StallReason, Step,
