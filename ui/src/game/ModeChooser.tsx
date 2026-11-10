@@ -38,6 +38,7 @@ export interface Mode {
   caption?: ReactNode;
   /** Its name, for a screen reader and a test. */
   name: string;
+  primary?: boolean;
   /** Unset: the use cannot be made now. */
   onPick?(): void;
   action?: Candidate;
@@ -121,9 +122,30 @@ export function ModeChooser({
   useEffect(() => {
     if (!active) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      close();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+        return;
+      }
+      if (
+        e.defaultPrevented ||
+        e.repeat ||
+        e.shiftKey ||
+        (e.key !== " " && e.key !== "Enter")
+      )
+        return;
+      if (
+        e.target instanceof Element &&
+        e.target.closest("button, input, select, textarea, a")
+      )
+        return;
+      const primary = group.current?.querySelector<HTMLButtonElement>(
+        "[data-primary]:enabled",
+      );
+      if (primary) {
+        e.preventDefault();
+        primary.click();
+      }
     };
     const onMenu = (e: MouseEvent) => {
       e.preventDefault();
@@ -258,6 +280,7 @@ function Frame({
       className={present && !selected ? "ability-choice" : "mode-departing"}
       data-dissolving={!present && !handed && !reduce ? "" : undefined}
       data-mode={m.key}
+      data-primary={m.primary ? "" : undefined}
       disabled={!m.onPick}
       tabIndex={present && !selected ? undefined : -1}
       aria-label={m.name}

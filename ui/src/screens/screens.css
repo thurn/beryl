@@ -2133,6 +2133,20 @@
   stroke: currentColor;
   stroke-width: 1.6;
 }
+/* A timing restriction reported at the permanent that imposes it. */
+.timing-refusal {
+  position: absolute;
+  z-index: 460;
+  pointer-events: none;
+  padding: 5px 10px;
+  border: 1px solid var(--stat-down);
+  border-radius: 8px;
+  white-space: nowrap;
+  font: 600 16px var(--font-sans);
+  color: var(--text);
+  background: rgb(27 26 24 / 95%);
+  box-shadow: 0 3px 12px rgb(0 0 0 / 50%);
+}
 /* Under the scan, a permanent's marks spelled out: its P/T against the printed one, then a
    badge per mark. */
 .inspect-marks {
@@ -2634,6 +2648,9 @@
 /* The use's cost or name, on a dark plaque across the frame's foot. */
 .ability-choice-caption {
   position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 0.2em;
   left: 50%;
   bottom: -26px;
   transform: translateX(-50%);
@@ -2649,7 +2666,7 @@
   box-shadow: 0 4px 12px rgb(0 0 0 / 55%);
 }
 .ability-choice-caption .mana-cost {
-  vertical-align: -3px;
+  padding-left: 0;
 }
 /* The X that closes the chooser, beside the gear, an icon button like it. */
 .chooser-close {

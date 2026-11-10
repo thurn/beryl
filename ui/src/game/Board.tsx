@@ -279,6 +279,17 @@ export function Board({
   // The hand card a click found nothing to do with, which the inspector says why of while
   // the pointer stays on it.
   const [refused, setRefused] = useState<number>();
+  const [timingNotice, setTimingNotice] = useState<{
+    view: PlayerView;
+    source: number;
+    id: number;
+  }>();
+  const noticeId = useRef(0);
+  useEffect(() => {
+    if (!timingNotice) return;
+    const timer = setTimeout(() => setTimingNotice(undefined), 1800);
+    return () => clearTimeout(timer);
+  }, [timingNotice]);
   const [menu, setMenu] = useState<Menu>();
   // The card whose uses are being chosen among (its casts, its activated abilities), and
   // where they sprang from.
@@ -618,6 +629,11 @@ export function Board({
     deciding && refused === hovered
       ? decision?.refused.find((r) => r.slot === refused)?.reason
       : undefined;
+  const noticeSource =
+    deciding && timingNotice?.view === view
+      ? placements.get(timingNotice.source)
+      : undefined;
+  const noticeBox = noticeSource && footprint(noticeSource);
   // A hovered card that a new view moves may leave the pointer, which then sends no event: once
   // it has glided to its new place, it stays inspected only if the pointer is still on it.
   const pointer = useRef<{ x: number; y: number }>(undefined);
@@ -724,6 +740,15 @@ export function Board({
     const o = objects.get(slot);
     if (!o) return;
     const name = o.name ?? "";
+    // The printed cast (or the land play for a cycling land) is the primary use.
+    const primary =
+      choices.find(
+        ({ act: { option } }) =>
+          option.kind === "cast" && option.costs.length === 0,
+      ) ?? choices.find(({ act }) => act.option.kind === "playLand");
+    const ordered = primary
+      ? [...choices.filter((choice) => choice !== primary), primary]
+      : choices;
     // A cast or a land played shows the face it is by: a modal card's back, a land's face.
     const faceOf = (act: Act) => {
       if (act.option.kind === "playLand") return pointedObject(o, act);
@@ -740,11 +765,12 @@ export function Board({
       object: o,
       from,
       split,
-      modes: choices.map(({ act, text }) => {
+      modes: ordered.map(({ act, text }) => {
         if (act.option.kind === "cast") {
           return {
             key: `act-${act.index}`,
             name: act.label,
+            primary: act === primary?.act,
             action: act.option,
             look: { kind: "card", object: faceOf(act) },
             caption: <CastCaption act={act} name={name} />,
@@ -757,6 +783,7 @@ export function Board({
         return {
           key: `act-${act.index}`,
           name: act.label,
+          primary: act === primary?.act,
           action: act.option,
           look:
             act.option.kind === "playLand"
@@ -1074,6 +1101,20 @@ export function Board({
       playSound("no");
       setMenu(undefined);
       setRefused(slot);
+      const reason = deciding
+        ? decision?.refused.find((r) => r.slot === slot)?.reason
+        : undefined;
+      const source =
+        reason?.kind === "timing" && reason.by !== null
+          ? objects.get(reason.by)
+          : undefined;
+      setTimingNotice(
+        source?.name &&
+          source.zone === "battlefield" &&
+          source.controller === "opponent"
+          ? { view, source: source.slot, id: ++noticeId.current }
+          : undefined,
+      );
       return false;
     }
     const casts = castActs(acts);
@@ -1244,7 +1285,13 @@ export function Board({
       return;
     }
     if (inert) return;
-    if ((e.key !== " " && e.key !== "Enter") || e.repeat || menu || viewed) {
+    if (
+      (e.key !== " " && e.key !== "Enter") ||
+      e.repeat ||
+      menu ||
+      activeChooser ||
+      viewed
+    ) {
       return;
     }
     const target = e.target instanceof Element ? e.target : null;
@@ -1500,6 +1547,27 @@ export function Board({
 
         <ManaFlow motes={motes} />
 
+        <AnimatePresence>
+          {timingNotice && noticeBox && (
+            <motion.div
+              key={timingNotice.id}
+              className="timing-refusal"
+              role="status"
+              style={{
+                left: (noticeBox.left + noticeBox.right) / 2,
+                top: noticeBox.bottom + 6,
+                x: "-50%",
+              }}
+              initial={reduceMotion ? false : { opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduceMotion ? undefined : { opacity: 0 }}
+              transition={{ duration: 0.16 }}
+            >
+              Sorcery speed only
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Over the cards on them: a pile is opened, never pointed at card by card. */}
         {[...piles, ...libraries].map(
           (pile) =>
@@ -1744,7 +1812,17 @@ export function Board({
               place={inspectorPlace(
                 menu ? menu.at.x : inspected!.x,
                 view.stack.length > 0 || asking,
-                targets,
+                noticeBox
+                  ? [
+                      ...targets,
+                      {
+                        left: (noticeBox.left + noticeBox.right) / 2 - 84,
+                        right: (noticeBox.left + noticeBox.right) / 2 + 84,
+                        top: noticeBox.top,
+                        bottom: noticeBox.bottom + 42,
+                      },
+                    ]
+                  : targets,
               )}
               lit={menu?.pointed && litParagraph(menu.pointed, objects)}
               refusal={menu ? undefined : refusal}

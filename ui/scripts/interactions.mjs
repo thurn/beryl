@@ -2834,10 +2834,16 @@ await check(
                     .locator(".ability-choice-caption")
                     .allTextContents()
             ).map((t) => t.split(" ")[0]),
-            ["Cast", "Kicker"],
+            ["Kicker", "Cast"],
             "a frame for each cast, said by its cost",
         );
-        await frames.nth(1).click();
+        await assertCaptionAligned(
+            frames.first().locator(".ability-choice-caption"),
+        );
+        await page
+            .locator(".ability-chooser")
+            .getByRole("button", { name: /Cast Thieving Skydiver with kicker/ })
+            .click();
         const step = page.getByRole("dialog", {
             name: "Cast Thieving Skydiver",
         });
@@ -2897,15 +2903,15 @@ for (const gesture of ["click", "drag"]) {
             }
             assert.equal(
                 await frames
-                    .nth(0)
+                    .last()
                     .locator(".ability-choice-caption")
                     .textContent(),
                 "Play",
             );
             assert.match(
-                await frames.nth(1).locator(".card-rules").textContent(),
+                await frames.first().locator(".card-rules").textContent(),
                 /Discard this card: Draw a card\./,
-                `cycling draws: ${await frames.nth(1).textContent()}`,
+                `cycling draws: ${await frames.first().textContent()}`,
             );
         },
         {
@@ -3061,7 +3067,10 @@ await check(
             await page.click(subtlety);
             await frames(page).first().waitFor();
         }
-        await frames(page).nth(0).click();
+        await page
+            .locator(".ability-chooser")
+            .getByRole("button", { name: "Cast Subtlety", exact: true })
+            .click();
         assert.deepEqual(await settled(page, 1), [plainCast], "cast");
     },
     evokeFixture,
@@ -3171,10 +3180,118 @@ await check(
             "cancel returns the card without casting",
         );
         await dragHandCardTo(page, subtlety, { x: 800, y: 380 });
-        await frames(page).nth(1).click();
+        await page
+            .locator(".ability-chooser")
+            .getByRole("button", { name: /Cast Subtlety with evoke/ })
+            .click();
         assert.deepEqual(await settled(page, 1), [evoked], "evoked");
     },
     evokeFixture,
+);
+
+/** A caption's text and every mana symbol share a visual center line. */
+async function assertCaptionAligned(caption) {
+    const offsets = await caption.evaluate((el) => {
+        const range = document.createRange();
+        range.selectNodeContents(el.firstChild);
+        const text = range.getBoundingClientRect();
+        return [...el.querySelectorAll(".mana-symbol")].map((symbol) => {
+            const mana = symbol.getBoundingClientRect();
+            return (mana.top + mana.bottom - text.top - text.bottom) / 2;
+        });
+    });
+    assert.ok(
+        offsets.length && offsets.every((dy) => Math.abs(dy) < 2),
+        `caption's mana is centered on its text: ${offsets}`,
+    );
+}
+
+await check(
+    "Enter confirms the regular cast from the mode chooser",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.click(subtlety);
+        await frames(page).first().waitFor();
+        await page.keyboard.press("Enter");
+        assert.deepEqual(await settled(page, 1), [plainCast]);
+    },
+    evokeFixture,
+);
+
+const timingViews = await load("teferi-timing");
+const timingView = timingViews[0];
+const timingCard = (name) =>
+    `[data-slot="${timingView.objects.find((o) => o.name === name).slot}"]`;
+
+await check(
+    "Teferi's timing refusal appears briefly beside its source",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const source = page.locator(timingCard("Teferi, Time Raveler"));
+        const notice = page.locator(".timing-refusal");
+        await page.click(timingCard("Thundertrap Trainer"));
+        assert.equal(await notice.count(), 0, "ordinary timing has no source");
+        await page.click(timingCard("Thirst for Discovery"));
+        await notice.waitFor();
+        await page.clock.runFor(500);
+        assert.equal(await notice.textContent(), "Sorcery speed only");
+        const at = await notice.boundingBox();
+        const teferi = await source.boundingBox();
+        assert.ok(
+            Math.abs(center(at).x - center(teferi).x) < 3,
+            "the notice is centered on the opposing source",
+        );
+        const gap = at.y - (teferi.y + teferi.height);
+        assert.ok(
+            gap >= -1 && gap < 12,
+            `the notice is just below the source: ${gap}`,
+        );
+        assert.ok(
+            Number(await notice.evaluate((e) => getComputedStyle(e).opacity)) >
+                0.9,
+        );
+        await page.mouse.move(800, 380);
+        assert.equal(await notice.count(), 1, "feedback outlasts hover");
+        await page.clock.runFor(2000);
+        await notice.waitFor({ state: "detached" });
+        assert.deepEqual(
+            await chosen(page),
+            [],
+            "the rejected click sends no action",
+        );
+    },
+    {
+        fixture: "teferi-timing",
+        at: 1,
+        ready: timingCard("Thirst for Discovery"),
+        reducedMotion: "reduce",
+    },
+);
+
+const mainWithTeferi = timingViews.findIndex((view) =>
+    view.status.decision?.candidates.some(
+        (c) => c.label === "Cast Thirst for Discovery",
+    ),
+);
+assert.ok(mainWithTeferi > 0, "the instant is legal in the main phase");
+await check(
+    "Teferi's timing allows the instant in the main phase",
+    async (page) => {
+        await page.clock.runFor(2000);
+        await page.click(timingCard("Thirst for Discovery"));
+        const index = timingViews[
+            mainWithTeferi
+        ].status.decision.candidates.findIndex(
+            (c) => c.label === "Cast Thirst for Discovery",
+        );
+        assert.deepEqual(await settled(page, 1), [index]);
+        assert.equal(await page.locator(".timing-refusal").count(), 0);
+    },
+    {
+        fixture: "teferi-timing",
+        at: mainWithTeferi + 1,
+        ready: timingCard("Thirst for Discovery"),
+    },
 );
 
 // Each cast's frame is the card, its caption the cast's cost in symbols or its keyword.
@@ -3184,10 +3301,17 @@ await check(
         await page.clock.runFor(2000);
         await page.click(subtlety);
         await frames(page).first().waitFor();
+        await page.clock.runFor(800);
         const captions = frames(page).locator(".ability-choice-caption");
+        const [evokeCaption, castCaption] = await captions.all();
+        assert.ok(
+            (await castCaption.boundingBox()).x >
+                (await evokeCaption.boundingBox()).x,
+            "the regular cast is on the right",
+        );
+        await assertCaptionAligned(castCaption);
         assert.deepEqual(
-            await captions
-                .nth(0)
+            await castCaption
                 .locator("[role=img]")
                 .evaluateAll((es) =>
                     es.map((e) => e.getAttribute("aria-label")),
@@ -3195,7 +3319,7 @@ await check(
             ["{2}", "{U}", "{U}"],
             "the card's mana cost",
         );
-        assert.equal((await captions.nth(1).textContent()).trim(), "Evoke");
+        assert.equal((await evokeCaption.textContent()).trim(), "Evoke");
         assert.equal(
             await frames(page).locator(".card-name").first().textContent(),
             "Subtlety",
@@ -3214,7 +3338,10 @@ await check(
         const evoke = async () => {
             await page.clock.runFor(2000);
             await page.click(subtlety);
-            await frames(page).nth(1).click();
+            await page
+                .locator(".ability-chooser")
+                .getByRole("button", { name: /Cast Subtlety with evoke/ })
+                .click();
             await prompt.waitFor();
             await page.clock.runFor(1000);
         };

@@ -426,6 +426,14 @@ pub const BOARDS: &[Scenario] = &[
         .battlefield(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[cast_with_option(P0, SUBTLETY)]),
+    // Teferi denies an instant during upkeep; a creature without flash has its own timing limit.
+    Scenario::new("teferi-timing")
+        .at(3, P0, TurnStep::Upkeep)
+        .battlefield(P0, &[ISLAND_, ISLAND_, ISLAND_])
+        .hand(P0, &[THIRST_FOR_DISCOVERY, THUNDERTRAP_TRAINER])
+        .library(P0, LANDS)
+        .battlefield(P1, &[Permanent::new(TEFERI_TIME_RAVELER)])
+        .library(P1, LANDS),
     // Portable Hole takes the opponent's Snapcaster Mage, beside a tapped land, an untapped
     // one and a tapped creature.
     Scenario::new("exiled-beneath")

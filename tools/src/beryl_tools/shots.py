@@ -224,6 +224,7 @@ INTERACTION_FIXTURES = [
     "cast-exile-choice",
     "cast-kicker",
     "cast-evoke",
+    "teferi-timing",
     "pay-default",
     "pay-other",
     "exiled-beneath",

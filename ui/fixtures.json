@@ -160,6 +160,14 @@
       "where": ["casting Subtlety"]
     },
     {
+      "name": "teferi-timing",
+      "board": "teferi-timing",
+      "stops": { "fullControl": true },
+      "until": "first priority decision for seat 0",
+      "where": ["step upkeep"],
+      "after": 3
+    },
+    {
       "name": "exiled-beneath",
       "board": "exiled-beneath",
       "until": "first priority decision for seat 0",
