@@ -5064,6 +5064,106 @@ async function motionFixture(name, views) {
     return { fixture: name, at: 1 };
 }
 
+const localScryReturn =
+    "confirming scry lands on top and tucks beneath the deck";
+if (wanted(localScryReturn)) {
+    const before = { ...scry.views.at(-1), events: [] };
+    const library = before.players.you.library;
+    const [bottom, top] = library.slice(-2);
+    const priority = scry.views.findLast(
+        (view) => view.status.decision?.kind === "priority",
+    ).status.decision;
+    const priorId = before.status.decision.id;
+    const result = {
+        ...before,
+        status: {
+            kind: "deciding",
+            decision: { ...priority, id: { ...priorId, seq: priorId.seq + 2 } },
+        },
+        players: {
+            ...before.players,
+            you: {
+                ...before.players.you,
+                library: [bottom, ...library.slice(0, -2), top],
+            },
+        },
+        events: [
+            { kind: "scry", player: "you", top: 1, bottom: 1 },
+            { kind: "abilityFinished" },
+        ],
+    };
+    const afterPick = {
+        ...before,
+        status: {
+            kind: "deciding",
+            decision: {
+                ...before.status.decision,
+                id: { ...priorId, seq: priorId.seq + 1 },
+                candidates: before.status.decision.candidates.filter(
+                    (candidate) => candidate.option.kind === "done",
+                ),
+            },
+        },
+    };
+    const run = await motionFixture("local-scry-return", [
+        before,
+        afterPick,
+        result,
+    ]);
+    await check(
+        localScryReturn,
+        async (page) => {
+            const deck = (slot) => page.locator(`.card-layer ${slotOf(slot)}`);
+            await page.clock.runFor(650);
+            assert.equal(await deck(bottom).locator(".card-back").count(), 0);
+            assert.equal(
+                await page.locator(tray(bottom)).locator(".card-back").count(),
+                0,
+            );
+            await page.locator(tray(bottom)).click({ force: true });
+            await page.clock.runFor(500);
+            await page.evaluate(record);
+            await page.clock.pauseAt(Date.now() + 60_000);
+            await page
+                .getByRole("button", { name: "Done", exact: true })
+                .click({ force: true });
+            await page.clock.runFor(120);
+            assert.equal(await page.locator(".card-el-scry-bottom").count(), 1);
+            await page.clock.runFor(250);
+            assert.equal(await deck(bottom).locator(".card-back").count(), 1);
+            await page.clock.runFor(350);
+            assert.ok(
+                await deck(bottom).evaluate((e) =>
+                    e.classList.contains("card-el-pile"),
+                ),
+            );
+            const layer = (card) =>
+                card.evaluate((e) => Number(e.style.zIndex));
+            assert.ok(
+                (await layer(deck(bottom))) < (await layer(deck(library[0]))),
+                "the bottom card enters below the entire deck",
+            );
+            await page.clock.runFor(900);
+            const motion = await page.evaluate(collect, 0);
+            assert.deepEqual(duplicatesIn(motion), []);
+            const track = posesOf(motion, top);
+            const home = track.at(-1);
+            assert.equal(home.librarySide, "you");
+            assert.ok(
+                track.every((pose) => pose.back !== true),
+                "the retained top card keeps the face shown in the chooser",
+            );
+            assert.ok(
+                track
+                    .filter((c) => c.zone === "library")
+                    .every((c) => c.y <= home.y + 3),
+                "the top return never dips below its landing",
+            );
+        },
+        { ...run, ready: tray(top) },
+    );
+}
+
 const parkedHand = "opponent hand stays parked during a private choice";
 if (wanted(parkedHand)) {
     const opening = (await load("opening-bottom")).find(
@@ -5181,6 +5281,7 @@ if (wanted(privateHandling)) {
                 const top = cards.at(-1);
                 await page.clock.runFor(800);
                 const from = await where(top);
+                const home = await top.boundingBox();
                 const bottom = await where(
                     page.locator(`.card-layer ${slotOf(library[0])}`),
                 );
@@ -5194,6 +5295,14 @@ if (wanted(privateHandling)) {
                 const rising = await where(top);
                 await page.clock.runFor(440);
                 const raised = await where(top);
+                for (const card of cards) {
+                    const box = await card.boundingBox();
+                    assert.ok(
+                        box.x > viewport.width / 2 &&
+                            box.width > home.width * 1.4,
+                        "every private back enlarges on screen right",
+                    );
+                }
                 assert.deepEqual(
                     await group.evaluateAll((els) =>
                         els
@@ -5357,6 +5466,15 @@ if (wanted(opponentScry)) {
                         "the enlarged fan clears the corner piles",
                     );
                 }
+                const surface = parked(library.at(-3));
+                assert.equal(await surface.locator(".card-back").count(), 1);
+                assert.equal(
+                    await surface
+                        .locator(".card-shade")
+                        .evaluate((e) => Number(e.style.opacity)),
+                    0,
+                    "the cards below the look keep an unshaded back on top",
+                );
                 const resting = await where(parked(library[0]));
                 assertNear(
                     resting,
@@ -5374,6 +5492,13 @@ if (wanted(opponentScry)) {
                     await page.locator(".library-choice-hud").innerText(),
                     `Scry · ${top} top · ${bottom} bottom`,
                 );
+                if (top > 0) {
+                    assert.equal(
+                        await surface.locator(".card-back").count(),
+                        1,
+                        "the remaining deck keeps its card back while the top packet is in flight",
+                    );
+                }
                 await page.clock.runFor(550);
                 const tucked = page.locator(".card-el-scry-bottom");
                 assert.deepEqual(

@@ -316,6 +316,7 @@ class Walk {
   private readonly seenInChoice: Set<number>;
   private readonly directToGraveyard = new Set<number>();
   private readonly startsHandling: boolean;
+  private readonly localScry: boolean;
   /** The beat cut last showed cards in a showcase: the next one lands them. */
   private landing = false;
 
@@ -324,6 +325,8 @@ class Walk {
     private readonly update: GameUpdate,
   ) {
     const choice = choiceOf(before);
+    const ask = before.status.kind === "deciding" && before.status.decision.ask;
+    this.localScry = !!ask && ask.kind === "scry";
     this.seenInChoice = new Set(choice ? choiceSlots(choice) : []);
     const handling = before.handling;
     if (handling?.zone === "library" && handling.count) {
@@ -625,10 +628,11 @@ class Walk {
       }
       if (
         e.kind === "scry" &&
-        e.player === "opponent" &&
-        this.cur.handling?.zone === "library" &&
-        this.cur.handling.side === "opponent" &&
-        this.cur.handling.scry
+        (e.player === "you"
+          ? this.localScry
+          : this.cur.handling?.zone === "library" &&
+            this.cur.handling.side === "opponent" &&
+            this.cur.handling.scry)
       ) {
         this.cut();
         this.returnScry(e);
@@ -726,8 +730,9 @@ class Walk {
 
   /** Land the top cards while the bottom packet approaches from below. */
   private returnScry(e: Extract<GameEvent, { kind: "scry" }>) {
-    const before = this.cur.players.opponent.library;
-    const after = this.view.players.opponent.library;
+    const side = e.player;
+    const before = this.cur.players[side].library;
+    const after = this.view.players[side].library;
     const slots = new Set(before);
     const bottom = new Set(after.slice(0, e.bottom));
     // A later draw or shuffle can obscure the result in the final library.
@@ -744,16 +749,20 @@ class Walk {
       handling: undefined,
       players: {
         ...this.cur.players,
-        opponent: {
-          ...this.cur.players.opponent,
+        [side]: {
+          ...this.cur.players[side],
           library: ordered ? after : before,
         },
       },
     };
     this.pending.push(e);
-    const tuck = ordered && bottom.size > 0;
-    this.cut(HOLD.landing, tuck ? { scryBottom: bottom } : undefined);
-    if (tuck && this.startsHandling) this.cut(HOLD.landing, undefined, true);
+    const top = new Set(
+      (ordered ? after : before).slice(before.length - e.top),
+    );
+    const tucked = ordered ? bottom : new Set<number>();
+    this.cut(HOLD.landing, { scryReturn: { side, top, bottom: tucked } });
+    if (tucked.size > 0 && this.startsHandling)
+      this.cut(HOLD.landing, undefined, true);
   }
 
   /** Reveal the cards leaving together (CR 708.9). Use the identity supplied

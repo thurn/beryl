@@ -135,6 +135,8 @@ export interface Placement {
   /** Face down in this library, unless it is the disclosed top card. */
   back?: boolean;
   librarySide?: Side;
+  /** A local tray owns the projected face, even if the card comes from under the top. */
+  lendingFace?: boolean;
   /** On the top card of a pile of identical permanents, how many it holds. */
   count?: number;
   /** On each card of a pile of identical permanents, the pile's slots, top first: what a choice
@@ -422,8 +424,12 @@ export interface Spotlight {
   drawn?: ReadonlySet<number>;
   /** Libraries lifted into two face-down packets during a shuffle. */
   shuffle?: ReadonlySet<Side>;
-  /** The backs taking the lower route into the opponent’s library. */
-  scryBottom?: ReadonlySet<number>;
+  /** Which cards are still in flight to the two ends of a scrying player's library. */
+  scryReturn?: {
+    side: Side;
+    top: ReadonlySet<number>;
+    bottom: ReadonlySet<number>;
+  };
   /** Mana reaches this permanent while its ability is still being paid for. */
   payingSource?: number;
 }
@@ -1577,7 +1583,7 @@ export function handlingSlots(
   return inOrder(cards, handOrder).map((o) => o.slot);
 }
 
-/** Private looks spread out their original backs. Opponent scry lifts into the space below the corner piles. */
+/** Limited library looks lift the same backs into a compact group at screen right. */
 function handlingPlacements(
   view: PlayerView,
   cards: ObjectView[],
@@ -1585,31 +1591,17 @@ function handlingPlacements(
   const handling = view.handling;
   if (!handling || cards.length === 0) return [];
   const side = handling.side;
-  const scry = handling.zone === "library" && handling.scry;
-  const library = view.players[side].library;
   const opening = view.turn.number === 0;
-  const columns = Math.min(handling.zone === "library" ? 5 : 7, cards.length);
+  const library = handling.zone === "library";
+  const columns = Math.min(library ? 5 : 7, cards.length);
   const packet = Math.ceil(cards.length / columns);
-  const pile = scry
-    ? pileLook(side, PILES[side].library, library.length)
+  const pile = library
+    ? pileLook(side, PILES[side].library, view.players[side].library.length)
     : undefined;
-  const opponentScry = scry && side === "opponent";
-  const width = (pile?.width ?? (opening ? 72 : 104)) * (opponentScry ? 2 : 1);
-  const step = width * (scry ? 0.24 : handling.zone === "hand" ? 0.72 : 1.12);
-  const center = opponentScry
-    ? fromRight(1465)
-    : pile
-      ? pile.x + width / 2
-      : fromMiddle(opening ? 465 : handling.zone === "hand" ? 800 : 565);
-  const top = opponentScry
-    ? 144
-    : pile
-      ? Math.max(1, pile.y - 28)
-      : opening
-        ? 8
-        : handling.zone === "hand" && side === "you"
-          ? 575
-          : 222;
+  const width = pile ? pile.width * 1.95 : opening ? 72 : 104;
+  const step = width * (library ? 0.27 : 0.72);
+  const center = library ? fromRight(1445) : fromMiddle(opening ? 465 : 800);
+  const top = library ? 144 : opening ? 8 : side === "you" ? 575 : 222;
   return cards.map((card, i) => {
     const column = i % columns;
     const depth = Math.floor(i / columns);
@@ -1623,8 +1615,8 @@ function handlingPlacements(
       width: FULL_WIDTH,
       span: FULL_WIDTH,
       scale: width / FULL_WIDTH,
-      rotate: scry ? 0 : dx * 2,
-      skew: scry && !opponentScry ? (pile?.skew ?? 0) : 0,
+      rotate: library ? 0 : dx * 2,
+      skew: 0,
       opacity: 1,
       z: SHOWCASE_Z + column * packet + packet - depth,
       rim: depth > 0,
@@ -1644,7 +1636,7 @@ function pileCards(
   library?: {
     top?: number;
     shuffle?: boolean;
-    scryBottom?: ReadonlySet<number>;
+    scryReturn?: Spotlight["scryReturn"];
   },
 ): Placement[] {
   const full = pileLook(side, PILES[side][zone], cards.length);
@@ -1655,7 +1647,7 @@ function pileCards(
     const away = borrowed.has(o.slot);
     const depth = away ? cards.length - 1 - i : --depthLeft;
     const at = onPile(away ? full : rest, side, depth);
-    if (library?.scryBottom?.has(o.slot)) {
+    if (library?.scryReturn?.bottom.has(o.slot)) {
       // Approach the lower edge from the outside of the pile. The final flight
       // keeps the pile's depth order, so these backs slide under its rim.
       const spread = Math.min(10, (cards.length - 1 - depth) * 3);
@@ -1669,8 +1661,11 @@ function pileCards(
         opacity: 1,
         z: 80 - Math.min(depth, 79),
         back: true,
-        x: full.x + full.width * 0.65 + spread,
-        y: full.y + (full.width / CARD_ASPECT) * 0.9 + spread,
+        x: full.x + full.width * 1.1 + spread,
+        y:
+          side === "opponent"
+            ? full.y + (full.width / CARD_ASPECT) * 0.9 + spread
+            : at.y,
       };
     }
     const raised = !library && aimed.has(o.slot) && depth > 0;
@@ -1683,7 +1678,11 @@ function pileCards(
       : raised
         ? ((side === "you" ? -1 : 1) * rest.width * PILE_RISE) / CARD_ASPECT
         : 0;
-    const hidden = depth >= 64 && !raised;
+    // Top-bound cards may still be in the air. Keep the back underneath them painted
+    // until they cover it, instead of showing the solid edge of a buried card.
+    const top = library?.scryReturn?.top;
+    const visibleDepth = top?.has(o.slot) ? depth : depth - (top?.size ?? 0);
+    const hidden = visibleDepth >= 64 && !raised;
     return {
       ...at,
       slot: o.slot,
@@ -1693,9 +1692,12 @@ function pileCards(
       span: FULL_WIDTH,
       opacity: hidden ? 0 : 1,
       z: raised ? 92 : (cut ? 96 : 80) - Math.min(depth, 79),
-      rim: depth > 1 && !raised && depth !== split,
-      back: !!library && (library.shuffle || o.slot !== library.top || !o.name),
+      rim: visibleDepth > 1 && !raised && depth !== split,
+      back:
+        !!library &&
+        (library.shuffle || (!away && o.slot !== library.top) || !o.name),
       librarySide: library ? side : undefined,
+      lendingFace: !!library && away && !!o.name,
       x: at.x + (cut ? (side === "you" ? 1 : -1) * rest.width * 0.68 : 0),
       y: at.y + lift,
     };
@@ -1817,7 +1819,7 @@ export function layout(
   const lifted = new Set([
     ...borrowed,
     ...handled.map((o) => o.slot),
-    ...(spotlight.scryBottom ?? []),
+    ...(spotlight.scryReturn?.bottom ?? []),
   ]);
   for (const side of ["opponent", "you"] as const) {
     const cards = view.players[side].library.flatMap((slot) => {
@@ -1830,7 +1832,10 @@ export function layout(
         // expose a different top just because a packet is temporarily off the pile.
         top: view.players[side].library.at(-1),
         shuffle: spotlight.shuffle?.has(side),
-        scryBottom: side === "opponent" ? spotlight.scryBottom : undefined,
+        scryReturn:
+          spotlight.scryReturn?.side === side
+            ? spotlight.scryReturn
+            : undefined,
       }),
     );
   }

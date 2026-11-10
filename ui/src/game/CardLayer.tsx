@@ -152,6 +152,7 @@ const TRAVEL: Transition = {
   duration: 0.65,
   ease: [0.4, 0, 0.2, 1],
 };
+const LIBRARY_TRAVEL: Transition = { ...TRAVEL, duration: 0.5 };
 /** A card going into a library stays in sight until it is there, then fades into the pile. */
 const INTO_LIBRARY: Transition = { type: "tween", duration: 0.2, delay: 0.6 };
 const TRAVEL_FOR = 700;
@@ -460,7 +461,9 @@ const CardElement = memo(function CardElement({
       stackFlight:
         (fromZone === "stack" && object.zone === "battlefield") ||
         (fromZone === "battlefield" && object.zone === "stack"),
-      tucking: was === "scry-bottom" && place.librarySide === "opponent",
+      tucking:
+        place.look === "scry-bottom" ||
+        (was === "scry-bottom" && place.librarySide !== undefined),
       travel:
         !samePile &&
         (linkedReturn ||
@@ -538,8 +541,12 @@ const CardElement = memo(function CardElement({
     opacity,
   ]);
   const restart = `${object.zone}:${handoff}`;
-  useGlide(x, place.x, reduce, { holding, how, restart });
-  useGlide(y, place.y, reduce, { holding, how, restart });
+  const glide =
+    object.zone === "library" && (moving || handed.current === epoch)
+      ? LIBRARY_TRAVEL
+      : how;
+  useGlide(x, place.x, reduce, { holding, how: glide, restart });
+  useGlide(y, place.y, reduce, { holding, how: glide, restart });
   // A card changing looks, or tapping, is drawn at another width (a back, a whole card, a
   // battlefield card): before that is painted, its scale makes up the difference, and then
   // glides, so the card's size changes smoothly too.
@@ -557,7 +564,10 @@ const CardElement = memo(function CardElement({
       scale.jump((scale.get() * was.width) / width);
     }
   }, [scale, width, frameKind, epoch]);
-  useGlide(scale, place.scale, reduce, { restart: `${width}:${restart}`, how });
+  useGlide(scale, place.scale, reduce, {
+    restart: `${width}:${restart}`,
+    how: glide,
+  });
   // A hand card is raised while hovered and while the pointer holds it; anything else dragged
   // straightens.
   const hand = place.look === "hand";
@@ -601,7 +611,7 @@ const CardElement = memo(function CardElement({
     object,
     place.back === true,
     // Anonymize the packet before it moves so a previously known card cannot be tracked.
-    reduce || shuffling,
+    reduce || shuffling || place.lendingFace === true,
     modeHandoff,
   );
   // Over the felt, the card is a physical thing (physics.ts): held up while dragged, falling
@@ -627,7 +637,8 @@ const CardElement = memo(function CardElement({
     },
     handling: dragging ? "held" : holding ? "dropped" : "free",
     size,
-    enabled: !rim && !concealed && !returning,
+    // The deck's cards already have a fixed plane, including while a packet lifts or lands.
+    enabled: object.zone !== "library" && !rim && !concealed && !returning,
     reduce,
     body,
     shadow,
@@ -825,7 +836,7 @@ const CardElement = memo(function CardElement({
           zIndex: dragging
             ? DRAGGING_Z
             : flying || emerging || (travelling && !hand && !change.tucking)
-              ? FLYING_Z + departureLayer
+              ? FLYING_Z + (place.librarySide ? place.z : departureLayer)
               : lifted && !ghosted
                 ? RAISED_Z
                 : place.z,
