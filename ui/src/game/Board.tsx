@@ -122,7 +122,6 @@ import { ModeChooser, type Mode, type Origin } from "./ModeChooser";
 import { eventsHold } from "./playback";
 import { Risen } from "./Risen";
 import { useBorrowedCard, type CardHandoff } from "./choiceFlight";
-import { dissolve } from "./dissolve";
 import { useStageWidth } from "./Stage";
 import { FloatPrompt, PromptRow } from "./FloatPrompt";
 import { useStandIns } from "./standIns";
@@ -673,6 +672,11 @@ export function Board({
     setCasting(undefined);
     setDraft(emptyDraft());
     setPointedOff(undefined);
+    setPointedItem((key) =>
+      view.stack.some((item, index) => stackKey(index, item) === key)
+        ? key
+        : undefined,
+    );
   }, [view]);
 
   const pick = (index: CandidateIndex, then?: Intent[]) => {
@@ -1359,14 +1363,13 @@ export function Board({
     if (floating(you.mana)) setLost((n) => n + 1);
     passOn();
   };
-  // The abilities whose source arrow shows: each one pointed at, on the stack or at its
-  // source. Joined, so that pointing elsewhere keeps the arrows and their routes.
+  // The source link appears when the player points at the ability on the stack.
   const sourced = shown.stack
     .flatMap((item, i) =>
       item.kind === "ability" &&
       !item.triggered &&
       item.source !== null &&
-      (pointedItem === stackKey(i, item) || hovered === item.source)
+      pointedItem === stackKey(i, item)
         ? [i]
         : [],
     )
@@ -2216,8 +2219,9 @@ function AbilityOnStack({
   const present = useIsPresent();
   const place = stackPlace(index, count);
   const reduce = useReducedMotion() ?? false;
-  const [lifting, setLifting] = useState(
-    () => from !== undefined && item.triggered && !reduce && !chosen,
+  // Keep the departure fixed if the next view rearranges the source during flight.
+  const [liftFrom, setLiftFrom] = useState(() =>
+    !reduce && !chosen ? from : undefined,
   );
   // Out of its source it comes whole, the size of the card it lifts off, so that the eye
   // follows it from there; with no source drawn, it fades in where it stays.
@@ -2244,7 +2248,6 @@ function AbilityOnStack({
       // Which item it is, by place and the ability's own name, for a motion audit: two
       // items sharing a source's face (an emblem's and its planeswalker's) stay apart.
       data-stack-key={`${index}:${item.name}`}
-      data-dissolving={!present && !reduce ? "" : undefined}
       style={{
         left: 0,
         top: 0,
@@ -2255,16 +2258,25 @@ function AbilityOnStack({
       initial={reduce ? false : start}
       animate={{
         opacity: 1,
-        scale: lifting && from ? [null, Math.min(1, start.scale * 1.12), 1] : 1,
-        x: lifting && from ? [null, from.x, place.x] : place.x,
-        y: lifting && from ? [null, from.y - 32, place.y] : place.y,
+        scale: liftFrom
+          ? [
+              null,
+              Math.min(
+                1,
+                (liftFrom.width * liftFrom.scale * 1.35) / place.width,
+              ),
+              1,
+            ]
+          : 1,
+        x: liftFrom ? [null, liftFrom.x, place.x] : place.x,
+        y: liftFrom ? [null, liftFrom.y - 54, place.y] : place.y,
         rotate: 0,
       }}
-      transition={lifting ? TRIGGER_FLIGHT : ABILITY_FLIGHT}
-      onAnimationComplete={() => setLifting(false)}
-      onPointerEnter={() => onPoint(true)}
+      transition={liftFrom ? SOURCE_FLIGHT : ABILITY_FLIGHT}
+      onAnimationComplete={() => setLiftFrom(undefined)}
+      onPointerMove={() => onPoint(true)}
       onPointerLeave={() => onPoint(false)}
-      exit={dissolve(reduce)}
+      exit={{ opacity: 0, transition: { duration: reduce ? 0.09 : 0.25 } }}
     >
       <StackItem
         id={present ? stackId(index) : undefined}
@@ -2283,21 +2295,20 @@ function AbilityOnStack({
  * across the table, easing into its place. */
 const ABILITY_FLIGHT = { duration: 0.5, ease: [0.2, 0.7, 0.3, 1] } as const;
 
-/** The first part of the trigger's flight lifts away from the source in place, so the
- * viewer sees the connection before the card crosses to the stack. */
-const TRIGGER_LEG = {
+/** Lift and grow right away over the source before crossing the table. */
+const SOURCE_LEG = {
   duration: 0.64,
-  times: [0, 0.27, 1],
+  times: [0, 0.18, 1],
   ease: [
-    [0.25, 0.1, 0.3, 1],
+    [0.15, 0.55, 0.35, 1],
     [0.3, 0, 0.25, 1],
   ],
 } as const;
-const TRIGGER_FLIGHT = {
+const SOURCE_FLIGHT = {
   ...ABILITY_FLIGHT,
-  x: TRIGGER_LEG,
-  y: TRIGGER_LEG,
-  scale: TRIGGER_LEG,
+  x: SOURCE_LEG,
+  y: SOURCE_LEG,
+  scale: SOURCE_LEG,
 };
 
 /** A stack item's identity during its flight and exit. Targets can change while it is there. */
@@ -2331,6 +2342,13 @@ function abilityPlacement(
   const slot = abilityOrigin(view, item);
   const from = previous?.get(slot);
   const current = placements.get(slot);
+  // Skipping a queued landing beat can leave a hand placement as the previous one.
+  if (
+    item.triggered &&
+    current?.zone === "battlefield" &&
+    from?.zone !== "battlefield"
+  )
+    return current;
   return from?.opacity &&
     (from.zone === "battlefield" ||
       from.zone === "hand" ||
@@ -2501,7 +2519,7 @@ function boardArrows(
   }
   // Each item's targets, the top's first so that it routes clearest: what a spell or ability
   // aims at is what a player most needs to read, beneath the top as on it. An ability's
-  // source only while it, or the source, is pointed at: its glow says it otherwise.
+  // source only while the ability is pointed at: its glow says it otherwise.
   // One beneath the top ties its arrows to the strip of it that shows.
   const top = view.stack.length - 1;
   const spells = new Map(

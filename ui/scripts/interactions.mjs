@@ -4786,6 +4786,9 @@ for (const fixture of [
                         gs.map((g) => [g.dataset.from, g.dataset.to]),
                     );
                 assert.deepEqual(await ends(), targets, "targets alone");
+                await page.hover(`#card-${item.source}`);
+                await page.clock.runFor(500);
+                assert.deepEqual(await ends(), targets, "source card alone");
                 await page.hover(`#stack-${top}`);
                 await page.clock.runFor(500);
                 assert.deepEqual(await ends(), expected, "and the source");
@@ -6409,6 +6412,7 @@ if (wanted(triggerLift)) {
     const run = await motionFixture("trigger-lifts-from-permanent", [
         before,
         after,
+        { ...view, stack: [], events: [] },
     ]);
     await check(
         triggerLift,
@@ -6423,10 +6427,14 @@ if (wanted(triggerLift)) {
                     if (permanent && trigger) {
                         const bounds = (el) =>
                             el.getBoundingClientRect().toJSON();
-                        window.triggerFrames.push([
-                            bounds(permanent),
-                            bounds(trigger),
-                        ]);
+                        const style = getComputedStyle(trigger);
+                        window.triggerFrames.push({
+                            at: performance.now(),
+                            permanent: bounds(permanent),
+                            ability: bounds(trigger),
+                            opacity: Number(style.opacity),
+                            mask: style.maskImage,
+                        });
                     }
                     if (performance.now() < end) requestAnimationFrame(sample);
                 };
@@ -6437,7 +6445,7 @@ if (wanted(triggerLift)) {
                 .click();
             await page.waitForFunction(() => window.triggerFrames.length > 35);
             const frames = await page.evaluate(() => window.triggerFrames);
-            const [from, start] = frames[0];
+            const [{ permanent: from, ability: start, at }] = frames;
             assert.ok(
                 Math.abs(from.x - start.x) < 20 &&
                     Math.abs(from.y - start.y) < 20,
@@ -6445,16 +6453,18 @@ if (wanted(triggerLift)) {
             );
             assert.ok(
                 frames.some(
-                    ([permanent, trigger]) =>
-                        trigger.y < permanent.y - 12 &&
-                        Math.abs(trigger.x - permanent.x) < 20,
+                    ({ at: now, ability }) =>
+                        now - at <= 220 &&
+                        ability.y < start.y - 38 &&
+                        ability.width > start.width * 1.2 &&
+                        Math.abs(ability.x - start.x) < 20,
                 ),
-                "the lift reads before the cross-table movement",
+                "the ability lifts and grows immediately, before crossing",
             );
             assert.ok(
                 frames.some(
-                    ([permanent, trigger]) =>
-                        trigger.width > permanent.width * 1.5,
+                    ({ permanent, ability }) =>
+                        ability.width > permanent.width * 1.5,
                 ),
                 "trigger grows into the large stack item",
             );
@@ -6462,6 +6472,19 @@ if (wanted(triggerLift)) {
                 await page.locator(".board-arrows .arrow-gold").count(),
                 0,
             );
+
+            await page.keyboard.press("Space");
+            await page.waitForFunction(() =>
+                window.triggerFrames.some(({ opacity }) => opacity < 0.9),
+            );
+            const exit = await page.evaluate(() =>
+                window.triggerFrames.filter(({ opacity }) => opacity < 0.9),
+            );
+            assert.ok(
+                exit.every(({ mask }) => mask === "none"),
+                "a plain fade",
+            );
+            await page.locator(".stack-ability").waitFor({ state: "detached" });
         },
         { ...run, clock: false, ready: slotOf(source.slot) },
     );
@@ -8897,6 +8920,59 @@ await check(
 // its picks counted on its button.
 const cleanup = await lastDecision("choice-cleanup");
 const [extra] = [...cleanup.bySlot.keys()];
+const discardBesideStack = "the raised discard hand stays clear of the stack";
+if (wanted(discardBesideStack)) {
+    const view = cleanup.views.at(-1);
+    const resolving = {
+        kind: "ability",
+        source: null,
+        name: "Currency Converter",
+        controller: "you",
+        triggered: false,
+        ability: 1,
+        granted: false,
+        nth: 0,
+        targets: [],
+        x: 0,
+    };
+    const run = await motionFixture("discard-beside-stack", [
+        {
+            ...view,
+            status: {
+                ...view.status,
+                decision: { ...view.status.decision, resolving },
+            },
+            events: [],
+        },
+    ]);
+    await check(
+        discardBesideStack,
+        async (page) => {
+            await page.clock.runFor(1500);
+            const stack = await page.locator(".stack-ability").boundingBox();
+            const hand = page.locator(
+                '.card-el-you[data-zone="hand"][data-slot]',
+            );
+            assert.equal(await hand.count(), cleanup.bySlot.size);
+            const boxes = await hand.evaluateAll((cards) =>
+                cards.map((card) => ({
+                    slot: card.dataset.slot,
+                    right: card
+                        .querySelector(".card-body")
+                        .getBoundingClientRect().right,
+                })),
+            );
+            const edge = boxes.sort((a, b) => b.right - a.right)[0];
+            assert.ok(
+                edge.right < stack.x,
+                "the whole hand clears the ability",
+            );
+            await page.locator(slotOf(edge.slot)).click();
+            assert.ok(await discardButton(page).isEnabled());
+        },
+        { ...run, ready: ".prompt", viewport: { width: 1728, height: 963 } },
+    );
+}
 const inHand = (slot) => `[data-slot="${slot}"][data-zone="hand"]`;
 await check(
     "the cleanup discard counts its picks",

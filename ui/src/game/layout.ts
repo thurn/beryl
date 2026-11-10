@@ -541,14 +541,18 @@ const HAND_AWAY = 420;
 
 /** The hand fan, held at the near edge: the more cards, the closer they sit; tucked, the fan
  * sinks out of the way; raised, it rises whole into view. */
-function handPlacements(cards: ObjectView[], hold: HandHold): Placement[] {
+function handPlacements(
+  cards: ObjectView[],
+  hold: HandHold,
+  stackCount: number,
+): Placement[] {
   const n = cards.length;
   const mid = (n - 1) / 2;
   const raised = hold === "raised";
   const fan = raised ? RAISED_HAND : { ...HAND, scale: 1, room: heldRoom() };
   const width = FULL_WIDTH * fan.scale;
   const spacing = n > 1 ? Math.min(fan.spacing, fan.room / (n - 1)) : 0;
-  return cards.map((o, i) => {
+  const places = cards.map((o, i): Placement => {
     const left = STAGE.width / 2 + (i - mid) * spacing - width / 2;
     const top =
       (raised ? RAISED_HAND.top : HAND.top) +
@@ -569,6 +573,21 @@ function handPlacements(cards: ObjectView[], hold: HandHold): Placement[] {
       scale: fan.scale,
     };
   });
+  if (!raised || stackCount === 0) return places;
+
+  // Keep the entire raised fan beside the stack, including the turned corners.
+  const stackLeft = stackPlace(0, stackCount).x;
+  const rightEdge = Math.max(
+    ...places.map((p) => {
+      const angle = (p.rotate * Math.PI) / 180;
+      return (
+        p.x +
+        width * (Math.cos(angle) + Math.max(0, -Math.sin(angle)) / CARD_ASPECT)
+      );
+    }),
+  );
+  const shift = Math.max(0, rightEdge + 16 - stackLeft);
+  return places.map((p) => ({ ...p, x: p.x - shift }));
 }
 
 /** How far the opponent's hand reaches down the stage: above their life orb's top (y 48),
@@ -1721,6 +1740,7 @@ export function layout(
       handPlacements(
         [...inOrder(owned("you", "hand"), order), ...elsewhere],
         hold,
+        view.stack.length,
       ),
       yours.filter(backRow).map(footprint),
     ),
