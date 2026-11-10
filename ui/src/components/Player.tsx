@@ -494,31 +494,6 @@ export function Graveyard({
   );
 }
 
-/** The edges beneath the top card of a face-up pile of `count` cards, a graveyard or exile,
- * for a top card drawn by someone else: the game screen draws every card itself, so it can
- * move. The top card's place is `-depth.x` pixels in from the left. */
-export function FaceUpEdges({
-  count,
-  width,
-  depth = GRAVEYARD_DEPTH,
-}: {
-  count: number;
-  width: number;
-  depth?: PileDepth;
-}) {
-  return (
-    <Pile
-      count={Math.max(0, count - 1) * 3}
-      depth={depth}
-      width={width}
-      label={`${count} cards`}
-      className="pile-face-up"
-    >
-      <div style={{ width, height: width / CARD_ASPECT }} />
-    </Pile>
-  );
-}
-
 /** Identical lands, each copy beneath peeking out by `step` (a fraction of the card's width),
  * with a ×N count once there are several. */
 export function LandStack({

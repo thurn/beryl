@@ -1301,12 +1301,20 @@
 /* Each card the table shows is its own compositor layer, painted once and then only moved:
    otherwise WebKit repaints every card a moving one overlaps, shadows and all, on each frame
    of a hover's rise or a drag, which drops frames on a full late-game table. */
-.card-el:not(.card-el-hidden) {
+.card-el:not(.card-el-hidden, .card-el-rim) {
   will-change: transform;
 }
 .card-el-hidden,
 .card-el-pile {
   pointer-events: none;
+}
+/* A parked card under another only needs its paper edge. */
+.pile-card-rim {
+  border: 1px solid #161210;
+  border-bottom-color: #756458;
+  border-right-color: #66554a;
+  border-radius: 4.8% / 3.4%;
+  background: #211b18;
 }
 .card-el-draggable {
   cursor: grab;
@@ -2915,9 +2923,15 @@
   animation-play-state: paused !important;
 }
 
+/* The library moves back from an arrange tray as one packet. */
+[data-library-pile="you"] {
+  translate: var(--library-return-x, 0px) var(--library-return-y, 0px);
+}
 /* A browser or prompt owns this card's visual while it is off the table. */
 [data-card-borrowed],
-.card-el[data-card-borrowed] + .card-ghost {
+.card-el[data-card-borrowed] + .card-ghost,
+.stage:has([data-table-library="you"][data-card-borrowed])
+  [data-library-pile="you"] {
   visibility: hidden;
   pointer-events: none;
 }

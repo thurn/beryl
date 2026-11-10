@@ -225,6 +225,7 @@ export function logLines(view: PlayerView, names: Names): LogLine[] {
       case "win":
         say(e.player, `${who(e.player)} won the game`);
         return;
+      case "libraryShuffled":
       case "tap":
       case "untap":
       case "mana":

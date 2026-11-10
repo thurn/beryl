@@ -715,6 +715,7 @@ impl<'a, L: Layout> EffectCtx<'a, L> {
     /// knows their order."
     pub fn shuffle(&mut self, player: Seat) {
         zone::shuffle_library(self.state, player);
+        self.sink.note(event::Event::LibraryShuffled { player });
     }
 
     /// Reveals a card to every player

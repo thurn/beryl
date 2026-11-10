@@ -22,6 +22,8 @@ export interface StandIns {
   /** Each card's place in the hand. New arrivals join on the right and a twin left in
    * hand takes the place of the one the engine moved. */
   order: ReadonlyMap<number, number>;
+  /** Exile has no rules order. Keep the table's order of arrival across views. */
+  exileOrder: ReadonlyMap<number, number>;
   /** The player handled the hand card in `slot`, which offers `acts`. */
   touch(slot: number, acts: readonly Act[] | undefined): void;
 }
@@ -31,9 +33,17 @@ export function useStandIns(view: PlayerView): StandIns {
     keys: Map<number, number>;
     order: Map<number, number>;
     nextPlace: number;
+    exileOrder: Map<number, number>;
+    nextExile: number;
     pending?: Touched;
     last?: PlayerView;
-  }>({ keys: new Map(), order: new Map(), nextPlace: 0 });
+  }>({
+    keys: new Map(),
+    order: new Map(),
+    nextPlace: 0,
+    exileOrder: new Map(),
+    nextExile: 0,
+  });
   const s = state.current;
   if (s.last !== view) {
     const before = s.last;
@@ -64,8 +74,11 @@ export function useStandIns(view: PlayerView): StandIns {
       if (!inHand.has(slot)) order.delete(slot);
     }
     // Several cards drawn together join in the order they came off the library.
-    if (view.events.some((e) => e.kind === "draw" && e.player === "you")) {
-      for (const slot of [...(before?.players.you.library ?? [])].reverse()) {
+    for (const event of view.events) {
+      if (event.kind !== "draw" || event.player !== "you") continue;
+      const slots =
+        event.slots ?? [...(before?.players.you.library ?? [])].reverse();
+      for (const slot of slots) {
         if (inHand.has(slot) && !order.has(slot))
           order.set(slot, s.nextPlace++);
       }
@@ -74,10 +87,27 @@ export function useStandIns(view: PlayerView): StandIns {
       if (!order.has(slot)) order.set(slot, s.nextPlace++);
     }
     s.order = order;
+    const exiled = new Set(
+      view.objects.filter((o) => o.zone === "exile").map((o) => o.slot),
+    );
+    const exileOrder = new Map(s.exileOrder);
+    for (const slot of exileOrder.keys()) {
+      if (!exiled.has(slot)) exileOrder.delete(slot);
+    }
+    for (const e of view.events) {
+      if (e.kind !== "zoneChange" || e.to !== "exile" || e.from === "exile")
+        continue;
+      if (exiled.has(e.slot)) exileOrder.set(e.slot, s.nextExile++);
+    }
+    for (const slot of exiled) {
+      if (!exileOrder.has(slot)) exileOrder.set(slot, s.nextExile++);
+    }
+    s.exileOrder = exileOrder;
   }
   return {
     keys: s.keys,
     order: s.order,
+    exileOrder: s.exileOrder,
     touch(slot, acts) {
       const object = view.objects.find((o) => o.slot === slot);
       if (object?.zone !== "hand") return;

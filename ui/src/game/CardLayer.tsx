@@ -37,7 +37,6 @@ import type {
   ObjectView,
   PaidCost,
   Side,
-  ZoneName,
 } from "../generated/protocol";
 import { StageScale } from "./Stage";
 import { faceDownFace, marksOf, useFace } from "./faces";
@@ -220,11 +219,17 @@ export function CardLayer(props: CardLayerProps) {
         : [],
     ),
   );
-  const exiling = (props.events ?? []).flatMap((e) =>
-    e.kind === "zoneChange" && e.to === "exile" && e.from !== "exile"
-      ? [e.slot]
-      : [],
-  );
+  const departures = (props.events ?? []).flatMap((e) => {
+    if (e.kind === "draw") return e.slots ?? [];
+    if (
+      e.kind === "zoneChange" &&
+      e.from !== e.to &&
+      (e.from === "library" || e.to === "exile" || e.to === "library")
+    )
+      return [e.slot];
+    return [];
+  });
+  const departureOrder = new Map(departures.map((slot, i) => [slot, i]));
   const states = useRef(new Map<number, CardState>());
   const stateOf = (slot: number) => {
     const given = props.states.get(slot) ?? NO_STATE;
@@ -238,7 +243,7 @@ export function CardLayer(props: CardLayerProps) {
       <AnimatePresence>
         {objects.map((o) => {
           const place = placements.get(o.slot);
-          const departure = exiling.indexOf(o.slot);
+          const departure = departureOrder.get(o.slot);
           return (
             place && (
               <CardElement
@@ -249,16 +254,16 @@ export function CardLayer(props: CardLayerProps) {
                 raised={props.hovered === o.slot}
                 struck={struck.has(o.slot)}
                 departureDelay={
-                  exiling.length > 1 && departure >= 0
-                    ? (0.3 * departure) / (exiling.length - 1)
-                    : 0
+                  departure === undefined
+                    ? 0
+                    : (departure * 0.3) / Math.max(1, departures.length - 1)
                 }
                 departureLayer={
-                  departure < 0
+                  departure === undefined
                     ? 0
                     : Math.min(
                         DRAGGING_Z - FLYING_Z - 1,
-                        exiling.length - departure,
+                        departures.length - departure,
                       )
                 }
                 epoch={props.epoch}
@@ -292,7 +297,7 @@ function useGlide(
   { holding = false, restart, how = SPRING }: GlideOptions = {},
 ) {
   useEffect(() => {
-    if (holding) return;
+    if (holding || value.get() === to) return;
     const controls = animate(value, to, instant ? { duration: 0 } : how);
     return () => controls.stop();
   }, [value, to, instant, holding, restart, how]);
@@ -366,33 +371,42 @@ const CardElement = memo(function CardElement({
   const returning = struck && (place.look === "hand" || place.look === "held");
   const carried = struck && place.look !== "stack" && !returning;
   // A card changing looks to or from a pile, a library or the showcase travels there; the
-  // transition holds until its look changes again, so that a render meanwhile keeps it going.
-  const moved = useRef<{ look: Look; zone: ZoneName; travel: boolean }>({
+  // transition holds for this view, so that a render meanwhile keeps it going.
+  const moved = useRef({
     look: place.look,
     zone: object.zone,
     travel: false,
+    epoch,
   });
   if (moved.current.look !== place.look || moved.current.zone !== object.zone) {
     const was = moved.current.look;
+    const samePile =
+      moved.current.zone === object.zone &&
+      (was === "hidden" || was === "pile") &&
+      (place.look === "hidden" || place.look === "pile");
     moved.current = {
       look: place.look,
       zone: object.zone,
-      travel: returning || TRAVELLED.has(was) || TRAVELLED.has(place.look),
+      epoch,
+      travel:
+        !samePile &&
+        (returning || TRAVELLED.has(was) || TRAVELLED.has(place.look)),
     };
   }
   const change = moved.current;
+  const moving = change.travel && change.epoch === epoch;
   const how = useMemo(() => {
     const base = carried
       ? CARRIED
       : emerging
         ? EMERGING
-        : change.travel
+        : moving
           ? TRAVEL
           : SPRING;
     return departureDelay
       ? { ...base, delay: (base.delay ?? 0) + departureDelay }
       : base;
-  }, [carried, emerging, change.travel, departureDelay]);
+  }, [carried, emerging, moving, departureDelay]);
   const element = useRef<HTMLDivElement>(null);
   const handed = useRef<unknown>(undefined);
   const [handoff, setHandoff] = useState(0);
@@ -475,7 +489,7 @@ const CardElement = memo(function CardElement({
   }, [place.look, place.opacity, opacity, reduce]);
   useGlide(opacity, place.opacity, reduce, {
     how:
-      (change.travel || handoff > 0) && place.look === "hidden"
+      (moving || handoff > 0) && place.look === "hidden"
         ? INTO_LIBRARY
         : SPRING,
     restart,
@@ -489,6 +503,9 @@ const CardElement = memo(function CardElement({
   // in the fan is what the pointer hits, the raised card included, and above the fan the raised
   // card's top, which its element reaches up to.
   const ghosted = hand && raised && !holding;
+  const parked = !travelling && !carried && !emerging;
+  const rim = parked && place.rim;
+  const concealed = parked && place.look === "hidden";
   // Over the felt, the card is a physical thing (physics.ts): held up while dragged, falling
   // where it is dropped, carried while it glides.
   const body = useRef<HTMLDivElement>(null);
@@ -512,7 +529,7 @@ const CardElement = memo(function CardElement({
     },
     handling: dragging ? "held" : holding ? "dropped" : "free",
     size,
-    enabled: place.look !== "hidden" && !returning,
+    enabled: !rim && !concealed && !returning,
     reduce,
     body,
     shadow,
@@ -542,10 +559,10 @@ const CardElement = memo(function CardElement({
   }, [carried, reduce, shake, flash]);
   // A travelling card crosses over the table, then lies where it went.
   const lastHandoff = useRef(handoff);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const fromTray = handoff !== lastHandoff.current;
     lastHandoff.current = handoff;
-    if ((!change.travel && !fromTray) || reduce) {
+    if ((!moving && !fromTray) || reduce) {
       setTravelling(false);
       return;
     }
@@ -555,7 +572,7 @@ const CardElement = memo(function CardElement({
       TRAVEL_FOR + departureDelay * 1000,
     );
     return () => clearTimeout(timer);
-  }, [change, reduce, departureDelay, handoff]);
+  }, [change, moving, reduce, departureDelay, handoff]);
   // An emerging token crosses over the table, then is a card like the rest.
   useEffect(() => {
     if (!emerging) return;
@@ -663,6 +680,7 @@ const CardElement = memo(function CardElement({
     state.playable && "card-el-playable",
     state.draggable && "card-el-draggable",
     dragging && "card-el-dragging",
+    rim && "card-el-rim",
   ]
     .filter(Boolean)
     .join(" ");
@@ -674,7 +692,8 @@ const CardElement = memo(function CardElement({
         className={classes}
         data-slot={object.slot}
         data-zone={object.zone}
-        data-card={object.name ?? undefined}
+        data-card={place.back ? undefined : (object.name ?? undefined)}
+        data-library-pile={parked ? place.librarySide : undefined}
         style={{
           ...frame,
           visibility: state.splitting ? "hidden" : undefined,
@@ -707,22 +726,34 @@ const CardElement = memo(function CardElement({
         }
         onPointerLeave={() => !drag.current && layer.onHover(undefined)}
       >
-        <motion.div
-          className={hand ? "card-look" : undefined}
-          style={{ ...raise, opacity: ghosted ? 0 : 1 }}
-        >
-          <motion.div style={{ x: shake, filter: flash }}>
-            <div className="card-body" ref={body}>
-              <FlippingLook object={object} place={place} state={state} />
-              <span className="card-shade" ref={shade} />
-            </div>
-            <span
-              className="card-cast"
-              ref={shadow}
-              style={{ width: size[0], height: size[1] }}
-            />
+        {concealed || rim ? (
+          <div
+            className="pile-card-rim"
+            style={{ width, height: width / CARD_ASPECT }}
+            aria-hidden
+          />
+        ) : (
+          <motion.div
+            className={hand ? "card-look" : undefined}
+            style={{ ...raise, opacity: ghosted ? 0 : 1 }}
+          >
+            <motion.div style={{ x: shake, filter: flash }}>
+              <div className="card-body" ref={body}>
+                {place.back ? (
+                  <CardBack width={width} />
+                ) : (
+                  <FlippingLook object={object} place={place} state={state} />
+                )}
+                <span className="card-shade" ref={shade} />
+              </div>
+              <span
+                className="card-cast"
+                ref={shadow}
+                style={{ width: size[0], height: size[1] }}
+              />
+            </motion.div>
           </motion.div>
-        </motion.div>
+        )}
         {hand && (
           <div
             className="hand-hit"

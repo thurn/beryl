@@ -43,9 +43,7 @@ import {
 } from "../components/Mana";
 import {
   Coin,
-  FaceUpEdges,
   floating,
-  Library,
   LifeOrb,
   ManaPool,
   PlayerBadge,
@@ -144,8 +142,6 @@ import {
   MANA_POOLS,
   overLog,
   passButton,
-  pileLook,
-  PILES,
   STACK,
   STACK_Z,
   stackPlace,
@@ -175,7 +171,6 @@ import {
   Lying,
   pileMark,
   PileButton,
-  pileTip,
   ZoneViewer,
 } from "./Piles";
 import { ManaFlow, manaMotes } from "./ManaFlow";
@@ -244,10 +239,12 @@ interface Casting {
   choice: CastChoice;
 }
 
+const NO_SPOTLIGHT: Spotlight = {};
+
 export function Board({
   view: given,
   live,
-  spotlight,
+  spotlight = NO_SPOTLIGHT,
   log,
   waiting,
   onSkip,
@@ -416,17 +413,62 @@ export function Board({
     : picking?.fromHand && seen === view
       ? "raised"
       : "held";
+  const piles = useMemo(
+    () => zonePiles(shown, standIns.exileOrder),
+    [shown, stageWidth, standIns.exileOrder],
+  );
+  const libraries = useMemo(() => knownLibraries(shown), [shown, stageWidth]);
+  const pile = [...piles, ...libraries].find(
+    (p) => p.side === viewing?.side && p.zone === viewing.zone,
+  );
+  const viewed =
+    pile && viewing?.linked !== undefined
+      ? { ...pile, cards: exiledWith(shown, viewing.linked) }
+      : pile;
+  const away = useMemo(() => {
+    const slots = new Set(traySlots);
+    if (!dimmed) for (const card of viewed?.cards ?? []) slots.add(card.slot);
+    return slots;
+  }, [traySlots, dimmed, viewed]);
+
+  const reduceMotion = useReducedMotion();
+  const visibleSpotlight = useMemo(
+    () =>
+      reduceMotion && spotlight.shuffle
+        ? { ...spotlight, shuffle: undefined }
+        : spotlight,
+    [reduceMotion, spotlight],
+  );
   const resting = useMemo(
-    () => layout(shown, hold, false, spotlight, standIns.order),
-    [shown, hold, spotlight, standIns.order, stageWidth],
+    () =>
+      layout(shown, hold, false, visibleSpotlight, standIns.order, away, piles),
+    [shown, hold, visibleSpotlight, standIns.order, away, piles, stageWidth],
   );
   const crowdsLog = overLog(resting);
   const laid = useMemo(
     () =>
       crowdsLog && logOpen
-        ? layout(shown, hold, true, spotlight, standIns.order)
+        ? layout(
+            shown,
+            hold,
+            true,
+            visibleSpotlight,
+            standIns.order,
+            away,
+            piles,
+          )
         : resting,
-    [resting, crowdsLog, logOpen, shown, hold, spotlight, standIns.order],
+    [
+      resting,
+      crowdsLog,
+      logOpen,
+      shown,
+      hold,
+      visibleSpotlight,
+      standIns.order,
+      away,
+      piles,
+    ],
   );
   // The table as the view before this one laid it: where a source sacrificed for its mana was.
   const tables = useRef<{ view?: PlayerView; laid?: Layout; before?: Layout }>(
@@ -502,18 +544,6 @@ export function Board({
     }, GLIDE_MS);
   }, [hoveredPlace]);
   useEffect(() => () => clearTimeout(recheck.current), []);
-  const piles = useMemo(() => zonePiles(shown), [shown, stageWidth]);
-  const libraries = useMemo(() => knownLibraries(shown), [shown, stageWidth]);
-  const pile = [...piles, ...libraries].find(
-    (p) => p.side === viewing?.side && p.zone === viewing.zone,
-  );
-  const viewed =
-    pile && viewing?.linked !== undefined
-      ? { ...pile, cards: exiledWith(shown, viewing.linked) }
-      : pile;
-  const away = new Set(traySlots);
-  if (!dimmed) for (const card of viewed?.cards ?? []) away.add(card.slot);
-
   // A new view closes whatever was open on the old one, and starts any declaration afresh.
   useEffect(() => {
     setMenu(undefined);
@@ -1232,46 +1262,18 @@ export function Board({
         }}
       >
         <div className="far-shade" />
-        {(["opponent", "you"] as const).map((side) => {
-          const { library } = view.players[side];
-          const pile = pileLook(side, PILES[side].library, library.length);
-          // A disclosed top card has its own element over the backs.
-          const top = library.at(-1);
-          const hasFace =
-            top !== undefined && placements.get(top)?.look === "pile";
-          const count = library.filter(
-            (slot) => !away.has(slot) && !(hasFace && slot === top),
-          ).length;
-          return (
-            <Lying
-              key={side}
-              look={pile}
-              tip={
-                <Tip side={side === "you" ? "over" : "below"}>
-                  {pileTip("library", library.length)}
-                </Tip>
-              }
-            >
-              <div data-table-library={side}>
-                <Library count={count} width={pile.width} depth={pile.depth} />
-              </div>
-            </Lying>
-          );
-        })}
-        {piles.map(({ side, zone, cards, look }) => {
-          const count = cards.filter((card) => !away.has(card.slot)).length;
-          return (
-            count > 1 && (
-              <Lying key={`${side}-${zone}`} look={look}>
-                <FaceUpEdges
-                  count={count}
-                  width={look.width}
-                  depth={look.depth}
-                />
-              </Lying>
-            )
-          );
-        })}
+        {/* The arrange tray borrows the pile as a packet. This anchor supplies its flight box. */}
+        {libraries.map(({ side, look }) => (
+          <Lying key={side} look={look}>
+            <div
+              data-table-library={side}
+              style={{
+                width: look.width + Math.abs(look.depth.x),
+                height: look.width / CARD_ASPECT + look.depth.y,
+              }}
+            />
+          </Lying>
+        ))}
 
         <div className="hud" style={{ left: 18, top: 62 }}>
           <PlayerBadge

@@ -54,26 +54,36 @@ function flyIn(element: HTMLElement, from: DOMRect, stage: HTMLElement) {
     const transform = getComputedStyle(p).transform;
     if (transform !== "none") axes = new DOMMatrix(transform).multiply(axes);
   }
-  const { x, y } = axes
-    .inverse()
-    .transformPoint(
-      new DOMPoint(
-        (from.left + from.width / 2 - to.left - to.width / 2) / scale,
-        (from.top + from.height / 2 - to.top - to.height / 2) / scale,
-        0,
-        0,
-      ),
-    );
+  const offset = new DOMPoint(
+    (from.left + from.width / 2 - to.left - to.width / 2) / scale,
+    (from.top + from.height / 2 - to.top - to.height / 2) / scale,
+    0,
+    0,
+  );
+  const { x, y } = axes.inverse().transformPoint(offset);
+  // The library's anchor measures the packet. Its actual cards live in CardLayer so
+  // they can leave individually. On return, translate those cards together.
+  const packet = element.hasAttribute("data-table-library");
   const size = from.width / to.width;
   const paint = (progress: number) => {
     const left = 1 - progress;
-    element.style.translate = `${x * left}px ${y * left}px`;
-    element.style.scale = String(size + (1 - size) * progress);
+    if (packet) {
+      stage.style.setProperty("--library-return-x", `${offset.x * left}px`);
+      stage.style.setProperty("--library-return-y", `${offset.y * left}px`);
+    } else {
+      element.style.translate = `${x * left}px ${y * left}px`;
+      element.style.scale = String(size + (1 - size) * progress);
+    }
   };
   const finish = () => {
     flight.moving = false;
-    element.style.translate = "";
-    element.style.scale = "";
+    if (packet) {
+      stage.style.removeProperty("--library-return-x");
+      stage.style.removeProperty("--library-return-y");
+    } else {
+      element.style.translate = "";
+      element.style.scale = "";
+    }
   };
   paint(0);
   const run = animate(0, 1, {

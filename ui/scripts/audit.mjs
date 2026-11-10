@@ -139,6 +139,7 @@ export function record(ui) {
             const top = points.some(([x, y]) => onTop(e, x, y));
             cards[slot] = {
                 zone: e.dataset.zone,
+                librarySide: e.dataset.libraryPile,
                 name: e.dataset.card ?? null,
                 x: Math.round(cx),
                 y: Math.round(cy),
@@ -394,6 +395,8 @@ function describe(e, names) {
             return `${e.player} ${e.kind === "lifeGain" ? "+" : "-"}${e.amount} life`;
         case "draw":
             return `${e.player} draws ${e.cards}`;
+        case "libraryShuffled":
+            return `${e.player} shuffles their library`;
         case "cast":
             return `cast ${name(e.slot)}`;
         case "countersAdded":
@@ -594,7 +597,20 @@ function judge(e, frames, names, later = frames) {
             };
         }
     }
+    if (e.kind === "libraryShuffled") {
+        const slots = librarySlots(frames, e.player);
+        if (slots.length < 2)
+            return { what, verdict: "ok", why: "fewer than two cards to cut" };
+        // A moving packet is visible through its top card. Its covered cards still move
+        // with it, but can spend the entire beat behind that face.
+        const visible = slots.filter((slot) => {
+            const b = behavior(frames, slot);
+            return b.moved >= MIN_PX && b.seen >= SEEN;
+        });
+        return judgeSlots(what, frames, visible.length ? visible : slots);
+    }
     if (e.kind === "draw") {
+        if (e.slots?.length) return judgeSlots(what, later, e.slots);
         // The cards drawn: those whose element arrived in a hand over the view or a beat
         // after it, even if they left it again (a card drawn and discarded).
         const before = later[0]?.cards ?? {};
@@ -774,6 +790,12 @@ function judgeSlots(what, frames, slots) {
     };
 }
 
+function librarySlots(frames, side) {
+    return Object.entries(frames[0]?.cards ?? {})
+        .filter(([, card]) => card.librarySide === side)
+        .map(([slot]) => slot);
+}
+
 /** The slots a view's events account for: their subjects, and with a draw, every card that
  * arrived in a hand. */
 function claimed(events, frames) {
@@ -781,6 +803,8 @@ function claimed(events, frames) {
     for (const e of events) {
         for (const s of subjects(e)) out.add(String(s));
         if (e.kind === "damage") out.add(String(e.source));
+        if (e.kind === "libraryShuffled")
+            for (const slot of librarySlots(frames, e.player)) out.add(slot);
     }
     if (events.some((e) => e.kind === "draw")) {
         const before = frames[0]?.cards ?? {};

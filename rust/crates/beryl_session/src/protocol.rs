@@ -770,6 +770,13 @@ pub enum GameEvent {
     Draw {
         player: Side,
         cards: u8,
+        /// The public slots drawn, top first. Older recordings carry only the count.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        slots: Option<Vec<u16>>,
+    },
+    LibraryShuffled {
+        player: Side,
     },
     LifeGain {
         player: Side,
@@ -1122,7 +1129,7 @@ pub fn player_view<L: Layout>(
         objects,
         stack,
         stops,
-        events: events.iter().map(|e| game_event(t, obs, e)).collect(),
+        events: game_events(t, obs, events),
         undone: false,
     }
 }
@@ -2144,6 +2151,29 @@ fn mana_event<L: Layout>(obs: Observation<'_, L>, e: &Event<L>) -> GameEvent {
     }
 }
 
+/// Combine the individual public handles with the draw count the rules listen to.
+fn game_events<L: Layout>(
+    t: &GameTable,
+    obs: Observation<'_, L>,
+    events: &[Event<L>],
+) -> Vec<GameEvent> {
+    let mut drawn = Vec::new();
+    events
+        .iter()
+        .filter_map(|e| {
+            if let Event::DrawCard { slot } = e {
+                drawn.push(slot.num());
+                return None;
+            }
+            let mut event = game_event(t, obs, e);
+            if let GameEvent::Draw { slots, .. } = &mut event {
+                *slots = (!drawn.is_empty()).then(|| std::mem::take(&mut drawn));
+            }
+            Some(event)
+        })
+        .collect()
+}
+
 /// An engine event as the viewer of `obs` is told it. Engine events name objects by slot and
 /// carry no identity: anything an event says about a card must come from `obs`, which the
 /// information independence test redeals. The table names only an ability's card, public as
@@ -2178,6 +2208,11 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
         Event::Draw { player, cards } => GameEvent::Draw {
             player: side(player),
             cards,
+            slots: None,
+        },
+        Event::DrawCard { .. } => unreachable!("draw slots are grouped with their draw"),
+        Event::LibraryShuffled { player } => GameEvent::LibraryShuffled {
+            player: side(player),
         },
         Event::LifeGain { player, amount } => GameEvent::LifeGain {
             player: side(player),

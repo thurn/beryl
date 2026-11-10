@@ -472,6 +472,31 @@ fn cast<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
     }
 }
 
+/// An ability's announcement in another layout.
+fn ability<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
+    let Event::Ability {
+        source,
+        controller,
+        card,
+        face,
+        ability,
+        targets,
+        x,
+    } = e
+    else {
+        unreachable!("an ability event");
+    };
+    Event::Ability {
+        source: source.map(|r| r.relayout()),
+        controller: *controller,
+        card: *card,
+        face: *face,
+        ability: *ability,
+        targets: queue(targets.as_slice(), Target::relayout),
+        x: *x,
+    }
+}
+
 impl<L: Layout> Relayout for LossCause<L> {
     type In<M: Layout> = LossCause<M>;
 
@@ -536,6 +561,8 @@ impl<L: Layout> Relayout for Event<L> {
                 combat: *combat,
             },
             &Event::Draw { player, cards } => Event::Draw { player, cards },
+            &Event::DrawCard { slot: drawn } => Event::DrawCard { slot: slot(drawn) },
+            &Event::LibraryShuffled { player } => Event::LibraryShuffled { player },
             &Event::LifeGain { player, amount } => Event::LifeGain { player, amount },
             &Event::LifeLoss { player, amount } => Event::LifeLoss { player, amount },
             &Event::CountersAdded {
@@ -569,23 +596,7 @@ impl<L: Layout> Relayout for Event<L> {
                 tokens: bits(tokens),
             },
             Event::Cast { .. } => cast(self),
-            Event::Ability {
-                source,
-                controller,
-                card,
-                face,
-                ability,
-                targets,
-                x,
-            } => Event::Ability {
-                source: source.map(|r| r.relayout()),
-                controller: *controller,
-                card: *card,
-                face: *face,
-                ability: *ability,
-                targets: queue(targets.as_slice(), Target::relayout),
-                x: *x,
-            },
+            Event::Ability { .. } => ability(self),
             &Event::Attack { player, attackers } => Event::Attack {
                 player,
                 attackers: bits(attackers),

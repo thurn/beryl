@@ -34,8 +34,11 @@ export const HOLD = {
   stack: 2000,
   counter: 1800,
   ending: 1600,
-  /** The opponent drawing: a card crossing from their library to their hand. */
+  /** A deal or collection can stagger its card flights by up to 300 ms. */
+  deal: 1000,
+  /** A single card crossing from the opponent's library to their hand. */
   draw: 700,
+  shuffle: 420,
   /** A spell or ability resolving against another spell, held on the stack with its arrow to
    * its target before the target is hit. */
   resolving: 900,
@@ -102,16 +105,13 @@ function hiddenTo(zone: ZoneName, owner: Side): boolean {
   return zone === "library" || (zone === "hand" && owner === "opponent");
 }
 
-/** Whether moving a card from `from` to `to` takes it out of a zone the viewer cannot see into
- * a pile (milled, discarded by the opponent, exiled from a library), or out of sight from a
- * pile (shuffled from a graveyard into a library). Such a card is shown face up over the pile
- * it goes to (SHOWCASE), then shrinks into it. A card the viewer sees leave (a permanent, a
- * spell, their own hand card) or that moves between two face-up piles (exiled from a
- * graveyard, put into a graveyard from exile) travels as it is: there is nothing new to read. */
+/** Give newly visible cards a moment to be read on their way to a face-up pile. */
 function hops(from: ZoneName, to: ZoneName, owner: Side): boolean {
-  if (from === to) return false;
-  if (to === "library") return from === "graveyard" || from === "exile";
-  return (to === "graveyard" || to === "exile") && hiddenTo(from, owner);
+  return (
+    from !== to &&
+    (to === "graveyard" || to === "exile") &&
+    hiddenTo(from, owner)
+  );
 }
 
 /** Whether a card moving from `from` to `to` goes between two face-up piles: a graveyard and
@@ -216,21 +216,85 @@ class Walk {
         // Show the announcement before its target moves, even while the spell stays.
         this.cut();
       }
+      if (e.kind === "libraryShuffled") {
+        this.cut();
+        // A wheel can shuffle both libraries before dealing either of the new hands.
+        const shuffle = new Set<Side>();
+        let end = i;
+        while (end < events.length) {
+          const event = events[end]!;
+          if (event.kind !== "libraryShuffled") break;
+          shuffle.add(event.player);
+          this.pending.push(event);
+          end++;
+        }
+        const deals = new Map<Side, number[]>();
+        for (let j = end; j < events.length; j++) {
+          const next = events[j]!;
+          if (next.kind !== "draw") break;
+          const slots = deals.get(next.player) ?? [];
+          slots.push(...(next.slots ?? []));
+          deals.set(next.player, slots);
+        }
+        for (const side of shuffle) this.shuffle(side, deals.get(side) ?? []);
+        this.cut(HOLD.shuffle, { shuffle });
+        this.cut(HOLD.shuffle, undefined, true);
+        i = end - 1;
+        continue;
+      }
+      if (
+        e.kind === "zoneChange" &&
+        e.to === "library" &&
+        e.from !== "library"
+      ) {
+        let end = i + 1;
+        while (end < events.length) {
+          const next = events[end]!;
+          if (
+            next.kind !== "zoneChange" ||
+            next.to !== "library" ||
+            next.from === "library"
+          )
+            break;
+          end++;
+        }
+        const collecting = events[end]?.kind === "libraryShuffled";
+        if (collecting || end > i + 1) {
+          this.cut();
+          for (const move of events.slice(i, end)) {
+            this.apply(move, collecting);
+            this.pending.push(move);
+          }
+          this.cut(HOLD.deal);
+          i = end - 1;
+          continue;
+        }
+      }
       if (e.kind === "zoneChange" && this.showcased(e)) {
         // Every card of the move at once: the events of one effect come together.
         const group = [e];
         while (i + 1 < events.length) {
           const next = events[i + 1]!;
-          if (next.kind !== "zoneChange" || !this.showcased(next)) break;
+          if (
+            next.kind !== "zoneChange" ||
+            next.from !== e.from ||
+            next.to !== e.to ||
+            !this.showcased(next)
+          )
+            break;
           group.push(next);
           i++;
         }
         this.cut();
         group.forEach((g) => this.apply(g));
         this.pending = group;
-        this.cut(HOLD.showcase, {
-          shown: new Set(group.map((g) => g.slot)),
-        });
+        // A full library travels straight to its destination. A row of that many faces
+        // would be too small to read and conceal the stack they came from.
+        if (group.length > 8) this.cut(HOLD.deal);
+        else
+          this.cut(HOLD.showcase, {
+            shown: new Set(group.map((g) => g.slot)),
+          });
         continue;
       }
       if (e.kind === "zoneChange" && crosses(e.from, e.to)) {
@@ -301,6 +365,7 @@ class Walk {
         // The permanent has to land before the trigger can visibly lift off it.
         this.cut();
       }
+      if (e.kind === "draw" && e.cards > 1) this.cut();
       const drawing = this.drawn.size;
       this.apply(e);
       this.pending.push(e);
@@ -310,10 +375,13 @@ class Walk {
         this.cut(HOLD.action);
         continue;
       }
-      if (e.kind === "draw" && e.player === "opponent") {
+      if (e.kind === "draw") {
         // The opponent's hand lies at the table's edge: what they drew dips into view first.
         const drawn = new Set([...this.drawn].slice(drawing));
-        if (drawn.size > 0) this.cut(HOLD.draw, { drawn });
+        const hold = e.cards > 1 ? HOLD.deal : HOLD.draw;
+        if (e.player === "opponent" && drawn.size > 0)
+          this.cut(hold, { drawn });
+        else if (e.cards > 1) this.cut(hold);
         continue;
       }
       const item = announcedItem(e);
@@ -409,12 +477,13 @@ class Walk {
 
   /** Plays `e` on the table so far. Only what a beat must show is played; anything else the
    * view's end shows when it comes. */
-  private apply(e: GameEvent) {
+  private apply(e: GameEvent, collecting = false) {
     const cur = this.cur;
     switch (e.kind) {
       case "zoneChange": {
-        const object = this.moved(e.slot, e.to);
-        if (!object) return;
+        const moved = this.moved(e.slot, e.to);
+        if (!moved) return;
+        const object = collecting ? { ...moved, name: null } : moved;
         const players = { ...cur.players };
         const side = object.owner;
         const player = { ...players[side] };
@@ -426,9 +495,10 @@ class Walk {
           // Where the view's end has it, counting from the top (the list's end).
           const end = this.view.players[side].library;
           const fromTop = end.length - 1 - end.indexOf(e.slot);
-          const at = end.includes(e.slot)
-            ? Math.max(0, player.library.length - fromTop)
-            : player.library.length;
+          const at =
+            !collecting && end.includes(e.slot)
+              ? Math.max(0, player.library.length - fromTop)
+              : player.library.length;
           player.library = [
             ...player.library.slice(0, at),
             e.slot,
@@ -473,7 +543,9 @@ class Walk {
       case "draw": {
         // From the top of the library, its list's end.
         const library = cur.players[e.player].library;
-        const taken = library.slice(Math.max(0, library.length - e.cards));
+        const taken =
+          e.slots ??
+          library.slice(Math.max(0, library.length - e.cards)).reverse();
         taken.forEach((s) => this.drawn.add(s));
         for (const slot of taken) {
           this.apply({
@@ -525,6 +597,27 @@ class Walk {
       default:
         return;
     }
+  }
+
+  /** After a shuffle the old handles can no longer identify any face. For an immediate
+   * deal, only the recorded draw order matters: place those anonymous backs at the top. */
+  private shuffle(side: Side, deal: number[]) {
+    const player = this.cur.players[side];
+    const library = new Set(player.library);
+    const top = deal.filter((slot) => library.delete(slot));
+    const rest = this.view.players[side].library.filter((slot) =>
+      library.delete(slot),
+    );
+    this.cur = {
+      ...this.cur,
+      players: {
+        ...this.cur.players,
+        [side]: { ...player, library: [...library, ...rest, ...top.reverse()] },
+      },
+      objects: this.cur.objects.map((o) =>
+        o.zone === "library" && o.owner === side ? { ...o, name: null } : o,
+      ),
+    };
   }
 
   /** Puts `item` on top of the stack, in place of itself in the making: a spell or ability

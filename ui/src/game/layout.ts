@@ -109,7 +109,7 @@ export type Look =
   | "stack" // a full frame on the stack
   | "pile" // a full frame on a graveyard or exile pile, which the pile's button covers
   | "shown" // a full frame face up over the table, on its way to a pile (SHOWCASE)
-  | "hidden"; // nothing drawn: libraries
+  | "hidden"; // fully occluded by the rest of a pile
 
 /** One card on the stage: its element's top-left corner at (x, y), then scaled, turned and
  * sheared about that corner, in that order (Motion's transform order). */
@@ -128,6 +128,11 @@ export interface Placement {
   skew: number;
   opacity: number;
   z: number;
+  /** Under the top card, only the physical rim is painted when the card is at rest. */
+  rim?: boolean;
+  /** Face down in this library, unless it is the disclosed top card. */
+  back?: boolean;
+  librarySide?: Side;
   /** On the top card of a pile of identical permanents, how many it holds. */
   count?: number;
   /** On each card of a pile of identical permanents, the pile's slots, top first: what a choice
@@ -310,20 +315,21 @@ export const PILES = {
   },
   you: {
     width: 80,
-    library: { x: 18, y: 772 },
+    library: { x: 28, y: 772 },
     graveyard: { x: 126, y: 772 },
     exile: { x: 226, y: 772 },
   },
 };
 
-/** Where a pile's upright sides meet, below the stage's middle. Seen from above the near edge,
- * the cards beneath a pile's top card show on its side toward this point, and the farther the
- * pile lies from it the more of its side shows: the camera looks at the far table more nearly
- * level. */
-const NADIR_Y = 1500;
-/** How far each card beneath a pile's top card lies toward the nadir, as a fraction of the
- * way. */
-const CARD_RISE = 0.0011;
+/** Each top layer is readable. Lower layers close up to keep a full library in its corner. */
+const PILE_BASE = { you: 13, opponent: 28 };
+function pileThickness(depth: number) {
+  return 1.25 * Math.min(depth, 12) + (13 * depth) / (depth + 45);
+}
+function pileOffset(side: Side, depth: number) {
+  const thickness = pileThickness(depth);
+  return { x: (side === "you" ? 0.5 : -0.5) * thickness, y: thickness };
+}
 
 /** How a pile of cards looks on the table. */
 export interface PileLook {
@@ -338,8 +344,7 @@ export interface PileLook {
   depth: { x: number; y: number };
 }
 
-/** How one of `side`'s piles of `count` cards looks, its top card's top-left corner at `at`,
- * from where it lies alone: one rule for every library, graveyard and exile. */
+/** A pile stands on a fixed spot on the table. Its top rises with each card. */
 export function pileLook(
   side: Side,
   at: { x: number; y: number },
@@ -347,16 +352,13 @@ export function pileLook(
 ): PileLook {
   const width = PILES[side].width * depthScale(at.y);
   const center = at.x + width / 2;
-  const rise = Math.max(0, count - 1) * CARD_RISE;
+  const depth = pileOffset(side, Math.max(0, count - 1));
   return {
-    x: at.x,
-    y: at.y,
+    x: at.x - depth.x,
+    y: at.y + PILE_BASE[side] - depth.y,
     width,
     skew: lean(center, at.y),
-    depth: {
-      x: (STAGE.width / 2 - center) * rise,
-      y: (NADIR_Y - at.y) * rise,
-    },
+    depth,
   };
 }
 
@@ -417,6 +419,8 @@ export const SHOWCASE = {
 export interface Spotlight {
   shown?: ReadonlySet<number>;
   drawn?: ReadonlySet<number>;
+  /** Libraries lifted into two face-down packets during a shuffle. */
+  shuffle?: ReadonlySet<Side>;
 }
 
 /** How far below the opponent's hand a card they just drew dips into view. */
@@ -1418,7 +1422,10 @@ export function exiledWith(view: PlayerView, slot: number): ObjectView[] {
 
 /** Each side's graveyard and exile piles, but for the cards your hand fan holds because you can
  * play them (`playableElsewhere`). */
-export function zonePiles(view: PlayerView): ZonePile[] {
+export function zonePiles(
+  view: PlayerView,
+  exileOrder: ReadonlyMap<number, number>,
+): ZonePile[] {
   const bySlot = new Map(view.objects.map((o) => [o.slot, o]));
   const holding = new Set(view.battlefield);
   const inHand = new Set(playableElsewhere(view));
@@ -1426,12 +1433,15 @@ export function zonePiles(view: PlayerView): ZonePile[] {
     const graveyard = view.players[side].graveyard.flatMap((slot) =>
       inHand.has(slot) ? [] : (bySlot.get(slot) ?? []),
     );
-    const exile = view.objects.filter(
-      (o) =>
-        o.owner === side &&
-        o.zone === "exile" &&
-        !inHand.has(o.slot) &&
-        held(o, holding) === undefined,
+    const exile = inOrder(
+      view.objects.filter(
+        (o) =>
+          o.owner === side &&
+          o.zone === "exile" &&
+          !inHand.has(o.slot) &&
+          held(o, holding) === undefined,
+      ),
+      exileOrder,
     );
     return [
       { zone: "graveyard" as const, cards: graveyard },
@@ -1465,25 +1475,73 @@ function pileBoxes(side: Side): Box[] {
 const meets = (a: Box, b: Box) =>
   a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 
-/** A full frame drawn as a pile's top card. */
-function onPile(look: PileLook) {
+/** The position of an individual card, counting from the top of its pile. */
+function onPile(look: PileLook, side: Side, depth: number) {
+  const offset = pileOffset(side, depth);
   return {
-    x: look.x,
-    y: look.y,
+    x: look.x + offset.x,
+    y: look.y + offset.y,
     scale: look.width / FULL_WIDTH,
     rotate: 0,
     skew: look.skew,
   };
 }
 
-/** Your hand in its order of arrival (standIns.ts), falling back to the view's slot order. */
+/** The parked layers and their positions are also the start/end points for card flights. A
+ * borrowed card keeps a home for its handoff, while the cards left on the table settle. */
+function pileCards(
+  side: Side,
+  zone: ZonePile["zone"],
+  cards: ObjectView[],
+  borrowed: ReadonlySet<number>,
+  aimed: ReadonlySet<number>,
+  library?: { top?: number; shuffle?: boolean },
+): Placement[] {
+  const full = pileLook(side, PILES[side][zone], cards.length);
+  const remaining = cards.filter((o) => !borrowed.has(o.slot)).length;
+  const rest = pileLook(side, PILES[side][zone], remaining);
+  let depthLeft = remaining;
+  return cards.map((o, i) => {
+    const away = borrowed.has(o.slot);
+    const depth = away ? cards.length - 1 - i : --depthLeft;
+    const at = onPile(away ? full : rest, side, depth);
+    const raised = !library && aimed.has(o.slot) && depth > 0;
+    // A shuffle moves two packets toward the open table, keeping all faces down.
+    const split =
+      library?.shuffle && remaining > 1 ? Math.ceil(remaining / 2) : 0;
+    const cut = depth < split;
+    const lift = cut
+      ? -12
+      : raised
+        ? ((side === "you" ? -1 : 1) * rest.width * PILE_RISE) / CARD_ASPECT
+        : 0;
+    const hidden = depth >= 64 && !raised;
+    return {
+      ...at,
+      slot: o.slot,
+      zone: o.zone,
+      look: hidden ? "hidden" : "pile",
+      width: FULL_WIDTH,
+      span: FULL_WIDTH,
+      opacity: hidden ? 0 : 1,
+      z: raised ? 92 : (cut ? 96 : 80) - Math.min(depth, 79),
+      rim: depth > 1 && !raised && depth !== split,
+      back: !!library && (library.shuffle || o.slot !== library.top || !o.name),
+      librarySide: library ? side : undefined,
+      x: at.x + (cut ? (side === "you" ? 1 : -1) * rest.width * 0.68 : 0),
+      y: at.y + lift,
+    };
+  });
+}
+
+/** Order of arrival (standIns.ts), falling back to the view's slot order. */
 function inOrder(
-  hand: ObjectView[],
+  cards: ObjectView[],
   order: ReadonlyMap<number, number> | undefined,
 ): ObjectView[] {
-  if (!order?.size) return hand;
+  if (!order?.size) return cards;
   const key = (o: ObjectView) => order.get(o.slot) ?? Infinity;
-  return [...hand].sort((a, b) => key(a) - key(b));
+  return [...cards].sort((a, b) => key(a) - key(b));
 }
 
 /** Every object's placement. The hand is tucked under a screen over the table or raised for a
@@ -1492,10 +1550,12 @@ function inOrder(
  * Hovering changes none of it (CardLayer raises a hovered hand card). */
 export function layout(
   view: PlayerView,
-  hold: HandHold = "held",
-  logOpen = false,
-  spotlight: Spotlight = {},
-  order?: ReadonlyMap<number, number>,
+  hold: HandHold,
+  logOpen: boolean,
+  spotlight: Spotlight,
+  order: ReadonlyMap<number, number>,
+  borrowed: ReadonlySet<number>,
+  piles: readonly ZonePile[],
 ): Layout {
   const out: Placement[] = [];
   const objects = view.objects;
@@ -1573,50 +1633,26 @@ export function layout(
       yours.filter(backRow).map(footprint),
     ),
   );
-  for (const side of ["opponent", "you"] as const) {
-    const player = view.players[side];
-    const library = pileLook(side, PILES[side].library, player.library.length);
-    // Only a top card whose identity is known to this viewer shows over the back.
-    const top = player.library.at(-1);
-    for (const o of owned(side, "library")) {
-      if (inHand.has(o.slot)) continue;
-      const known = o.slot === top && o.name !== null;
-      out.push({
-        slot: o.slot,
-        zone: o.zone,
-        look: known ? "pile" : "hidden",
-        width: FULL_WIDTH,
-        span: FULL_WIDTH,
-        opacity: known ? 1 : 0,
-        z: known ? 2 : 1,
-        ...onPile(library),
-      });
-    }
-  }
-  // A card under the top of a pile that the top of the stack targets rises out of the pile,
-  // toward the table's middle, so that the target arrow meets that card and not the pile's top.
+  // A targeted buried card rises toward the middle so its arrow meets the right face.
   const aimed = new Set(
     view.stack
       .at(-1)
       ?.targets.flatMap((t) => (t.kind === "player" ? [] : [t.slot])) ?? [],
   );
-  for (const pile of zonePiles(view)) {
-    pile.cards.forEach((o, i) => {
-      const at = onPile(pile.look);
-      const buried = aimed.has(o.slot) && i < pile.cards.length - 1;
-      const rise = (FULL_WIDTH * at.scale * PILE_RISE) / CARD_ASPECT;
-      out.push({
-        slot: o.slot,
-        zone: o.zone,
-        look: "pile",
-        width: FULL_WIDTH,
-        span: FULL_WIDTH,
-        opacity: 1,
-        z: buried ? 20 + pile.cards.length + i : 20 + i,
-        ...at,
-        y: buried ? at.y + (pile.side === "you" ? -rise : rise) : at.y,
-      });
+  for (const { side, zone, cards } of piles) {
+    out.push(...pileCards(side, zone, cards, borrowed, aimed));
+  }
+  for (const side of ["opponent", "you"] as const) {
+    const cards = view.players[side].library.flatMap((slot) => {
+      const object = bySlot.get(slot);
+      return object && !inHand.has(slot) ? [object] : [];
     });
+    out.push(
+      ...pileCards(side, "library", cards, borrowed, aimed, {
+        top: view.players[side].library.at(-1),
+        shuffle: spotlight.shuffle?.has(side),
+      }),
+    );
   }
   view.stack.forEach((item, i) => {
     if (item.kind !== "spell") return;

@@ -3080,13 +3080,16 @@ for (const [libraryTop, alone] of [
             });
             await choice.waitFor();
             await page.clock.runFor(2000);
-            const top = await page
-                .locator(`${subtlety}[data-zone="library"]`)
-                .evaluate((e) => getComputedStyle(e).opacity);
+            const moved = page.locator(`${subtlety}[data-zone="library"]`);
             assert.equal(
-                top,
-                libraryTop || alone ? "1" : "0",
-                "only the known top card shows",
+                await moved.locator(".card").count(),
+                libraryTop || alone ? 1 : 0,
+                "only the known top card shows its face",
+            );
+            assert.equal(
+                await moved.getAttribute("data-card"),
+                libraryTop || alone ? "Subtlety" : null,
+                "a buried face does not label the card back",
             );
             await choice.click();
             await page
@@ -3469,6 +3472,13 @@ await check(
             1,
         );
         const library = page.locator('[data-table-library="you"]');
+        const layers = page.locator('.card-layer > [data-library-pile="you"]');
+        assert.ok(await layers.count(), "the table still owns its slots");
+        assert.equal(
+            await layers.first().isVisible(),
+            false,
+            "the packet is hidden while borrowed",
+        );
         assert.equal(
             await library.isVisible(),
             false,
@@ -3480,6 +3490,7 @@ await check(
             true,
             "the library returns to the table",
         );
+        assert.equal(await layers.first().isVisible(), true);
     },
     { fixture: "choice-scry", at: scry.views.length, ready: tray(scryNext) },
 );
@@ -3720,6 +3731,27 @@ for (const count of [1, 10, 11]) {
         `a ${count}-card graveyard opens with the table cards borrowed`,
         async (page) => {
             const button = page.locator(`button${pile("you", "graveyard")}`);
+            await page.clock.runFor(1000);
+            const layers = await page
+                .locator('.card-layer > [data-zone="graveyard"].card-el-you')
+                .evaluateAll((cards) =>
+                    cards.map((card) => ({
+                        slot: Number(card.dataset.slot),
+                        top: card.getBoundingClientRect().top,
+                        z: Number(getComputedStyle(card).zIndex),
+                    })),
+                );
+            assert.equal(layers.length, count);
+            const ordered = layers.sort((a, b) => b.slot - a.slot);
+            assert.ok(
+                ordered.every(
+                    (layer, i) =>
+                        i === 0 ||
+                        (layer.top > ordered[i - 1].top &&
+                            layer.z < ordered[i - 1].z),
+                ),
+                "every card under the top has its own position and layer",
+            );
             await button.click();
             const dialog = page.getByRole("dialog", { name: "Your graveyard" });
             const listed = dialog.locator("[data-viewer-slot]");

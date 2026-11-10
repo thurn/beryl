@@ -118,6 +118,13 @@ pub enum Event<L: Layout = Small> {
         player: Seat,
         cards: u8,
     },
+    /// A public slot taken from the library, in draw order. Kept only for presentation.
+    DrawCard {
+        slot: L::Slot,
+    },
+    LibraryShuffled {
+        player: Seat,
+    },
     LifeGain {
         player: Seat,
         amount: u8,
@@ -775,13 +782,14 @@ pub(crate) fn draw<L: Layout>(
     let mut drawn = 0;
     let mut wins = None;
     for _ in 0..cards {
-        if s.library(player).is_empty() {
+        if let Some(&slot) = s.library(player).last() {
+            drawn += 1;
+            sink.note(Event::DrawCard { slot });
+        } else {
             wins = wins_instead_of_drawing(s, t, player);
             if wins.is_some() {
                 break;
             }
-        } else {
-            drawn += 1;
         }
         zone::draw(s, sink, player)?;
     }

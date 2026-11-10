@@ -9,7 +9,7 @@ use beryl_engine::event::{Event, Reason};
 use beryl_engine::{
     Choice, GameTable, Large, Limits, Profile, Relayout, Replay, Scratch, State, Step, apply, next,
 };
-use beryl_session::protocol::{Kind, Side, StackItem, Step as TurnStep};
+use beryl_session::protocol::{GameEvent, Kind, Side, StackItem, Step as TurnStep, ZoneName};
 use beryl_session::replay::Entry;
 use beryl_session::{
     CandidateIndex, Game, PlayerView, Seat, SessionId, StartGame, Status, StopsSetting, with_stops,
@@ -182,14 +182,26 @@ fn a_loot_reports_its_draw_before_it_asks_for_the_discard() {
             .filter(|e| matches!(e, Event::Draw { player, .. } if *player == Seat::P0))
             .count()
     };
-    loop {
+    let mut before: Option<PlayerView> = None;
+    let loot = loop {
         let view = game.next_view().expect("the game reaches Jace's loot");
         if looting(&view) {
-            break;
+            break view;
         }
+        before = Some(view);
         game.answer_by_stand_in();
-    }
+    };
     assert_eq!(draws(game.events()), 1, "the draw comes with the question");
+    let slot = *before.unwrap().players.you.library.last().unwrap();
+    assert!(loot.events.iter().any(|e| matches!(
+        e,
+        GameEvent::Draw { player: Side::You, cards: 1, slots: Some(slots) } if slots == &[slot]
+    )));
+    assert!(
+        loot.objects
+            .iter()
+            .any(|o| o.slot == slot && o.zone == ZoneName::Hand)
+    );
     game.answer_by_stand_in();
     let after = game.next_view().unwrap();
     assert!(!looting(&after));
