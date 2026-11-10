@@ -488,7 +488,7 @@ export function Card({
         {marks && (otherCounters.length > 0 || marks.token) && (
           <span className="card-counters">
             {/* Marks that say what the frame and art also hint, apart from any art. */}
-            {marks.token && <MarkBadge icon="token" label="Token" />}
+            {marks.token && <span className="token-label">Token</span>}
             {otherCounters.map((c) => (
               <MarkBadge
                 key={c.kind}

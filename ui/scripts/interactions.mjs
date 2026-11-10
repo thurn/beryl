@@ -5065,7 +5065,10 @@ if (wanted(targetDeparture)) {
         await check(
             `${targetDeparture} for ${to}`,
             async (page) => {
-                const color = object.controller === "you" ? "green" : "red";
+                const caster = view.objects.find(
+                    (o) => o.slot === item.slot,
+                ).controller;
+                const color = object.controller === caster ? "green" : "red";
                 const arrow = `.board-arrows .arrow-${color}[data-to="card-${target}"]`;
                 const targetCard = page.locator(slotOf(target));
                 await page.clock.runFor(1000);
@@ -9380,6 +9383,354 @@ await check("libraries face their owners", async (page) => {
         );
     }
 });
+
+await check(
+    "cancelled frames stay cancelled across bug report freeze",
+    async (page) => {
+        await page.evaluate(async () => {
+            const { freeze } = await import("/src/freeze.ts");
+            window.cancelledFrameCalls = 0;
+            window.cancelledFrameId = requestAnimationFrame(
+                () => window.cancelledFrameCalls++,
+            );
+            freeze();
+        });
+        await page.clock.runFor(50);
+        await page.evaluate(async () => {
+            cancelAnimationFrame(window.cancelledFrameId);
+            (await import("/src/freeze.ts")).thaw();
+        });
+        await page.clock.runFor(100);
+        assert.equal(await page.evaluate(() => window.cancelledFrameCalls), 0);
+    },
+    {
+        fixture: "arrow-player",
+        at: (await load("arrow-player")).length,
+        ready: ".board-arrows",
+    },
+);
+
+await check(
+    "a second bug report keeps thawed frames frozen",
+    async (page) => {
+        await page.evaluate(async () => {
+            const { freeze, thaw } = await import("/src/freeze.ts");
+            window.refrozenCalls = 0;
+            freeze();
+            requestAnimationFrame(() => window.refrozenCalls++);
+            thaw();
+            freeze();
+        });
+        await page.clock.runFor(100);
+        assert.equal(await page.evaluate(() => window.refrozenCalls), 0);
+        await page.evaluate(async () =>
+            (await import("/src/freeze.ts")).thaw(),
+        );
+        await page.clock.runFor(100);
+        assert.equal(await page.evaluate(() => window.refrozenCalls), 1);
+    },
+    {
+        fixture: "arrow-player",
+        at: (await load("arrow-player")).length,
+        ready: ".board-arrows",
+    },
+);
+
+for (const controller of ["you", "opponent"]) {
+    const view = structuredClone((await load("arrow-player")).at(-1));
+    const item = view.stack.at(-1);
+    item.controller = controller;
+    item.targets = [{ kind: "player", player: controller }];
+    view.events = [];
+    const run = await motionFixture(`self-target-${controller}`, [view]);
+    await check(
+        `self-target is green for ${controller}`,
+        async (page) => {
+            await page.clock.runFor(2000);
+            assert.equal(
+                await page
+                    .locator(`.arrow-green[data-to="${controller}-life-orb"]`)
+                    .count(),
+                1,
+            );
+        },
+        { ...run, at: 1, ready: ".board-arrows" },
+    );
+}
+
+if (wanted("undo does not repeat an automatic target")) {
+    const targetSlot = ownTarget.candidates[0].option.slot;
+    const before = structuredClone(ownBefore);
+    const target = structuredClone(ownAfter);
+    for (const view of [before, target]) {
+        const object = view.objects.find((o) => o.slot === targetSlot);
+        object.owner = "opponent";
+        object.controller = "opponent";
+    }
+    const resolved = structuredClone(target);
+    resolved.status = structuredClone(before.status);
+    resolved.status.decision.id.seq += 100;
+    resolved.status.decision.undo += 2;
+    resolved.stack = [];
+    resolved.events = [];
+    resolved.objects.find((o) => o.slot === oust).zone = "graveyard";
+    resolved.players.you.graveyard.push(oust);
+    const run = await motionFixture("undo-auto-target", [
+        before,
+        target,
+        resolved,
+    ]);
+    await check(
+        "undo does not repeat an automatic target",
+        async (page) => {
+            await page.clock.runFor(2000);
+            await page.click(slotOf(oust));
+            await settled(page, 2);
+            await page.clock.runFor(4000);
+            await page
+                .getByRole("button", { name: "Undo", exact: true })
+                .click();
+            await page.clock.runFor(3000);
+            assert.equal(
+                await page.locator(`${slotOf(oust)}[data-zone="hand"]`).count(),
+                1,
+            );
+            assert.equal(
+                (await chosen(page)).length,
+                2,
+                "undo does not automatically recast",
+            );
+        },
+        { ...run, at: 1, ready: slotOf(oust) },
+    );
+}
+
+if (wanted("bug report thaw never revives resolved arrows")) {
+    const before = structuredClone((await load("arrow-stacked")).at(-1));
+    before.stack = [before.stack[0]];
+    before.events = [];
+    const source = before.stack.at(-1).slot;
+    const after = structuredClone(before);
+    after.stack = [];
+    after.objects.find((o) => o.slot === source).zone = "graveyard";
+    after.players.you.graveyard.push(source);
+    after.events = [
+        {
+            kind: "zoneChange",
+            slot: source,
+            from: "stack",
+            to: "graveyard",
+            reason: "resolve",
+        },
+    ];
+    const run = await motionFixture("thaw-resolved-arrow", [before, after]);
+    await check(
+        "bug report thaw never revives resolved arrows",
+        async (page) => {
+            await page.clock.runFor(2000);
+            assert.equal(
+                await page
+                    .locator(`.arrow[data-from="card-${source}"]`)
+                    .count(),
+                1,
+            );
+            await page.evaluate(async () =>
+                (await import("/src/freeze.ts")).freeze(),
+            );
+            await page.clock.runFor(50);
+            await page
+                .getByRole("button", { name: "Resolve", exact: true })
+                .click();
+            await page.evaluate(async () =>
+                (await import("/src/freeze.ts")).thaw(),
+            );
+            await page.clock.runFor(5000);
+            assert.equal(
+                await page
+                    .locator(`${slotOf(source)}[data-zone="graveyard"]`)
+                    .count(),
+                1,
+            );
+            assert.equal(
+                await page
+                    .locator(`.arrow[data-from="card-${source}"]`)
+                    .count(),
+                0,
+            );
+        },
+        { ...run, ready: slotOf(source) },
+    );
+}
+
+if (wanted("tokens reach their destination before ceasing")) {
+    for (const to of ["hand", "library", "graveyard", "exile"]) {
+        for (const side of ["you", "opponent"]) {
+            const base = structuredClone((await load("arrow-spell")).at(-1));
+            const token = structuredClone(
+                (await load("tokens")).at(-1).objects.find((o) => o.token),
+            );
+            token.controller = side;
+            token.owner = side;
+            const before = {
+                ...base,
+                objects: [...base.objects, token],
+                battlefield: [...base.battlefield, token.slot],
+                events: [],
+            };
+            const after = {
+                ...base,
+                events: [
+                    {
+                        kind: "zoneChange",
+                        slot: token.slot,
+                        from: "battlefield",
+                        to,
+                        reason: "effect",
+                    },
+                ],
+            };
+            const run = await motionFixture(`token-destination-${side}-${to}`, [
+                before,
+                after,
+            ]);
+            await check(
+                `tokens reach their destination before ceasing: ${side} ${to}`,
+                async (page) => {
+                    await page.clock.runFor(2000);
+                    assert.equal(
+                        await page
+                            .locator(`${slotOf(token.slot)} .token-label`)
+                            .innerText(),
+                        "Token",
+                    );
+                    await page.evaluate(record);
+                    await page
+                        .getByRole("button", { name: "Resolve", exact: true })
+                        .click();
+                    await until(
+                        page,
+                        `${slotOf(token.slot)}[data-zone="${to}"]`,
+                        20,
+                    );
+                    await page.clock.runFor(650);
+                    assert.equal(
+                        await page
+                            .locator(`[data-ceasing-slot="${token.slot}"]`)
+                            .count(),
+                        0,
+                        "travel before dissolve",
+                    );
+                    await page.clock.runFor(1500);
+                    assert.equal(
+                        await page.locator(slotOf(token.slot)).count(),
+                        0,
+                    );
+                    const recording = await page.evaluate(collect, 0);
+                    assert.deepEqual(duplicatesIn(recording), []);
+                    const track = posesOf(recording, token.slot);
+                    assert.ok(
+                        track.some((p) => p.zone === to),
+                        "destination represented before disappearance",
+                    );
+                },
+                { ...run, ready: slotOf(token.slot) },
+            );
+        }
+    }
+}
+
+for (const next of ["player", "object", "attack"]) {
+    const title = `bug report thaw preserves later ${next} arrows`;
+    if (!wanted(title)) continue;
+    const before = structuredClone((await load("arrow-stacked")).at(-1));
+    before.stack = [before.stack[0]];
+    before.events = [];
+    const source = before.stack[0].slot;
+    const after = structuredClone(before);
+    after.stack = [];
+    after.events = [];
+    after.objects.find((o) => o.slot === source).zone = "graveyard";
+    after.events = [
+        {
+            kind: "zoneChange",
+            slot: source,
+            from: "stack",
+            to: "graveyard",
+            reason: "resolve",
+        },
+    ];
+    const later = structuredClone(
+        next === "attack"
+            ? pastWalker[attackAt]
+            : (
+                  await load(
+                      next === "player" ? "arrow-player" : "arrow-ability",
+                  )
+              ).at(-1),
+    );
+    later.events = [];
+    const run = await motionFixture(`thaw-later-${next}`, [
+        before,
+        after,
+        later,
+    ]);
+    await check(
+        title,
+        async (page) => {
+            await page.clock.runFor(2000);
+            await page.evaluate(async () =>
+                (await import("/src/freeze.ts")).freeze(),
+            );
+            await page.clock.runFor(50);
+            await page
+                .getByRole("button", { name: "Resolve", exact: true })
+                .click();
+            await page.evaluate(async () =>
+                (await import("/src/freeze.ts")).thaw(),
+            );
+            await page.clock.runFor(2000);
+            await page.keyboard.press("Space");
+            await page.clock.runFor(2000);
+            let from, to;
+            if (next === "attack") {
+                const slot = later.status.decision.candidates.find(
+                    (c) => c.option.kind === "attack",
+                ).option.slot;
+                const walker = later.objects.find(
+                    (o) =>
+                        o.zone === "battlefield" &&
+                        o.controller === "opponent" &&
+                        o.types.includes("planeswalker"),
+                ).slot;
+                await page.click(slotOf(slot));
+                await page.click(slotOf(walker));
+                await page.mouse.move(0, 0);
+                from = `card-${slot}`;
+                to = `card-${walker}`;
+            } else {
+                const target = later.stack[0].targets[0];
+                from = "stack-0";
+                to =
+                    target.kind === "player"
+                        ? `${target.player}-life-orb`
+                        : `card-${target.slot}`;
+            }
+            await page.clock.runFor(3000);
+            await until(
+                page,
+                `.arrow[data-from="${from}"][data-to="${to}"]`,
+                100,
+            );
+            assert.equal(
+                await page
+                    .locator(`.arrow[data-from="${from}"][data-to="${to}"]`)
+                    .count(),
+                1,
+            );
+        },
+        { ...run, ready: slotOf(source) },
+    );
+}
 
 await queue.drain();
 await browser.close();

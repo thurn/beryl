@@ -34,20 +34,33 @@ const thawed: (() => void)[] = [];
 const now = () => (frozenAt ?? realNow()) - skipped;
 
 performance.now = now;
+// Keep one public id across scheduling and freezing. An effect can cancel its frame
+// after the browser delivered it into the frozen queue; changing that id would revive
+// a disposed animation loop on thaw (including arrows from an old board).
+const scheduled = new Map<number, number>();
 window.requestAnimationFrame = (callback) => {
+  const id = nextId--;
   if (frozenAt !== undefined) {
-    const id = nextId--;
     waiting.set(id, callback);
     return id;
   }
-  // A frame asked for before the freeze that comes after it waits too.
-  return realFrame((t) => {
-    if (frozenAt === undefined) callback(t - skipped);
-    else waiting.set(nextId--, callback);
-  });
+  scheduled.set(
+    id,
+    realFrame((t) => {
+      scheduled.delete(id);
+      if (frozenAt === undefined) callback(t - skipped);
+      else waiting.set(id, callback);
+    }),
+  );
+  return id;
 };
 window.cancelAnimationFrame = (id) => {
-  if (!waiting.delete(id)) realCancel(id);
+  waiting.delete(id);
+  const handle = scheduled.get(id);
+  if (handle !== undefined) {
+    scheduled.delete(id);
+    realCancel(handle);
+  }
 };
 
 /** Pauses the page's running animations, but not the reporter's own. */
@@ -83,10 +96,14 @@ export function thaw() {
     if (a.playState === "paused") a.play();
   }
   paused.clear();
-  const callbacks = [...waiting.values()];
-  waiting.clear();
+  const callbacks = [...waiting.keys()];
   realFrame((t) => {
-    for (const callback of callbacks) callback(t - skipped);
+    if (frozenAt !== undefined) return;
+    for (const id of callbacks) {
+      const callback = waiting.get(id);
+      waiting.delete(id);
+      callback?.(t - skipped);
+    }
   });
   for (const run of thawed.splice(0)) run();
   for (const l of listeners) l();

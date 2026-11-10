@@ -488,13 +488,14 @@ function Playing({ playback }: { playback: Playback }) {
       if (intent?.waits && decision && decision.kind !== "priority") {
         planned.current = [intent, ...rest];
       } else {
-        // A target with no alternative is taken for the player, as Arena takes it.
+        // A target with no alternative is part of the preceding action. Undo must
+        // reach before that action rather than silently answering the target again.
         const lone =
-          canAutoPick.current && decision
+          canAutoPick.current && !view.undone && decision
             ? loneTarget(decision, view)
             : undefined;
         if (lone !== undefined) {
-          send(lone, []);
+          send(lone, [], true);
           return;
         }
       }

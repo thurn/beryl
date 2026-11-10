@@ -2370,8 +2370,8 @@ function tokenOrigins(
 }
 
 /** Combat links and stack arrows. Thin straight lines join blockers to attackers and
- * attackers to their chosen destinations. Stack targets are red for opposing cards and green
- * for yours. Abilities at the places `sourced` names draw a gold arrow from their source. */
+ * attackers to their chosen destinations. Stack targets are green for the controller
+ * and their objects, red for their opponent, consistently from either seat. Abilities at the places `sourced` names draw a gold arrow from their source. */
 function boardArrows(
   view: PlayerView,
   sourced: Set<number>,
@@ -2434,6 +2434,10 @@ function boardArrows(
   for (let i = top; i >= 0; i--) {
     const item = view.stack[i]!;
     const from = i === top ? itemId(item, i) : peekId(i);
+    const controller =
+      item.kind === "ability"
+        ? item.controller
+        : objects.get(item.slot)?.controller;
     if (item.kind === "spell" && objects.get(item.slot)?.zone !== "stack") {
       continue;
     }
@@ -2449,7 +2453,7 @@ function boardArrows(
         out.push({
           from,
           to: lifeId(target.player),
-          tone: target.player === "you" ? "green" : "red",
+          tone: target.player === controller ? "green" : "red",
         });
         continue;
       }
@@ -2477,7 +2481,7 @@ function boardArrows(
           index !== undefined && index < top
             ? peekId(index)
             : cardId(target.slot),
-        tone: object?.controller === "you" ? "green" : "red",
+        tone: object?.controller === controller ? "green" : "red",
         pulse: live
           ? {
               key: `${stackKey(i, item)}:${target.slot}`,

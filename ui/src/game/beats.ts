@@ -225,6 +225,22 @@ class Walk {
         // Show the announcement before its target moves, even while the spell stays.
         this.cut();
       }
+      if (
+        e.kind === "zoneChange" &&
+        e.from === "battlefield" &&
+        e.to !== "battlefield" &&
+        e.to !== "nowhere" &&
+        this.cur.objects.some((o) => o.slot === e.slot && o.token) &&
+        !this.final.has(e.slot)
+      ) {
+        // Tokens reach the destination before ceasing to exist (CR 704.5d).
+        // The final view omits them, so retain their physical card for the flight.
+        this.cut();
+        this.apply(e);
+        this.pending.push(e);
+        this.cut(HOLD.action);
+        continue;
+      }
       if (e.kind === "libraryShuffled") {
         this.cut();
         // A wheel can shuffle both libraries before dealing either of the new hands.
