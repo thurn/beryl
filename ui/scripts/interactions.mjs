@@ -7206,7 +7206,15 @@ if (wanted(manifestFlight)) {
 
 const triggerLift =
     "an ETB trigger visibly lifts away from the permanent before crossing";
-for (const controller of wanted(triggerLift) ? ["you", "opponent"] : []) {
+const triggerCases = [
+    ["you", "stop"],
+    ["opponent", "stop"],
+    ["you", "immediate"],
+    ["opponent", "immediate"],
+];
+for (const [controller, resolution] of wanted(triggerLift)
+    ? triggerCases
+    : []) {
     const board = (await load("arrow-stacked")).at(-1);
     const slot = board.stack[0].targets[0].slot;
     const source = {
@@ -7274,12 +7282,26 @@ for (const controller of wanted(triggerLift) ? ["you", "opponent"] : []) {
                       events: [{ kind: "ability", item, loyalty: null }],
                   },
               ];
+    const resolved = { ...view, stack: [], events: [] };
+    const updates =
+        resolution === "stop"
+            ? [...arrival, resolved]
+            : [
+                  {
+                      ...resolved,
+                      events: [
+                          ...after.events,
+                          { kind: "ability", item, loyalty: null },
+                          { kind: "abilityFinished" },
+                      ],
+                  },
+              ];
     const run = await motionFixture(
-        `trigger-lifts-from-permanent-${controller}`,
-        [before, ...arrival, { ...view, stack: [], events: [] }],
+        `trigger-lifts-from-permanent-${controller}-${resolution}`,
+        [before, ...updates],
     );
     await check(
-        `${triggerLift} (${controller})`,
+        `${triggerLift} (${controller}, ${resolution})`,
         async (page) => {
             // Motion plays the stack card on the browser's compositor clock.
             await page.evaluate((source) => {
@@ -7298,6 +7320,13 @@ for (const controller of wanted(triggerLift) ? ["you", "opponent"] : []) {
                             ability: trigger && bounds(trigger),
                             opacity: style && Number(style.opacity),
                             mask: style?.maskImage,
+                            copies: document.querySelectorAll(source).length,
+                            triggers:
+                                document.querySelectorAll(".stack-ability")
+                                    .length,
+                            arrows: document.querySelectorAll(
+                                ".board-arrows .arrow-gold",
+                            ).length,
                         });
                     }
                     if (performance.now() < end) requestAnimationFrame(sample);
@@ -7337,19 +7366,25 @@ for (const controller of wanted(triggerLift) ? ["you", "opponent"] : []) {
                     start.y + start.height <= from.y + from.height,
                 "trigger starts small inside the settled permanent",
             );
+            const lifted = frames.filter(
+                ({ permanent, ability, opacity }) =>
+                    opacity >= 0.85 &&
+                    ability.width > permanent.width &&
+                    Math.abs(center(ability).x - center(permanent).x) <
+                        permanent.width * 0.2 &&
+                    ability.y + ability.height <
+                        permanent.y + permanent.height * 0.72,
+            );
             assert.ok(
-                frames.some(
-                    ({ at: now, ability }) =>
-                        now - at <= 220 &&
-                        ability.y < start.y - 38 &&
-                        ability.width > start.width * 1.2 &&
-                        Math.abs(
-                            ability.x +
-                                ability.width / 2 -
-                                (start.x + start.width / 2),
-                        ) < 20,
+                lifted.length >= 3,
+                "the visible trigger lifts above its source, uncovering its lower portion before crossing",
+            );
+            assert.ok(
+                samples.every(
+                    ({ copies, triggers, arrows }) =>
+                        copies === 1 && triggers <= 1 && arrows === 0,
                 ),
-                "the ability lifts and grows immediately, before crossing",
+                "the lift has one permanent, one trigger and no arrows",
             );
             assert.ok(
                 frames.some(
@@ -7358,29 +7393,27 @@ for (const controller of wanted(triggerLift) ? ["you", "opponent"] : []) {
                 ),
                 "trigger grows into the large stack item",
             );
-            assert.equal(
-                await page.locator(".board-arrows .arrow-gold").count(),
-                0,
+            if (resolution === "stop") await page.keyboard.press("Space");
+            await page.waitForFunction(() =>
+                window.triggerFrames.some(
+                    ({ opacity, at }) =>
+                        at >
+                            window.triggerFrames.find(
+                                (frame) => frame.opacity === 1,
+                            )?.at &&
+                        opacity !== null &&
+                        opacity < 0.9,
+                ),
             );
-
-            const exitAt = await page.evaluate(() => performance.now());
-            await page.keyboard.press("Space");
-            await page.waitForFunction(
-                (exitAt) =>
-                    window.triggerFrames.some(
-                        ({ at, opacity }) =>
-                            at > exitAt && opacity !== null && opacity < 0.9,
-                    ),
-                exitAt,
-            );
-            const exit = await page.evaluate(
-                (exitAt) =>
-                    window.triggerFrames.filter(
-                        ({ at, opacity }) =>
-                            at > exitAt && opacity !== null && opacity < 0.9,
-                    ),
-                exitAt,
-            );
+            const exit = await page.evaluate(() => {
+                const full = window.triggerFrames.find(
+                    (frame) => frame.opacity === 1,
+                );
+                return window.triggerFrames.filter(
+                    ({ at, opacity }) =>
+                        at > full.at && opacity !== null && opacity < 0.9,
+                );
+            });
             assert.ok(
                 exit.every(({ mask }) => mask === "none"),
                 "a plain fade",

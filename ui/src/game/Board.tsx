@@ -2459,7 +2459,7 @@ function abilityLift(from: Placement, triggered: boolean) {
     },
     lift: {
       x: centerX - liftWidth / 2,
-      y: centerY - liftWidth / CARD_ASPECT / 2 - 38,
+      y: centerY - liftWidth / CARD_ASPECT / 2 - (bottom - top) * 0.7,
       width: liftWidth,
     },
   };
@@ -2485,10 +2485,18 @@ const SOURCE_FLIGHT = {
   scale: SOURCE_LEG,
 };
 
-/** Reveal the trigger as it lifts, without a visible static frame over its source. */
+// Give the visible lift its own leg before the trigger crosses the board.
+const TRIGGER_LEG = {
+  ...SOURCE_LEG,
+  duration: 0.74,
+  times: [0, 0.29, 1],
+} as const;
 const TRIGGER_FLIGHT = {
-  ...SOURCE_FLIGHT,
-  opacity: { duration: 0.1, ease: "linear" },
+  ...ABILITY_FLIGHT,
+  x: TRIGGER_LEG,
+  y: TRIGGER_LEG,
+  scale: TRIGGER_LEG,
+  opacity: { duration: 0.055, ease: "linear" },
 } as const;
 
 /** A stack item's identity during its flight and exit. Targets can change while it is there. */
