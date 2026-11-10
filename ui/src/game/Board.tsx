@@ -2667,6 +2667,7 @@ function boardArrows(
     if (
       combat?.kind !== "attacking" ||
       combat.blocked ||
+      combat.targetDeparted ||
       (combat.planeswalker === null &&
         !walkerControllers.has(o.controller === "you" ? "opponent" : "you"))
     ) {

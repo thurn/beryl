@@ -268,7 +268,7 @@ export type PowerToughness = { power: number, toughness: number, };
 
 export type CounterView = { kind: Counter, count: number, };
 
-export type Combat = { "kind": "attacking", planeswalker: number | null, blocked: boolean, } | { "kind": "blocking", attacker: number | null, };
+export type Combat = { "kind": "attacking", planeswalker: number | null, targetDeparted?: boolean, blocked: boolean, } | { "kind": "blocking", attacker: number | null, };
 
 export type StackItem = { "kind": "spell", slot: number, targets: Array<TargetRef>, 
 /**

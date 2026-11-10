@@ -1167,7 +1167,7 @@ function permanentRow(
   const center = (p: Placement) => p.x + (p.span * p.scale) / 2;
   const destination = ([o]: ObjectView[]) => {
     const combat = o?.combat;
-    if (combat?.kind !== "attacking") return undefined;
+    if (combat?.kind !== "attacking" || combat.targetDeparted) return undefined;
     const target =
       combat.planeswalker === null
         ? undefined

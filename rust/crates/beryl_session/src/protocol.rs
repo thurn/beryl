@@ -244,10 +244,13 @@ pub struct CounterView {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Combat {
-    /// Attacking a player, or the planeswalker in `planeswalker`.
+    /// Attacking a player or the named planeswalker, or still in combat after the target left.
     #[serde(rename_all = "camelCase")]
     Attacking {
         planeswalker: Option<u16>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        target_departed: Option<bool>,
         blocked: bool,
     },
     /// Blocking the attacker in `attacker`, if it is still in combat.
@@ -1353,12 +1356,11 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
             None
         },
         combat: if flags.has(ObjectFlags::ATTACKING) {
+            let attacks_walker = flags.has(ObjectFlags::ATTACKS_PLANESWALKER);
+            let planeswalker = if attacks_walker { some(o.combat) } else { None };
             Some(Combat::Attacking {
-                planeswalker: if flags.has(ObjectFlags::ATTACKS_PLANESWALKER) {
-                    some(o.combat)
-                } else {
-                    None
-                },
+                planeswalker,
+                target_departed: (attacks_walker && planeswalker.is_none()).then_some(true),
                 blocked: flags.has(ObjectFlags::BLOCKED),
             })
         } else if flags.has(ObjectFlags::BLOCKING) {

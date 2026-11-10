@@ -10373,6 +10373,135 @@ if (wanted(ordering)) {
     );
 }
 
+const departingWalker =
+    "attacks lose only the link to a departing planeswalker";
+if (wanted(departingWalker)) {
+    for (const attackingSide of ["you", "opponent"]) {
+        const before = structuredClone(tokenAim.views.at(-1));
+        const attacker = before.objects.find((o) => o.slot === human);
+        const walker = before.objects.find((o) => o.slot === emperor);
+        if (attackingSide === "opponent") {
+            for (const o of before.objects) {
+                o.controller = o.controller === "you" ? "opponent" : "you";
+                o.owner = o.owner === "you" ? "opponent" : "you";
+            }
+            [before.players.you, before.players.opponent] = [
+                before.players.opponent,
+                before.players.you,
+            ];
+        }
+        const extraSlot = Math.max(...before.objects.map((o) => o.slot)) + 1;
+        const otherWalker = { ...walker, slot: extraSlot };
+        attacker.combat = {
+            kind: "attacking",
+            planeswalker: emperor,
+            blocked: false,
+        };
+        const atPlayer = {
+            ...attacker,
+            slot: extraSlot + 1,
+            combat: { ...attacker.combat, planeswalker: null },
+        };
+        const atOtherWalker = {
+            ...attacker,
+            slot: extraSlot + 2,
+            combat: { ...attacker.combat, planeswalker: otherWalker.slot },
+        };
+        before.objects.push(otherWalker, atPlayer, atOtherWalker);
+        before.battlefield.push(
+            otherWalker.slot,
+            atPlayer.slot,
+            atOtherWalker.slot,
+        );
+        before.pendingAttackers = undefined;
+        before.events = [];
+        before.turn.active = attackingSide;
+        before.turn.step = "combatDamage";
+        before.status.decision.ask = { kind: "plain" };
+        before.status.decision.kind = "priority";
+        before.status.decision.candidates = [
+            {
+                ...before.status.decision.candidates[0],
+                option: { kind: "pass" },
+            },
+        ];
+        const after = structuredClone(before);
+        after.turn.step = "endOfCombat";
+        after.status = { kind: "playing" };
+        after.battlefield = after.battlefield.filter(
+            (slot) => slot !== emperor,
+        );
+        after.objects.find((o) => o.slot === emperor).zone = "graveyard";
+        after.players[walker.owner].graveyard.push(emperor);
+        after.objects.find((o) => o.slot === human).combat = {
+            ...attacker.combat,
+            planeswalker: null,
+            targetDeparted: true,
+        };
+        after.events = [
+            {
+                kind: "zoneChange",
+                slot: emperor,
+                from: "battlefield",
+                to: "graveyard",
+                reason: "stateBased",
+            },
+            { kind: "stepBegins", step: "endOfCombat", active: attackingSide },
+        ];
+        const run = await motionFixture(`departing-walker-${attackingSide}`, [
+            before,
+            after,
+        ]);
+        await check(
+            `${departingWalker} from the ${attackingSide} seat`,
+            async (page) => {
+                const target = (slot) =>
+                    page.locator(combatLink(slot)).getAttribute("data-to");
+                await page.clock.runFor(800);
+                assert.equal(await target(human), `card-${emperor}`);
+                await page.keyboard.press("Space");
+                const departing = page.locator(combatLink(human));
+                const walkerCard = page.locator(slotOf(emperor));
+                for (let i = 0; i < 55; i++) {
+                    await page.clock.runFor(16);
+                    if (
+                        (await walkerCard.getAttribute("data-zone")) ===
+                        "graveyard"
+                    ) {
+                        assert.equal(
+                            await departing.count(),
+                            0,
+                            "no link during the graveyard flight",
+                        );
+                    } else if (await departing.count()) {
+                        assert.equal(
+                            await target(human),
+                            `card-${emperor}`,
+                            "never retarget to the player",
+                        );
+                    }
+                    assert.equal(
+                        await target(atPlayer.slot),
+                        `${walker.controller}-life-orb`,
+                    );
+                    assert.equal(
+                        await target(atOtherWalker.slot),
+                        `card-${otherWalker.slot}`,
+                    );
+                }
+                assert.equal(await page.locator(combatLink(human)).count(), 0);
+                assert.equal(
+                    await page
+                        .locator(slotOf(emperor))
+                        .getAttribute("data-zone"),
+                    "graveyard",
+                );
+            },
+            { ...run, ready: combatLink(human) },
+        );
+    }
+}
+
 const observerLink =
     "the defending seat draws only the resolved token attack destination";
 if (wanted(observerLink)) {

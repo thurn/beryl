@@ -75,7 +75,8 @@ export function incoming(view: PlayerView, side: Side): number | undefined {
   const pending = pendingAttackers(view);
   for (const o of view.objects) {
     const c = o.combat;
-    if (c?.kind !== "attacking" || c.planeswalker !== null) continue;
+    if (c?.kind !== "attacking" || c.targetDeparted || c.planeswalker !== null)
+      continue;
     if (pending.includes(o.slot)) continue;
     if (o.controller === side) continue;
     total = (total ?? 0) + (c.blocked ? 0 : Math.max(0, o.pt?.power ?? 0));

@@ -90,6 +90,63 @@ const STAFF: &str = names::STAFF_OF_THE_STORYTELLER;
 const JACE: &str = names::JACE_VRYNS_PRODIGY;
 
 pub const SCENARIOS: &[Scenario] = &[
+    // [CR 506.4](https://yawgatog.com/resources/magic-rules/#R5064): "A planeswalker or battle
+    // that’s removed from combat stops being attacked."
+    Scenario::new("combat damage removes Teferi while other attacks remain")
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(names::BEZA_THE_BOUNDING_SPRING),
+                Permanent::new(names::SNAPCASTER_MAGE),
+                Permanent::new(names::SUBTLETY),
+            ],
+        )
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(TEFERI),
+                Permanent::new(names::JACE_THE_MIND_SCULPTOR),
+            ],
+        )
+        .library(P0, &[names::ISLAND])
+        .library(P1, &[names::PLAINS])
+        .actions(&[
+            Action::AdvanceTo {
+                turn: 1,
+                step: TurnStep::BeginningOfCombat,
+            },
+            Action::pass(P0),
+            Action::choose(P0, DecisionKind::Attacker, names::BEZA_THE_BOUNDING_SPRING),
+            Action::choose(P0, DecisionKind::AttackTarget, TEFERI),
+            Action::choose(P0, DecisionKind::Attacker, names::SNAPCASTER_MAGE),
+            Action::choose(
+                P0,
+                DecisionKind::AttackTarget,
+                names::JACE_THE_MIND_SCULPTOR,
+            ),
+            Action::choose(P0, DecisionKind::Attacker, names::SUBTLETY),
+            Action::answer(P0, DecisionKind::AttackTarget, Pick::DefendingPlayer),
+            Action::AdvanceTo {
+                turn: 1,
+                step: TurnStep::EndOfCombat,
+            },
+            Action::assert(Assertion::Count {
+                player: P1,
+                zone: Zone::Graveyard,
+                card: Some(TEFERI),
+                count: 1,
+            }),
+            Action::assert(Assertion::Counters {
+                player: P1,
+                card: names::JACE_THE_MIND_SCULPTOR,
+                kind: beryl_engine::state::CounterKind::Loyalty,
+                count: 1,
+            }),
+            Action::assert(Assertion::Life {
+                player: P1,
+                life: 17,
+            }),
+        ]),
     // CR 101.2 and 307.1: a flash spell in an opponent's hand waits for their own main phase
     // with an empty stack.
     Scenario::new("an opponent's flash spell waits for sorcery timing")
