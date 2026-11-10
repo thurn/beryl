@@ -9046,6 +9046,22 @@ if (wanted(stackLinks)) {
                         link.classList.contains("arrow-red"),
                     ),
                 );
+                const [shaftWidth, headHeight] = await links.evaluate(
+                    (link) => {
+                        const shaft = link.querySelector(".arrow-line path");
+                        const head = link.querySelector(
+                            ".arrow-line .arrow-head",
+                        );
+                        return [
+                            Number.parseFloat(
+                                getComputedStyle(shaft).strokeWidth,
+                            ),
+                            head.getBBox().height,
+                        ];
+                    },
+                );
+                assert.ok(shaftWidth <= 4, `shaft width: ${shaftWidth}px`);
+                assert.ok(headHeight <= 14, `head height: ${headHeight}px`);
                 const edges = await page.evaluate(
                     ({ cryptSlot, titheSlot, counterSlot }) => {
                         const crypt = document

@@ -424,11 +424,6 @@ export function Arrows({
       style={{ "--arrow-scale": scale } as CSSProperties}
       aria-hidden
     >
-      <defs>
-        <filter id="arrow-blur" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="3.5" />
-        </filter>
-      </defs>
       {drawn.map((a) => {
         if (a.direct) {
           return (
@@ -464,16 +459,10 @@ export function Arrows({
             data-from={a.from}
             data-to={a.to}
           >
-            {(["glow", "line", "core"] as const).map((layer) => (
-              <g key={layer} className={`arrow-${layer}`}>
-                <path d={a.d} />
-                <path
-                  className="arrow-head"
-                  d={layer === "core" ? HEAD_CORE : HEAD}
-                  transform={head}
-                />
-              </g>
-            ))}
+            <g className="arrow-line">
+              <path d={a.d} />
+              <path className="arrow-head" d={HEAD} transform={head} />
+            </g>
           </g>
         );
       })}
@@ -483,16 +472,9 @@ export function Arrows({
 
 /** How long both ends of a followed arrow stand still before it shows, in ms. */
 const REST_MS = 90;
-/** A settled target link gets one brief moment of emphasis. */
-
-/** The arrowhead, its tip at the origin, pointing along +x: a solid barbed head, three and a
- * half tubes wide, whose base the shaft runs into. */
-const HEAD = "M-25 -15 L0 0 L-25 15 L-19 0 Z";
-/** The head's core, the shaft's core carried on to near the tip: one tone, as the tube's. */
-const HEAD_CORE = "M-22 -11 L-5 0 L-22 11 L-17 0 Z";
-/** How far short of the tip the shaft stops: inside the head, past its notch, so its round cap
- * is hidden in the head and the two read as one piece. */
-const SHAFT_SHORT = 15;
+/** The tip sits at the target's edge. The shaft ends inside the filled head. */
+const HEAD = "M-14 -6 L0 0 L-14 6 Z";
+const SHAFT_SHORT = 10;
 
 /** An arrow's shaft: its cubic `p` stopped `SHAFT_SHORT` short of the tip along its heading
  * `angle` (degrees), both end and last control point, so it arrives square in the head. */

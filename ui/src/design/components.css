@@ -967,75 +967,40 @@
     opacity: 0;
   }
 }
-/* One look for every arrow: a tube, thin bright edges round a deeper core, in a bloom. Only the
-   tone differs. */
+/* Color distinguishes relationships. A small shadow keeps each link legible over card art. */
 .arrow {
   animation: arrow-in 160ms ease-out;
-  --weight: 9px;
-  --core: 0.55;
-  --glow: 0.9;
-  --glow-width: 1.9;
+  filter: drop-shadow(0 1px 1px rgb(22 13 12 / 75%));
 }
 .arrow.combat-link {
   animation: none;
+  filter: none;
 }
 .combat-link .arrow-line path {
   stroke: rgb(242 211 152 / 65%);
-  stroke-width: 2;
+  stroke-width: 1.5;
 }
 .arrow-gold {
   --tone: #ffd27a;
-  --tone-soft: rgb(255 120 10 / 90%);
-  --tone-core: #ff9a1f;
 }
 .arrow-cyan {
-  --tone: #c9fbff;
-  --tone-soft: rgb(2 225 254 / 90%);
-  --tone-core: #0fc4f2;
+  --tone: #a8edf8;
 }
 .arrow-green {
-  --tone: #d2ffd4;
-  --tone-soft: rgb(50 230 90 / 90%);
-  --tone-core: #38da62;
+  --tone: #a5eeb2;
 }
 .arrow-red {
-  --tone: #ffc9bd;
-  --tone-soft: rgb(255 50 30 / 90%);
-  --tone-core: #f0402a;
+  --tone: #ffa397;
 }
-.arrow path {
+.arrow-line path {
   fill: none;
+  stroke: var(--tone);
+  stroke-width: calc(3.5px * var(--arrow-scale));
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.arrow-glow {
-  filter: url(#arrow-blur);
-}
-.arrow-glow path {
-  stroke: var(--tone-soft);
-  stroke-width: calc(var(--weight) * var(--arrow-scale) * var(--glow-width));
-  opacity: var(--glow);
-}
-.arrow-line path {
-  stroke: var(--tone);
-  stroke-width: calc(var(--weight) * var(--arrow-scale));
-}
-.arrow-core path {
-  stroke: var(--tone-core);
-  stroke-width: calc(var(--weight) * var(--arrow-scale) * var(--core));
-}
-/* The head takes each layer's tone as a fill, with a thin stroke of it rounding its corners. */
-.arrow .arrow-head {
-  stroke-width: calc(2px * var(--arrow-scale));
-}
-.arrow-glow .arrow-head {
-  fill: var(--tone-soft);
-}
 .arrow-line .arrow-head {
   fill: var(--tone);
-}
-.arrow-core .arrow-head {
-  fill: var(--tone-core);
   stroke: none;
 }
 
