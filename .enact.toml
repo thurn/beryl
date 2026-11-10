@@ -18,10 +18,7 @@ remove = 'f="$ENACT_WORKTREE_PATH/tools/src/beryl_tools/warm.py"; [ -f "$f" ] ||
 # Beads labeled tier:light (mechanical work) run on a cheaper model.
 [tiers.light.claude]
 model = "sonnet"
-
-# Beads labeled tier:opus run on Opus whatever the app's default model is.
-[tiers.opus.claude]
-model = "opus"
+# tier:opus and tier:sonnet are built into Enact and need no entry here.
 
 # Codex Enact sessions default to Sol High for every spawned role.
 [roles.executor.codex]
