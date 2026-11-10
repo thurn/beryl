@@ -59,6 +59,12 @@ const OCULUS: &str = names::ABHORRENT_OCULUS;
 const SNAPCASTER: &str = names::SNAPCASTER_MAGE;
 
 const ISLANDS: &[Permanent] = &[Permanent::new(names::ISLAND); 3];
+// Flash gives the controller a live stop on the opponent's turn, before the next draw.
+const OCULUS_WITH_FLASH_MANA: &[Permanent] = &[
+    Permanent::new(OCULUS),
+    Permanent::new(names::ISLAND),
+    Permanent::new(names::ISLAND),
+];
 
 /// Six graveyard cards and a seventh at the bottom, top first.
 const SEVEN: &[&str] = &[
@@ -190,17 +196,8 @@ pub const SCENARIOS: &[Scenario] = &[
     // CR 701.62a: with one card to look at, that one is manifested, unasked.
     Scenario::new("Manifest dread with one card in the library manifests it")
         .at(1, P0, TurnStep::PostcombatMain)
-        // A playable instant-speed action lets the Playground pause on the
-        // result during the opponent's turn, before the next empty draw.
-        .battlefield(
-            P0,
-            &[
-                Permanent::new(OCULUS),
-                Permanent::new(names::ISLAND),
-                Permanent::new(names::ISLAND),
-            ],
-        )
-        .hand(P0, &[names::SNAPCASTER_MAGE])
+        .battlefield(P0, OCULUS_WITH_FLASH_MANA)
+        .hand(P0, &[SNAPCASTER])
         .library(P0, &[names::ISLAND])
         .library(P1, &[names::PLAINS])
         .actions(&[
@@ -214,18 +211,27 @@ pub const SCENARIOS: &[Scenario] = &[
                 count: 0,
             }),
         ]),
+    // CR 701.62a: with no cards to look at, the trigger resolves without manifesting.
     Scenario::new("Manifest dread with an empty library does nothing")
         .at(1, P0, TurnStep::PostcombatMain)
-        .battlefield(P0, &[Permanent::new(OCULUS)])
+        .battlefield(P0, OCULUS_WITH_FLASH_MANA)
+        .hand(P0, &[SNAPCASTER])
         .library(P1, &[names::PLAINS])
         .actions(&[
             TO_THEIR_UPKEEP,
+            Action::assert(Assertion::Stack { count: 1 }),
             Action::Resolve,
+            Action::assert(Assertion::Count {
+                player: P0,
+                zone: Zone::Library,
+                card: None,
+                count: 0,
+            }),
             Action::assert(Assertion::Count {
                 player: P0,
                 zone: Zone::Battlefield,
                 card: None,
-                count: 1,
+                count: 3,
             }),
             Action::assert(Assertion::Stack { count: 0 }),
         ]),

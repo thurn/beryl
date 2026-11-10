@@ -651,6 +651,17 @@ mod tests {
     }
 
     #[test]
+    fn empty_library_manifest_example_has_no_filler() {
+        let variant = find(
+            "abhorrent-oculus",
+            "playground-manifest-dread-with-an-empty-library-does-nothing-0",
+        )
+        .expect("the empty-library variant");
+        let (_, state) = prepare(variant).unwrap();
+        assert!(state.library(variant.controller.seat()).is_empty());
+    }
+
+    #[test]
     fn one_card_manifest_example_has_no_filler_to_choose_or_mill() {
         let generated = Box::leak(Box::new(generate("Abhorrent Oculus")));
         let variant = generated
