@@ -287,6 +287,11 @@
       "where": ["8 nonland permanents a side", "spell on the stack"]
     },
     {
+      "name": "piles-crowded",
+      "board": "piles-crowded",
+      "until": "first priority decision for seat 0"
+    },
+    {
       "name": "signals",
       "board": "signals",
       "until": "first priority decision for seat 0",

@@ -246,6 +246,7 @@ INTERACTION_FIXTURES = [
     "namesake-target",
     "pay-life",
     "crowded",
+    "piles-crowded",
     "target-up-to-one",
     "target-own",
     "attack-past-walker",

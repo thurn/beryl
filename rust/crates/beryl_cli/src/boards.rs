@@ -994,6 +994,74 @@ pub const BOARDS: &[Scenario] = &[
         .hand(P1, &[STOCK_UP])
         .library(P1, LANDS)
         .actions(&[Action::cast(P1, STOCK_UP)]),
+    // Six other permanents a side, a back row reaching past the opponent's piles in the far
+    // corner, and thick libraries, graveyards and exiles on both sides: the piles lie clear of
+    // every permanent (by-lomm).
+    Scenario::new("piles-crowded")
+        .at(5, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Permanent::new(SNAPCASTER_MAGE),
+                Permanent::new(STAFF_OF_THE_STORYTELLER),
+                Permanent::new(CURRENCY_CONVERTER),
+                Permanent::new(JACE_THE_MIND_SCULPTOR),
+                Permanent::new(THE_WANDERING_EMPEROR),
+                Permanent::new(TEFERI_HERO_OF_DOMINARIA),
+                Permanent::new(TEFERI_TIME_RAVELER),
+                ISLAND_,
+                ISLAND_,
+                PLAINS_,
+                Permanent::new(TUNDRA),
+                Permanent::new(SEACHROME_COAST),
+            ],
+        )
+        .hand(P0, &[COUNTERSPELL, OUST])
+        .graveyard(
+            P0,
+            &[
+                MANA_DRAIN,
+                STOCK_UP,
+                DAMN,
+                REPRIEVE,
+                THIRST_FOR_DISCOVERY,
+                NO_MORE_LIES,
+            ],
+        )
+        .exile(
+            P0,
+            &[TIME_SPIRAL, SUBTLETY, MALCOLM_ALLURING_SCOUNDREL, GET_LOST],
+        )
+        .library(P0, &[ISLAND; 30])
+        .battlefield(
+            P1,
+            &[
+                Permanent::new(TRINKET_MAGE),
+                Permanent::new(STAFF_OF_THE_STORYTELLER),
+                Permanent::new(CURRENCY_CONVERTER),
+                Permanent::new(JACE_THE_MIND_SCULPTOR),
+                Permanent::new(THE_WANDERING_EMPEROR),
+                Permanent::new(TEFERI_HERO_OF_DOMINARIA),
+                Permanent::new(TEFERI_TIME_RAVELER),
+                ISLAND_,
+                ISLAND_,
+                PLAINS_,
+                Permanent::new(TUNDRA),
+            ],
+        )
+        .graveyard(
+            P1,
+            &[
+                SWIFT_RECONFIGURATION,
+                STOCK_UP,
+                DAMN,
+                COUNTERSPELL,
+                FRACTURED_IDENTITY,
+                REPRIEVE,
+            ],
+        )
+        .exile(P1, &[SNAPCASTER_MAGE, OUST, TIME_SPIRAL, WINDS_OF_ABANDON])
+        .library(P1, &[PLAINS; 30]),
     // Four planeswalkers and an emblem a side, and a Portable Hole a side holding the other's
     // Snapcaster Mage, beside a full hand for the opponent: the human's Teferi, Hero of
     // Dominaria −8 and Hole in their turn, then the opponent's Jace, Telepath Unbound −9 and

@@ -215,8 +215,8 @@ const ROWS: Record<
 > = {
   // Just under the opponent's hand; their other permanents clear of the step banner
   // (screens.css .step-banner, 602 to 1002 across), whose detail text would lie over them, and
-  // under their piles' top cards in the far corner, nearer than the piles and so over their
-  // edges. As wide as keeps a planeswalker's loyalty readable at that depth.
+  // under their piles in the far corner, which end above it (`PILE_BASE`). As wide as keeps a
+  // planeswalker's loyalty readable at that depth.
   opponent: {
     back: 112,
     lands: 158,
@@ -299,13 +299,15 @@ export function overLog(placements: Layout): boolean {
  * mirror each other through the table's middle: yours lie in the near left corner, under your
  * badge and left of the hand's widest fan. The library is outermost, then the graveyard and
  * exile toward the middle. The opponent's lie in the far right corner, their library outermost,
- * then their graveyard and exile toward the middle, left of the gear. Their top cards end above
- * the opponent's back row (`ROWS`), whose permanents lie over the edges of a thick pile. Leave room
- * between piles for both the sideways rise of a thick pile and the lean at ultrawide widths. */
+ * then their graveyard and exile toward the middle, left of the gear. Their back row's other
+ * permanents reach under the corner, so the piles claim the band above that row: each top card
+ * ends `PILE_CLEARANCE` above it (`PILE_BASE`), and a full library's layers rise to the stage's
+ * top edge. Leave room between piles for both the sideways rise of a thick pile and the lean at
+ * ultrawide widths. */
 export const PILES = {
   // In the far right corner, held to the stage's right edge.
   opponent: {
-    width: 88,
+    width: 82,
     get library() {
       return { x: fromRight(1432), y: 8 };
     },
@@ -324,8 +326,20 @@ export const PILES = {
   },
 };
 
-/** Each top layer is readable. Lower layers close up to keep a full library in its corner. */
-const PILE_BASE = { you: 13, opponent: 28 };
+/** How far above the opponent's back row their piles' top cards end: no layer of a pile ever
+ * lies over a permanent (by-lomm). */
+const PILE_CLEARANCE = 4;
+/** How far each pile's top card lies below its anchor (`PILES`). Each top layer is readable.
+ * Lower layers close up to keep a full library in its corner. The opponent's top cards end
+ * `PILE_CLEARANCE` above their back row (`ROWS`). */
+const PILE_BASE = {
+  you: 13,
+  opponent:
+    ROWS.opponent.back -
+    PILE_CLEARANCE -
+    PILES.opponent.library.y -
+    (PILES.opponent.width * depthScale(PILES.opponent.library.y)) / CARD_ASPECT,
+};
 function pileThickness(depth: number) {
   return 1.25 * Math.min(depth, 12) + (13 * depth) / (depth + 45);
 }

@@ -3815,6 +3815,80 @@ for (const viewport of [
     );
 }
 
+// Six other permanents a side, the opponent's back row reaching under their piles' corner, and
+// thick piles on both sides (by-lomm): no layer of any library, graveyard or exile pile lies
+// over a permanent, at the reported window and at narrower and wider ones. Cards lean by
+// skewing sideways only, so their boxes' heights are their own.
+const pilesCrowded = await load("piles-crowded");
+for (const viewport of [
+    { width: 1728, height: 963 },
+    { width: 1600, height: 900 },
+    { width: 1280, height: 800 },
+    { width: 2134, height: 900 },
+]) {
+    await check(
+        `the piles lie clear of every permanent at ${viewport.width}×${viewport.height}`,
+        async (page) => {
+            await page.clock.runFor(2000);
+            const { piles, field } = await page.evaluate(() => {
+                const boxes = (selector) =>
+                    [...document.querySelectorAll(selector)]
+                        .filter((e) => {
+                            const s = getComputedStyle(e);
+                            return (
+                                s.visibility !== "hidden" &&
+                                Number(s.opacity) > 0
+                            );
+                        })
+                        .map((e) => {
+                            const r = e.getBoundingClientRect();
+                            return {
+                                name: `${e.dataset.card ?? "a back"} (${e.dataset.zone})`,
+                                x: r.x,
+                                y: r.y,
+                                right: r.right,
+                                bottom: r.bottom,
+                            };
+                        });
+                return {
+                    piles: boxes(
+                        ".card-layer > .card-el:is([data-zone=library], [data-zone=graveyard], [data-zone=exile])",
+                    ),
+                    field: boxes(
+                        ".card-layer > .card-el[data-zone=battlefield]",
+                    ),
+                };
+            });
+            for (const zone of ["library", "graveyard", "exile"]) {
+                assert.ok(
+                    piles.filter((p) => p.name.endsWith(`(${zone})`)).length >=
+                        6,
+                    `both ${zone} piles are thick`,
+                );
+            }
+            assert.ok(field.length >= 20, "both sides' permanents are drawn");
+            for (const p of piles) {
+                for (const b of field) {
+                    const across =
+                        Math.min(p.right, b.right) - Math.max(p.x, b.x);
+                    const down =
+                        Math.min(p.bottom, b.bottom) - Math.max(p.y, b.y);
+                    assert.ok(
+                        across <= 0.5 || down <= 0.5,
+                        `${p.name} covers ${b.name} by ${across.toFixed(1)} × ${down.toFixed(1)} px`,
+                    );
+                }
+            }
+        },
+        {
+            fixture: "piles-crowded",
+            at: pilesCrowded.length,
+            ready: "[data-pile=exile][data-side=opponent]",
+            viewport,
+        },
+    );
+}
+
 /** The names of the cards a pile in the piles' view holds. */
 function pileNames(side, zone) {
     const slots =
