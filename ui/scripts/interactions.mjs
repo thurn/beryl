@@ -4613,6 +4613,140 @@ async function motionFixture(name, views) {
     return { fixture: name, at: 1 };
 }
 
+const privateHandling =
+    "an opponent's private library look lifts and returns the original backs";
+if (wanted(privateHandling)) {
+    const before = { ...turnViews[mainHalt], events: [] };
+    const library = before.players.opponent.library;
+    const held = library.slice(-5);
+    const looking = {
+        ...before,
+        status: { kind: "thinking" },
+        handling: { zone: "library", side: "opponent", count: held.length },
+    };
+    const finished = {
+        ...before,
+        players: {
+            ...before.players,
+            opponent: {
+                ...before.players.opponent,
+                library: [...held.slice().reverse(), ...library.slice(0, -5)],
+            },
+        },
+    };
+    const run = await motionFixture("opponent-private-look", [
+        before,
+        looking,
+        finished,
+    ]);
+    for (const reducedMotion of ["no-preference", "reduce"]) {
+        await check(
+            `${privateHandling} (${reducedMotion})`,
+            async (page) => {
+                const group = page.locator(".card-layer .card-el-handling");
+                const cards = held.map((slot) =>
+                    page.locator(`.card-layer ${slotOf(slot)}`),
+                );
+                const top = cards.at(-1);
+                await page.clock.runFor(800);
+                const from = await where(top);
+                const bottom = await where(
+                    page.locator(`.card-layer ${slotOf(library[0])}`),
+                );
+                for (const card of cards)
+                    await card.evaluate((e) => (e.dataset.original = "true"));
+
+                await page.locator(".turn-action button").first().click();
+                await until(page, ".card-el-handling", 16);
+                await page.clock.runFor(300);
+                const rising = await where(top);
+                await page.clock.runFor(440);
+                const raised = await where(top);
+                assert.deepEqual(
+                    await group.evaluateAll((els) =>
+                        els
+                            .map((e) => Number(e.dataset.slot))
+                            .sort((a, b) => a - b),
+                    ),
+                    held.slice().sort((a, b) => a - b),
+                );
+                assert.equal(
+                    await page.locator(".card-el-handling[data-card]").count(),
+                    0,
+                );
+                assert.equal(
+                    await group.locator(".card-back").count(),
+                    held.length,
+                );
+                assert.ok(
+                    Math.hypot(raised[0] - from[0], raised[1] - from[1]) > 100,
+                );
+                if (reducedMotion === "reduce") {
+                    assertNear(
+                        rising,
+                        raised,
+                        "the reduced-motion lift is immediate",
+                    );
+                } else {
+                    assert.notDeepEqual(
+                        rising,
+                        raised,
+                        "the lift has an intermediate pose",
+                    );
+                    assert.notDeepEqual(
+                        rising,
+                        from,
+                        "the cards leave the pile during the lift",
+                    );
+                }
+
+                await until(page, ".turn-action button:not([disabled])", 16);
+                await page.clock.runFor(240);
+                const returning = await where(top);
+                await page.clock.runFor(800);
+                const returned = await where(top);
+                assert.equal(await group.count(), 0);
+                for (const card of cards) {
+                    assert.equal(await card.count(), 1);
+                    assert.equal(
+                        await card.getAttribute("data-original"),
+                        "true",
+                    );
+                }
+                if (reducedMotion === "reduce")
+                    assertNear(
+                        returning,
+                        returned,
+                        "the reduced-motion return is immediate",
+                    );
+                else {
+                    assert.notDeepEqual(
+                        returning,
+                        raised,
+                        "the backs have started to return",
+                    );
+                    assert.notDeepEqual(
+                        returning,
+                        returned,
+                        "the return has an intermediate pose",
+                    );
+                }
+                assertNear(
+                    bottom,
+                    returned,
+                    "the reordered card returns to the bottom of the pile",
+                );
+            },
+            {
+                ...run,
+                ready: ".turn-action button",
+                viewport: { width: 1180, height: 820 },
+                reducedMotion,
+            },
+        );
+    }
+}
+
 const targetDeparture =
     "a resolving spell's arrow stays until its target leaves";
 if (wanted(targetDeparture)) {

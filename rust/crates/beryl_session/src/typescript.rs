@@ -11,11 +11,12 @@ use crate::ipc::{
 };
 use crate::journal::Level;
 use crate::protocol::{
-    AbilityClass, AbilityRef, AskView, Candidate, CandidateIndex, CandidateView, CardType, Combat,
-    Counter, CounterView, Culprit, DecisionId, DecisionView, Declaration, Facing, GameEvent,
-    Keyword, Kind, LossReason, Mana, ManaPool, ObjectView, OutcomeView, PaidCost, PassTo, Payment,
-    PlayerState, PlayerView, Players, PowerToughness, RefusalView, Refused, SessionId, Side,
-    StackItem, Stall, Status, Step, StopsSetting, TargetRef, TurnView, Why, ZoneName,
+    AbilityClass, AbilityRef, AskView, Candidate, CandidateIndex, CandidateView, CardHandling,
+    CardType, Combat, Counter, CounterView, Culprit, DecisionId, DecisionView, Declaration, Facing,
+    GameEvent, Keyword, Kind, LossReason, Mana, ManaPool, ObjectView, OutcomeView, PaidCost,
+    PassTo, Payment, PlayerState, PlayerView, Players, PowerToughness, RefusalView, Refused,
+    SessionId, Side, StackItem, Stall, Status, Step, StopsSetting, TargetRef, TurnView, Why,
+    ZoneName,
 };
 use crate::{AgentView, GameUpdate, SessionError, StartRequest};
 
@@ -53,6 +54,7 @@ pub fn typescript() -> String {
         CandidateIndex::decl(&cfg),
         PlayerView::decl(&cfg),
         Status::decl(&cfg),
+        CardHandling::decl(&cfg),
         Side::decl(&cfg),
         TurnView::decl(&cfg),
         Players::decl(&cfg),

@@ -133,7 +133,11 @@ seq: number, };
 
 export type CandidateIndex = number;
 
-export type PlayerView = { status: Status, turn: TurnView, players: Players, 
+export type PlayerView = { status: Status, 
+/**
+ * Public scope of the opponent's card handling while their decision is open.
+ */
+handling?: CardHandling, turn: TurnView, players: Players, 
 /**
  * Permanents, in the order they entered.
  */
@@ -162,6 +166,8 @@ events: Array<GameEvent>,
 undone: boolean, };
 
 export type Status = { "kind": "deciding", decision: DecisionView, } | { "kind": "thinking" } | { "kind": "playing" } | { "kind": "stopped" } | { "kind": "over", outcome: OutcomeView, };
+
+export type CardHandling = { "zone": "library", side: Side, count: number | null, } | { "zone": "hand", side: Side, };
 
 export type Side = "you" | "opponent";
 

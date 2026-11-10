@@ -31,6 +31,10 @@ use ts_rs::TS;
 #[serde(rename_all = "camelCase")]
 pub struct PlayerView {
     pub status: Status,
+    /// Public scope of the opponent's card handling while their decision is open.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub handling: Option<CardHandling>,
     pub turn: TurnView,
     pub players: Players,
     /// Permanents, in the order they entered.
@@ -76,6 +80,21 @@ pub enum Status {
 pub enum Side {
     You,
     Opponent,
+}
+
+/// Which part of the table the opponent is handling. The scope names a zone and how
+/// much of it is in use, without the candidates, their identities or any picks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "zone", rename_all = "camelCase")]
+pub enum CardHandling {
+    /// The top `count` cards, or the whole library during a search.
+    Library {
+        side: Side,
+        count: Option<u8>,
+    },
+    Hand {
+        side: Side,
+    },
 }
 
 /// Face up or face down
@@ -1002,7 +1021,10 @@ pub enum Moment<'a, L: Layout = Small> {
     Halted(DecisionId),
     /// The other player is deciding, in the resolution of the stack entry given if one asks
     /// it.
-    Thinking(Option<&'a StackEntry<L>>),
+    Thinking {
+        resolving: Option<&'a StackEntry<L>>,
+        decision: Option<&'a Decision<L>>,
+    },
     Playing,
     Stopped,
     /// The game is over; `cause`, why the loser lost, when the session saw it
@@ -1028,29 +1050,7 @@ pub fn player_view<L: Layout>(
     let turn = obs.turn();
     let mut objects = Vec::new();
     let mut player_state = |p: Seat| {
-        let player = obs.player(p);
-        let [white, blue, black, red, green, colorless] = player.mana.amounts();
-        let state = PlayerState {
-            life: player.life,
-            mana: ManaPool {
-                white,
-                blue,
-                black,
-                red,
-                green,
-                colorless,
-            },
-            lands_played: player.lands_played,
-            mulligans: player.mulligans,
-            mulligan: player.mulligan.into(),
-            library: slots(obs.library(p).iter().copied()),
-            graveyard: slots(obs.graveyard(p).iter().copied()),
-            emblems: player
-                .emblems
-                .iter()
-                .map(|&e| t.def(e).name.to_owned())
-                .collect(),
-        };
+        let state = player_state(t, obs, p);
         for slots in [&state.library, &state.graveyard] {
             objects.extend(
                 slots
@@ -1082,7 +1082,10 @@ pub fn player_view<L: Layout>(
     // an instant or sorcery spell's resolution, the spell itself is put into its owner's
     // graveyard").
     let resolving = match moment {
-        Moment::Deciding(_, _, entry) | Moment::Thinking(entry) => entry,
+        Moment::Deciding(_, _, entry)
+        | Moment::Thinking {
+            resolving: entry, ..
+        } => entry,
         _ => None,
     };
     if let Some(entry) = resolving
@@ -1093,7 +1096,11 @@ pub fn player_view<L: Layout>(
     }
     // While the other player answers a question of its resolution, the entry stays on top of
     // the viewer's stack: the viewer's own questions name it apart ([`DecisionView::resolving`]).
-    if let Moment::Thinking(Some(entry)) = moment {
+    if let Moment::Thinking {
+        resolving: Some(entry),
+        ..
+    } = moment
+    {
         stack.push(stack_item(t, obs, entry));
     }
     objects.sort_by_key(|o| o.slot);
@@ -1107,15 +1114,22 @@ pub fn player_view<L: Layout>(
         Moment::Halted(id) => Status::Deciding {
             decision: halt_view(t, obs, id, stops),
         },
-        Moment::Thinking(_) => Status::Thinking,
+        Moment::Thinking { .. } => Status::Thinking,
         Moment::Playing => Status::Playing,
         Moment::Stopped => Status::Stopped,
         Moment::Over { .. } => Status::Over {
             outcome: outcome_view(t, obs, moment),
         },
     };
+    let handling = match moment {
+        Moment::Thinking {
+            decision: Some(d), ..
+        } if d.player != viewer => card_handling(obs, d),
+        _ => None,
+    };
     PlayerView {
         status,
+        handling,
         turn: TurnView {
             number: turn.number,
             active: side(obs, turn.active),
@@ -1131,6 +1145,78 @@ pub fn player_view<L: Layout>(
         stops,
         events: game_events(t, obs, events),
         undone: false,
+    }
+}
+
+fn player_state<L: Layout>(t: &GameTable, obs: Observation<'_, L>, p: Seat) -> PlayerState {
+    let player = obs.player(p);
+    let [white, blue, black, red, green, colorless] = player.mana.amounts();
+    PlayerState {
+        life: player.life,
+        mana: ManaPool {
+            white,
+            blue,
+            black,
+            red,
+            green,
+            colorless,
+        },
+        lands_played: player.lands_played,
+        mulligans: player.mulligans,
+        mulligan: player.mulligan.into(),
+        library: slots(obs.library(p).iter().copied()),
+        graveyard: slots(obs.graveyard(p).iter().copied()),
+        emblems: player
+            .emblems
+            .iter()
+            .map(|&e| t.def(e).name.to_owned())
+            .collect(),
+    }
+}
+
+fn card_handling<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>) -> Option<CardHandling> {
+    let library = |player, count: Option<u8>| {
+        let size = obs.library(player).len();
+        let count = count.map(|n| n.min(u8::try_from(size).unwrap_or(u8::MAX)));
+        (size > 0 && count != Some(0)).then(|| CardHandling::Library {
+            side: side(obs, player),
+            count,
+        })
+    };
+    let hand = |player| {
+        (!obs.zone(player, Zone::Hand).is_empty()).then(|| CardHandling::Hand {
+            side: side(obs, player),
+        })
+    };
+    match d.ask {
+        Ask::Scry { count } | Ask::Take { count, .. } | Ask::Bottom { count } => {
+            library(d.player, Some(count))
+        }
+        Ask::Look {
+            player,
+            zone,
+            count,
+            ..
+        } => match zone {
+            Zone::Library => library(player, Some(count)),
+            Zone::Hand => hand(player),
+            _ => None,
+        },
+        Ask::Fateseal { player } => library(player, Some(1)),
+        Ask::ManifestDread => library(d.player, Some(2)),
+        Ask::Search { .. } => library(d.player, None),
+        Ask::PutBack { .. }
+        | Ask::DiscardBasicLand { .. }
+        | Ask::ExileCards {
+            zone: Zone::Hand, ..
+        } => hand(d.player),
+        _ => match d.kind {
+            DecisionKind::KeepOrMulligan
+            | DecisionKind::PutOnBottom
+            | DecisionKind::Discard
+            | DecisionKind::ExileCost => hand(d.player),
+            _ => None,
+        },
     }
 }
 

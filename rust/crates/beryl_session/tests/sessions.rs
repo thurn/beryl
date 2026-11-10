@@ -555,7 +555,10 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
                     Status::Deciding { decision } => {
                         Moment::Deciding(decision.id, d.insert(open_decision(s, t)), None)
                     }
-                    Status::Thinking => Moment::Thinking(None),
+                    Status::Thinking => Moment::Thinking {
+                        resolving: None,
+                        decision: Some(d.insert(open_decision(s, t))),
+                    },
                     Status::Playing => Moment::Playing,
                     // The end shows what the human knows by then; the game is over.
                     Status::Over { .. } | Status::Stopped => break,
@@ -574,7 +577,9 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
                         .collect::<Vec<_>>(),
                 );
                 // What a cast taps and whom a blocker may block, played out on the redealt state.
-                if let Some(d) = &d {
+                if let Some(d) = &d
+                    && d.player == Seat::P0
+                {
                     add_previews(&mut theirs, &det, t, d);
                 }
                 // Who won the opening flip, whether a cast can be taken back, and whether the
@@ -599,14 +604,11 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
     assert!(events > 1000, "only {events} events compared");
 }
 
-/// The open decision of a state the human (seat 0) is deciding in.
+/// The open decision of a state either seat is deciding in.
 fn open_decision(s: &State, t: &GameTable) -> Decision {
     let mut s = *s;
     match next(&mut s, t, &mut Scratch::new(), &mut Replay) {
-        Step::Decide(d) => {
-            assert_eq!(d.player, Seat::P0);
-            d
-        }
+        Step::Decide(d) => d,
         Step::Over(o) => panic!("the game is over: {o:?}"),
     }
 }

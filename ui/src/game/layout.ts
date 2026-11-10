@@ -109,6 +109,7 @@ export type Look =
   | "stack" // a full frame on the stack
   | "pile" // a full frame on a graveyard or exile pile, which the pile's button covers
   | "shown" // a full frame face up over the table, on its way to a pile (SHOWCASE)
+  | "handling" // cards lifted while the opponent handles them
   | "hidden"; // fully occluded by the rest of a pile
 
 /** One card on the stage: its element's top-left corner at (x, y), then scaled, turned and
@@ -422,6 +423,8 @@ export interface Spotlight {
   drawn?: ReadonlySet<number>;
   /** Libraries lifted into two face-down packets during a shuffle. */
   shuffle?: ReadonlySet<Side>;
+  /** The lifted backs come together before returning to the library. */
+  packHandling?: boolean;
 }
 
 /** How far below the opponent's hand a card they just drew dips into view. */
@@ -1488,6 +1491,92 @@ function onPile(look: PileLook, side: Side, depth: number) {
   };
 }
 
+/** The same handling can span several private picks or an arrangement. */
+export function sameHandling(before: PlayerView, after: PlayerView): boolean {
+  const a = before.handling;
+  const b = after.handling;
+  return (
+    a !== undefined &&
+    b !== undefined &&
+    a.side === b.side &&
+    a.zone === b.zone &&
+    (a.zone !== "library" ||
+      b.zone !== "library" ||
+      (a.count === null) === (b.count === null))
+  );
+}
+
+/** The group in its initial table order. Keep that order while it is up so private
+ * selections and same-zone reorders do not shuffle the backs around on screen. */
+export function handlingSlots(
+  view: PlayerView,
+  handOrder: ReadonlyMap<number, number>,
+): number[] {
+  const handling = view.handling;
+  if (!handling) return [];
+  if (handling.zone === "library") {
+    const library = view.players[handling.side].library;
+    return library.slice(-(handling.count ?? library.length)).reverse();
+  }
+  const cards = view.objects.filter(
+    (o) => o.owner === handling.side && o.zone === "hand",
+  );
+  return (handling.side === "you" ? inOrder(cards, handOrder) : cards).map(
+    (o) => o.slot,
+  );
+}
+
+/** A small group spreads out. A full library moves as several overlapping packets so the
+ * whole library can travel without making a card smaller than a visible back. */
+function handlingPlacements(
+  view: PlayerView,
+  cards: ObjectView[],
+  packed: boolean,
+): Placement[] {
+  const handling = view.handling;
+  if (!handling || cards.length === 0) return [];
+  const opening = view.turn.number === 0;
+  const columns = packed
+    ? 1
+    : Math.min(handling.zone === "library" ? 5 : 7, cards.length);
+  const packet = Math.ceil(cards.length / columns);
+  const side = handling.side;
+  const pile = packed ? pileLook(side, PILES[side].library, 1) : undefined;
+  const width = pile?.width ?? (opening ? 72 : 104);
+  const step = width * (handling.zone === "hand" ? 0.72 : 1.12);
+  const center = pile
+    ? pile.x + width / 2 + (side === "you" ? 125 : -125)
+    : fromMiddle(opening ? 465 : handling.zone === "hand" ? 800 : 565);
+  const top = pile
+    ? pile.y + (side === "you" ? -65 : 48)
+    : opening
+      ? 8
+      : handling.zone === "hand" && side === "you"
+        ? 575
+        : 222;
+  return cards.map((card, i) => {
+    const column = i % columns;
+    const depth = Math.floor(i / columns);
+    const dx = column - (columns - 1) / 2;
+    return {
+      slot: card.slot,
+      zone: card.zone,
+      look: "handling",
+      x: center - width / 2 + dx * step + depth,
+      y: top + Math.abs(dx) * 3 + depth * 1.5,
+      width: FULL_WIDTH,
+      span: FULL_WIDTH,
+      scale: width / FULL_WIDTH,
+      rotate: dx * 2,
+      skew: 0,
+      opacity: 1,
+      z: SHOWCASE_Z + column * packet + packet - depth,
+      rim: depth > 0,
+      back: card.zone === "library" || card.owner === "opponent",
+    };
+  });
+}
+
 /** The parked layers and their positions are also the start/end points for card flights. A
  * borrowed card keeps a home for its handoff, while the cards left on the table settle. */
 function pileCards(
@@ -1557,6 +1646,7 @@ export function layout(
   order: ReadonlyMap<number, number>,
   borrowed: ReadonlySet<number>,
   piles: readonly ZonePile[],
+  handling: readonly number[],
 ): Layout {
   const out: Placement[] = [];
   const objects = view.objects;
@@ -1643,13 +1733,22 @@ export function layout(
   for (const { side, zone, cards } of piles) {
     out.push(...pileCards(side, zone, cards, borrowed, aimed));
   }
+  const handled = handling.flatMap((slot) => {
+    const object = bySlot.get(slot);
+    return object && object.zone === view.handling?.zone && !borrowed.has(slot)
+      ? [object]
+      : [];
+  });
+  const lifted = new Set([...borrowed, ...handled.map((o) => o.slot)]);
   for (const side of ["opponent", "you"] as const) {
     const cards = view.players[side].library.flatMap((slot) => {
       const object = bySlot.get(slot);
       return object && !inHand.has(slot) ? [object] : [];
     });
     out.push(
-      ...pileCards(side, "library", cards, borrowed, aimed, {
+      ...pileCards(side, "library", cards, lifted, aimed, {
+        // A disclosed card stays face down when it becomes a deeper layer. Do not
+        // expose a different top just because a packet is temporarily off the pile.
         top: view.players[side].library.at(-1),
         shuffle: spotlight.shuffle?.has(side),
       }),
@@ -1701,6 +1800,9 @@ export function layout(
       skew: 0,
     });
   });
+  out.push(
+    ...handlingPlacements(view, handled, spotlight.packHandling === true),
+  );
   return new Map(out.map((p) => [p.slot, p]));
 }
 

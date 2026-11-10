@@ -66,7 +66,10 @@ fn events(
     let view = player_view(
         &t,
         Observation::new(&s, viewer),
-        Moment::Thinking(None),
+        Moment::Thinking {
+            resolving: None,
+            decision: None,
+        },
         StopsSetting::SMART,
         x.events.events(),
     );

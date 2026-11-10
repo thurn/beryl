@@ -26,7 +26,10 @@ fn paid(name: &str) -> Vec<Vec<PaidCost>> {
             let view = player_view(
                 t,
                 Observation::new(s, viewer),
-                Moment::Thinking(None),
+                Moment::Thinking {
+                    resolving: None,
+                    decision: None,
+                },
                 StopsSetting::SMART,
                 &[],
             );

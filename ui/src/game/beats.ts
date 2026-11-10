@@ -19,7 +19,7 @@ import type {
 } from "../generated/protocol";
 import { choiceOf } from "./choices";
 import { withResolving } from "./decisions";
-import type { Spotlight } from "./layout";
+import { sameHandling, type Spotlight } from "./layout";
 
 /** How long a view holds the screen before the next one, in milliseconds: a step passing
  * briefly, a new turn while it is announced, an action long enough to follow, a spell or
@@ -39,6 +39,8 @@ export const HOLD = {
   /** A single card crossing from the opponent's library to their hand. */
   draw: 700,
   shuffle: 420,
+  /** Time for the face-down group to lift before an automated answer can take it away. */
+  handling: 850,
   /** A spell or ability resolving against another spell, held on the stack with its arrow to
    * its target before the target is hit. */
   resolving: 900,
@@ -71,8 +73,26 @@ export function beats(
   update: GameUpdate,
 ): Beat[] {
   const { view } = update;
-  if (!before || view.events.length === 0 || view.undone) return [{ update }];
+  if (before && sameHandling(before.view, view) && view.events.length === 0)
+    return [{ update, hold: 0 }];
+  if (
+    !before ||
+    view.undone ||
+    (view.events.length === 0 && !packHandling(before.view, view))
+  )
+    return [{ update }];
   return new Walk(withResolving(before.view), update).run();
+}
+
+/** Return a private arrangement as one packet before the pile settles. */
+function packHandling(before: PlayerView, after: PlayerView): boolean {
+  const handling = before.handling;
+  return (
+    handling?.zone === "library" &&
+    handling.count !== null &&
+    handling.count > 1 &&
+    !sameHandling(before, after)
+  );
 }
 
 /** Whether a spell or ability is still on `stack`. */
@@ -173,6 +193,7 @@ class Walk {
   /** Slots drawn in this view so far, to be seen in a hand before they leave it. */
   private readonly drawn = new Set<number>();
   private readonly seenInChoice: Set<number>;
+  private readonly startsHandling: boolean;
   /** The beat cut last showed cards in a showcase: the next one lands them. */
   private landing = false;
 
@@ -183,6 +204,8 @@ class Walk {
     const choice = choiceOf(before);
     this.seenInChoice = new Set(choice?.kind === "pick" ? choice.cards : []);
     this.view = update.view;
+    this.startsHandling =
+      !!this.view.handling && !sameHandling(before, this.view);
     this.final = new Map(this.view.objects.map((o) => [o.slot, o]));
     this.cur = { ...before, status: { kind: "playing" }, events: [] };
   }
@@ -227,6 +250,16 @@ class Walk {
           shuffle.add(event.player);
           this.pending.push(event);
           end++;
+        }
+        const handling = this.cur.handling;
+        if (handling && shuffle.has(handling.side)) {
+          // Put the search packet back before shuffling. Those backs remain the same
+          // elements, but the shuffle breaks the correspondence to any known faces.
+          const shuffles = this.pending;
+          this.pending = [];
+          this.cur = { ...this.cur, handling: undefined };
+          this.cut(HOLD.handling, undefined, true);
+          this.pending = shuffles;
         }
         const deals = new Map<Side, number[]>();
         for (let j = end; j < events.length; j++) {
@@ -407,7 +440,13 @@ class Walk {
     if (arrivingTrigger) this.cut(HOLD.action);
     // A question asked over the table (a search, a scry) waits for what led to it to land: a
     // card exiled, a spell resolving, seen rather than moving under the overlay.
-    if (this.pending.some(effect) && choiceOf(this.view)) this.cut();
+    if (
+      (this.startsHandling && this.pending.length > 0) ||
+      (this.pending.some(effect) && choiceOf(this.view))
+    )
+      this.cut();
+    if (packHandling(this.cur, this.view))
+      this.cut(HOLD.handling, { packHandling: true }, true);
     if (this.out.length === 0) return [{ update: this.update }];
     const last: GameUpdate = {
       ...this.update,
@@ -418,7 +457,12 @@ class Walk {
       ...this.out,
       {
         update: last,
-        hold: this.landing && !deciding ? HOLD.landing : undefined,
+        hold:
+          this.landing && !deciding
+            ? Math.max(HOLD.landing, this.startsHandling ? HOLD.handling : 0)
+            : !this.startsHandling && this.view.handling
+              ? eventsHold(last.view)
+              : undefined,
       },
     ];
   }

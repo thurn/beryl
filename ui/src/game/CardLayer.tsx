@@ -157,7 +157,7 @@ const INTO_LIBRARY: Transition = { type: "tween", duration: 0.2, delay: 0.6 };
 const TRAVEL_FOR = 700;
 /** Looks a card travels to or from: the piles and libraries, which lie in the table's corners,
  * and the showcase over its middle. */
-const TRAVELLED = new Set<Look>(["hidden", "pile", "shown"]);
+const TRAVELLED = new Set<Look>(["hidden", "pile", "shown", "handling"]);
 /** A hand card rises and settles back quickly and without bounce. */
 const RAISING: Transition = { type: "tween", duration: 0.14, ease: "easeOut" };
 /** A raised hand card is drawn over the rest of the hand. */
@@ -589,7 +589,10 @@ const CardElement = memo(function CardElement({
   }>(undefined);
   // A card in a library is unseen, and one on a graveyard or exile pile is the pile's: the
   // pile's button opens it (Piles.tsx). Neither is pointed at alone.
-  const untouchable = place.look === "hidden" || place.look === "pile";
+  const untouchable =
+    place.look === "hidden" ||
+    place.look === "pile" ||
+    place.look === "handling";
 
   const stagePoint = (e: ReactPointerEvent) => {
     const stage = (e.currentTarget as HTMLElement).closest(".stage");
@@ -698,7 +701,10 @@ const CardElement = memo(function CardElement({
           ...frame,
           visibility: state.splitting ? "hidden" : undefined,
           // A library's cards, drawn only while they travel, never take the pointer.
-          pointerEvents: place.look === "hidden" ? "none" : undefined,
+          pointerEvents:
+            place.look === "hidden" || place.look === "handling"
+              ? "none"
+              : undefined,
           // A card travelling into the hand keeps its place in the fan's order all the way,
           // sliding in under the cards to its right, rather than landing over them and then
           // dropping behind.

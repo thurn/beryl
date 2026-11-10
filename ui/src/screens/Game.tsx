@@ -741,15 +741,9 @@ function Opening({
   }, [spinning]);
   const starting = spinning ? null : view.turn.starting;
   const decision = spinning ? undefined : asked;
-  // What the opponent decides while the player waits: who goes first, the coin rocking
-  // between the seats, and then its hand, which it looks through.
   const choosingFirst =
     !spinning && starting === null && flipWinner === "opponent";
-  const considering =
-    !decision && starting !== null && view.status.kind === "thinking";
-  const opponentHand = view.objects.filter(
-    (o) => o.zone === "hand" && o.owner === "opponent",
-  ).length;
+  const considering = view.handling?.zone === "hand";
   const kind = decision?.kind;
   // The cards picked for the bottom, kept as they were: those sent are gone from the hand.
   const [bottom, setBottom] = useState<ObjectView[]>([]);
@@ -902,22 +896,7 @@ function Opening({
       )}
       <div className="opening-buttons">
         {considering ? (
-          <div
-            className="opening-considering"
-            role="status"
-            aria-label="Opponent's hand"
-          >
-            {Array.from({ length: opponentHand }, (_, i) => (
-              <CardBack
-                key={i}
-                width={44}
-                style={{
-                  rotate: `${(i - (opponentHand - 1) / 2) * 7}deg`,
-                  animationDelay: `${i * 0.18}s`,
-                }}
-              />
-            ))}
-          </div>
+          <span role="status" aria-label="Opponent is considering their hand" />
         ) : (
           !decision &&
           !choosingFirst && (

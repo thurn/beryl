@@ -22,7 +22,7 @@ import {
   type PlayerView,
   type SessionId,
 } from "../ipc";
-import { beats, eventsHold } from "./beats";
+import { beats, eventsHold, HOLD } from "./beats";
 import { soundBeat } from "../audio/events";
 import type { Spotlight } from "./layout";
 import { learnNames, logLines, type LogEntry, type Names } from "./log";
@@ -41,7 +41,7 @@ const SHOWN_LOG = 500;
 export function holdFor(view: PlayerView): number {
   const { kind } = view.status;
   if (kind !== "thinking" && kind !== "playing") return 0;
-  return eventsHold(view);
+  return Math.max(eventsHold(view), view.handling ? HOLD.handling : 0);
 }
 
 /** Holds of the views `beats` made, which their events would not give, and the cards each

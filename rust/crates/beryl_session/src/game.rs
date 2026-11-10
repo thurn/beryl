@@ -1939,18 +1939,21 @@ impl Game {
         let mut view = on_board!(&mut self.board, b => {
             // The session's decision, stack entry and events, in the game's layout.
             let decision = match &self.at {
-                At::Human(_, Open::Decision(d)) if d.player == viewer => Some(d.relayout()),
+                At::Agent(d) | At::Human(_, Open::Decision(d)) => Some(d.relayout()),
                 _ => None,
             };
             let resolving = resolving.as_ref().map(Relayout::relayout);
             let events: Vec<_> = self.events.iter().map(Relayout::relayout).collect();
             let moment = match (&self.at, &decision) {
                 (At::Playing, _) => Moment::Playing,
-                (At::Human(id, Open::Decision(_)), Some(d)) => {
+                (At::Human(id, Open::Decision(_)), Some(d)) if d.player == viewer => {
                     Moment::Deciding(*id, d, resolving.as_ref())
                 }
                 (At::Human(id, Open::Halt), _) if viewer == self.human => Moment::Halted(*id),
-                (At::Agent(_) | At::Human(..), _) => Moment::Thinking(resolving.as_ref()),
+                (At::Agent(_) | At::Human(..), _) => Moment::Thinking {
+                    resolving: resolving.as_ref(),
+                    decision: decision.as_ref(),
+                },
                 (
                     At::Over {
                         outcome,
@@ -1968,7 +1971,9 @@ impl Game {
             let shown = view(&b.state, &self.table, &mut b.scratch);
             let obs = Observation::new(shown, viewer);
             let mut view = player_view(&self.table, obs, moment, self.stops, &events);
-            if let Some(d) = &decision {
+            if let Some(d) = &decision
+                && d.player == viewer
+            {
                 preview::add_previews(&mut view, &b.state, &self.table, d);
             }
             view

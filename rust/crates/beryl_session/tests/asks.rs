@@ -3,8 +3,8 @@
 
 use beryl_cards::{CARDS, SCENARIOS, names};
 use beryl_engine::state::Pending;
-use beryl_engine::{Observation, Scratch, view};
-use beryl_session::protocol::{AskView, Kind, Moment, Side, ZoneName, player_view};
+use beryl_engine::{Ask, Observation, Scratch, view};
+use beryl_session::protocol::{AskView, CardHandling, Kind, Moment, Side, ZoneName, player_view};
 use beryl_session::{DecisionId, SessionId, Status, StopsSetting};
 
 /// The distinct asks other than [`AskView::Plain`] that `card`'s scenarios meet, in the order
@@ -44,6 +44,68 @@ fn asks(card: &str) -> Vec<(Kind, AskView)> {
         .unwrap_or_else(|e| panic!("{e}"));
     }
     seen
+}
+
+#[test]
+fn stock_up_observer_sees_the_group_size_without_seeing_its_cards_or_choices() {
+    let (_, scenarios) = SCENARIOS
+        .iter()
+        .find(|&&(name, _)| name == names::STOCK_UP)
+        .unwrap();
+    let mut checked = false;
+    beryl_scenario::visit(&CARDS, &scenarios[0], |t, s, d| {
+        if !matches!(d.ask, Ask::Take { take: 2, .. }) {
+            return;
+        }
+        let mut x = Scratch::new();
+        let shown = view(s, t, &mut x);
+        let resolving = s.stack().last();
+        let id = DecisionId {
+            session: SessionId(1),
+            seq: 1,
+        };
+        let controller = player_view(
+            t,
+            Observation::new(shown, d.player),
+            Moment::Deciding(id, d, resolving),
+            StopsSetting::SMART,
+            &[],
+        );
+        let observer = player_view(
+            t,
+            Observation::new(shown, d.player.opponent()),
+            Moment::Thinking {
+                resolving,
+                decision: Some(d),
+            },
+            StopsSetting::SMART,
+            &[],
+        );
+        assert!(controller.handling.is_none());
+        assert_eq!(observer.status, Status::Thinking);
+        assert_eq!(
+            observer.handling,
+            Some(CardHandling::Library {
+                side: Side::Opponent,
+                count: Some(5),
+            }),
+        );
+        for slot in observer.players.opponent.library.iter().rev().take(5) {
+            let object = |objects: &[beryl_session::protocol::ObjectView]| {
+                objects
+                    .iter()
+                    .find(|o| o.slot == *slot)
+                    .unwrap()
+                    .name
+                    .clone()
+            };
+            assert!(object(&controller.objects).is_some());
+            assert!(object(&observer.objects).is_none());
+        }
+        checked = true;
+    })
+    .unwrap();
+    assert!(checked, "Stock Up reached the first selection");
 }
 
 #[test]

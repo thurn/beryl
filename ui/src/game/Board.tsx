@@ -132,6 +132,7 @@ import {
   emblemSlot,
   exiledWith,
   held,
+  handlingSlots,
   footprint,
   fromMiddle,
   isEmblem,
@@ -142,6 +143,7 @@ import {
   MANA_POOLS,
   overLog,
   passButton,
+  sameHandling,
   STACK,
   STACK_Z,
   stackPlace,
@@ -326,6 +328,16 @@ export function Board({
     () => new Map([...view.objects, ...emblems].map((o) => [o.slot, o])),
     [view, emblems],
   );
+  const heldGroup = useRef<{ view: PlayerView; slots: number[] }>(undefined);
+  const previousGroup = heldGroup.current;
+  const handledSlots =
+    previousGroup &&
+    (previousGroup.view === view ||
+      (view.handling?.zone === "library" &&
+        sameHandling(previousGroup.view, view)))
+      ? previousGroup.slots
+      : handlingSlots(view, standIns.order);
+  heldGroup.current = { view, slots: handledSlots };
   const waterbend = useWaterbend(deciding ? decision : undefined, objects);
   // Declaring attackers or blockers: the creatures are picked on the table, in any order.
   const drafting =
@@ -441,8 +453,26 @@ export function Board({
   );
   const resting = useMemo(
     () =>
-      layout(shown, hold, false, visibleSpotlight, standIns.order, away, piles),
-    [shown, hold, visibleSpotlight, standIns.order, away, piles, stageWidth],
+      layout(
+        shown,
+        hold,
+        false,
+        visibleSpotlight,
+        standIns.order,
+        away,
+        piles,
+        handledSlots,
+      ),
+    [
+      shown,
+      hold,
+      visibleSpotlight,
+      standIns.order,
+      away,
+      piles,
+      handledSlots,
+      stageWidth,
+    ],
   );
   const crowdsLog = overLog(resting);
   const laid = useMemo(
@@ -456,6 +486,7 @@ export function Board({
             standIns.order,
             away,
             piles,
+            handledSlots,
           )
         : resting,
     [
@@ -468,6 +499,7 @@ export function Board({
       standIns.order,
       away,
       piles,
+      handledSlots,
     ],
   );
   // The table as the view before this one laid it: where a source sacrificed for its mana was.
@@ -504,6 +536,7 @@ export function Board({
   const inspected =
     hoveredPlace?.look === "hidden" ||
     hoveredPlace?.look === "pile" ||
+    hoveredPlace?.look === "handling" ||
     (hold === "raised" && hoveredPlace?.look === "hand")
       ? undefined
       : hoveredPlace;
@@ -1246,6 +1279,7 @@ export function Board({
     <>
       <div
         className={dimmed ? "table table-dimmed" : "table"}
+        data-opening={view.turn.number === 0 || undefined}
         onPointerDown={() => setSettings(false)}
         // Before the card under it hears the press, so that the card's click or drag is one on
         // the newest view.
